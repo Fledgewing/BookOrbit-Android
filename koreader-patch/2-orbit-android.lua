@@ -221,6 +221,27 @@ function Update.assetUrl(release, name)
 end
 
 -- A clock that went backwards also allows a check.
+Update.BLOCKED = "Internet blocked: is 'Block connections without VPN' on for Tailscale?"
+
+-- An update request failed: plain words. err: httpGet's error ("network: permission denied"
+-- is EACCES, what Android returns when "Block connections without VPN" stops a socket outside
+-- Tailscale). wifi_on/connected/vpn: the state now (nil: unknown).
+function Update.errorText(err, wifi_on, connected, vpn)
+    err = tostring(err)
+    local low = err:lower()
+    if low:find("permission denied", 1, true) or err:find("EACCES", 1, true) or err:find("EPERM", 1, true)
+        or low:find("operation not permitted", 1, true) then
+        return Update.BLOCKED
+    end
+    if wifi_on == false then return "no internet: Wi-Fi is off" end
+    if connected == false then return "no internet: Wi-Fi isn't connected" end
+    if err:find("network:", 1, true) then
+        if vpn then return Update.BLOCKED end
+        return "no internet (GitHub unreachable: " .. err:gsub("^network: ", "") .. ")"
+    end
+    return "check failed: " .. err
+end
+
 function Update.isDue(last, now, interval)
     last = tonumber(last) or 0
     return last <= 0 or now < last or now - last >= (interval or Update.INTERVAL)
@@ -338,21 +359,33 @@ function WifiPlan.decide(st, ctx)
     return nil, "needed or not idle"
 end
 
+-- Settings.Global "wifi_on" -> radio on? (nil: unknown)
+function Plan.wifiOnSetting(v)
+    if v == 1 or v == 2 then return true end
+    if v == 0 or v == 3 then return false end
+    return nil
+end
+
 -- Smart Home (docs/INTERFACE.md "go home"). What Home does in KOReader.
 --   mode: "smart" | "bookorbit"; in_reader: a book is open; covered: a menu or the
---   plugin's views are over it; from_other: Home came from another app (or KOReader was
---   just started); has_last: a last-opened book exists.
--- Returns "dashboard" (close any book, BookOrbit home) or "book" (show the book: close
--- what covers it, or open the last one).
+--   plugin's views are over it; on_dashboard: the plugin's BookOrbit home (dashboard) is the
+--   top widget; from_other: Home came from another app (or KOReader was just started);
+--   reopen: KOReader was killed with a book open (cold start, "open book at exit" set) and
+--   that file still exists. A book the user closed is never reopened from history.
+-- Returns "companion" (the companion's launcher page), "dashboard" (close any book,
+-- BookOrbit home) or "book" (show the book: close what covers it, or open the last one).
+-- Presses in KOReader step book -> BookOrbit home -> companion; Home from another app (the
+-- companion included) goes back to the book, so the steps never loop.
 local HomePlan = {}
 
 function HomePlan.decide(o)
+    if o.on_dashboard and not o.from_other then return "companion" end
     if o.mode ~= "smart" then return "dashboard" end
     if o.in_reader then
         if not o.covered and not o.from_other then return "dashboard" end
         return "book"
     end
-    if o.has_last then return "book" end
+    if o.reopen then return "book" end
     return "dashboard"
 end
 
@@ -443,6 +476,7 @@ local DEFAULTS = {
     patch_update_prerelease = false,
     patch_update_checked_at = 0,  -- os.time() of the last check
     patch_update_status = nil,    -- { at, text }
+    open_book_at_exit = nil,      -- path of the open book; set on ReaderReady, cleared on a close
 }
 
 local S = G_reader_settings:readSetting("orbit_android") or {}
@@ -454,6 +488,10 @@ local function saveSettings()
     G_reader_settings:saveSetting("orbit_android", S)
 end
 saveSettings()
+
+-- The book that was open when the previous KOReader process ended without a close (killed,
+-- e.g. by a firmware after sleep). Read once per process, before this run's ReaderReady.
+local killed_with_book = S.open_book_at_exit
 
 ---------------------------------------------------------------------------------------------
 -- JNI: explicit broadcasts, activities, screen state, VPN state, launch extras
@@ -613,13 +651,26 @@ end
 
 -- WifiManager.isWifiEnabled(): the radio, not the connection. nil if unknown.
 -- KOReader's Android backend only knows "connected" (device.lua:335-341, isWifiOn = isConnected).
+-- Wi-Fi radio on? true/false, nil if unknown. Not WifiManager.isWifiEnabled(): KOReader's
+-- manifest has no ACCESS_WIFI_STATE (android-luajit-launcher app/src/main/AndroidManifest.xml:
+-- INTERNET, ACCESS_NETWORK_STATE, ...), so that call throws SecurityException. Settings.Global
+-- "wifi_on" (Settings.Global.WIFI_ON) needs no permission: 1 on, 2 on in airplane mode, 0 off,
+-- 3 off by airplane mode.
 function Jni.wifiEnabled()
-    return withEnv("isWifiEnabled", function(env, activity)
-        local wm = systemService(env, activity, "wifi")
-        if wm == nil then error("no WifiManager", 0) end
-        local on = callBool(env, wm, "isWifiEnabled", "()Z")
-        del(env, wm)
-        return on
+    return withEnv("wifi_on", function(env, activity)
+        local cr = callObject(env, activity, "getContentResolver", "()Landroid/content/ContentResolver;")
+        if cr == nil then error("no ContentResolver", 0) end
+        local cls = env[0].FindClass(env, "android/provider/Settings$Global")
+        check(env, "FindClass Settings$Global")
+        local mid = env[0].GetStaticMethodID(env, cls, "getInt", "(Landroid/content/ContentResolver;Ljava/lang/String;I)I")
+        check(env, "Settings.Global.getInt")
+        local key = env[0].NewStringUTF(env, "wifi_on")
+        local v = tonumber(env[0].CallStaticIntMethod(env, cls, mid, cr, key, int32(-1)))
+        check(env, "Settings.Global.getInt wifi_on")
+        del(env, key)
+        del(env, cls)
+        del(env, cr)
+        return Plan.wifiOnSetting(v)
     end)
 end
 
@@ -726,6 +777,7 @@ Companion.ACTION = {
     SLEEP_NOW = Companion.PACKAGE .. ".action.SLEEP_NOW",
     SHOW_STATUS = Companion.PACKAGE .. ".action.SHOW_STATUS",
     SHOW_APPS = Companion.PACKAGE .. ".action.SHOW_APPS",
+    SHOW_LAUNCHER = Companion.PACKAGE .. ".action.SHOW_LAUNCHER",
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
@@ -1357,10 +1409,9 @@ function Updater.run(why)
     local url = pre and (RELEASES_API .. "?per_page=5") or (RELEASES_API .. "/latest")
     local body, err = httpGet(url, 10, 30)
     if not body then
-        if Wifi.radioOn() == false then return false, "no internet: Wi-Fi is off" end
-        if not NetworkMgr:isConnected() then return false, "no internet: Wi-Fi isn't connected" end
-        if tostring(err):find("network:", 1, true) then return false, "no internet (GitHub unreachable: " .. tostring(err):gsub("^network: ", "") .. ")" end
-        return false, "check failed: " .. tostring(err)
+        local text = Update.errorText(err, Wifi.radioOn(), NetworkMgr:isConnected() and true or false, Jni.vpnActive() == true)
+        log("update: check failed:", tostring(err), "->", text)
+        return false, text
     end
     local okj, json = pcall(require, "json")
     if not okj then return false, "check failed: no JSON module" end
@@ -1594,40 +1645,55 @@ function OrbitAndroid:checkCommand(source)
     if not cmd or cmd == "" then return false end
     local from = Jni.takeIntentExtra(Companion.EXTRA_FROM)
     log("command from companion:", cmd, "(" .. source .. ")", from and ("from " .. tostring(from)) or "")
-    if cmd == "home" then
-        self:onOrbitGoHome()
-        return true
-    end
-    if cmd == "home_smart" then
-        self:smartHome(source, from or nil)
+    if cmd == "home" or cmd == "home_smart" then
+        self:smartHome(source, from or nil, cmd == "home" and "bookorbit" or "smart")
         return true
     end
     log("unknown command ignored:", cmd)
     return false
 end
 
--- Smart Home: BookOrbit home when Home is pressed in a book; otherwise back to the book.
-function OrbitAndroid:smartHome(source, from_extra)
+-- The plugin's BookOrbit home is the top widget: its catalog widget (main.lua:1207-1230) is
+-- topmost (the plugin's own test, main.lua:1384) and shows its dashboard context
+-- (BookOrbitCatalog:dashboardMode, bookorbit_catalog.lua:1875-1877). Its other views
+-- (book details, lists, sheets over it) don't count.
+local function onDashboard(p)
+    local cb = p and p.catalog_browser
+    if cb == nil then return false end
+    local okt, top = pcall(function() return UIManager:getTopmostVisibleWidget() end)
+    if not okt or top ~= cb then return false end
+    local okd, dash = pcall(function() return cb:dashboardMode() end)
+    return okd and dash == true
+end
+
+-- Home (docs/INTERFACE.md "go home"): HomePlan decides. mode: "smart" (home_smart) or
+-- "bookorbit" (home).
+function OrbitAndroid:smartHome(source, from_extra, mode)
+    mode = mode or "smart"
     local ui = liveUI()
     local in_reader = ui ~= nil and ui.document ~= nil
     local p = bookorbit(ui)
     local menu_open = in_reader and ui.menu ~= nil and ui.menu.menu_container ~= nil
     local view_open = p ~= nil and p.catalog_browser ~= nil
-    local last = G_reader_settings:readSetting("lastfile")
-    local has_last = false
+    local on_dash = onDashboard(p)
+    -- Reopen only a book KOReader was killed with, on the first command of this process.
+    local last = (not in_reader and source == "start") and killed_with_book or nil
+    local reopen = false
     if type(last) == "string" then
         local okl, lfs = pcall(require, "libs/libkoreader-lfs")
-        has_last = okl and lfs.attributes(last, "mode") == "file"
+        reopen = okl and lfs.attributes(last, "mode") == "file"
     end
+    if source == "start" then killed_with_book = nil end
     local paused = source == "start" and nil or state.paused_for
     local from_other = HomePlan.cameFromOtherApp(from_extra, paused)
     local action = HomePlan.decide{
-        mode = "smart", in_reader = in_reader, covered = menu_open or view_open,
-        from_other = from_other, has_last = has_last,
+        mode = mode, in_reader = in_reader, covered = menu_open or view_open, on_dashboard = on_dash,
+        from_other = from_other, reopen = reopen,
     }
-    log("home (smart):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "BookOrbit view",
-        tostring(view_open), "from other app", tostring(from_other), "(paused", paused and fmt(paused) or "-", ")",
-        "last book", has_last and "yes" or "no")
+    log("home (" .. mode .. "):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "BookOrbit view",
+        tostring(view_open), "dashboard on top", tostring(on_dash), "from other app", tostring(from_other),
+        "(paused", paused and fmt(paused) or "-", ")", "reopen book killed with", reopen and "yes" or "no")
+    if action == "companion" then return self:openCompanionHome() end
     if action == "dashboard" then return self:onOrbitGoHome() end
     -- Back to the book: close what covers it, or open the last one.
     if menu_open then pcall(function() ui.menu:onCloseReaderMenu() end) end
@@ -1636,7 +1702,7 @@ function OrbitAndroid:smartHome(source, from_extra)
         log("home (smart): closed the BookOrbit view", okc and "" or tostring(err))
     end
     if not in_reader then
-        log("home (smart): opening the last book")
+        log("home (smart): reopening the book KOReader was killed with")
         UIManager:nextTick(function()
             require("apps/reader/readerui"):showReader(last)
         end)
@@ -1842,6 +1908,12 @@ function OrbitAndroid:chapterKey(page)
 end
 
 function OrbitAndroid:onCloseWidget()
+    -- A close (Back to file browser, Home, Exit) runs this; a kill or suspend doesn't.
+    if self.ui and self.ui.document and S.open_book_at_exit then
+        S.open_book_at_exit = nil
+        saveSettings()
+        pcall(function() G_reader_settings:flush() end)
+    end
     if self.reading_task then
         UIManager:unschedule(self.reading_task)
         self.reading_task = nil
@@ -1858,6 +1930,13 @@ function OrbitAndroid:onCloseWidget()
 end
 
 function OrbitAndroid:onReaderReady()
+    -- "Open book at exit": survives a kill (flushed now), cleared when the book is closed.
+    local file = self.ui and self.ui.document and self.ui.document.file
+    if file and S.open_book_at_exit ~= file then
+        S.open_book_at_exit = file
+        saveSettings()
+        pcall(function() G_reader_settings:flush() end)
+    end
     self.schedule = Schedule.new(S.reading_schedule, now_s())
     self:hookPluginPagePush()
     self:bookOpenFlow()
@@ -2051,6 +2130,23 @@ end
 
 function OrbitAndroid:onOrbitOpenCompanion()
     openCompanion(Companion.ACTION.SHOW_STATUS, "companion")
+    return true
+end
+
+-- Home from BookOrbit home: the companion's launcher page (as on a double Home). A companion
+-- older than 0.2.1 has no SHOW_LAUNCHER; its apps page stands in.
+function OrbitAndroid:openCompanionHome()
+    if not Companion.installed() then
+        log("home: companion not usable; staying on BookOrbit home")
+        return true
+    end
+    local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_LAUNCHER, package = Companion.PACKAGE }
+    if not ok then
+        ok = Jni.startActivity{ action = Companion.ACTION.SHOW_APPS, package = Companion.PACKAGE }
+        log("home: companion launcher page missing (older companion); apps page", ok and "started" or "FAILED")
+    else
+        log("home: companion launcher page started")
+    end
     return true
 end
 

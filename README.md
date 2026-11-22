@@ -27,7 +27,10 @@ After that, both update themselves from this repo's releases.
 Both pieces check `https://api.github.com/repos/Fledgewing/BookOrbit-Android/releases/latest`
 at most once a day, and only when the network is already up (neither turns Wi-Fi on for an
 automatic check; a check started by hand turns Wi-Fi on, Wi-Fi only, and puts it back off
-afterwards). Without a network they say so ("No internet: Wi-Fi is off").
+afterwards). Without a network they say so ("No internet: Wi-Fi is off"). If Android blocks the
+connection while Wi-Fi and Tailscale are up (EACCES), they say "Internet blocked: is 'Block
+connections without VPN' on for Tailscale?": Tailscale routes only the tailnet, so that
+setting blocks GitHub; the setup checklist's Tailscale row warns about it.
 With **Include pre-releases** on, they look at the five newest releases instead and also take
 pre-releases. Each downloads the release's `SHA256SUMS` and refuses a file whose SHA-256
 doesn't match.
@@ -68,8 +71,10 @@ Two settings are shared by the patch (Tools › BookOrbit › Android sync) and 
   sync path that has to turn Wi-Fi on turns it back off. KOReader never shows its "turn on
   Wi-Fi?" prompt while the companion can switch Wi-Fi.
 - **Home button**: *Back to my book, then BookOrbit home* (default: Home in a book opens
-  BookOrbit home; Home anywhere else, or from another app, goes back to your book) or
-  *BookOrbit home*.
+  BookOrbit home, Home on BookOrbit home opens the companion; Home anywhere else, or from
+  another app, goes back to the book if one is still open, else to BookOrbit home; after
+  KOReader was killed with a book open, Home reopens it) or *BookOrbit home* (Home on
+  BookOrbit home still opens the companion).
 
 The patch also adds the gesture action **Orbit Companion: apps**; *Apply recommended gestures*
 puts it on a two-finger swipe up.

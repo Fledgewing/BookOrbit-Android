@@ -142,11 +142,13 @@ The patch decides; `WifiPlan` (pure, `test/test_logic.lua`) holds the state mach
 ## Smart Home (v0.2)
 
 "Home button": *Back to my book, then BookOrbit home* (default, `COMMAND = home_smart`) or
-*BookOrbit home* (`home`). The patch decides with `HomePlan` (pure, tested): in a book with
-KOReader in front → BookOrbit home; from another app with a book open → stay; anywhere else →
-`lastfile`; nothing to reopen → BookOrbit home. "From another app" is the companion's
-`FROM=other_app` when it knows, else a KOReader pause of 2.5 s or more. A KOReader that was
-killed restarts with `home_smart` (smart mode), so it lands in the last book.
+*BookOrbit home* (`home`). The patch decides with `HomePlan` (pure, tested; full table in
+INTERFACE.md "go home"): reader showing a book → BookOrbit home; BookOrbit home (the plugin's
+dashboard) on top → the companion's launcher page (both modes); elsewhere with a book open →
+the book; elsewhere with no book open → BookOrbit home; cold start after KOReader was killed
+with a book open (`open_book_at_exit`) → that book. Presses step book → BookOrbit home →
+companion; Home from another app goes to the book, so the steps never loop. "From another
+app" is the companion's `FROM=other_app` when it knows, else a KOReader pause of 2.5 s or more.
 
 ## Vendor profiles
 

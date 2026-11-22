@@ -51,6 +51,7 @@ activity needs an intent filter with the action and `android.intent.category.DEF
 |---|---|
 | `net.fledgewing.orbitcompanion.action.SHOW_STATUS` | Companion status (mockup screen 3) |
 | `net.fledgewing.orbitcompanion.action.SHOW_APPS` | The launcher's apps page (mockup screen 2) |
+| `net.fledgewing.orbitcompanion.action.SHOW_LAUNCHER` | The launcher page (the one a double Home shows); Home pressed on BookOrbit home. Companions before 0.2.1 lack it; the patch then opens `SHOW_APPS`. |
 
 ## Companion → patch: "go home"
 
@@ -64,15 +65,26 @@ extra:     net.fledgewing.orbitcompanion.extra.COMMAND = "home" | "home_smart"  
 extra:     net.fledgewing.orbitcompanion.extra.FROM = "other_app"   (optional, home_smart only)
 ```
 
-`home` always opens BookOrbit home. `home_smart` is sent when the shared "Home button" setting
-is "Back to my book, then BookOrbit home" (the default); the patch decides (`HomePlan`):
+Both commands go through the patch's `HomePlan`. `home_smart` is sent when the shared "Home
+button" setting is "Back to my book, then BookOrbit home" (the default), `home` when it is
+"BookOrbit home".
 
-| Where KOReader is | Home came from another app? | Goes to |
+| Where KOReader is | `home_smart` | `home` |
 |---|---|---|
-| Reader, book open | no (KOReader was in front) | BookOrbit home |
-| Reader, book open | yes | stays in the book |
-| File browser, BookOrbit pages, menus | — | the last book (`lastfile`), if it exists |
-| anywhere, no last book | — | BookOrbit home |
+| Reader showing a book, Home pressed in KOReader | BookOrbit home | BookOrbit home |
+| BookOrbit home (the plugin's dashboard) is the top widget, Home pressed in KOReader | the companion's launcher page (`SHOW_LAUNCHER`) | the companion's launcher page |
+| Elsewhere (another app in front, a menu, KOReader settings, another BookOrbit view, the file browser) **with a book open** | the book (whatever covers it is closed) | BookOrbit home |
+| Elsewhere with **no book open** (closed by the user, or none opened) | BookOrbit home | BookOrbit home |
+| Cold start after KOReader was **killed with a book open** | that book (reopened) | BookOrbit home |
+
+So presses in KOReader step book → BookOrbit home → companion, and Home from another app
+(the companion included) never loops back to the companion. A book the user closed is never
+reopened from history. "Killed with a book open" is the patch's `open_book_at_exit` setting:
+set on ReaderReady (flushed at once), cleared when the reader closes (Back to file browser,
+Home, Exit); a kill or suspend leaves it set. "Dashboard on top": the plugin's catalog widget
+(`main.lua:1207-1230`) is `UIManager:getTopmostVisibleWidget()` (the plugin's own test,
+`main.lua:1384`) and in its dashboard context (`BookOrbitCatalog:dashboardMode`,
+`bookorbit_catalog.lua:1875-1877`).
 
 "From another app" is `FROM = "other_app"` when the companion knows (one of its own pages was
 in front, or KOReader had gone away), otherwise KOReader's pause before the command: 2.5 s or
@@ -91,8 +103,8 @@ Home press within 2 s, or a KOReader that is missing, fails to start or closes w
 starting, shows the companion's launcher page instead. When Home comes back to the front
 without a press (KOReader closed or was killed, e.g. by a firmware that stops the foreground
 app some time after the power button), the companion starts KOReader again: with
-`home_smart` + `FROM = "other_app"` in smart mode, without an extra otherwise, so it reopens the
-last book; with the screen off it waits for the next screen-on.
+`home_smart` + `FROM = "other_app"` in smart mode (the patch reopens the book KOReader was
+killed with), without an extra otherwise; with the screen off it waits for the next screen-on.
 
 ## Optional: companion status over loopback
 

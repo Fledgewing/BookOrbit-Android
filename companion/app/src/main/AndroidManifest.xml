@@ -38,12 +38,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Also opened by the patch (SHOW_LAUNCHER): Home pressed on BookOrbit home. -->
         <activity
             android:name=".LauncherActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:excludeFromRecents="true"
-            android:exported="false"
-            android:label="@string/home_name" />
+            android:exported="true"
+            android:label="@string/home_name">
+            <intent-filter>
+                <action android:name="net.fledgewing.orbitcompanion.action.SHOW_LAUNCHER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <!-- Opened by the patch with FLAG_ACTIVITY_NEW_TASK: own task, so Back returns to KOReader. -->
         <activity

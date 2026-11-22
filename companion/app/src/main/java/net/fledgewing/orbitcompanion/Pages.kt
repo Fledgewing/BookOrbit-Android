@@ -418,20 +418,23 @@ object Setup {
             null, "" -> "tip: VPN settings › Tailscale ⚙ › Always-on"
             else -> "tip: Always-on is set to another app"
         }
+        // Tailscale routes only the tailnet: lockdown blocks everything else (updates included).
+        val lockdown = Net.vpnLockdown(ctx) == true
         list.add(
             Check(
                 "Tailscale signed in and connected",
-                tsUp,
+                tsUp && !lockdown,
                 when {
                     tsState == AppState.MISSING -> "not installed"
                     tsState == AppState.FROZEN -> Vendor.disabledMessage(ctx, "Tailscale")
                     !tsUp -> "not connected: open Tailscale and sign in"
+                    lockdown -> NetErrors.LOCKDOWN_WARNING
                     else -> "connected · $alwaysOnNote"
                 },
             ) { a ->
                 when {
                     tsState == AppState.FROZEN -> a.tryStart(Vendor.reenablePage(ctx, Net.TAILSCALE_PKG), "re-enable page")
-                    tsUp -> a.tryStart(Intent(Settings.ACTION_VPN_SETTINGS), "VPN settings")
+                    lockdown || tsUp -> a.tryStart(Intent(Settings.ACTION_VPN_SETTINGS), "VPN settings")
                     else -> ctx.packageManager.getLaunchIntentForPackage(Net.TAILSCALE_PKG)?.let { a.tryStart(it, "Tailscale") }
                 }
             },

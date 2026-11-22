@@ -337,3 +337,50 @@ object WifiTestPlan {
     /** Was on: off, then on (times the reconnect). Was off: on (timed), then back off. */
     fun steps(wasOn: Boolean): List<Step> = if (wasOn) listOf(Step.OFF, Step.ON) else listOf(Step.ON, Step.OFF)
 }
+
+/** Plain-English network errors for update checks. */
+object NetErrors {
+    const val BLOCKED = "Internet blocked: is 'Block connections without VPN' on for Tailscale?"
+    const val LOCKDOWN_WARNING =
+        "Block connections without VPN is on: internet (updates) is blocked. VPN settings › Tailscale ⚙ › turn it off"
+
+    /** always_on_vpn_lockdown: "1" on, "0" off, anything else unknown. */
+    fun lockdown(value: String?): Boolean? = when (value?.trim()) {
+        "1" -> true
+        "0" -> false
+        else -> null
+    }
+
+    /**
+     * [kind]: "permission" (EACCES/EPERM), "connect" (no route, refused, timeout, DNS) or other.
+     */
+    fun message(kind: String, wifiEnabled: Boolean, wifiConnected: Boolean, vpnUp: Boolean, detail: String): String = when {
+        kind == "permission" -> BLOCKED
+        kind == "connect" && !wifiEnabled -> "no internet: Wi-Fi is off"
+        kind == "connect" && !wifiConnected -> "no internet: Wi-Fi isn't connected"
+        kind == "connect" && vpnUp -> BLOCKED
+        kind == "connect" -> "no internet: GitHub can't be reached"
+        else -> "check failed: $detail"
+    }
+
+    /** EACCES/EPERM: what Android returns when lockdown blocks a socket outside the VPN. */
+    fun kindOf(e: Throwable): String {
+        var t: Throwable? = e
+        while (t != null) {
+            val m = t.message.orEmpty()
+            if (m.contains("EACCES") || m.contains("EPERM") || m.contains("Permission denied", ignoreCase = true) ||
+                t is SecurityException
+            ) {
+                return "permission"
+            }
+            t = t.cause
+        }
+        return if (e is java.net.UnknownHostException || e is java.net.ConnectException ||
+            e is java.net.SocketTimeoutException || e is java.net.NoRouteToHostException
+        ) {
+            "connect"
+        } else {
+            "other"
+        }
+    }
+}

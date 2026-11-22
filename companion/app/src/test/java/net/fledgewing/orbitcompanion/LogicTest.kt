@@ -361,3 +361,29 @@ class VendorProfilesTest {
         assertEquals("Disabled by the system", AppStates.disabledShort(null))
     }
 }
+
+class NetErrorsTest {
+    @Test
+    fun lockdownSetting() {
+        assertEquals(true, NetErrors.lockdown("1"))
+        assertEquals(false, NetErrors.lockdown("0"))
+        assertNull(NetErrors.lockdown(null))
+        assertNull(NetErrors.lockdown("x"))
+    }
+
+    @Test
+    fun permissionDeniedMeansBlocked() {
+        val e = java.net.SocketException("socket failed: EACCES (Permission denied)")
+        assertEquals("permission", NetErrors.kindOf(e))
+        assertEquals(NetErrors.BLOCKED, NetErrors.message("permission", true, true, true, ""))
+        assertEquals("permission", NetErrors.kindOf(java.io.IOException("wrap", java.net.SocketException("connect failed: EPERM"))))
+    }
+
+    @Test
+    fun connectFailureWithWifiAndVpnUpMeansBlocked() {
+        assertEquals("connect", NetErrors.kindOf(java.net.UnknownHostException("api.github.com")))
+        assertEquals(NetErrors.BLOCKED, NetErrors.message("connect", true, true, vpnUp = true, detail = ""))
+        assertEquals("no internet: GitHub can't be reached", NetErrors.message("connect", true, true, vpnUp = false, detail = ""))
+        assertEquals("no internet: Wi-Fi is off", NetErrors.message("connect", false, false, vpnUp = true, detail = ""))
+    }
+}

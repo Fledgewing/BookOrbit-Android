@@ -26,6 +26,7 @@ object Contract {
     const val SLEEP_NOW = "$PACKAGE.action.SLEEP_NOW"
     const val SHOW_STATUS = "$PACKAGE.action.SHOW_STATUS"
     const val SHOW_APPS = "$PACKAGE.action.SHOW_APPS"
+    const val SHOW_LAUNCHER = "$PACKAGE.action.SHOW_LAUNCHER"
     const val SETTINGS = "$PACKAGE.action.SETTINGS"
     const val EXTRA_FROM = "$PACKAGE.extra.FROM"
     const val EXTRA_COMMAND = "$PACKAGE.extra.COMMAND"
@@ -276,6 +277,20 @@ object Net {
         }
         OLog.i("always_on_vpn_app reads ${v ?: "null"}")
         return v
+    }
+
+    /**
+     * "Block connections without VPN" (Settings.Secure always_on_vpn_lockdown): true/false, or
+     * null when it can't be read. With Tailscale (tailnet routes only) it blocks the internet.
+     */
+    fun vpnLockdown(ctx: Context): Boolean? {
+        val v = try {
+            Settings.Secure.getString(ctx.contentResolver, "always_on_vpn_lockdown")
+        } catch (e: Exception) {
+            OLog.d("always_on_vpn_lockdown unreadable: ${e.javaClass.simpleName}")
+            return null
+        }
+        return NetErrors.lockdown(v).also { OLog.i("always_on_vpn_lockdown reads ${v ?: "null"}") }
     }
 
     fun adminActive(ctx: Context): Boolean =

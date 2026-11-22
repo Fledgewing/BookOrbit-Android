@@ -120,13 +120,11 @@ object Updater {
     }
 
     /** Plain words instead of an exception name. */
-    private fun friendly(ctx: Context, e: Exception): String = when {
-        e is java.net.UnknownHostException || e is java.net.ConnectException || e is java.net.SocketTimeoutException -> when {
-            !Net.wifiEnabled(ctx) -> "no internet: Wi-Fi is off"
-            !Net.wifiConnected(ctx) -> "no internet: Wi-Fi isn't connected"
-            else -> "no internet: GitHub can't be reached"
-        }
-        else -> "check failed: ${e.message ?: e.javaClass.simpleName}"
+    private fun friendly(ctx: Context, e: Exception): String {
+        val kind = NetErrors.kindOf(e)
+        val msg = NetErrors.message(kind, Net.wifiEnabled(ctx), Net.wifiConnected(ctx), Net.vpnUp(ctx), e.message ?: e.javaClass.simpleName)
+        log("error kind $kind: ${e.javaClass.simpleName}: ${e.message} -> $msg")
+        return msg
     }
 
     private fun run(ctx: Context, interactive: Boolean, why: String): String {

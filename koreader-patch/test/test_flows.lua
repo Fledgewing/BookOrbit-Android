@@ -28,6 +28,7 @@ local UIManager = {
         for i = #W.queue, 1, -1 do if W.queue[i].fn == fn then table.remove(W.queue, i) end end
     end,
     show = function(_, w) table.insert(W.shown, w) end,
+    getTopmostVisibleWidget = function() return W.shown[#W.shown] end,
     close = function(_, w)
         for i = #W.shown, 1, -1 do if W.shown[i] == w then table.remove(W.shown, i) end end
         if w and w.dismiss_callback then w.dismiss_callback() end
@@ -63,6 +64,17 @@ local env_fns = {
     ExceptionClear = function() W.exception = false end,
     DeleteLocalRef = function() end,
     GetObjectClass = function(_, obj) return { cls = obj } end,
+    GetStaticMethodID = function(_, _, name) return name end,
+    -- Settings.Global.getInt(cr, "wifi_on", -1): the radio (W.radio, else W.wifi).
+    CallStaticIntMethod = function(_, cls, m, cr, key, def)
+        if m == "getInt" and key.str == "wifi_on" then
+            if W.wifi_on_unreadable then return tonumber(def) end
+            local on = W.radio
+            if on == nil then on = W.wifi end
+            return on and 1 or 0
+        end
+        return tonumber(def)
+    end,
     GetMethodID = function(_, _, name) return name end,
     FindClass = function(_, name) return { name = name } end,
     NewStringUTF = function(_, s) return { str = s } end,
@@ -108,11 +120,8 @@ local env_fns = {
     CallBooleanMethod = function(_, obj, m)
         if m == "isInteractive" then return W.screen_on and 1 or 0 end
         if m == "hasTransport" then return W.vpn and 1 or 0 end
-        if m == "isWifiEnabled" then
-            local on = W.radio
-            if on == nil then on = W.wifi end
-            return on and 1 or 0
-        end
+        -- KOReader has no ACCESS_WIFI_STATE: WifiManager.isWifiEnabled throws SecurityException.
+        if m == "isWifiEnabled" then W.exception = true; W.wifi_manager_called = true; return 0 end
         return 0
     end,
 }
@@ -243,6 +252,9 @@ end
 local function ok(v, what) if not v then error(what or "expected true", 2) end end
 
 ---------------------------------------------------------------- load
+-- The previous KOReader process was killed with this book open (Smart Home cold start).
+store.orbit_android = store.orbit_android or {}
+store.orbit_android.open_book_at_exit = "/books/killed.epub"
 dofile(here .. "/../2-orbit-android.lua")
 local plugins = PluginLoader:loadPlugins()
 local Orbit = plugins[#plugins]
@@ -586,6 +598,20 @@ test("frozen companion: says so, and a wake with Wi-Fi off gives up at once", fu
     done()
 end)
 
+test("wifi state: read from Settings.Global, never WifiManager (no ACCESS_WIFI_STATE)", function()
+    W.wifi_manager_called = false
+    local before = #W.logs
+    W.radio = false
+    local ui, m = newUI(false)
+    m:onResume()
+    run(20)
+    ok(not W.wifi_manager_called, "isWifiEnabled not called")
+    for i = before + 1, #W.logs do
+        ok(not W.logs[i]:find("failed: java exception", 1, true), "no JNI failure: " .. W.logs[i])
+    end
+    W.radio = nil
+end)
+
 ---------------------------------------------------------------- Smart Home (v0.2)
 local function command(m, cmd, from)
     W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = cmd
@@ -614,7 +640,17 @@ test("smart home: from another app with a book open -> stay in the book", functi
     ok(not W.home_called, "stayed in the book")
 end)
 
-test("smart home: from the file browser -> the last book", function()
+test("smart home: cold start after KOReader was killed with a book open -> that book", function()
+    W.files["/books/killed.epub"] = true
+    W.opened = nil
+    local ui, m = newUI(false)
+    command(nil, "home_smart", "other_app")
+    m:checkCommand("start") -- what init schedules 1 s after a cold start
+    run(5)
+    ok(W.opened == "/books/killed.epub", "reopened the book it was killed with")
+end)
+
+test("smart home: from the file browser with no book open -> BookOrbit home, not history", function()
     store.lastfile = "/books/last.epub"
     W.files["/books/last.epub"] = true
     W.opened = nil
@@ -624,7 +660,17 @@ test("smart home: from the file browser -> the last book", function()
     command(m, "home_smart")
     m:onResume()
     run(1)
-    ok(W.opened == "/books/last.epub", "opened the last book")
+    ok(W.opened == nil, "no book reopened from history")
+    ok(has(ui.bookorbit.calls, "dashboard"), "BookOrbit home")
+end)
+
+test("open book at exit: set when a book opens, cleared when it is closed", function()
+    local ui, m = newUI(true)
+    m:onReaderReady()
+    run(5)
+    ok(store.orbit_android.open_book_at_exit == "/b.epub", "set")
+    m:onCloseWidget()
+    ok(store.orbit_android.open_book_at_exit == nil, "cleared")
 end)
 
 test("smart home: no last book -> BookOrbit home", function()
@@ -635,6 +681,66 @@ test("smart home: no last book -> BookOrbit home", function()
     m:onResume()
     run(5)
     ok(has(ui.bookorbit.calls, "dashboard"), "dashboard")
+end)
+
+local function dashboardOnTop(ui, kind)
+    local cb = { dashboardMode = function() return kind == "dashboard" end }
+    ui.bookorbit.catalog_browser = cb
+    W.shown = { cb }
+end
+
+for _, cmd in ipairs({ "home_smart", "home" }) do
+    test("home (" .. cmd .. "): pressed on BookOrbit home -> the companion's launcher page", function()
+        store.lastfile = "/books/last.epub"
+        W.files["/books/last.epub"] = true
+        local ui, m = newUI(false)
+        run(5)
+        dashboardOnTop(ui, "dashboard")
+        W.activities, W.opened = {}, nil
+        m:onSuspend(); W.clock = W.clock + 0.5
+        command(m, cmd)
+        m:onResume()
+        run(1)
+        local a = W.activities[#W.activities]
+        ok(a and a.action:match("%.SHOW_LAUNCHER$"), "launcher page started")
+        ok(W.opened == nil, "no book opened")
+        ui.bookorbit.catalog_browser = nil
+        W.shown = {}
+    end)
+end
+
+test("home: from the companion page while BookOrbit home is on top, no book -> BookOrbit home", function()
+    store.lastfile = "/books/last.epub"
+    W.files["/books/last.epub"] = true
+    local ui, m = newUI(false)
+    run(5)
+    dashboardOnTop(ui, "dashboard")
+    W.activities, W.opened = {}, nil
+    command(m, "home_smart", "other_app")
+    m:onResume()
+    run(1)
+    ok(#W.activities == 0, "no companion page")
+    ok(W.opened == nil, "no book reopened")
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
+test("home: another BookOrbit view on top over an open book -> the book", function()
+    store.lastfile = "/books/last.epub"
+    W.files["/books/last.epub"] = true
+    local ui, m = newUI(true)
+    run(5)
+    dashboardOnTop(ui, "detail")
+    W.activities, W.opened, W.home_called = {}, nil, false
+    m:onSuspend(); W.clock = W.clock + 0.5
+    command(m, "home_smart")
+    m:onResume()
+    run(1)
+    ok(#W.activities == 0, "no companion page")
+    ok(not W.home_called, "the book stays open")
+    ok(#W.shown == 0, "the view over it was closed")
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
 end)
 
 test("apps gesture: registered and in the recommended set", function()
