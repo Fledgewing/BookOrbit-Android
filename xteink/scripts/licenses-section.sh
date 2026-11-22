@@ -3,24 +3,26 @@
 #   scripts/licenses-section.sh <upstream-tag> <overlay-commit>
 # Reads the MicroLink submodule pin and URL from this repository at <overlay-commit>
 # (needs that commit locally), and the upstream tag's freeink-sdk pin and platform from
-# GitHub with `gh` (GH_TOKEN). Env: OVERLAY_REPO (default Fledgewing/CrossInk-Tailnet),
+# GitHub with `gh` (GH_TOKEN). Env: OVERLAY_REPO (default Fledgewing/Orbify),
 # UPSTREAM_REPO (default agosez/CrossInk-Bookorbit), SOURCE_ARCHIVE (attached, the default:
 # the release carries source-<version>.tar.gz; request: older releases without one).
-# Used by .github/workflows/build.yml for new releases and by hand for older ones.
+# Used by .github/workflows/xteink.yml for new releases and by hand for older ones.
 set -euo pipefail
 
 tag="${1:?usage: licenses-section.sh <upstream-tag> <overlay-commit>}"
 overlay="${2:?usage: licenses-section.sh <upstream-tag> <overlay-commit>}"
-overlay_repo="${OVERLAY_REPO:-Fledgewing/CrossInk-Tailnet}"
+overlay_repo="${OVERLAY_REPO:-Fledgewing/Orbify}"
 upstream_repo="${UPSTREAM_REPO:-agosez/CrossInk-Bookorbit}"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 
 enc() { printf '%s' "$1" | sed 's/+/%2B/g'; }
 tag_enc="$(enc "$tag")"
 
-ml_sha="$(git -C "$here" rev-parse "$overlay:third_party/microlink")"
+# The overlay is xteink/ in Orbify (prefix "xteink/"); paths in a commit are from the repo root.
+prefix="$(git -C "$here" rev-parse --show-prefix)"
+ml_sha="$(git -C "$here" rev-parse "$overlay:${prefix}third_party/microlink")"
 ml_url="$(git -C "$here" show "$overlay:.gitmodules" \
-  | git config -f /dev/stdin --get submodule.third_party/microlink.url)"
+  | git config -f /dev/stdin --get "submodule.${prefix}third_party/microlink.url")"
 ml_url="${ml_url%.git}"
 
 sdk_sha="$(gh api "repos/$upstream_repo/contents/freeink-sdk?ref=$tag_enc" -q .sha 2>/dev/null || true)"
@@ -40,9 +42,9 @@ in \`licenses.zip\`. Both are attached to this release.
 
 Complete corresponding source:
 
-- CrossInk-Tailnet overlay: [\`${overlay:0:7}\`](https://github.com/$overlay_repo/tree/$overlay)
-  (build recipe: [\`.github/workflows/build.yml\`](https://github.com/$overlay_repo/blob/$overlay/.github/workflows/build.yml),
-  instructions: [Building locally](https://github.com/$overlay_repo/blob/$overlay/README.md#building-locally))
+- CrossInk-Tailnet overlay: [\`${overlay:0:7}\`](https://github.com/$overlay_repo/tree/$overlay/${prefix})
+  (build recipe: [\`.github/workflows/xteink.yml\`](https://github.com/$overlay_repo/blob/$overlay/.github/workflows/xteink.yml),
+  instructions: [Building locally](https://github.com/$overlay_repo/blob/$overlay/${prefix}README.md#building-locally))
 - CrossInk-Bookorbit: [\`$tag\`](https://github.com/$upstream_repo/tree/$tag_enc)$(
   [ -n "$sdk_sha" ] && printf ', with FreeInk SDK [`%s`](https://github.com/Free-Ink/freeink-sdk/tree/%s)' "${sdk_sha:0:7}" "$sdk_sha")
 - MicroLink: [\`${ml_sha:0:7}\`]($ml_url/tree/$ml_sha)

@@ -246,11 +246,18 @@ download_plugin() {
     say "BookOrbit plugin $PLUGIN_VER (release $tag): $n files, $(du -sk "$PLUGIN_DIR" | cut -f1) KB, git blob ids match"
 }
 
+# The version in an Android release tag: android-v0.7.1 (Orbify) or v0.7.0 (before it).
+orbit_version() {
+    local t=${1#android-}
+    printf '%s' "${t#v}"
+}
+
 download_orbit() {
-    local json name url
+    local json name url ver
     json=$(fetch "$ORBIT_API")
     ORBIT_TAG=$(jq -r .tag_name <<<"$json")
-    for name in SHA256SUMS "$PATCH_NAME" "orbit-companion-${ORBIT_TAG#v}.apk"; do
+    ver=$(orbit_version "$ORBIT_TAG")
+    for name in SHA256SUMS "$PATCH_NAME" "orbit-companion-$ver.apk"; do
         url=$(jq -r --arg n "$name" '.assets[] | select(.name == $n) | .browser_download_url' <<<"$json")
         [[ -n $url ]] || die "$ORBIT_TAG has no $name"
         fetch -o "$WORK/$name" "$url"
@@ -263,7 +270,7 @@ download_orbit() {
         checked=$((checked + 1))
     done <"$WORK/SHA256SUMS"
     [[ $checked == 2 ]] || die "SHA256SUMS doesn't list the companion and the patch"
-    COMPANION_APK="$WORK/orbit-companion-${ORBIT_TAG#v}.apk"
+    COMPANION_APK="$WORK/orbit-companion-$ver.apk"
     if command -v gh >/dev/null 2>&1 && gh attestation verify "$COMPANION_APK" -R Fledgewing/Orbify >/dev/null 2>&1 &&
         gh attestation verify "$WORK/$PATCH_NAME" -R Fledgewing/Orbify >/dev/null 2>&1; then
         say "Orbit $ORBIT_TAG: companion and patch match SHA256SUMS and their build attestations"

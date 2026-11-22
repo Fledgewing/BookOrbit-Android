@@ -1,20 +1,26 @@
-name: Build
-# Builds CrossInk-Bookorbit's latest release with the Tailnet overlay applied.
+name: Xteink
+# Builds CrossInk-Bookorbit's latest release with the Tailnet overlay (xteink/) applied.
 #
-# - push / pull request: build every reader (no release).
+# - push / pull request touching xteink/: host tests and every reader's build (no release).
 # - daily schedule and manual runs: build, then publish a release when this
-#   (upstream tag, overlay commit) pair has not been released yet. Readers see
-#   it under Settings > Check for updates, because the overlay points their
-#   updater at this repo's releases.
+#   (upstream tag, xteink/ tree) pair has not been released yet. Readers see it under
+#   Settings > Check for updates: the overlay points their updater at this repo's
+#   xteink-v releases (overlay patch ota-tag-prefix).
 #
-# Release versions keep upstream's and add a fourth number that only ever goes
-# up (the workflow run number): upstream v1.6.1+bookorbit.8 becomes
-# v1.6.1.<run>+bookorbit.8. CrossInk's updater compares four numeric parts, so
-# a new upstream release or an overlay-only rebuild both read as newer.
+# Tags: xteink-v<version>. Firmware releases are published with make_latest=false: "latest"
+# is always an Android release (companions up to 0.6.x read releases/latest).
+#
+# Release versions keep upstream's and add a fourth number that only ever goes up
+# (RUN_BASE + the workflow run number): upstream v1.6.1+bookorbit.8 becomes
+# xteink-v1.6.1.<n>+bookorbit.8. CrossInk's updater compares four numeric parts, so a new
+# upstream release or an overlay-only rebuild both read as newer. RUN_BASE keeps the numbers
+# above the last CrossInk-Tailnet release (1.6.1.46) now that the run counter restarted.
 on:
   push:
     branches: [main]
+    paths: ["xteink/**", "shared/**", ".github/workflows/xteink.yml"]
   pull_request:
+    paths: ["xteink/**", "shared/**", ".github/workflows/xteink.yml"]
   schedule:
     - cron: "17 11 * * *"
   workflow_dispatch:
@@ -35,20 +41,31 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   UPSTREAM_REPO: agosez/CrossInk-Bookorbit
   PIO_CORE: "6.1.19"
+  RUN_BASE: "100"
+  # The firmware reads this many releases (xteink/tailnet/tailnet_build.py OTA_PAGE); a daily
+  # run republishes when the newest firmware release has slipped below KEEP_WITHIN of them.
+  KEEP_WITHIN: "20"
 
 jobs:
   resolve:
     runs-on: ubuntu-latest
     outputs:
       upstream_tag: ${{ steps.r.outputs.upstream_tag }}
+      marker: ${{ steps.r.outputs.marker }}
       version: ${{ steps.r.outputs.version }}
       asset_version: ${{ steps.r.outputs.asset_version }}
       publish: ${{ steps.r.outputs.publish }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: xteink
+
       - id: r
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,19 +78,27 @@ jobs:
           # 1.6.1+bookorbit.8 -> 1.6.1.<run>+bookorbit.8
           numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"
           rest="${base#"$numeric"}"
-          version="${numeric}.${GITHUB_RUN_NUMBER}${rest}"
+          version="${numeric}.$((RUN_BASE + GITHUB_RUN_NUMBER))${rest}"
           asset_version="$(printf '%s' "$version" | sed 's/[^A-Za-z0-9._-]\{1,\}/-/g')"
 
+          # Only xteink/ decides: an Android-only commit never makes a firmware release.
+          marker="upstream=$tag overlay-tree=$(git rev-parse HEAD:xteink)"
           publish=false
           if [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            marker="upstream=$tag overlay=$GITHUB_SHA"
-            if [ "$FORCE" = true ] || ! gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" -q '.[].body' \
+            if [ "$FORCE" = true ] || ! gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '.[].body' \
                 | grep -qF "$marker"; then
+              publish=true
+            fi
+            # Keep the newest stable firmware within the page the readers read.
+            if [ "$GITHUB_EVENT_NAME" = schedule ] && ! gh api "repos/$GITHUB_REPOSITORY/releases?per_page=$KEEP_WITHIN" \
+                -q '.[] | select(.prerelease | not) | .tag_name' | grep -q '^xteink-v'; then
+              echo "no stable firmware release in the newest $KEEP_WITHIN releases: republishing"
               publish=true
             fi
           fi
           {
             echo "upstream_tag=$tag"
+            echo "marker=$marker"
             echo "version=$version"
             echo "asset_version=$asset_version"
             echo "publish=$publish"
@@ -94,10 +119,10 @@ jobs:
           - environment: default
             firmware: firmware-x3-x4
     steps:
-      - name: Check out the overlay
+      - name: Check out Orbify
         uses: actions/checkout@v6
         with:
-          path: overlay
+          path: orbify
           submodules: recursive
 
       - name: Check out CrossInk-Bookorbit ${{ needs.resolve.outputs.upstream_tag }}
@@ -140,7 +165,10 @@ jobs:
         # overlay/patches/v1.6 for CrossInk 1.6.x, v2.0 for 2.x (picked from the tag).
         env:
           CROSSINK_PATCH_SERIES: ${{ inputs.patch_series }}
-        run: overlay/scripts/apply.sh upstream
+        run: orbify/xteink/scripts/apply.sh upstream
+
+      - name: Host tests
+        run: orbify/xteink/test/run-host-tests.sh upstream
 
       - name: Set the release version
         working-directory: upstream
@@ -153,6 +181,7 @@ jobs:
         env:
           CROSSINK_RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
           TAILNET_OVERLAY_REPO: ${{ github.repository }}
+          TAILNET_OTA_TAG_PREFIX: xteink-v
         run: pio run -j1 -e "${{ matrix.environment }}"
 
       # Complete corresponding source (GPL): the overlay with MicroLink, CrossInk after the
@@ -164,7 +193,7 @@ jobs:
         run: |
           set -euo pipefail
           pio pkg install -e default -e x4-classic
-          ../overlay/scripts/source-archive.sh --upstream . \
+          ../orbify/xteink/scripts/source-archive.sh --upstream . \
             --version "${{ needs.resolve.outputs.version }}" \
             --core ~/.platformio/packages/framework-arduinoespressif32 \
             --out "../source/source-${{ needs.resolve.outputs.asset_version }}.tar.gz"
@@ -200,41 +229,56 @@ jobs:
           path: firmware
 
       # The license list, texts and the release-notes section come from this commit.
-      - name: Check out the overlay
+      - name: Check out Orbify
         uses: actions/checkout@v6
         with:
-          path: overlay
+          path: orbify
 
       - name: Write the release notes and license files
         env:
           GH_TOKEN: ${{ github.token }}
           OVERLAY_REPO: ${{ github.repository }}
           TAG: ${{ needs.resolve.outputs.upstream_tag }}
+          MARKER: ${{ needs.resolve.outputs.marker }}
         run: |
           set -euo pipefail
-          cp overlay/THIRD_PARTY_LICENSES.md firmware/
-          (cd overlay && zip -qr ../firmware/licenses.zip licenses LICENSE THIRD_PARTY_LICENSES.md)
+          cp orbify/xteink/THIRD_PARTY_LICENSES.md firmware/
+          (cd orbify/xteink && zip -qr ../../firmware/licenses.zip licenses LICENSE THIRD_PARTY_LICENSES.md)
+          (cd firmware && sha256sum -- *.bin *.tar.gz THIRD_PARTY_LICENSES.md licenses.zip > SHA256SUMS)
           {
-            echo "CrossInk-Bookorbit $TAG with Tailscale (MicroLink)."
+            echo "CrossInk-Bookorbit $TAG with Tailscale (MicroLink): Orbify's Xteink firmware."
             echo
             echo "Install over the air from the reader (Settings > Check for updates) once it runs a"
-            echo "CrossInk-Tailnet build, or flash the .bin for your reader from an SD card or USB."
+            echo "CrossInk-Tailnet or Orbify build, or flash the .bin for your reader from an SD card or USB."
+            echo "Verify: \`sha256sum -c SHA256SUMS\`, \`gh attestation verify <file> -R $OVERLAY_REPO\`."
             case "$TAG" in
               v2.*) echo 'The X3 build leaves out Nearby transfer, mDNS, Plugins and language/hyphenation downloads (see "X3 (rc2 / v2.0) differences" in the README for workarounds). The X4 Pro and X4 Classic keep everything.' ;;
             esac
             echo
-            overlay/scripts/licenses-section.sh "$TAG" "$GITHUB_SHA"
+            orbify/xteink/scripts/licenses-section.sh "$TAG" "$GITHUB_SHA"
             echo
             # Marker the resolve job looks for to skip already-released pairs.
-            echo "upstream=$TAG overlay=$GITHUB_SHA"
+            echo "$MARKER"
           } > notes.md
           cat notes.md
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            firmware/*.bin
+            firmware/source-*.tar.gz
+            firmware/THIRD_PARTY_LICENSES.md
+            firmware/licenses.zip
+            firmware/SHA256SUMS
+
       - uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ needs.resolve.outputs.version }}
+          tag_name: xteink-v${{ needs.resolve.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: v${{ needs.resolve.outputs.version }}
+          name: xteink-v${{ needs.resolve.outputs.version }}
+          # "latest" stays an Android release (AGENTS.md "Releases").
+          make_latest: false
           # An upstream release candidate stays a pre-release here too: only
           # readers with Include Release Candidates on are offered it.
           prerelease: ${{ contains(needs.resolve.outputs.version, '-rc') }}
@@ -244,3 +288,4 @@ jobs:
             firmware/THIRD_PARTY_LICENSES.md
             firmware/licenses.zip
             firmware/source-*.tar.gz
+            firmware/SHA256SUMS

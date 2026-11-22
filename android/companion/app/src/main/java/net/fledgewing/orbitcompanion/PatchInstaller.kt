@@ -228,12 +228,24 @@ object PatchInstaller {
         Updater.status(ctx, UpdateFlow.doneLine(want))
     }
 
+    /** This version's release: tagged android-v<v> since Orbify, v<v> before it (and the v0.7.0 bridge). */
+    private fun releaseText(v: String): String {
+        var last: Exception? = null
+        for (tag in ReleaseTags.forVersion(v)) {
+            try {
+                return Updater.httpText("${Updater.API}/releases/tags/$tag")
+            } catch (e: java.io.IOException) {
+                last = e
+            }
+        }
+        throw last ?: java.io.IOException("no release for v$v")
+    }
+
     private fun run(): String {
         val v = BuildConfig.VERSION_NAME
         val dev = Version.parse(v) == null || v.contains("dev")
-        val url = if (dev) "${Updater.API}/releases/latest" else "${Updater.API}/releases/tags/v$v"
         log("fetching ${if (dev) "the latest release" else "release v$v"}")
-        val rel = Updater.release(JSONObject(Updater.httpText(url)))
+        val rel = Updater.release(JSONObject(if (dev) Updater.httpText("${Updater.API}/releases/latest") else releaseText(v)))
         val luaUrl = rel.assets[PatchFile.NAME] ?: return "${rel.tag} has no ${PatchFile.NAME}"
         val sumsUrl = rel.assets[UpdatePolicy.SUMS_NAME] ?: return "${rel.tag} has no ${UpdatePolicy.SUMS_NAME}"
         val expected = Checksums.parse(Updater.httpText(sumsUrl))[PatchFile.NAME]

@@ -1,0 +1,42 @@
+# Features
+
+What Orbify ships, per platform. Only what we add: KOReader's, BookOrbit's and CrossInk's own
+features are not listed. Planned work is in [`ROADMAP.md`](../ROADMAP.md); an item moves here when
+it ships (AGENTS.md "Features and roadmap").
+
+**yes**: shipped. **2.x rc**: in the CrossInk 2.x release-candidate build only (Include Release
+Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "Platforms".
+
+## Network and sync
+
+| Feature | KOReader-Android | X4 Pro | X4 | X3 |
+|---|---|---|---|---|
+| Reach a BookOrbit server that is only on your tailnet | yes (Tailscale app, woken by the companion) | yes (MicroLink) | yes | yes |
+| Tailnet login and status on the device (Settings > Tailscale, QR code) | n/a (Tailscale app) | yes | yes | yes |
+| Tailnet names (`bookorbit`, `*.ts.net`) for every client on the device | n/a (Tailscale app) | yes | yes | yes |
+| Network brought up before the plugin syncs, and back off after | yes | n/a (firmware does it) | n/a | n/a |
+| Sync on sleep, wake pull, Sync and sleep | yes | n/a (firmware does it) | n/a | n/a |
+| Sync while reading (time, pages or chapters) | yes | 2.x rc | 2.x rc | no: no memory beside an open book |
+| Wi-Fi modes: Always on, Off while reading, Just in time | yes | n/a | n/a | n/a |
+| Faster Wi-Fi join and catalog boot session | n/a | yes | yes | yes |
+| Download progress, and back to the catalog after a download | n/a | yes | yes | yes |
+
+## Library and home
+
+| Feature | KOReader-Android | X4 Pro | X4 | X3 |
+|---|---|---|---|---|
+| Home button: back to the book, then BookOrbit home; companion as launcher | yes | n/a | n/a | n/a |
+| BookOrbit home opens on its first page | yes | n/a | n/a | n/a |
+| Lists by series and by author (BookOrbit's Series and Authors views) | yes | no | no | no |
+| Reopen the open book after an update restart | yes | n/a | n/a | n/a |
+
+## Device
+
+| Feature | KOReader-Android | X4 Pro | X4 | X3 |
+|---|---|---|---|---|
+| Settings PIN (kid lock) | yes | 2.x rc | 2.x rc | 2.x rc |
+| Battery stats in the `orbit-battery-stats/1` format, Compare across readers | yes | 2.x rc | 2.x rc | 2.x rc (file only, no numbers on screen) |
+| Clicker buttons (page turns in KOReader and other apps, Send key) | yes | n/a | n/a | n/a |
+| Frontlight re-applied after the first paint of every boot | n/a | yes | yes | yes |
+| Setup installs KOReader and the BookOrbit plugin; USB installer (`tools/install-usb.sh`) | yes | n/a | n/a | n/a |
+| Self-update, SHA-256 checked | yes (app and patch) | yes (OTA) | yes (OTA) | yes (OTA) |

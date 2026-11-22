@@ -1,0 +1,44 @@
+# Android CI: the KOReader patch tests, the USB installer checks and the companion's unit
+# tests, debug build and lint. Releases build in release.yml (android-v* tags).
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", "shared/**", "tools/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", "shared/**", "tools/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+
+      - name: KOReader patch tests
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq luajit >/dev/null
+          luajit android/koreader-patch/test/test_logic.lua
+          luajit android/koreader-patch/test/test_flows.lua
+
+      - name: USB installer checks
+        run: |
+          set -euo pipefail
+          shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh tools/upstreams
+          bash tools/test/test-install-usb.sh
+
+      - name: Companion tests, debug build and lint
+        working-directory: android/companion
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug lintDebug

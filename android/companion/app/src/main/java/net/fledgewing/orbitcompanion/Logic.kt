@@ -191,7 +191,46 @@ data class Version(val major: Int, val minor: Int, val patch: Int, val pre: Stri
 
 /** One GitHub release, reduced to what the updater needs. */
 data class ReleaseInfo(val tag: String, val prerelease: Boolean, val draft: Boolean, val assets: Map<String, String>) {
-    val version: Version? get() = Version.parse(tag)
+    /** Null for a release that is not an Android one (firmware `xteink-v…`, anything else). */
+    val version: Version? get() = ReleaseTags.version(tag)
+
+    companion object {
+        /** One object of GitHub's release JSON (org.json is pure Java, so this stays testable). */
+        fun from(o: org.json.JSONObject): ReleaseInfo {
+            val assets = LinkedHashMap<String, String>()
+            val arr = o.optJSONArray("assets") ?: org.json.JSONArray()
+            for (i in 0 until arr.length()) {
+                val a = arr.getJSONObject(i)
+                assets[a.getString("name")] = a.getString("browser_download_url")
+            }
+            return ReleaseInfo(o.optString("tag_name"), o.optBoolean("prerelease"), o.optBoolean("draft"), assets)
+        }
+    }
+}
+
+/**
+ * Orbify releases both platforms from one repo (AGENTS.md "Releases"): Android tags are
+ * `android-v<version>`, firmware tags `xteink-v<version>`. The Android pieces read only their
+ * own, plus the plain `v<version>` tags of BookOrbit-Android and the v0.7.0 bridge release,
+ * which companions up to 0.6.2 can parse.
+ */
+object ReleaseTags {
+    const val PREFIX = "android-v"
+
+    /** Only GET /releases?per_page=N lists pre-releases; firmware releases share the list. */
+    const val LIST_PAGE = 30
+
+    fun version(tag: String): Version? {
+        val t = tag.trim()
+        return when {
+            t.startsWith(PREFIX) -> Version.parse(t.removePrefix(PREFIX))
+            t.startsWith("v") || t.startsWith("V") -> Version.parse(t)
+            else -> null
+        }
+    }
+
+    /** Tags to try for one version's release, newest scheme first. */
+    fun forVersion(v: String): List<String> = listOf("$PREFIX$v", "v$v")
 }
 
 object UpdatePolicy {
@@ -831,6 +870,9 @@ object WhatsNew {
         ),
         "0.6.2" to listOf(
             "With a Settings PIN, a Boox library (and any launcher app) never asks for the PIN; only its settings screens do. Guarded apps lists every guarded entry so each can be turned off.",
+        ),
+        "0.7.0" to listOf(
+            "Orbify: the app and the KOReader patch now update from github.com/Fledgewing/Orbify, one home for Android and Xteink readers. Nothing changes on the reader.",
         ),
     )
 

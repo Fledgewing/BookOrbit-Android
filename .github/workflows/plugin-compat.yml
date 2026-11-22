@@ -6,7 +6,7 @@ name: Plugin compatibility
 on:
   pull_request:
   push:
-    tags: ["v*"]
+    tags: ["android-v*", "v*"]
   schedule:
     - cron: "17 6 * * 1" # Mondays
   workflow_dispatch:

@@ -27,7 +27,7 @@ import kotlin.concurrent.thread
 /**
  * Self-update from this repo's public GitHub releases (README "Updates").
  *
- * 1. Fetch releases/latest (or releases?per_page=5 with "Include pre-releases").
+ * 1. Fetch releases/latest (or the releases list with "Include pre-releases"); only Android tags count.
  * 2. Newer than BuildConfig.VERSION_NAME? Download SHA256SUMS and orbit-companion-<ver>.apk.
  * 3. The APK's SHA-256 must match SHA256SUMS, and its signing certificate must match the
  *    installed app's.
@@ -141,7 +141,7 @@ object Updater {
         log("check started ($why, interactive=$interactive, pre-releases=$pre, installed v${BuildConfig.VERSION_NAME})")
 
         val releases = if (pre) {
-            val arr = JSONArray(httpText("$API/releases?per_page=5"))
+            val arr = JSONArray(httpText("$API/releases?per_page=${ReleaseTags.LIST_PAGE}"))
             (0 until arr.length()).map { release(arr.getJSONObject(it)) }
         } else {
             listOf(release(JSONObject(httpText("$API/releases/latest"))))
@@ -190,15 +190,7 @@ object Updater {
         return "installing v$ver"
     }
 
-    internal fun release(o: JSONObject): ReleaseInfo {
-        val assets = LinkedHashMap<String, String>()
-        val arr = o.optJSONArray("assets") ?: JSONArray()
-        for (i in 0 until arr.length()) {
-            val a = arr.getJSONObject(i)
-            assets[a.getString("name")] = a.getString("browser_download_url")
-        }
-        return ReleaseInfo(o.optString("tag_name"), o.optBoolean("prerelease"), o.optBoolean("draft"), assets)
-    }
+    internal fun release(o: JSONObject): ReleaseInfo = ReleaseInfo.from(o)
 
     /** A connect timeout or reset is retried twice, after 3 s and 10 s (NetErrors.withRetry). */
     private fun open(url: String): HttpURLConnection = NetErrors.withRetry(

@@ -1,4 +1,8 @@
-# CrossInk-Tailnet
+# Orbify for Xteink (CrossInk-Tailnet)
+
+Orbify's Xteink firmware, built as the CrossInk-Tailnet overlay. It lived in
+Fledgewing/CrossInk-Tailnet until it moved into Orbify with its history (`xteink/`); that repo is
+archived. Releases are this repo's `xteink-v…` tags (AGENTS.md "Releases").
 
 [CrossInk-Bookorbit](https://github.com/agosez/CrossInk-Bookorbit) firmware with your reader on
 your Tailscale tailnet, using [MicroLink](https://github.com/CamM2325/microlink). BookOrbit sync,
@@ -11,7 +15,7 @@ This is an **overlay**, not a fork. CrossInk's source is used as released; the o
 | MicroLink | `third_party/microlink` (submodule: the `crossink` branch of [our fork](https://github.com/Fledgewing/microlink)) | Tailscale-compatible WireGuard client for ESP32, with our changes (closest relay region, per-peer relays) on top |
 | Shim | `tailnet/shim` | Starts MicroLink when WiFi gets an address, stops it when WiFi goes away; answers tailnet names (`bookorbit`, `bookorbit.<tailnet>.ts.net`) for every HTTP client in the firmware |
 | Settings screen | `tailnet/ui` | **Settings > Tailscale**: on/off, status and address, log in (QR code) and log out |
-| Build hook | `tailnet/tailnet_build.py` + `overlay/platformio.local.ini` | Compiles the above into CrossInk's normal PlatformIO build and points the updater at this repo's releases |
+| Build hook | `tailnet/tailnet_build.py` + `overlay/platformio.local.ini` | Compiles the above into CrossInk's normal PlatformIO build and points the updater at Orbify's `xteink-v…` releases (patch `ota-tag-prefix`) |
 | CrossInk patches | `overlay/patches/v1.6/` (CrossInk 1.6.x), `overlay/patches/v2.0/` (CrossInk 2.x) | One numbered series per upstream line: the Settings row (0001), the framebuffer freed while Tailscale runs in a network boot on the X3/X4 (0002, `tailnet/shim/TailnetNetPhase.h`), and the memory and download changes after them |
 
 When CrossInk-Bookorbit releases, the daily CI run rebuilds the new tag with the overlay and
@@ -56,8 +60,9 @@ Where the downloads used to be, the reader shows where to copy the files.
 ## First install
 
 Flash the `.bin` for your reader from the latest release the same way you install CrossInk from
-an SD card or USB. After that, **Settings > Check for updates** installs new CrossInk-Tailnet
-releases over the air. To go back to stock CrossInk-Bookorbit, flash its `.bin` the same way.
+an SD card or USB. After that, **Settings > Check for updates** installs new releases over the air:
+Orbify's `xteink-v…` firmware releases (a reader on a CrossInk-Tailnet build gets there through
+that repo's last release, which already points at Orbify). To go back to stock CrossInk-Bookorbit, flash its `.bin` the same way.
 
 ## Joining your tailnet
 
@@ -210,8 +215,9 @@ starts. The X3 and X4 build (`default`) writes the file without the numbers on t
 
 ```bash
 git clone --recursive https://github.com/agosez/CrossInk-Bookorbit
-git clone --recursive https://github.com/Fledgewing/CrossInk-Tailnet
-CrossInk-Tailnet/scripts/apply.sh CrossInk-Bookorbit
+git clone --recursive https://github.com/Fledgewing/Orbify
+Orbify/xteink/scripts/apply.sh CrossInk-Bookorbit
+Orbify/xteink/test/run-host-tests.sh CrossInk-Bookorbit   # the overlay's host tests
 cd CrossInk-Bookorbit && pio run -e x4-pro    # or x4-classic, default
 ```
 
@@ -226,10 +232,11 @@ directory, so keep a separate PlatformIO home for each, e.g.
 `PLATFORMIO_CORE_DIR=~/.platformio-rc2 pio run -e default` for 2.x.
 
 To rebuild a published release, use the commits from its notes: clone CrossInk-Bookorbit at the
-release's upstream tag (`git clone --recursive --branch <tag> ...`), check out this repository at
+release's upstream tag (`git clone --recursive --branch <tag> ...`), check out Orbify at
 the release's overlay commit (`git checkout <commit> && git submodule update --init --recursive`),
 then run the same commands. CI builds with PlatformIO Core 6.1.19 (pioarduino); see
-`.github/workflows/build.yml` at that commit.
+`.github/workflows/xteink.yml` at that commit (`.github/workflows/build.yml` in
+CrossInk-Tailnet for its releases).
 
 ## License
 

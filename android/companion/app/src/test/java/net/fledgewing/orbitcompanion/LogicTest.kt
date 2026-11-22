@@ -204,6 +204,30 @@ class UpdatePolicyTest {
         assertNull(UpdatePolicy.pick(listOf(r("v1.0.0-rc.1", pre = true)), includePre = false))
     }
 
+    /** shared/fixtures/github/orbify-releases.json: Android and firmware releases in one list. */
+    private fun fixture(): List<ReleaseInfo> {
+        val arr = org.json.JSONArray(java.io.File("../../../shared/fixtures/github/orbify-releases.json").readText())
+        return (0 until arr.length()).map { ReleaseInfo.from(arr.getJSONObject(it)) }
+    }
+
+    @Test
+    fun readsOnlyAndroidTagsFromTheSharedReleaseList() {
+        val list = fixture()
+        assertEquals("android-v0.7.1", UpdatePolicy.pick(list, includePre = false)?.tag)
+        assertEquals("android-v0.7.2-rc.1", UpdatePolicy.pick(list, includePre = true)?.tag)
+        assertNull(list.first { it.tag.startsWith("xteink-v") }.version)
+        assertEquals(Version.parse("0.7.0"), list.first { it.tag == "v0.7.0" }.version)
+        assertTrue(UpdatePolicy.pick(list, includePre = false)!!.assets.containsKey("orbit-companion-0.7.1.apk"))
+    }
+
+    @Test
+    fun releaseTagsForOneVersionTryTheOrbifySchemeFirst() {
+        assertEquals(listOf("android-v0.7.0", "v0.7.0"), ReleaseTags.forVersion("0.7.0"))
+        assertNull(ReleaseTags.version("xteink-v1.6.1.101+bookorbit.8"))
+        assertNull(ReleaseTags.version("nightly"))
+        assertEquals(Version.parse("0.7.1"), ReleaseTags.version("android-v0.7.1"))
+    }
+
     @Test
     fun onlyStrictlyNewerUpdates() {
         assertTrue(UpdatePolicy.isNewer(Version.parse("0.1.1"), Version.parse("0.1.0")))

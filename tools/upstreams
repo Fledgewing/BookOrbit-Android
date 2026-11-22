@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Clones the upstream projects Orbify builds on, at the versions pinned in tools/upstreams.lock,
+# into upstream/<name> (gitignored), so agents and people read the real source, not memory:
+#   bookorbit      BookOrbit server, web app and KOReader plugin (koreader-plugin/)
+#   crossink-v1.6  CrossInk-Bookorbit 1.6 (xteink/overlay/patches/v1.6 applies to it)
+#   crossink-v2.0  CrossInk-Bookorbit 2.x (xteink/overlay/patches/v2.0)
+#   koreader       KOReader
+#
+#   tools/upstreams [sync] [name...]   clone or move each checkout to its pinned commit
+#   tools/upstreams list               print the pins
+#   tools/upstreams pin <name> <ref>   re-pin <name> to <ref> (a tag or branch) in the lock file
+# A checkout with local changes is left alone. Needs git; `pin` also needs gh.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+lock="$root/tools/upstreams.lock"
+dest="$root/upstream"
+
+pins() { grep -v '^[[:space:]]*\(#\|$\)' "$lock"; }
+
+sync_one() { # name repo ref commit
+    local dir="$dest/$1"
+    if [ ! -d "$dir/.git" ]; then
+        mkdir -p "$dir"
+        git -C "$dir" init -q
+        git -C "$dir" remote add origin "https://github.com/$2.git"
+    fi
+    if [ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]; then
+        echo "$1: local changes, left at $(git -C "$dir" rev-parse --short HEAD)" >&2
+        return 0
+    fi
+    if [ "$(git -C "$dir" rev-parse -q --verify HEAD 2>/dev/null)" != "$4" ]; then
+        git -C "$dir" fetch -q --depth 1 origin "$4"
+        git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$4"
+    fi
+    echo "$1: $2 $3 (${4:0:12}) in upstream/$1"
+}
+
+cmd="${1:-sync}"
+case "$cmd" in
+    list) pins ;;
+    pin)
+        name="${2:?usage: tools/upstreams pin <name> <ref>}"
+        ref="${3:?usage: tools/upstreams pin <name> <ref>}"
+        repo="$(pins | awk -v n="$name" '$1 == n {print $2}')"
+        [ -n "$repo" ] || { echo "no pin named $name" >&2; exit 1; }
+        sha="$(gh api "repos/$repo/commits/$(printf '%s' "$ref" | sed 's/+/%2B/g')" -q .sha)"
+        tmp="$(mktemp)"
+        awk -v n="$name" -v r="$ref" -v s="$sha" \
+            '$1 == n && $0 !~ /^#/ {printf "%-17s %-28s %-23s %s\n", $1, $2, r, s; next} {print}' "$lock" >"$tmp"
+        mv "$tmp" "$lock"
+        echo "$name: $repo $ref ($sha)"
+        ;;
+    sync | *)
+        [ "$cmd" = sync ] && shift || true
+        while read -r name repo ref commit; do
+            if [ $# -gt 0 ]; then
+                case " $* " in *" $name "*) ;; *) continue ;; esac
+            fi
+            sync_one "$name" "$repo" "$ref" "$commit"
+        done < <(pins)
+        ;;
+esac

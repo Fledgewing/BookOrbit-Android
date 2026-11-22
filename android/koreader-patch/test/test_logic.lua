@@ -189,6 +189,17 @@ local rels = {
 test("pick: newest stable by default", function() eq(Update.pick(rels, false).tag_name, "v0.2.0") end)
 test("pick: pre-releases when asked", function() eq(Update.pick(rels, true).tag_name, "v0.3.0-rc.1") end)
 test("pick: nothing usable", function() eq(Update.pick({ { tag_name = "v1.0.0-rc.1", prerelease = true } }, false), nil) end)
+-- shared/fixtures/github/orbify-releases.json: Android and firmware releases in one list.
+local JSON = dofile(here .. "/json_mini.lua")
+local orbify = JSON.fixture(here, "github/orbify-releases.json")
+test("pick: only Android tags from the shared release list", function()
+    eq(Update.pick(orbify, false).tag_name, "android-v0.7.1")
+    eq(Update.pick(orbify, true).tag_name, "android-v0.7.2-rc.1")
+    eq(Update.parseVersion("xteink-v1.6.1.101+bookorbit.8"), nil)
+    eq(Update.compare("android-v0.7.0", "v0.7.0"), 0)
+    eq(Update.assetUrl(Update.pick(orbify, false), "2-orbit-android.lua"),
+        "https://github.com/Fledgewing/Orbify/releases/download/android-v0.7.1/2-orbit-android.lua")
+end)
 test("pick: asset url", function()
     eq(Update.assetUrl(Update.pick(rels, false), "2-orbit-android.lua"), "https://x/lua")
     eq(Update.assetUrl(Update.pick(rels, false), "SHA256SUMS"), nil)

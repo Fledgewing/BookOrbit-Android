@@ -1,15 +1,19 @@
-# Builds and publishes a release: the signed Orbit Companion APK, the version-stamped KOReader
-# patch, SHA256SUMS, license and notice files, all with keyless build-provenance attestations.
-# Both pieces update themselves from these releases (README "Updates").
+# Builds and publishes an Android release: the signed Orbit Companion APK, the version-stamped
+# KOReader patch, SHA256SUMS, license and notice files, all with keyless build-provenance
+# attestations. Both pieces update themselves from these releases (README "Updates").
+#
+# Tags: android-v<version>. A plain v<version> tag is only for the v0.7.0 bridge release that
+# companions and patches up to 0.6.2 can parse (AGENTS.md "Releases"). Firmware releases
+# (xteink-v<version>, .github/workflows/xteink.yml) never take "latest": that stays Android.
 name: release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["android-v*", "v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to (re)build and publish, e.g. v0.1.0"
+        description: "Existing tag to (re)build and publish, e.g. android-v0.7.1"
         required: true
 
 permissions:
@@ -38,9 +42,10 @@ jobs:
         id: ver
         run: |
           set -euo pipefail
-          VER="${TAG#v}"
+          VER="${TAG#android-}"
+          VER="${VER#v}"
           if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::tag $TAG is not vMAJOR.MINOR.PATCH[-pre]"; exit 1
+            echo "::error::tag $TAG is not android-vMAJOR.MINOR.PATCH[-pre]"; exit 1
           fi
           PRE=false; [[ "$VER" == *-* ]] && PRE=true
           echo "version=$VER" >> "$GITHUB_OUTPUT"
@@ -68,7 +73,7 @@ jobs:
           bash tools/test/test-install-usb.sh
 
       - name: Build the signed companion APK
-        working-directory: companion
+        working-directory: android/companion
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -97,7 +102,7 @@ jobs:
 
           # Licenses: the companion (MIT), the patch (AGPL-3.0-or-later) and the third-party
           # notices the app shows in Settings (generated into the APK at build time).
-          cp LICENSE dist/LICENSE-companion-MIT.txt
+          cp android/companion/LICENSE dist/LICENSE-companion-MIT.txt
           cp android/koreader-patch/LICENSE dist/LICENSE-koreader-patch-AGPL-3.0.txt
           unzip -p "$APK" assets/open_source_licenses.txt > dist/THIRD-PARTY-NOTICES.txt
           test -s dist/THIRD-PARTY-NOTICES.txt

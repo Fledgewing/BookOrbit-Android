@@ -159,10 +159,12 @@ local Update = {
     SUMS = "SHA256SUMS",
 }
 
--- "v1.2.3", "1.2.3-rc.1", "1.2.3+build" -> { 1, 2, 3, pre = "rc.1" | nil }, or nil.
+-- "v1.2.3", "android-v1.2.3", "1.2.3-rc.1", "1.2.3+build" -> { 1, 2, 3, pre = "rc.1" | nil }, or nil.
+-- Orbify tags Android releases android-v<version> and firmware xteink-v<version> in one repo
+-- (AGENTS.md "Releases"); a firmware tag is not a version here, so the patch never picks one.
 function Update.parseVersion(s)
     if type(s) ~= "string" then return nil end
-    s = s:match("^%s*(.-)%s*$"):gsub("^[vV]", "")
+    s = s:match("^%s*(.-)%s*$"):gsub("^android%-", ""):gsub("^[vV]", "")
     s = s:gsub("%+[%w%.%-]*$", "")
     local a, b, c, rest = s:match("^(%d+)%.(%d+)%.(%d+)(.*)$")
     if not a then return nil end
@@ -2362,7 +2364,8 @@ end
 function Updater.run(why)
     local pre = S.patch_update_prerelease == true
     log("update: check started (" .. why .. "), installed", PATCH_VERSION, "pre-releases", tostring(pre))
-    local url = pre and (RELEASES_API .. "?per_page=5") or (RELEASES_API .. "/latest")
+    -- The list holds firmware releases too: a longer page still reaches the newest Android one.
+    local url = pre and (RELEASES_API .. "?per_page=30") or (RELEASES_API .. "/latest")
     local body, err = Update.withRetry(function() return httpGet(url, Update.TRY_TIMEOUT_S, 20) end,
         function(s) require("socket").sleep(s) end,
         function(i, e, wait) log("update: try", i, "failed:", tostring(e), "- retrying in", wait, "s") end)
