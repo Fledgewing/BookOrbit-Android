@@ -511,6 +511,9 @@ object WhatsNew {
         "0.3.1" to listOf(
             "Setup: after installing the KOReader patch, the step updates at once; if KOReader still runs the old patch, a \"Restart KOReader\" button finishes it.",
         ),
+        "0.3.2" to listOf(
+            "Settings › Home opens: KOReader + BookOrbit, or any reader app (Readest, Moon+ Reader, …). Home brings it back where it was; press Home twice for the launcher page.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */
@@ -519,4 +522,31 @@ object WhatsNew {
             val c = Version.parse(v)?.code ?: return@filter false
             c in (fromCode + 1)..toCode
         }
+}
+
+/**
+ * "Home opens" (docs/DESIGN.md): KOReader + BookOrbit (the default, "") or any launchable app,
+ * by package. For another app a Home press just brings it to the front; the KOReader commands
+ * (home / home_smart) and the patch's Smart Home steps don't apply.
+ */
+object HomeApp {
+    const val KOREADER_BOOKORBIT = ""
+    const val KOREADER_PKG = "org.koreader.launcher"
+
+    fun isKoreader(choice: String?): Boolean = choice.isNullOrEmpty() || choice == KOREADER_PKG
+
+    /** pkg null = KOReader (with command/from); else that app, no extras. */
+    data class Launch(val pkg: String?, val command: String?, val from: String?)
+
+    fun launch(choice: String?, press: Boolean, button: HomeButton, companionPageInFront: Boolean): Launch {
+        if (!isKoreader(choice)) return Launch(choice, null, null)
+        val command = if (press) HomeCommands.forPress(button) else HomeCommands.forUncovered(button)
+        val from = if (command == HomeCommands.HOME_SMART) HomeCommands.from(companionPageInFront, !press) else null
+        return Launch(null, command, from)
+    }
+
+    /** The picker: known reader apps first, then everything else; A–Z within each. KOReader is the default row, not listed. */
+    fun order(apps: List<Pair<String, String>>, readers: Set<String>): List<Pair<String, String>> =
+        apps.filter { it.first != KOREADER_PKG }.distinctBy { it.first }
+            .sortedWith(compareBy<Pair<String, String>>({ it.first !in readers }, { it.second.lowercase() }))
 }

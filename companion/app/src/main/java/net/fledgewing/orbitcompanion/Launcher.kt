@@ -71,8 +71,10 @@ class HomeActivity : Activity() {
 
     private fun decide(press: Boolean) {
         val prefs = Prefs(this)
+        val choice = prefs.homeApp
+        val other = !HomeApp.isKoreader(choice)
         // Disabled (e.g. a vendor launcher's app freeze) counts as unusable: starting it would throw.
-        val problem = Koreader.problem(this)
+        val problem = if (other) HomeTarget.problem(this, choice) else Koreader.problem(this)
         val installed = problem == null
         val now = SystemClock.elapsedRealtime()
         val action = if (press) {
@@ -84,20 +86,24 @@ class HomeActivity : Activity() {
             problem != null -> problem
             !prefs.homeOpensKoreader -> null
             press -> "Home pressed twice."
-            else -> "KOReader closed straight after starting."
+            else -> "${HomeTarget.name(this)} closed straight after starting."
         }
         OLog.i("home ${if (press) "press" else "uncovered"}: $action${if (problem != null) " ($problem)" else ""}")
         if (action == HomeAction.START_KOREADER) {
             // "Home button": BookOrbit home -> "home" on a press, a plain start after KOReader went
             // away. Back to my book -> "home_smart" for both; the patch decides (HomePlan).
-            val pageInFront = EinkActivity.companionPageInFront()
-            val command = if (press) HomeCommands.forPress(prefs.homeButton) else HomeCommands.forUncovered(prefs.homeButton)
-            val from = if (command == HomeCommands.HOME_SMART) HomeCommands.from(pageInFront, !press) else null
-            OLog.i("home: ${prefs.homeButton.key} -> command ${command ?: "-"}${if (from != null) " from $from" else ""}")
-            val started = Koreader.start(this, if (press) "home press" else "home uncovered", command, from)
+            // Another "Home opens" app: just bring it to the front (HomeApp.launch).
+            val l = HomeApp.launch(choice, press, prefs.homeButton, EinkActivity.companionPageInFront())
+            val reason = if (press) "home press" else "home uncovered"
+            val started = if (l.pkg != null) {
+                HomeTarget.start(this, l.pkg, reason)
+            } else {
+                OLog.i("home: ${prefs.homeButton.key} -> command ${l.command ?: "-"}${if (l.from != null) " from ${l.from}" else ""}")
+                Koreader.start(this, reason, l.command, l.from)
+            }
             if (started) return
             decider.startFailed()
-            showLauncher("KOReader didn't start.")
+            showLauncher("${HomeTarget.name(this)} didn't start.")
         } else {
             showLauncher(why)
         }
@@ -146,7 +152,22 @@ class LauncherActivity : EinkActivity() {
     private fun render() {
         val root = page()
         root.addView(Ui.header(this, "Orbit"))
-        val open = Ui.button(this, "Open KOReader\n", solid = true, heightDp = 120, sp = 26f) {
+        val choice = Prefs(this).homeApp
+        if (!HomeApp.isKoreader(choice)) {
+            // "Home opens" another app: it is the big first tile; KOReader stays a tile below.
+            val name = HomeTarget.label(this, choice)
+            root.addView(Ui.button(this, "Open $name", solid = true, heightDp = 120, sp = 26f) {
+                if (HomeTarget.start(this, choice, "launcher button")) {
+                    HomeActivity.decider.startedByHand(SystemClock.elapsedRealtime())
+                } else {
+                    why = HomeTarget.problem(this, choice) ?: "$name didn't start."
+                    render()
+                }
+            })
+            root.addView(Ui.gap(this, 8))
+        }
+        val koFirst = HomeApp.isKoreader(choice)
+        val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) 120 else 88, sp = if (koFirst) 26f else 22f) {
             if (Koreader.goHome(this, "launcher button")) {
                 HomeActivity.decider.startedByHand(SystemClock.elapsedRealtime())
             } else {

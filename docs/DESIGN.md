@@ -151,6 +151,23 @@ with a book open (`open_book_at_exit`) → that book. Presses step book → Book
 companion; Home from another app goes to the book, so the steps never loop. "From another
 app" is the companion's `FROM=other_app` when it knows, else a KOReader pause of 2.5 s or more.
 
+## Home opens (v0.3.2)
+
+The "Home opens" setting is companion-only; it is not shared with the patch. Its choices:
+- KOReader + BookOrbit, the default (`""`): Smart Home as above.
+- Any launchable app: the picker lists known reader apps first (`KnownApps.READERS` plus the
+  vendor profile's `readerPkgs`), then the rest A–Z.
+
+With another app chosen:
+- A Home press, a boot, or Home coming back uncovered starts that app's launch intent with
+  `NEW_TASK | RESET_TASK_IF_NEEDED`, so it resumes where it was.
+- It gets no COMMAND extras; `HomeApp.launch` is unit-tested.
+- `HomeDecider` is target-neutral, so a double Home still shows the launcher page, and a
+  missing, disabled or crashing app falls back to the launcher page.
+- The launcher page shows the chosen app as its big first tile, with KOReader still a tile.
+- The patch's features (sync on sleep, Just in time Wi-Fi, BookOrbit home) work only inside
+  KOReader; Settings says so in one line.
+
 ## Setup needs you (v0.2.4)
 
 The companion is the Home app and is rarely opened, so a Setup step that stops working (Home

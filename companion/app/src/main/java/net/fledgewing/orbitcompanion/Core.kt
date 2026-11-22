@@ -80,6 +80,10 @@ class Prefs(ctx: Context) {
     var wakeLockEnabled: Boolean
         get() = bool("wake_lock", true)
         set(v) = setBool("wake_lock", v)
+    /** "Home opens": "" = KOReader + BookOrbit, else an app's package (HomeApp). */
+    var homeApp: String
+        get() = str("home_app")
+        set(v) = setStr("home_app", v)
     var homeOpensKoreader: Boolean
         get() = bool("home_opens_koreader", true)
         set(v) = setBool("home_opens_koreader", v)
@@ -334,6 +338,41 @@ object Net {
 
     fun notificationsEnabled(ctx: Context): Boolean =
         (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled()
+}
+
+/** The "Home opens" app when it isn't KOReader (HomeApp): label, state, start. */
+object HomeTarget {
+    fun choice(ctx: Context): String = Prefs(ctx).homeApp
+
+    fun label(ctx: Context, pkg: String): String = try {
+        val pm = ctx.packageManager
+        pm.getApplicationInfo(pkg, PackageManager.MATCH_DISABLED_COMPONENTS).loadLabel(pm).toString()
+    } catch (e: Exception) {
+        pkg
+    }
+
+    /** "Readest", or "KOReader" for the default. */
+    fun name(ctx: Context): String = choice(ctx).let { if (HomeApp.isKoreader(it)) "KOReader" else label(ctx, it) }
+
+    fun problem(ctx: Context, pkg: String): String? = when (Net.appState(ctx, pkg)) {
+        AppState.MISSING -> "${label(ctx, pkg)} isn't installed."
+        AppState.FROZEN -> Vendor.disabledMessage(ctx, label(ctx, pkg))
+        AppState.OK -> if (ctx.packageManager.getLaunchIntentForPackage(pkg) == null) "${label(ctx, pkg)} can't be opened." else null
+    }
+
+    /** Brings the app to the front where it was (a launcher's start: NEW_TASK | RESET_TASK_IF_NEEDED). */
+    fun start(ctx: Context, pkg: String, why: String): Boolean {
+        val i = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return false
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        return try {
+            ctx.startActivity(i)
+            OLog.i("home app $pkg started ($why)")
+            true
+        } catch (e: Exception) {
+            OLog.w("home app $pkg start FAILED ($why)", e)
+            false
+        }
+    }
 }
 
 object Koreader {

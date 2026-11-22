@@ -24,9 +24,30 @@ data class VendorProfile(
     val home: ComponentName?,
     val freezeHint: String?,
     val verified: Boolean,
+    /** The vendor's own reader app(s), listed first in "Home opens". */
+    val readerPkgs: List<String> = emptyList(),
     /** Settings.System key that says whether the frontlight is on (battery stats), or null. */
     val lightKey: String? = null,
 )
+
+/** Well-known reader apps by package name, listed first in "Home opens" (unverified ones are harmless). */
+object KnownApps {
+    val READERS = setOf(
+        "com.bilingify.readest", // Readest
+        "com.flyersoft.moonreader", "com.flyersoft.moonreaderp", // Moon+ Reader (free, Pro)
+        "org.readera", "org.readera.premium", // ReadEra
+        "com.foobnix.pdf.reader", "com.foobnix.pro.pdf.reader", // Librera
+        "org.geometerplus.zlibrary.ui.android", // FBReader
+        "com.amazon.kindle", "com.kobobooks.android", "com.google.android.apps.books",
+        "com.obreey.reader", // PocketBook
+        "com.neverland.alreader", // AlReader
+        "com.faultexception.reader", // Lithium
+        "com.rookiestudio.perfectviewer", // Perfect Viewer (comics)
+        "app.mihon", "eu.kanade.tachiyomi", // Mihon / Tachiyomi (manga)
+    )
+
+    fun readers(profile: VendorProfile): Set<String> = READERS + profile.readerPkgs
+}
 
 object VendorProfiles {
     /**
@@ -45,6 +66,8 @@ object VendorProfiles {
         // Read on an M8C with `settings list system` (also haoqing_warm_light, key_warm_value,
         // key_cold_value); the meaning is inferred from the name and the light being on.
         lightKey = "isLightOn",
+        // The reader is part of the vendor launcher on the M8C.
+        readerPkgs = listOf("com.haoqing.app.hqreader"),
     )
 
     /**
@@ -61,6 +84,7 @@ object VendorProfiles {
         home = null,
         freezeHint = "Apps › App Management › Freeze Settings",
         verified = false,
+        readerPkgs = listOf("com.onyx.kreader"),
     )
 
     val GENERIC = VendorProfile("generic", "Android", emptyList(), null, null, null, verified = true)

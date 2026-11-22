@@ -525,3 +525,43 @@ class PatchRowTest {
         assertEquals(setOf("patch"), r.regressed)
     }
 }
+
+class HomeAppTest {
+    private val readest = "com.bilingify.readest"
+
+    @Test
+    fun anotherAppIsBroughtToTheFrontWithoutKoreaderCommands() {
+        val l = HomeApp.launch(readest, press = true, button = HomeButton.SMART, companionPageInFront = false)
+        assertEquals(readest, l.pkg)
+        assertNull(l.command)
+        assertNull(l.from)
+        assertEquals("uncovered too", readest, HomeApp.launch(readest, false, HomeButton.SMART, false).pkg)
+    }
+
+    @Test
+    fun defaultStaysKoreaderWithSmartHome() {
+        for (choice in listOf("", HomeApp.KOREADER_PKG, null)) {
+            val l = HomeApp.launch(choice, press = true, button = HomeButton.SMART, companionPageInFront = false)
+            assertNull(l.pkg)
+            assertEquals(HomeCommands.HOME_SMART, l.command)
+        }
+        assertEquals(HomeCommands.HOME, HomeApp.launch("", true, HomeButton.BOOKORBIT, false).command)
+    }
+
+    @Test
+    fun doubleHomeStillShowsTheLauncherForAnotherApp() {
+        // The decider is target-neutral: "installed" is the chosen app's state.
+        val d = HomeDecider()
+        assertEquals(HomeAction.START_KOREADER, d.onHomePress(1_000, true, true))
+        assertEquals(HomeAction.SHOW_LAUNCHER, d.onHomePress(2_000, true, true))
+        assertEquals("missing app: launcher", HomeAction.SHOW_LAUNCHER, HomeDecider().onHomePress(0, false, true))
+    }
+
+    @Test
+    fun pickerListsReadersFirstThenAToZWithoutKoreader() {
+        val apps = listOf("b.files" to "Files", readest to "Readest", HomeApp.KOREADER_PKG to "KOReader",
+            "a.calc" to "calculator", "com.flyersoft.moonreader" to "Moon+ Reader", "com.haoqing.app.hqreader" to "Meebook")
+        val readers = KnownApps.readers(VendorProfiles.HAOQING)
+        assertEquals(listOf("Meebook", "Moon+ Reader", "Readest", "calculator", "Files"), HomeApp.order(apps, readers).map { it.second })
+    }
+}

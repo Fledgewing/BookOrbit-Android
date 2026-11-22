@@ -58,6 +58,10 @@ activity needs an intent filter with the action and `android.intent.category.DEF
 
 ## Companion → patch: "go home"
 
+This applies when Settings › "Home opens" is KOReader + BookOrbit (the default). With another
+app chosen, Home starts that app's own launch intent and KOReader gets no command (DESIGN
+"Home opens").
+
 The launcher starts KOReader explicitly:
 
 ```

@@ -91,6 +91,12 @@ In KOReader, open **Tools › Android sync**:
 
 The same Wi-Fi and Home settings are in Orbit Companion › Settings; changing one changes both.
 
+**Reading in another app?** Orbit Companion › Settings › **Home opens** picks what the Home
+button opens. The choices are KOReader + BookOrbit (the default) or any installed app, with
+reader apps such as Readest and Moon+ Reader listed first. Home then brings that app back
+where you were, and pressing Home twice still shows the launcher page. Sync on sleep, Just in
+time Wi-Fi and BookOrbit home work only inside KOReader.
+
 ## 9. If something's wrong
 
 - **KOReader asks "Turn on Wi-Fi?"**: Orbit Companion isn't running or is disabled. Open it

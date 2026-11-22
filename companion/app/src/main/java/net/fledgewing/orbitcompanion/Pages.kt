@@ -312,14 +312,24 @@ class SettingsActivity : EinkActivity() {
                 prefs.sharedSettingsAt = System.currentTimeMillis()
             }
         }
-        segmented(root, "Home button", HomeButton.entries.map { it to it.label }, prefs.homeButton) {
-            prefs.homeButton = it
-            prefs.sharedSettingsAt = System.currentTimeMillis()
+        val homeChoice = prefs.homeApp
+        root.addView(Ui.row(this, "Home opens", if (HomeApp.isKoreader(homeChoice)) "KOReader + BookOrbit" else HomeTarget.label(this, homeChoice),
+            Ui.value(this, "›"), onClick = { startActivity(Intent(this, HomeAppActivity::class.java)) }))
+        if (HomeApp.isKoreader(homeChoice)) {
+            segmented(root, "Home button", HomeButton.entries.map { it to it.label }, prefs.homeButton) {
+                prefs.homeButton = it
+                prefs.sharedSettingsAt = System.currentTimeMillis()
+            }
+        } else {
+            root.addView(Ui.text(this, "Sync on sleep, Just in time Wi-Fi and BookOrbit home work only inside KOReader.", 16f, color = Ui.MID).apply {
+                setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 8))
+            })
         }
         root.addView(Ui.gap(this, 8))
         toggle(root, "Wake Tailscale with Wi-Fi", null, prefs.wakeTailscaleWithWifi) { prefs.wakeTailscaleWithWifi = it }
         toggle(root, "Wake lock while syncing", "released at the patch's 20 s cap · 25 s max", prefs.wakeLockEnabled) { prefs.wakeLockEnabled = it }
-        toggle(root, "Home always opens BookOrbit home", "press Home twice for the launcher page", prefs.homeOpensKoreader) { prefs.homeOpensKoreader = it }
+        toggle(root, if (HomeApp.isKoreader(homeChoice)) "Home always opens BookOrbit home" else "Home always opens ${HomeTarget.label(this, homeChoice)}",
+            "press Home twice for the launcher page", prefs.homeOpensKoreader) { prefs.homeOpensKoreader = it }
         toggle(root, "Notify if Tailscale won't connect", null, prefs.notifyTailscale) { prefs.notifyTailscale = it }
         toggle(root, "Debug log", "more detail in logcat, tag OrbitCompanion", prefs.debugLog) { prefs.debugLog = it }
         toggle(root, "Auto-update app", "daily check of the GitHub releases", prefs.autoUpdate) { prefs.autoUpdate = it }
@@ -608,6 +618,60 @@ class SetupActivity : EinkActivity() {
                     left = Ui.check(this, c.done),
                 ),
             )
+        }
+    }
+}
+
+/**
+ * Settings › Home opens: KOReader + BookOrbit (default), then reader apps (KnownApps and the
+ * vendor's), then every other launchable app A–Z. Paged, no scrolling.
+ */
+class HomeAppActivity : EinkActivity() {
+    private var apps: List<Pair<String, String>> = emptyList()
+    private var readers: Set<String> = emptySet()
+    private var pageIndex = 0
+
+    override fun onResume() {
+        super.onResume()
+        val pm = packageManager
+        val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val found = pm.queryIntentActivities(main, 0)
+            .filter { it.activityInfo.packageName != packageName }
+            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+        readers = KnownApps.readers(Vendor.profile(this))
+        apps = HomeApp.order(found, readers)
+        render()
+    }
+
+    private fun render() {
+        val root = page()
+        root.addView(Ui.header(this, "Home opens", "‹ Back") { finish() })
+        val current = Prefs(this).homeApp
+        val rows = listOf(HomeApp.KOREADER_BOOKORBIT to "KOReader + BookOrbit") + apps
+        val perPage = maxOf(3, (resources.displayMetrics.heightPixels / resources.displayMetrics.density).toInt().minus(300) / (Ui.ROW_DP + 4))
+        val pages = maxOf(1, (rows.size + perPage - 1) / perPage)
+        pageIndex = pageIndex.coerceIn(0, pages - 1)
+        rows.drop(pageIndex * perPage).take(perPage).forEach { (pkg, label) ->
+            val sub = when {
+                pkg == HomeApp.KOREADER_BOOKORBIT -> "Smart Home, sync on sleep, Just in time Wi-Fi"
+                pkg in readers -> "reader app"
+                else -> null
+            }
+            val chosen = if (HomeApp.isKoreader(current)) pkg == HomeApp.KOREADER_BOOKORBIT else pkg == current
+            root.addView(Ui.row(this, label, sub, Ui.check(this, chosen), onClick = {
+                Prefs(this).homeApp = pkg
+                OLog.i("settings: Home opens ${if (pkg.isEmpty()) "KOReader + BookOrbit" else pkg}")
+                finish()
+            }))
+        }
+        root.addView(android.view.View(this), android.widget.LinearLayout.LayoutParams(1, 0, 1f))
+        root.addView(Ui.text(this, "Another app: Home brings it back where it was; press Home twice for the launcher page. Sync on sleep, Just in time Wi-Fi and BookOrbit home work only inside KOReader.", 15f, color = Ui.MID))
+        if (pages > 1) {
+            root.addView(Ui.gap(this, 8))
+            root.addView(Ui.weightRow(this,
+                Ui.button(this, "‹ Back", heightDp = 64, sp = 18f) { if (pageIndex > 0) { pageIndex--; render() } },
+                Ui.text(this, "${pageIndex + 1} / $pages", 17f, color = Ui.MID).apply { gravity = android.view.Gravity.CENTER },
+                Ui.button(this, "Next ›", heightDp = 64, sp = 18f) { if (pageIndex < pages - 1) { pageIndex++; render() } }))
         }
     }
 }
