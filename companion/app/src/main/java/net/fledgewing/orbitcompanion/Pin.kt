@@ -52,9 +52,12 @@ object Pin {
 
     fun isSet(ctx: Context): Boolean = live(ctx).pinSet
 
-    fun unlocked(): Boolean = gate.unlocked(now())
+    fun unlocked(): Boolean = watch().unlocked(now())
 
-    fun locked(ctx: Context): Boolean = live(ctx).locked(now())
+    fun locked(ctx: Context): Boolean = live(ctx).also { watch() }.locked(now())
+
+    /** The hard cap applies only while the accessibility service can't see the user leave. */
+    private fun watch(): PinGate = gate.also { it.watching = ClickerService.connected }
 
     fun backoff(ctx: Context): PinBackoff = Prefs(ctx).let { PinBackoff(it.pinFailures, it.pinLockedUntil) }
 
@@ -68,7 +71,7 @@ object Pin {
         if (PinHash.verify(pin, p.pinHash)) {
             save(p, b.success())
             live(ctx).unlock(now(), scope)
-            OLog.i("pin: unlocked${if (scope.isEmpty()) "" else " for ${scope.joinToString()}"} (until it's left, screen-off or ${PinGate.CAP_MS / 60_000} min)")
+            OLog.i("pin: unlocked${if (scope.isEmpty()) "" else " for ${scope.joinToString()}"} (while inside, then ${PinGate.GRACE_MS / 60_000} min; screen-off locks)")
             return null
         }
         val nb = b.fail(wall)
@@ -113,9 +116,14 @@ object Pin {
         if (gate.lock()) OLog.i("pin: locked (screen off)")
     }
 
-    /** A companion page came to the front. */
+    /** A companion page came to the front: protected → inside; open → the grace starts. */
     fun onPage(page: PinPage, name: String) {
-        if (page == PinPage.OPEN && gate.lock()) OLog.i("pin: locked (left to $name)")
+        val t = now()
+        when (page) {
+            PinPage.PROTECTED -> watch().enter(t)
+            PinPage.OPEN -> if (watch().leave(t)) OLog.i("pin: left to $name; unlocked for ${PinGate.GRACE_MS / 60_000} more min")
+            PinPage.NEUTRAL -> Unit
+        }
     }
 
     /** Run [action] now if no PIN is set or it's unlocked; else after the PIN page succeeds. */
@@ -189,7 +197,8 @@ object Pin {
         }
         val fg = Guard.classify(pkg, cls, ctx.packageName, hc, hp, ime, canLaunch, g.guarded) ?: return Guard.Decision.ALLOW
         val t = now()
-        if (g.onForeground(fg, pkg, t)) OLog.i("pin: locked (left to $pkg/$cls, $fg)")
+        watch()
+        if (g.onForeground(fg, pkg, cls, t)) OLog.i("pin: left to $pkg/$cls ($fg); unlocked for ${PinGate.GRACE_MS / 60_000} more min")
         val d = g.decide(pkg, cls, ctx.packageName, t)
         OLog.d("pin: gate $pkg/$cls ($fg) -> $d")
         return d

@@ -258,7 +258,7 @@ class SettingsActivity : EinkActivity() {
         OLog.debug = prefs.debugLog
         OLog.i(
             "settings: wifi_after_sleep=${prefs.wifiAfterSleep.key} wake_ts_with_wifi=${prefs.wakeTailscaleWithWifi} " +
-                "wake_lock=${prefs.wakeLockEnabled} home_opens_koreader=${prefs.homeOpensKoreader} " +
+                "wake_lock=${prefs.wakeLockEnabled} home_opens=${HomeApp.kind(prefs.homeApp)} " +
                 "notify_tailscale=${prefs.notifyTailscale} debug=${prefs.debugLog} " +
                 "auto_update=${prefs.autoUpdate} include_prereleases=${prefs.includePreReleases} " +
                 "wifi_mode=${prefs.wifiMode.key} wifi_idle_min=${prefs.wifiIdleMin} home_button=${prefs.homeButton.key}",
@@ -316,11 +316,15 @@ class SettingsActivity : EinkActivity() {
                 prefs.sharedSettingsAt = System.currentTimeMillis()
             }
         }
+        val schedule = ReadingSchedule.shown(prefs.readingSchedule, prefs.readingScheduleRequest)
+        root.addView(Ui.row(this, "Sync while reading", ReadingSchedule.label(schedule) +
+            if (prefs.readingScheduleRequest.isNotEmpty()) " · applies when KOReader opens" else "",
+            Ui.value(this, "›"), onClick = { startActivity(Intent(this, ReadingScheduleActivity::class.java)) }))
         val homeChoice = prefs.homeApp
-        root.addView(Ui.row(this, "Home opens", if (HomeApp.isKoreader(homeChoice)) "KOReader + BookOrbit" else HomeTarget.label(this, homeChoice),
+        root.addView(Ui.row(this, "Home opens", HomeApp.summary(homeChoice, if (HomeApp.isApp(homeChoice)) HomeTarget.label(this, homeChoice) else null),
             Ui.value(this, "›"), onClick = { startActivity(Intent(this, HomeAppActivity::class.java)) }))
-        if (HomeApp.isKoreader(homeChoice)) {
-            segmented(root, "Home button", HomeButton.entries.map { it to it.label }, prefs.homeButton) {
+        if (HomeApp.showsHomeButton(homeChoice)) {
+            segmented(root, HomeApp.HOME_BUTTON_TITLE, HomeButton.entries.map { it to it.label }, prefs.homeButton) {
                 prefs.homeButton = it
                 prefs.sharedSettingsAt = System.currentTimeMillis()
             }
@@ -335,8 +339,6 @@ class SettingsActivity : EinkActivity() {
         root.addView(Ui.gap(this, 8))
         toggle(root, "Wake Tailscale with Wi-Fi", null, prefs.wakeTailscaleWithWifi) { prefs.wakeTailscaleWithWifi = it }
         toggle(root, "Wake lock while syncing", "released at the patch's 20 s cap · 25 s max", prefs.wakeLockEnabled) { prefs.wakeLockEnabled = it }
-        toggle(root, if (HomeApp.isKoreader(homeChoice)) "Home always opens BookOrbit home" else "Home always opens ${HomeTarget.label(this, homeChoice)}",
-            "press Home twice for the launcher page", prefs.homeOpensKoreader) { prefs.homeOpensKoreader = it }
         toggle(root, "Notify if Tailscale won't connect", null, prefs.notifyTailscale) { prefs.notifyTailscale = it }
         toggle(root, "Debug log", "more detail in logcat, tag OrbitCompanion", prefs.debugLog) { prefs.debugLog = it }
         toggle(root, "Auto-update app", "daily check of the GitHub releases", prefs.autoUpdate) { prefs.autoUpdate = it }
@@ -687,6 +689,37 @@ class SetupActivity : EinkActivity() {
  * Settings › Home opens: KOReader + BookOrbit (default), then reader apps (KnownApps and the
  * vendor's), then every other launchable app A–Z. Paged, no scrolling.
  */
+/** Settings › Sync while reading: the patch's options; the patch applies and keeps the choice. */
+class ReadingScheduleActivity : EinkActivity() {
+    override val pinGuarded = true
+
+    override fun onResume() {
+        super.onResume()
+        render()
+    }
+
+    private fun render() {
+        val prefs = Prefs(this)
+        val root = page(scroll = true)
+        root.addView(Ui.header(this, "Sync while reading", "‹ Back") { finish() })
+        root.addView(Ui.text(this, "Syncs your place while a book is open. KOReader keeps this setting; a change here applies when KOReader next opens or comes back.", 16f, color = Ui.MID))
+        val now = ReadingSchedule.shown(prefs.readingSchedule, prefs.readingScheduleRequest)
+        ReadingSchedule.OPTIONS.forEach { (id, label) ->
+            root.addView(Ui.row(this, label, null, Ui.value(this, if (id == now) "●" else " "), onClick = {
+                if (id == prefs.readingSchedule) {
+                    prefs.readingScheduleRequest = ""
+                    prefs.readingScheduleRequestAt = 0
+                } else {
+                    prefs.readingScheduleRequest = id
+                    prefs.readingScheduleRequestAt = System.currentTimeMillis()
+                }
+                OLog.i("sync while reading: chose $id here (the patch has ${prefs.readingSchedule.ifEmpty { "?" }})")
+                render()
+            }))
+        }
+    }
+}
+
 class HomeAppActivity : EinkActivity() {
     override val pinGuarded = true
 
@@ -710,13 +743,14 @@ class HomeAppActivity : EinkActivity() {
         val root = page()
         root.addView(Ui.header(this, "Home opens", "‹ Back") { finish() })
         val current = Prefs(this).homeApp
-        val rows = listOf(HomeApp.KOREADER_BOOKORBIT to "KOReader + BookOrbit") + apps
+        val rows = listOf(HomeApp.KOREADER_BOOKORBIT to "KOReader + BookOrbit", HomeApp.LAUNCHER to HomeApp.LAUNCHER_LABEL) + apps
         val perPage = maxOf(3, (resources.displayMetrics.heightPixels / resources.displayMetrics.density).toInt().minus(300) / (Ui.ROW_DP + 4))
         val pages = maxOf(1, (rows.size + perPage - 1) / perPage)
         pageIndex = pageIndex.coerceIn(0, pages - 1)
         rows.drop(pageIndex * perPage).take(perPage).forEach { (pkg, label) ->
             val sub = when {
                 pkg == HomeApp.KOREADER_BOOKORBIT -> "Smart Home, sync on sleep, Just in time Wi-Fi"
+                pkg == HomeApp.LAUNCHER -> "Orbit's own page of apps"
                 pkg in readers -> "reader app"
                 else -> null
             }

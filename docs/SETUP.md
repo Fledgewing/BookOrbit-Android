@@ -92,9 +92,12 @@ In KOReader, open **Tools › Android sync**:
 The same Wi-Fi and Home settings are in Orbit Companion › Settings; changing one changes both.
 
 **Reading in another app?** Orbit Companion › Settings › **Home opens** picks what the Home
-button opens. The choices are KOReader + BookOrbit (the default) or any installed app, with
-reader apps such as Readest and Moon+ Reader listed first. Home then brings that app back
-where you were, and pressing Home twice still shows the launcher page. Sync on sleep, Just in
+button opens. The choices are KOReader + BookOrbit (the default), the Orbit launcher page, or
+any installed app, with reader apps such as Readest and Moon+ Reader listed first. Home then
+brings that app back where you were, and pressing Home twice still shows the launcher page.
+With KOReader + BookOrbit, **In KOReader, Home goes to** picks "Back to my book, then BookOrbit
+home" or "BookOrbit home". **Sync while reading** is in Settings too; KOReader keeps it, and a
+change made in the companion applies when KOReader next opens. Sync on sleep, Just in
 time Wi-Fi and BookOrbit home work only inside KOReader.
 
 ## 8b. A Bluetooth page clicker (optional)
@@ -129,9 +132,10 @@ Keeps kids out of the settings. Off until you set one.
    such as the Play Store or a browser. A guarded app opens behind the keypad; **Cancel** goes
    Home. This needs Android **Settings › Accessibility › Orbit clicker buttons**: Setup shows
    a "Clicker buttons / app guard (accessibility) on" row while a PIN is set.
-4. A right PIN unlocks only while you stay in what you unlocked: the companion's settings
-   pages, the guarded app, or the page a Setup Fix opened. Going Home, to KOReader or to any
-   other app locks it again at once, and so does the screen turning off. After 5 wrong tries the
+4. A right PIN stays unlocked while you are in the companion's settings, a guarded app, or the
+   page a Setup Fix opened. After you leave (Home, KOReader, another app) it stays unlocked for
+   2 more minutes, so coming back needs no PIN; then it locks. The screen turning off locks it
+   at once. After 5 wrong tries the
    keypad waits 30 s, then twice as long after each further wrong try, up to 5 minutes.
 5. Never locked: the companion itself, KOReader, the phone/emergency apps and the status bar.
    Pages a Setup **Fix** opens, and Android's install screens during an update you started.

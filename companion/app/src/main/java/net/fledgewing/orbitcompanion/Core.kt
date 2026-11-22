@@ -89,11 +89,16 @@ class Prefs(ctx: Context) {
 
     /** "Home opens": "" = KOReader + BookOrbit, else an app's package (HomeApp). */
     var homeApp: String
-        get() = str("home_app")
+        get() {
+            // One-time move off the 0.4.7 toggle "Home always opens …" (HomeApp.migrate).
+            if (sp.contains("home_opens_koreader")) {
+                val v = HomeApp.migrate(str("home_app"), sp.getBoolean("home_opens_koreader", true))
+                sp.edit().putString("home_app", v).remove("home_opens_koreader").apply()
+                return v
+            }
+            return str("home_app")
+        }
         set(v) = setStr("home_app", v)
-    var homeOpensKoreader: Boolean
-        get() = bool("home_opens_koreader", true)
-        set(v) = setBool("home_opens_koreader", v)
     var notifyTailscale: Boolean
         get() = bool("notify_tailscale", true)
         set(v) = setBool("notify_tailscale", v)
@@ -108,6 +113,15 @@ class Prefs(ctx: Context) {
         get() = HomeButton.fromKey(sp.getString("home_button", null))
         set(v) = setStr("home_button", v.key)
     var sharedSettingsAt by LongPref("shared_settings_at")
+    /** Sync while reading as the patch last reported it ("" = not yet). */
+    var readingSchedule: String
+        get() = str("reading_schedule_patch")
+        set(v) = setStr("reading_schedule_patch", v)
+    /** A change made here, waiting for the patch ("" = none) (ReadingSchedule). */
+    var readingScheduleRequest: String
+        get() = str("reading_schedule_request")
+        set(v) = setStr("reading_schedule_request", v)
+    var readingScheduleRequestAt by LongPref("reading_schedule_request_at")
 
     // Who turned Wi-Fi on (WifiOwnership).
     var wifiOwner: WifiOwner
@@ -390,7 +404,7 @@ object HomeTarget {
     }
 
     /** "Readest", or "KOReader" for the default. */
-    fun name(ctx: Context): String = choice(ctx).let { if (HomeApp.isKoreader(it)) "KOReader" else label(ctx, it) }
+    fun name(ctx: Context): String = choice(ctx).let { if (HomeApp.isApp(it)) label(ctx, it) else "KOReader" }
 
     fun problem(ctx: Context, pkg: String): String? = when (Net.appState(ctx, pkg)) {
         AppState.MISSING -> "${label(ctx, pkg)} isn't installed."

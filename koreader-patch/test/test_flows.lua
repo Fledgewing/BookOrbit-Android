@@ -1130,6 +1130,70 @@ test("home: the instance shows no handler but the UI routes the event -> BookOrb
     W.shown = {}
 end)
 
+local function scheduleMenu(m)
+    for _, it in ipairs(m:menuItems()) do
+        local sub = it.sub_item_table
+        if type(sub) == "table" and sub[1] and sub[1].text == "Off" and sub[1].checked_func then return sub end
+    end
+end
+
+test("sync while reading: set in the companion, applied and saved by the patch, shown in its menu, acked", function()
+    local url = "http://127.0.0.1:47913/status"
+    store.orbit_android.reading_schedule = "off"
+    store.orbit_android.reading_schedule_request_at = nil
+    -- KOReader wasn't running when the user chose it: the companion's /status still carries it.
+    W.web[url] = "STATUS"
+    W.json.STATUS = { version = "0.4.8", reading_schedule_request = { id = "pg50", at = 5000 } }
+    W.broadcasts = {}
+    local ui, m = newUI(true)
+    m:onResume()
+    run(2)
+    ok(store.orbit_android.reading_schedule == "pg50", "applied: " .. tostring(store.orbit_android.reading_schedule))
+    ok(store.orbit_android.reading_schedule_request_at == 5000, "remembered which request")
+    local sub = scheduleMenu(m)
+    for _, it in ipairs(sub) do
+        ok(it.checked_func() == (it.text == "Every 50 pages"), "menu shows it: " .. it.text)
+    end
+    local ack = lastBroadcast(".SETTINGS")
+    ok(ack and ack.extras.reading_schedule == "pg50" and ack.extras.reading_schedule_applied_at == "5000", "companion told")
+    -- The user changes it in KOReader's menu: the old request is never applied again.
+    for _, it in ipairs(sub) do if it.text == "Every chapter" then it.callback() end end
+    ok(lastBroadcast(".SETTINGS").extras.reading_schedule == "ch1", "menu change sent to the companion")
+    m:onResume()
+    run(2)
+    ok(store.orbit_android.reading_schedule == "ch1", "stale request not re-applied")
+    -- A newer one from the companion wins.
+    W.json.STATUS = { version = "0.4.8", reading_schedule_request = { id = "min15", at = 9000 } }
+    m:onResume()
+    run(2)
+    ok(store.orbit_android.reading_schedule == "min15", "newer request applied")
+    W.web[url], W.json.STATUS = nil, nil
+    store.orbit_android.reading_schedule = "off"
+end)
+
+test("home button menu says it is about KOReader, and notes the companion's Home opens", function()
+    local url = "http://127.0.0.1:47913/status"
+    W.web[url] = "STATUS"
+    local ui, m = newUI(false)
+    local function homeText()
+        for _, it in ipairs(m:menuItems()) do
+            if it.text_func then
+                local t = it.text_func()
+                if t:find("In KOReader, Home goes to", 1, true) then return t end
+            end
+        end
+    end
+    W.json.STATUS = { version = "0.4.8", settings = { settings_at = 0, home_opens = "koreader" } }
+    m:onResume(); run(1)
+    ok(homeText() == "In KOReader, Home goes to: Back to my book, then BookOrbit home", tostring(homeText()))
+    W.json.STATUS = { version = "0.4.8", settings = { settings_at = 0, home_opens = "launcher" } }
+    m:onResume(); run(1)
+    ok(homeText():find("(Home opens the Orbit launcher page)", 1, true), homeText())
+    W.web[url], W.json.STATUS = nil, nil
+    m:onResume(); run(1)
+    ok(not homeText():find("(", 1, true), "no companion: no note")
+end)
+
 test("compat: a check that found something missing early doesn't stick", function()
     local ui, m = newUI(true)
     local q = newPlugin()

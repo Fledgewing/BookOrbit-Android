@@ -21,10 +21,11 @@ class HomeDecider(
     private var lastPressAt: Long? = null
     private var lastStartAt: Long? = null
 
-    fun onHomePress(now: Long, koreaderInstalled: Boolean, homeOpensKoreader: Boolean): HomeAction {
+    /** [opensApp]: "Home opens" is KOReader or an app (false: the Orbit launcher page). */
+    fun onHomePress(now: Long, koreaderInstalled: Boolean, opensApp: Boolean): HomeAction {
         val prev = lastPressAt
         lastPressAt = now
-        if (!koreaderInstalled || !homeOpensKoreader) return HomeAction.SHOW_LAUNCHER
+        if (!koreaderInstalled || !opensApp) return HomeAction.SHOW_LAUNCHER
         if (prev != null && now - prev in 0..doublePressMs) {
             lastPressAt = null
             return HomeAction.SHOW_LAUNCHER
@@ -33,8 +34,8 @@ class HomeDecider(
         return HomeAction.START_KOREADER
     }
 
-    fun onUncovered(now: Long, koreaderInstalled: Boolean, homeOpensKoreader: Boolean): HomeAction {
-        if (!koreaderInstalled || !homeOpensKoreader) return HomeAction.SHOW_LAUNCHER
+    fun onUncovered(now: Long, koreaderInstalled: Boolean, opensApp: Boolean): HomeAction {
+        if (!koreaderInstalled || !opensApp) return HomeAction.SHOW_LAUNCHER
         val last = lastStartAt
         if (last != null && now - last in 0 until failWindowMs) {
             lastStartAt = null
@@ -283,6 +284,37 @@ enum class HomeButton(val key: String, val label: String) {
         fun fromKey(key: String?): HomeButton = entries.firstOrNull { it.key == key } ?: DEFAULT
         fun valid(key: String?) = entries.any { it.key == key }
     }
+}
+
+/**
+ * "Sync while reading" (docs/INTERFACE.md "reading_schedule_request"). The patch owns it: it
+ * reports its value in SETTINGS; a change here is a request (id, at ms) in /status that the
+ * patch applies and saves at its next start, resume or menu open, then acknowledges
+ * (reading_schedule_applied_at). Until then the companion shows the requested value.
+ */
+object ReadingSchedule {
+    val OPTIONS = listOf(
+        "off" to "Off",
+        "min10" to "Every 10 minutes", "min15" to "Every 15 minutes", "min30" to "Every 30 minutes", "min60" to "Every 60 minutes",
+        "pg25" to "Every 25 pages", "pg50" to "Every 50 pages", "pg100" to "Every 100 pages",
+        "ch1" to "Every chapter", "ch2" to "Every 2 chapters",
+    )
+
+    fun valid(id: String?): Boolean = OPTIONS.any { it.first == id }
+
+    fun label(id: String?): String = OPTIONS.firstOrNull { it.first == id }?.second ?: "Off"
+
+    /** What the companion shows: a request not yet applied, else what the patch reported. */
+    fun shown(patchValue: String, requestId: String): String =
+        requestId.takeIf { valid(it) } ?: patchValue.takeIf { valid(it) } ?: "off"
+
+    /** The patch reported [appliedAt]: our request is done when it covers [requestAt]. */
+    fun requestDone(requestId: String, requestAt: Long, appliedAt: Long?): Boolean =
+        requestId.isNotEmpty() && appliedAt != null && appliedAt >= requestAt
+
+    /** /status field: the pending request, or null. */
+    fun statusJson(requestId: String, requestAt: Long): String =
+        if (valid(requestId) && requestAt > 0) "{\"id\":\"$requestId\",\"at\":$requestAt}" else "null"
 }
 
 object SharedSettings {
@@ -595,6 +627,11 @@ object WhatsNew {
         "0.4.7" to listOf(
             "Home opens BookOrbit home again on KOReader 2025.10 and newer (KOReader now wraps the plugin's actions, which the patch took as missing). Test sync path and Apply recommended settings work there too.",
         ),
+        "0.4.8" to listOf(
+            "Settings PIN: after you leave the settings or a guarded app it stays unlocked for 2 minutes, so coming straight back needs no PIN. The screen turning off still locks it.",
+            "Sync while reading is now in Settings too (KOReader keeps it; a change applies when KOReader opens).",
+            "Home settings are simpler: \"Home opens\" now offers the Orbit launcher page (it replaces the \"Home always opens…\" switch), and \"In KOReader, Home goes to\" shows only with KOReader.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */
@@ -613,14 +650,48 @@ object WhatsNew {
 object HomeApp {
     const val KOREADER_BOOKORBIT = ""
     const val KOREADER_PKG = "org.koreader.launcher"
+    /** "Orbit launcher page": Home shows the companion's launcher page (was the toggle's off). */
+    const val LAUNCHER = "orbit:launcher"
 
     fun isKoreader(choice: String?): Boolean = choice.isNullOrEmpty() || choice == KOREADER_PKG
+
+    fun isLauncher(choice: String?): Boolean = choice == LAUNCHER
+
+    /** Another app (its package). */
+    fun isApp(choice: String?): Boolean = !isKoreader(choice) && !isLauncher(choice)
+
+    /** "koreader", "launcher" or "app": /status settings.home_opens for the patch. */
+    fun kind(choice: String?): String = when {
+        isKoreader(choice) -> "koreader"
+        isLauncher(choice) -> "launcher"
+        else -> "app"
+    }
+
+    /**
+     * 0.4.7 and older: "Home opens" plus the toggle "Home always opens …" (home_opens_koreader;
+     * off = the launcher page). [toggle] null = never set (on).
+     */
+    fun migrate(choice: String, toggle: Boolean?): String = if (toggle == false) LAUNCHER else choice
+
+    const val LAUNCHER_LABEL = "Orbit launcher page"
+    const val TWICE = "press Home twice for the launcher page"
+    const val HOME_BUTTON_TITLE = "In KOReader, Home goes to"
+
+    /** Settings' "Home opens" row: what it opens, and the double press unless that is the launcher. */
+    fun summary(choice: String?, appLabel: String?): String = when {
+        isLauncher(choice) -> LAUNCHER_LABEL
+        isKoreader(choice) -> "KOReader + BookOrbit · $TWICE"
+        else -> "${appLabel ?: choice} · $TWICE"
+    }
+
+    /** The "Home button" choice applies (and shows) only with KOReader + BookOrbit. */
+    fun showsHomeButton(choice: String?): Boolean = isKoreader(choice)
 
     /** pkg null = KOReader (with command/from); else that app, no extras. */
     data class Launch(val pkg: String?, val command: String?, val from: String?)
 
     fun launch(choice: String?, press: Boolean, button: HomeButton, companionPageInFront: Boolean): Launch {
-        if (!isKoreader(choice)) return Launch(choice, null, null)
+        if (!isKoreader(choice)) return Launch(choice, null, null) // the launcher page never gets here (HomeDecider)
         val command = if (press) HomeCommands.forPress(button) else HomeCommands.forUncovered(button)
         val from = if (command == HomeCommands.HOME_SMART) HomeCommands.from(companionPageInFront, !press) else null
         return Launch(null, command, from)

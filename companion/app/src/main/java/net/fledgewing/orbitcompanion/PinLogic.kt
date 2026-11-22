@@ -72,13 +72,16 @@ enum class Fg { KOREADER, HOME, APP, OTHER }
  * The live PIN state, one per process, shared by the pages, the accessibility service and
  * /status (no snapshot: set, clear and the guard list change it at once).
  *
- * An unlock lasts while the user stays in what it was granted for: the companion's protected
- * pages (they never end it), the packages in [scope] (a guarded app, a Setup Fix target, pages
- * opened from a protected page) and nothing else. KOReader, Home, another app or an open
- * companion page end it at once; so do screen-off and a hard cap ([capMs]).
+ * An unlock holds while the user is inside what it covers: the companion's protected pages,
+ * the packages in [scope] (a guarded app, a Setup Fix target, pages opened from a protected
+ * page) and any guarded app. Leaving (KOReader, Home, another app, an open companion page)
+ * starts a [graceMs] grace (2 min): coming back inside it needs no PIN and stops it; leaving
+ * again starts a fresh one; when it runs out, it locks. Screen-off locks at once. The hard cap
+ * ([capMs]) applies only while nothing watches the foreground (accessibility service off).
  */
-class PinGate(private val capMs: Long = CAP_MS) {
+class PinGate(private val graceMs: Long = GRACE_MS, private val capMs: Long = CAP_MS) {
     companion object {
+        const val GRACE_MS = 2 * 60_000L
         const val CAP_MS = 15 * 60_000L
     }
 
@@ -86,18 +89,32 @@ class PinGate(private val capMs: Long = CAP_MS) {
     var pinSet = false
     @Volatile
     var guarded: Set<String> = emptySet()
+    /** The accessibility service is running, so leaving other apps is seen. */
+    @Volatile
+    var watching = false
     private var unlockedAt = -1L
+    /** -1 while inside; else when the user left. */
+    private var leftAt = -1L
     private val scope = HashSet<String>()
     private var updateUntil = 0L
 
     @Synchronized
-    fun unlocked(now: Long): Boolean = unlockedAt >= 0 && now - unlockedAt in 0 until capMs
+    fun unlocked(now: Long): Boolean {
+        if (unlockedAt < 0 || now < unlockedAt) return false
+        if (!watching && now - unlockedAt >= capMs) return false
+        return leftAt < 0 || now - leftAt < graceMs
+    }
 
     fun locked(now: Long): Boolean = pinSet && !unlocked(now)
+
+    /** Inside since [now]? False when outside (in the grace) or locked. */
+    @Synchronized
+    fun inside(now: Long): Boolean = unlocked(now) && leftAt < 0
 
     @Synchronized
     fun unlock(now: Long, scopePkgs: Collection<String> = emptyList()) {
         unlockedAt = now
+        leftAt = -1
         scope.clear()
         scope.addAll(scopePkgs)
     }
@@ -112,22 +129,42 @@ class PinGate(private val capMs: Long = CAP_MS) {
     @Synchronized
     fun inScope(pkg: String): Boolean = pkg in scope
 
-    /** True when it was unlocked. */
+    /** Screen-off (and PIN removed): at once. True when it was unlocked. */
     @Synchronized
     fun lock(): Boolean {
         val was = unlockedAt >= 0
         unlockedAt = -1
+        leftAt = -1
         scope.clear()
         return was
     }
 
-    /** Something else came to the front: true when that ended the unlock. */
+    /** A protected companion page (or something in scope) is in front: inside again, no grace. */
     @Synchronized
-    fun onForeground(fg: Fg, pkg: String, now: Long): Boolean {
-        if (!unlocked(now)) return false
-        // Home always ends it, even when the launcher's package hosts a screen in scope (Boox).
-        if (fg == Fg.OTHER || (fg != Fg.HOME && pkg in scope)) return false
-        return lock()
+    fun enter(now: Long) {
+        if (unlocked(now)) leftAt = -1
+    }
+
+    /** The user left what the unlock covers: the grace starts. True when this started it. */
+    @Synchronized
+    fun leave(now: Long): Boolean {
+        if (!unlocked(now) || leftAt >= 0) return false
+        leftAt = now
+        return true
+    }
+
+    /** Something came to the front (the accessibility service). True when the user left. */
+    @Synchronized
+    fun onForeground(fg: Fg, pkg: String, cls: String?, now: Long): Boolean {
+        if (!unlocked(now) || fg == Fg.OTHER) return false
+        // Home always leaves, even when the launcher's package hosts a screen in scope (Boox).
+        val covered = fg != Fg.HOME && (pkg in scope || Guard.matches(guarded, pkg, cls))
+        if (covered) {
+            scope.add(pkg)
+            leftAt = -1
+            return false
+        }
+        return leave(now)
     }
 
     @Synchronized

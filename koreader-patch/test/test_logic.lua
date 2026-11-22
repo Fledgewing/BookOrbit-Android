@@ -20,6 +20,16 @@ local function turn(s, n, key, t)
     for _ = 1, n do Schedule.onPage(s, key, t) end
 end
 
+test("reading schedule request from the companion: valid, newer, applied once", function()
+    eq(Schedule.request({ id = "pg50", at = 2000 }, 1000), "pg50")
+    eq(select(2, Schedule.request({ id = "pg50", at = 2000 }, nil)), 2000)
+    eq(Schedule.request({ id = "pg50", at = 2000 }, 2000), nil, "already applied")
+    eq(Schedule.request({ id = "pg50", at = 1500 }, 2000), nil, "older")
+    eq(Schedule.request({ id = "bogus", at = 3000 }, 0), nil, "unknown id")
+    eq(Schedule.request(nil, 0), nil)
+    eq(Schedule.request({ id = "off", at = "4000" }, 0), "off")
+end)
+
 test("off never fires", function()
     local s = Schedule.new("off", 0)
     turn(s, 500, 1, 0)

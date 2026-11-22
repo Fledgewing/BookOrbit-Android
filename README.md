@@ -195,8 +195,8 @@ Optional, off by default (Settings › **Settings PIN**). A 4–8 digit PIN on a
 locks the companion's Settings, Clicker buttons, Setup's Fix buttons, the update install, the
 launcher's Android Settings tile and the patch's KOReader menu. **Guarded apps** (Android
 Settings by default, plus any app you add) open behind the keypad, through the accessibility
-service. Only a salted PBKDF2 hash is stored. A right PIN unlocks only while you stay in the
-screens you unlocked; Home, KOReader, another app or screen-off lock it again; 5 wrong tries start a 30 s wait that doubles up to 5 minutes. Forgot it: the
+service. Only a salted PBKDF2 hash is stored. A right PIN stays unlocked while you are in the
+screens it covers and for 2 minutes after you leave them; screen-off locks at once; 5 wrong tries start a 30 s wait that doubles up to 5 minutes. Forgot it: the
 adb `RESET_PIN` broadcast in [docs/SETUP.md](docs/SETUP.md#8c-a-settings-pin-optional). It is
 kid-proofing, not security: the notification shade's quick settings, safe mode and adb get
 past it.

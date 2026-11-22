@@ -52,6 +52,23 @@ function Schedule.option(id)
     return Schedule.OPTIONS[1]
 end
 
+function Schedule.valid(id)
+    for _, o in ipairs(Schedule.OPTIONS) do
+        if o.id == id then return true end
+    end
+    return false
+end
+
+-- "Sync while reading" set in the companion (docs/INTERFACE.md "reading_schedule_request"):
+-- req = { id, at (ms) } from /status. The patch keeps the setting; it applies a request once,
+-- newer than the last it applied (applied_at, ms). Returns the id to apply, or nil.
+function Schedule.request(req, applied_at)
+    if type(req) ~= "table" or not Schedule.valid(req.id) then return nil end
+    local at = tonumber(req.at)
+    if not at or at <= (tonumber(applied_at) or 0) then return nil end
+    return req.id, at
+end
+
 -- A fresh counter. `now` is in seconds (any monotonic clock).
 function Schedule.new(id, now)
     local o = Schedule.option(id)
@@ -1331,6 +1348,19 @@ function Shared.refresh(why)
     -- "Setup needs you": the count in the menu status; setup_prompt for the one-time box.
     Shared.setup_needed = st and tonumber(st.setup_needed) or nil
     Shared.setup_prompt = st and type(st.setup_prompt) == "table" and st.setup_prompt or nil
+    -- The companion's "Home opens": koreader, launcher or app (nil: unknown, older companion).
+    local so = st and type(st.settings) == "table" and st.settings.home_opens or nil
+    Shared.home_opens = (so == "koreader" or so == "launcher" or so == "app") and so or nil
+    -- Sync while reading set in the companion: apply and save it here, then tell the companion.
+    local req_id, req_at = Schedule.request(st and st.reading_schedule_request, S.reading_schedule_request_at)
+    if req_id then
+        local was = S.reading_schedule
+        S.reading_schedule, S.reading_schedule_request_at = req_id, req_at
+        saveSettings()
+        log("setting reading_schedule =", req_id, "(from the companion, was " .. tostring(was) .. ", " .. why .. ")")
+        if Shared.onSchedule then pcall(Shared.onSchedule, req_id) end
+        Shared.push("reading schedule from the companion")
+    end
     -- Settings PIN: locked only on the companion's word; no answer = unlocked (MenuLock).
     Shared.pin_locked = MenuLock.locked(st)
     -- The companion's lockdown reading (true/false; nil: unknown or no companion).
@@ -1366,6 +1396,9 @@ function Shared.push(why)
         wifi_idle_min = tostring(S.wifi_idle_min or 2),
         home_button = S.home_button or "smart",
         settings_at = string.format("%.0f", S.shared_settings_at or 0),
+        -- The patch owns Sync while reading; the companion shows it (and the request it applied).
+        reading_schedule = S.reading_schedule or "off",
+        reading_schedule_applied_at = string.format("%.0f", S.reading_schedule_request_at or 0),
     })
 end
 
@@ -2342,12 +2375,18 @@ function OrbitAndroid:init()
     local in_reader = self.ui ~= nil and self.ui.document ~= nil
     self.schedule = Schedule.new(S.reading_schedule, now_s())
     if in_reader then self:hookPluginPagePush() end
+    -- A Sync while reading change from the companion (Shared.refresh) restarts this counter.
+    Shared.onSchedule = function(id)
+        self.schedule = Schedule.new(id, now_s())
+        if self.ui and self.ui.document then self:hookPluginPagePush() end
+    end
 
     if not state.started then
         state.started = true
         log("start: KOReader started (treated as a wake)", in_reader and "in reader" or "in file browser")
         UIManager:scheduleIn(0.8, function()
             Shared.refresh("start")
+            Shared.push("start") -- the companion shows the patch's Sync while reading
             Wifi.applySettings("start")
             self:maybeSetupPrompt("start")
         end)
@@ -3365,6 +3404,7 @@ function OrbitAndroid:menuItems()
                 self.schedule = Schedule.new(o.id, now_s())
                 self:hookPluginPagePush()
                 log("setting reading_schedule =", o.id)
+                Shared.push("menu: sync while reading")
             end,
         })
     end
@@ -3442,7 +3482,11 @@ function OrbitAndroid:menuItems()
         },
         {
             text_func = function()
-                return _("Home button: ") .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
+                local t = _("In KOReader, Home goes to: ") .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
+                -- The companion's "Home opens" (companion 0.4.8+): this applies only with KOReader.
+                if Shared.home_opens == "launcher" then t = t .. _(" (Home opens the Orbit launcher page)")
+                elseif Shared.home_opens == "app" then t = t .. _(" (Home opens another app)") end
+                return t
             end,
             sub_item_table = home_items,
             separator = true,

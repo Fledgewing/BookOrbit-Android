@@ -623,3 +623,76 @@ class HomeAppTest {
         assertEquals(listOf("Meebook", "Moon+ Reader", "Readest", "calculator", "Files"), HomeApp.order(apps, readers).map { it.second })
     }
 }
+
+class ReadingScheduleTest {
+    @Test
+    fun sameOptionsAsThePatch() {
+        assertEquals(
+            listOf("off", "min10", "min15", "min30", "min60", "pg25", "pg50", "pg100", "ch1", "ch2"),
+            ReadingSchedule.OPTIONS.map { it.first },
+        )
+        assertEquals("Every 2 chapters", ReadingSchedule.label("ch2"))
+    }
+
+    @Test
+    fun queuedWhileKoreaderIsOffThenAckedByThePatch() {
+        // Chosen here with KOReader closed: shown at once, carried in /status until the patch applies it.
+        assertEquals("pg50", ReadingSchedule.shown(patchValue = "off", requestId = "pg50"))
+        assertEquals("{\"id\":\"pg50\",\"at\":5000}", ReadingSchedule.statusJson("pg50", 5000))
+        // The patch's SETTINGS without our request yet (an older applied_at): still pending.
+        assertFalse(ReadingSchedule.requestDone("pg50", 5000, appliedAt = 0))
+        assertFalse(ReadingSchedule.requestDone("pg50", 5000, appliedAt = null))
+        // Applied and saved by the patch: done; the companion then shows the patch's value.
+        assertTrue(ReadingSchedule.requestDone("pg50", 5000, appliedAt = 5000))
+        assertEquals("null", ReadingSchedule.statusJson("", 0))
+        assertEquals("ch1", ReadingSchedule.shown(patchValue = "ch1", requestId = ""))
+        assertEquals("off", ReadingSchedule.shown(patchValue = "", requestId = ""))
+        assertEquals("null", ReadingSchedule.statusJson("bogus", 1))
+    }
+}
+
+class HomeOpensTest {
+    @Test
+    fun toggleOffMigratesToTheLauncherPage() {
+        assertEquals(HomeApp.LAUNCHER, HomeApp.migrate("", toggle = false))
+        assertEquals(HomeApp.LAUNCHER, HomeApp.migrate("com.example.reader", toggle = false))
+        assertEquals("", HomeApp.migrate("", toggle = true))
+        assertEquals("com.example.reader", HomeApp.migrate("com.example.reader", toggle = true))
+        assertEquals("", HomeApp.migrate("", toggle = null))
+    }
+
+    @Test
+    fun koreaderChoice() {
+        val c = HomeApp.KOREADER_BOOKORBIT
+        assertEquals("koreader", HomeApp.kind(c))
+        assertTrue(HomeApp.showsHomeButton(c))
+        assertEquals("KOReader + BookOrbit · press Home twice for the launcher page", HomeApp.summary(c, null))
+        assertEquals(HomeAction.START_KOREADER, HomeDecider().onHomePress(0, true, opensApp = true))
+        val l = HomeApp.launch(c, press = true, button = HomeButton.SMART, companionPageInFront = false)
+        assertEquals(null, l.pkg)
+        assertEquals(HomeCommands.HOME_SMART, l.command)
+    }
+
+    @Test
+    fun launcherPageChoice() {
+        val c = HomeApp.LAUNCHER
+        assertEquals("launcher", HomeApp.kind(c))
+        assertFalse(HomeApp.showsHomeButton(c))
+        assertFalse(HomeApp.isKoreader(c))
+        assertFalse(HomeApp.isApp(c))
+        assertEquals("Orbit launcher page", HomeApp.summary(c, null))
+        val d = HomeDecider()
+        assertEquals(HomeAction.SHOW_LAUNCHER, d.onHomePress(0, true, opensApp = !HomeApp.isLauncher(c)))
+        assertEquals(HomeAction.SHOW_LAUNCHER, d.onUncovered(10_000, true, opensApp = !HomeApp.isLauncher(c)))
+    }
+
+    @Test
+    fun anotherAppChoice() {
+        val c = "com.example.reader"
+        assertEquals("app", HomeApp.kind(c))
+        assertFalse(HomeApp.showsHomeButton(c))
+        assertEquals("Reader · press Home twice for the launcher page", HomeApp.summary(c, "Reader"))
+        assertEquals(HomeAction.START_KOREADER, HomeDecider().onHomePress(0, true, opensApp = true))
+        assertEquals(HomeApp.Launch(c, null, null), HomeApp.launch(c, press = true, button = HomeButton.SMART, companionPageInFront = false))
+    }
+}

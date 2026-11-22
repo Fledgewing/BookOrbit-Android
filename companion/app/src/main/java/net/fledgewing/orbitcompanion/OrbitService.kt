@@ -329,6 +329,17 @@ class OrbitService : Service() {
 
     // SETTINGS from the patch's menu: newest settings_at wins.
     private fun applySettings(intent: Intent) {
+        // Sync while reading: the patch's value, whatever settings_at says (it owns it).
+        intent.getStringExtra("reading_schedule")?.takeIf { ReadingSchedule.valid(it) }?.let { v ->
+            prefs.readingSchedule = v
+            val applied = intent.getStringExtra("reading_schedule_applied_at")?.toLongOrNull()
+            if (ReadingSchedule.requestDone(prefs.readingScheduleRequest, prefs.readingScheduleRequestAt, applied)) {
+                OLog.i("sync while reading: the patch applied ${prefs.readingScheduleRequest}")
+                prefs.readingScheduleRequest = ""
+                prefs.readingScheduleRequestAt = 0
+            }
+            OLog.i("sync while reading in the patch: $v")
+        }
         val at = intent.getStringExtra("settings_at")?.toLongOrNull() ?: 0L
         if (at <= prefs.sharedSettingsAt) {
             OLog.i("settings from the patch ignored: older than ours ($at <= ${prefs.sharedSettingsAt})")
@@ -338,7 +349,7 @@ class OrbitService : Service() {
         intent.getStringExtra("wifi_idle_min")?.toIntOrNull()?.takeIf { SharedSettings.validIdle(it) }?.let { prefs.wifiIdleMin = it }
         intent.getStringExtra("home_button")?.takeIf { HomeButton.valid(it) }?.let { prefs.homeButton = HomeButton.fromKey(it) }
         prefs.sharedSettingsAt = at
-        OLog.i("settings from the patch: wifi_mode=${prefs.wifiMode.key} wifi_idle_min=${prefs.wifiIdleMin} home_button=${prefs.homeButton.key}")
+        OLog.i("settings from the patch: wifi_mode=${prefs.wifiMode.key} wifi_idle_min=${prefs.wifiIdleMin} home_button=${prefs.homeButton.key} (home opens ${HomeApp.kind(prefs.homeApp)})")
     }
 
     private fun onWifiUp() {
@@ -539,10 +550,14 @@ class OrbitService : Service() {
             // patch blames it for a failed update check only when this is true.
             "\"vpn_lockdown\":${Net.vpnLockdown(this)}," +
             "\"pin_locked\":${Pin.locked(this)}," +
+            // Sync while reading chosen here, for the patch to apply (docs/INTERFACE.md).
+            "\"reading_schedule_request\":${ReadingSchedule.statusJson(prefs.readingScheduleRequest, prefs.readingScheduleRequestAt)}," +
             // The KOReader setup box (docs/INTERFACE.md): only when unsnoozed rows need the user.
             "\"setup_prompt\":${setupPrompt()}," +
             "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +
-            "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}}," +
+            "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}," +
+            // Companion-only "Home opens", for the patch's menu: koreader, launcher or app.
+            "\"home_opens\":\"${HomeApp.kind(prefs.homeApp)}\"}," +
             // Clicker buttons for the patch (keycode -> press/hold/double -> action), docs/INTERFACE.md.
             "\"keymap\":${ClickerStore.map(this).forPatch()}}"
 

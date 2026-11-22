@@ -23,7 +23,7 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `NET_UP` | `reason`, `request_id`, `wifi` (`"1"`/`"0"`), `tailscale` (`"1"`/`"0"`), `wake_lock_s` (`"0"` = none), `owner` (`"auto"`/`"manual"`), `mode` | Cancel any pending Wi-Fi-off timer. Wi-Fi it turns on is owned by `owner` (`manual`: the reader asked by hand; already-on Wi-Fi also becomes `manual`). If `wake_lock_s` > 0, hold a partial wake lock for that long, hard-capped at 25 s. If `wifi = "1"` and Wi-Fi is off, turn it on. If `tailscale = "1"`, send Tailscale `CONNECT_VPN`. Record the time it took Wi-Fi to come up, for its status page. |
 | `NET_DONE` | `reason`, `ok` (`"1"`/`"0"`), `seconds` (e.g. `"4.2"`), `detail`, `restore` (`"off"` when Wi-Fi was off before) | Release the wake lock. `restore = "off"` on a sleep sync acts as "off now" (unless the owner is `manual`). For `reason` `sleep` or `sync_and_sleep`: record "Last sleep sync", then apply "Wi-Fi after sleep sync": keep on; off after 30 min (the timer turns Wi-Fi off only if the screen is still off when it fires); or off now, only while the screen is off. For `sync_and_sleep` the screen is still on at `NET_DONE` (`SLEEP_NOW` follows), so "off now" waits for the next screen-off, up to 30 s later. |
 | `WIFI_OFF` | `reason`, `auto` (`"1"`/`"0"`), `mode` | Turn Wi-Fi off. `auto = "1"` (the patch's automatic off: idle, restore) is refused when the owner is `manual`, and waits while the companion downloads an update. `auto = "0"`: KOReader's own "Wi-Fi off" toggle, or "Off while reading" when a book opens. |
-| `SETTINGS` | `wifi_mode` (`always_on`/`off_reading`/`jit`), `wifi_idle_min` (`1`/`2`/`5`/`10`), `home_button` (`smart`/`bookorbit`), `settings_at` (ms since epoch) | Store the shared settings when `settings_at` is newer than its own. |
+| `SETTINGS` | `wifi_mode` (`always_on`/`off_reading`/`jit`), `wifi_idle_min` (`1`/`2`/`5`/`10`), `home_button` (`smart`/`bookorbit`), `settings_at` (ms since epoch); patch 0.4.8+: `reading_schedule` (an id below), `reading_schedule_applied_at` (ms, the last companion request it applied) | Store the shared settings when `settings_at` is newer than its own. Always record `reading_schedule` (the patch owns it) and drop its own pending request once `reading_schedule_applied_at` ≥ that request's `at`. Sent at start, on a menu change and after applying a request. |
 | `STATS` | `seq`, `period_s`, `pages`, `full`, `partial`, `content` (`text`/`comic`/`webtoon`/`pdf`/`none`), `open` (`1`/`0`), `reading_min`, `wifi_mode`, `reading_schedule`, `reason` | Battery stats batch: store the counts with the current state; a book is "in front" while `open=1` (at most 6 min). Sent every 5 min with a book open, on open/Resume/Suspend/close, never per page (docs/STATS-DESIGN.md). |
 | `SETUP_LATER` | none | The setup box's "Later" in KOReader: the companion's own Later (quiet until an update or a step stops working). Companion 0.4.1+. |
 | `RELAUNCH` | `reason` (`restart`) | The patch is quitting for a restart (COMMAND `restart`): start KOReader again after 2.5 s. Patch 0.3.1+. |
@@ -157,6 +157,14 @@ are newer. `keymap` (v0.4.0): clicker buttons for the patch, keyed by Android ke
 `vpn_lockdown` (v0.4.3): "Block connections without VPN" as Android reports it (`true`,
 `false`, or `null` when unreadable). The patch blames it for a failed update check only when
 it is `true`.
+`reading_schedule_request` (v0.4.8): "Sync while reading" chosen in the companion, as
+`{"id": "pg50", "at": 1763800000000}` (`null` when nothing is pending). The ids are the patch's:
+`off`, `min10`, `min15`, `min30`, `min60`, `pg25`, `pg50`, `pg100`, `ch1`, `ch2`. The patch owns
+the setting: at start, resume and menu open it applies a request whose `at` is newer than the
+last one it applied, saves it (with that `at`) and acknowledges with `SETTINGS`. Chosen while
+KOReader isn't running, it simply waits in `/status` for the next start.
+`settings.home_opens` (v0.4.8): the companion's "Home opens", `koreader`, `launcher` (the Orbit
+launcher page) or `app`; the patch notes it on its Home button menu entry.
 `pin_locked` (v0.4.4): a Settings PIN is set and not unlocked right now. Then the patch's Orbit
 menu shows only "Enter the Settings PIN…" and starts `SHOW_PIN`. Only a real `true` locks:
 no answer (no companion, not running) or an older companion leaves the menu usable, so the

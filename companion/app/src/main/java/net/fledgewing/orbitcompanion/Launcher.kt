@@ -74,19 +74,20 @@ class HomeActivity : Activity() {
         if (press && Attention.promptOnHome(this)) return
         val prefs = Prefs(this)
         val choice = prefs.homeApp
-        val other = !HomeApp.isKoreader(choice)
+        val other = HomeApp.isApp(choice)
+        val opensApp = !HomeApp.isLauncher(choice)
         // Disabled (e.g. a vendor launcher's app freeze) counts as unusable: starting it would throw.
         val problem = if (other) HomeTarget.problem(this, choice) else Koreader.problem(this)
         val installed = problem == null
         val now = SystemClock.elapsedRealtime()
         val action = if (press) {
-            decider.onHomePress(now, installed, prefs.homeOpensKoreader)
+            decider.onHomePress(now, installed, opensApp)
         } else {
-            decider.onUncovered(now, installed, prefs.homeOpensKoreader)
+            decider.onUncovered(now, installed, opensApp)
         }
         val why = when {
             problem != null -> problem
-            !prefs.homeOpensKoreader -> null
+            !opensApp -> null
             press -> "Home pressed twice."
             else -> "${HomeTarget.name(this)} closed straight after starting."
         }
@@ -155,7 +156,7 @@ class LauncherActivity : EinkActivity() {
         val root = page()
         root.addView(Ui.header(this, "Orbit"))
         val choice = Prefs(this).homeApp
-        if (!HomeApp.isKoreader(choice)) {
+        if (HomeApp.isApp(choice)) {
             // "Home opens" another app: it is the big first tile; KOReader stays a tile below.
             val name = HomeTarget.label(this, choice)
             root.addView(Ui.button(this, "Open $name", solid = true, heightDp = 120, sp = 26f) {
@@ -168,7 +169,7 @@ class LauncherActivity : EinkActivity() {
             })
             root.addView(Ui.gap(this, 8))
         }
-        val koFirst = HomeApp.isKoreader(choice)
+        val koFirst = !HomeApp.isApp(choice)
         val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) 120 else 88, sp = if (koFirst) 26f else 22f) {
             if (Koreader.goHome(this, "launcher button")) {
                 HomeActivity.decider.startedByHand(SystemClock.elapsedRealtime())

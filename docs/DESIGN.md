@@ -151,10 +151,15 @@ with a book open (`open_book_at_exit`) → that book. Presses step book → Book
 companion; Home from another app goes to the book, so the steps never loop. "From another
 app" is the companion's `FROM=other_app` when it knows, else a KOReader pause of 2.5 s or more.
 
-## Home opens (v0.3.2)
+## Home opens (v0.3.2, v0.4.8)
 
-The "Home opens" setting is companion-only; it is not shared with the patch. Its choices:
-- KOReader + BookOrbit, the default (`""`): Smart Home as above.
+The "Home opens" setting is companion-only; the patch only sees its kind (`/status`
+`settings.home_opens`) to label its Home button entry. Its choices:
+- KOReader + BookOrbit, the default (`""`): Smart Home as above. Only then does Settings show
+  the Home button choice, titled "In KOReader, Home goes to".
+- Orbit launcher page (`orbit:launcher`, v0.4.8): Home shows the companion's launcher page.
+  It replaces the toggle "Home always opens …" (`home_opens_koreader`), whose off position
+  did this; `Prefs.homeApp` migrates `false` to it once (`HomeApp.migrate`).
 - Any launchable app: the picker lists known reader apps first (`KnownApps.READERS` plus the
   vendor profile's `readerPkgs`), then the rest A–Z.
 
@@ -245,14 +250,15 @@ Kid-proofing, modelled on the Xteink settings PIN (touch keypad). Optional, off 
 - **Live state (v0.4.6):** one `PinGate` per process holds PIN set, the guard list and the
   unlock; set, clear and Guarded apps change it directly, so the very next window change is
   gated (0.4.4 only noticed after a restart, because setting the PIN also unlocked it).
-- **Unlock (v0.4.6):** lasts while the user stays in what it was granted for, never a time
-  window: the companion's protected pages (`PinPage.PROTECTED`), plus the packages in its
-  scope (the guarded app it was entered for, `SHOW_PIN`'s KOReader, and any page started from
-  the unlocked flow through `EinkActivity.tryStart`: Setup Fix targets, pages opened from
-  Settings). An open companion page (launcher, status, setup) ends it on resume; the
-  accessibility service ends it when KOReader (unless in scope), Home (always) or another
-  launchable app comes to the front (`Guard.classify`, `PinGate.onForeground`); overlays and
-  system windows don't. Also `ACTION_SCREEN_OFF` and a 15-minute hard cap.
+- **Unlock (v0.4.8):** holds while the user is inside what it covers: the companion's
+  protected pages (`PinPage.PROTECTED`), the packages in its scope (the guarded app it was
+  entered for, `SHOW_PIN`'s KOReader, any page started from the unlocked flow through
+  `EinkActivity.tryStart`: Setup Fix targets, pages opened from Settings) and any guarded
+  app. Leaving (an open companion page, or the accessibility service seeing KOReader, Home or
+  another launchable app; overlays and system windows don't count) starts a 2-minute grace
+  (`PinGate.GRACE_MS`): coming back inside it needs no PIN and ends the grace, leaving again
+  starts a fresh one, and when it runs out it locks. `ACTION_SCREEN_OFF` locks at once. The
+  15-minute hard cap applies only while the accessibility service is off (`PinGate.watching`).
   Wrong tries (`PinBackoff`): 5 free, then 30 s doubling to 5 min, kept across restarts.
 - **Locked pages:** `EinkActivity.pinGuarded` (Settings, Home opens, Clicker buttons and its
   capture and action pages, Guarded apps): a locked resume opens the keypad, Cancel closes
@@ -278,6 +284,15 @@ Kid-proofing, modelled on the Xteink settings PIN (touch keypad). Optional, off 
   Android 14+ a reported sender uid must be shell or root (`PinReset.allowed`).
 - **Known gaps (documented in SETUP):** quick settings in the notification shade, safe-mode
   boot, adb.
+
+## Sync while reading in the companion (v0.4.8)
+
+The patch keeps "Sync while reading" (its menu stays). Companion Settings shows the value the
+patch reported in `SETTINGS` and offers the same ten options (`ReadingSchedule`). A choice there
+is a request (`id`, `at`) carried in `/status.reading_schedule_request`; the patch applies and
+saves it at its next start, resume or menu open (`Schedule.request`), restarts its counter and
+acknowledges with `SETTINGS` (`reading_schedule_applied_at`), which clears the request. Until
+then Settings shows the request with "applies when KOReader opens". The PIN guards the page.
 
 ## Plugin updates
 
