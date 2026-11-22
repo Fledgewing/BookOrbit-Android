@@ -443,6 +443,43 @@ it after layout, so the page no longer jumps to the top. Not unit-tested: it is 
 needs the Android runtime, and the project's tests are plain JVM tests (no Robolectric or
 instrumented tests).
 
+## Lists by series and by author (v0.6.0)
+
+Mockups reviewed 11-22 (the list's Sort sheet, Series in a list, a series in the list,
+Authors in a list, an author by series). On any library, collection or smart scope, the
+Sort sheet gets "By series" and "By author" at the top. They open the plugin's own Series and
+Authors views, limited to that list; sort, Reading/Finished, the name filter, the A-Z rail and
+paging all work. Tapping a series shows the list's books in it ("Whole series" switches to the
+normal series page). Tapping an author shows their books in the list by series, books outside
+a series last under "Not in a series", with chips: By series (default), All books (flat) and
+All by author (the normal author page, no list filter).
+
+- **Grouped on the device:** BookOrbit's sections endpoint takes no list
+  (`KoreaderCatalogSectionQueryDto` whitelists its fields), so the patch reads the list's books
+  (100 a page, "Reading N of M books…") with the list's current filters and groups them
+  (`Group`, pure, tested). Rows have the shape the plugin draws; the read buckets, filters,
+  orders, letters and buckets copy the server (`opds-book.service.ts`, cited in the code). A
+  book with no `seriesId` (an older server) groups by its series name.
+- **The plugin draws it:** the patch wraps methods on the plugin's catalog class (the list
+  methods are copied onto it by `CatalogLists.install`, so the class is where they live) and on
+  its API class (`Grouping`). Each wrapper passes through unless its mark is there. A grouped
+  view is the plugin's `loadSection`, whose request `fetch` answers from the held books;
+  `switchTo` tags the context (`orbit_group`), so reloads and paging stay in the list. The
+  patch's marks ride in request params (`orbit*`) and the API's `query` drops them.
+- **A row's books:** a library or collection adds `libraryId` / `collectionId` (the server ANDs
+  them) and the list's filters; a smart scope goes by `ids` (the server drops other filters with
+  `smartScopeId`), and past 200 books (the `ids` cap) the patch answers from the books it holds.
+- **Compat:** `Compat.CATALOG_CLASS` and `Compat.API_CLASS` are checked when a UI starts; a
+  missing method turns off only this feature (logged once). `test/plugin_compat.lua` checks the
+  same methods, the mix-in, the `open-series` / `open-author` actions, the Sort sheet's
+  `rows = {`, the section body fields and the context fields in CI (weekly).
+- **Known limits:** a book in two series shows under its main series only (the whole-series
+  page still has both); author rows show book covers, not photos (the list data has none);
+  counts are for the list only ("5", not "5 of 7"); authors sort by their shown name, not
+  BookOrbit's sort name (the books carry no sort name); the first open of a large list is slow
+  (about 1 s per 100 books) and the view is a snapshot until you leave the list (reopen it to
+  refresh).
+
 ## Sync while reading in the companion (v0.4.8)
 
 The patch keeps "Sync while reading" (its menu stays). Companion Settings shows the value the

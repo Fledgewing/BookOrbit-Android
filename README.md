@@ -107,6 +107,10 @@ Two settings are shared by the patch (Tools › Android sync) and the companion
   KOReader was killed with a book open, Home reopens it) or *BookOrbit home* (Home on
   BookOrbit home still opens the companion).
 
+**Lists by series and by author** (v0.6.0): on a BookOrbit library, collection or smart scope,
+Sort › "By series" or "By author" shows that list grouped, in BookOrbit's own Series and Authors
+views (docs/DESIGN.md "Lists by series and by author", with its known limits).
+
 The patch also adds the gesture action **Orbit Companion: apps**; *Apply recommended gestures*
 puts it on a two-finger swipe up.
 

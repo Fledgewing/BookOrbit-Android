@@ -1856,6 +1856,211 @@ test("settings PIN: a locked companion locks the Orbit menu and opens its keypad
     for _, a in ipairs(W.activities) do ok(not a.action:match("SHOW_PIN$"), "no keypad without the companion") end
 end)
 
+---------------------------------------------------------------- lists by series and by author
+-- A catalog class like plugin 2.3.0's (bookorbit_catalog.lua with CatalogLists mixed in), cut
+-- to what the wrappers touch, and its API class answering from a fake server.
+local function fakeCatalogClass(server)
+    local Cat = {}
+    Cat.__index = Cat
+    function Cat:listKind(ctx)
+        ctx = ctx or self.current_context or {}
+        if ctx.kind == "section" then return ctx.section end
+        if ctx.kind == "books" then
+            local p = ctx.params or {}
+            if p.seriesId or p.series then return "seriespage" end
+            if p.author then return "authorpage" end
+            return "books"
+        end
+    end
+    function Cat:runConnected(fn) fn() end
+    function Cat:fetch(text, fn) table.insert(self.labels, text); return fn() end
+    function Cat:showRetry(err) self.retry = err end
+    function Cat:paramsForEntry(section, e)
+        local p = { sort = section == "series" and "series" or "title" }
+        if e.seriesId then p.seriesId = e.seriesId else p.series = e.id end
+        return p
+    end
+    function Cat:loadBooks(params, title, push) self.loaded = { params = params, title = title, push = push } end
+    function Cat:switchTo(title, items, context, push) self.current_context = context; self.pushed = push end
+    function Cat:listSectionParams(section, opts)
+        return { q = opts.q, sort = opts.sort, filter = opts.filter, size = 2, offset = opts.offset, page = opts.page }
+    end
+    -- bookorbit_catalog.lua:974-1045, cut down.
+    function Cat:loadSection(section, opts)
+        opts = opts or {}
+        self:runConnected(function()
+            local params = self:listSectionParams(section, opts)
+            local body = self:fetch("Opening", function() return self.client:catalogSection(section, params) end)
+            self:switchTo(section, {}, { kind = "section", section = section, entries = body.items, total = body.total,
+                buckets = body.buckets, sort = body.sort, filter = body.filter, page = body.page, offset = body.offset }, not opts.replace)
+        end)
+    end
+    function Cat:listSortSheetModel() return { title = "Sort and filter", rows = { { key = "device" } } } end
+    function Cat:listRun(action) self.stock_run = action.kind end
+    function Cat:listHeader() return { title = "Series", sub = "3 series · A–Z" } end
+    function Cat:listToolbar() return { { key = "tb-sort" } } end
+    function Cat:listSortLabel() return "Title A–Z" end
+    local Api = {}
+    Api.__index = Api
+    function Api:query(path, params)
+        local keys = {}
+        for k, v in pairs(params or {}) do table.insert(keys, k .. "=" .. tostring(v)) end
+        table.sort(keys)
+        return path .. "?" .. table.concat(keys, "&")
+    end
+    -- Two books a page whatever the size asked, so reading the list takes several requests.
+    function Api:catalogBooks(params)
+        table.insert(server.urls, self:query("/books", params))
+        local page = tonumber(params.page) or 1
+        local items = {}
+        for i = (page - 1) * 2 + 1, math.min(#server.books, page * 2) do table.insert(items, server.books[i]) end
+        return { items = items, total = #server.books, page = page, hasNext = page * 2 < #server.books }
+    end
+    function Api:catalogSection(section) server.sections = (server.sections or 0) + 1; return { items = {}, total = 0 } end
+    function Api:catalogManifest(params) server.manifest = self:query("/manifest", params); return {} end
+    return Cat, Api
+end
+
+local function newCatalog(Cat, Api, context)
+    local cat = setmetatable({ labels = {}, client = setmetatable({}, Api) }, Cat)
+    cat.current_context = context
+    return cat
+end
+
+local lists_server = { urls = {}, books = {
+    { id = 1, title = "Lightning Thief", authors = { "Rick Riordan" }, seriesId = 7, seriesName = "Percy Jackson", seriesIndex = "1", readStatus = "read" },
+    { id = 2, title = "Sea of Monsters", authors = { "Rick Riordan" }, seriesId = 7, seriesName = "Percy Jackson", seriesIndex = "2" },
+    { id = 3, title = "Skyward", authors = { "Brandon Sanderson" }, seriesName = "Skyward", seriesIndex = "1", readStatus = "reading" },
+    { id = 4, title = "Tress", authors = { "Brandon Sanderson" } },
+    { id = 5, title = "Akata Witch", authors = { "Nnedi Okorafor" }, seriesId = 9, seriesName = "Nsibidi", seriesIndex = "1" },
+} }
+local LCat, LApi = fakeCatalogClass(lists_server)
+local stock_listRun, stock_fetch = LCat.listRun, LCat.fetch
+
+test("lists: a plugin without a hook -> the feature stays off, the plugin unchanged", function()
+    local header = LCat.listHeader
+    LCat.listHeader = nil
+    package.loaded["bookorbit_catalog"], package.loaded["bookorbit_api"] = LCat, LApi
+    newUI(false)
+    ok(LCat.listRun == stock_listRun and LCat.fetch == stock_fetch, "nothing wrapped")
+    ok(rawget(LCat, "__orbit_stock") == nil, "no marks")
+    LCat.listHeader = header
+end)
+
+test("lists: By series on a collection reads its books once and opens the plugin's Series view", function()
+    newUI(false) -- installs now that every hook is there
+    ok(LCat.listRun ~= stock_listRun, "wrapped")
+    local cat = newCatalog(LCat, LApi, { kind = "books", title = "Kids shelf", params = { collectionId = 4, readStatus = "unread", sort = "author", page = 2 } })
+    local m = cat:listSortSheetModel({})
+    ok(m.rows[1].key == "orbit-series" and m.rows[2].key == "orbit-authors" and m.rows[3].key == "device", "rows at the top")
+    cat:listRun({ kind = "orbit-group", section = "series" })
+    run(1)
+    ok(#lists_server.urls == 3, "three pages of two: " .. #lists_server.urls)
+    for _, u in ipairs(lists_server.urls) do
+        ok(u:find("collectionId=4", 1, true) and u:find("readStatus=unread", 1, true) and u:find("size=100", 1, true), "the list's filters: " .. u)
+        ok(not u:find("orbit", 1, true), "no marks sent")
+    end
+    ok(cat.labels[2] == "Reading 2 of 5 books…", "progress: " .. tostring(cat.labels[2]))
+    local ctx = cat.current_context
+    ok(ctx.kind == "section" and ctx.section == "series" and ctx.orbit_group, "the Series view, tagged")
+    ok(lists_server.sections == nil, "the sections endpoint never asked")
+    ok(ctx.total == 3 and #ctx.entries == 2, "a screen of 2 of 3 series")
+    ok(ctx.entries[1].title == "Nsibidi" and ctx.buckets[1].key == "N", "A-Z with buckets")
+    ok(cat:listHeader("series", ctx).title == "Series in Kids shelf", "header")
+    -- Paging (listGoPage -> reloadSection -> loadSection replace) stays in the list.
+    cat:loadSection("series", { replace = true, offset = 2 })
+    ok(cat.current_context.orbit_group and cat.current_context.entries[1].title == "Skyward", "page 2 from the held books")
+    ok(#lists_server.urls == 3, "no new reads")
+    -- A row: the server's series page with the collection ANDed in.
+    cat:listRun({ kind = "open-series", entry = cat.current_context.entries[1] })
+    local p = cat.loaded.params
+    ok(p.collectionId == 4 and p.series == "Skyward" and p.readStatus == "unread" and p.ids == nil, "collection + series")
+    ok(p.orbitGroup == ctx.orbit_group.token, "marked")
+    -- That page's header and its Whole series chip.
+    local page = { kind = "books", title = "Skyward", params = p, total = 1, books = { lists_server.books[3] } }
+    cat.current_context = page
+    ok(cat:listHeader("seriespage", page).sub == "Brandon Sanderson · 1 book in Kids shelf", "sub: " .. tostring(cat:listHeader("seriespage", page).sub))
+    local tb = cat:listToolbar("seriespage", page)
+    ok(tb[1].key == "tb-sort" and tb[2].key == "orbit-whole-series", "Whole series chip")
+    cat:listRun(tb[2].action)
+    ok(cat.loaded.params.series == "Skyward" and cat.loaded.params.collectionId == nil and cat.loaded.params.orbitGroup == nil, "the whole series")
+    -- Back on the list, By series again: no new reads.
+    cat.current_context = { kind = "books", title = "Kids shelf", params = { collectionId = 4 }, orbit_snapshot = ctx.orbit_group.token }
+    cat:listRun({ kind = "orbit-group", section = "series" })
+    ok(#lists_server.urls == 3 and cat.current_context.orbit_group, "instant the second time")
+end)
+
+test("lists: By author on a smart scope; an author by series; Not in a series; the chips", function()
+    lists_server.urls = {}
+    local cat = newCatalog(LCat, LApi, { kind = "books", title = "Unread fantasy", params = { smartScopeId = 3 } })
+    cat:listRun({ kind = "orbit-group", section = "authors" })
+    run(1)
+    local ctx = cat.current_context
+    ok(ctx.section == "authors" and ctx.total == 3, "3 authors")
+    ok(cat:listHeader("authors", ctx).title == "Authors in Unread fantasy", "header")
+    local bs = ctx.entries[1]
+    ok(bs.title == "Brandon Sanderson" and bs.count == 2, "Brandon first A-Z")
+    cat:listRun({ kind = "open-author", entry = bs })
+    local by = cat.current_context
+    ok(by.section == "series" and by.orbit_group.author == "Brandon Sanderson", "the author's books by series")
+    ok(cat.pushed == true, "pushed: Back returns to the authors")
+    ok(by.total == 2 and by.entries[1].title == "Skyward" and by.entries[2].title == "Not in a series", "series, then Not in a series")
+    local h = cat:listHeader("series", by)
+    ok(h.title == "Brandon Sanderson" and h.sub == "2 books in Unread fantasy · by series", "header: " .. tostring(h.sub))
+    local chips = cat:listToolbar("series", by)
+    ok(#chips == 3 and chips[1].on and chips[1].label == "By series" and chips[3].label == "All by author", "chips")
+    -- A smart scope's series: by id (the server ignores other filters with smartScopeId).
+    cat:listRun({ kind = "open-series", entry = by.entries[1] })
+    local p = cat.loaded.params
+    ok(p.ids == "3" and p.smartScopeId == nil and p.series == "Skyward" and p.author == "Brandon Sanderson", "ids + series + author")
+    cat:listRun({ kind = "open-series", entry = by.entries[2] })
+    ok(cat.loaded.params.ids == "4" and cat.loaded.params.series == nil and cat.loaded.title == "Not in a series", "standalones, flat")
+    cat:listRun(chips[2].action)
+    ok(cat.loaded.params.ids == "3,4" and cat.loaded.push == false, "All books: flat, in place")
+    cat:listRun(chips[3].action)
+    ok(cat.loaded.params.author == "Brandon Sanderson" and cat.loaded.params.ids == nil and cat.loaded.params.orbitGroup == nil, "All by author: no list filter")
+    ok(#lists_server.urls == 3, "read once")
+end)
+
+test("lists: a smart-scope series past 200 books comes from the books held here", function()
+    lists_server.urls = {}
+    local saved = lists_server.books
+    lists_server.books = {}
+    for i = 1, 201 do lists_server.books[i] = { id = i, title = "Vol " .. i, authors = { "A" }, seriesId = 1, seriesName = "Long", seriesIndex = tostring(i) } end
+    local cat = newCatalog(LCat, LApi, { kind = "books", title = "Big", params = { smartScopeId = 5 } })
+    cat:listRun({ kind = "orbit-group", section = "series" })
+    run(1)
+    cat:listRun({ kind = "open-series", entry = cat.current_context.entries[1] })
+    local p = cat.loaded.params
+    ok(p.orbitLocal == "1" and p.ids == nil, "held")
+    local before = #lists_server.urls
+    local body = cat.client:catalogBooks({ orbitGroup = p.orbitGroup, orbitLocal = "1", orbitSeries = p.orbitSeries, seriesId = 1, sort = "series", size = 100, page = 3 })
+    ok(#lists_server.urls == before, "answered here")
+    ok(body.total == 201 and #body.items == 1 and body.items[1].id == 201, "page 3 of the held books")
+    cat.client:catalogManifest({ orbitGroup = p.orbitGroup, orbitLocal = "1", orbitSeries = p.orbitSeries })
+    ok(lists_server.manifest:find("ids=1,2,3", 1, true) and not lists_server.manifest:find("orbit", 1, true), "Download all goes by id")
+    lists_server.books = saved
+end)
+
+test("lists: pass-through when nothing is marked", function()
+    lists_server.urls = {}
+    local cat = newCatalog(LCat, LApi, { kind = "books", title = "All books", params = { sort = "title" } })
+    ok(#cat:listSortSheetModel({}).rows == 1, "no list: no rows")
+    cat:listRun({ kind = "back" })
+    ok(cat.stock_run == "back", "other actions: the plugin's")
+    cat.current_context = { kind = "section", section = "series" }
+    cat:listRun({ kind = "open-series", entry = { title = "X" } })
+    ok(cat.stock_run == "open-series", "the server-wide Series view: the plugin's")
+    cat:loadSection("series", { replace = true })
+    ok(lists_server.sections == 1 and cat.current_context.orbit_group == nil, "the server answers")
+    ok(cat:listHeader("series", cat.current_context).title == "Series", "header unchanged")
+    ok(cat:listToolbar("series", cat.current_context)[1].key == "tb-sort", "toolbar unchanged")
+    ok(cat.client:query("/books", { sort = "title" }) == "/books?sort=title", "query unchanged")
+    cat.client:catalogBooks({ sort = "title", page = 1 })
+    ok(#lists_server.urls == 1, "books from the server")
+    package.loaded["bookorbit_catalog"], package.loaded["bookorbit_api"] = nil, nil
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

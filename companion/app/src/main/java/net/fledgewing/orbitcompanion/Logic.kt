@@ -813,6 +813,9 @@ object WhatsNew {
             "No Setup prompt in the middle of an update.",
             "Every companion page scrolls.",
         ),
+        "0.6.0" to listOf(
+            "In BookOrbit, any library, collection or smart scope can be shown by series or by author: Sort › By series / By author.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */

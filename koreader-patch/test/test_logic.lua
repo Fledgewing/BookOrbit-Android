@@ -640,5 +640,134 @@ test("compat: Make BookOrbit home is written only where the plugin knows the set
     eq(C.settable({}, "catalog_auto_open", "bogus"), false, "a value the plugin doesn't take")
 end)
 
+-- Lists by series and by author (Group)
+local G = M.Group
+local function bk(id, t)
+    t.id = id
+    t.title = t.title or ("Book " .. id)
+    t.authors = t.authors or { "Rick Riordan" }
+    return t
+end
+-- A shelf: Percy Jackson (ids, one missing from the shelf), Skyward by name only (an older
+-- server), two standalones, one book by two authors.
+local shelf = {
+    bk(1, { seriesId = 7, seriesName = "Percy Jackson", seriesIndex = "2", readStatus = "read" }),
+    bk(2, { seriesId = 7, seriesName = "Percy Jackson", seriesIndex = "1", readStatus = "read" }),
+    bk(3, { seriesId = 7, seriesName = "Percy Jackson", seriesIndex = "5", readStatus = "reading", lastReadAt = "2026-11-20" }),
+    bk(4, { seriesId = 7, seriesName = "Percy Jackson", seriesIndex = "5.5" }),
+    bk(5, { seriesName = "Skyward", seriesIndex = "1", authors = { "Brandon Sanderson" }, readStatus = "rereading" }),
+    bk(6, { seriesName = "skyward", seriesIndex = "2", authors = { "Brandon Sanderson" } }),
+    bk(7, { authors = { "Brandon Sanderson" }, title = "Tress", addedAt = "2026-01-02" }),
+    bk(8, { authors = { "Nnedi Okorafor", "Brandon Sanderson" }, title = "Akata Witch", readStatus = "skimmed" }),
+    bk(9, { seriesId = 9, seriesName = "Émile's Tales", seriesIndex = "1", authors = { "Émile Zola" } }),
+}
+
+test("lists: series rows from the list's books, in the plugin's section shape", function()
+    local rows = G.series(shelf)
+    eq(#rows, 3, "Percy, Skyward (by name), Émile")
+    local pj = rows[1]
+    eq(pj.title, "Percy Jackson"); eq(pj.id, "series:7"); eq(pj.seriesId, 7); eq(pj.count, 4)
+    eq(pj.readingCount, 1); eq(pj.finishedCount, 2); eq(pj.letter, "P")
+    eq(table.concat(pj.memberStates, ","), "finished,finished,reading,unread", "series order")
+    eq(pj.previewBooks[1].id, 2, "first by series index"); eq(#pj.previewBooks, 3)
+    eq(table.concat(pj.authorNames, ","), "Rick Riordan")
+    local sky = rows[2]
+    eq(sky.seriesId, nil, "no seriesId: grouped by name"); eq(sky.count, 2, "names fold case"); eq(sky.id, "Skyward")
+    eq(sky.readingCount, 1, "rereading counts as reading")
+    eq(rows[3].letter, "E", "accents fold for the letter")
+    eq(G.bucket("on_hold"), "reading"); eq(G.bucket("abandoned"), "finished"); eq(G.bucket("want_to_read"), "unread"); eq(G.bucket(nil), "unread")
+end)
+
+test("lists: author rows count a book for each of its authors", function()
+    local rows = G.sectionBody(G.authors(shelf), "authors", {}).items
+    eq(#rows, 4)
+    local bs = rows[1]
+    eq(bs.title, "Brandon Sanderson"); eq(bs.id, "Brandon Sanderson"); eq(bs.count, 4)
+    eq(bs.readingCount, 1); eq(bs.finishedCount, 1); eq(bs.seriesName, "Skyward", "their series with the most books")
+    eq(bs.previewBooks[1].id, 5, "reading first"); eq(bs.previewBooks[2].id, 8, "then finished")
+    eq(rows[2].title, "Émile Zola", "A-Z with accents folded")
+end)
+
+test("lists: sort, filter, q, buckets and offset slicing copy the server", function()
+    local rows = G.series(shelf)
+    local b = G.sectionBody(rows, "series", {})
+    eq(b.total, 3); eq(b.items[1].title, "Émile's Tales"); eq(b.items[3].title, "Skyward")
+    eq(b.buckets[1].key, "E"); eq(b.buckets[1].index, 0); eq(b.buckets[3].key, "S"); eq(b.buckets[3].index, 2)
+    b = G.sectionBody(rows, "series", { sort = "name_desc" })
+    eq(b.items[1].title, "Skyward")
+    b = G.sectionBody(rows, "series", { sort = "books" })
+    eq(b.items[1].title, "Percy Jackson"); eq(b.buckets, nil, "no buckets by most books")
+    eq(G.sectionBody(rows, "series", { filter = "reading" }).total, 2, "under way: Percy (reading) and Skyward (rereading)")
+    eq(G.sectionBody(rows, "series", { filter = "finished" }).total, 0, "all finished")
+    local done = G.series({ bk(20, { seriesId = 1, seriesName = "Done", readStatus = "read" }), bk(21, { seriesId = 1, seriesName = "Done", readStatus = "read" }),
+        bk(22, { seriesId = 2, seriesName = "Half", readStatus = "read" }), bk(23, { seriesId = 2, seriesName = "Half" }) })
+    eq(G.sectionBody(done, "series", { filter = "finished" }).items[1].title, "Done")
+    eq(G.sectionBody(done, "series", { filter = "reading" }).items[1].title, "Half", "some but not all finished is under way")
+    local authors = G.authors(shelf)
+    eq(G.sectionBody(authors, "authors", { filter = "finished" }).total, 3, "an author with one book finished")
+    eq(G.sectionBody(rows, "series", { q = "emile" }).items[1].title, "Émile's Tales", "q folds accents")
+    eq(G.sectionBody(rows, "series", { q = "JACK" }).total, 1)
+    local p2 = G.sectionBody(rows, "series", { size = 2, offset = 2 })
+    eq(#p2.items, 1); eq(p2.items[1].title, "Skyward"); eq(p2.page, 2); eq(p2.offset, 2); eq(p2.hasNext, false); eq(p2.hasPrevious, true)
+    local pg = G.sectionBody(rows, "series", { size = 2, page = 1 })
+    eq(#pg.items, 2); eq(pg.hasNext, true); eq(pg.offset, nil)
+end)
+
+test("lists: an author's books by series, with Not in a series last", function()
+    local mine = G.select(shelf, "Brandon Sanderson", nil)
+    eq(#mine, 4)
+    local b = G.sectionBody(G.series(mine), "series", { sort = "books" }, G.standalone(mine))
+    eq(b.total, 2); eq(b.items[1].title, "Skyward"); eq(b.items[2].title, "Not in a series"); eq(b.items[2].count, 2)
+    eq(b.items[2].id, G.STANDALONE)
+    eq(G.sectionBody(G.series(mine), "series", { q = "sky" }, G.standalone(mine)).total, 1, "a name filter leaves it out")
+    eq(#G.select(shelf, "Brandon Sanderson", G.STANDALONE), 2, "its books")
+    eq(#G.select(shelf, "Brandon Sanderson", "name:skyward"), 2)
+end)
+
+test("lists: which list a book list is, and the request that reads it all", function()
+    eq(G.listOf({ collectionId = 4, libraryId = 2 }).section, "collections")
+    eq(G.listOf({ smartScopeId = "3" }).id, 3)
+    eq(G.listOf({ libraryId = 2 }).section, "libraries")
+    eq(G.listOf({ sort = "title" }), nil, "All books")
+    local q = G.fetchParams({ collectionId = 4, readStatus = "unread", sort = "author", page = 3, size = 12, offset = 24, on_device_filter = true, orbitGroup = "g1" }, 2)
+    eq(q.collectionId, 4); eq(q.readStatus, "unread", "the shelf's filters"); eq(q.size, 100); eq(q.page, 2); eq(q.sort, "title")
+    eq(q.offset, nil); eq(q.on_device_filter, nil); eq(q.orbitGroup, nil)
+end)
+
+test("lists: drill-down params per list kind", function()
+    local some = { shelf[1], shelf[2] }
+    local p, how = G.drill({ section = "libraries", id = 2 }, { libraryId = 2, readStatus = "unread", sort = "title" }, some,
+        { sort = "series", seriesId = 7 }, { orbitGroup = "g1" })
+    eq(how, "server"); eq(p.libraryId, 2); eq(p.seriesId, 7); eq(p.readStatus, "unread"); eq(p.sort, "series"); eq(p.ids, nil); eq(p.orbitGroup, "g1")
+    p = G.drill({ section = "collections", id = 4 }, { collectionId = 4 }, some, { series = "Skyward", author = "B" }, {})
+    eq(p.collectionId, 4); eq(p.series, "Skyward"); eq(p.author, "B")
+    p, how = G.drill({ section = "smart-scopes", id = 3 }, { smartScopeId = 3 }, some, { sort = "series", seriesId = 7 }, {})
+    eq(how, "ids"); eq(p.ids, "1,2"); eq(p.smartScopeId, nil, "the server would drop the other filters"); eq(p.seriesId, 7)
+    local many = {}
+    for i = 1, 201 do many[i] = { id = i } end
+    p, how = G.drill({ section = "smart-scopes", id = 3 }, { smartScopeId = 3 }, many, { sort = "title" }, { orbitGroup = "g1" })
+    eq(how, "held", "past the ids cap: the books held here"); eq(p.ids, nil); eq(p.orbitLocal, "1")
+    p, how = G.drill({ section = "collections", id = 4 }, { collectionId = 4 }, some, { sort = "title" }, {}, true)
+    eq(how, "ids", "flat: by id in any list"); eq(p.collectionId, nil)
+end)
+
+test("lists: held books answer a request the way the server pages it", function()
+    local token = G.remember({ list = { section = "smart-scopes", id = 3 }, params = {}, title = "Unread fantasy", books = shelf })
+    local params = { orbitGroup = token, orbitLocal = "1", orbitAuthor = "Rick Riordan", orbitSeries = "id:7", sort = "series", size = 2, page = 2 }
+    local books = G.localBooks(params)
+    eq(#books, 4)
+    local b = G.booksBody(books, params)
+    eq(b.total, 4); eq(#b.items, 2); eq(b.items[1].id, 3, "series order, page 2"); eq(b.page, 2); eq(b.hasNext, false)
+    eq(G.booksBody(books, { readStatus = "finished", sort = "title" }).total, 2)
+    eq(G.booksBody(G.localBooks({ orbitGroup = token }), { sort = "recently_added", size = 1 }).items[1].id, 7, "newest first")
+    eq(G.localBooks({ orbitGroup = "gone" }), nil)
+    local s = G.strip({ orbitGroup = token, orbitLocal = "1", ids = "1,2", sort = "title" })
+    eq(s.orbitGroup, nil); eq(s.orbitLocal, nil); eq(s.ids, "1,2")
+    local plain = { sort = "title" }
+    eq(G.strip(plain), plain, "nothing to strip: the same table")
+    for _ = 1, G.SNAPSHOTS do G.remember({ books = {} }) end
+    eq(G.held[token], nil, "the oldest held list goes")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

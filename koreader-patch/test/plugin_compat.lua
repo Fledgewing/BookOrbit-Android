@@ -43,6 +43,26 @@ for _, f in ipairs(M.Compat.FEATURES) do
 end
 for name, kind in pairs(M.Compat.CATALOG) do need(name, kind) end
 for name, kind in pairs(M.Compat.PAGING) do need(name, kind) end
+-- Lists by series and by author (Grouping): the class methods it wraps or calls.
+for name, kind in pairs(M.Compat.CATALOG_CLASS) do need(name, kind) end
+for name, kind in pairs(M.Compat.API_CLASS) do need(name, kind) end
+local lists = src[dir .. "/bookorbit_catalog_lists.lua"] or ""
+local catalog = src[dir .. "/bookorbit_catalog.lua"] or ""
+local function has(text, plain, what) if not text:find(plain, 1, true) then table.insert(missing, what) end end
+-- The list methods are copied onto the catalog class (so the patch wraps that class).
+has(lists, "function CatalogLists.install(Catalog)", "CatalogLists.install")
+has(catalog, "CatalogLists.install(BookOrbitCatalog)", "CatalogLists.install(BookOrbitCatalog)")
+-- The row actions it takes over inside a grouped view, and the sheet rows it adds to.
+has(lists, 'kind == "open-series"', 'action kind "open-series"')
+has(lists, 'kind == "open-author"', 'action kind "open-author"')
+local sheet = lists:match("function CatalogLists:listSortSheetModel%(sheet%)(.-)\nend\n") or ""
+has(sheet, "rows = {", "rows = { in listSortSheetModel")
+-- The section body and context fields its answer and wrappers rely on.
+for _, f in ipairs({ "body.items", "body.total", "body.size", "body.buckets", "body.hasNext", "body.offset", "body.sort", "body.filter" }) do
+    has(catalog, f, "loadSection reads " .. f)
+end
+for _, f in ipairs({ "list_sheet", "dashboard_source_index", "series_summary" }) do need(f, "field") end
+has(lists, "params.q = opts.q", "listSectionParams sends q")
 -- Fields and events the patch reads or writes directly.
 for _, name in ipairs({ "catalog_browser", "pull_timestamp", "push_timestamp", "pages_before_update",
     "last_remote_progress", "PLUGIN_VERSION", "last_error", "sync_forward", "sync_backward",
