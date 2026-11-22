@@ -160,8 +160,9 @@ local Update = {
 }
 
 -- "v1.2.3", "android-v1.2.3", "1.2.3-rc.1", "1.2.3+build" -> { 1, 2, 3, pre = "rc.1" | nil }, or nil.
--- Orbify tags Android releases android-v<version> and firmware xteink-v<version> in one repo
--- (AGENTS.md "Releases"); a firmware tag is not a version here, so the patch never picks one.
+-- Orbify releases Android (v<version>; android-v<version> is read too) and firmware
+-- (xteink-v<version>) from one repo (AGENTS.md "Releases"); a firmware tag is not a version
+-- here, so the patch never picks one.
 function Update.parseVersion(s)
     if type(s) ~= "string" then return nil end
     s = s:match("^%s*(.-)%s*$"):gsub("^android%-", ""):gsub("^[vV]", "")

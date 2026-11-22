@@ -221,8 +221,8 @@ class UpdatePolicyTest {
     }
 
     @Test
-    fun releaseTagsForOneVersionTryTheOrbifySchemeFirst() {
-        assertEquals(listOf("android-v0.7.0", "v0.7.0"), ReleaseTags.forVersion("0.7.0"))
+    fun releaseTagsForOneVersionTryThePlainTagFirst() {
+        assertEquals(listOf("v0.7.0", "android-v0.7.0"), ReleaseTags.forVersion("0.7.0"))
         assertNull(ReleaseTags.version("xteink-v1.6.1.101+bookorbit.8"))
         assertNull(ReleaseTags.version("nightly"))
         assertEquals(Version.parse("0.7.1"), ReleaseTags.version("android-v0.7.1"))

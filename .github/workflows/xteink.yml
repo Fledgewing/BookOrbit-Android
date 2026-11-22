@@ -10,6 +10,13 @@ name: Xteink
 # Tags: xteink-v<version>. Firmware releases are published with make_latest=false: "latest"
 # is always an Android release (companions up to 0.6.x read releases/latest).
 #
+# Readers find firmware through a feed, not GitHub's release list: GitHub orders that list by
+# version-like tag name, so prefixed xteink-v tags sort after every v<version> Android release
+# and fall off any page a reader could read. After each release the feed job writes the newest
+# stable and the newest pre-release firmware release to xteink/releases.json on the
+# xteink-feed branch, in GitHub's release format; the firmware reads it from
+# raw.githubusercontent.com (xteink/tailnet/tailnet_build.py OTA_FEED).
+#
 # Release versions keep upstream's and add a fourth number that only ever goes up
 # (RUN_BASE + the workflow run number): upstream v1.6.1+bookorbit.8 becomes
 # xteink-v1.6.1.<n>+bookorbit.8. CrossInk's updater compares four numeric parts, so a new
@@ -38,6 +45,11 @@ on:
         required: false
         type: boolean
         default: false
+      feed_only:
+        description: "Only rewrite the firmware feed from the published releases (no build)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -48,12 +60,12 @@ env:
   UPSTREAM_REPO: agosez/CrossInk-Bookorbit
   PIO_CORE: "6.1.19"
   RUN_BASE: "100"
-  # The firmware reads this many releases (xteink/tailnet/tailnet_build.py OTA_PAGE); a daily
-  # run republishes when the newest firmware release has slipped below KEEP_WITHIN of them.
-  KEEP_WITHIN: "20"
+  FEED_BRANCH: xteink-feed
+  FEED_PATH: xteink/releases.json
 
 jobs:
   resolve:
+    if: ${{ !inputs.feed_only }}
     runs-on: ubuntu-latest
     outputs:
       upstream_tag: ${{ steps.r.outputs.upstream_tag }}
@@ -87,12 +99,6 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             if [ "$FORCE" = true ] || ! gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '.[].body' \
                 | grep -qF "$marker"; then
-              publish=true
-            fi
-            # Keep the newest stable firmware within the page the readers read.
-            if [ "$GITHUB_EVENT_NAME" = schedule ] && ! gh api "repos/$GITHUB_REPOSITORY/releases?per_page=$KEEP_WITHIN" \
-                -q '.[] | select(.prerelease | not) | .tag_name' | grep -q '^xteink-v'; then
-              echo "no stable firmware release in the newest $KEEP_WITHIN releases: republishing"
               publish=true
             fi
           fi
@@ -289,3 +295,36 @@ jobs:
             firmware/licenses.zip
             firmware/source-*.tar.gz
             firmware/SHA256SUMS
+
+  # The readers' update feed: the newest stable and the newest pre-release xteink-v release,
+  # reduced to what the updater reads (tag, pre-release flag, assets with size and digest).
+  feed:
+    needs: release
+    if: ${{ always() && (needs.release.result == 'success' || inputs.feed_only) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write the feed to the feed branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -s '
+            add
+            | map(select((.draft | not) and (.tag_name | startswith("xteink-v"))))
+            | sort_by(.created_at) | reverse
+            | [ (map(select(.prerelease | not)) | first), (map(select(.prerelease)) | first) ]
+            | map(select(. != null) | {
+                tag_name, name, draft, prerelease, created_at,
+                assets: [.assets[] | {name, size, digest, browser_download_url}]
+              })' > releases.json
+          jq -r '.[] | "\(.tag_name) (pre-release: \(.prerelease))"' releases.json
+          test "$(jq length releases.json)" -ge 1
+          if ! gh api "repos/$GITHUB_REPOSITORY/branches/$FEED_BRANCH" >/dev/null 2>&1; then
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/heads/$FEED_BRANCH" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          old_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$FEED_PATH?ref=$FEED_BRANCH" -q .sha 2>/dev/null || true)"
+          args=(-X PUT "repos/$GITHUB_REPOSITORY/contents/$FEED_PATH"
+            -f message="xteink feed: $(jq -r 'map(.tag_name) | join(", ")' releases.json)"
+            -f branch="$FEED_BRANCH" -f content="$(base64 -w0 releases.json)")
+          [ -n "$old_sha" ] && args+=(-f sha="$old_sha")
+          gh api "${args[@]}" -q .content.path

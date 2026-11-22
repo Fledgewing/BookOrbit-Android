@@ -17,7 +17,7 @@ How the server behaves: [`docs/server-contract.md`](docs/server-contract.md).
 
 One [releases page](https://github.com/Fledgewing/Orbify/releases) for both platforms:
 
-- `android-v…`: Orbit Companion APK and the KOReader patch. Both update themselves.
+- `v…`: Orbit Companion APK and the KOReader patch. Both update themselves.
 - `xteink-v…`: firmware for each reader, installed over the air from **Settings > Check for
   updates**, or flashed from an SD card or USB.
 

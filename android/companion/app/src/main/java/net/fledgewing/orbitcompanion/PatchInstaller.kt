@@ -228,7 +228,7 @@ object PatchInstaller {
         Updater.status(ctx, UpdateFlow.doneLine(want))
     }
 
-    /** This version's release: tagged android-v<v> since Orbify, v<v> before it (and the v0.7.0 bridge). */
+    /** This version's release: tagged v<v> (android-v<v> is read too, AGENTS.md "Releases"). */
     private fun releaseText(v: String): String {
         var last: Exception? = null
         for (tag in ReleaseTags.forVersion(v)) {

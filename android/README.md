@@ -53,7 +53,7 @@ if GitHub still doesn't answer they say "GitHub didn't answer (the network may s
 starting). Try again in a minute." A failed automatic check waits an hour before trying again.
 With **Include pre-releases** on, they look at the 30 newest releases instead and also take
 pre-releases. Firmware releases share the repo (`xteink-v…` tags, never "latest") and are
-skipped: only `android-v…` and the older `v…` tags count. Each downloads the release's `SHA256SUMS` and refuses a file whose SHA-256
+skipped: only `v…` (and `android-v…`) tags count. Each downloads the release's `SHA256SUMS` and refuses a file whose SHA-256
 doesn't match.
 
 - **KOReader patch** (Tools › Android sync): **Auto-update patch** (on by default),
@@ -153,9 +153,8 @@ From then on, updates install over it.
 
 ## Releasing
 
-Push a tag `android-vMAJOR.MINOR.PATCH` (or `android-vMAJOR.MINOR.PATCH-pre`, published as a
-pre-release). Releases up to v0.7.0 were tagged `vMAJOR.MINOR.PATCH`; v0.7.0 is the bridge
-that companions and patches up to 0.6.2 can read (AGENTS.md "Releases").
+Push a tag `vMAJOR.MINOR.PATCH` (or `vMAJOR.MINOR.PATCH-pre`, published as a pre-release).
+Firmware releases share the repo as `xteink-v…` (AGENTS.md "Releases").
 The workflow builds the APK with `versionName` = the tag and `versionCode` =
 `MAJOR*10000 + MINOR*100 + PATCH`, signs it with the release key from the repository
 secrets, stamps the tag into the patch's `PATCH_VERSION`, and publishes the APK, the patch,

@@ -2,8 +2,7 @@
 # KOReader patch, SHA256SUMS, license and notice files, all with keyless build-provenance
 # attestations. Both pieces update themselves from these releases (README "Updates").
 #
-# Tags: android-v<version>. A plain v<version> tag is only for the v0.7.0 bridge release that
-# companions and patches up to 0.6.2 can parse (AGENTS.md "Releases"). Firmware releases
+# Tags: v<version> (AGENTS.md "Releases"); android-v<version> also builds. Firmware releases
 # (xteink-v<version>, .github/workflows/xteink.yml) never take "latest": that stays Android.
 name: release
 
@@ -13,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to (re)build and publish, e.g. android-v0.7.1"
+        description: "Existing tag to (re)build and publish, e.g. v0.7.1"
         required: true
 
 permissions:
@@ -45,7 +44,7 @@ jobs:
           VER="${TAG#android-}"
           VER="${VER#v}"
           if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::tag $TAG is not android-vMAJOR.MINOR.PATCH[-pre]"; exit 1
+            echo "::error::tag $TAG is not vMAJOR.MINOR.PATCH[-pre]"; exit 1
           fi
           PRE=false; [[ "$VER" == *-* ]] && PRE=true
           echo "version=$VER" >> "$GITHUB_OUTPUT"

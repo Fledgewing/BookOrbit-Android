@@ -210,9 +210,8 @@ data class ReleaseInfo(val tag: String, val prerelease: Boolean, val draft: Bool
 
 /**
  * Orbify releases both platforms from one repo (AGENTS.md "Releases"): Android tags are
- * `android-v<version>`, firmware tags `xteink-v<version>`. The Android pieces read only their
- * own, plus the plain `v<version>` tags of BookOrbit-Android and the v0.7.0 bridge release,
- * which companions up to 0.6.2 can parse.
+ * `v<version>` (`android-v<version>` is read too), firmware tags `xteink-v<version>`, which the
+ * Android pieces skip.
  */
 object ReleaseTags {
     const val PREFIX = "android-v"
@@ -229,8 +228,8 @@ object ReleaseTags {
         }
     }
 
-    /** Tags to try for one version's release, newest scheme first. */
-    fun forVersion(v: String): List<String> = listOf("$PREFIX$v", "v$v")
+    /** Tags to try for one version's release, the one in use first. */
+    fun forVersion(v: String): List<String> = listOf("v$v", "$PREFIX$v")
 }
 
 object UpdatePolicy {

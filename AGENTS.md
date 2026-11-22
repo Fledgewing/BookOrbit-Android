@@ -53,15 +53,18 @@ commit when a design or `docs/server-contract.md` relies on upstream behaviour; 
 
 One repo releases both platforms; the tag prefix says which.
 
-- Android: `android-v<version>` (`.github/workflows/release.yml`): signed APK, stamped patch,
+- Android: `v<version>` (`.github/workflows/release.yml`): signed APK, stamped patch,
   `SHA256SUMS`, attestations. Always marked "latest". Keep the package id and the signing
   certificate (SHA-256 `F5:07:8C:…:0A:15`, checked by the workflow): either change breaks updates.
 - Xteink: `xteink-v<version>` (`.github/workflows/xteink.yml`, daily or by hand): firmware per
   reader, source archive, licenses, `SHA256SUMS`, attestations. Always `make_latest=false`.
-- "latest" must stay an Android release: companions and patches up to 0.6.2 read
-  `releases/latest` (through the old BookOrbit-Android URL) and parse only `v<version>` tags,
-  which is why v0.7.0 is tagged `v0.7.0`. The Android pieces read `android-v` and `v` tags; the
-  firmware reads the release list and keeps `xteink-v` tags (overlay patch `ota-tag-prefix`).
+- "latest" must stay an Android release: every companion and patch reads `releases/latest`
+  (0.6.x through the old BookOrbit-Android URL, and it parses only `v<version>` tags).
+- GitHub orders the release list by version-like tag name: `v…` tags first, prefixed tags
+  after all of them. So Android keeps plain `v…` tags (its pre-release check reads the list),
+  and readers find firmware through the feed `xteink/releases.json` on the `xteink-feed`
+  branch (newest stable and pre-release, written by the xteink workflow), never the list. The
+  Android pieces also read `android-v` tags and skip `xteink-v` ones.
 - A tag is never moved: fix forward with the next version.
 
 ## Checks
