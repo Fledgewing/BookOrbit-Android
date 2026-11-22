@@ -224,23 +224,61 @@ end
 -- A clock that went backwards also allows a check.
 Update.BLOCKED = "Internet blocked: is 'Block connections without VPN' on for Tailscale?"
 
+Update.WENT_DOWN = "network went down during the check"
+
 -- An update request failed: plain words. err: httpGet's error ("network: permission denied"
 -- is EACCES, what Android returns when "Block connections without VPN" stops a socket outside
--- Tailscale). wifi_on/connected/vpn: the state now (nil: unknown).
-function Update.errorText(err, wifi_on, connected, vpn)
+-- Tailscale). st (the state after the failure; nil fields: unknown):
+--   wifi_on, connected: the radio and KOReader's "connected";
+--   lockdown: the companion's reading of "Block connections without VPN" (only true blames it);
+--   went_down: Wi-Fi was switched off (or decided off) while the check ran.
+function Update.errorText(err, st)
     err = tostring(err)
+    st = st or {}
     local low = err:lower()
     if low:find("permission denied", 1, true) or err:find("EACCES", 1, true) or err:find("EPERM", 1, true)
         or low:find("operation not permitted", 1, true) then
-        return Update.BLOCKED
+        if st.lockdown == true then return Update.BLOCKED end
+        return "no internet: Android refused the connection (" .. err:gsub("^network: ", "") .. ")"
     end
-    if wifi_on == false then return "no internet: Wi-Fi is off" end
-    if connected == false then return "no internet: Wi-Fi isn't connected" end
+    if st.went_down then return Update.WENT_DOWN end
+    if st.wifi_on == false then return "no internet: Wi-Fi is off" end
+    if st.connected == false then return "no internet: Wi-Fi isn't connected" end
     if err:find("network:", 1, true) then
-        if vpn then return Update.BLOCKED end
+        if st.lockdown == true then return Update.BLOCKED end
         return "no internet (GitHub unreachable: " .. err:gsub("^network: ", "") .. ")"
     end
     return "check failed: " .. err
+end
+
+-- After a failed check, wait this long before an automatic retry.
+Update.RETRY_S = 3600
+
+-- The automatic check's gate. ctx: enabled, now (os.time), checked_at (last success),
+-- failed_at (last failure), connected, in_book, off_decided (a just-in-time Wi-Fi off was
+-- decided recently). Returns ok, why.
+function Update.autoGate(ctx)
+    if not ctx.enabled then return false, "auto-update is off" end
+    if not Update.isDue(ctx.checked_at, ctx.now) then return false, "checked today" end
+    local failed = tonumber(ctx.failed_at) or 0
+    if failed > 0 and ctx.now >= failed and ctx.now - failed < Update.RETRY_S then
+        return false, "failed " .. math.floor((ctx.now - failed) / 60) .. " min ago; retry after 1 h"
+    end
+    if ctx.in_book then return false, "a book is open; deferred to the file browser or BookOrbit home" end
+    if ctx.off_decided then return false, "Wi-Fi is going off" end
+    if not ctx.connected then return false, "network not up" end
+    return true
+end
+
+-- The child's result over the pipe: "1|0 <tab> net|msg <tab> text".
+function Update.encode(ok, text, neterr)
+    return (ok and "1" or "0") .. "\t" .. (neterr and "net" or "msg") .. "\t" .. tostring(neterr or text or "")
+end
+
+function Update.decode(data)
+    local okf, kind, text = tostring(data or ""):match("^([01])\t(%a+)\t(.*)$")
+    if not okf then return false, "msg", "check failed: no answer from the background check" end
+    return okf == "1", kind, text
 end
 
 function Update.isDue(last, now, interval)
@@ -1171,7 +1209,9 @@ function Companion.status(timeout)
     local socketutil = require("socketutil")
     local ltn12 = require("ltn12")
     local body = {}
-    socketutil:set_timeout(timeout or 1, (timeout or 1) + 1)
+    -- Loopback only (never Wi-Fi), so it answers at once or not at all: the UI thread waits at
+    -- most `timeout` (1 s), well under Android's 5 s input timeout.
+    socketutil:set_timeout(timeout or 1, timeout or 1)
     -- patch_version tells the companion which patch is running (its "restart to finish" row).
     local url = Companion.STATUS_URL .. "?patch_version=" .. PATCH_VERSION
     local code = socket.skip(1, http.request{ url = url, sink = ltn12.sink.table(body) })
@@ -1228,6 +1268,8 @@ function Shared.refresh(why)
     -- "Setup needs you": the count in the menu status; setup_prompt for the one-time box.
     Shared.setup_needed = st and tonumber(st.setup_needed) or nil
     Shared.setup_prompt = st and type(st.setup_prompt) == "table" and st.setup_prompt or nil
+    -- The companion's lockdown reading (true/false; nil: unknown or no companion).
+    if st then Shared.vpn_lockdown = type(st.vpn_lockdown) == "boolean" and st.vpn_lockdown or nil end
     local remote = st and type(st.settings) == "table" and st.settings or nil
     if not remote then return false end
     local at = tonumber(remote.settings_at) or 0
@@ -1348,12 +1390,17 @@ local function serverUrl(p)
 end
 
 -- Any HTTP status from the base URL counts: it proves the route and the server, with no login.
+-- Runs on the UI thread, so each probe is capped (block and total) at `timeout` <= 1.5 s,
+-- with the UI loop running between probes: well under Android's 5 s input timeout. Name
+-- lookup isn't covered by socket timeouts; the server is usually a Tailscale address or name
+-- that Tailscale's resolver answers locally.
 local function probeServer(url, timeout)
     local http = require("socket.http")
     local socket = require("socket")
     local socketutil = require("socketutil")
     local ltn12 = require("ltn12")
-    socketutil:set_timeout(timeout, timeout + 1)
+    timeout = math.min(1.5, timeout)
+    socketutil:set_timeout(timeout, timeout)
     local code = socket.skip(1, http.request{ url = url, method = "HEAD", sink = ltn12.sink.null() })
     socketutil:reset_timeout()
     return type(code) == "number", code
@@ -1442,7 +1489,7 @@ function Net.up(p, opts, cb)
         if not url then return finish(true) end
         if el >= next_probe then
             local remaining = cap - el
-            local answered, code = probeServer(url, math.max(0.5, math.min(2, remaining)))
+            local answered, code = probeServer(url, math.max(0.5, math.min(1.5, remaining)))
             local after = now_s() - t0
             if answered then
                 res.server_s = after
@@ -1636,6 +1683,7 @@ function Wifi.evaluate(why)
     local action, reason, force = WifiPlan.decide(st, { now = now_s(), wifi_on = wifi_on, busy = busy, screen_off = screen_off })
     if action == "off" then
         log("wifi: OFF decided:", reason, "| mode", st.mode, force and "| forced" or "| only if turned on automatically", "(" .. why .. ")")
+        Wifi.off_decided_at = now_s()
         Companion.wifiOff(reason, not force)
         WifiPlan.wifiOff(st)
         -- If the companion keeps it (turned on by hand), wait a full idle period before asking again.
@@ -1742,16 +1790,17 @@ local function setUpdateStatus(text)
     log("update:", text)
 end
 
--- Returns ok, status text. Blocking: callers schedule it.
+-- Returns ok, status text (or ok=false, nil, network error). Blocking: runs only in the
+-- background process (Updater.check), never on KOReader's UI thread.
 function Updater.run(why)
     local pre = S.patch_update_prerelease == true
     log("update: check started (" .. why .. "), installed", PATCH_VERSION, "pre-releases", tostring(pre))
     local url = pre and (RELEASES_API .. "?per_page=5") or (RELEASES_API .. "/latest")
     local body, err = httpGet(url, 10, 30)
     if not body then
-        local text = Update.errorText(err, Wifi.radioOn(), NetworkMgr:isConnected() and true or false, Jni.vpnActive() == true)
-        log("update: check failed:", tostring(err), "->", text)
-        return false, text
+        -- The parent words it (Update.errorText) from the state after the check: no JNI here.
+        log("update: check failed:", tostring(err))
+        return false, nil, err
     end
     local okj, json = pcall(require, "json")
     if not okj then return false, "check failed: no JSON module" end
@@ -1807,36 +1856,121 @@ function Updater.run(why)
     return true, "updated to " .. stamped .. "; restart KOReader to use it"
 end
 
+---------------------------------------------------------------------------------------------
+-- Network I/O off KOReader's UI thread. fn runs in a forked process: koreader-base
+-- ffi/util.lua:350 runInSubProcess (with a pipe), the way KOReader's own Trapper runs
+-- network lookups. The UI thread only polls it (isSubProcessDone :462, never waiting) and
+-- reads the short result once the process has exited (readAllFromFD :558, EOF at once).
+-- On timeout it is killed (terminateSubProcess :476). The child must not use JNI or the UI.
+---------------------------------------------------------------------------------------------
+
+local Background = { POLL_S = 0.25 }
+
+-- cb(result string) or cb(nil, error).
+function Background.run(name, fn, timeout_s, cb)
+    local okf, ffiutil = pcall(require, "ffi/util")
+    if not okf or type(ffiutil) ~= "table" or type(ffiutil.runInSubProcess) ~= "function" then
+        log(name .. ": no background process available; not run (never on the UI thread)")
+        return cb(nil, "no background process")
+    end
+    local pid, fd = ffiutil.runInSubProcess(function(_pid, wfd)
+        local okc, out = pcall(fn)
+        ffiutil.writeToFD(wfd, okc and tostring(out or "") or Update.encode(false, "check failed: " .. tostring(out)), true)
+    end, true)
+    if not pid then
+        log(name .. ": background process failed:", tostring(fd))
+        return cb(nil, tostring(fd))
+    end
+    local t0 = now_s()
+    local function poll()
+        if ffiutil.isSubProcessDone(pid) then
+            return cb(ffiutil.readAllFromFD(fd))
+        end
+        if now_s() - t0 > timeout_s then
+            log(name .. ": no answer after", fmt(now_s() - t0) .. "; stopped")
+            ffiutil.terminateSubProcess(pid)
+            local function reap()
+                if ffiutil.isSubProcessDone(pid) then pcall(ffiutil.readAllFromFD, fd) else UIManager:scheduleIn(1, reap) end
+            end
+            UIManager:scheduleIn(1, reap)
+            return cb(nil, "timed out")
+        end
+        UIManager:scheduleIn(Background.POLL_S, poll)
+    end
+    UIManager:scheduleIn(Background.POLL_S, poll)
+end
+
+Updater.TIMEOUT_S = 150 -- the child's own timeouts add up to at most 30 + 60 + 60 s
+
 function Updater.check(why, done)
     if Updater.busy then
         log("update: check already running; ignored (" .. why .. ")")
         return
     end
     Updater.busy = true
-    local okc, ok, text = pcall(Updater.run, why)
-    Updater.busy = false
-    if not okc then
-        ok, text = false, "check failed: " .. tostring(ok)
-    end
-    -- Only a successful check starts the 24 h wait: a failed one (no network, VPN lockdown,
-    -- a bad download) is tried again at the next start or wake with the network up.
-    if ok then S.patch_update_checked_at = os.time() end
-    setUpdateStatus(text)
-    if done then done(ok, text) end
+    local started = now_s()
+    log("update: check started (" .. why .. ") in the background")
+    Background.run("update", function() return Update.encode(Updater.run(why)) end, Updater.TIMEOUT_S, function(data, berr)
+        Updater.busy = false
+        local ok, kind, text
+        if data then
+            ok, kind, text = Update.decode(data)
+        else
+            ok, kind, text = false, "net", "network: " .. tostring(berr)
+        end
+        if kind == "net" then
+            local went_down = (Wifi.off_decided_at ~= nil and Wifi.off_decided_at >= started - 1)
+                or Wifi.radioOn() == false
+            local raw = text
+            text = Update.errorText(raw, {
+                wifi_on = Wifi.radioOn(), connected = NetworkMgr:isConnected() and true or false,
+                lockdown = Shared.vpn_lockdown, went_down = went_down })
+            log("update: check failed:", raw, "->", text, "after", fmt(now_s() - started))
+        end
+        -- A success starts the 24 h wait; a failure the 1 h back-off (Update.autoGate).
+        if ok then
+            S.patch_update_checked_at = os.time()
+            S.patch_update_failed_at = nil
+        else
+            S.patch_update_failed_at = os.time()
+        end
+        setUpdateStatus(text)
+        if done then done(ok, text) end
+    end)
 end
 
--- Daily automatic check, only when the network is already up.
+-- Daily automatic check: only with the network up, never in a book or with Wi-Fi going off,
+-- and inside its own Wi-Fi hold so just-in-time Wi-Fi off waits for it.
 function Updater.maybeAuto(reason)
-    if not S.auto_update_patch then return end
-    if not Update.isDue(S.patch_update_checked_at, os.time()) then return end
+    local function gate()
+        return Update.autoGate{
+            enabled = S.auto_update_patch, now = os.time(),
+            checked_at = S.patch_update_checked_at, failed_at = S.patch_update_failed_at,
+            connected = NetworkMgr:isConnected(), in_book = inBook(),
+            off_decided = Wifi.off_decided_at ~= nil and now_s() - Wifi.off_decided_at < 60,
+        }
+    end
+    if Updater.busy or Updater.waiting then return end
+    local ok, why = gate()
+    -- In a book: try again on reaching the file browser or BookOrbit home (OrbitAndroid:init).
+    Updater.deferred = (not ok and why:find("book is open", 1, true) ~= nil) or nil
+    if not ok then
+        if why ~= "auto-update is off" and why ~= "checked today" then log("update: daily check not now (" .. reason .. "):", why) end
+        return
+    end
+    Updater.waiting = true
+    local held_at = now_s()
+    Wifi.acquire("update")
     -- After the plugin's own drain and pull, which share the connection.
     UIManager:scheduleIn(8, function()
-        if Updater.busy or not Update.isDue(S.patch_update_checked_at, os.time()) then return end
-        if not NetworkMgr:isConnected() then
-            log("update: daily check due, network not up; skipped (" .. reason .. ")")
-            return
+        Updater.waiting = false
+        local ok2, why2 = gate()
+        if ok2 and Wifi.off_decided_at and Wifi.off_decided_at >= held_at then ok2, why2 = false, "Wi-Fi went off" end
+        if not ok2 then
+            log("update: daily check dropped (" .. reason .. "):", why2)
+            return Wifi.release("update")
         end
-        Updater.check("auto, " .. reason)
+        Updater.check("auto, " .. reason, function() Wifi.release("update") end)
     end)
 end
 
@@ -2153,6 +2287,9 @@ function OrbitAndroid:init()
         UIManager:scheduleIn(Stats.INTERVAL, statsTick)
     elseif state.pending_home and not in_reader then
         UIManager:scheduleIn(1, function() self:finishHome() end)
+    end
+    if state.started and not in_reader and Updater.deferred then
+        UIManager:scheduleIn(2, function() Updater.maybeAuto("deferred from the book") end)
     end
 end
 

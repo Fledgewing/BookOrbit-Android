@@ -9,7 +9,7 @@ local W = {
     clock = 1000, queue = {}, seq = 0, shown = {}, logs = {},
     wifi = true, vpn = true, screen_on = false, companion = true, server_code = 200,
     broadcasts = {}, activities = {}, intent_extras = {},
-    fetched = {}, web = {}, json = {}, files = {},
+    fetched = {}, web = {}, json = {}, files = {}, children = {},
 }
 function W.fake_sha(s) return string.format("%064x", #s) end
 local SELF = os.tmpname()
@@ -215,6 +215,21 @@ local preload = {
     socket = { skip = function(n, ...) return select(n + 1, ...) end },
     socketutil = { set_timeout = function() end, reset_timeout = function() end },
     ltn12 = { sink = { null = function() end, table = function(t) return function(chunk) if chunk then table.insert(t, chunk) end return 1 end end } },
+    -- koreader-base ffi/util subprocesses: the "child" runs as its own scheduled step (or by
+    -- hand with W.hold_child), so the UI-thread path can be checked for blocking calls.
+    ["ffi/util"] = {
+        runInSubProcess = function(fn)
+            local child = { done = false }
+            child.run = function() fn(#W.children, child); child.done = true end
+            table.insert(W.children, child)
+            if not W.hold_child then schedule(0.1, child.run) end
+            return #W.children, child
+        end,
+        writeToFD = function(child, data) child.out = data return true end,
+        isSubProcessDone = function(pid) return W.children[pid].done end,
+        readAllFromFD = function(child) return child.out or "" end,
+        terminateSubProcess = function(pid) W.children[pid].killed = true; W.children[pid].done = true end,
+    },
     -- KOReader's Android input module: waitForEvent returns what the test queues (default: EINTR).
     ["ffi/input_android"] = { waitForEvent = function() return false, 4 end },
     ["libs/libkoreader-lfs"] = { attributes = function(f, k) return W.files[f] and "file" or nil end },
@@ -665,6 +680,7 @@ test("frozen companion: says so, and a wake with Wi-Fi off gives up at once", fu
 end)
 
 test("wifi: KOReader's own Wi-Fi requests (plugin resume pull) show no Connecting message", function()
+    run(60) -- let earlier tests' holds (e.g. the update check's) finish and restore first
     W.simulate_companion = true
     W.radio, W.wifi = false, false
     W.shown, W.broadcasts = {}, {}
@@ -1236,6 +1252,7 @@ test("update: automatic check at most once a day, and only when connected", func
     resetSelf(); serveRelease()
     W.json.LATEST.tag_name = "v0.0.0-dev" -- nothing newer: just count checks
     store.orbit_android.patch_update_checked_at = 0
+    store.orbit_android.patch_update_failed_at = nil -- the checksum test above failed a check
     local _ui, orbit = newUI(false)
     W.fetched = {}
     W.wifi = false
@@ -1256,10 +1273,11 @@ test("update: automatic check at most once a day, and only when connected", func
     ok(count(W.fetched, function(u) return u == API end) == 1, "off means off")
     store.orbit_android.auto_update_patch = true
 end)
-test("update: a failed automatic check is tried again at the next wake, not 24 h later", function()
+test("update: a failed automatic check backs off 1 h, then is tried again", function()
     resetSelf(); serveRelease()
     W.json.LATEST.tag_name = "v0.0.0-dev"
     store.orbit_android.patch_update_checked_at = 0
+    store.orbit_android.patch_update_failed_at = nil
     W.wifi = true
     local _ui, orbit = newUI(false)
     local saved = W.web[API]
@@ -1269,11 +1287,63 @@ test("update: a failed automatic check is tried again at the next wake, not 24 h
     run(40)
     ok(count(W.fetched, function(u) return u == API end) == 1, "first check ran")
     ok(store.orbit_android.patch_update_checked_at == 0, "a failure doesn't start the 24 h wait")
+    ok((store.orbit_android.patch_update_failed_at or 0) > 0, "the failure is recorded")
     W.web[API] = saved
     orbit:wakeFlow("wake")
     run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 2, "retried at the next wake")
+    ok(count(W.fetched, function(u) return u == API end) == 1, "no retry within the hour")
+    store.orbit_android.patch_update_failed_at = os.time() - 3601
+    orbit:wakeFlow("wake")
+    run(40)
+    ok(count(W.fetched, function(u) return u == API end) == 2, "retried after the hour")
     ok(store.orbit_android.patch_update_checked_at > 0, "success starts the wait")
+end)
+
+test("update: the check never blocks KOReader's UI thread, and holds Wi-Fi while it runs", function()
+    resetSelf(); serveRelease()
+    W.json.LATEST.tag_name = "v0.0.0-dev"
+    store.orbit_android.patch_update_checked_at = 0
+    store.orbit_android.patch_update_failed_at = nil
+    W.wifi = true
+    -- A slow network: each GitHub request takes 30 s of the caller's time.
+    local http = require("socket.http")
+    local fast = http.request
+    http.request = function(t)
+        if t.url:find("github", 1, true) then W.clock = W.clock + 30 end
+        return fast(t)
+    end
+    W.hold_child, W.fetched, W.logs = true, {}, {}
+    local _ui, orbit = newUI(false)
+    orbit:wakeFlow("wake")
+    local before = W.clock
+    run(20)
+    ok(#W.children > 0, "the check went to a background process")
+    ok(not has(W.fetched, API), "no GitHub request on the UI thread")
+    ok(W.clock - before <= 20.5, "the scheduler kept time: " .. (W.clock - before))
+    local logs = table.concat(W.logs, "\n")
+    ok(logs:find("wifi: hold for update", 1, true), "Wi-Fi held for the check")
+    ok(not logs:find("wifi: release update", 1, true), "still held while it runs")
+    W.children[#W.children].run()
+    run(2)
+    ok(has(W.fetched, API), "the background process did the request")
+    ok(table.concat(W.logs, "\n"):find("wifi: release update", 1, true), "released when it ended")
+    ok(store.orbit_android.patch_update_checked_at > 0, "result reached the UI side")
+    http.request, W.hold_child = fast, nil
+end)
+
+test("update: never with a book open; deferred to the file browser", function()
+    resetSelf(); serveRelease()
+    W.json.LATEST.tag_name = "v0.0.0-dev"
+    store.orbit_android.patch_update_checked_at = 0
+    store.orbit_android.patch_update_failed_at = nil
+    W.wifi, W.fetched = true, {}
+    local _ui, orbit = newUI(true)
+    orbit:wakeFlow("wake")
+    run(40)
+    ok(not has(W.fetched, API), "no check in a book")
+    newUI(false)
+    run(40)
+    ok(count(W.fetched, function(u) return u == API end) == 1, "ran on reaching the file browser")
 end)
 os.remove(ORBIT_ANDROID_SELF_PATH)
 os.remove(SELF)

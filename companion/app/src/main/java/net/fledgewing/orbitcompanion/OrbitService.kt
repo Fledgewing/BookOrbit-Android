@@ -533,6 +533,9 @@ class OrbitService : Service() {
             "\"screen_off_permission\":${Net.adminActive(this)},\"setup_needed\":${prefs.setupNeeded}," +
             // Clicker buttons: the accessibility service is running (it then takes mapped keys in KOReader too).
             "\"clicker_service\":${ClickerService.connected}," +
+            // "Block connections without VPN" as Android reports it (null: unreadable): the
+            // patch blames it for a failed update check only when this is true.
+            "\"vpn_lockdown\":${Net.vpnLockdown(this)}," +
             // The KOReader setup box (docs/INTERFACE.md): only when unsnoozed rows need the user.
             "\"setup_prompt\":${setupPrompt()}," +
             "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +

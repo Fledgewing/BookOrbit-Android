@@ -31,17 +31,20 @@ After that, both update themselves from this repo's releases.
 Both pieces check `https://api.github.com/repos/Fledgewing/BookOrbit-Android/releases/latest`
 at most once a day, and only when the network is already up (neither turns Wi-Fi on for an
 automatic check; a check started by hand turns Wi-Fi on, Wi-Fi only, and puts it back off
-afterwards). Without a network they say so ("No internet: Wi-Fi is off"). If Android blocks the
-connection while Wi-Fi and Tailscale are up (EACCES), they say "Internet blocked: is 'Block
-connections without VPN' on for Tailscale?": Tailscale routes only the tailnet, so that
-setting blocks GitHub; the setup checklist's Tailscale row warns about it.
+afterwards). Without a network they say so ("No internet: Wi-Fi is off"; "network went down
+during the check" when Wi-Fi went off mid-check). They say "Internet blocked: is 'Block
+connections without VPN' on for Tailscale?" only when the companion reads that setting as on:
+Tailscale routes only the tailnet, so that setting blocks GitHub; the setup checklist's
+Tailscale row warns about it. A failed automatic check waits an hour before trying again.
 With **Include pre-releases** on, they look at the five newest releases instead and also take
 pre-releases. Each downloads the release's `SHA256SUMS` and refuses a file whose SHA-256
 doesn't match.
 
 - **KOReader patch** (Tools › Android sync): **Auto-update patch** (on by default),
   **Include pre-releases** (off), **Check for patch update**, and a status line. The check
-  runs about 8 s after a start or wake once the network is up. A newer `2-orbit-android.lua`
+  runs about 8 s after a start or wake once the network is up, never with a book open (it
+  waits for the file browser or BookOrbit home), and holds Wi-Fi until it ends. It runs in a
+  background process, so KOReader never waits on the network (v0.4.3). A newer `2-orbit-android.lua`
   (it must also declare the release's version in `PATCH_VERSION`) is written next to the
   running file and renamed over it, so the patch folder never holds a half-written file. It
   takes effect on the next KOReader start (on firmwares that stop KOReader after sleep, every wake is one).

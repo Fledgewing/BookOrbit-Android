@@ -546,6 +546,9 @@ object WhatsNew {
             "Clicker buttons work in KOReader again, including keyboard-mode and gamepad clickers.",
             "With Settings › Accessibility › Orbit clicker buttons on, one path handles every app: in KOReader it tells the patch, which turns the page exactly. Media keys now work in KOReader this way too.",
         ),
+        "0.4.3" to listOf(
+            "KOReader no longer freezes (\"not responding\") while the patch checks for an update: the check runs in the background, never with a book open, and waits an hour after a failure.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */

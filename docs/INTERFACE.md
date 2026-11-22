@@ -153,6 +153,9 @@ are newer. `keymap` (v0.4.0): clicker buttons for the patch, keyed by Android ke
   empty map turns this off.
 
 `clicker_service` (v0.4.2): the companion's accessibility service is running.
+`vpn_lockdown` (v0.4.3): "Block connections without VPN" as Android reports it (`true`,
+`false`, or `null` when unreadable). The patch blames it for a failed update check only when
+it is `true`.
 
 ### `GET /clicks` (companion 0.4.2+): the click channel
 
