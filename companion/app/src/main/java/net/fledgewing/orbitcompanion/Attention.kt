@@ -46,7 +46,9 @@ object Attention {
 
     fun evaluate(ctx: Context, why: String, notify: Boolean = true): Eval {
         val p = Prefs(ctx)
+        // A patch install or restart in progress isn't a step for the user.
         val checks = Setup.checks(ctx).associateBy { SetupAttention.idOf(it.label) }
+            .let { all -> if (PatchInstaller.inProgress(ctx)) all - "patch" else all }
         val pending = checks.filterValues { it.pending }.keys
         val r = SetupAttention.evaluate(checks.map { (id, c) -> id to c.done }, state(p), BuildConfig.VERSION_CODE, pending)
         save(p, r.next)
@@ -56,7 +58,7 @@ object Attention {
         if (r.needed.isNotEmpty() || r.regressed.isNotEmpty()) {
             OLog.i("setup: $why: needs ${r.needed}${if (r.regressed.isNotEmpty()) " (regressed ${r.regressed})" else ""}, prompt ${r.show}")
         }
-        if (notify) notification(ctx, r, whatsNew(ctx).isNotEmpty())
+        if (notify) notification(ctx, r)
         return Eval(r, checks)
     }
 
@@ -98,7 +100,8 @@ object Attention {
         return if (from > 0) WhatsNew.since(from, BuildConfig.VERSION_CODE) else emptyList()
     }
 
-    fun shouldPrompt(e: Eval, ctx: Context) = e.result.show || whatsNew(ctx).isNotEmpty()
+    /** What's new is a line on the status page, never a prompt or notification by itself. */
+    fun shouldPrompt(e: Eval, @Suppress("UNUSED_PARAMETER") ctx: Context) = e.result.show
 
     fun later(ctx: Context, e: Eval) {
         val p = Prefs(ctx)
@@ -143,8 +146,9 @@ object Attention {
 
     private var lastNoteLog: String? = null
 
-    private fun notification(ctx: Context, r: SetupAttention.Result, news: Boolean) {
-        if (!r.show && !news) return cancel(ctx)
+    /** At most one notification: only for steps that truly need the user. */
+    private fun notification(ctx: Context, r: SetupAttention.Result) {
+        if (!r.show || r.needed.isEmpty()) return cancel(ctx)
         val nm = nm(ctx)
         if (nm.getNotificationChannel(OLD_CHANNEL) != null) nm.deleteNotificationChannel(OLD_CHANNEL)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Setup steps", NotificationManager.IMPORTANCE_DEFAULT).apply {
@@ -153,10 +157,7 @@ object Attention {
             setSound(null, null)
         })
         val n = r.needed.size
-        val text = when {
-            r.show && n > 0 -> "Orbit Companion: $n setup step${if (n == 1) "" else "s"} need${if (n == 1) "s" else ""} you"
-            else -> "Orbit Companion ${BuildConfig.VERSION_NAME}: what's new"
-        }
+        val text = "Orbit Companion: $n setup step${if (n == 1) "" else "s"} need${if (n == 1) "s" else ""} you"
         val open = Intent(ctx, AttentionActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         nm.notify(ID, Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat)
@@ -235,7 +236,7 @@ class AttentionActivity : EinkActivity() {
                     buttons += Ui.button(this, label, solid = !busy, heightDp = 56, sp = 19f) {
                         if (busy) return@button
                         fixedHere = true
-                        Pin.fix(this) { c.open(this) }
+                        c.run(this)
                         render()
                     }
                 }

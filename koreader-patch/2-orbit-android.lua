@@ -535,6 +535,21 @@ Compat.FEATURES = {
 -- The feature that names each plugin event (advisory logging in pluginEvent).
 local PLUGIN_EVENT_FEATURE = { BookOrbitOpenDashboard = "dashboard", BookOrbitSyncBook = "test_sync",
     BookOrbitToggleAutoSync = "recommended" }
+-- Plugin settings the patch writes, with the values the plugin accepts. catalog_auto_open is the
+-- plugin's open mode (2.3.0 bookorbit_settings_page.lua:205-209 "Make BookOrbit home" = "home";
+-- read by main.lua:940-960 onStart/maybeAutoOpenCatalog; the plugin saves it by setting the
+-- field and flushing G_reader_settings, bookorbit_settings_page.lua:822-825).
+Compat.SETTINGS = { catalog_auto_open = { off = true, filemanager = true, home = true } }
+
+-- The setting can be written: the plugin's settings table, and the current value unset or one
+-- the plugin knows (a value we don't know means the plugin changed the setting: leave it alone).
+function Compat.settable(settings, key, value)
+    local known = Compat.SETTINGS[key]
+    if type(settings) ~= "table" or not known or not known[value] then return false end
+    local cur = settings[key]
+    return cur == nil or (type(cur) == "string" and known[cur] == true)
+end
+
 -- On the catalog widget, checked when it is open.
 Compat.CATALOG = { dashboardMode = "function", close_callback = "function", goDashboard = "function" }
 
@@ -1317,6 +1332,12 @@ function Companion.wifiOff(reason, auto)
 end
 
 -- Optional loopback status. Returns a table or nil.
+-- A book is open in KOReader (the reader UI has a document).
+function Companion.bookOpen()
+    local okr, ReaderUI = pcall(require, "apps/reader/readerui")
+    return okr and type(ReaderUI) == "table" and ReaderUI.instance ~= nil and ReaderUI.instance.document ~= nil
+end
+
 function Companion.status(timeout)
     local okr, http = pcall(require, "socket.http")
     if not okr then return nil end
@@ -1328,7 +1349,8 @@ function Companion.status(timeout)
     -- most `timeout` (1 s), well under Android's 5 s input timeout.
     socketutil:set_timeout(timeout or 1, timeout or 1)
     -- patch_version tells the companion which patch is running (its "restart to finish" row).
-    local url = Companion.STATUS_URL .. "?patch_version=" .. PATCH_VERSION
+    -- book (0.5.2+): a book is open, so the companion waits with a restart until it closes.
+    local url = Companion.STATUS_URL .. "?patch_version=" .. PATCH_VERSION .. "&book=" .. (Companion.bookOpen() and "1" or "0")
     local code = socket.skip(1, http.request{ url = url, sink = ltn12.sink.table(body) })
     socketutil:reset_timeout()
     if code ~= 200 then return nil end
@@ -3474,7 +3496,12 @@ function OrbitAndroid:applyRecommendedSettings()
             G_reader_settings:saveSetting("wifi_enable_action", "turn_on")
             p.settings.sync_forward = Plan.STRATEGY.SILENT
             p.settings.sync_backward = Plan.STRATEGY.DISABLE
-            p.settings.catalog_auto_open = "home"
+            -- Make BookOrbit home, the way the plugin's own Opening page saves it.
+            if Compat.settable(p.settings, "catalog_auto_open", "home") then
+                p.settings.catalog_auto_open = "home"
+            else
+                log("compat: catalog_auto_open is", tostring(p.settings.catalog_auto_open), "- left to the plugin's Opening page")
+            end
             if not p.settings.auto_sync and hasHandler(p, "BookOrbitToggleAutoSync") then
                 -- The plugin's own toggle also registers its reader events (main.lua:1416-1448).
                 pluginEvent(liveUI(), p, "BookOrbitToggleAutoSync", true, true, true)

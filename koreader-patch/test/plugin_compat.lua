@@ -49,6 +49,12 @@ for _, name in ipairs({ "catalog_browser", "pull_timestamp", "push_timestamp", "
 -- Public actions the patch sends as events.
 local main = src[dir .. "/main.lua"] or ""
 if not main:find('registerAction%("bookorbit_open_dashboard"') then table.insert(missing, "action bookorbit_open_dashboard") end
+-- Setting values the patch writes (Compat.SETTINGS): the plugin still offers each one.
+for key, values in pairs(M.Compat.SETTINGS) do
+    for v in pairs(values) do
+        if v ~= "off" and not any('"' .. esc(v) .. '"') then table.insert(missing, key .. " = " .. v) end
+    end
+end
 
 table.sort(missing)
 print("BookOrbit plugin " .. version)

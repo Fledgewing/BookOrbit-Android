@@ -511,10 +511,34 @@ object UpdateFlow {
 
     fun doneLine(app: String) = "Updated to v$app (KOReader restarted)"
 
-    /** The patch is installed; what happens next depends on the patch that runs now. */
-    fun installedLine(app: String, running: String?) =
-        if (autoRestart(running)) "Updated to v$app; KOReader restarts by itself when no book is open"
-        else "Updated to v$app; restart KOReader once to load the new patch (Setup)"
+    /** The patch is installed; the companion (any patch) or the patch (0.5.0+) restarts KOReader. */
+    fun installedLine(app: String) = "Updated to v$app; KOReader restarts to load it (after the book, if one is open)"
+
+    enum class Restart { NOW, WAIT, NONE }
+
+    /**
+     * The companion's side of the restart after a patch install (v0.5.2): COMMAND=restart, which
+     * every patch since 0.3.1 obeys. [awaiting]: the installed version not yet running (""/null:
+     * none); [sentFor]: the version a restart was already sent for (once per version, no loop);
+     * [book]: KOReader has a book open (null: unknown, e.g. KOReader not running).
+     */
+    fun restart(awaiting: String?, running: String?, sentFor: String?, book: Boolean?): Restart = when {
+        awaiting.isNullOrEmpty() || loaded(awaiting, running) -> Restart.NONE
+        sentFor == awaiting -> Restart.NONE
+        book == true -> Restart.WAIT
+        else -> Restart.NOW
+    }
+
+    /**
+     * KOReader's book state from a STATS broadcast: reason "suspend" always says open=0 (not being
+     * read), so it doesn't count; null means no change.
+     */
+    fun bookFromStats(reason: String?, open: String?): Boolean? = when {
+        reason == "suspend" -> null
+        open == "1" -> true
+        open == "0" -> false
+        else -> null
+    }
 
     /** The manual fallback, with the reason. */
     fun manualLine(app: String, reason: String) =
@@ -688,9 +712,18 @@ object WhatsNew {
             "Setup installs the rest: one tap each for the official KOReader, the BookOrbit plugin and the KOReader patch, every download checked. A new reader needs only this app sideloaded.",
             "Setup › Fix next walks every open step in order and comes back after each one. Setup also explains up front what may get in the way: Play Protect's warnings, a launcher that freezes apps, Family Link.",
         ),
+        "0.5.2" to listOf(
+            "After an update, KOReader restarts by itself to load the new patch, whichever patch it ran before; with a book open it waits until you close it. No Setup step, and no Settings PIN for update steps.",
+            "No more \"setup step needs you\" for a step already being done, and What's new is a line on this page instead of a notification.",
+            "Pages keep their scroll position when they update (Check for updates, Fix, toggles).",
+            "Apply recommended settings in KOReader sets BookOrbit's \"Make BookOrbit home\" only where the plugin knows that setting.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */
+    /** The status page's line ("What's new in v0.5.2 ›"), or null. */
+    fun line(pending: Boolean, version: String): String? = if (pending) "What's new in v$version ›" else null
+
     fun since(fromCode: Int, toCode: Int, notes: List<Pair<String, List<String>>> = NOTES): List<Pair<String, List<String>>> =
         notes.filter { (v, _) ->
             val c = Version.parse(v)?.code ?: return@filter false

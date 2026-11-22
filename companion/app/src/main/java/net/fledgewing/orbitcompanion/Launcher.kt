@@ -92,6 +92,8 @@ class HomeActivity : Activity() {
             else -> "${HomeTarget.name(this)} closed straight after starting."
         }
         OLog.i("home ${if (press) "press" else "uncovered"}: $action${if (problem != null) " ($problem)" else ""}")
+        // A patch waiting to load and no book open: this Home press restarts KOReader instead.
+        if (action == HomeAction.START_KOREADER && !HomeApp.isApp(choice) && PatchInstaller.follow(this, "home press")) return
         if (action == HomeAction.START_KOREADER) {
             // "Home button": BookOrbit home -> "home" on a press, a plain start after KOReader went
             // away. Back to my book -> "home_smart" for both; the patch decides (HomePlan).

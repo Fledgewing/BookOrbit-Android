@@ -137,6 +137,15 @@ class Prefs(ctx: Context) {
         get() = str("patch_await_version")
         set(v) = setStr("patch_await_version", v)
 
+    /** The version a restart was sent for (UpdateFlow.restart: once per version). */
+    var patchRestartSentFor: String
+        get() = str("patch_restart_sent_for")
+        set(v) = setStr("patch_restart_sent_for", v)
+    /** KOReader has a book open: "1", "0", "" unknown (STATS, /status?book=). */
+    var koreaderBook: String
+        get() = str("koreader_book")
+        set(v) = setStr("koreader_book", v)
+
     var koreaderInstallStatus: String
         get() = str("koreader_install_status")
         set(v) = setStr("koreader_install_status", v)

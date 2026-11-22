@@ -178,6 +178,10 @@ class StatusActivity : EinkActivity() {
     private fun render() {
         val root = page()
         root.addView(Ui.header(this, "Orbit Companion", "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) })
+        // After an update: a line to tap, never a notification of its own.
+        WhatsNew.line(Attention.whatsNew(this).isNotEmpty(), BuildConfig.VERSION_NAME)?.let { t ->
+            root.addView(Ui.row(this, t, onClick = { startActivity(Intent(this, AttentionActivity::class.java)) }))
+        }
         val wifi = when {
             !Net.wifiEnabled(this) -> "Off"
             Net.wifiConnected(this) -> "On · connected"
@@ -421,8 +425,13 @@ class Check(
     val detail: String,
     val pending: Boolean = false,
     val action: String? = "Fix",
+    /** Update follow-through (install this release's patch, restart KOReader): never behind the PIN. */
+    val pinFree: Boolean = false,
     val open: (EinkActivity) -> Unit,
-)
+) {
+    /** Runs the row's action: behind the Settings PIN unless [pinFree]. */
+    fun run(a: EinkActivity) = if (pinFree) open(a) else Pin.fix(a) { open(a) }
+}
 
 object Setup {
     private const val BATTERY_DETAIL = "android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL"
@@ -544,8 +553,8 @@ object Setup {
                 patchState == PatchRowState.CURRENT || patchState == PatchRowState.RESTART,
                 when {
                     PatchInstaller.busy -> "installing…"
-                    patchState == PatchRowState.RESTART && UpdateFlow.autoRestart(runningV) ->
-                        "KOReader restarts by itself to load it once no book is open (or when the device sleeps); it still runs v$runningV"
+                    patchState == PatchRowState.RESTART && PatchRow.canRestart(runningV) ->
+                        "KOReader restarts by itself to load it once no book is open; it still runs v$runningV · tap to restart now"
                     patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) "Restart KOReader to finish (KOReader still runs v$runningV)"
                         else "Restart KOReader to finish: close KOReader from recent apps and reopen it (it still runs v$runningV)"
                     patchState == PatchRowState.MISSING && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"
@@ -560,6 +569,8 @@ object Setup {
                     PatchRow.canRestart(runningV) -> "Restart KOReader"
                     else -> null
                 },
+                // Update follow-through (this release's patch, a restart): changes no setting, no PIN.
+                pinFree = true,
             ) { a ->
                 when {
                     PatchInstaller.busy -> Unit
@@ -753,7 +764,7 @@ class SetupActivity : EinkActivity() {
         tried.add(id)
         lastStep = now
         OLog.i("setup: Fix next -> $id ($why)")
-        Pin.fix(this) { c.open(this) }
+        c.run(this)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -812,14 +823,14 @@ class SetupActivity : EinkActivity() {
         checks.forEach { c ->
             val isTest = c.label == "Wi-Fi off/on test"
             val right: TextView = if (isTest) {
-                Ui.button(this, if (test?.running == true) "Running…" else "Run", heightDp = 56, sp = 18f) { Pin.fix(this) { c.open(this) } }
+                Ui.button(this, if (test?.running == true) "Running…" else "Run", heightDp = 56, sp = 18f) { c.run(this) }
             } else {
                 Ui.value(this, if (c.done) "done" else "open ›", bold = !c.done)
             }
             root.addView(
                 Ui.row(
                     this, c.label, if (c.done && c.detail == "done") null else c.detail, right,
-                    onClick = { Pin.fix(this) { c.open(this) } },
+                    onClick = { c.run(this) },
                     left = Ui.check(this, c.done),
                 ),
             )

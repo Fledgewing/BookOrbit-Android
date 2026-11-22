@@ -825,6 +825,43 @@ test("restart command: save, ask the companion to relaunch, then quit (Android c
     run(10)
 end)
 
+test("apply recommended settings: Make BookOrbit home, saved like the plugin's Opening page", function()
+    local ui, m = newUI(false)
+    ui.bookorbit.settings.catalog_auto_open = nil
+    local flushed = 0
+    local was = G_reader_settings.flush
+    G_reader_settings.flush = function() flushed = flushed + 1 end
+    W.shown = {}
+    m:applyRecommendedSettings()
+    local box
+    for _, w in ipairs(W.shown) do if w.ok_callback then box = w end end
+    ok(box and tostring(box.text):find("Make BookOrbit home", 1, true), "listed in the confirm")
+    box.ok_callback()
+    G_reader_settings.flush = was
+    ok(ui.bookorbit.settings.catalog_auto_open == "home", "open mode " .. tostring(ui.bookorbit.settings.catalog_auto_open))
+    ok(flushed >= 1, "flushed like the plugin's save")
+    -- A mode the patch doesn't know is left alone.
+    ui.bookorbit.settings.catalog_auto_open = "always"
+    W.shown = {}
+    m:applyRecommendedSettings()
+    for _, w in ipairs(W.shown) do if w.ok_callback then w.ok_callback() end end
+    ok(ui.bookorbit.settings.catalog_auto_open == "always", "unknown mode kept")
+    run(3)
+end)
+
+test("the status ping says whether a book is open (the companion's restart waits for it)", function()
+    local _, m = newUI(true)
+    W.last_url = nil
+    m:onResume()
+    run(2)
+    ok(W.last_url and W.last_url:find("&book=1", 1, true), "in a book: " .. tostring(W.last_url))
+    local _, m2 = newUI(false)
+    W.last_url = nil
+    m2:onResume()
+    run(2)
+    ok(W.last_url and W.last_url:find("&book=0", 1, true), "file browser: " .. tostring(W.last_url))
+end)
+
 test("the status ping tells the companion which patch is running", function()
     local _, m = newUI(false)
     W.last_url = nil

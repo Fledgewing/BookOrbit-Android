@@ -120,16 +120,24 @@ abstract class EinkActivity : Activity() {
         refresh()
     }
 
+    /** The page's ScrollView, so a rebuild (a status change, Fix, a toggle) keeps the position. */
+    private var scrollView: android.widget.ScrollView? = null
+
     fun page(scroll: Boolean = false): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(Ui.PAPER)
         val p = Ui.dp(this@EinkActivity, 20)
         setPadding(p, p, p, p)
+        val keepY = scrollView?.scrollY ?: 0
+        scrollView = null
         if (scroll) {
             setContentView(android.widget.ScrollView(this@EinkActivity).also {
                 it.setBackgroundColor(Ui.PAPER)
                 it.isVerticalScrollBarEnabled = true
                 it.addView(this)
+                scrollView = it
+                // After layout, so the new content is tall enough; clamped by ScrollView itself.
+                if (keepY > 0) it.post { it.scrollTo(0, keepY) }
             })
         } else {
             setContentView(this)

@@ -256,9 +256,27 @@ class PinActivity : EinkActivity() {
         // which is behind the PIN; from outside it is treated as an unlock.
         val asked = runCatching { Mode.valueOf(intent.getStringExtra("mode") ?: "") }.getOrDefault(Mode.UNLOCK)
         mode = if (intent.action == SHOW_PIN || (asked == Mode.SET && Pin.locked(this))) Mode.UNLOCK else asked
+        if (intent.getBooleanExtra("install", false)) {
+            // Finishing an update: Android's own confirm follows; it changes no setting, so no PIN.
+            OLog.i("pin: update install: no keypad")
+            installNow()
+            finish()
+            return
+        }
         if (mode != Mode.SET && !Pin.locked(this)) {
             OLog.i("pin: keypad not needed (no PIN or unlocked)")
             done()
+        }
+    }
+
+    private fun installNow() {
+        val confirm = Updater.pendingConfirm
+        Updater.pendingConfirm = null
+        if (confirm != null) {
+            Pin.installStarted(Updater.INSTALL_KEY)
+            tryStart(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "the install prompt")
+        } else {
+            OLog.i("pin: install prompt gone (app restarted); check for updates again")
         }
     }
 

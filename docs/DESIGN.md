@@ -330,9 +330,26 @@ One update covers the companion, the patch and KOReader's restart, with one stat
   (`UpdateFlow`, `Prefs.patchAwaitVersion`).
 - **Patch-only update** (patch newer, companion the same): the patch's own updater writes the
   file, then the same restart path runs.
-- **Fallback:** no storage access, a failed download or checksum, or a running patch older
-  than 0.5.0 (it can't restart itself): the status line gives the reason and Setup's
-  KOReader patch row keeps Install patch / Restart KOReader.
+- **The companion restarts too (v0.5.2):** after any patch install it sends `COMMAND=restart`,
+  which every patch since 0.3.1 obeys (a 0.4.8 patch did, Boox Page 11-22 01:04), so no
+  version needs a manual restart: at once when KOReader has no book open or isn't running,
+  else when the book closes (`STATS` reason `close`), on the next Home press or at screen-off,
+  whenever KOReader reports no book. Book state: `/status?book=1|0` (patch 0.5.2+) and `STATS`
+  `open` (any patch; `suspend` always says 0 and is ignored). Once per version
+  (`Prefs.patchRestartSentFor`), so a file that doesn't load never loops (`UpdateFlow.restart`).
+- **No PIN, no false prompt, one notification (v0.5.2):** installing this release's patch,
+  restarting KOReader and finishing an update (the update-ready notification) are never behind
+  the Settings PIN: they change no setting (`Check.pinFree`). While a patch install or restart
+  is under way, Setup doesn't count the patch row as needed, and after an app update Setup is
+  evaluated only once the patch step finished; a notification is posted only for steps that
+  truly need the user. "What's new" is a line on the status page ("What's new in vX ›"), never
+  a notification. 11-22 01:04 the user saw "1 setup step needs you" for the patch already
+  installing, then a what's-new notification, then had to enter the PIN to restart KOReader.
+- **Android's "Install update?" stays:** the companion targets SDK 28 (for
+  `WifiManager.setWifiEnabled`), and Android skips that confirm only for apps targeting a
+  recent SDK (`setRequireUserAction`, README "Updates"). It is the one tap an update needs.
+- **Fallback:** no storage access or a failed download or checksum: the status line gives the
+  reason and Setup's KOReader patch row keeps Install patch / Restart KOReader (no PIN).
 
 ## Setup installs the rest (v0.5.1)
 
@@ -377,6 +394,14 @@ downloading only from the official sources (never re-hosted) and logging source 
   `tools/test/test-install-usb.sh`; CI runs shellcheck and them. The NeoReader column names
   (`nativeAbsolutePath`, `title`, `authors`, `readingStatus`, `lastAccess`) are unverified on a
   device; missing columns stay empty.
+
+## Page rebuilds keep the scroll position (v0.5.2)
+
+Pages redraw by building their views again (`EinkActivity.page`), e.g. "Check for updates",
+Fix, Test network or a toggle. `page()` keeps the previous ScrollView's position and restores
+it after layout, so the page no longer jumps to the top. Not unit-tested: it is View code that
+needs the Android runtime, and the project's tests are plain JVM tests (no Robolectric or
+instrumented tests).
 
 ## Sync while reading in the companion (v0.4.8)
 

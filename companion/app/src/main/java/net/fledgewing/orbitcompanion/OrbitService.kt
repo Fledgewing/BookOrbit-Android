@@ -153,6 +153,7 @@ class OrbitService : Service() {
                 Intent.ACTION_SCREEN_OFF -> {
                     Pin.onScreenOff()
                     Pin.packagesChanged()
+                    PatchInstaller.follow(this@OrbitService, "screen off")
                     if (offAtScreenOffUntil > SystemClock.elapsedRealtime()) {
                         OLog.i("screen off after sync and sleep: Wi-Fi off now (setting Off now)")
                         Net.setWifi(this@OrbitService, false, "after sleep sync, Off now")
@@ -235,7 +236,11 @@ class OrbitService : Service() {
         noteSender(intent)
         val proto = intent.getStringExtra("proto")
         if (proto != null && proto != Contract.PROTOCOL) OLog.w("protocol $proto from the patch; this companion speaks ${Contract.PROTOCOL}")
-        if (action == Contract.STATS) return stats.onStats(intent)
+        if (action == Contract.STATS) {
+            // The book's open/closed state drives the restart after a patch install.
+            PatchInstaller.onBook(this, UpdateFlow.bookFromStats(intent.getStringExtra("reason"), intent.getStringExtra("open")), "KOReader: ${intent.getStringExtra("reason") ?: "stats"}")
+            return stats.onStats(intent)
+        }
         if (action == Contract.SETUP_LATER) return Attention.laterFromKoreader(this)
         if (action == Contract.RELAUNCH) {
             // The patch saved and is quitting for a restart: start KOReader again once it's gone.
@@ -627,6 +632,11 @@ class OrbitService : Service() {
                     Regex("[?&]patch_version=([0-9A-Za-z.+-]+)").find(parts[1])?.let { m ->
                         prefs.patchVersionSeen = m.groupValues[1]
                         PatchInstaller.onPatchSeen(this@OrbitService, m.groupValues[1])
+                    }
+                    // /status?book=1|0 (patch 0.5.2+): a book is open in KOReader.
+                    Regex("[?&]book=([01])").find(parts[1])?.let { m ->
+                        val book = m.groupValues[1] == "1"
+                        main.post { PatchInstaller.onBook(this@OrbitService, book, "KOReader status") }
                     }
                 }
                 OLog.i("status request ${parts.getOrNull(1)} -> ${if (ok) 200 else 404} in ${OLog.since(t0)} ms")

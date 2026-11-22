@@ -615,5 +615,15 @@ test("restart plan: a newer file loads now, or after the book; one try per versi
     eq(R.doneText("0.5.0"), "Updated to v0.5.0 (KOReader restarted)")
 end)
 
+test("compat: Make BookOrbit home is written only where the plugin knows the setting", function()
+    local C = M.Compat
+    eq(C.settable({}, "catalog_auto_open", "home"), true, "unset (the plugin's default, off)")
+    eq(C.settable({ catalog_auto_open = "filemanager" }, "catalog_auto_open", "home"), true, "a known mode")
+    eq(C.settable({ catalog_auto_open = "always" }, "catalog_auto_open", "home"), false, "a mode we don't know")
+    eq(C.settable({ catalog_auto_open = 3 }, "catalog_auto_open", "home"), false, "not a string")
+    eq(C.settable(nil, "catalog_auto_open", "home"), false, "no settings table")
+    eq(C.settable({}, "catalog_auto_open", "bogus"), false, "a value the plugin doesn't take")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

@@ -713,8 +713,33 @@ class UpdateFlowTest {
         assertTrue(UpdateFlow.autoRestart("0.6.1"))
         assertFalse(UpdateFlow.autoRestart("0.4.9"))
         assertFalse(UpdateFlow.autoRestart(null))
-        assertEquals("Updated to v0.5.1; KOReader restarts by itself when no book is open", UpdateFlow.installedLine("0.5.1", "0.5.0"))
-        assertTrue(UpdateFlow.installedLine("0.5.0", "0.4.9").contains("restart KOReader once"))
+        assertEquals("Updated to v0.5.2; KOReader restarts to load it (after the book, if one is open)", UpdateFlow.installedLine("0.5.2"))
+    }
+
+    /** Boox Page 11-22 01:04: a 0.4.8 patch, no book open; it obeyed COMMAND=restart. */
+    @Test
+    fun theCompanionRestartsAnyPatchWhenNoBookIsOpen() {
+        val now = UpdateFlow.Restart.NOW
+        assertEquals("an old patch, file browser", now, UpdateFlow.restart("0.5.2", "0.4.8", "", false))
+        assertEquals("KOReader not running (unknown)", now, UpdateFlow.restart("0.5.2", null, "", null))
+        assertEquals("a book open: never interrupts reading", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.5.2", "0.4.8", "", true))
+        assertEquals("sent once per version", UpdateFlow.Restart.NONE, UpdateFlow.restart("0.5.2", "0.4.8", "0.5.2", false))
+        assertEquals("already loaded", UpdateFlow.Restart.NONE, UpdateFlow.restart("0.5.2", "0.5.2", "", false))
+        assertEquals("nothing installed", UpdateFlow.Restart.NONE, UpdateFlow.restart("", "0.4.8", "", false))
+    }
+
+    @Test
+    fun bookStateFromStatsIgnoresSuspend() {
+        assertNull("suspend always says open=0", UpdateFlow.bookFromStats("suspend", "0"))
+        assertEquals(true, UpdateFlow.bookFromStats("resume", "1"))
+        assertEquals(false, UpdateFlow.bookFromStats("close", "0"))
+        assertNull(UpdateFlow.bookFromStats("interval", null))
+    }
+
+    @Test
+    fun whatsNewIsALineNotANotification() {
+        assertEquals("What's new in v0.5.2 ›", WhatsNew.line(true, "0.5.2"))
+        assertNull(WhatsNew.line(false, "0.5.2"))
     }
 
     @Test

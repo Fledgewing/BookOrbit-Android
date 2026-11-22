@@ -133,7 +133,8 @@ KOReader from recent apps and reopen it" instead of showing the button.
 ## Optional: companion status over loopback
 
 `GET http://127.0.0.1:47913/status?patch_version=0.3.1` → `200` with JSON. The query
-(patch 0.3.1+) tells the companion which patch is running, like `patch_version` in the
+(patch 0.3.1+) tells the companion which patch is running; patch 0.5.2+ adds `&book=1|0` (a book
+is open), so the companion's restart after a patch install waits for the book. Like `patch_version` in the
 broadcasts. For example:
 
 ```json

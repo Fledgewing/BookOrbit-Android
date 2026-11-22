@@ -377,9 +377,8 @@ object Updater {
         Pin.installEnded(INSTALL_KEY)
         status(ctx, "updated to v${BuildConfig.VERSION_NAME}")
         // One update covers everything: the release's patch, then KOReader's restart.
-        PatchInstaller.afterAppUpdate(ctx)
         Attention.onStart(ctx)
-        Attention.evaluate(ctx, "after update")
+        PatchInstaller.afterAppUpdate(ctx) { Attention.evaluate(ctx, "after update") }
     }
 
     private fun notifications(ctx: Context) = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

@@ -79,46 +79,92 @@ object PatchInstaller {
             log("result: $result")
             val p = Prefs(app)
             p.patchInstallStatus = result
+            val stamped = installedVersion()
+            if (result.startsWith("installed") && stamped != null) {
+                p.patchAwaitVersion = stamped
+                Updater.status(app, UpdateFlow.installedLine(stamped))
+            }
             busy = false
+            if (result.startsWith("installed")) main.post {
+                onPatchSeen(app, p.patchVersionSeen.ifEmpty { null })
+                follow(app, "patch installed")
+            }
             main.post { done(result) }
         }
     }
 
-    /** After the companion updated (Updater.onReplaced): the release's patch, then its restart. */
-    fun afterAppUpdate(ctx: Context) {
+    /**
+     * After the companion updated (Updater.onReplaced): the release's patch, then its restart.
+     * [then] runs when that is done (Setup is evaluated only then: no prompt for a step in progress).
+     */
+    fun afterAppUpdate(ctx: Context, then: () -> Unit = {}) {
         val app = BuildConfig.VERSION_NAME
         val file = installedVersion()
         if (!UpdateFlow.patchAfterUpdate(file, app)) {
             log("after the update: patch ${file ?: "not installed"}; nothing to do for v$app")
-            return
+            return then()
         }
         if (!hasPermission(ctx)) {
             log("after the update: no storage access; left to Setup")
             Updater.status(ctx, UpdateFlow.manualLine(app, "storage access isn't allowed"))
-            return
+            return then()
         }
         log("after the update: patch v$file is older than v$app; installing it")
         install(ctx) { result ->
             val now = installedVersion()
-            val p = Prefs(ctx)
-            if (now != null && !PatchFile.needsInstall(now, app)) {
-                p.patchAwaitVersion = now
-                Updater.status(ctx, UpdateFlow.installedLine(app, p.patchVersionSeen.ifEmpty { null }))
-                onPatchSeen(ctx, p.patchVersionSeen.ifEmpty { null })
-            } else {
-                Updater.status(ctx, UpdateFlow.manualLine(app, result))
+            if (now == null || PatchFile.needsInstall(now, app)) Updater.status(ctx, UpdateFlow.manualLine(app, result))
+            then()
+        }
+    }
+
+    /** A patch install or restart is under way: Setup doesn't count the patch row as needed. */
+    fun inProgress(ctx: Context): Boolean {
+        val p = Prefs(ctx)
+        val book = when (p.koreaderBook) { "1" -> true; "0" -> false; else -> null }
+        return busy || UpdateFlow.restart(p.patchAwaitVersion, p.patchVersionSeen.ifEmpty { null }, p.patchRestartSentFor, book) != UpdateFlow.Restart.NONE
+    }
+
+    /** KOReader's book state changed (STATS, /status?book=): maybe the restart can go now. */
+    fun onBook(ctx: Context, book: Boolean?, why: String) {
+        if (book == null) return
+        val p = Prefs(ctx)
+        val v = if (book) "1" else "0"
+        if (p.koreaderBook != v) p.koreaderBook = v
+        if (!book) follow(ctx, why)
+    }
+
+    /**
+     * The restart after a patch install (any patch version): COMMAND=restart now when KOReader
+     * has no book open (or isn't running), else on the book's close, the next Home or screen-off.
+     * The patch (0.5.0+) also restarts itself for a newer file; the two are one restart.
+     */
+    fun follow(ctx: Context, why: String): Boolean {
+        val p = Prefs(ctx)
+        val want = p.patchAwaitVersion
+        val book = when (p.koreaderBook) { "1" -> true; "0" -> false; else -> null }
+        return when (UpdateFlow.restart(want, p.patchVersionSeen.ifEmpty { null }, p.patchRestartSentFor, book)) {
+            UpdateFlow.Restart.NONE -> false
+            UpdateFlow.Restart.WAIT -> {
+                log("v$want installed; KOReader has a book open: restarting after it ($why)")
+                false
+            }
+            UpdateFlow.Restart.NOW -> {
+                p.patchRestartSentFor = want
+                log("v$want installed; restarting KOReader ($why)")
+                Koreader.restart(ctx.applicationContext, "patch v$want installed ($why)")
+                true
             }
         }
     }
 
-    /** The running patch reported its version: the restart after an update is done. */
+    /** The running patch reported its version: the restart after an install is done. */
     fun onPatchSeen(ctx: Context, running: String?) {
         val p = Prefs(ctx)
         val want = p.patchAwaitVersion
         if (want.isEmpty() || !UpdateFlow.loaded(want, running)) return
         p.patchAwaitVersion = ""
         log("KOReader runs patch v$running now")
-        Updater.status(ctx, UpdateFlow.doneLine(BuildConfig.VERSION_NAME))
+        Updater.status(ctx, UpdateFlow.doneLine(want))
     }
 
     private fun run(): String {
@@ -154,6 +200,6 @@ object PatchInstaller {
             return "can't write to storage: ${manualHint()}"
         }
         log("installed $stamped to ${file()} (sha256 ok)")
-        return "installed v$stamped; restart KOReader to use it"
+        return "installed v$stamped"
     }
 }
