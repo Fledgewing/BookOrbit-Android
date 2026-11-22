@@ -42,12 +42,22 @@ object Pin {
                 if (!loaded) {
                     val p = Prefs(ctx)
                     gate.pinSet = p.pinHash.isNotEmpty()
-                    gate.guarded = p.guardedApps ?: defaultGuarded(ctx)
+                    gate.guarded = p.guardedApps?.let { migrate(ctx, p, it) } ?: defaultGuarded(ctx)
                     loaded = true
                 }
             }
         }
         return gate
+    }
+
+    /** Saved entries from an older default (Guard.migrate): fixed and saved once, logged. */
+    private fun migrate(ctx: Context, p: Prefs, saved: Set<String>): Set<String> {
+        val homes = homePackages(ctx)
+        if (saved.none { '/' !in it && Guard.neverWhole(it, homes) }) return saved
+        val (next, dropped) = Guard.migrate(saved, homes, defaultGuarded(ctx))
+        p.guardedApps = next
+        OLog.i("pin: guarded apps migrated: removed ${dropped.joinToString()} (whole; it hosts the launcher or system UI), now ${next.joinToString()}")
+        return next
     }
 
     fun isSet(ctx: Context): Boolean = live(ctx).pinSet
@@ -195,6 +205,7 @@ object Pin {
         val g = live(ctx)
         if (!g.pinSet) return Guard.Decision.ALLOW
         val (hp, hc) = homeCache ?: (homePackages(ctx) to homeComponents(ctx)).also { homeCache = it }
+        g.homePkgs = hp
         val ime = imeCache ?: try {
             (ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
                 .inputMethodList.map { it.packageName }.toSet()
@@ -249,8 +260,21 @@ class PinActivity : EinkActivity() {
     companion object {
         const val SHOW_PIN = "${Contract.PACKAGE}.action.SHOW_PIN"
 
-        fun intent(ctx: Context, mode: Mode, guarded: String? = null): Intent =
-            Intent(ctx, PinActivity::class.java).putExtra("mode", mode.name).putExtra("guarded", guarded)
+        fun intent(ctx: Context, mode: Mode, guarded: String? = null, cls: String? = null): Intent =
+            Intent(ctx, PinActivity::class.java).putExtra("mode", mode.name).putExtra("guarded", guarded).putExtra("guarded_cls", cls)
+
+        /** The keypad's name for the app in front (Guard.label): its screen's label, else the app's. */
+        fun guardLabel(ctx: Context, pkg: String, cls: String?): String? {
+            val pm = ctx.packageManager
+            val activity = cls?.let {
+                try {
+                    pm.getActivityInfo(android.content.ComponentName(pkg, it), android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS).loadLabel(pm).toString()
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            return Guard.label(activity, HomeTarget.label(ctx, pkg), pkg, cls)
+        }
 
         /** The update-ready notification: PIN first, then Android's install prompt. The prompt
          * itself stays in memory (Updater.pendingConfirm), never taken from an extra. */
@@ -331,7 +355,7 @@ class PinActivity : EinkActivity() {
 
     private fun title() = when (mode) {
         Mode.SET -> if (first == null) "New PIN (4–8 digits)" else "Enter it again"
-        Mode.GUARD -> "PIN to open ${intent.getStringExtra("guarded")?.let { HomeTarget.label(this, it) } ?: "this app"}"
+        Mode.GUARD -> "PIN to open ${intent.getStringExtra("guarded")?.let { guardLabel(this, it, intent.getStringExtra("guarded_cls")) } ?: "this app"}"
         Mode.UNLOCK -> "Settings PIN"
     }
 
@@ -439,6 +463,18 @@ class GuardedAppsActivity : EinkActivity() {
                 val now = Pin.guarded(this)
                 Pin.setGuarded(this, if (pkg in now) now - pkg else now + pkg)
                 OLog.i("pin: guard ${if (pkg in now) "off" else "on"} for $pkg")
+                render()
+            }))
+        }
+        // Every other saved entry, even one the picker wouldn't offer, so any can be turned off.
+        val shown = settings + apps.map { it.first }
+        guarded.filter { it !in shown }.sorted().forEach { e ->
+            val pkg = e.substringBefore('/')
+            val cls = e.substringAfter('/', "").ifEmpty { null }
+            val name = PinActivity.guardLabel(this, pkg, cls) ?: e
+            root.addView(Ui.row(this, name, e, Ui.toggle(this, true), onClick = {
+                Pin.setGuarded(this, Pin.guarded(this) - e)
+                OLog.i("pin: guard off for $e")
                 render()
             }))
         }

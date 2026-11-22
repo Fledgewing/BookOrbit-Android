@@ -312,6 +312,14 @@ Kid-proofing, modelled on the Xteink settings PIN (touch keypad). Optional, off 
   `INSTALL_FAILED_VERIFICATION_FAILURE`, so it took two PINs and two tries. The Setup row "Clicker
   buttons / app guard (accessibility) on" shows while a PIN is set, since the guard needs the
   service.
+- **Never a launcher whole (v0.6.2):** a package with the Home role, or system UI, is never
+  guarded whole (`Guard.neverWhole`), only its screens. Before 0.4.6 the default saved a Boox's
+  `com.onyx` whole, and 0.4.6 never migrated saved sets, so on a Boox Go Color 7 (11-22 02:37)
+  opening the library asked for the PIN. At load, `Guard.migrate` drops such entries, adds that
+  package's Settings screens instead, saves and logs once; `Guard.matches` ignores one anyway.
+  The keypad names the screen by its label when it reads as a name, else the app
+  (`Guard.label`: never a class name or an internal title like "ContentBrowser"). Guarded apps
+  lists every saved entry, also ones the picker doesn't offer, so any can be turned off.
 - **KOReader:** `/status.pin_locked`; the patch's menu shows only "Enter the Settings PIN…"
   and starts `SHOW_PIN`. No answer from the companion → the menu works (`MenuLock.locked`).
 - **Recovery:** `RESET_PIN` over adb only: the receiver requires `DUMP` (shell only), and on

@@ -346,4 +346,43 @@ class PinLogicTest {
         assertEquals("Clicker buttons / app guard (accessibility) on", ClickerRow.label(true))
         assertEquals(ClickerRowState.OFF, ClickerRow.state(mapped = true, enabledInSettings = false, connected = false))
     }
+
+    // Boox Go Color 7, 11-22 02:37: opening the library (com.onyx MainActivity) asked for the PIN.
+    private val booxHomes = setOf("com.onyx")
+    private val booxSettings = setOf("com.android.settings", "com.onyx/com.onyx.common.setting.ui.WifiContainerActivity")
+
+    @Test
+    fun migrationDropsAWholeLauncherPackageAndKeepsItsSettingsScreens() {
+        val saved = setOf("com.android.settings", "com.onyx", "com.android.vending")
+        val (next, dropped) = Guard.migrate(saved, booxHomes, booxSettings)
+        assertEquals(listOf("com.onyx"), dropped)
+        assertEquals(setOf("com.android.settings", "com.onyx/com.onyx.common.setting.ui.WifiContainerActivity", "com.android.vending"), next)
+        val (again, none) = Guard.migrate(next, booxHomes, booxSettings)
+        assertTrue("once", none.isEmpty())
+        assertEquals(next, again)
+        assertTrue("system UI whole goes too", Guard.migrate(setOf(Guard.SYSTEM_UI), emptySet(), emptySet()).second.isNotEmpty())
+        assertTrue("AOSP Settings whole stays", Guard.migrate(setOf(Guard.SETTINGS_PKG), setOf(Guard.SETTINGS_PKG), emptySet()).second.isEmpty())
+    }
+
+    @Test
+    fun matchesIgnoresAWholeLauncherEntry() {
+        val stale = setOf("com.onyx", "com.onyx/com.onyx.common.setting.ui.WifiContainerActivity")
+        assertFalse("the library", Guard.matches(stale, "com.onyx", "com.onyx.reader.main.ui.MainActivity", booxHomes))
+        assertTrue("its Wi-Fi settings screen", Guard.matches(stale, "com.onyx", "com.onyx.common.setting.ui.WifiContainerActivity", booxHomes))
+        assertEquals(Guard.Decision.ALLOW, Guard.decide("com.onyx", "com.onyx.reader.main.ui.MainActivity", "own", true, false, stale, false, booxHomes))
+        assertTrue("a normal app whole still matches", Guard.matches(setOf("com.android.vending"), "com.android.vending", "x.Main", booxHomes))
+    }
+
+    @Test
+    fun keypadLabelIsAUserFacingName() {
+        val pkg = "com.onyx"
+        val cls = "com.onyx.reader.main.ui.MainActivity"
+        assertEquals("Library", Guard.label("Library", "Onyx", pkg, cls))
+        assertEquals("internal title: the app's", "Onyx", Guard.label("ContentBrowser", "Onyx", pkg, cls))
+        assertEquals("class name: the app's", "Onyx", Guard.label("MainActivity", "Onyx", pkg, cls))
+        assertEquals("Wi-Fi", Guard.label("Wi-Fi", "Settings", pkg, cls))
+        assertEquals("Settings", Guard.label(null, "Settings", "com.android.settings", null))
+        assertEquals("nothing readable: this app", null, Guard.label("ContentBrowser", "com.onyx", pkg, cls))
+        assertEquals("Play Store", Guard.label("com.google.android.finsky.Main", "Play Store", "com.android.vending", null))
+    }
 }

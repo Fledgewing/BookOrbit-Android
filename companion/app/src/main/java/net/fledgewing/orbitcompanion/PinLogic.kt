@@ -89,6 +89,9 @@ class PinGate(private val graceMs: Long = GRACE_MS, private val capMs: Long = CA
     var pinSet = false
     @Volatile
     var guarded: Set<String> = emptySet()
+    /** Packages with the Home role (Guard.neverWhole). */
+    @Volatile
+    var homePkgs: Set<String> = emptySet()
     /** The accessibility service is running, so leaving other apps is seen. */
     @Volatile
     var watching = false
@@ -193,7 +196,7 @@ class PinGate(private val graceMs: Long = GRACE_MS, private val capMs: Long = CA
 
     @Synchronized
     fun decide(pkg: String?, cls: String?, own: String, now: Long): Guard.Decision =
-        Guard.decide(pkg, cls, own, pinSet, unlocked(now), guarded, installing(now))
+        Guard.decide(pkg, cls, own, pinSet, unlocked(now), guarded, installing(now), homePkgs)
 }
 
 /**
@@ -252,8 +255,51 @@ object Guard {
 
     fun component(pkg: String, cls: String) = "$pkg/$cls"
 
-    fun matches(guarded: Set<String>, pkg: String, cls: String?): Boolean =
-        pkg in guarded || (cls != null && component(pkg, cls) in guarded)
+    /**
+     * A package never guarded whole: one with the Home role (a Boox's com.onyx hosts its launcher
+     * and library, so a whole entry put a keypad on opening the library) or system UI. Only its
+     * screens are (settingsEntry). AOSP Settings is always fine whole.
+     */
+    fun neverWhole(pkg: String, homePkgs: Set<String>): Boolean =
+        pkg != SETTINGS_PKG && (pkg in homePkgs || pkg == SYSTEM_UI)
+
+    /** A whole-package entry for a [neverWhole] package doesn't match, even if one was saved. */
+    fun matches(guarded: Set<String>, pkg: String, cls: String?, homePkgs: Set<String> = emptySet()): Boolean =
+        (pkg in guarded && !neverWhole(pkg, homePkgs)) || (cls != null && component(pkg, cls) in guarded)
+
+    /**
+     * Saved guard entries made by an older default (before 0.4.6 a Boox saved com.onyx whole):
+     * drops whole entries for [neverWhole] packages, adding that package's Settings screens
+     * ([settings]: the current default entries) in their place. Returns the new set and what
+     * it dropped (empty: nothing to do).
+     */
+    fun migrate(saved: Set<String>, homePkgs: Set<String>, settings: Set<String>): Pair<Set<String>, List<String>> {
+        val dropped = saved.filter { '/' !in it && neverWhole(it, homePkgs) }.sorted()
+        if (dropped.isEmpty()) return saved to dropped
+        val screens = settings.filter { e -> dropped.any { e.startsWith("$it/") } }
+        return (saved - dropped.toSet() + screens) to dropped
+    }
+
+    /**
+     * The name on the guard's keypad: the screen's label when it reads as a name ("Library",
+     * "Wi-Fi"), else the app's, never an internal name (a class name, "ContentBrowser", a
+     * package); null: "this app".
+     */
+    fun label(activityLabel: String?, appLabel: String?, pkg: String, cls: String?): String? {
+        fun readable(s: String?): Boolean {
+            val t = s?.trim().orEmpty()
+            if (t.isEmpty() || t == pkg || t == cls || t == cls?.substringAfterLast('.')) return false
+            if (t.contains('.') || t.contains('_') || t.contains('$')) return false
+            // One CamelCase word ("ContentBrowser", "MainActivity") is a class or title, not a name.
+            if (Regex("^[A-Za-z]*[a-z][A-Z][A-Za-z0-9]*$").matches(t)) return false
+            return true
+        }
+        return when {
+            readable(activityLabel) -> activityLabel!!.trim()
+            readable(appLabel) -> appLabel!!.trim()
+            else -> null
+        }
+    }
 
     /**
      * The guard entry for a Settings screen [cls] in [pkg]: the whole package for AOSP Settings
@@ -278,7 +324,7 @@ object Guard {
         pkg == Koreader.PKG -> Fg.KOREADER
         cls != null && component(pkg, cls) in homeComponents -> Fg.HOME
         pkg == SYSTEM_UI || pkg in ime -> Fg.OTHER
-        matches(guarded, pkg, cls) -> Fg.APP
+        matches(guarded, pkg, cls, homePkgs) -> Fg.APP
         pkg in homePkgs -> Fg.OTHER // the launcher package's other windows (overlays, transitions)
         launchable -> Fg.APP
         else -> Fg.OTHER
@@ -292,11 +338,12 @@ object Guard {
         unlocked: Boolean,
         guarded: Set<String>,
         installing: Boolean,
+        homePkgs: Set<String> = emptySet(),
     ): Decision = when {
         pkg == null || !pinSet || unlocked -> Decision.ALLOW
         !canGuard(pkg, own) -> Decision.ALLOW
         installing && installSurface(pkg, cls) -> Decision.ALLOW
-        matches(guarded, pkg, cls) -> Decision.GUARD
+        matches(guarded, pkg, cls, homePkgs) -> Decision.GUARD
         else -> Decision.ALLOW
     }
 }

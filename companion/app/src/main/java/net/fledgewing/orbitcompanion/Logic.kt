@@ -829,6 +829,9 @@ object WhatsNew {
         "0.6.1" to listOf(
             "After any app update, KOReader restarts right away and your book reopens where you were.",
         ),
+        "0.6.2" to listOf(
+            "With a Settings PIN, a Boox library (and any launcher app) never asks for the PIN; only its settings screens do. Guarded apps lists every guarded entry so each can be turned off.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */

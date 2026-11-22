@@ -152,7 +152,7 @@ class ClickerService : AccessibilityService() {
         guardShownAt = t
         OLog.i("pin: guarded app in front ($pkg/$cls): keypad")
         try {
-            startActivity(PinActivity.intent(this, PinActivity.Mode.GUARD, pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            startActivity(PinActivity.intent(this, PinActivity.Mode.GUARD, pkg, cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) {
             OLog.w("pin: could not show the keypad over $pkg", e)
         }
