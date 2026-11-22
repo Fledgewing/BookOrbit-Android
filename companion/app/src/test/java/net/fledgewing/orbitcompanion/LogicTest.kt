@@ -150,3 +150,113 @@ class WifiPolicyTest {
         assertTrue(r.tryAcquire(15_000))
     }
 }
+
+class VersionTest {
+    private fun v(s: String) = Version.parse(s)!!
+
+    @Test
+    fun parsesTagsAndRejectsJunk() {
+        assertEquals(Version(0, 1, 0), Version.parse("v0.1.0"))
+        assertEquals(Version(1, 2, 3, "rc.1"), Version.parse("1.2.3-rc.1"))
+        assertEquals(Version(1, 2, 3), Version.parse("v1.2.3+build.7"))
+        assertNull(Version.parse("1.2"))
+        assertNull(Version.parse("latest"))
+        assertNull(Version.parse(""))
+        assertNull(Version.parse(null))
+    }
+
+    @Test
+    fun ordersNumericallyNotAsText() {
+        assertTrue(v("0.10.0") > v("0.9.9"))
+        assertTrue(v("1.0.0") > v("0.99.99"))
+        assertTrue(v("0.1.1") > v("0.1.0"))
+        assertEquals(0, v("v0.1.0").compareTo(v("0.1.0")))
+    }
+
+    @Test
+    fun preReleasesSortBeforeTheRelease() {
+        assertTrue(v("0.2.0-rc.1") < v("0.2.0"))
+        assertTrue(v("0.2.0-rc.1") > v("0.1.9"))
+        assertTrue(v("0.2.0-rc.2") > v("0.2.0-rc.1"))
+        assertTrue(v("0.2.0-rc.10") > v("0.2.0-rc.9"))
+        assertTrue(v("0.2.0-beta") < v("0.2.0-rc"))
+        assertTrue(v("0.2.0-rc") < v("0.2.0-rc.1"))
+        assertTrue(v("0.0.0-dev") < v("0.1.0"))
+    }
+
+    @Test
+    fun versionCodeIsMonotonic() {
+        assertEquals(100, v("0.1.0").code)
+        assertEquals(10203, v("1.2.3").code)
+        assertTrue(v("0.1.1").code > v("0.1.0").code)
+        assertTrue(v("1.0.0").code > v("0.99.99").code)
+    }
+}
+
+class UpdatePolicyTest {
+    private fun r(tag: String, pre: Boolean = false, draft: Boolean = false) = ReleaseInfo(tag, pre, draft, emptyMap())
+
+    @Test
+    fun picksNewestStableUnlessPreReleasesWanted() {
+        val list = listOf(r("v0.3.0-rc.1", pre = true), r("v0.2.0"), r("v0.4.0", draft = true), r("v0.1.0"), r("nightly"))
+        assertEquals("v0.2.0", UpdatePolicy.pick(list, includePre = false)?.tag)
+        assertEquals("v0.3.0-rc.1", UpdatePolicy.pick(list, includePre = true)?.tag)
+        assertNull(UpdatePolicy.pick(listOf(r("v1.0.0-rc.1", pre = true)), includePre = false))
+    }
+
+    @Test
+    fun onlyStrictlyNewerUpdates() {
+        assertTrue(UpdatePolicy.isNewer(Version.parse("0.1.1"), Version.parse("0.1.0")))
+        assertFalse(UpdatePolicy.isNewer(Version.parse("0.1.0"), Version.parse("0.1.0")))
+        assertFalse(UpdatePolicy.isNewer(Version.parse("0.0.9"), Version.parse("0.1.0")))
+        assertFalse(UpdatePolicy.isNewer(null, Version.parse("0.1.0")))
+        assertTrue(UpdatePolicy.isNewer(Version.parse("0.1.0"), null))
+    }
+
+    @Test
+    fun checksAtMostDaily() {
+        val day = UpdatePolicy.INTERVAL_MS
+        assertTrue(UpdatePolicy.due(0, 1_000))
+        assertFalse(UpdatePolicy.due(1_000, 1_000 + day - 1))
+        assertTrue(UpdatePolicy.due(1_000, 1_000 + day))
+        assertTrue(UpdatePolicy.due(5_000, 1_000)) // clock went backwards
+    }
+
+    @Test
+    fun apkNameFollowsTheReleaseAsset() {
+        assertEquals("orbit-companion-0.1.0.apk", UpdatePolicy.apkName(Version.parse("v0.1.0")!!))
+    }
+}
+
+class ChecksumsTest {
+    private val a = "a".repeat(64)
+    private val b = "0123456789ABCDEF".repeat(4)
+
+    @Test
+    fun parsesSha256sumOutput() {
+        val sums = Checksums.parse("$a  orbit-companion-0.1.0.apk\n$b *2-orbit-android.lua\r\n")
+        assertEquals(a, sums["orbit-companion-0.1.0.apk"])
+        assertEquals(b.lowercase(), sums["2-orbit-android.lua"])
+    }
+
+    @Test
+    fun skipsBadLines() {
+        val sums = Checksums.parse("# comment\n\nabc  short.apk\n${a}x  long.apk\n$a  ok.apk\n")
+        assertEquals(1, sums.size)
+        assertEquals(a, sums["ok.apk"])
+    }
+}
+
+class AppStatesTest {
+    @Test
+    fun frozenIsNotMissing() {
+        assertEquals(AppState.MISSING, AppStates.of(false, 0, false, false))
+        assertEquals(AppState.OK, AppStates.of(true, 0, true, false))
+        assertEquals(AppState.OK, AppStates.of(true, 1, true, false))
+        // Meebook's App freeze: enabled=2 (COMPONENT_ENABLED_STATE_DISABLED).
+        assertEquals(AppState.FROZEN, AppStates.of(true, 2, false, false))
+        assertEquals(AppState.FROZEN, AppStates.of(true, 3, false, false))
+        assertEquals(AppState.FROZEN, AppStates.of(true, 4, true, false))
+        assertEquals(AppState.FROZEN, AppStates.of(true, 0, true, true))
+    }
+}

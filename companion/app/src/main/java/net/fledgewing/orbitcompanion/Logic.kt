@@ -139,3 +139,108 @@ class RateLimiter(private val intervalMs: Long) {
         return true
     }
 }
+
+/** A release version: MAJOR.MINOR.PATCH with an optional pre-release ("v" prefix and "+build" ignored). */
+data class Version(val major: Int, val minor: Int, val patch: Int, val pre: String? = null) : Comparable<Version> {
+    /** Monotonic Android versionCode, the same formula the release workflow uses. */
+    val code: Int get() = major * 10_000 + minor * 100 + patch
+
+    override fun compareTo(other: Version): Int {
+        compareValues(major, other.major).let { if (it != 0) return it }
+        compareValues(minor, other.minor).let { if (it != 0) return it }
+        compareValues(patch, other.patch).let { if (it != 0) return it }
+        // A release sorts after any of its pre-releases (semver 11.3).
+        if (pre == other.pre) return 0
+        if (pre == null) return 1
+        if (other.pre == null) return -1
+        val a = pre.split('.')
+        val b = other.pre.split('.')
+        for (i in 0 until minOf(a.size, b.size)) {
+            val x = a[i]
+            val y = b[i]
+            val xn = x.toLongOrNull()
+            val yn = y.toLongOrNull()
+            val c = when {
+                xn != null && yn != null -> compareValues(xn, yn)
+                xn != null -> -1 // numeric identifiers sort before alphanumeric ones
+                yn != null -> 1
+                else -> x.compareTo(y)
+            }
+            if (c != 0) return c
+        }
+        return compareValues(a.size, b.size)
+    }
+
+    override fun toString(): String = "$major.$minor.$patch" + (pre?.let { "-$it" } ?: "")
+
+    companion object {
+        private val RE = Regex("""^[vV]?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$""")
+
+        fun parse(raw: String?): Version? {
+            val m = RE.matchEntire(raw?.trim() ?: return null) ?: return null
+            val (a, b, c, p) = m.destructured
+            return Version(a.toIntOrNull() ?: return null, b.toIntOrNull() ?: return null, c.toIntOrNull() ?: return null, p.ifEmpty { null })
+        }
+    }
+}
+
+/** One GitHub release, reduced to what the updater needs. */
+data class ReleaseInfo(val tag: String, val prerelease: Boolean, val draft: Boolean, val assets: Map<String, String>) {
+    val version: Version? get() = Version.parse(tag)
+}
+
+object UpdatePolicy {
+    const val INTERVAL_MS = 24 * 60 * 60_000L
+    const val SUMS_NAME = "SHA256SUMS"
+
+    fun apkName(v: Version) = "orbit-companion-$v.apk"
+
+    /** At most one automatic check per 24 h; a clock that went backwards also allows one. */
+    fun due(lastCheckMs: Long, nowMs: Long): Boolean = lastCheckMs <= 0 || nowMs < lastCheckMs || nowMs - lastCheckMs >= INTERVAL_MS
+
+    /** The newest usable release: never a draft, a pre-release only when asked for. */
+    fun pick(releases: List<ReleaseInfo>, includePre: Boolean): ReleaseInfo? =
+        releases.filter { !it.draft && (includePre || !it.prerelease) && it.version != null }
+            .maxWithOrNull(compareBy { it.version!! })
+
+    fun isNewer(candidate: Version?, current: Version?): Boolean =
+        candidate != null && (current == null || candidate > current)
+}
+
+/** `sha256sum` output: "<64 hex>  name" or "<64 hex> *name" per line. Bad lines are skipped. */
+object Checksums {
+    private val LINE = Regex("""^([0-9a-fA-F]{64}) [ *](.+)$""")
+
+    fun parse(text: String): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        text.lineSequence().forEach { raw ->
+            val m = LINE.matchEntire(raw.trimEnd('\r').trim()) ?: return@forEach
+            out[m.groupValues[2].trim()] = m.groupValues[1].lowercase()
+        }
+        return out
+    }
+}
+
+/** Whether another app can be used: missing, disabled ("frozen" by the Meebook launcher) or fine. */
+enum class AppState { MISSING, FROZEN, OK }
+
+object AppStates {
+    // PackageManager.COMPONENT_ENABLED_STATE_*
+    private const val DISABLED = 2
+    private const val DISABLED_USER = 3
+    private const val DISABLED_UNTIL_USED = 4
+
+    /**
+     * [found]: the package exists (looked up with MATCH_DISABLED_COMPONENTS).
+     * [enabledSetting]: getApplicationEnabledSetting. [appInfoEnabled]: ApplicationInfo.enabled.
+     * [suspended]: ApplicationInfo.FLAG_SUSPENDED.
+     */
+    fun of(found: Boolean, enabledSetting: Int, appInfoEnabled: Boolean, suspended: Boolean): AppState = when {
+        !found -> AppState.MISSING
+        enabledSetting == DISABLED || enabledSetting == DISABLED_USER || enabledSetting == DISABLED_UNTIL_USED -> AppState.FROZEN
+        !appInfoEnabled || suspended -> AppState.FROZEN
+        else -> AppState.OK
+    }
+
+    fun frozenMessage(name: String) = "$name is frozen by Meebook: open Meebook › Freeze management and unfreeze $name."
+}

@@ -1,0 +1,154 @@
+# Builds and publishes a release: the signed Orbit Companion APK, the version-stamped KOReader
+# patch, SHA256SUMS, license and notice files, all with keyless build-provenance attestations.
+# Both pieces update themselves from these releases (README "Updates").
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build and publish, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  # SHA-256 of the release signing certificate. A build signed with anything else fails.
+  EXPECTED_CERT_SHA256: "F5:07:8C:85:F8:23:18:30:C1:F1:8D:93:FE:30:D7:1F:87:93:6C:1D:94:24:F2:D8:15:98:3D:1D:21:A9:0A:15"
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Version from the tag
+        id: ver
+        run: |
+          set -euo pipefail
+          VER="${TAG#v}"
+          if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::tag $TAG is not vMAJOR.MINOR.PATCH[-pre]"; exit 1
+          fi
+          PRE=false; [[ "$VER" == *-* ]] && PRE=true
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
+          echo "Releasing $VER (pre-release: $PRE)"
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+
+      - name: KOReader patch tests
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq luajit >/dev/null
+          luajit koreader-patch/test/test_logic.lua
+          luajit koreader-patch/test/test_flows.lua
+
+      - name: Build the signed companion APK
+        working-directory: companion
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export ORBIT_KEYSTORE_FILE="$RUNNER_TEMP/release.p12"
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$ORBIT_KEYSTORE_FILE"
+          ./gradlew --no-daemon -PorbitVersion="${{ steps.ver.outputs.version }}" testDebugUnitTest assembleRelease
+          rm -f "$ORBIT_KEYSTORE_FILE"
+
+      - name: Assemble release assets
+        id: assets
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.version }}"
+          mkdir -p dist
+          APK="dist/orbit-companion-$VER.apk"
+          cp companion/app/build/outputs/apk/release/app-release.apk "$APK"
+
+          # The patch, with its version stamped in; refuse a file whose stamp didn't take.
+          sed -E "s/^local PATCH_VERSION = \"[^\"]*\"$/local PATCH_VERSION = \"$VER\"/" \
+            koreader-patch/2-orbit-android.lua > dist/2-orbit-android.lua
+          grep -qx "local PATCH_VERSION = \"$VER\"" dist/2-orbit-android.lua
+
+          # Licenses: the companion (MIT), the patch (AGPL-3.0-or-later) and the third-party
+          # notices the app shows in Settings (generated into the APK at build time).
+          cp LICENSE dist/LICENSE-companion-MIT.txt
+          cp koreader-patch/LICENSE dist/LICENSE-koreader-patch-AGPL-3.0.txt
+          unzip -p "$APK" assets/open_source_licenses.txt > dist/THIRD-PARTY-NOTICES.txt
+          test -s dist/THIRD-PARTY-NOTICES.txt
+
+          (cd dist && sha256sum -- *.apk *.lua *.txt > SHA256SUMS)
+          cat dist/SHA256SUMS
+
+      - name: Check the APK signing certificate
+        id: cert
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(ls -1 "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          OUT="$("$APKSIGNER" verify --print-certs dist/orbit-companion-*.apk)"
+          echo "$OUT" | grep -i "certificate SHA-256" || true
+          GOT="$(echo "$OUT" | sed -nE 's/.*[Cc]ertificate SHA-256 digest: ([0-9a-fA-F]+).*/\1/p' | head -1 | tr 'a-f' 'A-F' | sed -E 's/(..)/\1:/g; s/:$//')"
+          echo "APK signing cert SHA-256: $GOT"
+          if [ "$GOT" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::APK signing certificate $GOT is not the release certificate $EXPECTED_CERT_SHA256"
+            exit 1
+          fi
+          echo "sha256=$GOT" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.apk
+            dist/*.lua
+            dist/*.txt
+            dist/SHA256SUMS
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.version }}"
+          cat > notes.md <<NOTES
+          Orbit Companion $VER and the orbit-android KOReader patch $VER.
+
+          **Install**
+          - Orbit Companion: install \`orbit-companion-$VER.apk\`. After that it updates itself from these releases.
+          - KOReader patch: copy \`2-orbit-android.lua\` to \`koreader/patches/\` and restart KOReader. After that it updates itself.
+
+          **Verify**
+          - Provenance: \`gh attestation verify <file> -R ${{ github.repository }}\`
+          - Checksums: \`sha256sum -c SHA256SUMS\`
+          - APK signing certificate SHA-256: \`${{ steps.cert.outputs.sha256 }}\`
+
+          Licenses: the companion is MIT, the KOReader patch is AGPL-3.0-or-later; bundled library notices are in \`THIRD-PARTY-NOTICES.txt\`.
+          NOTES
+          sed -i 's/^          //' notes.md
+          FLAGS=()
+          [ "${{ steps.ver.outputs.prerelease }}" = "true" ] && FLAGS+=(--prerelease) || FLAGS+=(--latest)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes-file notes.md "${FLAGS[@]}"
+          fi

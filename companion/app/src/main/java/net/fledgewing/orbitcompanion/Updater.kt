@@ -1,0 +1,365 @@
+package net.fledgewing.orbitcompanion
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
+import android.content.pm.Signature
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.widget.ScrollView
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
+import kotlin.concurrent.thread
+
+/**
+ * Self-update from this repo's public GitHub releases (README "Updates").
+ *
+ * 1. Fetch releases/latest (or releases?per_page=5 with "Include pre-releases").
+ * 2. Newer than BuildConfig.VERSION_NAME? Download SHA256SUMS and orbit-companion-<ver>.apk.
+ * 3. The APK's SHA-256 must match SHA256SUMS, and its signing certificate must match the
+ *    installed app's.
+ * 4. Install through a PackageInstaller session. On Android 12+ we ask for no user action, but
+ *    Android only honours that when the app being installed targets a recent SDK (S+ on
+ *    Android 14). The companion targets 28 for Wi-Fi control, so Android asks the user to
+ *    confirm: right away when the check was started by hand, otherwise via a notification.
+ */
+object Updater {
+    const val REPO = "Fledgewing/BookOrbit-Android"
+    private const val API = "https://api.github.com/repos/$REPO"
+    private const val CHANNEL = "updates"
+    private const val ID_UPDATE = 3
+    const val EXTRA_INTERACTIVE = "${Contract.PACKAGE}.extra.INTERACTIVE"
+    const val EXTRA_VERSION = "${Contract.PACKAGE}.extra.VERSION"
+
+    @Volatile
+    var busy = false
+        private set
+
+    private val main = Handler(Looper.getMainLooper())
+
+    private fun log(msg: String) = OLog.i("update: $msg")
+
+    private fun status(ctx: Context, s: String) {
+        val p = Prefs(ctx)
+        p.updateStatus = s
+        p.updateStatusAt = System.currentTimeMillis()
+        log("status: $s")
+    }
+
+    fun statusLine(ctx: Context): String {
+        val p = Prefs(ctx)
+        val base = "v${BuildConfig.VERSION_NAME}"
+        if (busy) return "$base · checking…"
+        if (p.updateStatus.isEmpty()) return "$base · not checked yet"
+        return "$base · ${p.updateStatus} (${Ui.clock(ctx, p.updateStatusAt)})"
+    }
+
+    /** Daily automatic check: Auto-update on, 24 h since the last one, Wi-Fi up, screen on. */
+    fun maybeAutoCheck(ctx: Context, why: String) {
+        val p = Prefs(ctx)
+        if (!p.autoUpdate || busy) return
+        if (!UpdatePolicy.due(p.updateCheckedAt, System.currentTimeMillis())) return
+        if (!Net.wifiConnected(ctx) || !Net.screenOn(ctx)) {
+            OLog.d("update: auto check due but network or screen not ready ($why)")
+            return
+        }
+        check(ctx, interactive = false, why = why)
+    }
+
+    /** [done] runs on the main thread with the final status line. */
+    fun check(ctx: Context, interactive: Boolean, why: String, done: ((String) -> Unit)? = null) {
+        if (busy) {
+            log("check already running; ignored ($why)")
+            return
+        }
+        busy = true
+        val app = ctx.applicationContext
+        thread(name = "orbit-update", isDaemon = true) {
+            val result = try {
+                run(app, interactive, why)
+            } catch (e: Exception) {
+                OLog.w("update: check failed ($why)", e)
+                "check failed: ${e.message ?: e.javaClass.simpleName}"
+            }
+            status(app, result)
+            busy = false
+            if (done != null) main.post { done(result) }
+        }
+    }
+
+    private fun run(ctx: Context, interactive: Boolean, why: String): String {
+        val p = Prefs(ctx)
+        p.updateCheckedAt = System.currentTimeMillis()
+        val pre = p.includePreReleases
+        log("check started ($why, interactive=$interactive, pre-releases=$pre, installed v${BuildConfig.VERSION_NAME})")
+
+        val releases = if (pre) {
+            val arr = JSONArray(httpText("$API/releases?per_page=5"))
+            (0 until arr.length()).map { release(arr.getJSONObject(it)) }
+        } else {
+            listOf(release(JSONObject(httpText("$API/releases/latest"))))
+        }
+        log("fetched ${releases.size} release(s): ${releases.joinToString { it.tag }}")
+        val rel = UpdatePolicy.pick(releases, pre) ?: return "no release found"
+        val ver = rel.version!!
+        val current = Version.parse(BuildConfig.VERSION_NAME)
+        if (!UpdatePolicy.isNewer(ver, current)) {
+            log("up to date: newest is ${rel.tag}")
+            return "up to date"
+        }
+
+        val apkName = UpdatePolicy.apkName(ver)
+        val apkUrl = rel.assets[apkName] ?: return "${rel.tag} has no $apkName"
+        val sumsUrl = rel.assets[UpdatePolicy.SUMS_NAME] ?: return "${rel.tag} has no ${UpdatePolicy.SUMS_NAME}"
+        val expected = Checksums.parse(httpText(sumsUrl))[apkName] ?: return "${UpdatePolicy.SUMS_NAME} has no line for $apkName"
+        log("${rel.tag}: expecting sha256 $expected for $apkName")
+
+        val dir = File(ctx.filesDir, "updates").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() } // only ever one pending update
+        val part = File(dir, "$apkName.part")
+        val got = download(apkUrl, part)
+        if (!got.equals(expected, ignoreCase = true)) {
+            part.delete()
+            log("checksum MISMATCH: got $got")
+            return "download failed its checksum; not installed"
+        }
+        log("checksum ok")
+        val apk = File(dir, apkName)
+        if (!part.renameTo(apk)) return "could not store the download"
+
+        val certProblem = signerProblem(ctx, apk)
+        if (certProblem != null) {
+            apk.delete()
+            log("signer check FAILED: $certProblem")
+            return certProblem
+        }
+        log("signer matches the installed app")
+        install(ctx, apk, ver.toString(), interactive)
+        return "installing v$ver"
+    }
+
+    private fun release(o: JSONObject): ReleaseInfo {
+        val assets = LinkedHashMap<String, String>()
+        val arr = o.optJSONArray("assets") ?: JSONArray()
+        for (i in 0 until arr.length()) {
+            val a = arr.getJSONObject(i)
+            assets[a.getString("name")] = a.getString("browser_download_url")
+        }
+        return ReleaseInfo(o.optString("tag_name"), o.optBoolean("prerelease"), o.optBoolean("draft"), assets)
+    }
+
+    private fun open(url: String): HttpURLConnection {
+        // HttpURLConnection follows the https -> https redirect to GitHub's asset host.
+        val c = URL(url).openConnection() as HttpURLConnection
+        c.connectTimeout = 15_000
+        c.readTimeout = 30_000
+        c.setRequestProperty("User-Agent", "OrbitCompanion/${BuildConfig.VERSION_NAME}")
+        if (url.startsWith(API)) {
+            c.setRequestProperty("Accept", "application/vnd.github+json")
+            c.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+        }
+        val code = c.responseCode
+        if (code != 200) {
+            c.disconnect()
+            throw java.io.IOException("HTTP $code from ${URL(url).host}")
+        }
+        return c
+    }
+
+    private fun httpText(url: String): String {
+        val c = open(url)
+        try {
+            return c.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8)
+        } finally {
+            c.disconnect()
+        }
+    }
+
+    /** Streams to [to] and returns the lowercase hex SHA-256. */
+    private fun download(url: String, to: File): String {
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        val md = MessageDigest.getInstance("SHA-256")
+        val c = open(url)
+        var n = 0L
+        try {
+            c.inputStream.use { input ->
+                FileOutputStream(to).use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    while (true) {
+                        val r = input.read(buf)
+                        if (r < 0) break
+                        md.update(buf, 0, r)
+                        out.write(buf, 0, r)
+                        n += r
+                    }
+                }
+            }
+        } finally {
+            c.disconnect()
+        }
+        log("downloaded ${to.name.removeSuffix(".part")}: $n bytes in ${OLog.since(t0)} ms")
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun certDigests(sigs: Array<Signature>?): Set<String> =
+        sigs.orEmpty().map { s -> MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString(":") { "%02X".format(it) } }.toSet()
+
+    @Suppress("DEPRECATION")
+    private fun signers(pm: PackageManager, archive: String?, pkg: String?): Set<String> {
+        if (Build.VERSION.SDK_INT >= 28) {
+            val flags = PackageManager.GET_SIGNING_CERTIFICATES
+            val info = if (archive != null) pm.getPackageArchiveInfo(archive, flags) else pm.getPackageInfo(pkg!!, flags)
+            val si = info?.signingInfo
+            if (si != null) return certDigests(if (si.hasMultipleSigners()) si.apkContentsSigners else si.signingCertificateHistory)
+        }
+        val info = if (archive != null) pm.getPackageArchiveInfo(archive, PackageManager.GET_SIGNATURES) else pm.getPackageInfo(pkg!!, PackageManager.GET_SIGNATURES)
+        return certDigests(info?.signatures)
+    }
+
+    /** null when the downloaded APK is our package and signed by the installed app's certificate. */
+    private fun signerProblem(ctx: Context, apk: File): String? {
+        val pm = ctx.packageManager
+        @Suppress("DEPRECATION")
+        val archivePkg = pm.getPackageArchiveInfo(apk.path, 0)?.packageName
+        if (archivePkg != ctx.packageName) return "the download is not Orbit Companion ($archivePkg); not installed"
+        val theirs = signers(pm, apk.path, null)
+        val ours = signers(pm, null, ctx.packageName)
+        log("signer of the download: ${theirs.joinToString()} / installed: ${ours.joinToString()}")
+        if (theirs.isEmpty()) return "could not read the download's signature; not installed"
+        // Key rotation history: the update's newest cert must be one we already trust.
+        if (theirs.intersect(ours).isEmpty()) {
+            return "the update is signed with a different key (a debug build is installed?): uninstall and install the release APK once"
+        }
+        return null
+    }
+
+    private fun install(ctx: Context, apk: File, version: String, interactive: Boolean) {
+        val pi = ctx.packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        params.setAppPackageName(ctx.packageName)
+        params.setSize(apk.length())
+        params.setInstallReason(PackageManager.INSTALL_REASON_USER)
+        if (Build.VERSION.SDK_INT >= 31) {
+            // Honoured only for apps targeting S+ on Android 14 (see the class comment); harmless otherwise.
+            params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        }
+        val id = pi.createSession(params)
+        pi.openSession(id).use { s ->
+            s.openWrite("base.apk", 0, apk.length()).use { out ->
+                apk.inputStream().use { it.copyTo(out) }
+                s.fsync(out)
+            }
+            val cb = Intent(ctx, InstallReceiver::class.java)
+                .putExtra(EXTRA_INTERACTIVE, interactive)
+                .putExtra(EXTRA_VERSION, version)
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
+            s.commit(PendingIntent.getBroadcast(ctx, id, cb, flags).intentSender)
+        }
+        log("session $id committed for v$version (interactive=$interactive)")
+    }
+
+    // Called by InstallReceiver.
+
+    fun onSessionStatus(ctx: Context, intent: Intent) {
+        val st = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+        val version = intent.getStringExtra(EXTRA_VERSION) ?: "?"
+        val interactive = intent.getBooleanExtra(EXTRA_INTERACTIVE, false)
+        when (st) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                @Suppress("DEPRECATION")
+                val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                if (confirm == null) {
+                    status(ctx, "v$version: Android wants a confirmation but sent no prompt")
+                    return
+                }
+                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                log("Android asks the user to confirm v$version (interactive=$interactive)")
+                // A check started by hand has our page in front, so the prompt may open now.
+                // In the background, Android blocks activity starts: post a notification instead.
+                var shown = false
+                if (interactive) {
+                    shown = try {
+                        ctx.startActivity(confirm)
+                        true
+                    } catch (e: Exception) {
+                        OLog.w("update: could not open the install prompt", e)
+                        false
+                    }
+                }
+                if (!shown) notifyReady(ctx, version, confirm)
+                status(ctx, "v$version ready: confirm the install")
+            }
+            PackageInstaller.STATUS_SUCCESS -> {
+                status(ctx, "updated to v$version")
+                notifications(ctx).cancel(ID_UPDATE)
+            }
+            else -> status(ctx, "v$version install failed ($st${if (msg != null) ": $msg" else ""})")
+        }
+    }
+
+    /** MY_PACKAGE_REPLACED: we are the new version now. */
+    fun onReplaced(ctx: Context) {
+        notifications(ctx).cancel(ID_UPDATE)
+        File(ctx.filesDir, "updates").listFiles()?.forEach { it.delete() }
+        status(ctx, "updated to v${BuildConfig.VERSION_NAME}")
+    }
+
+    private fun notifications(ctx: Context) = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    private fun notifyReady(ctx: Context, version: String, confirm: Intent) {
+        val nm = notifications(ctx)
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "App updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            setShowBadge(false)
+            enableVibration(false)
+        })
+        val text = "Orbit Companion $version is ready. Tap to install."
+        val n = Notification.Builder(ctx, CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat)
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(PendingIntent.getActivity(ctx, 3, confirm, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+            .build()
+        nm.notify(ID_UPDATE, n)
+        log("notification posted: v$version ready to install")
+    }
+}
+
+/** PackageInstaller session results. */
+class InstallReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        Updater.onSessionStatus(ctx, intent)
+    }
+}
+
+/** Settings › Open-source licenses: the notices generated at build time (assets). */
+class LicensesActivity : EinkActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val text = try {
+            assets.open("open_source_licenses.txt").use { it.readBytes().toString(Charsets.UTF_8) }
+        } catch (e: Exception) {
+            OLog.w("licenses: notices missing from this build", e)
+            "The notices file is missing from this build."
+        }
+        val root = page()
+        root.addView(Ui.header(this, "Open-source licenses", "‹ Back") { finish() })
+        val scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = true }
+        scroll.addView(Ui.text(this, text, 14f).apply { typeface = android.graphics.Typeface.MONOSPACE })
+        root.addView(scroll)
+    }
+}

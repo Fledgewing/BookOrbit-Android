@@ -11,7 +11,9 @@ plugin 2.3.0 (the version on the M8C).
 
 ## Install
 
-1. Copy `2-orbit-android.lua` to `koreader/patches/` on the device (create the folder if
+1. Download `2-orbit-android.lua` from the latest
+   [release](https://github.com/Fledgewing/BookOrbit-Android/releases/latest) (it carries
+   its version; it then updates itself) and copy it to `koreader/patches/` on the device (create the folder if
    needed), for example:
    `adb shell mkdir -p /sdcard/koreader/patches && adb push 2-orbit-android.lua /sdcard/koreader/patches/`
 2. Restart KOReader (on the M8C: power button, wait 2 minutes, wake).
@@ -37,7 +39,16 @@ Remove it by deleting the file. Its settings live under `orbit_android` in KORea
 Menu: **Tools › BookOrbit › Android sync** (falls back to a top-level **Android sync** entry
 under Tools when the plugin is missing). Toggles; Sync while reading; Sync and sleep now;
 Sleep sync limit (10/15/20 s); Apply recommended settings; Apply recommended gestures; Test
-sync path; Open Orbit Companion; Open another app…; status.
+sync path; Open Orbit Companion; Open another app…; Auto-update patch; Include
+pre-releases; Check for patch update; update status; status.
+
+**Self-update** (top-level README "Updates"): at most once a day, after a start or wake whose
+network is already up, the patch asks GitHub for the latest release of this repo, and if it
+is newer than its `PATCH_VERSION`, downloads `2-orbit-android.lua` and `SHA256SUMS`, checks
+the SHA-256 with KOReader's own `ffi/sha2` (koreader-base `ffi/sha2.lua:5612`, also used by
+`frontend/util.lua`), writes `2-orbit-android.lua.new` and renames it over itself. The new
+version runs from the next KOReader start. A copy taken straight from the repo says
+`0.0.0-dev`; releases stamp the tag into it.
 
 "Apply recommended settings" asks first, then sets the plugin's Auto-sync on, BookOrbit
 further ahead → Silent, further behind → Don't sync, Make BookOrbit home, and KOReader's
@@ -85,7 +96,8 @@ adb logcat -v time | grep OrbitAndroid
 
 ## Tests
 
-Pure logic (scheduling, outbox verdicts, reading decisions), any Lua 5.1-5.4 or LuaJIT:
+Pure logic (scheduling, outbox verdicts, reading decisions, update version comparison and
+`SHA256SUMS` parsing), any Lua 5.1-5.4 or LuaJIT:
 
 ```
 luajit koreader-patch/test/test_logic.lua

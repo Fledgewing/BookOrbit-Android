@@ -156,10 +156,10 @@ class StatusActivity : EinkActivity() {
             Net.wifiConnected(this) -> "On · connected"
             else -> "On · not connected"
         }
-        val ts = when {
-            !Net.installed(this, Net.TAILSCALE_PKG) -> "Not installed"
-            Net.vpnUp(this) -> "Connected"
-            else -> "Not connected"
+        val ts = when (Net.appState(this, Net.TAILSCALE_PKG)) {
+            AppState.MISSING -> "Not installed"
+            AppState.FROZEN -> "Frozen by Meebook"
+            else -> if (Net.vpnUp(this)) "Connected" else "Not connected"
         }
         root.addView(Ui.row(this, "Wi-Fi", right = Ui.value(this, wifi)))
         root.addView(Ui.row(this, "Tailscale", right = Ui.value(this, ts)))
@@ -183,6 +183,16 @@ class StatusActivity : EinkActivity() {
             ),
         )
         testResult?.let { root.addView(Ui.text(this, it, 18f).apply { setPadding(0, Ui.dp(this@StatusActivity, 10), 0, 0) }) }
+        Meebook.frozenApps(this).takeIf { it.isNotEmpty() }?.let { frozen ->
+            root.addView(Ui.text(this, frozen.joinToString(" ") { AppStates.frozenMessage(it) }, 18f, bold = true).apply {
+                setPadding(0, Ui.dp(this@StatusActivity, 10), 0, 0)
+            })
+        }
+        root.addView(Ui.gap(this, 12))
+        root.addView(Ui.row(this, "App version", Updater.statusLine(this), Ui.button(this, if (Updater.busy) "Checking…" else "Check for updates", heightDp = 56, sp = 18f) {
+            Updater.check(this, interactive = true, why = "status page") { if (!isFinishing) render() }
+            render()
+        }))
     }
 
     private fun runTest() {
@@ -215,7 +225,8 @@ class SettingsActivity : EinkActivity() {
         OLog.i(
             "settings: wifi_after_sleep=${prefs.wifiAfterSleep.key} wake_ts_with_wifi=${prefs.wakeTailscaleWithWifi} " +
                 "wake_lock=${prefs.wakeLockEnabled} home_opens_koreader=${prefs.homeOpensKoreader} " +
-                "notify_tailscale=${prefs.notifyTailscale} debug=${prefs.debugLog}",
+                "notify_tailscale=${prefs.notifyTailscale} debug=${prefs.debugLog} " +
+                "auto_update=${prefs.autoUpdate} include_prereleases=${prefs.includePreReleases}",
         )
         OrbitService.start(this, Intent(OrbitService.ACTION_REFRESH))
         render()
@@ -258,6 +269,15 @@ class SettingsActivity : EinkActivity() {
         toggle(root, "Home always opens BookOrbit home", "press Home twice for the launcher page", prefs.homeOpensKoreader) { prefs.homeOpensKoreader = it }
         toggle(root, "Notify if Tailscale won't connect", null, prefs.notifyTailscale) { prefs.notifyTailscale = it }
         toggle(root, "Debug log", "more detail in logcat, tag OrbitCompanion", prefs.debugLog) { prefs.debugLog = it }
+        toggle(root, "Auto-update app", "daily check of the GitHub releases", prefs.autoUpdate) { prefs.autoUpdate = it }
+        toggle(root, "Include pre-releases", null, prefs.includePreReleases) { prefs.includePreReleases = it }
+        root.addView(Ui.row(this, "Check for updates", Updater.statusLine(this), Ui.value(this, if (Updater.busy) "…" else "›"), onClick = {
+            Updater.check(this, interactive = true, why = "settings") { if (!isFinishing) render() }
+            render()
+        }))
+        root.addView(Ui.row(this, "Open-source licenses", null, Ui.value(this, "›"), onClick = {
+            startActivity(Intent(this, LicensesActivity::class.java))
+        }))
     }
 
     private fun toggle(root: LinearLayout, label: String, sub: String?, on: Boolean, set: (Boolean) -> Unit) {
@@ -294,6 +314,23 @@ object Setup {
             )
         })
 
+        // The Meebook launcher's "App freeze" disables apps (and force-stops them) behind our back.
+        val frozen = Meebook.frozenApps(ctx)
+        list.add(
+            Check(
+                "Not frozen by Meebook (KOReader, Tailscale, Orbit)",
+                frozen.isEmpty(),
+                if (frozen.isEmpty()) "done" else "frozen: ${frozen.joinToString()} · open Meebook › Freeze management and unfreeze",
+            ) { a ->
+                Meebook.freezePage(ctx)?.let { a.tryStart(it, "Meebook freeze management") }
+            },
+        )
+
+        val canInstall = ctx.packageManager.canRequestPackageInstalls()
+        list.add(Check("Install updates", canInstall, if (canInstall) "done" else "allow Orbit to install unknown apps (self-update)") { a ->
+            a.tryStart(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")), "install unknown apps")
+        })
+
         listOf(ctx.packageName to "Orbit", Net.TAILSCALE_PKG to "Tailscale", Koreader.PKG to "KOReader").forEach { (pkg, name) ->
             val installed = Net.installed(ctx, pkg)
             val ok = installed && (ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(pkg)
@@ -305,30 +342,31 @@ object Setup {
             })
         }
 
-        val tsInstalled = Net.installed(ctx, Net.TAILSCALE_PKG)
-        val vpn = Net.vpnUp(ctx)
-        // Readable for targetSdk 28 (hidden settings are blocked only from targetSdk 31); null = not set.
-        val alwaysOnApp: String? = try {
-            Settings.Secure.getString(ctx.contentResolver, "always_on_vpn_app")
-        } catch (e: Exception) {
-            null
+        val tsState = Net.appState(ctx, Net.TAILSCALE_PKG)
+        // Done when a VPN is up and it is Tailscale's (owner UID, where Android lets us read it).
+        // Always-on is advice only: some firmwares hide "always_on_vpn_app" from apps (logged).
+        val tsUp = Net.tailscaleVpnUp(ctx)
+        val alwaysOnApp = Net.alwaysOnVpnApp(ctx)
+        val alwaysOnNote = when (alwaysOnApp) {
+            Net.TAILSCALE_PKG -> "Always-on on"
+            null, "" -> "tip: VPN settings › Tailscale ⚙ › Always-on"
+            else -> "tip: Always-on is set to another app"
         }
-        val alwaysOn = alwaysOnApp == Net.TAILSCALE_PKG
         list.add(
             Check(
-                "Tailscale signed in + Always-on",
-                vpn && alwaysOn,
+                "Tailscale signed in and connected",
+                tsUp,
                 when {
-                    !tsInstalled -> "not installed"
-                    !vpn -> "not connected: open Tailscale and sign in"
-                    !alwaysOn -> "connected · Always-on off: VPN settings › Tailscale ⚙"
-                    else -> "done"
+                    tsState == AppState.MISSING -> "not installed"
+                    tsState == AppState.FROZEN -> AppStates.frozenMessage("Tailscale")
+                    !tsUp -> "not connected: open Tailscale and sign in"
+                    else -> "connected · $alwaysOnNote"
                 },
             ) { a ->
-                if (vpn && !alwaysOn) {
-                    a.tryStart(Intent(Settings.ACTION_VPN_SETTINGS), "VPN settings")
-                } else {
-                    ctx.packageManager.getLaunchIntentForPackage(Net.TAILSCALE_PKG)?.let { a.tryStart(it, "Tailscale") }
+                when {
+                    tsState == AppState.FROZEN -> Meebook.freezePage(ctx)?.let { a.tryStart(it, "Meebook freeze management") }
+                    tsUp -> a.tryStart(Intent(Settings.ACTION_VPN_SETTINGS), "VPN settings")
+                    else -> ctx.packageManager.getLaunchIntentForPackage(Net.TAILSCALE_PKG)?.let { a.tryStart(it, "Tailscale") }
                 }
             },
         )
@@ -351,9 +389,17 @@ object Setup {
             Check(
                 "KOReader patch answered",
                 seen > 0,
-                if (seen > 0) "last ${Ui.clock(ctx, seen)} (${prefs.patchSeenVia})" else "open KOReader with the patch, or run its Test sync path",
+                when {
+                    seen > 0 -> "last ${Ui.clock(ctx, seen)} (${prefs.patchSeenVia})"
+                    Koreader.problem(ctx) != null -> Koreader.problem(ctx)!!
+                    else -> "open KOReader with the patch, or run its Test sync path"
+                },
             ) { a ->
-                if (!Koreader.start(a, "setup: patch check", null)) OLog.i("setup: KOReader not startable")
+                if (Koreader.state(ctx) == AppState.FROZEN) {
+                    Meebook.freezePage(ctx)?.let { a.tryStart(it, "Meebook freeze management") }
+                } else if (!Koreader.start(a, "setup: patch check", null)) {
+                    OLog.i("setup: KOReader not startable")
+                }
             },
         )
 

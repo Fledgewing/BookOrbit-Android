@@ -3,7 +3,7 @@
 local here = (arg and arg[0] or ""):match("^(.*)/[^/]*$") or "."
 ORBIT_ANDROID_TEST = true
 local M = dofile(here .. "/../2-orbit-android.lua")
-local Schedule, Plan = M.Schedule, M.Plan
+local Schedule, Plan, Update = M.Schedule, M.Plan, M.Update
 
 local passed, failed = 0, 0
 local function test(name, fn)
@@ -136,6 +136,78 @@ test("reading: server ahead + Ask never prompts mid-book", function()
 end)
 test("reading: server ahead + Don't sync keeps both", function()
     eq(Plan.readingAction{ has_remote = true, remote_newer = true, forward = P.DISABLE }, "none")
+end)
+
+-- Update: version comparison
+local cmp = Update.compare
+test("version: parses tags, rejects junk", function()
+    local v = Update.parseVersion("v1.2.3-rc.1")
+    eq(v[1], 1); eq(v[2], 2); eq(v[3], 3); eq(v.pre, "rc.1")
+    eq(Update.parseVersion("1.2.3+build.5").pre, nil)
+    eq(Update.parseVersion("1.2"), nil)
+    eq(Update.parseVersion("latest"), nil)
+    eq(Update.parseVersion("1.2.3-"), nil)
+    eq(Update.parseVersion(nil), nil)
+end)
+test("version: numeric, not text, order", function()
+    eq(cmp("0.10.0", "0.9.9"), 1)
+    eq(cmp("1.0.0", "0.99.99"), 1)
+    eq(cmp("v0.1.0", "0.1.0"), 0)
+    eq(cmp("0.1.0", "0.1.1"), -1)
+end)
+test("version: pre-releases sort before the release", function()
+    eq(cmp("0.2.0-rc.1", "0.2.0"), -1)
+    eq(cmp("0.2.0", "0.2.0-rc.1"), 1)
+    eq(cmp("0.2.0-rc.2", "0.2.0-rc.1"), 1)
+    eq(cmp("0.2.0-rc.10", "0.2.0-rc.9"), 1)
+    eq(cmp("0.2.0-beta", "0.2.0-rc"), -1)
+    eq(cmp("0.2.0-rc", "0.2.0-rc.1"), -1)
+    eq(cmp("0.0.0-dev", "0.1.0"), -1)
+end)
+test("version: unparsable compares as nil", function() eq(cmp("x", "0.1.0"), nil) end)
+test("version: the repo copy is a dev version", function() eq(cmp(M.PATCH_VERSION, "0.0.1"), -1) end)
+
+-- Update: release choice
+local rels = {
+    { tag_name = "v0.3.0-rc.1", prerelease = true },
+    { tag_name = "v0.4.0", draft = true },
+    { tag_name = "v0.2.0", assets = { { name = "2-orbit-android.lua", browser_download_url = "https://x/lua" } } },
+    { tag_name = "nightly" },
+    { tag_name = "v0.1.0" },
+}
+test("pick: newest stable by default", function() eq(Update.pick(rels, false).tag_name, "v0.2.0") end)
+test("pick: pre-releases when asked", function() eq(Update.pick(rels, true).tag_name, "v0.3.0-rc.1") end)
+test("pick: nothing usable", function() eq(Update.pick({ { tag_name = "v1.0.0-rc.1", prerelease = true } }, false), nil) end)
+test("pick: asset url", function()
+    eq(Update.assetUrl(Update.pick(rels, false), "2-orbit-android.lua"), "https://x/lua")
+    eq(Update.assetUrl(Update.pick(rels, false), "SHA256SUMS"), nil)
+end)
+
+-- Update: checksum lines
+local A, B = string.rep("a", 64), string.rep("0123456789ABCDEF", 4)
+test("sums: sha256sum text and binary lines", function()
+    local s = Update.parseSums(A .. "  2-orbit-android.lua\n" .. B .. " *orbit-companion-0.1.0.apk\r\n")
+    eq(s["2-orbit-android.lua"], A)
+    eq(s["orbit-companion-0.1.0.apk"], B:lower())
+end)
+test("sums: bad lines are skipped", function()
+    local s = Update.parseSums("# c\n\nabc  short.lua\n" .. A .. "x  long.lua\n" .. A .. "  ok.lua\n")
+    local n = 0
+    for _ in pairs(s) do n = n + 1 end
+    eq(n, 1, "count"); eq(s["ok.lua"], A)
+end)
+test("sums: empty or nil text", function() eq(next(Update.parseSums(nil)), nil); eq(next(Update.parseSums("")), nil) end)
+
+test("stamp: reads the declared version", function()
+    eq(Update.stampedVersion('-- x\nlocal PATCH_VERSION = "0.1.0"\n'), "0.1.0")
+    eq(Update.stampedVersion("-- nothing here"), nil)
+end)
+
+test("due: at most once a day", function()
+    eq(Update.isDue(nil, 1000), true)
+    eq(Update.isDue(1000, 1000 + 86399), false)
+    eq(Update.isDue(1000, 1000 + 86400), true)
+    eq(Update.isDue(5000, 1000), true, "clock went back")
 end)
 
 print(string.format("%d passed, %d failed", passed, failed))

@@ -20,6 +20,10 @@ created alongside the plugins in every FileManager and ReaderUI.
 Companion interface: docs/INTERFACE.md. Logs: `adb logcat | grep OrbitAndroid`.
 ]]
 
+-- Stamped by the release workflow (.github/workflows/release.yml) from the tag; a copy from the
+-- repo says 0.0.0-dev, which any release replaces.
+local PATCH_VERSION = "0.0.0-dev"
+
 ---------------------------------------------------------------------------------------------
 -- Pure logic (no KOReader modules). Unit-tested by koreader-patch/test/.
 ---------------------------------------------------------------------------------------------
@@ -130,8 +134,100 @@ function Plan.readingAction(o)
     return "push"
 end
 
+-- Self-update from the repo's GitHub releases.
+local Update = {
+    INTERVAL = 24 * 60 * 60, -- at most one automatic check per day (os.time seconds)
+    ASSET = "2-orbit-android.lua",
+    SUMS = "SHA256SUMS",
+}
+
+-- "v1.2.3", "1.2.3-rc.1", "1.2.3+build" -> { 1, 2, 3, pre = "rc.1" | nil }, or nil.
+function Update.parseVersion(s)
+    if type(s) ~= "string" then return nil end
+    s = s:match("^%s*(.-)%s*$"):gsub("^[vV]", "")
+    s = s:gsub("%+[%w%.%-]*$", "")
+    local a, b, c, rest = s:match("^(%d+)%.(%d+)%.(%d+)(.*)$")
+    if not a then return nil end
+    local pre = nil
+    if rest ~= "" then
+        pre = rest:match("^%-([%w%.%-]+)$")
+        if not pre then return nil end
+    end
+    return { tonumber(a), tonumber(b), tonumber(c), pre = pre }
+end
+
+local function comparePre(x, y)
+    if x == y then return 0 end
+    if x == nil then return 1 end  -- a release sorts after its pre-releases
+    if y == nil then return -1 end
+    local xs, ys = {}, {}
+    for part in x:gmatch("[^%.]+") do xs[#xs + 1] = part end
+    for part in y:gmatch("[^%.]+") do ys[#ys + 1] = part end
+    for i = 1, math.min(#xs, #ys) do
+        local xn, yn = tonumber(xs[i]), tonumber(ys[i])
+        if xn and yn then
+            if xn ~= yn then return xn < yn and -1 or 1 end
+        elseif xn then return -1  -- numeric identifiers sort first
+        elseif yn then return 1
+        elseif xs[i] ~= ys[i] then return xs[i] < ys[i] and -1 or 1 end
+    end
+    if #xs == #ys then return 0 end
+    return #xs < #ys and -1 or 1
+end
+
+-- -1, 0 or 1; nil when either side isn't a version.
+function Update.compare(a, b)
+    a = type(a) == "table" and a or Update.parseVersion(a)
+    b = type(b) == "table" and b or Update.parseVersion(b)
+    if not a or not b then return nil end
+    for i = 1, 3 do
+        if a[i] ~= b[i] then return a[i] < b[i] and -1 or 1 end
+    end
+    return comparePre(a.pre, b.pre)
+end
+
+-- sha256sum output, "<64 hex>  name" or "<64 hex> *name" -> { [name] = lowercase hex }.
+function Update.parseSums(text)
+    local out = {}
+    for line in (text or ""):gmatch("[^\r\n]+") do
+        local hex, name = line:match("^%s*(%x+) [ %*](.-)%s*$")
+        if hex and #hex == 64 and name ~= "" then out[name] = hex:lower() end
+    end
+    return out
+end
+
+-- The PATCH_VERSION a downloaded patch declares, so a release can't install an unstamped file.
+function Update.stampedVersion(text)
+    return (text or ""):match('\nlocal PATCH_VERSION = "([^"\n]+)"')
+end
+
+-- releases: decoded GitHub release objects. The newest that is not a draft and, unless
+-- include_pre, not a pre-release. Returns the release and its parsed version.
+function Update.pick(releases, include_pre)
+    local best, best_v
+    for _i, r in ipairs(releases or {}) do
+        local v = type(r) == "table" and Update.parseVersion(r.tag_name)
+        if v and not r.draft and (include_pre or not r.prerelease) then
+            if not best_v or Update.compare(v, best_v) > 0 then best, best_v = r, v end
+        end
+    end
+    return best, best_v
+end
+
+function Update.assetUrl(release, name)
+    for _i, a in ipairs(release and release.assets or {}) do
+        if a.name == name then return a.browser_download_url end
+    end
+end
+
+-- A clock that went backwards also allows a check.
+function Update.isDue(last, now, interval)
+    last = tonumber(last) or 0
+    return last <= 0 or now < last or now - last >= (interval or Update.INTERVAL)
+end
+
 if rawget(_G, "ORBIT_ANDROID_TEST") then
-    return { Schedule = Schedule, Plan = Plan }
+    return { Schedule = Schedule, Plan = Plan, Update = Update, PATCH_VERSION = PATCH_VERSION }
 end
 
 ---------------------------------------------------------------------------------------------
@@ -184,6 +280,10 @@ local DEFAULTS = {
     reading_schedule = "off",
     sleep_cap = 20,
     last_sleep_sync = nil, -- { at, ok, seconds, reason }
+    auto_update_patch = true,
+    patch_update_prerelease = false,
+    patch_update_checked_at = 0,  -- os.time() of the last check
+    patch_update_status = nil,    -- { at, text }
 }
 
 local S = G_reader_settings:readSetting("orbit_android") or {}
@@ -669,6 +769,157 @@ function Sync.waitOutbox(p, cap, cb)
 end
 
 ---------------------------------------------------------------------------------------------
+-- Self-update from github.com/Fledgewing/BookOrbit-Android releases (README "Updates").
+-- Checks at most once a day on start/wake when the network is already up (never brings it up
+-- for this), or from the menu. The new file is SHA-256-checked against the release's
+-- SHA256SUMS, written next to this file and renamed over it; it runs from the next start.
+---------------------------------------------------------------------------------------------
+
+local Updater = { busy = false }
+local RELEASES_API = "https://api.github.com/repos/Fledgewing/BookOrbit-Android/releases"
+-- This file, as userpatch.lua dofile()d it (frontend/userpatch.lua: patch_dir .. "/" .. entry).
+local SELF_PATH = rawget(_G, "ORBIT_ANDROID_SELF_PATH") -- tests only
+    or (debug.getinfo(1, "S").source or ""):match("^@(.+%.lua)$")
+
+-- GET with manual redirects (release assets redirect to another host). Returns body or nil, err.
+local function httpGet(url, block_timeout, total_timeout)
+    local http = require("socket.http")
+    local ltn12 = require("ltn12")
+    local socket = require("socket")
+    local socketutil = require("socketutil")
+    socketutil:set_timeout(block_timeout, total_timeout)
+    local okp, body, err = pcall(function()
+        for _hop = 1, 5 do
+            local chunks = {}
+            local is_api = url:find("api.github.com", 1, true) ~= nil
+            local code, headers = socket.skip(1, http.request{
+                url = url,
+                method = "GET",
+                headers = {
+                    ["User-Agent"] = "BookOrbit-Android-patch/" .. PATCH_VERSION,
+                    ["Accept"] = is_api and "application/vnd.github+json" or "*/*",
+                },
+                sink = ltn12.sink.table(chunks),
+                redirect = false,
+            })
+            if type(code) ~= "number" then return nil, "network: " .. tostring(code) end
+            local location = type(headers) == "table" and (headers.location or headers.Location) or nil
+            if code >= 300 and code < 400 and location then
+                log("update: redirect", code, "to", (location:match("^https?://([^/]+)") or "?"))
+                url = location
+            elseif code == 200 then
+                return table.concat(chunks)
+            else
+                return nil, "HTTP " .. code
+            end
+        end
+        return nil, "too many redirects"
+    end)
+    socketutil:reset_timeout()
+    if not okp then return nil, tostring(body) end
+    return body, err
+end
+
+local function setUpdateStatus(text)
+    S.patch_update_status = { at = os.time(), text = text }
+    saveSettings()
+    log("update:", text)
+end
+
+-- Returns ok, status text. Blocking: callers schedule it.
+function Updater.run(why)
+    S.patch_update_checked_at = os.time()
+    saveSettings()
+    local pre = S.patch_update_prerelease == true
+    log("update: check started (" .. why .. "), installed", PATCH_VERSION, "pre-releases", tostring(pre))
+    local url = pre and (RELEASES_API .. "?per_page=5") or (RELEASES_API .. "/latest")
+    local body, err = httpGet(url, 10, 30)
+    if not body then return false, "check failed: " .. tostring(err) end
+    local okj, json = pcall(require, "json")
+    if not okj then return false, "check failed: no JSON module" end
+    local okd, data = pcall(json.decode, body)
+    if not okd or type(data) ~= "table" then return false, "check failed: unreadable answer" end
+    local rel, v = Update.pick(pre and data or { data }, pre)
+    if not rel then return false, "no release found" end
+    log("update: newest release", rel.tag_name)
+    if Update.compare(v, PATCH_VERSION) ~= 1 then return true, "up to date (" .. PATCH_VERSION .. ")" end
+
+    local lua_url, sums_url = Update.assetUrl(rel, Update.ASSET), Update.assetUrl(rel, Update.SUMS)
+    if not lua_url or not sums_url then return false, rel.tag_name .. " has no " .. Update.ASSET .. " or " .. Update.SUMS end
+    local sums, err2 = httpGet(sums_url, 15, 60)
+    if not sums then return false, "SHA256SUMS download failed: " .. tostring(err2) end
+    local expected = Update.parseSums(sums)[Update.ASSET]
+    if not expected then return false, "SHA256SUMS has no line for " .. Update.ASSET end
+    log("update: expecting sha256", expected)
+    local text, err3 = httpGet(lua_url, 15, 60)
+    if not text then return false, "patch download failed: " .. tostring(err3) end
+    -- koreader-base ffi/sha2.lua:5612 (sha256 returns lowercase hex); also used by frontend/util.lua.
+    local sha2 = require("ffi/sha2")
+    local got = sha2.sha256(text)
+    if got:lower() ~= expected then
+        log("update: checksum MISMATCH, got", got)
+        return false, "download failed its checksum; not installed"
+    end
+    log("update: checksum ok,", #text, "bytes")
+    local stamped = Update.stampedVersion(text)
+    if Update.compare(stamped, v) ~= 0 then
+        return false, "download declares " .. tostring(stamped) .. ", not " .. rel.tag_name .. "; not installed"
+    end
+
+    if not SELF_PATH then return false, "can't find this patch's own file; not installed" end
+    -- Not *.lua: the patch loader must never run a half-written file.
+    local tmp = SELF_PATH .. ".new"
+    local f, ferr = io.open(tmp, "wb")
+    if not f then return false, "can't write " .. tmp .. ": " .. tostring(ferr) end
+    local okw, werr = f:write(text)
+    f:close()
+    local rf = io.open(tmp, "rb")
+    local back = rf and rf:read("*a")
+    if rf then rf:close() end
+    if not okw or back ~= text then
+        os.remove(tmp)
+        return false, "write failed: " .. tostring(werr or "short write")
+    end
+    local okr, rerr = os.rename(tmp, SELF_PATH)
+    if not okr then
+        os.remove(tmp)
+        return false, "rename failed: " .. tostring(rerr)
+    end
+    log("update: wrote", stamped, "over", SELF_PATH)
+    return true, "updated to " .. stamped .. "; restart KOReader to use it"
+end
+
+function Updater.check(why, done)
+    if Updater.busy then
+        log("update: check already running; ignored (" .. why .. ")")
+        return
+    end
+    Updater.busy = true
+    local okc, ok, text = pcall(Updater.run, why)
+    Updater.busy = false
+    if not okc then
+        ok, text = false, "check failed: " .. tostring(ok)
+    end
+    setUpdateStatus(text)
+    if done then done(ok, text) end
+end
+
+-- Daily automatic check, only when the network is already up.
+function Updater.maybeAuto(reason)
+    if not S.auto_update_patch then return end
+    if not Update.isDue(S.patch_update_checked_at, os.time()) then return end
+    -- After the plugin's own drain and pull, which share the connection.
+    UIManager:scheduleIn(8, function()
+        if Updater.busy or not Update.isDue(S.patch_update_checked_at, os.time()) then return end
+        if not NetworkMgr:isConnected() then
+            log("update: daily check due, network not up; skipped (" .. reason .. ")")
+            return
+        end
+        Updater.check("auto, " .. reason)
+    end)
+end
+
+---------------------------------------------------------------------------------------------
 -- The patch's module: one per FileManager / ReaderUI, created like a plugin
 ---------------------------------------------------------------------------------------------
 
@@ -747,11 +998,13 @@ end
 function OrbitAndroid:wakeFlow(reason)
     if not S.sync_on_wake then
         log(reason .. ": sync on wake is off")
+        if NetworkMgr:isConnected() then Updater.maybeAuto(reason) end
         return
     end
     local p = bookorbit(self.ui)
     if not p or not p:isLoggedIn() then
         log(reason .. ": BookOrbit plugin missing or signed out; nothing to do")
+        if NetworkMgr:isConnected() then Updater.maybeAuto(reason) end
         return
     end
     local t0 = now_s()
@@ -761,6 +1014,7 @@ function OrbitAndroid:wakeFlow(reason)
             return
         end
         p:requestLifecycleOutboxDrain("orbit_" .. reason)
+        Updater.maybeAuto(reason)
         if inBook() then
             -- The plugin debounces pulls for 25 s (bookorbit_progress_sync.lua:26, 383-387).
             -- Clear it for this one pull; on a fresh start skip it if a pull already ran.
@@ -1229,6 +1483,29 @@ function OrbitAndroid:statusText()
     return _("Status: ") .. table.concat(parts, " · ")
 end
 
+function OrbitAndroid:updateStatusText()
+    local st = S.patch_update_status
+    local head = string.format(_("Patch %s"), PATCH_VERSION)
+    if not st then return head .. " · " .. _("not checked yet") end
+    return string.format("%s · %s (%s)", head, st.text, os.date("%m-%d %H:%M", st.at))
+end
+
+function OrbitAndroid:checkPatchUpdate()
+    if not NetworkMgr:isConnected() then
+        UIManager:show(InfoMessage:new{ text = _("Patch update: connect to Wi-Fi first."), timeout = 4 })
+        return
+    end
+    local msg = InfoMessage:new{ text = _("Checking for a patch update…") }
+    UIManager:show(msg)
+    UIManager:forceRePaint()
+    UIManager:scheduleIn(0.2, function()
+        Updater.check("menu", function(_ok, text)
+            UIManager:close(msg)
+            UIManager:show(InfoMessage:new{ text = _("Patch update: ") .. text, timeout = 6 })
+        end)
+    end)
+end
+
 function OrbitAndroid:menuItems()
     local schedule_items = {}
     for _i, o in ipairs(Schedule.OPTIONS) do
@@ -1280,6 +1557,10 @@ function OrbitAndroid:menuItems()
         { text = _("Test sync path"), callback = later(function() self:testSyncPath() end), separator = true },
         { text = _("Open Orbit Companion"), callback = later(function() self:onOrbitOpenCompanion() end) },
         { text = _("Open another app…"), callback = later(function() self:onOrbitOpenApps() end), separator = true },
+        toggle("auto_update_patch", _("Auto-update patch")),
+        toggle("patch_update_prerelease", _("Include pre-releases")),
+        { text = _("Check for patch update"), callback = later(function() self:checkPatchUpdate() end) },
+        { text_func = function() return self:updateStatusText() end, keep_menu_open = true, callback = function() end, separator = true },
         { text_func = function() return self:statusText() end, keep_menu_open = true, callback = function() end },
     }
 end
@@ -1357,5 +1638,5 @@ function PluginLoader:genPluginManagerSubItem(...)
     return r
 end
 
-log("patch loaded; companion", Companion.installed() and "installed" or "not installed",
+log("patch", PATCH_VERSION, "loaded; companion", Companion.installed() and "installed" or "not installed",
     "| schedule", S.reading_schedule, "| sleep cap", S.sleep_cap .. "s")

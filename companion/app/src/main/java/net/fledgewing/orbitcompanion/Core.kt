@@ -6,12 +6,14 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 
 /** docs/INTERFACE.md, protocol 1. */
@@ -79,6 +81,22 @@ class Prefs(ctx: Context) {
     var notifyTailscale: Boolean
         get() = bool("notify_tailscale", true)
         set(v) = setBool("notify_tailscale", v)
+    var settingsPinSeeded: Boolean
+        get() = bool("settings_pin_seeded", false)
+        set(v) = setBool("settings_pin_seeded", v)
+
+    // Self-update (Settings › Updates)
+    var autoUpdate: Boolean
+        get() = bool("auto_update", true)
+        set(v) = setBool("auto_update", v)
+    var includePreReleases: Boolean
+        get() = bool("include_prereleases", false)
+        set(v) = setBool("include_prereleases", v)
+    var updateCheckedAt by LongPref("update_checked_at")
+    var updateStatusAt by LongPref("update_status_at")
+    var updateStatus: String
+        get() = str("update_status")
+        set(v) = setStr("update_status", v)
     var debugLog: Boolean
         get() = bool("debug_log", false)
         set(v) = setBool("debug_log", v)
@@ -167,10 +185,64 @@ object Net {
 
     fun screenOn(ctx: Context) = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
 
-    fun installed(ctx: Context, pkg: String): Boolean = try {
-        ctx.packageManager.getApplicationInfo(pkg, 0).enabled
-    } catch (e: PackageManager.NameNotFoundException) {
-        false
+    /**
+     * Missing, frozen (disabled: the Meebook launcher's "App freeze" calls setApplicationEnabledSetting)
+     * or usable. A disabled package is only visible with MATCH_DISABLED_COMPONENTS.
+     */
+    fun appState(ctx: Context, pkg: String): AppState {
+        val pm = ctx.packageManager
+        val ai = try {
+            pm.getApplicationInfo(pkg, PackageManager.MATCH_DISABLED_COMPONENTS)
+        } catch (e: PackageManager.NameNotFoundException) {
+            return AppState.MISSING
+        }
+        val setting = try {
+            pm.getApplicationEnabledSetting(pkg)
+        } catch (e: IllegalArgumentException) {
+            return AppState.MISSING
+        }
+        val suspended = (ai.flags and ApplicationInfo.FLAG_SUSPENDED) != 0
+        val state = AppStates.of(true, setting, ai.enabled, suspended)
+        if (state == AppState.FROZEN) OLog.d("$pkg frozen: enabledSetting=$setting enabled=${ai.enabled} suspended=$suspended")
+        return state
+    }
+
+    /** Present on the device, frozen or not. */
+    fun installed(ctx: Context, pkg: String): Boolean = appState(ctx, pkg) != AppState.MISSING
+
+    fun usable(ctx: Context, pkg: String): Boolean = appState(ctx, pkg) == AppState.OK
+
+    /**
+     * Tailscale owns the VPN that is up. The owner UID is only visible to the owner on API 29+
+     * (it reads as -1 for us), so an unreadable owner counts as Tailscale when Tailscale is usable.
+     */
+    fun tailscaleVpnUp(ctx: Context): Boolean {
+        if (!usable(ctx, TAILSCALE_PKG)) return false
+        val cm = cm(ctx)
+        val tsUid = try {
+            ctx.packageManager.getApplicationInfo(TAILSCALE_PKG, 0).uid
+        } catch (e: Exception) {
+            -1
+        }
+        @Suppress("DEPRECATION")
+        val vpns = cm.allNetworks.mapNotNull { cm.getNetworkCapabilities(it) }.filter { it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) }
+        if (vpns.isEmpty()) return false
+        val owners = vpns.map { if (android.os.Build.VERSION.SDK_INT >= 29) it.ownerUid else -1 }
+        val ok = owners.any { it == -1 || it == tsUid }
+        OLog.d("vpn owners=$owners tailscaleUid=$tsUid -> ${if (ok) "tailscale" else "another app"}")
+        return ok
+    }
+
+    /** "always_on_vpn_app" is readable on some firmwares and not others; null = unknown. Logged. */
+    fun alwaysOnVpnApp(ctx: Context): String? {
+        val v = try {
+            Settings.Secure.getString(ctx.contentResolver, "always_on_vpn_app")
+        } catch (e: Exception) {
+            OLog.d("always_on_vpn_app unreadable: ${e.javaClass.simpleName}")
+            return null
+        }
+        OLog.i("always_on_vpn_app reads ${v ?: "null"}")
+        return v
     }
 
     fun adminActive(ctx: Context): Boolean =
@@ -181,11 +253,48 @@ object Net {
         (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled()
 }
 
+/** The Meebook launcher (Haoqing) and its "App freeze". */
+object Meebook {
+    const val PKG = "com.haoqing.app.hqreader"
+    val HOME = ComponentName(PKG, "$PKG.view.activity.LauncherActivity")
+
+    fun present(ctx: Context) = Net.installed(ctx, PKG)
+
+    /** An exported freeze-management activity if the launcher has one, else the Meebook launcher. */
+    fun freezePage(ctx: Context): Intent? {
+        if (!present(ctx)) return null
+        val freeze = try {
+            @Suppress("DEPRECATION")
+            ctx.packageManager.getPackageInfo(PKG, PackageManager.GET_ACTIVITIES).activities.orEmpty()
+                .firstOrNull { it.exported && it.name.contains("freeze", ignoreCase = true) }
+        } catch (e: Exception) {
+            null
+        }
+        OLog.i("meebook freeze page: ${freeze?.name ?: "none exported, using the Meebook launcher"}")
+        val component = if (freeze != null) ComponentName(PKG, freeze.name) else HOME
+        return Intent(Intent.ACTION_MAIN).setComponent(component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    fun frozenApps(ctx: Context): List<String> =
+        listOf(Koreader.PKG to "KOReader", Net.TAILSCALE_PKG to "Tailscale", ctx.packageName to "Orbit")
+            .filter { (pkg, _) -> Net.appState(ctx, pkg) == AppState.FROZEN }
+            .map { it.second }
+}
+
 object Koreader {
     const val PKG = "org.koreader.launcher"
     private const val ACTIVITY = "org.koreader.launcher.MainActivity"
 
+    fun state(ctx: Context) = Net.appState(ctx, PKG)
+
     fun installed(ctx: Context) = Net.installed(ctx, PKG)
+
+    /** Why KOReader can't be started, or null when it can. */
+    fun problem(ctx: Context): String? = when (state(ctx)) {
+        AppState.MISSING -> "KOReader isn't installed."
+        AppState.FROZEN -> AppStates.frozenMessage("KOReader")
+        AppState.OK -> null
+    }
 
     /** INTERFACE "go home": explicit MainActivity, ACTION_MAIN, NEW_TASK, COMMAND = "home". */
     fun goHome(ctx: Context, why: String): Boolean = start(ctx, why, "home")

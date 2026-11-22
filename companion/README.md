@@ -10,7 +10,15 @@ talks to BookOrbit and holds no login. Contract: [`../docs/INTERFACE.md`](../doc
   `GET http://127.0.0.1:47913/status`.
 - **Home**: every Home press and boot starts KOReader with `COMMAND = "home"`; Home twice
   within 2 s, or a KOReader that is missing or won't stay up, shows the launcher page.
-- **Pages**: launcher, other apps (paged, hold to pin), status, settings, setup checklist.
+- **Pages**: launcher, other apps (paged, hold to pin; Tailscale, Android Settings and Meebook
+  home are pinned by default), status, settings, setup checklist, open-source licenses.
+- **Self-update** from GitHub releases (`Updater.kt`; README "Updates"): daily, SHA-256 and
+  signing-certificate checked, installed with `PackageInstaller`. At targetSdk 28 Android
+  asks the user to confirm each update.
+- **Meebook "App freeze"**: the Meebook launcher (`com.haoqing.app.hqreader`) can freeze
+  (disable) apps, KOReader included. The companion tells "frozen" apart from "not installed"
+  (`getApplicationEnabledSetting`, `MATCH_DISABLED_COMPONENTS`), says so on the launcher page,
+  status page and setup checklist, and opens Meebook's freeze management to undo it.
 
 ## Build
 
@@ -19,9 +27,16 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17) ANDROID_HOME=$HOME/Library/Andr
 ./gradlew testDebugUnitTest assembleDebug
 ```
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`.
+APK: `app/build/outputs/apk/debug/app-debug.apk` (version `0.0.0-dev`, debug key).
+
+Release builds take `-PorbitVersion=X.Y.Z` (versionCode `X*10000+Y*100+Z`) and sign with the
+key named by `ORBIT_KEYSTORE_FILE` (PKCS12), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`
+and `ANDROID_KEY_PASSWORD`; without them `assembleRelease` is unsigned. The release workflow
+does this. Every build generates `assets/open_source_licenses.txt` from the runtime classpath.
 
 ## Install and first run
+
+Normally: the APK from Releases (top-level README "Install"). For a development build:
 
 ```
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -29,8 +44,8 @@ adb shell am start -n net.fledgewing.orbitcompanion/.StatusActivity
 ```
 
 Then Setup on the status page: each row opens the system page it needs (Home app,
-notifications, battery Unrestricted for Orbit, Tailscale and KOReader, Tailscale, device
-admin), then run the Wi-Fi off/on test.
+notifications, not frozen by Meebook, install updates, battery Unrestricted for Orbit,
+Tailscale and KOReader, Tailscale, device admin), then run the Wi-Fi off/on test.
 
 ## Logs
 

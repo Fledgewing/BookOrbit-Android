@@ -9,7 +9,11 @@ local W = {
     clock = 1000, queue = {}, seq = 0, shown = {}, logs = {},
     wifi = true, vpn = true, screen_on = false, companion = true, server_code = 200,
     broadcasts = {}, activities = {}, intent_extras = {},
+    fetched = {}, web = {}, json = {},
 }
+function W.fake_sha(s) return string.format("%064x", #s) end
+local SELF = os.tmpname()
+ORBIT_ANDROID_SELF_PATH = SELF .. ".lua"
 
 local function schedule(delay, fn, ...)
     W.seq = W.seq + 1
@@ -132,11 +136,28 @@ local preload = {
         isPackageEnabled = function() return W.companion end },
     ["apps/reader/readerui"] = ReaderUI,
     ["apps/filemanager/filemanager"] = FileManager,
-    ["socket.http"] = { request = function(t) W.probed = t.url; if W.server_code then return 1, W.server_code end return nil, "timeout" end },
+    ["socket.http"] = { request = function(t)
+        if t.method == "HEAD" then
+            W.probed = t.url
+            if W.server_code then return 1, W.server_code end
+            return nil, "timeout"
+        end
+        -- GET: the self-update (W.web: url -> body) or the companion status.
+        table.insert(W.fetched, t.url)
+        local body = W.web[t.url]
+        if body == nil then
+            if t.url:find("127.0.0.1", 1, true) and W.server_code then return 1, W.server_code, {} end
+            return 1, 404, {}
+        end
+        if t.sink then t.sink(body) end
+        return 1, 200, {}
+    end },
     socket = { skip = function(n, ...) return select(n + 1, ...) end },
     socketutil = { set_timeout = function() end, reset_timeout = function() end },
-    ltn12 = { sink = { null = function() end, table = function() end } },
-    json = { decode = function() return { version = "1" } end },
+    ltn12 = { sink = { null = function() end, table = function(t) return function(chunk) if chunk then table.insert(t, chunk) end return 1 end end } },
+    json = { decode = function(s) if W.json[s] then return W.json[s] end return { version = "1" } end },
+    -- Stand-in hash: "sha:<length>" padded, enough to check the wiring (the real one is ffi/sha2).
+    ["ffi/sha2"] = { sha256 = function(s) return W.fake_sha(s) end },
 }
 for k, v in pairs(preload) do package.preload[k] = function() return v end end
 
@@ -409,6 +430,72 @@ test("test sync path reports five steps", function()
     local viewer = W.shown[#W.shown]
     ok(viewer and viewer.text and viewer.text:match("5%. BookOrbit plugin synced ✓"), viewer and viewer.text or "no viewer")
 end)
+
+---------------------------------------------------------------- self-update
+local API = "https://api.github.com/repos/Fledgewing/BookOrbit-Android/releases/latest"
+local LUA_URL, SUMS_URL = "https://dl.test/2-orbit-android.lua", "https://dl.test/SHA256SUMS"
+local NEW = '-- new\nlocal PATCH_VERSION = "0.2.0"\nreturn\n'
+local function serveRelease(sha)
+    W.web = { [API] = "LATEST", [LUA_URL] = NEW, [SUMS_URL] = (sha or W.fake_sha(NEW)) .. "  2-orbit-android.lua\n" }
+    W.json = { LATEST = { tag_name = "v0.2.0", assets = {
+        { name = "2-orbit-android.lua", browser_download_url = LUA_URL },
+        { name = "SHA256SUMS", browser_download_url = SUMS_URL },
+    } } }
+end
+local function selfText()
+    local f = io.open(ORBIT_ANDROID_SELF_PATH, "rb")
+    if not f then return nil end
+    local t = f:read("*a"); f:close(); return t
+end
+local function resetSelf()
+    local f = io.open(ORBIT_ANDROID_SELF_PATH, "wb"); f:write("-- old\n"); f:close()
+end
+
+test("update: menu check installs a verified newer patch over its own file", function()
+    resetSelf(); serveRelease()
+    local _ui, orbit = newUI(false)
+    orbit:checkPatchUpdate()
+    run(5)
+    ok(selfText() == NEW, "file replaced")
+    ok(io.open(ORBIT_ANDROID_SELF_PATH .. ".new") == nil, "temp file gone")
+    ok(store.orbit_android.patch_update_status.text:find("updated to 0.2.0", 1, true), "status")
+end)
+
+test("update: checksum mismatch leaves the file alone", function()
+    resetSelf(); serveRelease(string.rep("b", 64))
+    local _ui, orbit = newUI(false)
+    orbit:checkPatchUpdate()
+    run(5)
+    ok(selfText() == "-- old\n", "unchanged")
+    ok(store.orbit_android.patch_update_status.text:find("checksum", 1, true), "status says checksum")
+end)
+
+test("update: automatic check at most once a day, and only when connected", function()
+    resetSelf(); serveRelease()
+    W.json.LATEST.tag_name = "v0.0.0-dev" -- nothing newer: just count checks
+    store.orbit_android.patch_update_checked_at = 0
+    local _ui, orbit = newUI(false)
+    W.fetched = {}
+    W.wifi = false
+    orbit:wakeFlow("wake")
+    run(40)
+    ok(not has(W.fetched, API), "no check without network")
+    W.wifi = true
+    orbit:wakeFlow("wake")
+    run(40)
+    ok(count(W.fetched, function(u) return u == API end) == 1, "one check")
+    orbit:wakeFlow("wake")
+    run(40)
+    ok(count(W.fetched, function(u) return u == API end) == 1, "still one check the same day")
+    store.orbit_android.auto_update_patch = false
+    store.orbit_android.patch_update_checked_at = 0
+    orbit:wakeFlow("wake")
+    run(40)
+    ok(count(W.fetched, function(u) return u == API end) == 1, "off means off")
+    store.orbit_android.auto_update_patch = true
+end)
+os.remove(ORBIT_ANDROID_SELF_PATH)
+os.remove(SELF)
 
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then

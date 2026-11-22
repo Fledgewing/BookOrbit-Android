@@ -165,6 +165,7 @@ class OrbitService : Service() {
         startStatusServer()
         // A timer that was pending when the process died is still in AlarmManager; nothing to do.
         OLog.i("service started v${BuildConfig.VERSION_NAME} in ${OLog.since(t0)} ms")
+        main.postDelayed({ Updater.maybeAutoCheck(this, "service start") }, 30_000)
     }
 
     override fun onDestroy() {
@@ -204,6 +205,7 @@ class OrbitService : Service() {
             Contract.SLEEP_NOW -> sleepNow(reason)
             ACTION_WIFI_TIMER -> wifiTimerFired()
             ACTION_REFRESH -> OLog.debug = prefs.debugLog
+            Intent.ACTION_MY_PACKAGE_REPLACED -> Updater.onReplaced(this)
             else -> OLog.d("start: ${Contract.shortName(action)}")
         }
         if (action in setOf(Contract.NET_UP, Contract.NET_DONE, Contract.WIFI_OFF, Contract.SLEEP_NOW)) {
@@ -255,6 +257,8 @@ class OrbitService : Service() {
             OLog.d("wifi network available")
         }
         updateNotification()
+        // Daily self-update check, once Wi-Fi is up anyway (never turns Wi-Fi on for it).
+        main.postDelayed({ Updater.maybeAutoCheck(this, "Wi-Fi up") }, 15_000)
     }
 
     private fun recordNetReady(ms: Long, reason: String) {
