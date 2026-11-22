@@ -146,6 +146,31 @@ adb shell dumpsys batterystats --charged net.fledgewing.orbitcompanion | grep -i
 
 Expected: no change in wakeups or alarms, and under a second of CPU a day.
 
+## Clicker buttons
+
+Orbit Companion › Settings › Clicker buttons maps a Bluetooth clicker's buttons (press, hold,
+double press) to a small set of actions: next or previous page, Home, Back, frontlight, and
+Sync and sleep.
+- **In KOReader** the patch turns pages exactly.
+- **In other apps** an accessibility service sends page taps. It is switched on by you, holds
+  key filtering only, and cannot read window content. It acts only on mapped buttons from
+  your clicker and never stores or sends key presses.
+- **Key Mapper:** if you used it for this, turn it off once Orbit's buttons work; you can then
+  uninstall it. Design: [docs/BTKEYS-DESIGN.md](docs/BTKEYS-DESIGN.md).
+
+**Battery cost check.** The service is event-driven: no polling, alarms, wake locks or
+Bluetooth scanning. To confirm, compare a normal day before and after switching it on:
+
+```sh
+adb shell dumpsys batterystats --reset
+# ... a day of use with the clicker ...
+adb shell dumpsys batterystats --charged net.fledgewing.orbitcompanion | grep -iE "wake|cpu|alarm"
+adb shell dumpsys accessibility | grep -A3 orbitcompanion   # bound, key filtering only
+```
+
+Expected: no change in wakeups or alarms, and CPU time in the order of milliseconds per key
+press. The Battery page's standby rate (by setting) should not move.
+
 ## Device notes
 
 The code is generic Android; vendor quirks are one table (`Vendor.kt` in the companion,

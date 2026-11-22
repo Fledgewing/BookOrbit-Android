@@ -168,6 +168,22 @@ With another app chosen:
 - The patch's features (sync on sleep, Just in time Wi-Fi, BookOrbit home) work only inside
   KOReader; Settings says so in one line.
 
+## Clicker buttons (v0.4.0)
+
+Design and decision: [BTKEYS-DESIGN.md](BTKEYS-DESIGN.md). The companion keeps one key map
+per clicker profile (InputDevice name + vendor/product ids). Each mapped button has an action
+for press, and optionally for hold (0.6 s) and double press (0.35 s).
+- **KOReader:** the patch gets the map in `/status` and turns pages exactly. No permission is
+  needed.
+- **Other apps:** the `ClickerService` accessibility service handles the map. It does key
+  filtering only and cannot read window content. It acts only on mapped keys from captured
+  clickers, and sends taps on per-app zones (`Vendor.kt` defaults, user overrides), Home,
+  Back and Sleep.
+- **Setup row** "Clicker buttons (accessibility)", only once a clicker is mapped:
+  - done = enabled in Android and connected;
+  - a freeze or force-stop is a regression, which feeds "Setup needs you";
+  - an info row names Key Mapper (or another key filter) when one is on.
+
 ## Setup needs you (v0.2.4)
 
 The companion is the Home app and is rarely opened, so a Setup step that stops working (Home

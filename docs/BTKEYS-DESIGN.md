@@ -1,4 +1,4 @@
-# Clicker buttons: design (draft for approval)
+# Clicker buttons: design (approved, built in v0.4.0)
 
 Goal: a Bluetooth clicker turns pages and runs a few actions on the reader, from the
 companion, with no other app. Nothing is built. Mockups: `btkeys-mockups.html` next to this
@@ -137,7 +137,18 @@ checking zones). Shared to the patch: the map only, through `/status`.
 | Key Mapper | Warn only; user uninstalls | Not ours to remove |
 | Vendor zones | `Vendor.kt` defaults | House rule |
 
-## One-way doors for you
+## Decision (maintainer, 2026-11-21)
+
+Approved **with the Accessibility service**, so clicker buttons work in all apps. One-way
+door 1 is taken as written: key filtering, gestures and window-state events only,
+`canRetrieveWindowContent="false"`, switched on by the user, nothing read, stored or sent.
+Door 2 stays closed: no system settings are changed. Built in v0.4.0:
+- `ClickerLogic.kt` (pure, tested): the key map, the press timer, zones and the Setup row;
+- `ClickerService.kt`: the service;
+- `Clicker.kt`: screens 1–3;
+- the patch's `Clicks`: KOReader.
+
+## One-way doors (as proposed)
 
 1. **Add an Accessibility service to Orbit Companion.** It is Android's most powerful app
    permission class. We'd use it only to (a) see key presses and act on the mapped ones,

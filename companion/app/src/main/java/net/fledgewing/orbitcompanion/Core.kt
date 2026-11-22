@@ -80,6 +80,11 @@ class Prefs(ctx: Context) {
     var wakeLockEnabled: Boolean
         get() = bool("wake_lock", true)
         set(v) = setBool("wake_lock", v)
+    /** Clicker buttons: the KeyMap as JSON (ClickerStore). */
+    var clickerMap: String
+        get() = str("clicker_map")
+        set(v) = setStr("clicker_map", v)
+
     /** "Home opens": "" = KOReader + BookOrbit, else an app's package (HomeApp). */
     var homeApp: String
         get() = str("home_app")

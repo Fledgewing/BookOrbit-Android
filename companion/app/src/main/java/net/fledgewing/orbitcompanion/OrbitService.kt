@@ -531,7 +531,9 @@ class OrbitService : Service() {
             "\"wifi_owner\":\"${prefs.wifiOwner.key}\",\"tailscale\":${Net.vpnUp(this)}," +
             "\"screen_off_permission\":${Net.adminActive(this)},\"setup_needed\":${prefs.setupNeeded}," +
             "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +
-            "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}}}"
+            "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}}," +
+            // Clicker buttons for the patch (keycode -> press/hold/double -> action), docs/INTERFACE.md.
+            "\"keymap\":${ClickerStore.map(this).forPatch()}}"
 
     private fun startStatusServer() {
         thread(name = "orbit-status", isDaemon = true) {

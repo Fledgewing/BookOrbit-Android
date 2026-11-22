@@ -97,6 +97,18 @@ reader apps such as Readest and Moon+ Reader listed first. Home then brings that
 where you were, and pressing Home twice still shows the launcher page. Sync on sleep, Just in
 time Wi-Fi and BookOrbit home work only inside KOReader.
 
+## 8b. A Bluetooth page clicker (optional)
+
+1. Pair the clicker in Android's Bluetooth settings.
+2. Open Orbit Companion › Settings › **Clicker buttons** › **Add a clicker**, then press each
+   button and pick its action: next or previous page, Home, Back, frontlight on/off, or Sync
+   and sleep. Hold and double press are optional per button.
+3. In KOReader it works at once. For other reader apps, switch on Android **Settings ›
+   Accessibility › Orbit clicker buttons**. It only sees button presses and which app is in
+   front; it can't read the screen. Setup reminds you if a vendor app freeze turns it off.
+4. Used **Key Mapper** before? Turn it off once Orbit's buttons work; you can then uninstall
+   it. Two key mappers both see every key and can fight.
+
 ## 9. If something's wrong
 
 - **KOReader asks "Turn on Wi-Fi?"**: Orbit Companion isn't running or is disabled. Open it

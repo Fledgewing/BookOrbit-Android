@@ -438,7 +438,7 @@ object PatchFile {
  */
 object SetupAttention {
     /** Rows that report a test or a sighting, not a setting: never prompted about. */
-    val INFO_ONLY = setOf("patch_seen", "wifi_test")
+    val INFO_ONLY = setOf("patch_seen", "wifi_test", "keymapper")
 
     fun idOf(label: String): String = when {
         label.startsWith("Set Orbit as Home") -> "home"
@@ -451,6 +451,8 @@ object SetupAttention {
         label.startsWith("KOReader patch installed") -> "patch"
         label.startsWith("KOReader patch answered") -> "patch_seen"
         label.startsWith("Wi-Fi off/on test") -> "wifi_test"
+        label.startsWith("Clicker buttons") -> "clicker"
+        label.startsWith("Key Mapper") || label.startsWith("Another key mapper") -> "keymapper"
         else -> label.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
     }
 
@@ -513,6 +515,11 @@ object WhatsNew {
         ),
         "0.3.2" to listOf(
             "Settings › Home opens: KOReader + BookOrbit, or any reader app (Readest, Moon+ Reader, …). Home brings it back where it was; press Home twice for the launcher page.",
+        ),
+        "0.4.0" to listOf(
+            "Settings › Clicker buttons: map a Bluetooth clicker's buttons (press, hold, double press) to next/previous page, Home, Back, frontlight or Sync and sleep.",
+            "In KOReader pages turn exactly; in other apps it taps the page once you switch on Settings › Accessibility › Orbit clicker buttons.",
+            "Using Key Mapper for this? Turn it off once Orbit's buttons work; you can then uninstall it.",
         ),
     )
 

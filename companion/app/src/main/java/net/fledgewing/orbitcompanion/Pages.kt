@@ -346,6 +346,9 @@ class SettingsActivity : EinkActivity() {
                 render()
             }))
         }
+        root.addView(Ui.row(this, "Clicker buttons", "Bluetooth page clicker: page turns, Home, Back, Sleep", Ui.value(this, "›"), onClick = {
+            startActivity(Intent(this, ClickersActivity::class.java))
+        }))
         root.addView(Ui.row(this, "Open-source licenses", null, Ui.value(this, "›"), onClick = {
             startActivity(Intent(this, LicensesActivity::class.java))
         }))
@@ -496,6 +499,29 @@ object Setup {
 
         // One-tap patch install (PatchInstaller): from this app's release, SHA-256 checked.
         // The file when readable (storage permission), else what the running patch reports.
+        // Clicker buttons: shown only once a clicker is mapped (docs/BTKEYS-DESIGN.md "Staying on").
+        val clicker = ClickerStore.state(ctx)
+        if (clicker != ClickerRowState.HIDDEN) {
+            list.add(Check(
+                "Clicker buttons (accessibility)",
+                clicker == ClickerRowState.DONE,
+                when (clicker) {
+                    ClickerRowState.DONE -> "on · works in every app"
+                    ClickerRowState.OFF -> "Off: was it frozen or turned off? Clicker buttons work only in KOReader until it's on. Orbit uses it only to see button presses, which app is in front, and to send page taps, Home and Back. It can't read what's on screen."
+                    else -> "On in Android but not running yet: turn it off and on in Settings › Accessibility."
+                },
+            ) { a -> a.tryStart(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), "accessibility settings") })
+            val others = ClickerRow.others(ClickerStore.accessibilitySetting(ctx), ctx.packageName)
+            others.firstOrNull()?.let { other ->
+                val km = other == "io.github.sds100.keymapper"
+                list.add(Check(
+                    if (km) "Key Mapper also remaps keys" else "Another key mapper is on (${HomeTarget.label(ctx, other)})",
+                    false,
+                    "Turn it off once Orbit's buttons work; you can then uninstall it. Two key filters both see every key and can fight.",
+                ) { a -> a.tryStart(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), "accessibility settings") })
+            }
+        }
+
         // The file decides "outdated"; the version the running patch reports decides "restart".
         val fileV = PatchInstaller.installedVersion()
         val runningV = prefs.patchVersionSeen.takeIf { it.isNotEmpty() }

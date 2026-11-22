@@ -26,6 +26,8 @@ data class VendorProfile(
     val verified: Boolean,
     /** The vendor's own reader app(s), listed first in "Home opens". */
     val readerPkgs: List<String> = emptyList(),
+    /** Clicker page taps per reader app (package -> next/prev -> zone); users can override them. */
+    val tapZones: Map<String, Map<ClickAction, Zone>> = emptyMap(),
     /** Settings.System key that says whether the frontlight is on (battery stats), or null. */
     val lightKey: String? = null,
 )
@@ -68,6 +70,8 @@ object VendorProfiles {
         lightKey = "isLightOn",
         // The reader is part of the vendor launcher on the M8C.
         readerPkgs = listOf("com.haoqing.app.hqreader"),
+        // Unverified: the Meebook reader turns pages on side taps like most readers.
+        tapZones = mapOf("com.haoqing.app.hqreader" to mapOf(ClickAction.NEXT to Zone.RIGHT_THIRD, ClickAction.PREV to Zone.LEFT_THIRD)),
     )
 
     /**

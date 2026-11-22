@@ -140,7 +140,17 @@ broadcasts. For example:
 
 `settings` are the shared settings (above). The patch reads them on start, resume and when its
 menu opens; the newer `settings_at` wins, and the patch pushes its own with `SETTINGS` when they
-are newer. `wifi_owner`: `none`, `auto` or `manual`. `setup_needed`: how many Setup steps need the user
+are newer. `keymap` (v0.4.0): clicker buttons for the patch, keyed by Android keycode, e.g.
+`{"87": {"press": "next", "hold": "sync_sleep"}, "66": {"double": "home"}}`.
+- Actions: `next`, `prev`, `home`, `back`, `light`, `sync_sleep`.
+- Kinds: `press`, `hold` (≥ 0.6 s), `double` (≤ 0.35 s).
+- Keys the reader's own buttons also send are left out, so KOReader keeps its meaning for
+  them.
+- The patch reads the map at start and resume. It handles mapped keys in
+  `Input:handleKeyBoardEv` and drops them there, so KOReader never also acts on them. An
+  empty map turns this off.
+
+`wifi_owner`: `none`, `auto` or `manual`. `setup_needed`: how many Setup steps need the user
 (not done and not skipped); the patch shows it as one line in its menu status, never as a
 pop-up.
 

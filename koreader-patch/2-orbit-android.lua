@@ -543,9 +543,80 @@ function Stats.isDue(acc, now, book_open)
     return acc.at ~= nil and (book_open or Stats.counted(acc)) and now - acc.at >= Stats.INTERVAL
 end
 
+---------------------------------------------------------------------------------------------
+-- Clicker buttons (docs/BTKEYS-DESIGN.md): the companion's key map, handled inside KOReader.
+-- Keys are Android keycodes (ev.code in Input:handleKeyBoardEv, frontend/device/input.lua:723).
+---------------------------------------------------------------------------------------------
+
+local Clicks = { HOLD = 0.6, DOUBLE = 0.35, EPS = 1e-6, map = {} }
+Clicks.ACTIONS = set("next prev home back light sync_sleep")
+Clicks.KINDS = { "press", "hold", "double" }
+
+-- /status "keymap": { ["87"] = { press = "next", hold = "sync_sleep" }, ... } -> keycode-keyed.
+function Clicks.parse(keymap)
+    local out = {}
+    if type(keymap) ~= "table" then return out end
+    for k, v in pairs(keymap) do
+        local code = tonumber(k)
+        if code and type(v) == "table" then
+            local acts
+            for _, kind in ipairs(Clicks.KINDS) do
+                if Clicks.ACTIONS[v[kind]] then acts = acts or {}; acts[kind] = v[kind] end
+            end
+            out[code] = acts
+        end
+    end
+    return out
+end
+
+-- Press/hold/double for one key, never blocking: feed down/up, call tick at nextDue. A key with
+-- only "press" fires on key down (no delay); hold/double are timed only when mapped.
+function Clicks.down(st, now, acts)
+    if st.down_at then return nil end
+    st.down_at, st.hold_fired = now, false
+    local pending, late = st.single_due, false
+    if pending then
+        st.single_due = nil
+        if acts.double and now <= pending then st.hold_fired = true return "double" end
+        late = acts.press ~= nil
+    end
+    if not acts.hold and not acts.double then
+        st.hold_fired = true
+        return acts.press and "press" or nil
+    end
+    return late and "press" or nil
+end
+
+function Clicks.up(st, now, acts)
+    local d = st.down_at
+    if not d then return nil end
+    st.down_at = nil
+    if st.hold_fired then return nil end
+    if acts.hold and now - d >= Clicks.HOLD - Clicks.EPS then return "hold" end
+    if acts.double then st.single_due = now + Clicks.DOUBLE return nil end
+    return acts.press and "press" or nil
+end
+
+function Clicks.nextDue(st, acts)
+    if st.down_at and not st.hold_fired and acts.hold then return st.down_at + Clicks.HOLD end
+    return st.single_due
+end
+
+function Clicks.tick(st, now, acts)
+    if st.down_at and not st.hold_fired and acts.hold and now - st.down_at >= Clicks.HOLD - Clicks.EPS then
+        st.hold_fired = true
+        return "hold"
+    end
+    if st.single_due and now >= st.single_due - Clicks.EPS then
+        st.single_due = nil
+        return acts.press and "press" or nil
+    end
+    return nil
+end
+
 if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = Schedule, Plan = Plan, Update = Update, WifiPlan = WifiPlan, HomePlan = HomePlan,
-        disabledText = disabledText, Compat = Compat, Stats = Stats,
+        disabledText = disabledText, Compat = Compat, Stats = Stats, Clicks = Clicks,
         PATCH_VERSION = PATCH_VERSION }
 end
 
@@ -1094,6 +1165,14 @@ end
 function Shared.refresh(why)
     if not Companion.installed() then return false end
     local st = Companion.status(1)
+    -- Clicker buttons: the companion's key map (an empty map turns ours off).
+    if st then
+        local m = Clicks.parse(st.keymap)
+        local n = 0
+        for _ in pairs(m) do n = n + 1 end
+        if n ~= Clicks.count then log("clicker: key map from the companion,", n, "key(s)") end
+        Clicks.map, Clicks.count = m, n
+    end
     -- "Setup needs you" count, shown passively in the menu status (never a pop-up).
     Shared.setup_needed = st and tonumber(st.setup_needed) or nil
     local remote = st and type(st.settings) == "table" and st.settings or nil
@@ -1766,6 +1845,73 @@ if UIManager._repaint then
     end
 end
 
+-- Clicker actions inside KOReader (docs/BTKEYS-DESIGN.md "Actions"): exact page turns
+-- (ReaderPaging/ReaderRolling:onGotoViewRel, readerpaging.lua:575, readerrolling.lua:900),
+-- Back (ReaderBack:onBack, readerback.lua:117), frontlight (DeviceListener:onToggleFrontlight,
+-- devicelistener.lua:175), and the patch's own Home and Sync and sleep.
+function Clicks.run(action, code)
+    local ReaderUI = require("apps/reader/readerui")
+    local ui = ReaderUI.instance or liveUI()
+    log("clicker: key", code, "->", action)
+    if action == "next" or action == "prev" then
+        if ReaderUI.instance then ReaderUI.instance:handleEvent(Event:new("GotoViewRel", action == "next" and 1 or -1)) end
+    elseif action == "back" then
+        UIManager:sendEvent(Event:new("Back"))
+    elseif action == "light" then
+        if ui then ui:handleEvent(Event:new("ToggleFrontlight")) end
+    elseif action == "home" then
+        if state.module then state.module:onOrbitGoHome() end
+    elseif action == "sync_sleep" then
+        if state.module then state.module:onOrbitSyncAndSleep() end
+    end
+end
+
+local click_state = {}
+
+local function clickSchedule(code, st, acts)
+    if st.task then UIManager:unschedule(st.task); st.task = nil end
+    local due = Clicks.nextDue(st, acts)
+    if not due then return end
+    st.task = function()
+        st.task = nil
+        local kind = Clicks.tick(st, now_s(), acts)
+        if kind then Clicks.run(acts[kind], code) end
+        clickSchedule(code, st, acts)
+    end
+    UIManager:scheduleIn(math.max(0.01, due - now_s()), st.task)
+end
+
+-- A mapped key: handled here and dropped (KEY_PRESS 1, KEY_RELEASE 0, KEY_REPEAT 2,
+-- input.lua:23-25). Returns true when it was ours.
+function Clicks.onKey(ev)
+    local acts = ev and Clicks.map[ev.code]
+    if not acts then return false end
+    local st = click_state[ev.code] or {}
+    click_state[ev.code] = st
+    local kind
+    if ev.value == 1 then kind = Clicks.down(st, now_s(), acts)
+    elseif ev.value == 0 then kind = Clicks.up(st, now_s(), acts) end
+    if kind then Clicks.run(acts[kind], ev.code) end
+    clickSchedule(ev.code, st, acts)
+    return true
+end
+
+-- Wrap Input:handleKeyBoardEv (input.lua:723; called per EV_KEY at :1814). Returning nothing
+-- drops the event, so a mapped key never also does KOReader's own thing.
+do
+    local okI, Input = pcall(require, "device/input")
+    if okI and type(Input) == "table" and Input.handleKeyBoardEv then
+        local stock_key = Input.handleKeyBoardEv
+        function Input:handleKeyBoardEv(ev)
+            if ev and Clicks.map[ev.code] then
+                local ok, mine = pcall(Clicks.onKey, ev)
+                if ok and mine then return end
+            end
+            return stock_key(self, ev)
+        end
+    end
+end
+
 local OrbitAndroid = WidgetContainer:extend{
     name = "orbitandroid",
     fullname = "Orbit Android (user patch)",
@@ -1773,6 +1919,7 @@ local OrbitAndroid = WidgetContainer:extend{
 }
 
 function OrbitAndroid:init()
+    state.module = self
     self:onDispatcherRegisterActions()
     if self.ui and self.ui.menu then self.ui.menu:registerToMainMenu(self) end
     local in_reader = self.ui ~= nil and self.ui.document ~= nil

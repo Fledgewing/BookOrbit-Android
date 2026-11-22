@@ -439,5 +439,45 @@ test("stats: nothing to send without a book and counts, or while paused", functi
     eq(Stats.take(a, 9999, "text", false), nil)
 end)
 
+local Clicks = M.Clicks
+
+test("clicks: the key map keeps known actions only, keyed by keycode", function()
+    local m = Clicks.parse({ ["87"] = { press = "next", hold = "nuke" }, ["66"] = { press = "nothing" }, x = { press = "next" } })
+    eq(m[87].press, "next")
+    eq(m[87].hold, nil, "unknown action dropped")
+    eq(m[66], nil, "nothing: not ours")
+    eq(next(Clicks.parse(nil)), nil)
+end)
+
+test("clicks: plain press fires on key down, no delay", function()
+    local st, a = {}, { press = "next" }
+    eq(Clicks.down(st, 0, a), "press")
+    eq(Clicks.down(st, 0.05, a), nil, "repeat while down")
+    eq(Clicks.up(st, 0.1, a), nil)
+    eq(Clicks.nextDue(st, a), nil)
+end)
+
+test("clicks: hold at 0.6 s while down, else a press on release", function()
+    local st, a = {}, { press = "next", hold = "sync_sleep" }
+    eq(Clicks.down(st, 10, a), nil)
+    eq(Clicks.nextDue(st, a), 10.6)
+    eq(Clicks.tick(st, 10.59, a), nil)
+    eq(Clicks.tick(st, 10.6, a), "hold")
+    eq(Clicks.up(st, 11, a), nil)
+    eq(Clicks.down(st, 20, a), nil)
+    eq(Clicks.up(st, 20.2, a), "press")
+end)
+
+test("clicks: double within 0.35 s, else the single after the window", function()
+    local st, a = {}, { press = "light", double = "home" }
+    Clicks.down(st, 0, a); eq(Clicks.up(st, 0.1, a), nil)
+    eq(Clicks.down(st, 0.3, a), "double")
+    eq(Clicks.up(st, 0.35, a), nil)
+    eq(Clicks.tick(st, 5, a), nil)
+    Clicks.down(st, 10, a); Clicks.up(st, 10.1, a)
+    eq(Clicks.tick(st, 10.44, a), nil)
+    eq(Clicks.tick(st, 10.45, a), "press")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

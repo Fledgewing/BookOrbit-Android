@@ -172,6 +172,8 @@ local actions = {}
 
 local preload = {
     device = { isAndroid = function() return true end },
+    -- KOReader's Input: the stock key handler counts what reaches KOReader itself.
+    ["device/input"] = { handleKeyBoardEv = function(_, ev) W.stock_keys = (W.stock_keys or 0) + 1 return "key" .. ev.code end },
     logger = { info = function(...) table.insert(W.logs, table.concat({ ... }, " ")) end },
     ffi = require("ffi"),
     ["ui/widget/confirmbox"] = class({}),
@@ -758,6 +760,43 @@ test("the status ping tells the companion which patch is running", function()
     m:onResume()
     run(2)
     ok(W.last_url and W.last_url:find("/status?patch_version=", 1, true), "url " .. tostring(W.last_url))
+end)
+
+test("clicker: mapped keys turn pages inside KOReader; others reach KOReader untouched", function()
+    local url = "http://127.0.0.1:47913/status"
+    W.web[url] = "STATUS"
+    W.json.STATUS = { version = "0.4.0", keymap = { ["87"] = { press = "next" }, ["88"] = { press = "prev", hold = "light" }, ["66"] = { press = "nothing" } } }
+    local ui, m = newUI(true)
+    m:onResume()
+    run(2)
+    local events = {}
+    ui.handleEvent = function(_, ev) table.insert(events, ev.name .. ":" .. tostring(ev.args[1])) end
+    local Input = require("device/input")
+    W.stock_keys = 0
+    ok(Input:handleKeyBoardEv({ code = 87, value = 1 }) == nil, "mapped key dropped")
+    ok(events[1] == "GotoViewRel:1", "next page at key down: " .. tostring(events[1]))
+    Input:handleKeyBoardEv({ code = 87, value = 0 })
+    ok(#events == 1, "release does nothing more")
+    ok(Input:handleKeyBoardEv({ code = 66, value = 1 }) == "key66", "'nothing' goes to KOReader")
+    ok(Input:handleKeyBoardEv({ code = 24, value = 1 }) == "key24", "unmapped key goes to KOReader")
+    ok(W.stock_keys == 2, "stock handler saw only the unmapped keys")
+    -- Hold on a key with a hold action: fires after 0.6 s while still down.
+    Input:handleKeyBoardEv({ code = 88, value = 1 })
+    ok(#events == 1, "waits: the key has a hold")
+    run(1)
+    ok(events[2] == "ToggleFrontlight:nil", "hold -> frontlight: " .. tostring(events[2]))
+    Input:handleKeyBoardEv({ code = 88, value = 0 })
+    ok(#events == 2, "no press after the hold")
+    Input:handleKeyBoardEv({ code = 88, value = 1 })
+    W.clock = W.clock + 0.2
+    Input:handleKeyBoardEv({ code = 88, value = 0 })
+    ok(events[3] == "GotoViewRel:-1", "short press -> previous page")
+    -- An empty map from the companion turns it all off.
+    W.json.STATUS = { version = "0.4.0" }
+    m:onResume()
+    run(2)
+    ok(Input:handleKeyBoardEv({ code = 87, value = 1 }) == "key87", "map cleared")
+    W.web[url], W.json.STATUS = nil, nil
 end)
 
 test("broadcasts carry the patch version (for the companion's setup row)", function()
