@@ -456,13 +456,17 @@ end
 --   reopen: a current book that isn't open now and still exists: the book Home itself closed
 --   (home_book), or the one KOReader was killed with (cold start, open_book_at_exit). A book
 --   the user closed is never reopened from history.
--- Returns "companion" (the companion's launcher page), "dashboard" (close any book,
+-- bookorbit_sub: a BookOrbit screen that isn't its main page is on top (BookOrbit.screen).
+-- Returns "bookorbit_main" (that BookOrbit main page), "companion" (the companion's launcher page), "dashboard" (close any book,
 -- BookOrbit home) or "book" (show the book: close what covers it, or open the last one).
 -- Presses in KOReader step book -> BookOrbit home -> companion; Home from another app (the
 -- companion included) goes back to the book, so the steps never loop.
 local HomePlan = {}
 
 function HomePlan.decide(o)
+    -- Any BookOrbit screen other than its main page (a detail, list, search, board, settings,
+    -- a sheet or dialog over the catalog): back to the main page (v0.4.9).
+    if o.bookorbit_sub then return "bookorbit_main" end
     if o.on_dashboard and not o.from_other then return "companion" end
     if o.mode ~= "smart" then return "dashboard" end
     if o.in_reader then
@@ -532,7 +536,7 @@ Compat.FEATURES = {
 local PLUGIN_EVENT_FEATURE = { BookOrbitOpenDashboard = "dashboard", BookOrbitSyncBook = "test_sync",
     BookOrbitToggleAutoSync = "recommended" }
 -- On the catalog widget, checked when it is open.
-Compat.CATALOG = { dashboardMode = "function", close_callback = "function" }
+Compat.CATALOG = { dashboardMode = "function", close_callback = "function", goDashboard = "function" }
 
 -- "function" means callable: KOReader 2025.10+ wraps every plugin on* handler in a
 -- HandlerSandbox, a table with __call (frontend/pluginloader.lua v2026.07.1:117-128, :158-164,
@@ -2591,6 +2595,61 @@ local function widgetName(w, p)
     return "unnamed widget"
 end
 
+-- Visible widgets, topmost first (uimanager.lua:858-866 skips invisible ones the same way).
+local function visibleStack()
+    local out = {}
+    local okw, stack = pcall(function() return UIManager._window_stack end)
+    if okw and type(stack) == "table" then
+        for i = #stack, 1, -1 do
+            local w = type(stack[i]) == "table" and stack[i].widget or nil
+            if w ~= nil and not w.invisible then table.insert(out, w) end
+        end
+    else
+        local top = topWidget()
+        if top then out[1] = top end
+    end
+    return out
+end
+
+-- Which BookOrbit screen is showing (plugin 2.3.0), from the real window stack:
+--   "main": the catalog (main.lua:1207-1229) is the topmost widget, in dashboard mode
+--     (bookorbit_catalog.lua:1875-1877: current_context.kind == "dashboard").
+--   "sub": BookOrbit, but not its main page: the catalog in another mode (books, detail, lists,
+--     search, board, ... switched in place, bookorbit_catalog.lua:1350 showBookPage, :1288
+--     showRecentSearches; detail_sheet/list_sheet live in that context, :2451-2462), or
+--     widgets over the catalog: its dialogs (bookorbit_catalog.lua:1439, :1534, :1559, :1598,
+--     :1792), the book sheet (bookorbit_book_sheet.lua:385, :410), settings
+--     (bookorbit_settings_page.lua:952), menu pages and dialogs (bookorbit_dialog_ui.lua:91),
+--     the main menu sheet (bookorbit_main_menu.lua:380 openMenuSheet).
+--   nil: no catalog showing (none, or KOReader's file browser or a book over it).
+-- Returns kind, the widgets over the catalog (topmost first), and a description for the log.
+local function bookorbitScreen(p)
+    local cb = p and p.catalog_browser
+    if cb == nil then return nil, {}, "no BookOrbit view" end
+    -- Without dashboardMode the main page can't be told apart: the pre-0.4.9 behaviour.
+    if not Compat.callable(cb.dashboardMode) then return nil, {}, "BookOrbit catalog without dashboardMode" end
+    local above, found = {}, false
+    local okr, RUI = pcall(require, "apps/reader/readerui")
+    local okf, FM = pcall(require, "apps/filemanager/filemanager")
+    for _, w in ipairs(visibleStack()) do
+        if w == cb then found = true break end
+        if (okr and type(RUI) == "table" and w == RUI.instance) or (okf and type(FM) == "table" and w == FM.instance) then
+            return nil, {}, "BookOrbit covered by " .. widgetName(w, p)
+        end
+        table.insert(above, w)
+    end
+    if not found then return nil, {}, "BookOrbit view not in the window stack" end
+    local okk, kind = pcall(function() return cb.current_context and cb.current_context.kind end)
+    kind = okk and kind or nil
+    local dash = Compat.callable(cb.dashboardMode) and select(2, pcall(function() return cb:dashboardMode() end)) == true
+    if #above == 0 and dash then return "main", above, "BookOrbit main page" end
+    local names = {}
+    for _, w in ipairs(above) do table.insert(names, widgetName(w, p)) end
+    local desc = "BookOrbit " .. tostring(kind or "?") .. " view"
+    if #names > 0 then desc = desc .. " under " .. table.concat(names, ", ") end
+    return "sub", above, desc
+end
+
 local function onDashboard(p)
     local cb = p and p.catalog_browser
     if cb == nil then return false end
@@ -2616,7 +2675,8 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
     local p = bookorbit(ui)
     local menu_open = in_reader and ui.menu ~= nil and ui.menu.menu_container ~= nil
     local view_open = p ~= nil and p.catalog_browser ~= nil
-    local on_dash = onDashboard(p)
+    local screen, over, screen_desc = bookorbitScreen(p)
+    local on_dash = screen == "main" or (screen == nil and onDashboard(p))
     -- Reopen only the current book: one Home closed, or one KOReader was killed with (first
     -- command of this process). Never history.
     local last = nil
@@ -2634,12 +2694,15 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
     local from_other = HomePlan.cameFromOtherApp(from_extra, paused)
     local action = HomePlan.decide{
         mode = mode, in_reader = in_reader, covered = menu_open or view_open, on_dashboard = on_dash,
+        bookorbit_sub = screen == "sub",
         from_other = from_other, reopen = reopen,
     }
     log("home (" .. mode .. "):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "BookOrbit view",
         tostring(view_open), "dashboard on top", tostring(on_dash), "(top: " .. widgetName(topWidget(), p) .. ")",
         "from other app", tostring(from_other),
         "(paused", paused and fmt(paused) or "-", ")", "reopen current book", reopen and tostring(last) or "no")
+    log("home: screen:", screen_desc)
+    if action == "bookorbit_main" then return self:bookorbitMain(p, over, screen_desc) end
     if action == "companion" then return self:openCompanionHome() end
     if action == "dashboard" then return self:onOrbitGoHome() end
     -- Back to the book: close what covers it, or open the last one.
@@ -2710,6 +2773,49 @@ local function checkDashboardOpened(p, why)
             log("home: BookOrbit home did NOT open (" .. why .. "); top:", widgetName(topWidget(), q))
         end
     end)
+end
+
+-- Close one widget the plugin's way: its close_callback (the catalog, main.lua:1225-1228),
+-- else UIManager:close, which runs its onCloseWidget / on_close (MenuPage sheets).
+local function closeWidget(w)
+    local okc, err = pcall(function()
+        if Compat.callable(w.close_callback) then w.close_callback() else UIManager:close(w) end
+    end)
+    if not okc then log("home: closing", widgetName(w), "failed:", tostring(err)) end
+end
+
+-- Home on a BookOrbit screen that isn't its main page: close what is over the catalog, then
+-- the catalog's own Home (goDashboard, bookorbit_catalog.lua:530-537; also its hold-Return,
+-- :2521-2525). If anything is left over it, or the plugin lacks goDashboard: close the catalog
+-- and open BookOrbit home fresh (the plugin's event), so no half-closed stack is left.
+function OrbitAndroid:bookorbitMain(p, over, desc)
+    log("home: on", desc, "-> BookOrbit main page")
+    for _, w in ipairs(over or {}) do
+        log("home: closing", widgetName(w, p))
+        closeWidget(w)
+    end
+    local cb = p.catalog_browser
+    local screen = bookorbitScreen(p)
+    if cb and screen ~= nil and topWidget() == cb and Compat.callable(cb.goDashboard) then
+        if screen ~= "main" then
+            local okg, err = pcall(function() cb:goDashboard() end)
+            if okg then
+                log("home: BookOrbit catalog back to its main page (goDashboard)")
+                checkDashboardOpened(p, "back to main")
+                return true
+            end
+            log("home: goDashboard failed:", tostring(err))
+        else
+            log("home: BookOrbit main page showing")
+            return true
+        end
+    end
+    log("home: reopening BookOrbit home fresh (top:", widgetName(topWidget(), p) .. ")")
+    if p.catalog_browser then closeWidget(p.catalog_browser) end
+    p.catalog_browser = nil
+    pluginEvent(liveUI(), p, "BookOrbitOpenDashboard")
+    checkDashboardOpened(p, "reopened")
+    return true
 end
 
 function OrbitAndroid:onOrbitGoHome()

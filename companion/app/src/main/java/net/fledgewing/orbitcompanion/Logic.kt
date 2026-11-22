@@ -632,6 +632,9 @@ object WhatsNew {
             "Sync while reading is now in Settings too (KOReader keeps it; a change applies when KOReader opens).",
             "Home settings are simpler: \"Home opens\" now offers the Orbit launcher page (it replaces the \"Home always opens…\" switch), and \"In KOReader, Home goes to\" shows only with KOReader.",
         ),
+        "0.4.9" to listOf(
+            "Home on any BookOrbit screen other than its main page (a book, a list, search, a sheet) goes back to BookOrbit's main page; Home on the main page opens the launcher page.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */

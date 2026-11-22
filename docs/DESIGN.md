@@ -145,10 +145,23 @@ The patch decides; `WifiPlan` (pure, `test/test_logic.lua`) holds the state mach
 *BookOrbit home* (`home`). The patch decides with `HomePlan` (pure, tested; full table in
 INTERFACE.md "go home"): reader showing a book → BookOrbit home, opened over the book (the
 plugin's public action; the book stays open); BookOrbit home on top → the companion's
-launcher page (both modes); elsewhere with a current book (still open, or closed by Home
+launcher page (both modes); any other BookOrbit screen (v0.4.9) → BookOrbit's main page;
+elsewhere with a current book (still open, or closed by Home
 itself, `home_book`) → the book; elsewhere with none → BookOrbit home; cold start after KOReader was killed
 with a book open (`open_book_at_exit`) → that book. Presses step book → BookOrbit home →
-companion; Home from another app goes to the book, so the steps never loop. "From another
+companion; Home from another app goes to the book, so the steps never loop.
+
+"Which BookOrbit screen" (v0.4.9, `bookorbitScreen`) comes from `UIManager._window_stack`,
+never a flag: the main page is the catalog widget topmost and in `dashboardMode` (plugin 2.3.0
+bookorbit_catalog.lua:1875). Anything else with the catalog visible is a sub-screen: the
+catalog switched in place to another mode (`current_context.kind`: books, detail, lists,
+search, board…), or the plugin's widgets over it (its dialogs, book sheet, settings, menu
+pages and main menu sheet). Home then closes what is over the catalog (each by its
+`close_callback`, else `UIManager:close`), calls the catalog's `goDashboard`
+(bookorbit_catalog.lua:530-537, also its hold-Return), and if that is missing or something is
+still over it, closes the catalog and opens BookOrbit home fresh through the plugin's event.
+The file browser or a book over the catalog is not BookOrbit (v0.4.6: brought back on top).
+CI's plugin_compat checks `goDashboard`, `dashboardMode`, `close_callback` and `current_context`. "From another
 app" is the companion's `FROM=other_app` when it knows, else a KOReader pause of 2.5 s or more.
 
 ## Home opens (v0.3.2, v0.4.8)

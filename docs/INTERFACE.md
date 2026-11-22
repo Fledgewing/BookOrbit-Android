@@ -83,7 +83,8 @@ button" setting is "Back to my book, then BookOrbit home" (the default), `home` 
 |---|---|---|
 | Reader showing a book, Home pressed in KOReader | BookOrbit home, opened on top of the book (the book stays open) | BookOrbit home |
 | BookOrbit home (the plugin's dashboard) is the top widget, Home pressed in KOReader | the companion's launcher page (`SHOW_LAUNCHER`) | the companion's launcher page |
-| Elsewhere (another app in front, a menu, KOReader settings, another BookOrbit view, the file browser) **with a current book**: one still open, or one Home itself closed (`home_book`) | the book (whatever covers it is closed, or the book is reopened) | BookOrbit home |
+| Any other BookOrbit screen on top (v0.4.9): a book detail, list, search, board, settings, a sheet or dialog over the catalog, the catalog in a non-dashboard mode | BookOrbit's main page (what is over the catalog is closed, then the catalog's own `goDashboard`, or a fresh BookOrbit home) | the same |
+| Elsewhere (another app in front, a menu, KOReader settings, the file browser) **with a current book**: one still open, or one Home itself closed (`home_book`) | the book (whatever covers it is closed, or the book is reopened) | BookOrbit home |
 | Elsewhere with **no current book** (the user closed it, or none opened) | BookOrbit home | BookOrbit home |
 | Cold start after KOReader was **killed with a book open** | that book (reopened) | BookOrbit home |
 

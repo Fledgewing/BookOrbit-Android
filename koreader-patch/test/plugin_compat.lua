@@ -45,7 +45,7 @@ for name, kind in pairs(M.Compat.CATALOG) do need(name, kind) end
 -- Fields and events the patch reads or writes directly.
 for _, name in ipairs({ "catalog_browser", "pull_timestamp", "push_timestamp", "pages_before_update",
     "last_remote_progress", "PLUGIN_VERSION", "last_error", "sync_forward", "sync_backward",
-    "catalog_auto_open", "auto_sync" }) do need(name, "field") end
+    "catalog_auto_open", "auto_sync", "current_context" }) do need(name, "field") end
 -- Public actions the patch sends as events.
 local main = src[dir .. "/main.lua"] or ""
 if not main:find('registerAction%("bookorbit_open_dashboard"') then table.insert(missing, "action bookorbit_open_dashboard") end

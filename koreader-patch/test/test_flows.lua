@@ -39,6 +39,14 @@ local UIManager = {
     -- Like uimanager.lua _repaint: drain the queue, then replace it.
     _repaint = function(self) self._refresh_stack = {} end,
 }
+-- UIManager._window_stack (uimanager.lua): W.shown, bottom to top.
+setmetatable(UIManager, { __index = function(_, k)
+    if k == "_window_stack" then
+        local t = {}
+        for i, w in ipairs(W.shown) do t[i] = { widget = w } end
+        return t
+    end
+end })
 
 local function run(limit)
     limit = limit or 120
@@ -1327,20 +1335,82 @@ test("home: file browser on top of a stale BookOrbit home -> BookOrbit home brou
     W.shown = {}
 end)
 
-test("home: another BookOrbit view on top over an open book -> the book", function()
+-- A catalog like plugin 2.3.0's: modes switched in place, goDashboard back to the main page.
+local function catalogIn(ui, kind)
+    local p = ui.bookorbit
+    local cb = { current_context = { kind = kind } }
+    function cb:dashboardMode() return self.current_context.kind == "dashboard" end
+    function cb:goDashboard() self.current_context = { kind = "dashboard" }; W.went_dashboard = true end
+    cb.close_callback = function() UIManager:close(cb); p.catalog_browser = nil end
+    p.catalog_browser = cb
+    W.shown = { cb }
+    return cb
+end
+
+local function homePress(m)
+    W.activities, W.opened, W.home_called, W.went_dashboard = {}, nil, false, false
+    m:onSuspend(); W.clock = W.clock + 0.5
+    command(m, "home_smart")
+    m:onResume()
+    run(2)
+end
+
+test("home: BookOrbit detail view over an open book -> BookOrbit main page, book stays", function()
     store.lastfile = "/books/last.epub"
     W.files["/books/last.epub"] = true
     local ui, m = newUI(true)
     run(5)
-    dashboardOnTop(ui, "detail")
-    W.activities, W.opened, W.home_called = {}, nil, false
-    m:onSuspend(); W.clock = W.clock + 0.5
-    command(m, "home_smart")
-    m:onResume()
-    run(1)
+    local cb = catalogIn(ui, "detail")
+    homePress(m)
     ok(#W.activities == 0, "no companion page")
     ok(not W.home_called, "the book stays open")
-    ok(#W.shown == 0, "the view over it was closed")
+    ok(W.went_dashboard and cb:dashboardMode(), "catalog back to its main page")
+    ok(W.shown[#W.shown] == cb, "same catalog on top")
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
+test("home: a sheet over BookOrbit's main page -> the sheet closed, main page", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    run(5)
+    local cb = catalogIn(ui, "dashboard")
+    local closed = false
+    local sheet = { name = "bookorbit_menu_sheet", onCloseWidget = function() closed = true end }
+    sheet.dismiss_callback = function() closed = true end
+    table.insert(W.shown, sheet)
+    homePress(m)
+    ok(#W.activities == 0, "no companion page")
+    ok(closed and W.shown[#W.shown] == cb, "sheet closed, catalog on top")
+    ok(cb:dashboardMode(), "main page")
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
+test("home: catalog in a list mode, plugin without goDashboard -> reopened on its main page", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    run(5)
+    local cb = catalogIn(ui, "books")
+    cb.goDashboard = nil
+    homePress(m)
+    local now = ui.bookorbit.catalog_browser
+    ok(now ~= nil and now ~= cb, "a fresh catalog")
+    ok(W.shown[#W.shown] == now and now:dashboardMode(), "on its main page")
+    ok(#W.shown == 1, "the old one closed: " .. #W.shown)
+    ok(#W.activities == 0, "no companion page")
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
+test("home: BookOrbit's true main page -> the companion's launcher page", function()
+    local ui, m = newUI(false)
+    run(5)
+    catalogIn(ui, "dashboard")
+    homePress(m)
+    local a = W.activities[#W.activities]
+    ok(a and a.action:match("%.SHOW_LAUNCHER$"), "launcher page")
+    ok(not W.went_dashboard, "no reset")
     ui.bookorbit.catalog_browser = nil
     W.shown = {}
 end)
