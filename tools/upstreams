@@ -51,7 +51,7 @@ case "$cmd" in
         echo "$name: $repo $ref ($sha)"
         ;;
     sync | *)
-        [ "$cmd" = sync ] && shift || true
+        if [ "$cmd" = sync ] && [ $# -gt 0 ]; then shift; fi
         while read -r name repo ref commit; do
             if [ $# -gt 0 ]; then
                 case " $* " in *" $name "*) ;; *) continue ;; esac
