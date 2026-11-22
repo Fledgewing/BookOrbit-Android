@@ -911,6 +911,7 @@ local DEFAULTS = {
     patch_update_checked_at = 0,  -- os.time() of the last successful check
     patch_update_status = nil,    -- { at, text }
     open_book_at_exit = nil,      -- path of the open book; set on ReaderReady, cleared on a close
+    restart_book = nil,           -- the book open when a restart quit; reopened by the next start
     home_book = nil,              -- the book Home closed (fallback path); cleared by a user close or another book
     saved_pages_before_update = nil, -- the plugin's Push while reading value, kept while ours is on
     key_log = true,               -- log every key KOReader gets (clicker diagnosis; v0.4.2 default on)
@@ -2473,7 +2474,10 @@ function OrbitAndroid:init()
             self:maybeSetupPrompt("start")
         end)
         UIManager:scheduleIn(1, function()
-            self:checkCommand("start")
+            local handled = self:checkCommand("start")
+            if S.restart_book ~= nil then
+                if handled then S.restart_book = nil; saveSettings() else self:reopenAfterRestart("start") end
+            end
             self:maybeRestart("check")
         end)
         UIManager:scheduleIn(1.5, function() self:wakeFlow("start") end)
@@ -2616,6 +2620,10 @@ function OrbitAndroid:checkCommand(source)
         self:restartForCompanion(source)
         return true
     end
+    if cmd == "reopen_book" then
+        self:reopenAfterRestart(source)
+        return true
+    end
     log("unknown command ignored:", cmd)
     return false
 end
@@ -2633,6 +2641,9 @@ function OrbitAndroid:restartForCompanion(source)
     log("restart: requested by the companion (" .. tostring(source) .. "); saving, then quitting so the new patch loads")
     local ui = liveUI()
     if ui and ui.document and ui.saveSettings then pcall(ui.saveSettings, ui) end
+    -- The quit closes the reader (which clears open_book_at_exit): remember the book apart, so
+    -- the next start reopens it where it was (v0.5.5).
+    S.restart_book = ui and ui.document and ui.document.file or nil
     saveSettings()
     pcall(function() G_reader_settings:flush() end)
     Stats.send("restart", nil, false)
@@ -2942,6 +2953,31 @@ local function closeWidget(w)
         if Compat.callable(w.close_callback) then w.close_callback() else UIManager:close(w) end
     end)
     if not okc then log("home: closing", widgetName(w), "failed:", tostring(err)) end
+end
+
+-- After a restart that quit with a book open: that book again, at its saved place (the reader
+-- saved it before the quit; showReader opens at the last position). The book: the one this
+-- patch remembered (restart_book), else KOReader's last file (a restart by an older patch,
+-- which the companion follows with COMMAND=reopen_book). BookOrbit home opened by the start
+-- (the plugin's open mode) is closed so the book is on top.
+function OrbitAndroid:reopenAfterRestart(source)
+    local file = S.restart_book
+    if file ~= nil then S.restart_book = nil; saveSettings() end
+    if type(file) ~= "string" then
+        local okl, last = pcall(function() return G_reader_settings:readSetting("lastfile") end)
+        file = okl and last or nil
+    end
+    local ui = liveUI()
+    if type(file) ~= "string" then log("restart: no book to reopen (" .. source .. ")"); return end
+    if ui and ui.document then log("restart: a book is already open; not reopening", file); return end
+    local okl, lfs = pcall(require, "libs/libkoreader-lfs")
+    if not (okl and lfs.attributes(file, "mode") == "file") then log("restart: the book is gone:", file); return end
+    local p = bookorbit(ui)
+    if p and p.catalog_browser then closeWidget(p.catalog_browser) end
+    log("restart: reopening the book at its place (" .. source .. "):", file)
+    UIManager:nextTick(function()
+        require("apps/reader/readerui"):showReader(file)
+    end)
 end
 
 -- Home on a BookOrbit screen that isn't its main page: close what is over the catalog, then

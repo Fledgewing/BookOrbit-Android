@@ -113,7 +113,7 @@ abstract class EinkActivity : Activity() {
         if (requestCode != PatchInstaller.REQUEST_CODE) return
         OLog.i("patch install: storage permission ${if (granted) "granted" else "denied"}")
         if (granted) {
-            PatchInstaller.install(this) { refresh() }
+            PatchInstaller.install(this, userStarted = true) { refresh() }
         } else {
             Prefs(this).patchInstallStatus = "no storage permission: ${PatchInstaller.manualHint()}"
         }
@@ -123,7 +123,12 @@ abstract class EinkActivity : Activity() {
     /** The page's ScrollView, so a rebuild (a status change, Fix, a toggle) keeps the position. */
     private var scrollView: android.widget.ScrollView? = null
 
-    fun page(scroll: Boolean = false): LinearLayout = LinearLayout(this).apply {
+    /**
+     * The page's root column. Every page scrolls (v0.5.5: the status page ran off the M8C's
+     * screen below "Test network"); fillViewport keeps a short page full height. Only a page
+     * that pages its own content by the height it gets passes scroll = false (UiPagesTest).
+     */
+    fun page(scroll: Boolean = true): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(Ui.PAPER)
         val p = Ui.dp(this@EinkActivity, 20)
@@ -134,6 +139,7 @@ abstract class EinkActivity : Activity() {
             setContentView(android.widget.ScrollView(this@EinkActivity).also {
                 it.setBackgroundColor(Ui.PAPER)
                 it.isVerticalScrollBarEnabled = true
+                it.isFillViewport = true
                 it.addView(this)
                 scrollView = it
                 // After layout, so the new content is tall enough; clamped by ScrollView itself.

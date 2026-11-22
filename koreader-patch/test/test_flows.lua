@@ -825,6 +825,57 @@ test("restart command: save, ask the companion to relaunch, then quit (Android c
     run(10)
 end)
 
+test("restart with a book open (an update you started): the next start reopens that book", function()
+    W.broadcasts = {}
+    W.clock = W.clock + 10 -- past the last restart's once-guard
+    W.files["/b.epub"] = true
+    local ui, m = newUI(true)
+    run(5)
+    local saved = false
+    ui.saveSettings = function() saved = true end
+    UIManager.quit = function() W.quits = (W.quits or 0) + 1 end
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = "restart"
+    m:checkCommand("resume")
+    ok(saved, "the book's place saved before the quit")
+    m:onCloseWidget() -- the quit closes the reader
+    ok(store.orbit_android.restart_book == "/b.epub", "the book kept for the next start")
+    run(2)
+    -- The next process: KOReader starts in the file browser, BookOrbit home opened over it.
+    W.opened = nil
+    local ui2, m2 = newUI(false)
+    local cb = {}
+    cb.close_callback = function() ui2.bookorbit.catalog_browser = nil; W.catalog_closed = true end
+    ui2.bookorbit.catalog_browser = cb
+    W.catalog_closed = false
+    m2:reopenAfterRestart("start") -- what init schedules 1 s after a start with restart_book set
+    run(1)
+    ok(W.opened == "/b.epub", "the book reopened: " .. tostring(W.opened))
+    ok(W.catalog_closed, "BookOrbit home closed so the book is on top")
+    ok(store.orbit_android.restart_book == nil, "used once")
+    W.opened = nil
+    m2:reopenAfterRestart("start")
+    run(1)
+    ok(W.opened == nil, "not reopened twice")
+end)
+
+test("restart by an older patch: COMMAND=reopen_book opens KOReader's last book", function()
+    store.lastfile = "/books/last.epub"
+    W.files["/books/last.epub"] = true
+    W.opened = nil
+    local ui, m = newUI(false)
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = "reopen_book"
+    ok(m:checkCommand("start") == true, "command handled")
+    run(1)
+    ok(W.opened == "/books/last.epub", "reopened")
+    -- Already in a book: nothing.
+    W.opened = nil
+    local ui2, m2 = newUI(true)
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = "reopen_book"
+    m2:checkCommand("resume")
+    run(1)
+    ok(W.opened == nil, "a book already open stays")
+end)
+
 test("apply recommended settings: Make BookOrbit home, saved like the plugin's Opening page", function()
     local ui, m = newUI(false)
     ui.bookorbit.settings.catalog_auto_open = nil

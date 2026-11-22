@@ -363,6 +363,20 @@ One update covers the companion, the patch and KOReader's restart, with one stat
   truly need the user. "What's new" is a line on the status page ("What's new in vX ›"), never
   a notification. 11-22 01:04 the user saw "1 setup step needs you" for the patch already
   installing, then a what's-new notification, then had to enter the PIN to restart KOReader.
+- **An update you start restarts now (v0.5.5):** a check by hand, the update notification's
+  tap or Setup's "Install patch" restarts KOReader as soon as the patch is installed, book open
+  or not ("if I click update myself that means restart KOReader now", M8C 11-22 01:42, where
+  the restart waited for the book through five events). The mark (`Prefs.userUpdateAt`, 30 min)
+  crosses the app replace; `Prefs.patchRestartNow` names the version. The patch saves the book
+  and keeps it as `restart_book`; the relaunch carries `COMMAND=reopen_book` (for a restart by
+  an older patch: KOReader's last file), so it reopens where it was. A background update still
+  waits for the book's close, Home or sleep; the wait is logged once per version.
+- **Setup holds its prompts while an update settles (v0.5.5):** for 30 s after the version
+  changes, and while the patch install and restart that follow run, Setup prompts and posts
+  nothing (`AfterUpdate`); the patch row is pending, and so is the clicker (accessibility) row
+  until its service reconnects after the package replace (it re-evaluates on
+  `onServiceConnected` and when the grace ends). Only what is still wrong then prompts.
+  11-22 01:42:31 the M8C prompted "needs [patch, clicker]" mid-update.
 - **Android's "Install update?" stays:** the companion targets SDK 28 (for
   `WifiManager.setWifiEnabled`), and Android skips that confirm only for apps targeting a
   recent SDK (`setRequireUserAction`, README "Updates"). It is the one tap an update needs.
@@ -417,6 +431,11 @@ downloading only from the official sources (never re-hosted) and logging source 
   device; missing columns stay empty.
 
 ## Page rebuilds keep the scroll position (v0.5.2)
+
+Every page scrolls (v0.5.5): `page()` wraps the page in a ScrollView by default (fillViewport,
+so a short page is unchanged). The status page had run off the M8C's screen below "Test
+network". Only "Other apps" (paged by the height it gets) and the licenses page (its own
+ScrollView) opt out; `UiPagesTest` keeps that list.
 
 Pages redraw by building their views again (`EinkActivity.page`), e.g. "Check for updates",
 Fix, Test network or a toggle. `page()` keeps the previous ScrollView's position and restores

@@ -141,6 +141,22 @@ class Prefs(ctx: Context) {
     var patchRestartSentFor: String
         get() = str("patch_restart_sent_for")
         set(v) = setStr("patch_restart_sent_for", v)
+    /** When the user started an update (UpdateFlow.userStarted), 0 none. */
+    var userUpdateAt by LongPref("user_update_at")
+
+    /** A patch version to restart KOReader for now, book or not (the user started it). */
+    var patchRestartNow: String
+        get() = str("patch_restart_now")
+        set(v) = setStr("patch_restart_now", v)
+
+    /** A restart was sent with a book open: the relaunch reopens it ("1"). */
+    var restartReopen: String
+        get() = str("restart_reopen")
+        set(v) = setStr("restart_reopen", v)
+
+    /** When this app last changed version (AfterUpdate), 0 none. */
+    var updatedAt by LongPref("updated_at")
+
     /** KOReader has a book open: "1", "0", "" unknown (STATS, /status?book=). */
     var koreaderBook: String
         get() = str("koreader_book")

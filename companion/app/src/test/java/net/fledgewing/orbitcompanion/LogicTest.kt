@@ -716,6 +716,46 @@ class UpdateFlowTest {
         assertEquals("Updated to v0.5.2; KOReader restarts to load it (after the book, if one is open)", UpdateFlow.installedLine("0.5.2"))
     }
 
+    /** M8C 11-22 01:42: "if I click update myself that means restart KOReader now". */
+    @Test
+    fun anUpdateYouStartedRestartsWithTheBookOpenAndReopensIt() {
+        assertEquals("you started it: now, book open", UpdateFlow.Restart.NOW, UpdateFlow.restart("0.5.5", "0.5.4", "", true, now = true))
+        assertEquals("a background update waits for the book", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.5.5", "0.5.4", "", true, now = false))
+        assertEquals("still once per version", UpdateFlow.Restart.NONE, UpdateFlow.restart("0.5.5", "0.5.4", "0.5.5", true, now = true))
+        assertEquals(HomeCommands.REOPEN_BOOK, UpdateFlow.relaunchCommand(bookWasOpen = true))
+        assertEquals(null, UpdateFlow.relaunchCommand(bookWasOpen = false))
+        val t = 1_000_000_000L
+        assertTrue("tapped a minute before the replace", UpdateFlow.userStarted(t + 60_000, t))
+        assertFalse("never started by hand", UpdateFlow.userStarted(t, 0))
+        assertFalse("a stale tap from hours ago", UpdateFlow.userStarted(t + 3 * 3_600_000L, t))
+    }
+
+    /** M8C 11-22 01:42:31: "needs [patch, clicker] (regressed …)" mid-update, notification posted. */
+    @Test
+    fun setupHoldsItsPromptsWhileAnUpdateSettles() {
+        val t = 1_000_000_000L
+        assertTrue("version changed, not yet seen", AfterUpdate.settling(t, 0, justUpdated = true, patchBusy = false))
+        assertTrue("within the grace", AfterUpdate.settling(t + 10_000, t, justUpdated = false, patchBusy = false))
+        assertTrue("patch install or restart running", AfterUpdate.settling(t + 120_000, t, justUpdated = false, patchBusy = true))
+        assertFalse("settled", AfterUpdate.settling(t + 31_000, t, justUpdated = false, patchBusy = false))
+        assertEquals(setOf("patch", "clicker"), AfterUpdate.pendingRows(true, 120_000, clickerConnected = false))
+        assertEquals("clicker reconnected", setOf("patch"), AfterUpdate.pendingRows(true, 120_000, clickerConnected = true))
+        assertEquals("a fresh process: the clicker may still be binding", setOf("clicker"), AfterUpdate.pendingRows(false, 5_000, clickerConnected = false))
+        assertEquals("after the grace a missing clicker is real", emptySet<String>(), AfterUpdate.pendingRows(false, 60_000, clickerConnected = false))
+
+        // Pending rows are neither needed nor regressed; after the grace a real regression prompts.
+        val before = SetupAttention.State(lastDone = setOf("patch", "clicker", "home"))
+        val rows = listOf("patch" to false, "clicker" to false, "home" to true)
+        val held = SetupAttention.evaluate(rows, before, 10, AfterUpdate.pendingRows(true, 1_000, false))
+        assertTrue(held.needed.isEmpty())
+        assertTrue(held.regressed.isEmpty())
+        assertFalse(held.show)
+        val after = SetupAttention.evaluate(listOf("patch" to true, "clicker" to false, "home" to true), held.next, 10, AfterUpdate.pendingRows(false, 60_000, false))
+        assertEquals(listOf("clicker"), after.needed)
+        assertEquals(setOf("clicker"), after.regressed)
+        assertTrue(after.show)
+    }
+
     /** M8C 11-22 01:28-01:34: KOReader ran 0.4.6 with 0.5.3 on disk and nothing pending. */
     @Test
     fun anOlderRunningPatchRestartsOnceWithNoBookOpen() {

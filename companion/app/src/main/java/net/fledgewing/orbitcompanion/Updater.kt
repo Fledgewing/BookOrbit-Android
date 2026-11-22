@@ -184,6 +184,8 @@ object Updater {
             return certProblem
         }
         log("signer matches the installed app")
+        // A check by hand: the restart that finishes it doesn't wait for the book (v0.5.5).
+        if (interactive) Prefs(ctx).userUpdateAt = System.currentTimeMillis()
         installApk(ctx, apk, ctx.packageName, ver.toString(), interactive, INSTALL_KEY)
         return "installing v$ver"
     }
@@ -426,7 +428,8 @@ class LicensesActivity : EinkActivity() {
             OLog.w("licenses: notices missing from this build", e)
             "The notices file is missing from this build."
         }
-        val root = page()
+        // Its own ScrollView below the header.
+        val root = page(scroll = false)
         root.addView(Ui.header(this, "Open-source licenses", "‹ Back") { finish() })
         val scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = true }
         scroll.addView(Ui.text(this, text, 14f).apply { typeface = android.graphics.Typeface.MONOSPACE })

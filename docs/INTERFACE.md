@@ -131,6 +131,16 @@ Android lacks (`canRestart = no`, frontend/device/android/device.lua:86), so the
 starts it again. An older running patch ignores the command; the companion then says "close
 KOReader from recent apps and reopen it" instead of showing the button.
 
+From 0.5.5 the patch also keeps the open book as `restart_book` (the quit closes the reader,
+which clears `open_book_at_exit`), and the next start reopens it at its saved place.
+
+### `reopen_book` (patch 0.5.5+)
+
+`COMMAND = "reopen_book"`, sent with the start that follows `RELAUNCH` when the companion's
+restart went out with a book open: reopen `restart_book`, else KOReader's `lastfile`, unless a
+book is already open (BookOrbit home opened by the start is closed first). It covers a restart
+done by an older patch, which doesn't keep `restart_book`. Older patches ignore the command.
+
 ## Optional: companion status over loopback
 
 `GET http://127.0.0.1:47913/status?patch_version=0.3.1` → `200` with JSON. The query

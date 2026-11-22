@@ -92,6 +92,8 @@ class ClickerService : AccessibilityService() {
         instance = this
         OLog.i("clicker: accessibility service connected")
         ClickChannel.service(true)
+        // A row held as pending while it reconnected (AfterUpdate): settle it now.
+        android.os.Handler(android.os.Looper.getMainLooper()).post { Attention.evaluate(applicationContext, "clicker connected") }
     }
 
     override fun onUnbind(intent: Intent?): Boolean {

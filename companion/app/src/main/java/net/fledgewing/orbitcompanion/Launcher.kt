@@ -331,7 +331,8 @@ class AppsActivity : EinkActivity() {
     }
 
     private fun render() {
-        val root = page()
+        // Paged by the height it gets (no scrolling): measured below.
+        val root = page(scroll = false)
         root.addView(Ui.header(this, "Other apps", "‹ Back") { finish() })
 
         // Pinned tiles, three per row.

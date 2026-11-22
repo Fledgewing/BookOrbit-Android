@@ -350,6 +350,8 @@ object HomeCommands {
     const val FROM_OTHER_APP = "other_app"
     /** Save and quit, then the companion starts KOReader again (patch 0.3.1+, docs/INTERFACE.md). */
     const val RESTART = "restart"
+    /** After a restart with a book open: reopen it at its place (patch 0.5.5+; older ones ignore it). */
+    const val REOPEN_BOOK = "reopen_book"
 
     fun forPress(button: HomeButton): String = if (button == HomeButton.SMART) HOME_SMART else HOME
 
@@ -522,10 +524,10 @@ object UpdateFlow {
      * none); [sentFor]: the version a restart was already sent for (once per version, no loop);
      * [book]: KOReader has a book open (null: unknown, e.g. KOReader not running).
      */
-    fun restart(awaiting: String?, running: String?, sentFor: String?, book: Boolean?): Restart = when {
+    fun restart(awaiting: String?, running: String?, sentFor: String?, book: Boolean?, now: Boolean = false): Restart = when {
         awaiting.isNullOrEmpty() || loaded(awaiting, running) -> Restart.NONE
         sentFor == awaiting -> Restart.NONE
-        book == true -> Restart.WAIT
+        book == true && !now -> Restart.WAIT
         else -> Restart.NOW
     }
 
@@ -548,6 +550,19 @@ object UpdateFlow {
     }
 
     fun pairKey(running: String, file: String) = "$running>$file"
+
+    /** How long a user-started update counts as one across the app replace (v0.5.5). */
+    const val USER_UPDATE_MS = 30 * 60_000L
+
+    /**
+     * The update in progress was started by the user (a check by hand, the update notification's
+     * tap, Setup's Install patch): "update" means restart KOReader now, book or not; the patch
+     * saves the book and it reopens at the same place. [atMs]: when they started it (0: never).
+     */
+    fun userStarted(nowMs: Long, atMs: Long): Boolean = atMs > 0 && nowMs - atMs in 0..USER_UPDATE_MS
+
+    /** The relaunch after a restart: reopen the book that was open (patch 0.5.5+ obeys it). */
+    fun relaunchCommand(bookWasOpen: Boolean): String? = if (bookWasOpen) HomeCommands.REOPEN_BOOK else null
 
     fun staleLine(running: String, file: String) = "restart: KOReader runs $running, file has $file"
 
@@ -584,6 +599,30 @@ class StaleRestart {
             log(UpdateFlow.staleLine(running, file) + "; ${if (book == true) "a book is open" else "book state unknown"}, after it")
         }
         return d
+    }
+}
+
+/**
+ * Setup holds its prompts while an update settles (v0.5.5; M8C 11-22 01:42 prompted for the
+ * patch and the clicker mid-update): for [GRACE_MS] after the version changed, and while the
+ * patch install and restart that follow it run. Meanwhile the patch row is pending, and the
+ * clicker (accessibility) row is pending until its service reconnects after the package
+ * replace, or the grace ends (also after any process start). Only what is still wrong after
+ * that prompts.
+ */
+object AfterUpdate {
+    const val GRACE_MS = 30_000L
+
+    /** [justUpdated]: the version changed and Setup hasn't seen it yet; [patchBusy]: install or restart running. */
+    fun settling(nowMs: Long, updatedAtMs: Long, justUpdated: Boolean, patchBusy: Boolean): Boolean =
+        justUpdated || patchBusy || (updatedAtMs > 0 && nowMs - updatedAtMs in 0 until GRACE_MS)
+
+    /** Rows that count as pending (never needed, never a regression) right now. */
+    fun pendingRows(settling: Boolean, processAgeMs: Long, clickerConnected: Boolean): Set<String> {
+        val out = mutableSetOf<String>()
+        if (settling) out += "patch"
+        if (!clickerConnected && (settling || processAgeMs in 0 until GRACE_MS)) out += "clicker"
+        return out
     }
 }
 
@@ -768,6 +807,11 @@ object WhatsNew {
         "0.5.4" to listOf(
             "KOReader restarts to load a newer patch whenever it runs an older one, however the patch got there (after your book, if one is open).",
             "Home on BookOrbit's second page (or any list past its first page) goes to page 1 first; Home on page 1 goes to the launcher.",
+        ),
+        "0.5.5" to listOf(
+            "An update you start yourself restarts KOReader right away, and your book reopens where you were. Background updates still wait for the book.",
+            "No Setup prompt in the middle of an update.",
+            "Every companion page scrolls.",
         ),
     )
 

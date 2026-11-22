@@ -58,10 +58,11 @@ object PatchInstaller {
             a.requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_CODE)
             return
         }
-        install(a, done)
+        install(a, userStarted = true, done = done)
     }
 
-    fun install(ctx: Context, done: (String) -> Unit) {
+    /** [userStarted]: the user asked for it (Setup, an update by hand): KOReader restarts at once, book or not. */
+    fun install(ctx: Context, userStarted: Boolean = false, done: (String) -> Unit) {
         if (busy) return
         busy = true
         val app = ctx.applicationContext
@@ -82,6 +83,7 @@ object PatchInstaller {
             val stamped = installedVersion()
             if (result.startsWith("installed") && stamped != null) {
                 p.patchAwaitVersion = stamped
+                p.patchRestartNow = if (userStarted) stamped else ""
                 Updater.status(app, UpdateFlow.installedLine(stamped))
             }
             busy = false
@@ -109,8 +111,13 @@ object PatchInstaller {
             Updater.status(ctx, UpdateFlow.manualLine(app, "storage access isn't allowed"))
             return then()
         }
-        log("after the update: patch v$file is older than v$app; installing it")
-        install(ctx) { result ->
+        val p = Prefs(ctx)
+        val user = UpdateFlow.userStarted(System.currentTimeMillis(), p.userUpdateAt)
+        p.userUpdateAt = 0
+        log("after the update: patch v$file is older than v$app; installing it (${if (user) "you started the update: KOReader restarts now" else "background update"})")
+        afterUpdateBusy = true
+        install(ctx, userStarted = user) { result ->
+            afterUpdateBusy = false
             val now = installedVersion()
             if (now == null || PatchFile.needsInstall(now, app)) Updater.status(ctx, UpdateFlow.manualLine(app, result))
             then()
@@ -142,15 +149,21 @@ object PatchInstaller {
         val p = Prefs(ctx)
         val want = p.patchAwaitVersion
         val book = when (p.koreaderBook) { "1" -> true; "0" -> false; else -> null }
-        return when (UpdateFlow.restart(want, p.patchVersionSeen.ifEmpty { null }, p.patchRestartSentFor, book)) {
+        val now = want.isNotEmpty() && p.patchRestartNow == want
+        return when (UpdateFlow.restart(want, p.patchVersionSeen.ifEmpty { null }, p.patchRestartSentFor, book, now)) {
             UpdateFlow.Restart.NONE -> followStale(ctx, p, book, why, quiet)
             UpdateFlow.Restart.WAIT -> {
-                log("v$want installed; KOReader has a book open: restarting after it ($why)")
+                // Once per version, not on every event that checks.
+                if (waitLogged != want) {
+                    waitLogged = want
+                    log("v$want installed; KOReader has a book open: restarting after it ($why)")
+                }
                 false
             }
             UpdateFlow.Restart.NOW -> {
                 p.patchRestartSentFor = want
-                log("v$want installed; restarting KOReader ($why)")
+                p.restartReopen = if (book == true) "1" else ""
+                log("v$want installed; restarting KOReader ($why)${if (book == true) "; you started the update: the book reopens where you were" else ""}")
                 Koreader.restart(ctx.applicationContext, "patch v$want installed ($why)")
                 true
             }
@@ -158,6 +171,13 @@ object PatchInstaller {
     }
 
     private val stale = StaleRestart()
+    @Volatile
+    private var waitLogged: String? = null
+
+    /** The patch install that follows an app update is running (Setup holds its prompts). */
+    @Volatile
+    var afterUpdateBusy = false
+        private set
     private var cachedKey: Pair<Long, Long>? = null
     private var cachedVersion: String? = null
 
@@ -192,6 +212,7 @@ object PatchInstaller {
         val want = p.patchAwaitVersion
         if (want.isEmpty() || !UpdateFlow.loaded(want, running)) return
         p.patchAwaitVersion = ""
+        p.patchRestartNow = ""
         log("KOReader runs patch v$running now")
         Updater.status(ctx, UpdateFlow.doneLine(want))
     }

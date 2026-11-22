@@ -37,7 +37,12 @@ object Attention {
         val last = p.lastSeenVersionCode
         if (last in 1 until now) {
             p.whatsNewFromCode = last
-            OLog.i("setup: updated from code $last to $now; what's new pending")
+            p.updatedAt = System.currentTimeMillis()
+            OLog.i("setup: updated from code $last to $now; what's new pending; prompts held ${AfterUpdate.GRACE_MS / 1000} s")
+            // What is still wrong once the update settled prompts then.
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                { evaluate(ctx.applicationContext, "after the update settled") }, AfterUpdate.GRACE_MS + 2_000,
+            )
         }
         if (last != now) p.lastSeenVersionCode = now
     }
@@ -49,16 +54,24 @@ object Attention {
         // A patch install or restart in progress isn't a step for the user.
         val checks = Setup.checks(ctx).associateBy { SetupAttention.idOf(it.label) }
             .let { all -> if (PatchInstaller.inProgress(ctx)) all - "patch" else all }
-        val pending = checks.filterValues { it.pending }.keys
-        val r = SetupAttention.evaluate(checks.map { (id, c) -> id to c.done }, state(p), BuildConfig.VERSION_CODE, pending)
+        // An update settling: the patch and a reconnecting clicker wait, and nothing prompts.
+        val settling = AfterUpdate.settling(
+            System.currentTimeMillis(), p.updatedAt, p.lastSeenVersionCode != BuildConfig.VERSION_CODE,
+            PatchInstaller.afterUpdateBusy || PatchInstaller.busy || PatchInstaller.inProgress(ctx),
+        )
+        val processAge = android.os.SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime()
+        val held = AfterUpdate.pendingRows(settling, processAge, ClickerService.connected)
+        val pending = checks.filterValues { it.pending }.keys + held.filter { it in checks }
+        val raw = SetupAttention.evaluate(checks.map { (id, c) -> id to c.done }, state(p), BuildConfig.VERSION_CODE, pending)
+        val r = if (settling) raw.copy(show = false) else raw
         save(p, r.next)
         p.setupNeeded = r.needed.size
         p.setupPromptKey = SetupAttention.promptKey(r)
         p.setupPromptRows = if (r.show) r.needed.mapNotNull { checks[it]?.label }.joinToString("\n") else ""
         if (r.needed.isNotEmpty() || r.regressed.isNotEmpty()) {
-            OLog.i("setup: $why: needs ${r.needed}${if (r.regressed.isNotEmpty()) " (regressed ${r.regressed})" else ""}, prompt ${r.show}")
+            OLog.i("setup: $why: needs ${r.needed}${if (r.regressed.isNotEmpty()) " (regressed ${r.regressed})" else ""}, prompt ${r.show}${if (settling) " (update settling: held)" else ""}")
         }
-        if (notify) notification(ctx, r)
+        if (notify && !settling) notification(ctx, r)
         return Eval(r, checks)
     }
 

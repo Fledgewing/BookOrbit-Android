@@ -246,8 +246,11 @@ class OrbitService : Service() {
         if (action == Contract.SETUP_LATER) return Attention.laterFromKoreader(this)
         if (action == Contract.RELAUNCH) {
             // The patch saved and is quitting for a restart: start KOReader again once it's gone.
-            OLog.i("koreader restart: relaunching in 2.5 s (${intent.getStringExtra("reason") ?: "-"})")
-            main.postDelayed({ Koreader.start(this, "restart after patch update", null) }, 2_500)
+            // A restart sent with a book open reopens it (patch 0.5.5+, COMMAND=reopen_book).
+            val command = UpdateFlow.relaunchCommand(prefs.restartReopen == "1")
+            prefs.restartReopen = ""
+            OLog.i("koreader restart: relaunching in 2.5 s (${intent.getStringExtra("reason") ?: "-"})${if (command != null) ", reopening the book" else ""}")
+            main.postDelayed({ Koreader.start(this, "restart after patch update", command) }, 2_500)
             return
         }
         if (action == Contract.NET_UP || action == Contract.NET_DONE || action == Contract.SLEEP_NOW) {

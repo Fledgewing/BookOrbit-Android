@@ -292,6 +292,7 @@ class PinActivity : EinkActivity() {
         val confirm = Updater.pendingConfirm
         Updater.pendingConfirm = null
         if (confirm != null) {
+            Prefs(this).userUpdateAt = System.currentTimeMillis()
             Pin.installStarted(Updater.INSTALL_KEY)
             tryStart(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "the install prompt")
         } else {
@@ -307,6 +308,7 @@ class PinActivity : EinkActivity() {
             val confirm = Updater.pendingConfirm
             Updater.pendingConfirm = null
             if (confirm != null) {
+                Prefs(this).userUpdateAt = System.currentTimeMillis()
                 Pin.installStarted(Updater.INSTALL_KEY)
                 tryStart(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "the install prompt")
             } else {
