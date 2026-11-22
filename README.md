@@ -155,6 +155,16 @@ Sync and sleep.
 - **In other apps** an accessibility service sends page taps. It is switched on by you, holds
   key filtering only, and cannot read window content. It acts only on mapped buttons from
   your clicker and never stores or sends key presses.
+- **Per app:** each button has a default action; any app can have its own (e.g. Volume down in
+  Readest).
+- **Send Volume up/down, Send key…** (Page up/down, arrows, Space) go through the **Orbit
+  keyboard** ("Orbit clicker keys"), which has no keys, shows nothing, and never reads what you
+  type. It switches in for the key press and your keyboard comes back; a press while a text
+  field is focused does nothing. If switching fails on a reader, "Keep Orbit keyboard active"
+  keeps it current instead.
+- **Volume keys:** a sent key reaches the app's own key handling first, so a reader that turns
+  pages on volume keys gets it; an app that doesn't handle it lets Android change the volume.
+  Not yet checked on a device (docs/BTKEYS-DESIGN.md, "Send key").
 - **Key Mapper:** if you used it for this, turn it off once Orbit's buttons work; you can then
   uninstall it. Design: [docs/BTKEYS-DESIGN.md](docs/BTKEYS-DESIGN.md).
 

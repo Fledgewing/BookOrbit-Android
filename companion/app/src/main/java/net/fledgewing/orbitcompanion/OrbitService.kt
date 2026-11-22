@@ -234,6 +234,7 @@ class OrbitService : Service() {
         val proto = intent.getStringExtra("proto")
         if (proto != null && proto != Contract.PROTOCOL) OLog.w("protocol $proto from the patch; this companion speaks ${Contract.PROTOCOL}")
         if (action == Contract.STATS) return stats.onStats(intent)
+        if (action == Contract.SETUP_LATER) return Attention.laterFromKoreader(this)
         if (action == Contract.RELAUNCH) {
             // The patch saved and is quitting for a restart: start KOReader again once it's gone.
             OLog.i("koreader restart: relaunching in 2.5 s (${intent.getStringExtra("reason") ?: "-"})")
@@ -530,10 +531,19 @@ class OrbitService : Service() {
             "\"wifi\":${Net.wifiConnected(this)},\"wifi_enabled\":${Net.wifiEnabled(this)}," +
             "\"wifi_owner\":\"${prefs.wifiOwner.key}\",\"tailscale\":${Net.vpnUp(this)}," +
             "\"screen_off_permission\":${Net.adminActive(this)},\"setup_needed\":${prefs.setupNeeded}," +
+            // The KOReader setup box (docs/INTERFACE.md): only when unsnoozed rows need the user.
+            "\"setup_prompt\":${setupPrompt()}," +
             "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +
             "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}}," +
             // Clicker buttons for the patch (keycode -> press/hold/double -> action), docs/INTERFACE.md.
             "\"keymap\":${ClickerStore.map(this).forPatch()}}"
+
+    private fun setupPrompt(): String {
+        val key = prefs.setupPromptKey
+        if (key.isEmpty()) return "null"
+        val rows = org.json.JSONArray(prefs.setupPromptRows.split('\n').filter { it.isNotEmpty() })
+        return org.json.JSONObject().put("key", key).put("rows", rows).toString()
+    }
 
     private fun startStatusServer() {
         thread(name = "orbit-status", isDaemon = true) {

@@ -70,6 +70,8 @@ class HomeActivity : Activity() {
     }
 
     private fun decide(press: Boolean) {
+        // A new setup step: the prompt once, then (when it closes) on to KOReader as usual.
+        if (press && Attention.promptOnHome(this)) return
         val prefs = Prefs(this)
         val choice = prefs.homeApp
         val other = !HomeApp.isKoreader(choice)

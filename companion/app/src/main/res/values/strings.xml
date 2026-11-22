@@ -5,5 +5,7 @@
     <string name="apps_name">Other apps</string>
     <string name="admin_description">Lets \"Sync and sleep\" turn the screen off after syncing. Uses only the lock-screen permission.</string>
     <string name="clicker_service_label">Orbit clicker buttons</string>
-    <string name="clicker_service_description">Lets your Bluetooth clicker turn pages and press Home, Back or Sleep in apps other than KOReader. Orbit uses this only to see button presses from the clickers you set up (it acts only on the buttons you mapped), to learn which app is in front (its name), and to send page taps, Home, Back and Sleep. It cannot read what is on the screen, and it never stores or sends your key presses.</string>
+    <string name="clicker_service_description">Lets your Bluetooth clicker turn pages and press Home, Back or Sleep in apps other than KOReader. Orbit uses this only to see button presses from the clickers you set up (it acts only on the buttons you mapped), to learn which app is in front (its name) and whether a text field has focus (so it doesn\'t send keys while you type), to send page taps, Home, Back and Sleep, and to switch to the Orbit keyboard for a moment when a button sends a key. It cannot read what is on the screen, and it never stores or sends your key presses.</string>
+    <string name="ime_label">Orbit clicker keys</string>
+    <string name="ime_subtype">Sends your clicker\'s keys only; it has no keys and never reads what you type</string>
 </resources>

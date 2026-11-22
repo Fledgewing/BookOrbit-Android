@@ -614,9 +614,35 @@ function Clicks.tick(st, now, acts)
     return nil
 end
 
+---------------------------------------------------------------------------------------------
+-- "Setup needs you" box (companion 0.4.1+): /status carries setup_prompt = { key, rows } only
+-- while rows need the user and they didn't say Later (the companion's snooze). Shown once per
+-- key, never with a book on screen: the file browser, BookOrbit home or a menu.
+---------------------------------------------------------------------------------------------
+
+local SetupPrompt = {}
+
+-- where: "reader" (a book on screen), "browser", "bookorbit" or "menu". Returns show, why.
+function SetupPrompt.decide(prompt, where, shown_key)
+    if type(prompt) ~= "table" or type(prompt.key) ~= "string" or prompt.key == "" then return false, "nothing needed" end
+    if where == "reader" then return false, "in a book" end
+    if prompt.key == shown_key then return false, "already shown" end
+    return true, where
+end
+
+function SetupPrompt.text(prompt)
+    local rows = type(prompt.rows) == "table" and prompt.rows or {}
+    local n = #rows
+    if n == 0 then return "Orbit Companion needs a setup step." end
+    if n == 1 then return "Orbit Companion needs 1 setup step: " .. tostring(rows[1]) .. "." end
+    local list = {}
+    for i, r in ipairs(rows) do list[i] = "• " .. tostring(r) end
+    return "Orbit Companion needs " .. n .. " setup steps:\n" .. table.concat(list, "\n")
+end
+
 if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = Schedule, Plan = Plan, Update = Update, WifiPlan = WifiPlan, HomePlan = HomePlan,
-        disabledText = disabledText, Compat = Compat, Stats = Stats, Clicks = Clicks,
+        disabledText = disabledText, Compat = Compat, Stats = Stats, Clicks = Clicks, SetupPrompt = SetupPrompt,
         PATCH_VERSION = PATCH_VERSION }
 end
 
@@ -987,6 +1013,9 @@ Companion.ACTION = {
     SHOW_LAUNCHER = Companion.PACKAGE .. ".action.SHOW_LAUNCHER",
     STATS = Companion.PACKAGE .. ".action.STATS",
     RELAUNCH = Companion.PACKAGE .. ".action.RELAUNCH",
+    -- Companion 0.4.1+: the setup box's "Fix now" (activity) and "Later" (broadcast).
+    SHOW_SETUP = Companion.PACKAGE .. ".action.SHOW_SETUP",
+    SETUP_LATER = Companion.PACKAGE .. ".action.SETUP_LATER",
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
@@ -1173,8 +1202,9 @@ function Shared.refresh(why)
         if n ~= Clicks.count then log("clicker: key map from the companion,", n, "key(s)") end
         Clicks.map, Clicks.count = m, n
     end
-    -- "Setup needs you" count, shown passively in the menu status (never a pop-up).
+    -- "Setup needs you": the count in the menu status; setup_prompt for the one-time box.
     Shared.setup_needed = st and tonumber(st.setup_needed) or nil
+    Shared.setup_prompt = st and type(st.setup_prompt) == "table" and st.setup_prompt or nil
     local remote = st and type(st.settings) == "table" and st.settings or nil
     if not remote then return false end
     local at = tonumber(remote.settings_at) or 0
@@ -1932,6 +1962,7 @@ function OrbitAndroid:init()
         UIManager:scheduleIn(0.8, function()
             Shared.refresh("start")
             Wifi.applySettings("start")
+            self:maybeSetupPrompt("start")
         end)
         UIManager:scheduleIn(1, function() self:checkCommand("start") end)
         UIManager:scheduleIn(1.5, function() self:wakeFlow("start") end)
@@ -1995,6 +2026,8 @@ function OrbitAndroid:onResume()
         Shared.refresh("resume")
         Wifi.applySettings("resume")
         self:checkCommand("resume")
+        -- After checkCommand: a Home command moves to BookOrbit home first (finishHome checks too).
+        self:maybeSetupPrompt("resume")
         -- Also after "home": the closed book's sync needs the network.
         self:wakeFlow("wake")
     end)
@@ -2179,6 +2212,7 @@ function OrbitAndroid:onOrbitGoHome()
         -- The plugin's public action bookorbit_open_dashboard (event BookOrbitOpenDashboard,
         -- main.lua:987-988).
         UIManager:nextTick(function() ui:handleEvent(Event:new("BookOrbitOpenDashboard")) end)
+        UIManager:scheduleIn(1, function() self:maybeSetupPrompt("home") end)
         return true
     end
     state.pending_home = os.time()
@@ -2189,6 +2223,8 @@ function OrbitAndroid:onOrbitGoHome()
     else
         self:finishHome()
     end
+    -- Also when finishHome stays put (BookOrbit home already open, no plugin): once off the book.
+    UIManager:scheduleIn(2.5, function() self:maybeSetupPrompt("home") end)
     return true
 end
 
@@ -2213,6 +2249,43 @@ function OrbitAndroid:finishHome()
     end
     local host = liveUI() or self.ui
     if host and host.handleEvent then host:handleEvent(Event:new("BookOrbitOpenDashboard")) else p:onBookOrbitOpenDashboard() end
+    UIManager:scheduleIn(1, function() self:maybeSetupPrompt("home") end)
+end
+
+-- Where the reader is now, for the setup box: a book on screen, BookOrbit home, the file browser.
+function OrbitAndroid:whereNow()
+    local ui = liveUI() or self.ui
+    local p = bookorbit(ui)
+    if p and p.catalog_browser then return "bookorbit" end
+    if ui and ui.document then return "reader" end
+    return "browser"
+end
+
+-- The one-time "Setup needs you" box (SetupPrompt). where: given (the menu) or looked up.
+function OrbitAndroid:maybeSetupPrompt(why, where)
+    if not Companion.installed() then return end
+    where = where or self:whereNow()
+    local prompt = Shared.setup_prompt
+    local show, reason = SetupPrompt.decide(prompt, where, S.setup_prompt_shown)
+    if prompt then log("setup box (" .. why .. "):", show and ("showing in " .. where) or ("not now, " .. reason)) end
+    if not show then return end
+    S.setup_prompt_shown = prompt.key
+    saveSettings()
+    UIManager:show(ConfirmBox:new{
+        text = _(SetupPrompt.text(prompt)),
+        ok_text = _("Fix now"),
+        cancel_text = _("Later"),
+        ok_callback = function()
+            local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_SETUP, package = Companion.PACKAGE }
+            if not ok then ok = Jni.startActivity{ action = Companion.ACTION.SHOW_STATUS, package = Companion.PACKAGE } end
+            log("setup box: Fix now", ok and "opened the companion" or "FAILED to open the companion")
+        end,
+        cancel_callback = function()
+            -- The companion's own Later: quiet until an update or a step stops working.
+            Companion.send(Companion.ACTION.SETUP_LATER, {})
+            log("setup box: Later")
+        end,
+    })
 end
 
 ---------------------------------------------------------------------------------------------
@@ -2921,6 +2994,7 @@ end
 function OrbitAndroid:addToMainMenu(menu_items)
     local entry = { text = _("Android sync"), sub_item_table_func = function()
         Shared.refresh("menu")
+        UIManager:scheduleIn(0.5, function() self:maybeSetupPrompt("menu", "menu") end)
         return self:menuItems()
     end }
     -- Its own top-level entry in Tools, the way plugins and user patches add menus: an item

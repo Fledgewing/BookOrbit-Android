@@ -183,6 +183,14 @@ for press, and optionally for hold (0.6 s) and double press (0.35 s).
   - done = enabled in Android and connected;
   - a freeze or force-stop is a regression, which feeds "Setup needs you";
   - an info row names Key Mapper (or another key filter) when one is on.
+- **Per-app actions (v0.4.1):** a default action per button and kind, and any app can
+  override the action itself ("+ Override for another app": app → action → tap zone for page
+  actions). KOReader's override decides the patch's `keymap`.
+- **Send key (v0.4.1):** Send Volume up/down and Send key… (Page up/down, arrows, Space) go
+  through the Orbit keyboard (`OrbitKeysIme`), switched in just for the press by the
+  accessibility service and switched back; skipped while a text field is focused; "Keep Orbit
+  keyboard active" when switching fails. Setup row "Orbit keyboard enabled" only while one is
+  mapped. Details and the volume-key findings: [BTKEYS-DESIGN.md](BTKEYS-DESIGN.md#send-key-v041).
 
 ## Setup needs you (v0.2.4)
 
@@ -195,9 +203,23 @@ rows when the service starts, after an update, and when the status or launcher p
 - **Prompt** (a page listing only the needed rows, each with "Fix" = the Setup row's action)
   unless snoozed with "Later", which lasts until the next update or a regression (a row
   that was done and isn't now).
-- **Delivery:** the prompt on the status page, a quiet notification, a one-line banner on the
+- **Delivery:** the prompt on the status page, a notification, a one-line banner on the
   launcher page, and `setup_needed` in `/status` for the patch's menu status. Nothing shows
   when all is done; nothing pops up in a book.
+- **Showing up when it matters (v0.4.1).** The companion's own pages are rarely seen (Home goes
+  straight to KOReader), so:
+  - *At the moment of cause:* a change in the companion that makes a new row needed (the first
+    mapped clicker button needs the accessibility service; a Send-key action needs the Orbit
+    keyboard) opens the prompt at once, with that row first (`SetupAttention.caused`).
+  - *Home press:* a new unsnoozed row shows the prompt once before KOReader; closing it goes on
+    to KOReader (`SetupAttention.homePrompt`).
+  - *In KOReader:* `/status` carries `setup_prompt` (the unsnoozed rows) and the patch shows a
+    one-time box, "Orbit Companion needs 1 setup step: … Fix now / Later", only off a book (file
+    browser, BookOrbit home, its menu): at start, resume, Home and on reaching BookOrbit home.
+    Fix opens the prompt (`SHOW_SETUP`); Later is the companion's Later (`SETUP_LATER`).
+  - *Notification:* channel "Setup steps" at default importance (the old low-importance
+    channel hid it from the status bar); each post logs whether notifications are allowed and
+    the channel's importance, since vendor ROMs may block them.
 - **In-app fixes** (the patch install opens no system page, so no `onResume` follows) re-check
   the rows when they finish. A done row leaves the prompt; with none left it says "All set"
   and closes. The Fix button reads "Installing…" and does nothing while an install runs.

@@ -411,6 +411,30 @@ class SetupAttentionTest {
     private fun rows(vararg r: Pair<String, Boolean>) = r.toList()
 
     @Test
+    fun aChangeThatMakesARowNeededPromptsAtOnceEvenWhenSnoozed() {
+        val st = SetupAttention.snooze(SetupAttention.State(), listOf("tailscale"), v1)
+        val before = SetupAttention.evaluate(rows("tailscale" to false), st, v1)
+        assertFalse(before.show)
+        val after = SetupAttention.evaluate(rows("tailscale" to false, "clicker" to false), before.next, v1)
+        assertEquals(listOf("clicker"), SetupAttention.caused(before.needed, after))
+        assertTrue(SetupAttention.caused(after.needed, after).isEmpty())
+        assertEquals("keyboard", SetupAttention.idOf("Orbit keyboard enabled"))
+    }
+
+    @Test
+    fun homePromptsOnceForNewUnsnoozedRows() {
+        val r = SetupAttention.evaluate(rows("clicker" to false), SetupAttention.State(), v1)
+        assertTrue(SetupAttention.homePrompt(r, emptySet()))
+        assertFalse("shown once", SetupAttention.homePrompt(r, setOf("clicker")))
+        val more = SetupAttention.evaluate(rows("clicker" to false, "keyboard" to false), r.next, v1)
+        assertTrue("a new row prompts again", SetupAttention.homePrompt(more, setOf("clicker")))
+        val snoozed = SetupAttention.evaluate(rows("clicker" to false), SetupAttention.snooze(r.next, r.needed, v1), v1)
+        assertFalse("Later is respected", SetupAttention.homePrompt(snoozed, emptySet()))
+        assertEquals("", SetupAttention.promptKey(snoozed))
+        assertEquals("clicker,keyboard", SetupAttention.promptKey(more))
+    }
+
+    @Test
     fun idsAreStable() {
         assertEquals("home", SetupAttention.idOf("Set Orbit as Home app"))
         assertEquals("battery:KOReader", SetupAttention.idOf("Battery: Unrestricted (KOReader)"))

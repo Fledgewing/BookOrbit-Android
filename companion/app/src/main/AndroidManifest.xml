@@ -107,6 +107,24 @@
                 android:resource="@xml/clicker_service" />
         </service>
 
+        <!-- "Orbit clicker keys": Send-key actions (docs/BTKEYS-DESIGN.md "Send key"). Enabled by the user; never their default. -->
+        <service
+            android:name=".OrbitKeysIme"
+            android:exported="true"
+            android:label="@string/ime_label"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
+        <receiver
+            android:name=".KeyboardReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".ClickersActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
@@ -135,7 +153,13 @@
         <activity
             android:name=".AttentionActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
-            android:exported="false" />
+            android:exported="true">
+            <!-- The patch's "Fix now" in KOReader's setup box (docs/INTERFACE.md). -->
+            <intent-filter>
+                <action android:name="net.fledgewing.orbitcompanion.action.SHOW_SETUP" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name=".LicensesActivity"
@@ -163,6 +187,7 @@
                 <action android:name="net.fledgewing.orbitcompanion.action.SETTINGS" />
                 <action android:name="net.fledgewing.orbitcompanion.action.STATS" />
                 <action android:name="net.fledgewing.orbitcompanion.action.RELAUNCH" />
+                <action android:name="net.fledgewing.orbitcompanion.action.SETUP_LATER" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

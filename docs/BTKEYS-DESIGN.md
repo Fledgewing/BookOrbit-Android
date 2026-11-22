@@ -70,6 +70,53 @@ Each app decides which keycodes it handles:
 
    Per-app override rows exist for page actions only (zone or "send nothing"). Tap zones per
    reader are stored per package; vendor readers' defaults go in `Vendor.kt`, never in code.
+5. **Default action plus per-app actions (v0.4.1).** Each button × kind has a default action;
+   any app can override the action itself (e.g. default Next page; Readest: Send Volume down).
+   `ClickerButton.resolve(pkg)` picks the app's override, else the default; the KOReader
+   override (package `org.koreader.launcher`) decides what the patch gets in `keymap`.
+
+## Send key (v0.4.1)
+
+Some readers turn pages on keys, not taps (Volume, Page up/down, arrows, Space). An
+accessibility service can't inject keys into another app, so these go through a minimal
+keyboard, **Orbit clicker keys** (`OrbitKeysIme`, an `InputMethodService`), chosen by the
+maintainer as option A, "switch keyboards just in time":
+
+1. The user enables the Orbit keyboard (Setup row "Orbit keyboard enabled", shown only while a
+   Send-key action is mapped; Fix opens `Settings.ACTION_INPUT_METHOD_SETTINGS`). It is never
+   their default keyboard.
+2. A mapped press: the accessibility service calls
+   [`SoftKeyboardController.switchToInputMethod`](https://developer.android.com/reference/android/accessibilityservice/AccessibilityService.SoftKeyboardController#switchToInputMethod(java.lang.String))
+   (API 30) with the Orbit keyboard's id.
+3. Once bound (`onStartInput`, or `onBindInput` when no editor is focused: the fallback
+   InputConnection still reaches the focused window), the keyboard sends key down/up
+   (`sendDownUpKeyEvents`) for every queued press.
+4. 40 ms later the service switches back to the previous keyboard the same way
+   (`switchToPreviousInputMethod` from the keyboard if that fails).
+- Presses during a switch are queued; each step's latency is logged (`keys:` lines).
+- **Typing:** a focused text field skips the press (logged). The service knows from
+  `TYPE_VIEW_FOCUSED` events' class name (never their text); if it missed one, the keyboard
+  sees a text `EditorInfo.inputType` on bind, sends nothing and restores.
+- **Timeout:** no bind within 700 ms drops the queue, restores, and counts a failure. Settings
+  › Clicker buttons then suggests **Keep Orbit keyboard active**: the Orbit keyboard stays
+  current, presses are sent at once, and an ongoing notification's "Switch keyboard" takes the
+  user to their normal keyboard to type. Android 8–10 (no `switchToInputMethod`) need it.
+- `ImeSwitch` (pure, tested) is the state machine: queue, timeout, restore, skip on a text
+  field, keep active.
+- **The keyboard never shows an input view** (`onEvaluateInputViewShown` = false) and never
+  reads, logs or stores text or editor content: it looks only at the editor's input-type class.
+- **In KOReader** the patch acts, not the keyboard: a Send-key action becomes the page turn
+  KOReader gives that key on Android (Vol up/PgUp/Left/Up = back; Vol down/PgDn/Right/Down/Space
+  = forward). Older patches need no change.
+
+**Volume keys and the system volume.** A key sent through an InputConnection is delivered to
+the focused window (`ViewRootImpl.dispatchKeyFromIme`), so it goes through the app's
+`dispatchKeyEvent`/`onKeyDown` first. It never passes the system's pre-dispatch volume handling
+(`PhoneWindowManager.interceptKeyBeforeQueueing`), which only sees hardware input. A reader that
+handles volume keys (most page-turn-on-volume readers do, in `onKeyDown`) gets it and turns the
+page; an app that doesn't lets it fall through to `PhoneWindow.onKeyDown`, which changes the
+media volume and shows the volume panel. Not yet checked on a device: the first log lines with
+`keys: switch took … ms; sent 25` and the page turning (or the volume panel showing) settle it.
 
 ## Permissions and privacy
 
@@ -115,7 +162,8 @@ page's before/after check (README "Battery stats") verifies it.
 
 ## Settings (companion › Clicker buttons)
 
-Clickers list (each: buttons → actions, Forget); Add a clicker / Add a button (capture);
+Clickers list (each: buttons → default action and per-app actions, Forget); Add a clicker /
+Add a button (capture); Keep Orbit keyboard active (only with a Send-key action);
 per-app page actions (zone L/R thirds, top/bottom halves, swipe, nothing); long-press and
 double-press on/off per button (off by default: no delay); Show taps (a brief dot, for
 checking zones). Shared to the patch: the map only, through `/status`.

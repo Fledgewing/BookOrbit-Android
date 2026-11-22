@@ -688,7 +688,7 @@ test("wifi: without the companion, KOReader's stock path (and message) is kept",
     run(1)
 end)
 
-test("setup needs you: the companion's count shows in the menu status, never as a pop-up", function()
+test("setup needs you: the companion's count shows in the menu status, no pop-up in a book", function()
     local url = "http://127.0.0.1:47913/status"
     W.web[url] = "STATUS"
     W.json.STATUS = { version = "0.2.4", setup_needed = 2 }
@@ -702,6 +702,44 @@ test("setup needs you: the companion's count shows in the menu status, never as 
     m:onResume()
     run(2)
     ok(not m:statusText():find("setup step", 1, true), "gone when done")
+    W.web[url], W.json.STATUS = nil, nil
+end)
+
+test("setup box: once off a book, never in one; Fix opens the companion, Later snoozes there", function()
+    local url = "http://127.0.0.1:47913/status"
+    W.web[url] = "STATUS"
+    W.json.STATUS = { version = "0.4.1", setup_needed = 1,
+        setup_prompt = { key = "clicker", rows = { "Clicker buttons (accessibility)" } } }
+    local function boxes()
+        local n, last = 0, nil
+        for _, w in ipairs(W.shown) do if w.ok_text == "Fix now" then n = n + 1; last = w end end
+        return n, last
+    end
+    local ui, m = newUI(true)
+    W.shown = {}
+    m:onResume()
+    run(3)
+    ok(boxes() == 0, "never with a book on screen")
+    ui, m = newUI(false)
+    W.shown, W.activities, W.broadcasts = {}, {}, {}
+    m:onResume()
+    run(3)
+    local n, box = boxes()
+    ok(n == 1, "shown in the file browser")
+    ok(box.text == "Orbit Companion needs 1 setup step: Clicker buttons (accessibility).", box.text)
+    box.ok_callback()
+    ok(W.activities[#W.activities].action:match("SHOW_SETUP$"), "Fix opens the companion's prompt")
+    box.cancel_callback()
+    ok(W.broadcasts[#W.broadcasts].action:match("SETUP_LATER$"), "Later snoozes in the companion")
+    W.shown = {}
+    m:onResume()
+    run(3)
+    ok(boxes() == 0, "once per set of steps")
+    -- Snoozed in the companion: it sends no setup_prompt, only the count.
+    W.json.STATUS = { version = "0.4.1", setup_needed = 2 }
+    m:onResume()
+    run(3)
+    ok(boxes() == 0, "Later respected")
     W.web[url], W.json.STATUS = nil, nil
 end)
 

@@ -106,7 +106,15 @@ time Wi-Fi and BookOrbit home work only inside KOReader.
 3. In KOReader it works at once. For other reader apps, switch on Android **Settings ›
    Accessibility › Orbit clicker buttons**. It only sees button presses and which app is in
    front; it can't read the screen. Setup reminds you if a vendor app freeze turns it off.
-4. Used **Key Mapper** before? Turn it off once Orbit's buttons work; you can then uninstall
+4. **Per app:** each button has a default action, and **+ Override for another app** gives one
+   app its own (for example Next page everywhere, but Volume down in Readest).
+5. **Send Volume up/down, Send key…** (Page up/down, arrows, Space) are for readers that turn
+   pages on keys. They need the **Orbit keyboard**: Setup asks you to switch on "Orbit clicker
+   keys" in Android's keyboard settings. It has no keys and never becomes your keyboard: it
+   switches in for the press, then yours comes back. A press while you type in a text field
+   does nothing. If keys don't arrive, turn on Settings › Clicker buttons › **Keep Orbit
+   keyboard active** and use its notification's "Switch keyboard" when you want to type.
+6. Used **Key Mapper** before? Turn it off once Orbit's buttons work; you can then uninstall
    it. Two key mappers both see every key and can fight.
 
 ## 9. If something's wrong

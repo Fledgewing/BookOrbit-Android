@@ -452,6 +452,7 @@ object SetupAttention {
         label.startsWith("KOReader patch answered") -> "patch_seen"
         label.startsWith("Wi-Fi off/on test") -> "wifi_test"
         label.startsWith("Clicker buttons") -> "clicker"
+        label.startsWith("Orbit keyboard") -> "keyboard"
         label.startsWith("Key Mapper") || label.startsWith("Another key mapper") -> "keymapper"
         else -> label.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
     }
@@ -489,6 +490,21 @@ object SetupAttention {
     fun snooze(st: State, needed: List<String>, versionCode: Int): State =
         st.copy(snoozeCode = versionCode, snoozeNotDone = needed.toSet())
 
+    /**
+     * "Prompt at the moment of cause": rows a change in the companion just made needed (not
+     * needed before it). Shown at once, snooze or not: the user is right here.
+     */
+    fun caused(before: Collection<String>, after: Result): List<String> = after.needed.filter { it !in before }
+
+    /**
+     * Home press: show the prompt once before KOReader when an unsnoozed row is new since the
+     * last Home prompt ([prompted]: the rows it showed).
+     */
+    fun homePrompt(r: Result, prompted: Set<String>): Boolean = r.show && !prompted.containsAll(r.needed)
+
+    /** The rows an unsnoozed prompt is about ("" when none): KOReader shows its box once per key. */
+    fun promptKey(r: Result): String = if (r.show) r.needed.sorted().joinToString(",") else ""
+
     fun ignore(st: State, id: String): State = st.copy(ignored = st.ignored + id)
     fun unignoreAll(st: State): State = st.copy(ignored = emptySet())
 }
@@ -520,6 +536,11 @@ object WhatsNew {
             "Settings › Clicker buttons: map a Bluetooth clicker's buttons (press, hold, double press) to next/previous page, Home, Back, frontlight or Sync and sleep.",
             "In KOReader pages turn exactly; in other apps it taps the page once you switch on Settings › Accessibility › Orbit clicker buttons.",
             "Using Key Mapper for this? Turn it off once Orbit's buttons work; you can then uninstall it.",
+        ),
+        "0.4.1" to listOf(
+            "Clicker buttons: a default action per button, and any app can use its own (e.g. Next page, but Volume down in Readest).",
+            "New actions: Send Volume up/down and Send key (Page up/down, arrows, Space), through the Orbit keyboard. It switches in only for the key press, then your keyboard comes back.",
+            "Setup steps show up when they appear: right after you map a clicker, on the next Home press, and once in KOReader outside a book.",
         ),
     )
 

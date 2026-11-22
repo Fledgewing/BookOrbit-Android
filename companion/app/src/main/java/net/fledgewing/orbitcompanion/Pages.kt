@@ -522,6 +522,17 @@ object Setup {
             }
         }
 
+        // Orbit keyboard: shown only while a Send-key action is mapped (docs/BTKEYS-DESIGN.md "Send key").
+        if (ClickerStore.map(ctx).sendsKeys) {
+            val on = KeySender.enabled(ctx)
+            list.add(Check(
+                "Orbit keyboard enabled",
+                on,
+                if (on) "on · switches in only for a key press, then your keyboard comes back"
+                else "Turn on \"Orbit clicker keys\" for Send Volume up/down and Send key. It has no keys, never stays your keyboard and never reads what you type; Android's warning about collecting text is the same for every keyboard.",
+            ) { a -> a.tryStart(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS), "keyboard settings") })
+        }
+
         // The file decides "outdated"; the version the running patch reports decides "restart".
         val fileV = PatchInstaller.installedVersion()
         val runningV = prefs.patchVersionSeen.takeIf { it.isNotEmpty() }

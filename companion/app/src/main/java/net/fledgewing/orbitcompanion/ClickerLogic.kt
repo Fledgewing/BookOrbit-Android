@@ -17,18 +17,46 @@ enum class PressKind(val key: String, val label: String) {
     }
 }
 
-/** The small action list (BTKEYS-DESIGN.md "Actions"). */
-enum class ClickAction(val key: String, val label: String, val note: String?) {
+/**
+ * The small action list (BTKEYS-DESIGN.md "Actions"). Send-key actions (v0.4.1) deliver a real
+ * key to the app in front through the Orbit keyboard ([sendKeycode], Android keycodes).
+ */
+enum class ClickAction(val key: String, val label: String, val note: String?, val sendKeycode: Int? = null) {
     NEXT("next", "Next page", null),
     PREV("prev", "Previous page", null),
     HOME("home", "Home", null),
     BACK("back", "Back", null),
     LIGHT("light", "Frontlight on/off", "KOReader only"),
     SLEEP("sync_sleep", "Sync and sleep", "other apps: Sleep"),
+    SEND_VOL_UP("send_vol_up", "Send Volume up", "a real key, through the Orbit keyboard", 24),
+    SEND_VOL_DOWN("send_vol_down", "Send Volume down", "a real key, through the Orbit keyboard", 25),
+    SEND_PAGE_UP("send_page_up", "Send Page up", null, 92),
+    SEND_PAGE_DOWN("send_page_down", "Send Page down", null, 93),
+    SEND_LEFT("send_left", "Send Left arrow", null, 21),
+    SEND_RIGHT("send_right", "Send Right arrow", null, 22),
+    SEND_UP("send_up", "Send Up arrow", null, 19),
+    SEND_DOWN("send_down", "Send Down arrow", null, 20),
+    SEND_SPACE("send_space", "Send Space", null, 62),
     NOTHING("nothing", "Nothing (the app gets the key)", null);
+
+    val sendsKey: Boolean get() = sendKeycode != null
+
+    /**
+     * In KOReader the patch acts, not the keyboard: a sent key becomes the page turn KOReader
+     * gives that key on Android (event_map: Vol up/PgUp/Left = back, Vol down/PgDn/Right = forward).
+     */
+    val inKoreader: ClickAction get() = when (this) {
+        SEND_VOL_UP, SEND_PAGE_UP, SEND_LEFT, SEND_UP -> PREV
+        SEND_VOL_DOWN, SEND_PAGE_DOWN, SEND_RIGHT, SEND_DOWN, SEND_SPACE -> NEXT
+        else -> this
+    }
 
     companion object {
         fun fromKey(k: String?): ClickAction? = entries.firstOrNull { it.key == k }
+
+        /** The picker's main list; the other send keys sit under "Send key…". */
+        val MAIN = listOf(NEXT, PREV, HOME, BACK, LIGHT, SLEEP, SEND_VOL_UP, SEND_VOL_DOWN, NOTHING)
+        val MORE_KEYS = listOf(SEND_PAGE_UP, SEND_PAGE_DOWN, SEND_LEFT, SEND_RIGHT, SEND_UP, SEND_DOWN, SEND_SPACE)
     }
 }
 
@@ -77,10 +105,19 @@ data class ClickerButton(
     val keycode: Int,
     val scancode: Int,
     val label: String,
+    /** The default action per press kind. */
     val actions: Map<PressKind, ClickAction>,
     /** The reader's own buttons also send this keycode: in KOReader it keeps KOReader's meaning. */
     val builtinToo: Boolean = false,
-)
+    /** Per-app overrides of the action itself: package -> kind -> action (v0.4.1). */
+    val appActions: Map<String, Map<PressKind, ClickAction>> = emptyMap(),
+) {
+    /** The actions in [pkg]: its override per kind, else the default. Kinds come from the default. */
+    fun resolve(pkg: String?): Map<PressKind, ClickAction> {
+        val o = pkg?.let { appActions[it] }.orEmpty()
+        return actions.mapValues { (k, a) -> o[k] ?: a }
+    }
+}
 
 /** One clicker profile: InputDevice name + vendor/product ids. */
 data class Clicker(val name: String, val vendor: Int, val product: Int, val buttons: List<ClickerButton>) {
@@ -102,6 +139,20 @@ data class KeyMap(
 ) {
     val mapped: Boolean get() = clickers.any { c -> c.buttons.any { b -> b.actions.values.any { it != ClickAction.NOTHING } } }
 
+    /** Any default or per-app action sends a key (the Orbit keyboard is needed). */
+    val sendsKeys: Boolean get() = clickers.any { c ->
+        c.buttons.any { b -> b.actions.values.any { it.sendsKey } || b.appActions.values.any { m -> m.values.any { it.sendsKey } } }
+    }
+
+    fun setAppAction(clickerId: String, keycode: Int, pkg: String, kind: PressKind, action: ClickAction?): KeyMap {
+        val c = clicker(clickerId) ?: return this
+        val b = c.button(keycode) ?: return this
+        val cur = b.appActions[pkg].orEmpty()
+        val next = if (action == null) cur - kind else cur + (kind to action)
+        val nb = b.copy(appActions = if (next.isEmpty()) b.appActions - pkg else b.appActions + (pkg to next))
+        return upsert(c.copy(buttons = c.buttons.map { if (it.keycode == keycode) nb else it }))
+    }
+
     fun clicker(id: String) = clickers.firstOrNull { it.id == id }
 
     fun upsert(c: Clicker): KeyMap = copy(clickers = clickers.filter { it.id != c.id } + c)
@@ -112,7 +163,9 @@ data class KeyMap(
         val c = clicker(clickerId) ?: return this
         val b = c.button(keycode) ?: return this
         val acts = if (action == null) b.actions - kind else b.actions + (kind to action)
-        val nb = b.copy(actions = acts)
+        // "Stop using hold/double" drops that kind's per-app overrides too.
+        val apps = if (action == null) b.appActions.mapValues { it.value - kind }.filterValues { it.isNotEmpty() } else b.appActions
+        val nb = b.copy(actions = acts, appActions = apps)
         return upsert(c.copy(buttons = c.buttons.map { if (it.keycode == keycode) nb else it }))
     }
 
@@ -121,10 +174,10 @@ data class KeyMap(
         return upsert(c.copy(buttons = c.buttons.filter { it.keycode != keycode }))
     }
 
-    /** The mapped actions for a key from this device, or null (not ours: let it through). */
-    fun lookup(name: String, vendor: Int, product: Int, keycode: Int): Map<PressKind, ClickAction>? {
+    /** The mapped actions for a key from this device in app [pkg], or null (not ours: let it through). */
+    fun lookup(name: String, vendor: Int, product: Int, keycode: Int, pkg: String? = null): Map<PressKind, ClickAction>? {
         val b = clicker(Clicker.profileId(name, vendor, product))?.button(keycode) ?: return null
-        val acts = b.actions.filterValues { it != ClickAction.NOTHING }
+        val acts = b.resolve(pkg).filterValues { it != ClickAction.NOTHING }
         return acts.ifEmpty { null }
     }
 
@@ -147,10 +200,10 @@ data class KeyMap(
         val out = JSONObject()
         for (c in clickers) for (b in c.buttons) {
             if (b.builtinToo) continue
-            val acts = b.actions.filterValues { it != ClickAction.NOTHING }
+            val acts = b.resolve(HomeApp.KOREADER_PKG).filterValues { it != ClickAction.NOTHING }
             if (acts.isEmpty()) continue
             val o = JSONObject()
-            acts.forEach { (k, a) -> o.put(k.key, a.key) }
+            acts.forEach { (k, a) -> o.put(k.key, a.inKoreader.key) }
             out.put(b.keycode.toString(), o)
         }
         return out
@@ -163,8 +216,14 @@ data class KeyMap(
             c.buttons.forEach { b ->
                 val acts = JSONObject()
                 b.actions.forEach { (k, a) -> acts.put(k.key, a.key) }
+                val apps = JSONObject()
+                b.appActions.forEach { (pkg, m) ->
+                    val o = JSONObject()
+                    m.forEach { (k, a) -> o.put(k.key, a.key) }
+                    apps.put(pkg, o)
+                }
                 bs.put(JSONObject().put("keycode", b.keycode).put("scancode", b.scancode).put("label", b.label)
-                    .put("builtin_too", b.builtinToo).put("actions", acts))
+                    .put("builtin_too", b.builtinToo).put("actions", acts).put("app_actions", apps))
             }
             cs.put(JSONObject().put("name", c.name).put("vendor", c.vendor).put("product", c.product).put("buttons", bs))
         }
@@ -190,15 +249,18 @@ data class KeyMap(
                         c.optJSONArray("buttons")?.let { bs ->
                             for (j in 0 until bs.length()) {
                                 val b = bs.getJSONObject(j)
-                                val acts = mutableMapOf<PressKind, ClickAction>()
-                                b.optJSONObject("actions")?.let { a ->
-                                    a.keys().forEach { k ->
+                                fun kinds(a: JSONObject?): Map<PressKind, ClickAction> {
+                                    val m = mutableMapOf<PressKind, ClickAction>()
+                                    a?.keys()?.forEach { k ->
                                         val kind = PressKind.fromKey(k)
                                         val act = ClickAction.fromKey(a.optString(k))
-                                        if (kind != null && act != null) acts[kind] = act
+                                        if (kind != null && act != null) m[kind] = act
                                     }
+                                    return m
                                 }
-                                buttons += ClickerButton(b.getInt("keycode"), b.optInt("scancode"), b.optString("label"), acts, b.optBoolean("builtin_too"))
+                                val apps = mutableMapOf<String, Map<PressKind, ClickAction>>()
+                                b.optJSONObject("app_actions")?.let { a -> a.keys().forEach { pkg -> kinds(a.optJSONObject(pkg)).takeIf { it.isNotEmpty() }?.let { apps[pkg] = it } } }
+                                buttons += ClickerButton(b.getInt("keycode"), b.optInt("scancode"), b.optString("label"), kinds(b.optJSONObject("actions")), b.optBoolean("builtin_too"), apps)
                             }
                         }
                         clickers += Clicker(c.getString("name"), c.optInt("vendor"), c.optInt("product"), buttons)

@@ -30,6 +30,8 @@ object Contract {
     const val SETTINGS = "$PACKAGE.action.SETTINGS"
     const val STATS = "$PACKAGE.action.STATS"
     const val RELAUNCH = "$PACKAGE.action.RELAUNCH"
+    const val SETUP_LATER = "$PACKAGE.action.SETUP_LATER"
+    const val SHOW_SETUP = "$PACKAGE.action.SHOW_SETUP"
     const val EXTRA_FROM = "$PACKAGE.extra.FROM"
     const val EXTRA_COMMAND = "$PACKAGE.extra.COMMAND"
     const val PATCH_SENDER = "org.koreader.launcher"
@@ -132,6 +134,25 @@ class Prefs(ctx: Context) {
     var setupLastDone: Set<String>
         get() = set("setup_last_done")
         set(v) = setSet("setup_last_done", v)
+    /** Rows the last Home-press prompt showed (SetupAttention.homePrompt). */
+    var setupHomePrompted: Set<String>
+        get() = set("setup_home_prompted")
+        set(v) = setSet("setup_home_prompted", v)
+    /** SetupAttention.promptKey for /status (the KOReader box). */
+    var setupPromptKey: String
+        get() = sp.getString("setup_prompt_key", "") ?: ""
+        set(v) = sp.edit().putString("setup_prompt_key", v).apply()
+    var setupPromptRows: String
+        get() = sp.getString("setup_prompt_rows", "") ?: ""
+        set(v) = sp.edit().putString("setup_prompt_rows", v).apply()
+    /** Send-key actions: keep the Orbit keyboard current instead of switching just in time. */
+    var keepOrbitKeyboard: Boolean
+        get() = sp.getBoolean("keep_orbit_keyboard", false)
+        set(v) = sp.edit().putBoolean("keep_orbit_keyboard", v).apply()
+    /** Just-in-time switches that timed out on this reader. */
+    var imeSwitchFailures: Int
+        get() = sp.getInt("ime_switch_failures", 0)
+        set(v) = sp.edit().putInt("ime_switch_failures", v).apply()
     var setupSnoozeCode: Int
         get() = sp.getInt("setup_snooze_code", 0)
         set(v) = sp.edit().putInt("setup_snooze_code", v).apply()

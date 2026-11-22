@@ -25,6 +25,7 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `WIFI_OFF` | `reason`, `auto` (`"1"`/`"0"`), `mode` | Turn Wi-Fi off. `auto = "1"` (the patch's automatic off: idle, restore) is refused when the owner is `manual`, and waits while the companion downloads an update. `auto = "0"`: KOReader's own "Wi-Fi off" toggle, or "Off while reading" when a book opens. |
 | `SETTINGS` | `wifi_mode` (`always_on`/`off_reading`/`jit`), `wifi_idle_min` (`1`/`2`/`5`/`10`), `home_button` (`smart`/`bookorbit`), `settings_at` (ms since epoch) | Store the shared settings when `settings_at` is newer than its own. |
 | `STATS` | `seq`, `period_s`, `pages`, `full`, `partial`, `content` (`text`/`comic`/`webtoon`/`pdf`/`none`), `open` (`1`/`0`), `reading_min`, `wifi_mode`, `reading_schedule`, `reason` | Battery stats batch: store the counts with the current state; a book is "in front" while `open=1` (at most 6 min). Sent every 5 min with a book open, on open/Resume/Suspend/close, never per page (docs/STATS-DESIGN.md). |
+| `SETUP_LATER` | none | The setup box's "Later" in KOReader: the companion's own Later (quiet until an update or a step stops working). Companion 0.4.1+. |
 | `RELAUNCH` | `reason` (`restart`) | The patch is quitting for a restart (COMMAND `restart`): start KOReader again after 2.5 s. Patch 0.3.1+. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
 
@@ -54,6 +55,7 @@ activity needs an intent filter with the action and `android.intent.category.DEF
 |---|---|
 | `net.fledgewing.orbitcompanion.action.SHOW_STATUS` | Companion status (mockup screen 3) |
 | `net.fledgewing.orbitcompanion.action.SHOW_APPS` | The launcher's apps page (mockup screen 2) |
+| `net.fledgewing.orbitcompanion.action.SHOW_SETUP` | The "Setup needs you" prompt (the setup box's "Fix now"). Companion 0.4.1+; the patch falls back to `SHOW_STATUS`. |
 | `net.fledgewing.orbitcompanion.action.SHOW_LAUNCHER` | The launcher page (the one a double Home shows); Home pressed on BookOrbit home. Companions before 0.2.1 lack it; the patch then opens `SHOW_APPS`. |
 
 ## Companion → patch: "go home"
@@ -151,8 +153,11 @@ are newer. `keymap` (v0.4.0): clicker buttons for the patch, keyed by Android ke
   empty map turns this off.
 
 `wifi_owner`: `none`, `auto` or `manual`. `setup_needed`: how many Setup steps need the user
-(not done and not skipped); the patch shows it as one line in its menu status, never as a
-pop-up.
+(not done and not skipped); the patch shows it as one line in its menu status.
+`setup_prompt` (v0.4.1): `{"key": "clicker,keyboard", "rows": ["Clicker buttons (accessibility)", …]}`
+while unsnoozed rows need the user, else `null`. The patch shows a one-time box per `key`
+("Fix now" → `SHOW_SETUP`, "Later" → `SETUP_LATER`), never with a book on screen.
+`keymap` actions also include what a Send-key action becomes in KOReader (`next`/`prev`).
 
 Bind to `127.0.0.1` only. The patch uses it in "Test sync path" (step 1, "Companion
 answered", 1 s timeout) and treats any `200` as an answer; the fields are for display and

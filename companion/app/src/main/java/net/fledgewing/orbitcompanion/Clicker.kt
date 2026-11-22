@@ -90,6 +90,28 @@ class ClickersActivity : EinkActivity() {
             ClickerStore.save(this, ClickerStore.map(this).copy(showTaps = !ClickerStore.map(this).showTaps))
             render()
         }))
+        if (map.sendsKeys) {
+            val p = Prefs(this)
+            val note = when {
+                !KeySender.canSwitch -> "This Android version can't switch keyboards for one press: turn this on for Send-key actions."
+                p.imeSwitchFailures > 0 -> "Switching keyboards failed ${p.imeSwitchFailures}× on this reader: turn this on."
+                else -> "Only if Send-key actions don't arrive."
+            }
+            root.addView(Ui.row(this, "Keep Orbit keyboard active", note, Ui.toggle(this, p.keepOrbitKeyboard), onClick = {
+                p.keepOrbitKeyboard = !p.keepOrbitKeyboard
+                OLog.i("keys: keep Orbit keyboard active ${if (p.keepOrbitKeyboard) "on" else "off"}")
+                if (p.keepOrbitKeyboard) {
+                    // Make it the current keyboard: Android's own picker (the user chooses).
+                    (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).showInputMethodPicker()
+                } else {
+                    KeySender.keyboardNotification(this, false)
+                }
+                render()
+            }))
+            root.addView(Ui.text(this, "Sent keys (Volume, Page up/down, arrows, Space) go through the Orbit keyboard, which has no keys. Normally it switches in just for the press and your keyboard comes back at once, and a press while you type in a text field does nothing. With \"Keep Orbit keyboard active\" it stays your keyboard instead: to type, use the notification's \"Switch keyboard\", then pick Orbit clicker keys again afterwards.", 15f, color = Ui.MID).apply {
+                setPadding(0, Ui.dp(this@ClickersActivity, 8), 0, 0)
+            })
+        }
         root.addView(Ui.text(this, "In KOReader the patch turns pages exactly, no permission needed. Other apps get page taps (right/left third by default; change them on a page action). Orbit never stores or sends your key presses.", 15f, color = Ui.MID).apply {
             setPadding(0, Ui.dp(this@ClickersActivity, 8), 0, 0)
         })
@@ -174,18 +196,25 @@ class CaptureActivity : EinkActivity() {
     }
 }
 
-/** Screen 3: one button's action, and where page actions tap in other apps. */
+/**
+ * Screen 3: one button's default action, per-app overrides of the action (v0.4.1), and where
+ * page actions tap in other apps.
+ */
 class ClickActionActivity : EinkActivity() {
     companion object {
         fun intent(ctx: android.content.Context, clicker: String, keycode: Int, kind: PressKind): Intent =
             Intent(ctx, ClickActionActivity::class.java).putExtra("clicker", clicker).putExtra("keycode", keycode).putExtra("kind", kind.key)
+
+        private const val DEFAULT = ""
     }
 
     private var clickerId = ""
     private var keycode = 0
     private var kind = PressKind.PRESS
-    private var pickingFor: String? = null // package whose zone is being chosen
+    private var pickingAction: String? = null // DEFAULT or a package whose action is being chosen
     private var pickingApp = false
+    private var zoneFor: Pair<String, ClickAction>? = null // package and page action whose tap zone is being chosen
+    private var moreKeys = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -201,44 +230,51 @@ class ClickActionActivity : EinkActivity() {
 
     private fun appLabel(pkg: String) = HomeTarget.label(this, pkg)
 
+    private fun section(root: LinearLayout, title: String) {
+        root.addView(Ui.text(this, title, 15f, bold = true, color = Ui.MID).apply { setPadding(0, Ui.dp(this@ClickActionActivity, 12), 0, 0) })
+    }
+
     private fun render() {
         val map = ClickerStore.map(this)
         val b = map.clicker(clickerId)?.button(keycode) ?: return finish()
-        val action = b.actions[kind] ?: ClickAction.NOTHING
-        pickingFor?.let { return zonePage(it, action) }
-        if (pickingApp) return appPage(action)
+        val default = b.actions[kind] ?: ClickAction.NOTHING
+        zoneFor?.let { (pkg, a) -> return zonePage(pkg, a) }
+        pickingAction?.let { return actionPage(b, it, default) }
+        if (pickingApp) return appPage()
         val root = page(scroll = true)
         root.addView(Ui.header(this, "${b.label} ${kind.label}", "‹ Back") { finish() })
-        root.addView(Ui.text(this, "ACTION", 15f, bold = true, color = Ui.MID))
-        ClickAction.entries.forEach { a ->
-            root.addView(Ui.row(this, a.label, a.note, Ui.check(this, a == action), onClick = {
-                ClickerStore.save(this, ClickerStore.map(this).setAction(clickerId, keycode, kind, a))
-                OLog.i("clicker: ${b.label} ${kind.key} -> ${a.key}")
-                render()
-            }))
+        section(root, "ACTION")
+        root.addView(Ui.row(this, "Default", "every app without its own", Ui.value(this, "${default.label} ›"), onClick = { pickingAction = DEFAULT; render() }))
+        val overrides = b.appActions.filterValues { kind in it }.keys.sortedBy { appLabel(it).lowercase() }
+        overrides.forEach { pkg ->
+            val a = b.appActions[pkg]?.get(kind) ?: return@forEach
+            root.addView(Ui.row(this, appLabel(pkg), null, Ui.value(this, "${a.label} ›"), onClick = { pickingAction = pkg; render() }))
         }
-        if (action == ClickAction.NEXT || action == ClickAction.PREV) {
-            root.addView(Ui.text(this, "${action.label.uppercase()} IN", 15f, bold = true, color = Ui.MID).apply { setPadding(0, Ui.dp(this@ClickActionActivity, 12), 0, 0) })
+        root.addView(Ui.row(this, "+ Override for another app", "e.g. Volume down in one reader", Ui.value(this, "›"), onClick = { pickingApp = true; render() }))
+        val used = (listOf(default) + overrides.mapNotNull { b.appActions[it]?.get(kind) }).toSet()
+        if (used.any { it.sendsKey }) {
+            root.addView(Ui.text(this, "Sent keys go through the Orbit keyboard: it switches in for the press, then your keyboard comes back. In KOReader they turn the page. Settings › Clicker buttons has \"Keep Orbit keyboard active\" if switching fails.", 15f, color = Ui.MID))
+        }
+        listOf(ClickAction.NEXT, ClickAction.PREV).filter { it in used }.forEach { action ->
+            section(root, "${action.label.uppercase()} TAPS IN")
             root.addView(Ui.row(this, "KOReader", null, Ui.value(this, "exact page turn")))
             val vendor = Vendor.profile(this).tapZones
             (map.zones.keys + vendor.keys).distinct().sortedBy { appLabel(it).lowercase() }.forEach { pkg ->
                 val z = map.zoneFor(pkg, action, vendor)
                 root.addView(Ui.row(this, appLabel(pkg), if (map.zones[pkg]?.containsKey(action) == true) "your choice" else "default", Ui.value(this, z.label), onClick = {
-                    pickingFor = pkg
+                    zoneFor = pkg to action
                     render()
                 }))
             }
             root.addView(Ui.row(this, "Every other app", null, Ui.value(this, Zone.defaultFor(action).label)))
-            root.addView(Ui.row(this, "+ Override for another app", null, Ui.value(this, "›"), onClick = { pickingApp = true; render() }))
         }
+        root.addView(Ui.gap(this, 12))
         if (kind != PressKind.PRESS) {
-            root.addView(Ui.gap(this, 12))
             root.addView(Ui.button(this, "Stop using ${kind.label}", heightDp = 56, sp = 17f) {
                 ClickerStore.save(this, ClickerStore.map(this).setAction(clickerId, keycode, kind, null))
                 finish()
             })
         } else {
-            root.addView(Ui.gap(this, 12))
             root.addView(Ui.button(this, "Remove this button", heightDp = 56, sp = 17f) {
                 ClickerStore.save(this, ClickerStore.map(this).removeButton(clickerId, keycode))
                 finish()
@@ -246,31 +282,66 @@ class ClickActionActivity : EinkActivity() {
         }
     }
 
+    /** Pick the default action ([target] DEFAULT) or one app's override. */
+    private fun actionPage(b: ClickerButton, target: String, default: ClickAction) {
+        val forApp = target != DEFAULT
+        val current = if (forApp) b.appActions[target]?.get(kind) else default
+        val root = page(scroll = true)
+        root.addView(Ui.header(this, if (forApp) appLabel(target) else "Default action", "‹ Back") { pickingAction = null; render() })
+        root.addView(Ui.text(this, "${b.label} ${kind.label}${if (forApp) " in ${appLabel(target)}" else ""}", 17f, color = Ui.MID))
+        if (forApp) {
+            root.addView(Ui.row(this, "Same as default", default.label, Ui.check(this, current == null), onClick = { choose(b, target, null) }))
+        }
+        ClickAction.MAIN.forEach { a -> root.addView(actionRow(b, target, a, current)) }
+        val showMore = moreKeys || current in ClickAction.MORE_KEYS
+        root.addView(Ui.row(this, "Send key…", "Page up/down, arrows, Space", Ui.value(this, if (showMore) "⌄" else "›"), onClick = { moreKeys = !showMore; render() }))
+        if (showMore) ClickAction.MORE_KEYS.forEach { a -> root.addView(actionRow(b, target, a, current)) }
+    }
+
+    private fun actionRow(b: ClickerButton, target: String, a: ClickAction, current: ClickAction?) =
+        Ui.row(this, a.label, a.note, Ui.check(this, a == current), onClick = { choose(b, target, a) })
+
+    private fun choose(b: ClickerButton, target: String, a: ClickAction?) {
+        val before = Attention.neededNow(this)
+        val map = ClickerStore.map(this)
+        val next = if (target == DEFAULT) map.setAction(clickerId, keycode, kind, a ?: ClickAction.NOTHING)
+        else map.setAppAction(clickerId, keycode, target, kind, a)
+        ClickerStore.save(this, next)
+        OLog.i("clicker: ${b.label} ${kind.key}${if (target == DEFAULT) "" else " in $target"} -> ${a?.key ?: "default"}")
+        pickingAction = null
+        moreKeys = false
+        // An override that turns pages: straight on to where it taps in that app.
+        if (target != DEFAULT && (a == ClickAction.NEXT || a == ClickAction.PREV)) zoneFor = target to a
+        // The first mapped button needs the accessibility service; a sent key the Orbit keyboard.
+        if (!Attention.afterChange(this, before, "mapping ${b.label} ${kind.key}")) render()
+    }
+
     private fun zonePage(pkg: String, action: ClickAction) {
         val root = page()
-        root.addView(Ui.header(this, appLabel(pkg), "‹ Back") { pickingFor = null; render() })
+        root.addView(Ui.header(this, appLabel(pkg), "‹ Back") { zoneFor = null; render() })
         root.addView(Ui.text(this, "${action.label}: where to tap", 17f, color = Ui.MID))
         val current = ClickerStore.map(this).zoneFor(pkg, action, Vendor.profile(this).tapZones)
         Zone.entries.forEach { z ->
             root.addView(Ui.row(this, z.label, null, Ui.check(this, z == current), onClick = {
                 ClickerStore.save(this, ClickerStore.map(this).setZone(pkg, action, z))
-                pickingFor = null
+                zoneFor = null
                 render()
             }))
         }
     }
 
-    private fun appPage(action: ClickAction) {
+    private fun appPage() {
         val root = page(scroll = true)
         root.addView(Ui.header(this, "Override for…", "‹ Back") { pickingApp = false; render() })
         val pm = packageManager
         val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
             .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
-            .filter { it.first != packageName && it.first != Koreader.PKG }
-        HomeApp.order(apps, KnownApps.readers(Vendor.profile(this))).forEach { (pkg, label) ->
+            .filter { it.first != packageName }
+        // KOReader is listed too: its override decides what the patch does there.
+        HomeApp.order(apps, KnownApps.readers(Vendor.profile(this))).let { listOfNotNull(apps.firstOrNull { it.first == Koreader.PKG }) + it }.forEach { (pkg, label) ->
             root.addView(Ui.row(this, label, null, Ui.value(this, "›"), onClick = {
                 pickingApp = false
-                pickingFor = pkg
+                pickingAction = pkg
                 render()
             }))
         }

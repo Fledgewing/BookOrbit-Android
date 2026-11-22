@@ -83,6 +83,8 @@ class ClickerService : AccessibilityService() {
 
     private val main = Handler(Looper.getMainLooper())
     private var foreground: String? = null
+    /** A text field has focus in the app in front (from focus events' class name only). */
+    private var editorFocused = false
     private val timers = HashMap<String, PressTimer>()
 
     override fun onServiceConnected() {
@@ -104,11 +106,19 @@ class ClickerService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+            // Send-key actions skip while typing. Only the class name is used, never any text.
+            val text = Keyboard.isTextField(event.className, event.isPassword)
+            if (text != editorFocused) OLog.d("clicker: text field ${if (text) "focused" else "left"}")
+            editorFocused = text
+            return
+        }
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         if (pkg in IGNORED_WINDOWS) return
         if (pkg != foreground) OLog.d("clicker: in front: $pkg")
         foreground = pkg
+        editorFocused = false
     }
 
     override fun onInterrupt() = Unit
@@ -119,7 +129,7 @@ class ClickerService : AccessibilityService() {
         val fg = foreground
         // KOReader: the patch handles mapped keys exactly. Our own pages: the capture screen.
         if (fg == Koreader.PKG || fg == packageName) return false
-        val acts = ClickerStore.map(this).lookup(dev.name, dev.vendorId, dev.productId, event.keyCode) ?: return false
+        val acts = ClickerStore.map(this).lookup(dev.name, dev.vendorId, dev.productId, event.keyCode, fg) ?: return false
         val key = "${dev.descriptor}:${event.keyCode}"
         val t = timers.getOrPut(key) { PressTimer() }
         val now = SystemClock.uptimeMillis()
@@ -164,6 +174,7 @@ class ClickerService : AccessibilityService() {
             }
             ClickAction.LIGHT -> OLog.i("clicker: frontlight works only in KOReader")
             ClickAction.NOTHING -> Unit
+            else -> a.sendKeycode?.let { KeySender.press(this, it, editorFocused) }
         }
     }
 

@@ -1,5 +1,6 @@
 package net.fledgewing.orbitcompanion
 
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,7 +16,10 @@ import android.widget.LinearLayout
  * a quiet notification, a one-line launcher banner, and setup_needed in /status for the patch.
  */
 object Attention {
-    private const val CHANNEL = "setup"
+    // "setup" was IMPORTANCE_LOW: hidden from the status bar and easy to miss on e-ink. A
+    // channel's importance can't be raised once created, so it is replaced.
+    private const val OLD_CHANNEL = "setup"
+    private const val CHANNEL = "setup_steps"
     private const val ID = 4
 
     private fun state(p: Prefs) = SetupAttention.State(p.setupIgnored, p.setupSnoozeCode, p.setupSnoozeNotDone, p.setupLastDone)
@@ -47,11 +51,46 @@ object Attention {
         val r = SetupAttention.evaluate(checks.map { (id, c) -> id to c.done }, state(p), BuildConfig.VERSION_CODE, pending)
         save(p, r.next)
         p.setupNeeded = r.needed.size
+        p.setupPromptKey = SetupAttention.promptKey(r)
+        p.setupPromptRows = if (r.show) r.needed.mapNotNull { checks[it]?.label }.joinToString("\n") else ""
         if (r.needed.isNotEmpty() || r.regressed.isNotEmpty()) {
             OLog.i("setup: $why: needs ${r.needed}${if (r.regressed.isNotEmpty()) " (regressed ${r.regressed})" else ""}, prompt ${r.show}")
         }
         if (notify) notification(ctx, r, whatsNew(ctx).isNotEmpty())
         return Eval(r, checks)
+    }
+
+    /** The rows that need the user now (for "before" in [afterChange]). */
+    fun neededNow(ctx: Context): List<String> = evaluate(ctx, "before a change", notify = false).result.needed
+
+    /**
+     * "Prompt at the moment of cause": a change made in the companion (e.g. the first mapped
+     * clicker button, a Send-key action) made new rows needed: open the prompt at once.
+     */
+    fun afterChange(a: Activity, before: List<String>, why: String): Boolean {
+        val e = evaluate(a, why)
+        val caused = SetupAttention.caused(before, e.result)
+        if (caused.isEmpty()) return false
+        OLog.i("setup: $why made $caused needed: prompting now")
+        a.startActivity(Intent(a, AttentionActivity::class.java).putExtra(AttentionActivity.EXTRA_FIRST, caused.toTypedArray()))
+        return true
+    }
+
+    /** Home press: the prompt once before KOReader when an unsnoozed row is new (SetupAttention.homePrompt). */
+    fun promptOnHome(a: Activity): Boolean {
+        val p = Prefs(a)
+        val e = evaluate(a, "home press")
+        if (!SetupAttention.homePrompt(e.result, p.setupHomePrompted)) return false
+        p.setupHomePrompted = e.result.needed.toSet()
+        OLog.i("setup: home press: prompting once for ${e.result.needed} before ${HomeTarget.name(a)}")
+        a.startActivity(Intent(a, AttentionActivity::class.java))
+        return true
+    }
+
+    /** KOReader's setup box "Later" (SETUP_LATER): the same snooze as the prompt's Later. */
+    fun laterFromKoreader(ctx: Context) {
+        val e = evaluate(ctx, "koreader later", notify = false)
+        if (e.result.needed.isNotEmpty()) later(ctx, e) else OLog.i("setup: Later from KOReader; nothing needed")
     }
 
     fun whatsNew(ctx: Context): List<Pair<String, List<String>>> {
@@ -65,6 +104,8 @@ object Attention {
         val p = Prefs(ctx)
         save(p, SetupAttention.snooze(state(p), e.result.needed, BuildConfig.VERSION_CODE))
         p.whatsNewFromCode = 0
+        p.setupPromptKey = ""
+        p.setupPromptRows = ""
         OLog.i("setup: Later (snoozed ${e.result.needed} until an update or a regression)")
         cancel(ctx)
     }
@@ -100,12 +141,16 @@ object Attention {
 
     private fun cancel(ctx: Context) = nm(ctx).cancel(ID)
 
+    private var lastNoteLog: String? = null
+
     private fun notification(ctx: Context, r: SetupAttention.Result, news: Boolean) {
         if (!r.show && !news) return cancel(ctx)
         val nm = nm(ctx)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Setup steps", NotificationManager.IMPORTANCE_LOW).apply {
+        if (nm.getNotificationChannel(OLD_CHANNEL) != null) nm.deleteNotificationChannel(OLD_CHANNEL)
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Setup steps", NotificationManager.IMPORTANCE_DEFAULT).apply {
             setShowBadge(false)
             enableVibration(false)
+            setSound(null, null)
         })
         val n = r.needed.size
         val text = when {
@@ -120,11 +165,21 @@ object Attention {
             .setAutoCancel(true)
             .setContentIntent(PendingIntent.getActivity(ctx, 4, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             .build())
+        // Vendor ROMs may block or demote it: log what Android says, once per change.
+        val importance = nm.getNotificationChannel(CHANNEL)?.importance
+        val line = "setup: notification posted ($text); notifications ${if (nm.areNotificationsEnabled()) "allowed" else "BLOCKED"}, channel importance $importance"
+        if (line != lastNoteLog) OLog.i(line)
+        lastNoteLog = line
     }
 }
 
 /** The prompt: what's new after an update, then only the rows that need the user. */
 class AttentionActivity : EinkActivity() {
+    companion object {
+        /** Rows a change just made needed: listed first. */
+        const val EXTRA_FIRST = "first"
+    }
+
     private var eval: Attention.Eval? = null
     /** Something was fixed from inside this page: when nothing is left, say "All set" before closing. */
     private var fixedHere = false
@@ -165,7 +220,8 @@ class AttentionActivity : EinkActivity() {
         }
         if (needed.isNotEmpty() || pending.isNotEmpty()) {
             root.addView(Ui.gap(this, 12))
-            (needed + pending).forEach { id ->
+            val first = intent.getStringArrayExtra(EXTRA_FIRST).orEmpty().toList()
+            (first.filter { it in needed } + needed.filter { it !in first } + pending).forEach { id ->
                 val c = e.checks[id] ?: return@forEach
                 val card = Ui.card(this)
                 val label = c.label + if (id in e.result.regressed) " (changed since last time)" else ""

@@ -479,5 +479,21 @@ test("clicks: double within 0.35 s, else the single after the window", function(
     eq(Clicks.tick(st, 10.45, a), "press")
 end)
 
+-- SetupPrompt: the one-time setup box, never in a book
+local SetupPrompt = M.SetupPrompt
+test("setup box: only off a book, once per key, never when snoozed", function()
+    local pr = { key = "clicker", rows = { "Clicker buttons (accessibility)" } }
+    eq(SetupPrompt.decide(pr, "reader", nil), false, "never in a book")
+    eq(SetupPrompt.decide(pr, "browser", nil), true)
+    eq(SetupPrompt.decide(pr, "bookorbit", nil), true)
+    eq(SetupPrompt.decide(pr, "menu", nil), true)
+    eq(SetupPrompt.decide(pr, "browser", "clicker"), false, "already shown")
+    eq(SetupPrompt.decide({ key = "clicker,keyboard" }, "browser", "clicker"), true, "a new row shows again")
+    eq(SetupPrompt.decide(nil, "browser", nil), false, "snoozed or nothing: the companion sends none")
+    eq(SetupPrompt.decide({ key = "" }, "browser", nil), false)
+    eq(SetupPrompt.text(pr), "Orbit Companion needs 1 setup step: Clicker buttons (accessibility).")
+    ok(SetupPrompt.text({ key = "a,b", rows = { "A", "B" } }):find("2 setup steps:\n• A\n• B", 1, true))
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end
