@@ -334,6 +334,50 @@ One update covers the companion, the patch and KOReader's restart, with one stat
   than 0.5.0 (it can't restart itself): the status line gives the reason and Setup's
   KOReader patch row keeps Install patch / Restart KOReader.
 
+## Setup installs the rest (v0.5.1)
+
+A new device needs only the companion APK sideloaded; Setup installs the rest, one tap each,
+downloading only from the official sources (never re-hosted) and logging source and size.
+
+- **KOReader** (`Installers.koreader`): `koreader/koreader` releases/latest, the asset
+  `koreader-android-<arm64|arm|x86>-<tag>.apk` for the first of `Build.SUPPORTED_ABIS` that has
+  one (`KoreaderRelease.assetFor`), checked against GitHub's asset `digest` (sha256) and against
+  KOReader's signing certificate (`KoreaderRelease.OFFICIAL_CERT`, read from the v2026.07.1
+  APK with apksigner), then a PackageInstaller session (the install window keeps the PIN off
+  its prompts). The row detects F-Droid's build (`org.koreader.launcher.fdroid`, a separate
+  app: KOReader returns before applying user patches on that flavor,
+  `frontend/userpatch.lua:27-28` at v2026.07.1) and a KOReader signed by anyone else (Android
+  won't update across signers: uninstall first). Installed: the row checks for a newer
+  release on tap.
+- **BookOrbit plugin** (`Installers.plugin`): bookorbit/bookorbit's releases (v3.0.0–v3.9.0)
+  carry no assets, and the plugin's own updater downloads its zip from the user's BookOrbit
+  server (`bookorbit_api.lua:778-781` `/koreader/plugin/package`, after login), which a new
+  device doesn't have yet. So: the latest release tag's `koreader-plugin/bookorbit.koplugin`
+  tree (contents API → tree sha → `git/trees/<sha>?recursive=1`), each file from
+  raw.githubusercontent.com at that tag and checked against its git blob id (SHA-1 of
+  `blob <size>\0` + content; paths must be relative, no `..`). Written to
+  `bookorbit.koplugin.orbit-new`, then old aside, new in, old removed (KOReader loads only
+  `*.koplugin` folders). Installed only when missing or older than `PluginRelease.MIN_VERSION`
+  (2.3.0, what CI's plugin_compat checks): the plugin's own updater
+  (`bookorbit_updater.lua`) owns updates after that. KOReader restarts (`COMMAND=restart`)
+  when the running patch can; otherwise the row says to restart it.
+- **KOReader patch:** the existing one-tap install, in the same block.
+- **Up front** (`DeviceChecks`): Family Link (`com.google.android.apps.kids.familylinkhelper`)
+  or a managed device (UserManager restrictions such as `no_install_unknown_sources`, other
+  device admins) with what it blocks and "approve it in the parent's Family Link app"; Play
+  Protect (Play Store present) with "More details → Install anyway"; the vendor freeze row
+  (`Vendor.kt`) says what freezing does and where to undo it. These are info rows
+  (`SetupAttention.INFO_ONLY`), never prompted.
+- **Fix next** (`SetupWalk`): one button walks every pending row in order, each once per walk,
+  and continues when the user is back in Setup (a page closed) or an in-app install finished.
+- **USB** (`tools/install-usb.sh`, bash, macOS and Linux): the same sources and checks, plus
+  `SHA256SUMS` and build attestations for our assets; `--fresh` (lists `/sdcard/koreader`,
+  asks y/N) and `--books out.csv` (NeoReader's `Metadata` provider when present, the epub OPF
+  read on the device with `unzip -p`, KOReader's sidecar status and last write). Offline tests:
+  `tools/test/test-install-usb.sh`; CI runs shellcheck and them. The NeoReader column names
+  (`nativeAbsolutePath`, `title`, `authors`, `readingStatus`, `lastAccess`) are unverified on a
+  device; missing columns stay empty.
+
 ## Sync while reading in the companion (v0.4.8)
 
 The patch keeps "Sync while reading" (its menu stays). Companion Settings shows the value the

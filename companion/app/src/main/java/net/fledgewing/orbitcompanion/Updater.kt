@@ -43,6 +43,7 @@ object Updater {
     private const val ID_UPDATE = 3
     const val EXTRA_INTERACTIVE = "${Contract.PACKAGE}.extra.INTERACTIVE"
     const val EXTRA_VERSION = "${Contract.PACKAGE}.extra.VERSION"
+    const val EXTRA_KEY = "${Contract.PACKAGE}.extra.INSTALL_KEY"
 
     @Volatile
     var busy = false
@@ -183,7 +184,7 @@ object Updater {
             return certProblem
         }
         log("signer matches the installed app")
-        install(ctx, apk, ver.toString(), interactive)
+        installApk(ctx, apk, ctx.packageName, ver.toString(), interactive, INSTALL_KEY)
         return "installing v$ver"
     }
 
@@ -221,10 +222,12 @@ object Updater {
         return c
     }
 
-    internal fun httpText(url: String): String {
+    internal fun httpText(url: String): String = httpBytes(url).toString(Charsets.UTF_8)
+
+    internal fun httpBytes(url: String): ByteArray {
         val c = open(url)
         try {
-            return c.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8)
+            return c.inputStream.use { it.readBytes() }
         } finally {
             c.disconnect()
         }
@@ -260,7 +263,7 @@ object Updater {
         sigs.orEmpty().map { s -> MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString(":") { "%02X".format(it) } }.toSet()
 
     @Suppress("DEPRECATION")
-    private fun signers(pm: PackageManager, archive: String?, pkg: String?): Set<String> {
+    internal fun signers(pm: PackageManager, archive: String?, pkg: String?): Set<String> {
         if (Build.VERSION.SDK_INT >= 28) {
             val flags = PackageManager.GET_SIGNING_CERTIFICATES
             val info = if (archive != null) pm.getPackageArchiveInfo(archive, flags) else pm.getPackageInfo(pkg!!, flags)
@@ -288,17 +291,18 @@ object Updater {
         return null
     }
 
-    private fun install(ctx: Context, apk: File, version: String, interactive: Boolean) {
+    /** A PackageInstaller session for [apk] ([pkg]); the result comes to InstallReceiver with [key]. */
+    internal fun installApk(ctx: Context, apk: File, pkg: String, version: String, interactive: Boolean, key: String) {
         val pi = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
-        params.setAppPackageName(ctx.packageName)
+        params.setAppPackageName(pkg)
         params.setSize(apk.length())
         params.setInstallReason(PackageManager.INSTALL_REASON_USER)
         if (Build.VERSION.SDK_INT >= 31) {
             // Honoured only for apps targeting S+ on Android 14 (see the class comment); harmless otherwise.
             params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
-        Pin.installStarted(INSTALL_KEY)
+        Pin.installStarted(key)
         val id = pi.createSession(params)
         pi.openSession(id).use { s ->
             s.openWrite("base.apk", 0, apk.length()).use { out ->
@@ -308,15 +312,18 @@ object Updater {
             val cb = Intent(ctx, InstallReceiver::class.java)
                 .putExtra(EXTRA_INTERACTIVE, interactive)
                 .putExtra(EXTRA_VERSION, version)
+                .putExtra(EXTRA_KEY, key)
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
             s.commit(PendingIntent.getBroadcast(ctx, id, cb, flags).intentSender)
         }
-        log("session $id committed for v$version (interactive=$interactive)")
+        log("session $id committed for $pkg v$version (interactive=$interactive)")
     }
 
     // Called by InstallReceiver.
 
     fun onSessionStatus(ctx: Context, intent: Intent) {
+        val key = intent.getStringExtra(EXTRA_KEY) ?: INSTALL_KEY
+        if (key != INSTALL_KEY) return Installers.onSessionStatus(ctx, intent, key)
         val st = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
         val version = intent.getStringExtra(EXTRA_VERSION) ?: "?"

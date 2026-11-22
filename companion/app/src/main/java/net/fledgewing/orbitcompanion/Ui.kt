@@ -102,8 +102,15 @@ abstract class EinkActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         @Suppress("DEPRECATION")
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != PatchInstaller.REQUEST_CODE) return
         val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (requestCode == Installers.PLUGIN_REQUEST_CODE) {
+            OLog.i("plugin install: storage permission ${if (granted) "granted" else "denied"}")
+            if (granted) Installers.plugin(this) { refresh() }
+            else Prefs(this).pluginInstallStatus = "no storage permission: allow it, or copy bookorbit.koplugin into koreader/plugins/ (SETUP.md)"
+            refresh()
+            return
+        }
+        if (requestCode != PatchInstaller.REQUEST_CODE) return
         OLog.i("patch install: storage permission ${if (granted) "granted" else "denied"}")
         if (granted) {
             PatchInstaller.install(this) { refresh() }
@@ -285,6 +292,11 @@ object Ui {
     }
 
     fun clock(ctx: Context, wallMs: Long): String = DateFormat.getTimeFormat(ctx).format(Date(wallMs))
+
+    /** A plain-words explanation with OK (Setup's Help). */
+    fun note(a: android.app.Activity, text: String) {
+        android.app.AlertDialog.Builder(a).setMessage(text).setPositiveButton("OK", null).show()
+    }
 
     fun secs(ms: Long): String = String.format(Locale.US, "%.1f s", ms / 1000.0)
 }

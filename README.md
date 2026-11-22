@@ -15,16 +15,28 @@ Design and approved mockups: `docs/DESIGN.md`, `docs/mockups.html`.
 
 From [Releases](https://github.com/Fledgewing/BookOrbit-Android/releases/latest):
 
-1. **Orbit Companion**: download `orbit-companion-<version>.apk` and install it (allow your
-   browser or file manager to install unknown apps when Android asks). Open it, then work
-   through **Setup** on its status page.
-2. **KOReader patch**: tap **KOReader patch installed** on the companion's Setup page (it
-   downloads the patch from the same release, checks its SHA-256 and writes it into
-   `koreader/patches/`), or copy `2-orbit-android.lua` there yourself (create the folder if
-   needed). Then restart KOReader. Needs the GitHub build of KOReader;
-   see `koreader-patch/README.md`.
+**Sideload one APK, then Setup.** Download `orbit-companion-<version>.apk` and install it
+(allow your browser or file manager to install unknown apps; on a Play Protect warning tap
+**More details**, then **Install anyway**). Open it, then **Setup › Fix next**: it walks every
+open step in order and installs the rest with one tap each, every download checked:
 
-After that, both update themselves from this repo's releases.
+- **KOReader**: the official APK from [koreader/koreader](https://github.com/koreader/koreader/releases)
+  for the reader's ABI (arm64-v8a or armeabi-v7a), checked against GitHub's published SHA-256
+  digest and KOReader's signing certificate. F-Droid's build is detected and explained (it
+  skips user patches). Tap the row again later for KOReader updates.
+- **BookOrbit plugin**: from [bookorbit/bookorbit](https://github.com/bookorbit/bookorbit)'s
+  latest release tag (`koreader-plugin/bookorbit.koplugin`; BookOrbit publishes no plugin zip
+  asset), each file checked against its git blob id, swapped into `koreader/plugins/`
+  atomically, then KOReader restarts. Only when it's missing or older than the patch needs;
+  after that the plugin updates itself from your server.
+- **KOReader patch**: `2-orbit-android.lua` from this release, checked against `SHA256SUMS`.
+
+Up front, Setup explains in plain words what may get in the way: Play Protect's warnings,
+a launcher that freezes apps (Boox, Meebook), and Family Link or a managed profile ("approve it
+in the parent's Family Link app"). Over USB from a Mac or Linux computer,
+`tools/install-usb.sh` installs everything at once ([docs/SETUP.md](docs/SETUP.md#6-set-up-over-usb-optional)).
+
+After that, everything updates itself from this repo's releases.
 
 ## Updates
 

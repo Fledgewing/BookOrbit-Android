@@ -1,8 +1,13 @@
 # Setup guide
 
 This guide sets up an Android e-reader so that KOReader keeps your place in sync with your
-BookOrbit library. It works on its own: the reader wakes, syncs, and goes back to sleep. Plan
-on about 30 minutes. You need nothing but the reader and a phone or computer to download files.
+BookOrbit library. It works on its own: the reader wakes, syncs, and goes back to sleep.
+
+**The short version: sideload one app, then follow its Setup.** Orbit Companion installs
+everything else (KOReader, the BookOrbit plugin and the KOReader add-on) from their official
+releases, checks each download, and walks you through the rest with one button. Plan on about
+15 minutes. With a computer and a USB cable there is also a script that does it all at once
+(see "Set up over USB" below).
 
 ## 1. What you need
 
@@ -11,24 +16,51 @@ on about 30 minutes. You need nothing but the reader and a phone or computer to 
 - **Tailscale**, but only if your BookOrbit server is on a private Tailscale network
   ("tailnet"). If the server is reachable on the open internet, skip Tailscale.
 
-## 2. Install KOReader (the right build)
+## 2. Sideload Orbit Companion
 
-Download the newest `.apk` for your reader from
-[KOReader's releases](https://github.com/koreader/koreader/releases) (usually the `arm64`
-one) and install it.
+On the reader, download `orbit-companion-<version>.apk` from
+[this project's releases](https://github.com/Fledgewing/BookOrbit-Android/releases/latest)
+and open it. When Android asks, allow your browser or file manager to install apps.
 
-Use **this build only**. The F-Droid and Play Store copies ignore the add-on this setup
-installs in step 6.
+**Play Protect** may say the app is unknown or "unsafe". That is its standard warning for apps
+from outside the Play Store: tap **More details**, then **Install anyway**. It can warn again
+when Orbit installs KOReader or updates itself; the answer is the same.
 
-How to tell which one you have: open Android Settings › Apps › KOReader › App details (at the
-bottom). "Installed from F-Droid" or "Google Play" means the wrong build: uninstall it and
-install the one above. Your books and settings stay in the `koreader` folder.
+## 3. Open Orbit Companion › Setup › Fix next
 
-## 3. Install the BookOrbit plugin and sign in
+Open **Orbit Companion**, then **Setup**, and tap **Fix next**. It goes through every step that
+isn't ticked, in order, and brings you back to Setup after each one. You can also tap any row
+yourself. Rows that only explain something (Play Protect, Family Link) are never "fixed"; read
+them once.
 
-Follow the plugin's own instructions:
-[BookOrbit Sync plugin for KOReader](https://github.com/bookorbit/bookorbit/blob/main/koreader-plugin/README.md).
-Sign in from KOReader's Tools › BookOrbit menu.
+| Row | What it does |
+|---|---|
+| Family Link supervision / Managed device | Shown only if a parent's Family Link or a work profile controls the reader. It says what it blocks (installs, the Home app, accessibility). When a step won't stick, **approve it in the parent's Family Link app**. |
+| Play Protect scans installs | Reminder: on a Play Protect warning, tap **More details**, then **Install anyway**. |
+| Not disabled by the system | Some launchers (Boox, Meebook) "freeze" apps they think are unused. It names any frozen app and opens the page to re-enable it (step 5). |
+| Install updates | Allow "Install unknown apps" for Orbit, so it can install KOReader and its own updates. |
+| KOReader app installed | Installs the official KOReader from its GitHub releases, for your reader's processor, and checks the download. Tap it again later to check for a KOReader update. |
+| BookOrbit plugin installed | Installs the BookOrbit plugin from BookOrbit's GitHub release into `koreader/plugins/` (allow storage access) and restarts KOReader. After that the plugin updates itself from your BookOrbit server. |
+| KOReader patch installed | Installs the KOReader add-on into `koreader/patches/` and checks it. |
+| Set Orbit as Home app | Pick Orbit Companion as the Home app ("Always"). |
+| Allow notifications | Allow. The app shows one quiet notification so Android keeps it running. |
+| Battery: Unrestricted | Choose "Unrestricted" so Android doesn't stop syncs. |
+| Tailscale signed in and connected | Only for a private server: install Tailscale and sign in (step 4). |
+| Allow "lock screen" (device admin) | Allow. "Sync and sleep" uses it to turn the screen off; nothing else. |
+| KOReader patch answered | Open KOReader once; it ticks when the add-on is running. |
+| Wi-Fi off/on test | Tap. It checks that Wi-Fi can be switched without a prompt, and leaves Wi-Fi as it was. |
+
+Then open KOReader, go to Tools › BookOrbit and **sign in** to your BookOrbit server.
+
+**Which KOReader?** Only the official build from KOReader's GitHub releases loads the add-on.
+F-Droid's KOReader is a separate app that skips add-ons (KOReader's `frontend/userpatch.lua`
+turns them off on that build); the Play Store copy isn't the official build either. Setup says
+which one you have. Install the official one from Setup; your books and the `koreader` folder
+stay. A KOReader signed by someone else has to be uninstalled first (Setup opens its app page).
+
+**Updates are one step.** When Orbit updates (it asks you to confirm), it installs the matching
+add-on itself, and KOReader restarts to load it once no book is open (or when the reader next
+sleeps). It never interrupts reading, and says "Updated to v… (KOReader restarted)".
 
 ## 4. Install Tailscale (only for a private server)
 
@@ -38,38 +70,7 @@ Sign in from KOReader's Tools › BookOrbit menu.
    traffic for your private network. With this on, everything else (including updates for
    this app) is blocked.
 
-## 5. Install Orbit Companion
-
-1. On the reader, download `orbit-companion-<version>.apk` from
-   [this project's releases](https://github.com/Fledgewing/BookOrbit-Android/releases/latest)
-   and open it. When Android asks, allow your browser or file manager to install apps.
-2. Open **Orbit Companion**, then **Setup**. Tap each row that isn't ticked:
-
-| Row | What to do |
-|---|---|
-| Set Orbit as Home app | Pick Orbit Companion as the Home app ("Always"). |
-| Allow notifications | Allow. The app shows one quiet notification so Android keeps it running. |
-| Not disabled by the system | Re-enable any app it names (see step 7). |
-| Install updates | Allow "Install unknown apps" for Orbit, so it can update itself. |
-| Battery: Unrestricted | Choose "Unrestricted" so Android doesn't stop syncs. |
-| Tailscale signed in and connected | Only for a private server: open Tailscale and sign in. |
-| Allow "lock screen" (device admin) | Allow. "Sync and sleep" uses it to turn the screen off; nothing else. |
-| KOReader patch installed | Tap to install the KOReader add-on (step 6). |
-| KOReader patch answered | Tap to open KOReader; it ticks once the add-on is running. |
-| Wi-Fi off/on test | Tap. It checks that Wi-Fi can be switched without a prompt, and leaves Wi-Fi as it was. |
-
-## 6. Install the KOReader add-on (patch)
-
-- **Easiest:** on Setup, tap **KOReader patch installed** and allow storage access. It
-  downloads the add-on, checks it, and puts it in the `koreader/patches` folder. Then close
-  and reopen KOReader.
-- **By hand:** download `2-orbit-android.lua` from the same releases page and copy it into
-  the `koreader/patches` folder on the reader (create the folder if needed), then restart
-  KOReader.
-
-The add-on then updates itself.
-
-## 7. Notes for your reader brand
+## 5. Notes for your reader brand
 
 - **Meebook:** the Meebook launcher "freezes" apps it thinks are unused. Open it, go to
   **Freeze management**, unfreeze KOReader, Tailscale and Orbit Companion, and turn
@@ -79,6 +80,32 @@ The add-on then updates itself.
   them to run in the background if Boox asks.
 - **Any reader:** set the battery to "Unrestricted" for KOReader, Tailscale and Orbit
   Companion (Android Settings › Apps › the app › Battery).
+
+## 6. Set up over USB (optional)
+
+With a Mac or Linux computer, a USB cable and USB debugging on (Settings › About › tap the
+build number 7 times, then Developer options › USB debugging), one script installs
+everything:
+
+```sh
+tools/install-usb.sh                  # install or update everything
+tools/install-usb.sh --fresh          # first clear an old koreader folder (lists it, asks y/N)
+tools/install-usb.sh --books out.csv  # also save the reader's book list as a spreadsheet
+```
+
+It needs `adb` (Android platform-tools), `curl` and `jq`. It shows the reader's model, Android
+version and processor, then downloads the newest KOReader, BookOrbit plugin, Orbit Companion and
+add-on from their official GitHub releases, checks every file (GitHub's published checksums,
+`SHA256SUMS`, and the build attestations when the `gh` tool is installed), installs the two apps
+and copies the plugin and add-on into place. An existing plugin that is new enough is kept (it
+updates itself). `--books` lists every book file with its title and author (from NeoReader's
+library on a Boox, and from the book itself), plus its reading status and when it was last
+opened in KOReader; it runs before any change. The script never deletes anything except the old
+`koreader` folder you confirmed with `--fresh` and the plugin folder it replaces. Then open
+Orbit Companion › Setup › **Fix next** on the reader for the steps that need a tap there.
+
+If you'd rather copy files by hand: `2-orbit-android.lua` goes into `koreader/patches/`, the
+plugin's `bookorbit.koplugin` folder into `koreader/plugins/`, then restart KOReader.
 
 ## 8. Recommended settings
 
@@ -160,7 +187,7 @@ can't.
   and check its Setup page.
 - **"Internet blocked: is 'Block connections without VPN' on…"**: turn that setting off
   (step 4).
-- **"… is disabled by …" or "disabled by the system"**: re-enable the app it names (step 7).
+- **"… is disabled by …" or "disabled by the system"**: re-enable the app it names (step 5).
 - **KOReader restarts after sleep**: some readers stop it a few minutes after the screen goes
   off. That's expected. Home reopens your book, and syncs still run.
 - **Sync didn't happen**: run Tools › Android sync › Test sync path. The first step with ✗

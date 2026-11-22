@@ -544,7 +544,7 @@ object PatchFile {
  */
 object SetupAttention {
     /** Rows that report a test or a sighting, not a setting: never prompted about. */
-    val INFO_ONLY = setOf("patch_seen", "wifi_test", "keymapper")
+    val INFO_ONLY = setOf("patch_seen", "wifi_test", "keymapper", "play_protect", "managed")
 
     fun idOf(label: String): String = when {
         label.startsWith("Set Orbit as Home") -> "home"
@@ -555,6 +555,10 @@ object SetupAttention {
         label.startsWith("Tailscale") -> "tailscale"
         label.startsWith("Allow \"lock screen\"") -> "admin"
         label.startsWith("KOReader patch installed") -> "patch"
+        label.startsWith("KOReader app") -> "koreader"
+        label.startsWith("BookOrbit plugin") -> "plugin"
+        label.startsWith("Play Protect") -> "play_protect"
+        label.startsWith("Family Link") || label.startsWith("Managed device") -> "managed"
         label.startsWith("KOReader patch answered") -> "patch_seen"
         label.startsWith("Wi-Fi off/on test") -> "wifi_test"
         label.startsWith("Clicker buttons") -> "clicker"
@@ -679,6 +683,10 @@ object WhatsNew {
         "0.5.0" to listOf(
             "One update covers everything: after the app updates it installs the matching KOReader patch itself, and KOReader restarts to load it once no book is open (or when the device next sleeps). It never interrupts reading.",
             "The Settings PIN keypad no longer covers an install: the installer, permission screens and Play Protect's scan pass while an update runs and for a minute after, even with the Play Store guarded.",
+        ),
+        "0.5.1" to listOf(
+            "Setup installs the rest: one tap each for the official KOReader, the BookOrbit plugin and the KOReader patch, every download checked. A new reader needs only this app sideloaded.",
+            "Setup › Fix next walks every open step in order and comes back after each one. Setup also explains up front what may get in the way: Play Protect's warnings, a launcher that freezes apps, Family Link.",
         ),
     )
 

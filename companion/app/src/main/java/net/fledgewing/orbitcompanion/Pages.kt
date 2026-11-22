@@ -427,9 +427,148 @@ class Check(
 object Setup {
     private const val BATTERY_DETAIL = "android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL"
 
+    /** UserManager restrictions in force for this user (DeviceChecks.BLOCKING names the ones that matter). */
+    private fun userRestrictions(ctx: Context): Set<String> = try {
+        val b = (ctx.getSystemService(Context.USER_SERVICE) as android.os.UserManager).userRestrictions
+        b.keySet().filter { b.getBoolean(it) }.toSet()
+    } catch (e: Exception) {
+        emptySet()
+    }
+
+    /** Device admins other than us (a managing app). */
+    private fun otherAdmins(ctx: Context): List<String> = try {
+        val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+        dpm.activeAdmins.orEmpty().map { it.packageName }.filter { it != ctx.packageName }.distinct()
+    } catch (e: Exception) {
+        emptyList()
+    }
+
     fun checks(ctx: Context): List<Check> {
         val prefs = Prefs(ctx)
         val list = mutableListOf<Check>()
+
+        // Up front: what will get in the way, in plain words (DeviceChecks).
+        val managed = DeviceChecks.managed(
+            Net.installed(ctx, DeviceChecks.FAMILY_LINK),
+            userRestrictions(ctx),
+            otherAdmins(ctx),
+        )
+        if (managed != null) {
+            list.add(Check(if (Net.installed(ctx, DeviceChecks.FAMILY_LINK)) "Family Link supervision" else "Managed device", false, managed, action = "Help") { a ->
+                Ui.note(a, managed)
+            })
+        }
+        if (Net.appState(ctx, DeviceChecks.PLAY_STORE) == AppState.OK) {
+            list.add(Check("Play Protect scans installs", true, DeviceChecks.playProtect(), action = "Help") { a ->
+                Ui.note(a, DeviceChecks.playProtect())
+            })
+        }
+
+        // Some vendor launchers "freeze" (disable) apps behind our back (Vendor.kt).
+        val frozen = Vendor.disabledApps(ctx)
+        val disabler = Vendor.disablerLabel(ctx)
+        list.add(
+            Check(
+                "Not disabled by the system (KOReader, Tailscale, Orbit)",
+                frozen.isEmpty(),
+                when {
+                    frozen.isNotEmpty() -> "${AppStates.disabledShort(disabler)}: ${frozen.joinToString()}. A frozen app can't start, sync or update until it's re-enabled · re-enable${Vendor.profile(ctx).freezeHint?.let { h -> " in ${disabler ?: "the launcher"} › $h" } ?: " in Settings › Apps"}"
+                    Vendor.profile(ctx).freezeHint != null -> "done · this ${disabler ?: "launcher"} can freeze apps it thinks are unused; if KOReader or Orbit stop working, this row says so and opens ${Vendor.profile(ctx).freezeHint}"
+                    else -> "done"
+                },
+            ) { a ->
+                a.tryStart(Vendor.reenablePage(ctx), "re-enable page")
+            },
+        )
+
+        val canInstall = ctx.packageManager.canRequestPackageInstalls()
+        list.add(Check("Install updates", canInstall, if (canInstall) "done" else "allow Orbit to install apps: KOReader and its own updates") { a ->
+            a.tryStart(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")), "install unknown apps")
+        })
+
+        // Setup installs the rest: KOReader, the BookOrbit plugin, the patch (Installers).
+        val ko = Installers.koreaderState(ctx)
+        val koV = Installers.koreaderVersion(ctx)
+        list.add(
+            Check(
+                "KOReader app installed${if (ko == KoreaderRelease.State.OFFICIAL && koV != null) " ($koV)" else ""}",
+                ko == KoreaderRelease.State.OFFICIAL,
+                when {
+                    Installers.busy(Installers.KOREADER) -> "downloading…"
+                    ko == KoreaderRelease.State.OFFICIAL -> "official build${prefs.koreaderInstallStatus.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""} · tap to check for an update"
+                    prefs.koreaderInstallStatus.isNotEmpty() && ko == KoreaderRelease.State.MISSING -> "${prefs.koreaderInstallStatus} · tap to try again"
+                    else -> KoreaderRelease.explain(ko)
+                },
+                action = if (ko == KoreaderRelease.State.OFFICIAL) "Check" else "Install",
+            ) { a ->
+                if (ko == KoreaderRelease.State.OTHER_SIGNER) {
+                    a.tryStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${Koreader.PKG}")), "KOReader app info")
+                } else if (!a.packageManager.canRequestPackageInstalls()) {
+                    prefs.koreaderInstallStatus = "allow Orbit to install apps first (Install updates)"
+                    a.tryStart(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${a.packageName}")), "install unknown apps")
+                } else {
+                    Installers.koreader(a) { a.refresh() }
+                    a.refresh()
+                }
+            },
+        )
+
+        val plV = Installers.pluginVersion()
+        val plNeeds = PluginRelease.needsInstall(plV)
+        list.add(
+            Check(
+                "BookOrbit plugin installed${plV?.let { " (v$it)" } ?: ""}",
+                !plNeeds,
+                when {
+                    Installers.busy(Installers.PLUGIN) -> "downloading…"
+                    !plNeeds -> "it updates itself from your BookOrbit server${prefs.pluginInstallStatus.takeIf { it.startsWith("installed") }?.let { " · $it" } ?: ""}"
+                    prefs.pluginInstallStatus.isNotEmpty() -> "${prefs.pluginInstallStatus} · tap to try again"
+                    plV == null -> "tap to install it from BookOrbit's GitHub release into koreader/plugins/"
+                    else -> "older than the patch needs (v${PluginRelease.MIN_VERSION}) · tap to update"
+                },
+                action = if (plNeeds) "Install" else null,
+            ) { a ->
+                if (plNeeds && !Installers.busy(Installers.PLUGIN)) Installers.pluginFrom(a) { a.refresh() }
+                a.refresh()
+            },
+        )
+
+        // The file decides "outdated"; the version the running patch reports decides "restart".
+        val fileV = PatchInstaller.installedVersion()
+        val runningV = prefs.patchVersionSeen.takeIf { it.isNotEmpty() }
+        val patchState = PatchRow.state(fileV, runningV, BuildConfig.VERSION_NAME)
+        val patchV = fileV ?: runningV
+        list.add(
+            Check(
+                "KOReader patch installed${patchV?.let { " (v$it)" } ?: ""}",
+                patchState == PatchRowState.CURRENT || patchState == PatchRowState.RESTART,
+                when {
+                    PatchInstaller.busy -> "installing…"
+                    patchState == PatchRowState.RESTART && UpdateFlow.autoRestart(runningV) ->
+                        "KOReader restarts by itself to load it once no book is open (or when the device sleeps); it still runs v$runningV"
+                    patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) "Restart KOReader to finish (KOReader still runs v$runningV)"
+                        else "Restart KOReader to finish: close KOReader from recent apps and reopen it (it still runs v$runningV)"
+                    patchState == PatchRowState.MISSING && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"
+                    patchState == PatchRowState.MISSING -> "tap to install it into koreader/patches/"
+                    patchState == PatchRowState.OUTDATED -> "older than this app's release (v${BuildConfig.VERSION_NAME}) · tap to update"
+                    else -> "up to date${prefs.patchInstallStatus.takeIf { it.startsWith("installed") }?.let { " · $it" } ?: ""}"
+                },
+                pending = patchState == PatchRowState.RESTART,
+                action = when {
+                    PatchInstaller.busy -> "Installing…"
+                    patchState != PatchRowState.RESTART -> "Fix"
+                    PatchRow.canRestart(runningV) -> "Restart KOReader"
+                    else -> null
+                },
+            ) { a ->
+                when {
+                    PatchInstaller.busy -> Unit
+                    patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) Koreader.restart(a, "setup: new patch installed")
+                    else -> PatchInstaller.installFrom(a) { a.refresh() }
+                }
+                a.refresh()
+            },
+        )
 
         val home = ctx.packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
@@ -447,23 +586,6 @@ object Setup {
             )
         })
 
-        // Some vendor launchers "freeze" (disable) apps behind our back (Vendor.kt).
-        val frozen = Vendor.disabledApps(ctx)
-        val disabler = Vendor.disablerLabel(ctx)
-        list.add(
-            Check(
-                "Not disabled by the system (KOReader, Tailscale, Orbit)",
-                frozen.isEmpty(),
-                if (frozen.isEmpty()) "done" else "${AppStates.disabledShort(disabler)}: ${frozen.joinToString()} · re-enable${Vendor.profile(ctx).freezeHint?.let { h -> " in ${disabler ?: "the launcher"} › $h" } ?: " in Settings › Apps"}",
-            ) { a ->
-                a.tryStart(Vendor.reenablePage(ctx), "re-enable page")
-            },
-        )
-
-        val canInstall = ctx.packageManager.canRequestPackageInstalls()
-        list.add(Check("Install updates", canInstall, if (canInstall) "done" else "allow Orbit to install unknown apps (self-update)") { a ->
-            a.tryStart(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")), "install unknown apps")
-        })
 
         listOf(ctx.packageName to "Orbit", Net.TAILSCALE_PKG to "Tailscale", Koreader.PKG to "KOReader").forEach { (pkg, name) ->
             val installed = Net.installed(ctx, pkg)
@@ -559,43 +681,6 @@ object Setup {
             ) { a -> a.tryStart(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS), "keyboard settings") })
         }
 
-        // The file decides "outdated"; the version the running patch reports decides "restart".
-        val fileV = PatchInstaller.installedVersion()
-        val runningV = prefs.patchVersionSeen.takeIf { it.isNotEmpty() }
-        val patchState = PatchRow.state(fileV, runningV, BuildConfig.VERSION_NAME)
-        val patchV = fileV ?: runningV
-        list.add(
-            Check(
-                "KOReader patch installed${patchV?.let { " (v$it)" } ?: ""}",
-                patchState == PatchRowState.CURRENT || patchState == PatchRowState.RESTART,
-                when {
-                    PatchInstaller.busy -> "installing…"
-                    patchState == PatchRowState.RESTART && UpdateFlow.autoRestart(runningV) ->
-                        "KOReader restarts by itself to load it once no book is open (or when the device sleeps); it still runs v$runningV"
-                    patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) "Restart KOReader to finish (KOReader still runs v$runningV)"
-                        else "Restart KOReader to finish: close KOReader from recent apps and reopen it (it still runs v$runningV)"
-                    patchState == PatchRowState.MISSING && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"
-                    patchState == PatchRowState.MISSING -> "tap to install it into koreader/patches/"
-                    patchState == PatchRowState.OUTDATED -> "older than this app's release (v${BuildConfig.VERSION_NAME}) · tap to update"
-                    else -> "up to date${prefs.patchInstallStatus.takeIf { it.startsWith("installed") }?.let { " · $it" } ?: ""}"
-                },
-                pending = patchState == PatchRowState.RESTART,
-                action = when {
-                    PatchInstaller.busy -> "Installing…"
-                    patchState != PatchRowState.RESTART -> "Fix"
-                    PatchRow.canRestart(runningV) -> "Restart KOReader"
-                    else -> null
-                },
-            ) { a ->
-                when {
-                    PatchInstaller.busy -> Unit
-                    patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) Koreader.restart(a, "setup: new patch installed")
-                    else -> PatchInstaller.installFrom(a) { a.refresh() }
-                }
-                a.refresh()
-            },
-        )
-
         val seen = prefs.patchSeenAt
         list.add(
             Check(
@@ -630,9 +715,45 @@ object Setup {
 class SetupActivity : EinkActivity() {
     private var test: NetTest? = null
 
+    /** "Fix next": walking the pending rows in order, each once (SetupWalk). */
+    private var walking = false
+    private val tried = HashSet<String>()
+    private var lastStep = 0L
+
     override fun onResume() {
         super.onResume()
         render()
+        if (walking) continueWalk("back in Setup")
+    }
+
+    private fun installing() = PatchInstaller.busy || Installers.busy(Installers.PLUGIN) || Installers.busy(Installers.KOREADER)
+
+    private fun startWalk() {
+        walking = true
+        tried.clear()
+        lastStep = 0
+        OLog.i("setup: Fix next started")
+        continueWalk("start")
+    }
+
+    /** The next pending row, once the last step is back (a page closed, an install finished). */
+    private fun continueWalk(why: String) {
+        if (!walking || isFinishing || installing()) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastStep < 1_000) return
+        val checks = Setup.checks(this)
+        val id = SetupWalk.next(checks.map { SetupAttention.idOf(it.label) to it.done }, tried)
+        val c = checks.firstOrNull { SetupAttention.idOf(it.label) == id }
+        if (id == null || c == null) {
+            walking = false
+            OLog.i("setup: Fix next done ($why); ${checks.count { !it.done }} row(s) still open")
+            render()
+            return
+        }
+        tried.add(id)
+        lastStep = now
+        OLog.i("setup: Fix next -> $id ($why)")
+        Pin.fix(this) { c.open(this) }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -650,8 +771,13 @@ class SetupActivity : EinkActivity() {
     }
 
     override fun refresh() {
-        if (!isFinishing) render()
+        if (isFinishing) return
+        render()
+        // An in-app step (an install) finished: on to the next one.
+        if (walking && hasWindowFocus()) main.postDelayed({ continueWalk("step finished") }, 1_200)
     }
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
 
     fun runWifiTest() {
         if (test?.running == true) return
@@ -669,6 +795,20 @@ class SetupActivity : EinkActivity() {
         val root = page(scroll = true)
         val checks = Setup.checks(this)
         root.addView(Ui.header(this, "First-run setup (${checks.count { it.done }}/${checks.size})", "‹ Back") { finish() })
+        val open = checks.count { !it.done && SetupAttention.idOf(it.label) !in SetupAttention.INFO_ONLY }
+        if (open > 0) {
+            root.addView(
+                Ui.button(this, if (walking) "Fixing… (tap to stop)" else "Fix next ($open to go)", solid = !walking) {
+                    if (walking) {
+                        walking = false
+                        render()
+                    } else {
+                        startWalk()
+                    }
+                },
+            )
+            root.addView(Ui.text(this, "Goes through each step in order and comes back here after each one.", 15f, color = Ui.MID))
+        }
         checks.forEach { c ->
             val isTest = c.label == "Wi-Fi off/on test"
             val right: TextView = if (isTest) {

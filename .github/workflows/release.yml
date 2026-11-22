@@ -61,6 +61,12 @@ jobs:
           luajit koreader-patch/test/test_logic.lua
           luajit koreader-patch/test/test_flows.lua
 
+      - name: USB installer checks
+        run: |
+          set -euo pipefail
+          shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh
+          bash tools/test/test-install-usb.sh
+
       - name: Build the signed companion APK
         working-directory: companion
         env:

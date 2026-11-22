@@ -137,6 +137,13 @@ class Prefs(ctx: Context) {
         get() = str("patch_await_version")
         set(v) = setStr("patch_await_version", v)
 
+    var koreaderInstallStatus: String
+        get() = str("koreader_install_status")
+        set(v) = setStr("koreader_install_status", v)
+    var pluginInstallStatus: String
+        get() = str("plugin_install_status")
+        set(v) = setStr("plugin_install_status", v)
+
     var patchInstallStatus: String
         get() = sp.getString("patch_install_status", "") ?: ""
         set(v) = setStr("patch_install_status", v)
