@@ -20,9 +20,9 @@ Every extra is a **string**. Every broadcast carries `proto = "1"` and
 | Action (`net.fledgewing.orbitcompanion.action.…`) | Extras | Companion does |
 |---|---|---|
 | `NET_UP` | `reason`, `request_id`, `wifi` (`"1"`/`"0"`), `tailscale` (`"1"`/`"0"`), `wake_lock_s` (`"0"` = none) | Cancel any pending Wi-Fi-off timer. If `wake_lock_s` > 0, hold a partial wake lock for that long, hard-capped at 25 s. If `wifi = "1"` and Wi-Fi is off, turn it on. If `tailscale = "1"`, send Tailscale `CONNECT_VPN`. Record the time it took Wi-Fi to come up, for its status page. |
-| `NET_DONE` | `reason`, `ok` (`"1"`/`"0"`), `seconds` (e.g. `"4.2"`), `detail` | Release the wake lock. For `reason` `sleep` or `sync_and_sleep`: record "Last sleep sync", then apply "Wi-Fi after sleep sync" (keep on / off after N min / off now), only while the screen is still off. |
+| `NET_DONE` | `reason`, `ok` (`"1"`/`"0"`), `seconds` (e.g. `"4.2"`), `detail` | Release the wake lock. For `reason` `sleep` or `sync_and_sleep`: record "Last sleep sync", then apply "Wi-Fi after sleep sync": keep on; off after 30 min (the timer turns Wi-Fi off only if the screen is still off when it fires); or off now, only while the screen is off. For `sync_and_sleep` the screen is still on at `NET_DONE` (`SLEEP_NOW` follows), so "off now" waits for the next screen-off, up to 30 s later. |
 | `WIFI_OFF` | `reason` | Turn Wi-Fi off (KOReader's own "Wi-Fi off" toggle). |
-| `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()`; fallback, an accessibility service's `GLOBAL_ACTION_LOCK_SCREEN`. |
+| `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
 
 `reason` values: `start` (KOReader just started; every wake is a fresh start on the M8C),
 `wake`, `retry`, `sleep` (power button), `sync_and_sleep`, `reading` (sync while reading),
@@ -35,6 +35,9 @@ a KOReader that is frozen or killed before it sends `NET_DONE`.
 
 "Sync and sleep": `NET_UP`, `NET_DONE`, then `SLEEP_NOW`. On failure the patch shows its
 message for 3 s first.
+
+The companion's setup row "KOReader patch answered" is ticked by any broadcast carrying
+`sender = "org.koreader.launcher"` or by a loopback `GET /status`.
 
 ## Patch → companion: activities
 
@@ -64,6 +67,13 @@ start and on every resume, removes it, closes any open book (the reader saves it
 plugin syncs it as on any close) and opens the plugin's BookOrbit home.
 
 Unknown commands are logged and ignored.
+
+When the companion sends it: on every Home press and at boot (it is the HOME app). A second
+Home press within 2 s, or a KOReader that is missing, fails to start or closes within 5 s of
+starting, shows the companion's launcher page instead. When Home comes back to the front
+without a press (KOReader closed or was killed, e.g. by the M8C firmware about 110 s after the
+power button), the companion starts KOReader again *without* the extra, so it reopens the last
+book as on any fresh start; with the screen off it waits for the next screen-on.
 
 ## Optional: companion status over loopback
 

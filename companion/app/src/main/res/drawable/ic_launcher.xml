@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An orbit: a ring with a dot, black on white. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M24,1a23,23 0,1 1,0 46a23,23 0,1 1,0 -46z" />
+    <path android:strokeColor="#FF000000" android:strokeWidth="3" android:fillColor="#00000000"
+        android:pathData="M24,9a15,15 0,1 1,0 30a15,15 0,1 1,0 -30z" />
+    <path android:fillColor="#FF000000" android:pathData="M24,18a6,6 0,1 1,0 12a6,6 0,1 1,0 -12z" />
+    <path android:fillColor="#FF000000" android:pathData="M37,6a4,4 0,1 1,0 8a4,4 0,1 1,0 -8z" />
+</vector>

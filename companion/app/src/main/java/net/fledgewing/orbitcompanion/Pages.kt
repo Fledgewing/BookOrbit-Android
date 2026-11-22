@@ -1,0 +1,426 @@
+package net.fledgewing.orbitcompanion
+
+import android.app.admin.DevicePolicyManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.provider.Settings
+import android.view.Gravity
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.TextView
+
+/** Lines shared by the launcher page and the status page. */
+object Status {
+    fun networkLine(ctx: Context): String = when {
+        !Net.wifiEnabled(ctx) -> "Wi-Fi off"
+        !Net.wifiConnected(ctx) -> "Wi-Fi connecting"
+        Net.vpnUp(ctx) -> "Wi-Fi + Tailscale up"
+        else -> "Wi-Fi up · Tailscale off"
+    }
+
+    fun lastSleepSync(ctx: Context): String {
+        val p = Prefs(ctx)
+        if (p.lastSleepSyncAt == 0L) return "none yet"
+        val s = p.lastSleepSyncSeconds.ifEmpty { "?" }
+        return "${Ui.clock(ctx, p.lastSleepSyncAt)} · ${if (p.lastSleepSyncOk) "done" else "failed"}, $s s"
+    }
+
+    fun lastNetReady(ctx: Context): String {
+        val p = Prefs(ctx)
+        if (p.lastNetReadyAt == 0L) return "none yet"
+        return "${Ui.clock(ctx, p.lastNetReadyAt)} · ${Ui.secs(p.lastNetReadyMs)}"
+    }
+
+    fun wifiTimer(ctx: Context): String {
+        val p = Prefs(ctx)
+        val now = System.currentTimeMillis()
+        return when {
+            p.wifiOffDeadline > now && Net.wifiEnabled(ctx) -> "in ${WifiPolicy.minutesLeft(now, p.wifiOffDeadline)} min"
+            p.wifiAfterSleep == WifiAfterSleep.KEEP_ON -> "never (Keep on)"
+            else -> "no timer"
+        }
+    }
+}
+
+/**
+ * Times Wi-Fi + Tailscale. Polls every 250 ms and reports once at the end (one e-ink redraw).
+ * [offFirst]: the setup checklist's Wi-Fi off/on test, which also records whether Android
+ * showed a prompt (a refused call, a state that never changed, or our window losing focus).
+ */
+class NetTest(private val ctx: Context, private val offFirst: Boolean, private val done: (Boolean, String) -> Unit) {
+    private val h = Handler(Looper.getMainLooper())
+    private var t0 = 0L
+    private var onAt = 0L
+    private var wifiMs = -1L
+    private var phase = 0
+    private var refused = false
+    var focusLost = false
+    var running = false
+        private set
+
+    fun start() {
+        running = true
+        t0 = SystemClock.elapsedRealtime()
+        OLog.i("${if (offFirst) "Wi-Fi off/on test" else "network test"} started")
+        if (offFirst) {
+            refused = !Net.setWifi(ctx, false, "setup Wi-Fi test")
+            phase = 0
+        } else {
+            wifiOn()
+            Net.connectTailscale(ctx, "network test")
+        }
+        h.postDelayed(::tick, 250)
+    }
+
+    private fun wifiOn() {
+        phase = 1
+        onAt = SystemClock.elapsedRealtime()
+        if (!Net.wifiEnabled(ctx) && !Net.setWifi(ctx, true, if (offFirst) "setup Wi-Fi test" else "network test")) refused = true
+    }
+
+    private fun tick() {
+        val now = SystemClock.elapsedRealtime()
+        when (phase) {
+            0 -> when {
+                !Net.wifiEnabled(ctx) -> wifiOn()
+                now - t0 > 10_000 -> return finish(false, "Wi-Fi didn't turn off")
+            }
+            1 -> when {
+                Net.wifiConnected(ctx) -> {
+                    wifiMs = now - onAt
+                    if (offFirst) return finish(true, "")
+                    Net.connectTailscale(ctx, "network test, Wi-Fi up")
+                    phase = 2
+                }
+                now - onAt > 45_000 -> return finish(false, "Wi-Fi didn't reconnect in 45 s")
+            }
+            2 -> when {
+                Net.vpnUp(ctx) -> return finish(true, "")
+                now - onAt > 30_000 -> return finish(false, "Tailscale didn't connect")
+            }
+        }
+        h.postDelayed(::tick, 250)
+    }
+
+    private fun finish(ok: Boolean, problem: String) {
+        running = false
+        val prompt = refused || focusLost
+        val total = SystemClock.elapsedRealtime() - t0
+        val summary = if (offFirst) {
+            val reconnect = if (wifiMs >= 0) "reconnected in ${Ui.secs(wifiMs)}" else problem
+            val p = if (prompt) "Android prompted or refused" else "no prompt"
+            "$reconnect · $p"
+        } else {
+            val parts = mutableListOf<String>()
+            if (wifiMs >= 0) parts.add("Wi-Fi ${Ui.secs(wifiMs)}")
+            if (ok) parts.add("Tailscale ${Ui.secs(SystemClock.elapsedRealtime() - onAt - wifiMs)}")
+            if (problem.isNotEmpty()) parts.add(problem)
+            parts.joinToString(" · ")
+        }
+        OLog.i("${if (offFirst) "Wi-Fi off/on test" else "network test"} ${if (ok) "passed" else "FAILED"} in $total ms: $summary (refused=$refused focusLost=$focusLost)")
+        done(ok && !(offFirst && prompt), summary)
+    }
+
+    fun cancel() {
+        h.removeCallbacksAndMessages(null)
+        running = false
+    }
+}
+
+/** Mockup 3. Also opened by the patch (SHOW_STATUS) and from the launcher. */
+class StatusActivity : EinkActivity() {
+    private var testResult: String? = null
+    private var test: NetTest? = null
+
+    override fun onResume() {
+        super.onResume()
+        OrbitService.start(this)
+        render()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        test?.cancel()
+    }
+
+    private fun render() {
+        val root = page()
+        root.addView(Ui.header(this, "Orbit Companion", "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) })
+        val wifi = when {
+            !Net.wifiEnabled(this) -> "Off"
+            Net.wifiConnected(this) -> "On · connected"
+            else -> "On · not connected"
+        }
+        val ts = when {
+            !Net.installed(this, Net.TAILSCALE_PKG) -> "Not installed"
+            Net.vpnUp(this) -> "Connected"
+            else -> "Not connected"
+        }
+        root.addView(Ui.row(this, "Wi-Fi", right = Ui.value(this, wifi)))
+        root.addView(Ui.row(this, "Tailscale", right = Ui.value(this, ts)))
+        root.addView(Ui.row(this, "Service", right = Ui.value(this, if (OrbitService.running) "Running" else "Starting")))
+        root.addView(Ui.row(this, "Screen-off permission", right = Ui.value(this, if (Net.adminActive(this)) "Granted" else "Not granted")))
+        root.addView(Ui.gap(this, 16))
+        val card = Ui.card(this)
+        card.addView(Ui.row(this, "Last sleep sync", "reported by the KOReader patch", Ui.value(this, Status.lastSleepSync(this))))
+        card.addView(Ui.row(this, "Last wake network ready in", right = Ui.value(this, Status.lastNetReady(this))))
+        card.addView(Ui.row(this, "Wi-Fi turns off", right = Ui.value(this, Status.wifiTimer(this))))
+        root.addView(card)
+        root.addView(Ui.gap(this, 16))
+        val checks = Setup.checks(this)
+        root.addView(
+            Ui.weightRow(
+                this,
+                Ui.button(this, if (test?.running == true) "Testing…" else "Test network") { runTest() },
+                Ui.button(this, "Setup (${checks.count { it.done }}/${checks.size})", solid = checks.any { !it.done }) {
+                    startActivity(Intent(this, SetupActivity::class.java))
+                },
+            ),
+        )
+        testResult?.let { root.addView(Ui.text(this, it, 18f).apply { setPadding(0, Ui.dp(this@StatusActivity, 10), 0, 0) }) }
+    }
+
+    private fun runTest() {
+        if (test?.running == true) return
+        testResult = "Testing: Wi-Fi on, Tailscale wake…"
+        test = NetTest(this, offFirst = false) { ok, summary ->
+            testResult = (if (ok) "Network test passed: " else "Network test failed: ") + summary
+            render()
+        }.also { it.start() }
+        render()
+    }
+}
+
+/** Mockup 4. */
+class SettingsActivity : EinkActivity() {
+    private lateinit var prefs: Prefs
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        prefs = Prefs(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        render()
+    }
+
+    private fun changed() {
+        OLog.debug = prefs.debugLog
+        OLog.i(
+            "settings: wifi_after_sleep=${prefs.wifiAfterSleep.key} wake_ts_with_wifi=${prefs.wakeTailscaleWithWifi} " +
+                "wake_lock=${prefs.wakeLockEnabled} home_opens_koreader=${prefs.homeOpensKoreader} " +
+                "notify_tailscale=${prefs.notifyTailscale} debug=${prefs.debugLog}",
+        )
+        OrbitService.start(this, Intent(OrbitService.ACTION_REFRESH))
+        render()
+    }
+
+    private fun render() {
+        val root = page()
+        root.addView(Ui.header(this, "Settings", "‹ Back") { finish() })
+        root.addView(Ui.text(this, "Wi-Fi after sleep sync", 21f).apply { setPadding(0, 0, 0, Ui.dp(this@SettingsActivity, 8)) })
+        val seg = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = Ui.box(this@SettingsActivity, Ui.PAPER)
+            val pad = Ui.dp(this@SettingsActivity, 2)
+            setPadding(pad, pad, pad, pad)
+        }
+        listOf(
+            WifiAfterSleep.KEEP_ON to "Keep on",
+            WifiAfterSleep.OFF_AFTER_30 to "Off after 30 min",
+            WifiAfterSleep.OFF_NOW to "Off now",
+        ).forEach { (mode, label) ->
+            val sel = prefs.wifiAfterSleep == mode
+            val t = Ui.text(this, label, 18f, bold = sel, color = if (sel) Ui.PAPER else Ui.INK).apply {
+                gravity = Gravity.CENTER
+                minHeight = Ui.dp(this@SettingsActivity, 72)
+                setBackgroundColor(if (sel) Ui.INK else Ui.PAPER)
+            }
+            Ui.clickable(t, {
+                prefs.wifiAfterSleep = mode
+                changed()
+            })
+            seg.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        root.addView(seg)
+        root.addView(
+            Ui.text(this, "Short naps keep Wi-Fi up, so waking syncs in about 1 s. The timer only turns Wi-Fi off if the screen is still off.", 16f, color = Ui.MID)
+                .apply { setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 12)) },
+        )
+        toggle(root, "Wake Tailscale with Wi-Fi", null, prefs.wakeTailscaleWithWifi) { prefs.wakeTailscaleWithWifi = it }
+        toggle(root, "Wake lock while syncing", "released at the patch's 20 s cap · 25 s max", prefs.wakeLockEnabled) { prefs.wakeLockEnabled = it }
+        toggle(root, "Home always opens BookOrbit home", "press Home twice for the launcher page", prefs.homeOpensKoreader) { prefs.homeOpensKoreader = it }
+        toggle(root, "Notify if Tailscale won't connect", null, prefs.notifyTailscale) { prefs.notifyTailscale = it }
+        toggle(root, "Debug log", "more detail in logcat, tag OrbitCompanion", prefs.debugLog) { prefs.debugLog = it }
+    }
+
+    private fun toggle(root: LinearLayout, label: String, sub: String?, on: Boolean, set: (Boolean) -> Unit) {
+        root.addView(Ui.row(this, label, sub, Ui.toggle(this, on), onClick = {
+            set(!on)
+            changed()
+        }))
+    }
+}
+
+/** One checklist row (mockup 5). */
+class Check(val label: String, val done: Boolean, val detail: String, val open: (EinkActivity) -> Unit)
+
+object Setup {
+    private const val BATTERY_DETAIL = "android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL"
+
+    fun checks(ctx: Context): List<Check> {
+        val prefs = Prefs(ctx)
+        val list = mutableListOf<Check>()
+
+        val home = ctx.packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
+        )?.activityInfo?.packageName
+        list.add(Check("Set Orbit as Home app", home == ctx.packageName, if (home == ctx.packageName) "done" else "now: ${home ?: "ask every time"}") { a ->
+            a.tryStart(Intent(Settings.ACTION_HOME_SETTINGS), "Home app settings") ||
+                a.tryStart(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS), "default apps settings")
+        })
+
+        val notif = Net.notificationsEnabled(ctx)
+        list.add(Check("Allow notifications", notif, if (notif) "done" else "off") { a ->
+            a.tryStart(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName),
+                "notification settings",
+            )
+        })
+
+        listOf(ctx.packageName to "Orbit", Net.TAILSCALE_PKG to "Tailscale", Koreader.PKG to "KOReader").forEach { (pkg, name) ->
+            val installed = Net.installed(ctx, pkg)
+            val ok = installed && (ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(pkg)
+            list.add(Check("Battery: Unrestricted ($name)", ok, if (!installed) "not installed" else if (ok) "done" else "set App battery usage › Unrestricted") { a ->
+                if (installed) {
+                    a.tryStart(Intent(BATTERY_DETAIL, Uri.parse("package:$pkg")), "battery page for $pkg") ||
+                        a.tryStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")), "app info for $pkg")
+                }
+            })
+        }
+
+        val tsInstalled = Net.installed(ctx, Net.TAILSCALE_PKG)
+        val vpn = Net.vpnUp(ctx)
+        // Readable for targetSdk 28 (hidden settings are blocked only from targetSdk 31); null = not set.
+        val alwaysOnApp: String? = try {
+            Settings.Secure.getString(ctx.contentResolver, "always_on_vpn_app")
+        } catch (e: Exception) {
+            null
+        }
+        val alwaysOn = alwaysOnApp == Net.TAILSCALE_PKG
+        list.add(
+            Check(
+                "Tailscale signed in + Always-on",
+                vpn && alwaysOn,
+                when {
+                    !tsInstalled -> "not installed"
+                    !vpn -> "not connected: open Tailscale and sign in"
+                    !alwaysOn -> "connected · Always-on off: VPN settings › Tailscale ⚙"
+                    else -> "done"
+                },
+            ) { a ->
+                if (vpn && !alwaysOn) {
+                    a.tryStart(Intent(Settings.ACTION_VPN_SETTINGS), "VPN settings")
+                } else {
+                    ctx.packageManager.getLaunchIntentForPackage(Net.TAILSCALE_PKG)?.let { a.tryStart(it, "Tailscale") }
+                }
+            },
+        )
+
+        val admin = Net.adminActive(ctx)
+        list.add(Check("Allow \"lock screen\" (device admin)", admin, if (admin) "done" else "for Sync and sleep") { a ->
+            a.tryStart(
+                Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                    .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminReceiver.component(ctx))
+                    .putExtra(
+                        DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                        "Lets \"Sync and sleep\" turn the screen off after syncing. It uses only the lock-screen permission.",
+                    ),
+                "device admin",
+            )
+        })
+
+        val seen = prefs.patchSeenAt
+        list.add(
+            Check(
+                "KOReader patch answered",
+                seen > 0,
+                if (seen > 0) "last ${Ui.clock(ctx, seen)} (${prefs.patchSeenVia})" else "open KOReader with the patch, or run its Test sync path",
+            ) { a ->
+                if (!Koreader.start(a, "setup: patch check", null)) OLog.i("setup: KOReader not startable")
+            },
+        )
+
+        list.add(
+            Check(
+                "Wi-Fi off/on test",
+                prefs.wifiTestOk,
+                if (prefs.wifiTestAt > 0) "${Ui.clock(ctx, prefs.wifiTestAt)}: ${prefs.wifiTestSummary}" else "times the reconnect; checks for a prompt",
+            ) { a -> (a as? SetupActivity)?.runWifiTest() },
+        )
+        return list
+    }
+}
+
+/** Mockup 5. Rows re-check on resume. */
+class SetupActivity : EinkActivity() {
+    private var test: NetTest? = null
+
+    override fun onResume() {
+        super.onResume()
+        render()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        val t = test
+        if (!hasFocus && t != null && t.running) {
+            t.focusLost = true
+            OLog.i("Wi-Fi test: window lost focus (a system prompt?)")
+        }
+    }
+
+    override fun onDestroy() {
+        test?.cancel()
+        super.onDestroy()
+    }
+
+    fun runWifiTest() {
+        if (test?.running == true) return
+        test = NetTest(this, offFirst = true) { ok, summary ->
+            val prefs = Prefs(this)
+            prefs.wifiTestAt = System.currentTimeMillis()
+            prefs.wifiTestOk = ok
+            prefs.wifiTestSummary = summary
+            render()
+        }.also { it.start() }
+        render()
+    }
+
+    private fun render() {
+        val root = page()
+        val checks = Setup.checks(this)
+        root.addView(Ui.header(this, "First-run setup (${checks.count { it.done }}/${checks.size})", "‹ Back") { finish() })
+        checks.forEach { c ->
+            val isTest = c.label == "Wi-Fi off/on test"
+            val right: TextView = if (isTest) {
+                Ui.button(this, if (test?.running == true) "Running…" else "Run", heightDp = 56, sp = 18f) { c.open(this) }
+            } else {
+                Ui.value(this, if (c.done) "done" else "open ›", bold = !c.done)
+            }
+            root.addView(
+                Ui.row(
+                    this, c.label, if (c.done && c.detail == "done") null else c.detail, right,
+                    onClick = { c.open(this) },
+                    left = Ui.check(this, c.done),
+                ),
+            )
+        }
+    }
+}

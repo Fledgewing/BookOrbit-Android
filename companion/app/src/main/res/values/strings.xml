@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Orbit Companion</string>
+    <string name="home_name">Orbit</string>
+    <string name="apps_name">Other apps</string>
+    <string name="admin_description">Lets \"Sync and sleep\" turn the screen off after syncing. Uses only the lock-screen permission.</string>
+</resources>
