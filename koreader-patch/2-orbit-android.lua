@@ -225,6 +225,33 @@ end
 Update.BLOCKED = "Internet blocked: is 'Block connections without VPN' on for Tailscale?"
 
 Update.WENT_DOWN = "network went down during the check"
+Update.NO_ANSWER = "GitHub didn't answer (the network may still be starting). Try again in a minute."
+
+-- A connect timeout or reset right after Wi-Fi or Tailscale comes up is usually gone seconds
+-- later (11-21 Boox: a 15 s timeout, then 0.04 s a minute after). Retry twice, after 3 s
+-- and 10 s, with a shorter per-try timeout (Update.TRY_TIMEOUT_S).
+Update.RETRY_WAITS = { 3, 10 }
+Update.TRY_TIMEOUT_S = 8
+
+function Update.transient(err)
+    local low = tostring(err or ""):lower()
+    if not low:find("^network:") then return false end
+    return low:find("timeout", 1, true) ~= nil or low:find("timed out", 1, true) ~= nil
+        or low:find("reset", 1, true) ~= nil
+end
+
+-- fn() returns body or nil, err. Retries transient errors after each wait in RETRY_WAITS.
+-- sleep(s) and note(try, err, wait) are injected (tests; the child sleeps for real).
+function Update.withRetry(fn, sleep, note)
+    local body, err = fn()
+    for i, wait in ipairs(Update.RETRY_WAITS) do
+        if body or not Update.transient(err) then break end
+        if note then note(i, err, wait) end
+        sleep(wait)
+        body, err = fn()
+    end
+    return body, err
+end
 
 -- An update request failed: plain words. err: httpGet's error ("network: permission denied"
 -- is EACCES, what Android returns when "Block connections without VPN" stops a socket outside
@@ -246,7 +273,7 @@ function Update.errorText(err, st)
     if st.connected == false then return "no internet: Wi-Fi isn't connected" end
     if err:find("network:", 1, true) then
         if st.lockdown == true then return Update.BLOCKED end
-        return "no internet (GitHub unreachable: " .. err:gsub("^network: ", "") .. ")"
+        return Update.NO_ANSWER
     end
     return "check failed: " .. err
 end
@@ -1815,7 +1842,9 @@ function Updater.run(why)
     local pre = S.patch_update_prerelease == true
     log("update: check started (" .. why .. "), installed", PATCH_VERSION, "pre-releases", tostring(pre))
     local url = pre and (RELEASES_API .. "?per_page=5") or (RELEASES_API .. "/latest")
-    local body, err = httpGet(url, 10, 30)
+    local body, err = Update.withRetry(function() return httpGet(url, Update.TRY_TIMEOUT_S, 20) end,
+        function(s) require("socket").sleep(s) end,
+        function(i, e, wait) log("update: try", i, "failed:", tostring(e), "- retrying in", wait, "s") end)
     if not body then
         -- The parent words it (Update.errorText) from the state after the check: no JNI here.
         log("update: check failed:", tostring(err))
@@ -1919,7 +1948,7 @@ function Background.run(name, fn, timeout_s, cb)
     UIManager:scheduleIn(Background.POLL_S, poll)
 end
 
-Updater.TIMEOUT_S = 150 -- the child's own timeouts add up to at most 30 + 60 + 60 s
+Updater.TIMEOUT_S = 210 -- the child's own timeouts add up to at most 3 x 20 + 3 + 10 + 60 + 60 s
 
 function Updater.check(why, done)
     if Updater.busy then

@@ -35,7 +35,10 @@ afterwards). Without a network they say so ("No internet: Wi-Fi is off"; "networ
 during the check" when Wi-Fi went off mid-check). They say "Internet blocked: is 'Block
 connections without VPN' on for Tailscale?" only when the companion reads that setting as on:
 Tailscale routes only the tailnet, so that setting blocks GitHub; the setup checklist's
-Tailscale row warns about it. A failed automatic check waits an hour before trying again.
+Tailscale row warns about it. A connect timeout or reset (common for a few seconds after Wi-Fi
+or Tailscale comes up) is retried twice, after 3 s and 10 s, each try connecting within 8 s;
+if GitHub still doesn't answer they say "GitHub didn't answer (the network may still be
+starting). Try again in a minute." A failed automatic check waits an hour before trying again.
 With **Include pre-releases** on, they look at the five newest releases instead and also take
 pre-releases. Each downloads the release's `SHA256SUMS` and refuses a file whose SHA-256
 doesn't match.

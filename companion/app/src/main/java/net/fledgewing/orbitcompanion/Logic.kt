@@ -343,6 +343,37 @@ object WifiTestPlan {
 /** Plain-English network errors for update checks. */
 object NetErrors {
     const val BLOCKED = "Internet blocked: is 'Block connections without VPN' on for Tailscale?"
+    const val NO_ANSWER = "GitHub didn't answer (the network may still be starting). Try again in a minute."
+
+    /** Waits before the 2nd and 3rd try after a connect timeout or reset; each try connects within 8 s. */
+    val RETRY_WAITS_MS = listOf(3_000L, 10_000L)
+    const val CONNECT_TIMEOUT_MS = 8_000
+
+    /** A connect timeout or reset: often gone seconds after Wi-Fi or Tailscale comes up. */
+    fun transient(e: Throwable): Boolean {
+        var t: Throwable? = e
+        while (t != null) {
+            if (t is java.net.SocketTimeoutException) return true
+            if (t is java.net.SocketException && t.message.orEmpty().contains("reset", ignoreCase = true)) return true
+            t = t.cause
+        }
+        return false
+    }
+
+    /** Runs [block], retrying transient failures after each of [waits] (ms). */
+    fun <T> withRetry(waits: List<Long> = RETRY_WAITS_MS, sleep: (Long) -> Unit, note: (Int, Exception, Long) -> Unit = { _, _, _ -> }, block: () -> T): T {
+        var i = 0
+        while (true) {
+            try {
+                return block()
+            } catch (e: Exception) {
+                if (i >= waits.size || !transient(e)) throw e
+                note(i + 1, e, waits[i])
+                sleep(waits[i])
+                i++
+            }
+        }
+    }
     const val LOCKDOWN_WARNING =
         "Block connections without VPN is on: internet (updates) is blocked. VPN settings › Tailscale ⚙ › turn it off"
 
@@ -356,12 +387,14 @@ object NetErrors {
     /**
      * [kind]: "permission" (EACCES/EPERM), "connect" (no route, refused, timeout, DNS) or other.
      */
-    fun message(kind: String, wifiEnabled: Boolean, wifiConnected: Boolean, vpnUp: Boolean, detail: String): String = when {
-        kind == "permission" -> BLOCKED
+    /** [lockdown]: "Block connections without VPN" as read; only true blames it. */
+    fun message(kind: String, wifiEnabled: Boolean, wifiConnected: Boolean, lockdown: Boolean?, detail: String): String = when {
+        kind == "permission" && lockdown == true -> BLOCKED
+        kind == "permission" -> "no internet: Android refused the connection ($detail)"
         kind == "connect" && !wifiEnabled -> "no internet: Wi-Fi is off"
         kind == "connect" && !wifiConnected -> "no internet: Wi-Fi isn't connected"
-        kind == "connect" && vpnUp -> BLOCKED
-        kind == "connect" -> "no internet: GitHub can't be reached"
+        kind == "connect" && lockdown == true -> BLOCKED
+        kind == "connect" -> NO_ANSWER
         else -> "check failed: $detail"
     }
 
@@ -552,6 +585,9 @@ object WhatsNew {
         "0.4.4" to listOf(
             "Settings PIN (optional): Settings › Settings PIN locks the settings, Setup fixes, updates, Android Settings and any app you add, and KOReader's Android sync menu. Forgot it? See the setup guide.",
             "Clicker buttons now sits right under the Home button in Settings.",
+        ),
+        "0.4.5" to listOf(
+            "Update checks retry twice when GitHub doesn't answer right after Wi-Fi comes up, and no longer blame 'Block connections without VPN' unless it is on.",
         ),
     )
 

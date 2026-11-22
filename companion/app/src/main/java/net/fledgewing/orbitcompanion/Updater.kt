@@ -124,7 +124,7 @@ object Updater {
     /** Plain words instead of an exception name. */
     internal fun friendly(ctx: Context, e: Exception): String {
         val kind = NetErrors.kindOf(e)
-        val msg = NetErrors.message(kind, Net.wifiEnabled(ctx), Net.wifiConnected(ctx), Net.vpnUp(ctx), e.message ?: e.javaClass.simpleName)
+        val msg = NetErrors.message(kind, Net.wifiEnabled(ctx), Net.wifiConnected(ctx), Net.vpnLockdown(ctx), e.message ?: e.javaClass.simpleName)
         log("error kind $kind: ${e.javaClass.simpleName}: ${e.message} -> $msg")
         return msg
     }
@@ -192,10 +192,16 @@ object Updater {
         return ReleaseInfo(o.optString("tag_name"), o.optBoolean("prerelease"), o.optBoolean("draft"), assets)
     }
 
-    private fun open(url: String): HttpURLConnection {
+    /** A connect timeout or reset is retried twice, after 3 s and 10 s (NetErrors.withRetry). */
+    private fun open(url: String): HttpURLConnection = NetErrors.withRetry(
+        sleep = { Thread.sleep(it) },
+        note = { i, e, wait -> log("try $i to ${URL(url).host} failed (${e.javaClass.simpleName}: ${e.message}); retrying in ${wait / 1000} s") },
+    ) { openOnce(url) }
+
+    private fun openOnce(url: String): HttpURLConnection {
         // HttpURLConnection follows the https -> https redirect to GitHub's asset host.
         val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = 15_000
+        c.connectTimeout = NetErrors.CONNECT_TIMEOUT_MS
         c.readTimeout = 30_000
         c.setRequestProperty("User-Agent", "OrbitCompanion/${BuildConfig.VERSION_NAME}")
         if (url.startsWith(API)) {

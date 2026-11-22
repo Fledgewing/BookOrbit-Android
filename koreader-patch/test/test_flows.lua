@@ -212,7 +212,8 @@ local preload = {
         if t.sink then t.sink(body) end
         return 1, 200, {}
     end },
-    socket = { skip = function(n, ...) return select(n + 1, ...) end },
+    socket = { skip = function(n, ...) return select(n + 1, ...) end,
+        sleep = function(sec) W.slept = W.slept or {}; table.insert(W.slept, sec) end },
     socketutil = { set_timeout = function() end, reset_timeout = function() end },
     ltn12 = { sink = { null = function() end, table = function(t) return function(chunk) if chunk then table.insert(t, chunk) end return 1 end end } },
     -- koreader-base ffi/util subprocesses: the "child" runs as its own scheduled step (or by
@@ -1297,6 +1298,29 @@ test("update: a failed automatic check backs off 1 h, then is tried again", func
     run(40)
     ok(count(W.fetched, function(u) return u == API end) == 2, "retried after the hour")
     ok(store.orbit_android.patch_update_checked_at > 0, "success starts the wait")
+end)
+
+test("update: a timeout right after Wi-Fi comes up is retried, and the check then succeeds", function()
+    resetSelf(); serveRelease()
+    W.json.LATEST.tag_name = "v0.0.0-dev"
+    store.orbit_android.patch_update_checked_at = 0
+    store.orbit_android.patch_update_failed_at = nil
+    W.wifi = true
+    local http = require("socket.http")
+    local fast = http.request
+    local fails = 2
+    http.request = function(t)
+        if t.url == API and fails > 0 then fails = fails - 1; return nil, "timeout" end
+        return fast(t)
+    end
+    W.slept = {}
+    local _ui, orbit = newUI(false)
+    orbit:wakeFlow("wake")
+    run(40)
+    http.request = fast
+    ok(table.concat(W.slept, ",") == "3,10", "waited 3 s then 10 s: " .. table.concat(W.slept, ","))
+    ok(store.orbit_android.patch_update_checked_at > 0, "succeeded on the third try")
+    ok(not store.orbit_android.patch_update_failed_at, "no failure recorded")
 end)
 
 test("update: the check never blocks KOReader's UI thread, and holds Wi-Fi while it runs", function()

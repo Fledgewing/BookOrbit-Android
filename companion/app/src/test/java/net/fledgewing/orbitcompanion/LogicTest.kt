@@ -375,16 +375,50 @@ class NetErrorsTest {
     fun permissionDeniedMeansBlocked() {
         val e = java.net.SocketException("socket failed: EACCES (Permission denied)")
         assertEquals("permission", NetErrors.kindOf(e))
-        assertEquals(NetErrors.BLOCKED, NetErrors.message("permission", true, true, true, ""))
+        assertEquals(NetErrors.BLOCKED, NetErrors.message("permission", true, true, lockdown = true, detail = ""))
         assertEquals("permission", NetErrors.kindOf(java.io.IOException("wrap", java.net.SocketException("connect failed: EPERM"))))
     }
 
     @Test
-    fun connectFailureWithWifiAndVpnUpMeansBlocked() {
+    fun lockdownBlamedOnlyWhenItReadsOn() {
         assertEquals("connect", NetErrors.kindOf(java.net.UnknownHostException("api.github.com")))
-        assertEquals(NetErrors.BLOCKED, NetErrors.message("connect", true, true, vpnUp = true, detail = ""))
-        assertEquals("no internet: GitHub can't be reached", NetErrors.message("connect", true, true, vpnUp = false, detail = ""))
-        assertEquals("no internet: Wi-Fi is off", NetErrors.message("connect", false, false, vpnUp = true, detail = ""))
+        assertEquals(NetErrors.BLOCKED, NetErrors.message("connect", true, true, lockdown = true, detail = ""))
+        // 11-21 Boox: a 15 s connect timeout right after Wi-Fi came up, lockdown reads 0.
+        assertEquals(NetErrors.NO_ANSWER, NetErrors.message("connect", true, true, lockdown = false, detail = ""))
+        assertEquals(NetErrors.NO_ANSWER, NetErrors.message("connect", true, true, lockdown = null, detail = ""))
+        assertEquals("no internet: Android refused the connection (x)", NetErrors.message("permission", true, true, lockdown = false, detail = "x"))
+        assertEquals("no internet: Wi-Fi is off", NetErrors.message("connect", false, false, lockdown = true, detail = ""))
+    }
+
+    @Test
+    fun connectTimeoutOrResetRetriedTwiceAfter3And10s() {
+        val slept = mutableListOf<Long>()
+        var tries = 0
+        val r = NetErrors.withRetry(sleep = { slept += it }) {
+            tries++
+            if (tries < 3) throw java.net.SocketTimeoutException("failed to connect to api.github.com after 8000ms")
+            "ok"
+        }
+        assertEquals("ok", r)
+        assertEquals(3, tries)
+        assertEquals(listOf(3_000L, 10_000L), slept)
+
+        slept.clear(); tries = 0
+        val e = runCatching {
+            NetErrors.withRetry<String>(sleep = { slept += it }) { tries++; throw java.net.SocketException("Connection reset") }
+        }.exceptionOrNull()
+        assertTrue(e is java.net.SocketException)
+        assertEquals(3, tries)
+        assertEquals(listOf(3_000L, 10_000L), slept)
+
+        // Not transient: no retry.
+        listOf(java.net.SocketException("EACCES (Permission denied)"), java.io.IOException("HTTP 404 from api.github.com"), java.net.UnknownHostException("x")).forEach { ex ->
+            slept.clear(); tries = 0
+            runCatching { NetErrors.withRetry<String>(sleep = { slept += it }) { tries++; throw ex } }
+            assertEquals(1, tries)
+            assertTrue(slept.isEmpty())
+        }
+        assertTrue(NetErrors.CONNECT_TIMEOUT_MS <= 8_000)
     }
 }
 
