@@ -17,6 +17,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.wifi.WifiManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -122,6 +123,25 @@ class OrbitService : Service() {
         }
     }
 
+    // Who turned Wi-Fi on: us (recently asked, WifiOwnership.PENDING_MS) or the user.
+    private val wifiStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, intent: Intent) {
+            when (intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN)) {
+                WifiManager.WIFI_STATE_ENABLED -> {
+                    val now = System.currentTimeMillis()
+                    val owner = WifiOwnership.onEnabled(now, prefs.wifiPendingAt, prefs.wifiPendingOwner)
+                    prefs.wifiOwner = owner
+                    prefs.wifiPendingAt = 0
+                    OLog.i("wifi: is ON | owner ${owner.key}${if (owner == WifiOwner.MANUAL) " (not asked by us: the user)" else ""} | mode ${prefs.wifiMode.key}")
+                }
+                WifiManager.WIFI_STATE_DISABLED -> {
+                    if (prefs.wifiOwner != WifiOwner.NONE) OLog.i("wifi: is OFF (was ${prefs.wifiOwner.key}) | mode ${prefs.wifiMode.key}")
+                    prefs.wifiOwner = WifiOwner.NONE
+                }
+            }
+        }
+    }
+
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) {
             when (intent.action) {
@@ -158,6 +178,7 @@ class OrbitService : Service() {
                 .build(),
             vpnCallback, main,
         )
+        registerReceiver(wifiStateReceiver, IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION))
         registerReceiver(screenReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
@@ -174,6 +195,7 @@ class OrbitService : Service() {
             cm.unregisterNetworkCallback(wifiCallback)
             cm.unregisterNetworkCallback(vpnCallback)
             unregisterReceiver(screenReceiver)
+            unregisterReceiver(wifiStateReceiver)
         } catch (e: Exception) {
             OLog.w("service teardown", e)
         }
@@ -198,17 +220,15 @@ class OrbitService : Service() {
         when (action) {
             Contract.NET_UP -> netUp(intent, reason)
             Contract.NET_DONE -> netDone(intent, reason)
-            Contract.WIFI_OFF -> {
-                cancelWifiTimer("WIFI_OFF")
-                Net.setWifi(this, false, "WIFI_OFF reason=$reason")
-            }
+            Contract.WIFI_OFF -> wifiOff(intent, reason)
+            Contract.SETTINGS -> applySettings(intent)
             Contract.SLEEP_NOW -> sleepNow(reason)
             ACTION_WIFI_TIMER -> wifiTimerFired()
             ACTION_REFRESH -> OLog.debug = prefs.debugLog
             Intent.ACTION_MY_PACKAGE_REPLACED -> Updater.onReplaced(this)
             else -> OLog.d("start: ${Contract.shortName(action)}")
         }
-        if (action in setOf(Contract.NET_UP, Contract.NET_DONE, Contract.WIFI_OFF, Contract.SLEEP_NOW)) {
+        if (action in setOf(Contract.NET_UP, Contract.NET_DONE, Contract.WIFI_OFF, Contract.SLEEP_NOW, Contract.SETTINGS)) {
             OLog.i("${Contract.shortName(action)} reason=${reason.ifEmpty { "-" }} handled in ${OLog.since(t0)} ms")
         }
         updateNotification()
@@ -230,8 +250,15 @@ class OrbitService : Service() {
         if (lockMs > 0) acquireWakeLock(lockMs)
         val wantWifi = intent.getStringExtra("wifi") != "0"
         val wantTailscale = intent.getStringExtra("tailscale") != "0"
-        OLog.i("NET_UP reason=$reason id=$id wifi=$wantWifi tailscale=$wantTailscale wake_lock=${lockMs} ms")
-        if (wantWifi && !Net.wifiEnabled(this)) Net.setWifi(this, true, "NET_UP reason=$reason")
+        val owner = if (intent.getStringExtra("owner") == "manual") WifiOwner.MANUAL else WifiOwner.AUTO
+        OLog.i("NET_UP reason=$reason id=$id wifi=$wantWifi tailscale=$wantTailscale owner=${owner.key} wake_lock=${lockMs} ms")
+        if (wantWifi && !Net.wifiEnabled(this)) {
+            Net.setWifi(this, true, "NET_UP reason=$reason", owner)
+        } else if (wantWifi && owner == WifiOwner.MANUAL && prefs.wifiOwner != WifiOwner.MANUAL) {
+            // Already on, and now the reader asked for it by hand: it's theirs from here.
+            prefs.wifiOwner = WifiOwner.MANUAL
+            OLog.i("wifi: already on; owner -> manual (asked by hand in KOReader) | mode ${prefs.wifiMode.key}")
+        }
         if (Net.wifiConnected(this)) {
             recordNetReady(0, reason)
             netUpAt = 0
@@ -247,6 +274,43 @@ class OrbitService : Service() {
         }
     }
 
+    // WIFI_OFF. auto="1": only Wi-Fi we turned on (never the user's own); otherwise unconditional
+    // (KOReader's own Wi-Fi toggle, or "Off while reading" when a book opens).
+    private fun wifiOff(intent: Intent, reason: String) {
+        val auto = intent.getStringExtra("auto") == "1"
+        val owner = prefs.wifiOwner
+        val mode = intent.getStringExtra("mode")?.takeIf { it.isNotEmpty() } ?: prefs.wifiMode.key
+        if (!WifiOwnership.allowOff(auto, owner)) {
+            OLog.i("wifi: OFF refused ($reason): turned on by hand | owner ${owner.key} | mode $mode")
+            return
+        }
+        if (auto && Updater.busy) {
+            OLog.i("wifi: OFF deferred ($reason): an app update is downloading | owner ${owner.key} | mode $mode")
+            main.postDelayed({ wifiOff(intent, reason) }, 5_000)
+            return
+        }
+        cancelWifiTimer("WIFI_OFF")
+        if (!Net.wifiEnabled(this)) {
+            OLog.d("wifi: OFF ($reason): already off")
+            return
+        }
+        Net.setWifi(this, false, "WIFI_OFF $reason${if (auto) ", automatic" else ""}")
+    }
+
+    // SETTINGS from the patch's menu: newest settings_at wins.
+    private fun applySettings(intent: Intent) {
+        val at = intent.getStringExtra("settings_at")?.toLongOrNull() ?: 0L
+        if (at <= prefs.sharedSettingsAt) {
+            OLog.i("settings from the patch ignored: older than ours ($at <= ${prefs.sharedSettingsAt})")
+            return
+        }
+        intent.getStringExtra("wifi_mode")?.takeIf { WifiMode.valid(it) }?.let { prefs.wifiMode = WifiMode.fromKey(it) }
+        intent.getStringExtra("wifi_idle_min")?.toIntOrNull()?.takeIf { SharedSettings.validIdle(it) }?.let { prefs.wifiIdleMin = it }
+        intent.getStringExtra("home_button")?.takeIf { HomeButton.valid(it) }?.let { prefs.homeButton = HomeButton.fromKey(it) }
+        prefs.sharedSettingsAt = at
+        OLog.i("settings from the patch: wifi_mode=${prefs.wifiMode.key} wifi_idle_min=${prefs.wifiIdleMin} home_button=${prefs.homeButton.key}")
+    }
+
     private fun onWifiUp() {
         val pending = netUpAt
         if (pending > 0) {
@@ -258,7 +322,8 @@ class OrbitService : Service() {
         }
         updateNotification()
         // Daily self-update check, once Wi-Fi is up anyway (never turns Wi-Fi on for it).
-        main.postDelayed({ Updater.maybeAutoCheck(this, "Wi-Fi up") }, 15_000)
+        // A wake brought it up anyway; an automatic Wi-Fi off waits for a running download.
+        main.postDelayed({ Updater.maybeAutoCheck(this, "Wi-Fi up") }, 2_000)
     }
 
     private fun recordNetReady(ms: Long, reason: String) {
@@ -275,7 +340,10 @@ class OrbitService : Service() {
         OLog.i("NET_DONE reason=$reason ok=$ok seconds=$seconds detail=$detail")
         val screenOn = Net.screenOn(this)
         val now = System.currentTimeMillis()
-        val action = WifiPolicy.afterSleepSync(prefs.wifiAfterSleep, reason, screenOn, now) ?: return
+        // restore=off: Wi-Fi was off before this sleep sync; put it back unless the user turned it on.
+        val restoreOff = intent.getStringExtra("restore") == "off" && prefs.wifiOwner != WifiOwner.MANUAL
+        if (restoreOff) OLog.i("wifi: sleep sync found Wi-Fi off; restoring off | owner ${prefs.wifiOwner.key} | mode ${prefs.wifiMode.key}")
+        val action = WifiPolicy.afterSleepSync(prefs.wifiAfterSleep, reason, screenOn, now, restoreOff) ?: return
         prefs.lastSleepSyncAt = now
         prefs.lastSleepSyncOk = ok
         prefs.lastSleepSyncSeconds = seconds
@@ -432,8 +500,11 @@ class OrbitService : Service() {
 
     private fun statusJson(): String =
         "{\"proto\":\"${Contract.PROTOCOL}\",\"version\":\"${BuildConfig.VERSION_NAME}\"," +
-            "\"wifi\":${Net.wifiConnected(this)},\"tailscale\":${Net.vpnUp(this)}," +
-            "\"screen_off_permission\":${Net.adminActive(this)}}"
+            "\"wifi\":${Net.wifiConnected(this)},\"wifi_enabled\":${Net.wifiEnabled(this)}," +
+            "\"wifi_owner\":\"${prefs.wifiOwner.key}\",\"tailscale\":${Net.vpnUp(this)}," +
+            "\"screen_off_permission\":${Net.adminActive(this)}," +
+            "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +
+            "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}}}"
 
     private fun startStatusServer() {
         thread(name = "orbit-status", isDaemon = true) {

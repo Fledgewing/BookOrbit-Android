@@ -107,6 +107,7 @@
                 <action android:name="net.fledgewing.orbitcompanion.action.NET_DONE" />
                 <action android:name="net.fledgewing.orbitcompanion.action.WIFI_OFF" />
                 <action android:name="net.fledgewing.orbitcompanion.action.SLEEP_NOW" />
+                <action android:name="net.fledgewing.orbitcompanion.action.SETTINGS" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

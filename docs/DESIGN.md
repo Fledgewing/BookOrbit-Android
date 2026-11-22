@@ -1,4 +1,4 @@
-# M8C / Boox ↔ BookOrbit sync: design, revision 2 (draft for approval)
+# Android e-readers ↔ BookOrbit sync: design, revision 2 (first device surveyed: Meebook M8C)
 
 Refines `memory/android-ereader-plan.md`. Nothing is built. The mockups are in
 `m8c-sync-mockups.html` next to this file.
@@ -87,7 +87,7 @@ commands and outcomes only: `NET_UP`, `NET_DONE{ok, seconds}`, `SLEEP_NOW`.
 5. The patch waits for the plugin's result, 20 s cap in total, then sends `NET_DONE`.
 6. The companion applies the Wi-Fi setting and releases the lock.
 
-**Risk:** Android or the Meebook firmware may freeze KOReader, or cut its network, seconds after
+**Risk:** Android or the vendor firmware may freeze KOReader, or cut its network, seconds after
 screen-off. The push then simply stays in the plugin's outbox until the next wake. The survey
 measures this.
 
@@ -106,6 +106,57 @@ measures this.
 3. The plugin's `NetworkConnected` handler drains the outbox (any missed push goes first), then
    pulls. Further ahead → Silent jump with the plugin's own toast.
 4. On failure, the patch banner (10b) shows. Reading is never blocked.
+
+## Wi-Fi modes (v0.2)
+
+One shared setting, stored by the companion (it is the only one that switches Wi-Fi) and
+mirrored in the patch menu: newest `settings_at` wins (`SETTINGS` broadcast one way, the
+status JSON's `settings` the other; docs/INTERFACE.md).
+
+| Mode | Behaviour |
+|---|---|
+| Always on | Wi-Fi as the user set it. |
+| Off while reading | When a book opens: the open-time pull finishes, then Wi-Fi goes off (`WIFI_OFF auto=0`). When it closes: back to what it was (`NET_UP reason=book_closed`). |
+| Just in time (default with the companion) | Off after N idle minutes (1/2/5/10, default 2). |
+
+The patch decides; `WifiPlan` (pure, `test/test_logic.lua`) holds the state machine:
+- **Holds.** Every flow that needs the network (`wake`, `open`, `sleep`, `reading`, `test`,
+  `update`) holds Wi-Fi and records whether it was on. On release, Wi-Fi that was off is
+  restored off in every mode (sleep syncs: by the companion through `NET_DONE restore=off`,
+  since KOReader may be frozen; others: by the patch after a 3 s grace).
+- **Never off while busy.** Not while a hold is open, an HTTP request is in flight
+  (`socket.http`/`ssl.https` wrapped), or the plugin's sync or outbox is busy.
+- **Activity** = a request finished, `beforeWifiAction`, or a hold released. KOReader's
+  `tx_packets` check (networklistener.lua:101-113) isn't used for the timer because its
+  `auto_disable_wifi` needs an interface name Android doesn't give (:184-185).
+- **Ownership (A).** The companion records who turned Wi-Fi on (`WIFI_STATE_CHANGED`: ours
+  if we asked in the last 60 s, else the user's). Automatic offs (`auto=1`) are refused for
+  manual Wi-Fi; KOReader's own Wi-Fi toggle and the launcher's Wi-Fi tile mark it manual.
+- **Foreground only.** The patch sends automatic offs only while KOReader is in front, or
+  with the screen off.
+- **No prompt.** With a usable companion, `wifi_enable_action = turn_on` and
+  `NetworkMgr:turnOnWifi/turnOffWifi/isWifiOn` go through it (device.lua:317-342), so
+  `runWhenOnline`/`beforeWifiAction` (manager.lua:698, :605-619) never prompt. Without one,
+  KOReader's stock behaviour stays, and a network step with Wi-Fi off fails at once.
+
+## Smart Home (v0.2)
+
+"Home button": *Back to my book, then BookOrbit home* (default, `COMMAND = home_smart`) or
+*BookOrbit home* (`home`). The patch decides with `HomePlan` (pure, tested): in a book with
+KOReader in front → BookOrbit home; from another app with a book open → stay; anywhere else →
+`lastfile`; nothing to reopen → BookOrbit home. "From another app" is the companion's
+`FROM=other_app` when it knows, else a KOReader pause of 2.5 s or more. A KOReader that was
+killed restarts with `home_smart` (smart mode), so it lands in the last book.
+
+## Vendor profiles
+
+The code is generic Android. Vendor quirks (the launcher that "freezes" apps, its freeze
+page, a "<Vendor> home" tile) live in one table each: `Vendor.kt` (companion, chosen by
+`Build.MANUFACTURER`/`BRAND`, then by the launcher being installed) and `VENDORS` (patch,
+by launcher). A disabled app is named "disabled by <launcher label>", the label read at run
+time, or "disabled by the system" with no profile. Meebook/Haoqing is measured; Boox/Onyx is
+an unverified stub (Boox help center: Apps › App Management › Freeze Settings); anything else
+gets the generic profile.
 
 ## Decisions
 

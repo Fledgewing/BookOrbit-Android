@@ -59,8 +59,9 @@ class HomeActivity : Activity() {
         val press = pressPending
         pressPending = false
         if (!Net.screenOn(this)) {
-            // KOReader was force-stopped with the screen off (the M8C does this ~110 s after the
-            // power button). Start it on the next wake, not now: a start now would be killed again.
+            // KOReader went away with the screen off (some firmwares force-stop the foreground app
+            // a while after the power button). Start it on the next wake, not now: a start now
+            // could be stopped again.
             startOnScreenOn = true
             OLog.i("home: ${if (press) "press" else "uncovered"} with the screen off, KOReader starts on wake")
             return
@@ -70,7 +71,7 @@ class HomeActivity : Activity() {
 
     private fun decide(press: Boolean) {
         val prefs = Prefs(this)
-        // Frozen by the Meebook launcher counts as unusable: starting it would throw.
+        // Disabled (e.g. a vendor launcher's app freeze) counts as unusable: starting it would throw.
         val problem = Koreader.problem(this)
         val installed = problem == null
         val now = SystemClock.elapsedRealtime()
@@ -87,9 +88,13 @@ class HomeActivity : Activity() {
         }
         OLog.i("home ${if (press) "press" else "uncovered"}: $action${if (problem != null) " ($problem)" else ""}")
         if (action == HomeAction.START_KOREADER) {
-            // A press goes to BookOrbit home; a restart after KOReader went away (killed after
-            // sleep) reopens it as a plain start, so the reader lands back in the book.
-            val started = if (press) Koreader.goHome(this, "home press") else Koreader.start(this, "home uncovered", null)
+            // "Home button": BookOrbit home -> "home" on a press, a plain start after KOReader went
+            // away. Back to my book -> "home_smart" for both; the patch decides (HomePlan).
+            val pageInFront = EinkActivity.companionPageInFront()
+            val command = if (press) HomeCommands.forPress(prefs.homeButton) else HomeCommands.forUncovered(prefs.homeButton)
+            val from = if (command == HomeCommands.HOME_SMART) HomeCommands.from(pageInFront, !press) else null
+            OLog.i("home: ${prefs.homeButton.key} -> command ${command ?: "-"}${if (from != null) " from $from" else ""}")
+            val started = Koreader.start(this, if (press) "home press" else "home uncovered", command, from)
             if (started) return
             decider.startFailed()
             showLauncher("KOReader didn't start.")
@@ -134,7 +139,7 @@ class LauncherActivity : EinkActivity() {
     override fun onResume() {
         super.onResume()
         // Unfrozen since: drop the stale message.
-        if (why == AppStates.frozenMessage("KOReader") && Koreader.state(this) != AppState.FROZEN) why = null
+        if (why == Vendor.disabledMessage(this, "KOReader") && Koreader.state(this) != AppState.FROZEN) why = null
         render()
     }
 
@@ -152,7 +157,7 @@ class LauncherActivity : EinkActivity() {
         open.text = android.text.SpannableStringBuilder().apply {
             append("Open KOReader\n")
             val s = length
-            append("opens on BookOrbit home")
+            append(if (Prefs(this@LauncherActivity).homeButton == HomeButton.SMART) "back to your book" else "opens on BookOrbit home")
             setSpan(android.text.style.RelativeSizeSpan(0.65f), s, length, 0)
             setSpan(android.text.style.StyleSpan(android.graphics.Typeface.NORMAL), s, length, 0)
         }
@@ -161,8 +166,8 @@ class LauncherActivity : EinkActivity() {
         if (Koreader.state(this) == AppState.FROZEN) {
             root.addView(Ui.gap(this, 8))
             root.addView(
-                Ui.button(this, "Open Meebook freeze management") {
-                    Meebook.freezePage(this)?.let { tryStart(it, "Meebook freeze management") }
+                Ui.button(this, "Re-enable KOReader") {
+                    tryStart(Vendor.reenablePage(this, Koreader.PKG), "re-enable page")
                 },
             )
         }
@@ -174,7 +179,18 @@ class LauncherActivity : EinkActivity() {
                 Ui.button(this, "⚙  Companion") { startActivity(Intent(this, StatusActivity::class.java)) },
             ),
         )
-        root.addView(Ui.gap(this, 24))
+        root.addView(Ui.gap(this, 12))
+        // Wi-Fi by hand: on here is the user's, so "Just in time" leaves it on until they turn it off.
+        val wifiOn = Net.wifiEnabled(this)
+        root.addView(Ui.row(this, "Wi-Fi", if (wifiOn) "on · ${Prefs(this).wifiOwner.key}" else "off", Ui.toggle(this, wifiOn), onClick = {
+            if (wifiOn) {
+                Net.setWifi(this, false, "launcher Wi-Fi tile")
+            } else {
+                Net.setWifi(this, true, "launcher Wi-Fi tile", WifiOwner.MANUAL)
+            }
+            android.os.Handler(mainLooper).postDelayed({ if (!isFinishing) render() }, 800)
+        }))
+        root.addView(Ui.gap(this, 12))
         val card = Ui.card(this)
         card.addView(Ui.row(this, "Network", right = Ui.value(this, Status.networkLine(this))))
         card.addView(Ui.row(this, "Last sleep sync", right = Ui.value(this, Status.lastSleepSync(this))))
@@ -196,7 +212,6 @@ class AppsActivity : EinkActivity() {
 
     companion object {
         const val MAX_PINS = 6
-        val MEEBOOK_HOME = Meebook.HOME
 
         /** Fixed "Android Settings" tile: not a real component; launch() opens Settings.ACTION_SETTINGS. */
         val SETTINGS_TILE = ComponentName("android.settings", "ACTION_SETTINGS")
@@ -229,7 +244,8 @@ class AppsActivity : EinkActivity() {
             .filter { it.activityInfo.packageName != packageName }
             .map { App(it.loadLabel(pm).toString(), ComponentName(it.activityInfo.packageName, it.activityInfo.name)) }
             .toMutableList()
-        if (Net.installed(this, MEEBOOK_HOME.packageName)) list.add(App("Meebook home", MEEBOOK_HOME))
+        // "<Vendor> home" from the vendor profile, if this device has one (Vendor.kt).
+        Vendor.homeTile(this)?.let { (label, component) -> list.add(App(label, component)) }
         list.add(App("Android Settings", SETTINGS_TILE))
         val sorted = list.distinctBy { it.component }.sortedBy { it.label.lowercase() }
         OLog.d("apps page: ${sorted.size} apps in ${OLog.since(t0)} ms")
@@ -238,8 +254,8 @@ class AppsActivity : EinkActivity() {
 
     private fun defaultPins(): List<String> {
         val tailscale = apps.firstOrNull { it.component.packageName == Net.TAILSCALE_PKG }?.component
-        val meebook = apps.firstOrNull { it.component == MEEBOOK_HOME }?.component
-        return listOfNotNull(tailscale, SETTINGS_TILE, meebook).map { it.flattenToString() }
+        val vendorHome = Vendor.homeTile(this)?.second?.let { home -> apps.firstOrNull { it.component == home }?.component }
+        return listOfNotNull(tailscale, SETTINGS_TILE, vendorHome).map { it.flattenToString() }
     }
 
     /** Once per install: pins made before the Settings tile existed get it too. Unpinning sticks. */
@@ -262,7 +278,7 @@ class AppsActivity : EinkActivity() {
             return
         }
         val i = Intent(Intent.ACTION_MAIN).setComponent(app.component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (app.component != MEEBOOK_HOME) i.addCategory(Intent.CATEGORY_LAUNCHER)
+        if (app.component != Vendor.homeTile(this)?.second) i.addCategory(Intent.CATEGORY_LAUNCHER)
         tryStart(i, "app ${app.component.flattenToShortString()}")
     }
 

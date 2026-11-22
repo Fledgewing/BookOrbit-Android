@@ -253,10 +253,111 @@ class AppStatesTest {
         assertEquals(AppState.MISSING, AppStates.of(false, 0, false, false))
         assertEquals(AppState.OK, AppStates.of(true, 0, true, false))
         assertEquals(AppState.OK, AppStates.of(true, 1, true, false))
-        // Meebook's App freeze: enabled=2 (COMPONENT_ENABLED_STATE_DISABLED).
+        // A vendor launcher's app freeze: enabled=2 (COMPONENT_ENABLED_STATE_DISABLED).
         assertEquals(AppState.FROZEN, AppStates.of(true, 2, false, false))
         assertEquals(AppState.FROZEN, AppStates.of(true, 3, false, false))
         assertEquals(AppState.FROZEN, AppStates.of(true, 4, true, false))
         assertEquals(AppState.FROZEN, AppStates.of(true, 0, true, true))
+    }
+}
+
+class WifiOwnershipTest {
+    @Test
+    fun ourRecentRequestIsOursOtherwiseTheUsers() {
+        assertEquals(WifiOwner.AUTO, WifiOwnership.onEnabled(10_000, 5_000, WifiOwner.AUTO))
+        assertEquals(WifiOwner.MANUAL, WifiOwnership.onEnabled(10_000, 5_000, WifiOwner.MANUAL))
+        // Quick settings, long after any request of ours: the user's.
+        assertEquals(WifiOwner.MANUAL, WifiOwnership.onEnabled(100_000, 5_000, WifiOwner.AUTO))
+        assertEquals(WifiOwner.MANUAL, WifiOwnership.onEnabled(10_000, 0, WifiOwner.AUTO))
+    }
+
+    @Test
+    fun automaticOffNeverTurnsOffTheUsersWifi() {
+        assertFalse(WifiOwnership.allowOff(auto = true, owner = WifiOwner.MANUAL))
+        assertTrue(WifiOwnership.allowOff(auto = true, owner = WifiOwner.AUTO))
+        assertTrue(WifiOwnership.allowOff(auto = true, owner = WifiOwner.NONE))
+        assertTrue(WifiOwnership.allowOff(auto = false, owner = WifiOwner.MANUAL)) // KOReader's own toggle
+    }
+
+    @Test
+    fun sleepSyncRestoresOffWhenWifiWasOff() {
+        val a = WifiPolicy.afterSleepSync(WifiAfterSleep.KEEP_ON, "sleep", screenOn = false, nowWallMs = 0, restoreOff = true)
+        assertEquals(SleepWifiAction.OffNow, a)
+        val b = WifiPolicy.afterSleepSync(WifiAfterSleep.KEEP_ON, "sync_and_sleep", screenOn = true, nowWallMs = 0, restoreOff = true)
+        assertEquals(SleepWifiAction.OffAtNextScreenOff, b)
+        assertEquals(SleepWifiAction.KeepOn, WifiPolicy.afterSleepSync(WifiAfterSleep.KEEP_ON, "sleep", false, 0))
+    }
+}
+
+class SharedSettingsTest {
+    @Test
+    fun defaultsAndParsing() {
+        assertEquals(WifiMode.JIT, WifiMode.fromKey(null))
+        assertEquals(WifiMode.OFF_READING, WifiMode.fromKey("off_reading"))
+        assertEquals(HomeButton.SMART, HomeButton.fromKey("bogus"))
+        assertTrue(SharedSettings.validIdle(5))
+        assertFalse(SharedSettings.validIdle(3))
+    }
+}
+
+class HomeCommandsTest {
+    @Test
+    fun commandFollowsTheSetting() {
+        assertEquals("home_smart", HomeCommands.forPress(HomeButton.SMART))
+        assertEquals("home", HomeCommands.forPress(HomeButton.BOOKORBIT))
+        assertEquals("home_smart", HomeCommands.forUncovered(HomeButton.SMART))
+        assertNull(HomeCommands.forUncovered(HomeButton.BOOKORBIT))
+    }
+
+    @Test
+    fun fromOtherAppOnlyWhenKnown() {
+        assertEquals("other_app", HomeCommands.from(companionPageInFront = true, uncovered = false))
+        assertEquals("other_app", HomeCommands.from(companionPageInFront = false, uncovered = true))
+        assertNull(HomeCommands.from(companionPageInFront = false, uncovered = false))
+    }
+}
+
+class WifiTestPlanTest {
+    @Test
+    fun leavesWifiAsFound() {
+        assertEquals(listOf(WifiTestPlan.Step.OFF, WifiTestPlan.Step.ON), WifiTestPlan.steps(wasOn = true))
+        assertEquals(listOf(WifiTestPlan.Step.ON, WifiTestPlan.Step.OFF), WifiTestPlan.steps(wasOn = false))
+    }
+}
+
+class VendorProfilesTest {
+    private val none: (String) -> Boolean = { false }
+
+    @Test
+    fun byManufacturerOrBrand() {
+        assertEquals("haoqing", VendorProfiles.pick("Haoqing", "Meebook", none).id)
+        assertEquals("onyx", VendorProfiles.pick("ONYX", "Onyx", none).id)
+        assertEquals("generic", VendorProfiles.pick("Google", "google", none).id)
+        assertEquals("generic", VendorProfiles.pick(null, null, none).id)
+    }
+
+    @Test
+    fun byLauncherPackageWhenTheBuildSaysNothing() {
+        assertEquals("haoqing", VendorProfiles.pick("alps", "alps") { it == "com.haoqing.app.hqreader" }.id)
+    }
+
+    @Test
+    fun genericHasNoVendorHomeOrHint() {
+        assertNull(VendorProfiles.GENERIC.home)
+        assertNull(VendorProfiles.GENERIC.launcherPkg)
+        assertFalse(VendorProfiles.ONYX.verified)
+    }
+
+    @Test
+    fun disabledMessageNamesTheDisablerOrStaysNeutral() {
+        assertEquals(
+            "KOReader is disabled by Meebook Launcher: re-enable it in Meebook Launcher › Freeze management.",
+            AppStates.disabledMessage("KOReader", "Meebook Launcher", "Freeze management"),
+        )
+        assertEquals(
+            "KOReader is disabled by the system: re-enable it in Settings › Apps.",
+            AppStates.disabledMessage("KOReader", null, null),
+        )
+        assertEquals("Disabled by the system", AppStates.disabledShort(null))
     }
 }

@@ -19,14 +19,17 @@ Every extra is a **string**. Every broadcast carries `proto = "1"` and
 
 | Action (`net.fledgewing.orbitcompanion.action.…`) | Extras | Companion does |
 |---|---|---|
-| `NET_UP` | `reason`, `request_id`, `wifi` (`"1"`/`"0"`), `tailscale` (`"1"`/`"0"`), `wake_lock_s` (`"0"` = none) | Cancel any pending Wi-Fi-off timer. If `wake_lock_s` > 0, hold a partial wake lock for that long, hard-capped at 25 s. If `wifi = "1"` and Wi-Fi is off, turn it on. If `tailscale = "1"`, send Tailscale `CONNECT_VPN`. Record the time it took Wi-Fi to come up, for its status page. |
-| `NET_DONE` | `reason`, `ok` (`"1"`/`"0"`), `seconds` (e.g. `"4.2"`), `detail` | Release the wake lock. For `reason` `sleep` or `sync_and_sleep`: record "Last sleep sync", then apply "Wi-Fi after sleep sync": keep on; off after 30 min (the timer turns Wi-Fi off only if the screen is still off when it fires); or off now, only while the screen is off. For `sync_and_sleep` the screen is still on at `NET_DONE` (`SLEEP_NOW` follows), so "off now" waits for the next screen-off, up to 30 s later. |
-| `WIFI_OFF` | `reason` | Turn Wi-Fi off (KOReader's own "Wi-Fi off" toggle). |
+| `NET_UP` | `reason`, `request_id`, `wifi` (`"1"`/`"0"`), `tailscale` (`"1"`/`"0"`), `wake_lock_s` (`"0"` = none), `owner` (`"auto"`/`"manual"`), `mode` | Cancel any pending Wi-Fi-off timer. Wi-Fi it turns on is owned by `owner` (`manual`: the reader asked by hand; already-on Wi-Fi also becomes `manual`). If `wake_lock_s` > 0, hold a partial wake lock for that long, hard-capped at 25 s. If `wifi = "1"` and Wi-Fi is off, turn it on. If `tailscale = "1"`, send Tailscale `CONNECT_VPN`. Record the time it took Wi-Fi to come up, for its status page. |
+| `NET_DONE` | `reason`, `ok` (`"1"`/`"0"`), `seconds` (e.g. `"4.2"`), `detail`, `restore` (`"off"` when Wi-Fi was off before) | Release the wake lock. `restore = "off"` on a sleep sync acts as "off now" (unless the owner is `manual`). For `reason` `sleep` or `sync_and_sleep`: record "Last sleep sync", then apply "Wi-Fi after sleep sync": keep on; off after 30 min (the timer turns Wi-Fi off only if the screen is still off when it fires); or off now, only while the screen is off. For `sync_and_sleep` the screen is still on at `NET_DONE` (`SLEEP_NOW` follows), so "off now" waits for the next screen-off, up to 30 s later. |
+| `WIFI_OFF` | `reason`, `auto` (`"1"`/`"0"`), `mode` | Turn Wi-Fi off. `auto = "1"` (the patch's automatic off: idle, restore) is refused when the owner is `manual`, and waits while the companion downloads an update. `auto = "0"`: KOReader's own "Wi-Fi off" toggle, or "Off while reading" when a book opens. |
+| `SETTINGS` | `wifi_mode` (`always_on`/`off_reading`/`jit`), `wifi_idle_min` (`1`/`2`/`5`/`10`), `home_button` (`smart`/`bookorbit`), `settings_at` (ms since epoch) | Store the shared settings when `settings_at` is newer than its own. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
 
-`reason` values: `start` (KOReader just started; every wake is a fresh start on the M8C),
+`reason` values: `start` (KOReader just started; on firmwares that stop KOReader after sleep,
+every wake is a fresh start),
 `wake`, `retry`, `sleep` (power button), `sync_and_sleep`, `reading` (sync while reading),
-`test` (Test sync path), `koreader_wifi_on`, `koreader_wifi_off`. Unknown reasons must be
+`test` (Test sync path), `open` (a book opened), `book_closed`, `update`, `koreader_wifi_on`,
+`koreader_wifi_off`, and Wi-Fi-off reasons such as `just in time: idle 2 min`. Unknown reasons must be
 accepted and treated like `wake`.
 
 Order for a sleep sync: `NET_UP` (with a wake lock), then exactly one `NET_DONE`, at most
@@ -57,8 +60,23 @@ The launcher starts KOReader explicitly:
 component: org.koreader.launcher/org.koreader.launcher.MainActivity
 action:    android.intent.action.MAIN
 flags:     FLAG_ACTIVITY_NEW_TASK
-extra:     net.fledgewing.orbitcompanion.extra.COMMAND = "home"   (String)
+extra:     net.fledgewing.orbitcompanion.extra.COMMAND = "home" | "home_smart"   (String)
+extra:     net.fledgewing.orbitcompanion.extra.FROM = "other_app"   (optional, home_smart only)
 ```
+
+`home` always opens BookOrbit home. `home_smart` is sent when the shared "Home button" setting
+is "Back to my book, then BookOrbit home" (the default); the patch decides (`HomePlan`):
+
+| Where KOReader is | Home came from another app? | Goes to |
+|---|---|---|
+| Reader, book open | no (KOReader was in front) | BookOrbit home |
+| Reader, book open | yes | stays in the book |
+| File browser, BookOrbit pages, menus | — | the last book (`lastfile`), if it exists |
+| anywhere, no last book | — | BookOrbit home |
+
+"From another app" is `FROM = "other_app"` when the companion knows (one of its own pages was
+in front, or KOReader had gone away), otherwise KOReader's pause before the command: 2.5 s or
+more counts as another app.
 
 Do not use `ACTION_VIEW`: KOReader treats that as "open this file". `MainActivity` is
 `singleInstance`, so a running KOReader gets the intent through `onNewIntent`, which calls
@@ -71,17 +89,24 @@ Unknown commands are logged and ignored.
 When the companion sends it: on every Home press and at boot (it is the HOME app). A second
 Home press within 2 s, or a KOReader that is missing, fails to start or closes within 5 s of
 starting, shows the companion's launcher page instead. When Home comes back to the front
-without a press (KOReader closed or was killed, e.g. by the M8C firmware about 110 s after the
-power button), the companion starts KOReader again *without* the extra, so it reopens the last
-book as on any fresh start; with the screen off it waits for the next screen-on.
+without a press (KOReader closed or was killed, e.g. by a firmware that stops the foreground
+app some time after the power button), the companion starts KOReader again: with
+`home_smart` + `FROM = "other_app"` in smart mode, without an extra otherwise, so it reopens the
+last book; with the screen off it waits for the next screen-on.
 
 ## Optional: companion status over loopback
 
 `GET http://127.0.0.1:47913/status` → `200` with JSON, for example:
 
 ```json
-{ "proto": "1", "version": "1.0", "wifi": true, "tailscale": true, "screen_off_permission": true }
+{ "proto": "1", "version": "0.2.0", "wifi": true, "wifi_enabled": true, "wifi_owner": "auto",
+  "tailscale": true, "screen_off_permission": true,
+  "settings": { "wifi_mode": "jit", "wifi_idle_min": 2, "home_button": "smart", "settings_at": 0 } }
 ```
+
+`settings` are the shared settings (above). The patch reads them on start, resume and when its
+menu opens; the newer `settings_at` wins, and the patch pushes its own with `SETTINGS` when they
+are newer. `wifi_owner`: `none`, `auto` or `manual`.
 
 Bind to `127.0.0.1` only. The patch uses it in "Test sync path" (step 1, "Companion
 answered", 1 s timeout) and treats any `200` as an answer; the fields are for display and
@@ -91,8 +116,11 @@ may grow. A companion without the endpoint still works for everything else.
 
 - The patch sends Tailscale's own broadcast itself: action `com.tailscale.ipn.CONNECT_VPN`
   to `com.tailscale.ipn/.IPNReceiver` (explicit component), once at the start of each
-  network attempt and once more when Wi-Fi comes up. Present on the M8C (Tailscale
-  1.104.6).
+  network attempt and once more when Wi-Fi comes up.
+- The Wi-Fi setting is "Always on" and can't be changed; KOReader's `wifi_enable_action` is
+  left as it is. If Wi-Fi is off, network steps fail at once ("Wi-Fi is off") instead of
+  waiting. A disabled companion (e.g. by a vendor launcher's app freeze) counts as missing,
+  and the menu says who disabled it.
 - Wi-Fi stays as it is. A background request from KOReader to turn Wi-Fi on just waits for
   Android's Wi-Fi; a request the reader made by hand opens Android's Wi-Fi settings (stock
   KOReader).

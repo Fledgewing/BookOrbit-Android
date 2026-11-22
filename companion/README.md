@@ -6,19 +6,29 @@ talks to BookOrbit and holds no login. Contract: [`../docs/INTERFACE.md`](../doc
 
 - **Service** (foreground, ongoing notification): `NET_UP` (Wi-Fi on, Tailscale
   `CONNECT_VPN`, wake lock capped at 25 s), `NET_DONE` (release, then "Wi-Fi after sleep
-  sync"), `WIFI_OFF`, `SLEEP_NOW` (`lockNow()`, device admin with `force-lock` only), and
-  `GET http://127.0.0.1:47913/status`.
-- **Home**: every Home press and boot starts KOReader with `COMMAND = "home"`; Home twice
-  within 2 s, or a KOReader that is missing or won't stay up, shows the launcher page.
-- **Pages**: launcher, other apps (paged, hold to pin; Tailscale, Android Settings and Meebook
-  home are pinned by default), status, settings, setup checklist, open-source licenses.
+  sync", or back off when it was off), `WIFI_OFF` (automatic offs never touch Wi-Fi the user
+  turned on: it tracks the owner from `WIFI_STATE_CHANGED`), `SETTINGS` (shared Wi-Fi mode,
+  idle minutes, Home button), `SLEEP_NOW` (`lockNow()`, device admin with `force-lock` only),
+  and `GET http://127.0.0.1:47913/status`. Every Wi-Fi switch logs `wifi:` with the reason,
+  owner and mode.
+- **Home**: every Home press and boot starts KOReader with `COMMAND = "home_smart"` (or
+  `"home"` when Home button is "BookOrbit home"); Home twice within 2 s, or a KOReader that is
+  missing or won't stay up, shows the launcher page. The launcher page has a Wi-Fi tile; Wi-Fi
+  turned on there is the user's ("manual").
+- **Pages**: launcher, other apps (paged, hold to pin; Tailscale, Android Settings and the
+  vendor home, if the vendor profile has one, are pinned by default), status, settings,
+  setup checklist (its Wi-Fi off/on test leaves Wi-Fi as it found it), open-source licenses.
 - **Self-update** from GitHub releases (`Updater.kt`; README "Updates"): daily, SHA-256 and
   signing-certificate checked, installed with `PackageInstaller`. At targetSdk 28 Android
   asks the user to confirm each update.
-- **Meebook "App freeze"**: the Meebook launcher (`com.haoqing.app.hqreader`) can freeze
-  (disable) apps, KOReader included. The companion tells "frozen" apart from "not installed"
-  (`getApplicationEnabledSetting`, `MATCH_DISABLED_COMPONENTS`), says so on the launcher page,
-  status page and setup checklist, and opens Meebook's freeze management to undo it.
+- **Disabled apps**: some vendor launchers "freeze" (disable) apps, KOReader included. The
+  companion tells "disabled" apart from "not installed" (`getApplicationEnabledSetting`,
+  `MATCH_DISABLED_COMPONENTS`), names the likely disabler from the vendor launcher's label at
+  run time ("Disabled by Meebook Launcher"), says so on the launcher page, status page and
+  setup checklist ("Not disabled by the system"), and opens the vendor's freeze page, or
+  Android's app settings, to undo it.
+- **Vendor profiles** (`Vendor.kt`): the only vendor-specific code. Meebook/Haoqing
+  (measured), Boox/Onyx (unverified stub), generic Android.
 
 ## Build
 
@@ -44,7 +54,7 @@ adb shell am start -n net.fledgewing.orbitcompanion/.StatusActivity
 ```
 
 Then Setup on the status page: each row opens the system page it needs (Home app,
-notifications, not frozen by Meebook, install updates, battery Unrestricted for Orbit,
+notifications, not disabled by the system, install updates, battery Unrestricted for Orbit,
 Tailscale and KOReader, Tailscale, device admin), then run the Wi-Fi off/on test.
 
 ## Logs

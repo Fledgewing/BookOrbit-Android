@@ -26,6 +26,8 @@ object Contract {
     const val SLEEP_NOW = "$PACKAGE.action.SLEEP_NOW"
     const val SHOW_STATUS = "$PACKAGE.action.SHOW_STATUS"
     const val SHOW_APPS = "$PACKAGE.action.SHOW_APPS"
+    const val SETTINGS = "$PACKAGE.action.SETTINGS"
+    const val EXTRA_FROM = "$PACKAGE.extra.FROM"
     const val EXTRA_COMMAND = "$PACKAGE.extra.COMMAND"
     const val PATCH_SENDER = "org.koreader.launcher"
     const val STATUS_PORT = 47913
@@ -81,6 +83,27 @@ class Prefs(ctx: Context) {
     var notifyTailscale: Boolean
         get() = bool("notify_tailscale", true)
         set(v) = setBool("notify_tailscale", v)
+    // Shared with the KOReader patch (docs/INTERFACE.md "Settings"); newest settings_at wins.
+    var wifiMode: WifiMode
+        get() = WifiMode.fromKey(sp.getString("wifi_mode", null))
+        set(v) = setStr("wifi_mode", v.key)
+    var wifiIdleMin: Int
+        get() = sp.getInt("wifi_idle_min", 2)
+        set(v) = sp.edit().putInt("wifi_idle_min", v).apply()
+    var homeButton: HomeButton
+        get() = HomeButton.fromKey(sp.getString("home_button", null))
+        set(v) = setStr("home_button", v.key)
+    var sharedSettingsAt by LongPref("shared_settings_at")
+
+    // Who turned Wi-Fi on (WifiOwnership).
+    var wifiOwner: WifiOwner
+        get() = WifiOwner.fromKey(sp.getString("wifi_owner", null))
+        set(v) = setStr("wifi_owner", v.key)
+    var wifiPendingOwner: WifiOwner
+        get() = WifiOwner.fromKey(sp.getString("wifi_pending_owner", null))
+        set(v) = setStr("wifi_pending_owner", v.key)
+    var wifiPendingAt by LongPref("wifi_pending_at")
+
     var settingsPinSeeded: Boolean
         get() = bool("settings_pin_seeded", false)
         set(v) = setBool("settings_pin_seeded", v)
@@ -146,9 +169,19 @@ object Net {
 
     fun wifiEnabled(ctx: Context): Boolean = wifi(ctx).isWifiEnabled
 
-    /** Works because targetSdk is 28; apps targeting 29+ get false and nothing happens. */
+    /**
+     * Works because targetSdk is 28; apps targeting 29+ get false and nothing happens.
+     * [owner]: who this "on" is for (auto: a sync or KOReader needed it; manual: the user asked).
+     * The service's WIFI_STATE_CHANGED receiver records it once Wi-Fi is actually on.
+     */
     @Suppress("DEPRECATION")
-    fun setWifi(ctx: Context, on: Boolean, why: String): Boolean {
+    fun setWifi(ctx: Context, on: Boolean, why: String, owner: WifiOwner = WifiOwner.AUTO): Boolean {
+        val prefs = Prefs(ctx)
+        if (on) {
+            prefs.wifiPendingOwner = owner
+            prefs.wifiPendingAt = System.currentTimeMillis()
+        }
+        OLog.i("wifi: ${if (on) "ON" else "OFF"} ($why) | owner ${if (on) owner.key else prefs.wifiOwner.key} | mode ${prefs.wifiMode.key}")
         val t0 = SystemClock.elapsedRealtime()
         val ok = try {
             wifi(ctx).setWifiEnabled(on)
@@ -186,8 +219,8 @@ object Net {
     fun screenOn(ctx: Context) = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
 
     /**
-     * Missing, frozen (disabled: the Meebook launcher's "App freeze" calls setApplicationEnabledSetting)
-     * or usable. A disabled package is only visible with MATCH_DISABLED_COMPONENTS.
+     * Missing, disabled (FROZEN: e.g. a vendor launcher's "app freeze" calls
+     * setApplicationEnabledSetting; see Vendor.kt) or usable. A disabled package is only visible with MATCH_DISABLED_COMPONENTS.
      */
     fun appState(ctx: Context, pkg: String): AppState {
         val pm = ctx.packageManager
@@ -253,34 +286,6 @@ object Net {
         (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled()
 }
 
-/** The Meebook launcher (Haoqing) and its "App freeze". */
-object Meebook {
-    const val PKG = "com.haoqing.app.hqreader"
-    val HOME = ComponentName(PKG, "$PKG.view.activity.LauncherActivity")
-
-    fun present(ctx: Context) = Net.installed(ctx, PKG)
-
-    /** An exported freeze-management activity if the launcher has one, else the Meebook launcher. */
-    fun freezePage(ctx: Context): Intent? {
-        if (!present(ctx)) return null
-        val freeze = try {
-            @Suppress("DEPRECATION")
-            ctx.packageManager.getPackageInfo(PKG, PackageManager.GET_ACTIVITIES).activities.orEmpty()
-                .firstOrNull { it.exported && it.name.contains("freeze", ignoreCase = true) }
-        } catch (e: Exception) {
-            null
-        }
-        OLog.i("meebook freeze page: ${freeze?.name ?: "none exported, using the Meebook launcher"}")
-        val component = if (freeze != null) ComponentName(PKG, freeze.name) else HOME
-        return Intent(Intent.ACTION_MAIN).setComponent(component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-
-    fun frozenApps(ctx: Context): List<String> =
-        listOf(Koreader.PKG to "KOReader", Net.TAILSCALE_PKG to "Tailscale", ctx.packageName to "Orbit")
-            .filter { (pkg, _) -> Net.appState(ctx, pkg) == AppState.FROZEN }
-            .map { it.second }
-}
-
 object Koreader {
     const val PKG = "org.koreader.launcher"
     private const val ACTIVITY = "org.koreader.launcher.MainActivity"
@@ -292,22 +297,23 @@ object Koreader {
     /** Why KOReader can't be started, or null when it can. */
     fun problem(ctx: Context): String? = when (state(ctx)) {
         AppState.MISSING -> "KOReader isn't installed."
-        AppState.FROZEN -> AppStates.frozenMessage("KOReader")
+        AppState.FROZEN -> Vendor.disabledMessage(ctx, "KOReader")
         AppState.OK -> null
     }
 
-    /** INTERFACE "go home": explicit MainActivity, ACTION_MAIN, NEW_TASK, COMMAND = "home". */
-    fun goHome(ctx: Context, why: String): Boolean = start(ctx, why, "home")
+    /** INTERFACE "go home": explicit MainActivity, ACTION_MAIN, NEW_TASK, COMMAND per the Home button setting. */
+    fun goHome(ctx: Context, why: String): Boolean = start(ctx, why, HomeCommands.forPress(Prefs(ctx).homeButton), HomeCommands.FROM_OTHER_APP)
 
-    fun start(ctx: Context, why: String, command: String?): Boolean {
+    fun start(ctx: Context, why: String, command: String?, from: String? = null): Boolean {
         val t0 = SystemClock.elapsedRealtime()
         val i = Intent(Intent.ACTION_MAIN)
             .setComponent(ComponentName(PKG, ACTIVITY))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
         if (command != null) i.putExtra(Contract.EXTRA_COMMAND, command)
+        if (command != null && from != null) i.putExtra(Contract.EXTRA_FROM, from)
         return try {
             ctx.startActivity(i)
-            OLog.i("koreader started command=${command ?: "-"} ($why) in ${OLog.since(t0)} ms")
+            OLog.i("koreader started command=${command ?: "-"}${if (from != null) " from=$from" else ""} ($why) in ${OLog.since(t0)} ms")
             true
         } catch (e: Exception) {
             OLog.w("koreader start FAILED ($why)", e)

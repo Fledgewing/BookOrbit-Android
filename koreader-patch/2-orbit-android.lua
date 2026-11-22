@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Copyright (c) 2026 Fledgewing. Part of BookOrbit-Android (see koreader-patch/LICENSE).
 --[[--
-orbit-android: a KOReader user patch for Android e-readers (first target: Meebook M8C).
+orbit-android: a KOReader user patch for Android e-readers (generic Android; vendor quirks live in VENDORS).
 
 The official BookOrbit plugin (bookorbit.koplugin) does ALL syncing and holds the login.
 This patch never talks to BookOrbit's API. It only:
@@ -226,8 +226,161 @@ function Update.isDue(last, now, interval)
     return last <= 0 or now < last or now - last >= (interval or Update.INTERVAL)
 end
 
+-- Wi-Fi modes (docs/DESIGN.md "Wi-Fi modes"). The companion does the switching and refuses an
+-- automatic off when the user turned Wi-Fi on by hand; this plan only says *when* the patch
+-- asks for on or off.
+--   always_on    the user's Wi-Fi stays as it is; flows that had to turn it on put it back off
+--   off_reading  a book opening turns Wi-Fi off; closing it restores what it was before
+--   jit          off unless something needs it: off when a flow ends in a book, and after
+--                idle_s with no network activity
+local WifiPlan = {
+    MODES = {
+        { id = "always_on",   label = "Always on" },
+        { id = "off_reading", label = "Off while reading" },
+        { id = "jit",         label = "Just in time" },
+    },
+    IDLE_MINUTES = { 1, 2, 5, 10 },
+    GRACE = 3, -- seconds after the last flow ends before acting (lets the plugin start its follow-ups)
+}
+
+function WifiPlan.validMode(m)
+    for _i, o in ipairs(WifiPlan.MODES) do if o.id == m then return true end end
+    return false
+end
+
+function WifiPlan.modeLabel(m)
+    for _i, o in ipairs(WifiPlan.MODES) do if o.id == m then return o.label end end
+    return m
+end
+
+function WifiPlan.new(mode, idle_min, now)
+    return {
+        mode = WifiPlan.validMode(mode) and mode or "jit",
+        idle_s = (tonumber(idle_min) or 2) * 60,
+        leases = {},          -- flow name -> count
+        n = 0,                -- total leases held
+        restore_off = false,  -- Wi-Fi was off when the first current lease started
+        release_at = nil,     -- the last lease ended; act from this time on
+        last_flow = nil,
+        last_activity = now or 0,
+        in_book = false,
+        book_was_on = nil,    -- off_reading: Wi-Fi state when the book opened
+        force_off_once = false,
+        foreground = true,    -- KOReader in front (Suspend/Resume)
+    }
+end
+
+-- A flow needs the network. wifi_on: the radio state now (nil = unknown).
+function WifiPlan.acquire(st, name, wifi_on, now)
+    if st.n == 0 then st.restore_off = (wifi_on == false) end
+    st.leases[name] = (st.leases[name] or 0) + 1
+    st.n = st.n + 1
+    st.release_at = nil
+    st.last_activity = now
+end
+
+-- handled: someone else restores (the companion, after a sleep sync).
+function WifiPlan.release(st, name, now, handled)
+    if (st.leases[name] or 0) <= 0 then return end
+    st.leases[name] = st.leases[name] - 1
+    st.n = st.n - 1
+    st.last_activity = now
+    st.last_flow = name
+    if handled then st.restore_off = false end
+    if st.n == 0 then st.release_at = now + WifiPlan.GRACE end
+end
+
+function WifiPlan.activity(st, now) st.last_activity = now end
+
+function WifiPlan.bookOpened(st, wifi_on)
+    st.in_book = true
+    st.book_was_on = wifi_on
+    st.force_off_once = st.mode == "off_reading" and wifi_on == true
+end
+
+-- Returns "on" when off_reading should turn Wi-Fi back on.
+function WifiPlan.bookClosed(st)
+    local was = st.book_was_on
+    st.in_book, st.book_was_on, st.force_off_once = false, nil, false
+    if st.mode == "off_reading" and was == true then return "on" end
+    return nil
+end
+
+-- Wi-Fi went off (by anyone): nothing left to restore.
+function WifiPlan.wifiOff(st)
+    st.restore_off = false
+    st.release_at = nil
+    st.force_off_once = false
+end
+
+-- ctx = { now, wifi_on, busy, screen_off }. Returns action ("off" | nil), reason, force.
+-- force: off_reading's book-open off, which applies even to Wi-Fi turned on by hand.
+-- Never off while a flow holds the network, the plugin or a download is busy, or (except
+-- with the screen off) while another app is in front.
+function WifiPlan.decide(st, ctx)
+    if ctx.wifi_on == false then return nil, "already off" end
+    if st.n > 0 then return nil, "in use" end
+    if ctx.busy then return nil, "busy" end
+    if not st.foreground and not ctx.screen_off then return nil, "KOReader not in front" end
+    local released = st.release_at ~= nil and ctx.now >= st.release_at
+    if st.force_off_once and st.in_book and (released or st.release_at == nil) then
+        return "off", "book opened (off while reading)", true
+    end
+    if released then
+        if st.restore_off then return "off", "restore previous state (off) after " .. tostring(st.last_flow) end
+        if st.in_book and st.mode ~= "always_on" then
+            return "off", (st.mode == "jit" and "just in time" or "off while reading") .. ": " .. tostring(st.last_flow) .. " done in a book"
+        end
+    end
+    if st.mode == "jit" and ctx.now - st.last_activity >= st.idle_s then
+        return "off", string.format("just in time: idle %d min", math.floor(st.idle_s / 60))
+    end
+    return nil, "needed or not idle"
+end
+
+-- Smart Home (docs/INTERFACE.md "go home"). What Home does in KOReader.
+--   mode: "smart" | "bookorbit"; in_reader: a book is open; covered: a menu or the
+--   plugin's views are over it; from_other: Home came from another app (or KOReader was
+--   just started); has_last: a last-opened book exists.
+-- Returns "dashboard" (close any book, BookOrbit home) or "book" (show the book: close
+-- what covers it, or open the last one).
+local HomePlan = {}
+
+function HomePlan.decide(o)
+    if o.mode ~= "smart" then return "dashboard" end
+    if o.in_reader then
+        if not o.covered and not o.from_other then return "dashboard" end
+        return "book"
+    end
+    if o.has_last then return "book" end
+    return "dashboard"
+end
+
+-- KOReader was in the background this long before the command arrived: Home from inside
+-- KOReader pauses it for well under this; a stay in another app is longer.
+HomePlan.OTHER_APP_S = 2.5
+
+function HomePlan.cameFromOtherApp(from_extra, suspended_s)
+    if from_extra == "other_app" then return true end
+    if from_extra == "koreader" then return false end
+    return suspended_s == nil or suspended_s >= HomePlan.OTHER_APP_S
+end
+
+-- "<app> is disabled by <launcher label>: re-enable it in <label> › <hint>.", or a neutral text.
+-- Pure (tested): disabler is the label read at run time, or nil.
+local function disabledText(app, disabler, hint)
+    if disabler and hint then
+        return string.format("%s is disabled by %s: re-enable it in %s › %s.", app, disabler, disabler, hint)
+    elseif disabler then
+        return string.format("%s is disabled by %s: re-enable it there.", app, disabler)
+    end
+    return app .. " is disabled by the system: re-enable it in Settings › Apps."
+end
+
 if rawget(_G, "ORBIT_ANDROID_TEST") then
-    return { Schedule = Schedule, Plan = Plan, Update = Update, PATCH_VERSION = PATCH_VERSION }
+    return { Schedule = Schedule, Plan = Plan, Update = Update, WifiPlan = WifiPlan, HomePlan = HomePlan,
+        disabledText = disabledText,
+        PATCH_VERSION = PATCH_VERSION }
 end
 
 ---------------------------------------------------------------------------------------------
@@ -280,6 +433,12 @@ local DEFAULTS = {
     reading_schedule = "off",
     sleep_cap = 20,
     last_sleep_sync = nil, -- { at, ok, seconds, reason }
+    -- Shared with the companion, which stores them (docs/INTERFACE.md "Settings"); these are
+    -- the patch's cached copy, refreshed from the companion's loopback status.
+    wifi_mode = nil,              -- "always_on" | "off_reading" | "jit"; nil = default for this device
+    wifi_idle_min = 2,            -- just in time: minutes of no network activity before Wi-Fi goes off
+    home_button = "smart",        -- "smart" | "bookorbit"
+    shared_settings_at = 0,       -- ms, when the shared settings last changed (either side)
     auto_update_patch = true,
     patch_update_prerelease = false,
     patch_update_checked_at = 0,  -- os.time() of the last check
@@ -349,6 +508,12 @@ local function callBool(env, obj, name, sig, ...)
     local r = env[0].CallBooleanMethod(env, obj, methodId(env, obj, name, sig), ...)
     check(env, name)
     return r ~= 0
+end
+
+local function callInt(env, obj, name, sig, ...)
+    local r = env[0].CallIntMethod(env, obj, methodId(env, obj, name, sig), ...)
+    check(env, name)
+    return tonumber(r)
 end
 
 local function withEnv(what, fn)
@@ -446,6 +611,33 @@ function Jni.isInteractive()
     end)
 end
 
+-- WifiManager.isWifiEnabled(): the radio, not the connection. nil if unknown.
+-- KOReader's Android backend only knows "connected" (device.lua:335-341, isWifiOn = isConnected).
+function Jni.wifiEnabled()
+    return withEnv("isWifiEnabled", function(env, activity)
+        local wm = systemService(env, activity, "wifi")
+        if wm == nil then error("no WifiManager", 0) end
+        local on = callBool(env, wm, "isWifiEnabled", "()Z")
+        del(env, wm)
+        return on
+    end)
+end
+
+-- PackageManager.getApplicationEnabledSetting(pkg): 0 default, 1 enabled, 2/3/4 disabled.
+-- nil when the package isn't installed (it throws IllegalArgumentException).
+function Jni.appEnabledSetting(pkg)
+    return withEnv("getApplicationEnabledSetting " .. pkg, function(env, activity)
+        local pm = callObject(env, activity, "getPackageManager", "()Landroid/content/pm/PackageManager;")
+        if pm == nil then error("no PackageManager", 0) end
+        local jp = env[0].NewStringUTF(env, pkg)
+        local okc, v = pcall(callInt, env, pm, "getApplicationEnabledSetting", "(Ljava/lang/String;)I", jp)
+        del(env, jp)
+        del(env, pm)
+        if not okc then return false end -- missing: false, so withEnv doesn't log it as a failure
+        return v
+    end)
+end
+
 -- Whether any network has the VPN transport (Tailscale up). nil if unknown.
 function Jni.vpnActive()
     return withEnv("vpnActive", function(env, activity)
@@ -477,6 +669,29 @@ end
 -- Reads and removes a string extra from the activity's current intent (the launch intent,
 -- or the latest one: MainActivity.onNewIntent calls setIntent, android-luajit-launcher
 -- MainActivity.kt:205-210).
+-- An app's label ("Meebook Launcher"), also when it's disabled; false when missing.
+function Jni.appLabel(pkg)
+    return withEnv("appLabel " .. pkg, function(env, activity, jni)
+        local pm = callObject(env, activity, "getPackageManager", "()Landroid/content/pm/PackageManager;")
+        if pm == nil then error("no PackageManager", 0) end
+        local jp = env[0].NewStringUTF(env, pkg)
+        local label = false
+        local oka, ai = pcall(callObject, env, pm, "getApplicationInfo", "(Ljava/lang/String;I)Landroid/content/pm/ApplicationInfo;", jp, 0x200)
+        if oka and ai ~= nil then
+            local okl, cs = pcall(callObject, env, pm, "getApplicationLabel", "(Landroid/content/pm/ApplicationInfo;)Ljava/lang/CharSequence;", ai)
+            if okl and cs ~= nil then
+                local okt, js = pcall(callObject, env, cs, "toString", "()Ljava/lang/String;")
+                if okt and js ~= nil then label = jni:to_string(js); del(env, js) end
+                del(env, cs)
+            end
+            del(env, ai)
+        end
+        del(env, jp)
+        del(env, pm)
+        return label
+    end)
+end
+
 function Jni.takeIntentExtra(key)
     return withEnv("takeIntentExtra", function(env, activity, jni)
         local intent = callObject(env, activity, "getIntent", "()Landroid/content/Intent;")
@@ -514,6 +729,8 @@ Companion.ACTION = {
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
+-- With "home_smart": "other_app" when the companion knows Home came from outside KOReader.
+Companion.EXTRA_FROM = Companion.PACKAGE .. ".extra.FROM"
 
 local TAILSCALE = {
     action = "com.tailscale.ipn.CONNECT_VPN",
@@ -521,16 +738,76 @@ local TAILSCALE = {
     class = "com.tailscale.ipn.IPNReceiver",
 }
 
-local installed_cache = { at = -1000, value = false }
+Companion.ACTION.SETTINGS = Companion.PACKAGE .. ".action.SETTINGS"
 
-function Companion.installed()
+-- Vendor quirks, kept to this table (mirrors the companion's Vendor.kt): a vendor launcher that
+-- "freezes" (disables) apps, and where it re-enables them. Matched by the launcher being installed.
+-- Meebook/Haoqing: measured on a device. Boox/Onyx: unverified (Boox help center documents
+-- Apps › App Management › Freeze Settings; the package name is from community reports).
+local VENDORS = {
+    { id = "haoqing", launcher = "com.haoqing.app.hqreader", hint = "Freeze management" },
+    { id = "onyx", launcher = "com.onyx", hint = "Apps › App Management › Freeze Settings", unverified = true },
+}
+
+local vendor_cache
+-- The installed vendor launcher's label and hint, or {} (generic Android).
+local function vendorDisabler()
+    if vendor_cache then return vendor_cache end
+    vendor_cache = {}
+    for _, v in ipairs(VENDORS) do
+        local label = Jni.appLabel(v.launcher)
+        if label then
+            vendor_cache = { id = v.id, label = label, hint = v.hint }
+            log("vendor profile:", v.id, "(" .. label .. ")", v.unverified and "[unverified]" or "")
+            break
+        end
+    end
+    return vendor_cache
+end
+
+function Companion.disabledText()
+    local v = vendorDisabler()
+    return disabledText("Orbit Companion", v.label, v.hint)
+end
+
+local installed_cache = { at = -1000, value = "missing", logged = nil }
+
+-- "ok", "frozen" (installed but disabled, e.g. by a vendor launcher's app freeze) or "missing".
+function Companion.state()
     local t = now_s()
     if t - installed_cache.at > 30 then
         local ok, v = pcall(android.isPackageEnabled, Companion.PACKAGE)
-        installed_cache.value = ok and v == true
-        installed_cache.at = t
+        local st
+        if ok and v == true then
+            st = "ok"
+        else
+            local setting = Jni.appEnabledSetting(Companion.PACKAGE)
+            st = (setting == nil or setting == false) and "missing" or "frozen"
+        end
+        installed_cache.value, installed_cache.at = st, t
+        if installed_cache.logged ~= st then
+            installed_cache.logged = st
+            if st == "frozen" then
+                log("companion disabled:", Companion.disabledText(), "Wi-Fi can't be switched")
+            else
+                log("companion", st == "ok" and "available" or "not installed")
+            end
+        end
     end
     return installed_cache.value
+end
+
+-- Usable: installed and not frozen.
+function Companion.installed()
+    return Companion.state() == "ok"
+end
+
+-- For menus and the test: what's wrong with the companion, or nil.
+function Companion.problem()
+    local st = Companion.state()
+    if st == "frozen" then return Companion.disabledText() end
+    if st == "missing" then return _("Orbit Companion is not installed.") end
+    return nil
 end
 
 local request_seq = 0
@@ -544,6 +821,7 @@ function Companion.send(action, extras)
     return ok
 end
 
+-- opts: wake_lock_s, owner ("auto": the patch needs it; "manual": the reader asked by hand).
 function Companion.netUp(reason, opts)
     opts = opts or {}
     request_seq = request_seq + 1
@@ -553,17 +831,27 @@ function Companion.netUp(reason, opts)
         wifi = S.wifi_via_companion and "1" or "0",
         tailscale = S.wake_tailscale and "1" or "0",
         wake_lock_s = tostring(opts.wake_lock_s or 0),
+        owner = opts.owner or "auto",
+        mode = S.wifi_mode or "",
     }), tostring(request_seq)
 end
 
-function Companion.netDone(reason, ok, seconds, detail)
+-- restore: "off" when Wi-Fi was off before this sleep sync (the companion turns it off again).
+function Companion.netDone(reason, ok, seconds, detail, restore)
     if not Companion.installed() then return end
     Companion.send(Companion.ACTION.NET_DONE, {
         reason = reason,
         ok = ok and "1" or "0",
         seconds = string.format("%.1f", seconds or 0),
         detail = detail or "",
+        restore = restore or "",
     })
+end
+
+-- auto: only if the companion (or the patch) turned Wi-Fi on; the companion keeps Wi-Fi the
+-- reader turned on by hand. force (auto = "0"): the reader's own "Wi-Fi off" or off while reading.
+function Companion.wifiOff(reason, auto)
+    return Companion.send(Companion.ACTION.WIFI_OFF, { reason = reason, auto = auto and "1" or "0", mode = S.wifi_mode or "" })
 end
 
 -- Optional loopback status. Returns a table or nil.
@@ -582,6 +870,69 @@ function Companion.status(timeout)
     if not okj then return {} end
     local okd, data = pcall(json.decode, table.concat(body))
     return okd and type(data) == "table" and data or {}
+end
+
+---------------------------------------------------------------------------------------------
+-- Settings shared with the companion (Wi-Fi mode, idle minutes, Home button). The companion
+-- stores them; the patch reads them from its loopback status and sends changes made in its
+-- own menu with a SETTINGS broadcast. Newest change wins (settings_at, ms).
+---------------------------------------------------------------------------------------------
+
+local Shared = {}
+
+function Shared.defaultMode()
+    return Companion.installed() and "jit" or "always_on"
+end
+
+function Shared.mode()
+    if not Companion.installed() then return "always_on" end -- nothing can switch Wi-Fi
+    return WifiPlan.validMode(S.wifi_mode) and S.wifi_mode or Shared.defaultMode()
+end
+
+-- Pull the companion's copy if it is newer. Cheap: loopback, 1 s timeout.
+function Shared.refresh(why)
+    if not Companion.installed() then return false end
+    local st = Companion.status(1)
+    local remote = st and type(st.settings) == "table" and st.settings or nil
+    if not remote then return false end
+    local at = tonumber(remote.settings_at) or 0
+    if at > (S.shared_settings_at or 0) then
+        local changed = {}
+        if WifiPlan.validMode(remote.wifi_mode) and remote.wifi_mode ~= S.wifi_mode then
+            S.wifi_mode = remote.wifi_mode; table.insert(changed, "wifi_mode=" .. remote.wifi_mode)
+        end
+        local idle = tonumber(remote.wifi_idle_min)
+        if idle and idle ~= S.wifi_idle_min then S.wifi_idle_min = idle; table.insert(changed, "wifi_idle_min=" .. idle) end
+        if (remote.home_button == "smart" or remote.home_button == "bookorbit") and remote.home_button ~= S.home_button then
+            S.home_button = remote.home_button; table.insert(changed, "home_button=" .. remote.home_button)
+        end
+        S.shared_settings_at = at
+        saveSettings()
+        log("settings from companion (" .. why .. "):", #changed > 0 and table.concat(changed, " ") or "no change")
+        return #changed > 0
+    elseif at < (S.shared_settings_at or 0) then
+        Shared.push("companion older (" .. why .. ")")
+    end
+    return false
+end
+
+function Shared.push(why)
+    if not Companion.installed() then return end
+    Companion.send(Companion.ACTION.SETTINGS, {
+        reason = why,
+        wifi_mode = S.wifi_mode or Shared.defaultMode(),
+        wifi_idle_min = tostring(S.wifi_idle_min or 2),
+        home_button = S.home_button or "smart",
+        settings_at = string.format("%.0f", S.shared_settings_at or 0),
+    })
+end
+
+function Shared.set(key, value)
+    S[key] = value
+    S.shared_settings_at = os.time() * 1000
+    saveSettings()
+    log("setting", key, "=", tostring(value), "(sent to the companion)")
+    Shared.push("patch menu")
 end
 
 local function tailscaleConnect(reason)
@@ -657,12 +1008,6 @@ function Net.up(p, opts, cb)
     log("network up: start", opts.reason, "cap", cap .. "s", "companion", res.companion and "yes" or "no",
         "server", url and "set" or "none")
 
-    if res.companion and (S.wifi_via_companion or S.wake_tailscale) then
-        Companion.netUp(opts.reason, { wake_lock_s = opts.wake_lock_s })
-    elseif S.wake_tailscale then
-        tailscaleConnect(opts.reason)
-    end
-
     local next_probe = 0
     local ts_resent = false
     local function finish(ok, failed_at, detail)
@@ -677,6 +1022,28 @@ function Net.up(p, opts, cb)
             local okc, err = pcall(w, ok, res)
             if not okc then log("network callback error:", err) end
         end
+    end
+
+    -- Wi-Fi switched off (not just disconnected) and nobody to switch it on: say so now
+    -- rather than wait out the cap.
+    if Jni.wifiEnabled() == false and not (res.companion and S.wifi_via_companion) then
+        local why
+        if Companion.state() == "frozen" then
+            why = Companion.disabledText()
+        elseif res.companion then
+            why = "Wi-Fi is off and \"Wi-Fi via Orbit Companion\" is off"
+        else
+            why = "Wi-Fi is off and Orbit Companion isn't installed to turn it on"
+        end
+        log("network up: Wi-Fi is off and can't be turned on; skipped:", why)
+        if S.wake_tailscale then tailscaleConnect(opts.reason) end
+        return finish(false, "wifi", why)
+    end
+
+    if res.companion and (S.wifi_via_companion or S.wake_tailscale) then
+        Companion.netUp(opts.reason, { wake_lock_s = opts.wake_lock_s })
+    elseif S.wake_tailscale then
+        tailscaleConnect(opts.reason)
     end
 
     local function tick()
@@ -769,6 +1136,161 @@ function Sync.waitOutbox(p, cap, cb)
 end
 
 ---------------------------------------------------------------------------------------------
+-- Wi-Fi modes: when to ask the companion for Wi-Fi on or off (WifiPlan above decides).
+-- Every decision is logged with its reason and the mode, so a battery day can be audited:
+--   adb logcat | grep -E "OrbitAndroid: wifi|OrbitCompanion: wifi"
+---------------------------------------------------------------------------------------------
+
+local Wifi = { plan = nil, inflight_http = 0, ticking = false, tx = nil }
+local TICK_S = 15
+
+function Wifi.state()
+    if not Wifi.plan then
+        Wifi.plan = WifiPlan.new(Shared.mode(), S.wifi_idle_min, now_s())
+        log("wifi: mode", Wifi.plan.mode, "idle", S.wifi_idle_min .. " min")
+    end
+    return Wifi.plan
+end
+
+-- Settings changed (menu or companion): keep the state, swap mode and idle time.
+function Wifi.applySettings(why)
+    local st = Wifi.state()
+    local mode = Shared.mode()
+    local idle = (tonumber(S.wifi_idle_min) or 2) * 60
+    if st.mode ~= mode or st.idle_s ~= idle then
+        log("wifi: mode", st.mode, "->", mode, "idle", math.floor(idle / 60) .. " min (" .. why .. ")")
+        st.mode, st.idle_s = mode, idle
+        st.last_activity = now_s()
+    end
+    Wifi.kick()
+end
+
+-- The radio state: Jni first (the radio), KOReader's "connected" as a fallback.
+function Wifi.radioOn()
+    local on = Jni.wifiEnabled()
+    if on == nil then on = NetworkMgr:isConnected() end
+    return on
+end
+
+-- tx_packets of wlan0 when the firmware lets apps read it (NetworkListener reads the same
+-- counter for auto_disable_wifi, networklistener.lua:101-113, but only where KOReader knows the
+-- interface name, which it doesn't on Android: networklistener.lua:184-185).
+local function txPackets()
+    local f = io.open("/sys/class/net/wlan0/statistics/tx_packets", "rb")
+    if not f then return nil end
+    local n = f:read("*number")
+    f:close()
+    return n
+end
+
+function Wifi.busy()
+    if Wifi.inflight_http > 0 then return true, "download in progress" end
+    local p = bookorbit()
+    if p then
+        local okb, busy = pcall(function()
+            local c = p:getSyncCoordinator()
+            if c:isBusy() or c:queuedCount() > 0 then return true end
+            local d = p:getLifecycleOutbox():diagnostics()
+            return ((d.count or 0) - (d.blocked or 0)) > 0
+        end)
+        if okb and busy then return true, "BookOrbit plugin syncing" end
+    end
+    return false
+end
+
+function Wifi.activity(what)
+    local st = Wifi.state()
+    WifiPlan.activity(st, now_s())
+    if what then log("wifi: activity", what) end
+    Wifi.kick()
+end
+
+function Wifi.acquire(name)
+    local st = Wifi.state()
+    local on = Wifi.radioOn()
+    WifiPlan.acquire(st, name, on, now_s())
+    log("wifi: hold for", name, "(Wi-Fi was", on == false and "off" or "on", ") mode", st.mode)
+    return on
+end
+
+-- handled: the companion restores (sleep sync). Returns whether a restore to off is pending.
+function Wifi.release(name, handled)
+    local st = Wifi.state()
+    WifiPlan.release(st, name, now_s(), handled)
+    log("wifi: release", name, handled and "(companion restores)" or "", "mode", st.mode)
+    Wifi.kick()
+    if st.n == 0 and st.release_at then
+        UIManager:scheduleIn(WifiPlan.GRACE + 0.1, function() Wifi.evaluate("after " .. name) end)
+    end
+    return st.restore_off and st.n == 0
+end
+
+-- Decide now; ask the companion when the answer is "off".
+function Wifi.evaluate(why)
+    local st = Wifi.state()
+    if not Companion.installed() then return nil, "no companion" end
+    local wifi_on = Wifi.radioOn()
+    if wifi_on == false then
+        if st.restore_off or st.release_at or st.force_off_once then WifiPlan.wifiOff(st) end
+        return nil, "already off"
+    end
+    local tx = txPackets()
+    if tx and Wifi.tx and tx - Wifi.tx > 10 then WifiPlan.activity(st, now_s()) end
+    Wifi.tx = tx
+    local busy, busy_why = Wifi.busy()
+    local screen_off = Jni.isInteractive() == false
+    local action, reason, force = WifiPlan.decide(st, { now = now_s(), wifi_on = wifi_on, busy = busy, screen_off = screen_off })
+    if action == "off" then
+        log("wifi: OFF decided:", reason, "| mode", st.mode, force and "| forced" or "| only if turned on automatically", "(" .. why .. ")")
+        Companion.wifiOff(reason, not force)
+        WifiPlan.wifiOff(st)
+        -- If the companion keeps it (turned on by hand), wait a full idle period before asking again.
+        st.last_activity = now_s()
+    elseif busy and st.release_at and now_s() >= st.release_at then
+        log("wifi: kept on while", busy_why, "| mode", st.mode)
+    end
+    return action, reason
+end
+
+-- A cheap loop that only runs while Wi-Fi is on or a restore is pending.
+function Wifi.kick()
+    if Wifi.ticking or not Companion.installed() then return end
+    Wifi.ticking = true
+    local function tick()
+        local st = Wifi.state()
+        local action, reason = Wifi.evaluate("timer")
+        local pending = st.n > 0 or st.release_at ~= nil or st.force_off_once
+        if not pending and (reason == "already off" or st.mode ~= "jit") then
+            Wifi.ticking = false
+            return
+        end
+        UIManager:scheduleIn((st.release_at and st.release_at > now_s()) and math.max(0.5, st.release_at - now_s() + 0.1) or TICK_S, tick)
+    end
+    UIManager:scheduleIn(0.5, tick)
+end
+
+-- Every HTTP(S) request KOReader makes counts as network activity, and an in-flight one
+-- (a download) blocks Wi-Fi off. Wraps the module tables, so callers that look up
+-- http.request at call time (all of KOReader's) are covered.
+local function pack(...) return { n = select("#", ...), ... } end
+
+local function wrapRequests(modname)
+    local okm, mod = pcall(require, modname)
+    if not okm or type(mod) ~= "table" or type(mod.request) ~= "function" or mod._orbit_wrapped then return end
+    local orig = mod.request
+    mod._orbit_wrapped = true
+    mod.request = function(...)
+        Wifi.inflight_http = Wifi.inflight_http + 1
+        if Wifi.plan then WifiPlan.activity(Wifi.plan, now_s()) end
+        local r = pack(pcall(orig, ...))
+        Wifi.inflight_http = Wifi.inflight_http - 1
+        if Wifi.plan then WifiPlan.activity(Wifi.plan, now_s()) end
+        if not r[1] then error(r[2], 0) end
+        return unpack(r, 2, r.n)
+    end
+end
+
+---------------------------------------------------------------------------------------------
 -- Self-update from github.com/Fledgewing/BookOrbit-Android releases (README "Updates").
 -- Checks at most once a day on start/wake when the network is already up (never brings it up
 -- for this), or from the menu. The new file is SHA-256-checked against the release's
@@ -834,7 +1356,12 @@ function Updater.run(why)
     log("update: check started (" .. why .. "), installed", PATCH_VERSION, "pre-releases", tostring(pre))
     local url = pre and (RELEASES_API .. "?per_page=5") or (RELEASES_API .. "/latest")
     local body, err = httpGet(url, 10, 30)
-    if not body then return false, "check failed: " .. tostring(err) end
+    if not body then
+        if Wifi.radioOn() == false then return false, "no internet: Wi-Fi is off" end
+        if not NetworkMgr:isConnected() then return false, "no internet: Wi-Fi isn't connected" end
+        if tostring(err):find("network:", 1, true) then return false, "no internet (GitHub unreachable: " .. tostring(err):gsub("^network: ", "") .. ")" end
+        return false, "check failed: " .. tostring(err)
+    end
     local okj, json = pcall(require, "json")
     if not okj then return false, "check failed: no JSON module" end
     local okd, data = pcall(json.decode, body)
@@ -927,6 +1454,8 @@ local state = {
     started = false,            -- first module of this process seen
     sas_done_at = -1000,        -- "Sync and sleep" finished (monotonic s)
     pending_home = nil,         -- "go home" waiting for the file browser
+    suspended_at = nil,         -- last Suspend (monotonic s)
+    paused_for = nil,           -- how long the last Suspend lasted, set on Resume
 }
 
 local OrbitAndroid = WidgetContainer:extend{
@@ -945,6 +1474,10 @@ function OrbitAndroid:init()
     if not state.started then
         state.started = true
         log("start: KOReader started (treated as a wake)", in_reader and "in reader" or "in file browser")
+        UIManager:scheduleIn(0.8, function()
+            Shared.refresh("start")
+            Wifi.applySettings("start")
+        end)
         UIManager:scheduleIn(1, function() self:checkCommand("start") end)
         UIManager:scheduleIn(1.5, function() self:wakeFlow("start") end)
     elseif state.pending_home and not in_reader then
@@ -960,7 +1493,7 @@ function OrbitAndroid:onDispatcherRegisterActions()
     Dispatcher:registerAction("orbit_open_companion",
         { category = "none", event = "OrbitOpenCompanion", title = _("Orbit: open Orbit Companion"), general = true })
     Dispatcher:registerAction("orbit_open_apps",
-        { category = "none", event = "OrbitOpenApps", title = _("Orbit: open another app"), general = true, separator = true })
+        { category = "none", event = "OrbitOpenApps", title = _("Orbit Companion: apps"), general = true, separator = true })
 end
 
 -- "Sync while reading" replaces the plugin's every-few-pages push while it is on.
@@ -987,8 +1520,13 @@ end
 ---------------------------------------------------------------------------------------------
 
 function OrbitAndroid:onResume()
-    log("resume")
+    state.paused_for = state.suspended_at and (now_s() - state.suspended_at) or nil
+    state.suspended_at = nil
+    Wifi.state().foreground = true
+    log("resume", state.paused_for and ("after " .. fmt(state.paused_for) .. " in the background") or "")
     UIManager:scheduleIn(0.3, function()
+        Shared.refresh("resume")
+        Wifi.applySettings("resume")
         self:checkCommand("resume")
         -- Also after "home": the closed book's sync needs the network.
         self:wakeFlow("wake")
@@ -1008,13 +1546,20 @@ function OrbitAndroid:wakeFlow(reason)
         return
     end
     local t0 = now_s()
+    local lease = "wake"
+    Wifi.acquire(lease)
     Net.up(p, { reason = reason, cap = 20, need_server = true }, function(ok, res)
         if not ok then
+            Wifi.release(lease)
             self:showWakeBanner(res)
             return
         end
         p:requestLifecycleOutboxDrain("orbit_" .. reason)
         Updater.maybeAuto(reason)
+        -- Hold Wi-Fi until the plugin's drain and pull are done, then restore.
+        UIManager:scheduleIn(1, function()
+            Sync.waitOutbox(p, 20, function() Wifi.release(lease) end)
+        end)
         if inBook() then
             -- The plugin debounces pulls for 25 s (bookorbit_progress_sync.lua:26, 383-387).
             -- Clear it for this one pull; on a fresh start skip it if a pull already ran.
@@ -1047,13 +1592,56 @@ end
 function OrbitAndroid:checkCommand(source)
     local cmd = Jni.takeIntentExtra(Companion.EXTRA_COMMAND)
     if not cmd or cmd == "" then return false end
-    log("command from companion:", cmd, "(" .. source .. ")")
+    local from = Jni.takeIntentExtra(Companion.EXTRA_FROM)
+    log("command from companion:", cmd, "(" .. source .. ")", from and ("from " .. tostring(from)) or "")
     if cmd == "home" then
         self:onOrbitGoHome()
         return true
     end
+    if cmd == "home_smart" then
+        self:smartHome(source, from or nil)
+        return true
+    end
     log("unknown command ignored:", cmd)
     return false
+end
+
+-- Smart Home: BookOrbit home when Home is pressed in a book; otherwise back to the book.
+function OrbitAndroid:smartHome(source, from_extra)
+    local ui = liveUI()
+    local in_reader = ui ~= nil and ui.document ~= nil
+    local p = bookorbit(ui)
+    local menu_open = in_reader and ui.menu ~= nil and ui.menu.menu_container ~= nil
+    local view_open = p ~= nil and p.catalog_browser ~= nil
+    local last = G_reader_settings:readSetting("lastfile")
+    local has_last = false
+    if type(last) == "string" then
+        local okl, lfs = pcall(require, "libs/libkoreader-lfs")
+        has_last = okl and lfs.attributes(last, "mode") == "file"
+    end
+    local paused = source == "start" and nil or state.paused_for
+    local from_other = HomePlan.cameFromOtherApp(from_extra, paused)
+    local action = HomePlan.decide{
+        mode = "smart", in_reader = in_reader, covered = menu_open or view_open,
+        from_other = from_other, has_last = has_last,
+    }
+    log("home (smart):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "BookOrbit view",
+        tostring(view_open), "from other app", tostring(from_other), "(paused", paused and fmt(paused) or "-", ")",
+        "last book", has_last and "yes" or "no")
+    if action == "dashboard" then return self:onOrbitGoHome() end
+    -- Back to the book: close what covers it, or open the last one.
+    if menu_open then pcall(function() ui.menu:onCloseReaderMenu() end) end
+    if view_open then
+        local okc, err = pcall(function() UIManager:close(p.catalog_browser) end)
+        log("home (smart): closed the BookOrbit view", okc and "" or tostring(err))
+    end
+    if not in_reader then
+        log("home (smart): opening the last book")
+        UIManager:nextTick(function()
+            require("apps/reader/readerui"):showReader(last)
+        end)
+    end
+    return true
 end
 
 -- Close the open book (the reader saves it and the plugin syncs it as on any close,
@@ -1093,6 +1681,8 @@ end
 ---------------------------------------------------------------------------------------------
 
 function OrbitAndroid:onSuspend()
+    state.suspended_at = now_s()
+    Wifi.state().foreground = false
     if not S.sync_on_sleep then return end
     if now_s() - state.sas_done_at < 15 then
         log("suspend: just synced by Sync and sleep; skip")
@@ -1118,16 +1708,22 @@ function OrbitAndroid:sleepSync(reason)
     local t0 = now_s()
     local p = bookorbit(self.ui)
     log(reason .. ": sleep sync start, cap", cap .. "s")
+    local held = false
     local function done(ok, detail)
         local seconds = now_s() - t0
         S.last_sleep_sync = { at = os.time(), ok = ok, seconds = seconds, reason = reason, detail = detail }
         saveSettings()
-        log(reason .. ": sleep sync", ok and "done" or "FAILED", "in", fmt(seconds), detail or "")
-        Companion.netDone(reason, ok, seconds, detail)
+        local restore = held and Wifi.state().restore_off and Wifi.state().n == 1 and "off" or ""
+        log(reason .. ": sleep sync", ok and "done" or "FAILED", "in", fmt(seconds), detail or "",
+            restore == "off" and "| Wi-Fi was off before: companion restores off" or "")
+        Companion.netDone(reason, ok, seconds, detail, restore)
+        if held then Wifi.release("sleep", true) end
     end
     if not p or not p:isLoggedIn() then
         return done(false, "BookOrbit plugin missing or signed out")
     end
+    Wifi.acquire("sleep")
+    held = true
     Net.up(p, { reason = reason, cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
         if not ok then return done(false, res.detail) end
         -- The plugin queued its snapshot in its own _onSuspend (main.lua:1340-1351) but drains
@@ -1181,8 +1777,14 @@ function OrbitAndroid:onOrbitSyncAndSleep()
         local seconds = now_s() - t0
         S.last_sleep_sync = { at = os.time(), ok = ok, seconds = seconds, reason = "sync_and_sleep", detail = detail }
         saveSettings()
-        log("sync and sleep:", ok and "synced" or "FAILED", "in", fmt(seconds), detail or "")
-        Companion.netDone("sync_and_sleep", ok, seconds, detail)
+        local restore = self.sas_held and Wifi.state().restore_off and Wifi.state().n == 1 and "off" or ""
+        log("sync and sleep:", ok and "synced" or "FAILED", "in", fmt(seconds), detail or "",
+            restore == "off" and "| Wi-Fi was off before: companion restores off" or "")
+        Companion.netDone("sync_and_sleep", ok, seconds, detail, restore)
+        if self.sas_held then
+            self.sas_held = false
+            Wifi.release("sync_and_sleep", true)
+        end
         if cancelled then return end
         state.sas_done_at = now_s()
         if ok then
@@ -1205,6 +1807,8 @@ function OrbitAndroid:onOrbitSyncAndSleep()
         finish(false, "BookOrbit plugin missing or signed out")
         return true
     end
+    Wifi.acquire("sync_and_sleep")
+    self.sas_held = true
     Net.up(p, { reason = "sync_and_sleep", cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
         if cancelled then return finish(false, "cancelled") end
         if not ok then return finish(false, res.detail) end
@@ -1242,11 +1846,49 @@ function OrbitAndroid:onCloseWidget()
         UIManager:unschedule(self.reading_task)
         self.reading_task = nil
     end
+    if self.ui and self.ui.document and self.book_tracked then
+        self.book_tracked = false
+        local st = Wifi.state()
+        local restore = WifiPlan.bookClosed(st)
+        log("wifi: book closed | mode", st.mode, restore == "on" and "| Wi-Fi was on before the book: turning it back on" or "")
+        if restore == "on" and Companion.installed() then
+            Companion.netUp("book_closed", { owner = "auto" })
+        end
+    end
 end
 
 function OrbitAndroid:onReaderReady()
     self.schedule = Schedule.new(S.reading_schedule, now_s())
     self:hookPluginPagePush()
+    self:bookOpenFlow()
+end
+
+-- A book opened: remember Wi-Fi for off while reading; in the off-while-reading and just-in-time
+-- modes, bring the network up for the plugin's open-time pull, then let Wi-Fi go off.
+function OrbitAndroid:bookOpenFlow()
+    if not Companion.installed() then return end
+    local st = Wifi.state()
+    local on = Wifi.radioOn()
+    WifiPlan.bookOpened(st, on)
+    self.book_tracked = true
+    log("wifi: book opened (Wi-Fi", on == false and "off" or "on", ") mode", st.mode)
+    if st.mode == "always_on" then return end
+    local p = bookorbit(self.ui)
+    if not p or not p:isLoggedIn() then return Wifi.kick() end
+    Wifi.acquire("open")
+    Net.up(p, { reason = "open", cap = 20, need_server = true }, function(ok)
+        if not ok then return Wifi.release("open") end
+        -- The plugin pulls on open by itself, or on NetworkConnected when it was offline
+        -- (main.lua:1353-1361); its 25 s debounce keeps this from doubling up.
+        p:requestProgressPull(false, false, "orbit_open")
+        UIManager:scheduleIn(1, function()
+            Sync.waitOutbox(p, 20, function() Wifi.release("open") end)
+        end)
+    end)
+end
+
+function OrbitAndroid:onNetworkConnected()
+    Wifi.kick()
 end
 
 function OrbitAndroid:onPageUpdate(page)
@@ -1272,8 +1914,10 @@ function OrbitAndroid:readingSync()
     local t0 = now_s()
     Schedule.markSynced(self.schedule, t0)
     log("reading: sync due (" .. S.reading_schedule .. ")")
+    Wifi.acquire("reading")
     Net.up(p, { reason = "reading", cap = 20, need_server = true }, function(ok, res)
         if not ok then
+            Wifi.release("reading")
             self.reading_running = false
             log("reading: network not ready; try again at the next interval:", res.detail or "")
             return
@@ -1282,6 +1926,10 @@ function OrbitAndroid:readingSync()
         local digest = p:getDocumentDigest()
         p:fetchRemoteProgress(digest, function(fetched)
             self.reading_running = false
+            -- Wi-Fi goes back to its previous state once the plugin's push or pull is done.
+            UIManager:scheduleIn(1, function()
+                Sync.waitOutbox(p, 20, function() Wifi.release("reading") end)
+            end)
             if not fetched then
                 log("reading: plugin could not read BookOrbit's position")
                 return
@@ -1324,7 +1972,21 @@ function OrbitAndroid:testSyncPath()
         table.insert(lines, line)
         log("test:", label, ok and "ok" or "FAILED", seconds and fmt(seconds) or "", hint or "")
     end
+    local held = false
     local function show()
+        if held then
+            held = false
+            -- Put Wi-Fi back as the test found it, now rather than after the usual grace.
+            local st = Wifi.state()
+            local restore = st.restore_off
+            Wifi.release("test")
+            if restore then
+                st.release_at = now_s()
+                local action, reason = Wifi.evaluate("test done")
+                add(action == "off", _("Wi-Fi turned back off (it was off)"), nil,
+                    _("Left on: ") .. tostring(reason))
+            end
+        end
         UIManager:close(wait)
         local text = table.concat(lines, "\n") .. "\n\n" .. string.format(_("Total %s."), fmt(now_s() - t0))
             .. "\n" .. _("Step 4 only checks that the server answers at its base address; it uses no login.")
@@ -1332,10 +1994,13 @@ function OrbitAndroid:testSyncPath()
     end
 
     local c0 = now_s()
-    if Companion.installed() then
+    local cstate = Companion.state()
+    if cstate == "ok" then
         local status = Companion.status(1)
         add(status ~= nil, _("Companion answered"), now_s() - c0,
             _("Orbit Companion is installed but did not answer: open it once."))
+    elseif cstate == "frozen" then
+        add(false, _("Companion answered"), nil, Companion.disabledText())
     else
         add(false, _("Companion answered"), nil, _("Orbit Companion is not installed: Wi-Fi stays as it is, Tailscale is woken directly."))
     end
@@ -1343,6 +2008,9 @@ function OrbitAndroid:testSyncPath()
         add(false, _("BookOrbit plugin signed in"), nil, _("Sign in to BookOrbit first."))
         return show()
     end
+    local was_on = Wifi.acquire("test")
+    held = true
+    if was_on == false then add(Companion.installed(), _("Wi-Fi was off: turning it on for the test"), nil, Companion.problem()) end
     Net.up(p, { reason = "test", cap = 20, need_server = true }, function(ok, res)
         add(res.wifi_s ~= nil, _("Wi-Fi connected"), res.wifi_s, _("Turn Wi-Fi on, or check Orbit Companion's Wi-Fi permission."))
         add(res.vpn_s ~= nil, _("Tailscale up"), res.vpn_s, _("Tailscale not connected: open Tailscale and sign in."))
@@ -1425,6 +2093,9 @@ local RECOMMENDED_GESTURES = {
     { id = "hold_top_left_corner", action = "bookorbit_sync_now", label = "Hold top-left corner → BookOrbit: sync all books" },
     -- KOReader has no one-finger "swipe up from the bottom"; this bottom-edge swipe is the nearest.
     { id = "one_finger_swipe_bottom_edge_right", action = "bookorbit_this_book", label = "Swipe right along the bottom edge → BookOrbit: this book" },
+    -- Not used by the three above. KOReader's default for it in books is "brighter frontlight"
+    -- on devices with a frontlight (gestures.koplugin/defaults.lua:129); this replaces that.
+    { id = "two_finger_swipe_north", action = "orbit_open_apps", label = "Two-finger swipe up → Orbit Companion: apps (replaces brighter frontlight)" },
 }
 
 function OrbitAndroid:applyRecommendedGestures()
@@ -1470,11 +2141,15 @@ end
 
 function OrbitAndroid:statusText()
     local parts = {}
-    if Companion.installed() then
+    local cstate = Companion.state()
+    if cstate == "ok" then
         table.insert(parts, _("companion installed"))
+    elseif cstate == "frozen" then
+        table.insert(parts, Companion.disabledText())
     else
         table.insert(parts, _("no companion"))
     end
+    table.insert(parts, _("Wi-Fi: ") .. _(WifiPlan.modeLabel(Shared.mode())))
     local last = S.last_sleep_sync
     if last then
         table.insert(parts, string.format("%s %s %s", _("last sleep sync"), last.ok and fmt(last.seconds) or _("failed"),
@@ -1490,19 +2165,36 @@ function OrbitAndroid:updateStatusText()
     return string.format("%s · %s (%s)", head, st.text, os.date("%m-%d %H:%M", st.at))
 end
 
+-- By hand: bring Wi-Fi up if needed (through the companion), check, then put Wi-Fi back.
 function OrbitAndroid:checkPatchUpdate()
-    if not NetworkMgr:isConnected() then
-        UIManager:show(InfoMessage:new{ text = _("Patch update: connect to Wi-Fi first."), timeout = 4 })
-        return
-    end
     local msg = InfoMessage:new{ text = _("Checking for a patch update…") }
     UIManager:show(msg)
     UIManager:forceRePaint()
-    UIManager:scheduleIn(0.2, function()
-        Updater.check("menu", function(_ok, text)
-            UIManager:close(msg)
-            UIManager:show(InfoMessage:new{ text = _("Patch update: ") .. text, timeout = 6 })
+    local function report(text)
+        UIManager:close(msg)
+        UIManager:show(InfoMessage:new{ text = _("Patch update: ") .. text, timeout = 6 })
+    end
+    local function run(held)
+        UIManager:scheduleIn(0.2, function()
+            Updater.check("menu", function(_ok, text)
+                if held then Wifi.release("update") end
+                report(text)
+            end)
         end)
+    end
+    if NetworkMgr:isConnected() then return run(false) end
+    if not Companion.installed() then
+        setUpdateStatus("no internet: Wi-Fi is off")
+        return report((Companion.problem() and (Companion.problem() .. " ") or "") .. _("No internet: Wi-Fi is off."))
+    end
+    Wifi.acquire("update")
+    Net.up(nil, { reason = "update", cap = 20, need_server = false }, function(ok, res)
+        if not ok then
+            Wifi.release("update")
+            setUpdateStatus("no internet: " .. tostring(res.detail))
+            return report(_("No internet: ") .. tostring(res.detail))
+        end
+        run(true)
     end)
 end
 
@@ -1537,7 +2229,70 @@ function OrbitAndroid:menuItems()
             UIManager:scheduleIn(0.2, fn)
         end
     end
+    local wifi_items = {}
+    for _i, o in ipairs(WifiPlan.MODES) do
+        table.insert(wifi_items, {
+            text = _(o.label),
+            radio = true,
+            enabled_func = function() return Companion.installed() end,
+            checked_func = function() return Shared.mode() == o.id end,
+            callback = function()
+                Shared.set("wifi_mode", o.id)
+                Wifi.applySettings("menu")
+            end,
+        })
+    end
+    local idle_items = {}
+    for _i, m in ipairs(WifiPlan.IDLE_MINUTES) do
+        table.insert(idle_items, {
+            text = string.format(_("%d min"), m),
+            radio = true,
+            checked_func = function() return (S.wifi_idle_min or 2) == m end,
+            callback = function()
+                Shared.set("wifi_idle_min", m)
+                Wifi.applySettings("menu")
+            end,
+        })
+    end
+    table.insert(wifi_items, {
+        text_func = function() return string.format(_("Just in time: off after %d min idle"), S.wifi_idle_min or 2) end,
+        enabled_func = function() return Shared.mode() == "jit" end,
+        sub_item_table = idle_items,
+        separator = true,
+    })
+    table.insert(wifi_items, {
+        text_func = function()
+            return Companion.problem() or _("Only Orbit Companion switches Wi-Fi. It never turns off Wi-Fi you turned on by hand in just in time, and never while another app is in front.")
+        end,
+        keep_menu_open = true,
+        callback = function() end,
+    })
+    local home_items = {
+        {
+            text = _("Back to my book, then BookOrbit home"),
+            radio = true,
+            checked_func = function() return S.home_button ~= "bookorbit" end,
+            callback = function() Shared.set("home_button", "smart") end,
+        },
+        {
+            text = _("BookOrbit home"),
+            radio = true,
+            checked_func = function() return S.home_button == "bookorbit" end,
+            callback = function() Shared.set("home_button", "bookorbit") end,
+        },
+    }
     return {
+        {
+            text_func = function() return _("Wi-Fi: ") .. _(WifiPlan.modeLabel(Shared.mode())) end,
+            sub_item_table = wifi_items,
+        },
+        {
+            text_func = function()
+                return _("Home button: ") .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
+            end,
+            sub_item_table = home_items,
+            separator = true,
+        },
         toggle("wifi_via_companion", _("Wi-Fi via Orbit Companion")),
         toggle("wake_tailscale", _("Wake Tailscale before syncing")),
         toggle("sync_on_wake", _("Always sync on wake")),
@@ -1566,7 +2321,10 @@ function OrbitAndroid:menuItems()
 end
 
 function OrbitAndroid:addToMainMenu(menu_items)
-    local entry = { text = _("Android sync"), sub_item_table_func = function() return self:menuItems() end }
+    local entry = { text = _("Android sync"), sub_item_table_func = function()
+        Shared.refresh("menu")
+        return self:menuItems()
+    end }
     -- The plugin registers its Tools › BookOrbit entry first (bookorbit_main_menu.lua:320-366).
     local host = menu_items.bookorbit
     if host and type(host.sub_item_table) == "table" then
@@ -1590,7 +2348,13 @@ function NetworkMgr:turnOnWifi(complete_callback, interactive)
         return stock_turnOnWifi(self, complete_callback, interactive)
     end
     if Companion.installed() then
-        Companion.netUp("koreader_wifi_on")
+        -- interactive: the reader's own Wi-Fi toggle (manager.lua:433 toggleWifiOn), so it is
+        -- theirs to turn off. Otherwise beforeWifiAction/runWhenOnline (manager.lua:605-619,
+        -- 698-719) needs the network for something: just in time may turn it off again.
+        local owner = interactive and "manual" or "auto"
+        log("wifi: ON requested by KOReader (" .. owner .. ") | mode", Shared.mode())
+        Wifi.activity()
+        Companion.netUp("koreader_wifi_on", { owner = owner })
     elseif interactive then
         return stock_turnOnWifi(self, complete_callback, interactive)
     else
@@ -1604,12 +2368,49 @@ end
 
 function NetworkMgr:turnOffWifi(complete_callback)
     if S.wifi_via_companion and Companion.installed() then
-        Companion.send(Companion.ACTION.WIFI_OFF, { reason = "koreader_wifi_off" })
+        log("wifi: OFF requested by KOReader's own toggle | mode", Shared.mode())
+        Companion.wifiOff("koreader_wifi_off", false)
         if complete_callback then complete_callback() end
         return
     end
     return stock_turnOffWifi(self, complete_callback)
 end
+
+-- KOReader's Android backend calls "connected" Wi-Fi on (device.lua:341). With the companion we
+-- know the radio itself, so the menu toggle and turnOnWifiAndWaitForConnection
+-- (manager.lua:517-567) see real state.
+local stock_isWifiOn = NetworkMgr.isWifiOn
+function NetworkMgr:isWifiOn()
+    if S.wifi_via_companion and Companion.installed() then
+        local on = Jni.wifiEnabled()
+        if on ~= nil then return on end
+    end
+    return stock_isWifiOn(self)
+end
+
+-- Anything that asks for the network through KOReader's framework (the plugin's catalog and
+-- downloads, OPDS, updates) counts as activity for just in time.
+local stock_beforeWifiAction = NetworkMgr.beforeWifiAction
+function NetworkMgr:beforeWifiAction(callback)
+    Wifi.activity("KOReader needs the network")
+    return stock_beforeWifiAction(self, callback)
+end
+
+-- No "Turn on Wi-Fi?" prompt, in every Wi-Fi mode, when the companion can switch Wi-Fi:
+-- beforeWifiAction then calls turnOnWifiAndWaitForConnection (manager.lua:609-611), whose
+-- turnOnWifi goes to the companion. Without a usable companion, KOReader's stock behaviour stays.
+local function silentWifiOn()
+    if not (S.wifi_via_companion and Companion.installed()) then return end
+    local cur = G_reader_settings:readSetting("wifi_enable_action")
+    if cur ~= "turn_on" then
+        G_reader_settings:saveSetting("wifi_enable_action", "turn_on")
+        log("wifi: KOReader's \"Action when Wi-Fi is off\" was", tostring(cur), "-> turn_on (the companion switches Wi-Fi, no prompt)")
+    end
+end
+silentWifiOn()
+
+wrapRequests("socket.http")
+wrapRequests("ssl.https")
 
 ---------------------------------------------------------------------------------------------
 -- Load the module next to the plugins in every FileManager and ReaderUI

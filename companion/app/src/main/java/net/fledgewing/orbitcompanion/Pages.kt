@@ -59,6 +59,8 @@ class NetTest(private val ctx: Context, private val offFirst: Boolean, private v
     private var wifiMs = -1L
     private var phase = 0
     private var refused = false
+    private var wasOn = true
+    private var restored: Boolean? = null
     var focusLost = false
     var running = false
         private set
@@ -68,8 +70,15 @@ class NetTest(private val ctx: Context, private val offFirst: Boolean, private v
         t0 = SystemClock.elapsedRealtime()
         OLog.i("${if (offFirst) "Wi-Fi off/on test" else "network test"} started")
         if (offFirst) {
-            refused = !Net.setWifi(ctx, false, "setup Wi-Fi test")
-            phase = 0
+            // Leave Wi-Fi as found (WifiTestPlan): on -> off, on; off -> on (timed), off.
+            wasOn = Net.wifiEnabled(ctx)
+            OLog.i("Wi-Fi test: steps ${WifiTestPlan.steps(wasOn)} (Wi-Fi was ${if (wasOn) "on" else "off"})")
+            if (wasOn) {
+                refused = !Net.setWifi(ctx, false, "setup Wi-Fi test")
+                phase = 0
+            } else {
+                wifiOn()
+            }
         } else {
             wifiOn()
             Net.connectTailscale(ctx, "network test")
@@ -93,7 +102,10 @@ class NetTest(private val ctx: Context, private val offFirst: Boolean, private v
             1 -> when {
                 Net.wifiConnected(ctx) -> {
                     wifiMs = now - onAt
-                    if (offFirst) return finish(true, "")
+                    if (offFirst) {
+                        if (!wasOn) restored = Net.setWifi(ctx, false, "setup Wi-Fi test: restoring off")
+                        return finish(true, "")
+                    }
                     Net.connectTailscale(ctx, "network test, Wi-Fi up")
                     phase = 2
                 }
@@ -109,12 +121,18 @@ class NetTest(private val ctx: Context, private val offFirst: Boolean, private v
 
     private fun finish(ok: Boolean, problem: String) {
         running = false
+        if (offFirst && !wasOn && restored == null && Net.wifiEnabled(ctx)) restored = Net.setWifi(ctx, false, "setup Wi-Fi test: restoring off")
         val prompt = refused || focusLost
         val total = SystemClock.elapsedRealtime() - t0
         val summary = if (offFirst) {
-            val reconnect = if (wifiMs >= 0) "reconnected in ${Ui.secs(wifiMs)}" else problem
+            val reconnect = if (wifiMs >= 0) "${if (wasOn) "reconnected" else "connected"} in ${Ui.secs(wifiMs)}" else problem
             val p = if (prompt) "Android prompted or refused" else "no prompt"
-            "$reconnect · $p"
+            val back = when (restored) {
+                true -> " · turned back off (it was off)"
+                false -> " · could not turn it back off"
+                null -> if (!wasOn && wifiMs < 0) " · left off" else ""
+            }
+            "$reconnect · $p$back"
         } else {
             val parts = mutableListOf<String>()
             if (wifiMs >= 0) parts.add("Wi-Fi ${Ui.secs(wifiMs)}")
@@ -158,7 +176,7 @@ class StatusActivity : EinkActivity() {
         }
         val ts = when (Net.appState(this, Net.TAILSCALE_PKG)) {
             AppState.MISSING -> "Not installed"
-            AppState.FROZEN -> "Frozen by Meebook"
+            AppState.FROZEN -> AppStates.disabledShort(Vendor.disablerLabel(this))
             else -> if (Net.vpnUp(this)) "Connected" else "Not connected"
         }
         root.addView(Ui.row(this, "Wi-Fi", right = Ui.value(this, wifi)))
@@ -183,8 +201,8 @@ class StatusActivity : EinkActivity() {
             ),
         )
         testResult?.let { root.addView(Ui.text(this, it, 18f).apply { setPadding(0, Ui.dp(this@StatusActivity, 10), 0, 0) }) }
-        Meebook.frozenApps(this).takeIf { it.isNotEmpty() }?.let { frozen ->
-            root.addView(Ui.text(this, frozen.joinToString(" ") { AppStates.frozenMessage(it) }, 18f, bold = true).apply {
+        Vendor.disabledApps(this).takeIf { it.isNotEmpty() }?.let { frozen ->
+            root.addView(Ui.text(this, frozen.joinToString(" ") { Vendor.disabledMessage(this, it) }, 18f, bold = true).apply {
                 setPadding(0, Ui.dp(this@StatusActivity, 10), 0, 0)
             })
         }
@@ -226,14 +244,15 @@ class SettingsActivity : EinkActivity() {
             "settings: wifi_after_sleep=${prefs.wifiAfterSleep.key} wake_ts_with_wifi=${prefs.wakeTailscaleWithWifi} " +
                 "wake_lock=${prefs.wakeLockEnabled} home_opens_koreader=${prefs.homeOpensKoreader} " +
                 "notify_tailscale=${prefs.notifyTailscale} debug=${prefs.debugLog} " +
-                "auto_update=${prefs.autoUpdate} include_prereleases=${prefs.includePreReleases}",
+                "auto_update=${prefs.autoUpdate} include_prereleases=${prefs.includePreReleases} " +
+                "wifi_mode=${prefs.wifiMode.key} wifi_idle_min=${prefs.wifiIdleMin} home_button=${prefs.homeButton.key}",
         )
         OrbitService.start(this, Intent(OrbitService.ACTION_REFRESH))
         render()
     }
 
     private fun render() {
-        val root = page()
+        val root = page(scroll = true)
         root.addView(Ui.header(this, "Settings", "‹ Back") { finish() })
         root.addView(Ui.text(this, "Wi-Fi after sleep sync", 21f).apply { setPadding(0, 0, 0, Ui.dp(this@SettingsActivity, 8)) })
         val seg = LinearLayout(this).apply {
@@ -264,6 +283,28 @@ class SettingsActivity : EinkActivity() {
             Ui.text(this, "Short naps keep Wi-Fi up, so waking syncs in about 1 s. The timer only turns Wi-Fi off if the screen is still off.", 16f, color = Ui.MID)
                 .apply { setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 12)) },
         )
+        segmented(root, "Wi-Fi", WifiMode.entries.map { it to it.label }, prefs.wifiMode) {
+            prefs.wifiMode = it
+            prefs.sharedSettingsAt = System.currentTimeMillis()
+        }
+        root.addView(
+            Ui.text(this, when (prefs.wifiMode) {
+                WifiMode.ALWAYS_ON -> "Wi-Fi stays as you set it. Syncs that have to turn it on turn it back off."
+                WifiMode.OFF_READING -> "Off when a book opens (after its sync), back as it was when the book closes."
+                WifiMode.JIT -> "Off unless something needs it. Wi-Fi you turn on by hand stays on until you turn it off."
+            }, 16f, color = Ui.MID).apply { setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 8)) },
+        )
+        if (prefs.wifiMode == WifiMode.JIT) {
+            segmented(root, "Just in time: off after idle", SharedSettings.IDLE_MINUTES.map { it to "$it min" }, prefs.wifiIdleMin) {
+                prefs.wifiIdleMin = it
+                prefs.sharedSettingsAt = System.currentTimeMillis()
+            }
+        }
+        segmented(root, "Home button", HomeButton.entries.map { it to it.label }, prefs.homeButton) {
+            prefs.homeButton = it
+            prefs.sharedSettingsAt = System.currentTimeMillis()
+        }
+        root.addView(Ui.gap(this, 8))
         toggle(root, "Wake Tailscale with Wi-Fi", null, prefs.wakeTailscaleWithWifi) { prefs.wakeTailscaleWithWifi = it }
         toggle(root, "Wake lock while syncing", "released at the patch's 20 s cap · 25 s max", prefs.wakeLockEnabled) { prefs.wakeLockEnabled = it }
         toggle(root, "Home always opens BookOrbit home", "press Home twice for the launcher page", prefs.homeOpensKoreader) { prefs.homeOpensKoreader = it }
@@ -278,6 +319,30 @@ class SettingsActivity : EinkActivity() {
         root.addView(Ui.row(this, "Open-source licenses", null, Ui.value(this, "›"), onClick = {
             startActivity(Intent(this, LicensesActivity::class.java))
         }))
+    }
+
+    private fun <T> segmented(root: LinearLayout, title: String, options: List<Pair<T, String>>, current: T, set: (T) -> Unit) {
+        root.addView(Ui.text(this, title, 21f).apply { setPadding(0, Ui.dp(this@SettingsActivity, 8), 0, Ui.dp(this@SettingsActivity, 8)) })
+        val seg = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = Ui.box(this@SettingsActivity, Ui.PAPER)
+            val pad = Ui.dp(this@SettingsActivity, 2)
+            setPadding(pad, pad, pad, pad)
+        }
+        options.forEach { (value, label) ->
+            val sel = value == current
+            val t = Ui.text(this, label, 17f, bold = sel, color = if (sel) Ui.PAPER else Ui.INK).apply {
+                gravity = Gravity.CENTER
+                minHeight = Ui.dp(this@SettingsActivity, 64)
+                setBackgroundColor(if (sel) Ui.INK else Ui.PAPER)
+            }
+            Ui.clickable(t, {
+                set(value)
+                changed()
+            })
+            seg.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        root.addView(seg)
     }
 
     private fun toggle(root: LinearLayout, label: String, sub: String?, on: Boolean, set: (Boolean) -> Unit) {
@@ -314,15 +379,16 @@ object Setup {
             )
         })
 
-        // The Meebook launcher's "App freeze" disables apps (and force-stops them) behind our back.
-        val frozen = Meebook.frozenApps(ctx)
+        // Some vendor launchers "freeze" (disable) apps behind our back (Vendor.kt).
+        val frozen = Vendor.disabledApps(ctx)
+        val disabler = Vendor.disablerLabel(ctx)
         list.add(
             Check(
-                "Not frozen by Meebook (KOReader, Tailscale, Orbit)",
+                "Not disabled by the system (KOReader, Tailscale, Orbit)",
                 frozen.isEmpty(),
-                if (frozen.isEmpty()) "done" else "frozen: ${frozen.joinToString()} · open Meebook › Freeze management and unfreeze",
+                if (frozen.isEmpty()) "done" else "${AppStates.disabledShort(disabler)}: ${frozen.joinToString()} · re-enable${Vendor.profile(ctx).freezeHint?.let { h -> " in ${disabler ?: "the launcher"} › $h" } ?: " in Settings › Apps"}",
             ) { a ->
-                Meebook.freezePage(ctx)?.let { a.tryStart(it, "Meebook freeze management") }
+                a.tryStart(Vendor.reenablePage(ctx), "re-enable page")
             },
         )
 
@@ -358,13 +424,13 @@ object Setup {
                 tsUp,
                 when {
                     tsState == AppState.MISSING -> "not installed"
-                    tsState == AppState.FROZEN -> AppStates.frozenMessage("Tailscale")
+                    tsState == AppState.FROZEN -> Vendor.disabledMessage(ctx, "Tailscale")
                     !tsUp -> "not connected: open Tailscale and sign in"
                     else -> "connected · $alwaysOnNote"
                 },
             ) { a ->
                 when {
-                    tsState == AppState.FROZEN -> Meebook.freezePage(ctx)?.let { a.tryStart(it, "Meebook freeze management") }
+                    tsState == AppState.FROZEN -> a.tryStart(Vendor.reenablePage(ctx, Net.TAILSCALE_PKG), "re-enable page")
                     tsUp -> a.tryStart(Intent(Settings.ACTION_VPN_SETTINGS), "VPN settings")
                     else -> ctx.packageManager.getLaunchIntentForPackage(Net.TAILSCALE_PKG)?.let { a.tryStart(it, "Tailscale") }
                 }
@@ -396,7 +462,7 @@ object Setup {
                 },
             ) { a ->
                 if (Koreader.state(ctx) == AppState.FROZEN) {
-                    Meebook.freezePage(ctx)?.let { a.tryStart(it, "Meebook freeze management") }
+                    a.tryStart(Vendor.reenablePage(ctx, Koreader.PKG), "re-enable page")
                 } else if (!Koreader.start(a, "setup: patch check", null)) {
                     OLog.i("setup: KOReader not startable")
                 }
@@ -450,7 +516,7 @@ class SetupActivity : EinkActivity() {
     }
 
     private fun render() {
-        val root = page()
+        val root = page(scroll = true)
         val checks = Setup.checks(this)
         root.addView(Ui.header(this, "First-run setup (${checks.count { it.done }}/${checks.size})", "‹ Back") { finish() })
         checks.forEach { c ->

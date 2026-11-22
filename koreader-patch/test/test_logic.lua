@@ -3,13 +3,14 @@
 local here = (arg and arg[0] or ""):match("^(.*)/[^/]*$") or "."
 ORBIT_ANDROID_TEST = true
 local M = dofile(here .. "/../2-orbit-android.lua")
-local Schedule, Plan, Update = M.Schedule, M.Plan, M.Update
+local Schedule, Plan, Update, WifiPlan, HomePlan = M.Schedule, M.Plan, M.Update, M.WifiPlan, M.HomePlan
 
 local passed, failed = 0, 0
 local function test(name, fn)
     local ok, err = pcall(fn)
     if ok then passed = passed + 1 else failed = failed + 1; print("FAIL " .. name .. ": " .. tostring(err)) end
 end
+local function ok(v, what) if not v then error(what or "expected true", 2) end end
 local function eq(a, b, what)
     if a ~= b then error((what or "value") .. ": expected " .. tostring(b) .. ", got " .. tostring(a), 2) end
 end
@@ -208,6 +209,137 @@ test("due: at most once a day", function()
     eq(Update.isDue(1000, 1000 + 86399), false)
     eq(Update.isDue(1000, 1000 + 86400), true)
     eq(Update.isDue(5000, 1000), true, "clock went back")
+end)
+
+-- WifiPlan: restore previous state, idle timer, never off while busy
+local function ctx(now, t) t = t or {}; t.now = now; if t.wifi_on == nil then t.wifi_on = true end; return t end
+local function act(st, c) local a, why, force = WifiPlan.decide(st, c); return a, why, force end
+
+test("wifi: a flow that turned Wi-Fi on puts it back off, in every mode", function()
+    for _, mode in ipairs({ "always_on", "off_reading", "jit" }) do
+        local st = WifiPlan.new(mode, 10, 0)
+        WifiPlan.acquire(st, "wake", false, 0)
+        eq(act(st, ctx(5)), nil, mode .. ": held")
+        WifiPlan.release(st, "wake", 10)
+        eq(act(st, ctx(11)), nil, mode .. ": grace")
+        local a, why = act(st, ctx(13))
+        eq(a, "off", mode .. ": restored")
+        ok(why:find("restore", 1, true), "reason names the restore")
+    end
+end)
+
+test("wifi: a flow that found Wi-Fi on leaves it on (always on, not in a book)", function()
+    local st = WifiPlan.new("always_on", 2, 0)
+    WifiPlan.acquire(st, "wake", true, 0)
+    WifiPlan.release(st, "wake", 1)
+    eq(act(st, ctx(1000)), nil)
+end)
+
+test("wifi: overlapping flows restore once, after the last", function()
+    local st = WifiPlan.new("always_on", 2, 0)
+    WifiPlan.acquire(st, "wake", false, 0)
+    WifiPlan.acquire(st, "reading", true, 1) -- on by now, but the first lease decided
+    WifiPlan.release(st, "wake", 2)
+    eq(act(st, ctx(10)), nil, "reading still holds it")
+    WifiPlan.release(st, "reading", 12)
+    eq(act(st, ctx(16)), "off")
+end)
+
+test("wifi: never off while busy, a flow holds it, or another app is in front", function()
+    local st = WifiPlan.new("jit", 1, 0)
+    eq(act(st, ctx(100, { busy = true })), nil, "busy")
+    st.foreground = false
+    eq(act(st, ctx(100)), nil, "other app")
+    eq(act(st, ctx(100, { screen_off = true })), "off", "screen off counts as ours")
+    st.foreground = true
+    WifiPlan.acquire(st, "test", true, 100)
+    eq(act(st, ctx(1000)), nil, "lease")
+end)
+
+test("wifi: just in time turns off after the idle time, measured from the last activity", function()
+    local st = WifiPlan.new("jit", 2, 0)
+    eq(act(st, ctx(119)), nil, "not yet")
+    WifiPlan.activity(st, 100)
+    eq(act(st, ctx(219)), nil, "activity restarts the timer")
+    local a, why = act(st, ctx(220))
+    eq(a, "off"); ok(why:find("idle 2 min", 1, true), why)
+    eq(act(st, ctx(220, { wifi_on = false })), nil, "already off")
+end)
+
+test("wifi: always on and off while reading have no idle timer", function()
+    eq(act(WifiPlan.new("always_on", 1, 0), ctx(1e6)), nil)
+    eq(act(WifiPlan.new("off_reading", 1, 0), ctx(1e6)), nil)
+end)
+
+test("wifi: just in time in a book turns off when the open-time pull is done", function()
+    local st = WifiPlan.new("jit", 10, 0)
+    WifiPlan.bookOpened(st, true)
+    WifiPlan.acquire(st, "open", true, 0)
+    eq(act(st, ctx(2)), nil, "pulling")
+    WifiPlan.release(st, "open", 4)
+    eq(act(st, ctx(7)), "off")
+end)
+
+test("wifi: off while reading turns Wi-Fi off at open and back on at close", function()
+    local st = WifiPlan.new("off_reading", 2, 0)
+    WifiPlan.bookOpened(st, true)
+    WifiPlan.acquire(st, "open", true, 0)
+    eq(act(st, ctx(1)), nil, "pull first")
+    WifiPlan.release(st, "open", 2)
+    local a, _why, force = act(st, ctx(5))
+    eq(a, "off"); eq(force, true, "applies to Wi-Fi on by hand too")
+    WifiPlan.wifiOff(st)
+    eq(act(st, ctx(6, { wifi_on = false })), nil)
+    eq(WifiPlan.bookClosed(st), "on", "restored")
+    WifiPlan.bookOpened(st, false)
+    eq(WifiPlan.bookClosed(st), nil, "was off: stays off")
+end)
+
+test("wifi: sleep sync hands the restore to the companion", function()
+    local st = WifiPlan.new("always_on", 2, 0)
+    WifiPlan.acquire(st, "sleep", false, 0)
+    WifiPlan.release(st, "sleep", 5, true)
+    eq(act(st, ctx(100)), nil)
+end)
+
+test("wifi: unknown mode falls back to just in time", function()
+    eq(WifiPlan.new("bogus", 2, 0).mode, "jit")
+    eq(WifiPlan.validMode("off_reading"), true)
+end)
+
+-- HomePlan: the Smart Home decision table
+local H = HomePlan.decide
+test("home: BookOrbit home mode always goes to the dashboard", function()
+    eq(H{ mode = "bookorbit", in_reader = false, has_last = true }, "dashboard")
+    eq(H{ mode = "bookorbit", in_reader = true, from_other = true }, "dashboard")
+end)
+test("home: smart, in the reader, pressed in KOReader -> BookOrbit home", function()
+    eq(H{ mode = "smart", in_reader = true, covered = false, from_other = false }, "dashboard")
+end)
+test("home: smart, in the reader but coming from another app -> stay in the book", function()
+    eq(H{ mode = "smart", in_reader = true, covered = false, from_other = true }, "book")
+end)
+test("home: smart, a menu or BookOrbit view over the book -> back to the book", function()
+    eq(H{ mode = "smart", in_reader = true, covered = true, from_other = false }, "book")
+end)
+test("home: smart, file browser with a last book -> that book", function()
+    eq(H{ mode = "smart", in_reader = false, has_last = true }, "book")
+end)
+test("home: smart, no last book -> BookOrbit home", function()
+    eq(H{ mode = "smart", in_reader = false, has_last = false }, "dashboard")
+end)
+test("home: where Home came from", function()
+    eq(HomePlan.cameFromOtherApp("other_app", 0.1), true)
+    eq(HomePlan.cameFromOtherApp(nil, 0.8), false, "quick pause: pressed in KOReader")
+    eq(HomePlan.cameFromOtherApp(nil, 40), true, "long pause: another app")
+    eq(HomePlan.cameFromOtherApp(nil, nil), true, "fresh start")
+    eq(HomePlan.cameFromOtherApp("koreader", 40), false)
+end)
+
+test("disabled text names the disabler at run time, or stays neutral", function()
+    eq(M.disabledText("Orbit Companion", "Meebook Launcher", "Freeze management"),
+        "Orbit Companion is disabled by Meebook Launcher: re-enable it in Meebook Launcher › Freeze management.")
+    eq(M.disabledText("Orbit Companion", nil, nil), "Orbit Companion is disabled by the system: re-enable it in Settings › Apps.")
 end)
 
 print(string.format("%d passed, %d failed", passed, failed))

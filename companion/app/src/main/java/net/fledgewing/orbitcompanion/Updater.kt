@@ -88,16 +88,45 @@ object Updater {
         busy = true
         val app = ctx.applicationContext
         thread(name = "orbit-update", isDaemon = true) {
+            // By hand with Wi-Fi off: turn it on for the check (Wi-Fi only, GitHub needs no
+            // Tailscale), then put it back. Automatic checks never turn Wi-Fi on.
+            var turnedOn = false
             val result = try {
+                if (interactive && !Net.wifiConnected(app)) turnedOn = bringWifiUp(app)
                 run(app, interactive, why)
             } catch (e: Exception) {
                 OLog.w("update: check failed ($why)", e)
-                "check failed: ${e.message ?: e.javaClass.simpleName}"
+                friendly(app, e)
+            } finally {
+                if (turnedOn) {
+                    OLog.i("update: Wi-Fi was off before the check; turning it back off")
+                    Net.setWifi(app, false, "update check done, restoring off")
+                }
             }
             status(app, result)
             busy = false
             if (done != null) main.post { done(result) }
         }
+    }
+
+    /** Returns true when we turned Wi-Fi on. Waits up to 30 s for a connection. */
+    private fun bringWifiUp(ctx: Context): Boolean {
+        val was = Net.wifiEnabled(ctx)
+        if (!was && !Net.setWifi(ctx, true, "update check", WifiOwner.AUTO)) return false
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        while (!Net.wifiConnected(ctx) && android.os.SystemClock.elapsedRealtime() - t0 < 30_000) Thread.sleep(250)
+        log("Wi-Fi ${if (Net.wifiConnected(ctx)) "connected" else "NOT connected"} after ${OLog.since(t0)} ms for the check")
+        return !was
+    }
+
+    /** Plain words instead of an exception name. */
+    private fun friendly(ctx: Context, e: Exception): String = when {
+        e is java.net.UnknownHostException || e is java.net.ConnectException || e is java.net.SocketTimeoutException -> when {
+            !Net.wifiEnabled(ctx) -> "no internet: Wi-Fi is off"
+            !Net.wifiConnected(ctx) -> "no internet: Wi-Fi isn't connected"
+            else -> "no internet: GitHub can't be reached"
+        }
+        else -> "check failed: ${e.message ?: e.javaClass.simpleName}"
     }
 
     private fun run(ctx: Context, interactive: Boolean, why: String): String {

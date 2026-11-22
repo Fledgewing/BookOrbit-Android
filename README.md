@@ -1,6 +1,6 @@
 # BookOrbit-Android
 
-Keeps Android e-readers (first target: Meebook M8C) in sync with a BookOrbit server over Tailscale, the way CrossInk does on Xteink readers.
+Keeps Android e-readers in sync with a BookOrbit server over Tailscale, the way CrossInk does on Xteink readers.
 
 The official BookOrbit KOReader plugin does all syncing and keeps the login. This repo adds:
 
@@ -25,7 +25,9 @@ After that, both update themselves from this repo's releases.
 ## Updates
 
 Both pieces check `https://api.github.com/repos/Fledgewing/BookOrbit-Android/releases/latest`
-at most once a day, and only when the network is already up (neither turns Wi-Fi on for it).
+at most once a day, and only when the network is already up (neither turns Wi-Fi on for an
+automatic check; a check started by hand turns Wi-Fi on, Wi-Fi only, and puts it back off
+afterwards). Without a network they say so ("No internet: Wi-Fi is off").
 With **Include pre-releases** on, they look at the five newest releases instead and also take
 pre-releases. Each downloads the release's `SHA256SUMS` and refuses a file whose SHA-256
 doesn't match.
@@ -35,11 +37,11 @@ doesn't match.
   runs about 8 s after a start or wake once the network is up. A newer `2-orbit-android.lua`
   (it must also declare the release's version in `PATCH_VERSION`) is written next to the
   running file and renamed over it, so the patch folder never holds a half-written file. It
-  takes effect on the next KOReader start (on the M8C, every wake is one).
+  takes effect on the next KOReader start (on firmwares that stop KOReader after sleep, every wake is one).
 - **Orbit Companion** (Settings): **Auto-update app** (on by default), **Include
   pre-releases** (off), **Check for updates** (also on the status page), and the version and
-  last result. The automatic check runs when the service starts or Wi-Fi comes up, with the
-  screen on. The APK must match `SHA256SUMS` *and* be signed with the same certificate as the
+  last result. The automatic check runs when the service starts or Wi-Fi comes up (for
+  example for a wake pull), with the screen on; an automatic Wi-Fi off waits for its download. The APK must match `SHA256SUMS` *and* be signed with the same certificate as the
   installed app; it is then installed through a `PackageInstaller` session.
   - **Android asks you to confirm each app update.** The companion targets SDK 28 on purpose
     (`WifiManager.setWifiEnabled` stops working at 29+), and Android only allows updates
@@ -52,6 +54,25 @@ doesn't match.
     a notification, "Orbit Companion <version> is ready. Tap to install."
   - Setup row **Install updates** opens Android's "Install unknown apps" page for Orbit;
     allow it once.
+
+## Wi-Fi and the Home button
+
+Two settings are shared by the patch (Tools › BookOrbit › Android sync) and the companion
+(Settings); changing either changes both.
+
+- **Wi-Fi**: *Always on* (Wi-Fi stays as you set it), *Off while reading* (off once a book's
+  sync is done, back as it was when the book closes), or *Just in time* (the default with the
+  companion: off after 1/2/5/10 minutes without network use, never during a download or a
+  sync; Wi-Fi you turn on by hand, in KOReader or with the launcher's Wi-Fi tile, stays on
+  until you turn it off). In every mode, a sleep sync, wake pull, sync while reading or Test
+  sync path that has to turn Wi-Fi on turns it back off. KOReader never shows its "turn on
+  Wi-Fi?" prompt while the companion can switch Wi-Fi.
+- **Home button**: *Back to my book, then BookOrbit home* (default: Home in a book opens
+  BookOrbit home; Home anywhere else, or from another app, goes back to your book) or
+  *BookOrbit home*.
+
+The patch also adds the gesture action **Orbit Companion: apps**; *Apply recommended gestures*
+puts it on a two-finger swipe up.
 
 ## Verify
 
@@ -98,9 +119,16 @@ secrets, stamps the tag into the patch's `PATCH_VERSION`, and publishes the APK,
 `SHA256SUMS` and the license files. A tag is never moved: a broken release is fixed forward
 with the next patch version.
 
-## Device findings (Meebook M8C, Android 14, firmware V2.2.1)
+## Device notes
+
+The code is generic Android; vendor quirks are one table (`Vendor.kt` in the companion,
+`VENDORS` in the patch), picked by `Build.MANUFACTURER`/`BRAND` or the vendor launcher being
+installed. Meebook (Haoqing) is measured; Boox (Onyx) is an unverified stub.
+
+### Meebook M8C (Android 14, firmware V2.2.1)
 
 - KOReader is the GitHub build, so user patches work.
+- The Meebook launcher (`com.haoqing.app.hqreader`) has "App freeze", which disables apps (`enabled=2`); the companion names it from its label and opens its Freeze management.
 - After the power button, KOReader keeps running with network for about 1 min 50 s, then the firmware force-stops the foreground app. Battery "Unrestricted" does not prevent it. Services (Tailscale) survive.
 - Every wake is therefore a fresh KOReader start.
 

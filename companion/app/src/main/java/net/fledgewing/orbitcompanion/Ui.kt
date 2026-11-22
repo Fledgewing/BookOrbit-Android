@@ -24,6 +24,23 @@ import java.util.Locale
  * no ripples (plain state-list backgrounds), big tap targets.
  */
 abstract class EinkActivity : Activity() {
+    companion object {
+        @Volatile
+        private var resumed = 0
+
+        @Volatile
+        private var lastPausedAt = 0L
+
+        /** One of our pages is in front, or was until a moment ago (Home pauses it first). */
+        fun companionPageInFront(): Boolean =
+            resumed > 0 || android.os.SystemClock.elapsedRealtime() - lastPausedAt < 2_000
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumed++
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setWindowAnimations(0)
@@ -43,6 +60,8 @@ abstract class EinkActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
+        resumed = maxOf(0, resumed - 1)
+        lastPausedAt = android.os.SystemClock.elapsedRealtime()
         noTransition()
     }
 
@@ -59,12 +78,21 @@ abstract class EinkActivity : Activity() {
         false
     }
 
-    fun page(): LinearLayout = LinearLayout(this).apply {
+    /** [scroll]: long pages (settings, setup) scroll; the rest are fixed, one e-ink redraw. */
+    fun page(scroll: Boolean = false): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(Ui.PAPER)
         val p = Ui.dp(this@EinkActivity, 20)
         setPadding(p, p, p, p)
-        setContentView(this)
+        if (scroll) {
+            setContentView(android.widget.ScrollView(this@EinkActivity).also {
+                it.setBackgroundColor(Ui.PAPER)
+                it.isVerticalScrollBarEnabled = true
+                it.addView(this)
+            })
+        } else {
+            setContentView(this)
+        }
     }
 }
 

@@ -88,10 +88,14 @@ object WifiPolicy {
 
     fun isSleepReason(reason: String?): Boolean = reason == "sleep" || reason == "sync_and_sleep"
 
-    /** What NET_DONE does with Wi-Fi. null: not a sleep sync, Wi-Fi is left alone. */
-    fun afterSleepSync(mode: WifiAfterSleep, reason: String?, screenOn: Boolean, nowWallMs: Long): SleepWifiAction? {
+    /**
+     * What NET_DONE does with Wi-Fi. null: not a sleep sync, Wi-Fi is left alone.
+     * [restoreOff]: Wi-Fi was off before this sleep sync (NET_DONE restore="off") and the user
+     * didn't turn it on by hand, so it goes back off like "Off now".
+     */
+    fun afterSleepSync(mode: WifiAfterSleep, reason: String?, screenOn: Boolean, nowWallMs: Long, restoreOff: Boolean = false): SleepWifiAction? {
         if (!isSleepReason(reason)) return null
-        return when (mode) {
+        return when (if (restoreOff) WifiAfterSleep.OFF_NOW else mode) {
             WifiAfterSleep.KEEP_ON -> SleepWifiAction.KeepOn
             // Scheduled even with the screen on: the timer checks the screen when it fires.
             WifiAfterSleep.OFF_AFTER_30 -> SleepWifiAction.OffAt(nowWallMs + OFF_AFTER_MS)
@@ -221,7 +225,7 @@ object Checksums {
     }
 }
 
-/** Whether another app can be used: missing, disabled ("frozen" by the Meebook launcher) or fine. */
+/** Whether another app can be used: missing, disabled ("frozen", e.g. by a vendor launcher) or fine. */
 enum class AppState { MISSING, FROZEN, OK }
 
 object AppStates {
@@ -242,5 +246,94 @@ object AppStates {
         else -> AppState.OK
     }
 
-    fun frozenMessage(name: String) = "$name is frozen by Meebook: open Meebook › Freeze management and unfreeze $name."
+    /**
+     * [disabler]: the label of the app that most likely disabled it (the vendor launcher, read at
+     * run time), or null. [hint]: where that app re-enables it.
+     */
+    fun disabledMessage(app: String, disabler: String?, hint: String?): String = when {
+        disabler != null && hint != null -> "$app is disabled by $disabler: re-enable it in $disabler › $hint."
+        disabler != null -> "$app is disabled by $disabler: re-enable it there."
+        else -> "$app is disabled by the system: re-enable it in Settings › Apps."
+    }
+
+    /** Short status value, e.g. "Disabled by Meebook Launcher". */
+    fun disabledShort(disabler: String?): String = if (disabler != null) "Disabled by $disabler" else "Disabled by the system"
+}
+
+/** The shared "Wi-Fi" setting (docs/DESIGN.md "Wi-Fi modes"). The patch decides when; we switch. */
+enum class WifiMode(val key: String, val label: String) {
+    ALWAYS_ON("always_on", "Always on"),
+    OFF_READING("off_reading", "Off while reading"),
+    JIT("jit", "Just in time");
+
+    companion object {
+        val DEFAULT = JIT
+        fun fromKey(key: String?): WifiMode = entries.firstOrNull { it.key == key } ?: DEFAULT
+        fun valid(key: String?) = entries.any { it.key == key }
+    }
+}
+
+/** The shared "Home button" setting. */
+enum class HomeButton(val key: String, val label: String) {
+    SMART("smart", "Back to my book, then BookOrbit home"),
+    BOOKORBIT("bookorbit", "BookOrbit home");
+
+    companion object {
+        val DEFAULT = SMART
+        fun fromKey(key: String?): HomeButton = entries.firstOrNull { it.key == key } ?: DEFAULT
+        fun valid(key: String?) = entries.any { it.key == key }
+    }
+}
+
+object SharedSettings {
+    val IDLE_MINUTES = listOf(1, 2, 5, 10)
+    fun validIdle(v: Int?) = v != null && v in IDLE_MINUTES
+}
+
+/** Who turned Wi-Fi on. Only automatic (patch or companion) Wi-Fi is turned off automatically. */
+enum class WifiOwner(val key: String) {
+    NONE("none"), AUTO("auto"), MANUAL("manual");
+
+    companion object {
+        fun fromKey(key: String?): WifiOwner = entries.firstOrNull { it.key == key } ?: NONE
+    }
+}
+
+object WifiOwnership {
+    /** How long after our own setWifiEnabled(true) an ENABLED broadcast still counts as ours. */
+    const val PENDING_MS = 60_000L
+
+    /** Wi-Fi came on. Ours (with the owner we asked for) if we asked recently, else the user's. */
+    fun onEnabled(nowMs: Long, pendingAtMs: Long, pendingOwner: WifiOwner?): WifiOwner =
+        if (pendingOwner != null && pendingAtMs > 0 && nowMs - pendingAtMs in 0..PENDING_MS) pendingOwner else WifiOwner.MANUAL
+
+    /** A WIFI_OFF: auto ones never turn off Wi-Fi the user turned on by hand. */
+    fun allowOff(auto: Boolean, owner: WifiOwner): Boolean = !auto || owner != WifiOwner.MANUAL
+}
+
+/** Home press -> the COMMAND extra for KOReader (docs/INTERFACE.md "go home"). */
+object HomeCommands {
+    const val HOME = "home"
+    const val HOME_SMART = "home_smart"
+    const val FROM_OTHER_APP = "other_app"
+
+    fun forPress(button: HomeButton): String = if (button == HomeButton.SMART) HOME_SMART else HOME
+
+    /** KOReader went away and Home came back: smart mode reopens the book; otherwise a plain start. */
+    fun forUncovered(button: HomeButton): String? = if (button == HomeButton.SMART) HOME_SMART else null
+
+    /**
+     * FROM extra. We only know for sure Home came from outside KOReader when one of our own pages
+     * was in front, or KOReader had gone away (uncovered); otherwise the patch measures its pause.
+     */
+    fun from(companionPageInFront: Boolean, uncovered: Boolean): String? =
+        if (companionPageInFront || uncovered) FROM_OTHER_APP else null
+}
+
+/** Setup's Wi-Fi off/on test leaves Wi-Fi as it found it. */
+object WifiTestPlan {
+    enum class Step { OFF, ON }
+
+    /** Was on: off, then on (times the reconnect). Was off: on (timed), then back off. */
+    fun steps(wasOn: Boolean): List<Step> = if (wasOn) listOf(Step.OFF, Step.ON) else listOf(Step.ON, Step.OFF)
 }

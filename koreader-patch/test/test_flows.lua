@@ -9,7 +9,7 @@ local W = {
     clock = 1000, queue = {}, seq = 0, shown = {}, logs = {},
     wifi = true, vpn = true, screen_on = false, companion = true, server_code = 200,
     broadcasts = {}, activities = {}, intent_extras = {},
-    fetched = {}, web = {}, json = {},
+    fetched = {}, web = {}, json = {}, files = {},
 }
 function W.fake_sha(s) return string.format("%064x", #s) end
 local SELF = os.tmpname()
@@ -59,8 +59,8 @@ Widget.__index = Widget
 
 -- A tiny JNI: objects are Lua tables, method ids are names.
 local env_fns = {
-    ExceptionCheck = function() return 0 end,
-    ExceptionClear = function() end,
+    ExceptionCheck = function() return W.exception and 1 or 0 end,
+    ExceptionClear = function() W.exception = false end,
     DeleteLocalRef = function() end,
     GetObjectClass = function(_, obj) return { cls = obj } end,
     GetMethodID = function(_, _, name) return name end,
@@ -85,13 +85,34 @@ local env_fns = {
         return obj
     end,
     CallVoidMethod = function(_, obj, m, a)
-        if m == "sendBroadcast" then table.insert(W.broadcasts, a)
+        if m == "sendBroadcast" then
+            a.at = W.clock; table.insert(W.broadcasts, a)
+            -- Optionally play the companion: switch the fake radio.
+            if W.simulate_companion and a.action:match("%.WIFI_OFF$") then
+                if a.extras.auto ~= "1" or W.owner ~= "manual" then W.radio, W.wifi = false, false end
+            elseif W.simulate_companion and a.action:match("%.NET_UP$") then
+                if not W.radio then W.owner = a.extras.owner end
+                W.radio, W.wifi = true, true
+            end
         elseif m == "startActivity" then table.insert(W.activities, a)
         elseif m == "removeExtra" then W.intent_extras[a.str] = nil end
+    end,
+    -- getApplicationEnabledSetting: 2 (disabled) when frozen, else a missing package throws.
+    CallIntMethod = function(_, obj, m)
+        if m == "getApplicationEnabledSetting" then
+            if W.companion_frozen then return 2 end
+            W.exception = true
+        end
+        return 0
     end,
     CallBooleanMethod = function(_, obj, m)
         if m == "isInteractive" then return W.screen_on and 1 or 0 end
         if m == "hasTransport" then return W.vpn and 1 or 0 end
+        if m == "isWifiEnabled" then
+            local on = W.radio
+            if on == nil then on = W.wifi end
+            return on and 1 or 0
+        end
         return 0
     end,
 }
@@ -116,6 +137,7 @@ function PluginLoader:genPluginManagerSubItem() return self:loadPlugins() end
 function PluginLoader:getPluginInstance() return nil end
 
 local ReaderUI, FileManager = {}, {}
+function ReaderUI:showReader(file) W.opened = file end
 local actions = {}
 
 local preload = {
@@ -155,6 +177,7 @@ local preload = {
     socket = { skip = function(n, ...) return select(n + 1, ...) end },
     socketutil = { set_timeout = function() end, reset_timeout = function() end },
     ltn12 = { sink = { null = function() end, table = function(t) return function(chunk) if chunk then table.insert(t, chunk) end return 1 end end } },
+    ["libs/libkoreader-lfs"] = { attributes = function(f, k) return W.files[f] and "file" or nil end },
     json = { decode = function(s) if W.json[s] then return W.json[s] end return { version = "1" } end },
     -- Stand-in hash: "sha:<length>" padded, enough to check the wiring (the real one is ffi/sha2).
     ["ffi/sha2"] = { sha256 = function(s) return W.fake_sha(s) end },
@@ -210,7 +233,12 @@ end
 local passed, failed = 0, 0
 local function test(name, fn)
     local ok, err = pcall(fn)
-    if ok then passed = passed + 1 else failed = failed + 1; print("FAIL " .. name .. ": " .. tostring(err)) end
+    if ok then passed = passed + 1 else
+        failed = failed + 1; print("FAIL " .. name .. ": " .. tostring(err))
+        if os.getenv("ORBIT_TEST_LOGS") then
+            for i = math.max(1, #W.logs - 25), #W.logs do print("   | " .. W.logs[i]) end
+        end
+    end
 end
 local function ok(v, what) if not v then error(what or "expected true", 2) end end
 
@@ -308,7 +336,7 @@ test("suspend: server never answers -> NET_DONE not ok at the cap", function()
     run(60)
     local done = lastBroadcast(".NET_DONE")
     ok(done and done.extras.ok == "0", "NET_DONE failed")
-    ok(W.clock - t0 <= 22, "within the cap, took " .. (W.clock - t0))
+    ok(done.at - t0 <= 22, "within the cap, took " .. (done.at - t0))
     W.server_code = 200
 end)
 
@@ -318,7 +346,7 @@ test("sync and sleep: plugin snapshot, then SLEEP_NOW, and the following Suspend
     run(30)
     W.broadcasts = {}
     m:onOrbitSyncAndSleep()
-    run(30)
+    run(5) -- (the Wi-Fi timer keeps the fake clock running; the skip window is 15 s)
     ok(has(ui.bookorbit.calls, "onSuspend"), "plugin _onSuspend")
     ok(lastBroadcast(".SLEEP_NOW"), "SLEEP_NOW")
     local n = #W.broadcasts
@@ -429,6 +457,194 @@ test("test sync path reports five steps", function()
     run(30)
     local viewer = W.shown[#W.shown]
     ok(viewer and viewer.text and viewer.text:match("5%. BookOrbit plugin synced ✓"), viewer and viewer.text or "no viewer")
+end)
+
+---------------------------------------------------------------- Wi-Fi modes (v0.2)
+local function wifiOffs()
+    local out = {}
+    for _, b in ipairs(W.broadcasts) do if b.action:match("%.WIFI_OFF$") then table.insert(out, b) end end
+    return out
+end
+local function fresh(mode, idle)
+    store.orbit_android.wifi_mode = mode
+    store.orbit_android.wifi_idle_min = idle or 2
+    W.broadcasts = {}
+    W.simulate_companion = true
+end
+local function done() W.simulate_companion = false; W.radio, W.wifi, W.owner = nil, true, nil end
+
+test("wifi: KOReader asks for Wi-Fi silently (turn_on), in every mode", function()
+    ok(store.wifi_enable_action == "turn_on", "wifi_enable_action")
+end)
+
+test("wifi: wake with Wi-Fi off brings it up, then restores it off after the pull", function()
+    fresh("always_on")
+    W.radio, W.wifi = false, false
+    local ui, m = newUI(false)
+    m:onResume()
+    run(1)
+    m:wakeFlow("wake")
+    run(20)
+    ok(lastBroadcast(".NET_UP"), "NET_UP")
+    local offs = wifiOffs()
+    ok(#offs >= 1 and offs[#offs].extras.auto == "1", "auto WIFI_OFF")
+    ok(offs[#offs].extras.reason:find("restore", 1, true), "reason " .. tostring(offs[#offs] and offs[#offs].extras.reason))
+    ok(W.radio == false, "radio back off")
+    done()
+end)
+
+test("wifi: just in time turns Wi-Fi off after the idle time, and not while a download runs", function()
+    fresh("jit", 1)
+    local ui, m = newUI(false)
+    m:onResume()
+    run(30)
+    W.broadcasts = {}
+    -- A download that blocks for a while: activity, so the timer restarts.
+    require("socket.http").request({ url = "https://dl.test/none", method = "GET" })
+    run(50)
+    ok(#wifiOffs() == 0, "not idle yet")
+    run(40)
+    local offs = wifiOffs()
+    ok(#offs == 1 and offs[1].extras.reason:find("idle 1 min", 1, true), "idle off")
+    done()
+end)
+
+test("wifi: just in time leaves Wi-Fi the reader turned on by hand", function()
+    fresh("jit", 1)
+    W.radio, W.wifi = false, false
+    NetworkMgr:turnOnWifi(nil, true) -- KOReader's own toggle
+    ok(lastBroadcast(".NET_UP").extras.owner == "manual", "owner manual")
+    local ui, m = newUI(false)
+    run(200)
+    ok(#wifiOffs() >= 1, "asked")
+    ok(W.radio == true, "the companion kept it on")
+    done()
+end)
+
+test("wifi: never switches while another app is in front", function()
+    fresh("jit", 1)
+    W.screen_on = true
+    local ui, m = newUI(false)
+    run(5)
+    m:onSuspend() -- app switch: the screen stays on
+    W.broadcasts = {}
+    run(200)
+    ok(#wifiOffs() == 0, "no off while in the background")
+    m:onResume()
+    W.screen_on = false
+    done()
+end)
+
+test("wifi: off while reading turns Wi-Fi off once the book's pull is done, back on at close", function()
+    fresh("off_reading")
+    local ui, m = newUI(true)
+    m:onResume() -- picks up the mode
+    run(1)
+    m:onReaderReady()
+    run(10)
+    local offs = wifiOffs()
+    ok(#offs >= 1 and offs[#offs].extras.auto == "0", "forced off at open")
+    W.broadcasts = {}
+    m:onCloseWidget()
+    local up = lastBroadcast(".NET_UP")
+    ok(up and up.extras.reason == "book_closed", "restored on")
+    done()
+end)
+
+test("wifi: test sync path turns Wi-Fi on for the test and back off, and says so", function()
+    fresh("always_on")
+    W.radio, W.wifi = false, false
+    local ui, m = newUI(false)
+    W.shown = {}
+    m:testSyncPath()
+    run(10)
+    local viewer
+    for _, w in ipairs(W.shown) do if w.title == "Test sync path" then viewer = w end end
+    ok(viewer, "result shown")
+    ok(viewer.text:find("Wi-Fi was off: turning it on", 1, true), "on step")
+    ok(viewer.text:find("Wi-Fi turned back off (it was off) ✓", 1, true), "restore step:\n" .. viewer.text)
+    done()
+end)
+
+test("frozen companion: says so, and a wake with Wi-Fi off gives up at once", function()
+    W.companion, W.companion_frozen = false, true
+    W.clock = W.clock + 100
+    W.radio, W.wifi = false, false
+    local ui, m = newUI(false)
+    local t0 = W.clock
+    local before = #W.logs
+    m:wakeFlow("wake")
+    run(25)
+    local skipped
+    for i = before + 1, #W.logs do
+        if W.logs[i]:find("disabled by", 1, true) and W.logs[i]:find("network up: FAILED", 1, true) then skipped = true end
+    end
+    ok(skipped, "failed fast with the frozen reason")
+    ok(m:statusText():find("Orbit Companion is disabled by", 1, true), "menu status: " .. m:statusText())
+    W.companion, W.companion_frozen = true, false
+    W.clock = W.clock + 100
+    done()
+end)
+
+---------------------------------------------------------------- Smart Home (v0.2)
+local function command(m, cmd, from)
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = cmd
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.FROM"] = from
+end
+
+test("smart home: pressed in a book -> BookOrbit home", function()
+    local ui, m = newUI(true)
+    run(5)
+    W.home_called = false
+    m:onSuspend(); W.clock = W.clock + 0.5
+    command(m, "home_smart")
+    m:onResume()
+    run(1)
+    ok(W.home_called, "closed the book for BookOrbit home")
+end)
+
+test("smart home: from another app with a book open -> stay in the book", function()
+    local ui, m = newUI(true)
+    run(5)
+    W.home_called = false
+    m:onSuspend(); W.clock = W.clock + 60
+    command(m, "home_smart")
+    m:onResume()
+    run(1)
+    ok(not W.home_called, "stayed in the book")
+end)
+
+test("smart home: from the file browser -> the last book", function()
+    store.lastfile = "/books/last.epub"
+    W.files["/books/last.epub"] = true
+    W.opened = nil
+    local ui, m = newUI(false)
+    run(5)
+    m:onSuspend(); W.clock = W.clock + 0.5
+    command(m, "home_smart")
+    m:onResume()
+    run(1)
+    ok(W.opened == "/books/last.epub", "opened the last book")
+end)
+
+test("smart home: no last book -> BookOrbit home", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    run(5)
+    command(m, "home_smart", "other_app")
+    m:onResume()
+    run(5)
+    ok(has(ui.bookorbit.calls, "dashboard"), "dashboard")
+end)
+
+test("apps gesture: registered and in the recommended set", function()
+    ok(actions.orbit_open_apps and actions.orbit_open_apps.title == "Orbit Companion: apps", "action title")
+    local ui, m = newUI(true)
+    W.shown = {}
+    m:applyRecommendedGestures()
+    local box = W.shown[#W.shown]
+    box.ok_callback()
+    ok(ui.gestures.data.gesture_reader.two_finger_swipe_north.orbit_open_apps, "two-finger swipe up")
 end)
 
 ---------------------------------------------------------------- self-update
