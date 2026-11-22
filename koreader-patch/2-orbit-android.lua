@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+-- Copyright (c) 2026 Fledgewing. Part of BookOrbit-Android (see koreader-patch/LICENSE).
 --[[--
 orbit-android: a KOReader user patch for Android e-readers (first target: Meebook M8C).
 

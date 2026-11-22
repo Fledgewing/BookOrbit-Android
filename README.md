@@ -14,3 +14,10 @@ Design and approved mockups: `docs/DESIGN.md`, `docs/mockups.html`.
 - KOReader is the GitHub build, so user patches work.
 - After the power button, KOReader keeps running with network for about 1 min 50 s, then the firmware force-stops the foreground app. Battery "Unrestricted" does not prevent it. Services (Tailscale) survive.
 - Every wake is therefore a fresh KOReader start.
+
+## License
+
+This repository uses two licenses:
+
+- `koreader-patch/` is **AGPL-3.0-or-later** (see `koreader-patch/LICENSE`). The patch runs inside KOReader and works with the BookOrbit KOReader plugin, both AGPL-3.0.
+- Everything else (`companion/`, `docs/`) is **MIT** (see `LICENSE`). The companion app bundles AndroidX and Kotlin libraries under Apache-2.0; their notices ship inside the app.
