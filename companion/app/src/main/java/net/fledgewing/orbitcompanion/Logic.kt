@@ -480,6 +480,47 @@ object PatchRow {
     }
 }
 
+/**
+ * One update covers everything (docs/DESIGN.md "One update"): after the companion updates,
+ * its new process installs the release's patch, and the running patch (0.5.0+, RestartPlan)
+ * loads it by a restart that never interrupts reading. One status line says how it went.
+ */
+object UpdateFlow {
+    /** The first patch that restarts KOReader by itself for a newer file on disk. */
+    const val AUTO_RESTART_SINCE = "0.5.0"
+
+    /**
+     * Install the release's patch after an app update: only over an older installed file
+     * (never a downgrade of a newer patch-only update; a first install is Setup's step).
+     */
+    fun patchAfterUpdate(file: String?, app: String): Boolean =
+        file != null && Version.parse(app) != null && PatchFile.needsInstall(file, app)
+
+    /** The running patch loads a newer file by itself. */
+    fun autoRestart(running: String?): Boolean {
+        val r = running?.let { Version.parse(it) } ?: return false
+        return r >= Version.parse(AUTO_RESTART_SINCE)!!
+    }
+
+    /** The running patch reports [awaiting] (or newer): the restart happened. */
+    fun loaded(awaiting: String, running: String?): Boolean {
+        val w = Version.parse(awaiting) ?: return false
+        val r = running?.let { Version.parse(it) } ?: return false
+        return r >= w
+    }
+
+    fun doneLine(app: String) = "Updated to v$app (KOReader restarted)"
+
+    /** The patch is installed; what happens next depends on the patch that runs now. */
+    fun installedLine(app: String, running: String?) =
+        if (autoRestart(running)) "Updated to v$app; KOReader restarts by itself when no book is open"
+        else "Updated to v$app; restart KOReader once to load the new patch (Setup)"
+
+    /** The manual fallback, with the reason. */
+    fun manualLine(app: String, reason: String) =
+        "Updated to v$app, but the KOReader patch wasn't updated: $reason. Setup > KOReader patch"
+}
+
 object PatchFile {
     const val NAME = "2-orbit-android.lua"
     private val VERSION = Regex("""(?m)^local PATCH_VERSION = "([^"]+)"""")
@@ -634,6 +675,10 @@ object WhatsNew {
         ),
         "0.4.9" to listOf(
             "Home on any BookOrbit screen other than its main page (a book, a list, search, a sheet) goes back to BookOrbit's main page; Home on the main page opens the launcher page.",
+        ),
+        "0.5.0" to listOf(
+            "One update covers everything: after the app updates it installs the matching KOReader patch itself, and KOReader restarts to load it once no book is open (or when the device next sleeps). It never interrupts reading.",
+            "The Settings PIN keypad no longer covers an install: the installer, permission screens and Play Protect's scan pass while an update runs and for a minute after, even with the Play Store guarded.",
         ),
     )
 

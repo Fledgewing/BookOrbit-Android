@@ -141,7 +141,16 @@ object Pin {
         if (gate.addScope(pkg, now())) OLog.i("pin: $pkg joins the unlock")
     }
 
-    fun selfUpdateStarted() = gate.selfUpdateStarted(now())
+    /** The install window (Guard.installSurface): an install the companion starts, by [key]. */
+    fun installStarted(key: String) {
+        gate.installStarted(key, now())
+        OLog.i("pin: install window open ($key)")
+    }
+
+    fun installEnded(key: String) {
+        gate.installEnded(key, now())
+        OLog.i("pin: install $key ended; window open ${Guard.INSTALL_GRACE_MS / 1000} s more")
+    }
 
     internal fun succeeded() {
         val p = pending
@@ -261,7 +270,7 @@ class PinActivity : EinkActivity() {
             val confirm = Updater.pendingConfirm
             Updater.pendingConfirm = null
             if (confirm != null) {
-                Pin.selfUpdateStarted()
+                Pin.installStarted(Updater.INSTALL_KEY)
                 tryStart(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "the install prompt")
             } else {
                 OLog.i("pin: install prompt gone (app restarted); check for updates again")

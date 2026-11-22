@@ -776,10 +776,41 @@ function MenuLock.locked(st)
     return type(st) == "table" and st.pin_locked == true
 end
 
+---------------------------------------------------------------------------------------------
+-- One update covers everything: a newer patch file on disk (the companion installed it after
+-- its own update, or our updater wrote it) gets loaded by a restart that never interrupts
+-- reading: at once with no book open, else right after the book closes or the device sleeps.
+-- One try per version: a file that still doesn't load after its restart is left to Setup.
+---------------------------------------------------------------------------------------------
+
+local RestartPlan = {}
+
+-- The PATCH_VERSION a file's head declares (it sits near the top), or nil.
+function RestartPlan.fileVersion(head)
+    return (head or ""):match('\nlocal PATCH_VERSION = "([^"\n]+)"')
+end
+
+-- want: the file's version; running: PATCH_VERSION; tried: the version a restart was already
+-- made for (S.restart_tried); in_book; event: "check" (start, resume, after an update),
+-- "close" (a book just closed) or "sleep" (screen off).
+-- Returns "none" | "done" (already running it) | "restart" | "wait" | "gave_up".
+function RestartPlan.decide(want, running, tried, in_book, event)
+    if not want then return "none" end
+    if Update.compare(want, running) ~= 1 then return tried and "done" or "none" end
+    if tried and Update.compare(tried, want) == 0 then return "gave_up" end
+    if not in_book or event == "sleep" or event == "close" then return "restart" end
+    return "wait"
+end
+
+-- The one status line after a restart made for an update.
+function RestartPlan.doneText(version)
+    return string.format("Updated to v%s (KOReader restarted)", tostring(version))
+end
+
 if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = Schedule, Plan = Plan, Update = Update, WifiPlan = WifiPlan, HomePlan = HomePlan,
         disabledText = disabledText, Compat = Compat, Stats = Stats, Clicks = Clicks, SetupPrompt = SetupPrompt,
-        MenuLock = MenuLock,
+        MenuLock = MenuLock, RestartPlan = RestartPlan,
         PATCH_VERSION = PATCH_VERSION }
 end
 
@@ -1959,7 +1990,7 @@ function Updater.run(why)
         return false, "rename failed: " .. tostring(rerr)
     end
     log("update: wrote", stamped, "over", SELF_PATH)
-    return true, "updated to " .. stamped .. "; restart KOReader to use it"
+    return true, "updated to " .. stamped .. "; KOReader restarts to use it (after the book, if one is open)"
 end
 
 ---------------------------------------------------------------------------------------------
@@ -2041,6 +2072,10 @@ function Updater.check(why, done)
             S.patch_update_failed_at = os.time()
         end
         setUpdateStatus(text)
+        -- One update covers everything: load the new file now or when reading allows.
+        if ok and Updater.onInstalled and tostring(text):find("^updated to") then
+            UIManager:scheduleIn(1, Updater.onInstalled)
+        end
         if done then done(ok, text) end
     end)
 end
@@ -2380,6 +2415,7 @@ function OrbitAndroid:init()
     self.schedule = Schedule.new(S.reading_schedule, now_s())
     if in_reader then self:hookPluginPagePush() end
     -- A Sync while reading change from the companion (Shared.refresh) restarts this counter.
+    Updater.onInstalled = function() self:maybeRestart("check") end
     Shared.onSchedule = function(id)
         self.schedule = Schedule.new(id, now_s())
         if self.ui and self.ui.document then self:hookPluginPagePush() end
@@ -2394,7 +2430,10 @@ function OrbitAndroid:init()
             Wifi.applySettings("start")
             self:maybeSetupPrompt("start")
         end)
-        UIManager:scheduleIn(1, function() self:checkCommand("start") end)
+        UIManager:scheduleIn(1, function()
+            self:checkCommand("start")
+            self:maybeRestart("check")
+        end)
         UIManager:scheduleIn(1.5, function() self:wakeFlow("start") end)
         UIManager:scheduleIn(Stats.INTERVAL, statsTick)
     elseif state.pending_home and not in_reader then
@@ -2460,6 +2499,7 @@ function OrbitAndroid:onResume()
         Shared.refresh("resume")
         Wifi.applySettings("resume")
         self:checkCommand("resume")
+        self:maybeRestart("check")
         -- After checkCommand: a Home command moves to BookOrbit home first (finishHome checks too).
         self:maybeSetupPrompt("resume")
         -- Also after "home": the closed book's sync needs the network.
@@ -2545,6 +2585,9 @@ end
 -- stays open_book_at_exit, so the cold start reopens it), ask the companion to start KOReader
 -- again (RELAUNCH), and quit (Android Device:exit finishes the activity, device.lua:492-497).
 function OrbitAndroid:restartForCompanion(source)
+    -- Once: the quit ends this process (a second request in the meantime is the same restart).
+    if state.restarting_at and now_s() - state.restarting_at < 5 then return end
+    state.restarting_at = now_s()
     log("restart: requested by the companion (" .. tostring(source) .. "); saving, then quitting so the new patch loads")
     local ui = liveUI()
     if ui and ui.document and ui.saveSettings then pcall(ui.saveSettings, ui) end
@@ -2555,6 +2598,44 @@ function OrbitAndroid:restartForCompanion(source)
     UIManager:scheduleIn(0.5, function()
         if Device.canRestart and Device:canRestart() then UIManager:restartKOReader() else UIManager:quit() end
     end)
+end
+
+-- RestartPlan here: the version our own file on disk declares (PATCH_VERSION is near its top).
+local function patchFileVersion()
+    if not SELF_PATH then return nil end
+    local f = io.open(SELF_PATH, "rb")
+    if not f then return nil end
+    local head = f:read(8192)
+    f:close()
+    return RestartPlan.fileVersion("\n" .. (head or ""))
+end
+
+-- A newer patch file waits on disk: restart now, or when reading allows (RestartPlan).
+function OrbitAndroid:maybeRestart(event)
+    if state.restarting_at and now_s() - state.restarting_at < 5 then return "restart" end
+    local want = patchFileVersion()
+    local act = RestartPlan.decide(want, PATCH_VERSION, S.restart_tried, inBook(), event)
+    if act == "wait" then
+        if state.restart_waiting ~= want then
+            state.restart_waiting = want
+            log("restart: v" .. tostring(want) .. " is installed; restarting after the book closes or the device sleeps")
+        end
+    elseif act == "done" then
+        local text = RestartPlan.doneText(PATCH_VERSION)
+        S.restart_tried = nil
+        setUpdateStatus(text)
+        UIManager:show(InfoMessage:new{ text = _(text), timeout = 3 })
+    elseif act == "gave_up" then
+        if state.restart_gave_up ~= want then
+            state.restart_gave_up = want
+            setUpdateStatus("v" .. tostring(want) .. " is installed but didn't load after a restart: restart KOReader by hand (Orbit Companion > Setup)")
+        end
+    elseif act == "restart" then
+        S.restart_tried = want
+        saveSettings()
+        self:restartForCompanion("v" .. tostring(want) .. " installed (" .. event .. ")")
+    end
+    return act
 end
 
 -- The plugin's BookOrbit home is the top widget: its catalog widget (main.lua:1207-1230) is
@@ -2928,6 +3009,17 @@ function OrbitAndroid:onSuspend()
     end
     state.suspended_at = now_s()
     Wifi.state().foreground = false
+    -- A patch update waiting for the book: the device sleeping is the moment (after any sleep sync).
+    if patchFileVersion() and RestartPlan.decide(patchFileVersion(), PATCH_VERSION, S.restart_tried, true, "check") == "wait" then
+        UIManager:scheduleIn(1.5, function()
+            if Jni.isInteractive() ~= false then return end
+            if state.sleep_syncing then
+                state.restart_after_sync = true
+            else
+                self:maybeRestart("sleep")
+            end
+        end)
+    end
     if not S.sync_on_sleep then return end
     if now_s() - state.sas_done_at < 15 then
         log("suspend: just synced by Sync and sleep; skip")
@@ -2954,7 +3046,13 @@ function OrbitAndroid:sleepSync(reason)
     local p = bookorbit(self.ui)
     log(reason .. ": sleep sync start, cap", cap .. "s")
     local held = false
+    state.sleep_syncing = true
     local function done(ok, detail)
+        state.sleep_syncing = false
+        if state.restart_after_sync then
+            state.restart_after_sync = false
+            UIManager:scheduleIn(1, function() self:maybeRestart("sleep") end)
+        end
         local seconds = now_s() - t0
         S.last_sleep_sync = { at = os.time(), ok = ok, seconds = seconds, reason = reason, detail = detail }
         saveSettings()
@@ -3088,6 +3186,10 @@ end
 
 function OrbitAndroid:onCloseWidget()
     if self.ui and self.ui.document then Stats.send("close", contentOfUI(self.ui), false) end
+    -- A patch update waiting for the book: once nothing is open (another book may be opening).
+    if self.ui and self.ui.document and state.restart_waiting then
+        UIManager:scheduleIn(1.5, function() OrbitAndroid.maybeRestart(self, "check") end)
+    end
     -- A close (Back to file browser, Exit) runs this; a kill or suspend doesn't. A close Home
     -- started keeps the book as the current one (home_book); the user's own close clears it.
     if self.ui and self.ui.document then

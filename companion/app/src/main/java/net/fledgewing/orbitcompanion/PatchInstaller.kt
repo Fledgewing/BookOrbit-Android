@@ -84,6 +84,43 @@ object PatchInstaller {
         }
     }
 
+    /** After the companion updated (Updater.onReplaced): the release's patch, then its restart. */
+    fun afterAppUpdate(ctx: Context) {
+        val app = BuildConfig.VERSION_NAME
+        val file = installedVersion()
+        if (!UpdateFlow.patchAfterUpdate(file, app)) {
+            log("after the update: patch ${file ?: "not installed"}; nothing to do for v$app")
+            return
+        }
+        if (!hasPermission(ctx)) {
+            log("after the update: no storage access; left to Setup")
+            Updater.status(ctx, UpdateFlow.manualLine(app, "storage access isn't allowed"))
+            return
+        }
+        log("after the update: patch v$file is older than v$app; installing it")
+        install(ctx) { result ->
+            val now = installedVersion()
+            val p = Prefs(ctx)
+            if (now != null && !PatchFile.needsInstall(now, app)) {
+                p.patchAwaitVersion = now
+                Updater.status(ctx, UpdateFlow.installedLine(app, p.patchVersionSeen.ifEmpty { null }))
+                onPatchSeen(ctx, p.patchVersionSeen.ifEmpty { null })
+            } else {
+                Updater.status(ctx, UpdateFlow.manualLine(app, result))
+            }
+        }
+    }
+
+    /** The running patch reported its version: the restart after an update is done. */
+    fun onPatchSeen(ctx: Context, running: String?) {
+        val p = Prefs(ctx)
+        val want = p.patchAwaitVersion
+        if (want.isEmpty() || !UpdateFlow.loaded(want, running)) return
+        p.patchAwaitVersion = ""
+        log("KOReader runs patch v$running now")
+        Updater.status(ctx, UpdateFlow.doneLine(BuildConfig.VERSION_NAME))
+    }
+
     private fun run(): String {
         val v = BuildConfig.VERSION_NAME
         val dev = Version.parse(v) == null || v.contains("dev")

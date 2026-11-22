@@ -96,7 +96,10 @@ class PinGate(private val graceMs: Long = GRACE_MS, private val capMs: Long = CA
     /** -1 while inside; else when the user left. */
     private var leftAt = -1L
     private val scope = HashSet<String>()
-    private var updateUntil = 0L
+    /** Installs the companion started and that are still open (Guard "install window"). */
+    private val installs = HashSet<String>()
+    private var installSince = 0L
+    private var installUntil = 0L
 
     @Synchronized
     fun unlocked(now: Long): Boolean {
@@ -167,21 +170,40 @@ class PinGate(private val graceMs: Long = GRACE_MS, private val capMs: Long = CA
         return leave(now)
     }
 
+    /**
+     * The install window opens when the user starts an update or the companion starts any
+     * install ([key] names it: "update", "patch", ...), and stays open until the last one ends
+     * plus [Guard.INSTALL_GRACE_MS]. A session that never reports ends after [Guard.INSTALL_CAP_MS].
+     */
     @Synchronized
-    fun selfUpdateStarted(now: Long, forMs: Long = Guard.UPDATE_WINDOW_MS) {
-        updateUntil = now + forMs
+    fun installStarted(key: String, now: Long) {
+        if (installs.isEmpty() || now - installSince >= Guard.INSTALL_CAP_MS) installSince = now
+        installs.add(key)
     }
 
     @Synchronized
+    fun installEnded(key: String, now: Long) {
+        installs.remove(key)
+        if (installs.isEmpty()) installUntil = maxOf(installUntil, now + Guard.INSTALL_GRACE_MS)
+    }
+
+    @Synchronized
+    fun installing(now: Long): Boolean =
+        (installs.isNotEmpty() && now - installSince < Guard.INSTALL_CAP_MS) || now < installUntil
+
+    @Synchronized
     fun decide(pkg: String?, cls: String?, own: String, now: Long): Guard.Decision =
-        Guard.decide(pkg, cls, own, pinSet, unlocked(now), guarded, now < updateUntil)
+        Guard.decide(pkg, cls, own, pinSet, unlocked(now), guarded, installing(now))
 }
 
 /**
  * The app guard: with a PIN set and locked, a guarded app (an entry "pkg", or "pkg/activity"
  * for one screen of a package that also hosts the launcher) gets the PIN page on top. Never
- * the companion, KOReader, phone/emergency or system UI; nor the installer during a
- * companion self-update the user started.
+ * the companion, KOReader, phone/emergency or system UI; nor, during the install window
+ * (PinGate.installStarted), the screens an install needs: the package installer and permission
+ * controller (AOSP, Google and vendor builds) and Play Protect's dialogs, even when the Play
+ * Store itself is guarded (a keypad over Play Protect fails the install with
+ * INSTALL_FAILED_VERIFICATION_FAILURE).
  */
 object Guard {
     enum class Decision { ALLOW, GUARD }
@@ -195,13 +217,35 @@ object Guard {
         "com.android.incallui", "com.android.emergency", "com.google.android.apps.safetyhub",
     )
 
-    /** Allowed while a companion self-update runs (its install and permission screens). */
+    /** Allowed during the install window (its install and permission screens). */
     val INSTALLERS = setOf(
         "com.android.packageinstaller", "com.google.android.packageinstaller",
         "com.android.permissioncontroller", "com.google.android.permissioncontroller",
     )
 
-    const val UPDATE_WINDOW_MS = 10 * 60_000L
+    /** Play Store: its Play Protect dialogs (com.google.android.finsky.protectdialogs.*) scan our installs. */
+    const val PLAY_STORE = "com.android.vending"
+    const val PLAY_PROTECT_DIALOGS = ".protectdialogs."
+
+    /** After the last install ends, the window stays open this long (Play Protect's follow-up). */
+    const val INSTALL_GRACE_MS = 60_000L
+    /** An install that never reports its end stops counting after this. */
+    const val INSTALL_CAP_MS = 30 * 60_000L
+
+    /**
+     * A screen an install needs: the installers and permission controllers (AOSP, Google, and
+     * vendor builds such as com.miui.packageinstaller or com.samsung.android.packageinstaller),
+     * and Play Protect's dialogs, matched by activity. When the event names no Play Store
+     * activity (null, or a plain view/dialog class), the Play Store package itself, for the
+     * window only; its own store pages stay guarded.
+     */
+    fun installSurface(pkg: String, cls: String?): Boolean = when {
+        pkg in INSTALLERS -> true
+        pkg.endsWith(".packageinstaller") || pkg.endsWith(".permissioncontroller") -> true
+        pkg == PLAY_STORE -> cls == null || cls.contains(PLAY_PROTECT_DIALOGS) ||
+            !(cls.startsWith("com.google.android.finsky.") || cls.startsWith("com.android.vending."))
+        else -> false
+    }
 
     fun canGuard(pkg: String, own: String): Boolean = pkg != own && pkg !in NEVER
 
@@ -246,11 +290,11 @@ object Guard {
         pinSet: Boolean,
         unlocked: Boolean,
         guarded: Set<String>,
-        selfUpdate: Boolean,
+        installing: Boolean,
     ): Decision = when {
         pkg == null || !pinSet || unlocked -> Decision.ALLOW
         !canGuard(pkg, own) -> Decision.ALLOW
-        selfUpdate && pkg in INSTALLERS -> Decision.ALLOW
+        installing && installSurface(pkg, cls) -> Decision.ALLOW
         matches(guarded, pkg, cls) -> Decision.GUARD
         else -> Decision.ALLOW
     }

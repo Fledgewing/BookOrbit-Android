@@ -696,3 +696,34 @@ class HomeOpensTest {
         assertEquals(HomeApp.Launch(c, null, null), HomeApp.launch(c, press = true, button = HomeButton.SMART, companionPageInFront = false))
     }
 }
+
+class UpdateFlowTest {
+    @Test
+    fun patchFollowsTheAppUpdateOnlyOverAnOlderFile() {
+        assertTrue(UpdateFlow.patchAfterUpdate("0.4.9", "0.5.0"))
+        assertFalse("already current", UpdateFlow.patchAfterUpdate("0.5.0", "0.5.0"))
+        assertFalse("a newer patch-only update is never downgraded", UpdateFlow.patchAfterUpdate("0.5.1", "0.5.0"))
+        assertFalse("a first install is Setup's step", UpdateFlow.patchAfterUpdate(null, "0.5.0"))
+        assertFalse("a dev build", UpdateFlow.patchAfterUpdate("0.4.9", "dev"))
+    }
+
+    @Test
+    fun theRunningPatchDecidesWhoRestarts() {
+        assertTrue(UpdateFlow.autoRestart("0.5.0"))
+        assertTrue(UpdateFlow.autoRestart("0.6.1"))
+        assertFalse(UpdateFlow.autoRestart("0.4.9"))
+        assertFalse(UpdateFlow.autoRestart(null))
+        assertEquals("Updated to v0.5.1; KOReader restarts by itself when no book is open", UpdateFlow.installedLine("0.5.1", "0.5.0"))
+        assertTrue(UpdateFlow.installedLine("0.5.0", "0.4.9").contains("restart KOReader once"))
+    }
+
+    @Test
+    fun oneStatusLineOnceKOReaderRunsTheNewPatch() {
+        assertFalse(UpdateFlow.loaded("0.5.1", "0.5.0"))
+        assertFalse(UpdateFlow.loaded("0.5.1", null))
+        assertTrue(UpdateFlow.loaded("0.5.1", "0.5.1"))
+        assertTrue(UpdateFlow.loaded("0.5.1", "0.5.2"))
+        assertEquals("Updated to v0.5.1 (KOReader restarted)", UpdateFlow.doneLine("0.5.1"))
+        assertTrue(UpdateFlow.manualLine("0.5.1", "storage access isn't allowed").endsWith("storage access isn't allowed. Setup > KOReader patch"))
+    }
+}

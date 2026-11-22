@@ -570,6 +570,8 @@ object Setup {
                 patchState == PatchRowState.CURRENT || patchState == PatchRowState.RESTART,
                 when {
                     PatchInstaller.busy -> "installing…"
+                    patchState == PatchRowState.RESTART && UpdateFlow.autoRestart(runningV) ->
+                        "KOReader restarts by itself to load it once no book is open (or when the device sleeps); it still runs v$runningV"
                     patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) "Restart KOReader to finish (KOReader still runs v$runningV)"
                         else "Restart KOReader to finish: close KOReader from recent apps and reopen it (it still runs v$runningV)"
                     patchState == PatchRowState.MISSING && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"

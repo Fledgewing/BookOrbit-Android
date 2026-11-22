@@ -243,11 +243,63 @@ class PinLogicTest {
     }
 
     @Test
-    fun installerAllowedOnlyDuringASelfUpdate() {
+    fun installerAllowedOnlyDuringTheInstallWindow() {
         val inst = "com.google.android.packageinstaller"
         assertEquals(Guard.Decision.GUARD, decide(inst, guarded = setOf(inst)))
         assertEquals(Guard.Decision.ALLOW, decide(inst, guarded = setOf(inst), update = true))
         assertEquals(Guard.Decision.GUARD, decide(settings, update = true))
+    }
+
+    private val protect = "com.google.android.finsky.protectdialogs.activity.PlayProtectDialogsActivity"
+    private val store = "com.android.vending"
+
+    /** The Boox Page, 11-22: a guarded Play Store, Play Protect's dialog during an update. */
+    @Test
+    fun playProtectDuringAnUpdateGetsNoKeypadEvenWithThePlayStoreGuarded() {
+        val g = gate()
+        assertTrue(store in g.guarded)
+        g.installStarted("update", 1_000)
+        assertEquals(Guard.Decision.ALLOW, front(g, store, protect, 2_000))
+        assertEquals(Guard.Decision.ALLOW, front(g, "com.google.android.packageinstaller", "com.android.packageinstaller.InstallStaging", 3_000))
+        // The Play Store's own pages stay guarded during the window.
+        assertEquals(Guard.Decision.GUARD, front(g, store, "com.google.android.finsky.activities.MainActivity", 4_000))
+        assertEquals(Guard.Decision.GUARD, front(g, settings, sCls, 4_000))
+        // The install ends: Play Protect's follow-up dialog within about 60 s still passes.
+        g.installEnded("update", 10_000)
+        assertEquals(Guard.Decision.ALLOW, front(g, store, protect, 10_000 + Guard.INSTALL_GRACE_MS - 1))
+        assertEquals(Guard.Decision.GUARD, front(g, store, protect, 10_000 + Guard.INSTALL_GRACE_MS))
+    }
+
+    @Test
+    fun playProtectWithNoUpdateRunningIsStillGated() {
+        val g = gate()
+        assertFalse(g.installing(5_000))
+        assertEquals(Guard.Decision.GUARD, front(g, store, protect, 5_000))
+        assertEquals(Guard.Decision.GUARD, front(g, store, null, 5_000))
+    }
+
+    @Test
+    fun installWindowCoversEveryOpenInstallAndEndsAtTheCap() {
+        val g = gate()
+        g.installStarted("update", 0)
+        g.installStarted("patch", 10)
+        g.installEnded("patch", 20)
+        assertTrue("one install still open", g.installing(20 + Guard.INSTALL_GRACE_MS + 1))
+        assertFalse("a session that never reports stops counting", g.installing(Guard.INSTALL_CAP_MS))
+        g.installEnded("update", Guard.INSTALL_CAP_MS)
+        assertTrue(g.installing(Guard.INSTALL_CAP_MS + 1))
+    }
+
+    @Test
+    fun installSurfacesByActivityAndVendor() {
+        assertTrue(Guard.installSurface("com.miui.packageinstaller", "x.Y"))
+        assertTrue(Guard.installSurface("com.samsung.android.packageinstaller", null))
+        assertTrue(Guard.installSurface("com.google.android.permissioncontroller", null))
+        assertTrue(Guard.installSurface(store, protect))
+        assertTrue("no activity named: the package, for the window only", Guard.installSurface(store, null))
+        assertTrue("a plain dialog window", Guard.installSurface(store, "android.app.Dialog"))
+        assertFalse(Guard.installSurface(store, "com.android.vending.AssetBrowserActivity"))
+        assertFalse(Guard.installSurface(settings, null))
     }
 
     @Test

@@ -49,8 +49,10 @@ doesn't match.
   waits for the file browser or BookOrbit home), and holds Wi-Fi until it ends. It runs in a
   background process, so KOReader never waits on the network (v0.4.3). A newer `2-orbit-android.lua`
   (it must also declare the release's version in `PATCH_VERSION`) is written next to the
-  running file and renamed over it, so the patch folder never holds a half-written file. It
-  takes effect on the next KOReader start (on firmwares that stop KOReader after sleep, every wake is one).
+  running file and renamed over it, so the patch folder never holds a half-written file.
+  KOReader then restarts by itself to load it (v0.5.0): at once with no book open, otherwise
+  right after the book is closed or when the device next sleeps; it never interrupts reading,
+  and shows "Updated to vX (KOReader restarted)".
 - **Orbit Companion** (Settings): **Auto-update app** (on by default), **Include
   pre-releases** (off), **Check for updates** (also on the status page), and the version and
   last result. The automatic check runs when the service starts or Wi-Fi comes up (for
@@ -65,6 +67,13 @@ doesn't match.
     The companion still asks for it, so it would take effect if that ever changes. A check
     you start by hand opens Android's install prompt straight away; an automatic one posts
     a notification, "Orbit Companion <version> is ready. Tap to install."
+  - **One update covers everything (v0.5.0):** after the app updates, it installs the
+    matching KOReader patch from the same release by itself (checksum-checked), and KOReader
+    restarts to load it as above. If a step can't run (no storage access, no network), the
+    status line says why and Setup's **KOReader patch** row does it by hand.
+  - With a Settings PIN, the keypad never covers the installer, permission screens or Play
+    Protect's scan while an update runs and for a minute after, even with the Play Store
+    guarded.
   - Setup row **Install updates** opens Android's "Install unknown apps" page for Orbit;
     allow it once.
 

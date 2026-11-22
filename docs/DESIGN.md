@@ -287,8 +287,18 @@ Kid-proofing, modelled on the Xteink settings PIN (touch keypad). Optional, off 
   a vendor package is guarded whole only when it has no Home role and isn't system UI
   (`Guard.settingsEntry`; a Boox resolves Settings into `com.onyx`, its launcher too, so only
   that screen is guarded). The user adds any launchable app except a launcher. Never: the
-  companion, KOReader, dialer/telecom/emergency and system UI; the installer and permission
-  controller during a self-update started while unlocked (10 min). The Setup row "Clicker
+  companion, KOReader, dialer/telecom/emergency and system UI. **Install window (v0.5.0):**
+  from the moment the user starts an update (or the companion starts any install) until the
+  install session ends plus 60 s (`PinGate.installStarted/installEnded`, `Guard.INSTALL_GRACE_MS`;
+  a session that never reports stops counting after 30 min), the screens an install needs are
+  never covered (`Guard.installSurface`): the package installer and permission controller
+  (AOSP, Google, and vendor `*.packageinstaller` / `*.permissioncontroller`) and Play
+  Protect's dialogs, matched by activity (`com.android.vending` `…finsky.protectdialogs.*`),
+  even when the Play Store is guarded; when the event names no Play Store activity, the
+  package passes for the window only, and the store's own pages stay guarded. Outside the
+  window Play Protect is gated like the rest of the Play Store. Seen on a Boox Page 11-22:
+  the keypad over `PlayProtectDialogsActivity` failed the update with
+  `INSTALL_FAILED_VERIFICATION_FAILURE`, so it took two PINs and two tries. The Setup row "Clicker
   buttons / app guard (accessibility) on" shows while a PIN is set, since the guard needs the
   service.
 - **KOReader:** `/status.pin_locked`; the patch's menu shows only "Enter the Settings PIN…"
@@ -297,6 +307,32 @@ Kid-proofing, modelled on the Xteink settings PIN (touch keypad). Optional, off 
   Android 14+ a reported sender uid must be shell or root (`PinReset.allowed`).
 - **Known gaps (documented in SETUP):** quick settings in the notification shade, safe-mode
   boot, adb.
+
+## One update (v0.5.0)
+
+One update covers the companion, the patch and KOReader's restart, with one status line.
+
+- **Companion update:** the new process (`MY_PACKAGE_REPLACED` → `Updater.onReplaced`)
+  installs the patch from its own release (`PatchInstaller.afterAppUpdate`: the release's
+  `SHA256SUMS`, the stamped `PATCH_VERSION`, temp file then rename, as Setup's Install patch
+  does) when the installed patch is older; never over a newer patch-only update, and a
+  first install stays Setup's step. No prompt.
+- **Restart:** the patch (0.5.0+) compares the `PATCH_VERSION` its own file on disk declares
+  with the one running (`RestartPlan`). Newer on disk: with no book open it restarts at once
+  (at start, resume, or right after our own update); with a book open it waits and restarts
+  right after the book is closed (unless another book opened) or when the device next sleeps
+  (screen off, after the sleep sync). It never interrupts reading. The restart is the
+  existing one (save, `RELAUNCH`, quit; the companion starts KOReader again, the book at exit
+  reopens). One try per version (`restart_tried`): a file that still doesn't load is left to
+  Setup with the reason, never a restart loop.
+- **Status:** KOReader shows "Updated to vX (KOReader restarted)" after the restart; the
+  companion's update line says the same once the running patch reports the new version
+  (`UpdateFlow`, `Prefs.patchAwaitVersion`).
+- **Patch-only update** (patch newer, companion the same): the patch's own updater writes the
+  file, then the same restart path runs.
+- **Fallback:** no storage access, a failed download or checksum, or a running patch older
+  than 0.5.0 (it can't restart itself): the status line gives the reason and Setup's
+  KOReader patch row keeps Install patch / Restart KOReader.
 
 ## Sync while reading in the companion (v0.4.8)
 

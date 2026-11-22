@@ -132,6 +132,11 @@ class Prefs(ctx: Context) {
         set(v) = setStr("wifi_pending_owner", v.key)
     var wifiPendingAt by LongPref("wifi_pending_at")
 
+    /** The patch version installed after an app update, until the running patch reports it (UpdateFlow). */
+    var patchAwaitVersion: String
+        get() = str("patch_await_version")
+        set(v) = setStr("patch_await_version", v)
+
     var patchInstallStatus: String
         get() = sp.getString("patch_install_status", "") ?: ""
         set(v) = setStr("patch_install_status", v)

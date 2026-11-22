@@ -267,7 +267,10 @@ class OrbitService : Service() {
         if (intent.getStringExtra("sender") == Contract.PATCH_SENDER) {
             prefs.patchSeenAt = System.currentTimeMillis()
             prefs.patchSeenVia = Contract.shortName(intent.action)
-            intent.getStringExtra("patch_version")?.takeIf { it.isNotEmpty() }?.let { prefs.patchVersionSeen = it }
+            intent.getStringExtra("patch_version")?.takeIf { it.isNotEmpty() }?.let {
+                prefs.patchVersionSeen = it
+                PatchInstaller.onPatchSeen(this, it)
+            }
         }
     }
 
@@ -621,7 +624,10 @@ class OrbitService : Service() {
                     prefs.patchSeenAt = System.currentTimeMillis()
                     prefs.patchSeenVia = "status"
                     // /status?patch_version=X (patch 0.3.1+): the running patch's version.
-                    Regex("[?&]patch_version=([0-9A-Za-z.+-]+)").find(parts[1])?.let { m -> prefs.patchVersionSeen = m.groupValues[1] }
+                    Regex("[?&]patch_version=([0-9A-Za-z.+-]+)").find(parts[1])?.let { m ->
+                        prefs.patchVersionSeen = m.groupValues[1]
+                        PatchInstaller.onPatchSeen(this@OrbitService, m.groupValues[1])
+                    }
                 }
                 OLog.i("status request ${parts.getOrNull(1)} -> ${if (ok) 200 else 404} in ${OLog.since(t0)} ms")
             }

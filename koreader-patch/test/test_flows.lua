@@ -35,6 +35,8 @@ local UIManager = {
         if w and w.dismiss_callback then w.dismiss_callback() end
     end,
     forceRePaint = function() end,
+    -- Android: Device:canRestart is no, so a restart is quit + the companion's RELAUNCH.
+    quit = function() W.quits = (W.quits or 0) + 1 end,
     _refresh_stack = {},
     -- Like uimanager.lua _repaint: drain the queue, then replace it.
     _repaint = function(self) self._refresh_stack = {} end,
@@ -819,7 +821,8 @@ test("restart command: save, ask the companion to relaunch, then quit (Android c
     ok(quit == nil, "quits only after the broadcast went out")
     run(1)
     ok(quit == 0, "quit (Device canRestart is no on Android)")
-    UIManager.quit = nil
+    UIManager.quit = function() W.quits = (W.quits or 0) + 1 end
+    run(10)
 end)
 
 test("the status ping tells the companion which patch is running", function()
@@ -1584,6 +1587,116 @@ test("update: never with a book open; deferred to the file browser", function()
     run(40)
     ok(count(W.fetched, function(u) return u == API end) == 1, "ran on reaching the file browser")
 end)
+---------------------------------------------------------------- one update covers everything
+local function stampSelf(v)
+    local f = io.open(ORBIT_ANDROID_SELF_PATH, "wb")
+    f:write('-- BookOrbit-Android patch\nlocal PATCH_VERSION = "' .. v .. '"\nreturn\n'); f:close()
+end
+local function relaunches() return count(W.broadcasts, function(b) return b.action:sub(-9) == ".RELAUNCH" end) end
+local function restartReset() run(10); W.clock = W.clock + 10; store.orbit_android.restart_tried = nil; W.broadcasts = {} end
+
+test("one update: our own update with no book open restarts KOReader at once", function()
+    restartReset(); resetSelf(); serveRelease()
+    local _ui, orbit = newUI(false)
+    orbit:checkPatchUpdate()
+    run(5)
+    ok(selfText() == NEW, "file replaced")
+    ok(relaunches() == 1, "restarted once: " .. relaunches())
+    ok(store.orbit_android.restart_tried == "0.2.0", "one try recorded for 0.2.0")
+    restartReset()
+end)
+
+test("one update: a new file with no book open restarts on resume (the companion installed it)", function()
+    restartReset(); stampSelf("0.3.0")
+    local _ui, m = newUI(false)
+    m:onResume()
+    run(3)
+    ok(relaunches() == 1, "restarted: " .. relaunches())
+    restartReset()
+end)
+
+test("one update: a book open waits, then restarts once the book is closed", function()
+    restartReset(); stampSelf("0.3.0")
+    W.screen_on = true
+    local _ui, m = newUI(true)
+    m:onResume()
+    run(5)
+    ok(relaunches() == 0, "never interrupts reading")
+    m:onCloseWidget()
+    newUI(false)
+    run(3)
+    ok(relaunches() == 1, "restarted after the close: " .. relaunches())
+    restartReset()
+end)
+
+test("one update: closing one book to open another doesn't restart", function()
+    restartReset(); stampSelf("0.3.0")
+    W.screen_on = true
+    local _ui, m = newUI(true)
+    m:onResume()
+    run(2)
+    m:onCloseWidget()
+    newUI(true)
+    run(3)
+    ok(relaunches() == 0, "still reading")
+    restartReset()
+end)
+
+test("one update: a book open restarts when the device sleeps, after the sleep sync", function()
+    restartReset(); stampSelf("0.3.0")
+    W.screen_on = true
+    local _ui, m = newUI(true)
+    m:onResume()
+    run(5)
+    W.screen_on = false
+    m:onSuspend()
+    run(40)
+    local done_i, relaunch_i
+    for i, b in ipairs(W.broadcasts) do
+        if b.action:sub(-9) == ".NET_DONE" then done_i = done_i or i end
+        if b.action:sub(-9) == ".RELAUNCH" then relaunch_i = relaunch_i or i end
+    end
+    ok(relaunch_i, "restarted on sleep")
+    ok(done_i and done_i < relaunch_i, "after the sleep sync finished")
+    restartReset()
+end)
+
+test("one update: an app switch (screen on) in a book doesn't restart", function()
+    restartReset(); stampSelf("0.3.0")
+    W.screen_on = true
+    local _ui, m = newUI(true)
+    m:onSuspend()
+    run(10)
+    ok(relaunches() == 0, "screen on: not asleep")
+    restartReset()
+end)
+
+test("one update: after its restart the new patch shows one status line", function()
+    restartReset(); stampSelf("0.0.0-dev")
+    store.orbit_android.restart_tried = "0.0.0-dev"
+    W.shown = {}
+    local _ui, m = newUI(false)
+    m:onResume()
+    run(3)
+    local found = false
+    for _, w in ipairs(W.shown) do if tostring(w.text):find("Updated to v0.0.0-dev (KOReader restarted)", 1, true) then found = true end end
+    ok(found, "status line shown")
+    ok(store.orbit_android.restart_tried == nil, "try cleared")
+    ok(store.orbit_android.patch_update_status.text:find("KOReader restarted", 1, true), "update status")
+    restartReset()
+end)
+
+test("one update: a file that still didn't load after its restart is left to Setup (no loop)", function()
+    restartReset(); stampSelf("0.3.0")
+    store.orbit_android.restart_tried = "0.3.0"
+    local _ui, m = newUI(false)
+    m:onResume()
+    run(3)
+    ok(relaunches() == 0, "no second restart")
+    ok(store.orbit_android.patch_update_status.text:find("didn't load", 1, true), "says so")
+    restartReset()
+end)
+W.screen_on = false
 os.remove(ORBIT_ANDROID_SELF_PATH)
 os.remove(SELF)
 

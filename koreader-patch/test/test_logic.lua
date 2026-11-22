@@ -598,5 +598,22 @@ test("menu lock: only on the companion's pin_locked = true; no answer stays usab
     eq(L.locked({ pin_locked = "true" }), false, "only a real boolean locks")
 end)
 
+test("restart plan: a newer file loads now, or after the book; one try per version", function()
+    local R = M.RestartPlan
+    eq(R.fileVersion('\n-- x\nlocal PATCH_VERSION = "0.5.0"\n'), "0.5.0")
+    eq(R.fileVersion("-- no version"), nil)
+    eq(R.decide(nil, "0.4.9", nil, false, "check"), "none", "no file")
+    eq(R.decide("0.4.9", "0.4.9", nil, false, "check"), "none", "already running it")
+    eq(R.decide("0.4.8", "0.4.9", nil, false, "check"), "none", "older file never restarts")
+    eq(R.decide("0.5.0", "0.4.9", nil, false, "check"), "restart", "no book: at once")
+    eq(R.decide("0.5.0", "0.4.9", nil, true, "check"), "wait", "a book open: never interrupts reading")
+    eq(R.decide("0.5.0", "0.4.9", nil, true, "sleep"), "restart", "the device sleeping")
+    eq(R.decide("0.5.0", "0.4.9", "0.5.0", false, "check"), "gave_up", "restarted for it and still old")
+    eq(R.decide("0.5.1", "0.4.9", "0.5.0", false, "check"), "restart", "a newer file gets its own try")
+    eq(R.decide("0.5.0", "0.5.0", "0.5.0", false, "check"), "done", "loaded after its restart")
+    eq(R.decide("0.0.0-dev", "0.0.0-dev", nil, false, "check"), "none", "dev build")
+    eq(R.doneText("0.5.0"), "Updated to v0.5.0 (KOReader restarted)")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

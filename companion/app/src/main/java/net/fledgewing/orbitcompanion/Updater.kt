@@ -52,7 +52,10 @@ object Updater {
 
     private fun log(msg: String) = OLog.i("update: $msg")
 
-    private fun status(ctx: Context, s: String) {
+    /** The install window key (Pin.installStarted) for app updates. */
+    const val INSTALL_KEY = "update"
+
+    internal fun status(ctx: Context, s: String) {
         val p = Prefs(ctx)
         p.updateStatus = s
         p.updateStatusAt = System.currentTimeMillis()
@@ -86,8 +89,9 @@ object Updater {
             return
         }
         busy = true
-        // Started by hand while unlocked (Pin.run): the guard lets the installer through.
-        if (interactive) Pin.selfUpdateStarted()
+        // Started by hand while unlocked (Pin.run): the install window opens now, so the guard
+        // lets the installer and Play Protect through (Guard.installSurface).
+        if (interactive) Pin.installStarted(INSTALL_KEY)
         val app = ctx.applicationContext
         thread(name = "orbit-update", isDaemon = true) {
             // By hand with Wi-Fi off: turn it on for the check (Wi-Fi only, GitHub needs no
@@ -106,6 +110,7 @@ object Updater {
                 }
             }
             status(app, result)
+            if (interactive && !result.startsWith("installing")) Pin.installEnded(INSTALL_KEY)
             busy = false
             if (done != null) main.post { done(result) }
         }
@@ -293,6 +298,7 @@ object Updater {
             // Honoured only for apps targeting S+ on Android 14 (see the class comment); harmless otherwise.
             params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
+        Pin.installStarted(INSTALL_KEY)
         val id = pi.createSession(params)
         pi.openSession(id).use { s ->
             s.openWrite("base.apk", 0, apk.length()).use { out ->
@@ -337,14 +343,22 @@ object Updater {
                         false
                     }
                 }
-                if (!shown) notifyReady(ctx, version, confirm)
+                if (!shown) {
+                    // Nothing on screen until the notification is tapped (PinActivity reopens the window).
+                    Pin.installEnded(INSTALL_KEY)
+                    notifyReady(ctx, version, confirm)
+                }
                 status(ctx, "v$version ready: confirm the install")
             }
             PackageInstaller.STATUS_SUCCESS -> {
+                Pin.installEnded(INSTALL_KEY)
                 status(ctx, "updated to v$version")
                 notifications(ctx).cancel(ID_UPDATE)
             }
-            else -> status(ctx, "v$version install failed ($st${if (msg != null) ": $msg" else ""})")
+            else -> {
+                Pin.installEnded(INSTALL_KEY)
+                status(ctx, "v$version install failed ($st${if (msg != null) ": $msg" else ""})")
+            }
         }
     }
 
@@ -352,7 +366,11 @@ object Updater {
     fun onReplaced(ctx: Context) {
         notifications(ctx).cancel(ID_UPDATE)
         File(ctx.filesDir, "updates").listFiles()?.forEach { it.delete() }
+        // A fresh process: the window's last 60 s cover Play Protect's follow-up.
+        Pin.installEnded(INSTALL_KEY)
         status(ctx, "updated to v${BuildConfig.VERSION_NAME}")
+        // One update covers everything: the release's patch, then KOReader's restart.
+        PatchInstaller.afterAppUpdate(ctx)
         Attention.onStart(ctx)
         Attention.evaluate(ctx, "after update")
     }
