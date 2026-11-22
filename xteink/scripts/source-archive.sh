@@ -85,7 +85,7 @@ platform="$(sed -nE 's#^platform *= *(https://[^ ]+)#\1#p' "$upstream/platformio
 platform_ver="$(printf '%s' "$platform" | sed -nE 's#.*/download/([^/]+)/.*#\1#p')"
 up_desc="$(git -C "$upstream" describe --tags --exact-match 2>/dev/null || git -C "$upstream" rev-parse HEAD)"
 tabler="$(git -C "$upstream" ls-tree HEAD assets/tabler-icons | awk '{print $3}')"
-microlink="$(git -C "$overlay" rev-parse HEAD:third_party/microlink)"
+microlink="$(git -C "$overlay" rev-parse HEAD:./third_party/microlink)"
 sdk="$(git -C "$upstream" ls-tree HEAD freeink-sdk | awk '{print $3}')"
 
 cat > "$stage/BUILD.md" <<EOF
