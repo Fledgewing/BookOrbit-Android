@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Battery stats mockups</title>
+<style>
+  :root { --ink: #000; --g1: #444; --g2: #777; --g3: #bbb; --g4: #e6e6e6; --paper: #fff; }
+  body { margin: 0; padding: 24px 16px; background: #f2f2f2; color: var(--ink);
+         font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { margin: 0 0 24px; color: var(--g1); max-width: 760px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 28px; }
+  figure { margin: 0; width: 351px; }
+  /* M8C: 1404 x 1872 px, shown at 1/4 scale */
+  .screen { width: 351px; height: 468px; background: var(--paper); border: 2px solid var(--ink);
+            border-radius: 6px; box-sizing: border-box; padding: 12px 14px; overflow: hidden;
+            display: flex; flex-direction: column; font-size: 13px; line-height: 1.3; }
+  figcaption { font-size: 13px; color: var(--g1); margin-top: 8px; }
+  .hdr { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .hdr b { font-size: 18px; }
+  .hdr span { font-size: 12px; border: 1.5px solid var(--ink); border-radius: 4px; padding: 1px 6px; }
+  .tabs { display: flex; gap: 3px; margin-bottom: 10px; }
+  .tabs div { flex: 1; text-align: center; font-size: 10.5px; padding: 4px 0; border: 1.5px solid var(--ink); border-radius: 4px; }
+  .tabs .on { background: var(--ink); color: var(--paper); font-weight: 700; }
+  .big { font-size: 40px; font-weight: 800; line-height: 1; }
+  .sub { color: var(--g1); font-size: 12px; }
+  .card { border: 1.5px solid var(--ink); border-radius: 6px; padding: 7px 9px; margin-bottom: 8px; }
+  .row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--g4); }
+  .row:last-child { border-bottom: 0; }
+  .row b { white-space: nowrap; }
+  .muted { color: var(--g2); }
+  .hidden b { color: var(--g2); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  th, td { border-bottom: 1px solid var(--g3); padding: 3px 2px; text-align: left; vertical-align: top; }
+  th { font-size: 10.5px; color: var(--g1); font-weight: 600; }
+  td.n { text-align: right; white-space: nowrap; }
+  td small, .row small { display: block; color: var(--g2); font-size: 9.5px; }
+  .bar { height: 9px; background: var(--ink); display: inline-block; vertical-align: middle; }
+  .bar.g { background: var(--g2); }
+  .day { display: grid; grid-template-columns: 52px 1fr 34px; gap: 6px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--g4); font-size: 11.5px; }
+  .day small { grid-column: 2 / 4; color: var(--g2); font-size: 10px; margin-top: -2px; }
+  .foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  .btn { border: 1.5px solid var(--ink); border-radius: 5px; padding: 6px 10px; text-align: center; font-weight: 600; }
+  .btn.solid { background: var(--ink); color: var(--paper); }
+  .stack { display: flex; flex-direction: column; gap: 6px; }
+  ul.inc { margin: 4px 0 8px 16px; padding: 0; font-size: 12px; }
+  ul.inc li { margin: 2px 0; }
+  .sheet { margin-top: auto; border-top: 2px solid var(--ink); padding-top: 8px; }
+  .sheet .apps { display: flex; gap: 8px; margin-top: 6px; }
+  .sheet .apps div { flex: 1; height: 42px; border: 1.5px solid var(--g2); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--g1); }
+</style>
+</head>
+<body>
+<h1>Battery stats: mockups</h1>
+<p class="lead">Orbit Companion › Battery. M8C screen proportions (1404 × 1872, shown at ¼). Black on white, greys only, one screen per page, no scrolling. Numbers are realistic for an M8C after about seven weeks of use. Values with too little data show "—" and what is missing.</p>
+
+<div class="grid">
+
+<!-- 1. Now -->
+<figure>
+<div class="screen">
+  <div class="hdr"><b>Battery</b><span>‹ Back</span></div>
+  <div class="tabs"><div class="on">Now</div><div>Rates</div><div>By setting</div><div>History</div><div>Compare</div></div>
+  <div class="big">64%</div>
+  <div class="sub">Not charging · last full charge 2 days ago</div>
+  <div class="card" style="margin-top:10px">
+    <div class="row"><span>At your usual use</span><b>about 5 days 13 h</b></div>
+    <div class="row"><span>Reading text non-stop</span><b>about 16 h</b></div>
+    <div class="row"><span>Standby only</span><b>about 14 days</b></div>
+    <div class="row muted"><span style="font-size:11px">Usual use = last 7 days: screen on 1 h 50 min a day</span></div>
+  </div>
+  <div class="card">
+    <div class="row"><span>Today: used</span><b>9%</b></div>
+    <div class="row"><span>Screen on</span><b>1 h 12 min</b></div>
+    <div class="row"><span>Pages turned</span><b>214</b></div>
+    <div class="row"><span>Full / partial refreshes</span><b>38 / 251</b></div>
+  </div>
+  <div class="foot"><span class="muted">Data since 1 Oct · 52 days</span><span class="btn">Export…</span></div>
+</div>
+<figcaption>Now: current level, three time-left estimates from this device's own rates, and today so far.</figcaption>
+</figure>
+
+<!-- 2. Rates -->
+<figure>
+<div class="screen">
+  <div class="hdr"><b>Battery</b><span>‹ Back</span></div>
+  <div class="tabs"><div>Now</div><div class="on">Rates</div><div>By setting</div><div>History</div><div>Compare</div></div>
+  <div class="card">
+    <div class="row"><span>Standby (screen off)<small>212 h of data · 74 stretches</small></span><b>0.18 %/h ± 0.02</b></div>
+    <div class="row"><span>Reading (all)<small>31 h of data · 96 stretches</small></span><b>4.1 %/h ± 0.3</b></div>
+    <div class="row"><span>Charging<small>6.5 h of data</small></span><b>+38 %/h</b></div>
+  </div>
+  <div class="card">
+    <div class="row"><span>Per 100 pages (text)<small>2,410 pages</small></span><b>1.3%</b></div>
+    <div class="row"><span>Per 100 full refreshes<small>980 full refreshes</small></span><b>2.9%</b></div>
+    <div class="row hidden"><span>Per 100 pages (comic)<small>62 pages, need 100</small></span><b>—</b></div>
+  </div>
+  <div class="card">
+    <div class="row hidden"><span>Reading with Wi-Fi Always on<small>0.4 h of 1 h needed</small></span><b>—</b></div>
+  </div>
+  <div class="foot"><span class="muted">± = how sure (1 standard error)</span><span class="muted">Page 1 / 1</span></div>
+</div>
+<figcaption>Rates: % per hour from a least-squares fit over every stretch, each with its hours of data; "—" when there is too little data.</figcaption>
+</figure>
+
+<!-- 3. By setting -->
+<figure>
+<div class="screen">
+  <div class="hdr"><b>Battery</b><span>‹ Back</span></div>
+  <div class="tabs"><div>Now</div><div>Rates</div><div class="on">By setting</div><div>History</div><div>Compare</div></div>
+  <table>
+    <tr><th>Standby, %/h</th><th class="n" style="text-align:right">rate</th><th class="n" style="text-align:right">data</th></tr>
+    <tr><td>Wi-Fi Just in time</td><td class="n"><b>0.17</b></td><td class="n">180 h</td></tr>
+    <tr><td>Wi-Fi Always on</td><td class="n"><b>0.61</b></td><td class="n">32 h</td></tr>
+    <tr><td>Wi-Fi Off while reading</td><td class="n muted">—</td><td class="n muted">0.6 h</td></tr>
+  </table>
+  <table style="margin-top:10px">
+    <tr><th>Reading, %/h</th><th class="n" style="text-align:right">rate</th><th class="n" style="text-align:right">data</th></tr>
+    <tr><td>Text</td><td class="n"><b>3.9</b></td><td class="n">24 h</td></tr>
+    <tr><td>Comic</td><td class="n"><b>6.8</b></td><td class="n">5.5 h</td></tr>
+    <tr><td>Webtoon (continuous)</td><td class="n muted">—</td><td class="n muted">0.4 h</td></tr>
+    <tr><td>PDF</td><td class="n muted">—</td><td class="n muted">0 h</td></tr>
+    <tr><td>Frontlight on</td><td class="n"><b>5.2</b></td><td class="n">12 h</td></tr>
+    <tr><td>Frontlight off</td><td class="n"><b>3.4</b></td><td class="n">19 h</td></tr>
+    <tr><td>Wi-Fi Just in time</td><td class="n"><b>4.0</b></td><td class="n">27 h</td></tr>
+    <tr><td>Wi-Fi Always on</td><td class="n"><b>4.9</b></td><td class="n">3.6 h</td></tr>
+  </table>
+  <div class="foot"><span class="muted">"—": less than 1 h or 2% of data</span><span class="muted">Page 1 / 1</span></div>
+</div>
+<figcaption>By setting: the same rate under each Wi-Fi mode, content type and frontlight state, with the hours behind each number.</figcaption>
+</figure>
+
+<!-- 4. History -->
+<figure>
+<div class="screen">
+  <div class="hdr"><b>Battery</b><span>‹ Back</span></div>
+  <div class="tabs"><div>Now</div><div>Rates</div><div>By setting</div><div class="on">History</div><div>Compare</div></div>
+  <div class="sub" style="margin-bottom:4px">% used per day (bar), screen on, pages, full refreshes</div>
+  <div class="day"><b>Today</b><span><span class="bar" style="width:36px"></span></span><b>9%</b><small>1 h 12 min · 214 pages · 38 full</small></div>
+  <div class="day"><b>Thu 20</b><span><span class="bar" style="width:44px"></span></span><b>11%</b><small>1 h 35 min · 310 pages · 41 full</small></div>
+  <div class="day"><b>Wed 19</b><span><span class="bar" style="width:96px"></span></span><b>24%</b><small>3 h 40 min · 61 pages · 260 full · comic</small></div>
+  <div class="day"><b>Tue 18</b><span><span class="bar g" style="width:12px"></span></span><b>3%</b><small>12 min · 18 pages · charged</small></div>
+  <div class="day"><b>Mon 17</b><span><span class="bar" style="width:40px"></span></span><b>10%</b><small>1 h 28 min · 280 pages · 37 full</small></div>
+  <div class="day"><b>Sun 16</b><span><span class="bar" style="width:68px"></span></span><b>17%</b><small>2 h 50 min · 520 pages · 70 full</small></div>
+  <div class="day"><b>Sat 15</b><span><span class="bar" style="width:20px"></span></span><b>5%</b><small>34 min · 96 pages · 13 full</small></div>
+  <div class="foot"><span class="btn">‹ Newer</span><span class="muted">Page 1 / 8</span><span class="btn">Older ›</span></div>
+</div>
+<figcaption>History: seven days per page, with % used as a plain bar and that day's screen time, pages and full refreshes.</figcaption>
+</figure>
+
+<!-- 5. Compare -->
+<figure>
+<div class="screen">
+  <div class="hdr"><b>Battery</b><span>‹ Back</span></div>
+  <div class="tabs"><div>Now</div><div>Rates</div><div>By setting</div><div>History</div><div class="on">Compare</div></div>
+  <table>
+    <tr><th></th><th>This M8C<small>Android 14</small></th><th>Boox Go 7<small>imported 18 Nov</small></th><th>Xteink X4<small>firmware</small></th></tr>
+    <tr><td>Standby %/h</td><td><b>0.18</b><small>212 h</small></td><td><b>0.31</b><small>140 h</small></td><td><b>0.05</b><small>300 h</small></td></tr>
+    <tr><td>Reading text %/h</td><td><b>3.9</b><small>24 h</small></td><td><b>4.4</b><small>19 h</small></td><td><b>2.1</b><small>40 h</small></td></tr>
+    <tr><td>Reading comic %/h</td><td><b>6.8</b><small>5.5 h</small></td><td class="muted">—<small>0.3 h</small></td><td class="muted">n/a</td></tr>
+    <tr><td>Per 100 pages</td><td><b>1.3%</b></td><td><b>1.6%</b></td><td><b>0.4%</b></td></tr>
+    <tr><td>Capacity</td><td>3000 mAh<small>power profile</small></td><td>2300 mAh</td><td class="muted">—</td></tr>
+    <tr><td>Days of data</td><td>52</td><td>41</td><td>63</td></tr>
+  </table>
+  <div class="foot"><span class="btn">Import…</span><span class="btn">Remove…</span><span class="muted">1 / 1</span></div>
+</div>
+<figcaption>Compare: this device next to imported exports. Each cell shows its own hours; "n/a" means that device can't measure it.</figcaption>
+</figure>
+
+<!-- 6. Export -->
+<figure>
+<div class="screen">
+  <div class="hdr"><b>Export battery summary</b><span>‹ Back</span></div>
+  <div class="sub">A small file to compare with other readers. It holds:</div>
+  <ul class="inc">
+    <li>Model, Android version, battery capacity, app version</li>
+    <li>The rates and per-100 numbers above, with their hours</li>
+    <li>% used, screen time, pages and refreshes per day</li>
+  </ul>
+  <div class="sub">Never included: book titles or files, exact times, Wi-Fi names, accounts, or any device ID.</div>
+  <div class="stack" style="margin-top:12px">
+    <div class="btn solid">Share…</div>
+    <div class="btn">Save to Downloads</div>
+  </div>
+  <div class="sheet">
+    <b style="font-size:12px">Share with (Android's share sheet)</b>
+    <div class="apps"><div>Files</div><div>Email</div><div>Messages</div><div>Bluetooth</div></div>
+  </div>
+</div>
+<figcaption>Export: says exactly what's in the file before you share it or save orbit-battery-M8C-2026-11-21.json.</figcaption>
+</figure>
+
+<!-- 7. Import -->
+<figure>
+<div class="screen">
+  <div class="hdr"><b>Import a summary</b><span>‹ Back</span></div>
+  <div class="sub">Pick a file another reader exported (Android's file picker opens).</div>
+  <div class="card" style="margin-top:10px">
+    <div class="row"><span>File</span><b>orbit-battery-Go7-2026-11-18.json</b></div>
+    <div class="row"><span>Device</span><b>Onyx Boox Go 7 · Android 12</b></div>
+    <div class="row"><span>Data</span><b>41 days · 159 h</b></div>
+    <div class="row"><span>Format</span><b>orbit-battery-stats/1 ✓</b></div>
+  </div>
+  <div class="card hidden">
+    <div class="row"><span>Not usable: <i>notes.json</i><small>not a battery summary (no "schema")</small></span><b>✗</b></div>
+  </div>
+  <div class="stack" style="margin-top:auto">
+    <div class="btn solid">Add to Compare</div>
+    <div class="btn">Pick another file</div>
+  </div>
+</div>
+<figcaption>Import: checks the format, shows what the file covers, and adds it to Compare only (never merged into this device's numbers).</figcaption>
+</figure>
+
+</div>
+</body>
+</html>
