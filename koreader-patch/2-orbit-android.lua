@@ -2685,6 +2685,43 @@ end
 -- No "Turn on Wi-Fi?" prompt, in every Wi-Fi mode, when the companion can switch Wi-Fi:
 -- beforeWifiAction then calls turnOnWifiAndWaitForConnection (manager.lua:609-611), whose
 -- turnOnWifi goes to the companion. Without a usable companion, KOReader's stock behaviour stays.
+-- KOReader's turn_on path shows a centred "Connecting to Wi-Fi…" InfoMessage until the
+-- connection is up (frontend/ui/network/manager.lua:539-541, closed at :110-113 or replaced by
+-- "Error connecting to the network" at :88-92). It runs for every beforeWifiAction
+-- (manager.lua:605-619), e.g. the plugin's resume pull, which asks for the network 1 s after
+-- each wake (bookorbit.koplugin main.lua:1329-1337 -> requestProgressPull(true, ...) ->
+-- willRerunWhenConnected, bookorbit_progress_sync.lua:389). With Wi-Fi off after a sleep
+-- sync or "just in time", that flashed on every wake. With the companion, the same steps run
+-- without the message: ask for Wi-Fi (requestToTurnOnWifi, manager.lua:67-78), then the
+-- stock connectivity check with no widget (:82-133), which shows nothing on success and
+-- nothing on its 45 s give-up; a wake that can't connect still gets the patch's own banner.
+local stock_turnOnWifiAndWait = NetworkMgr.turnOnWifiAndWaitForConnection
+function NetworkMgr:turnOnWifiAndWaitForConnection(callback)
+    if not (S.wifi_via_companion and Companion.installed()) or not self.requestToTurnOnWifi
+            or not self.scheduleConnectivityCheck then
+        return stock_turnOnWifiAndWait(self, callback)
+    end
+    if self:isWifiOn() and self:isConnected() then
+        local fresh = not self.hasLeaseForCurrentNetwork or self:hasLeaseForCurrentNetwork()
+        if fresh then
+            if callback then callback() end
+            return
+        end
+        if self.releaseIP then self:releaseIP() end
+        self.lease_ssid = nil
+    end
+    log("wifi: KOReader needs the network; bringing it up quietly (no Connecting message) | mode", Shared.mode())
+    local status = self:requestToTurnOnWifi(function()
+        if self.pending_connectivity_check then self:unscheduleConnectivityCheck() end
+        self:scheduleConnectivityCheck(callback)
+    end)
+    if status == false then
+        log("wifi: quiet bring-up failed to start")
+        if self._abortWifiConnection then self:_abortWifiConnection() end
+        return false
+    end
+end
+
 local function silentWifiOn()
     if not (S.wifi_via_companion and Companion.installed()) then return end
     local cur = G_reader_settings:readSetting("wifi_enable_action")

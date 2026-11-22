@@ -140,6 +140,7 @@ installed. Meebook (Haoqing) is measured; Boox (Onyx) is an unverified stub.
 - The Meebook launcher (`com.haoqing.app.hqreader`) has "App freeze", which disables apps (`enabled=2`); the companion names it from its label and opens its Freeze management.
 - After the power button, KOReader keeps running with network for about 1 min 50 s, then the firmware force-stops the foreground app. Battery "Unrestricted" does not prevent it. Services (Tailscale) survive.
 - Every wake is therefore a fresh KOReader start.
+- No Android or firmware toast was seen when the companion switches Wi-Fi (`setWifiEnabled`; logcat shows none). The "Connecting to Wi-Fi…" message some wakes showed came from KOReader itself and is silenced since v0.2.3.
 
 ## License
 

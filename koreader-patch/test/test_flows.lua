@@ -133,6 +133,23 @@ local jni = { env = env, to_string = function(_, j) return j.str end,
 local NetworkMgr = { isConnected = function() return W.wifi end }
 function NetworkMgr:turnOnWifi(cb) W.settings_opened = true; if cb then cb() end end
 function NetworkMgr:turnOffWifi(cb) W.settings_opened = true; if cb then cb() end end
+-- Stock beforeWifiAction turn_on path: a centred "Connecting to Wi-Fi…" message (manager.lua:539).
+function NetworkMgr:turnOnWifiAndWaitForConnection(cb)
+    if self:isConnected() then if cb then cb() end return end
+    table.insert(W.shown, { text = "Connecting to Wi-Fi…" })
+    self:requestToTurnOnWifi(function() self:scheduleConnectivityCheck(cb) end)
+end
+function NetworkMgr:requestToTurnOnWifi(cb) return self:turnOnWifi(cb) end
+function NetworkMgr:beforeWifiAction(cb) return self:turnOnWifiAndWaitForConnection(cb) end -- turn_on
+function NetworkMgr:scheduleConnectivityCheck(cb, widget)
+    W.connectivity_widget = widget
+    local function poll(i)
+        if W.wifi then if cb then cb() end return end
+        if i < 180 then UIManager:scheduleIn(0.25, function() poll(i + 1) end) end
+    end
+    UIManager:scheduleIn(0.25, function() poll(1) end)
+end
+function NetworkMgr:unscheduleConnectivityCheck() end
 
 local store = {}
 G_reader_settings = {
@@ -634,6 +651,35 @@ test("frozen companion: says so, and a wake with Wi-Fi off gives up at once", fu
     W.companion, W.companion_frozen = true, false
     W.clock = W.clock + 100
     done()
+end)
+
+test("wifi: KOReader's own Wi-Fi requests (plugin resume pull) show no Connecting message", function()
+    W.simulate_companion = true
+    W.radio, W.wifi = false, false
+    W.shown, W.broadcasts = {}, {}
+    local ran = false
+    NetworkMgr:beforeWifiAction(function() ran = true end)
+    for _, w in ipairs(W.shown) do
+        ok(not (w.text or ""):find("Connecting", 1, true), "no Connecting message")
+    end
+    ok(lastBroadcast(".NET_UP"), "asked the companion")
+    ok(W.connectivity_widget == nil, "connectivity check without a widget")
+    run(2)
+    ok(ran, "the action ran once connected")
+    W.simulate_companion = false
+    W.radio, W.wifi = nil, true
+end)
+
+test("wifi: without the companion, KOReader's stock path (and message) is kept", function()
+    W.companion = false
+    W.clock = W.clock + 100 -- companion state cache
+    W.wifi = false
+    W.shown = {}
+    NetworkMgr:turnOnWifiAndWaitForConnection(function() end)
+    ok(W.shown[1] and W.shown[1].text == "Connecting to Wi-Fi…", "stock message")
+    W.companion, W.wifi = true, true
+    W.clock = W.clock + 100
+    run(1)
 end)
 
 test("wifi state: read from Settings.Global, never WifiManager (no ACCESS_WIFI_STATE)", function()
