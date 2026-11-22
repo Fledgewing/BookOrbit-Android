@@ -1,0 +1,4 @@
+[submodule "xteink/third_party/microlink"]
+	path = xteink/third_party/microlink
+	url = https://github.com/Fledgewing/microlink
+	branch = crossink
