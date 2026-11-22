@@ -198,7 +198,8 @@ local preload = {
         end
         -- GET: the self-update (W.web: url -> body) or the companion status.
         table.insert(W.fetched, t.url)
-        local body = W.web[t.url]
+        W.last_url = t.url
+        local body = W.web[t.url] or W.web[(t.url:gsub("%?.*$", ""))]
         if body == nil then
             if t.url:find("127.0.0.1", 1, true) and W.server_code then return 1, W.server_code, {} end
             return 1, 404, {}
@@ -732,6 +733,31 @@ test("stats: page turns and refreshes go to the companion in batches, and on sus
     b = lastBroadcast(".STATS")
     ok(b.extras.reason == "resume" and b.extras.open == "1", "resume announces the book")
     run(5)
+end)
+
+test("restart command: save, ask the companion to relaunch, then quit (Android can't restart itself)", function()
+    W.broadcasts = {}
+    local ui, m = newUI(true)
+    run(5)
+    local saved, quit = false, nil
+    ui.saveSettings = function() saved = true end
+    UIManager.quit = function(_, code) quit = code or 0 end
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = "restart"
+    ok(m:checkCommand("resume") == true, "command handled")
+    ok(saved, "book settings saved first")
+    ok(lastBroadcast(".RELAUNCH") and lastBroadcast(".RELAUNCH").extras.reason == "restart", "RELAUNCH sent")
+    ok(quit == nil, "quits only after the broadcast went out")
+    run(1)
+    ok(quit == 0, "quit (Device canRestart is no on Android)")
+    UIManager.quit = nil
+end)
+
+test("the status ping tells the companion which patch is running", function()
+    local _, m = newUI(false)
+    W.last_url = nil
+    m:onResume()
+    run(2)
+    ok(W.last_url and W.last_url:find("/status?patch_version=", 1, true), "url " .. tostring(W.last_url))
 end)
 
 test("broadcasts carry the patch version (for the companion's setup row)", function()

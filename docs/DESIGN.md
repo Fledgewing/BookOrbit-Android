@@ -165,6 +165,15 @@ rows when the service starts, after an update, and when the status or launcher p
 - **Delivery:** the prompt on the status page, a quiet notification, a one-line banner on the
   launcher page, and `setup_needed` in `/status` for the patch's menu status. Nothing shows
   when all is done; nothing pops up in a book.
+- **In-app fixes** (the patch install opens no system page, so no `onResume` follows) re-check
+  the rows when they finish. A done row leaves the prompt; with none left it says "All set"
+  and closes. The Fix button reads "Installing…" and does nothing while an install runs.
+- **Patch row** (`PatchRow`): the installed file's `PATCH_VERSION` decides "outdated"; when the
+  file is current but the running patch (its `patch_version` in broadcasts and the `/status`
+  ping) is older, the row is "Restart KOReader to finish". That is pending, not a "needs you"
+  item (not counted, no notification), with a "Restart KOReader" button (COMMAND `restart`)
+  when the running patch knows it, else the recent-apps hint. It clears when the new patch
+  reports in.
 - **After an update:** a one-screen "What's new" from a short per-version list in the app
   (`WhatsNew`), with any needed steps.
 

@@ -234,6 +234,12 @@ class OrbitService : Service() {
         val proto = intent.getStringExtra("proto")
         if (proto != null && proto != Contract.PROTOCOL) OLog.w("protocol $proto from the patch; this companion speaks ${Contract.PROTOCOL}")
         if (action == Contract.STATS) return stats.onStats(intent)
+        if (action == Contract.RELAUNCH) {
+            // The patch saved and is quitting for a restart: start KOReader again once it's gone.
+            OLog.i("koreader restart: relaunching in 2.5 s (${intent.getStringExtra("reason") ?: "-"})")
+            main.postDelayed({ Koreader.start(this, "restart after patch update", null) }, 2_500)
+            return
+        }
         if (action == Contract.NET_UP || action == Contract.NET_DONE || action == Contract.SLEEP_NOW) {
             stats.record(Contract.shortName(action).lowercase())
         }
@@ -573,6 +579,8 @@ class OrbitService : Service() {
                 if (ok) {
                     prefs.patchSeenAt = System.currentTimeMillis()
                     prefs.patchSeenVia = "status"
+                    // /status?patch_version=X (patch 0.3.1+): the running patch's version.
+                    Regex("[?&]patch_version=([0-9A-Za-z.+-]+)").find(parts[1])?.let { m -> prefs.patchVersionSeen = m.groupValues[1] }
                 }
                 OLog.i("status request ${parts.getOrNull(1)} -> ${if (ok) 200 else 404} in ${OLog.since(t0)} ms")
             }

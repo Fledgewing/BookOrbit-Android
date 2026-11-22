@@ -43,7 +43,8 @@ object Attention {
     fun evaluate(ctx: Context, why: String, notify: Boolean = true): Eval {
         val p = Prefs(ctx)
         val checks = Setup.checks(ctx).associateBy { SetupAttention.idOf(it.label) }
-        val r = SetupAttention.evaluate(checks.map { (id, c) -> id to c.done }, state(p), BuildConfig.VERSION_CODE)
+        val pending = checks.filterValues { it.pending }.keys
+        val r = SetupAttention.evaluate(checks.map { (id, c) -> id to c.done }, state(p), BuildConfig.VERSION_CODE, pending)
         save(p, r.next)
         p.setupNeeded = r.needed.size
         if (r.needed.isNotEmpty() || r.regressed.isNotEmpty()) {
@@ -125,14 +126,17 @@ object Attention {
 /** The prompt: what's new after an update, then only the rows that need the user. */
 class AttentionActivity : EinkActivity() {
     private var eval: Attention.Eval? = null
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-    }
+    /** Something was fixed from inside this page: when nothing is left, say "All set" before closing. */
+    private var fixedHere = false
 
     override fun onResume() {
         super.onResume()
         render()
+    }
+
+    /** An in-app fix finished (e.g. the patch install): look again. */
+    override fun refresh() {
+        if (!isFinishing) render()
     }
 
     private fun render() {
@@ -140,42 +144,64 @@ class AttentionActivity : EinkActivity() {
         eval = e
         val news = Attention.whatsNew(this)
         val needed = e.result.needed
-        if (needed.isEmpty() && news.isEmpty()) {
-            finish()
+        val pending = e.result.pending
+        if (news.isEmpty() && (needed.isEmpty() && (pending.isEmpty() || !fixedHere))) {
+            if (fixedHere) {
+                val root = page()
+                root.addView(Ui.header(this, "All set"))
+                root.addView(Ui.text(this, "Every setup step is done.", 20f))
+                root.postDelayed({ finish() }, 1_500)
+            } else {
+                finish()
+            }
             return
         }
         val root = page(scroll = true)
-        val title = if (needed.isNotEmpty()) "Setup needs you" else "What's new"
+        val title = if (needed.isNotEmpty() || pending.isNotEmpty()) "Setup needs you" else "What's new"
         root.addView(Ui.header(this, title, "Close") { closeOut() })
         news.forEach { (v, lines) ->
             root.addView(Ui.text(this, "New in $v", 20f, bold = true).apply { setPadding(0, Ui.dp(this@AttentionActivity, 8), 0, Ui.dp(this@AttentionActivity, 4)) })
             lines.forEach { root.addView(Ui.text(this, "• $it", 18f)) }
         }
-        if (needed.isNotEmpty()) {
+        if (needed.isNotEmpty() || pending.isNotEmpty()) {
             root.addView(Ui.gap(this, 12))
-            needed.forEach { id ->
+            (needed + pending).forEach { id ->
                 val c = e.checks[id] ?: return@forEach
                 val card = Ui.card(this)
                 val label = c.label + if (id in e.result.regressed) " (changed since last time)" else ""
                 card.addView(Ui.text(this, label, 19f, bold = true))
                 card.addView(Ui.text(this, c.detail, 16f, color = Ui.MID))
                 card.addView(Ui.gap(this, 6))
-                card.addView(Ui.weightRow(
-                    this,
-                    Ui.button(this, "Fix", solid = true, heightDp = 56, sp = 19f) { c.open(this) },
-                    Ui.button(this, "Don't ask about this", heightDp = 56, sp = 16f) {
+                val buttons = mutableListOf<android.view.View>()
+                c.action?.let { label ->
+                    // "Installing…" while the patch install runs: no second install.
+                    val busy = PatchInstaller.busy && id == "patch"
+                    buttons += Ui.button(this, label, solid = !busy, heightDp = 56, sp = 19f) {
+                        if (busy) return@button
+                        fixedHere = true
+                        c.open(this)
+                        render()
+                    }
+                }
+                if (id in needed) {
+                    buttons += Ui.button(this, "Don't ask about this", heightDp = 56, sp = 16f) {
                         Attention.ignore(this, id)
                         render()
-                    },
-                ))
+                    }
+                }
+                if (buttons.isNotEmpty()) card.addView(Ui.weightRow(this, *buttons.toTypedArray()))
                 root.addView(card)
                 root.addView(Ui.gap(this, 8))
             }
-            root.addView(Ui.button(this, "Later") {
-                Attention.later(this, e)
-                finish()
-            })
-            root.addView(Ui.text(this, "Later: not again until the next update or until a step stops working. Skipped steps can be asked again in Settings.", 15f, color = Ui.MID))
+            if (needed.isNotEmpty()) {
+                root.addView(Ui.button(this, "Later") {
+                    Attention.later(this, e)
+                    finish()
+                })
+                root.addView(Ui.text(this, "Later: not again until the next update or until a step stops working. Skipped steps can be asked again in Settings.", 15f, color = Ui.MID))
+            } else {
+                root.addView(Ui.button(this, "OK") { closeOut() })
+            }
         } else {
             root.addView(Ui.gap(this, 12))
             root.addView(Ui.button(this, "OK") { closeOut() })

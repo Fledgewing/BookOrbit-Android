@@ -915,6 +915,7 @@ Companion.ACTION = {
     SHOW_APPS = Companion.PACKAGE .. ".action.SHOW_APPS",
     SHOW_LAUNCHER = Companion.PACKAGE .. ".action.SHOW_LAUNCHER",
     STATS = Companion.PACKAGE .. ".action.STATS",
+    RELAUNCH = Companion.PACKAGE .. ".action.RELAUNCH",
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
@@ -1053,7 +1054,9 @@ function Companion.status(timeout)
     local ltn12 = require("ltn12")
     local body = {}
     socketutil:set_timeout(timeout or 1, (timeout or 1) + 1)
-    local code = socket.skip(1, http.request{ url = Companion.STATUS_URL, sink = ltn12.sink.table(body) })
+    -- patch_version tells the companion which patch is running (its "restart to finish" row).
+    local url = Companion.STATUS_URL .. "?patch_version=" .. PATCH_VERSION
+    local code = socket.skip(1, http.request{ url = url, sink = ltn12.sink.table(body) })
     socketutil:reset_timeout()
     if code ~= 200 then return nil end
     local okj, json = pcall(require, "json")
@@ -1913,8 +1916,31 @@ function OrbitAndroid:checkCommand(source)
         self:smartHome(source, from or nil, cmd == "home" and "bookorbit" or "smart")
         return true
     end
+    if cmd == "restart" then
+        self:restartForCompanion(source)
+        return true
+    end
     log("unknown command ignored:", cmd)
     return false
+end
+
+-- COMMAND=restart (docs/INTERFACE.md): the companion installed a newer patch file; a restart
+-- loads it. KOReader's own restart (UIManager:restartKOReader, frontend/ui/uimanager.lua:1766,
+-- quit(85)) relies on a launcher script that Android lacks (Device canRestart = no,
+-- frontend/device/android/device.lua:86), so: save like a kill would leave it (the open book
+-- stays open_book_at_exit, so the cold start reopens it), ask the companion to start KOReader
+-- again (RELAUNCH), and quit (Android Device:exit finishes the activity, device.lua:492-497).
+function OrbitAndroid:restartForCompanion(source)
+    log("restart: requested by the companion (" .. tostring(source) .. "); saving, then quitting so the new patch loads")
+    local ui = liveUI()
+    if ui and ui.document and ui.saveSettings then pcall(ui.saveSettings, ui) end
+    saveSettings()
+    pcall(function() G_reader_settings:flush() end)
+    Stats.send("restart", nil, false)
+    Companion.send(Companion.ACTION.RELAUNCH, { reason = "restart" })
+    UIManager:scheduleIn(0.5, function()
+        if Device.canRestart and Device:canRestart() then UIManager:restartKOReader() else UIManager:quit() end
+    end)
 end
 
 -- The plugin's BookOrbit home is the top widget: its catalog widget (main.lua:1207-1230) is

@@ -316,6 +316,8 @@ object HomeCommands {
     const val HOME = "home"
     const val HOME_SMART = "home_smart"
     const val FROM_OTHER_APP = "other_app"
+    /** Save and quit, then the companion starts KOReader again (patch 0.3.1+, docs/INTERFACE.md). */
+    const val RESTART = "restart"
 
     fun forPress(button: HomeButton): String = if (button == HomeButton.SMART) HOME_SMART else HOME
 
@@ -386,6 +388,33 @@ object NetErrors {
 }
 
 /** The KOReader patch file the companion installs (Setup "KOReader patch installed"). */
+/**
+ * The Setup row "KOReader patch installed": the file decides "outdated"; the version the
+ * running patch reports (broadcasts, /status ping) decides "restart to finish".
+ */
+enum class PatchRowState { MISSING, OUTDATED, RESTART, CURRENT }
+
+object PatchRow {
+    /** The first patch that obeys COMMAND=restart (docs/INTERFACE.md). */
+    const val RESTART_COMMAND_SINCE = "0.3.1"
+
+    /** file: PATCH_VERSION in koreader/patches (null: missing or unreadable). running: last reported. */
+    fun state(file: String?, running: String?, app: String): PatchRowState {
+        if (file == null && running == null) return PatchRowState.MISSING
+        val have = file ?: running
+        if (PatchFile.needsInstall(have, app)) return PatchRowState.OUTDATED
+        val f = file?.let { Version.parse(it) } ?: return PatchRowState.CURRENT
+        val r = running?.let { Version.parse(it) } ?: return PatchRowState.CURRENT
+        return if (r < f) PatchRowState.RESTART else PatchRowState.CURRENT
+    }
+
+    /** The running patch can restart KOReader on the companion's command. */
+    fun canRestart(running: String?): Boolean {
+        val r = running?.let { Version.parse(it) } ?: return false
+        return r >= Version.parse(RESTART_COMMAND_SINCE)!!
+    }
+}
+
 object PatchFile {
     const val NAME = "2-orbit-android.lua"
     private val VERSION = Regex("""(?m)^local PATCH_VERSION = "([^"]+)"""")
@@ -433,17 +462,25 @@ object SetupAttention {
     )
 
     /** needed: rows to fix (not done, not ignored); regressed: of those, done last time; show: prompt now. */
-    data class Result(val needed: List<String>, val regressed: Set<String>, val show: Boolean, val next: State)
+    data class Result(val needed: List<String>, val regressed: Set<String>, val show: Boolean, val next: State, val pending: List<String> = emptyList())
 
-    fun evaluate(rows: List<Pair<String, Boolean>>, st: State, versionCode: Int): Result {
-        val done = rows.filter { it.second }.map { it.first }.toSet()
-        val needed = rows.filter { !it.second && it.first !in INFO_ONLY && it.first !in st.ignored }.map { it.first }
+    /** After an in-app fix finishes: close the prompt ("All set") when nothing is left to show. */
+    fun allSet(r: Result): Boolean = r.needed.isEmpty() && r.pending.isEmpty()
+
+    /**
+     * [pending]: rows that are fine but wait on something outside the app (e.g. "Restart
+     * KOReader to finish"): counted as done, never a "needs you", but listed in an open prompt.
+     */
+    fun evaluate(rows: List<Pair<String, Boolean>>, st: State, versionCode: Int, pending: Set<String> = emptySet()): Result {
+        val done = rows.filter { it.second || it.first in pending }.map { it.first }.toSet()
+        val needed = rows.filter { it.first !in done && it.first !in INFO_ONLY && it.first !in st.ignored }.map { it.first }
+        val waiting = rows.map { it.first }.filter { it in pending && it !in st.ignored }
         val regressed = needed.filter { it in st.lastDone }.toSet()
         // A row fixed since the snooze leaves it; if it breaks again it is new to the snooze.
         val snoozeLeft = st.snoozeNotDone - done
         val snoozed = st.snoozeCode == versionCode && snoozeLeft.containsAll(needed)
         val next = st.copy(snoozeNotDone = snoozeLeft, lastDone = done)
-        return Result(needed, regressed, needed.isNotEmpty() && !snoozed, next)
+        return Result(needed, regressed, needed.isNotEmpty() && !snoozed, next, waiting)
     }
 
     /** "Later": quiet until the next update or a regression. */
@@ -470,6 +507,9 @@ object WhatsNew {
         "0.3.0" to listOf(
             "Battery: hours left, % per hour in standby and reading, by setting and content, and a daily history (Orbit Companion › Battery).",
             "Export a battery summary and compare readers side by side.",
+        ),
+        "0.3.1" to listOf(
+            "Setup: after installing the KOReader patch, the step updates at once; if KOReader still runs the old patch, a \"Restart KOReader\" button finishes it.",
         ),
     )
 

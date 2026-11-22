@@ -79,6 +79,24 @@ abstract class EinkActivity : Activity() {
     }
 
     /** [scroll]: long pages (settings, setup) scroll; the rest are fixed, one e-ink redraw. */
+    /** Re-render after an in-app fix finished (no onResume follows one). */
+    open fun refresh() = Unit
+
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        @Suppress("DEPRECATION")
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != PatchInstaller.REQUEST_CODE) return
+        val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+        OLog.i("patch install: storage permission ${if (granted) "granted" else "denied"}")
+        if (granted) {
+            PatchInstaller.install(this) { refresh() }
+        } else {
+            Prefs(this).patchInstallStatus = "no storage permission: ${PatchInstaller.manualHint()}"
+        }
+        refresh()
+    }
+
     fun page(scroll: Boolean = false): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(Ui.PAPER)

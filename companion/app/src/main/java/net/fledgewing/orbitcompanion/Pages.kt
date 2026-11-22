@@ -374,7 +374,18 @@ class SettingsActivity : EinkActivity() {
 }
 
 /** One checklist row (mockup 5). */
-class Check(val label: String, val done: Boolean, val detail: String, val open: (EinkActivity) -> Unit)
+/**
+ * A Setup row. pending: fine but waiting on something outside the app (shown, never counted).
+ * action: the prompt's button label, null = no button (the detail says what to do).
+ */
+class Check(
+    val label: String,
+    val done: Boolean,
+    val detail: String,
+    val pending: Boolean = false,
+    val action: String? = "Fix",
+    val open: (EinkActivity) -> Unit,
+)
 
 object Setup {
     private const val BATTERY_DETAIL = "android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL"
@@ -475,20 +486,39 @@ object Setup {
 
         // One-tap patch install (PatchInstaller): from this app's release, SHA-256 checked.
         // The file when readable (storage permission), else what the running patch reports.
-        val patchV = PatchInstaller.installedVersion() ?: prefs.patchVersionSeen.takeIf { it.isNotEmpty() }
-        val wantPatch = PatchFile.needsInstall(patchV, BuildConfig.VERSION_NAME)
+        // The file decides "outdated"; the version the running patch reports decides "restart".
+        val fileV = PatchInstaller.installedVersion()
+        val runningV = prefs.patchVersionSeen.takeIf { it.isNotEmpty() }
+        val patchState = PatchRow.state(fileV, runningV, BuildConfig.VERSION_NAME)
+        val patchV = fileV ?: runningV
         list.add(
             Check(
                 "KOReader patch installed${patchV?.let { " (v$it)" } ?: ""}",
-                patchV != null && !wantPatch,
+                patchState == PatchRowState.CURRENT || patchState == PatchRowState.RESTART,
                 when {
                     PatchInstaller.busy -> "installing…"
-                    patchV == null && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"
-                    patchV == null -> "tap to install it into koreader/patches/"
-                    wantPatch -> "older than this app's release (v${BuildConfig.VERSION_NAME}) · tap to update"
+                    patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) "Restart KOReader to finish (KOReader still runs v$runningV)"
+                        else "Restart KOReader to finish: close KOReader from recent apps and reopen it (it still runs v$runningV)"
+                    patchState == PatchRowState.MISSING && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"
+                    patchState == PatchRowState.MISSING -> "tap to install it into koreader/patches/"
+                    patchState == PatchRowState.OUTDATED -> "older than this app's release (v${BuildConfig.VERSION_NAME}) · tap to update"
                     else -> "up to date${prefs.patchInstallStatus.takeIf { it.startsWith("installed") }?.let { " · $it" } ?: ""}"
                 },
-            ) { a -> PatchInstaller.installFrom(a) { (a as? SetupActivity)?.refresh() } },
+                pending = patchState == PatchRowState.RESTART,
+                action = when {
+                    PatchInstaller.busy -> "Installing…"
+                    patchState != PatchRowState.RESTART -> "Fix"
+                    PatchRow.canRestart(runningV) -> "Restart KOReader"
+                    else -> null
+                },
+            ) { a ->
+                when {
+                    PatchInstaller.busy -> Unit
+                    patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) Koreader.restart(a, "setup: new patch installed")
+                    else -> PatchInstaller.installFrom(a) { a.refresh() }
+                }
+                a.refresh()
+            },
         )
 
         val seen = prefs.patchSeenAt
@@ -544,22 +574,8 @@ class SetupActivity : EinkActivity() {
         super.onDestroy()
     }
 
-    fun refresh() {
+    override fun refresh() {
         if (!isFinishing) render()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != PatchInstaller.REQUEST_CODE) return
-        val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
-        OLog.i("patch install: storage permission ${if (granted) "granted" else "denied"}")
-        if (granted) {
-            PatchInstaller.install(this) { refresh() }
-        } else {
-            Prefs(this).patchInstallStatus = "no storage permission: ${PatchInstaller.manualHint()}"
-        }
-        render()
     }
 
     fun runWifiTest() {

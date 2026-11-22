@@ -29,6 +29,7 @@ object Contract {
     const val SHOW_LAUNCHER = "$PACKAGE.action.SHOW_LAUNCHER"
     const val SETTINGS = "$PACKAGE.action.SETTINGS"
     const val STATS = "$PACKAGE.action.STATS"
+    const val RELAUNCH = "$PACKAGE.action.RELAUNCH"
     const val EXTRA_FROM = "$PACKAGE.extra.FROM"
     const val EXTRA_COMMAND = "$PACKAGE.extra.COMMAND"
     const val PATCH_SENDER = "org.koreader.launcher"
@@ -352,6 +353,9 @@ object Koreader {
 
     /** INTERFACE "go home": explicit MainActivity, ACTION_MAIN, NEW_TASK, COMMAND per the Home button setting. */
     fun goHome(ctx: Context, why: String): Boolean = start(ctx, why, HomeCommands.forPress(Prefs(ctx).homeButton), HomeCommands.FROM_OTHER_APP)
+
+    /** INTERFACE COMMAND=restart: the patch saves, quits, and asks us to start KOReader again (RELAUNCH). */
+    fun restart(ctx: Context, why: String): Boolean = start(ctx, why, HomeCommands.RESTART)
 
     fun start(ctx: Context, why: String, command: String?, from: String? = null): Boolean {
         val t0 = SystemClock.elapsedRealtime()

@@ -474,3 +474,54 @@ class SetupAttentionTest {
         assertTrue(WhatsNew.since(204, 204, notes).isEmpty())
     }
 }
+
+class PatchRowTest {
+    @Test
+    fun fileDecidesOutdatedRunningDecidesRestart() {
+        assertEquals(PatchRowState.MISSING, PatchRow.state(null, null, "0.3.1"))
+        assertEquals(PatchRowState.OUTDATED, PatchRow.state("0.3.0", "0.3.0", "0.3.1"))
+        // The bug: the file is new, KOReader still runs the old patch -> not "Fix" again.
+        assertEquals(PatchRowState.RESTART, PatchRow.state("0.3.1", "0.3.0", "0.3.1"))
+        assertEquals(PatchRowState.CURRENT, PatchRow.state("0.3.1", "0.3.1", "0.3.1"))
+        assertEquals("running unknown", PatchRowState.CURRENT, PatchRow.state("0.3.1", null, "0.3.1"))
+        assertEquals("file unreadable: the running version stands in", PatchRowState.CURRENT, PatchRow.state(null, "0.3.1", "0.3.1"))
+        assertEquals(PatchRowState.OUTDATED, PatchRow.state(null, "0.2.4", "0.3.1"))
+    }
+
+    @Test
+    fun restartCommandOnlyFromPatchesThatKnowIt() {
+        assertFalse(PatchRow.canRestart("0.3.0"))
+        assertFalse(PatchRow.canRestart(null))
+        assertTrue(PatchRow.canRestart("0.3.1"))
+        assertTrue(PatchRow.canRestart("0.4.0"))
+    }
+
+    @Test
+    fun restartIsPendingNotNeedsYou() {
+        val st = SetupAttention.State()
+        val r = SetupAttention.evaluate(listOf("home" to true, "patch" to true), st, 301, pending = setOf("patch"))
+        assertTrue(r.needed.isEmpty())
+        assertFalse("no prompt or notification for a restart", r.show)
+        assertEquals(listOf("patch"), r.pending)
+        assertFalse(SetupAttention.allSet(r))
+    }
+
+    @Test
+    fun reEvaluatingAfterAnInAppFix() {
+        // Prompt open with the outdated patch; Fix installs it (no onResume follows).
+        var r = SetupAttention.evaluate(listOf("home" to true, "patch" to false), SetupAttention.State(), 301)
+        assertEquals(listOf("patch"), r.needed)
+        assertTrue(r.show)
+        // Install finished, KOReader still runs the old patch: the row turns into "restart", not "Fix".
+        r = SetupAttention.evaluate(listOf("home" to true, "patch" to true), r.next, 301, pending = setOf("patch"))
+        assertTrue(r.needed.isEmpty())
+        assertEquals(listOf("patch"), r.pending)
+        assertFalse(SetupAttention.allSet(r))
+        // The new patch reported in: nothing left, the prompt closes with "All set".
+        r = SetupAttention.evaluate(listOf("home" to true, "patch" to true), r.next, 301)
+        assertTrue(SetupAttention.allSet(r))
+        // Restart pending -> outdated again counts as a regression.
+        r = SetupAttention.evaluate(listOf("home" to true, "patch" to false), r.next, 301)
+        assertEquals(setOf("patch"), r.regressed)
+    }
+}

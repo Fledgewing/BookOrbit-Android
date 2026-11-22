@@ -25,6 +25,7 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `WIFI_OFF` | `reason`, `auto` (`"1"`/`"0"`), `mode` | Turn Wi-Fi off. `auto = "1"` (the patch's automatic off: idle, restore) is refused when the owner is `manual`, and waits while the companion downloads an update. `auto = "0"`: KOReader's own "Wi-Fi off" toggle, or "Off while reading" when a book opens. |
 | `SETTINGS` | `wifi_mode` (`always_on`/`off_reading`/`jit`), `wifi_idle_min` (`1`/`2`/`5`/`10`), `home_button` (`smart`/`bookorbit`), `settings_at` (ms since epoch) | Store the shared settings when `settings_at` is newer than its own. |
 | `STATS` | `seq`, `period_s`, `pages`, `full`, `partial`, `content` (`text`/`comic`/`webtoon`/`pdf`/`none`), `open` (`1`/`0`), `reading_min`, `wifi_mode`, `reading_schedule`, `reason` | Battery stats batch: store the counts with the current state; a book is "in front" while `open=1` (at most 6 min). Sent every 5 min with a book open, on open/Resume/Suspend/close, never per page (docs/STATS-DESIGN.md). |
+| `RELAUNCH` | `reason` (`restart`) | The patch is quitting for a restart (COMMAND `restart`): start KOReader again after 2.5 s. Patch 0.3.1+. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
 
 `reason` values: `start` (KOReader just started; on firmwares that stop KOReader after sleep,
@@ -111,9 +112,21 @@ app some time after the power button), the companion starts KOReader again: with
 `home_smart` + `FROM = "other_app"` in smart mode (the patch reopens the book KOReader was
 killed with), without an extra otherwise; with the screen off it waits for the next screen-on.
 
+### `restart` (patch 0.3.1+)
+
+`COMMAND = "restart"`: the companion installed a newer patch file and the running patch is
+older (Setup › "Restart KOReader to finish"). The patch saves the open book's settings (it stays
+the book to reopen), sends `RELAUNCH`, and quits. KOReader's own restart
+(`UIManager:restartKOReader`, frontend/ui/uimanager.lua:1766) needs a launcher script that
+Android lacks (`canRestart = no`, frontend/device/android/device.lua:86), so the companion
+starts it again. An older running patch ignores the command; the companion then says "close
+KOReader from recent apps and reopen it" instead of showing the button.
+
 ## Optional: companion status over loopback
 
-`GET http://127.0.0.1:47913/status` → `200` with JSON, for example:
+`GET http://127.0.0.1:47913/status?patch_version=0.3.1` → `200` with JSON. The query
+(patch 0.3.1+) tells the companion which patch is running, like `patch_version` in the
+broadcasts. For example:
 
 ```json
 { "proto": "1", "version": "0.2.0", "wifi": true, "wifi_enabled": true, "wifi_owner": "auto",
