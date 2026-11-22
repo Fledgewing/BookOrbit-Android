@@ -530,6 +530,28 @@ object UpdateFlow {
     }
 
     /**
+     * KOReader runs an older patch than the file on disk, however the file got there (v0.5.4:
+     * M8C 11-22 ran 0.4.6 with 0.5.3 installed, by an earlier companion, so no restart was
+     * pending). One per (running, file) pair per process: [StaleRestart] keeps the pairs.
+     * [book]: a book is open (null: unknown); [quiet]: the trigger can't interrupt reading
+     * (screen off, Home pressed), so an unknown book state may restart there.
+     */
+    fun staleRestart(running: String?, file: String?, book: Boolean?, quiet: Boolean, sent: Set<String>): Restart {
+        val r = running?.let { Version.parse(it) } ?: return Restart.NONE
+        val f = file?.let { Version.parse(it) } ?: return Restart.NONE
+        if (f <= r || pairKey(running, file) in sent) return Restart.NONE
+        return when {
+            book == true -> Restart.WAIT
+            book == false || quiet -> Restart.NOW
+            else -> Restart.WAIT
+        }
+    }
+
+    fun pairKey(running: String, file: String) = "$running>$file"
+
+    fun staleLine(running: String, file: String) = "restart: KOReader runs $running, file has $file"
+
+    /**
      * KOReader's book state from a STATS broadcast: reason "suspend" always says open=0 (not being
      * read), so it doesn't count; null means no change.
      */
@@ -543,6 +565,26 @@ object UpdateFlow {
     /** The manual fallback, with the reason. */
     fun manualLine(app: String, reason: String) =
         "Updated to v$app, but the KOReader patch wasn't updated: $reason. Setup > KOReader patch"
+}
+
+/** The pairs a stale-patch restart was sent (or a wait logged) for, in this process. */
+class StaleRestart {
+    private val sent = mutableSetOf<String>()
+    private val waited = mutableSetOf<String>()
+
+    /** The decision; NOW is recorded so the same pair never restarts again (no loop). [log] gets a line once per pair and outcome. */
+    fun decide(running: String?, file: String?, book: Boolean?, quiet: Boolean, log: (String) -> Unit = {}): UpdateFlow.Restart {
+        val d = UpdateFlow.staleRestart(running, file, book, quiet, sent)
+        if (d == UpdateFlow.Restart.NONE || running == null || file == null) return d
+        val key = UpdateFlow.pairKey(running, file)
+        if (d == UpdateFlow.Restart.NOW) {
+            sent += key
+            log(UpdateFlow.staleLine(running, file))
+        } else if (waited.add(key)) {
+            log(UpdateFlow.staleLine(running, file) + "; ${if (book == true) "a book is open" else "book state unknown"}, after it")
+        }
+        return d
+    }
 }
 
 object PatchFile {
@@ -722,6 +764,10 @@ object WhatsNew {
         "0.5.3" to listOf(
             "Setup's tips (Family Link, Play Protect, a launcher that freezes apps) have \"Got it\" and never count as steps; \"Show hidden tips\" brings them back.",
             "With a Settings PIN, a guarded app that pops up by itself while you read (such as the Play Store) is sent back instead of showing the keypad. The keypad shows when you open the app.",
+        ),
+        "0.5.4" to listOf(
+            "KOReader restarts to load a newer patch whenever it runs an older one, however the patch got there (after your book, if one is open).",
+            "Home on BookOrbit's second page (or any list past its first page) goes to page 1 first; Home on page 1 goes to the launcher.",
         ),
     )
 

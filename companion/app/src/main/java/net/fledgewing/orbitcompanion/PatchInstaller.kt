@@ -138,12 +138,12 @@ object PatchInstaller {
      * has no book open (or isn't running), else on the book's close, the next Home or screen-off.
      * The patch (0.5.0+) also restarts itself for a newer file; the two are one restart.
      */
-    fun follow(ctx: Context, why: String): Boolean {
+    fun follow(ctx: Context, why: String, quiet: Boolean = true): Boolean {
         val p = Prefs(ctx)
         val want = p.patchAwaitVersion
         val book = when (p.koreaderBook) { "1" -> true; "0" -> false; else -> null }
         return when (UpdateFlow.restart(want, p.patchVersionSeen.ifEmpty { null }, p.patchRestartSentFor, book)) {
-            UpdateFlow.Restart.NONE -> false
+            UpdateFlow.Restart.NONE -> followStale(ctx, p, book, why, quiet)
             UpdateFlow.Restart.WAIT -> {
                 log("v$want installed; KOReader has a book open: restarting after it ($why)")
                 false
@@ -155,6 +155,35 @@ object PatchInstaller {
                 true
             }
         }
+    }
+
+    private val stale = StaleRestart()
+    private var cachedKey: Pair<Long, Long>? = null
+    private var cachedVersion: String? = null
+
+    /** [installedVersion], read again only when the file changed (it is checked on every /status). */
+    @Synchronized
+    fun installedVersionCached(): String? {
+        val f = file()
+        val key = try { f.lastModified() to f.length() } catch (e: Exception) { null }
+        if (key == null || key.second == 0L) return installedVersion()
+        if (key != cachedKey) {
+            cachedVersion = installedVersion()
+            cachedKey = key
+        }
+        return cachedVersion
+    }
+
+    /**
+     * No install pending, but KOReader runs an older patch than the file (v0.5.4): restart once
+     * per (running, file) pair in this process; with a book open, after it (UpdateFlow.staleRestart).
+     */
+    private fun followStale(ctx: Context, p: Prefs, book: Boolean?, why: String, quiet: Boolean): Boolean {
+        val running = p.patchVersionSeen.ifEmpty { null } ?: return false
+        val file = installedVersionCached() ?: return false
+        if (stale.decide(running, file, book, quiet) { OLog.i("$it ($why)") } != UpdateFlow.Restart.NOW) return false
+        Koreader.restart(ctx.applicationContext, "patch v$file on disk, v$running running ($why)")
+        return true
     }
 
     /** The running patch reported its version: the restart after an install is done. */

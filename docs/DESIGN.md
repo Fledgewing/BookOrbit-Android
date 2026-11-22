@@ -146,6 +146,9 @@ The patch decides; `WifiPlan` (pure, `test/test_logic.lua`) holds the state mach
 INTERFACE.md "go home"): reader showing a book → BookOrbit home, opened over the book (the
 plugin's public action; the book stays open); BookOrbit home on top → the companion's
 launcher page (both modes); any other BookOrbit screen (v0.4.9) → BookOrbit's main page;
+a BookOrbit page past its first with nothing over it (v0.5.4: the dashboard's page 2, a list's
+page 3) → its page 1 first, by the plugin's own paging (`boardPage`/`boardFlip`,
+`listMode`/`listPaging`/`listGoPage`, `Compat.PAGING`; without them the old rule);
 elsewhere with a current book (still open, or closed by Home
 itself, `home_book`) → the book; elsewhere with none → BookOrbit home; cold start after KOReader was killed
 with a book open (`open_book_at_exit`) → that book. Presses step book → BookOrbit home →
@@ -345,6 +348,13 @@ One update covers the companion, the patch and KOReader's restart, with one stat
   whenever KOReader reports no book. Book state: `/status?book=1|0` (patch 0.5.2+) and `STATS`
   `open` (any patch; `suspend` always says 0 and is ignored). Once per version
   (`Prefs.patchRestartSentFor`), so a file that doesn't load never loops (`UpdateFlow.restart`).
+- **Any older running patch (v0.5.4):** on every `/status` and at companion start the companion
+  compares the running `patch_version` with the file's `PATCH_VERSION`, however the file got
+  there (M8C 11-22 ran 0.4.6 with 0.5.3 on disk, put there by an earlier companion, so no
+  restart was pending). Older and no book open (`/status?book=0` or `STATS open=0`): restart,
+  logged `restart: KOReader runs X, file has Y`. Book open or unknown: after the book, at
+  screen-off or the next Home (unknown counts as closed only there). Once per (running, file)
+  pair per process (`StaleRestart`), so a version that stays old never loops.
 - **No PIN, no false prompt, one notification (v0.5.2):** installing this release's patch,
   restarting KOReader and finishing an update (the update-ready notification) are never behind
   the Settings PIN: they change no setting (`Check.pinFree`). While a patch install or restart

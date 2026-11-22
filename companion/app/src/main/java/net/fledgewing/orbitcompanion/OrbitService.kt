@@ -202,6 +202,8 @@ class OrbitService : Service() {
         // "Setup needs you": after an update and on every start (no timers).
         Attention.onStart(this)
         main.postDelayed({ Attention.evaluate(this, "service start") }, 5_000)
+        // The last running patch reported is older than the file: same rule as on /status.
+        main.postDelayed({ PatchInstaller.follow(this, "companion start", quiet = false) }, 5_000)
         // A timer that was pending when the process died is still in AlarmManager; nothing to do.
         OLog.i("service started v${BuildConfig.VERSION_NAME} in ${OLog.since(t0)} ms")
         main.postDelayed({ Updater.maybeAutoCheck(this, "service start") }, 30_000)
@@ -638,6 +640,8 @@ class OrbitService : Service() {
                         val book = m.groupValues[1] == "1"
                         main.post { PatchInstaller.onBook(this@OrbitService, book, "KOReader status") }
                     }
+                    // An older patch running than the file on disk, however it got there (v0.5.4).
+                    main.post { PatchInstaller.follow(this@OrbitService, "KOReader status", quiet = false) }
                 }
                 OLog.i("status request ${parts.getOrNull(1)} -> ${if (ok) 200 else 404} in ${OLog.since(t0)} ms")
             }

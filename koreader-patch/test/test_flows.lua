@@ -1427,6 +1427,50 @@ test("home: a sheet over BookOrbit's main page -> the sheet closed, main page", 
     W.shown = {}
 end)
 
+-- Plugin 2.3.0's paging: the dashboard's board_page (boardPage/boardFlip), a list's page
+-- (listMode/listPaging/listGoPage).
+local function withPaging(cb, page)
+    cb.current_context.board_page = page
+    cb.list_page = page
+    function cb:boardPage() return self.current_context.board_page end
+    function cb:boardFlip(d) self.current_context.board_page = self.current_context.board_page + d end
+    function cb:listMode() return self.current_context.kind == "books" end
+    function cb:listPaging() return { page = self.list_page } end
+    function cb:listGoPage(n) self.list_page = n; W.list_went = n end
+    return cb
+end
+
+test("home: BookOrbit home on page 2 -> page 1, not the companion", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    run(5)
+    local cb = withPaging(catalogIn(ui, "dashboard"), 2)
+    homePress(m)
+    ok(#W.activities == 0, "no companion page")
+    ok(cb:boardPage() == 1, "page 1")
+    ok(W.shown[#W.shown] == cb and cb:dashboardMode(), "same catalog, main page")
+    homePress(m)
+    local a = W.activities[#W.activities]
+    ok(a and a.action:match("%.SHOW_LAUNCHER$"), "page 1: the launcher page")
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
+test("home: a BookOrbit list on page 3 -> its page 1, then the main page", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    run(5)
+    local cb = withPaging(catalogIn(ui, "books"), 3)
+    W.list_went = nil
+    homePress(m)
+    ok(W.list_went == 1, "list page 1")
+    ok(not W.went_dashboard and #W.activities == 0, "stayed on the list")
+    homePress(m)
+    ok(W.went_dashboard and cb:dashboardMode(), "then the main page")
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
 test("home: catalog in a list mode, plugin without goDashboard -> reopened on its main page", function()
     store.lastfile = nil
     local ui, m = newUI(false)

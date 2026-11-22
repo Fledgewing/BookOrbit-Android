@@ -464,6 +464,9 @@ end
 local HomePlan = {}
 
 function HomePlan.decide(o)
+    -- A BookOrbit page past its first (the dashboard's page 2, a list's page 3), nothing over
+    -- it: page 1 first; only page 1 leaves (v0.5.4).
+    if o.page_above_1 and not o.from_other then return "first_page" end
     -- Any BookOrbit screen other than its main page (a detail, list, search, board, settings,
     -- a sheet or dialog over the catalog): back to the main page (v0.4.9).
     if o.bookorbit_sub then return "bookorbit_main" end
@@ -553,6 +556,12 @@ end
 -- On the catalog widget, checked when it is open.
 Compat.CATALOG = { dashboardMode = "function", close_callback = "function", goDashboard = "function" }
 
+-- Paging on the catalog, for Home's "page 1 first" (v0.5.4): the dashboard's page
+-- (bookorbit_catalog_board.lua:119-123 boardPage, :968-976 boardFlip) and a list's page
+-- (bookorbit_catalog_lists.lua:64-66 listMode, :390-411 listPaging, :421-446 listGoPage).
+Compat.PAGING = { boardPage = "function", boardFlip = "function", listMode = "function",
+    listPaging = "function", listGoPage = "function" }
+
 -- "function" means callable: KOReader 2025.10+ wraps every plugin on* handler in a
 -- HandlerSandbox, a table with __call (frontend/pluginloader.lua v2026.07.1:117-128, :158-164,
 -- applied at :263); up to 2025.08 the wrapper was a plain function. A type() check alone saw
@@ -581,6 +590,17 @@ function Compat.check(p)
         if #missing > 0 then table.sort(missing); out[f.id] = missing end
     end
     return out
+end
+
+-- The names in needs that obj lacks (sorted); {} when all are there.
+function Compat.missingOn(obj, needs)
+    local missing = {}
+    for name, kind in pairs(needs) do
+        local okv, v = pcall(function() return obj[name] end)
+        if not okv or not hasKind(v, kind) then table.insert(missing, name) end
+    end
+    table.sort(missing)
+    return missing
 end
 
 function Compat.fallback(id)
@@ -2753,6 +2773,33 @@ local function bookorbitScreen(p)
     return "sub", above, desc
 end
 
+-- The catalog's page past the first, with nothing over it: page, how to go to page 1, what.
+-- nil on page 1, with something over the catalog, or a plugin without the paging hooks.
+local function catalogPage(cb)
+    if cb == nil then return nil end
+    local missing = Compat.missingOn(cb, Compat.PAGING)
+    if #missing > 0 then
+        if not compat_logged.paging then
+            compat_logged.paging = true
+            log("compat: paging unavailable: missing " .. table.concat(missing, ", ") .. " -> Home leaves any page")
+        end
+        return nil
+    end
+    local okp, page, go, what = pcall(function()
+        if cb:dashboardMode() then
+            local n = tonumber(cb:boardPage())
+            return n, function() cb:boardFlip(1 - n) end, "dashboard"
+        end
+        if cb:listMode() then
+            local pg = cb:listPaging()
+            return tonumber(type(pg) == "table" and pg.page), function() cb:listGoPage(1) end, "list"
+        end
+    end)
+    if not okp then log("home: paging check failed:", tostring(page)); return nil end
+    if page and page > 1 then return page, go, what end
+    return nil
+end
+
 local function onDashboard(p)
     local cb = p and p.catalog_browser
     if cb == nil then return false end
@@ -2780,6 +2827,10 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
     local view_open = p ~= nil and p.catalog_browser ~= nil
     local screen, over, screen_desc = bookorbitScreen(p)
     local on_dash = screen == "main" or (screen == nil and onDashboard(p))
+    local page, first_page, page_what
+    if screen == "main" or (screen == "sub" and #over == 0) then
+        page, first_page, page_what = catalogPage(p.catalog_browser)
+    end
     -- Reopen only the current book: one Home closed, or one KOReader was killed with (first
     -- command of this process). Never history.
     local last = nil
@@ -2797,7 +2848,7 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
     local from_other = HomePlan.cameFromOtherApp(from_extra, paused)
     local action = HomePlan.decide{
         mode = mode, in_reader = in_reader, covered = menu_open or view_open, on_dashboard = on_dash,
-        bookorbit_sub = screen == "sub",
+        bookorbit_sub = screen == "sub", page_above_1 = page ~= nil,
         from_other = from_other, reopen = reopen,
     }
     log("home (" .. mode .. "):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "BookOrbit view",
@@ -2805,6 +2856,12 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
         "from other app", tostring(from_other),
         "(paused", paused and fmt(paused) or "-", ")", "reopen current book", reopen and tostring(last) or "no")
     log("home: screen:", screen_desc)
+    if action == "first_page" then
+        log("home: BookOrbit " .. page_what .. " page " .. page .. " -> page 1")
+        local okg, err = pcall(first_page)
+        if not okg then log("home: going to page 1 failed:", tostring(err)) end
+        return true
+    end
     if action == "bookorbit_main" then return self:bookorbitMain(p, over, screen_desc) end
     if action == "companion" then return self:openCompanionHome() end
     if action == "dashboard" then return self:onOrbitGoHome() end

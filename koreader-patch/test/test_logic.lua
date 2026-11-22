@@ -345,6 +345,21 @@ test("home: any BookOrbit screen but its main page -> the main page, in both mod
     eq(H{ mode = "smart", in_reader = false, covered = true, bookorbit_sub = true, from_other = true }, "bookorbit_main")
     eq(H{ mode = "bookorbit", bookorbit_sub = true }, "bookorbit_main")
 end)
+test("home: a BookOrbit page past the first -> page 1 first (M8C 11-22)", function()
+    eq(H{ mode = "smart", on_dashboard = true, page_above_1 = true, from_other = false }, "first_page", "dashboard page 2")
+    eq(H{ mode = "bookorbit", on_dashboard = true, page_above_1 = true, from_other = false }, "first_page")
+    eq(H{ mode = "smart", bookorbit_sub = true, page_above_1 = true, from_other = false }, "first_page", "a list's page 3")
+    eq(H{ mode = "smart", on_dashboard = true, page_above_1 = false, from_other = false }, "companion", "page 1 leaves")
+    eq(H{ mode = "smart", on_dashboard = true, page_above_1 = true, from_other = true }, "dashboard",
+        "from another app: the usual rule")
+end)
+test("compat: missingOn names what an object lacks", function()
+    local Compat = M.Compat
+    eq(#Compat.missingOn({ boardPage = function() end, boardFlip = function() end, listMode = function() end,
+        listPaging = function() end, listGoPage = function() end }, Compat.PAGING), 0)
+    eq(table.concat(Compat.missingOn({ boardPage = function() end }, Compat.PAGING), ","),
+        "boardFlip,listGoPage,listMode,listPaging")
+end)
 test("home: cold start after KOReader was killed with a book open -> that book", function()
     eq(H{ mode = "smart", in_reader = false, from_other = true, reopen = true }, "book")
 end)

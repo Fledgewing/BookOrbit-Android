@@ -716,6 +716,41 @@ class UpdateFlowTest {
         assertEquals("Updated to v0.5.2; KOReader restarts to load it (after the book, if one is open)", UpdateFlow.installedLine("0.5.2"))
     }
 
+    /** M8C 11-22 01:28-01:34: KOReader ran 0.4.6 with 0.5.3 on disk and nothing pending. */
+    @Test
+    fun anOlderRunningPatchRestartsOnceWithNoBookOpen() {
+        val s = StaleRestart()
+        val lines = mutableListOf<String>()
+        assertEquals(UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.3", false, quiet = false) { lines += it })
+        assertEquals(listOf("restart: KOReader runs 0.4.6, file has 0.5.3"), lines)
+        assertEquals("no loop: still old after the restart", UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", false, quiet = false) { lines += it })
+        assertEquals("no loop on Home either", UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", null, quiet = true))
+        assertEquals(1, lines.size)
+        assertEquals("a newer file is a new pair", UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.4", false, quiet = false))
+    }
+
+    @Test
+    fun anOlderRunningPatchWaitsForTheBook() {
+        val s = StaleRestart()
+        val lines = mutableListOf<String>()
+        assertEquals(UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", true, quiet = false) { lines += it })
+        assertEquals("book open: not even on screen-off or Home", UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", true, quiet = true) { lines += it })
+        assertEquals("the wait is logged once", 1, lines.size)
+        assertEquals("unknown book on a status request waits", UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", null, quiet = false))
+        assertEquals("unknown book on screen-off or Home goes", UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.3", null, quiet = true))
+        assertEquals(UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", false, quiet = false))
+    }
+
+    @Test
+    fun equalOrNewerRunningPatchDoesNothing() {
+        val s = StaleRestart()
+        assertEquals(UpdateFlow.Restart.NONE, s.decide("0.5.3", "0.5.3", false, quiet = false))
+        assertEquals("a newer running patch than the file", UpdateFlow.Restart.NONE, s.decide("0.5.4", "0.5.3", false, quiet = false))
+        assertEquals("unknown running", UpdateFlow.Restart.NONE, s.decide(null, "0.5.3", false, quiet = false))
+        assertEquals("no file", UpdateFlow.Restart.NONE, s.decide("0.4.6", null, false, quiet = false))
+        assertEquals("a dev file", UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.0.0-dev", false, quiet = false))
+    }
+
     /** Boox Page 11-22 01:04: a 0.4.8 patch, no book open; it obeyed COMMAND=restart. */
     @Test
     fun theCompanionRestartsAnyPatchWhenNoBookIsOpen() {

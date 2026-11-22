@@ -42,6 +42,7 @@ for _, f in ipairs(M.Compat.FEATURES) do
     for name, kind in pairs(f.needs) do need(name, kind) end
 end
 for name, kind in pairs(M.Compat.CATALOG) do need(name, kind) end
+for name, kind in pairs(M.Compat.PAGING) do need(name, kind) end
 -- Fields and events the patch reads or writes directly.
 for _, name in ipairs({ "catalog_browser", "pull_timestamp", "push_timestamp", "pages_before_update",
     "last_remote_progress", "PLUGIN_VERSION", "last_error", "sync_forward", "sync_backward",
