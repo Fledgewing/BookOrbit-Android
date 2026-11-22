@@ -24,6 +24,8 @@ data class VendorProfile(
     val home: ComponentName?,
     val freezeHint: String?,
     val verified: Boolean,
+    /** Settings.System key that says whether the frontlight is on (battery stats), or null. */
+    val lightKey: String? = null,
 )
 
 object VendorProfiles {
@@ -40,6 +42,9 @@ object VendorProfiles {
         home = ComponentName("com.haoqing.app.hqreader", "com.haoqing.app.hqreader.view.activity.LauncherActivity"),
         freezeHint = "Freeze management",
         verified = true,
+        // Read on an M8C with `settings list system` (also haoqing_warm_light, key_warm_value,
+        // key_cold_value); the meaning is inferred from the name and the light being on.
+        lightKey = "isLightOn",
     )
 
     /**

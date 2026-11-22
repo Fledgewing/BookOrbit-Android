@@ -84,6 +84,7 @@ class OrbitService : Service() {
 
     private val main = Handler(Looper.getMainLooper())
     private lateinit var prefs: Prefs
+    private lateinit var stats: StatsRecorder
     private lateinit var cm: ConnectivityManager
     private var wakeLock: PowerManager.WakeLock? = null
     private var wakeLockAt = 0L
@@ -112,6 +113,7 @@ class OrbitService : Service() {
     private val vpnCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             OLog.i("tailscale (VPN) up")
+            stats.record("vpn_up")
             main.removeCallbacks(tailscaleCheck)
             notificationManager().cancel(ID_TAILSCALE_ALERT)
             updateNotification()
@@ -119,6 +121,7 @@ class OrbitService : Service() {
 
         override fun onLost(network: Network) {
             OLog.i("tailscale (VPN) down")
+            stats.record("vpn_down")
             updateNotification()
         }
     }
@@ -133,10 +136,12 @@ class OrbitService : Service() {
                     prefs.wifiOwner = owner
                     prefs.wifiPendingAt = 0
                     OLog.i("wifi: is ON | owner ${owner.key}${if (owner == WifiOwner.MANUAL) " (not asked by us: the user)" else ""} | mode ${prefs.wifiMode.key}")
+                    stats.record("wifi_on")
                 }
                 WifiManager.WIFI_STATE_DISABLED -> {
                     if (prefs.wifiOwner != WifiOwner.NONE) OLog.i("wifi: is OFF (was ${prefs.wifiOwner.key}) | mode ${prefs.wifiMode.key}")
                     prefs.wifiOwner = WifiOwner.NONE
+                    stats.record("wifi_off")
                 }
             }
         }
@@ -151,8 +156,12 @@ class OrbitService : Service() {
                         Net.setWifi(this@OrbitService, false, "after sleep sync, Off now")
                     }
                     offAtScreenOffUntil = 0
+                    stats.record("screen_off")
                 }
-                Intent.ACTION_SCREEN_ON -> updateNotification(force = true)
+                Intent.ACTION_SCREEN_ON -> {
+                    stats.record("screen_on")
+                    updateNotification(force = true)
+                }
             }
         }
     }
@@ -168,6 +177,9 @@ class OrbitService : Service() {
         cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         createChannels()
         startForeground(ID_STATUS, buildStatusNotification(statusText()))
+        // Battery stats: state rows on change only (no alarms or polling), docs/STATS-DESIGN.md.
+        stats = StatsRecorder(this, prefs)
+        stats.start()
         cm.registerNetworkCallback(
             NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), wifiCallback, main,
         )
@@ -199,6 +211,7 @@ class OrbitService : Service() {
             cm.unregisterNetworkCallback(vpnCallback)
             unregisterReceiver(screenReceiver)
             unregisterReceiver(wifiStateReceiver)
+            stats.stop()
         } catch (e: Exception) {
             OLog.w("service teardown", e)
         }
@@ -220,6 +233,10 @@ class OrbitService : Service() {
         noteSender(intent)
         val proto = intent.getStringExtra("proto")
         if (proto != null && proto != Contract.PROTOCOL) OLog.w("protocol $proto from the patch; this companion speaks ${Contract.PROTOCOL}")
+        if (action == Contract.STATS) return stats.onStats(intent)
+        if (action == Contract.NET_UP || action == Contract.NET_DONE || action == Contract.SLEEP_NOW) {
+            stats.record(Contract.shortName(action).lowercase())
+        }
         when (action) {
             Contract.NET_UP -> netUp(intent, reason)
             Contract.NET_DONE -> netDone(intent, reason)

@@ -94,6 +94,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".BatteryActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false" />
+
+        <activity
             android:name=".AttentionActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false" />
@@ -122,6 +127,7 @@
                 <action android:name="net.fledgewing.orbitcompanion.action.WIFI_OFF" />
                 <action android:name="net.fledgewing.orbitcompanion.action.SLEEP_NOW" />
                 <action android:name="net.fledgewing.orbitcompanion.action.SETTINGS" />
+                <action android:name="net.fledgewing.orbitcompanion.action.STATS" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

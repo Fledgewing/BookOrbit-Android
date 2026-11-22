@@ -28,6 +28,7 @@ object Contract {
     const val SHOW_APPS = "$PACKAGE.action.SHOW_APPS"
     const val SHOW_LAUNCHER = "$PACKAGE.action.SHOW_LAUNCHER"
     const val SETTINGS = "$PACKAGE.action.SETTINGS"
+    const val STATS = "$PACKAGE.action.STATS"
     const val EXTRA_FROM = "$PACKAGE.extra.FROM"
     const val EXTRA_COMMAND = "$PACKAGE.extra.COMMAND"
     const val PATCH_SENDER = "org.koreader.launcher"
@@ -294,7 +295,7 @@ object Net {
         @Suppress("DEPRECATION")
         val vpns = cm.allNetworks.mapNotNull { cm.getNetworkCapabilities(it) }.filter { it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) }
         if (vpns.isEmpty()) return false
-        val owners = vpns.map { if (android.os.Build.VERSION.SDK_INT >= 29) it.ownerUid else -1 }
+        val owners = vpns.map { if (android.os.Build.VERSION.SDK_INT >= 30) it.ownerUid else -1 }
         val ok = owners.any { it == -1 || it == tsUid }
         OLog.d("vpn owners=$owners tailscaleUid=$tsUid -> ${if (ok) "tailscale" else "another app"}")
         return ok

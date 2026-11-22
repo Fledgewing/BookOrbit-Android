@@ -35,6 +35,9 @@ local UIManager = {
         if w and w.dismiss_callback then w.dismiss_callback() end
     end,
     forceRePaint = function() end,
+    _refresh_stack = {},
+    -- Like uimanager.lua _repaint: drain the queue, then replace it.
+    _repaint = function(self) self._refresh_stack = {} end,
 }
 
 local function run(limit)
@@ -697,6 +700,38 @@ test("setup needs you: the companion's count shows in the menu status, never as 
     run(2)
     ok(not m:statusText():find("setup step", 1, true), "gone when done")
     W.web[url], W.json.STATUS = nil, nil
+end)
+
+test("stats: page turns and refreshes go to the companion in batches, and on suspend", function()
+    W.broadcasts = {}
+    local ui, m = newUI(true)
+    run(5)
+    m:onReaderReady()
+    run(5)
+    local open = lastBroadcast(".STATS")
+    ok(open and open.extras.content == "text" and open.extras.open == "1", "announced on open")
+    local n = #W.broadcasts
+    for i = 1, 30 do
+        m:onPageUpdate(i)
+        table.insert(UIManager._refresh_stack, { mode = i % 10 == 0 and "full" or "partial" })
+        UIManager:_repaint()
+    end
+    run(5)
+    local sent = 0
+    for i = n + 1, #W.broadcasts do if W.broadcasts[i].action:match("STATS$") then sent = sent + 1 end end
+    ok(sent == 0, "never per page")
+    run(310)
+    local b = lastBroadcast(".STATS")
+    ok(b.extras.reason == "interval", "interval batch: " .. tostring(b.extras.reason))
+    ok(b.extras.pages == "30" and b.extras.full == "3" and b.extras.partial == "27", "counts " .. b.extras.pages .. "/" .. b.extras.full .. "/" .. b.extras.partial)
+    m:onPageUpdate(31)
+    m:onSuspend()
+    b = lastBroadcast(".STATS")
+    ok(b.extras.reason == "suspend" and b.extras.pages == "1" and b.extras.open == "0", "suspend batch")
+    m:onResume()
+    b = lastBroadcast(".STATS")
+    ok(b.extras.reason == "resume" and b.extras.open == "1", "resume announces the book")
+    run(5)
 end)
 
 test("broadcasts carry the patch version (for the companion's setup row)", function()

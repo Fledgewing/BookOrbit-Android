@@ -467,6 +467,10 @@ object WhatsNew {
             "Setup now tells you when a step needs you (here, in a quiet notification, and in KOReader's Android sync status).",
             "This list: what changed after each update.",
         ),
+        "0.3.0" to listOf(
+            "Battery: hours left, % per hour in standby and reading, by setting and content, and a daily history (Orbit Companion › Battery).",
+            "Export a battery summary and compare readers side by side.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */

@@ -128,6 +128,24 @@ secrets, stamps the tag into the patch's `PATCH_VERSION`, and publishes the APK,
 `SHA256SUMS` and the license files. A tag is never moved: a broken release is fixed forward
 with the next patch version.
 
+## Battery stats
+
+Orbit Companion › Battery shows:
+- hours left, % per hour in standby and while reading (by content, Wi-Fi mode and frontlight);
+- % per 100 pages and per 100 full refreshes, and a daily history;
+- a Compare page for other readers' exported summaries ([format](docs/STATS.md),
+  [design](docs/STATS-DESIGN.md)).
+
+It records only on changes the system already broadcasts (no alarms, no polling). To check
+its cost, compare a day before and after installing:
+
+```sh
+adb shell dumpsys batterystats --reset            # start of the day, off the charger
+adb shell dumpsys batterystats --charged net.fledgewing.orbitcompanion | grep -iE "wake|cpu|alarm"
+```
+
+Expected: no change in wakeups or alarms, and under a second of CPU a day.
+
 ## Device notes
 
 The code is generic Android; vendor quirks are one table (`Vendor.kt` in the companion,

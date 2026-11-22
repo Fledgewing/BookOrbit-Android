@@ -98,33 +98,37 @@ The `net.fledgewing.orbitcompanion.action.STATS` broadcast is explicit, like the
 | `wifi_mode` | The current Wi-Fi mode. |
 | `reading_schedule` | The current Sync while reading setting. |
 
-**Sending rules:** every 5 minutes while a book is open and something was counted; on
-Suspend, before the sleep sync; and on book close. Never per page. A batch lost while
-KOReader is killed costs at most 5 minutes of counts.
+| `open` | `1` if a book stays open after this batch, `0` on Suspend or close. |
+
+**Sending rules:**
+- every 5 minutes while a book is open (even with nothing counted, so the companion knows a
+  book is in front);
+- on book open and on Resume (zero counts, to announce the book);
+- on Suspend (`open=0`: screen off or another app in front);
+- on book close.
+- Never per page. A batch lost while KOReader is killed costs at most 5 minutes of counts;
+  the companion treats a book as open for at most 6 minutes after its last batch.
 
 ## Export JSON (`orbit-battery-stats/1`)
 
-The export is aggregate only. Dates are by day.
+The full format is in [`STATS.md`](STATS.md). It is frozen: additive only, unknown fields
+and enum values are kept, and every Android field is optional. The companion writes:
+- the device (`android_version`, `capacity_mah` and their source);
+- `source: "android-companion"` and `battery_source: "fuel_gauge"`;
+- rates and per-100 numbers;
+- daily totals;
+- every segment of the last 90 days, with its start and end time, `duration_s`, % and
+  settings.
 
-```json
-{ "schema": "orbit-battery-stats/1", "generated": "2026-11-21",
-  "device": { "manufacturer": "Haoqing", "model": "M8C", "android": "14",
-              "capacity_mah": 3000, "capacity_source": "power_profile" },
-  "source": { "app": "orbit-companion", "version": "0.3.0" },
-  "period": { "first_day": "2026-10-01", "last_day": "2026-11-21", "days": 52 },
-  "rates": [ { "state": "standby", "wifi_mode": "jit", "content": null, "light": null,
-               "pct_per_h": 0.19, "se": 0.02, "hours": 180.2, "drop_pct": 34, "segments": 61 } ],
-  "per_100": [ { "unit": "pages", "content": "text", "pct": 1.3, "count": 2410 } ],
-  "daily": [ { "day": "2026-11-20", "used_pct": 11, "screen_on_min": 95, "pages": 310,
-               "full": 41, "partial": 290, "charges": 0 } ] }
-```
+Firmware such as Xteink's writes `source: "crossink-firmware"`, possibly
+`battery_source: "voltage_estimate"`, only `standby`/`awake` (asleep/awake), and may leave
+out the dates when its clock was never set. The companion fits rates from segments when a file
+has none.
 
-- **Values:** `state` is `standby`, `reading` or `charging`. `null` means "any". Unknown
-  fields are ignored. A firmware such as the Xteink one can emit the same format and leave
-  out what it can't measure.
-- **Delivery:** export goes through the share sheet or to Downloads. Import goes through
-  Android's file picker into app storage.
-- **Display:** imported files are only displayed side by side, never merged.
+- **Delivery:** export goes through Android's "Save" document picker (Downloads, Drive, …). If
+  there is none, it goes straight to Downloads with the storage permission from the patch
+  install. Import goes through the file picker into app storage.
+- **Display:** imports are shown side by side on Compare and never merged.
 
 ## Deliberately left out
 
@@ -134,7 +138,6 @@ The export is aggregate only. Dates are by day.
 - Alerts and notifications.
 - Any upload or cloud.
 - mAh-based rates (the % is all every device reports).
-- Exact timestamps in exports.
 
 ## Decisions I made (two-way doors)
 
@@ -151,33 +154,25 @@ The export is aggregate only. Dates are by day.
 - STATS goes every 5 minutes, on Suspend and on close; that is cheap and loses ≤ 5 minutes
   on a kill.
 - Rollups are built on page open or service start, so no timer is needed.
+- Export uses the system "Save" picker, not a share sheet: no file provider (no AndroidX)
+  and no permission are needed, and it can still save to Drive or Downloads.
 - Compare shows imports side by side and never merges them, since different devices'
   numbers aren't additive.
 - The pages are paged, not scrolled, with History at 7 days a page, which suits e-ink.
 - The companion is the only store; the patch keeps nothing, so there is one source of truth.
 
-## One-way doors for you
+## One-way doors (decided by the maintainer, 2026-11-21)
 
-1. **What leaves the device** (export contents).
-   - Options: aggregates only (recommended); add per-day timestamps of segments; add
-     per-book data.
-   - Hard to reverse because once files are shared they can't be recalled. Aggregates are
-     enough to compare devices and carry no reading history.
-2. **The export schema `orbit-battery-stats/1`.**
-   - Options: freeze the field names above with "unknown fields ignored" (recommended),
-     or keep it unversioned and internal.
-   - Hard to reverse because, once other devices or a firmware emit it, renaming breaks
-     them; later changes must be additive or go to `/2`.
-3. **Raw retention: 90 days, then rollups only.**
-   - Options: 30 days, 90 days (recommended), or forever (about 8 MB a year).
-   - Hard to reverse because deleted raw rows can't be rebuilt. The rollups keep every
-     shown statistic, so only new kinds of analysis on old data are lost.
-4. **Permissions.** None new:
-   - the broadcasts, `Settings.System` reads and the file picker need no grant;
-   - "Save to Downloads" reuses the storage permission granted for the patch install, and
-     the share sheet needs none.
-5. **Public.** `docs/STATS.md` (the schema) will be public in this repo, like the rest. The
-   export file itself is only ever shared by the user.
+1. **What leaves the device:** only what the user exports. Times finer than a day are
+   allowed: segments carry their start and end times, so imports can be compared at that
+   resolution. Still never: book titles or files, Wi-Fi names, accounts, device IDs.
+2. **Schema:** `orbit-battery-stats/1` is frozen, unknown fields are ignored, and changes are
+   additive only. The fine-grained time fields are in `/1` from the start. Android fields are
+   optional, so reader firmware can write it too (`source`, `battery_source`, asleep/awake
+   only, dates possibly null).
+3. **Retention:** raw rows for 90 days, then daily rollups forever.
+4. **Permissions:** none new.
+5. **Public:** `docs/STATS.md` documents the format in this repo.
 
 ## Open questions (with my recommendation)
 

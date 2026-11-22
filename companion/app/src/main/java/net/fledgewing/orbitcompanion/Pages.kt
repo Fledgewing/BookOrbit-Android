@@ -192,6 +192,9 @@ class StatusActivity : EinkActivity() {
         root.addView(Ui.row(this, "Tailscale", right = Ui.value(this, ts)))
         root.addView(Ui.row(this, "Service", right = Ui.value(this, if (OrbitService.running) "Running" else "Starting")))
         root.addView(Ui.row(this, "Screen-off permission", right = Ui.value(this, if (Net.adminActive(this)) "Granted" else "Not granted")))
+        root.addView(Ui.row(this, "Battery", "hours left, % per hour, by setting, history", Ui.value(this, "›"), onClick = {
+            startActivity(Intent(this, BatteryActivity::class.java))
+        }))
         root.addView(Ui.gap(this, 16))
         val card = Ui.card(this)
         card.addView(Ui.row(this, "Last sleep sync", "reported by the KOReader patch", Ui.value(this, Status.lastSleepSync(this))))

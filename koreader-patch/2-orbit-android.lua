@@ -480,9 +480,72 @@ function Compat.lines(missing, version)
     return out
 end
 
+---------------------------------------------------------------------------------------------
+-- Battery stats (docs/STATS-DESIGN.md): the patch counts page turns and screen refreshes and
+-- sends them to the companion in batches (STATS), never per page. The companion stores them.
+---------------------------------------------------------------------------------------------
+
+local Stats = { INTERVAL = 300 }
+
+local function set(list) local t = {} for w in list:gmatch("%S+") do t[w] = true end return t end
+Stats.TEXT = set("epub epub3 fb2 fb3 txt text html htm xhtml mobi azw azw3 prc pdb doc docx rtf odt md chm")
+Stats.COMIC = set("cbz cbr cb7 cbt jpg jpeg png gif webp bmp tif tiff")
+Stats.PDF = set("pdf djvu djv xps oxps")
+-- Flashing refreshes (refresh_methods, frontend/ui/uimanager.lua:1142-1152); the rest
+-- (partial, ui, fast, a2, [ui], [partial]) are partial.
+Stats.FULL = set("full flashui flashpartial")
+
+-- text, comic, webtoon (a comic in continuous mode: ReaderView.page_scroll,
+-- readerview.lua:959/986), pdf, or none (no book). Unknown extensions go by the engine.
+function Stats.contentOf(file, page_scroll, paging)
+    if type(file) ~= "string" or file == "" then return "none" end
+    local f = file:lower():gsub("%.zip$", "")
+    local ext = f:match("%.([%w]+)$")
+    if ext and Stats.COMIC[ext] then return page_scroll and "webtoon" or "comic" end
+    if ext and Stats.PDF[ext] then return "pdf" end
+    if ext and Stats.TEXT[ext] then return "text" end
+    return paging and "pdf" or "text"
+end
+
+function Stats.new(now) return { pages = 0, full = 0, partial = 0, at = now, seq = 0 } end
+
+function Stats.refresh(acc, mode)
+    if Stats.FULL[mode] then acc.full = acc.full + 1 else acc.partial = acc.partial + 1 end
+end
+
+function Stats.page(acc) acc.pages = acc.pages + 1 end
+
+function Stats.counted(acc) return acc.pages + acc.full + acc.partial > 0 end
+
+-- Takes the batch since the last one as STATS extras (all strings) and starts a new one.
+-- content: the open book's type, or "none". open: a book stays open after this batch.
+-- Nothing to send (no book and nothing counted, or paused by a suspend): nil.
+function Stats.take(acc, now, content, open, extra)
+    if not acc.at then return nil end
+    if content == "none" and not Stats.counted(acc) then acc.at = now return nil end
+    local period = math.max(0, now - acc.at)
+    acc.seq = acc.seq + 1
+    local out = {
+        seq = tostring(acc.seq),
+        period_s = tostring(math.floor(period + 0.5)),
+        pages = tostring(acc.pages), full = tostring(acc.full), partial = tostring(acc.partial),
+        content = content,
+        open = open and "1" or "0",
+        reading_min = string.format("%.1f", content ~= "none" and period / 60 or 0),
+    }
+    for k, v in pairs(extra or {}) do out[k] = tostring(v) end
+    acc.pages, acc.full, acc.partial, acc.at = 0, 0, 0, now
+    return out
+end
+
+-- When the next batch is due: every INTERVAL while a book is open or something was counted.
+function Stats.isDue(acc, now, book_open)
+    return acc.at ~= nil and (book_open or Stats.counted(acc)) and now - acc.at >= Stats.INTERVAL
+end
+
 if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = Schedule, Plan = Plan, Update = Update, WifiPlan = WifiPlan, HomePlan = HomePlan,
-        disabledText = disabledText, Compat = Compat,
+        disabledText = disabledText, Compat = Compat, Stats = Stats,
         PATCH_VERSION = PATCH_VERSION }
 end
 
@@ -851,6 +914,7 @@ Companion.ACTION = {
     SHOW_STATUS = Companion.PACKAGE .. ".action.SHOW_STATUS",
     SHOW_APPS = Companion.PACKAGE .. ".action.SHOW_APPS",
     SHOW_LAUNCHER = Companion.PACKAGE .. ".action.SHOW_LAUNCHER",
+    STATS = Companion.PACKAGE .. ".action.STATS",
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
@@ -1653,6 +1717,52 @@ local state = {
     paused_for = nil,           -- how long the last Suspend lasted, set on Resume
 }
 
+-- Battery stats batches (Stats above). One accumulator per KOReader process.
+local stats_acc = Stats.new(now_s())
+
+local function contentOfUI(ui)
+    local doc = ui and ui.document
+    if not doc then return "none" end
+    return Stats.contentOf(doc.file, ui.view and ui.view.page_scroll, ui.paging ~= nil)
+end
+
+local function readerContent()
+    return contentOfUI(require("apps/reader/readerui").instance)
+end
+
+-- Sends the batch so far. content/open default to the open book (or none).
+function Stats.send(why, content, open)
+    if not Companion.installed() then return end
+    content = content or readerContent()
+    if open == nil then open = content ~= "none" end
+    local extras = Stats.take(stats_acc, now_s(), content, open,
+        { reason = why, wifi_mode = Shared.mode(), reading_schedule = S.reading_schedule or "off" })
+    if extras then Companion.send(Companion.ACTION.STATS, extras) end
+end
+
+-- Every INTERVAL while a book is open. A Lua timer only: it never wakes the device.
+local function statsTick()
+    local t = now_s()
+    if Stats.isDue(stats_acc, t, readerContent() ~= "none") then Stats.send("interval") end
+    local wait = stats_acc.at and math.max(5, stats_acc.at + Stats.INTERVAL - now_s()) or Stats.INTERVAL
+    UIManager:scheduleIn(wait, statsTick)
+end
+
+-- Count every physical refresh: _repaint drains _refresh_stack through refresh_methods
+-- (uimanager.lua:1388) and then replaces it (:1399), so the old table lists exactly what was
+-- sent to the screen, after merging (:1200) and full-refresh promotion.
+if UIManager._repaint then
+    local stock_repaint = UIManager._repaint
+    function UIManager:_repaint(...)
+        local stack = self._refresh_stack
+        local r = pack(stock_repaint(self, ...))
+        if type(stack) == "table" and self._refresh_stack ~= stack then
+            for i = 1, #stack do Stats.refresh(stats_acc, stack[i].mode) end
+        end
+        return unpack(r, 1, r.n)
+    end
+end
+
 local OrbitAndroid = WidgetContainer:extend{
     name = "orbitandroid",
     fullname = "Orbit Android (user patch)",
@@ -1675,6 +1785,7 @@ function OrbitAndroid:init()
         end)
         UIManager:scheduleIn(1, function() self:checkCommand("start") end)
         UIManager:scheduleIn(1.5, function() self:wakeFlow("start") end)
+        UIManager:scheduleIn(Stats.INTERVAL, statsTick)
     elseif state.pending_home and not in_reader then
         UIManager:scheduleIn(1, function() self:finishHome() end)
     end
@@ -1722,6 +1833,10 @@ end
 ---------------------------------------------------------------------------------------------
 
 function OrbitAndroid:onResume()
+    if not stats_acc.at then
+        stats_acc.at = now_s()
+        if readerContent() ~= "none" then Stats.send("resume") end
+    end
     state.paused_for = state.suspended_at and (now_s() - state.suspended_at) or nil
     state.suspended_at = nil
     Wifi.state().foreground = true
@@ -1932,6 +2047,11 @@ end
 ---------------------------------------------------------------------------------------------
 
 function OrbitAndroid:onSuspend()
+    -- Screen off or another app in front: KOReader isn't being read until Resume.
+    if stats_acc.at then
+        Stats.send("suspend", nil, false)
+        stats_acc.at = nil
+    end
     state.suspended_at = now_s()
     Wifi.state().foreground = false
     if not S.sync_on_sleep then return end
@@ -2093,6 +2213,7 @@ function OrbitAndroid:chapterKey(page)
 end
 
 function OrbitAndroid:onCloseWidget()
+    if self.ui and self.ui.document then Stats.send("close", contentOfUI(self.ui), false) end
     -- A close (Back to file browser, Exit) runs this; a kill or suspend doesn't. A close Home
     -- started keeps the book as the current one (home_book); the user's own close clears it.
     if self.ui and self.ui.document then
@@ -2135,6 +2256,7 @@ function OrbitAndroid:onReaderReady()
     end
     self.schedule = Schedule.new(S.reading_schedule, now_s())
     self:hookPluginPagePush()
+    Stats.send("open", contentOfUI(self.ui), true)
     self:bookOpenFlow()
 end
 
@@ -2167,6 +2289,7 @@ function OrbitAndroid:onNetworkConnected()
 end
 
 function OrbitAndroid:onPageUpdate(page)
+    if self.ui and self.ui.document then Stats.page(stats_acc) end
     if S.reading_schedule == "off" or not (self.ui and self.ui.document) then return end
     local t = now_s()
     Schedule.onPage(self.schedule, self:chapterKey(page), t)

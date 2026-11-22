@@ -73,6 +73,8 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    // Android ships org.json; plain JVM unit tests need the real one (StatsExport).
+    testImplementation("org.json:json:20240303")
 }
 
 /**

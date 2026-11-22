@@ -389,5 +389,55 @@ test("update: a check failure maps GitHub's EACCES too", function()
     eq(Update.errorText("network: Permission denied", true, true, false), Update.BLOCKED)
 end)
 
+local Stats = M.Stats
+
+test("stats: content type from the file and the view", function()
+    eq(Stats.contentOf("/b/x.epub"), "text")
+    eq(Stats.contentOf("/b/X.FB2.ZIP"), "text")
+    eq(Stats.contentOf("/b/manga.cbz", false), "comic")
+    eq(Stats.contentOf("/b/manga.cbz", true), "webtoon", "a comic in continuous mode")
+    eq(Stats.contentOf("/b/paper.pdf", true), "pdf", "a PDF in scroll mode stays pdf")
+    eq(Stats.contentOf("/b/a.djvu"), "pdf")
+    eq(Stats.contentOf("/b/odd.xyz", false, true), "pdf", "unknown, paged engine")
+    eq(Stats.contentOf("/b/odd.xyz", false, false), "text", "unknown, flowing engine")
+    eq(Stats.contentOf(nil), "none")
+end)
+
+test("stats: refreshes split into full and partial", function()
+    local a = Stats.new(0)
+    for _, m in ipairs({ "full", "flashui", "flashpartial", "partial", "ui", "fast", "a2", "[ui]", "[partial]" }) do
+        Stats.refresh(a, m)
+    end
+    eq(a.full, 3, "full")
+    eq(a.partial, 6, "partial")
+end)
+
+test("stats: batches every 5 minutes with a book open, never per page", function()
+    local a = Stats.new(0)
+    for _ = 1, 40 do Stats.page(a); Stats.refresh(a, "partial") end
+    eq(Stats.isDue(a, 299, true), false, "not before 5 min")
+    eq(Stats.isDue(a, 300, true), true, "due at 5 min")
+    local b = Stats.take(a, 300, "text", true, { wifi_mode = "jit" })
+    eq(b.pages, "40"); eq(b.partial, "40"); eq(b.full, "0")
+    eq(b.period_s, "300"); eq(b.reading_min, "5.0"); eq(b.content, "text"); eq(b.open, "1")
+    eq(b.seq, "1"); eq(b.wifi_mode, "jit")
+    eq(a.pages, 0, "reset after a batch")
+    eq(Stats.isDue(a, 500, true), false)
+    eq(Stats.take(a, 600, "text", true).seq, "2", "sequence counts up")
+end)
+
+test("stats: nothing to send without a book and counts, or while paused", function()
+    local a = Stats.new(0)
+    eq(Stats.isDue(a, 1000, false), false, "file browser, nothing counted")
+    eq(Stats.take(a, 1000, "none", false), nil)
+    Stats.refresh(a, "ui")
+    eq(Stats.isDue(a, 1400, false), true, "file browser refreshes still go out")
+    eq(Stats.take(a, 1400, "none", false).reading_min, "0.0")
+    a.at = nil
+    Stats.page(a)
+    eq(Stats.isDue(a, 9999, true), false, "paused by a suspend")
+    eq(Stats.take(a, 9999, "text", false), nil)
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

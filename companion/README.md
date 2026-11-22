@@ -21,6 +21,9 @@ talks to BookOrbit and holds no login. Contract: [`../docs/INTERFACE.md`](../doc
   installed" installs or updates the patch from this app's release, SHA-256 checked, into
   `koreader/patches/` with the storage permission, which still works at targetSdk 28),
   open-source licenses.
+- **Battery**: hours left, % per hour by state and setting, per 100 pages and refreshes, a
+  daily history, and Compare with other readers' exports (docs/STATS.md). Recorded from
+  system broadcasts only; raw rows 90 days, daily rollups forever.
 - **Setup needs you**: when a Setup step isn't done (new, or it stopped working), a page lists
   just those steps with "Fix", "Don't ask about this" and "Later"; also a quiet notification,
   a launcher banner and a line in KOReader's Android sync status. After an update it shows
