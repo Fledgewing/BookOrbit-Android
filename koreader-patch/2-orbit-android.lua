@@ -941,6 +941,7 @@ function Companion.send(action, extras)
     extras = extras or {}
     extras.proto = Companion.PROTOCOL
     extras.sender = "org.koreader.launcher"
+    extras.patch_version = PATCH_VERSION
     local ok = Jni.sendBroadcast{ action = action, package = Companion.PACKAGE, extras = extras }
     log("companion", action:match("[^.]+$"), ok and "sent" or "NOT sent", extras.reason or "")
     return ok
@@ -1015,9 +1016,19 @@ function Shared.mode()
 end
 
 -- Pull the companion's copy if it is newer. Cheap: loopback, 1 s timeout.
+-- "Orbit Companion: 1 setup step needs you", or nil.
+function Shared.setupNeededText()
+    local n = Shared.setup_needed
+    if not n or n < 1 or not Companion.installed() then return nil end
+    return string.format(n == 1 and _("Orbit Companion: %d setup step needs you (open the companion)")
+        or _("Orbit Companion: %d setup steps need you (open the companion)"), n)
+end
+
 function Shared.refresh(why)
     if not Companion.installed() then return false end
     local st = Companion.status(1)
+    -- "Setup needs you" count, shown passively in the menu status (never a pop-up).
+    Shared.setup_needed = st and tonumber(st.setup_needed) or nil
     local remote = st and type(st.settings) == "table" and st.settings or nil
     if not remote then return false end
     local at = tonumber(remote.settings_at) or 0
@@ -2443,6 +2454,8 @@ function OrbitAndroid:statusText()
         table.insert(parts, string.format("%s %s %s", _("last sleep sync"), last.ok and fmt(last.seconds) or _("failed"),
             os.date("%H:%M", last.at)))
     end
+    local need = Shared.setupNeededText()
+    if need then table.insert(parts, need) end
     for _i, l in ipairs(compatLines(bookorbit(self.ui))) do table.insert(parts, l) end
     return _("Status: ") .. table.concat(parts, " · ")
 end

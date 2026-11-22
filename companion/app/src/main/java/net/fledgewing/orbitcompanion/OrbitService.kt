@@ -184,6 +184,9 @@ class OrbitService : Service() {
             addAction(Intent.ACTION_SCREEN_ON)
         })
         startStatusServer()
+        // "Setup needs you": after an update and on every start (no timers).
+        Attention.onStart(this)
+        main.postDelayed({ Attention.evaluate(this, "service start") }, 5_000)
         // A timer that was pending when the process died is still in AlarmManager; nothing to do.
         OLog.i("service started v${BuildConfig.VERSION_NAME} in ${OLog.since(t0)} ms")
         main.postDelayed({ Updater.maybeAutoCheck(this, "service start") }, 30_000)
@@ -238,6 +241,7 @@ class OrbitService : Service() {
         if (intent.getStringExtra("sender") == Contract.PATCH_SENDER) {
             prefs.patchSeenAt = System.currentTimeMillis()
             prefs.patchSeenVia = Contract.shortName(intent.action)
+            intent.getStringExtra("patch_version")?.takeIf { it.isNotEmpty() }?.let { prefs.patchVersionSeen = it }
         }
     }
 
@@ -502,7 +506,7 @@ class OrbitService : Service() {
         "{\"proto\":\"${Contract.PROTOCOL}\",\"version\":\"${BuildConfig.VERSION_NAME}\"," +
             "\"wifi\":${Net.wifiConnected(this)},\"wifi_enabled\":${Net.wifiEnabled(this)}," +
             "\"wifi_owner\":\"${prefs.wifiOwner.key}\",\"tailscale\":${Net.vpnUp(this)}," +
-            "\"screen_off_permission\":${Net.adminActive(this)}," +
+            "\"screen_off_permission\":${Net.adminActive(this)},\"setup_needed\":${prefs.setupNeeded}," +
             "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +
             "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}}}"
 

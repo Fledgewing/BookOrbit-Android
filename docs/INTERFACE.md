@@ -14,8 +14,9 @@ adds `FLAG_INCLUDE_STOPPED_PACKAGES | FLAG_RECEIVER_FOREGROUND`, and calls
 intent filter for these actions (manifest, not runtime: KOReader may be in the background
 and the companion may not be running).
 
-Every extra is a **string**. Every broadcast carries `proto = "1"` and
-`sender = "org.koreader.launcher"`.
+Every extra is a **string**. Every broadcast carries `proto = "1"`,
+`sender = "org.koreader.launcher"` and `patch_version` (the patch's `PATCH_VERSION`; the
+companion's "KOReader patch installed" row uses it when it can't read the file).
 
 | Action (`net.fledgewing.orbitcompanion.action.…`) | Extras | Companion does |
 |---|---|---|
@@ -121,7 +122,9 @@ killed with), without an extra otherwise; with the screen off it waits for the n
 
 `settings` are the shared settings (above). The patch reads them on start, resume and when its
 menu opens; the newer `settings_at` wins, and the patch pushes its own with `SETTINGS` when they
-are newer. `wifi_owner`: `none`, `auto` or `manual`.
+are newer. `wifi_owner`: `none`, `auto` or `manual`. `setup_needed`: how many Setup steps need the user
+(not done and not skipped); the patch shows it as one line in its menu status, never as a
+pop-up.
 
 Bind to `127.0.0.1` only. The patch uses it in "Test sync path" (step 1, "Companion
 answered", 1 s timeout) and treats any `200` as an answer; the fields are for display and

@@ -151,6 +151,23 @@ with a book open (`open_book_at_exit`) → that book. Presses step book → Book
 companion; Home from another app goes to the book, so the steps never loop. "From another
 app" is the companion's `FROM=other_app` when it knows, else a KOReader pause of 2.5 s or more.
 
+## Setup needs you (v0.2.4)
+
+The companion is the Home app and is rarely opened, so a Setup step that stops working (Home
+app changed, device admin removed, an app disabled, battery optimisation back on) or a new one
+added by an update could go unnoticed. `SetupAttention` (pure, tested) evaluates the Setup
+rows when the service starts, after an update, and when the status or launcher page opens:
+- **Needed** = not done and not skipped ("Don't ask about this", undone in Settings). Rows
+  that only report a test or a sighting (patch answered, Wi-Fi test) never prompt.
+- **Prompt** (a page listing only the needed rows, each with "Fix" = the Setup row's action)
+  unless snoozed with "Later", which lasts until the next update or a regression (a row
+  that was done and isn't now).
+- **Delivery:** the prompt on the status page, a quiet notification, a one-line banner on the
+  launcher page, and `setup_needed` in `/status` for the patch's menu status. Nothing shows
+  when all is done; nothing pops up in a book.
+- **After an update:** a one-screen "What's new" from a short per-version list in the app
+  (`WhatsNew`), with any needed steps.
+
 ## Plugin updates
 
 The patch prefers the plugin's public surfaces (its Dispatcher actions and user settings) and

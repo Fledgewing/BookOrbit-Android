@@ -682,6 +682,32 @@ test("wifi: without the companion, KOReader's stock path (and message) is kept",
     run(1)
 end)
 
+test("setup needs you: the companion's count shows in the menu status, never as a pop-up", function()
+    local url = "http://127.0.0.1:47913/status"
+    W.web[url] = "STATUS"
+    W.json.STATUS = { version = "0.2.4", setup_needed = 2 }
+    local ui, m = newUI(true)
+    W.shown = {}
+    m:onResume()
+    run(2)
+    ok(#W.shown == 0, "no pop-up")
+    ok(m:statusText():find("Orbit Companion: 2 setup steps need you", 1, true), "status: " .. m:statusText())
+    W.json.STATUS = { version = "0.2.4", setup_needed = 0 }
+    m:onResume()
+    run(2)
+    ok(not m:statusText():find("setup step", 1, true), "gone when done")
+    W.web[url], W.json.STATUS = nil, nil
+end)
+
+test("broadcasts carry the patch version (for the companion's setup row)", function()
+    W.broadcasts = {}
+    local ui, m = newUI(false)
+    m:wakeFlow("wake")
+    run(5)
+    local up = lastBroadcast(".NET_UP")
+    ok(up and up.extras.patch_version ~= nil, "patch_version extra")
+end)
+
 test("wifi state: read from Settings.Global, never WifiManager (no ACCESS_WIFI_STATE)", function()
     W.wifi_manager_called = false
     local before = #W.logs

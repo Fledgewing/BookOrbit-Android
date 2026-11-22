@@ -109,6 +109,31 @@ class Prefs(ctx: Context) {
         get() = sp.getString("patch_install_status", "") ?: ""
         set(v) = setStr("patch_install_status", v)
 
+    // "Setup needs you" (Attention)
+    private fun set(key: String): Set<String> = sp.getStringSet(key, emptySet())?.toSet() ?: emptySet()
+    private fun setSet(key: String, v: Set<String>) = sp.edit().putStringSet(key, v).apply()
+    var setupIgnored: Set<String>
+        get() = set("setup_ignored")
+        set(v) = setSet("setup_ignored", v)
+    var setupSnoozeNotDone: Set<String>
+        get() = set("setup_snooze_not_done")
+        set(v) = setSet("setup_snooze_not_done", v)
+    var setupLastDone: Set<String>
+        get() = set("setup_last_done")
+        set(v) = setSet("setup_last_done", v)
+    var setupSnoozeCode: Int
+        get() = sp.getInt("setup_snooze_code", 0)
+        set(v) = sp.edit().putInt("setup_snooze_code", v).apply()
+    var setupNeeded: Int
+        get() = sp.getInt("setup_needed", 0)
+        set(v) = sp.edit().putInt("setup_needed", v).apply()
+    var lastSeenVersionCode: Int
+        get() = sp.getInt("last_seen_version_code", 0)
+        set(v) = sp.edit().putInt("last_seen_version_code", v).apply()
+    var whatsNewFromCode: Int
+        get() = sp.getInt("whats_new_from_code", 0)
+        set(v) = sp.edit().putInt("whats_new_from_code", v).apply()
+
     var settingsPinSeeded: Boolean
         get() = bool("settings_pin_seeded", false)
         set(v) = setBool("settings_pin_seeded", v)
@@ -146,6 +171,10 @@ class Prefs(ctx: Context) {
     var lastNetReadyMs by LongPref("last_net_ready_ms")
     var wifiOffDeadline by LongPref("wifi_off_deadline")
     var patchSeenAt by LongPref("patch_seen_at")
+    /** PATCH_VERSION the patch reports in its broadcasts (patch 0.2.4+). */
+    var patchVersionSeen: String
+        get() = str("patch_version_seen")
+        set(v) = setStr("patch_version_seen", v)
     var patchSeenVia: String
         get() = str("patch_seen_via")
         set(v) = setStr("patch_seen_via", v)

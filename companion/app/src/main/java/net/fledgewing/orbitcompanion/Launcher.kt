@@ -171,6 +171,13 @@ class LauncherActivity : EinkActivity() {
                 },
             )
         }
+        Attention.evaluate(this, "launcher", notify = false)
+        Attention.bannerText(this)?.let { t ->
+            root.addView(Ui.gap(this, 8))
+            root.addView(Ui.text(this, t, 19f, bold = true).also { v ->
+                Ui.clickable(v, { startActivity(Intent(this, AttentionActivity::class.java)) })
+            })
+        }
         root.addView(Ui.gap(this, 16))
         root.addView(
             Ui.weightRow(

@@ -345,6 +345,8 @@ object Updater {
         notifications(ctx).cancel(ID_UPDATE)
         File(ctx.filesDir, "updates").listFiles()?.forEach { it.delete() }
         status(ctx, "updated to v${BuildConfig.VERSION_NAME}")
+        Attention.onStart(ctx)
+        Attention.evaluate(ctx, "after update")
     }
 
     private fun notifications(ctx: Context) = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

@@ -405,3 +405,72 @@ class PatchFileTest {
         assertFalse(PatchFile.needsInstall("0.3.0", "0.2.2"))
     }
 }
+
+class SetupAttentionTest {
+    private val v1 = 204
+    private fun rows(vararg r: Pair<String, Boolean>) = r.toList()
+
+    @Test
+    fun idsAreStable() {
+        assertEquals("home", SetupAttention.idOf("Set Orbit as Home app"))
+        assertEquals("battery:KOReader", SetupAttention.idOf("Battery: Unrestricted (KOReader)"))
+        assertEquals("patch", SetupAttention.idOf("KOReader patch installed (v0.2.3)"))
+        assertEquals("admin", SetupAttention.idOf("Allow \"lock screen\" (device admin)"))
+    }
+
+    @Test
+    fun allDoneShowsNothingAndInfoRowsNeverPrompt() {
+        val r = SetupAttention.evaluate(rows("home" to true, "wifi_test" to false, "patch_seen" to false), SetupAttention.State(), v1)
+        assertTrue(r.needed.isEmpty())
+        assertFalse(r.show)
+    }
+
+    @Test
+    fun regressionIsDetectedAndBreaksTheSnooze() {
+        var st = SetupAttention.State()
+        var r = SetupAttention.evaluate(rows("home" to true, "admin" to false), st, v1)
+        assertEquals(listOf("admin"), r.needed)
+        assertTrue(r.show)
+        st = SetupAttention.snooze(r.next, r.needed, v1)
+        r = SetupAttention.evaluate(rows("home" to true, "admin" to false), st, v1)
+        assertFalse("snoozed", r.show)
+        // Home app changed: a regression, so the prompt is back.
+        r = SetupAttention.evaluate(rows("home" to false, "admin" to false), r.next, v1)
+        assertEquals(setOf("home"), r.regressed)
+        assertTrue(r.show)
+    }
+
+    @Test
+    fun fixedThenBrokenAgainAlsoBreaksTheSnooze() {
+        var r = SetupAttention.evaluate(rows("admin" to false), SetupAttention.State(), v1)
+        var st = SetupAttention.snooze(r.next, r.needed, v1)
+        r = SetupAttention.evaluate(rows("admin" to true), st, v1)
+        assertFalse(r.show)
+        r = SetupAttention.evaluate(rows("admin" to false), r.next, v1)
+        assertTrue(r.show)
+        assertEquals(setOf("admin"), r.regressed)
+    }
+
+    @Test
+    fun updateEndsTheSnooze() {
+        val r = SetupAttention.evaluate(rows("patch" to false), SetupAttention.State(), v1)
+        val st = SetupAttention.snooze(r.next, r.needed, v1)
+        assertFalse(SetupAttention.evaluate(rows("patch" to false), st, v1).show)
+        assertTrue(SetupAttention.evaluate(rows("patch" to false), st, v1 + 1).show)
+    }
+
+    @Test
+    fun ignoredRowsNeverPromptUntilUndone() {
+        var st = SetupAttention.ignore(SetupAttention.State(), "tailscale")
+        assertFalse(SetupAttention.evaluate(rows("tailscale" to false), st, v1).show)
+        st = SetupAttention.unignoreAll(st)
+        assertTrue(SetupAttention.evaluate(rows("tailscale" to false), st, v1).show)
+    }
+
+    @Test
+    fun whatsNewSinceTheLastSeenVersion() {
+        val notes = listOf("0.2.2" to listOf("a"), "0.2.3" to listOf("b"), "0.2.4" to listOf("c"))
+        assertEquals(listOf("0.2.3", "0.2.4"), WhatsNew.since(202, 204, notes).map { it.first })
+        assertTrue(WhatsNew.since(204, 204, notes).isEmpty())
+    }
+}

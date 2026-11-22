@@ -154,10 +154,19 @@ class NetTest(private val ctx: Context, private val offFirst: Boolean, private v
 class StatusActivity : EinkActivity() {
     private var testResult: String? = null
     private var test: NetTest? = null
+    private var prompted = false
 
     override fun onResume() {
         super.onResume()
         OrbitService.start(this)
+        // "Setup needs you": once per visit, only when a step needs the user or after an update.
+        if (!prompted) {
+            prompted = true
+            val e = Attention.evaluate(this, "status page")
+            if (Attention.shouldPrompt(e, this)) {
+                startActivity(Intent(this, AttentionActivity::class.java))
+            }
+        }
         render()
     }
 
@@ -316,6 +325,14 @@ class SettingsActivity : EinkActivity() {
             Updater.check(this, interactive = true, why = "settings") { if (!isFinishing) render() }
             render()
         }))
+        val skipped = prefs.setupIgnored
+        if (skipped.isNotEmpty()) {
+            root.addView(Ui.row(this, "Skipped setup steps: ${skipped.size}", "tap to be asked again", Ui.value(this, "›"), onClick = {
+                Attention.unignoreAll(this)
+                Attention.evaluate(this, "settings")
+                render()
+            }))
+        }
         root.addView(Ui.row(this, "Open-source licenses", null, Ui.value(this, "›"), onClick = {
             startActivity(Intent(this, LicensesActivity::class.java))
         }))
@@ -454,7 +471,8 @@ object Setup {
         })
 
         // One-tap patch install (PatchInstaller): from this app's release, SHA-256 checked.
-        val patchV = PatchInstaller.installedVersion()
+        // The file when readable (storage permission), else what the running patch reports.
+        val patchV = PatchInstaller.installedVersion() ?: prefs.patchVersionSeen.takeIf { it.isNotEmpty() }
         val wantPatch = PatchFile.needsInstall(patchV, BuildConfig.VERSION_NAME)
         list.add(
             Check(

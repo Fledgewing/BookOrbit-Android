@@ -400,3 +400,79 @@ object PatchFile {
         return i < a
     }
 }
+
+/**
+ * "Setup needs you": which Setup rows to prompt about (docs/DESIGN.md "Setup needs you").
+ * Rows are identified by a stable id (idOf). A prompt shows for rows that aren't done and
+ * aren't ignored, unless snoozed with "Later". A snooze lasts until the next app update or
+ * until a row regresses (done, then not done again).
+ */
+object SetupAttention {
+    /** Rows that report a test or a sighting, not a setting: never prompted about. */
+    val INFO_ONLY = setOf("patch_seen", "wifi_test")
+
+    fun idOf(label: String): String = when {
+        label.startsWith("Set Orbit as Home") -> "home"
+        label.startsWith("Allow notifications") -> "notifications"
+        label.startsWith("Not disabled") -> "disabled"
+        label.startsWith("Install updates") -> "install_updates"
+        label.startsWith("Battery:") -> "battery:" + label.substringAfter("(", "").substringBefore(")")
+        label.startsWith("Tailscale") -> "tailscale"
+        label.startsWith("Allow \"lock screen\"") -> "admin"
+        label.startsWith("KOReader patch installed") -> "patch"
+        label.startsWith("KOReader patch answered") -> "patch_seen"
+        label.startsWith("Wi-Fi off/on test") -> "wifi_test"
+        else -> label.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
+    }
+
+    data class State(
+        val ignored: Set<String> = emptySet(),
+        val snoozeCode: Int = 0,
+        val snoozeNotDone: Set<String> = emptySet(),
+        val lastDone: Set<String> = emptySet(),
+    )
+
+    /** needed: rows to fix (not done, not ignored); regressed: of those, done last time; show: prompt now. */
+    data class Result(val needed: List<String>, val regressed: Set<String>, val show: Boolean, val next: State)
+
+    fun evaluate(rows: List<Pair<String, Boolean>>, st: State, versionCode: Int): Result {
+        val done = rows.filter { it.second }.map { it.first }.toSet()
+        val needed = rows.filter { !it.second && it.first !in INFO_ONLY && it.first !in st.ignored }.map { it.first }
+        val regressed = needed.filter { it in st.lastDone }.toSet()
+        // A row fixed since the snooze leaves it; if it breaks again it is new to the snooze.
+        val snoozeLeft = st.snoozeNotDone - done
+        val snoozed = st.snoozeCode == versionCode && snoozeLeft.containsAll(needed)
+        val next = st.copy(snoozeNotDone = snoozeLeft, lastDone = done)
+        return Result(needed, regressed, needed.isNotEmpty() && !snoozed, next)
+    }
+
+    /** "Later": quiet until the next update or a regression. */
+    fun snooze(st: State, needed: List<String>, versionCode: Int): State =
+        st.copy(snoozeCode = versionCode, snoozeNotDone = needed.toSet())
+
+    fun ignore(st: State, id: String): State = st.copy(ignored = st.ignored + id)
+    fun unignoreAll(st: State): State = st.copy(ignored = emptySet())
+}
+
+/** User-visible changes per version, shown once after an update ("What's new"). */
+object WhatsNew {
+    val NOTES: List<Pair<String, List<String>>> = listOf(
+        "0.2.2" to listOf(
+            "Home goes book → BookOrbit home → this launcher → back to your book.",
+            "Setup can install the KOReader patch for you.",
+            "A setup guide for new readers: docs/SETUP.md.",
+        ),
+        "0.2.3" to listOf("No more \"Connecting to Wi-Fi\" message when the reader wakes."),
+        "0.2.4" to listOf(
+            "Setup now tells you when a step needs you (here, in a quiet notification, and in KOReader's Android sync status).",
+            "This list: what changed after each update.",
+        ),
+    )
+
+    /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */
+    fun since(fromCode: Int, toCode: Int, notes: List<Pair<String, List<String>>> = NOTES): List<Pair<String, List<String>>> =
+        notes.filter { (v, _) ->
+            val c = Version.parse(v)?.code ?: return@filter false
+            c in (fromCode + 1)..toCode
+        }
+}
