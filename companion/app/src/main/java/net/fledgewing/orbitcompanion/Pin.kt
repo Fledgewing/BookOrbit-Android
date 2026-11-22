@@ -12,34 +12,54 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
 
+/** A companion page's place in the PIN flow (EinkActivity.pinPage). */
+enum class PinPage {
+    /** Behind the PIN; staying on these keeps an unlock. */
+    PROTECTED,
+    /** Neither: the keypad itself, licenses. */
+    NEUTRAL,
+    /** Launcher, status, setup…: showing one ends an unlock. */
+    OPEN,
+}
+
 /**
  * Settings PIN runtime (docs/DESIGN.md "Settings PIN"). The hash and the back-off live in the
- * app's private prefs; the unlock window lives in memory only (a restart locks).
+ * app's private prefs; the live state (PIN set, guard list, unlock) in one [PinGate] that every
+ * gate reads, so a change counts at once. The unlock is memory only (a restart locks).
  */
 object Pin {
-    private val session = PinSession()
-    private val fixAllowed = HashMap<String, Long>()
+    private val gate = PinGate()
     @Volatile
-    private var selfUpdateUntil = 0L
-    /** A Setup "Fix" is opening a page right now (EinkActivity.tryStart records it). */
-    @Volatile
-    var fixing = false
-        private set
+    private var loaded = false
     /** What to do after the PIN page's next success (same process). */
     private var pending: (() -> Unit)? = null
 
     private fun now() = SystemClock.elapsedRealtime()
 
-    fun isSet(ctx: Context): Boolean = Prefs(ctx).pinHash.isNotEmpty()
+    private fun live(ctx: Context): PinGate {
+        if (!loaded) {
+            synchronized(this) {
+                if (!loaded) {
+                    val p = Prefs(ctx)
+                    gate.pinSet = p.pinHash.isNotEmpty()
+                    gate.guarded = p.guardedApps ?: defaultGuarded(ctx)
+                    loaded = true
+                }
+            }
+        }
+        return gate
+    }
 
-    fun unlocked(): Boolean = session.unlocked(now())
+    fun isSet(ctx: Context): Boolean = live(ctx).pinSet
 
-    fun locked(ctx: Context): Boolean = isSet(ctx) && !unlocked()
+    fun unlocked(): Boolean = gate.unlocked(now())
+
+    fun locked(ctx: Context): Boolean = live(ctx).locked(now())
 
     fun backoff(ctx: Context): PinBackoff = Prefs(ctx).let { PinBackoff(it.pinFailures, it.pinLockedUntil) }
 
-    /** Check an entered PIN. Returns null when right, else the message to show. */
-    fun check(ctx: Context, pin: String): String? {
+    /** Check an entered PIN; right: unlocked for [scope]. Returns null when right, else the message. */
+    fun check(ctx: Context, pin: String, scope: Collection<String>): String? {
         val p = Prefs(ctx)
         val wall = System.currentTimeMillis()
         val b = backoff(ctx)
@@ -47,8 +67,8 @@ object Pin {
         if (wait > 0) return "Too many wrong tries. Wait ${(wait + 999) / 1000} s."
         if (PinHash.verify(pin, p.pinHash)) {
             save(p, b.success())
-            session.unlock(now())
-            OLog.i("pin: unlocked for ${PinSession.WINDOW_MS / 60_000} min")
+            live(ctx).unlock(now(), scope)
+            OLog.i("pin: unlocked${if (scope.isEmpty()) "" else " for ${scope.joinToString()}"} (until it's left, screen-off or ${PinGate.CAP_MS / 60_000} min)")
             return null
         }
         val nb = b.fail(wall)
@@ -63,27 +83,39 @@ object Pin {
         p.pinLockedUntil = b.lockedUntil
     }
 
+    /** Set from Settings (a protected page): live at once; this Settings visit stays unlocked. */
     fun set(ctx: Context, pin: String) {
         val p = Prefs(ctx)
         p.pinHash = PinHash.hash(pin)
         save(p, PinBackoff())
-        session.unlock(now())
-        OLog.i("pin: set")
+        live(ctx).pinSet = true
+        gate.unlock(now())
+        OLog.i("pin: set (live now; guarding ${gate.guarded.joinToString()})")
     }
 
     fun clear(ctx: Context, why: String) {
         val p = Prefs(ctx)
         p.pinHash = ""
         save(p, PinBackoff())
-        session.lock()
+        live(ctx).pinSet = false
+        gate.lock()
         OLog.i("pin: removed ($why)")
     }
 
-    /** Screen off: lock, and end any Setup-fix allowance. */
+    fun guarded(ctx: Context): Set<String> = live(ctx).guarded
+
+    fun setGuarded(ctx: Context, entries: Set<String>) {
+        Prefs(ctx).guardedApps = entries
+        live(ctx).guarded = entries
+    }
+
     fun onScreenOff() {
-        if (session.unlocked(now())) OLog.i("pin: locked (screen off)")
-        session.lock()
-        synchronized(fixAllowed) { fixAllowed.clear() }
+        if (gate.lock()) OLog.i("pin: locked (screen off)")
+    }
+
+    /** A companion page came to the front. */
+    fun onPage(page: PinPage, name: String) {
+        if (page == PinPage.OPEN && gate.lock()) OLog.i("pin: locked (left to $name)")
     }
 
     /** Run [action] now if no PIN is set or it's unlocked; else after the PIN page succeeds. */
@@ -93,24 +125,15 @@ object Pin {
         a.startActivity(PinActivity.intent(a, PinActivity.Mode.UNLOCK))
     }
 
-    /** A Setup "Fix": behind the PIN; the page it opens is allowed by the guard for a while. */
-    fun fix(a: Activity, action: () -> Unit) = run(a) {
-        fixing = true
-        try {
-            action()
-        } finally {
-            fixing = false
-        }
+    /** A Setup "Fix": behind the PIN; the page it opens joins the unlock (EinkActivity.tryStart). */
+    fun fix(a: Activity, action: () -> Unit) = run(a, action)
+
+    /** A page started while unlocked joins the unlock (Setup Fix targets, pages opened from Settings). */
+    fun opened(pkg: String) {
+        if (gate.addScope(pkg, now())) OLog.i("pin: $pkg joins the unlock")
     }
 
-    fun allowAfterFix(pkg: String) {
-        synchronized(fixAllowed) { fixAllowed[pkg] = now() + Guard.FIX_WINDOW_MS }
-        OLog.i("pin: guard allows $pkg for a Setup fix")
-    }
-
-    fun selfUpdateStarted() {
-        selfUpdateUntil = now() + Guard.UPDATE_WINDOW_MS
-    }
+    fun selfUpdateStarted() = gate.selfUpdateStarted(now())
 
     internal fun succeeded() {
         val p = pending
@@ -122,26 +145,69 @@ object Pin {
         pending = null
     }
 
-    /** Android's own Settings packages (and vendor equivalents): guarded by default. */
-    fun settingsPackages(ctx: Context): Set<String> {
+    private fun homes(ctx: Context): List<android.content.pm.ResolveInfo> =
+        ctx.packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)
+
+    /** Packages with the Home role (launchers). */
+    fun homePackages(ctx: Context): Set<String> = homes(ctx).map { it.activityInfo.packageName }.toSet()
+
+    fun homeComponents(ctx: Context): Set<String> = homes(ctx).map { Guard.component(it.activityInfo.packageName, it.activityInfo.name) }.toSet()
+
+    /** Android Settings, by the screens its intents resolve to (Guard.settingsEntry). */
+    fun defaultGuarded(ctx: Context): Set<String> {
         val pm = ctx.packageManager
-        val found = listOf(Settings.ACTION_SETTINGS, Settings.ACTION_WIRELESS_SETTINGS, Settings.ACTION_APPLICATION_SETTINGS)
-            .flatMap { a -> pm.queryIntentActivities(Intent(a), 0).map { it.activityInfo.packageName } }
-        return (found + "com.android.settings").filter { Guard.canGuard(it, ctx.packageName) }.toSet()
+        val homesP = homePackages(ctx)
+        val intents = listOf(
+            Intent(Settings.ACTION_SETTINGS), Intent(Settings.ACTION_WIRELESS_SETTINGS),
+            Intent(Settings.ACTION_APPLICATION_SETTINGS), Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${ctx.packageName}")),
+            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), Intent(Settings.ACTION_SECURITY_SETTINGS),
+        )
+        val found = intents.flatMap { i -> pm.queryIntentActivities(i, 0).map { it.activityInfo.packageName to it.activityInfo.name } }
+            .filter { (pkg, _) -> Guard.canGuard(pkg, ctx.packageName) }
+            .map { (pkg, cls) -> Guard.settingsEntry(pkg, cls, homesP) }
+        return (found + Guard.SETTINGS_PKG).toSet().also { OLog.i("pin: Android Settings guard entries: ${it.joinToString()}") }
     }
 
-    fun guarded(ctx: Context): Set<String> = Prefs(ctx).guardedApps ?: settingsPackages(ctx)
+    private val launchable = HashMap<String, Boolean>()
+    private var homeCache: Pair<Set<String>, Set<String>>? = null
+    private var imeCache: Set<String>? = null
 
-    fun decide(ctx: Context, pkg: String?): Guard.Decision {
+    /** The accessibility service saw [pkg]/[cls] come to the front: end an unlock that it leaves, then gate. */
+    fun onForeground(ctx: Context, pkg: String, cls: String?): Guard.Decision {
+        val g = live(ctx)
+        if (!g.pinSet) return Guard.Decision.ALLOW
+        val (hp, hc) = homeCache ?: (homePackages(ctx) to homeComponents(ctx)).also { homeCache = it }
+        val ime = imeCache ?: try {
+            (ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                .inputMethodList.map { it.packageName }.toSet()
+        } catch (e: Exception) {
+            emptySet()
+        }.also { imeCache = it }
+        val canLaunch = synchronized(launchable) {
+            launchable.getOrPut(pkg) { ctx.packageManager.getLaunchIntentForPackage(pkg) != null }
+        }
+        val fg = Guard.classify(pkg, cls, ctx.packageName, hc, hp, ime, canLaunch, g.guarded) ?: return Guard.Decision.ALLOW
         val t = now()
-        val fix = synchronized(fixAllowed) { fixAllowed.filterValues { it > t }.keys }
-        return Guard.decide(pkg, ctx.packageName, isSet(ctx), unlocked(), guarded(ctx), fix, selfUpdateUntil > t)
+        if (g.onForeground(fg, pkg, t)) OLog.i("pin: locked (left to $pkg/$cls, $fg)")
+        val d = g.decide(pkg, cls, ctx.packageName, t)
+        OLog.d("pin: gate $pkg/$cls ($fg) -> $d")
+        return d
+    }
+
+    /** Home role or launch intents changed (rare): forget the caches. */
+    fun packagesChanged() {
+        homeCache = null
+        imeCache = null
+        synchronized(launchable) { launchable.clear() }
     }
 }
 
 /** The full-screen keypad: unlock, set a new PIN (twice), or the guard's cover over an app. */
 class PinActivity : EinkActivity() {
     enum class Mode { UNLOCK, SET, GUARD }
+
+    override val pinPage = PinPage.NEUTRAL
 
     companion object {
         const val SHOW_PIN = "${Contract.PACKAGE}.action.SHOW_PIN"
@@ -256,7 +322,12 @@ class PinActivity : EinkActivity() {
             }
             return render()
         }
-        val err = Pin.check(this, pin)
+        val scope = when {
+            mode == Mode.GUARD -> listOfNotNull(intent.getStringExtra("guarded"))
+            intent.action == SHOW_PIN -> listOf(Koreader.PKG) // KOReader's Android sync menu
+            else -> emptyList()
+        }
+        val err = Pin.check(this, pin, scope)
         if (err == null) return done()
         message = err
         render()
@@ -290,17 +361,26 @@ class GuardedAppsActivity : EinkActivity() {
         root.addView(Ui.header(this, "Guarded apps", "‹ Back") { finish() })
         root.addView(Ui.text(this, "With the PIN set, these open only after the PIN. Needs Settings › Accessibility › Orbit clicker buttons.", 16f, color = Ui.MID))
         val pm = packageManager
-        val settings = Pin.settingsPackages(this)
-        val apps = (pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() } + settings.map { it to HomeTarget.label(this, it) })
-            .filter { Guard.canGuard(it.first, packageName) }
-            .distinctBy { it.first }
-            .sortedWith(compareBy({ it.first !in settings }, { it.second.lowercase() }))
+        val settings = Pin.defaultGuarded(this)
+        val homes = Pin.homePackages(this)
         val guarded = Pin.guarded(this)
+        root.addView(Ui.row(this, "Android Settings", settings.joinToString(), Ui.toggle(this, settings.all { it in guarded }), onClick = {
+            val now = Pin.guarded(this)
+            val on = settings.all { it in now }
+            Pin.setGuarded(this, if (on) now - settings else now + settings)
+            OLog.i("pin: guard ${if (on) "off" else "on"} for Android Settings")
+            render()
+        }))
+        // Whole apps only; a launcher (Home role) is never guarded whole.
+        val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+            .filter { (pkg, _) -> Guard.canGuard(pkg, packageName) && pkg !in homes && pkg !in settings }
+            .distinctBy { it.first }
+            .sortedBy { it.second.lowercase() }
         apps.forEach { (pkg, label) ->
-            root.addView(Ui.row(this, label, if (pkg in settings) "Android Settings" else null, Ui.toggle(this, pkg in guarded), onClick = {
+            root.addView(Ui.row(this, label, null, Ui.toggle(this, pkg in guarded), onClick = {
                 val now = Pin.guarded(this)
-                Prefs(this).guardedApps = if (pkg in now) now - pkg else now + pkg
+                Pin.setGuarded(this, if (pkg in now) now - pkg else now + pkg)
                 OLog.i("pin: guard ${if (pkg in now) "off" else "on"} for $pkg")
                 render()
             }))

@@ -589,6 +589,9 @@ object WhatsNew {
         "0.4.5" to listOf(
             "Update checks retry twice when GitHub doesn't answer right after Wi-Fi comes up, and no longer blame 'Block connections without VPN' unless it is on.",
         ),
+        "0.4.6" to listOf(
+            "Settings PIN: works as soon as it's set, unlocks only while you stay in the settings or the app you unlocked, and on Boox guards only the Settings screen (no longer the launcher). Home on KOReader's file browser opens BookOrbit home again.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */

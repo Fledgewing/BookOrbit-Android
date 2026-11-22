@@ -122,7 +122,7 @@ class ClickerService : AccessibilityService() {
         if (pkg != foreground) OLog.d("clicker: in front: $pkg")
         foreground = pkg
         editorFocused = false
-        guard(pkg)
+        guard(pkg, event.className?.toString())
     }
 
     override fun onInterrupt() = Unit
@@ -130,13 +130,13 @@ class ClickerService : AccessibilityService() {
     /** Settings PIN app guard (docs/DESIGN.md "Settings PIN"): the keypad over a guarded app. */
     private var guardShownAt = 0L
 
-    private fun guard(pkg: String) {
-        if (Pin.decide(this, pkg) != Guard.Decision.GUARD || PinActivity.showing) return
+    private fun guard(pkg: String, cls: String?) {
+        if (Pin.onForeground(this, pkg, cls) != Guard.Decision.GUARD || PinActivity.showing) return
         // One keypad per arrival: the app's further window events while it opens don't stack more.
         val t = android.os.SystemClock.elapsedRealtime()
         if (t - guardShownAt < 1_500) return
         guardShownAt = t
-        OLog.i("pin: guarded app in front ($pkg): keypad")
+        OLog.i("pin: guarded app in front ($pkg/$cls): keypad")
         try {
             startActivity(PinActivity.intent(this, PinActivity.Mode.GUARD, pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) {

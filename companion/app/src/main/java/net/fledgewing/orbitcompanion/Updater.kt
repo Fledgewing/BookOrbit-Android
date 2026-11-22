@@ -392,6 +392,8 @@ class InstallReceiver : BroadcastReceiver() {
 
 /** Settings › Open-source licenses: the notices generated at build time (assets). */
 class LicensesActivity : EinkActivity() {
+    override val pinPage = PinPage.NEUTRAL
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val text = try {

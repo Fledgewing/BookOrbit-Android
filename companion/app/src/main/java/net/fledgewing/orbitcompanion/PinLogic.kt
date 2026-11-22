@@ -65,35 +65,95 @@ data class PinBackoff(val failures: Int = 0, val lockedUntil: Long = 0) {
     fun success(): PinBackoff = PinBackoff()
 }
 
-/** A right PIN unlocks for 5 minutes or until the screen turns off. Monotonic ms. */
-class PinSession(private val windowMs: Long = WINDOW_MS) {
+/** What came to the front, for ending an unlock (Guard.classify). */
+enum class Fg { KOREADER, HOME, APP, OTHER }
+
+/**
+ * The live PIN state, one per process, shared by the pages, the accessibility service and
+ * /status (no snapshot: set, clear and the guard list change it at once).
+ *
+ * An unlock lasts while the user stays in what it was granted for: the companion's protected
+ * pages (they never end it), the packages in [scope] (a guarded app, a Setup Fix target, pages
+ * opened from a protected page) and nothing else. KOReader, Home, another app or an open
+ * companion page end it at once; so do screen-off and a hard cap ([capMs]).
+ */
+class PinGate(private val capMs: Long = CAP_MS) {
     companion object {
-        const val WINDOW_MS = 5 * 60_000L
+        const val CAP_MS = 15 * 60_000L
     }
 
-    private var until = 0L
+    @Volatile
+    var pinSet = false
+    @Volatile
+    var guarded: Set<String> = emptySet()
+    private var unlockedAt = -1L
+    private val scope = HashSet<String>()
+    private var updateUntil = 0L
 
-    fun unlock(now: Long) {
-        until = now + windowMs
+    @Synchronized
+    fun unlocked(now: Long): Boolean = unlockedAt >= 0 && now - unlockedAt in 0 until capMs
+
+    fun locked(now: Long): Boolean = pinSet && !unlocked(now)
+
+    @Synchronized
+    fun unlock(now: Long, scopePkgs: Collection<String> = emptyList()) {
+        unlockedAt = now
+        scope.clear()
+        scope.addAll(scopePkgs)
     }
 
-    fun unlocked(now: Long): Boolean = now < until
-
-    fun lock() {
-        until = 0L
+    /** A page opened from the unlocked flow joins it. False when locked. */
+    @Synchronized
+    fun addScope(pkg: String, now: Long): Boolean {
+        if (!unlocked(now)) return false
+        return scope.add(pkg)
     }
+
+    @Synchronized
+    fun inScope(pkg: String): Boolean = pkg in scope
+
+    /** True when it was unlocked. */
+    @Synchronized
+    fun lock(): Boolean {
+        val was = unlockedAt >= 0
+        unlockedAt = -1
+        scope.clear()
+        return was
+    }
+
+    /** Something else came to the front: true when that ended the unlock. */
+    @Synchronized
+    fun onForeground(fg: Fg, pkg: String, now: Long): Boolean {
+        if (!unlocked(now)) return false
+        // Home always ends it, even when the launcher's package hosts a screen in scope (Boox).
+        if (fg == Fg.OTHER || (fg != Fg.HOME && pkg in scope)) return false
+        return lock()
+    }
+
+    @Synchronized
+    fun selfUpdateStarted(now: Long, forMs: Long = Guard.UPDATE_WINDOW_MS) {
+        updateUntil = now + forMs
+    }
+
+    @Synchronized
+    fun decide(pkg: String?, cls: String?, own: String, now: Long): Guard.Decision =
+        Guard.decide(pkg, cls, own, pinSet, unlocked(now), guarded, now < updateUntil)
 }
 
 /**
- * The app guard: with a PIN set and the settings locked, a guarded app coming to the front gets
- * the PIN page on top. Never guards the companion, KOReader, phone/emergency or system UI; nor
- * the installer while a companion self-update runs; nor a page a Setup "Fix" just opened.
+ * The app guard: with a PIN set and locked, a guarded app (an entry "pkg", or "pkg/activity"
+ * for one screen of a package that also hosts the launcher) gets the PIN page on top. Never
+ * the companion, KOReader, phone/emergency or system UI; nor the installer during a
+ * companion self-update the user started.
  */
 object Guard {
     enum class Decision { ALLOW, GUARD }
 
+    const val SETTINGS_PKG = "com.android.settings"
+    const val SYSTEM_UI = "com.android.systemui"
+
     val NEVER = setOf(
-        Koreader.PKG, "com.android.systemui",
+        Koreader.PKG, SYSTEM_UI,
         "com.android.dialer", "com.google.android.dialer", "com.android.phone", "com.android.server.telecom",
         "com.android.incallui", "com.android.emergency", "com.google.android.apps.safetyhub",
     )
@@ -104,25 +164,57 @@ object Guard {
         "com.android.permissioncontroller", "com.google.android.permissioncontroller",
     )
 
-    const val FIX_WINDOW_MS = 10 * 60_000L
     const val UPDATE_WINDOW_MS = 10 * 60_000L
 
     fun canGuard(pkg: String, own: String): Boolean = pkg != own && pkg !in NEVER
 
+    fun component(pkg: String, cls: String) = "$pkg/$cls"
+
+    fun matches(guarded: Set<String>, pkg: String, cls: String?): Boolean =
+        pkg in guarded || (cls != null && component(pkg, cls) in guarded)
+
+    /**
+     * The guard entry for a Settings screen [cls] in [pkg]: the whole package for AOSP Settings
+     * or a vendor settings app; only that screen when the package also has the Home role or is
+     * system UI (a Boox resolves Settings to com.onyx, which also hosts its launcher).
+     */
+    fun settingsEntry(pkg: String, cls: String, homePkgs: Set<String>): String =
+        if (pkg == SETTINGS_PKG || (pkg !in homePkgs && pkg != SYSTEM_UI)) pkg else component(pkg, cls)
+
+    /** What [pkg]/[cls] in front means for an unlock; null: our own (the pages decide). */
+    fun classify(
+        pkg: String,
+        cls: String?,
+        own: String,
+        homeComponents: Set<String>,
+        homePkgs: Set<String>,
+        ime: Set<String>,
+        launchable: Boolean,
+        guarded: Set<String>,
+    ): Fg? = when {
+        pkg == own -> null
+        pkg == Koreader.PKG -> Fg.KOREADER
+        cls != null && component(pkg, cls) in homeComponents -> Fg.HOME
+        pkg == SYSTEM_UI || pkg in ime -> Fg.OTHER
+        matches(guarded, pkg, cls) -> Fg.APP
+        pkg in homePkgs -> Fg.OTHER // the launcher package's other windows (overlays, transitions)
+        launchable -> Fg.APP
+        else -> Fg.OTHER
+    }
+
     fun decide(
         pkg: String?,
+        cls: String?,
         own: String,
         pinSet: Boolean,
         unlocked: Boolean,
         guarded: Set<String>,
-        fixAllowed: Set<String>,
         selfUpdate: Boolean,
     ): Decision = when {
         pkg == null || !pinSet || unlocked -> Decision.ALLOW
         !canGuard(pkg, own) -> Decision.ALLOW
         selfUpdate && pkg in INSTALLERS -> Decision.ALLOW
-        pkg in fixAllowed -> Decision.ALLOW
-        pkg in guarded -> Decision.GUARD
+        matches(guarded, pkg, cls) -> Decision.GUARD
         else -> Decision.ALLOW
     }
 }

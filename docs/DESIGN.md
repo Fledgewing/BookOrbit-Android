@@ -242,22 +242,36 @@ Kid-proofing, modelled on the Xteink settings PIN (touch keypad). Optional, off 
 - **Storage:** `Prefs.pinHash` = `pbkdf2-sha256$iterations$salt$hash` (20 000 rounds, 16-byte
   salt) in the app-private prefs; the back-off (failures, locked-until) too. Never the PIN,
   never logged. The unlock window is memory only, so a restart locks (`Pin`, `PinLogic.kt`).
-- **Unlock:** 5 minutes (`PinSession`), ended by `ACTION_SCREEN_OFF` in `OrbitService`.
+- **Live state (v0.4.6):** one `PinGate` per process holds PIN set, the guard list and the
+  unlock; set, clear and Guarded apps change it directly, so the very next window change is
+  gated (0.4.4 only noticed after a restart, because setting the PIN also unlocked it).
+- **Unlock (v0.4.6):** lasts while the user stays in what it was granted for, never a time
+  window: the companion's protected pages (`PinPage.PROTECTED`), plus the packages in its
+  scope (the guarded app it was entered for, `SHOW_PIN`'s KOReader, and any page started from
+  the unlocked flow through `EinkActivity.tryStart`: Setup Fix targets, pages opened from
+  Settings). An open companion page (launcher, status, setup) ends it on resume; the
+  accessibility service ends it when KOReader (unless in scope), Home (always) or another
+  launchable app comes to the front (`Guard.classify`, `PinGate.onForeground`); overlays and
+  system windows don't. Also `ACTION_SCREEN_OFF` and a 15-minute hard cap.
   Wrong tries (`PinBackoff`): 5 free, then 30 s doubling to 5 min, kept across restarts.
 - **Locked pages:** `EinkActivity.pinGuarded` (Settings, Home opens, Clicker buttons and its
-  capture page, Guarded apps): a locked resume opens the keypad, Cancel closes the page.
-  Actions (`Pin.run`): the launcher's Android Settings tile, Check for updates on the status
-  page, turning the PIN off. Setup's Fix buttons go through `Pin.fix`, which also records
-  the package the Fix opens (`EinkActivity.tryStart`) so the guard lets it through for 10 min
-  or until screen-off. The update-ready notification opens the keypad first
-  (`PinActivity.thenInstall`); the install prompt itself stays in memory, never in an extra.
-- **App guard** (`Guard.decide`, run by `ClickerService` on each window-state change): a
-  PIN set, locked, and a guarded package in front → the full-screen keypad on top, Cancel
-  goes Home. Guarded by default: the packages answering `ACTION_SETTINGS` and friends plus
-  `com.android.settings`; the user adds any launchable app. Never: the companion, KOReader,
-  dialer/telecom/emergency and system UI; the installer and permission controller during a
-  self-update started while unlocked (10 min). The Setup row "Clicker buttons / app guard
-  (accessibility) on" shows while a PIN is set, since the guard needs the service.
+  capture and action pages, Guarded apps): a locked resume opens the keypad, Cancel closes
+  the page. Actions (`Pin.run`): the launcher's Android Settings tile, Check for updates on
+  the status page, turning the PIN off, Setup's Fix buttons (`Pin.fix`). The update-ready
+  notification opens the keypad first (`PinActivity.thenInstall`); the install prompt itself
+  stays in memory, never in an extra. The launcher and status pages are never gated.
+- **App guard** (`ClickerService` → `Pin.onForeground` on each window-state change, logging
+  package/activity and the decision): a PIN set, locked, and a guarded entry in front → the
+  full-screen keypad on top, Cancel goes Home. Entries are a package, or `package/activity`
+  for one screen. Android Settings by default: the screens `ACTION_SETTINGS`,
+  `ACTION_APPLICATION_DETAILS_SETTINGS` and similar resolve to, plus `com.android.settings`;
+  a vendor package is guarded whole only when it has no Home role and isn't system UI
+  (`Guard.settingsEntry`; a Boox resolves Settings into `com.onyx`, its launcher too, so only
+  that screen is guarded). The user adds any launchable app except a launcher. Never: the
+  companion, KOReader, dialer/telecom/emergency and system UI; the installer and permission
+  controller during a self-update started while unlocked (10 min). The Setup row "Clicker
+  buttons / app guard (accessibility) on" shows while a PIN is set, since the guard needs the
+  service.
 - **KOReader:** `/status.pin_locked`; the patch's menu shows only "Enter the Settings PIN…"
   and starts `SHOW_PIN`. No answer from the companion → the menu works (`MenuLock.locked`).
 - **Recovery:** `RESET_PIN` over adb only: the receiver requires `DUMP` (shell only), and on

@@ -38,11 +38,14 @@ abstract class EinkActivity : Activity() {
 
     /** Behind the Settings PIN: locked on resume → the keypad; cancel closes this page. */
     open val pinGuarded = false
+    /** Showing an OPEN page ends an unlock (Pin.onPage). */
+    open val pinPage: PinPage get() = if (pinGuarded) PinPage.PROTECTED else PinPage.OPEN
     private var pinAsked = false
 
     override fun onResume() {
         super.onResume()
         resumed++
+        Pin.onPage(pinPage, javaClass.simpleName)
         if (pinGuarded && Pin.locked(this)) {
             if (pinAsked) return finish() // the keypad was cancelled
             pinAsked = true
@@ -81,7 +84,8 @@ abstract class EinkActivity : Activity() {
 
     /** Starts a system page; false (and logged) if this device has no such page. */
     fun tryStart(intent: Intent, what: String): Boolean = try {
-        if (Pin.fixing) intent.resolveActivity(packageManager)?.packageName?.let { Pin.allowAfterFix(it) }
+        // Started while unlocked (a Setup Fix, a page from Settings): it joins the unlock.
+        if (Pin.unlocked()) intent.resolveActivity(packageManager)?.packageName?.takeIf { it != packageName }?.let { Pin.opened(it) }
         startActivity(intent)
         OLog.i("opened $what")
         true

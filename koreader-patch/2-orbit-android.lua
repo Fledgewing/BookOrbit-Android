@@ -2497,11 +2497,27 @@ end
 -- topmost (the plugin's own test, main.lua:1384) and shows its dashboard context
 -- (BookOrbitCatalog:dashboardMode, bookorbit_catalog.lua:1875-1877). Its other views
 -- (book details, lists, sheets over it) don't count.
+local function topWidget()
+    local okt, top = pcall(function() return UIManager:getTopmostVisibleWidget() end)
+    return okt and top or nil
+end
+
+-- What is really showing, by identity with the plugin's catalog widget (never its flag alone:
+-- plugin.catalog_browser stays set while the file browser or a book covers it).
+local function catalogOnTop(p)
+    local cb = p and p.catalog_browser
+    return cb ~= nil and topWidget() == cb
+end
+
+local function widgetName(w)
+    if w == nil then return "nothing" end
+    return tostring(rawget(w, "name") or rawget(w, "title") or "widget")
+end
+
 local function onDashboard(p)
     local cb = p and p.catalog_browser
     if cb == nil then return false end
-    local okt, top = pcall(function() return UIManager:getTopmostVisibleWidget() end)
-    if not okt or top ~= cb then return false end
+    if topWidget() ~= cb then return false end
     if type(cb.dashboardMode) ~= "function" then
         if not compat_logged.catalog then
             compat_logged.catalog = true
@@ -2543,7 +2559,8 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
         from_other = from_other, reopen = reopen,
     }
     log("home (" .. mode .. "):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "BookOrbit view",
-        tostring(view_open), "dashboard on top", tostring(on_dash), "from other app", tostring(from_other),
+        tostring(view_open), "dashboard on top", tostring(on_dash), "(top: " .. widgetName(topWidget()) .. ")",
+        "from other app", tostring(from_other),
         "(paused", paused and fmt(paused) or "-", ")", "reopen current book", reopen and tostring(last) or "no")
     if action == "companion" then return self:openCompanionHome() end
     if action == "dashboard" then return self:onOrbitGoHome() end
@@ -2608,15 +2625,26 @@ function OrbitAndroid:finishHome()
         return
     end
     -- With "Make BookOrbit home" the plugin opens itself when the book closes (main.lua:1404-1412).
-    if p.catalog_browser then
-        log("home: BookOrbit home already open")
+    if p.catalog_browser and catalogOnTop(p) then
+        log("home: BookOrbit home already showing")
         return
     end
-    log("home: opening BookOrbit home")
     if not can(p, "dashboard") then
         log("home: no BookOrbit home action in this plugin; staying in the file browser")
         return
     end
+    if p.catalog_browser then
+        -- Open but covered (the file browser on top): the plugin's open action does nothing while
+        -- catalog_browser is set (main.lua:1381-1385), so close it the plugin's way, then reopen.
+        log("home: BookOrbit home is open but not showing (top: " .. widgetName(topWidget()) .. "); bringing it to the top")
+        local cb = p.catalog_browser
+        local okc, err = pcall(function()
+            if cb.close_callback then cb.close_callback() else UIManager:close(cb); p.catalog_browser = nil end
+        end)
+        if not okc then log("home: closing the covered BookOrbit view failed:", tostring(err)) end
+        p.catalog_browser = nil
+    end
+    log("home: opening BookOrbit home")
     local host = liveUI() or self.ui
     if host and host.handleEvent then host:handleEvent(Event:new("BookOrbitOpenDashboard")) else p:onBookOrbitOpenDashboard() end
     UIManager:scheduleIn(1, function() self:maybeSetupPrompt("home") end)
@@ -2626,7 +2654,7 @@ end
 function OrbitAndroid:whereNow()
     local ui = liveUI() or self.ui
     local p = bookorbit(ui)
-    if p and p.catalog_browser then return "bookorbit" end
+    if catalogOnTop(p) then return "bookorbit" end
     if ui and ui.document then return "reader" end
     return "browser"
 end

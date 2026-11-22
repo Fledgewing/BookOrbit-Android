@@ -47,26 +47,133 @@ class PinLogicTest {
         assertEquals(PinBackoff(), b.success())
     }
 
+    private val onyx = "com.onyx"
+    private val onyxSettings = "com.onyx.settings.SettingsActivity"
+    private val onyxHome = "com.onyx.launcher.HomeActivity"
+    private val homeComponents = setOf(Guard.component(onyx, onyxHome))
+    private val homePkgs = setOf(onyx)
+    private val defaultGuard = setOf(settings, Guard.settingsEntry(onyx, onyxSettings, homePkgs))
+
+    private fun gate(pin: Boolean = true) = PinGate().apply {
+        pinSet = pin
+        guarded = defaultGuard + "com.android.vending"
+    }
+
+    private fun fg(pkg: String, cls: String?, g: PinGate) =
+        Guard.classify(pkg, cls, own, homeComponents, homePkgs, emptySet(), launchable = pkg != "com.onyx.overlay", guarded = g.guarded)
+
+    /** What ClickerService does with each window change: end an unlock it leaves, then decide. */
+    private fun front(g: PinGate, pkg: String, cls: String?, now: Long): Guard.Decision {
+        fg(pkg, cls, g)?.let { g.onForeground(it, pkg, now) }
+        return g.decide(pkg, cls, own, now)
+    }
+
     @Test
-    fun unlockLastsFiveMinutesOrUntilScreenOff() {
-        val s = PinSession()
-        assertFalse(s.unlocked(0))
-        s.unlock(1_000)
-        assertTrue(s.unlocked(1_000 + PinSession.WINDOW_MS - 1))
-        assertFalse(s.unlocked(1_000 + PinSession.WINDOW_MS))
-        s.unlock(2_000)
-        s.lock() // screen off (Pin.onScreenOff)
-        assertFalse(s.unlocked(2_001))
+    fun aPinSetIsLiveForTheVeryNextGuardedEvent() {
+        val g = gate(pin = false)
+        assertEquals(Guard.Decision.ALLOW, front(g, settings, "com.android.settings.Settings", 0))
+        // Set in companion Settings (Pin.set: pinSet + unlocked for that visit), then Home.
+        g.pinSet = true
+        g.unlock(1)
+        front(g, onyx, onyxHome, 2)
+        assertEquals(Guard.Decision.GUARD, front(g, settings, "com.android.settings.Settings", 3))
+        // The guard list is live too.
+        g.guarded = g.guarded + "org.example.browser"
+        assertEquals(Guard.Decision.GUARD, front(g, "org.example.browser", "Main", 4))
+    }
+
+    @Test
+    fun booxSettingsGuardedByScreenNotTheLauncherPackage() {
+        // Settings resolves into com.onyx, which also is the launcher: only that screen is guarded.
+        assertEquals("com.onyx/$onyxSettings", Guard.settingsEntry(onyx, onyxSettings, homePkgs))
+        assertEquals("org.vendor.settings", Guard.settingsEntry("org.vendor.settings", "X", homePkgs))
+        assertEquals(settings, Guard.settingsEntry(settings, "com.android.settings.Settings", setOf(settings)))
+        assertEquals("com.android.systemui/X", Guard.settingsEntry(Guard.SYSTEM_UI, "X", emptySet()))
+        val g = gate()
+        assertEquals(Guard.Decision.ALLOW, front(g, onyx, onyxHome, 0))
+        assertEquals(Guard.Decision.ALLOW, front(g, onyx, "com.onyx.SomeTransition", 1))
+        assertEquals(Guard.Decision.ALLOW, front(g, own, "net.fledgewing.orbitcompanion.LauncherActivity", 2))
+        assertEquals(Guard.Decision.GUARD, front(g, onyx, onyxSettings, 3))
+    }
+
+    @Test
+    fun unlockEndsWhenTheUserLeavesToKoreaderHomeOrAnotherApp() {
+        listOf(Koreader.PKG to "org.koreader.launcher.MainActivity", onyx to onyxHome, "org.example.notes" to "Main").forEach { (pkg, cls) ->
+            val g = gate()
+            g.unlock(0, listOf(settings)) // the keypad over Android Settings
+            assertEquals(Guard.Decision.ALLOW, front(g, settings, "com.android.settings.SubSettings", 1))
+            front(g, pkg, cls, 2)
+            assertFalse("left to $pkg", g.unlocked(3))
+            assertEquals(Guard.Decision.GUARD, front(g, settings, "com.android.settings.Settings", 4))
+        }
+    }
+
+    @Test
+    fun unlockStaysWhileMovingWithinProtectedScreens() {
+        val g = gate()
+        g.unlock(0) // companion Settings
+        // Companion pages are handled by the pages (null: not the service's call).
+        assertEquals(null, fg(own, "net.fledgewing.orbitcompanion.ClickersActivity", g))
+        // A page opened from Settings (accessibility settings) joins the unlock.
+        assertTrue(g.addScope(settings, 1))
+        assertEquals(Guard.Decision.ALLOW, front(g, settings, "com.android.settings.SubSettings", 2))
+        // Launcher overlays and system windows don't end it.
+        front(g, onyx, "com.onyx.SomeTransition", 3)
+        front(g, "com.onyx.overlay", "Toast", 4)
+        assertTrue(g.unlocked(5))
+        // A locked gate takes no scope.
+        val l = gate()
+        assertFalse(l.addScope(settings, 0))
+    }
+
+    @Test
+    fun setupFixTargetAllowedOnlyInThatFlow() {
+        val g = gate()
+        g.unlock(0)
+        g.addScope(settings, 1) // the Fix's target (EinkActivity.tryStart while unlocked)
+        assertEquals(Guard.Decision.ALLOW, front(g, settings, "com.android.settings.Settings", 2))
+        front(g, Koreader.PKG, null, 3)
+        assertEquals(Guard.Decision.GUARD, front(g, settings, "com.android.settings.Settings", 4))
+    }
+
+    @Test
+    fun homeEndsAnUnlockEvenWhenTheLauncherPackageIsInScope() {
+        val g = gate()
+        g.unlock(0, listOf(onyx)) // the keypad over Boox Settings (in com.onyx)
+        assertEquals(Guard.Decision.ALLOW, front(g, onyx, onyxSettings, 1))
+        front(g, onyx, onyxHome, 2)
+        assertTrue(g.locked(3))
+    }
+
+    @Test
+    fun screenOffAndTheHardCapLock() {
+        val g = gate()
+        g.unlock(0)
+        assertTrue(g.lock()) // screen off
+        assertTrue(g.locked(1))
+        g.unlock(100)
+        assertTrue(g.unlocked(100 + PinGate.CAP_MS - 1))
+        assertFalse(g.unlocked(100 + PinGate.CAP_MS))
+    }
+
+    @Test
+    fun koreaderMenuUnlockSurvivesKoreaderInFront() {
+        val g = gate()
+        g.unlock(0, listOf(Koreader.PKG)) // SHOW_PIN from the patch's menu
+        front(g, Koreader.PKG, "org.koreader.launcher.MainActivity", 1)
+        assertFalse(g.locked(2))
+        front(g, onyx, onyxHome, 3)
+        assertTrue(g.locked(4))
     }
 
     private fun decide(
         pkg: String?,
+        cls: String? = null,
         pinSet: Boolean = true,
         unlocked: Boolean = false,
         guarded: Set<String> = setOf(settings, "com.android.vending"),
-        fix: Set<String> = emptySet(),
         update: Boolean = false,
-    ) = Guard.decide(pkg, own, pinSet, unlocked, guarded, fix, update)
+    ) = Guard.decide(pkg, cls, own, pinSet, unlocked, guarded, update)
 
     @Test
     fun guardedAppGetsTheKeypadOnlyWhileLocked() {
@@ -76,12 +183,6 @@ class PinLogicTest {
         assertEquals(Guard.Decision.ALLOW, decide(settings, unlocked = true))
         assertEquals(Guard.Decision.ALLOW, decide(settings, pinSet = false))
         assertEquals(Guard.Decision.ALLOW, decide(null))
-    }
-
-    @Test
-    fun setupFixPageIsAllowed() {
-        assertEquals(Guard.Decision.ALLOW, decide(settings, fix = setOf(settings)))
-        assertEquals(Guard.Decision.GUARD, decide("com.android.vending", fix = setOf(settings)))
     }
 
     @Test

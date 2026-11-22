@@ -205,6 +205,8 @@ class CaptureActivity : EinkActivity() {
  * page actions tap in other apps.
  */
 class ClickActionActivity : EinkActivity() {
+    override val pinGuarded = true
+
     companion object {
         fun intent(ctx: android.content.Context, clicker: String, keycode: Int, kind: PressKind): Intent =
             Intent(ctx, ClickActionActivity::class.java).putExtra("clicker", clicker).putExtra("keycode", keycode).putExtra("kind", kind.key)

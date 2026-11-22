@@ -1182,6 +1182,28 @@ test("home: from the companion page while BookOrbit home is on top, no book -> B
     W.shown = {}
 end)
 
+test("home: file browser on top of a stale BookOrbit home -> BookOrbit home brought to the top", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    run(5)
+    local stale = { dashboardMode = function() return true end }
+    stale.close_callback = function() UIManager:close(stale); ui.bookorbit.catalog_browser = nil end
+    ui.bookorbit.catalog_browser = stale
+    local browser = { name = "filemanager" }
+    W.shown = { stale, browser }
+    W.activities, W.opened = {}, nil
+    command(m, "home_smart", "other_app")
+    m:onResume()
+    run(2)
+    local top = W.shown[#W.shown]
+    ok(#W.activities == 0, "no companion page")
+    ok(ui.bookorbit.catalog_browser ~= nil and ui.bookorbit.catalog_browser ~= stale, "reopened")
+    ok(top == ui.bookorbit.catalog_browser, "BookOrbit home is on top")
+    ok(m:whereNow() == "bookorbit", "where: bookorbit")
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
 test("home: another BookOrbit view on top over an open book -> the book", function()
     store.lastfile = "/books/last.epub"
     W.files["/books/last.epub"] = true
