@@ -152,6 +152,22 @@ are newer. `keymap` (v0.4.0): clicker buttons for the patch, keyed by Android ke
   `Input:handleKeyBoardEv` and drops them there, so KOReader never also acts on them. An
   empty map turns this off.
 
+`clicker_service` (v0.4.2): the companion's accessibility service is running.
+
+### `GET /clicks` (companion 0.4.2+): the click channel
+
+The patch opens `GET /clicks?patch_version=X` on the same port and keeps it open. After an HTTP
+200 header, the companion writes one line per event:
+- `SERVICE on|off`: the accessibility service is running, or isn't.
+- `CLICK <action> <seq>`: do this now. `action` is one of `next`, `prev`, `home`, `back`,
+  `light`, `sync_sleep`; a Send-key action arrives as the page turn it means in KOReader.
+
+While a patch listens, the service takes mapped keys with KOReader in front and sends `CLICK`
+instead of letting the key through. While the channel is up and the service is on, the patch
+ignores mapped keys itself. When the connection closes, both fall back: the service lets keys
+through and the patch handles them. The patch watches the socket in KOReader's ALooper, so a
+click needs no polling.
+
 `wifi_owner`: `none`, `auto` or `manual`. `setup_needed`: how many Setup steps need the user
 (not done and not skipped); the patch shows it as one line in its menu status.
 `setup_prompt` (v0.4.1): `{"key": "clicker,keyboard", "rows": ["Clicker buttons (accessibility)", …]}`

@@ -531,6 +531,8 @@ class OrbitService : Service() {
             "\"wifi\":${Net.wifiConnected(this)},\"wifi_enabled\":${Net.wifiEnabled(this)}," +
             "\"wifi_owner\":\"${prefs.wifiOwner.key}\",\"tailscale\":${Net.vpnUp(this)}," +
             "\"screen_off_permission\":${Net.adminActive(this)},\"setup_needed\":${prefs.setupNeeded}," +
+            // Clicker buttons: the accessibility service is running (it then takes mapped keys in KOReader too).
+            "\"clicker_service\":${ClickerService.connected}," +
             // The KOReader setup box (docs/INTERFACE.md): only when unsnoozed rows need the user.
             "\"setup_prompt\":${setupPrompt()}," +
             "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +
@@ -570,15 +572,21 @@ class OrbitService : Service() {
     private fun serve(c: Socket) {
         val t0 = SystemClock.elapsedRealtime()
         try {
+            c.soTimeout = 2_000
+            val reader = BufferedReader(InputStreamReader(c.getInputStream(), Charsets.ISO_8859_1))
+            val requestLine = reader.readLine() ?: return c.close()
+            while (true) {
+                val h = reader.readLine() ?: break
+                if (h.isEmpty()) break
+            }
+            val parts = requestLine.split(' ')
+            // GET /clicks: the patch's kept-open click channel (ClickChannel), not closed here.
+            if (parts.size >= 2 && parts[0] == "GET" && parts[1].substringBefore('?') == "/clicks") {
+                prefs.patchSeenAt = System.currentTimeMillis()
+                prefs.patchSeenVia = "clicks"
+                return ClickChannel.add(c, Regex("[?&]patch_version=([0-9A-Za-z.+-]+)").find(parts[1])?.groupValues?.get(1))
+            }
             c.use { s ->
-                s.soTimeout = 2_000
-                val reader = BufferedReader(InputStreamReader(s.getInputStream(), Charsets.ISO_8859_1))
-                val requestLine = reader.readLine() ?: return
-                while (true) {
-                    val h = reader.readLine() ?: break
-                    if (h.isEmpty()) break
-                }
-                val parts = requestLine.split(' ')
                 val ok = parts.size >= 2 && (parts[0] == "GET" || parts[0] == "HEAD") && parts[1].substringBefore('?') == "/status"
                 val body = if (ok) statusJson() else "{\"error\":\"not found\"}"
                 val bytes = body.toByteArray(Charsets.UTF_8)
@@ -598,6 +606,7 @@ class OrbitService : Service() {
             }
         } catch (e: Exception) {
             OLog.w("status request failed", e)
+            runCatching { c.close() }
         }
     }
 }

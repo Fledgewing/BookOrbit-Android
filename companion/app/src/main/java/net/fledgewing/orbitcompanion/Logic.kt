@@ -542,6 +542,10 @@ object WhatsNew {
             "New actions: Send Volume up/down and Send key (Page up/down, arrows, Space), through the Orbit keyboard. It switches in only for the key press, then your keyboard comes back.",
             "Setup steps show up when they appear: right after you map a clicker, on the next Home press, and once in KOReader outside a book.",
         ),
+        "0.4.2" to listOf(
+            "Clicker buttons work in KOReader again, including keyboard-mode and gamepad clickers.",
+            "With Settings › Accessibility › Orbit clicker buttons on, one path handles every app: in KOReader it tells the patch, which turns the page exactly. Media keys now work in KOReader this way too.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */

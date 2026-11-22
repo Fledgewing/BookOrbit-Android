@@ -188,7 +188,10 @@ local preload = {
         s = function(n) return n * 1e6 end },
     ["ui/event"] = { new = function(_, name, ...) return { name = name, args = { ... } } end },
     gettext = function(s) return s end,
-    android = { app = { activity = { vm = {}, clazz = { activity = true } } }, jni = jni,
+    -- looper/lib: the /clicks channel adds its socket to KOReader's ALooper.
+    android = { app = { activity = { vm = {}, clazz = { activity = true } }, looper = {} }, jni = jni,
+        lib = { ALooper_addFd = function(_, fd, ident) W.looper_fd = { fd = fd, ident = ident } return 1 end,
+            ALooper_removeFd = function(_, fd) W.looper_removed = fd return 1 end },
         isPackageEnabled = function() return W.companion end },
     ["apps/reader/readerui"] = ReaderUI,
     ["apps/filemanager/filemanager"] = FileManager,
@@ -212,6 +215,8 @@ local preload = {
     socket = { skip = function(n, ...) return select(n + 1, ...) end },
     socketutil = { set_timeout = function() end, reset_timeout = function() end },
     ltn12 = { sink = { null = function() end, table = function(t) return function(chunk) if chunk then table.insert(t, chunk) end return 1 end end } },
+    -- KOReader's Android input module: waitForEvent returns what the test queues (default: EINTR).
+    ["ffi/input_android"] = { waitForEvent = function() return false, 4 end },
     ["libs/libkoreader-lfs"] = { attributes = function(f, k) return W.files[f] and "file" or nil end },
     json = { decode = function(s) if W.json[s] then return W.json[s] end return { version = "1" } end },
     -- Stand-in hash: "sha:<length>" padded, enough to check the wiring (the real one is ffi/sha2).
@@ -834,6 +839,99 @@ test("clicker: mapped keys turn pages inside KOReader; others reach KOReader unt
     m:onResume()
     run(2)
     ok(Input:handleKeyBoardEv({ code = 87, value = 1 }) == "key87", "map cleared")
+    W.web[url], W.json.STATUS = nil, nil
+end)
+
+test("clicker: letters, gamepad buttons, DPAD and volume reach the action through the live Device.input", function()
+    local url = "http://127.0.0.1:47913/status"
+    W.web[url] = "STATUS"
+    W.json.STATUS = { version = "0.4.2", keymap = { ["38"] = { press = "prev" }, ["36"] = { press = "next" },
+        ["96"] = { press = "next" }, ["22"] = { press = "next" }, ["25"] = { press = "next" } } }
+    local Input = require("device/input")
+    local Device = require("device")
+    -- As after inhibitInput (input.lua:1859-1905): a stock handler copied onto the instance,
+    -- shadowing the class (the 0.4.1 hook sat on the class only).
+    local stock_inst = function(_, ev) W.inst_stock = (W.inst_stock or 0) + 1 return "inst" .. ev.code end
+    Device.input = setmetatable({ event_map = { [38] = "J", [36] = "H", [22] = "Right", [25] = "LPgFwd" },
+        handleKeyBoardEv = stock_inst }, { __index = Input })
+    local ui, m = newUI(true)
+    m:onResume()
+    run(2)
+    local events = {}
+    ui.handleEvent = function(_, ev) table.insert(events, ev.name .. ":" .. tostring(ev.args[1])) end
+    W.inst_stock, W.logs = 0, {}
+    for _, code in ipairs({ 38, 36, 96, 22, 25 }) do
+        ok(Device.input:handleKeyBoardEv({ code = code, value = 1 }) == nil, "mapped key " .. code .. " dropped")
+        Device.input:handleKeyBoardEv({ code = code, value = 0 })
+    end
+    ok(table.concat(events, ",") == "GotoViewRel:-1,GotoViewRel:1,GotoViewRel:1,GotoViewRel:1,GotoViewRel:1", table.concat(events, ","))
+    ok(Device.input:handleKeyBoardEv({ code = 37, value = 1 }) == "inst37", "unmapped letter reaches KOReader")
+    ok(W.inst_stock == 1, "only the unmapped key reached the stock handler")
+    local logged = table.concat(W.logs, "\n")
+    ok(logged:find("key 38 J down -> mapped (own path)", 1, true), "every key is logged: " .. logged)
+    ok(logged:find("key 37 ? down -> pass", 1, true), "unmapped logged too")
+    Device.input = nil
+    W.web[url], W.json.STATUS = nil, nil
+end)
+
+test("clicker: one path; the service's clicks arrive over /clicks, no double page turn, fallback when it's off", function()
+    local url = "http://127.0.0.1:47913/status"
+    W.web[url] = "STATUS"
+    W.json.STATUS = { version = "0.4.2", clicker_service = true, keymap = { ["38"] = { press = "prev" } } }
+    local socket = require("socket")
+    local inbox, sent, closed = {}, {}, false
+    socket.tcp = function()
+        return {
+            settimeout = function() end,
+            connect = function(_, host, port) W.connected = host .. ":" .. port return 1 end,
+            getfd = function() return 42 end,
+            send = function(_, d) table.insert(sent, d) return #d end,
+            receive = function()
+                if #inbox > 0 then return nil, "timeout", table.remove(inbox, 1) end
+                if closed then return nil, "closed", "" end
+                return nil, "timeout", ""
+            end,
+            close = function() end,
+        }
+    end
+    local ui, m = newUI(true)
+    m:onResume()
+    run(2)
+    ok(W.connected == "127.0.0.1:47913", "channel connected")
+    ok(sent[1] and sent[1]:find("^GET /clicks%?patch_version="), "asked for /clicks: " .. tostring(sent[1]))
+    ok(W.looper_fd and W.looper_fd.fd == 42, "socket watched in KOReader's looper")
+    local events = {}
+    ui.handleEvent = function(_, ev) table.insert(events, ev.name .. ":" .. tostring(ev.args[1])) end
+    local wait = require("ffi/input_android").waitForEvent
+    table.insert(inbox, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nSERVICE on\n")
+    local okw = wait()
+    ok(okw == false, "no click yet: the stock result")
+    -- The service is on: a key that still reaches KOReader is not turned into a second page turn.
+    local Input = require("device/input")
+    W.stock_keys = 0
+    ok(Input:handleKeyBoardEv({ code = 38, value = 1 }) == "key38", "own path off while the service handles keys")
+    ok(#events == 0, "no double page turn")
+    table.insert(inbox, "CLICK prev 1\n")
+    local okc, evs = wait()
+    ok(okc == true and type(evs) == "table" and #evs == 0, "a click wakes UIManager")
+    run(1)
+    ok(events[1] == "GotoViewRel:-1", "the click turned the page: " .. tostring(events[1]))
+    ok(table.concat(W.logs, "\n"):find("CLICK prev done", 1, true), "logged")
+    -- Service off: the patch's own key path is back.
+    table.insert(inbox, "SERVICE off\n")
+    wait()
+    ok(Input:handleKeyBoardEv({ code = 38, value = 1 }) == nil, "own path again")
+    Input:handleKeyBoardEv({ code = 38, value = 0 })
+    ok(events[2] == "GotoViewRel:-1", "fallback turned the page")
+    -- The companion goes away: the channel closes, the own path stays on.
+    table.insert(inbox, "SERVICE on\n")
+    wait()
+    closed = true
+    wait()
+    ok(W.looper_removed == 42, "fd removed from the looper")
+    ok(Input:handleKeyBoardEv({ code = 38, value = 1 }) == nil, "own path after the channel closed")
+    ok(#events == 3, "one turn per press")
+    socket.tcp = nil
     W.web[url], W.json.STATUS = nil, nil
 end)
 

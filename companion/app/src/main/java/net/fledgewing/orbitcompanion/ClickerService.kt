@@ -91,15 +91,18 @@ class ClickerService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         OLog.i("clicker: accessibility service connected")
+        ClickChannel.service(true)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
         OLog.i("clicker: accessibility service unbound")
+        ClickChannel.service(false)
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
+        if (instance != null) ClickChannel.service(false)
         instance = null
         main.removeCallbacksAndMessages(null)
         super.onDestroy()
@@ -123,13 +126,33 @@ class ClickerService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    /** External devices whose keys passed untouched (not a captured clicker): logged once each. */
+    private val unknownSeen = HashSet<String>()
+
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val dev = event.device
+        // Never the reader's own buttons or a virtual keyboard; keycodes are logged only for
+        // captured clickers (never for a keyboard someone types on).
         if (!ClickerStore.isClicker(dev)) return false
         val fg = foreground
-        // KOReader: the patch handles mapped keys exactly. Our own pages: the capture screen.
-        if (fg == Koreader.PKG || fg == packageName) return false
-        val acts = ClickerStore.map(this).lookup(dev.name, dev.vendorId, dev.productId, event.keyCode, fg) ?: return false
+        val down = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
+        val acts = ClickerStore.map(this).lookup(dev.name, dev.vendorId, dev.productId, event.keyCode, fg)
+        if (acts == null) {
+            if (ClickerStore.map(this).clicker(Clicker.profileId(dev.name, dev.vendorId, dev.productId)) == null && unknownSeen.add(dev.name)) {
+                OLog.i("clicker: keys from ${dev.name} (sources 0x${Integer.toHexString(dev.sources)}, not a captured clicker) pass through")
+            } else if (down) {
+                OLog.i("clicker: key ${event.keyCode} from ${dev.name} in ${fg ?: "?"} -> pass (not mapped here)")
+            }
+            return false
+        }
+        // One path (ClickRoute): KOReader gets the action from us when the patch listens.
+        val route = ClickRoute.route(fg, packageName, ClickChannel.listening)
+        if (down) OLog.i("clicker: key ${event.keyCode} from ${dev.name} in ${fg ?: "?"} -> ${when (route) {
+            ClickRoute.Route.PASS -> if (fg == Koreader.PKG) "pass (patch not listening: its own key path)" else "pass"
+            ClickRoute.Route.TO_PATCH -> "KOReader via the patch"
+            ClickRoute.Route.ACT -> "act"
+        }}")
+        if (route == ClickRoute.Route.PASS) return false
         val key = "${dev.descriptor}:${event.keyCode}"
         val t = timers.getOrPut(key) { PressTimer() }
         val now = SystemClock.uptimeMillis()
@@ -155,6 +178,11 @@ class ClickerService : AccessibilityService() {
 
     private fun run(a: ClickAction, keycode: Int, pkg: String?) {
         OLog.i("clicker: key $keycode -> ${a.label.lowercase()} in ${pkg ?: "?"}")
+        if (pkg == Koreader.PKG) {
+            // Exact in KOReader: the patch turns the page with KOReader's own event, never a tap.
+            if (!ClickChannel.send(a)) OLog.w("clicker: KOReader's patch stopped listening; ${a.key} lost")
+            return
+        }
         when (a) {
             ClickAction.NEXT, ClickAction.PREV -> {
                 val zone = ClickerStore.map(this).zoneFor(pkg, a, Vendor.profile(this).tapZones)

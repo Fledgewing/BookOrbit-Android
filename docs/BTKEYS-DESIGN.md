@@ -75,6 +75,48 @@ Each app decides which keycodes it handles:
    `ClickerButton.resolve(pkg)` picks the app's override, else the default; the KOReader
    override (package `org.koreader.launcher`) decides what the patch gets in `keymap`.
 
+## One path (v0.4.2)
+
+Device test of 0.4.1: an 8BitDo Micro in keyboard mode (sources KEYBOARD|DPAD|JOYSTICK, keys
+J/H/G = 38/36/35) did nothing in KOReader, and neither the service nor the patch logged a key.
+
+How KOReader on Android gets keys (koreader-base `ffi/input_android.lua`, commit ab4cb58):
+`keyEventHandler` (lines 195-231) turns every key the activity receives into an `EV_KEY`
+with the Android keycode, which `Input:waitEvent` hands to `Input:handleKeyBoardEv`
+(KOReader `frontend/device/input.lua:723`, called at :1814). Letters are in the Android event
+map (`frontend/device/android/event_map.lua:2-6`), and gamepad buttons and DPAD reach Lua too.
+Media keys, power and, while KOReader ignores them, volume keys go back to Android unconsumed
+and never reach Lua, so the patch alone can never map those. The 0.4.1 hook wrapped only the
+`Input` class. `Input:inhibitInput` (input.lua:1859-1905, run by `ReaderUI:init` and by
+suspend) copies the handler onto the live `Device.input`, and that copy then hides the class
+method.
+
+The design (approved by the maintainer):
+- **One interception path.** With the accessibility service on, it takes mapped keys in every
+  app, KOReader included. With KOReader in front it consumes the key, times press, hold and
+  double, and sends the action to the patch over `GET /clicks` (docs/INTERFACE.md). The patch
+  does it with KOReader's own event (`GotoViewRel`, `ToggleFrontlight`, Back, Home, Sync and
+  sleep), never a tap, and logs `CLICK <action> done`.
+- **No polling.** The patch can't register a broadcast receiver, so it adds the channel's
+  socket fd to KOReader's own `ALooper` (`ALooper_addFd`, ident 20306). It wraps
+  `ffi/input_android`'s `waitForEvent` to read the socket after each wake-up; when a click
+  arrived it returns at once, so UIManager runs it.
+- **The patch's own key path is the fallback**, used unless the channel is up and the service
+  is on (`SERVICE on/off` lines; `clicker_service` in `/status`). Nothing turns two pages:
+  - the service consumes only while the patch listens;
+  - the patch ignores mapped keys while the service handles them.
+- **The fallback hook** is installed on the `Input` class and on `Device.input`, at load, init
+  and every resume.
+- **Logging.** The service logs `key <code> from <device> in <pkg> -> act/pass/KOReader via
+  the patch` for captured clickers, and once per unknown external device with its sources. It
+  never logs keycodes from devices that aren't captured clickers, such as a keyboard someone
+  types on. The patch logs `key <code> <name> down/up -> <result>` for every key, behind
+  "Log every key", which is on by default for now.
+- **Gamepads.** `ClickerStore.isClicker` takes any external, non-virtual input device, so
+  gamepad-classified clickers are included. Whether Android's key filter hands a pure-gamepad
+  source button (no KEYBOARD bit) to accessibility services is still to be seen on a device:
+  the service's per-device log line shows its sources and every key it gets.
+
 ## Send key (v0.4.1)
 
 Some readers turn pages on keys, not taps (Volume, Page up/down, arrows, Space). An

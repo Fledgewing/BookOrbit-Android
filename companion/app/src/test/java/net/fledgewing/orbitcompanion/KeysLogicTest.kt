@@ -79,6 +79,18 @@ class KeysLogicTest {
         assertFalse(Keyboard.takesText(android.text.InputType.TYPE_NULL))
     }
 
+    @Test
+    fun onePathKoreaderGetsTheActionFromTheServiceWhenThePatchListens() {
+        val own = "net.fledgewing.orbitcompanion"
+        assertEquals(ClickRoute.Route.TO_PATCH, ClickRoute.route(Koreader.PKG, own, patchListening = true))
+        assertEquals("no channel: KOReader's own key path", ClickRoute.Route.PASS, ClickRoute.route(Koreader.PKG, own, patchListening = false))
+        assertEquals(ClickRoute.Route.ACT, ClickRoute.route(readest, own, patchListening = true))
+        assertEquals("the capture screen gets raw keys", ClickRoute.Route.PASS, ClickRoute.route(own, own, patchListening = true))
+        assertEquals("CLICK prev 7\n", ClickRoute.clickLine(ClickAction.SEND_VOL_UP, 7))
+        assertEquals("CLICK light 8\n", ClickRoute.clickLine(ClickAction.LIGHT, 8))
+        assertEquals("SERVICE off\n", ClickRoute.serviceLine(false))
+    }
+
     private val prev = "com.a/.Ime"
 
     @Test

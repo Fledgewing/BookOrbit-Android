@@ -183,6 +183,9 @@ for press, and optionally for hold (0.6 s) and double press (0.35 s).
   - done = enabled in Android and connected;
   - a freeze or force-stop is a regression, which feeds "Setup needs you";
   - an info row names Key Mapper (or another key filter) when one is on.
+- **One path (v0.4.2):** with the service on, KOReader's mapped keys go through it too; it
+  sends the action over `/clicks` and the patch does it exactly. The patch's own key path is
+  the fallback when the service is off ([BTKEYS-DESIGN.md](BTKEYS-DESIGN.md#one-path-v042)).
 - **Per-app actions (v0.4.1):** a default action per button and kind, and any app can
   override the action itself ("+ Override for another app": app → action → tap zone for page
   actions). KOReader's override decides the patch's `keymap`.

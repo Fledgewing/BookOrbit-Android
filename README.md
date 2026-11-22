@@ -151,7 +151,9 @@ Expected: no change in wakeups or alarms, and under a second of CPU a day.
 Orbit Companion › Settings › Clicker buttons maps a Bluetooth clicker's buttons (press, hold,
 double press) to a small set of actions: next or previous page, Home, Back, frontlight, and
 Sync and sleep.
-- **In KOReader** the patch turns pages exactly.
+- **In KOReader** the patch turns pages exactly. With the accessibility service on, the service
+  catches the button in KOReader too and tells the patch, so media keys work there as well;
+  without it, the patch catches the keys itself.
 - **In other apps** an accessibility service sends page taps. It is switched on by you, holds
   key filtering only, and cannot read window content. It acts only on mapped buttons from
   your clicker and never stores or sends key presses.

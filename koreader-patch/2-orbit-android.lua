@@ -614,6 +614,23 @@ function Clicks.tick(st, now, acts)
     return nil
 end
 
+-- One interception path (v0.4.2, docs/BTKEYS-DESIGN.md "One path"): with the companion's
+-- accessibility service on, it takes mapped keys in KOReader too and sends the action over the
+-- /clicks channel. The patch's own key path is the fallback: on unless the channel is up and
+-- the service on, so a key never turns two pages.
+function Clicks.ownPath(channel_up, service_on)
+    return not (channel_up and service_on)
+end
+
+-- A /clicks line: "CLICK next 12" -> "click", "next"; "SERVICE on" -> "service", true.
+function Clicks.parseLine(line)
+    local action = type(line) == "string" and line:match("^CLICK (%S+)")
+    if action then return "click", Clicks.ACTIONS[action] and action or nil end
+    local svc = type(line) == "string" and line:match("^SERVICE (%S+)")
+    if svc then return "service", svc == "on" end
+    return nil
+end
+
 ---------------------------------------------------------------------------------------------
 -- "Setup needs you" box (companion 0.4.1+): /status carries setup_prompt = { key, rows } only
 -- while rows need the user and they didn't say Later (the companion's snooze). Shown once per
@@ -710,6 +727,7 @@ local DEFAULTS = {
     open_book_at_exit = nil,      -- path of the open book; set on ReaderReady, cleared on a close
     home_book = nil,              -- the book Home closed (fallback path); cleared by a user close or another book
     saved_pages_before_update = nil, -- the plugin's Push while reading value, kept while ours is on
+    key_log = true,               -- log every key KOReader gets (clicker diagnosis; v0.4.2 default on)
 }
 
 local S = G_reader_settings:readSetting("orbit_android") or {}
@@ -1172,6 +1190,8 @@ end
 ---------------------------------------------------------------------------------------------
 
 local Shared = {}
+-- The /clicks channel's state (filled in below, "The /clicks channel").
+local Channel = { up = false, service_on = false, buf = "" }
 
 function Shared.defaultMode()
     return Companion.installed() and "jit" or "always_on"
@@ -1199,8 +1219,11 @@ function Shared.refresh(why)
         local m = Clicks.parse(st.keymap)
         local n = 0
         for _ in pairs(m) do n = n + 1 end
-        if n ~= Clicks.count then log("clicker: key map from the companion,", n, "key(s)") end
+        if n ~= Clicks.count or why == "start" then log("clicker: key map from the companion,", n, "key(s) (" .. why .. ")") end
         Clicks.map, Clicks.count = m, n
+        -- One path: the channel (when the companion has it) lets its service drive KOReader.
+        if st.clicker_service ~= nil then Shared.clicker_service = st.clicker_service == true end
+        if n > 0 and not Channel.up then pcall(Channel.connect, why) end
     end
     -- "Setup needs you": the count in the menu status; setup_prompt for the one-time box.
     Shared.setup_needed = st and tonumber(st.setup_needed) or nil
@@ -1926,21 +1949,181 @@ function Clicks.onKey(ev)
     return true
 end
 
--- Wrap Input:handleKeyBoardEv (input.lua:723; called per EV_KEY at :1814). Returning nothing
--- drops the event, so a mapped key never also does KOReader's own thing.
-do
+---------------------------------------------------------------------------------------------
+-- The /clicks channel (companion 0.4.2+): a kept-open loopback connection the companion writes
+-- one line per action to. Its fd is added to KOReader's own ALooper (the one
+-- ffi/input_android.lua waitForEvent polls), so a click wakes KOReader at once and nothing
+-- polls. waitForEvent is wrapped to read the socket after every wake-up.
+---------------------------------------------------------------------------------------------
+
+Channel.IDENT, Channel.EVENT_INPUT = 20306, 1 -- our looper ident (KOReader uses 1-3); ALOOPER_EVENT_INPUT
+
+local function looper()
+    if not has_android or type(android) ~= "table" or not android.app or not android.lib then return nil end
+    pcall(ffi.cdef, [[
+        int ALooper_addFd(ALooper* looper, int fd, int ident, int events, ALooper_callbackFunc callback, void* data);
+        int ALooper_removeFd(ALooper* looper, int fd);
+    ]])
+    return android.app.looper
+end
+
+function Channel.close(why)
+    if Channel.sock then
+        local lp = looper()
+        if lp and Channel.fd then pcall(function() android.lib.ALooper_removeFd(lp, Channel.fd) end) end
+        pcall(function() Channel.sock:close() end)
+    end
+    if Channel.up then log("clicks: channel closed (" .. why .. "); KOReader's own key path is on") end
+    Channel.sock, Channel.fd, Channel.up, Channel.service_on, Channel.buf = nil, nil, false, false, ""
+end
+
+function Channel.onLine(line)
+    local kind, v = Clicks.parseLine(line)
+    if kind == "service" then
+        if v ~= Channel.service_on then
+            log("clicks: companion's clicker service", v and "on: it handles mapped keys" or "off: KOReader's own key path is on")
+        end
+        Channel.service_on = v
+    elseif kind == "click" and v then
+        UIManager:nextTick(function()
+            Clicks.run(v, "service")
+            log("CLICK", v, "done")
+        end)
+        return true
+    elseif kind == "click" then
+        log("clicks: unknown action in", line)
+    end
+    return false
+end
+
+-- Read what arrived (never blocks). True if a click is to be done.
+function Channel.drain()
+    local sock = Channel.sock
+    if not sock then return false end
+    local got = false
+    for _i = 1, 16 do
+        local data, err, partial = sock:receive(4096)
+        local chunk = data or partial
+        if chunk and #chunk > 0 then Channel.buf = Channel.buf .. chunk end
+        if err == "closed" then Channel.close("the companion went away") break end
+        if not data then break end
+    end
+    while true do
+        local line, rest = Channel.buf:match("^([^\n]*)\n(.*)$")
+        if not line then break end
+        Channel.buf = rest
+        if Channel.onLine((line:gsub("\r$", ""))) then got = true end
+    end
+    return got
+end
+
+local wait_wrapped = false
+local function wrapWait()
+    if wait_wrapped then return true end
+    local okm, mod = pcall(require, "ffi/input_android")
+    if not okm or type(mod) ~= "table" or type(mod.waitForEvent) ~= "function" then return false end
+    local stock_wait = mod.waitForEvent
+    mod.waitForEvent = function(...)
+        local ok, ev, extra = stock_wait(...)
+        if Channel.sock then
+            local okd, got = pcall(Channel.drain)
+            -- Our fd woke the looper (input_android returns EINTR for it): hand control back so
+            -- UIManager runs the click now instead of waiting out its deadline.
+            if okd and got and not ok then return true, {} end
+        end
+        return ok, ev, extra
+    end
+    wait_wrapped = true
+    return true
+end
+
+function Channel.connect(why)
+    if Channel.up or not Companion.installed() then return Channel.up end
+    local lp = looper()
+    if not lp or not wrapWait() then return false end
+    local oks, socket = pcall(require, "socket")
+    if not oks or type(socket.tcp) ~= "function" then return false end
+    local sock = socket.tcp()
+    sock:settimeout(1)
+    local ok, err = sock:connect("127.0.0.1", 47913)
+    if not ok then
+        sock:close()
+        log("clicks: no channel (" .. why .. "):", err)
+        return false
+    end
+    local fd = sock:getfd()
+    local okA, rc = pcall(function() return android.lib.ALooper_addFd(lp, fd, Channel.IDENT, Channel.EVENT_INPUT, nil, nil) end)
+    if not okA or rc ~= 1 then
+        sock:close()
+        log("clicks: can't watch the channel in KOReader's event loop; own key path only")
+        return false
+    end
+    sock:send("GET /clicks?patch_version=" .. PATCH_VERSION .. " HTTP/1.0\r\n\r\n")
+    sock:settimeout(0)
+    Channel.sock, Channel.fd, Channel.up, Channel.buf = sock, fd, true, ""
+    log("clicks: channel open (" .. why .. ")")
+    return true
+end
+
+---------------------------------------------------------------------------------------------
+-- KOReader's key path: Input:handleKeyBoardEv (input.lua:723), called for every EV_KEY at
+-- :1814. On Android every key the activity gets becomes an EV_KEY with the Android keycode
+-- (ffi/input_android.lua keyEventHandler:195-231), letters and gamepad buttons included;
+-- media keys, power and (when KOReader ignores them) volume keys are handed back to Android
+-- unconsumed and never reach Lua, so only the companion's service can map those.
+-- Returning nothing drops the event, so a mapped key never also does KOReader's own thing.
+-- Installed on the Input class and on the live Device.input: inhibitInput (input.lua:1859-1905,
+-- used by ReaderUI:init and suspend) copies the handler onto the instance, which then shadows
+-- the class.
+---------------------------------------------------------------------------------------------
+
+local key_wrappers = setmetatable({}, { __mode = "k" })
+
+function Clicks.handleKey(self, ev, stock)
+    local acts = ev and Clicks.map[ev.code]
+    local result
+    if acts and Clicks.ownPath(Channel.up, Channel.service_on) then
+        local ok, mine = pcall(Clicks.onKey, ev)
+        if ok and mine then result = "mapped (own path)" end
+        if not ok then log("clicker: key handler error:", mine) end
+    elseif acts then
+        result = nil -- the companion's service has it; anything that still arrives is KOReader's
+    end
+    if S.key_log and ev and ev.code then
+        local name = self and type(self.event_map) == "table" and self.event_map[ev.code] or "?"
+        local what = result or (acts and "pass (service handles mapped keys)" or "pass")
+        log("key", ev.code, name, ev.value == 1 and "down" or ev.value == 0 and "up" or "repeat", "->", what)
+    end
+    if result then return end
+    return stock(self, ev)
+end
+
+local function wrapKey(stock)
+    local w = function(self, ev) return Clicks.handleKey(self, ev, stock) end
+    key_wrappers[w] = true
+    return w
+end
+
+function Clicks.install(why)
     local okI, Input = pcall(require, "device/input")
-    if okI and type(Input) == "table" and Input.handleKeyBoardEv then
-        local stock_key = Input.handleKeyBoardEv
-        function Input:handleKeyBoardEv(ev)
-            if ev and Clicks.map[ev.code] then
-                local ok, mine = pcall(Clicks.onKey, ev)
-                if ok and mine then return end
+    if okI and type(Input) == "table" and type(Input.handleKeyBoardEv) == "function" and not key_wrappers[Input.handleKeyBoardEv] then
+        Input.handleKeyBoardEv = wrapKey(Input.handleKeyBoardEv)
+        log("clicker: key hook on Input (" .. why .. ")")
+    end
+    local inst = type(Device) == "table" and rawget(Device, "input") or nil
+    if type(inst) == "table" and inst ~= Input then
+        for _i, field in ipairs({ "handleKeyBoardEv", "_key_ev_handler" }) do
+            local own = rawget(inst, field)
+            -- handleKeyBoardEv is the power-only handler while input is inhibited: leave it.
+            local inhibited = field == "handleKeyBoardEv" and rawget(inst, "_key_ev_handler") ~= nil
+            if type(own) == "function" and not key_wrappers[own] and not inhibited then
+                inst[field] = wrapKey(own)
+                log("clicker: key hook on Device.input." .. field .. " (" .. why .. ")")
             end
-            return stock_key(self, ev)
         end
     end
 end
+Clicks.install("load")
 
 local OrbitAndroid = WidgetContainer:extend{
     name = "orbitandroid",
@@ -1950,6 +2133,7 @@ local OrbitAndroid = WidgetContainer:extend{
 
 function OrbitAndroid:init()
     state.module = self
+    Clicks.install("init")
     self:onDispatcherRegisterActions()
     if self.ui and self.ui.menu then self.ui.menu:registerToMainMenu(self) end
     local in_reader = self.ui ~= nil and self.ui.document ~= nil
@@ -2022,6 +2206,7 @@ function OrbitAndroid:onResume()
     state.suspended_at = nil
     Wifi.state().foreground = true
     log("resume", state.paused_for and ("after " .. fmt(state.paused_for) .. " in the background") or "")
+    Clicks.install("resume")
     UIManager:scheduleIn(0.3, function()
         Shared.refresh("resume")
         Wifi.applySettings("resume")
@@ -2968,6 +3153,7 @@ function OrbitAndroid:menuItems()
         toggle("wake_tailscale", _("Wake Tailscale before syncing")),
         toggle("sync_on_wake", _("Always sync on wake")),
         toggle("sync_on_sleep", _("Sync when the screen goes off")),
+        toggle("key_log", _("Log every key (clicker diagnosis)")),
         {
             text_func = function() return _("Sync while reading: ") .. _(Schedule.option(S.reading_schedule).label) end,
             sub_item_table = schedule_items,

@@ -479,6 +479,20 @@ test("clicks: double within 0.35 s, else the single after the window", function(
     eq(Clicks.tick(st, 10.45, a), "press")
 end)
 
+test("clicker: one path; the patch's own keys only when the service can't", function()
+    eq(Clicks.ownPath(false, false), true)
+    eq(Clicks.ownPath(true, false), true, "service off")
+    eq(Clicks.ownPath(false, true), true, "no channel")
+    eq(Clicks.ownPath(true, true), false, "service handles them: never two page turns")
+    local k, v = Clicks.parseLine("CLICK next 3")
+    eq(k, "click"); eq(v, "next")
+    k, v = Clicks.parseLine("CLICK nuke 4")
+    eq(k, "click"); eq(v, nil)
+    k, v = Clicks.parseLine("SERVICE off")
+    eq(k, "service"); eq(v, false)
+    eq(Clicks.parseLine("HTTP/1.1 200 OK"), nil)
+end)
+
 -- SetupPrompt: the one-time setup box, never in a book
 local SetupPrompt = M.SetupPrompt
 test("setup box: only off a book, once per key, never when snoozed", function()
