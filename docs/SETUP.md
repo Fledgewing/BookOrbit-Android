@@ -117,6 +117,37 @@ time Wi-Fi and BookOrbit home work only inside KOReader.
 6. Used **Key Mapper** before? Turn it off once Orbit's buttons work; you can then uninstall
    it. Two key mappers both see every key and can fight.
 
+## 8c. A Settings PIN (optional)
+
+Keeps kids out of the settings. Off until you set one.
+
+1. Orbit Companion › Settings › **Settings PIN**: type 4–8 digits on the keypad, then again.
+2. Behind the PIN: the companion's Settings and Clicker buttons, Setup's **Fix** buttons, the
+   update install, turning the PIN off, the launcher's **Android Settings** tile and the
+   KOReader **Android sync** menu.
+3. **Guarded apps** (Settings, once a PIN is set): Android Settings is on the list; add any app,
+   such as the Play Store or a browser. A guarded app opens behind the keypad; **Cancel** goes
+   Home. This needs Android **Settings › Accessibility › Orbit clicker buttons**: Setup shows
+   a "Clicker buttons / app guard (accessibility) on" row while a PIN is set.
+4. A right PIN unlocks for 5 minutes, or until the screen turns off. After 5 wrong tries the
+   keypad waits 30 s, then twice as long after each further wrong try, up to 5 minutes.
+5. Never locked: the companion itself, KOReader, the phone/emergency apps and the status bar.
+   Pages a Setup **Fix** opens, and Android's install screens during an update you started.
+
+**What it can't stop:** the quick settings in the pulled-down notification shade (Wi-Fi,
+airplane mode and so on), booting into Android's safe mode (the guard doesn't run there), and
+anyone with a USB cable and adb. Uninstalling the companion or turning its accessibility
+service off both go through Android Settings, which is guarded.
+
+**Forgot the PIN?** Connect the reader by USB with adb (developer options) and run:
+
+```sh
+adb shell am broadcast -n net.fledgewing.orbitcompanion/.PinResetReceiver -a net.fledgewing.orbitcompanion.action.RESET_PIN
+```
+
+The PIN is gone; set a new one in Settings. Only adb can send this; other apps on the reader
+can't.
+
 ## 9. If something's wrong
 
 - **KOReader asks "Turn on Wi-Fi?"**: Orbit Companion isn't running or is disabled. Open it

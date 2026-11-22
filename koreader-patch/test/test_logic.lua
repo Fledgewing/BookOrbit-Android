@@ -533,5 +533,14 @@ test("setup box: only off a book, once per key, never when snoozed", function()
     ok(SetupPrompt.text({ key = "a,b", rows = { "A", "B" } }):find("2 setup steps:\n• A\n• B", 1, true))
 end)
 
+test("menu lock: only on the companion's pin_locked = true; no answer stays usable", function()
+    local L = M.MenuLock
+    eq(L.locked({ pin_locked = true }), true, "locked")
+    eq(L.locked({ pin_locked = false }), false, "unlocked")
+    eq(L.locked({}), false, "older companion without the field")
+    eq(L.locked(nil), false, "companion unreachable")
+    eq(L.locked({ pin_locked = "true" }), false, "only a real boolean locks")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

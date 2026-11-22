@@ -161,6 +161,34 @@
             </intent-filter>
         </activity>
 
+        <!-- Settings PIN keypad; SHOW_PIN is the patch's locked Orbit menu (docs/INTERFACE.md). -->
+        <activity
+            android:name=".PinActivity"
+            android:taskAffinity=""
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:excludeFromRecents="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="net.fledgewing.orbitcompanion.action.SHOW_PIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".GuardedAppsActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false" />
+
+        <!-- USB-only PIN recovery: only the shell holds DUMP (docs/SETUP.md "Forgot the PIN"). -->
+        <receiver
+            android:name=".PinResetReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="net.fledgewing.orbitcompanion.action.RESET_PIN" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".LicensesActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"

@@ -36,9 +36,20 @@ abstract class EinkActivity : Activity() {
             resumed > 0 || android.os.SystemClock.elapsedRealtime() - lastPausedAt < 2_000
     }
 
+    /** Behind the Settings PIN: locked on resume → the keypad; cancel closes this page. */
+    open val pinGuarded = false
+    private var pinAsked = false
+
     override fun onResume() {
         super.onResume()
         resumed++
+        if (pinGuarded && Pin.locked(this)) {
+            if (pinAsked) return finish() // the keypad was cancelled
+            pinAsked = true
+            startActivity(PinActivity.intent(this, PinActivity.Mode.UNLOCK))
+        } else {
+            pinAsked = false
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,6 +81,7 @@ abstract class EinkActivity : Activity() {
 
     /** Starts a system page; false (and logged) if this device has no such page. */
     fun tryStart(intent: Intent, what: String): Boolean = try {
+        if (Pin.fixing) intent.resolveActivity(packageManager)?.packageName?.let { Pin.allowAfterFix(it) }
         startActivity(intent)
         OLog.i("opened $what")
         true

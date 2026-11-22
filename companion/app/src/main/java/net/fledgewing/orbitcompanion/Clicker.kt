@@ -28,6 +28,8 @@ private fun keyLabel(keycode: Int): String = when (keycode) {
 
 /** Screen 1: clickers and their buttons. */
 class ClickersActivity : EinkActivity() {
+    override val pinGuarded = true
+
     override fun onResume() {
         super.onResume()
         render()
@@ -120,6 +122,8 @@ class ClickersActivity : EinkActivity() {
 
 /** Screen 2: press a clicker button; records keycode, scancode and the InputDevice. */
 class CaptureActivity : EinkActivity() {
+    override val pinGuarded = true
+
     private data class Heard(val keycode: Int, val scancode: Int, val name: String, val vendor: Int, val product: Int, val builtinToo: Boolean)
 
     private var heard: Heard? = null

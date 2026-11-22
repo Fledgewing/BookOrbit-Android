@@ -368,6 +368,9 @@ class PressTimer(private val holdMs: Long = HOLD_MS, private val doubleMs: Long 
 enum class ClickerRowState { HIDDEN, DONE, OFF, NOT_CONNECTED }
 
 object ClickerRow {
+    /** Setup row label: with a Settings PIN set the service also runs the app guard. */
+    fun label(pinSet: Boolean): String = if (pinSet) "Clicker buttons / app guard (accessibility) on" else "Clicker buttons (accessibility)"
+
     fun state(mapped: Boolean, enabledInSettings: Boolean, connected: Boolean): ClickerRowState = when {
         !mapped -> ClickerRowState.HIDDEN
         !enabledInSettings -> ClickerRowState.OFF

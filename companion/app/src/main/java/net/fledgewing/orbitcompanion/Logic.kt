@@ -549,6 +549,10 @@ object WhatsNew {
         "0.4.3" to listOf(
             "KOReader no longer freezes (\"not responding\") while the patch checks for an update: the check runs in the background, never with a book open, and waits an hour after a failure.",
         ),
+        "0.4.4" to listOf(
+            "Settings PIN (optional): Settings › Settings PIN locks the settings, Setup fixes, updates, Android Settings and any app you add, and KOReader's Android sync menu. Forgot it? See the setup guide.",
+            "Clicker buttons now sits right under the Home button in Settings.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */

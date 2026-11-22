@@ -182,6 +182,18 @@ class Prefs(ctx: Context) {
     var updateStatus: String
         get() = str("update_status")
         set(v) = setStr("update_status", v)
+    // Settings PIN (Pin): only the salted PBKDF2 hash; never the PIN.
+    var pinHash: String
+        get() = str("pin_hash")
+        set(v) = setStr("pin_hash", v)
+    var pinFailures: Int
+        get() = sp.getInt("pin_failures", 0)
+        set(v) = sp.edit().putInt("pin_failures", v).apply()
+    var pinLockedUntil by LongPref("pin_locked_until")
+    /** null = the default (Android Settings packages). */
+    var guardedApps: Set<String>?
+        get() = if (sp.contains("guarded_apps")) set("guarded_apps") else null
+        set(v) = if (v == null) sp.edit().remove("guarded_apps").apply() else setSet("guarded_apps", v)
     var debugLog: Boolean
         get() = bool("debug_log", false)
         set(v) = setBool("debug_log", v)

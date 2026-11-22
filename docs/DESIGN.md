@@ -235,6 +235,36 @@ rows when the service starts, after an update, and when the status or launcher p
 - **After an update:** a one-screen "What's new" from a short per-version list in the app
   (`WhatsNew`), with any needed steps.
 
+## Settings PIN (v0.4.4)
+
+Kid-proofing, modelled on the Xteink settings PIN (touch keypad). Optional, off by default.
+
+- **Storage:** `Prefs.pinHash` = `pbkdf2-sha256$iterations$salt$hash` (20 000 rounds, 16-byte
+  salt) in the app-private prefs; the back-off (failures, locked-until) too. Never the PIN,
+  never logged. The unlock window is memory only, so a restart locks (`Pin`, `PinLogic.kt`).
+- **Unlock:** 5 minutes (`PinSession`), ended by `ACTION_SCREEN_OFF` in `OrbitService`.
+  Wrong tries (`PinBackoff`): 5 free, then 30 s doubling to 5 min, kept across restarts.
+- **Locked pages:** `EinkActivity.pinGuarded` (Settings, Home opens, Clicker buttons and its
+  capture page, Guarded apps): a locked resume opens the keypad, Cancel closes the page.
+  Actions (`Pin.run`): the launcher's Android Settings tile, Check for updates on the status
+  page, turning the PIN off. Setup's Fix buttons go through `Pin.fix`, which also records
+  the package the Fix opens (`EinkActivity.tryStart`) so the guard lets it through for 10 min
+  or until screen-off. The update-ready notification opens the keypad first
+  (`PinActivity.thenInstall`); the install prompt itself stays in memory, never in an extra.
+- **App guard** (`Guard.decide`, run by `ClickerService` on each window-state change): a
+  PIN set, locked, and a guarded package in front → the full-screen keypad on top, Cancel
+  goes Home. Guarded by default: the packages answering `ACTION_SETTINGS` and friends plus
+  `com.android.settings`; the user adds any launchable app. Never: the companion, KOReader,
+  dialer/telecom/emergency and system UI; the installer and permission controller during a
+  self-update started while unlocked (10 min). The Setup row "Clicker buttons / app guard
+  (accessibility) on" shows while a PIN is set, since the guard needs the service.
+- **KOReader:** `/status.pin_locked`; the patch's menu shows only "Enter the Settings PIN…"
+  and starts `SHOW_PIN`. No answer from the companion → the menu works (`MenuLock.locked`).
+- **Recovery:** `RESET_PIN` over adb only: the receiver requires `DUMP` (shell only), and on
+  Android 14+ a reported sender uid must be shell or root (`PinReset.allowed`).
+- **Known gaps (documented in SETUP):** quick settings in the notification shade, safe-mode
+  boot, adb.
+
 ## Plugin updates
 
 The patch prefers the plugin's public surfaces (its Dispatcher actions and user settings) and

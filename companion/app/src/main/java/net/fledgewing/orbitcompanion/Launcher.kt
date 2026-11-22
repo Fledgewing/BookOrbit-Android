@@ -304,7 +304,7 @@ class AppsActivity : EinkActivity() {
 
     private fun launch(app: App) {
         if (app.component == SETTINGS_TILE) {
-            tryStart(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "Android Settings")
+            Pin.run(this) { tryStart(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "Android Settings") }
             return
         }
         val i = Intent(Intent.ACTION_MAIN).setComponent(app.component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

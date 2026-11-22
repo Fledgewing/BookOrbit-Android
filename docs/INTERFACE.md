@@ -56,6 +56,7 @@ activity needs an intent filter with the action and `android.intent.category.DEF
 | `net.fledgewing.orbitcompanion.action.SHOW_STATUS` | Companion status (mockup screen 3) |
 | `net.fledgewing.orbitcompanion.action.SHOW_APPS` | The launcher's apps page (mockup screen 2) |
 | `net.fledgewing.orbitcompanion.action.SHOW_SETUP` | The "Setup needs you" prompt (the setup box's "Fix now"). Companion 0.4.1+; the patch falls back to `SHOW_STATUS`. |
+| `net.fledgewing.orbitcompanion.action.SHOW_PIN` | The Settings PIN keypad (companion 0.4.4+). The patch's Orbit menu asks for it while `/status` says `pin_locked: true`; it closes at once when no PIN is set or it's already unlocked. The unlock state comes back through `/status`. |
 | `net.fledgewing.orbitcompanion.action.SHOW_LAUNCHER` | The launcher page (the one a double Home shows); Home pressed on BookOrbit home. Companions before 0.2.1 lack it; the patch then opens `SHOW_APPS`. |
 
 ## Companion → patch: "go home"
@@ -156,6 +157,10 @@ are newer. `keymap` (v0.4.0): clicker buttons for the patch, keyed by Android ke
 `vpn_lockdown` (v0.4.3): "Block connections without VPN" as Android reports it (`true`,
 `false`, or `null` when unreadable). The patch blames it for a failed update check only when
 it is `true`.
+`pin_locked` (v0.4.4): a Settings PIN is set and not unlocked right now. Then the patch's Orbit
+menu shows only "Enter the Settings PIN…" and starts `SHOW_PIN`. Only a real `true` locks:
+no answer (no companion, not running) or an older companion leaves the menu usable, so the
+patch never locks anyone out.
 
 ### `GET /clicks` (companion 0.4.2+): the click channel
 
@@ -221,3 +226,8 @@ Wi-Fi on, hold a wake lock (25 s cap) or lock the screen. That is acceptable on 
 single-user e-reader. Android 14 only reveals the sender when the sender opts in, so the
 companion should simply bound what each action can do (the wake-lock cap, at most one
 `SLEEP_NOW` per few seconds).
+
+`RESET_PIN` (companion 0.4.4+, `net.fledgewing.orbitcompanion.action.RESET_PIN`) is not a
+patch broadcast: it removes the Settings PIN and is for USB recovery only. Its receiver
+(`.PinResetReceiver`) requires `android.permission.DUMP`, which only the shell (adb) holds,
+and on Android 14+ refuses a sender uid other than shell or root when Android reports one.

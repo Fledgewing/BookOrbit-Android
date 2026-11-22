@@ -220,8 +220,10 @@ class StatusActivity : EinkActivity() {
         }
         root.addView(Ui.gap(this, 12))
         root.addView(Ui.row(this, "App version", Updater.statusLine(this), Ui.button(this, if (Updater.busy) "Checking…" else "Check for updates", heightDp = 56, sp = 18f) {
-            Updater.check(this, interactive = true, why = "status page") { if (!isFinishing) render() }
-            render()
+            Pin.run(this) {
+                Updater.check(this, interactive = true, why = "status page") { if (!isFinishing) render() }
+                render()
+            }
         }))
     }
 
@@ -238,6 +240,8 @@ class StatusActivity : EinkActivity() {
 
 /** Mockup 4. */
 class SettingsActivity : EinkActivity() {
+    override val pinGuarded = true
+
     private lateinit var prefs: Prefs
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -325,6 +329,9 @@ class SettingsActivity : EinkActivity() {
                 setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 8))
             })
         }
+        root.addView(Ui.row(this, "Clicker buttons", "Bluetooth page clicker: page turns, Home, Back, Sleep", Ui.value(this, "›"), onClick = {
+            startActivity(Intent(this, ClickersActivity::class.java))
+        }))
         root.addView(Ui.gap(this, 8))
         toggle(root, "Wake Tailscale with Wi-Fi", null, prefs.wakeTailscaleWithWifi) { prefs.wakeTailscaleWithWifi = it }
         toggle(root, "Wake lock while syncing", "released at the patch's 20 s cap · 25 s max", prefs.wakeLockEnabled) { prefs.wakeLockEnabled = it }
@@ -346,9 +353,24 @@ class SettingsActivity : EinkActivity() {
                 render()
             }))
         }
-        root.addView(Ui.row(this, "Clicker buttons", "Bluetooth page clicker: page turns, Home, Back, Sleep", Ui.value(this, "›"), onClick = {
-            startActivity(Intent(this, ClickersActivity::class.java))
-        }))
+        if (Pin.isSet(this)) {
+            root.addView(Ui.row(this, "Settings PIN", "on · tap to change", Ui.value(this, "›"), onClick = {
+                startActivity(PinActivity.intent(this, PinActivity.Mode.SET))
+            }))
+            root.addView(Ui.row(this, "Guarded apps", "${Pin.guarded(this).size} · open only after the PIN", Ui.value(this, "›"), onClick = {
+                startActivity(Intent(this, GuardedAppsActivity::class.java))
+            }))
+            root.addView(Ui.row(this, "Turn the PIN off", null, Ui.value(this, "›"), onClick = {
+                Pin.run(this) {
+                    Pin.clear(this, "turned off in Settings")
+                    render()
+                }
+            }))
+        } else {
+            root.addView(Ui.row(this, "Settings PIN", "off · keeps kids out of settings", Ui.value(this, "›"), onClick = {
+                startActivity(PinActivity.intent(this, PinActivity.Mode.SET))
+            }))
+        }
         root.addView(Ui.row(this, "Open-source licenses", null, Ui.value(this, "›"), onClick = {
             startActivity(Intent(this, LicensesActivity::class.java))
         }))
@@ -500,10 +522,12 @@ object Setup {
         // One-tap patch install (PatchInstaller): from this app's release, SHA-256 checked.
         // The file when readable (storage permission), else what the running patch reports.
         // Clicker buttons: shown only once a clicker is mapped (docs/BTKEYS-DESIGN.md "Staying on").
-        val clicker = ClickerStore.state(ctx)
+        // With a Settings PIN set the app guard needs the same service, so the row shows then too.
+        val pinSet = Pin.isSet(ctx)
+        val clicker = ClickerRow.state(ClickerStore.map(ctx).mapped || pinSet, ClickerStore.enabled(ctx), ClickerService.connected)
         if (clicker != ClickerRowState.HIDDEN) {
             list.add(Check(
-                "Clicker buttons (accessibility)",
+                ClickerRow.label(pinSet),
                 clicker == ClickerRowState.DONE,
                 when (clicker) {
                     ClickerRowState.DONE -> "on · works in every app"
@@ -644,14 +668,14 @@ class SetupActivity : EinkActivity() {
         checks.forEach { c ->
             val isTest = c.label == "Wi-Fi off/on test"
             val right: TextView = if (isTest) {
-                Ui.button(this, if (test?.running == true) "Running…" else "Run", heightDp = 56, sp = 18f) { c.open(this) }
+                Ui.button(this, if (test?.running == true) "Running…" else "Run", heightDp = 56, sp = 18f) { Pin.fix(this) { c.open(this) } }
             } else {
                 Ui.value(this, if (c.done) "done" else "open ›", bold = !c.done)
             }
             root.addView(
                 Ui.row(
                     this, c.label, if (c.done && c.detail == "done") null else c.detail, right,
-                    onClick = { c.open(this) },
+                    onClick = { Pin.fix(this) { c.open(this) } },
                     left = Ui.check(this, c.done),
                 ),
             )
@@ -664,6 +688,8 @@ class SetupActivity : EinkActivity() {
  * vendor's), then every other launchable app A–Z. Paged, no scrolling.
  */
 class HomeAppActivity : EinkActivity() {
+    override val pinGuarded = true
+
     private var apps: List<Pair<String, String>> = emptyList()
     private var readers: Set<String> = emptySet()
     private var pageIndex = 0

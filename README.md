@@ -186,6 +186,18 @@ adb shell dumpsys accessibility | grep -A3 orbitcompanion   # bound, key filteri
 Expected: no change in wakeups or alarms, and CPU time in the order of milliseconds per key
 press. The Battery page's standby rate (by setting) should not move.
 
+## Settings PIN
+
+Optional, off by default (Settings › **Settings PIN**). A 4–8 digit PIN on a big e-ink keypad
+locks the companion's Settings, Clicker buttons, Setup's Fix buttons, the update install, the
+launcher's Android Settings tile and the patch's KOReader menu. **Guarded apps** (Android
+Settings by default, plus any app you add) open behind the keypad, through the accessibility
+service. Only a salted PBKDF2 hash is stored. A right PIN unlocks for 5 minutes or until the
+screen goes off; 5 wrong tries start a 30 s wait that doubles up to 5 minutes. Forgot it: the
+adb `RESET_PIN` broadcast in [docs/SETUP.md](docs/SETUP.md#8c-a-settings-pin-optional). It is
+kid-proofing, not security: the notification shade's quick settings, safe mode and adb get
+past it.
+
 ## Device notes
 
 The code is generic Android; vendor quirks are one table (`Vendor.kt` in the companion,

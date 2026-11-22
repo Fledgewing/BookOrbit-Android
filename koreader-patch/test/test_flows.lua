@@ -1348,6 +1348,30 @@ end)
 os.remove(ORBIT_ANDROID_SELF_PATH)
 os.remove(SELF)
 
+test("settings PIN: a locked companion locks the Orbit menu and opens its keypad; unreachable stays usable", function()
+    local url = "http://127.0.0.1:47913/status"
+    local ui, m = newUI(true)
+    local items = {}
+    m:addToMainMenu(items)
+    W.web[url] = "STATUS"
+    W.json.STATUS = { version = "0.4.4", pin_locked = true }
+    W.activities = {}
+    local sub = items.orbit_android.sub_item_table_func()
+    ok(#sub == 2 and sub[1].text:find("PIN", 1, true), "locked menu " .. #sub)
+    run(1)
+    ok(W.activities[#W.activities] and W.activities[#W.activities].action:match("SHOW_PIN$"), "keypad asked for")
+    W.activities = {}
+    sub[1].callback()
+    ok(W.activities[1] and W.activities[1].action:match("SHOW_PIN$"), "tap opens the keypad again")
+    W.json.STATUS = { version = "0.4.4", pin_locked = false }
+    ok(#items.orbit_android.sub_item_table_func() >= 13, "unlocked: full menu")
+    W.web[url], W.json.STATUS = nil, nil
+    W.activities = {}
+    ok(#items.orbit_android.sub_item_table_func() >= 13, "companion unreachable: full menu")
+    run(1)
+    for _, a in ipairs(W.activities) do ok(not a.action:match("SHOW_PIN$"), "no keypad without the companion") end
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

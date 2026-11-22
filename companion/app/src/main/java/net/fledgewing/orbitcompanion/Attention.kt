@@ -235,7 +235,7 @@ class AttentionActivity : EinkActivity() {
                     buttons += Ui.button(this, label, solid = !busy, heightDp = 56, sp = 19f) {
                         if (busy) return@button
                         fixedHere = true
-                        c.open(this)
+                        Pin.fix(this) { c.open(this) }
                         render()
                     }
                 }

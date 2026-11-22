@@ -122,9 +122,27 @@ class ClickerService : AccessibilityService() {
         if (pkg != foreground) OLog.d("clicker: in front: $pkg")
         foreground = pkg
         editorFocused = false
+        guard(pkg)
     }
 
     override fun onInterrupt() = Unit
+
+    /** Settings PIN app guard (docs/DESIGN.md "Settings PIN"): the keypad over a guarded app. */
+    private var guardShownAt = 0L
+
+    private fun guard(pkg: String) {
+        if (Pin.decide(this, pkg) != Guard.Decision.GUARD || PinActivity.showing) return
+        // One keypad per arrival: the app's further window events while it opens don't stack more.
+        val t = android.os.SystemClock.elapsedRealtime()
+        if (t - guardShownAt < 1_500) return
+        guardShownAt = t
+        OLog.i("pin: guarded app in front ($pkg): keypad")
+        try {
+            startActivity(PinActivity.intent(this, PinActivity.Mode.GUARD, pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            OLog.w("pin: could not show the keypad over $pkg", e)
+        }
+    }
 
     /** External devices whose keys passed untouched (not a captured clicker): logged once each. */
     private val unknownSeen = HashSet<String>()

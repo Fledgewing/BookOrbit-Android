@@ -86,6 +86,8 @@ object Updater {
             return
         }
         busy = true
+        // Started by hand while unlocked (Pin.run): the guard lets the installer through.
+        if (interactive) Pin.selfUpdateStarted()
         val app = ctx.applicationContext
         thread(name = "orbit-update", isDaemon = true) {
             // By hand with Wi-Fi off: turn it on for the check (Wi-Fi only, GitHub needs no
@@ -351,6 +353,10 @@ object Updater {
 
     private fun notifications(ctx: Context) = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+    /** The install prompt behind the update-ready notification (PinActivity.thenInstall). */
+    @Volatile
+    var pendingConfirm: Intent? = null
+
     private fun notifyReady(ctx: Context, version: String, confirm: Intent) {
         val nm = notifications(ctx)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "App updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
@@ -363,7 +369,8 @@ object Updater {
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setAutoCancel(true)
-            .setContentIntent(PendingIntent.getActivity(ctx, 3, confirm, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+            // Through the PIN keypad (no PIN or unlocked: straight to Android's prompt).
+            .setContentIntent(PendingIntent.getActivity(ctx, 3, PinActivity.thenInstall(ctx, confirm), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             .build()
         nm.notify(ID_UPDATE, n)
         log("notification posted: v$version ready to install")

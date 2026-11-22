@@ -695,9 +695,24 @@ function SetupPrompt.text(prompt)
     return "Orbit Companion needs " .. n .. " setup steps:\n" .. table.concat(list, "\n")
 end
 
+---------------------------------------------------------------------------------------------
+-- Settings PIN (companion 0.4.4+): /status carries pin_locked. Locked: the Orbit menu shows
+-- only "Enter the PIN" and asks the companion for its keypad (SHOW_PIN). No answer from the
+-- companion (not installed, not running, older version): the menu stays usable, so nobody is
+-- ever locked out by the patch.
+---------------------------------------------------------------------------------------------
+
+local MenuLock = {}
+
+-- st: the decoded /status table, or nil when the companion didn't answer.
+function MenuLock.locked(st)
+    return type(st) == "table" and st.pin_locked == true
+end
+
 if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = Schedule, Plan = Plan, Update = Update, WifiPlan = WifiPlan, HomePlan = HomePlan,
         disabledText = disabledText, Compat = Compat, Stats = Stats, Clicks = Clicks, SetupPrompt = SetupPrompt,
+        MenuLock = MenuLock,
         PATCH_VERSION = PATCH_VERSION }
 end
 
@@ -1072,6 +1087,8 @@ Companion.ACTION = {
     -- Companion 0.4.1+: the setup box's "Fix now" (activity) and "Later" (broadcast).
     SHOW_SETUP = Companion.PACKAGE .. ".action.SHOW_SETUP",
     SETUP_LATER = Companion.PACKAGE .. ".action.SETUP_LATER",
+    -- Companion 0.4.4+: the Settings PIN keypad (activity).
+    SHOW_PIN = Companion.PACKAGE .. ".action.SHOW_PIN",
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
@@ -1268,6 +1285,8 @@ function Shared.refresh(why)
     -- "Setup needs you": the count in the menu status; setup_prompt for the one-time box.
     Shared.setup_needed = st and tonumber(st.setup_needed) or nil
     Shared.setup_prompt = st and type(st.setup_prompt) == "table" and st.setup_prompt or nil
+    -- Settings PIN: locked only on the companion's word; no answer = unlocked (MenuLock).
+    Shared.pin_locked = MenuLock.locked(st)
     -- The companion's lockdown reading (true/false; nil: unknown or no companion).
     if st then Shared.vpn_lockdown = type(st.vpn_lockdown) == "boolean" and st.vpn_lockdown or nil end
     local remote = st and type(st.settings) == "table" and st.settings or nil
@@ -3314,9 +3333,26 @@ function OrbitAndroid:menuItems()
     }
 end
 
+-- Settings PIN set and locked: the companion's keypad, then open the menu again.
+function OrbitAndroid:showPinKeypad(why)
+    local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_PIN, package = Companion.PACKAGE }
+    log("menu: locked by the Settings PIN; keypad (" .. why .. ")", ok and "started" or "FAILED")
+    return ok
+end
+
+function OrbitAndroid:lockedMenuItems()
+    UIManager:scheduleIn(0.1, function() self:showPinKeypad("menu") end)
+    return {
+        { text = _("Enter the Settings PIN…"), callback = function() self:showPinKeypad("tap") end },
+        { text = _("Locked by the companion's Settings PIN. Enter it, then open this menu again."),
+            keep_menu_open = true, callback = function() end },
+    }
+end
+
 function OrbitAndroid:addToMainMenu(menu_items)
     local entry = { text = _("Android sync"), sub_item_table_func = function()
         Shared.refresh("menu")
+        if Shared.pin_locked then return self:lockedMenuItems() end
         UIManager:scheduleIn(0.5, function() self:maybeSetupPrompt("menu", "menu") end)
         return self:menuItems()
     end }
