@@ -522,7 +522,7 @@ index 00000000..e1ee497c
 +
 +// Battery stats, hardware-free part (CrossInk-Tailnet patch 0025): the on-SD record
 +// format and the analysis behind the `orbit-battery-stats/1` export
-+// (BookOrbit-Android docs/STATS.md). The device side (src/util/BatteryStats.cpp)
++// (Orbify docs/design/STATS.md). The device side (src/util/BatteryStats.cpp)
 +// appends one record per transition and feeds the file back through Analyzer.
 +
 +#include <cstddef>
@@ -1364,7 +1364,7 @@ index 00000000..91fae1e5
 +//     book open/close, frontlight, 1 % step) appended to /.crossink/battery.bin. Never a
 +//     timer or a wakeup: records are written where the firmware already is awake.
 +//   2 + export: Settings > System > Battery stats writes /battery_stats.json in the
-+//     orbit-battery-stats/1 format (BookOrbit-Android docs/STATS.md).
++//     orbit-battery-stats/1 format (Orbify docs/design/STATS.md).
 +//   3 + the numbers on that page, and an export whenever USB Drive mode starts.
 +// At 0 every call below is an empty inline.
 +

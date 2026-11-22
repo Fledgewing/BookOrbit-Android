@@ -58,8 +58,8 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get install -y -qq luajit >/dev/null
-          luajit koreader-patch/test/test_logic.lua
-          luajit koreader-patch/test/test_flows.lua
+          luajit android/koreader-patch/test/test_logic.lua
+          luajit android/koreader-patch/test/test_flows.lua
 
       - name: USB installer checks
         run: |
@@ -88,17 +88,17 @@ jobs:
           VER="${{ steps.ver.outputs.version }}"
           mkdir -p dist
           APK="dist/orbit-companion-$VER.apk"
-          cp companion/app/build/outputs/apk/release/app-release.apk "$APK"
+          cp android/companion/app/build/outputs/apk/release/app-release.apk "$APK"
 
           # The patch, with its version stamped in; refuse a file whose stamp didn't take.
           sed -E "s/^local PATCH_VERSION = \"[^\"]*\"$/local PATCH_VERSION = \"$VER\"/" \
-            koreader-patch/2-orbit-android.lua > dist/2-orbit-android.lua
+            android/koreader-patch/2-orbit-android.lua > dist/2-orbit-android.lua
           grep -qx "local PATCH_VERSION = \"$VER\"" dist/2-orbit-android.lua
 
           # Licenses: the companion (MIT), the patch (AGPL-3.0-or-later) and the third-party
           # notices the app shows in Settings (generated into the APK at build time).
           cp LICENSE dist/LICENSE-companion-MIT.txt
-          cp koreader-patch/LICENSE dist/LICENSE-koreader-patch-AGPL-3.0.txt
+          cp android/koreader-patch/LICENSE dist/LICENSE-koreader-patch-AGPL-3.0.txt
           unzip -p "$APK" assets/open_source_licenses.txt > dist/THIRD-PARTY-NOTICES.txt
           test -s dist/THIRD-PARTY-NOTICES.txt
 

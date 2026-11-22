@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Set up an Android e-reader over USB (adb): KOReader, the BookOrbit plugin, Orbit Companion
 # and the KOReader patch, each downloaded from its official GitHub release and verified before
-# anything touches the device. macOS and Linux. See docs/SETUP.md "Set up over USB".
+# anything touches the device. macOS and Linux. See android/docs/SETUP.md "Set up over USB".
 #
 #   tools/install-usb.sh                  install or update everything
 #   tools/install-usb.sh --fresh          first clear an old /sdcard/koreader (lists it, asks y/N)
@@ -16,7 +16,7 @@ set -euo pipefail
 KOREADER_API="https://api.github.com/repos/koreader/koreader/releases/latest"
 BOOKORBIT_API="https://api.github.com/repos/bookorbit/bookorbit"
 BOOKORBIT_RAW="https://raw.githubusercontent.com/bookorbit/bookorbit"
-ORBIT_API="https://api.github.com/repos/Fledgewing/BookOrbit-Android/releases/latest"
+ORBIT_API="https://api.github.com/repos/Fledgewing/Orbify/releases/latest"
 PLUGIN_NAME="bookorbit.koplugin"
 PLUGIN_MIN="2.3.0" # the plugin the patch's hooks are checked against (companion PluginRelease.MIN_VERSION)
 PATCH_NAME="2-orbit-android.lua"
@@ -264,8 +264,8 @@ download_orbit() {
     done <"$WORK/SHA256SUMS"
     [[ $checked == 2 ]] || die "SHA256SUMS doesn't list the companion and the patch"
     COMPANION_APK="$WORK/orbit-companion-${ORBIT_TAG#v}.apk"
-    if command -v gh >/dev/null 2>&1 && gh attestation verify "$COMPANION_APK" -R Fledgewing/BookOrbit-Android >/dev/null 2>&1 &&
-        gh attestation verify "$WORK/$PATCH_NAME" -R Fledgewing/BookOrbit-Android >/dev/null 2>&1; then
+    if command -v gh >/dev/null 2>&1 && gh attestation verify "$COMPANION_APK" -R Fledgewing/Orbify >/dev/null 2>&1 &&
+        gh attestation verify "$WORK/$PATCH_NAME" -R Fledgewing/Orbify >/dev/null 2>&1; then
         say "Orbit $ORBIT_TAG: companion and patch match SHA256SUMS and their build attestations"
     else
         say "Orbit $ORBIT_TAG: companion and patch match SHA256SUMS (install the gh CLI to also check build attestations)"

@@ -2,18 +2,18 @@
 
 Keeps Android e-readers in sync with a BookOrbit server over Tailscale, the way CrossInk does on Xteink readers.
 
-**New here? Start with the [setup guide](docs/SETUP.md).**
+**New here? Start with the [setup guide](android/docs/SETUP.md).**
 
 The official BookOrbit KOReader plugin does all syncing and keeps the login. This repo adds:
 
-- `koreader-patch/`: a KOReader user patch that brings the network up (Wi-Fi + Tailscale) before the plugin syncs, syncs on sleep and on a schedule, and sends Home to BookOrbit home.
-- `companion/`: "Orbit Companion", an Android app that switches Wi-Fi, wakes Tailscale, holds a short wake lock, turns the screen off for "Sync and sleep", and acts as the Home launcher.
+- `android/koreader-patch/`: a KOReader user patch that brings the network up (Wi-Fi + Tailscale) before the plugin syncs, syncs on sleep and on a schedule, and sends Home to BookOrbit home.
+- `android/companion/`: "Orbit Companion", an Android app that switches Wi-Fi, wakes Tailscale, holds a short wake lock, turns the screen off for "Sync and sleep", and acts as the Home launcher.
 
-Design and approved mockups: `docs/DESIGN.md`, `docs/mockups.html`.
+Design and approved mockups: `android/docs/DESIGN.md`, `android/docs/mockups.html`.
 
 ## Install
 
-From [Releases](https://github.com/Fledgewing/BookOrbit-Android/releases/latest):
+From [Releases](https://github.com/Fledgewing/Orbify/releases/latest):
 
 **Sideload one APK, then Setup.** Download `orbit-companion-<version>.apk` and install it
 (allow your browser or file manager to install unknown apps; on a Play Protect warning tap
@@ -34,13 +34,13 @@ open step in order and installs the rest with one tap each, every download check
 Up front, Setup explains in plain words what may get in the way: Play Protect's warnings,
 a launcher that freezes apps (Boox, Meebook), and Family Link or a managed profile ("approve it
 in the parent's Family Link app"). Over USB from a Mac or Linux computer,
-`tools/install-usb.sh` installs everything at once ([docs/SETUP.md](docs/SETUP.md#6-set-up-over-usb-optional)).
+`tools/install-usb.sh` installs everything at once ([android/docs/SETUP.md](android/docs/SETUP.md#6-set-up-over-usb-optional)).
 
 After that, everything updates itself from this repo's releases.
 
 ## Updates
 
-Both pieces check `https://api.github.com/repos/Fledgewing/BookOrbit-Android/releases/latest`
+Both pieces check `https://api.github.com/repos/Fledgewing/Orbify/releases/latest`
 at most once a day, and only when the network is already up (neither turns Wi-Fi on for an
 automatic check; a check started by hand turns Wi-Fi on, Wi-Fi only, and puts it back off
 afterwards). Without a network they say so ("No internet: Wi-Fi is off"; "network went down
@@ -109,7 +109,7 @@ Two settings are shared by the patch (Tools › Android sync) and the companion
 
 **Lists by series and by author** (v0.6.0): on a BookOrbit library, collection or smart scope,
 Sort › "By series" or "By author" shows that list grouped, in BookOrbit's own Series and Authors
-views (docs/DESIGN.md "Lists by series and by author", with its known limits).
+views (android/docs/DESIGN.md "Lists by series and by author", with its known limits).
 
 The patch also adds the gesture action **Orbit Companion: apps**; *Apply recommended gestures*
 puts it on a two-finger swipe up.
@@ -120,8 +120,8 @@ Every release asset has a keyless build-provenance attestation from the release 
 (`.github/workflows/release.yml`):
 
 ```
-gh attestation verify orbit-companion-<version>.apk -R Fledgewing/BookOrbit-Android
-gh attestation verify 2-orbit-android.lua -R Fledgewing/BookOrbit-Android
+gh attestation verify orbit-companion-<version>.apk -R Fledgewing/Orbify
+gh attestation verify 2-orbit-android.lua -R Fledgewing/Orbify
 sha256sum -c SHA256SUMS
 ```
 
@@ -164,8 +164,8 @@ with the next patch version.
 Orbit Companion › Battery shows:
 - hours left, % per hour in standby and while reading (by content, Wi-Fi mode and frontlight);
 - % per 100 pages and per 100 full refreshes, and a daily history;
-- a Compare page for other readers' exported summaries ([format](docs/STATS.md),
-  [design](docs/STATS-DESIGN.md)).
+- a Compare page for other readers' exported summaries ([format](docs/design/STATS.md),
+  [design](docs/design/STATS-DESIGN.md)).
 
 It records only on changes the system already broadcasts (no alarms, no polling). To check
 its cost, compare a day before and after installing:
@@ -197,9 +197,9 @@ Sync and sleep.
   keeps it current instead.
 - **Volume keys:** a sent key reaches the app's own key handling first, so a reader that turns
   pages on volume keys gets it; an app that doesn't handle it lets Android change the volume.
-  Not yet checked on a device (docs/BTKEYS-DESIGN.md, "Send key").
+  Not yet checked on a device (android/docs/BTKEYS-DESIGN.md, "Send key").
 - **Key Mapper:** if you used it for this, turn it off once Orbit's buttons work; you can then
-  uninstall it. Design: [docs/BTKEYS-DESIGN.md](docs/BTKEYS-DESIGN.md).
+  uninstall it. Design: [android/docs/BTKEYS-DESIGN.md](android/docs/BTKEYS-DESIGN.md).
 
 **Battery cost check.** The service is event-driven: no polling, alarms, wake locks or
 Bluetooth scanning. To confirm, compare a normal day before and after switching it on:
@@ -222,7 +222,7 @@ launcher's Android Settings tile and the patch's KOReader menu. **Guarded apps**
 Settings by default, plus any app you add) open behind the keypad, through the accessibility
 service. Only a salted PBKDF2 hash is stored. A right PIN stays unlocked while you are in the
 screens it covers and for 2 minutes after you leave them; screen-off locks at once; 5 wrong tries start a 30 s wait that doubles up to 5 minutes. Forgot it: the
-adb `RESET_PIN` broadcast in [docs/SETUP.md](docs/SETUP.md#8c-a-settings-pin-optional). It is
+adb `RESET_PIN` broadcast in [android/docs/SETUP.md](android/docs/SETUP.md#8c-a-settings-pin-optional). It is
 kid-proofing, not security: the notification shade's quick settings, safe mode and adb get
 past it.
 
@@ -244,5 +244,5 @@ installed. Meebook (Haoqing) is measured; Boox (Onyx) is an unverified stub.
 
 This repository uses two licenses:
 
-- `koreader-patch/` is **AGPL-3.0-or-later** (see `koreader-patch/LICENSE`). The patch runs inside KOReader and works with the BookOrbit KOReader plugin, both AGPL-3.0.
-- Everything else (`companion/`, `docs/`) is **MIT** (see `LICENSE`). The companion app bundles the Kotlin standard library (Apache-2.0); its notices ship inside the app (Settings › Open-source licenses) and with each release (`THIRD-PARTY-NOTICES.txt`).
+- `android/koreader-patch/` is **AGPL-3.0-or-later** (see `android/koreader-patch/LICENSE`). The patch runs inside KOReader and works with the BookOrbit KOReader plugin, both AGPL-3.0.
+- Everything else (`android/companion/`, `docs/`) is **MIT** (see `LICENSE`). The companion app bundles the Kotlin standard library (Apache-2.0); its notices ship inside the app (Settings › Open-source licenses) and with each release (`THIRD-PARTY-NOTICES.txt`).

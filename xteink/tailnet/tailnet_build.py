@@ -190,7 +190,7 @@ SWITCHES = {
     "CROSSINK_TAILNET_BACKGROUND_SYNC":   (0,      1,      1),
     # Patch 0023: optional settings PIN (off until one is set in Settings > Settings PIN).
     "CROSSINK_TAILNET_SETTINGS_PIN":      (1,      1,      1),
-    # Patch 0025: battery stats in the orbit-battery-stats/1 format (docs/BATTERY-STATS-DESIGN.md).
+    # Patch 0025: battery stats in the orbit-battery-stats/1 format (docs/design/XTEINK-BATTERY-STATS.md).
     # 0 off, 1 record (/.crossink/battery.bin), 2 + Settings > System > Battery stats writes
     # /battery_stats.json, 3 + the rates on that page and an export when USB Drive mode starts.
     "CROSSINK_TAILNET_BATTERY_STATS":     (2,      3,      3),
