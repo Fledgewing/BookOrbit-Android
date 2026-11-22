@@ -1,0 +1,104 @@
+[
+  {
+    "tag_name": "xteink-v1.6.1.104+bookorbit.8",
+    "name": "xteink-v1.6.1.104+bookorbit.8",
+    "draft": false,
+    "prerelease": false,
+    "created_at": "2026-11-22T22:57:57Z",
+    "assets": [
+      {
+        "name": "firmware-x3-x4-v1.6.1.104-bookorbit.8.bin",
+        "size": 6337408,
+        "digest": "sha256:e83b42023f8b5388988aaff1ccb66841414bbee52c4a815f4d1506b65a8d33a6",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v1.6.1.104%2Bbookorbit.8/firmware-x3-x4-v1.6.1.104-bookorbit.8.bin"
+      },
+      {
+        "name": "firmware-x4-classic-v1.6.1.104-bookorbit.8.bin",
+        "size": 5837952,
+        "digest": "sha256:360059dd92d994a35b7ba79437d255414842db84da952195b3a5fd5401c44fa9",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v1.6.1.104%2Bbookorbit.8/firmware-x4-classic-v1.6.1.104-bookorbit.8.bin"
+      },
+      {
+        "name": "firmware-x4-pro-v1.6.1.104-bookorbit.8.bin",
+        "size": 5988128,
+        "digest": "sha256:b4b89039b46fe79e4b7da4d63929ff5f6ed1ff963faaf3d5dfe21f758c98d88d",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v1.6.1.104%2Bbookorbit.8/firmware-x4-pro-v1.6.1.104-bookorbit.8.bin"
+      },
+      {
+        "name": "licenses.zip",
+        "size": 144085,
+        "digest": "sha256:3a2aac5d8958213b3f31700f016f7672f4069d54301772f26b43423e32818704",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v1.6.1.104%2Bbookorbit.8/licenses.zip"
+      },
+      {
+        "name": "SHA256SUMS",
+        "size": 601,
+        "digest": "sha256:c5f86c4c2303e6dfa795b1757ba4ca7d7491063b1bbabf3cf26c3b073ff00fb0",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v1.6.1.104%2Bbookorbit.8/SHA256SUMS"
+      },
+      {
+        "name": "source-1.6.1.104-bookorbit.8.tar.gz",
+        "size": 76027823,
+        "digest": "sha256:5748a5938ba79c94a1dc49df615d550aa9feea24bf046e82c05f743a9ecb20a3",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v1.6.1.104%2Bbookorbit.8/source-1.6.1.104-bookorbit.8.tar.gz"
+      },
+      {
+        "name": "THIRD_PARTY_LICENSES.md",
+        "size": 17070,
+        "digest": "sha256:f8d028f5b65f8ffa5c35125cba699f0da37580ba3038d54b6c06edf047123dec",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v1.6.1.104%2Bbookorbit.8/THIRD_PARTY_LICENSES.md"
+      }
+    ]
+  },
+  {
+    "tag_name": "xteink-v2.0.0.106+bookorbit.1-rc2",
+    "name": "xteink-v2.0.0.106+bookorbit.1-rc2",
+    "draft": false,
+    "prerelease": true,
+    "created_at": "2026-11-22T22:57:57Z",
+    "assets": [
+      {
+        "name": "firmware-x3-x4-v2.0.0.106-bookorbit.1-rc2.bin",
+        "size": 6489296,
+        "digest": "sha256:3adc9cf428399d2ae530b7ac8ada7e3ea365a61735eff1b3479e7a2f2418d2eb",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v2.0.0.106%2Bbookorbit.1-rc2/firmware-x3-x4-v2.0.0.106-bookorbit.1-rc2.bin"
+      },
+      {
+        "name": "firmware-x4-classic-v2.0.0.106-bookorbit.1-rc2.bin",
+        "size": 5991696,
+        "digest": "sha256:9164aea8cae8037af69ff8148ddef79d619647d9d815987f13a06a2380db7cb2",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v2.0.0.106%2Bbookorbit.1-rc2/firmware-x4-classic-v2.0.0.106-bookorbit.1-rc2.bin"
+      },
+      {
+        "name": "firmware-x4-pro-v2.0.0.106-bookorbit.1-rc2.bin",
+        "size": 6144400,
+        "digest": "sha256:804791c3010a31d341cda85d4f3aab88680e20f4a8d837cea8610d7baac09dfc",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v2.0.0.106%2Bbookorbit.1-rc2/firmware-x4-pro-v2.0.0.106-bookorbit.1-rc2.bin"
+      },
+      {
+        "name": "licenses.zip",
+        "size": 144085,
+        "digest": "sha256:0151dd19a65f9cb593ca20d1e696cd954b0afdeb5a6c970ed1fc314b15941b29",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v2.0.0.106%2Bbookorbit.1-rc2/licenses.zip"
+      },
+      {
+        "name": "SHA256SUMS",
+        "size": 617,
+        "digest": "sha256:f2c591bde1dc1e8bd546622e3d0a11a578165212d6b99cf7021324b73fa84f40",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v2.0.0.106%2Bbookorbit.1-rc2/SHA256SUMS"
+      },
+      {
+        "name": "source-2.0.0.106-bookorbit.1-rc2.tar.gz",
+        "size": 104102683,
+        "digest": "sha256:7be65e25d22651c2fe3bfa3f1ab01dabd8efbf757823a269b314bde151cef330",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v2.0.0.106%2Bbookorbit.1-rc2/source-2.0.0.106-bookorbit.1-rc2.tar.gz"
+      },
+      {
+        "name": "THIRD_PARTY_LICENSES.md",
+        "size": 17070,
+        "digest": "sha256:f8d028f5b65f8ffa5c35125cba699f0da37580ba3038d54b6c06edf047123dec",
+        "browser_download_url": "https://github.com/Fledgewing/Orbify/releases/download/xteink-v2.0.0.106%2Bbookorbit.1-rc2/THIRD_PARTY_LICENSES.md"
+      }
+    ]
+  }
+]
