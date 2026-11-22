@@ -211,7 +211,7 @@ class StatusActivity : EinkActivity() {
             Ui.weightRow(
                 this,
                 Ui.button(this, if (test?.running == true) "Testing…" else "Test network") { runTest() },
-                Ui.button(this, "Setup (${checks.count { it.done }}/${checks.size})", solid = checks.any { !it.done }) {
+                Ui.button(this, "Setup (${Setup.progress(checks)})", solid = !SetupTips.complete(checks.map { SetupAttention.idOf(it.label) to it.done })) {
                     startActivity(Intent(this, SetupActivity::class.java))
                 },
             ),
@@ -427,6 +427,8 @@ class Check(
     val action: String? = "Fix",
     /** Update follow-through (install this release's patch, restart KOReader): never behind the PIN. */
     val pinFree: Boolean = false,
+    /** A tip, not a step (SetupTips): "Got it" hides it; never counted. */
+    val advisory: Boolean = false,
     val open: (EinkActivity) -> Unit,
 ) {
     /** Runs the row's action: behind the Settings PIN unless [pinFree]. */
@@ -452,7 +454,23 @@ object Setup {
         emptyList()
     }
 
+    /** Setup's rows: dismissed tips left out (SetupTips). */
     fun checks(ctx: Context): List<Check> {
+        val all = allChecks(ctx)
+        val keep = SetupTips.visible(all.map { SetupAttention.idOf(it.label) }, Prefs(ctx).hiddenTips).toSet()
+        return all.filter { SetupAttention.idOf(it.label) in keep }
+    }
+
+    /** Dismissed tips that "Show hidden tips" would bring back. */
+    fun hiddenTips(ctx: Context): Int = Prefs(ctx).hiddenTips.count { SetupTips.isTip(it) }
+
+    /** "First-run setup (done/total)": steps only. */
+    fun progress(checks: List<Check>): String {
+        val steps = SetupTips.steps(checks.map { SetupAttention.idOf(it.label) to it.done })
+        return "${steps.count { it.second }}/${steps.size}"
+    }
+
+    private fun allChecks(ctx: Context): List<Check> {
         val prefs = Prefs(ctx)
         val list = mutableListOf<Check>()
 
@@ -463,12 +481,12 @@ object Setup {
             otherAdmins(ctx),
         )
         if (managed != null) {
-            list.add(Check(if (Net.installed(ctx, DeviceChecks.FAMILY_LINK)) "Family Link supervision" else "Managed device", false, managed, action = "Help") { a ->
+            list.add(Check(if (Net.installed(ctx, DeviceChecks.FAMILY_LINK)) "Family Link supervision" else "Managed device", false, managed, action = "Help", advisory = true) { a ->
                 Ui.note(a, managed)
             })
         }
         if (Net.appState(ctx, DeviceChecks.PLAY_STORE) == AppState.OK) {
-            list.add(Check("Play Protect scans installs", true, DeviceChecks.playProtect(), action = "Help") { a ->
+            list.add(Check("Play Protect scans installs", true, DeviceChecks.playProtect(), action = "Help", advisory = true) { a ->
                 Ui.note(a, DeviceChecks.playProtect())
             })
         }
@@ -482,13 +500,19 @@ object Setup {
                 frozen.isEmpty(),
                 when {
                     frozen.isNotEmpty() -> "${AppStates.disabledShort(disabler)}: ${frozen.joinToString()}. A frozen app can't start, sync or update until it's re-enabled · re-enable${Vendor.profile(ctx).freezeHint?.let { h -> " in ${disabler ?: "the launcher"} › $h" } ?: " in Settings › Apps"}"
-                    Vendor.profile(ctx).freezeHint != null -> "done · this ${disabler ?: "launcher"} can freeze apps it thinks are unused; if KOReader or Orbit stop working, this row says so and opens ${Vendor.profile(ctx).freezeHint}"
                     else -> "done"
                 },
             ) { a ->
                 a.tryStart(Vendor.reenablePage(ctx), "re-enable page")
             },
         )
+        val freezeHint = Vendor.profile(ctx).freezeHint
+        if (frozen.isEmpty() && freezeHint != null) {
+            val tip = "This ${disabler ?: "launcher"} can freeze apps it thinks are unused. If KOReader or Orbit stop working, the row above says so; to prevent it, set them to never freeze in $freezeHint."
+            list.add(Check("Launcher can freeze apps", true, tip, action = "Help", advisory = true) { a ->
+                a.tryStart(Vendor.reenablePage(ctx), "freeze settings")
+            })
+        }
 
         val canInstall = ctx.packageManager.canRequestPackageInstalls()
         list.add(Check("Install updates", canInstall, if (canInstall) "done" else "allow Orbit to install apps: KOReader and its own updates") { a ->
@@ -805,7 +829,7 @@ class SetupActivity : EinkActivity() {
     private fun render() {
         val root = page(scroll = true)
         val checks = Setup.checks(this)
-        root.addView(Ui.header(this, "First-run setup (${checks.count { it.done }}/${checks.size})", "‹ Back") { finish() })
+        root.addView(Ui.header(this, "First-run setup (${Setup.progress(checks)})", "‹ Back") { finish() })
         val open = checks.count { !it.done && SetupAttention.idOf(it.label) !in SetupAttention.INFO_ONLY }
         if (open > 0) {
             root.addView(
@@ -822,6 +846,22 @@ class SetupActivity : EinkActivity() {
         }
         checks.forEach { c ->
             val isTest = c.label == "Wi-Fi off/on test"
+            if (c.advisory) {
+                val id = SetupAttention.idOf(c.label)
+                root.addView(
+                    Ui.row(
+                        this, c.label, c.detail,
+                        Ui.button(this, "Got it", heightDp = 56, sp = 18f) {
+                            val p = Prefs(this)
+                            p.hiddenTips = SetupTips.hide(p.hiddenTips, id)
+                            OLog.i("setup: tip $id hidden")
+                            render()
+                        },
+                        onClick = { c.run(this) },
+                    ),
+                )
+                return@forEach
+            }
             val right: TextView = if (isTest) {
                 Ui.button(this, if (test?.running == true) "Running…" else "Run", heightDp = 56, sp = 18f) { c.run(this) }
             } else {
@@ -834,6 +874,14 @@ class SetupActivity : EinkActivity() {
                     left = Ui.check(this, c.done),
                 ),
             )
+        }
+        val hidden = Setup.hiddenTips(this)
+        if (hidden > 0) {
+            root.addView(Ui.row(this, "Show hidden tips ($hidden)", onClick = {
+                Prefs(this).hiddenTips = emptySet()
+                OLog.i("setup: hidden tips shown again")
+                render()
+            }))
         }
     }
 }

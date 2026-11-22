@@ -206,7 +206,8 @@ class PinGate(private val graceMs: Long = GRACE_MS, private val capMs: Long = CA
  * INSTALL_FAILED_VERIFICATION_FAILURE).
  */
 object Guard {
-    enum class Decision { ALLOW, GUARD }
+    /** DISMISS: a guarded app popped up by itself (no user tap): sent back, no keypad (Popup). */
+    enum class Decision { ALLOW, GUARD, DISMISS }
 
     const val SETTINGS_PKG = "com.android.settings"
     const val SYSTEM_UI = "com.android.systemui"
@@ -298,6 +299,29 @@ object Guard {
         matches(guarded, pkg, cls) -> Decision.GUARD
         else -> Decision.ALLOW
     }
+}
+
+/**
+ * A guarded app asks for the PIN only when the user opens it: it comes to the front after a tap
+ * on a launcher, recents or the companion (within [USER_TAP_MS]), or from the launcher, recents
+ * or the companion itself. Its activity appearing over KOReader or another app with no such tap
+ * is a background popup (the Play Store's own update or scan UI): sent back, no keypad, nothing
+ * unlocked. The install window (Guard.installSurface) is decided before this and still passes.
+ */
+object Popup {
+    const val USER_TAP_MS = 2_000L
+
+    /** [prev]/[prevPkg]: what was in front before (null: the companion or unknown). */
+    fun userOpened(prev: Fg?, prevPkg: String?, pkg: String, now: Long, lastTapAt: Long): Boolean = when {
+        lastTapAt > 0 && now - lastTapAt in 0..USER_TAP_MS -> true
+        prevPkg == pkg -> true
+        prev == Fg.KOREADER || prev == Fg.APP -> false
+        else -> true // a launcher (Home), recents or system UI, the companion
+    }
+
+    /** The decision for a guarded arrival: the keypad when the user opened it, else sent back. */
+    fun decide(d: Guard.Decision, prev: Fg?, prevPkg: String?, pkg: String, now: Long, lastTapAt: Long): Guard.Decision =
+        if (d == Guard.Decision.GUARD && !userOpened(prev, prevPkg, pkg, now, lastTapAt)) Guard.Decision.DISMISS else d
 }
 
 /** RESET_PIN (adb only). The receiver needs DUMP, which only the shell holds; on Android 14+

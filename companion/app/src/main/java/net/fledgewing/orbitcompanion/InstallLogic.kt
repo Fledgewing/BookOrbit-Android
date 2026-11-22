@@ -137,6 +137,29 @@ object DeviceChecks {
         "Play Protect checks apps installed outside the Play Store and may warn about Orbit, KOReader or their updates. Tap \"More details\", then \"Install anyway\". The Settings PIN never covers it during an install."
 }
 
+/**
+ * Setup's advisories (v0.5.3): Family Link / managed, Play Protect and the launcher's app freeze
+ * are tips, not steps. They never count towards "steps need you", the notification, the Home
+ * prompt, Fix next or setup_needed, and "Got it" hides one for good (Prefs.hiddenTips).
+ */
+object SetupTips {
+    val IDS = setOf("managed", "play_protect", "freeze_tip")
+
+    fun isTip(id: String) = id in IDS
+
+    /** Rows to show: hidden tips left out. */
+    fun visible(ids: List<String>, hidden: Set<String>): List<String> = ids.filter { !isTip(it) || it !in hidden }
+
+    /** The steps (tips left out) for Setup's done/total count. */
+    fun steps(rows: List<Pair<String, Boolean>>): List<Pair<String, Boolean>> = rows.filter { !isTip(it.first) }
+
+    /** Setup is complete when every step is done; tips and info rows don't count. */
+    fun complete(rows: List<Pair<String, Boolean>>): Boolean =
+        rows.all { (id, done) -> done || isTip(id) || id in SetupAttention.INFO_ONLY }
+
+    fun hide(hidden: Set<String>, id: String): Set<String> = if (isTip(id)) hidden + id else hidden
+}
+
 /** Setup's "Fix next": the pending rows in order, each tried once per walk. */
 object SetupWalk {
     /** [rows]: (id, done) in Setup order. The next one to fix, or null when the walk is over. */

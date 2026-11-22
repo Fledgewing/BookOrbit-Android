@@ -204,13 +204,32 @@ object Pin {
         val canLaunch = synchronized(launchable) {
             launchable.getOrPut(pkg) { ctx.packageManager.getLaunchIntentForPackage(pkg) != null }
         }
-        val fg = Guard.classify(pkg, cls, ctx.packageName, hc, hp, ime, canLaunch, g.guarded) ?: return Guard.Decision.ALLOW
+        val fg = Guard.classify(pkg, cls, ctx.packageName, hc, hp, ime, canLaunch, g.guarded)
+        val prev = prevFg
+        val prevP = prevPkg
+        prevFg = fg
+        prevPkg = if (fg == null) null else pkg
+        if (fg == null) return Guard.Decision.ALLOW
         val t = now()
         watch()
         if (g.onForeground(fg, pkg, cls, t)) OLog.i("pin: left to $pkg/$cls ($fg); unlocked for ${PinGate.GRACE_MS / 60_000} more min")
-        val d = g.decide(pkg, cls, ctx.packageName, t)
-        OLog.d("pin: gate $pkg/$cls ($fg) -> $d")
+        val d = Popup.decide(g.decide(pkg, cls, ctx.packageName, t), prev, prevP, pkg, t, lastTapAt)
+        OLog.d("pin: gate $pkg/$cls ($fg, after ${prevP ?: "-"}) -> $d")
         return d
+    }
+
+    /** What was in front before the current window (Popup). */
+    @Volatile
+    private var prevFg: Fg? = null
+    @Volatile
+    private var prevPkg: String? = null
+    @Volatile
+    private var lastTapAt = 0L
+
+    /** A tap (accessibility click) in [pkg]: one on a launcher, recents or the companion opens apps. */
+    fun onTap(ctx: Context, pkg: String) {
+        val hp = homeCache?.first ?: homePackages(ctx)
+        if (pkg in hp || pkg == Guard.SYSTEM_UI || pkg == ctx.packageName) lastTapAt = now()
     }
 
     /** Home role or launch intents changed (rare): forget the caches. */

@@ -160,6 +160,10 @@ class Prefs(ctx: Context) {
     // "Setup needs you" (Attention)
     private fun set(key: String): Set<String> = sp.getStringSet(key, emptySet())?.toSet() ?: emptySet()
     private fun setSet(key: String, v: Set<String>) = sp.edit().putStringSet(key, v).apply()
+    /** Setup tips the user dismissed ("Got it", SetupTips). */
+    var hiddenTips: Set<String>
+        get() = set("setup_hidden_tips")
+        set(v) = setSet("setup_hidden_tips", v)
     var setupIgnored: Set<String>
         get() = set("setup_ignored")
         set(v) = setSet("setup_ignored", v)

@@ -296,7 +296,15 @@ Kid-proofing, modelled on the Xteink settings PIN (touch keypad). Optional, off 
   Protect's dialogs, matched by activity (`com.android.vending` `…finsky.protectdialogs.*`),
   even when the Play Store is guarded; when the event names no Play Store activity, the
   package passes for the window only, and the store's own pages stay guarded. Outside the
-  window Play Protect is gated like the rest of the Play Store. Seen on a Boox Page 11-22:
+  window Play Protect is gated like the rest of the Play Store. **Background popups (v0.5.3):**
+  the keypad shows only when the user opens a guarded app: it comes to the front from a
+  launcher, recents (system UI) or the companion, or within 2 s of a tap there (accessibility
+  click events, package only). A guarded activity appearing over KOReader or another app with
+  no such tap (the Play Store's own update or scan UI) is sent back with
+  `GLOBAL_ACTION_BACK`, no keypad, nothing unlocked, logged as `pin: background popup from
+  <pkg/activity> dismissed` (`Popup`). Reported 11-22 as a keypad "while just reading";
+  unconfirmed on a device. Known gap: a link tapped inside KOReader to a guarded app counts as
+  a popup too (KOReader's taps produce no accessibility clicks). Seen on a Boox Page 11-22:
   the keypad over `PlayProtectDialogsActivity` failed the update with
   `INSTALL_FAILED_VERIFICATION_FAILURE`, so it took two PINs and two tries. The Setup row "Clicker
   buttons / app guard (accessibility) on" shows while a PIN is set, since the guard needs the
@@ -383,8 +391,11 @@ downloading only from the official sources (never re-hosted) and logging source 
   or a managed device (UserManager restrictions such as `no_install_unknown_sources`, other
   device admins) with what it blocks and "approve it in the parent's Family Link app"; Play
   Protect (Play Store present) with "More details → Install anyway"; the vendor freeze row
-  (`Vendor.kt`) says what freezing does and where to undo it. These are info rows
-  (`SetupAttention.INFO_ONLY`), never prompted.
+  (`Vendor.kt`) says what freezing does and where to undo it. These are tips, not steps
+  (v0.5.3, `SetupTips`): never counted in Setup's done/total, "steps need you", the
+  notification, the Home prompt, Fix next or `setup_needed`; each has "Got it", which hides it
+  for good (`Prefs.hiddenTips`, kept across restarts), and "Show hidden tips" at the bottom of
+  Setup brings them back.
 - **Fix next** (`SetupWalk`): one button walks every pending row in order, each once per walk,
   and continues when the user is back in Setup (a page closed) or an in-app install finished.
 - **USB** (`tools/install-usb.sh`, bash, macOS and Linux): the same sources and checks, plus

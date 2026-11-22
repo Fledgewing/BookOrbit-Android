@@ -95,4 +95,26 @@ class InstallLogicTest {
         assertEquals("managed", SetupAttention.idOf("Family Link supervision"))
         assertEquals("play_protect", SetupAttention.idOf("Play Protect scans installs"))
     }
+
+    @Test
+    fun anAdvisoryAloneMeansSetupIsComplete() {
+        val rows = listOf("managed" to false, "play_protect" to true, "freeze_tip" to true, "home" to true, "patch" to true)
+        assertTrue(SetupTips.complete(rows))
+        assertEquals(listOf("home" to true, "patch" to true), SetupTips.steps(rows))
+        assertFalse(SetupTips.complete(rows + ("notifications" to false)))
+        // Never a "Fix next" stop, a prompt or setup_needed.
+        assertNull(SetupWalk.next(rows, emptySet()))
+        val st = SetupAttention.evaluate(rows, SetupAttention.State(), 50200, emptySet())
+        assertTrue(st.needed.isEmpty())
+    }
+
+    @Test
+    fun gotItHidesATipUntilShownAgain() {
+        val hidden = SetupTips.hide(emptySet(), "managed")
+        assertEquals(setOf("managed"), hidden)
+        assertEquals("only tips can be hidden", hidden, SetupTips.hide(hidden, "home"))
+        assertEquals(listOf("play_protect", "home"), SetupTips.visible(listOf("managed", "play_protect", "home"), hidden))
+        assertEquals("Show hidden tips", listOf("managed", "home"), SetupTips.visible(listOf("managed", "home"), emptySet()))
+        assertEquals("freeze_tip", SetupAttention.idOf("Launcher can freeze apps"))
+    }
 }

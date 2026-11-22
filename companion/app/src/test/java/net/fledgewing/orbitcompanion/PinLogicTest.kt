@@ -302,6 +302,33 @@ class PinLogicTest {
         assertFalse(Guard.installSurface(settings, null))
     }
 
+    /** Play Store popping up over KOReader by itself (auto-update, scan): back, no keypad. */
+    @Test
+    fun aBackgroundPopupIsDismissedWithNoKeypad() {
+        val g = gate()
+        val now = 100_000L
+        val d = g.decide(store, "com.google.android.finsky.activities.MainActivity", own, now)
+        assertEquals(Guard.Decision.GUARD, d)
+        assertEquals(Guard.Decision.DISMISS, Popup.decide(d, Fg.KOREADER, Koreader.PKG, store, now, lastTapAt = 0))
+        assertEquals("over another reader app", Guard.Decision.DISMISS, Popup.decide(d, Fg.APP, "org.example.reader", store, now, 0))
+        assertTrue("nothing unlocked", g.locked(now))
+    }
+
+    @Test
+    fun aUserOpenedGuardedAppGetsTheKeypad() {
+        val g = gate()
+        val now = 100_000L
+        val d = g.decide(store, "com.google.android.finsky.activities.MainActivity", own, now)
+        assertEquals("a launcher tap just before", Guard.Decision.GUARD, Popup.decide(d, Fg.KOREADER, Koreader.PKG, store, now, lastTapAt = now - 1_500))
+        assertEquals("from the launcher", Guard.Decision.GUARD, Popup.decide(d, Fg.HOME, "com.onyx", store, now, 0))
+        assertEquals("from recents", Guard.Decision.GUARD, Popup.decide(d, Fg.OTHER, Guard.SYSTEM_UI, store, now, 0))
+        assertEquals("from the companion", Guard.Decision.GUARD, Popup.decide(d, null, null, store, now, 0))
+        assertEquals("a stale tap doesn't count", Guard.Decision.DISMISS, Popup.decide(d, Fg.KOREADER, Koreader.PKG, store, now, now - 2_500))
+        // The install window still lets Play Protect through.
+        g.installStarted("update", now)
+        assertEquals(Guard.Decision.ALLOW, Popup.decide(g.decide(store, protect, own, now), Fg.KOREADER, Koreader.PKG, store, now, 0))
+    }
+
     @Test
     fun resetPinRefusedFromANonShellCaller() {
         assertFalse(PinReset.allowed(10_123))

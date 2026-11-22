@@ -30,8 +30,9 @@ when Orbit installs KOReader or updates itself; the answer is the same.
 
 Open **Orbit Companion**, then **Setup**, and tap **Fix next**. It goes through every step that
 isn't ticked, in order, and brings you back to Setup after each one. You can also tap any row
-yourself. Rows that only explain something (Play Protect, Family Link) are never "fixed"; read
-them once.
+yourself. Tips that only explain something (Play Protect, Family Link, a launcher that
+freezes apps) aren't steps: read them, tap **Got it** to hide them (**Show hidden tips** at the
+bottom brings them back).
 
 | Row | What it does |
 |---|---|

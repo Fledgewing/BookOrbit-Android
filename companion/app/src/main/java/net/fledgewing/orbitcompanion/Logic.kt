@@ -568,7 +568,7 @@ object PatchFile {
  */
 object SetupAttention {
     /** Rows that report a test or a sighting, not a setting: never prompted about. */
-    val INFO_ONLY = setOf("patch_seen", "wifi_test", "keymapper", "play_protect", "managed")
+    val INFO_ONLY = setOf("patch_seen", "wifi_test", "keymapper", "play_protect", "managed", "freeze_tip")
 
     fun idOf(label: String): String = when {
         label.startsWith("Set Orbit as Home") -> "home"
@@ -582,6 +582,7 @@ object SetupAttention {
         label.startsWith("KOReader app") -> "koreader"
         label.startsWith("BookOrbit plugin") -> "plugin"
         label.startsWith("Play Protect") -> "play_protect"
+        label.startsWith("Launcher can freeze apps") -> "freeze_tip"
         label.startsWith("Family Link") || label.startsWith("Managed device") -> "managed"
         label.startsWith("KOReader patch answered") -> "patch_seen"
         label.startsWith("Wi-Fi off/on test") -> "wifi_test"
@@ -717,6 +718,10 @@ object WhatsNew {
             "No more \"setup step needs you\" for a step already being done, and What's new is a line on this page instead of a notification.",
             "Pages keep their scroll position when they update (Check for updates, Fix, toggles).",
             "Apply recommended settings in KOReader sets BookOrbit's \"Make BookOrbit home\" only where the plugin knows that setting.",
+        ),
+        "0.5.3" to listOf(
+            "Setup's tips (Family Link, Play Protect, a launcher that freezes apps) have \"Got it\" and never count as steps; \"Show hidden tips\" brings them back.",
+            "With a Settings PIN, a guarded app that pops up by itself while you read (such as the Play Store) is sent back instead of showing the keypad. The keypad shows when you open the app.",
         ),
     )
 

@@ -109,6 +109,11 @@ class ClickerService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+            // Package only: a tap on a launcher, recents or the companion (Settings PIN, Popup).
+            event.packageName?.toString()?.let { Pin.onTap(this, it) }
+            return
+        }
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
             // Send-key actions skip while typing. Only the class name is used, never any text.
             val text = Keyboard.isTextField(event.className, event.isPassword)
@@ -131,7 +136,14 @@ class ClickerService : AccessibilityService() {
     private var guardShownAt = 0L
 
     private fun guard(pkg: String, cls: String?) {
-        if (Pin.onForeground(this, pkg, cls) != Guard.Decision.GUARD || PinActivity.showing) return
+        val d = Pin.onForeground(this, pkg, cls)
+        if (d == Guard.Decision.DISMISS) {
+            // Popped up by itself over what the user was doing: back, no keypad, nothing unlocked.
+            OLog.i("pin: background popup from $pkg/$cls dismissed")
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            return
+        }
+        if (d != Guard.Decision.GUARD || PinActivity.showing) return
         // One keypad per arrival: the app's further window events while it opens don't stack more.
         val t = android.os.SystemClock.elapsedRealtime()
         if (t - guardShownAt < 1_500) return
