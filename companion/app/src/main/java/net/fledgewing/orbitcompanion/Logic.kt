@@ -592,6 +592,9 @@ object WhatsNew {
         "0.4.6" to listOf(
             "Settings PIN: works as soon as it's set, unlocks only while you stay in the settings or the app you unlocked, and on Boox guards only the Settings screen (no longer the launcher). Home on KOReader's file browser opens BookOrbit home again.",
         ),
+        "0.4.7" to listOf(
+            "Home opens BookOrbit home again on KOReader 2025.10 and newer (KOReader now wraps the plugin's actions, which the patch took as missing). Test sync path and Apply recommended settings work there too.",
+        ),
     )
 
     /** Notes for versions newer than [fromCode] up to [toCode] (Version.code), oldest first. */

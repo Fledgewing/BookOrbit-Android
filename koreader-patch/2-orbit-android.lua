@@ -511,8 +511,27 @@ Compat.FEATURES = {
     { id = "recommended", needs = { onBookOrbitToggleAutoSync = "function" },
       fallback = "Apply recommended settings can't turn on Auto-sync" },
 }
+-- The feature that names each plugin event (advisory logging in pluginEvent).
+local PLUGIN_EVENT_FEATURE = { BookOrbitOpenDashboard = "dashboard", BookOrbitSyncBook = "test_sync",
+    BookOrbitToggleAutoSync = "recommended" }
 -- On the catalog widget, checked when it is open.
 Compat.CATALOG = { dashboardMode = "function", close_callback = "function" }
+
+-- "function" means callable: KOReader 2025.10+ wraps every plugin on* handler in a
+-- HandlerSandbox, a table with __call (frontend/pluginloader.lua v2026.07.1:117-128, :158-164,
+-- applied at :263); up to 2025.08 the wrapper was a plain function. A type() check alone saw
+-- 2.3.0's handlers as missing on 2025.10+ (11-21 Boox Page, KOReader 2026.07.1).
+function Compat.callable(v)
+    if type(v) == "function" then return true end
+    if type(v) ~= "table" and type(v) ~= "userdata" then return false end
+    local okm, mt = pcall(getmetatable, v)
+    return okm and type(mt) == "table" and mt.__call ~= nil
+end
+
+local function hasKind(v, kind)
+    if kind == "function" then return Compat.callable(v) end
+    return type(v) == kind
+end
 
 -- { [id] = missing symbols (sorted list) } for one plugin instance; {} when all is there.
 function Compat.check(p)
@@ -521,7 +540,7 @@ function Compat.check(p)
         local missing = {}
         for name, kind in pairs(f.needs) do
             local okv, v = pcall(function() return p[name] end)
-            if not okv or type(v) ~= kind then table.insert(missing, name) end
+            if not okv or not hasKind(v, kind) then table.insert(missing, name) end
         end
         if #missing > 0 then table.sort(missing); out[f.id] = missing end
     end
@@ -1385,13 +1404,15 @@ local function pluginVersion(p)
     return (okv and type(v) == "string") and v or "unknown"
 end
 
--- Unavailable features for this plugin instance (cached), logged once per feature.
+-- Unavailable features for this plugin instance, logged once per feature. Only a full pass is
+-- cached (per live instance): a check that finds something missing, e.g. one made before the
+-- plugin finished init, is made again next time.
 local function compatOf(p)
     if not p then return {} end
     local m = compat_seen[p]
     if m then return m end
     m = Compat.check(p)
-    compat_seen[p] = m
+    if next(m) == nil then compat_seen[p] = m end
     for id, missing in pairs(m) do
         if not compat_logged[id] then
             compat_logged[id] = true
@@ -2509,22 +2530,40 @@ local function catalogOnTop(p)
     return cb ~= nil and topWidget() == cb
 end
 
-local function widgetName(w)
+-- The topmost widget, named for the log: KOReader's own screens by identity, else its name,
+-- title or (for a class instance) its class's name.
+local function widgetName(w, p)
     if w == nil then return "nothing" end
-    return tostring(rawget(w, "name") or rawget(w, "title") or "widget")
+    if p and w == p.catalog_browser then return "BookOrbit catalog" end
+    local okr, RUI = pcall(require, "apps/reader/readerui")
+    if okr and type(RUI) == "table" and w == RUI.instance then return "ReaderUI (book)" end
+    local okf, FM = pcall(require, "apps/filemanager/filemanager")
+    if okf and type(FM) == "table" and w == FM.instance then return "FileManager (file browser)" end
+    local okn, n = pcall(function()
+        local v = w.name or w.title
+        if v == nil then
+            local mt = getmetatable(w)
+            local cls = mt and (rawget(mt, "__index") or mt)
+            v = type(cls) == "table" and (rawget(cls, "name") or rawget(cls, "title")) or nil
+        end
+        return v
+    end)
+    if okn and n ~= nil and (type(n) == "string" or type(n) == "number") then return tostring(n) end
+    return "unnamed widget"
 end
 
 local function onDashboard(p)
     local cb = p and p.catalog_browser
     if cb == nil then return false end
     if topWidget() ~= cb then return false end
-    if type(cb.dashboardMode) ~= "function" then
+    if not Compat.callable(cb.dashboardMode) then
         if not compat_logged.catalog then
             compat_logged.catalog = true
             log("compat: catalog unavailable (plugin " .. pluginVersion(p) .. "): missing dashboardMode -> Home on BookOrbit home goes back to the book")
         end
         return false
     end
+    if not Compat.callable(cb.dashboardMode) then return false end
     local okd, dash = pcall(function() return cb:dashboardMode() end)
     return okd and dash == true
 end
@@ -2559,7 +2598,7 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
         from_other = from_other, reopen = reopen,
     }
     log("home (" .. mode .. "):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "BookOrbit view",
-        tostring(view_open), "dashboard on top", tostring(on_dash), "(top: " .. widgetName(topWidget()) .. ")",
+        tostring(view_open), "dashboard on top", tostring(on_dash), "(top: " .. widgetName(topWidget(), p) .. ")",
         "from other app", tostring(from_other),
         "(paused", paused and fmt(paused) or "-", ")", "reopen current book", reopen and tostring(last) or "no")
     if action == "companion" then return self:openCompanionHome() end
@@ -2591,14 +2630,60 @@ end
 -- does the same from a book, bookorbit_main_menu.lua:307). Fallback (no plugin, signed out):
 -- close the book (the reader saves it; the plugin syncs it as on any close, main.lua:1292-1312)
 -- and remember it as the current book (home_book), so Home elsewhere goes back to it.
+-- The plugin has some BookOrbitOpenDashboard handler. Advisory: anything there counts (a
+-- KOReader HandlerSandbox or a future wrapper); only a plugin without it is "missing".
+local function hasHandler(p, event)
+    if p == nil then return false end
+    local okv, v = pcall(function() return p["on" .. event] end)
+    return okv and v ~= nil
+end
+
+-- Send a plugin event the way KOReader's dispatcher does (the plugin's public actions, e.g.
+-- bookorbit_open_dashboard -> BookOrbitOpenDashboard, main.lua:987-988): through the live UI,
+-- which passes it to its plugin modules. Without a UI that takes it, call the handler.
+local function pluginEvent(host, p, event, ...)
+    if not can(p, PLUGIN_EVENT_FEATURE[event] or "core") then
+        log("compat: the method check doesn't see on" .. event .. "; sending the event anyway")
+    end
+    host = host or liveUI()
+    if host and host.handleEvent then
+        local okh, err = pcall(host.handleEvent, host, Event:new(event, ...))
+        if okh then return true end
+        log("plugin event", event, "failed:", tostring(err))
+    end
+    local okv, h = pcall(function() return p and p["on" .. event] end)
+    if okv and Compat.callable(h) then
+        local okc, err = pcall(h, p, ...)
+        if not okc then log("plugin handler on" .. event, "failed:", tostring(err)) end
+        return okc
+    end
+    local okb = pcall(UIManager.broadcastEvent, UIManager, Event:new(event, ...))
+    return okb
+end
+
+-- After opening BookOrbit home: say so if it isn't on top a second later.
+local function checkDashboardOpened(p, why)
+    UIManager:scheduleIn(1, function()
+        local q = bookorbit(liveUI()) or p
+        if catalogOnTop(q) then
+            log("home: BookOrbit home is on top (" .. why .. ")")
+        else
+            log("home: BookOrbit home did NOT open (" .. why .. "); top:", widgetName(topWidget(), q))
+        end
+    end)
+end
+
 function OrbitAndroid:onOrbitGoHome()
     local ui = liveUI()
     local p = bookorbit(ui)
-    if ui and ui.document and can(p, "dashboard") and p:isLoggedIn() then
+    if ui and ui.document and hasHandler(p, "BookOrbitOpenDashboard") and p:isLoggedIn() then
         log("home: BookOrbit home over the open book")
         -- The plugin's public action bookorbit_open_dashboard (event BookOrbitOpenDashboard,
         -- main.lua:987-988).
-        UIManager:nextTick(function() ui:handleEvent(Event:new("BookOrbitOpenDashboard")) end)
+        UIManager:nextTick(function()
+            pluginEvent(ui, p, "BookOrbitOpenDashboard")
+            checkDashboardOpened(p, "over the book")
+        end)
         UIManager:scheduleIn(1, function() self:maybeSetupPrompt("home") end)
         return true
     end
@@ -2629,14 +2714,14 @@ function OrbitAndroid:finishHome()
         log("home: BookOrbit home already showing")
         return
     end
-    if not can(p, "dashboard") then
-        log("home: no BookOrbit home action in this plugin; staying in the file browser")
-        return
+    if not hasHandler(p, "BookOrbitOpenDashboard") then
+        -- Advisory: the live UI may still route the event to a plugin module we can't see.
+        log("home: this plugin instance shows no BookOrbit home handler; sending the event anyway")
     end
     if p.catalog_browser then
         -- Open but covered (the file browser on top): the plugin's open action does nothing while
         -- catalog_browser is set (main.lua:1381-1385), so close it the plugin's way, then reopen.
-        log("home: BookOrbit home is open but not showing (top: " .. widgetName(topWidget()) .. "); bringing it to the top")
+        log("home: BookOrbit home is open but not showing (top: " .. widgetName(topWidget(), p) .. "); bringing it to the top")
         local cb = p.catalog_browser
         local okc, err = pcall(function()
             if cb.close_callback then cb.close_callback() else UIManager:close(cb); p.catalog_browser = nil end
@@ -2645,8 +2730,8 @@ function OrbitAndroid:finishHome()
         p.catalog_browser = nil
     end
     log("home: opening BookOrbit home")
-    local host = liveUI() or self.ui
-    if host and host.handleEvent then host:handleEvent(Event:new("BookOrbitOpenDashboard")) else p:onBookOrbitOpenDashboard() end
+    pluginEvent(liveUI() or self.ui, p, "BookOrbitOpenDashboard")
+    checkDashboardOpened(p, "from the file browser")
     UIManager:scheduleIn(1, function() self:maybeSetupPrompt("home") end)
 end
 
@@ -3070,13 +3155,13 @@ function OrbitAndroid:testSyncPath()
                 err and (_("The plugin reported: ") .. tostring(p:errorLabel(err))) or nil)
             show()
         end
-        if not can(p, "test_sync") then
+        if not (hasHandler(p, "BookOrbitSyncBook") and Compat.callable(p.startSweep) and Compat.callable(p.errorLabel)) then
             add(true, _("BookOrbit plugin step skipped: ") .. Compat.fallback("test_sync"), nil)
             return show()
         end
         -- The plugin's own Sync now: this book in a book, the library otherwise.
         if inBook() then
-            p:onBookOrbitSyncBook({ quiet = true, on_done = plugin_done })
+            pluginEvent(liveUI(), p, "BookOrbitSyncBook", { quiet = true, on_done = plugin_done })
         else
             p:startSweep({ quiet = true, on_progress = function() end, on_done = plugin_done })
         end
@@ -3143,9 +3228,9 @@ function OrbitAndroid:applyRecommendedSettings()
             p.settings.sync_forward = Plan.STRATEGY.SILENT
             p.settings.sync_backward = Plan.STRATEGY.DISABLE
             p.settings.catalog_auto_open = "home"
-            if not p.settings.auto_sync and can(p, "recommended") then
+            if not p.settings.auto_sync and hasHandler(p, "BookOrbitToggleAutoSync") then
                 -- The plugin's own toggle also registers its reader events (main.lua:1416-1448).
-                p:onBookOrbitToggleAutoSync(true, true, true)
+                pluginEvent(liveUI(), p, "BookOrbitToggleAutoSync", true, true, true)
             end
             G_reader_settings:flush()
             log("applied recommended plugin settings; auto_sync", tostring(p.settings.auto_sync))

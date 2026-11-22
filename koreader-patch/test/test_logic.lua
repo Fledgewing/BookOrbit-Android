@@ -391,6 +391,23 @@ test("disabled text names the disabler at run time, or stays neutral", function(
     eq(M.disabledText("Orbit Companion", nil, nil), "Orbit Companion is disabled by the system: re-enable it in Settings › Apps.")
 end)
 
+test("compat: KOReader 2025.10+ HandlerSandbox (a callable table) counts as a function", function()
+    local C = M.Compat
+    local sandbox = setmetatable({}, { __call = function(_, module, ...) return true end })
+    eq(C.callable(function() end), true)
+    eq(C.callable(sandbox), true, "callable table")
+    eq(C.callable({}), false, "plain table")
+    eq(C.callable("x"), false)
+    eq(C.callable(nil), false)
+    local p = { settings = {} }
+    for _, f in ipairs(C.FEATURES) do
+        for name, kind in pairs(f.needs) do
+            if kind == "function" then p[name] = name:sub(1, 2) == "on" and sandbox or function() end end
+        end
+    end
+    eq(next(C.check(p)), nil, "2.3.0 on KOReader 2026.07.1: nothing missing")
+end)
+
 test("compat: missing or mistyped plugin symbols turn off only their feature", function()
     local C = M.Compat
     local full = { settings = {} }

@@ -1082,6 +1082,65 @@ test("smart home: fallback close by Home keeps the book current; elsewhere goes 
     ok(store.orbit_android.home_book == nil, "user close clears it")
 end)
 
+-- Like KOReader 2025.10+ (frontend/pluginloader.lua v2026.07.1:117-164): on* handlers become
+-- callable tables.
+local function sandboxed(p)
+    for k, v in pairs(p) do
+        if type(k) == "string" and k:sub(1, 2) == "on" and type(v) == "function" then
+            p[k] = setmetatable({ f = v }, { __call = function(t, module, ...) return t.f(module, ...) end })
+        end
+    end
+    return p
+end
+
+test("home: plugin handlers wrapped by KOReader 2026.07 -> Home on the file browser opens BookOrbit home", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    sandboxed(ui.bookorbit)
+    run(5)
+    W.shown, W.activities = { { name = "filemanager" } }, {}
+    command(m, "home_smart", "other_app")
+    m:onResume()
+    run(2)
+    ok(has(ui.bookorbit.calls, "dashboard"), "dashboard handler ran")
+    ok(W.shown[#W.shown] == ui.bookorbit.catalog_browser, "BookOrbit home on top")
+    ok(#W.activities == 0, "no companion page")
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
+test("home: the instance shows no handler but the UI routes the event -> BookOrbit home opens", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    local real = ui.bookorbit
+    local seen = newPlugin()
+    seen.onBookOrbitOpenDashboard = nil -- what the patch sees; the UI still has the real module
+    ui.bookorbit = seen
+    function ui:handleEvent(ev)
+        local h = real["on" .. ev.name]
+        if h then return h(real, unpack(ev.args)) end
+    end
+    run(5)
+    W.shown, W.activities = { { name = "filemanager" } }, {}
+    command(m, "home_smart", "other_app")
+    m:onResume()
+    run(2)
+    ok(has(real.calls, "dashboard"), "event reached the plugin")
+    ok(W.shown[#W.shown] == real.catalog_browser, "BookOrbit home on top")
+    W.shown = {}
+end)
+
+test("compat: a check that found something missing early doesn't stick", function()
+    local ui, m = newUI(true)
+    local q = newPlugin()
+    local drain, outbox = q.requestLifecycleOutboxDrain, q.getLifecycleOutbox
+    q.getLifecycleOutbox, q.requestLifecycleOutboxDrain, q.PLUGIN_VERSION = nil, nil, "9.9.8"
+    ui.bookorbit = q
+    ok(m:statusText():find("BookOrbit 9.9.8 changed", 1, true), "missing at first")
+    q.getLifecycleOutbox, q.requestLifecycleOutboxDrain = outbox, drain -- the plugin finished init
+    ok(not m:statusText():find("BookOrbit 9.9.8 changed", 1, true), "re-checked: " .. m:statusText())
+end)
+
 test("compat: a plugin without its outbox API -> sleep sync leaves it to the plugin, no error", function()
     local ui, m = newUI(true)
     local q = newPlugin()

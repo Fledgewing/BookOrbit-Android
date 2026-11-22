@@ -289,6 +289,15 @@ behaviour, and is shown in the menu status and Test sync path. CI checks the sam
 against the latest plugin weekly and opens an issue when it changes (koreader-patch/README.md
 "Plugin hook points").
 
+The plugin's event handlers (`onBookOrbitOpenDashboard`, `onBookOrbitSyncBook`,
+`onBookOrbitToggleAutoSync`) are reached by sending the event through the live UI, as
+KOReader's dispatcher does, never by a type check on the method: KOReader 2025.10+ wraps
+every plugin `on*` handler in a HandlerSandbox, a callable table (frontend/pluginloader.lua
+v2026.07.1:117-128, :158-164, :263), so `type(p.onX) == "function"` is false there (v0.4.6
+and older: Home on the file browser did nothing). The compatibility check counts callables
+as functions, and only a full pass is cached per plugin instance, so a check made before the
+plugin finished `init` is made again.
+
 ## Vendor profiles
 
 The code is generic Android. Vendor quirks (the launcher that "freezes" apps, its freeze
