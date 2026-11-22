@@ -38,7 +38,7 @@ import kotlin.concurrent.thread
  */
 object Updater {
     const val REPO = "Fledgewing/BookOrbit-Android"
-    private const val API = "https://api.github.com/repos/$REPO"
+    internal const val API = "https://api.github.com/repos/$REPO"
     private const val CHANNEL = "updates"
     private const val ID_UPDATE = 3
     const val EXTRA_INTERACTIVE = "${Contract.PACKAGE}.extra.INTERACTIVE"
@@ -110,7 +110,7 @@ object Updater {
     }
 
     /** Returns true when we turned Wi-Fi on. Waits up to 30 s for a connection. */
-    private fun bringWifiUp(ctx: Context): Boolean {
+    internal fun bringWifiUp(ctx: Context): Boolean {
         val was = Net.wifiEnabled(ctx)
         if (!was && !Net.setWifi(ctx, true, "update check", WifiOwner.AUTO)) return false
         val t0 = android.os.SystemClock.elapsedRealtime()
@@ -120,7 +120,7 @@ object Updater {
     }
 
     /** Plain words instead of an exception name. */
-    private fun friendly(ctx: Context, e: Exception): String {
+    internal fun friendly(ctx: Context, e: Exception): String {
         val kind = NetErrors.kindOf(e)
         val msg = NetErrors.message(kind, Net.wifiEnabled(ctx), Net.wifiConnected(ctx), Net.vpnUp(ctx), e.message ?: e.javaClass.simpleName)
         log("error kind $kind: ${e.javaClass.simpleName}: ${e.message} -> $msg")
@@ -129,7 +129,6 @@ object Updater {
 
     private fun run(ctx: Context, interactive: Boolean, why: String): String {
         val p = Prefs(ctx)
-        p.updateCheckedAt = System.currentTimeMillis()
         val pre = p.includePreReleases
         log("check started ($why, interactive=$interactive, pre-releases=$pre, installed v${BuildConfig.VERSION_NAME})")
 
@@ -139,6 +138,9 @@ object Updater {
         } else {
             listOf(release(JSONObject(httpText("$API/releases/latest"))))
         }
+        // Only a check that reached GitHub counts for the daily timer: a failed one (no network,
+        // VPN lockdown) is retried at the next Wi-Fi up instead of 24 h later.
+        p.updateCheckedAt = System.currentTimeMillis()
         log("fetched ${releases.size} release(s): ${releases.joinToString { it.tag }}")
         val rel = UpdatePolicy.pick(releases, pre) ?: return "no release found"
         val ver = rel.version!!
@@ -178,7 +180,7 @@ object Updater {
         return "installing v$ver"
     }
 
-    private fun release(o: JSONObject): ReleaseInfo {
+    internal fun release(o: JSONObject): ReleaseInfo {
         val assets = LinkedHashMap<String, String>()
         val arr = o.optJSONArray("assets") ?: JSONArray()
         for (i in 0 until arr.length()) {
@@ -206,7 +208,7 @@ object Updater {
         return c
     }
 
-    private fun httpText(url: String): String {
+    internal fun httpText(url: String): String {
         val c = open(url)
         try {
             return c.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8)
@@ -216,7 +218,7 @@ object Updater {
     }
 
     /** Streams to [to] and returns the lowercase hex SHA-256. */
-    private fun download(url: String, to: File): String {
+    internal fun download(url: String, to: File): String {
         val t0 = android.os.SystemClock.elapsedRealtime()
         val md = MessageDigest.getInstance("SHA-256")
         val c = open(url)

@@ -2,6 +2,8 @@
 
 Keeps Android e-readers in sync with a BookOrbit server over Tailscale, the way CrossInk does on Xteink readers.
 
+**New here? Start with the [setup guide](docs/SETUP.md).**
+
 The official BookOrbit KOReader plugin does all syncing and keeps the login. This repo adds:
 
 - `koreader-patch/`: a KOReader user patch that brings the network up (Wi-Fi + Tailscale) before the plugin syncs, syncs on sleep and on a schedule, and sends Home to BookOrbit home.
@@ -16,8 +18,10 @@ From [Releases](https://github.com/Fledgewing/BookOrbit-Android/releases/latest)
 1. **Orbit Companion**: download `orbit-companion-<version>.apk` and install it (allow your
    browser or file manager to install unknown apps when Android asks). Open it, then work
    through **Setup** on its status page.
-2. **KOReader patch**: copy `2-orbit-android.lua` into `koreader/patches/` on the device
-   (create the folder if needed) and restart KOReader. Needs the GitHub build of KOReader;
+2. **KOReader patch**: tap **KOReader patch installed** on the companion's Setup page (it
+   downloads the patch from the same release, checks its SHA-256 and writes it into
+   `koreader/patches/`), or copy `2-orbit-android.lua` there yourself (create the folder if
+   needed). Then restart KOReader. Needs the GitHub build of KOReader;
    see `koreader-patch/README.md`.
 
 After that, both update themselves from this repo's releases.
@@ -35,7 +39,7 @@ With **Include pre-releases** on, they look at the five newest releases instead 
 pre-releases. Each downloads the release's `SHA256SUMS` and refuses a file whose SHA-256
 doesn't match.
 
-- **KOReader patch** (Tools › BookOrbit › Android sync): **Auto-update patch** (on by default),
+- **KOReader patch** (Tools › Android sync): **Auto-update patch** (on by default),
   **Include pre-releases** (off), **Check for patch update**, and a status line. The check
   runs about 8 s after a start or wake once the network is up. A newer `2-orbit-android.lua`
   (it must also declare the release's version in `PATCH_VERSION`) is written next to the
@@ -60,7 +64,7 @@ doesn't match.
 
 ## Wi-Fi and the Home button
 
-Two settings are shared by the patch (Tools › BookOrbit › Android sync) and the companion
+Two settings are shared by the patch (Tools › Android sync) and the companion
 (Settings); changing either changes both.
 
 - **Wi-Fi**: *Always on* (Wi-Fi stays as you set it), *Off while reading* (off once a book's
@@ -71,8 +75,8 @@ Two settings are shared by the patch (Tools › BookOrbit › Android sync) and 
   sync path that has to turn Wi-Fi on turns it back off. KOReader never shows its "turn on
   Wi-Fi?" prompt while the companion can switch Wi-Fi.
 - **Home button**: *Back to my book, then BookOrbit home* (default: Home in a book opens
-  BookOrbit home, Home on BookOrbit home opens the companion; Home anywhere else, or from
-  another app, goes back to the book if one is still open, else to BookOrbit home; after
+  BookOrbit home on top of it, Home there opens the companion, Home from the companion or any
+  other app goes back to the book; with no current book, Home opens BookOrbit home; after
   KOReader was killed with a book open, Home reopens it) or *BookOrbit home* (Home on
   BookOrbit home still opens the companion).
 

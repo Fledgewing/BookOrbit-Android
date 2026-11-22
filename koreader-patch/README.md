@@ -37,8 +37,8 @@ Remove it by deleting the file. Its settings live under `orbit_android` in KORea
 | **Wi-Fi requests from KOReader** | With a usable companion: `NetworkMgr:turnOnWifi`/`turnOffWifi`/`isWifiOn` (Android's, device.lua:317-342; `isWifiOn = isConnected` at :341) go through the companion, and `wifi_enable_action` is set to `turn_on`, so `beforeWifiAction` (manager.lua:605-619) and `runWhenOnline` (manager.lua:698) bring Wi-Fi up without a prompt. Without one (missing or disabled): Tailscale is woken and KOReader's stock behaviour stays; if Wi-Fi is off, network steps fail at once. |
 | **Wi-Fi mode** (shared with the companion) | *Always on*; *Off while reading* (off once the open-time pull is done, restored at close); *Just in time* (default with the companion: off after 1/2/5/10 min without traffic, counted from `socket.http`/`ssl.https` requests; never during a request, the plugin's sync or an outbox drain; only Wi-Fi it turned on; never while another app is in front). Sleep sync, wake pull, Sync while reading, manual patch update and Test sync path put Wi-Fi back off when they had to turn it on. Every decision logs `wifi:` with the reason and mode. The radio state comes from `Settings.Global` `wifi_on` (no permission needed): KOReader has no `ACCESS_WIFI_STATE`, so `WifiManager.isWifiEnabled` throws there. KOReader's own `auto_disable_wifi` can't work here (it needs `getNetworkInterfaceName`, nil on Android, networklistener.lua:184-185). |
 
-Menu: **Tools › BookOrbit › Android sync** (falls back to a top-level **Android sync** entry
-under Tools when the plugin is missing). Toggles; Sync while reading; Sync and sleep now;
+Menu: **Tools › Android sync** (its own entry: a menu item with `sorting_hint = "tools"`,
+frontend/ui/menusorter.lua:162-189; nothing is added to the plugin's menu). Toggles; Sync while reading; Sync and sleep now;
 Sleep sync limit (10/15/20 s); Apply recommended settings; Apply recommended gestures; Test
 sync path; Wi-Fi (mode, idle minutes); Home button; Open Orbit Companion; Open another app…; Auto-update patch; Include
 pre-releases; Check for patch update; update status; status.
@@ -66,22 +66,36 @@ Dispatcher actions (for any gesture): `orbit_sync_and_sleep`, `orbit_go_home`,
 
 The companion interface is in [`docs/INTERFACE.md`](../docs/INTERFACE.md).
 
-## Plugin hook points (bookorbit.koplugin 2.3.0)
+## Plugin hook points (bookorbit.koplugin 2.3.0; checked against the latest weekly)
 
-| Use | Plugin code |
+**Public** (the plugin's actions and user settings; stable for users too):
+
+| Use | Plugin surface |
 |---|---|
-| Drain the durable outbox (only when connected) | `requestLifecycleOutboxDrain`, main.lua:414-547 |
-| Wait for it: outbox count, coordinator busy, last error | `getLifecycleOutbox():diagnostics()` bookorbit_lifecycle_outbox.lua:303-317; `getSyncCoordinator()` main.lua:361-372, `isBusy`/`queuedCount` bookorbit_sync_coordinator.lua:48-54; `settings.last_error` main.lua:321-333 |
-| Sleep snapshot for "Sync and sleep" | `_onSuspend`, main.lua:1340-1351 |
-| Pull with the debounce cleared | `pull_timestamp` checked at bookorbit_progress_sync.lua:383-387 (25 s, line 26); `requestProgressPull` main.lua:730-741 |
-| Push | `push_timestamp` (bookorbit_progress_sync.lua:307-311); `requestProgressPush` main.lua:717-728 |
-| BookOrbit's position without prompting | `fetchRemoteProgress` bookorbit_progress_sync.lua:521-536; `isSamePlace` 145-155; `remoteProgressIsNewer` 157-167 |
-| Every-few-pages push (skipped while Sync while reading is on) | `_onPageUpdate` main.lua:1314-1327 → `schedulePeriodicPush` bookorbit_progress_sync.lua:538-543 (instance override) |
-| Home | `onBookOrbitOpenDashboard` main.lua:1381-1389 (action `bookorbit_open_dashboard`, main.lua:987-988); with Make BookOrbit home the plugin opens itself after a close, main.lua:1404-1412 and 1472-1475 |
-| Test sync path, step 5 | `onBookOrbitSyncBook{quiet, on_done}` main.lua:1269-1288 in a book; `startSweep{quiet, on_done}` main.lua:1246-1253 otherwise |
-| Auto-sync toggle (also registers its events) | `onBookOrbitToggleAutoSync` main.lua:1416-1448 |
+| Home: BookOrbit home | action `bookorbit_open_dashboard` (event `BookOrbitOpenDashboard`), main.lua:987-988 → main.lua:1381-1389; opens over an open book, main.lua:1206-1230 |
+| Every-few-pages push off while Sync while reading is on | setting "Push while reading" (`settings.pages_before_update`, bookorbit_settings_page.lua:259-260; read in `_onPageUpdate`, main.lua:1322-1324): set to 0, the reader's value kept and put back |
+| Recommended settings | settings `auto_sync`, `sync_forward`, `sync_backward`, `catalog_auto_open` |
 | Server URL | `settings.server_url` (G_reader_settings `bookorbit`), main.lua:102-125 |
-| Menu | `menu_items.bookorbit.sub_item_table`, bookorbit_main_menu.lua:320-366 |
+| Version (compat messages) | `BookOrbit.PLUGIN_VERSION`, main.lua:54/95 (`_meta.lua` has none) |
+
+**Private** (no public equivalent; each behind the start-up compatibility check, `Compat`):
+
+| Use | Plugin code | If it's gone |
+|---|---|---|
+| Drain the outbox, wait for it: count, coordinator busy, last error | `requestLifecycleOutboxDrain` main.lua:414-547; `getLifecycleOutbox():diagnostics()` bookorbit_lifecycle_outbox.lua:303-317; `getSyncCoordinator()` main.lua:361-372; `settings.last_error` | wake and sleep syncs use the plugin's own sync |
+| Silent pull, debounce cleared only if the last pull was < 25 s ago | `requestProgressPull` main.lua:730-741; `pull_timestamp` bookorbit_progress_sync.lua:384-387 (25 s, line 26). The public `bookorbit_pull_progress` is interactive: it jumps even backwards and shows toasts (bookorbit_progress_sync.lua:454-462), which breaks the Silent / Don't sync rule | wake and open pulls use the plugin's own timing |
+| Sleep snapshot for "Sync and sleep" | `_onSuspend` main.lua:1340-1351 | sends what the plugin already queued |
+| Sync while reading: BookOrbit's position without moving or prompting, then push or pull | `fetchRemoteProgress` 521-536, `isSamePlace` 145-155, `remoteProgressIsNewer` 157-167, `getLastPercent`/`getLastProgress`/`getDocumentDigest` (bookorbit_progress_sync.lua); `requestProgressPush` main.lua:717-728 (the public push action is interactive) | Sync while reading is off |
+| "Is BookOrbit home on top?" | the catalog widget `catalog_browser` (main.lua:1207-1230), `dashboardMode` bookorbit_catalog.lua:1875-1877, closed with its `close_callback` | Home there goes back to the book |
+| Test sync path, step 5 (needs `on_done`) | `onBookOrbitSyncBook{quiet, on_done}` main.lua:1269-1288; `startSweep{quiet, on_done}` main.lua:1246-1253; `errorLabel` | the step is skipped |
+| Auto-sync toggle (also registers its events) | `onBookOrbitToggleAutoSync` main.lua:1416-1448 | not toggled |
+
+At start the patch checks each private symbol's type (`Compat.check`). A missing one turns off
+only its feature, logs `OrbitAndroid: compat: <feature> unavailable (plugin <version>)`, and
+the menu status and Test sync path say e.g. "BookOrbit 2.5.0 changed: Sync while reading is
+off". CI (`.github/workflows/plugin-compat.yml`: pull requests, release tags, weekly) runs
+`test/plugin_compat.lua` against the latest `bookorbit/bookorbit` plugin and, on the weekly
+run, opens an issue "BookOrbit plugin <ver> changed: <symbols>".
 
 The patch adds itself to the plugin list KOReader instantiates (`PluginLoader:loadPlugins`,
 used by readerui.lua:464 and filemanager.lua:418), last, so it gets the same events as a

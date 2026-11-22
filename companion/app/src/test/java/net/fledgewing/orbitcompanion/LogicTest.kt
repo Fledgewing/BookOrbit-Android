@@ -387,3 +387,21 @@ class NetErrorsTest {
         assertEquals("no internet: Wi-Fi is off", NetErrors.message("connect", false, false, vpnUp = true, detail = ""))
     }
 }
+
+class PatchFileTest {
+    @Test
+    fun readsPatchVersion() {
+        assertEquals("0.2.2", PatchFile.version("-- x\nlocal PATCH_VERSION = \"0.2.2\"\nlocal y = 1\n"))
+        assertNull(PatchFile.version("-- nothing here"))
+        assertNull(PatchFile.version(null))
+    }
+
+    @Test
+    fun installWhenMissingOrOlder() {
+        assertTrue(PatchFile.needsInstall(null, "0.2.2"))
+        assertTrue(PatchFile.needsInstall("0.2.0", "0.2.2"))
+        assertTrue(PatchFile.needsInstall("0.0.0-dev", "0.2.2"))
+        assertFalse(PatchFile.needsInstall("0.2.2", "0.2.2"))
+        assertFalse(PatchFile.needsInstall("0.3.0", "0.2.2"))
+    }
+}

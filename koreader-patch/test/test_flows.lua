@@ -28,6 +28,7 @@ local UIManager = {
         for i = #W.queue, 1, -1 do if W.queue[i].fn == fn then table.remove(W.queue, i) end end
     end,
     show = function(_, w) table.insert(W.shown, w) end,
+    getElapsedTimeSinceBoot = function() return W.clock * 1e6 end,
     getTopmostVisibleWidget = function() return W.shown[#W.shown] end,
     close = function(_, w)
         for i = #W.shown, 1, -1 do if W.shown[i] == w then table.remove(W.shown, i) end end
@@ -161,7 +162,9 @@ local preload = {
     ["ui/widget/textviewer"] = Widget:extend{},
     ["ui/uimanager"] = UIManager,
     ["ui/widget/container/widgetcontainer"] = Widget,
-    ["ui/time"] = { now = function() return W.clock * 1e6 end, to_s = function(t) return t / 1e6 end },
+    ["ui/time"] = { now = function() return W.clock * 1e6 end, to_s = function(t) return t / 1e6 end,
+        s = function(n) return n * 1e6 end },
+    ["ui/event"] = { new = function(_, name, ...) return { name = name, args = { ... } } end },
     gettext = function(s) return s end,
     android = { app = { activity = { vm = {}, clazz = { activity = true } } }, jni = jni,
         isPackageEnabled = function() return W.companion end },
@@ -215,7 +218,16 @@ local function newPlugin()
     function p:isSamePlace(b, pct) return b.percentage == pct end
     function p:remoteProgressIsNewer(b, pct) return b.percentage > pct end
     function p:schedulePeriodicPush() rec("plugin_page_push") end
-    function p:onBookOrbitOpenDashboard() rec("dashboard"); p.catalog_browser = {} end
+    -- Like the plugin: a catalog widget shown on top (main.lua:1206-1230), on its dashboard.
+    function p:onBookOrbitOpenDashboard()
+        rec("dashboard")
+        if p.catalog_browser then return true end
+        local cb = { dashboardMode = function() return true end }
+        cb.close_callback = function() UIManager:close(cb); p.catalog_browser = nil end
+        p.catalog_browser = cb
+        UIManager:show(cb)
+        return true
+    end
     function p:onBookOrbitSyncBook(o) rec("syncbook"); o.on_done(nil) end
     function p:startSweep(o) rec("sweep"); o.on_done(nil) end
     function p:errorLabel(e) return tostring(e) end
@@ -267,6 +279,10 @@ local function newUI(in_book)
                 getPreviousChapter = function(_, pg) return pg - ((pg - 1) % 10) end },
         gestures = { data = {}, onFlushSettings = function(g) g.flushed = true end } }
     function ui:onHome() W.home_called = true; ReaderUI.instance = nil end
+    function ui:handleEvent(ev)
+        local h = self.bookorbit and self.bookorbit["on" .. ev.name]
+        if h then return h(self.bookorbit, table.unpack and table.unpack(ev.args) or unpack(ev.args)) end
+    end
     if in_book then ReaderUI.instance = ui; FileManager.instance = nil
     else FileManager.instance = ui; ReaderUI.instance = nil end
     local m = Orbit:new{ ui = ui }
@@ -297,16 +313,21 @@ test("start: network up, then drain and pull with the debounce cleared", functio
     ok(W.probed == "https://books.example.test", "probed server")
 end)
 
-test("plugin page push is suppressed only while sync while reading is on", function()
-    local ui = newUI(true)
+test("plugin's Push while reading is off while Sync while reading is on, then restored", function()
+    local ui, m = newUI(true)
     local p = ui.bookorbit
-    p:schedulePeriodicPush()
-    ok(has(p.calls, "plugin_page_push"), "off: plugin push kept")
+    p.settings.pages_before_update = 7
     store.orbit_android.reading_schedule = "pg25"
-    p.calls = {}
-    p:schedulePeriodicPush()
-    ok(not has(p.calls, "plugin_page_push"), "on: plugin push skipped")
+    m:hookPluginPagePush()
+    ok(p.settings.pages_before_update == 0, "off while ours is on")
+    ok(store.orbit_android.saved_pages_before_update == 7, "kept the reader's value")
+    m:hookPluginPagePush() -- again (another UI): still kept
+    ok(store.orbit_android.saved_pages_before_update == 7, "not overwritten by 0")
     store.orbit_android.reading_schedule = "off"
+    m:hookPluginPagePush()
+    ok(p.settings.pages_before_update == 7, "restored")
+    ok(store.orbit_android.saved_pages_before_update == nil, "forgotten")
+    p.settings.pages_before_update = nil
 end)
 
 test("suspend with the screen off: plugin drain, wait, NET_DONE ok", function()
@@ -434,31 +455,48 @@ test("sync while reading, every chapter: Ask + server ahead never pulls or promp
     store.orbit_android.reading_schedule = "off"
 end)
 
-test("home from the companion: close the book, then open BookOrbit home", function()
+test("home from the companion: BookOrbit home opens over the book, which stays open", function()
     local ui = newUI(true)
     run(30)
     W.home_called = false
+    W.shown = {}
     W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = "home"
     ui.menu.registered[1]:onResume()
     run(1)
-    ok(W.home_called, "reader closed")
-    local fm = newUI(false)
-    run(5)
-    ok(has(fm.bookorbit.calls, "dashboard"), "dashboard opened")
+    ok(not W.home_called, "reader not closed")
+    ok(has(ui.bookorbit.calls, "dashboard"), "dashboard opened")
+    ok(W.shown[#W.shown] == ui.bookorbit.catalog_browser, "dashboard on top")
+    ui.bookorbit.catalog_browser.close_callback()
     ok(W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] == nil, "extra consumed")
 end)
 
-test("menu nests under the plugin's BookOrbit entry and builds", function()
+test("menu is its own Tools entry, not inside the plugin's menu, and builds", function()
     local ui, m = newUI(true)
     local items = { bookorbit = { sub_item_table = {} } }
     m:addToMainMenu(items)
-    local entry = items.bookorbit.sub_item_table[1]
-    ok(entry and entry.text == "Android sync", "entry")
+    ok(#items.bookorbit.sub_item_table == 0, "plugin menu untouched")
+    local entry = items.orbit_android
+    ok(entry and entry.text == "Android sync" and entry.sorting_hint == "tools", "Tools entry")
     local sub = entry.sub_item_table_func()
     ok(#sub >= 13, "items " .. #sub)
-    local fallback = {}
-    m:addToMainMenu(fallback)
-    ok(fallback.orbit_android, "top-level fallback without the plugin")
+end)
+
+test("pull debounce: cleared only when the last pull was within 25 s", function()
+    local ui, m = newUI(true)
+    run(30)
+    local p = ui.bookorbit
+    p.pull_timestamp = W.clock * 1e6 - 5e6 -- 5 s ago
+    p.calls = {}
+    m:wakeFlow("wake")
+    run(5)
+    ok(has(p.calls, "pull:orbit_wake:0"), "recent pull: debounce cleared")
+    p.pull_timestamp = W.clock * 1e6 - 100e6 -- 100 s ago
+    local before = p.pull_timestamp
+    p.calls = {}
+    m:wakeFlow("wake")
+    run(5)
+    ok(has(p.calls, "pull:orbit_wake:" .. before), "old pull: left alone")
+    p.pull_timestamp = 0
 end)
 
 test("test sync path reports five steps", function()
@@ -626,7 +664,8 @@ test("smart home: pressed in a book -> BookOrbit home", function()
     command(m, "home_smart")
     m:onResume()
     run(1)
-    ok(W.home_called, "closed the book for BookOrbit home")
+    ok(has(ui.bookorbit.calls, "dashboard") and not W.home_called, "BookOrbit home over the book")
+    ui.bookorbit.catalog_browser.close_callback()
 end)
 
 test("smart home: from another app with a book open -> stay in the book", function()
@@ -662,6 +701,99 @@ test("smart home: from the file browser with no book open -> BookOrbit home, not
     run(1)
     ok(W.opened == nil, "no book reopened from history")
     ok(has(ui.bookorbit.calls, "dashboard"), "BookOrbit home")
+end)
+
+test("smart home: book -> BookOrbit home -> companion -> back to the book", function()
+    local ui, m = newUI(true)
+    run(5)
+    W.shown, W.activities, W.home_called = {}, {}, false
+    local function press(from, pause)
+        m:onSuspend(); W.clock = W.clock + (pause or 0.5)
+        command(m, "home_smart", from)
+        m:onResume()
+        run(1)
+    end
+    press()
+    ok(ui.bookorbit.catalog_browser ~= nil and W.shown[#W.shown] == ui.bookorbit.catalog_browser, "1: BookOrbit home")
+    press()
+    local a = W.activities[#W.activities]
+    ok(a and a.action:match("%.SHOW_LAUNCHER$"), "2: companion")
+    press("other_app", 30)
+    ok(ui.bookorbit.catalog_browser == nil and #W.shown == 0, "3: dashboard closed, back in the book")
+    ok(not W.home_called, "the book was never closed")
+end)
+
+test("smart home: fallback close by Home keeps the book current; elsewhere goes back to it", function()
+    store.orbit_android.home_book = nil
+    W.files["/b.epub"] = true
+    local ui, m = newUI(true)
+    m:onReaderReady()
+    run(5)
+    -- A plugin without the dashboard action (compat fallback): Home closes the book instead.
+    local q = newPlugin(); q.onBookOrbitOpenDashboard = nil
+    ui.bookorbit = q
+    local before = #W.logs
+    m:onOrbitGoHome()
+    run(1)
+    ok(W.home_called, "closed by Home")
+    local logged = false
+    for i = before + 1, #W.logs do
+        if W.logs[i]:find("compat: dashboard unavailable (plugin", 1, true) then logged = true end
+    end
+    ok(logged, "compat logged")
+    m:onCloseWidget()
+    ok(store.orbit_android.home_book == "/b.epub", "still the current book")
+    local fm, m2 = newUI(false)
+    run(5)
+    W.opened = nil
+    command(m2, "home_smart", "other_app")
+    m2:onResume()
+    run(1)
+    ok(W.opened == "/b.epub", "back to the book Home closed")
+    -- A user close clears it.
+    local ui3, m3 = newUI(true)
+    m3:onReaderReady()
+    m3:onCloseWidget()
+    ok(store.orbit_android.home_book == nil, "user close clears it")
+end)
+
+test("compat: a plugin without its outbox API -> sleep sync leaves it to the plugin, no error", function()
+    local ui, m = newUI(true)
+    local q = newPlugin()
+    q.getLifecycleOutbox, q.requestLifecycleOutboxDrain, q.PLUGIN_VERSION = nil, nil, "9.9.9"
+    ui.bookorbit = q
+    W.broadcasts = {}
+    m:sleepSync("sleep")
+    run(30)
+    local done = lastBroadcast(".NET_DONE")
+    ok(done and done.extras.ok == "1", "NET_DONE ok")
+    ok(m:statusText():find("BookOrbit 9.9.9 changed: wake and sleep syncs use the plugin's own sync", 1, true),
+        "menu status: " .. m:statusText())
+end)
+
+test("compat: a plugin without fetchRemoteProgress -> Sync while reading does nothing", function()
+    local ui, m = newUI(true)
+    local q = newPlugin(); q.fetchRemoteProgress = nil
+    ui.bookorbit = q
+    m:readingSync()
+    run(30)
+    ok(not has(q.calls, "fetch"), "no fetch")
+    ok(m:statusText():find("Sync while reading is off", 1, true), "status says so")
+end)
+
+test("compat: a catalog without dashboardMode -> not treated as BookOrbit home", function()
+    local ui, m = newUI(true)
+    run(5)
+    local cb = {}
+    cb.close_callback = function() UIManager:close(cb); ui.bookorbit.catalog_browser = nil end
+    ui.bookorbit.catalog_browser = cb
+    W.shown, W.activities = { cb }, {}
+    m:onSuspend(); W.clock = W.clock + 0.5
+    command(m, "home_smart")
+    m:onResume()
+    run(1)
+    ok(#W.activities == 0, "no companion page")
+    ok(ui.bookorbit.catalog_browser == nil, "back to the book")
 end)
 
 test("open book at exit: set when a book opens, cleared when it is closed", function()
@@ -815,6 +947,25 @@ test("update: automatic check at most once a day, and only when connected", func
     run(40)
     ok(count(W.fetched, function(u) return u == API end) == 1, "off means off")
     store.orbit_android.auto_update_patch = true
+end)
+test("update: a failed automatic check is tried again at the next wake, not 24 h later", function()
+    resetSelf(); serveRelease()
+    W.json.LATEST.tag_name = "v0.0.0-dev"
+    store.orbit_android.patch_update_checked_at = 0
+    W.wifi = true
+    local _ui, orbit = newUI(false)
+    local saved = W.web[API]
+    W.web[API] = nil -- GitHub unreachable (404 here; EACCES on the device)
+    W.fetched = {}
+    orbit:wakeFlow("wake")
+    run(40)
+    ok(count(W.fetched, function(u) return u == API end) == 1, "first check ran")
+    ok(store.orbit_android.patch_update_checked_at == 0, "a failure doesn't start the 24 h wait")
+    W.web[API] = saved
+    orbit:wakeFlow("wake")
+    run(40)
+    ok(count(W.fetched, function(u) return u == API end) == 2, "retried at the next wake")
+    ok(store.orbit_android.patch_update_checked_at > 0, "success starts the wait")
 end)
 os.remove(ORBIT_ANDROID_SELF_PATH)
 os.remove(SELF)

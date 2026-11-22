@@ -366,5 +366,28 @@ test("disabled text names the disabler at run time, or stays neutral", function(
     eq(M.disabledText("Orbit Companion", nil, nil), "Orbit Companion is disabled by the system: re-enable it in Settings › Apps.")
 end)
 
+test("compat: missing or mistyped plugin symbols turn off only their feature", function()
+    local C = M.Compat
+    local full = { settings = {} }
+    for _, f in ipairs(C.FEATURES) do
+        for name, kind in pairs(f.needs) do
+            if kind == "function" then full[name] = function() end end
+        end
+    end
+    eq(next(C.check(full)), nil, "complete plugin")
+    full._onSuspend = nil
+    full.fetchRemoteProgress = "not a function"
+    local m = C.check(full)
+    eq(m.sleep_snapshot[1], "_onSuspend")
+    eq(m.reading_sync[1], "fetchRemoteProgress")
+    eq(m.outbox, nil, "others unaffected")
+    local lines = C.lines(m, "2.4.0")
+    eq(#lines, 2)
+    eq(lines[1], "BookOrbit 2.4.0 changed: Sync while reading is off")
+end)
+test("update: a check failure maps GitHub's EACCES too", function()
+    eq(Update.errorText("network: Permission denied", true, true, false), Update.BLOCKED)
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

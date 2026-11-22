@@ -17,7 +17,10 @@ talks to BookOrbit and holds no login. Contract: [`../docs/INTERFACE.md`](../doc
   turned on there is the user's ("manual").
 - **Pages**: launcher, other apps (paged, hold to pin; Tailscale, Android Settings and the
   vendor home, if the vendor profile has one, are pinned by default), status, settings,
-  setup checklist (its Wi-Fi off/on test leaves Wi-Fi as it found it), open-source licenses.
+  setup checklist (its Wi-Fi off/on test leaves Wi-Fi as it found it; "KOReader patch
+  installed" installs or updates the patch from this app's release, SHA-256 checked, into
+  `koreader/patches/` with the storage permission, which still works at targetSdk 28),
+  open-source licenses.
 - **Self-update** from GitHub releases (`Updater.kt`; README "Updates"): daily, SHA-256 and
   signing-certificate checked, installed with `PackageInstaller`. At targetSdk 28 Android
   asks the user to confirm each update.

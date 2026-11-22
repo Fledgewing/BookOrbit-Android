@@ -105,6 +105,10 @@ class Prefs(ctx: Context) {
         set(v) = setStr("wifi_pending_owner", v.key)
     var wifiPendingAt by LongPref("wifi_pending_at")
 
+    var patchInstallStatus: String
+        get() = sp.getString("patch_install_status", "") ?: ""
+        set(v) = setStr("patch_install_status", v)
+
     var settingsPinSeeded: Boolean
         get() = bool("settings_pin_seeded", false)
         set(v) = setBool("settings_pin_seeded", v)

@@ -1,0 +1,59 @@
+# Checks that every BookOrbit plugin internal the KOReader patch hooks still exists in the
+# latest plugin source (bookorbit/bookorbit, koreader-plugin/bookorbit.koplugin).
+# The weekly run opens an issue here when something is gone.
+name: Plugin compatibility
+
+on:
+  pull_request:
+  push:
+    tags: ["v*"]
+  schedule:
+    - cron: "17 6 * * 1" # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  plugin-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch the latest BookOrbit plugin
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --filter=blob:none --sparse https://github.com/bookorbit/bookorbit "$RUNNER_TEMP/bookorbit"
+          git -C "$RUNNER_TEMP/bookorbit" sparse-checkout set koreader-plugin/bookorbit.koplugin
+          echo "PLUGIN_DIR=$RUNNER_TEMP/bookorbit/koreader-plugin/bookorbit.koplugin" >> "$GITHUB_ENV"
+          echo "PLUGIN_SHA=$(git -C "$RUNNER_TEMP/bookorbit" rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Check hooked symbols
+        id: check
+        run: |
+          set -uo pipefail
+          sudo apt-get install -y -qq luajit >/dev/null
+          luajit koreader-patch/test/plugin_compat.lua "$PLUGIN_DIR" | tee "$RUNNER_TEMP/compat.txt"
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Open an issue (weekly run)
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^BookOrbit plugin //p' "$RUNNER_TEMP/compat.txt")
+          symbols=$(sed -n 's/^missing: //p' "$RUNNER_TEMP/compat.txt")
+          title="BookOrbit plugin ${version} changed: ${symbols}"
+          if gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"BookOrbit plugin ${version} changed\" in:title" --json number --jq '.[0].number' | grep -q .; then
+            echo "an open issue already tracks plugin ${version}"
+            exit 0
+          fi
+          body=$(printf '%s\n\n%s\n\n%s\n' \
+            "The weekly check found BookOrbit plugin internals the KOReader patch uses that are gone (bookorbit/bookorbit @ ${PLUGIN_SHA})." \
+            "Missing: ${symbols}" \
+            "The patch turns off only the affected features and falls back to the plugin's own behaviour (koreader-patch/README.md \"Plugin hook points\"). Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"

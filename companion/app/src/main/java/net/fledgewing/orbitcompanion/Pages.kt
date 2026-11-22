@@ -453,6 +453,23 @@ object Setup {
             )
         })
 
+        // One-tap patch install (PatchInstaller): from this app's release, SHA-256 checked.
+        val patchV = PatchInstaller.installedVersion()
+        val wantPatch = PatchFile.needsInstall(patchV, BuildConfig.VERSION_NAME)
+        list.add(
+            Check(
+                "KOReader patch installed${patchV?.let { " (v$it)" } ?: ""}",
+                patchV != null && !wantPatch,
+                when {
+                    PatchInstaller.busy -> "installing…"
+                    patchV == null && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"
+                    patchV == null -> "tap to install it into koreader/patches/"
+                    wantPatch -> "older than this app's release (v${BuildConfig.VERSION_NAME}) · tap to update"
+                    else -> "up to date${prefs.patchInstallStatus.takeIf { it.startsWith("installed") }?.let { " · $it" } ?: ""}"
+                },
+            ) { a -> PatchInstaller.installFrom(a) { (a as? SetupActivity)?.refresh() } },
+        )
+
         val seen = prefs.patchSeenAt
         list.add(
             Check(
@@ -504,6 +521,24 @@ class SetupActivity : EinkActivity() {
     override fun onDestroy() {
         test?.cancel()
         super.onDestroy()
+    }
+
+    fun refresh() {
+        if (!isFinishing) render()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != PatchInstaller.REQUEST_CODE) return
+        val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+        OLog.i("patch install: storage permission ${if (granted) "granted" else "denied"}")
+        if (granted) {
+            PatchInstaller.install(this) { refresh() }
+        } else {
+            Prefs(this).patchInstallStatus = "no storage permission: ${PatchInstaller.manualHint()}"
+        }
+        render()
     }
 
     fun runWifiTest() {

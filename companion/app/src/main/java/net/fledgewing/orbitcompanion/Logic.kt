@@ -384,3 +384,19 @@ object NetErrors {
         }
     }
 }
+
+/** The KOReader patch file the companion installs (Setup "KOReader patch installed"). */
+object PatchFile {
+    const val NAME = "2-orbit-android.lua"
+    private val VERSION = Regex("""(?m)^local PATCH_VERSION = "([^"]+)"""")
+
+    /** PATCH_VERSION declared in the file's text, or null. */
+    fun version(text: String?): String? = text?.let { VERSION.find(it)?.groupValues?.get(1) }
+
+    /** Install or update when missing, unreadable or older than the app's release. */
+    fun needsInstall(installed: String?, app: String): Boolean {
+        val a = Version.parse(app) ?: return installed == null
+        val i = installed?.let { Version.parse(it) } ?: return true
+        return i < a
+    }
+}

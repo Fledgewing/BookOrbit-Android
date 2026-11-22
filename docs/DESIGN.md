@@ -143,12 +143,23 @@ The patch decides; `WifiPlan` (pure, `test/test_logic.lua`) holds the state mach
 
 "Home button": *Back to my book, then BookOrbit home* (default, `COMMAND = home_smart`) or
 *BookOrbit home* (`home`). The patch decides with `HomePlan` (pure, tested; full table in
-INTERFACE.md "go home"): reader showing a book → BookOrbit home; BookOrbit home (the plugin's
-dashboard) on top → the companion's launcher page (both modes); elsewhere with a book open →
-the book; elsewhere with no book open → BookOrbit home; cold start after KOReader was killed
+INTERFACE.md "go home"): reader showing a book → BookOrbit home, opened over the book (the
+plugin's public action; the book stays open); BookOrbit home on top → the companion's
+launcher page (both modes); elsewhere with a current book (still open, or closed by Home
+itself, `home_book`) → the book; elsewhere with none → BookOrbit home; cold start after KOReader was killed
 with a book open (`open_book_at_exit`) → that book. Presses step book → BookOrbit home →
 companion; Home from another app goes to the book, so the steps never loop. "From another
 app" is the companion's `FROM=other_app` when it knows, else a KOReader pause of 2.5 s or more.
+
+## Plugin updates
+
+The patch prefers the plugin's public surfaces (its Dispatcher actions and user settings) and
+keeps the few private internals it needs (outbox wait, silent pull/push, position check
+without prompting, dashboard detection, `on_done` callbacks) behind a start-up compatibility
+check: a missing symbol turns off only that feature, which falls back to the plugin's own
+behaviour, and is shown in the menu status and Test sync path. CI checks the same list
+against the latest plugin weekly and opens an issue when it changes (koreader-patch/README.md
+"Plugin hook points").
 
 ## Vendor profiles
 

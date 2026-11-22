@@ -8,10 +8,11 @@ This patch never talks to BookOrbit's API. It only:
 
   * gets the network ready (Wi-Fi through the "Orbit Companion" app, Tailscale wake),
   * checks that the plugin's configured server answers at its base URL (no login),
-  * then triggers or waits on the plugin's own functions:
-      requestLifecycleOutboxDrain, requestProgressPull, requestProgressPush,
-      fetchRemoteProgress, _onSuspend, onBookOrbitSyncBook, startSweep,
-      onBookOrbitOpenDashboard.
+  * then triggers or waits on the plugin: its public action BookOrbitOpenDashboard and its
+    "Push while reading" setting, and, behind a compatibility check with a fallback for each
+    (Compat below; koreader-patch/README.md "Plugin hook points"), its internals
+    requestLifecycleOutboxDrain, requestProgressPull, requestProgressPush,
+    fetchRemoteProgress, _onSuspend, onBookOrbitSyncBook, startSweep.
 
 File name: "2-" is KOReader's `late` priority (frontend/userpatch.lua:13): it runs after
 UIManager is ready and before the file browser or reader starts, so the module below is
@@ -370,8 +371,9 @@ end
 --   mode: "smart" | "bookorbit"; in_reader: a book is open; covered: a menu or the
 --   plugin's views are over it; on_dashboard: the plugin's BookOrbit home (dashboard) is the
 --   top widget; from_other: Home came from another app (or KOReader was just started);
---   reopen: KOReader was killed with a book open (cold start, "open book at exit" set) and
---   that file still exists. A book the user closed is never reopened from history.
+--   reopen: a current book that isn't open now and still exists: the book Home itself closed
+--   (home_book), or the one KOReader was killed with (cold start, open_book_at_exit). A book
+--   the user closed is never reopened from history.
 -- Returns "companion" (the companion's launcher page), "dashboard" (close any book,
 -- BookOrbit home) or "book" (show the book: close what covers it, or open the last one).
 -- Presses in KOReader step book -> BookOrbit home -> companion; Home from another app (the
@@ -410,9 +412,77 @@ local function disabledText(app, disabler, hint)
     return app .. " is disabled by the system: re-enable it in Settings › Apps."
 end
 
+-- Plugin compatibility (survive BookOrbit plugin updates). Every plugin internal the patch
+-- calls, grouped by the feature that needs it. A missing one turns off only that feature, which
+-- then falls back to the plugin's own behaviour. Definitions (bookorbit.koplugin 2.3.0):
+-- main.lua:283 isLoggedIn, :287 errorLabel, :361 getSyncCoordinator, :374 getLifecycleOutbox,
+-- :414 requestLifecycleOutboxDrain, :717 requestProgressPush, :730 requestProgressPull,
+-- :1246 startSweep, :1269 onBookOrbitSyncBook, :1340 _onSuspend, :1381 onBookOrbitOpenDashboard,
+-- :1416 onBookOrbitToggleAutoSync; bookorbit_progress_sync.lua:63 getLastPercent, :71
+-- getLastProgress, :81 getDocumentDigest, :145 isSamePlace, :157 remoteProgressIsNewer, :521
+-- fetchRemoteProgress; the catalog widget: main.lua:1207-1230
+-- (catalog_browser, close_callback), bookorbit_catalog.lua:1875 dashboardMode.
+-- test/plugin_compat.lua checks the same list against the latest plugin source (CI, weekly).
+local Compat = {}
+Compat.FEATURES = {
+    { id = "core", needs = { isLoggedIn = "function", settings = "table" },
+      fallback = "the patch leaves syncing to the plugin" },
+    { id = "outbox", needs = { requestLifecycleOutboxDrain = "function", getLifecycleOutbox = "function",
+        getSyncCoordinator = "function" },
+      fallback = "wake and sleep syncs use the plugin's own sync" },
+    { id = "wake_pull", needs = { requestProgressPull = "function" },
+      fallback = "wake and open pulls use the plugin's own timing" },
+    { id = "sleep_snapshot", needs = { _onSuspend = "function" },
+      fallback = "Sync and sleep sends what the plugin already queued" },
+    { id = "reading_sync", needs = { fetchRemoteProgress = "function", isSamePlace = "function",
+        remoteProgressIsNewer = "function", getLastPercent = "function", getLastProgress = "function",
+        getDocumentDigest = "function", requestProgressPush = "function", requestProgressPull = "function",
+        requestLifecycleOutboxDrain = "function" },
+      fallback = "Sync while reading is off" },
+    { id = "dashboard", needs = { onBookOrbitOpenDashboard = "function" },
+      fallback = "Home closes the book, then the plugin opens BookOrbit home" },
+    { id = "test_sync", needs = { onBookOrbitSyncBook = "function", startSweep = "function", errorLabel = "function" },
+      fallback = "Test sync path skips the plugin step" },
+    { id = "recommended", needs = { onBookOrbitToggleAutoSync = "function" },
+      fallback = "Apply recommended settings can't turn on Auto-sync" },
+}
+-- On the catalog widget, checked when it is open.
+Compat.CATALOG = { dashboardMode = "function", close_callback = "function" }
+
+-- { [id] = missing symbols (sorted list) } for one plugin instance; {} when all is there.
+function Compat.check(p)
+    local out = {}
+    for _, f in ipairs(Compat.FEATURES) do
+        local missing = {}
+        for name, kind in pairs(f.needs) do
+            local okv, v = pcall(function() return p[name] end)
+            if not okv or type(v) ~= kind then table.insert(missing, name) end
+        end
+        if #missing > 0 then table.sort(missing); out[f.id] = missing end
+    end
+    return out
+end
+
+function Compat.fallback(id)
+    for _, f in ipairs(Compat.FEATURES) do if f.id == id then return f.fallback end end
+    return id
+end
+
+-- One line per unavailable feature, e.g. "BookOrbit 2.4.0 changed: sleep sync uses ...".
+function Compat.lines(missing, version)
+    local ids = {}
+    for id in pairs(missing) do table.insert(ids, id) end
+    table.sort(ids)
+    local out = {}
+    for _, id in ipairs(ids) do
+        table.insert(out, string.format("BookOrbit %s changed: %s", version or "?", Compat.fallback(id)))
+    end
+    return out
+end
+
 if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = Schedule, Plan = Plan, Update = Update, WifiPlan = WifiPlan, HomePlan = HomePlan,
-        disabledText = disabledText,
+        disabledText = disabledText, Compat = Compat,
         PATCH_VERSION = PATCH_VERSION }
 end
 
@@ -442,6 +512,7 @@ local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local time = require("ui/time")
+local Event = require("ui/event")
 local _ = require("gettext")
 
 local has_android, android = pcall(require, "android")
@@ -474,9 +545,11 @@ local DEFAULTS = {
     shared_settings_at = 0,       -- ms, when the shared settings last changed (either side)
     auto_update_patch = true,
     patch_update_prerelease = false,
-    patch_update_checked_at = 0,  -- os.time() of the last check
+    patch_update_checked_at = 0,  -- os.time() of the last successful check
     patch_update_status = nil,    -- { at, text }
     open_book_at_exit = nil,      -- path of the open book; set on ReaderReady, cleared on a close
+    home_book = nil,              -- the book Home closed (fallback path); cleared by a user close or another book
+    saved_pages_before_update = nil, -- the plugin's Push while reading value, kept while ours is on
 }
 
 local S = G_reader_settings:readSetting("orbit_android") or {}
@@ -1005,6 +1078,37 @@ local function liveUI()
     return require("apps/filemanager/filemanager").instance
 end
 
+local compat_seen = setmetatable({}, { __mode = "k" })
+local compat_logged = {}
+
+-- The plugin's version (main.lua:54/95: BookOrbit.PLUGIN_VERSION; _meta.lua has none).
+local function pluginVersion(p)
+    local okv, v = pcall(function() return p.PLUGIN_VERSION end)
+    return (okv and type(v) == "string") and v or "unknown"
+end
+
+-- Unavailable features for this plugin instance (cached), logged once per feature.
+local function compatOf(p)
+    if not p then return {} end
+    local m = compat_seen[p]
+    if m then return m end
+    m = Compat.check(p)
+    compat_seen[p] = m
+    for id, missing in pairs(m) do
+        if not compat_logged[id] then
+            compat_logged[id] = true
+            log("compat:", id, "unavailable (plugin " .. pluginVersion(p) .. "): missing",
+                table.concat(missing, ", "), "->", Compat.fallback(id))
+        end
+    end
+    return m
+end
+
+-- Can the patch use this plugin feature?
+local function can(p, id)
+    return p ~= nil and compatOf(p)[id] == nil
+end
+
 local function bookorbit(ui)
     ui = liveUI() or ui
     local p = ui and ui.bookorbit
@@ -1012,7 +1116,15 @@ local function bookorbit(ui)
         local ok, inst = pcall(PluginLoader.getPluginInstance, PluginLoader, "bookorbit")
         p = ok and inst or nil
     end
+    -- Without isLoggedIn/settings nothing else is safe: behave as without the plugin.
+    if p and not can(p, "core") then return nil end
     return p
+end
+
+-- Status lines for the menu and Test sync path; {} when the plugin is fully supported.
+local function compatLines(p)
+    if not p then return {} end
+    return Compat.lines(compatOf(p), pluginVersion(p))
 end
 
 local function inBook()
@@ -1147,7 +1259,27 @@ end
 
 local Sync = {}
 
+-- The plugin skips a non-interactive pull within 25 s of the last one
+-- (API_CALL_DEBOUNCE_DELAY, bookorbit_progress_sync.lua:26, 384-387). Clear it only when the
+-- last pull really was that recent; on a fresh start a pull that already ran stands.
+function Sync.clearPullDebounce(p, reason)
+    local okc, cleared = pcall(function()
+        local last = p.pull_timestamp
+        if type(last) ~= "number" or last == 0 then return false end
+        if reason == "start" then return false end
+        local now = UIManager:getElapsedTimeSinceBoot()
+        local window = time.s(25)
+        if now - last <= window then p.pull_timestamp = 0; return true end
+        return false
+    end)
+    if okc and cleared then log("pull: cleared the plugin's 25 s debounce for this pull (" .. reason .. ")") end
+end
+
 function Sync.waitOutbox(p, cap, cb)
+    if not can(p, "outbox") then
+        -- Can't see the plugin's outbox: leave it to the plugin's own sync.
+        return UIManager:nextTick(function() cb(true, "left to the plugin (compat)", 0) end)
+    end
     local t0 = now_s()
     local start_os = os.time()
     local last_nudge = t0
@@ -1238,7 +1370,7 @@ end
 function Wifi.busy()
     if Wifi.inflight_http > 0 then return true, "download in progress" end
     local p = bookorbit()
-    if p then
+    if p and can(p, "outbox") then
         local okb, busy = pcall(function()
             local c = p:getSyncCoordinator()
             if c:isBusy() or c:queuedCount() > 0 then return true end
@@ -1402,8 +1534,6 @@ end
 
 -- Returns ok, status text. Blocking: callers schedule it.
 function Updater.run(why)
-    S.patch_update_checked_at = os.time()
-    saveSettings()
     local pre = S.patch_update_prerelease == true
     log("update: check started (" .. why .. "), installed", PATCH_VERSION, "pre-releases", tostring(pre))
     local url = pre and (RELEASES_API .. "?per_page=5") or (RELEASES_API .. "/latest")
@@ -1478,6 +1608,9 @@ function Updater.check(why, done)
     if not okc then
         ok, text = false, "check failed: " .. tostring(ok)
     end
+    -- Only a successful check starts the 24 h wait: a failed one (no network, VPN lockdown,
+    -- a bad download) is tried again at the next start or wake with the network up.
+    if ok then S.patch_update_checked_at = os.time() end
     setUpdateStatus(text)
     if done then done(ok, text) end
 end
@@ -1548,22 +1681,29 @@ function OrbitAndroid:onDispatcherRegisterActions()
 end
 
 -- "Sync while reading" replaces the plugin's every-few-pages push while it is on.
--- The plugin schedules that push from _onPageUpdate (main.lua:1314-1327) through
--- schedulePeriodicPush (bookorbit_progress_sync.lua:538-543); this instance override
--- skips it while our schedule is on and leaves the plugin's setting untouched.
+-- The plugin's every-few-pages push is its user setting "Push while reading"
+-- (settings.pages_before_update, bookorbit_settings_page.lua:259-260; read by _onPageUpdate,
+-- main.lua:1322-1324; 0 = off). While our Sync while reading is on we set it to 0 and keep the
+-- reader's value; when it goes off we put that value back (unless they changed it meanwhile).
 function OrbitAndroid:hookPluginPagePush()
     local p = bookorbit(self.ui)
-    if not p or p._orbit_page_push_hooked or type(p.schedulePeriodicPush) ~= "function" then return end
-    local orig = p.schedulePeriodicPush
-    p._orbit_page_push_hooked = true
-    p.schedulePeriodicPush = function(plugin, ...)
-        if S.reading_schedule ~= "off" then
-            plugin.page_update_counter = 0
-            return
+    if not p or type(p.settings) ~= "table" then return end
+    local cur = p.settings.pages_before_update
+    if S.reading_schedule ~= "off" then
+        if S.saved_pages_before_update == nil and (cur or 0) > 0 then
+            S.saved_pages_before_update = cur
+            p.settings.pages_before_update = 0
+            saveSettings()
+            log("page push: plugin's Push while reading", cur, "-> off while Sync while reading is on")
         end
-        return orig(plugin, ...)
+    elseif S.saved_pages_before_update ~= nil then
+        if (cur or 0) == 0 then
+            p.settings.pages_before_update = S.saved_pages_before_update
+            log("page push: plugin's Push while reading restored to", S.saved_pages_before_update)
+        end
+        S.saved_pages_before_update = nil
+        saveSettings()
     end
-    log("hooked plugin page push (sync while reading:", S.reading_schedule .. ")")
 end
 
 ---------------------------------------------------------------------------------------------
@@ -1605,18 +1745,16 @@ function OrbitAndroid:wakeFlow(reason)
             self:showWakeBanner(res)
             return
         end
-        p:requestLifecycleOutboxDrain("orbit_" .. reason)
+        if can(p, "outbox") then p:requestLifecycleOutboxDrain("orbit_" .. reason) end
         Updater.maybeAuto(reason)
         -- Hold Wi-Fi until the plugin's drain and pull are done, then restore.
         UIManager:scheduleIn(1, function()
             Sync.waitOutbox(p, 20, function() Wifi.release(lease) end)
         end)
-        if inBook() then
+        if inBook() and can(p, "wake_pull") then
             -- The plugin debounces pulls for 25 s (bookorbit_progress_sync.lua:26, 383-387).
             -- Clear it for this one pull; on a fresh start skip it if a pull already ran.
-            if reason ~= "start" or (p.pull_timestamp or 0) == 0 then
-                p.pull_timestamp = 0
-            end
+            Sync.clearPullDebounce(p, reason)
             p:requestProgressPull(false, false, "orbit_" .. reason)
             log(reason .. ": asked plugin to drain outbox and pull, network ready in", fmt(now_s() - t0))
         else
@@ -1662,6 +1800,13 @@ local function onDashboard(p)
     if cb == nil then return false end
     local okt, top = pcall(function() return UIManager:getTopmostVisibleWidget() end)
     if not okt or top ~= cb then return false end
+    if type(cb.dashboardMode) ~= "function" then
+        if not compat_logged.catalog then
+            compat_logged.catalog = true
+            log("compat: catalog unavailable (plugin " .. pluginVersion(p) .. "): missing dashboardMode -> Home on BookOrbit home goes back to the book")
+        end
+        return false
+    end
     local okd, dash = pcall(function() return cb:dashboardMode() end)
     return okd and dash == true
 end
@@ -1676,12 +1821,17 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
     local menu_open = in_reader and ui.menu ~= nil and ui.menu.menu_container ~= nil
     local view_open = p ~= nil and p.catalog_browser ~= nil
     local on_dash = onDashboard(p)
-    -- Reopen only a book KOReader was killed with, on the first command of this process.
-    local last = (not in_reader and source == "start") and killed_with_book or nil
+    -- Reopen only the current book: one Home closed, or one KOReader was killed with (first
+    -- command of this process). Never history.
+    local last = nil
+    if not in_reader then
+        last = S.home_book or (source == "start" and killed_with_book) or nil
+    end
     local reopen = false
     if type(last) == "string" then
         local okl, lfs = pcall(require, "libs/libkoreader-lfs")
         reopen = okl and lfs.attributes(last, "mode") == "file"
+        if not reopen and last == S.home_book then S.home_book = nil; saveSettings() end
     end
     if source == "start" then killed_with_book = nil end
     local paused = source == "start" and nil or state.paused_for
@@ -1692,17 +1842,23 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
     }
     log("home (" .. mode .. "):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "BookOrbit view",
         tostring(view_open), "dashboard on top", tostring(on_dash), "from other app", tostring(from_other),
-        "(paused", paused and fmt(paused) or "-", ")", "reopen book killed with", reopen and "yes" or "no")
+        "(paused", paused and fmt(paused) or "-", ")", "reopen current book", reopen and tostring(last) or "no")
     if action == "companion" then return self:openCompanionHome() end
     if action == "dashboard" then return self:onOrbitGoHome() end
     -- Back to the book: close what covers it, or open the last one.
     if menu_open then pcall(function() ui.menu:onCloseReaderMenu() end) end
     if view_open then
-        local okc, err = pcall(function() UIManager:close(p.catalog_browser) end)
+        -- The plugin's own close (close_callback, main.lua:1225-1228; used by the catalog itself,
+        -- bookorbit_catalog_download.lua:359-362) also clears plugin.catalog_browser, without
+        -- which openCatalogBrowser (main.lua:1207) never opens it again.
+        local cb = p.catalog_browser
+        local okc, err = pcall(function()
+            if cb.close_callback then cb.close_callback() else UIManager:close(cb); p.catalog_browser = nil end
+        end)
         log("home (smart): closed the BookOrbit view", okc and "" or tostring(err))
     end
     if not in_reader then
-        log("home (smart): reopening the book KOReader was killed with")
+        log("home (smart): reopening the current book", tostring(last))
         UIManager:nextTick(function()
             require("apps/reader/readerui"):showReader(last)
         end)
@@ -1710,13 +1866,26 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
     return true
 end
 
--- Close the open book (the reader saves it and the plugin syncs it as on any close,
--- main.lua:1292-1312), then show the plugin's BookOrbit home.
+-- BookOrbit home. With a book open, the plugin's dashboard opens on top of the reader without
+-- closing it (onBookOrbitOpenDashboard, main.lua:1381-1389 -> browseCatalog, main.lua:1235-1241
+-- -> openCatalogBrowser, main.lua:1206-1230: UIManager:show of its catalog widget; its own menu
+-- does the same from a book, bookorbit_main_menu.lua:307). Fallback (no plugin, signed out):
+-- close the book (the reader saves it; the plugin syncs it as on any close, main.lua:1292-1312)
+-- and remember it as the current book (home_book), so Home elsewhere goes back to it.
 function OrbitAndroid:onOrbitGoHome()
-    state.pending_home = os.time()
     local ui = liveUI()
+    local p = bookorbit(ui)
+    if ui and ui.document and can(p, "dashboard") and p:isLoggedIn() then
+        log("home: BookOrbit home over the open book")
+        -- The plugin's public action bookorbit_open_dashboard (event BookOrbitOpenDashboard,
+        -- main.lua:987-988).
+        UIManager:nextTick(function() ui:handleEvent(Event:new("BookOrbitOpenDashboard")) end)
+        return true
+    end
+    state.pending_home = os.time()
     if ui and ui.document then
-        log("home: closing book, then BookOrbit home")
+        log("home: closing book, then BookOrbit home (it stays the current book)")
+        state.closing_for_home = ui.document.file
         UIManager:nextTick(function() ui:onHome() end)
     else
         self:finishHome()
@@ -1739,7 +1908,12 @@ function OrbitAndroid:finishHome()
         return
     end
     log("home: opening BookOrbit home")
-    p:onBookOrbitOpenDashboard()
+    if not can(p, "dashboard") then
+        log("home: no BookOrbit home action in this plugin; staying in the file browser")
+        return
+    end
+    local host = liveUI() or self.ui
+    if host and host.handleEvent then host:handleEvent(Event:new("BookOrbitOpenDashboard")) else p:onBookOrbitOpenDashboard() end
 end
 
 ---------------------------------------------------------------------------------------------
@@ -1794,7 +1968,7 @@ function OrbitAndroid:sleepSync(reason)
         if not ok then return done(false, res.detail) end
         -- The plugin queued its snapshot in its own _onSuspend (main.lua:1340-1351) but drains
         -- only when already connected (main.lua:411-419). Now we are: drain and wait.
-        p:requestLifecycleOutboxDrain("orbit_" .. reason)
+        if can(p, "outbox") then p:requestLifecycleOutboxDrain("orbit_" .. reason) end
         Sync.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why)
             done(synced, why)
         end)
@@ -1878,11 +2052,11 @@ function OrbitAndroid:onOrbitSyncAndSleep()
     Net.up(p, { reason = "sync_and_sleep", cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
         if cancelled then return finish(false, "cancelled") end
         if not ok then return finish(false, res.detail) end
-        if inBook() then
+        if inBook() and can(p, "sleep_snapshot") then
             -- Exactly what the plugin does on sleep: snapshot the open book into its
             -- durable outbox and drain it (main.lua:1340-1351).
             p:_onSuspend()
-        else
+        elseif can(p, "outbox") then
             p:requestLifecycleOutboxDrain("orbit_sync_and_sleep", true)
         end
         Sync.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why)
@@ -1908,8 +2082,17 @@ function OrbitAndroid:chapterKey(page)
 end
 
 function OrbitAndroid:onCloseWidget()
-    -- A close (Back to file browser, Home, Exit) runs this; a kill or suspend doesn't.
-    if self.ui and self.ui.document and S.open_book_at_exit then
+    -- A close (Back to file browser, Exit) runs this; a kill or suspend doesn't. A close Home
+    -- started keeps the book as the current one (home_book); the user's own close clears it.
+    if self.ui and self.ui.document then
+        local file = self.ui.document.file
+        if state.closing_for_home and state.closing_for_home == file then
+            S.home_book = file
+            log("home: book closed by Home; it stays the current book")
+        else
+            S.home_book = nil
+        end
+        state.closing_for_home = nil
         S.open_book_at_exit = nil
         saveSettings()
         pcall(function() G_reader_settings:flush() end)
@@ -1931,9 +2114,11 @@ end
 
 function OrbitAndroid:onReaderReady()
     -- "Open book at exit": survives a kill (flushed now), cleared when the book is closed.
+    -- Another book opening replaces Home's current book.
     local file = self.ui and self.ui.document and self.ui.document.file
-    if file and S.open_book_at_exit ~= file then
+    if file and (S.open_book_at_exit ~= file or S.home_book) then
         S.open_book_at_exit = file
+        S.home_book = nil
         saveSettings()
         pcall(function() G_reader_settings:flush() end)
     end
@@ -1989,6 +2174,7 @@ function OrbitAndroid:readingSync()
     if self.reading_running then return end
     local p = bookorbit(self.ui)
     if not p or not p:isLoggedIn() or not inBook() then return end
+    if not can(p, "reading_sync") then return end
     self.reading_running = true
     local t0 = now_s()
     Schedule.markSynced(self.schedule, t0)
@@ -2069,6 +2255,8 @@ function OrbitAndroid:testSyncPath()
         UIManager:close(wait)
         local text = table.concat(lines, "\n") .. "\n\n" .. string.format(_("Total %s."), fmt(now_s() - t0))
             .. "\n" .. _("Step 4 only checks that the server answers at its base address; it uses no login.")
+        local cl = compatLines(bookorbit(self.ui))
+        if #cl > 0 then text = text .. "\n\n" .. table.concat(cl, "\n") end
         UIManager:show(TextViewer:new{ title = _("Test sync path"), text = text })
     end
 
@@ -2103,6 +2291,10 @@ function OrbitAndroid:testSyncPath()
             add(err == nil, _("BookOrbit plugin synced"), now_s() - s0,
                 err and (_("The plugin reported: ") .. tostring(p:errorLabel(err))) or nil)
             show()
+        end
+        if not can(p, "test_sync") then
+            add(true, _("BookOrbit plugin step skipped: ") .. Compat.fallback("test_sync"), nil)
+            return show()
         end
         -- The plugin's own Sync now: this book in a book, the library otherwise.
         if inBook() then
@@ -2173,7 +2365,7 @@ function OrbitAndroid:applyRecommendedSettings()
             p.settings.sync_forward = Plan.STRATEGY.SILENT
             p.settings.sync_backward = Plan.STRATEGY.DISABLE
             p.settings.catalog_auto_open = "home"
-            if not p.settings.auto_sync then
+            if not p.settings.auto_sync and can(p, "recommended") then
                 -- The plugin's own toggle also registers its reader events (main.lua:1416-1448).
                 p:onBookOrbitToggleAutoSync(true, true, true)
             end
@@ -2220,7 +2412,7 @@ function OrbitAndroid:applyRecommendedGestures()
 end
 
 ---------------------------------------------------------------------------------------------
--- Menu (mockup screen 6): Tools › BookOrbit › Android sync
+-- Menu (mockup screen 6): Tools › Android sync
 ---------------------------------------------------------------------------------------------
 
 local function toggle(key, text)
@@ -2251,6 +2443,7 @@ function OrbitAndroid:statusText()
         table.insert(parts, string.format("%s %s %s", _("last sleep sync"), last.ok and fmt(last.seconds) or _("failed"),
             os.date("%H:%M", last.at)))
     end
+    for _i, l in ipairs(compatLines(bookorbit(self.ui))) do table.insert(parts, l) end
     return _("Status: ") .. table.concat(parts, " · ")
 end
 
@@ -2421,14 +2614,11 @@ function OrbitAndroid:addToMainMenu(menu_items)
         Shared.refresh("menu")
         return self:menuItems()
     end }
-    -- The plugin registers its Tools › BookOrbit entry first (bookorbit_main_menu.lua:320-366).
-    local host = menu_items.bookorbit
-    if host and type(host.sub_item_table) == "table" then
-        table.insert(host.sub_item_table, entry)
-    else
-        entry.sorting_hint = "tools"
-        menu_items.orbit_android = entry
-    end
+    -- Its own top-level entry in Tools, the way plugins and user patches add menus: an item
+    -- missing from the menu order goes to the menu its sorting_hint names
+    -- (frontend/ui/menusorter.lua:162-189). Nothing is injected into the plugin's menu.
+    entry.sorting_hint = "tools"
+    menu_items.orbit_android = entry
 end
 
 ---------------------------------------------------------------------------------------------

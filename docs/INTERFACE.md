@@ -71,15 +71,18 @@ button" setting is "Back to my book, then BookOrbit home" (the default), `home` 
 
 | Where KOReader is | `home_smart` | `home` |
 |---|---|---|
-| Reader showing a book, Home pressed in KOReader | BookOrbit home | BookOrbit home |
+| Reader showing a book, Home pressed in KOReader | BookOrbit home, opened on top of the book (the book stays open) | BookOrbit home |
 | BookOrbit home (the plugin's dashboard) is the top widget, Home pressed in KOReader | the companion's launcher page (`SHOW_LAUNCHER`) | the companion's launcher page |
-| Elsewhere (another app in front, a menu, KOReader settings, another BookOrbit view, the file browser) **with a book open** | the book (whatever covers it is closed) | BookOrbit home |
-| Elsewhere with **no book open** (closed by the user, or none opened) | BookOrbit home | BookOrbit home |
+| Elsewhere (another app in front, a menu, KOReader settings, another BookOrbit view, the file browser) **with a current book**: one still open, or one Home itself closed (`home_book`) | the book (whatever covers it is closed, or the book is reopened) | BookOrbit home |
+| Elsewhere with **no current book** (the user closed it, or none opened) | BookOrbit home | BookOrbit home |
 | Cold start after KOReader was **killed with a book open** | that book (reopened) | BookOrbit home |
 
 So presses in KOReader step book → BookOrbit home → companion, and Home from another app
 (the companion included) never loops back to the companion. A book the user closed is never
-reopened from history. "Killed with a book open" is the patch's `open_book_at_exit` setting:
+reopened from history. BookOrbit home opens on top of the reader through the plugin's public
+action (`BookOrbitOpenDashboard`), so the book stays open; only when the plugin can't do that
+does Home close the book, and then it keeps it as `home_book` until the user closes a book
+themselves or opens another one. "Killed with a book open" is the patch's `open_book_at_exit` setting:
 set on ReaderReady (flushed at once), cleared when the reader closes (Back to file browser,
 Home, Exit); a kill or suspend leaves it set. "Dashboard on top": the plugin's catalog widget
 (`main.lua:1207-1230`) is `UIManager:getTopmostVisibleWidget()` (the plugin's own test,
