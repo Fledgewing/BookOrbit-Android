@@ -103,7 +103,17 @@ object PatchInstaller {
         val app = BuildConfig.VERSION_NAME
         val file = installedVersion()
         if (!UpdateFlow.patchAfterUpdate(file, app)) {
-            log("after the update: patch ${file ?: "not installed"}; nothing to do for v$app")
+            // The file is current but KOReader still runs an older patch: the same restart now.
+            val p = Prefs(ctx)
+            val running = p.patchVersionSeen.ifEmpty { null }
+            if (file != null && running != null && UpdateFlow.staleRestart(running, file, false, true, emptySet()) == UpdateFlow.Restart.NOW) {
+                log("after the update: patch v$file on disk, KOReader runs v$running: restarting now")
+                p.patchAwaitVersion = file
+                p.patchRestartNow = file
+                follow(ctx, "app updated")
+            } else {
+                log("after the update: patch ${file ?: "not installed"}; nothing to do for v$app")
+            }
             return then()
         }
         if (!hasPermission(ctx)) {
@@ -112,9 +122,10 @@ object PatchInstaller {
             return then()
         }
         val p = Prefs(ctx)
-        val user = UpdateFlow.userStarted(System.currentTimeMillis(), p.userUpdateAt)
+        // An app replace is always user-confirmed (UpdateFlow.restartNowAfter): restart at once.
+        val user = UpdateFlow.restartNowAfter(appReplaced = true, nowMs = System.currentTimeMillis(), markAtMs = p.userUpdateAt)
         p.userUpdateAt = 0
-        log("after the update: patch v$file is older than v$app; installing it (${if (user) "you started the update: KOReader restarts now" else "background update"})")
+        log("after the update: patch v$file is older than v$app; installing it (you confirmed the app update: KOReader restarts now, the book reopens)")
         afterUpdateBusy = true
         install(ctx, userStarted = user) { result ->
             afterUpdateBusy = false

@@ -716,6 +716,19 @@ class UpdateFlowTest {
         assertEquals("Updated to v0.5.2; KOReader restarts to load it (after the book, if one is open)", UpdateFlow.installedLine("0.5.2"))
     }
 
+    /** M8C 11-22 02:06: 0.5.4 -> 0.6.0 by hand; the old process wrote no mark, so it waited for the book. */
+    @Test
+    fun anAppReplaceRestartsNowWithNoMark() {
+        val t = 1_000_000_000L
+        val now = UpdateFlow.restartNowAfter(appReplaced = true, nowMs = t, markAtMs = 0)
+        assertTrue("an app replace needs no mark", now)
+        assertEquals("book open: restarts now", UpdateFlow.Restart.NOW, UpdateFlow.restart("0.6.0", "0.5.4", "", true, now))
+        val patchOnly = UpdateFlow.restartNowAfter(appReplaced = false, nowMs = t, markAtMs = 0)
+        assertFalse(patchOnly)
+        assertEquals("a background patch-only update waits for the book", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.6.1", "0.6.0", "", true, patchOnly))
+        assertTrue("a patch-only update the user started", UpdateFlow.restartNowAfter(appReplaced = false, nowMs = t + 1_000, markAtMs = t))
+    }
+
     /** M8C 11-22 01:42: "if I click update myself that means restart KOReader now". */
     @Test
     fun anUpdateYouStartedRestartsWithTheBookOpenAndReopensIt() {

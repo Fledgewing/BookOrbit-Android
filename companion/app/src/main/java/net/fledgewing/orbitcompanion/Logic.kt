@@ -561,6 +561,16 @@ object UpdateFlow {
      */
     fun userStarted(nowMs: Long, atMs: Long): Boolean = atMs > 0 && nowMs - atMs in 0..USER_UPDATE_MS
 
+    /**
+     * The patch install that follows a change of this app's version restarts KOReader now (v0.6.1).
+     * At targetSdk 28 every app update waits for the user's tap on Android's install prompt
+     * (a background check only posts a notification), so every app replace was user-confirmed,
+     * with no mark needed: the old process (0.5.4 and earlier) never wrote one (M8C 11-22 02:06).
+     * Only a patch-only update goes by [userStarted]'s mark.
+     */
+    fun restartNowAfter(appReplaced: Boolean, nowMs: Long, markAtMs: Long): Boolean =
+        appReplaced || userStarted(nowMs, markAtMs)
+
     /** The relaunch after a restart: reopen the book that was open (patch 0.5.5+ obeys it). */
     fun relaunchCommand(bookWasOpen: Boolean): String? = if (bookWasOpen) HomeCommands.REOPEN_BOOK else null
 
@@ -815,6 +825,9 @@ object WhatsNew {
         ),
         "0.6.0" to listOf(
             "In BookOrbit, any library, collection or smart scope can be shown by series or by author: Sort › By series / By author.",
+        ),
+        "0.6.1" to listOf(
+            "After any app update, KOReader restarts right away and your book reopens where you were.",
         ),
     )
 

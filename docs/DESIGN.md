@@ -371,6 +371,10 @@ One update covers the companion, the patch and KOReader's restart, with one stat
   and keeps it as `restart_book`; the relaunch carries `COMMAND=reopen_book` (for a restart by
   an older patch: KOReader's last file), so it reopens where it was. A background update still
   waits for the book's close, Home or sleep; the wait is logged once per version.
+  From v0.6.1 every app replace counts as user-started with no mark: at targetSdk 28 each app
+  update needs the user's tap on Android's install prompt, and an old process (0.5.4 and
+  earlier) never wrote the mark (M8C 11-22 02:06 waited for the book after an update by hand).
+  The mark now only matters for a patch-only update; one found in the background still waits.
 - **Setup holds its prompts while an update settles (v0.5.5):** for 30 s after the version
   changes, and while the patch install and restart that follow run, Setup prompts and posts
   nothing (`AfterUpdate`); the patch row is pending, and so is the clicker (accessibility) row
