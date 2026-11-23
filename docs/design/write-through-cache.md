@@ -27,7 +27,29 @@ modes), which both platforms' tests read.
 | Size | Total cap (Android 8 MB, X4 2 MB on SD) and entry cap (400 / 200). Least recently used goes first; the Home body and the open book's detail are never evicted by a list page. |
 | Overlay | Unchanged: local-first's rules (device wins while newer or unsent; a local finish leaves Continue reading and counts toward the goal at once; design D4) are applied to what the cache returns, never written into it. |
 | Offline | Reads come from the cache, with the "Offline, saved …" stamp. Writes made offline use the existing queues (the plugin's outbox, Orbit's finish queue, the firmware's sync queue); the cache only learns of them when they succeed. |
-| Covers | Part of the cache: a disk file per book id + cover version, the version being the book's `updatedAt` as the server lists it (the plugin already names its files this way: `bookorbit_catalog_thumbnails.lua:58-85` coverToken/memoKey, files in `cache/bookorbit`, pruned at 600). A cover is downloaded only when it is missing, failed earlier, or listed with a version other than the one on disk; a cover whose version is unchanged is never downloaded again. A cover changed on the server without a new version is what Full refresh is for. |
+| Covers | Part of the cache: a disk file per book id + cover version, the version being the book's `updatedAt` as the server lists it (the plugin already names its files this way: `bookorbit_catalog_thumbnails.lua:58-85` coverToken/memoKey, files in `cache/bookorbit`, pruned at 600). A cover is downloaded only when it is missing, failed earlier, or listed with a version other than the one on disk; a cover whose version is unchanged is never downloaded again. A cover changed on the server without a new version is what Full refresh is for. Reading never changes the version (see "Cover version" below). |
+
+## Cover version
+
+`updatedAt` in a catalog book is the `books.updated_at` column (server
+`koreader-catalog.service.ts:964`, :1204, :1297), bumped on every update of that row
+(`db/schema/books.ts:44-47`, `$onUpdateFn`). Reading never writes that row:
+
+- progress goes to the KOReader progress tables (`db/schema/koreader.ts`);
+- read status goes to `user-book-status` (`setManual`, called from `koreader-catalog.service.ts:520`);
+- a rating goes to `user_book_ratings` and `reading_attempts` (`book.repository.ts:2494-2510`);
+- none of these is an `update(books)`.
+
+What does bump it: metadata edits (`book.repository.ts:2606`, :2658), community-rating refreshes from
+metadata fetches (:2642), a new primary file (:1839), cover changes (`book-cover-store.repository.ts:303`),
+series membership, scans, moves, renames and uploads. Each of these costs one cover download for that
+book. That is rare, and is the price of a version the listing carries.
+
+The thumbnail itself has a cover-only version: `ETag` = the cover file's mtime, with
+`If-None-Match` answered by `304` (`koreader-catalog.service.ts:752-769`). The plugin's downloader
+neither sends nor keeps it (`bookorbit_api.lua:455-527`), so Android uses `updatedAt`. The
+firmware has its own downloader: it may store the ETag and send `If-None-Match` when `updatedAt`
+moved, turning a metadata-only change into a 304.
 
 ## Refresh and Full refresh
 
