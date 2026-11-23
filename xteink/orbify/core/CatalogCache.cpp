@@ -131,7 +131,26 @@ ReadPlan planRead(const bool hasEntry, const uint32_t validatedAt, const uint32_
   return plan;
 }
 
-uint32_t canonicalHash(JsonVariantConst value) { return hashValue(FNV_OFFSET, value); }
+uint32_t canonicalHash(JsonVariantConst value) {
+  // "Same reply" ignores what changes on every request (the design's Revalidate row): the server's
+  // clock (generatedAt) and Discover's random pick (the Home store keeps a day's draw,
+  // BookOrbitHomeStore). Only at the top level, where the dashboard carries them.
+  if (!value.is<JsonObjectConst>()) return hashValue(FNV_OFFSET, value);
+  JsonObjectConst object = value.as<JsonObjectConst>();
+  std::vector<const char*> names;
+  names.reserve(object.size());
+  for (JsonPairConst p : object) {
+    const char* name = p.key().c_str();
+    if (std::strcmp(name, "generatedAt") != 0 && std::strcmp(name, "discover") != 0) names.push_back(name);
+  }
+  std::sort(names.begin(), names.end(), [](const char* a, const char* b) { return std::strcmp(a, b) < 0; });
+  uint32_t hash = fnv(FNV_OFFSET, "{", 1);
+  for (const char* name : names) {
+    hash = fnv(hash, name, std::strlen(name) + 1);
+    hash = hashValue(hash, object[name]);
+  }
+  return fnv(hash, "}", 1);
+}
 
 Revalidated revalidate(const int status, const bool hadEntry, const uint32_t cachedHash, const uint32_t replyHash) {
   Revalidated r;

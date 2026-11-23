@@ -56,7 +56,9 @@ Mode modeOf(const char* m) {
 void reads(JsonObjectConst all) {
   for (JsonObjectConst c : all["reads"].as<JsonArrayConst>()) {
     const bool has = !c["entry"].isNull();
-    const ReadPlan p = planRead(has, has ? c["entry"]["validated_at"].as<uint32_t>() : 0, c["now"], modeOf(c["mode"]),
+    // A write marks an entry stale by clearing its stamp (IndexEntry::validatedAt 0 = due).
+    const uint32_t validated = has && !(c["entry"]["stale"] | false) ? c["entry"]["validated_at"].as<uint32_t>() : 0;
+    const ReadPlan p = planRead(has, validated, c["now"], modeOf(c["mode"]),
                                 c["offline"] | false);
     CHECK_NAMED(c["name"].as<const char*>(), p.serve == c["serve"].as<bool>() && p.fetch == c["fetch"].as<bool>());
   }
