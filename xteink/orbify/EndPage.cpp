@@ -5,6 +5,12 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+#include <Bitmap.h>
+#include <HalStorage.h>
+
+#include "core/NextCover.h"
+#endif
 
 #include <cstdio>
 
@@ -78,6 +84,33 @@ eob::Metrics metricsFor(GfxRenderer& renderer) {
   return m;
 }
 
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+// The next book's cover, fitted and centred in its box, framed as Home frames its covers. A file that
+// went missing or does not parse leaves the box empty (the label already sits beside it).
+void drawCover(GfxRenderer& renderer, const eob::Op& op) {
+  HalFile file;
+  if (!Storage.openFileForRead("ORB", op.text.c_str(), file)) return;
+  Bitmap bitmap(file);
+  if (bitmap.parseHeaders() == BmpReaderError::Ok && bitmap.getWidth() > 0 && bitmap.getHeight() > 0) {
+    int w = op.w, h = op.h;
+    if (bitmap.getWidth() * op.h > bitmap.getHeight() * op.w) {
+      h = bitmap.getHeight() * op.w / bitmap.getWidth();
+    } else {
+      w = bitmap.getWidth() * op.h / bitmap.getHeight();
+    }
+    if (w > bitmap.getWidth() && h > bitmap.getHeight()) {
+      w = bitmap.getWidth();  // never scaled up
+      h = bitmap.getHeight();
+    }
+    const int x = op.x + (op.w - w) / 2, y = op.y + (op.h - h) / 2;
+    renderer.fillRect(x, y, w, h, false);
+    renderer.drawBitmap(bitmap, x, y, w, h);
+    renderer.drawRect(x, y, w, h, !op.white);
+  }
+  file.close();
+}
+#endif
+
 void drawOps(GfxRenderer& renderer, const eob::Layout& layout, const int dx, const int dy) {
   for (eob::Op op : layout.ops) {
     op.x += dx;
@@ -100,6 +133,11 @@ void drawOps(GfxRenderer& renderer, const eob::Layout& layout, const int dx, con
         renderer.drawLine(s[4], s[5], s[6], s[7], 4, !op.white);
         break;
       }
+      case eob::Op::Kind::Image:
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+        drawCover(renderer, op);
+#endif
+        break;
       case eob::Op::Kind::Star: {
         int pts[20];
         eob::starPoints(op.x, op.y, op.w, pts);
@@ -143,6 +181,20 @@ void OrbifyEndPage::load(const std::string& path, const BookInfo& info, const st
     bookOnDevice(card.nextBook.id, nextPath);
     for (uint8_t k = 0; k < card.suggestionCount; ++k) bookOnDevice(card.suggestions[k].id, suggestionPaths[k]);
   }
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+  nextCover.clear();
+  // The next book's cover, when a sync fetched and decoded it (FinishSync::fetchNextCover). The page
+  // never fetches: without the file the row is drawn as without covers.
+  const bool hasNext = hasCard && (card.next == SeriesCard::Next::Next || card.next == SeriesCard::Next::LastUnread);
+  char cover[96];
+  if (hasNext && card.nextBook.coverVer != 0 &&
+      orbify::cover::bmpPath(orbify::cover::DIR, card.nextBook.id, card.nextBook.coverVer, eob::COVER_WIDTH,
+                             eob::COVER_HEIGHT, cover, sizeof(cover)) &&
+      Storage.exists(cover)) {
+    nextCover = cover;
+  }
+  if (hasNext) LOG_INF("ORB", "End page: next book's cover %s", nextCover.empty() ? "none" : nextCover.c_str());
+#endif
   build();
   LOG_INF("ORB", "End page: %s, card %s, series %s, %u rows", finished ? "finished" : "not finished",
           hasCard ? "yes" : "no", book.series.empty() ? "none" : "offline", static_cast<unsigned>(plannedCount));
@@ -200,6 +252,14 @@ void OrbifyEndPage::fit(const eob::Metrics& metrics, const int available, const 
   fm.rowHeight = eob::rowHeight(twoLine, metrics, touch);
   fm.headingHeight = eob::rowHeight(heading, metrics, touch) - fm.rowHeight;
   fm.available = available;
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+  if (!nextCover.empty()) {
+    // The Next row holds the cover: taller than the other rows (core/EndPagePlan counts it).
+    eob::Row covered = twoLine;
+    covered.image = nextCover;
+    fm.nextRowHeight = eob::rowHeight(covered, metrics, touch);
+  }
+#endif
   for (size_t i = 0; i < rowCount; ++i) {
     if (rows[i].kind == RowKind::Rating) fm.available -= eob::rowHeight(rating, metrics, touch) - fm.rowHeight;
   }
@@ -256,6 +316,9 @@ void OrbifyEndPage::labelRow(const size_t i) {
       if (card.nextRead) out.label += DOT + std::string(tr(STR_ORBIFY_READ));
       paths[i] = nextPath;
       out.sub = paths[i].empty() ? tr(STR_ORBIFY_ON_SERVER_DOWNLOAD) : tr(STR_ORBIFY_ON_READER_OPEN);
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+      out.image = nextCover;
+#endif
       break;
     case RowKind::Info:
       out.role = eob::RowRole::Info;

@@ -12,8 +12,8 @@
 //   Your rating      ★ ★ ★ ★ ☆                          five stars, each a tap target (X4 Pro)
 //     tap a star                                         ◀ ▶ and Confirm on buttons
 //   NEXT IN SERIES                                       section heading
-//   Book 3 · The Storm Signal                            rows: label, then a smaller line
-//     On BookOrbit · Download & open
+//   ┌──┐ Book 3 · The Storm Signal                       rows: label, then a smaller line; the
+//   └──┘ On BookOrbit · Download & open                  next book's cover at the left (X4)
 //   ...
 //   Home
 //
@@ -44,6 +44,8 @@ struct Row {
   std::string value;    // right-aligned action ("Undo", "Open", "›"); "" = none
   bool enabled = true;  // false: drawn grey, never selected or tapped
   bool check = false;   // a check mark before the label (drawn, not a glyph: the fonts lack ✓)
+  std::string image;    // a cover BMP drawn at the left, COVER_WIDTH x COVER_HEIGHT; the row grows
+                        // to hold it and its text moves right. "" = none: the row as without covers
 };
 
 struct Page {
@@ -56,7 +58,7 @@ struct Page {
 };
 
 struct Op {
-  enum class Kind : uint8_t { Text, FillRect, Line, Star, Check };
+  enum class Kind : uint8_t { Text, FillRect, Line, Star, Check, Image };
   Kind kind = Kind::Text;
   Font font = Font::Row;
   bool bold = false;
@@ -64,9 +66,9 @@ struct Op {
   bool white = false;  // text or fill in white (on the selected row's black band)
   bool grey = false;   // dimmed text (a disabled row)
   int x = 0, y = 0, w = 0, h = 0;  // Text: x,y = top-left; Star: centre x,y and outer radius w;
-                                   // Check: the w x h box it sits in
+                                   // Check, Image: the w x h box it sits in
   bool filled = false;             // Star
-  std::string text;
+  std::string text;                // Text: the text; Image: the BMP's path
 };
 
 struct Target {
@@ -87,6 +89,11 @@ constexpr int ROW_PAD = 9;
 constexpr int MIN_TOUCH_ROW = 64;
 constexpr int STAR_RADIUS = 21;  // a 42 px star; its target is the 52 px cell around it
 constexpr int STAR_CELL = 52;
+// The next book's cover (2:3, Home's shape), with COVER_PAD above and below it in its row.
+constexpr int COVER_WIDTH = 60;
+constexpr int COVER_HEIGHT = 90;
+constexpr int COVER_PAD = 8;
+constexpr int COVER_GAP = 14;  // between the cover and the label
 
 // The height one row takes (heading included), so the caller can drop rows that do not fit.
 int rowHeight(const Row& row, const Metrics& m, bool touch);

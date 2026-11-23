@@ -18,6 +18,9 @@ struct CardBook {
   int64_t id = 0;
   char index[12] = {};  // seriesIndex as the server sends it ("2", "1.5"); empty for suggestions
   char title[72] = {};
+  // The book's cover version (core/NextCover: the Home store's hash of its updatedAt), 0 = none known.
+  // Card version 2; it sits where version 1 had padding, so the record keeps its size.
+  uint32_t coverVer = 0;
 };
 
 struct SeriesCard {
@@ -44,7 +47,8 @@ void cardFilter(JsonDocument& filter);
 // False when the detail is not a book.
 bool pickCard(JsonObjectConst detail, size_t maxSuggestions, SeriesCard& out);
 
-// The cache record: fixed size, versioned, with a CRC; deserialize is false for anything else.
+// The cache record: fixed size, versioned, with a CRC; deserialize is false for anything else. A
+// version 1 record (before covers) reads as a card with no cover versions.
 constexpr size_t CARD_BYTES = 8 + sizeof(SeriesCard) + 4;
 size_t serializeCard(const SeriesCard& card, uint8_t* out, size_t capacity);
 bool deserializeCard(const uint8_t* data, size_t size, SeriesCard& out);

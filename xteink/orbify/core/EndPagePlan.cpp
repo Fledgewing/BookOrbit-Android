@@ -42,7 +42,10 @@ size_t planRows(const PlanInput& input, RowSpec* out, const size_t capacity) {
 
 int rowsHeight(const RowSpec* rows, const size_t count, const FitMetrics& metrics) {
   int height = 0;
-  for (size_t i = 0; i < count; ++i) height += metrics.rowHeight + (rows[i].heading ? metrics.headingHeight : 0);
+  for (size_t i = 0; i < count; ++i) {
+    const bool tall = rows[i].kind == RowKind::Next && metrics.nextRowHeight > 0;
+    height += (tall ? metrics.nextRowHeight : metrics.rowHeight) + (rows[i].heading ? metrics.headingHeight : 0);
+  }
   return height;
 }
 

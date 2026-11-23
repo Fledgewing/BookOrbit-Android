@@ -92,7 +92,24 @@ to PNGs. CI uploads the PNGs as the `eob-page-*` artifact.
 | P4 | Every tap and button on the page is consumed (`Action::Consumed`), and a tap whose finger went down before the page was drawn is ignored and logged | An unhandled input used to fall through to the reader's page turns, short-Back-to-Home and gestures. |
 | P5 | No card (offline, nothing fetched yet): the EPUB's own series (`Epub::loadSyncMetadata`) under "Next in series" with "Connect to see what's next", the folder rows under "Continue with", and "All books by <author>" from the EPUB's author | The ask's offline fallback; the rows no longer disappear. |
 | P6 | Logs: `ORB End page: <state>, card <yes/no>, series <none/offline>, <n> rows`; `tap row <i> (kind <k>, star <s>)`; `row <i> acts (<act>)`; `tap … ignored`; `Back, to the last page`; `ERS End of book: Home` | Names the exit next time. |
-| P7 | Not in this patch: the next book's cover | Covers exist on the card only for Home shelves; a next-in-series cover needs a fetch with the series card and a radio-off JPEG decode (about 53 KB). |
+| P7 | Not in this patch: the next book's cover | Added by patch 0035 (below), X4 Pro and X4 only. |
+
+### The next book's cover (patch 0035, 2026-11-22)
+
+`CROSSINK_TAILNET_ORBIFY_EOB_COVER` (0,1,1): X4 Pro and X4; the X3 has no flash for it. The rules are
+`orbify/core/NextCover` (host test `end_of_book`); the files and requests are `orbify/FinishSync.cpp`.
+
+| # | Question | Decision | Why |
+|---|---|---|---|
+| N1 | Cover version | `CardBook::coverVer`, the Home store's FNV-1a of `updatedAt` (`cache::coverVersion`), 0 = none known. Taken from the detail's `relatedSections` books (`hasCover`, `updatedAt`, added to the card filter); when no section lists the next book (the series section holds only the first 8 others, BookOrbit `koreader-catalog.service.ts:148,1395`), the sync asks that book's own detail. | `seriesMembers` carry no `updatedAt` or `hasCover` (`:1388`). |
+| N2 | Card file | Version 2. `coverVer` sits in what version 1 left as padding, so the record keeps its size; a version 1 file reads as a card with no cover versions, never as a bad one. | No re-fetch storm after the update. |
+| N3 | Files | `/.crosspoint/orbify_series/<bookId>_<ver>_60x90.bmp`, and `<bookId>_<ver>.jpg` until the decode | The cards' own directory: Home's prune lists only `/.crosspoint/bookorbit_home`. |
+| N4 | When it is fetched | A sync (manual or sleep), after the card refresh and after the sync session closed, Wi-Fi still up. Never the page, never a background sync. | Nothing interrupts reading. |
+| N5 | How | A Home BMP of that book at that version is copied (the largest); otherwise the thumbnail is downloaded, If-None-Match with the cache's kept ETag when an older version's BMP is here (`cache::planCover`); a 304 renames that file. The ETag record is the cache's (`OrbifyCache::coverRecord`), shared with Home: it describes the server's thumbnail. | Reuse; a metadata-only edit costs a 304. |
+| N6 | Decode | 1-bit at 60x90 (`JpegToBmpConverter`, as Home), with the radio off: the sleep sync after `SavedWifiConnect::disconnect()`, and a manual sync after its disconnect. Needs a 54 KB block, else it waits. | About 53 KB of contiguous heap. |
+| N7 | Old files | The book's other versions and sizes go after each fetch; the previous next book's files go when a card names another next book. | |
+| N8 | Page | The cover at the left of the Next row, centred in a row grown to 106 px; label and second line beside it (`EndPageLayout` `COVER_*`). `fitRows` counts the taller row (`FitMetrics::nextRowHeight`). No file: no image and no space, the row as before. | Mockup 7, cover at the left. |
+| N9 | Flash | `x4-pro` +8,192 B (6,283,597, 95.88%), `x4-classic` +8,380 B (6,129,086, 93.52%); X3 `default` +466 B with the switch off (6,505,613, 99.27%, 15.2 KB under the 99.5% gate): the shared card, plan and layout code | |
 
 ## Item 4: the write-through cache, seams (patch 0029)
 

@@ -161,6 +161,33 @@ Metrics metrics() {
   return m;
 }
 
+// A stand-in for the decoded cover BMP (1-bit, dithered, as JpegToBmpConverter writes it): a dithered
+// sky over a dark sea, a lighthouse, the book number; framed as orbify/EndPage.cpp frames it.
+void cover(Canvas& cv, const Op& op) {
+  static const int BAYER[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+  const int horizon = op.h * 3 / 5;
+  for (int j = 0; j < op.h; ++j) {
+    for (int i = 0; i < op.w; ++i) {
+      const int tone = j < horizon ? 2 + 8 * j / horizon : 12;  // 0 white .. 16 black
+      // A lighthouse: a tapered tower standing on the horizon, its lamp lit.
+      const int half = 3 + (j - op.h / 4) / 8;
+      const bool tower = j >= op.h / 4 && j < horizon && std::abs(i - op.w / 3) <= half;
+      const bool lamp = j >= op.h / 4 - 7 && j < op.h / 4 - 1 && std::abs(i - op.w / 3) <= 2;
+      const bool on = lamp ? false : tower || BAYER[j % 4][i % 4] < tone;
+      cv.set(op.x + i, op.y + j, on ? 0 : 255);
+    }
+  }
+  const std::string n = "3";
+  const int tw = textWidth(nullptr, Font::Title, true, n.c_str());
+  cv.fill(op.x + (op.w - tw) / 2 - 4, op.y + op.h - 44, tw + 8, 38, 255);
+  cv.text(Font::Title, true, false, op.x + (op.w - tw) / 2, op.y + op.h - 46, n, false);
+  const uint8_t frame = op.white ? 255 : 0;
+  cv.fill(op.x, op.y, op.w, 1, frame);
+  cv.fill(op.x, op.y + op.h - 1, op.w, 1, frame);
+  cv.fill(op.x, op.y, 1, op.h, frame);
+  cv.fill(op.x + op.w - 1, op.y, 1, op.h, frame);
+}
+
 void draw(Canvas& cv, const Layout& layout) {
   for (const Op& op : layout.ops) {
     switch (op.kind) {
@@ -181,6 +208,9 @@ void draw(Canvas& cv, const Layout& layout) {
         for (int k = 0; k < 2; ++k) cv.line(s[4 * k], s[4 * k + 1], s[4 * k + 2], s[4 * k + 3], 4, op.white ? 255 : 0);
         break;
       }
+      case Op::Kind::Image:
+        cover(cv, op);
+        break;
       case Op::Kind::Star: {
         int pts[20];
         starPoints(op.x, op.y, op.w, pts);
@@ -317,6 +347,22 @@ int main(int argc, char** argv) {
     scenes.push_back(s);
   }
 
+  // The next book's cover at the left of the Next row (X4 Pro and X4, the card has its version).
+  const size_t NEXT_ROW = 2;
+  {
+    Scene s{"eob-x4pro-cover.png", {}};
+    s.page = scenes[0].page;
+    s.page.rows[NEXT_ROW].image = "/.crosspoint/orbify_series/103_0000abcd_60x90.bmp";
+    scenes.push_back(s);
+  }
+  {
+    Scene s{"eob-x4-cover.png", {}};
+    s.page = scenes.back().page;
+    s.page.touch = false;
+    s.page.selected = static_cast<int>(NEXT_ROW);
+    scenes.push_back(s);
+  }
+
   const char* const touchHints[4] = {"Back", "Open", "Up", "Down"};
   for (Scene& s : scenes) {
     Canvas cv(480, 800);
@@ -354,6 +400,58 @@ int main(int argc, char** argv) {
       const Target* h = hit(a, t.x + t.w / 2, t.y + t.h / 2);
       CHECK(h && h->star == t.star, "star tap");
     }
+  }
+  // The cover: one image at the left of the Next row, inside its target, the label and its second
+  // line beside it; the row is taller only by what the cover needs, and the rows above stay put.
+  for (const bool touch : {true, false}) {
+    const char* name = touch ? "cover x4pro" : "cover x4";
+    Page with = scenes[0].page, without = scenes[0].page;
+    with.touch = without.touch = touch;
+    with.rows[NEXT_ROW].image = "cover.bmp";
+    const Layout a = orbify::eob::layout(with, m, 480, 760);
+    const Layout b = orbify::eob::layout(without, m, 480, 760);
+    const Op* image = nullptr;
+    int images = 0;
+    for (const Op& op : a.ops) {
+      if (op.kind != Op::Kind::Image) continue;
+      image = &op;
+      ++images;
+    }
+    CHECK(images == 1 && image && image->text == "cover.bmp", name);
+    for (const Op& op : b.ops) CHECK(op.kind != Op::Kind::Image, name);
+    const Target* nextT = nullptr;
+    const Target* rowWithout = nullptr;
+    for (const Target& t : a.targets) if (t.row == static_cast<int>(NEXT_ROW)) nextT = &t;
+    for (const Target& t : b.targets) if (t.row == static_cast<int>(NEXT_ROW)) rowWithout = &t;
+    CHECK(nextT && rowWithout && image, name);
+    if (!nextT || !rowWithout || !image) continue;
+    CHECK(image->x == MARGIN + ROW_PAD && image->w == COVER_WIDTH && image->h == COVER_HEIGHT, name);
+    CHECK(image->y >= nextT->y + COVER_PAD - 1 && image->y + image->h <= nextT->y + nextT->h - COVER_PAD + 1, name);
+    CHECK(nextT->y == rowWithout->y && nextT->h == std::max(rowWithout->h, COVER_PAD + COVER_HEIGHT + COVER_PAD), name);
+    // Label and sub line start right of the cover, at the same x, both inside the row.
+    int texts = 0;
+    for (const Op& op : a.ops) {
+      if (op.kind != Op::Kind::Text || op.y < nextT->y || op.y >= nextT->y + nextT->h) continue;
+      ++texts;
+      CHECK(op.x == image->x + COVER_WIDTH + COVER_GAP, name);
+      CHECK(textWidth(nullptr, op.font, op.bold, op.text.c_str()) + op.x <= 480 - MARGIN - ROW_PAD, name);
+    }
+    CHECK(texts == 2, name);
+    // Every target above the Next row is where it was without the cover.
+    for (size_t k = 0; k < a.targets.size() && k < b.targets.size(); ++k) {
+      if (a.targets[k].row >= static_cast<int>(NEXT_ROW)) break;
+      CHECK(a.targets[k].y == b.targets[k].y && a.targets[k].h == b.targets[k].h, name);
+    }
+    // Home stays put across Undo / Mark finished with the cover too.
+    Page unfinished = with;
+    unfinished.rows[0] = row(RowRole::Status, "Not finished", "", "Mark finished");
+    unfinished.rows[1] = row(RowRole::Rating, "Your rating", "rate it once it's finished", "", "", false);
+    const Layout u = orbify::eob::layout(unfinished, m, 480, 760);
+    int homeA = -1, homeU = -1;
+    const int homeRow = static_cast<int>(with.rows.size()) - 1;
+    for (const Target& t : a.targets) if (t.row == homeRow) homeA = t.y;
+    for (const Target& t : u.targets) if (t.row == homeRow) homeU = t.y;
+    CHECK(homeA > 0 && homeA == homeU, name);
   }
   // Long titles are cut with an ellipsis, never drawn past the row.
   {

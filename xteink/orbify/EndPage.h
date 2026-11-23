@@ -7,8 +7,9 @@
 //   ✓ Finished · sends at next sync                Undo
 //   Your rating                           ★ ★ ★ ★ ☆     (X4: stars; tap one on the X4 Pro)
 //   NEXT IN SERIES
-//   Book 3 · The Wayfarer                         Open / Download
-//     On this reader · Open / On BookOrbit · Download & open
+//   ┌──┐ Book 3 · The Wayfarer                    Open / Download
+//   └──┘   On this reader · Open / On BookOrbit · Download & open
+//        (the cover: X4 Pro and X4, once a sync fetched it; without it the row is as before)
 //   ALSO BY <author> / YOU MIGHT LIKE                 (up to 2)
 //   All books by <author>                              ›
 //   Home
@@ -86,6 +87,7 @@ class OrbifyEndPage {
   std::vector<std::string> folderNames;
   std::vector<std::string> folderPaths;
   std::string nextPath;  // on-device paths of the card's books, "" = download
+  std::string nextCover;  // the next book's cover BMP (FinishSync::fetchNextCover), "" = none
   std::string suggestionPaths[orbify::SeriesCard::MAX_SUGGESTIONS];
 
   orbify::RowSpec planned[orbify::MAX_ROWS];

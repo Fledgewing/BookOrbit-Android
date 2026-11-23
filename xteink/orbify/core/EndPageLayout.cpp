@@ -42,6 +42,7 @@ int bodyHeight(const Row& row, const Metrics& m, bool touch) {
   // The status and rating rows always keep their second line, so Undo / Mark finished never
   // moves the rows below them.
   if (!row.sub.empty() || row.role == RowRole::Status || row.role == RowRole::Rating) h += 2 + lh(m, Font::Small);
+  if (!row.image.empty() && h < COVER_PAD + COVER_HEIGHT + COVER_PAD) h = COVER_PAD + COVER_HEIGHT + COVER_PAD;
   if (touch && h < MIN_TOUCH_ROW) h = MIN_TOUCH_ROW;
   return h;
 }
@@ -180,6 +181,16 @@ Layout layout(const Page& page, const Metrics& m, const int areaWidth, const int
       labelRight = right - vw - 16;
     }
     int labelLeft = left;
+    if (!row.image.empty() && row.role != RowRole::Rating) {
+      // The cover at the left, centred in the taller row; the label and its second line beside it,
+      // centred as a block.
+      Op image = rect(Op::Kind::Image, left, y + (body - COVER_HEIGHT) / 2, COVER_WIDTH, COVER_HEIGHT, selected);
+      image.text = row.image;
+      out.ops.push_back(image);
+      labelLeft = left + COVER_WIDTH + COVER_GAP;
+      const int block = lh(m, Font::Row) + (row.sub.empty() ? 0 : 2 + lh(m, Font::Small));
+      textTop = y + (body - block) / 2;
+    }
     if (row.check) {
       const int size = lh(m, Font::Row) * 2 / 3;
       Op check = rect(Op::Kind::Check, left, textTop + (lh(m, Font::Row) - size) / 2, size, size, selected);
@@ -194,7 +205,8 @@ Layout layout(const Page& page, const Metrics& m, const int areaWidth, const int
     if (!row.sub.empty()) {
       const int subTop = (row.role == RowRole::Rating ? y + ROW_PAD + (page.touch ? STAR_CELL : lh(m, Font::Row) + 8)
                                                      : textTop + lh(m, Font::Row)) + 2;
-      Op sub = text(Font::Small, left, subTop, ellipsize(m, Font::Small, false, row.sub, right - left));
+      const int subLeft = row.image.empty() ? left : labelLeft;
+      Op sub = text(Font::Small, subLeft, subTop, ellipsize(m, Font::Small, false, row.sub, right - subLeft));
       sub.white = selected;
       sub.grey = true;
       out.ops.push_back(sub);

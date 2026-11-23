@@ -51,6 +51,7 @@ struct FitMetrics {
   int available = 0;  // the list band: below the title, above the button hints
   int rowHeight = 0;
   int headingHeight = 0;
+  int nextRowHeight = 0;  // the Next row with the next book's cover (taller); 0: rowHeight
 };
 int rowsHeight(const RowSpec* rows, size_t count, const FitMetrics& metrics);
 // Drops rows until the rest fit: the last suggestion first, then the folder rows, then the author

@@ -11,6 +11,17 @@
 #include <ctime>
 #include <memory>
 #include <new>
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+#include <JpegToBmpConverter.h>
+
+#include <string>
+#include <vector>
+
+#include "CacheStore.h"
+#include "core/EndPageLayout.h"
+#include "core/NextCover.h"
+#include "network/BookOrbitCatalogClient.h"
+#endif
 
 #include "BookOrbitCredentialStore.h"
 #include "BookOrbitDownloadIndex.h"
@@ -221,6 +232,128 @@ int64_t bookIdOf(const std::string& bookPath) {
   return bookId;
 }
 
+bool writeCard(const orbify::SeriesCard& card) {
+  std::unique_ptr<uint8_t[]> buf(new (std::nothrow) uint8_t[orbify::CARD_BYTES]);
+  if (!buf) return false;
+  const size_t size = orbify::serializeCard(card, buf.get(), orbify::CARD_BYTES);
+  Storage.mkdir("/.crosspoint");
+  Storage.mkdir(CARD_DIR);
+  const std::string path = cardPath(card.bookId);
+  HalFile file;
+  if (!size || !Storage.openFileForWrite(TAG, path.c_str(), file)) return false;
+  const bool ok = file.write(buf.get(), size) == size;
+  file.close();
+  if (!ok) Storage.remove(path.c_str());
+  return ok;
+}
+
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+#if !CROSSINK_TAILNET_ORBIFY_CACHE
+#error "CROSSINK_TAILNET_ORBIFY_EOB_COVER keeps its ETags in the cache (CROSSINK_TAILNET_ORBIFY_CACHE)"
+#endif
+// --- the next book's cover ------------------------------------------------------------------
+
+namespace cover = orbify::cover;
+// The Home store's limits for a cover transfer and for the JPEG decoder (BookOrbitHomeStore.cpp).
+constexpr uint32_t MIN_FREE_HEAP_FOR_COVER = 42 * 1024;
+constexpr uint32_t MIN_MAX_ALLOC_FOR_COVER = 20 * 1024;
+constexpr uint32_t MIN_MAX_ALLOC_FOR_DECODE = 54 * 1024;
+
+// What storeCard last found for the next book; refreshCard asks that book itself when no section
+// listed it.
+int64_t s_nextId = 0;
+cover::Lookup s_nextLookup = cover::Lookup::NotListed;
+bool s_coverPending = false;
+
+bool coverBmp(const int64_t bookId, const uint32_t version, char* out, const size_t size) {
+  return cover::bmpPath(cover::DIR, bookId, version, orbify::eob::COVER_WIDTH, orbify::eob::COVER_HEIGHT, out, size);
+}
+
+// The cover files in a directory, by name (listed first: nothing is removed while it is open).
+template <typename Visit>
+void forEachCoverFile(const char* dirPath, Visit visit) {
+  HalFile dir = Storage.open(dirPath);
+  if (!dir || !dir.isDirectory()) return;
+  std::vector<std::string> names;
+  char name[48];
+  HalFile entry;
+  cover::Name parsed;
+  while ((entry = dir.openNextFile())) {
+    const size_t length = entry.getName(name, sizeof(name));
+    entry.close();
+    if (length > 0 && cover::parseName(name, parsed)) names.emplace_back(name);
+  }
+  dir.close();
+  for (const std::string& n : names) {
+    if (cover::parseName(n.c_str(), parsed)) visit(std::string(dirPath) + "/" + n, parsed);
+  }
+}
+
+// Removes this book's cover files: all of them (version 0), or those stale at this version.
+void removeCovers(const int64_t bookId, const uint32_t version) {
+  forEachCoverFile(cover::DIR, [&](const std::string& path, const cover::Name& n) {
+    if (n.bookId != bookId) return;
+    if (version && !cover::isStale(n, bookId, version, orbify::eob::COVER_WIDTH, orbify::eob::COVER_HEIGHT)) return;
+    if (Storage.remove(path.c_str())) LOG_INF(TAG, "Next cover: removed %s", path.c_str());
+  });
+}
+
+// A BMP the Home store keeps of this book at this version, the largest one.
+bool homeBmp(const int64_t bookId, const uint32_t version, std::string& out) {
+  int best = 0;
+  forEachCoverFile(cover::HOME_DIR, [&](const std::string& path, const cover::Name& n) {
+    if (n.jpg || n.bookId != bookId || n.version != version || n.width <= best) return;
+    best = n.width;
+    out = path;
+  });
+  return best > 0;
+}
+
+bool copyFile(const std::string& from, const char* to) {
+  HalFile in;
+  HalFile out;
+  if (!Storage.openFileForRead(TAG, from.c_str(), in)) return false;
+  bool ok = Storage.openFileForWrite(TAG, to, out);
+  uint8_t buf[512];
+  while (ok) {
+    const int n = in.read(buf, sizeof(buf));
+    if (n <= 0) break;
+    ok = out.write(buf, static_cast<size_t>(n)) == static_cast<size_t>(n);
+  }
+  if (out) out.close();
+  in.close();
+  if (!ok) Storage.remove(to);
+  return ok;
+}
+
+// The next book's own detail: its hasCover and updatedAt, for a card whose sections did not list it.
+void refreshNextCoverVersion(const int64_t bookId, const int64_t nextId) {
+  const std::string path = "/plugin/catalog/books/" + std::to_string(nextId) + "?deviceId=" + BookOrbitSyncClient::deviceId();
+  const int code = BookOrbitSyncClient::orbifyRequest("GET", path.c_str(), nullptr, REPLY_PATH);
+  uint32_t version = 0;
+  cover::Lookup lookup = cover::Lookup::NotListed;
+  if (code >= 200 && code < 300) {
+    JsonDocument filter;
+    filter["id"] = true;
+    filter["hasCover"] = true;
+    filter["updatedAt"] = true;
+    JsonDocument doc;
+    if (parseReply(filter, doc)) lookup = cover::versionOf(doc.as<JsonObjectConst>(), version);
+  }
+  Storage.remove(REPLY_PATH);
+  std::unique_ptr<orbify::SeriesCard> card(new (std::nothrow) orbify::SeriesCard());
+  if (lookup == cover::Lookup::NotListed || !card || !loadCardById(bookId, *card) || card->nextBook.id != nextId) {
+    LOG_INF(TAG, "Next cover: book %lld not looked up (http %d)", static_cast<long long>(nextId), code);
+    return;
+  }
+  card->nextBook.coverVer = version;
+  if (writeCard(*card)) {
+    LOG_INF(TAG, "Next cover: book %lld version %08lx (its own detail)", static_cast<long long>(nextId),
+            static_cast<unsigned long>(version));
+  }
+}
+#endif
+
 // Loads the queue, applies change to this book's job, saves when change returns true.
 template <typename Change>
 bool withJob(const std::string& bookPath, Change change) {
@@ -379,26 +512,38 @@ void setRating(const std::string& bookPath, const int8_t value) {
 
 bool loadCard(const std::string& bookPath, orbify::SeriesCard& out) { return loadCardById(bookIdOf(bookPath), out); }
 
-void storeCard(JsonObjectConst detail) {
+namespace {
+// coverFields: the detail was read with cover::addToFilter (a sync's refresh); the catalog's download
+// reads it without, and keeps the cover version an earlier sync found.
+void storeCardFrom(JsonObjectConst detail, const bool coverFields) {
   std::unique_ptr<orbify::SeriesCard> card(new (std::nothrow) orbify::SeriesCard());
-  std::unique_ptr<uint8_t[]> buf(new (std::nothrow) uint8_t[orbify::CARD_BYTES]);
-  if (!card || !buf || !orbify::pickCard(detail, CROSSINK_TAILNET_ORBIFY_SUGGESTIONS, *card)) return;
-  const size_t size = orbify::serializeCard(*card, buf.get(), orbify::CARD_BYTES);
-  Storage.mkdir("/.crosspoint");
-  Storage.mkdir(CARD_DIR);
-  const std::string path = cardPath(card->bookId);
-  HalFile file;
-  if (!size || !Storage.openFileForWrite(TAG, path.c_str(), file)) return;
-  const bool ok = file.write(buf.get(), size) == size;
-  file.close();
-  if (!ok) {
-    Storage.remove(path.c_str());
-    return;
+  if (!card || !orbify::pickCard(detail, CROSSINK_TAILNET_ORBIFY_SUGGESTIONS, *card)) return;
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+  s_nextId = 0;
+  s_nextLookup = cover::Lookup::NotListed;
+  std::unique_ptr<orbify::SeriesCard> old(new (std::nothrow) orbify::SeriesCard());
+  const bool hadOld = old && loadCardById(card->bookId, *old);
+  const bool hasNext = card->next == orbify::SeriesCard::Next::Next || card->next == orbify::SeriesCard::Next::LastUnread;
+  if (hasNext) {
+    s_nextId = card->nextBook.id;
+    uint32_t version = 0;
+    if (coverFields) s_nextLookup = cover::versionIn(detail, s_nextId, version);
+    if (s_nextLookup == cover::Lookup::NotListed && hadOld && old->nextBook.id == s_nextId) version = old->nextBook.coverVer;
+    card->nextBook.coverVer = version;
   }
+  // The next book changed (it was read, or the series grew): the old one's cover goes.
+  if (hadOld && old->nextBook.id > 0 && old->nextBook.id != s_nextId) removeCovers(old->nextBook.id, 0);
+#else
+  (void)coverFields;
+#endif
+  if (!writeCard(*card)) return;
   LOG_INF(TAG, "Series card %lld: next %d (book %lld), %u suggestions", static_cast<long long>(card->bookId),
           static_cast<int>(card->next), static_cast<long long>(card->nextBook.id),
           static_cast<unsigned>(card->suggestionCount));
 }
+}  // namespace
+
+void storeCard(JsonObjectConst detail) { storeCardFrom(detail, false); }
 
 void refreshCard(const std::string& bookPath, const float percentage) {
   if (!isEpub(bookPath) || !BOOKORBIT_STORE.hasCredentials()) return;
@@ -412,19 +557,123 @@ void refreshCard(const std::string& bookPath, const float percentage) {
     // Device measurement (X3 heap while parsing the saved detail): these two lines.
     LOG_INF(TAG, "Series card parse: heap free %u, largest %u", static_cast<unsigned>(ESP.getFreeHeap()),
             static_cast<unsigned>(ESP.getMaxAllocHeap()));
-    JsonDocument filter;
-    orbify::cardFilter(filter);
-    JsonDocument doc;
-    size_t replyBytes = 0;
-    const bool parsed = parseReply(filter, doc, &replyBytes);
-    LOG_INF(TAG, "Series card parsed (%s): %u-byte reply, heap free %u, largest %u", parsed ? "ok" : "failed",
-            static_cast<unsigned>(replyBytes), static_cast<unsigned>(ESP.getFreeHeap()),
-            static_cast<unsigned>(ESP.getMaxAllocHeap()));
-    if (parsed) storeCard(doc.as<JsonObjectConst>());
+    bool parsed = false;
+    {
+      JsonDocument filter;
+      orbify::cardFilter(filter);
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+      cover::addToFilter(filter);
+#endif
+      JsonDocument doc;
+      size_t replyBytes = 0;
+      parsed = parseReply(filter, doc, &replyBytes);
+      LOG_INF(TAG, "Series card parsed (%s): %u-byte reply, heap free %u, largest %u", parsed ? "ok" : "failed",
+              static_cast<unsigned>(replyBytes), static_cast<unsigned>(ESP.getFreeHeap()),
+              static_cast<unsigned>(ESP.getMaxAllocHeap()));
+      if (parsed) storeCardFrom(doc.as<JsonObjectConst>(), true);
+    }
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+    // The series section lists only the first 8 other books: past them, the next book says itself.
+    if (parsed && s_nextId > 0 && s_nextLookup == cover::Lookup::NotListed) refreshNextCoverVersion(bookId, s_nextId);
+#endif
   } else {
     LOG_INF(TAG, "Series card %lld not refreshed (http %d)", static_cast<long long>(bookId), code);
   }
   Storage.remove(REPLY_PATH);
 }
+
+#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+void fetchNextCover(const std::string& bookPath, bool (*stop)()) {
+  if (!isEpub(bookPath) || !BOOKORBIT_STORE.hasCredentials()) return;
+  std::unique_ptr<orbify::SeriesCard> card(new (std::nothrow) orbify::SeriesCard());
+  if (!card || !loadCard(bookPath, *card)) return;
+  if (card->next != orbify::SeriesCard::Next::Next && card->next != orbify::SeriesCard::Next::LastUnread) return;
+  const int64_t id = card->nextBook.id;
+  const uint32_t version = card->nextBook.coverVer;
+  if (id <= 0 || version == 0) return;  // no cover known: the page's row stays as without covers
+
+  char bmp[96];
+  char jpg[96];
+  if (!coverBmp(id, version, bmp, sizeof(bmp)) || !cover::jpgPath(id, version, jpg, sizeof(jpg))) return;
+  cover::Disk disk;
+  disk.bmp = Storage.exists(bmp);
+  disk.pending = Storage.exists(jpg);
+  std::string home;
+  disk.homeBmp = !disk.bmp && !disk.pending && homeBmp(id, version, home);
+  orbify::cache::CoverRecord kept;
+  char keptPath[96] = {};
+  if (OrbifyCache::coverRecord(static_cast<int32_t>(id), kept) && kept.version != version &&
+      coverBmp(id, kept.version, keptPath, sizeof(keptPath))) {
+    disk.kept = Storage.exists(keptPath);
+    disk.keptVersion = kept.version;
+    disk.hasEtag = !kept.etag.empty();
+  }
+  const cover::Step step = cover::plan(version, disk);
+  if (step == cover::Step::CopyHome) {
+    Storage.mkdir(cover::DIR);
+    const bool copied = copyFile(home, bmp);
+    LOG_INF(TAG, "Next cover: book %lld %s Home's %s", static_cast<long long>(id), copied ? "copied" : "could not copy",
+            home.c_str());
+  } else if (step == cover::Step::Download || step == cover::Step::Conditional) {
+    if (stop && stop()) return;
+    if (ESP.getFreeHeap() < MIN_FREE_HEAP_FOR_COVER || ESP.getMaxAllocHeap() < MIN_MAX_ALLOC_FOR_COVER) {
+      LOG_INF(TAG, "Next cover: left for the next sync (free=%u maxAlloc=%u)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+      return;
+    }
+    Storage.mkdir(cover::DIR);
+    std::string etag;
+    const auto result = BookOrbitCatalogClient::downloadThumbnail(
+        id, jpg, stop, step == cover::Step::Conditional ? kept.etag : std::string(), &etag);
+    switch (cover::afterFetch(result == HttpDownloader::OK, HttpDownloader::lastHttpStatus, step)) {
+      case cover::After::RenameKept:
+        Storage.rename(keptPath, bmp);
+        OrbifyCache::coverStored(static_cast<int32_t>(id), version, kept.etag);
+        LOG_INF(TAG, "Next cover: book %lld unchanged (304)", static_cast<long long>(id));
+        break;
+      case cover::After::Decode:
+        OrbifyCache::coverStored(static_cast<int32_t>(id), version, etag);
+        s_coverPending = true;
+        LOG_INF(TAG, "Next cover: book %lld fetched, decodes with the radio off", static_cast<long long>(id));
+        break;
+      case cover::After::Drop:
+        Storage.remove(jpg);
+        LOG_ERR(TAG, "Next cover: book %lld not fetched (err=%d, http=%d)", static_cast<long long>(id),
+                static_cast<int>(result), HttpDownloader::lastHttpStatus);
+        return;
+    }
+  }
+  removeCovers(id, version);
+}
+
+void decodeNextCovers(bool (*stop)()) {
+  forEachCoverFile(cover::DIR, [&](const std::string& path, const cover::Name& n) {
+    if (!n.jpg || (stop && stop())) return;
+    if (ESP.getMaxAllocHeap() < MIN_MAX_ALLOC_FOR_DECODE) {
+      LOG_INF(TAG, "Next cover: decode waits for more heap (maxAlloc=%u)", ESP.getMaxAllocHeap());
+      return;
+    }
+    char bmp[96];
+    if (!coverBmp(n.bookId, n.version, bmp, sizeof(bmp))) return;
+    HalFile jpeg;
+    HalFile out;
+    bool decoded = false;
+    if (Storage.openFileForRead(TAG, path.c_str(), jpeg)) {
+      if (Storage.openFileForWrite(TAG, bmp, out)) {
+        decoded = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(jpeg, out, orbify::eob::COVER_WIDTH,
+                                                                      orbify::eob::COVER_HEIGHT, true);
+        out.close();
+      }
+      jpeg.close();
+    }
+    // With the heap it asked for, a failed decode is a bad file: the next sync fetches it again.
+    if (!decoded) Storage.remove(bmp);
+    Storage.remove(path.c_str());
+    LOG_INF(TAG, "Next cover: book %lld %s", static_cast<long long>(n.bookId), decoded ? "decoded" : "dropped (bad JPEG)");
+  });
+  s_coverPending = false;
+}
+
+bool nextCoverPending() { return s_coverPending; }
+#endif
 
 }  // namespace OrbifyFinish

@@ -1,6 +1,7 @@
 #include "SeriesCard.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -9,8 +10,13 @@ namespace orbify {
 
 namespace {
 
+// Version 1 records are read as version 2 ones: the layout must not move.
+static_assert(offsetof(CardBook, coverVer) == 92 && sizeof(CardBook) == 96, "CardBook keeps version 1's layout");
+
 constexpr uint8_t CARD_MAGIC[4] = {'O', 'S', 'C', '1'};
-constexpr uint8_t CARD_VERSION = 1;
+// 2: CardBook::coverVer, in what version 1 left as padding (its bytes there are not zero).
+constexpr uint8_t CARD_VERSION = 2;
+constexpr uint8_t CARD_VERSION_NO_COVERS = 1;
 
 void copyText(char* dst, size_t capacity, const char* src) {
   if (!src) src = "";
@@ -182,7 +188,8 @@ size_t serializeCard(const SeriesCard& card, uint8_t* out, const size_t capacity
 }
 
 bool deserializeCard(const uint8_t* data, const size_t size, SeriesCard& out) {
-  if (size != CARD_BYTES || std::memcmp(data, CARD_MAGIC, 4) != 0 || data[4] != CARD_VERSION) return false;
+  if (size != CARD_BYTES || std::memcmp(data, CARD_MAGIC, 4) != 0) return false;
+  if (data[4] != CARD_VERSION && data[4] != CARD_VERSION_NO_COVERS) return false;
   if ((data[5] | (data[6] << 8)) != static_cast<int>(sizeof(SeriesCard))) return false;
   uint32_t crc = 0;
   for (int i = 0; i < 4; ++i) crc |= static_cast<uint32_t>(data[8 + sizeof(SeriesCard) + i]) << (8 * i);
@@ -191,6 +198,10 @@ bool deserializeCard(const uint8_t* data, const size_t size, SeriesCard& out) {
   out.author[sizeof(out.author) - 1] = '\0';
   out.nextBook.title[sizeof(out.nextBook.title) - 1] = '\0';
   if (out.suggestionCount > SeriesCard::MAX_SUGGESTIONS) return false;
+  if (data[4] == CARD_VERSION_NO_COVERS) {
+    out.nextBook.coverVer = 0;
+    for (CardBook& book : out.suggestions) book.coverVer = 0;
+  }
   return true;
 }
 

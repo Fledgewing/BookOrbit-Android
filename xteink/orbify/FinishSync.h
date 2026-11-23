@@ -50,4 +50,15 @@ void storeCard(JsonObjectConst detail);
 // On a BookOrbit session: refreshes the open book's card when it has none or is near its end.
 void refreshCard(const std::string& bookPath, float percentage);
 
+// --- the next book's cover (X4 Pro and X4: CROSSINK_TAILNET_ORBIFY_EOB_COVER; core/NextCover) -----
+
+// A sync, after its session closed and before Wi-Fi goes: fetches the cover of the open book's next
+// book (a copy of Home's BMP, or the thumbnail, If-None-Match with the kept ETag). Never the page.
+void fetchNextCover(const std::string& bookPath, bool (*stop)());
+// With the radio off (the JPEG decoder needs about 53 KB of contiguous heap): fetched covers become
+// the BMPs the End-of-Book page draws.
+void decodeNextCovers(bool (*stop)());
+// A fetched cover waits for decodeNextCovers (this boot).
+bool nextCoverPending();
+
 }  // namespace OrbifyFinish
