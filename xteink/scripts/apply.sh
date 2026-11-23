@@ -7,6 +7,7 @@
 #   platformio.local.ini  (copied from overlay/)
 #   tailnet               (symlink to this repo's tailnet/, excluded via .git/info/exclude)
 #   src/tailnet           (symlink to tailnet/ui, built with CrossInk's own sources)
+#   src/orbify            (symlink to orbify/: Orbify's own features, behind their switches)
 # and applies the patch series for its CrossInk version (the Settings row; on the C3, the
 # framebuffer freed while Tailscale runs: TailnetNetPhase.h). MicroLink's changes
 # live on the crossink branch of the Fledgewing/microlink fork (the submodule).
@@ -46,12 +47,13 @@ fi
 cp "$overlay/overlay/platformio.local.ini" "$target/platformio.local.ini"
 ln -sfn "$overlay/tailnet" "$target/tailnet"
 ln -sfn "$overlay/tailnet/ui" "$target/src/tailnet"
+ln -sfn "$overlay/orbify" "$target/src/orbify"
 # Keep the symlink out of `git status` (upstream's build marks dirty trees)
 # without editing upstream's .gitignore.
 exclude="$(git -C "$target" rev-parse --git-path info/exclude)"
 case "$exclude" in /*) ;; *) exclude="$target/$exclude" ;; esac
 mkdir -p "$(dirname "$exclude")"
-for p in /tailnet /src/tailnet; do
+for p in /tailnet /src/tailnet /src/orbify; do
   grep -qx "$p" "$exclude" 2>/dev/null || echo "$p" >> "$exclude"
 done
 

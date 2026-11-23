@@ -169,6 +169,18 @@ also wait for that sync. Nothing is shown while reading; without a network it si
 again at the next interval. Not on the X3: a sync does not fit in its memory beside an open
 book.
 
+## Finished at the end of a book (CrossInk 2.x)
+
+Turning past the last page marks the book finished on the reader, and the next BookOrbit sync
+(on sleep, by hand, or while reading) tells BookOrbit: the book leaves Also Reading and counts as
+read on the day it was finished. Marking a book finished from the menus, its stats page or the
+Library is sent the same way, and marking it unfinished before that sync cancels it. Offline,
+up to 16 finished books wait in `/.crosspoint/orbify_finish.bin` and go with the next sync. A sync
+on sleep also no longer pushes a position far below the end of a book finished here (a second
+reader's old position would otherwise reopen it as a reread).
+
+**Settings > BookOrbit Sync > Mark Finished at End** turns the automatic mark off (on by default).
+
 ## Settings PIN
 
 **Settings > System > Settings PIN** sets an optional 4-digit PIN (Up/Down change a digit,

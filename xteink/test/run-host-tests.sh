@@ -24,3 +24,20 @@ fi
   "$up/src/network/FirmwareVersion.cpp" "$up/src/network/OtaReleasePick.cpp" \
   -o "$out/ota_release_pick_test"
 "$out/ota_release_pick_test" "$repo/shared/fixtures/github/orbify-releases.json"
+
+# Orbify's own logic (xteink/orbify/core): pure C++, tested with ArduinoJson, the JSON library the
+# firmware links: the build fetches it, so CI runs these after the build.
+ajson="${ARDUINOJSON_DIR:-}"
+if [ -z "$ajson" ]; then
+  for d in "$up"/.pio/libdeps/*/ArduinoJson/src; do [ -f "$d/ArduinoJson.h" ] && ajson="$d" && break; done
+fi
+[ -n "$ajson" ] || { echo "ArduinoJson not found: run 'pio pkg install -e <env>' in $up, or set ARDUINOJSON_DIR" >&2; exit 1; }
+core="$repo/xteink/orbify/core"
+orbify_test() { # name fixture [extra sources...]
+  local name="$1" fixture="$2"
+  shift 2
+  "${CXX:-c++}" -std=c++17 -Wall -Wextra -O1 -I"$ajson" -I"$core" -I"$here" \
+    "$here/${name}_test.cpp" "$@" -o "$out/${name}_test"
+  "$out/${name}_test" "$repo/shared/fixtures/$fixture"
+}
+orbify_test finish bookorbit/finish-steps.json "$core/FinishQueue.cpp"

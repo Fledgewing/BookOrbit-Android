@@ -204,6 +204,11 @@ SWITCHES = {
     # 0 off, 1 record (/.crossink/battery.bin), 2 + Settings > System > Battery stats writes
     # /battery_stats.json, 3 + the rates on that page and an export when USB Drive mode starts.
     "CROSSINK_TAILNET_BATTERY_STATS":     (2,      3,      3),
+    # --- Orbify features (xteink/orbify, docs/design/end-of-book/DESIGN.md, ROADMAP items 1 and 2).
+    # Patch 0027: reaching the end of a book marks it finished; BookOrbit syncs send it.
+    "CROSSINK_TAILNET_ORBIFY_FINISH":     (1,      1,      1),
+    # Ratings on the end-of-book page (item 2): not on the X3 (G31).
+    "CROSSINK_TAILNET_ORBIFY_RATING":     (0,      1,      1),
 }
 # Switches that stand for wolfSSL defines rather than a define of their own.
 WOLFSSL_SWITCH_DEFINES = {
@@ -219,7 +224,8 @@ SWITCH_COLUMN = pioenv if pioenv in SWITCH_ENVS else ("x4-pro" if has_psram else
 V2_ONLY_SWITCHES = ("CROSSINK_TAILNET_NO_NEARBY", "CROSSINK_TAILNET_NO_MDNS", "CROSSINK_TAILNET_NO_PLUGINS",
                     "CROSSINK_TAILNET_NO_ASSET_DOWNLOADS", "CROSSINK_TAILNET_WOLFSSL_NO_ERROR_STRINGS",
                     "CROSSINK_TAILNET_BACKGROUND_SYNC", "CROSSINK_TAILNET_SETTINGS_PIN",
-                    "CROSSINK_TAILNET_BATTERY_STATS")
+                    "CROSSINK_TAILNET_BATTERY_STATS", "CROSSINK_TAILNET_ORBIFY_FINISH",
+                    "CROSSINK_TAILNET_ORBIFY_RATING")
 try:
     CROSSINK_MAJOR = int(str(env.GetProjectConfig().get("crossink", "version")).split(".")[0])  # noqa: F821
 except Exception:

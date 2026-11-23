@@ -1,0 +1,160 @@
+{
+  "description": "Xteink drain steps (docs/design/end-of-book/DESIGN.md §3; the shared rules are in finish-cases.json): one finished-book job, the server's answers, and the requests and job state the drain must produce. Step 1 (the final position) is each platform's own progress push and is not listed. Requests: 'match-check', 'book-states complete[ <day>][ rating=<n>|rating=clear]', 'detail', 'read-status read', 'rating <n>|clear'. A server entry left out answers 200 (detail: readStatus null). 'now' is epoch seconds; retryIn is nextTryAt - now; an expected bookId of 0 means still unknown.",
+  "now": 1795377600,
+  "hash": "0123456789abcdef0123456789abcdef",
+  "cases": [
+    {
+      "name": "finished a day ago, server still reading: day, guard, then read",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading"},
+      "server": {"detail": {"code": 200, "readStatus": "reading"}},
+      "expect": {"requests": ["book-states complete 2026-11-21", "detail", "read-status read"], "outcome": "sent"}
+    },
+    {
+      "name": "book-states applied the finish: the guard sees read, no read-status",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading"},
+      "server": {"detail": {"code": 200, "readStatus": "read"}},
+      "expect": {"requests": ["book-states complete 2026-11-21", "detail"], "outcome": "sent"}
+    },
+    {
+      "name": "same-day tie kept the server's reading: read-status closes it",
+      "job": {"bookId": 12, "finishedOn": "2026-11-22", "statusSeen": "reading"},
+      "server": {"book-states": 201, "detail": {"code": 200, "readStatus": "reading"}},
+      "expect": {"requests": ["book-states complete 2026-11-22", "detail", "read-status read"], "outcome": "sent"}
+    },
+    {
+      "name": "clock never set: no day, so no book-states for a known book",
+      "job": {"bookId": 12, "finishedOn": null, "statusSeen": "reading"},
+      "server": {"detail": {"code": 200, "readStatus": "reading"}},
+      "expect": {"requests": ["detail", "read-status read"], "outcome": "sent"}
+    },
+    {
+      "name": "rereading chosen elsewhere after we finished: not fought",
+      "job": {"bookId": 12, "finishedOn": "2026-11-20", "statusSeen": "reading"},
+      "server": {"detail": {"code": 200, "readStatus": "rereading"}},
+      "expect": {"requests": ["book-states complete 2026-11-20", "detail"], "outcome": "sent"}
+    },
+    {
+      "name": "abandoned chosen elsewhere: not fought",
+      "job": {"bookId": 12, "finishedOn": "2026-11-20", "statusSeen": "reading"},
+      "server": {"detail": {"code": 200, "readStatus": "abandoned"}},
+      "expect": {"requests": ["book-states complete 2026-11-20", "detail"], "outcome": "sent"}
+    },
+    {
+      "name": "our own reread (rereading when we finished) is closed",
+      "job": {"bookId": 12, "finishedOn": "2026-11-22", "statusSeen": "rereading"},
+      "server": {"detail": {"code": 200, "readStatus": "rereading"}},
+      "expect": {"requests": ["book-states complete 2026-11-22", "detail", "read-status read"], "outcome": "sent"}
+    },
+    {
+      "name": "a rating goes after the status",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "rating": 4, "statusSeen": "reading"},
+      "server": {"detail": {"code": 200, "readStatus": "reading"}},
+      "expect": {"requests": ["book-states complete 2026-11-21", "detail", "read-status read", "rating 4"], "outcome": "sent"}
+    },
+    {
+      "name": "a cleared rating sends null",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "rating": "clear", "statusSeen": "reading"},
+      "server": {"detail": {"code": 200, "readStatus": "read"}},
+      "expect": {"requests": ["book-states complete 2026-11-21", "detail", "rating clear"], "outcome": "sent"}
+    },
+    {
+      "name": "a platform without ratings (the X3) never sends one",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "rating": 4, "statusSeen": "reading"},
+      "ratings": false,
+      "server": {"detail": {"code": 200, "readStatus": "read"}},
+      "expect": {"requests": ["book-states complete 2026-11-21", "detail"], "outcome": "sent"}
+    },
+    {
+      "name": "no book id, hash known to the server: match-check finds it",
+      "job": {"bookId": null, "finishedOn": "2026-11-21", "statusSeen": null},
+      "hashKnown": true,
+      "server": {"match-check": {"code": 200, "bookId": 34}, "detail": {"code": 200, "readStatus": "reading"}},
+      "expect": {"requests": ["match-check", "book-states complete 2026-11-21", "detail", "read-status read"], "outcome": "sent", "bookId": 34}
+    },
+    {
+      "name": "no book id, match-check knows nothing: book-states alone",
+      "job": {"bookId": null, "finishedOn": "2026-11-21", "statusSeen": null},
+      "hashKnown": true,
+      "server": {"match-check": {"code": 200, "bookId": null}},
+      "expect": {"requests": ["match-check", "book-states complete 2026-11-21"], "outcome": "sent", "bookId": 0}
+    },
+    {
+      "name": "no book id, hash never answered: no match-check, book-states carries the rating",
+      "job": {"bookId": null, "finishedOn": "2026-11-21", "rating": 5, "statusSeen": null},
+      "hashKnown": false,
+      "expect": {"requests": ["book-states complete 2026-11-21 rating=5"], "outcome": "sent"}
+    },
+    {
+      "name": "no book id and no day: book-states still carries the status",
+      "job": {"bookId": null, "finishedOn": null, "statusSeen": null},
+      "expect": {"requests": ["book-states complete"], "outcome": "sent"}
+    },
+    {
+      "name": "network down: retried in a minute",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading"},
+      "server": {"book-states": -1},
+      "expect": {"requests": ["book-states complete 2026-11-21"], "outcome": "retry", "attempts": 1, "retryIn": 60}
+    },
+    {
+      "name": "a 500 on the third try waits four minutes",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading", "attempts": 2},
+      "server": {"detail": {"code": 200, "readStatus": "reading"}, "read-status": 500},
+      "expect": {"requests": ["book-states complete 2026-11-21", "detail", "read-status read"], "outcome": "retry", "attempts": 3, "retryIn": 240}
+    },
+    {
+      "name": "the fifth failure parks the job",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading", "attempts": 4},
+      "server": {"book-states": 503},
+      "expect": {"requests": ["book-states complete 2026-11-21"], "outcome": "parked", "attempts": 5}
+    },
+    {
+      "name": "a parked job waits for a manual sync",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading", "attempts": 5, "parked": true},
+      "expect": {"requests": [], "outcome": "not-due", "attempts": 5}
+    },
+    {
+      "name": "a manual sync retries a parked job",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading", "attempts": 5, "parked": true},
+      "manual": true,
+      "server": {"detail": {"code": 200, "readStatus": "read"}},
+      "expect": {"requests": ["book-states complete 2026-11-21", "detail"], "outcome": "sent", "attempts": 0}
+    },
+    {
+      "name": "not before its retry time",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading", "attempts": 1, "retryIn": 30},
+      "expect": {"requests": [], "outcome": "not-due", "attempts": 1}
+    },
+    {
+      "name": "401 keeps the job for a sign-in",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading"},
+      "server": {"book-states": 401},
+      "expect": {"requests": ["book-states complete 2026-11-21"], "outcome": "auth-wait", "attempts": 0}
+    },
+    {
+      "name": "404 on the guard drops the job",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading"},
+      "server": {"detail": {"code": 404}},
+      "expect": {"requests": ["book-states complete 2026-11-21", "detail"], "outcome": "dropped"}
+    },
+    {
+      "name": "403 drops the job",
+      "job": {"bookId": 12, "finishedOn": null, "statusSeen": "reading"},
+      "server": {"detail": {"code": 200, "readStatus": "reading"}, "read-status": 403},
+      "expect": {"requests": ["detail", "read-status read"], "outcome": "dropped"}
+    },
+    {
+      "name": "400 from book-states drops the job",
+      "job": {"bookId": 12, "finishedOn": "2026-11-21", "statusSeen": "reading"},
+      "server": {"book-states": 400},
+      "expect": {"requests": ["book-states complete 2026-11-21"], "outcome": "dropped"}
+    }
+  ],
+  "holdCases": [
+    {"name": "finished here, push 30 points lower: held", "job": {"finalPermille": 1000, "pagesAtFinish": 300}, "finishedLocally": true, "pushPermille": 700, "pagesTurned": 302, "hold": true},
+    {"name": "exactly 10 points lower: held", "job": {"finalPermille": 1000, "pagesAtFinish": 300}, "finishedLocally": true, "pushPermille": 900, "pagesTurned": 300, "hold": true},
+    {"name": "9 points lower: pushed", "job": {"finalPermille": 1000, "pagesAtFinish": 300}, "finishedLocally": true, "pushPermille": 910, "pagesTurned": 300, "hold": false},
+    {"name": "10 pages turned forward since: a reread, pushed", "job": {"finalPermille": 1000, "pagesAtFinish": 300}, "finishedLocally": true, "pushPermille": 50, "pagesTurned": 310, "hold": false},
+    {"name": "undone (no longer finished here): pushed", "job": {"finalPermille": 1000, "pagesAtFinish": 300}, "finishedLocally": false, "pushPermille": 50, "pagesTurned": 300, "hold": false},
+    {"name": "no job: pushed", "job": null, "finishedLocally": true, "pushPermille": 50, "pagesTurned": 300, "hold": false}
+  ]
+}

@@ -1,7 +1,8 @@
 name: Xteink
 # Builds CrossInk-Bookorbit's latest release with the Tailnet overlay (xteink/) applied.
 #
-# - push / pull request touching xteink/: host tests and every reader's build (no release).
+# - push / pull request touching xteink/: host tests and every reader's build of both pinned
+#   CrossInk lines, crossink-v1.6 and crossink-v2.0 in tools/upstreams.lock (no release).
 # - daily schedule and manual runs: build, then publish a release when this
 #   (upstream tag, xteink/ tree) pair has not been released yet. Readers see it under
 #   Settings > Check for updates: the overlay points their updater at this repo's
@@ -73,6 +74,7 @@ jobs:
       version: ${{ steps.r.outputs.version }}
       asset_version: ${{ steps.r.outputs.asset_version }}
       publish: ${{ steps.r.outputs.publish }}
+      lines: ${{ steps.r.outputs.lines }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -87,22 +89,32 @@ jobs:
           FORCE: ${{ inputs.force_release }}
         run: |
           set -euo pipefail
-          # Push and pull request builds use the CrossInk version pinned in tools/upstreams.lock,
-          # so an upstream release never turns an unrelated change red; daily and manual runs
-          # take upstream's latest release (a patch that stops applying shows up there).
+          # Push and pull request builds use the CrossInk versions pinned in tools/upstreams.lock
+          # (both lines), so an upstream release never turns an unrelated change red; daily and
+          # manual runs take one tag, upstream's latest release unless one is given (a patch that
+          # stops applying shows up there).
           if [ -n "$INPUT_REF" ]; then
-            tag="$INPUT_REF"
+            tags="$INPUT_REF"
           elif [ "$GITHUB_EVENT_NAME" = push ] || [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            tag="$(awk '$1 == "crossink-v1.6" {print $3}' tools/upstreams.lock)"
+            tags="$(awk '$1 == "crossink-v1.6" || $1 == "crossink-v2.0" {print $3}' tools/upstreams.lock)"
           else
-            tag="$(gh api "repos/$UPSTREAM_REPO/releases/latest" -q .tag_name)"
+            tags="$(gh api "repos/$UPSTREAM_REPO/releases/latest" -q .tag_name)"
           fi
-          base="${tag#v}"
-          # 1.6.1+bookorbit.9 -> 1.6.1.<run>+bookorbit.9
-          numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"
-          rest="${base#"$numeric"}"
-          version="${numeric}.$((RUN_BASE + GITHUB_RUN_NUMBER))${rest}"
-          asset_version="$(printf '%s' "$version" | sed 's/[^A-Za-z0-9._-]\{1,\}/-/g')"
+          version_of() { # 1.6.1+bookorbit.9 -> 1.6.1.<run>+bookorbit.9
+            local base="${1#v}" numeric rest
+            numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"
+            rest="${base#"$numeric"}"
+            printf '%s' "${numeric}.$((RUN_BASE + GITHUB_RUN_NUMBER))${rest}"
+          }
+          asset_of() { printf '%s' "$1" | sed 's/[^A-Za-z0-9._-]\{1,\}/-/g'; }
+          lines="$(for t in $tags; do
+            v="$(version_of "$t")"
+            jq -cn --arg tag "$t" --arg version "$v" --arg asset "$(asset_of "$v")" \
+              '{upstream_tag: $tag, version: $version, asset_version: $asset}'
+          done | jq -cs .)"
+          tag="$(printf '%s\n' $tags | head -1)"
+          version="$(version_of "$tag")"
+          asset_version="$(asset_of "$version")"
 
           # Only xteink/ decides: an Android-only commit never makes a firmware release.
           marker="upstream=$tag overlay-tree=$(git rev-parse HEAD:xteink)"
@@ -119,8 +131,9 @@ jobs:
             echo "version=$version"
             echo "asset_version=$asset_version"
             echo "publish=$publish"
+            echo "lines=$lines"
           } >> "$GITHUB_OUTPUT"
-          echo "upstream $tag -> $version (publish=$publish)"
+          echo "upstream $tags -> $lines (publish=$publish)"
 
   build:
     needs: resolve
@@ -128,6 +141,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        line: ${{ fromJSON(needs.resolve.outputs.lines) }}
+        environment: [x4-pro, x4-classic, default]
         include:
           - environment: x4-pro
             firmware: firmware-x4-pro
@@ -142,11 +157,11 @@ jobs:
           path: orbify
           submodules: recursive
 
-      - name: Check out CrossInk-Bookorbit ${{ needs.resolve.outputs.upstream_tag }}
+      - name: Check out CrossInk-Bookorbit ${{ matrix.line.upstream_tag }}
         uses: actions/checkout@v6
         with:
           repository: ${{ env.UPSTREAM_REPO }}
-          ref: ${{ needs.resolve.outputs.upstream_tag }}
+          ref: ${{ matrix.line.upstream_tag }}
           path: upstream
           submodules: recursive
 
@@ -184,22 +199,39 @@ jobs:
           CROSSINK_PATCH_SERIES: ${{ inputs.patch_series }}
         run: orbify/xteink/scripts/apply.sh upstream
 
-      - name: Host tests
-        run: orbify/xteink/test/run-host-tests.sh upstream
-
       - name: Set the release version
         working-directory: upstream
         env:
-          VERSION: ${{ needs.resolve.outputs.version }}
+          VERSION: ${{ matrix.line.version }}
         run: sed -i "/^\[crossink\]$/,/^\[/s/^version = .*/version = $VERSION/" platformio.ini
 
       - name: Build
         working-directory: upstream
         env:
-          CROSSINK_RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+          CROSSINK_RELEASE_VERSION: ${{ matrix.line.version }}
           TAILNET_OVERLAY_REPO: ${{ github.repository }}
           TAILNET_OTA_TAG_PREFIX: xteink-v
-        run: pio run -j1 -e "${{ matrix.environment }}"
+        run: |
+          set -o pipefail
+          pio run -j1 -e "${{ matrix.environment }}" 2>&1 | tee ../build.log
+
+      # The app slot is fixed (the partition table changes only over USB), and the X3 build was
+      # at 98.5% before the Orbify features: a build above 99.5% fails here, and the features drop
+      # in the order docs/design/end-of-book/DESIGN.md §5 gives (suggestions first, then the author row).
+      - name: Flash budget (99.5% of the app slot)
+        run: |
+          set -euo pipefail
+          line="$(grep -a 'Flash: \[' build.log | tail -1)"
+          used="$(printf '%s' "$line" | sed -E 's/.*used ([0-9]+) bytes from ([0-9]+) bytes.*/\1/')"
+          slot="$(printf '%s' "$line" | sed -E 's/.*used ([0-9]+) bytes from ([0-9]+) bytes.*/\2/')"
+          pct="$(awk -v u="$used" -v s="$slot" 'BEGIN { printf "%.2f", 100 * u / s }')"
+          echo "${{ matrix.line.upstream_tag }} ${{ matrix.environment }}: $used of $slot bytes ($pct%), $((slot * 995 / 1000 - used)) bytes under the 99.5% gate" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$((used * 1000))" -le "$((slot * 995))" ] || { echo "::error::${{ matrix.environment }} uses $pct% of the app slot (gate 99.5%)"; exit 1; }
+
+      # After the build: Orbify's tests compile against the ArduinoJson the build fetched.
+      - name: Host tests
+        run: orbify/xteink/test/run-host-tests.sh upstream
 
       # Complete corresponding source (GPL): the overlay with MicroLink, CrossInk after the
       # overlay, the FreeInk SDK, every env's library sources and the Arduino core. Packed once,
@@ -225,8 +257,8 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: firmware-${{ matrix.environment }}
-          path: upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ needs.resolve.outputs.asset_version }}.bin
+          name: firmware-${{ matrix.environment }}-${{ matrix.line.asset_version }}
+          path: upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin
           if-no-files-found: error
 
   release:

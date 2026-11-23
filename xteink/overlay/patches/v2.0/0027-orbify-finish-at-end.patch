@@ -1,0 +1,353 @@
+diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
+index e598b8b3..7623f367 100644
+--- a/include/CrossInkTailnetCuts.h
++++ b/include/CrossInkTailnetCuts.h
+@@ -168,3 +168,13 @@ bool tlsArenaActive();                                // the arena is reserved (
+ #ifndef CROSSINK_TAILNET_FRONTLIGHT_REAPPLY
+ #define CROSSINK_TAILNET_FRONTLIGHT_REAPPLY 0
+ #endif
++
++// Orbify: mark done at the end of a book (overlay patch 0027, src/orbify/FinishSync): the
++// End-of-Book page marks the book finished, every finish is queued, and BookOrbit syncs send
++// the queue. ORBIFY_RATING sends ratings (the X4s' rating row, item 2).
++#ifndef CROSSINK_TAILNET_ORBIFY_FINISH
++#define CROSSINK_TAILNET_ORBIFY_FINISH 0
++#endif
++#ifndef CROSSINK_TAILNET_ORBIFY_RATING
++#define CROSSINK_TAILNET_ORBIFY_RATING 0
++#endif
+diff --git a/lib/BookOrbitSync/BookOrbitCredentialStore.cpp b/lib/BookOrbitSync/BookOrbitCredentialStore.cpp
+index 411751f6..138a748d 100644
+--- a/lib/BookOrbitSync/BookOrbitCredentialStore.cpp
++++ b/lib/BookOrbitSync/BookOrbitCredentialStore.cpp
+@@ -59,6 +59,9 @@ void BookOrbitCredentialStore::toJson(JsonDocument& doc) const {
+   doc["downloadFolder"] = downloadFolder;
+   doc["syncBehavior"] = static_cast<uint8_t>(syncBehavior);
+   doc["syncOnSleep"] = syncOnSleep;
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  doc["orbifyMarkAtEnd"] = orbifyMarkAtEnd;
++#endif
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   doc["backgroundSync"] = backgroundSync;
+ #endif
+@@ -93,6 +96,9 @@ bool BookOrbitCredentialStore::fromJson(JsonVariantConst doc) {
+   syncBehavior = behavior == static_cast<uint8_t>(BookOrbitSyncBehavior::SMART) ? BookOrbitSyncBehavior::SMART
+                                                                                 : BookOrbitSyncBehavior::ASK_EVERY_TIME;
+   syncOnSleep = doc["syncOnSleep"] | false;
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  orbifyMarkAtEnd = doc["orbifyMarkAtEnd"] | true;
++#endif
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   backgroundSync = doc["backgroundSync"] | static_cast<uint8_t>(0);
+ #endif
+diff --git a/lib/BookOrbitSync/BookOrbitCredentialStore.h b/lib/BookOrbitSync/BookOrbitCredentialStore.h
+index 3d5d779a..edee8363 100644
+--- a/lib/BookOrbitSync/BookOrbitCredentialStore.h
++++ b/lib/BookOrbitSync/BookOrbitCredentialStore.h
+@@ -41,6 +41,9 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
+   std::string cfClientSecret;  // Cloudflare Access service token, Client Secret half
+   BookOrbitSyncBehavior syncBehavior = BookOrbitSyncBehavior::ASK_EVERY_TIME;
+   bool syncOnSleep = false;
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  bool orbifyMarkAtEnd = true;  // Orbify: the End-of-Book page marks the book finished (D1)
++#endif
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   uint8_t backgroundSync = 0;  // a BookOrbitBackgroundSync::Interval; 0 = off
+ #endif
+@@ -94,6 +97,18 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
+     return syncOnSleep;
+   }
+ 
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  // Orbify: reaching the End-of-Book page marks the book finished, sent at the next sync.
++  void setOrbifyMarkAtEnd(const bool enabled) {
++    ensureLoaded();
++    orbifyMarkAtEnd = enabled;
++  }
++  bool getOrbifyMarkAtEnd() const {
++    ensureLoaded();
++    return orbifyMarkAtEnd;
++  }
++#endif
++
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   // Sync the open book in the background while reading (CrossInk-Tailnet, X4s): how often,
+   // as a BookOrbitBackgroundSync::Interval. Runs only under Smart sync.
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+index 1a0f9c4c..c747f475 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+@@ -34,6 +34,7 @@
+ 
+ #include "BookOrbitCredentialStore.h"
+ #include "BookOrbitJsonFilter.h"
++#include <HalStorage.h>
+ #include "StreamingJsonParser.h"
+ 
+ // This file intentionally mirrors lib/KOReaderSync/KOReaderSyncClient.cpp rather than
+@@ -270,6 +271,15 @@ class JsonBody {
+     return true;
+   }
+ 
++  // A body already serialized (Orbify's requests).
++  bool copy(const char* text, const size_t length) {
++    data_ = makeUniqueNoThrow<char[]>(length + 1);
++    if (!data_) return false;
++    memcpy(data_.get(), text, length + 1);
++    length_ = capacity_ = length;
++    return true;
++  }
++
+   // Opens a gap of `len` bytes `fromEnd` bytes before the end of the body, in the room build()
+   // set aside, for the caller to fill. nullptr when it does not fit.
+   char* insertBeforeEnd(const size_t fromEnd, const size_t len) {
+@@ -1049,6 +1059,41 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::completeSweep(const std::string&
+ #endif
+ }
+ 
++int BookOrbitSyncClient::orbifyRequest(const char* method, const std::string& path, const char* jsonBody,
++                                       const char* replyPath) {
++  lastHttpCode = 0;
++  lastTransportError = 0;
++  if (!BOOKORBIT_STORE.hasCredentials()) return -1;
++#ifdef SIMULATOR
++  (void)method;
++  (void)path;
++  (void)jsonBody;
++  (void)replyPath;
++  return -1;
++#else
++  const uint32_t freeHeap = ESP.getFreeHeap();
++  const uint32_t heapFloor = requiredHeapFloor();
++  if (freeHeap < heapFloor) {
++    LOG_ERR("BookOrbit", "Insufficient heap for %s %s: %u free (need %u)", method, path.c_str(), (unsigned)freeHeap,
++            (unsigned)heapFloor);
++    return -1;
++  }
++  JsonBody body;
++  if (jsonBody && !body.copy(jsonBody, strlen(jsonBody))) return -1;
++  HalFile reply;
++  if (replyPath && !Storage.openFileForWrite("BookOrbit", replyPath, reply)) return -1;
++  const int code = sendBookOrbitRequest(method, BOOKORBIT_STORE.getBaseUrl() + path, jsonBody ? &body : nullptr,
++                                        [&](const uint8_t* data, const size_t len, size_t) {
++                                          return !replyPath || reply.write(data, len) == len;
++                                        });
++  if (replyPath) reply.close();
++  lastHttpCode = code > 0 ? code : 0;
++  lastTransportError = code < 0 ? code : 0;
++  LOG_INF("BookOrbit", "%s %s -> %d", method, path.c_str(), code);
++  return code;
++#endif
++}
++
+ bool BookOrbitSyncClient::acceptsSidecarState() {
+   if (s_sidecarStateAnswer != CapabilityAnswer::Unknown) return s_sidecarStateAnswer == CapabilityAnswer::Yes;
+   lastHttpCode = 0;
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.h b/lib/BookOrbitSync/BookOrbitSyncClient.h
+index c2e75009..5106bba8 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.h
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.h
+@@ -161,6 +161,15 @@ class BookOrbitSyncClient {
+    * @param annotationsUpserted Highlights sent to the server this sync
+    * @return OK on success, error code on failure
+    */
++  /**
++   * CrossInk-Tailnet (Orbify): one request to a BookOrbit route below the base URL (e.g.
++   * "/plugin/book-states"), on the open Session when there is one. jsonBody (or nullptr) is sent
++   * as it is; the reply is written to replyPath on the SD card when given, else read and dropped.
++   * Returns the HTTP status, or a negative number when the transport failed or the heap is below
++   * the request floor.
++   */
++  static int orbifyRequest(const char* method, const std::string& path, const char* jsonBody, const char* replyPath);
++
+   static Error completeSweep(const std::string& deviceModel, uint32_t booksMatched, uint32_t pageStatsUploaded,
+                              uint32_t annotationsUpserted);
+ 
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 4dd9a0b7..0d787e58 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -290,6 +290,7 @@ STR_BOOKORBIT_IN_PROGRESS: "In progress"
+ STR_BOOKORBIT_ON_DEVICE_ERROR: "Could not list the books on the SD card."
+ STR_BOOKORBIT_SYNC_ON_SLEEP: "Sync on Sleep"
+ STR_BOOKORBIT_SYNC_WHILE_READING: "Sync While Reading"
++STR_ORBIFY_MARK_AT_END: "Mark Finished at End"
+ STR_EVERY_N_MINUTES: "Every %d min"
+ STR_EVERY_N_PAGES: "Every %d pages"
+ STR_EVERY_CHAPTER: "Every chapter"
+diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
+index 12f7e393..34516cf3 100644
+--- a/src/activities/reader/EpubReaderActivity.cpp
++++ b/src/activities/reader/EpubReaderActivity.cpp
+@@ -112,6 +112,7 @@
+ #include "util/BookMoveUtils.h"
+ #include "util/Dictionary.h"
+ #include "util/ScreenshotUtil.h"
++#include "orbify/FinishSync.h"
+ 
+ namespace {
+ // The caller owns RenderLock. The main-loop idle hook cannot acquire it while
+@@ -3849,6 +3850,13 @@ void EpubReaderActivity::loop() {
+     }
+   }
+ 
++  // Orbify (patch 0027): reaching the End-of-Book page marks the book finished (D1), once per
++  // visit, so an un-mark on that page sticks. BookSyncFile::onFinishedChanged queues it for BookOrbit.
++  if (OrbifyFinish::reachedEnd(atEndOfBook) && !stats.isCompleted && OrbifyFinish::autoMarkEnabled()) {
++    LOG_INF("ERS", "End of book reached: marking it finished");
++    setBookCompleted(true);
++  }
++
+   // Arm the move here so any exit path relocates the book into /Read/.
+   // setBookCompleted() also arms this when the user marks a book finished before
+   // the End-of-Book screen.
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index f2dd8482..f0913acc 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -43,6 +43,7 @@
+ #include "components/TouchHeaderBackButton.h"
+ #include "components/UITheme.h"
+ #include "components/themes/bookorbit/BookOrbitHomeLayout.h"
++#include "orbify/FinishSync.h"
+ #include "fontIds.h"
+ #include "network/SavedWifiConnect.h"
+ #include "util/BookContentId.h"
+@@ -99,6 +100,9 @@ bool BookOrbitSyncActivity::smartSyncEnabled() const {
+ void BookOrbitSyncActivity::markAutoReturn() { autoReturnAt = millis() + AUTO_RETURN_DELAY_MS; }
+ 
+ void BookOrbitSyncActivity::completeAlreadySynced() {
++  // Orbify (patch 0027): books finished on this reader, on this sync's session.
++  OrbifyFinish::drain(hasRemoteProgress ? documentHash : std::string(), !sleepSync && !backgroundSync,
++                      sleepSync ? &sleepSyncWakeRequested : nullptr);
+   syncSession.reset();  // no request follows; free the TLS session before the reader reloads
+   {
+     RenderLock lock(*this);
+@@ -310,6 +314,12 @@ void BookOrbitSyncActivity::runSleepSync() {
+   } else if (!stopIfWoken()) {
+     LOG_INF("BookOrbit", "Sleep sync skipped: no saved network answered");
+   }
++  // Orbify (patch 0027): whichever way the book's sync ended, finished books go now. A no-op
++  // when an earlier step already sent them.
++  if (wifiConnectedForSleepSync && state != SYNC_FAILED && !sleepSyncWakeRequested()) {
++    if (!syncSession) syncSession = makeUniqueNoThrow<BookOrbitSyncClient::Session>();
++    OrbifyFinish::drain(std::string(), false, &sleepSyncWakeRequested);
++  }
+   syncSession.reset();
+   // The BookOrbit Home draws from what this boot's network leaves behind. Each step is
+   // retried by the next sync, so a wake press can end it anywhere. Its tile dates the
+@@ -732,6 +742,22 @@ void BookOrbitSyncActivity::performUpload() {
+     LOG_DBG("BookOrbit", "Released epub before upload (heap: %u)", (unsigned)ESP.getFreeHeap());
+   }
+ 
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  // Orbify (patch 0027, design §7): an automatic sync never pushes a position well below the
++  // end of a book finished here; that would reopen it on the server as a reread (S3).
++  if ((sleepSync || backgroundSync) && OrbifyFinish::holdPush(epubPath, documentHash, localProgress.percentage)) {
++    OrbifyFinish::drain(hasRemoteProgress ? documentHash : std::string(), false,
++                        sleepSync ? &sleepSyncWakeRequested : nullptr);
++    syncSession.reset();
++    {
++      RenderLock lock(*this);
++      state = UPLOAD_COMPLETE;
++    }
++    requestUpdate(true);
++    return;
++  }
++#endif
++
+   KOReaderProgress progress;
+   progress.document = documentHash;
+   progress.progress = localProgress.xpath;
+@@ -741,6 +767,10 @@ void BookOrbitSyncActivity::performUpload() {
+ 
+   if (stopIfWoken()) return;
+   const auto result = BookOrbitSyncClient::updateProgress(progress);
++  // Orbify (patch 0027): the final position is up; now the finished books, on the same session.
++  if (result == BookOrbitSyncClient::OK) {
++    OrbifyFinish::drain(documentHash, !sleepSync && !backgroundSync, sleepSync ? &sleepSyncWakeRequested : nullptr);
++  }
+ 
+   syncSession.reset();
+   // The sleep sync refreshes Home on this connection next; runSleepSync() closes it.
+diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
+index 1fe9ec2b..5947ca37 100644
+--- a/src/activities/settings/BookOrbitSettingsActivity.cpp
++++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
+@@ -34,7 +34,9 @@ namespace fui = freeink::ui;
+ 
+ namespace {
+ // CrossInk-Tailnet: "Sync While Reading" is the last row, listed only under Smart sync.
+-constexpr int MENU_ITEMS = 9 + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);
++// Orbify (patch 0027): "Mark Finished at End" sits before Home.
++constexpr int ORBIFY_ROWS = CROSSINK_TAILNET_ORBIFY_FINISH ? 1 : 0;
++constexpr int MENU_ITEMS = 9 + ORBIFY_ROWS + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);
+ // The folder row reuses the OPDS strings: "Download Folder" and "SD Root" are
+ // generic and already translated in every language file.
+ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+@@ -45,13 +47,17 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+                                      StrId::STR_OPDS_DOWNLOAD_FOLDER,
+                                      StrId::STR_SYNC_BEHAVIOR,
+                                      StrId::STR_BOOKORBIT_SYNC_ON_SLEEP,
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++                                     StrId::STR_ORBIFY_MARK_AT_END,
++#endif
+                                      StrId::STR_HOME,
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+                                      StrId::STR_BOOKORBIT_SYNC_WHILE_READING,
+ #endif
+ };
+-constexpr int HOME_ROW = 8;
+-constexpr int BACKGROUND_SYNC_ROW = 9;
++constexpr int ORBIFY_MARK_ROW = 8;  // with ORBIFY_ROWS
++constexpr int HOME_ROW = 8 + ORBIFY_ROWS;
++constexpr int BACKGROUND_SYNC_ROW = 9 + ORBIFY_ROWS;
+ // The Home page: the top shelf, the bottom shelf, then the refresh.
+ constexpr int HOME_ITEMS = 3;
+ constexpr int REFRESH_ROW = 2;
+@@ -263,6 +269,12 @@ void BookOrbitSettingsActivity::handleSelection() {
+     BOOKORBIT_STORE.setSyncOnSleep(!BOOKORBIT_STORE.getSyncOnSleep());
+     BOOKORBIT_STORE.saveToFile();
+     requestUpdate();
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  } else if (selectedIndex == ORBIFY_MARK_ROW) {
++    BOOKORBIT_STORE.setOrbifyMarkAtEnd(!BOOKORBIT_STORE.getOrbifyMarkAtEnd());
++    BOOKORBIT_STORE.saveToFile();
++    requestUpdate();
++#endif
+   } else if (selectedIndex == HOME_ROW) {
+     startActivityForResult(std::make_unique<BookOrbitSettingsActivity>(renderer, mappedInput, Page::Home),
+                            [](const ActivityResult&) {});
+@@ -423,6 +435,10 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+                                                                                     : tr(STR_ASK_EVERY_TIME);
+     } else if (i == 7) {
+       values[i] = BOOKORBIT_STORE.getSyncOnSleep() ? tr(STR_ON) : tr(STR_OFF);
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++    } else if (i == ORBIFY_MARK_ROW) {
++      values[i] = BOOKORBIT_STORE.getOrbifyMarkAtEnd() ? tr(STR_ON) : tr(STR_OFF);
++#endif
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+     } else if (i == BACKGROUND_SYNC_ROW) {
+       char label[40];
+diff --git a/src/sync/BookSyncFile.cpp b/src/sync/BookSyncFile.cpp
+index dcb6051e..f0025d2c 100644
+--- a/src/sync/BookSyncFile.cpp
++++ b/src/sync/BookSyncFile.cpp
+@@ -14,6 +14,7 @@
+ #include "SyncIds.h"
+ #include "SyncPending.h"
+ #include "activities/reader/BookReadingStats.h"
++#include "orbify/FinishSync.h"
+ 
+ namespace {
+ // Version 2 adds walkStamp and idsGeneration after the version 1 fields.
+@@ -140,6 +141,9 @@ void forgetIdsRecord(const std::string& bookPath) {
+ void BookSyncFile::onFinishedChanged(const std::string& bookPath, const bool finished) {
+   if (finished) SyncIds::removePath(bookPath);
+   forgetIdsRecord(bookPath);
++  // Orbify: every finish on this reader (End-of-Book page, prompt, menus, stats page, Library)
++  // is queued for BookOrbit; an un-finish deletes the unsent job (overlay patch 0027).
++  OrbifyFinish::onFinishedChanged(bookPath, finished);
+ }
+ 
+ void BookSyncFile::onRenamed(const std::string& oldPath, const std::string& newPath) {
