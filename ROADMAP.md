@@ -11,13 +11,13 @@ Status: idea, designing, approved, building, shipped. Platforms: Android, X4 Pro
 
 | # | Outcome | Platforms | Status | Design |
 |---|---|---|---|---|
-| 1 | **Mark done at end of book**: send the final position, then `read-status=read`, so a finished book no longer stays at 100% in Also Reading. Upstream: [progress finishes a book only at the library's threshold](docs/server-contract.md#progress-finishes-a-book-only-at-the-librarys-threshold). | Android, X4 Pro, X4, X3 | idea | |
-| 2 | **End-of-book screen**: rating, then "Next in series" (from the book detail's [`seriesMembers`](docs/server-contract.md#series-members-in-book-detail)). | Android, X4 Pro, X4; X3 if strings and flash allow | idea | |
-| 3 | **Local-first home**: overlay local progress, status and outbox state on the cached dashboard, and redraw only when something changed. | Android | idea | |
-| 4 | **Local-first Xteink catalog**: keep the list cache and open from it without Wi-Fi. | X4 Pro, X4, X3 | idea | |
+| 1 | **Mark done at end of book**: send the final position, then `read-status=read`, so a finished book no longer stays at 100% in Also Reading. Upstream: [progress finishes a book only at the library's threshold](docs/server-contract.md#progress-finishes-a-book-only-at-the-librarys-threshold). | Android, X4 Pro, X4, X3 | approved | [end-of-book](docs/design/end-of-book/DESIGN.md), [mockups](https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk) |
+| 2 | **End-of-book screen**: rating, then "Next in series" (from the book detail's [`seriesMembers`](docs/server-contract.md#series-members-in-book-detail)). | Android, X4 Pro, X4; X3 if strings and flash allow | approved | [end-of-book](docs/design/end-of-book/DESIGN.md), [mockups](https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk) |
+| 3 | **Local-first home**: overlay local progress, status and outbox state on the cached dashboard, and redraw only when something changed. | Android | approved | [local-first](docs/design/local-first/DESIGN.md), [mockups](https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk) |
+| 4 | **Local-first Xteink catalog**: keep the list cache and open from it without Wi-Fi. | X4 Pro, X4, X3 | approved | [local-first](docs/design/local-first/DESIGN.md), [mockups](https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk) |
 | 5 | **Tap to download**: a book tile downloads the book, or opens it when it is already on the device. | Android, X4 Pro, X4, X3 | idea | |
 | 6 | **Series view**: shows which books are on the device and which are only on the server. | Android, X4 Pro, X4, X3 | idea | |
-| 6a | **Group catalog lists by series or author on Xteink**, matching Android 0.6.0. | X4 Pro, X4; not X3 | designing | |
+| 6a | **Group catalog lists by series or author on Xteink**, matching Android 0.6.0. | X4 Pro, X4; not X3 | approved | [local-first](docs/design/local-first/DESIGN.md), [mockups](https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk) |
 
 ## Later
 

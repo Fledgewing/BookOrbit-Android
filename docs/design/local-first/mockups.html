@@ -1,0 +1,346 @@
+<title>Local-first Home Mockups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  :root { --ink: #000; --g1: #444; --g2: #777; --g3: #bbb; --g4: #e6e6e6; --paper: #fff; --page: #eceeef; --pagefg: #15181a; --pagemuted: #4a5054; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #16191b; --pagefg: #e8ebed; --pagemuted: #a7aeb3; color-scheme: dark } }
+  :root[data-theme="dark"] { --page: #16191b; --pagefg: #e8ebed; --pagemuted: #a7aeb3; color-scheme: dark }
+  .screen { color: var(--ink); }
+  body { margin: 0; padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); background: var(--page); color: var(--pagefg);
+         font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 12px; }
+  p.lead { margin: 0 0 24px; color: var(--pagemuted); max-width: 760px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  figure { margin: 0; max-width: 100%; }
+  figure.m8c { width: 351px; } figure.x4 { width: 480px; } figure.x3 { width: 528px; }
+  /* M8C: 1404 x 1872 px at 1/4 scale. X4: 480 x 800 and X3: 528 x 792 at real size. */
+  .screen { max-width: 100%; background: var(--paper); border: 2px solid var(--ink); border-radius: 6px; box-sizing: border-box;
+            overflow: hidden; display: flex; flex-direction: column; line-height: 1.3; position: relative; }
+  .m8c .screen { width: 351px; aspect-ratio: 1404 / 1872; padding: 10px 11px; font-size: 11px; }
+  .x4 .screen { width: 480px; aspect-ratio: 480 / 800; padding: 0; font-size: 17px; }
+  .x3 .screen { width: 528px; aspect-ratio: 528 / 792; padding: 0; font-size: 18px; }
+  figcaption { font-size: 13px; color: var(--pagemuted); margin-top: 8px; }
+
+  /* Android board */
+  .bhdr { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 7px; }
+  .bhdr .greet { font-size: 16px; font-weight: 800; }
+  .bhdr .subl { font-size: 10px; color: var(--g1); }
+  .bhdr .subl b { color: var(--ink); }
+  .status { border: 1.5px solid var(--ink); border-radius: 5px; padding: 2px 6px; font-size: 9px; text-align: center; line-height: 1.2; white-space: nowrap; }
+  .status b { display: block; font-size: 10px; }
+  .icons { font-size: 13px; letter-spacing: 6px; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1; min-height: 0; }
+  .tile { border: 1.5px solid var(--ink); border-radius: 6px; padding: 5px 6px; overflow: hidden; position: relative; }
+  .tile.w { grid-column: span 2; }
+  .tile h4 { margin: 0 0 3px; font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--g1); }
+  .hero { display: flex; gap: 8px; }
+  .cover { background: repeating-linear-gradient(135deg, var(--g4) 0 4px, var(--paper) 4px 8px); border: 1px solid var(--ink); flex: none; display: flex; align-items: flex-end; font-size: 7px; padding: 2px; box-sizing: border-box; }
+  .cover.c1 { width: 52px; height: 76px; } .cover.c2 { width: 24px; height: 34px; } .cover.c3 { width: 100%; aspect-ratio: 2/3; }
+  .ttl { font-weight: 700; font-size: 12px; }
+  .meta { color: var(--g1); font-size: 9.5px; }
+  .bar { height: 6px; border: 1px solid var(--ink); border-radius: 3px; margin: 4px 0 2px; }
+  .bar i { display: block; height: 100%; background: var(--ink); }
+  .dev { display: inline-block; border: 1px solid var(--ink); border-radius: 3px; font-size: 8px; padding: 0 3px; font-weight: 700; }
+  .mini { display: flex; gap: 5px; align-items: center; padding: 2px 0; }
+  .mini .meta { flex: 1; }
+  .shelf { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .shelf div small { display: block; font-size: 7.5px; line-height: 1.15; margin-top: 1px; }
+  .big { font-size: 18px; font-weight: 800; }
+  .dots { display: flex; gap: 3px; margin-top: 3px; }
+  .dots i { width: 11px; height: 11px; border: 1px solid var(--ink); border-radius: 50%; font-size: 7px; font-style: normal; text-align: center; line-height: 11px; }
+  .dots i.on { background: var(--ink); color: var(--paper); }
+  .weekbars { display: flex; gap: 3px; align-items: flex-end; height: 26px; }
+  .weekbars i { flex: 1; background: var(--ink); }
+  .pager { text-align: center; font-size: 10px; margin-top: 5px; letter-spacing: 4px; }
+  .anno { outline: 2px dashed var(--ink); outline-offset: 2px; }
+  .tag { position: absolute; right: 3px; top: 3px; background: var(--ink); color: var(--paper); font-size: 7.5px; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+  .band { border: 1.5px solid var(--ink); border-radius: 5px; padding: 4px 7px; font-size: 9.5px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 6px; align-items: center; }
+  .band .btn { border: 1.5px solid var(--ink); border-radius: 4px; padding: 1px 6px; font-weight: 700; white-space: nowrap; }
+  .lrow { display: flex; gap: 7px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--g4); }
+  .lrow .meta { flex: 1; }
+  .lrow .v { text-align: right; font-size: 10px; white-space: nowrap; }
+  .lrow .v small { display: block; color: var(--g2); font-size: 8.5px; }
+  .ltitle { font-size: 15px; font-weight: 800; margin: 2px 0 6px; display: flex; justify-content: space-between; }
+
+  /* Xteink catalog */
+  .xbar { border-bottom: 2px solid var(--ink); padding: 14px 18px 10px; }
+  .xbar .t { font-size: 1.35em; font-weight: 800; display: flex; justify-content: space-between; align-items: baseline; }
+  .xbar .t span { font-size: .7em; font-weight: 600; }
+  .xbar .s { font-size: .8em; margin-top: 3px; }
+  .xrow { display: flex; justify-content: space-between; align-items: center; padding: 11px 18px; border-bottom: 1px solid var(--g3); gap: 10px; }
+  .xrow small { display: block; font-size: .75em; color: var(--g1); margin-top: 2px; }
+  .xrow .r { white-space: nowrap; font-size: .85em; text-align: right; }
+  .xrow.sel { background: var(--ink); color: var(--paper); }
+  .xrow.sel small { color: var(--g4); }
+  .xrow.grey { color: var(--g3); }
+  .xrow.grey small { color: var(--g3); }
+  .xsec { padding: 9px 18px 3px; font-size: .7em; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--g1); }
+  .xfoot { margin-top: auto; border-top: 2px solid var(--ink); display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; font-size: .75em; font-weight: 700; }
+  .xfoot div { padding: 9px 0; border-right: 1px solid var(--ink); }
+  .xfoot div:last-child { border-right: 0; }
+  .xnote { padding: 8px 18px; font-size: .75em; color: var(--g1); }
+  .sheet { position: absolute; left: 22px; right: 22px; top: 34%; background: var(--paper); border: 3px solid var(--ink); border-radius: 10px; padding: 18px 18px 16px; box-shadow: 6px 6px 0 var(--ink); }
+  .sheet h3 { margin: 0 0 8px; font-size: 1.2em; }
+  .sheet p { margin: 0 0 8px; font-size: .85em; }
+  .sheet .b { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .sheet .b div { border: 2px solid var(--ink); border-radius: 6px; padding: 9px; text-align: center; font-weight: 800; }
+  .sheet .b div.solid { background: var(--ink); color: var(--paper); }
+  .dim { opacity: .35; }
+  .hic { display: inline-flex; align-items: center; justify-content: center; width: 1.9em; height: 1.9em; border: 2px solid var(--ink); border-radius: 6px; font-size: .62em; font-weight: 800; margin-left: 6px; vertical-align: middle; }
+  .hic.sel { background: var(--ink); color: var(--paper); }
+  .xbar .t .ic { display: flex; align-items: center; }
+  .xgh { padding: 8px 18px 4px; font-weight: 800; font-size: .85em; border-bottom: 1.5px solid var(--ink); display: flex; justify-content: space-between; }
+  .xgh span { font-weight: 600; color: var(--g1); }
+  .xrow.ind { padding-left: 34px; }
+  .rf { font-size: 12px; margin-right: 6px; }
+</style>
+<h1>Local-first Home and catalog: mockups (draft 2)</h1>
+<p class="lead">ROADMAP items 3 and 4, and lists grouped by series and by author on the X4. Meebook M8C (1404 × 1872) at quarter scale;
+Xteink X4 (480 × 800) and X3 (528 × 792) at real size. Black on white, drawn once per change. A dashed outline marks what a quiet
+update repaints; it is not on the screen. Book titles and names are made up. Draft 2: a refresh button (⟳) in every header, a stamp that
+reads "updated just now" after a refresh, "Connect and …" sheets, and screens 10-12. Design: <code>DESIGN.md</code>.</p>
+
+<h2>Android: BookOrbit Home and lists</h2>
+<div class="grid">
+
+<figure class="m8c">
+  <div class="screen">
+    <div class="bhdr">
+      <div><div class="greet">Good evening</div><div class="subl">Sunday 22 November · updated 3 h ago</div></div>
+      <div class="icons"><span class="rf">⟳</span>◔ ▭ 19:42 ⌕☰</div>
+    </div>
+    <div class="tiles">
+      <div class="tile w"><h4>Continue reading</h4>
+        <div class="hero"><div class="cover c1">cover</div>
+          <div style="flex:1"><div class="ttl">The Silver Road</div><div class="meta">M. Hale · chapter 12</div>
+            <div class="bar"><i style="width:57%"></i></div><div class="meta"><b>57%</b> · about 2 h left · <span class="dev">ON DEVICE</span></div></div></div></div>
+      <div class="tile"><h4>Also reading</h4>
+        <div class="mini"><div class="cover c2"></div><div class="meta">Tidewater<br><b>23%</b></div></div>
+        <div class="mini"><div class="cover c2"></div><div class="meta">Small Lanterns<br><b>81%</b></div></div></div>
+      <div class="tile"><h4>Goal 2026</h4><div class="big">14 <span style="font-size:11px">of 30</span></div>
+        <div class="bar"><i style="width:47%"></i></div><div class="meta">on pace</div></div>
+      <div class="tile w"><h4>Recently added</h4>
+        <div class="shelf"><div><div class="cover c3"></div><small>Northbound</small></div><div><div class="cover c3"></div><small>The Glass Fox</small></div><div><div class="cover c3"></div><small>Paper Moons</small></div><div><div class="cover c3"></div><small>Stillwater</small></div></div></div>
+      <div class="tile"><h4>Streak</h4><div class="big">5 days</div><div class="dots"><i class="on">S</i><i class="on">M</i><i>T</i><i class="on">W</i><i class="on">T</i><i class="on">F</i><i class="on">S</i></div></div>
+      <div class="tile"><h4>This week</h4><div class="weekbars"><i style="height:40%"></i><i style="height:70%"></i><i style="height:4%"></i><i style="height:55%"></i><i style="height:30%"></i><i style="height:90%"></i><i style="height:60%"></i></div><div class="meta">3 h 40 min</div></div>
+    </div>
+    <div class="pager">● ○ ○</div>
+  </div>
+  <figcaption>1. Open, online, with the refresh running. One paint, from the saved board plus this device: The Silver Road shows 57 % (read here 10 minutes ago; the saved board said 41 %), and the book finished here last night has left Also reading and counts in the goal (14). The stamp says when the board was last fetched. The new ⟳ sits left of Wi-Fi, battery and clock, and refetches this view.</figcaption>
+</figure>
+
+<figure class="m8c">
+  <div class="screen">
+    <div class="bhdr anno">
+      <div><div class="greet">Good evening</div><div class="subl">Sunday 22 November · <b>updated just now</b></div></div>
+      <div class="icons"><span class="rf">⟳</span>◔ ▭ 19:42 ⌕☰</div>
+    </div>
+    <div class="tiles">
+      <div class="tile w"><h4>Continue reading</h4>
+        <div class="hero"><div class="cover c1">cover</div>
+          <div style="flex:1"><div class="ttl">The Silver Road</div><div class="meta">M. Hale · chapter 12</div>
+            <div class="bar"><i style="width:57%"></i></div><div class="meta"><b>57%</b> · about 2 h left · <span class="dev">ON DEVICE</span></div></div></div></div>
+      <div class="tile anno"><span class="tag">repainted</span><h4>Also reading</h4>
+        <div class="mini"><div class="cover c2"></div><div class="meta">Tidewater<br><b>34%</b></div></div>
+        <div class="mini"><div class="cover c2"></div><div class="meta">Small Lanterns<br><b>81%</b></div></div></div>
+      <div class="tile"><h4>Goal 2026</h4><div class="big">14 <span style="font-size:11px">of 30</span></div>
+        <div class="bar"><i style="width:47%"></i></div><div class="meta">on pace</div></div>
+      <div class="tile w anno"><span class="tag">repainted</span><h4>Recently added</h4>
+        <div class="shelf"><div><div class="cover c3"></div><small>Harbor Lights</small></div><div><div class="cover c3"></div><small>Northbound</small></div><div><div class="cover c3"></div><small>The Glass Fox</small></div><div><div class="cover c3"></div><small>Paper Moons</small></div></div></div>
+      <div class="tile"><h4>Streak</h4><div class="big">5 days</div><div class="dots"><i class="on">S</i><i class="on">M</i><i>T</i><i class="on">W</i><i class="on">T</i><i class="on">F</i><i class="on">S</i></div></div>
+      <div class="tile"><h4>This week</h4><div class="weekbars"><i style="height:40%"></i><i style="height:70%"></i><i style="height:4%"></i><i style="height:55%"></i><i style="height:30%"></i><i style="height:90%"></i><i style="height:60%"></i></div><div class="meta">3 h 40 min</div></div>
+    </div>
+    <div class="pager">● ○ ○</div>
+  </div>
+  <figcaption>2. Updated quietly, a few seconds later. The stamp turns to "updated just now" (a text-only refresh of the header, like the clock's), and only the two tiles whose data changed repaint: Tidewater read on another device (23 → 34 %) and Harbor Lights added. On the Go Color 7 they use the dithered colour refresh. A refresh with no change repaints only the stamp.</figcaption>
+</figure>
+
+<figure class="m8c">
+  <div class="screen">
+    <div class="bhdr">
+      <div><div class="greet">Good evening</div><div class="subl"><b>Offline</b>, saved 3 h ago</div></div>
+      <div class="icons"><span class="rf">⟳</span>◌ ▭ 19:42 ⌕☰</div>
+    </div>
+    <div class="tiles">
+      <div class="tile w"><h4>Continue reading</h4>
+        <div class="hero"><div class="cover c1">cover</div>
+          <div style="flex:1"><div class="ttl">The Silver Road</div><div class="meta">M. Hale · chapter 14</div>
+            <div class="bar"><i style="width:63%"></i></div><div class="meta"><b>63%</b> · about 1 h 50 min left · <span class="dev">ON DEVICE</span></div></div></div></div>
+      <div class="tile"><h4>Also reading</h4>
+        <div class="mini"><div class="cover c2"></div><div class="meta">Tidewater<br><b>34%</b></div></div>
+        <div class="mini"><div class="cover c2"></div><div class="meta">Small Lanterns<br><b>81%</b></div></div></div>
+      <div class="tile"><h4>Goal 2026</h4><div class="big">15 <span style="font-size:11px">of 30</span></div>
+        <div class="bar"><i style="width:50%"></i></div><div class="meta">on pace</div></div>
+      <div class="tile w"><h4>Finished this year</h4>
+        <div class="shelf"><div><div class="cover c3"></div><small>Quiet Harbour</small></div><div><div class="cover c3"></div><small>Owl Street</small></div><div><div class="cover c3"></div><small>The Long Thaw</small></div><div><div class="cover c3"></div><small>Kites</small></div></div></div>
+      <div class="tile"><h4>Streak</h4><div class="big">6 days</div><div class="dots"><i class="on">M</i><i>T</i><i class="on">W</i><i class="on">T</i><i class="on">F</i><i class="on">S</i><i class="on">S</i></div></div>
+      <div class="tile"><h4>This week</h4><div class="weekbars"><i style="height:70%"></i><i style="height:4%"></i><i style="height:55%"></i><i style="height:30%"></i><i style="height:90%"></i><i style="height:60%"></i><i style="height:45%"></i></div><div class="meta">4 h 05 min</div></div>
+    </div>
+    <div class="pager">○ ● ○</div>
+  </div>
+  <figcaption>3. Offline (page 2 of the board), in upstream's words: "Offline, saved 3 h ago". Everything read here since then is already in: 63 %, Quiet Harbour finished here (first in Finished, goal 15), and today's minutes in the streak. ⟳ asks for a connection through the Wi-Fi setting, then refreshes. Online with no answer from the server, it reads "Not updated · saved 3 h ago".</figcaption>
+</figure>
+
+<figure class="m8c">
+  <div class="screen">
+    <div class="ltitle"><span>‹ The Wayfarer books</span><span class="icons"><span class="rf">⟳</span>⌕☰</span></div>
+    <div class="meta" style="margin:-4px 0 6px">5 books · series order · updated just now</div>
+    <div class="lrow"><div class="cover c2"></div><div class="meta"><div class="ttl" style="font-size:11px">1 · The Wayfarer</div>J. Arden</div><div class="v"><b>Finished</b></div></div>
+    <div class="lrow"><div class="cover c2"></div><div class="meta"><div class="ttl" style="font-size:11px">2 · Wayfarer's Return</div>J. Arden</div><div class="v"><b>12%</b> <span class="dev">ON DEVICE</span></div></div>
+    <div class="lrow"><div class="cover c2"></div><div class="meta"><div class="ttl" style="font-size:11px">3 · The Far Shore</div>J. Arden</div><div class="v">—</div></div>
+    <div class="lrow"><div class="cover c2"></div><div class="meta"><div class="ttl" style="font-size:11px">4 · Lantern Coast</div>J. Arden</div><div class="v">—</div></div>
+    <div class="lrow" style="border:0"><div class="cover c2"></div><div class="meta"><div class="ttl" style="font-size:11px">5 · Wayfarer's End</div>J. Arden</div><div class="v">—</div></div>
+    <div class="pager" style="margin-top:auto">page 1 of 1</div>
+  </div>
+  <figcaption>4. A series list with the same overlay as Home: book 1 (finished here a minute ago) and book 2 (started here) show the device's values at once. Auto-sync is on, so there is no "not synced" mark; it appears only when an upload is blocked or retrying, or auto-sync is off. The list header gets the same ⟳ and stamp.</figcaption>
+</figure>
+
+</div>
+
+<h2>Xteink: BookOrbit catalog</h2>
+<div class="grid">
+
+<figure class="x4">
+  <div class="screen">
+    <div class="xbar"><div class="t">BookOrbit <span class="ic"><span class="hic">⟳</span></span></div><div class="s"><b>Offline</b> · saved 3 h ago</div></div>
+    <div class="xsec">On this reader</div>
+    <div class="xrow"><span>On device</span><span class="r">23</span></div>
+    <div class="xrow"><span>In progress</span><span class="r">3</span></div>
+    <div class="xsec">Library · saved</div>
+    <div class="xrow sel"><span>Continue reading</span><span class="r">4</span></div>
+    <div class="xrow"><span>Recently added</span><span class="r">212</span></div>
+    <div class="xrow"><span>All books</span><span class="r">212</span></div>
+    <div class="xrow"><span>Series</span><span class="r">41</span></div>
+    <div class="xrow"><span>Search<small>searches your saved lists</small></span><span class="r"></span></div>
+    <div class="xrow grey"><span>Authors<small>needs Wi-Fi</small></span><span class="r">96</span></div>
+    <div class="xrow grey"><span>Collections<small>needs Wi-Fi</small></span><span class="r">5</span></div>
+    <div class="xfoot"><div>Back</div><div>Open</div><div>▲</div><div>▼</div></div>
+  </div>
+  <figcaption>5. X4 (touch shown): the catalog opened with Wi-Fi off, drawn at once from the saved root and counts. Saved lists have no age limit. The ⟳ in the header (on every view) connects and refreshes; there is no "Update" row any more. Lists never opened are grey. Search looks in the saved lists first (screen 8).</figcaption>
+</figure>
+
+<figure class="x4">
+  <div class="screen">
+    <div class="xbar"><div class="t">Continue reading <span class="ic"><span class="hic sel">⟳</span></span></div><div class="s"><b>updated just now</b></div></div>
+    <div class="xrow"><span>The Silver Road<small>M. Hale</small></span><span class="r">• 63 %</span></div>
+    <div class="xrow"><span>Tidewater<small>R. Okafor</small></span><span class="r">• 34 %</span></div>
+    <div class="xrow"><span>Quiet Harbour<small>L. Brandt</small></span><span class="r">• Finished</span></div>
+    <div class="xrow"><span>Harbor Lights<small>S. Vance</small></span><span class="r"></span></div>
+    <div class="xsec">Recently added · saved 2 d ago</div>
+    <div class="xrow"><span>Northbound<small>T. Iqbal</small></span><span class="r">• 0 %</span></div>
+    <div class="xrow grey"><span>The Glass Fox<small>A. Moreau</small></span><span class="r"></span></div>
+    <div class="xrow grey"><span>More<small>needs Wi-Fi</small></span><span class="r"></span></div>
+    <div class="xfoot"><div>Back</div><div>Refresh</div><div>▲</div><div>▼</div></div>
+  </div>
+  <figcaption>6. X4 without touch, just after a refresh. Up from the top row selects the header ⟳ (inverted), Confirm refreshes (the hint says "Refresh"), and Down goes back to the rows. The stamp now reads "updated just now". Rows on the card show <b>•</b> and this card's progress, or "Finished". A section from an older saved page keeps its own age. "More" past the saved pages needs Wi-Fi.</figcaption>
+</figure>
+
+<figure class="x4">
+  <div class="screen">
+    <div class="dim" style="display:flex;flex-direction:column;flex:1">
+    <div class="xbar"><div class="t">Recently added <span class="ic"><span class="hic">⟳</span></span></div><div class="s"><b>Offline</b> · saved 2 d ago</div></div>
+    <div class="xrow"><span>Northbound<small>T. Iqbal</small></span><span class="r">• 0 %</span></div>
+    <div class="xrow sel"><span>The Glass Fox<small>A. Moreau</small></span><span class="r"></span></div>
+    <div class="xrow grey"><span>Paper Moons<small>K. Sato</small></span><span class="r"></span></div>
+    </div>
+    <div class="sheet">
+      <h3>Needs Wi-Fi</h3>
+      <p><b>The Glass Fox</b> isn't on this reader yet.</p>
+      <div class="b"><div>Cancel</div><div class="solid">Connect and download</div></div>
+    </div>
+    <div class="xfoot"><div>Back</div><div>Select</div><div>◀</div><div>▶</div></div>
+  </div>
+  <figcaption>7. X4: tapping a grey book offline (or Download in the long-press menu). "Connect and download" joins Wi-Fi straight away and downloads, the same wording and behaviour as the end-of-book actions. Only if joining fails does the sheet turn into "Couldn't connect" with "Try again" / "Cancel". Nothing is queued.</figcaption>
+</figure>
+
+<figure class="x4">
+  <div class="screen">
+    <div class="dim" style="display:flex;flex-direction:column;flex:1">
+    <div class="xbar"><div class="t">Search <span class="ic"><span class="hic">⟳</span></span></div><div class="s"><b>Offline</b> · your saved lists</div></div>
+    <div class="xrow"><span>“lighthouse”<small>0 in saved lists · 0 on this reader</small></span><span class="r"></span></div>
+    </div>
+    <div class="sheet">
+      <h3>Not in your saved lists</h3>
+      <p>Nothing called “lighthouse” in the lists saved on this reader. Update and search the server?</p>
+      <div class="b"><div>Cancel</div><div class="solid">Connect and search</div></div>
+    </div>
+    <div class="xfoot"><div>Back</div><div>Select</div><div>◀</div><div>▶</div></div>
+  </div>
+  <figcaption>8. X4: offline search. It first looks through the saved lists and the books on the card. With matches, they are listed with a last grey row, "Search the server for …". With none, this sheet. The other smart cases work the same way: paging past the saved pages, a sort that isn't saved (done on the reader when the whole list is saved), a Home link to an unsaved list, and an empty saved list.</figcaption>
+</figure>
+
+<figure class="x3">
+  <div class="screen">
+    <div class="dim" style="display:flex;flex-direction:column;flex:1">
+    <div class="xbar"><div class="t">Series <span class="ic"><span class="hic">⟳</span></span></div><div class="s"><b>Offline</b> · saved 1 d ago</div></div>
+    <div class="xrow"><span>The Wayfarer books<small>5 books</small></span><span class="r">• 2</span></div>
+    <div class="xrow sel"><span>Lantern Coast Mysteries<small>8 books</small></span><span class="r"></span></div>
+    <div class="xrow"><span>Owl Street<small>3 books</small></span><span class="r">• 3</span></div>
+    <div class="xrow grey"><span>River Kings<small>needs Wi-Fi</small></span><span class="r"></span></div>
+    </div>
+    <div class="sheet">
+      <h3>Needs Wi-Fi</h3>
+      <p><b>Lantern Coast Mysteries</b> hasn't been saved on this reader.</p>
+      <p style="color:var(--g1)">The reader restarts to connect, then comes back here.</p>
+      <div class="b"><div>Cancel</div><div class="solid">Connect and open</div></div>
+    </div>
+    <div class="xfoot"><div>Back</div><div>Select</div><div>◀</div><div>▶</div></div>
+  </div>
+  <figcaption>9. X3 (528 × 792, no touch): the catalog opened from saved pages with no restart and no Wi-Fi. ⟳ (reached with Up, as on screen 6) and "Connect and …" cost the network-boot restart, which comes back to this view and finishes the action. English only, as the rest of the X3 build. No grouping on the X3.</figcaption>
+</figure>
+
+</div>
+
+<h2>Xteink X4: lists by series and by author</h2>
+<div class="grid">
+
+<figure class="x4">
+  <div class="screen">
+    <div class="xbar"><div class="t">Series in Kids shelf <span class="ic"><span class="hic">⇅</span><span class="hic">⧩</span><span class="hic">⟳</span></span></div><div class="s">14 series · name · updated just now</div></div>
+    <div class="xrow"><span>Harbor Watch<small>D. Mensah · 4 books</small></span><span class="r">• 2</span></div>
+    <div class="xrow sel"><span>Lantern Coast Mysteries<small>E. Lund · 8 books · 3 finished</small></span><span class="r">• 3</span></div>
+    <div class="xrow"><span>Owl Street<small>P. Taylor · 3 books</small></span><span class="r">• 3</span></div>
+    <div class="xrow"><span>River Kings<small>R. Doyle · 6 books · 1 reading</small></span><span class="r">• 1</span></div>
+    <div class="xrow"><span>Skyward Kites<small>M. Ito · 2 books</small></span><span class="r"></span></div>
+    <div class="xrow"><span>The Wayfarer books<small>J. Arden · 5 books · 1 finished</small></span><span class="r">• 2</span></div>
+    <div class="xrow"><span>Not in a series<small>38 books</small></span><span class="r">• 6</span></div>
+    <div class="xnote">Sort options (⇅ or Left): By series ✓ · By author · Name · Most books</div>
+    <div class="xfoot"><div>Back</div><div>Open</div><div>▲</div><div>▼</div></div>
+  </div>
+  <figcaption>10. X4: a collection grouped by series. "By series" and "By author" sit at the top of the list's Sort options, as on Android (touch: the sort icon; buttons: Left). The first time, the list is read 100 books a time ("Reading 54 of 142 books…"). It is grouped on the reader and saved, so it reopens grouped offline. <b>•</b> n = books of that series on this card; "finished" counts books finished on this reader.</figcaption>
+</figure>
+
+<figure class="x4">
+  <div class="screen">
+    <div class="xbar"><div class="t">Authors in Kids shelf <span class="ic"><span class="hic">⇅</span><span class="hic">⧩</span><span class="hic">⟳</span></span></div><div class="s"><b>Offline</b> · saved 2 d ago · 31 authors</div></div>
+    <div class="xrow"><span>J. Arden<small>5 books · The Wayfarer books</small></span><span class="r">• 2</span></div>
+    <div class="xrow"><span>R. Doyle<small>7 books · River Kings</small></span><span class="r">• 1</span></div>
+    <div class="xrow sel"><span>E. Lund<small>11 books · Lantern Coast Mysteries</small></span><span class="r">• 4</span></div>
+    <div class="xrow"><span>D. Mensah<small>4 books · Harbor Watch</small></span><span class="r">• 2</span></div>
+    <div class="xrow"><span>P. Taylor<small>3 books · Owl Street</small></span><span class="r">• 3</span></div>
+    <div class="xrow"><span>S. Vance<small>2 books</small></span><span class="r"></span></div>
+    <div class="xnote">Offline: grouped from this list's saved copy (all 142 books). Without a whole saved copy it asks: "Grouping needs the whole list. Connect and read 142 books?"</div>
+    <div class="xfoot"><div>Back</div><div>Open</div><div>▲</div><div>▼</div></div>
+  </div>
+  <figcaption>11. X4: the same collection by author, offline. Each row shows the author's book count in this list and their main series. Grouping never works from part of a list: the counts would be wrong.</figcaption>
+</figure>
+
+<figure class="x4">
+  <div class="screen">
+    <div class="xbar"><div class="t">E. Lund <span class="ic"><span class="hic">⇅</span><span class="hic">⟳</span></span></div><div class="s">11 books in Kids shelf · by series</div></div>
+    <div class="xgh">Lantern Coast Mysteries <span>8</span></div>
+    <div class="xrow ind"><span>1 · The Bell at Low Tide</span><span class="r">• Finished</span></div>
+    <div class="xrow ind"><span>2 · The Salt Room</span><span class="r">• Finished</span></div>
+    <div class="xrow ind sel"><span>3 · Fog Over Marram</span><span class="r">• 41 %</span></div>
+    <div class="xrow ind grey"><span>4 · The Drowned Clock</span><span class="r"></span></div>
+    <div class="xgh">Night Ferry <span>1</span></div>
+    <div class="xrow ind"><span>1 · Night Ferry</span><span class="r">• Finished</span></div>
+    <div class="xgh">Not in a series <span>2</span></div>
+    <div class="xrow ind grey"><span>Sea Glass</span><span class="r"></span></div>
+    <div class="xnote">Sort options: By series ✓ · All books · All by author</div>
+    <div class="xfoot"><div>Back</div><div>Open</div><div>▲</div><div>▼</div></div>
+  </div>
+  <figcaption>12. X4: an author tapped in screen 11 shows their books in this list by series, with "Not in a series" last. Android's chips become Sort options here ("All books" flat, "All by author" the server's author page; a series view adds "Whole series"). Rows come from the saved list, so nothing is fetched, even in a smart scope past 200 books.</figcaption>
+</figure>
+
+</div>

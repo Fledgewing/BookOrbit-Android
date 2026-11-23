@@ -58,6 +58,12 @@ the same rule for web and audio progress,
 [`book.service.ts:2464`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/book/book.service.ts#L2464)). Jumping back in a
 finished book, or a stale position from another device, can start a reread.
 
+- "Previous" is the **latest progress from any device** for that file: `getLatestDeviceProgress`
+  has no device filter ([`koreader.repository.ts:770-783`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader.repository.ts#L770-L783)).
+- With no active attempt and progress below the finish threshold, that evidence opens a new
+  attempt and the status becomes `rereading`
+  ([`reading-attempt.service.ts:335-355`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/user-book-status/reading-attempt.service.ts#L335-L355)).
+
 ## book-states: newest date wins, same-day ties go to the server
 
 `POST /koreader/plugin/book-states` applies a device's status only when its modification date
@@ -80,3 +86,81 @@ It is the one way to mark a book done regardless of the threshold.
 `GET /koreader/plugin/catalog/books/:id` carries `seriesMembers`, the other books of its series
 ([`koreader-catalog.service.ts:747`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader-catalog.service.ts#L747),
 [`:1372-1424`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader-catalog.service.ts#L1372-L1424)).
+
+## The stale-push guard compares send times
+
+A push is "late" only when its timestamp is older than the newest one the server knows
+([`koreader.service.ts:263-268`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader.service.ts#L263-L268)). KOReader stamps a push with the time it is
+**sent**, not when the position was reached ([`koreader.service.ts:321-322`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader.service.ts#L321-L322)), so
+a stale position from a second device is not late and gets through (and, with the rule above, can
+start a reread). End-of-book design: a device-side hold.
+
+## A push to a finished book changes nothing
+
+With no active attempt, no reread evidence and the book's latest read completed, a push dated no
+later than that read's end joins it as backlog; any other such push without meaningful activity
+is ignored ([`reading-attempt.service.ts:289-312`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/user-book-status/reading-attempt.service.ts#L289-L312)).
+
+## book-states details
+
+- A device `complete` that wins (see the tie rule above) becomes a manual `read` with
+  `endedOn = statusModified`, the day the device gave
+  ([`koreader-plugin.service.ts:462-489`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader-plugin.service.ts#L462-L489)).
+- `rating` and `reviewNote` follow the same newest-day rule
+  ([`koreader-plugin.service.ts:420-433`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader-plugin.service.ts#L420-L433); DTO
+  [`koreader-plugin.dto.ts:215-252`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/dto/koreader-plugin.dto.ts#L215-L252)).
+- The Android plugin pushes state **before** progress
+  ([`bookorbit_book_sync.lua:286`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/koreader-plugin/bookorbit.koplugin/bookorbit_book_sync.lua#L286)) and then writes the server's state back into KOReader's
+  summary ([`bookorbit_sidecar.lua:401-420`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/koreader-plugin/bookorbit.koplugin/bookorbit_sidecar.lua#L401-L420)). So a same-day "Mark as finished" in KOReader
+  is dropped by the tie rule and then reverted on the device.
+
+## read-status closes the read
+
+Setting `read` through `PUT …/read-status` closes an active attempt as completed with
+`endedOn` = today ([`reading-attempt.service.ts:150-205`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/user-book-status/reading-attempt.service.ts#L150-L205)); it is safe to
+retry. The plugin wraps it as `catalogSetReadStatus`, and the rating route as `catalogSetRating`
+([`bookorbit_api.lua:705-712`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/koreader-plugin/bookorbit.koplugin/bookorbit_api.lua#L705-L712)).
+
+## Ratings are whole stars, per user, attached to the latest finished read
+
+- One rating per user and book (`user_book_ratings`, [`reader.ts:116-130`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/db/schema/reader.ts#L116-L130)),
+  and each read keeps its own 1-5 stars ([`reader.ts:78-79`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/db/schema/reader.ts#L78-L79)).
+- The catalog DTO accepts any number 0-5 ([`koreader-catalog-query.dto.ts:313-319`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/dto/koreader-catalog-query.dto.ts#L313-L319)),
+  but only **whole stars 1-5** are stored; `null` clears. Send the rating **after** the status so
+  it attaches to this read.
+- A book whose metadata `rating` field is locked skips the rating silently
+  ([`book.service.ts:2864-2878`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/book/book.service.ts#L2864-L2878)).
+
+## Reviews
+
+A user's review is `user_book_notes.note`, up to 10,000 characters
+([`reader.ts:144-163`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/db/schema/reader.ts#L144-L163)). A device reaches it only through book-states
+`reviewNote`.
+
+## Continue reading is readStatus "reading"
+
+The dashboard's `continueReading` is the books with `readStatus: 'reading'`, most recently read
+first ([`koreader-catalog.service.ts:241-246`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader-catalog.service.ts#L241-L246)). A book pushed to 100% but still
+`reading` stays there.
+
+## Book detail, series, author and suggestions
+
+- `GET …/catalog/books/:id` ([`koreader-catalog.service.ts:729-749`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader-catalog.service.ts#L729-L749)) returns
+  `seriesId/Name/Index`, `authors`, the user's `rating`, `readStatus`, `files`,
+  `relatedSections` (`series`, `author`, `similar`) and `seriesMembers`.
+- `seriesMembers` holds only books the user can see: accessible libraries plus content filters
+  (kids' age limits), so a restricted book is just absent
+  ([`recommendation.service.ts:127-164`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/recommendation/recommendation.service.ts#L127-L164)).
+- "Also by this author" and "Similar books" use the same limits
+  ([`recommendation.service.ts:78`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/recommendation/recommendation.service.ts#L78),
+  [`recommendation.service.ts:183-184`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/recommendation/recommendation.service.ts#L183-L184)).
+- `GET catalog/books?author=<name>` takes an author **name**, resolves it to a visible author and
+  returns `authorSummary` ([`koreader-catalog.service.ts:466-491`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader-catalog.service.ts#L466-L491),
+  [`koreader-catalog-query.dto.ts:137-139`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/dto/koreader-catalog-query.dto.ts#L137-L139)).
+
+## match-check records unknown hashes
+
+`POST /koreader/plugin/match-check` returns `bookId` for each known hash and records every
+unknown one as an "unmatched" book on the server
+([`koreader-plugin.service.ts:135-154`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader-plugin.service.ts#L135-L154)). Ask only for hashes the server already
+knows.
