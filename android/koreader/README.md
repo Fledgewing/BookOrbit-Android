@@ -51,7 +51,7 @@ order it lists them, so the code reads as the single patch file did:
 
 Menu: **Tools › Android sync** (its own entry: a menu item with `sorting_hint = "tools"`,
 frontend/ui/menusorter.lua:162-189; nothing is added to the plugin's menu). Toggles; Sync while reading; Sync and sleep now;
-Sleep sync limit (10/15/20 s); Apply recommended settings; Apply recommended gestures; Test
+Sleep sync limit (10/15/20 s); Recommended settings (a status line, opens the review page); Test
 sync path; Wi-Fi (mode, idle minutes); Home button; Open Orbit Companion; Open another app…; Auto-update patch; Include
 pre-releases; Check for patch update; update status; status.
 
@@ -65,15 +65,18 @@ the unpacked `main.lua` declares the release's version, and swaps the folder in 
 `orbit.koplugin.old`. The new version runs from the next KOReader start. A copy taken straight
 from the repo says `0.0.0-dev`; releases stamp the tag into it (`package.sh`).
 
-"Apply recommended settings" asks first, then sets the plugin's Auto-sync on, BookOrbit
-further ahead → Silent, further behind → Don't sync, Make BookOrbit home, and KOReader's
-Action when Wi-Fi is off → Turn on.
-
-"Apply recommended gestures" asks first, then sets, in books only: hold top-right → Sync and
-sleep; hold top-left → BookOrbit: sync all books; swipe right along the bottom edge →
-BookOrbit: this book (KOReader has no one-finger "swipe up from the bottom"); two-finger swipe
-up → Orbit Companion: apps (this replaces KOReader's default "increase front light" on
-front-lit devices, gestures defaults.lua:129). Nothing else changes gestures.
+**Recommended settings** (0.11.0, [design](../../docs/design/addon-mode.md) §5): at KOReader's
+start, on update and when the companion's capabilities change, the plugin looks at each item it
+has not settled before. An item still at its stock default (BookOrbit's `default_settings`,
+KOReader's gestures defaults, or no value saved) is set, with a backup in
+`orbit_android.recommended_backup`; an item the user changed is never overwritten, only listed
+"to review". Items: BookOrbit Auto-sync on, further ahead → Silent, Make BookOrbit home;
+KOReader's Action when Wi-Fi is off → Turn on (only with Wi-Fi via the companion); in books, hold
+top-right → Sync and sleep, hold top-left → BookOrbit: sync all books, swipe right along the
+bottom edge → BookOrbit: this book, two-finger swipe up → Orbit Companion: apps (only when the
+companion offers other apps). A pass that changed something shows one line off-book for 4 s.
+The review page lists To review (Use Orbit's / Keep mine), Applied (Undo), Kept yours and
+Unavailable. Every pass logs `recommended (why): applied N | to review M | …`.
 
 Dispatcher actions (for any gesture): `orbit_sync_and_sleep`, `orbit_go_home`,
 `orbit_open_companion`, `orbit_open_apps` ("Orbit Companion: apps").
