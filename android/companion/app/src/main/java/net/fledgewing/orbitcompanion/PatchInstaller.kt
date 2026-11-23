@@ -92,7 +92,7 @@ object PatchInstaller {
             if (result.startsWith("installed") && stamped != null) {
                 p.patchAwaitVersion = stamped
                 p.patchRestartNow = if (userStarted) stamped else ""
-                Updater.status(app, UpdateFlow.installedLine(stamped))
+                Updater.status(app, UpdateFlow.installedLine(stamped, now = userStarted))
             }
             busy = false
             if (result.startsWith("installed")) main.post {
@@ -114,7 +114,8 @@ object PatchInstaller {
             // The file is current but KOReader still runs an older patch: the same restart now.
             val p = Prefs(ctx)
             val running = p.patchVersionSeen.ifEmpty { null }
-            if (file != null && running != null && UpdateFlow.staleRestart(running, file, false, true, emptySet()) == UpdateFlow.Restart.NOW) {
+            // The app replace was confirmed by the user (UpdateFlow.restartNowAfter): a manual restart.
+            if (file != null && running != null && UpdateFlow.staleRestart(running, file, manual = true, screenOff = false, sent = emptySet()) == UpdateFlow.Restart.NOW) {
                 log("after the update: patch v$file on disk, KOReader runs v$running: restarting now")
                 p.patchAwaitVersion = file
                 p.patchRestartNow = file
@@ -146,11 +147,10 @@ object PatchInstaller {
     /** A patch install or restart is under way: Setup doesn't count the patch row as needed. */
     fun inProgress(ctx: Context): Boolean {
         val p = Prefs(ctx)
-        val book = when (p.koreaderBook) { "1" -> true; "0" -> false; else -> null }
-        return busy || UpdateFlow.restart(p.patchAwaitVersion, p.patchVersionSeen.ifEmpty { null }, p.patchRestartSentFor, book) != UpdateFlow.Restart.NONE
+        return busy || UpdateFlow.restart(p.patchAwaitVersion, p.patchVersionSeen.ifEmpty { null }, p.patchRestartSentFor, manual = false) != UpdateFlow.Restart.NONE
     }
 
-    /** KOReader's book state changed (STATS, /status?book=): maybe the restart can go now. */
+    /** KOReader's book state changed (STATS, /status?book=): kept for the relaunch's reopen; a manual restart may go. */
     fun onBook(ctx: Context, book: Boolean?, why: String) {
         if (book == null) return
         val p = Prefs(ctx)
@@ -160,29 +160,30 @@ object PatchInstaller {
     }
 
     /**
-     * The restart after a patch install (any patch version): COMMAND=restart now when KOReader
-     * has no book open (or isn't running), else on the book's close, the next Home or screen-off.
+     * The restart after a patch install (any patch version), COMMAND=restart (UpdateFlow.restart):
+     * at once when the user started the update, book open or not; after an automatic update
+     * only when the screen goes off ([screenOff]), never while KOReader may be in front.
      * The patch (0.5.0+) also restarts itself for a newer file; the two are one restart.
      */
-    fun follow(ctx: Context, why: String, quiet: Boolean = true): Boolean {
+    fun follow(ctx: Context, why: String, screenOff: Boolean = false): Boolean {
         val p = Prefs(ctx)
         val want = p.patchAwaitVersion
         val book = when (p.koreaderBook) { "1" -> true; "0" -> false; else -> null }
-        val now = want.isNotEmpty() && p.patchRestartNow == want
-        return when (UpdateFlow.restart(want, p.patchVersionSeen.ifEmpty { null }, p.patchRestartSentFor, book, now)) {
-            UpdateFlow.Restart.NONE -> followStale(ctx, p, book, why, quiet)
+        val manual = want.isNotEmpty() && p.patchRestartNow == want
+        return when (UpdateFlow.restart(want, p.patchVersionSeen.ifEmpty { null }, p.patchRestartSentFor, manual, screenOff)) {
+            UpdateFlow.Restart.NONE -> followStale(ctx, p, why, screenOff)
             UpdateFlow.Restart.WAIT -> {
                 // Once per version, not on every event that checks.
                 if (waitLogged != want) {
                     waitLogged = want
-                    log("v$want installed; KOReader has a book open: restarting after it ($why)")
+                    log("v$want installed automatically; KOReader restarts at the next screen-off ($why)")
                 }
                 false
             }
             UpdateFlow.Restart.NOW -> {
                 p.patchRestartSentFor = want
                 p.restartReopen = if (book == true) "1" else ""
-                log("v$want installed; restarting KOReader ($why)${if (book == true) "; you started the update: the book reopens where you were" else ""}")
+                log("v$want installed; restarting KOReader ($why)${if (manual) "; you started the update" else ""}${if (book == true) "; the book reopens where you were" else ""}")
                 Koreader.restart(ctx.applicationContext, "patch v$want installed ($why)")
                 true
             }
@@ -215,12 +216,13 @@ object PatchInstaller {
 
     /**
      * No install pending, but KOReader runs an older patch than the file (v0.5.4): restart once
-     * per (running, file) pair in this process; with a book open, after it (UpdateFlow.staleRestart).
+     * per (running, file) pair in this process, only at a screen-off (UpdateFlow.staleRestart).
      */
-    private fun followStale(ctx: Context, p: Prefs, book: Boolean?, why: String, quiet: Boolean): Boolean {
+    private fun followStale(ctx: Context, p: Prefs, why: String, screenOff: Boolean): Boolean {
         val running = p.patchVersionSeen.ifEmpty { null } ?: return false
         val file = installedVersionCached() ?: return false
-        if (stale.decide(running, file, book, quiet) { OLog.i("$it ($why)") } != UpdateFlow.Restart.NOW) return false
+        if (stale.decide(running, file, manual = false, screenOff = screenOff) { OLog.i("$it ($why)") } != UpdateFlow.Restart.NOW) return false
+        if (p.koreaderBook == "1") p.restartReopen = "1"
         Koreader.restart(ctx.applicationContext, "patch v$file on disk, v$running running ($why)")
         return true
     }

@@ -92,7 +92,7 @@ end
 function OC.saveIndex()
     if OC.child or OC._save_pending then return end
     OC._save_pending = true
-    UIManager:scheduleIn(1, function()
+    UIManager:scheduleIn(3, function()
         OC._save_pending = nil
         writeFile(OC.dir() .. "/index.lua", Cache.encode(OC.index()))
     end)
@@ -145,7 +145,8 @@ function OC.get(key)
         return nil
     end
     if meta and meta.validated_at then e.validated_at = math.max(e.validated_at or 0, meta.validated_at) end
-    if meta and meta.stale then e.validated_at = 0 end
+    -- Stale (a write since): checked at once, but its age stays its real age.
+    e.stale = meta and meta.stale or nil
     remember(key, e)
     return e
 end
@@ -167,8 +168,11 @@ function OC.adopt(key, e, bytes)
     local idx = OC.index()
     local ids = {}
     for id in pairs(Cache.ids(e.body)) do table.insert(ids, id) end
+    local old = idx.entries[key]
+    local mirror = (old and old.mirror) or e.mirror or nil
     idx.entries[key] = { bytes = bytes, fetched_at = e.fetched_at, validated_at = e.validated_at, used_at = nowT(),
-        ids = ids, home = Cache.isHome(e.path) or nil, keep = Cache.isHome(e.path) or nil }
+        ids = ids, home = Cache.isHome(e.path) or nil, keep = (Cache.isHome(e.path) or mirror) and true or nil,
+        mirror = mirror, path = e.path }
     OC.done[key] = true
     for _, k in ipairs(Cache.evict(idx.entries, Cache.MAX_BYTES, Cache.MAX_ENTRIES)) do
         idx.entries[k] = nil
@@ -184,7 +188,7 @@ function OC.touch(key, validated)
     if not m then return end
     m.used_at = nowT()
     if validated then m.validated_at, m.stale = nowT(), nil end
-    if OC.memo[key] and validated then OC.memo[key].validated_at = nowT() end
+    if OC.memo[key] and validated then OC.memo[key].validated_at, OC.memo[key].stale = nowT(), nil end
     OC.saveIndex()
 end
 
@@ -222,6 +226,8 @@ function OC.drainEvents()
                 OC.source[ev.key] = ev.source
             elseif ev.kind == "miss" then
                 OC.offline_miss = true
+            elseif ev.kind == "search" then
+                OC.offline_search = true
             elseif ev.kind == "other" then
                 OC.offline_other = true
             end
@@ -245,16 +251,47 @@ function OC.begin(mode)
 end
 
 -- The wrapper's body for a cacheable GET. Returns handled, body, err, errbody.
+-- The entry for a read: its own, or a list page cut from the offline mirror's pages.
+function OC.lookup(client, key, path)
+    local e = OC.get(key)
+    if e then return e end
+    local w = Cache.listWindow(path)
+    if not w then return nil end
+    local owner = OC.owner(client)
+    local pages, oldest = {}, nil
+    local first = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, 1) }))
+    if not first then return nil end
+    pages[1] = first.body
+    oldest = first.validated_at or 0
+    local n = Cache.pageCount(type(first.body) == "table" and first.body.total)
+    for i = 2, n do
+        local pe = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, i) }))
+        if pe then pages[i] = pe.body; oldest = math.min(oldest, pe.validated_at or 0) end
+    end
+    local b = Cache.slice(w, pages)
+    if not b then return nil end
+    return { key = key, body = b, validated_at = oldest, path = path, from_mirror = true }
+end
+
 function OC.read(client, stock, method, path, body, headers)
     local owner = OC.owner(client)
     local key = Cache.key({ account = owner, server = client.server_url, method = method, path = path })
-    local entry = OC.get(key)
+    local entry = OC.lookup(client, key, path)
     local mode = OC.mode()
     -- Within one refresh each key is fetched or checked once; later reads are plain opens.
     if mode ~= "open" and OC.done[key] then mode = "open" end
     local offline = not OC.online(client)
     local serve, fetch = Cache.readPlan(entry, nowT(), mode, offline)
+    if OC.cache_only then fetch = false end
+    local variant = tostring(path):match("/catalog/books/%d+%?.*variant=([%w_]+)")
+    if variant and not inChild(client) and OC.index().detail_variant ~= variant then
+        OC.index().detail_variant = variant
+        OC.saveIndex()
+    end
     local short = tostring(path):gsub("^/koreader/plugin/catalog", "")
+    if serve and entry.from_mirror then short = short .. " (offline mirror)" end
+    if not serve and OC.cache_only then return true, nil, "cancelled" end
+    if not offline and not OC.cache_only and not inChild(client) then pcall(OC.mirrorTick, "read") end
     if serve then
         OC.saw(client, key, "cache")
         OC.touch(key)
@@ -262,7 +299,8 @@ function OC.read(client, stock, method, path, body, headers)
             OC.done[key] = true
             if inChild(client) then OC.event("check", { key = key, method = method, path = path, headers = headers })
             else OC.check(nil, key, method, path, headers, client) end
-            log("cache:", short, "from the cache, age", (nowT() - (entry.validated_at or 0)) .. "s; checking (" .. mode .. ")")
+            log("cache:", short, "from the cache, age", (nowT() - (entry.validated_at or 0)) .. "s"
+                .. (entry.stale and ", changed here since" or "") .. "; checking (" .. mode .. ")")
         else
             log("cache:", short, "from the cache, age", (nowT() - (entry.validated_at or 0)) .. "s" .. (offline and ", offline" or ""))
         end
@@ -270,7 +308,12 @@ function OC.read(client, stock, method, path, body, headers)
     end
     if offline and OC.offline_pass then
         -- Offline, not saved: quiet ("cancelled" is the plugin's no-error path) and the
-        -- runConnected wrapper asks to connect.
+        -- runConnected wrapper asks to connect; a search only says it needs a connection.
+        if Cache.isSearch(path) then
+            if inChild(client) then OC.event("search", {}) else OC.offline_search = true end
+            log("cache:", short, "is a search; it needs a connection (offline)")
+            return true, nil, "cancelled"
+        end
         OC.missed(client)
         log("cache:", short, "isn't saved on this reader (offline)")
         return true, nil, "cancelled"
@@ -310,7 +353,7 @@ end
 function OC.check(_, key, method, path, headers, client)
     if OC.inflight[key] then return end
     OC.inflight[key] = true
-    table.insert(OC.queue, { key = key, method = method, path = path, headers = headers, client = client })
+    table.insert(OC.queue, { key = key, method = method, path = path, headers = headers, client = client, mode = OC.mode() })
     OC.pump()
 end
 
@@ -351,20 +394,53 @@ function OC.landed(client, job, r)
     local short = tostring(job.path):gsub("^/koreader/plugin/catalog", "")
     if type(r) ~= "table" or type(r.body) ~= "table" then
         OC.failed[job.key] = true
-        log("cache:", short, "check failed:", tostring(type(r) == "table" and r.err or "no answer"))
+        log("cache:", short, "check failed (network:", tostring(type(r) == "table" and r.err or "no answer") .. "); the saved copy stays")
         return
     end
     OC.failed[job.key] = nil
-    local entry = OC.get(job.key)
+    local entry = OC.lookup(client, job.key, job.path)
     local changed = Cache.revalidate(entry and entry.body, r.body, 200)
+    if job.mirror then pcall(OC.mirrorChecked, client, job, entry, r.body, changed) end
     if not changed then
-        OC.touch(job.key, true)
+        if entry and not entry.from_mirror then OC.touch(job.key, true) end
         log("cache:", short, "checked: unchanged")
         return
     end
-    OC.put(client, job.key, r.body, job.path)
-    log("cache:", short, "checked: changed; redrawing")
-    OC.redraw(job.key)
+    OC.put(client, job.key, Cache.settle(entry and entry.body, r.body, job.mode), job.path)
+    if OC.onScreen(job.key) then
+        log("cache:", short, "checked: changed; redrawing once the checks are done")
+        OC.redraw_soon(job.key)
+    else
+        log("cache:", short, "checked: changed; saved (not on screen)")
+    end
+end
+
+function OC.onScreen(key)
+    local p = bookorbit(liveUI())
+    local cat = p and p.catalog_browser
+    return cat ~= nil and not cat.catalog_closed and cat._orbit_view_keys ~= nil and cat._orbit_view_keys[key] == true
+end
+
+-- One redraw after the running checks land, however many of the view's keys changed.
+function OC.redraw_soon(key)
+    OC.redraw_key = key
+    if OC.redraw_scheduled then return end
+    OC.redraw_scheduled = true
+    local function flush()
+        if OC.running or #OC.queue > 0 then return UIManager:scheduleIn(0.5, flush) end
+        OC.redraw_scheduled = nil
+        local k = OC.redraw_key
+        OC.redraw_key = nil
+        if k then OC.redraw(k) end
+    end
+    UIManager:scheduleIn(0.3, flush)
+end
+
+-- What keeps Wi-Fi on (Wifi.busy): checks in flight or the offline mirror saving.
+function OC.busy()
+    if OC.running or #OC.queue > 0 then return "the Orbit cache checking BookOrbit" end
+    if Mirror and Mirror.active then return "saving BookOrbit for offline" end
+    return nil
 end
 
 -- A changed entry that is on screen: the view reloads from the cache (no request, no spinner).
@@ -374,9 +450,10 @@ function OC.redraw(key)
     if not cat or cat.catalog_closed or not cat._orbit_view_keys or not cat._orbit_view_keys[key] then return end
     local ctx = cat.current_context or {}
     if ctx.kind == "dashboard" and Compat.callable(cat.loadDashboardRoot) then
-        return cat:loadDashboardRoot(true, { invisible = true })
+        cat:loadDashboardRoot(true, { invisible = true })
+        return true
     end
-    if Compat.callable(cat.refreshCurrent) then return LF.refreshKeepingCovers(cat) end
+    if Compat.callable(cat.refreshCurrent) then LF.refreshKeepingCovers(cat); return true end
 end
 
 ---------------------------------------------------------------- writes
@@ -400,7 +477,7 @@ function OC.afterWrite(method, path, body)
         end
         if eff.stale_home and m.home then
             m.stale = true
-            if OC.memo[key] then OC.memo[key].validated_at = 0 end
+            if OC.memo[key] then OC.memo[key].stale = true end
         end
     end
     -- A progress write names the book by document digest; the local overlay already shows this
@@ -469,12 +546,41 @@ function OC.httpCover(client, path, temp, max_bytes, etag)
     return 200, rh and (rh.etag or rh.ETag or rh["Etag"])
 end
 
+local function clock()
+    local oks, socket = pcall(require, "socket")
+    if oks and type(socket) == "table" and socket.gettime then return socket.gettime() end
+    return os.time()
+end
+
+-- A copy of src at dst, published by rename (never a half-written cover).
+local function copyFile(src, dst)
+    local data = readFile(src)
+    if not data then return false end
+    local tmp = dst .. ".copy"
+    if not writeFile(tmp, data) then return false end
+    if not os.rename(tmp, dst) then os.remove(tmp); return false end
+    return true
+end
+OC.copyFile = copyFile
+
 -- The plugin's downloadCatalogThumbnail, with ETags: a moved version asks If-None-Match and a
--- 304 renames the file it has. Falls back to the plugin's download on anything unexpected.
+-- 304 copies the file it has to the new version's name. The older file stays where it is: a view
+-- painted from an older body (the plugin's saved Home) still finds its cover. Falls back to the
+-- plugin's download on anything unexpected. Runs in the thumbnail worker's child process: no
+-- JNI, no events, and only true / (true, "not_modified") / (nil, err) back, as the worker wants.
 function OC.coverDownload(client, stock, book_id, local_path, opts)
     opts = opts or {}
+    local t0 = clock()
+    local function done(how, ok, detail, bytes)
+        log(string.format("cover: %s %s%s in %d ms", tostring(book_id), how,
+            bytes and (", " .. bytes .. " B") or "", math.floor((clock() - t0) * 1000 + 0.5)) .. (detail and (" (" .. tostring(detail) .. ")") or ""))
+        return ok, detail
+    end
     local dir, name = tostring(local_path):match("^(.*)/([^/]+)$")
-    if not dir then return stock(client, book_id, local_path, opts) end
+    if not dir then
+        local ok, err = stock(client, book_id, local_path, opts)
+        return done(ok and "200 (plugin)" or "error (plugin)", ok, err)
+    end
     local old = OC.olderCover(dir, name, tostring(book_id))
     -- Full refresh re-asks a good file with its own ETag.
     local same = (opts.orbit_recheck and readFile(local_path .. ".etag", 200)) and local_path or nil
@@ -483,20 +589,27 @@ function OC.coverDownload(client, stock, book_id, local_path, opts)
     local temp = opts.temp_path or (local_path .. ".part")
     local code, got = OC.httpCover(client, "/koreader/plugin/catalog/books/" .. tostring(book_id) .. "/thumbnail",
         temp, opts.max_bytes or 4 * 1024 * 1024, etag)
-    if code == "fallback" then return stock(client, book_id, local_path, opts) end
+    if code == "fallback" then
+        local ok, err = stock(client, book_id, local_path, opts)
+        return done(ok and "200 (plugin download: proxy or redirect)" or "error (plugin download)", ok, err)
+    end
     if code == 304 and have then
         if have ~= local_path then
-            if not os.rename(have, local_path) then return stock(client, book_id, local_path, opts) end
-            os.rename(have .. ".etag", local_path .. ".etag")
+            if not copyFile(have, local_path) then
+                local ok, err = stock(client, book_id, local_path, opts)
+                return done(ok and "200 (copy failed; downloaded)" or "error", ok, err)
+            end
+            copyFile(have .. ".etag", local_path .. ".etag")
         end
         if lfs_ok then lfs.touch(local_path) end
+        local _, d = done("304", true, have ~= local_path and "copied from the older version" or nil)
         return true, "not_modified"
     end
-    if code ~= 200 then return nil, got end
-    if not os.rename(temp, local_path) then os.remove(temp); return nil, "publish_failed" end
+    if code ~= 200 then return done("error", nil, got) end
+    if not os.rename(temp, local_path) then os.remove(temp); return done("error", nil, "publish_failed") end
     if got then writeFile(local_path .. ".etag", tostring(got)) else os.remove(local_path .. ".etag") end
-    if old and old ~= local_path then os.remove(old); os.remove(old .. ".etag") end
-    return true
+    local size = lfs_ok and lfs.attributes(local_path, "size") or nil
+    return done("200", true, nil, size)
 end
 
 -- ETags whose cover is gone (the plugin's pruner removes only *.jpg).
@@ -531,7 +644,7 @@ end
 -- A short note on screen (the plugin's toast; its absence is no error).
 function OC.note(text, timeout)
     log("cache: note:", text)
-    pcall(function() require("bookorbit_toast").show(text, { timeout = timeout or 2 }) end)
+    pcall(function() require("bookorbit_toast").show(text, { timeout = timeout or 2 }) end) -- gate: bookorbit_toast is gated (Gate.installToast)
 end
 
 -- Full refresh is done when its view has painted and its covers are re-asked.
@@ -542,13 +655,28 @@ function OC.fullStep(what, n)
     if what == "covers" then f.covers_done, f.replaced = true, n or 0 end
     if f.painted and f.covers_done then
         OC.full = nil
-        OC.note(string.format(_("Full refresh done · %d covers checked"), f.covers)
-            .. ((f.replaced or 0) > 0 and string.format(_(", %d replaced"), f.replaced) or ""), 3)
+        OC.note(string.format(_("This page is refreshed · %d covers checked"), f.covers)
+            .. ((f.replaced or 0) > 0 and string.format(_(", %d replaced"), f.replaced) or "")
+            .. (Mirror and _(" · saving the rest for offline…") or ""), 3)
     end
 end
 
 -- Tap ⟳ / background checks: revalidate this view, never evict, retry failed covers.
+-- Offline, a refresh first asks for the network (KOReader's own path, which the Orbit Wi-Fi
+-- switching answers quietly) and runs once connected: it never repaints from a saved body.
+local function whenOnline(what, fn)
+    if NetworkMgr:isConnected() then return false end
+    log("cache:", what, "while offline: connecting first")
+    if Compat.callable(NetworkMgr.runWhenConnected) then
+        NetworkMgr:runWhenConnected(fn)
+    else
+        OC.note(_("Connect to refresh"), 3)
+    end
+    return true
+end
+
 function OC.refresh(cat)
+    if whenOnline("Refresh", function() OC.refresh(cat) end) then return end
     log("cache: Refresh")
     if not S.refresh_tip_shown then
         S.refresh_tip_shown = true
@@ -559,12 +687,16 @@ function OC.refresh(cat)
     end
     OC.begin("refresh")
     if type(cat.thumbnail_failures) == "table" then cat.thumbnail_failures = {} end
-    return LF.refreshKeepingCovers(cat)
+    local r = LF.refreshKeepingCovers(cat)
+    -- The delta for the offline mirror: every saved page, in the background.
+    if Mirror then pcall(Mirror.revalidate, "Refresh") end
+    return r
 end
 
 -- Hold ⟳ / the menu: this view (and Home) from the server; bad cover files replaced, good ones
 -- asked If-None-Match.
 function OC.fullRefresh(cat)
+    if whenOnline("Full refresh", function() OC.fullRefresh(cat) end) then return end
     log("cache: Full refresh")
     OC.note(_("Full refresh: reloading everything from BookOrbit…"), 3)
     OC.begin("full")
@@ -586,8 +718,16 @@ function OC.fullRefresh(cat)
     OC.full = { covers = #books }
     if #recheck > 0 then OC.recheckCovers(cat, recheck) else OC.fullStep("covers", bad) end
     -- Home's sections are fetched with the view when on Home; elsewhere, Home is marked stale.
-    for _, m in pairs(OC.index().entries) do if m.home then m.stale = true end end
-    return LF.refreshKeepingCovers(cat)
+    for k, m in pairs(OC.index().entries) do
+        if m.home then m.stale = true; if OC.memo[k] then OC.memo[k].stale = true end end
+    end
+    local r = LF.refreshKeepingCovers(cat)
+    -- Then everything reachable from Home, for offline (ko/mirror.lua).
+    if Mirror then
+        Mirror.cat = cat
+        UIManager:scheduleIn(1, function() pcall(Mirror.start, "Full refresh", true) end)
+    end
+    return r
 end
 
 function OC.recheckCovers(cat, jobs)
@@ -620,7 +760,22 @@ function OC.menuFullRefresh()
     if cat and not cat.catalog_closed then return OC.fullRefresh(cat) end
     OC.begin("full")
     OC.active.until_t = nowT() + 600
-    pcall(function() require("bookorbit_toast").show(_("Full refresh when BookOrbit opens next"), { timeout = 3 }) end)
+    pcall(function() require("bookorbit_toast").show(_("Full refresh when BookOrbit opens next"), { timeout = 3 }) end) -- gate: bookorbit_toast is gated (Gate.installToast)
+end
+
+-- One line per paint: covers the view needs, how many are on disk, how many are queued.
+function OC.coverSummary(cat)
+    local books = OC.visibleBooks(cat)
+    local need, have = 0, 0
+    for _, b in ipairs(books) do
+        if type(b) == "table" and b.hasCover then
+            need = need + 1
+            if Compat.callable(cat.cachedThumbnailPath) and cat:cachedThumbnailPath(b) then have = have + 1 end
+        end
+    end
+    local q = cat.thumbnail_queue
+    local queued = type(q) == "table" and q.tail and q.head and (q.tail - q.head + 1) or 0
+    if need > 0 then log("covers:", need, "needed,", have, "on disk,", queued, "queued") end
 end
 
 ---------------------------------------------------------------- install
@@ -677,7 +832,7 @@ function OC.install(why)
     if Compat.callable(Catalog.runConnected) then
         wrap(Catalog, "runConnected", function(stock) return function(self, fn)
             if not OC.on() or OC.offline_pass or NetworkMgr:isConnected() then return stock(self, fn) end
-            OC.offline_pass, OC.offline_miss, OC.offline_other = true, false, false
+            OC.offline_pass, OC.offline_miss, OC.offline_other, OC.offline_search = true, false, false, false
             local okr, err = pcall(function()
                 local Trapper = require("ui/trapper")
                 Trapper:wrap(function()
@@ -686,9 +841,13 @@ function OC.install(why)
                     pcall(OC.drainEvents)
                     if not okf then log("cache: offline view failed:", ferr) end
                     if OC.offline_other then return stock(self, fn) end
+                    if OC.offline_search and not OC.offline_miss then
+                        OC.note(_("Search needs a connection"), 3)
+                        return
+                    end
                     if OC.offline_miss then
                         log("cache: offline; asking to connect for a page that isn't saved")
-                        UIManager:show(require("ui/widget/confirmbox"):new{
+                        UIManager:show(require("ui/widget/confirmbox"):new{ -- gate: user action (paging a list offline)
                             text = _("This page isn't saved on this reader."),
                             ok_text = _("Connect and load more"),
                             ok_callback = function() stock(self, fn) end,
@@ -729,8 +888,50 @@ function OC.install(why)
         end
         local r = stock(self, title, item_table, context, push)
         if OC.full then OC.fullStep("painted") end
+        pcall(OC.coverSummary, self)
         return r
     end end, "cache")
+    -- Home's first paint from this cache (the dashboard and its sections, assembled by the
+    -- plugin's own dashboardRootFetch, nothing asked of the network) instead of the plugin's saved
+    -- body; the local overlay goes on top in BoardData.build. Anything not saved -> the plugin's.
+    if Compat.callable(Catalog.initialDashboardContext) and Compat.callable(Catalog.dashboardRootFetch) then
+        wrap(Catalog, "initialDashboardContext", function(stock) return function(self, ...)
+            if not OC.on() then return stock(self, ...) end
+            OC.cache_only = true
+            local prefer = self.prefer_cached_dashboard
+            self.prefer_cached_dashboard = nil -- offline too: this cache, not the saved body
+            local okf, items, context = pcall(self.dashboardRootFetch, self, { invisible = true })
+            self.prefer_cached_dashboard = prefer
+            OC.cache_only = nil
+            OC.pending = {}
+            if okf and type(context) == "table" and type(context.dashboard) == "table" and not context.unavailable then
+                context.stale, context.orbit_first = true, true
+                self._orbit_paint_source = "cache"
+                log("cache: Home's first paint from the cache")
+                return items, context
+            end
+            return stock(self, ...)
+        end end, "cache")
+    end
+    -- Cover jobs dropped by a new view (the plugin's switchTo), for the log.
+    if Compat.callable(Catalog.cancelThumbnailJobs) then
+        wrap(Catalog, "cancelThumbnailJobs", function(stock) return function(self, ...)
+            local q = self.thumbnail_queue
+            local n = type(q) == "table" and q.tail and q.head and (q.tail - q.head + 1) or 0
+            if n > 0 then log("covers:", n, "queued cover job(s) cancelled by a new view") end
+            return stock(self, ...)
+        end end, "cache")
+    end
+    if Compat.callable(Catalog.downloadThumbnailBatch) then
+        wrap(Catalog, "downloadThumbnailBatch", function(stock) return function(self, batch, generation)
+            local results = stock(self, batch, generation)
+            local okn, bad = 0, 0
+            for _, v in pairs(type(results) == "table" and results or {}) do if v then okn = okn + 1 else bad = bad + 1 end end
+            log("covers: batch of", #(batch or {}), "->", results == nil and "interrupted" or (okn .. " saved, " .. bad .. " failed"),
+                generation ~= self.thumbnail_generation and "(view changed; not drawn)" or "")
+            return results
+        end end, "cache")
+    end
     OC.installed = true
     log("cache: installed (" .. tostring(why) .. ")")
     UIManager:scheduleIn(5, function()

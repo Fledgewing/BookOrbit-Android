@@ -155,7 +155,7 @@ function OrbitAndroid:maybeRecommendedLine(where)
     Rec.line_pending = false
     if not text then return end
     log("recommended: line shown in " .. where .. ": " .. text)
-    UIManager:show(InfoMessage:new{ text = _(text) .. "\n" .. _("Tools › Android sync › Recommended settings"), timeout = 4 })
+    orbitNote(_(text) .. " · " .. _("Tools › Android sync › Recommended settings"), 4)
 end
 
 -- Start: a pass once the BookOrbit plugin instance can be found (module.lua's next-tick fallback).
@@ -241,7 +241,7 @@ function OrbitAndroid:showRecommended(why)
         if self.rec_menu then UIManager:close(self.rec_menu); self.rec_menu = nil end
         UIManager:scheduleIn(0.1, function() self:showRecommended("refresh") end)
     end
-    local function note(text) UIManager:show(InfoMessage:new{ text = text, timeout = 3 }) end
+    local function note(text) UIManager:show(InfoMessage:new{ text = text, timeout = 3 }) end -- gate: user action (Recommended settings menu)
     local function dialog(title, buttons)
         local ButtonDialog = require("ui/widget/buttondialog")
         local d
@@ -250,7 +250,7 @@ function OrbitAndroid:showRecommended(why)
             table.insert(row, { text = b[1], callback = function() UIManager:close(d); b[2]() end })
         end
         d = ButtonDialog:new{ title = title, buttons = { row } }
-        UIManager:show(d)
+        UIManager:show(d) -- gate: user action (Recommended settings menu)
         return d
     end
     local groups = { conflict = {}, applied = {}, already = {}, kept = {}, unavailable = {} }
@@ -314,7 +314,7 @@ function OrbitAndroid:showRecommended(why)
                             Rec.report("review"); reopen()
                         end
                         if wifiNeeded(it) then
-                            UIManager:show(ConfirmBox:new{
+                            UIManager:show(ConfirmBox:new{ -- gate: user action (Recommended settings menu)
                                 text = _("Wi-Fi switching needs this. Turn off Wi-Fi via Orbit Companion and undo?"),
                                 ok_text = _("Turn off and undo"),
                                 ok_callback = function() S.wifi_via_companion = false; saveSettings(); go() end,
@@ -372,7 +372,7 @@ function OrbitAndroid:showRecommended(why)
         covers_fullscreen = true,
         close_callback = function() if self.rec_menu then UIManager:close(self.rec_menu); self.rec_menu = nil end end,
     }
-    UIManager:show(self.rec_menu)
+    UIManager:show(self.rec_menu) -- gate: user action (Recommended settings menu)
     return self.rec_menu
 end
 

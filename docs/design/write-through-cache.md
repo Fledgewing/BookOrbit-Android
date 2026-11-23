@@ -22,9 +22,9 @@ modes), which both platforms' tests read.
 | Cached reads | `GET` of the catalog: root, dashboard, sections, books lists, book detail, manifest (paths under `/koreader/plugin/catalog/`, firmware `/plugin/catalog/`). Nothing else (auth, version, progress, sync, downloads). |
 | Key | account + server + method + path + query, normalised: server URL lower-case without trailing `/`, query parameters sorted, empty values dropped. Account = the user name the request authenticates as. Entries of another account or server are never served; signing out or changing server/account drops them. |
 | Read | Entry present: return it at once (no network), then revalidate in the background unless it was validated in the last 60 s. Entry missing: go to the server (as today) and store a `2xx` reply. Errors are never stored. |
-| Revalidate | One background request per key at a time. Same reply (by canonical form): stamp `validated_at`, nothing else. Different: replace it and tell the view showing that key to redraw (see the platform hooks). Failure: keep the entry; the view's stamp says "Not updated". |
+| Revalidate | One background request per key at a time. Same reply (by canonical form, after normalising: `generatedAt` is dropped, it is a fresh clock value per request; Home's `discover` row is random per request and keeps the saved one except on a Full refresh; see [server contract](../server-contract.md#catalog-replies-carry-no-version)): stamp `validated_at`, nothing else. Different: replace it and tell the view showing that key to redraw (see the platform hooks). Failure: keep the entry; the view's stamp says "Not updated". |
 | Writes | Every non-`GET` passes through untouched. On `2xx`, the write's effects are applied to the cache: `read-status` and `rating` on book *id* patch `readStatus`/`rating` of that book wherever a cached body lists it (detail, Home lists, series members, list pages) and mark Home stale; progress and book-states mark Home stale. Stale = revalidate on the next read (immediately if it is on screen). A failed write changes nothing. |
-| Size | Total cap (Android 8 MB, X4 2 MB on SD) and entry cap (400 / 200). Least recently used goes first; the Home body and the open book's detail are never evicted by a list page. |
+| Size | Total cap (Android 64 MB since v0.11.1, logged at each Full refresh; X4 2 MB on SD) and entry cap (20000 / 200). Least recently used goes first; the Home body and the open book's detail are never evicted by a list page. |
 | Overlay | Unchanged: local-first's rules (device wins while newer or unsent; a local finish leaves Continue reading and counts toward the goal at once; design D4) are applied to what the cache returns, never written into it. |
 | Offline | Reads come from the cache, with the "Offline, saved …" stamp. Writes made offline use the existing queues (the plugin's outbox, Orbit's finish queue, the firmware's sync queue); the cache only learns of them when they succeed. |
 | Covers | Part of the cache: a disk file per book id + cover version, the version being the book's `updatedAt` as the server lists it (the plugin already names its files this way: `bookorbit_catalog_thumbnails.lua:58-85` coverToken/memoKey, files in `cache/bookorbit`, pruned at 600). A cover is downloaded only when it is missing, failed earlier, or listed with a version other than the one on disk; a cover whose version is unchanged is never downloaded again. A cover changed on the server without a new version is what Full refresh is for. Reading never changes the version (see "Cover version" below). |
@@ -59,6 +59,37 @@ The thumbnail itself has a cover-only version: `ETag` = the cover file's mtime, 
   conditional GET that reuses the client's server, auth headers and the worker's temp path and size
   cap. The plugin's downloader neither sends nor keeps ETags (`bookorbit_api.lua:455-527`). Behind a
   proxy or on a redirect, it falls back to the plugin's download (no ETag).
+
+## Offline mirror (v0.11.1)
+
+A Full refresh ends by saving everything reachable from Home without typing, so the reader can
+browse offline:
+- every page of Home's sections and of every list they link to;
+- the section indexes (collections, smart scopes, libraries, series, authors) and each entry's
+  book list;
+- On device;
+- details of the books on the reader, Continue reading, Up next, and the next book in each
+  series;
+- their covers, conditional by ETag.
+
+Search stays online; offline it says "Search needs a connection".
+
+- **Pages.** Lists are saved as 100-item pages (the server's page maximum). Any page or offset the
+  plugin asks for offline is cut from them (`Cache.slice`), so paging never asks to connect.
+- **Pacing.** One request at a time, a "Full refresh · saving for offline N/M" note every 10 s,
+  and a queue kept on disk that resumes after a restart. Wi-Fi is held only while it runs, and it
+  stops when the network goes.
+- **Refresh.** A normal Refresh rechecks **every saved page** of a list, never only the first one.
+  When a list's total changes, the list is paged again (`Cache.repage`): a series that gains a
+  21st book shows it after Refresh.
+- **When.** A Full refresh can be started by hand (hold ⟳, or the menu). It also starts by itself
+  when the mirror is older than its TTL (default 7 days; Orbit menu › Automatic Full refresh, or
+  off) or when the library version changes (the sweep reply's `libraryVersion`).
+- **Shown as** "Saved for offline · <day time>" in the Orbit menu. The log reports lists, pages,
+  requests and MB at the end of each run.
+
+The first paint of Home comes from the cache with the local overlay already applied: Resume
+shows at once, never Download then Resume.
 
 ## Refresh and Full refresh
 
@@ -131,6 +162,10 @@ cover jobs. Neither of our modes goes through that deletion.
   name with the book id and its `updatedAt`, so a cover is fetched under the same rules.
 - **Revalidate:** only while Wi-Fi is already up (the firmware joins on demand); a catalog screen
   opened offline shows the cached copy with the saved stamp. No background task on the C3.
+- **Offline mirror (X4, X4 Pro):** a smaller scope. Home's sections and the lists they link to,
+  first pages only beyond Continue reading and Up next, the books on the reader and their next in
+  series; files on SD under the same 2 MB cap, oldest lists dropped first. Same "Saved for offline"
+  line in settings and the same TTL rule. X3 is excluded (no room).
 - **X3:** not designed for now beyond "doesn't break": the cache stays off where the build lacks
   the room (compile-time flag), and the code path is the one it has today.
 

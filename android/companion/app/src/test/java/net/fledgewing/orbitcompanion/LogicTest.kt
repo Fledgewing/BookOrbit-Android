@@ -751,34 +751,52 @@ class UpdateFlowTest {
         assertTrue(UpdateFlow.autoRestart("0.6.1"))
         assertFalse(UpdateFlow.autoRestart("0.4.9"))
         assertFalse(UpdateFlow.autoRestart(null))
-        assertEquals("Updated to v0.5.2; KOReader restarts to load it (after the book, if one is open)", UpdateFlow.installedLine("0.5.2"))
+        assertEquals("Updated to v0.5.2; KOReader restarts to load it when the screen next goes off", UpdateFlow.installedLine("0.5.2"))
+        assertEquals("Updated to v0.5.2; KOReader restarts now to load it (an open book reopens)", UpdateFlow.installedLine("0.5.2", now = true))
     }
 
     /** M8C 11-22 02:06: 0.5.4 -> 0.6.0 by hand; the old process wrote no mark, so it waited for the book. */
     @Test
     fun anAppReplaceRestartsNowWithNoMark() {
         val t = 1_000_000_000L
-        val now = UpdateFlow.restartNowAfter(appReplaced = true, nowMs = t, markAtMs = 0)
-        assertTrue("an app replace needs no mark", now)
-        assertEquals("book open: restarts now", UpdateFlow.Restart.NOW, UpdateFlow.restart("0.6.0", "0.5.4", "", true, now))
+        val manual = UpdateFlow.restartNowAfter(appReplaced = true, nowMs = t, markAtMs = 0)
+        assertTrue("an app replace needs no mark", manual)
+        assertEquals("book open: restarts now", UpdateFlow.Restart.NOW, UpdateFlow.restart("0.6.0", "0.5.4", "", manual))
         val patchOnly = UpdateFlow.restartNowAfter(appReplaced = false, nowMs = t, markAtMs = 0)
         assertFalse(patchOnly)
-        assertEquals("a background patch-only update waits for the book", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.6.1", "0.6.0", "", true, patchOnly))
+        assertEquals("a background patch-only update waits for the screen-off", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.6.1", "0.6.0", "", patchOnly))
         assertTrue("a patch-only update the user started", UpdateFlow.restartNowAfter(appReplaced = false, nowMs = t + 1_000, markAtMs = t))
     }
 
     /** M8C 11-22 01:42: "if I click update myself that means restart KOReader now". */
     @Test
     fun anUpdateYouStartedRestartsWithTheBookOpenAndReopensIt() {
-        assertEquals("you started it: now, book open", UpdateFlow.Restart.NOW, UpdateFlow.restart("0.5.5", "0.5.4", "", true, now = true))
-        assertEquals("a background update waits for the book", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.5.5", "0.5.4", "", true, now = false))
-        assertEquals("still once per version", UpdateFlow.Restart.NONE, UpdateFlow.restart("0.5.5", "0.5.4", "0.5.5", true, now = true))
+        assertEquals("you started it: now, book open", UpdateFlow.Restart.NOW, UpdateFlow.restart("0.5.5", "0.5.4", "", manual = true))
+        assertEquals("a background update waits", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.5.5", "0.5.4", "", manual = false))
+        assertEquals("still once per version", UpdateFlow.Restart.NONE, UpdateFlow.restart("0.5.5", "0.5.4", "0.5.5", manual = true))
         assertEquals(HomeCommands.REOPEN_BOOK, UpdateFlow.relaunchCommand(bookWasOpen = true))
         assertEquals(null, UpdateFlow.relaunchCommand(bookWasOpen = false))
         val t = 1_000_000_000L
         assertTrue("tapped a minute before the replace", UpdateFlow.userStarted(t + 60_000, t))
         assertFalse("never started by hand", UpdateFlow.userStarted(t, 0))
         assertFalse("a stale tap from hours ago", UpdateFlow.userStarted(t + 3 * 3_600_000L, t))
+    }
+
+    /**
+     * v0.11.1 rule (user decision): a manual update restarts KOReader at once, book open or not;
+     * an automatic one never while the screen is on (not with the book closed, not on BookOrbit
+     * Home, not on a Home press), only at the screen-off.
+     */
+    @Test
+    fun manualRestartsNowAutomaticOnlyAtScreenOff() {
+        assertEquals("manual, a book open: now", UpdateFlow.Restart.NOW, UpdateFlow.restart("0.11.1", "0.11.0", "", manual = true, screenOff = false))
+        assertEquals("automatic, the book closed: waits", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.11.1", "0.11.0", "", manual = false, screenOff = false))
+        assertEquals("automatic, a Home press: waits", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.11.1", "0.11.0", "", manual = false, screenOff = false))
+        assertEquals("automatic at the screen-off: now", UpdateFlow.Restart.NOW, UpdateFlow.restart("0.11.1", "0.11.0", "", manual = false, screenOff = true))
+        assertEquals("automatic, KOReader never reported: still only at screen-off", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.11.1", null, "", manual = false))
+        assertEquals("sent once per version", UpdateFlow.Restart.NONE, UpdateFlow.restart("0.11.1", "0.11.0", "0.11.1", manual = false, screenOff = true))
+        assertEquals("already loaded", UpdateFlow.Restart.NONE, UpdateFlow.restart("0.11.1", "0.11.1", "", manual = true))
+        assertEquals("nothing installed", UpdateFlow.Restart.NONE, UpdateFlow.restart("", "0.11.0", "", manual = true))
     }
 
     /** M8C 11-22 01:42:31: "needs [patch, clicker] (regressed …)" mid-update, notification posted. */
@@ -809,49 +827,118 @@ class UpdateFlowTest {
 
     /** M8C 11-22 01:28-01:34: KOReader ran 0.4.6 with 0.5.3 on disk and nothing pending. */
     @Test
-    fun anOlderRunningPatchRestartsOnceWithNoBookOpen() {
+    fun anOlderRunningPatchRestartsOnceAtScreenOff() {
         val s = StaleRestart()
         val lines = mutableListOf<String>()
-        assertEquals(UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.3", false, quiet = false) { lines += it })
+        assertEquals(UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.3", manual = false, screenOff = true) { lines += it })
         assertEquals(listOf("restart: KOReader runs 0.4.6, file has 0.5.3"), lines)
-        assertEquals("no loop: still old after the restart", UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", false, quiet = false) { lines += it })
-        assertEquals("no loop on Home either", UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", null, quiet = true))
+        assertEquals("no loop: still old after the restart", UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", manual = false, screenOff = true) { lines += it })
+        assertEquals("no loop on a manual trigger either", UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", manual = true, screenOff = false))
         assertEquals(1, lines.size)
-        assertEquals("a newer file is a new pair", UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.4", false, quiet = false))
+        assertEquals("a newer file is a new pair", UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.4", manual = false, screenOff = true))
     }
 
     @Test
-    fun anOlderRunningPatchWaitsForTheBook() {
+    fun anOlderRunningPatchWaitsForTheScreenOff() {
         val s = StaleRestart()
         val lines = mutableListOf<String>()
-        assertEquals(UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", true, quiet = false) { lines += it })
-        assertEquals("book open: not even on screen-off or Home", UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", true, quiet = true) { lines += it })
+        assertEquals("status request, screen on", UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", manual = false, screenOff = false) { lines += it })
+        assertEquals("a Home press", UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", manual = false, screenOff = false) { lines += it })
         assertEquals("the wait is logged once", 1, lines.size)
-        assertEquals("unknown book on a status request waits", UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", null, quiet = false))
-        assertEquals("unknown book on screen-off or Home goes", UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.3", null, quiet = true))
-        assertEquals(UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", false, quiet = false))
+        assertTrue(lines[0].endsWith("restarting at the next screen-off"))
+        assertEquals("after the user's app update", UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.3", manual = true, screenOff = false))
+        assertEquals(UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", manual = false, screenOff = true))
     }
 
     @Test
     fun equalOrNewerRunningPatchDoesNothing() {
         val s = StaleRestart()
-        assertEquals(UpdateFlow.Restart.NONE, s.decide("0.5.3", "0.5.3", false, quiet = false))
-        assertEquals("a newer running patch than the file", UpdateFlow.Restart.NONE, s.decide("0.5.4", "0.5.3", false, quiet = false))
-        assertEquals("unknown running", UpdateFlow.Restart.NONE, s.decide(null, "0.5.3", false, quiet = false))
-        assertEquals("no file", UpdateFlow.Restart.NONE, s.decide("0.4.6", null, false, quiet = false))
-        assertEquals("a dev file", UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.0.0-dev", false, quiet = false))
+        assertEquals(UpdateFlow.Restart.NONE, s.decide("0.5.3", "0.5.3", manual = true, screenOff = true))
+        assertEquals("a newer running patch than the file", UpdateFlow.Restart.NONE, s.decide("0.5.4", "0.5.3", manual = true, screenOff = true))
+        assertEquals("unknown running", UpdateFlow.Restart.NONE, s.decide(null, "0.5.3", manual = true, screenOff = true))
+        assertEquals("no file", UpdateFlow.Restart.NONE, s.decide("0.4.6", null, manual = true, screenOff = true))
+        assertEquals("a dev file", UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.0.0-dev", manual = true, screenOff = true))
     }
 
-    /** Boox Page 11-22 01:04: a 0.4.8 patch, no book open; it obeyed COMMAND=restart. */
+    /** v0.11.1 (live, plugin 0.10.1 running): Fix next sent signin x3 and recommended x1. */
     @Test
-    fun theCompanionRestartsAnyPatchWhenNoBookIsOpen() {
-        val now = UpdateFlow.Restart.NOW
-        assertEquals("an old patch, file browser", now, UpdateFlow.restart("0.5.2", "0.4.8", "", false))
-        assertEquals("KOReader not running (unknown)", now, UpdateFlow.restart("0.5.2", null, "", null))
-        assertEquals("a book open: never interrupts reading", UpdateFlow.Restart.WAIT, UpdateFlow.restart("0.5.2", "0.4.8", "", true))
-        assertEquals("sent once per version", UpdateFlow.Restart.NONE, UpdateFlow.restart("0.5.2", "0.4.8", "0.5.2", false))
-        assertEquals("already loaded", UpdateFlow.Restart.NONE, UpdateFlow.restart("0.5.2", "0.5.2", "", false))
-        assertEquals("nothing installed", UpdateFlow.Restart.NONE, UpdateFlow.restart("", "0.4.8", "", false))
+    fun aCommandIsSentOnlyToAPluginThatKnowsIt() {
+        assertNull("0.10.1 doesn't know signin", PluginCommands.allowed(HomeCommands.SIGNIN, "0.10.1"))
+        assertNull(PluginCommands.allowed(HomeCommands.RECOMMENDED, "0.10.1"))
+        assertEquals(HomeCommands.SIGNIN, PluginCommands.allowed(HomeCommands.SIGNIN, "0.11.0"))
+        assertEquals(HomeCommands.RECOMMENDED, PluginCommands.allowed(HomeCommands.RECOMMENDED, "0.11.1"))
+        assertNull("never reported: a versioned command waits", PluginCommands.allowed(HomeCommands.SIGNIN, null))
+        assertNull("restart needs 0.3.1", PluginCommands.allowed(HomeCommands.RESTART, "0.3.0"))
+        assertEquals(HomeCommands.RESTART, PluginCommands.allowed(HomeCommands.RESTART, "0.3.1"))
+        assertNull("reopen_book needs 0.5.5", PluginCommands.allowed(HomeCommands.REOPEN_BOOK, "0.5.4"))
+        assertEquals(HomeCommands.REOPEN_BOOK, PluginCommands.allowed(HomeCommands.REOPEN_BOOK, "0.5.5"))
+        assertEquals("home is known by every plugin", HomeCommands.HOME, PluginCommands.allowed(HomeCommands.HOME, null))
+        assertEquals(HomeCommands.HOME_SMART, PluginCommands.allowed(HomeCommands.HOME_SMART, "0.1.0"))
+        assertNull("no command stays none", PluginCommands.allowed(null, "0.11.0"))
+        assertEquals("command=signin not sent: the running plugin (v0.10.1) doesn't know it (needs v0.11.0+)", PluginCommands.droppedLine(HomeCommands.SIGNIN, "0.10.1"))
+    }
+
+    /** M8C: command=restart at 21:11:24.559, a Home press 0.9 s later sent command=home and replaced it. */
+    @Test
+    fun aRestartIsNotReplacedByTheNextStart() {
+        val l = RestartLatch()
+        val t = 1_000_000L
+        assertEquals("nothing sent yet", HomeCommands.HOME, l.resolve(HomeCommands.HOME, t, "0.11.0"))
+        l.sent(t, "0.11.0")
+        assertEquals("a Home press 0.9 s later sends restart", HomeCommands.RESTART, l.resolve(HomeCommands.HOME_SMART, t + 900, "0.11.0"))
+        assertEquals("a plain start too", HomeCommands.RESTART, l.resolve(null, t + 5_000, "0.11.0"))
+        assertEquals("a new version runs: the restart happened", HomeCommands.HOME, l.resolve(HomeCommands.HOME, t + 6_000, "0.11.1"))
+        l.sent(t, "0.11.0")
+        assertEquals("after 10 s it's no longer held", HomeCommands.HOME, l.resolve(HomeCommands.HOME, t + 10_001, "0.11.0"))
+        l.sent(t, "0.11.0")
+        l.clear() // RELAUNCH came: the plugin read it
+        assertEquals("the relaunch's own command goes", HomeCommands.REOPEN_BOOK, l.resolve(HomeCommands.REOPEN_BOOK, t + 2_500, "0.11.0"))
+    }
+
+    /** "Nothing interrupts reading": the reading state from STATS (reading=1|0 from 0.11.1, else derived). */
+    @Test
+    fun readingFromStats() {
+        assertEquals(true, ReadingLogic.fromStats("interval", "1", "1"))
+        assertEquals("BookOrbit Home over the book", false, ReadingLogic.fromStats("interval", "1", "0"))
+        assertEquals("older plugin: open=1", true, ReadingLogic.fromStats("resume", "1", null))
+        assertEquals("older plugin: suspend", false, ReadingLogic.fromStats("suspend", "0", null))
+        assertEquals("older plugin: closed", false, ReadingLogic.fromStats("close", "0", null))
+        assertNull("nothing said", ReadingLogic.fromStats("interval", null, null))
+        val t = 1_000_000_000L
+        assertTrue(ReadingLogic.reading(t, t + 60_000))
+        assertFalse("no report for over 6 min", ReadingLogic.reading(t, t + ReadingLogic.FRESH_MS + 1))
+        assertFalse("not reading", ReadingLogic.reading(0, t))
+        assertEquals(t + ReadingLogic.FRESH_MS + 1, ReadingLogic.expiresAt(t))
+        assertNull(ReadingLogic.expiresAt(0))
+    }
+
+    @Test
+    fun anUpdateReadyWhileReadingIsHeldUntilTheBookCloses() {
+        val g = ReadingGate()
+        assertFalse("ready while reading: held", g.offer("update", reading = true, screenOn = true))
+        assertEquals(setOf("update"), g.holding)
+        assertTrue("still reading: nothing", g.release(reading = true, screenOn = true).isEmpty())
+        assertTrue("screen off (suspend): nobody would see it", g.release(reading = false, screenOn = false).isEmpty())
+        assertEquals("book closed, screen on: posted", listOf("update"), g.release(reading = false, screenOn = true))
+        assertTrue(g.holding.isEmpty())
+    }
+
+    @Test
+    fun anUpdateReadyOnBookOrbitHomeIsPostedAtOnce() {
+        val g = ReadingGate()
+        val reading = ReadingLogic.fromStats("interval", "1", "0")!! // Home over the book: reading=0
+        assertTrue(g.offer("update", reading, screenOn = true))
+        assertTrue(g.holding.isEmpty())
+    }
+
+    @Test
+    fun nothingIsPostedWithTheScreenOff() {
+        val g = ReadingGate()
+        assertFalse("screen off: held", g.offer("setup", reading = false, screenOn = false))
+        assertTrue(g.release(reading = false, screenOn = false).isEmpty())
+        assertFalse(g.offer("update", reading = true, screenOn = true))
+        assertTrue("a stale one is dropped", g.drop("setup"))
+        assertEquals("in offer order, one per key", listOf("update"), g.release(reading = false, screenOn = true))
     }
 
     @Test

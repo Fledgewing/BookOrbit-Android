@@ -24,7 +24,7 @@ function OrbitAndroid:init()
         else UIManager:nextTick(function() self:hookPluginPagePush() end) end
     end
     -- A Sync while reading change from the companion (Shared.refresh) restarts this counter.
-    Updater.onInstalled = function() self:maybeRestart("check") end
+    Updater.onInstalled = function(event) self:maybeRestart(event or "check") end
     Shared.onSchedule = function(id)
         self.schedule = Schedule.new(id, now_s())
         if self.ui and self.ui.document then self:hookPluginPagePush() end

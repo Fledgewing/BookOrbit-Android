@@ -164,3 +164,24 @@ first ([`koreader-catalog.service.ts:241-246`](https://github.com/bookorbit/book
 unknown one as an "unmatched" book on the server
 ([`koreader-plugin.service.ts:135-154`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/koreader/koreader-plugin.service.ts#L135-L154)). Ask only for hashes the server already
 knows.
+
+## Catalog replies carry no version
+
+The JSON catalog routes have no ETag, `since` or `updatedAt` filter, so a cache can only compare
+whole replies. Two fields change on every request and are ignored in that compare
+(`Cache.normalize`):
+- `generatedAt` is a fresh clock value per request (`koreader-catalog.service.ts:279`);
+- Home's `discover` row is random per request (`getRandomBooks`, `:417`).
+
+List pages are at most 100 items (the DTOs, `:87`, `:284`). The library version that changes when
+books are added or removed comes from the progress sweep reply (`getLibraryVersion`,
+`koreader-plugin.service.ts:314-330`). Covers do send ETags.
+
+## A metadata write changes the file hash
+
+BookOrbit embeds metadata into the library file when tags or series change
+(`file-write.repository.ts:199`), so the file's partial MD5 moves. A copy matched by its old hash
+stays matched, but only hashes in the compatible set place positions and highlights
+(`koreader.repository.ts:32-42`): the copy is answered `positionCompatible: false`, and
+progress, highlights and bookmarks stop syncing for it until the copy is replaced
+([keep copies current](design/keep-copies-current.md)).

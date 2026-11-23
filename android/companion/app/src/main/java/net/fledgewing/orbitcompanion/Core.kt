@@ -194,6 +194,9 @@ class Prefs(ctx: Context) {
     /** When this app last changed version (AfterUpdate), 0 none. */
     var updatedAt by LongPref("updated_at")
 
+    /** Wall time of the last STATS that said reading (Reading, ReadingLogic), 0 not reading. */
+    var readingAt by LongPref("reading_at")
+
     /** KOReader has a book open: "1", "0", "" unknown (STATS, /status?book=). */
     var koreaderBook: String
         get() = str("koreader_book")
@@ -531,7 +534,30 @@ object Koreader {
     /** INTERFACE COMMAND=restart: the patch saves, quits, and asks us to start KOReader again (RELAUNCH). */
     fun restart(ctx: Context, why: String): Boolean = start(ctx, why, HomeCommands.RESTART)
 
-    fun start(ctx: Context, why: String, command: String?, from: String? = null): Boolean {
+    /** A RESTART not yet read is never replaced by the next start's intent (RestartLatch). */
+    private val latch = RestartLatch()
+
+    /** RELAUNCH came: the plugin read the restart. */
+    @Synchronized
+    fun restartRead() = latch.clear()
+
+    /**
+     * Starts KOReader with [command], when the plugin that reads it ([plugin]: the running one
+     * by default, /status?patch_version=) knows it (PluginCommands); else with none, logged.
+     */
+    @Synchronized
+    fun start(ctx: Context, why: String, command: String?, from: String? = null, plugin: String? = Prefs(ctx).patchVersionSeen.ifEmpty { null }): Boolean {
+        val running = Prefs(ctx).patchVersionSeen.ifEmpty { null }
+        val now = SystemClock.elapsedRealtime()
+        val held = latch.resolve(command, now, running)
+        if (held != command) OLog.i("koreader start: command=${command ?: "-"} sent as restart: a restart sent ${RestartLatch.WINDOW_MS / 1000} s ago may not be read yet ($why)")
+        val cmd = PluginCommands.allowed(held, plugin)
+        if (held != null && cmd == null) OLog.i("koreader start: ${PluginCommands.droppedLine(held, plugin)}; starting with no command ($why)")
+        if (cmd == HomeCommands.RESTART) latch.sent(now, running)
+        return launch(ctx, why, cmd, if (held == command) from else null)
+    }
+
+    private fun launch(ctx: Context, why: String, command: String?, from: String?): Boolean {
         val t0 = SystemClock.elapsedRealtime()
         val i = Intent(Intent.ACTION_MAIN)
             .setComponent(ComponentName(PKG, ACTIVITY))

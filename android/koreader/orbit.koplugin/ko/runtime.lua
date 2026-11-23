@@ -33,7 +33,9 @@ function Stats.send(why, content, open)
     content = content or readerContent()
     if open == nil then open = content ~= "none" end
     local extras = Stats.take(stats_acc, now_s(), content, open,
-        { reason = why, wifi_mode = Shared.mode(), reading_schedule = S.reading_schedule or "off" })
+        { reason = why, wifi_mode = Shared.mode(), reading_schedule = S.reading_schedule or "off",
+          -- The companion's mirror of the reading gate (docs/design/reading-gate.md).
+          reading = (why ~= "close" and why ~= "suspend" and reading and reading()) and "1" or "0" })
     if extras then Companion.send(Companion.ACTION.STATS, extras) end
 end
 

@@ -39,7 +39,8 @@ import kotlin.concurrent.thread
 object Updater {
     const val REPO = "Fledgewing/Orbify"
     internal const val API = "https://api.github.com/repos/$REPO"
-    private const val CHANNEL = "updates"
+    private const val OLD_CHANNEL = "updates"
+    private const val CHANNEL = "updates_quiet"
     private const val ID_UPDATE = 3
     const val EXTRA_INTERACTIVE = "${Contract.PACKAGE}.extra.INTERACTIVE"
     const val EXTRA_VERSION = "${Contract.PACKAGE}.extra.VERSION"
@@ -347,12 +348,17 @@ object Updater {
                 if (!shown) {
                     // Nothing on screen until the notification is tapped (PinActivity reopens the window).
                     Pin.installEnded(INSTALL_KEY)
-                    notifyReady(ctx, version, confirm)
+                    ready = version to confirm
+                    // Never while reading: the notification waits for a moment nobody is (Reading).
+                    val app = ctx.applicationContext
+                    Reading.show(app, Reading.KEY_UPDATE, "update v$version ready") { notifyReady(app, version, confirm) }
                 }
                 status(ctx, "v$version ready: confirm the install")
             }
             PackageInstaller.STATUS_SUCCESS -> {
                 Pin.installEnded(INSTALL_KEY)
+                ready = null
+                Reading.drop(Reading.KEY_UPDATE)
                 status(ctx, "updated to v$version")
                 notifications(ctx).cancel(ID_UPDATE)
             }
@@ -365,6 +371,8 @@ object Updater {
 
     /** MY_PACKAGE_REPLACED: we are the new version now. */
     fun onReplaced(ctx: Context) {
+        ready = null
+        Reading.drop(Reading.KEY_UPDATE)
         notifications(ctx).cancel(ID_UPDATE)
         File(ctx.filesDir, "updates").listFiles()?.forEach { it.delete() }
         // A fresh process: the window's last 60 s cover Play Protect's follow-up.
@@ -381,11 +389,26 @@ object Updater {
     @Volatile
     var pendingConfirm: Intent? = null
 
+    /** A background update downloaded and waiting for the user's Install: (version, Android's prompt). */
+    @Volatile
+    private var ready: Pair<String, Intent>? = null
+
+    /** The update ready to install, while it is still newer than this app (Status shows "Install"). */
+    fun readyToInstall(): Pair<String, Intent>? = ready?.takeIf { stillNewer(it.first) }
+
+    private fun stillNewer(version: String): Boolean =
+        UpdatePolicy.isNewer(Version.parse(version), Version.parse(BuildConfig.VERSION_NAME))
+
+    /** Quiet: no sound, no vibration, no heads-up (IMPORTANCE_DEFAULT never peeks); shown only through Reading. */
     private fun notifyReady(ctx: Context, version: String, confirm: Intent) {
+        if (!stillNewer(version)) return log("v$version ready, but this app is already v${BuildConfig.VERSION_NAME}: no notification")
         val nm = notifications(ctx)
+        // The old "updates" channel had a sound, which can't be changed once created: replaced.
+        if (nm.getNotificationChannel(OLD_CHANNEL) != null) nm.deleteNotificationChannel(OLD_CHANNEL)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "App updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
             setShowBadge(false)
             enableVibration(false)
+            setSound(null, null)
         })
         val text = "Orbit Companion $version is ready. Tap to install."
         val n = Notification.Builder(ctx, CHANNEL)
@@ -393,6 +416,7 @@ object Updater {
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             // Through the PIN keypad (no PIN or unlocked: straight to Android's prompt).
             .setContentIntent(PendingIntent.getActivity(ctx, 3, PinActivity.thenInstall(ctx, confirm), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             .build()
