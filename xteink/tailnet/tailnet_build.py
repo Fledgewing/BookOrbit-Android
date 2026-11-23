@@ -222,6 +222,9 @@ SWITCHES = {
     # Patch 0029, the write-through cache in front of BookOrbit (item 4,
     # docs/design/write-through-cache.md): X4 Pro and X4 only; the X3 keeps today's catalog.
     "CROSSINK_TAILNET_ORBIFY_CACHE":      (0,      1,      1),
+    # Patch 0035, the offline mirror, Full refresh and the catalog's ⟳ (write-through-cache.md
+    # "Offline mirror", local-first DESIGN decisions 36-37): X4s, on the cache; X3 excluded.
+    "CROSSINK_TAILNET_ORBIFY_MIRROR":     (0,      1,      1),
 }
 # Switches that stand for wolfSSL defines rather than a define of their own.
 WOLFSSL_SWITCH_DEFINES = {

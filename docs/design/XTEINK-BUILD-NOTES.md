@@ -218,6 +218,27 @@ Not host-tested: the carry-over itself. It is the fork's `BookUpdateMigration`, 
 storage layer; the test covers the queue entry that records the old hash and the hash check that gates the
 swap.
 
+## Offline mirror, Full refresh and the catalog's ⟳ (patch 0035, 2026-11-22)
+
+Design: [write-through-cache](write-through-cache.md) ("Offline mirror", "Refresh and Full
+refresh", the Xteink section) and [local-first](local-first/DESIGN.md) decisions 36-37 (the
+header ⟳ on every view; on button-only readers Up on the first row selects it). X4 Pro and X4
+(`CROSSINK_TAILNET_ORBIFY_MIRROR` 0,1,1, which needs the cache); the X3 has neither.
+Rules in `orbify/core/Mirror` (host test `mirror_test.cpp`, with the shared `mirror.due` cases);
+the walker in `orbify/Mirror`.
+
+| # | Question | Decision | Why |
+|---|---|---|---|
+| M1 | What a Full refresh saves | The catalog root; the first page of each section the root lists (Want to read too); for authors, series, collections, libraries and SmartScopes, the first page of the lists of their first 20 rows; the details of the books on the reader and of their next in series (30 at most). 150 requests at most. | The design's X4 scope ("first pages only"), inside the cache's 200 entries so the views read by hand keep room. |
+| M2 | Same requests as the browser | The walker calls the catalog client's own fetches with the browser's page size; a facet row's book list comes from `core/Mirror::facetQuery`, the browser's `activateSelected` mapping, checked by the host test | A request the browser makes differently would miss the cache offline. |
+| M3 | Cache mode | Every mirror request runs under `OrbifyCache::ScopedMode(Full)`: it asks the server whatever the cache holds and replaces the entry | The design's Full refresh. |
+| M4 | When, automatically | The sleep sync, after the copy refresh, when the mirror was never saved, is 7 days old, or the library version (the match check's token) moved: up to 2 min per sleep, resumed by the next (plan on the card, `/.crosspoint/orbify/mirror.tsv`) | Never while reading; the radio is already up. Not in the Home tile's sync, which would then take minutes unasked. |
+| M5 | When, by hand | Hold ⟳ (X4 Pro) or long-press Confirm on ⟳ (X4) in the catalog: runs in place with "Full refresh · saving for offline N/M". Settings › BookOrbit › Home › Full refresh: runs in the Home sync boot with a progress bar; its value is "Saved for offline · 3 h ago" | The approved controls, plus the settings row as a second trigger. |
+| M6 | The ⟳ | At the header's right on every catalog view, the stamp ("updated just now", "Offline, saved 3 h ago", "Not updated · …", `orbify::formatStamp`) as the header's second line on the X4 Pro and beside the ⟳ on the X4. Tap / Confirm: Refresh (the view, asked now, the session's page copies dropped). Hold / long press: Full refresh | Decisions 36-37. Up from the ⟳ wraps to the last row; Down goes back to the first. |
+| M7 | Offline | The catalog boot that cannot join Wi-Fi opens from the cache when a mirror is saved, instead of leaving; Search says "Search needs a connection"; ⟳ connects first ("Couldn't connect" when it can't) | The design's "opens offline"; downloads still need Wi-Fi and fail as before. |
+| M8 | Not in this patch | Covers in the mirror (the Home sync keeps the Home covers); the automatic-Full-refresh setting (fixed at 7 days); opening the catalog offline without the network boot (decision 29's restart stays) | Smallest change that gives offline browsing; each is a follow-up if the device test asks for it. |
+| M9 | Flash | `x4-pro` +14.0 KB (96.0%); X3 unchanged | |
+
 ## Measurements needed on a device
 
 Item 1 adds only small requests on the sync's existing TLS session, so no new memory measurement
@@ -233,3 +254,9 @@ Keep book copies current (patch 0034), on any of the three, serial log: sleep th
 reach. Expect `ORB Copy refresh: <n> queued (...)`, then per book `ORB Copy refresh: <path> (book <id>)
 replaced: <old> -> <new> in <s> s`, then `<k> replaced, <m> waiting`. On the X3, the line to watch is
 `heap too fragmented for a download`: that is when a copy waits for the next sleep instead.
+
+Offline mirror (patch 0035), X4 Pro or X4, serial log: Settings › BookOrbit › Home › Full refresh.
+Expect `ORB Mirror: Full refresh started, 0/<n> requests (free=…, maxAlloc=…)`, a `Full refresh ·
+saving for offline <i>/<n>` line every 10 s, then `ORB Mirror: saved for offline: <l> lists, <s>
+sections, <d> details, <n> requests (<f> failed) in <t> s`. The cache's own `Couldn't keep the reply`
+or evictions in that run mean the 150-request plan is too big for 2 MB.

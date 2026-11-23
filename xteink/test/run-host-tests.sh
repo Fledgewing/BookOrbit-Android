@@ -55,6 +55,7 @@ orbify_test reading_quiet "$core/ReadingQuiet.cpp"
 orbify_test cache "$core/CatalogCache.cpp" "$core/LocalFirst.cpp"
 orbify_test copy_check "$core/CopyCheck.cpp"
 orbify_test copy_queue "$core/CopyQueue.cpp" "$core/CopyCheck.cpp"
+orbify_test mirror "$core/Mirror.cpp"
 # The End-of-Book page (orbify/core/EndPageLayout): touch rules on the X4 Pro and X4 layouts, and
 # PNGs drawn with CrossInk's own font sources for review against the mockups (in $out). Needs
 # FreeType and libpng; CI sets ORBIFY_REQUIRE_RENDER=1 so a missing library fails there.

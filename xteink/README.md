@@ -260,6 +260,21 @@ change but whose cover doesn't costs a short "not modified" reply instead of a n
 server or account clears the folder. The X3 keeps today's catalog
 ([design](../docs/design/write-through-cache.md)).
 
+**Offline catalog.** Every catalog screen has a ⟳ at the top right, with when the screen was
+last updated beside it ("updated just now", "Offline, saved 3 h ago"). On the X4 Pro, tap it; on
+the X4, press Up on the first row to select it, then Confirm:
+- **Refresh** (tap, or Confirm) asks BookOrbit for this screen now.
+- **Full refresh** (hold, or a long press of Confirm) saves the catalog for offline use: its root,
+  the first page of each section and of the lists they lead to, and the details of the books on
+  the reader and the next books in their series. "Full refresh · saving for offline 12/140" shows
+  how far it is.
+
+**Settings › BookOrbit › Home › Full refresh** does the same from settings; its value says when
+the catalog was last saved. The reader also refreshes the saved catalog by itself while asleep
+(with Wi-Fi in reach) every 7 days, or when the library changes. With a saved catalog, opening
+the catalog without Wi-Fi shows it from the card instead of giving up. Search and downloads still
+need a connection.
+
 ## Settings PIN
 
 **Settings > System > Settings PIN** sets an optional 4-digit PIN (Up/Down change a digit,

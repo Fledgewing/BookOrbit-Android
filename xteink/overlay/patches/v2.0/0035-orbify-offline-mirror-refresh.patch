@@ -1,0 +1,687 @@
+diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
+index ecedf940..9ea55bd8 100644
+--- a/include/CrossInkTailnetCuts.h
++++ b/include/CrossInkTailnetCuts.h
+@@ -201,3 +201,11 @@ bool tlsArenaActive();                                // the arena is reserved (
+ #ifndef CROSSINK_TAILNET_ORBIFY_CACHE
+ #define CROSSINK_TAILNET_ORBIFY_CACHE 0
+ #endif
++// Patch 0035, the offline mirror, Full refresh and the catalog's ⟳ (src/orbify/Mirror.h): X4s,
++// on top of the cache.
++#ifndef CROSSINK_TAILNET_ORBIFY_MIRROR
++#define CROSSINK_TAILNET_ORBIFY_MIRROR 0
++#endif
++#if CROSSINK_TAILNET_ORBIFY_MIRROR && !CROSSINK_TAILNET_ORBIFY_CACHE
++#error "CROSSINK_TAILNET_ORBIFY_MIRROR needs CROSSINK_TAILNET_ORBIFY_CACHE"
++#endif
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 9c2565ed..5e89b07a 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -320,6 +320,13 @@ STR_ORBIFY_ON_SERVER_DOWNLOAD: "On BookOrbit · Download & open"
+ STR_ORBIFY_ON_READER_OPEN: "On this reader · Open"
+ STR_ORBIFY_CONNECT_NEXT: "Connect to see what's next"
+ STR_ORBIFY_BOOK_N_OF: "Book %s of %s"
++STR_ORBIFY_REFRESH: "Refresh"
++STR_ORBIFY_FULL_REFRESH: "Full refresh"
++STR_ORBIFY_SAVING_OFFLINE: "Full refresh · saving for offline %u/%u"
++STR_ORBIFY_SAVED_OFFLINE: "Saved for offline"
++STR_ORBIFY_NOT_SAVED_OFFLINE: "Not saved for offline yet"
++STR_ORBIFY_SEARCH_NEEDS_CONNECTION: "Search needs a connection"
++STR_ORBIFY_COULDNT_CONNECT: "Couldn't connect"
+ STR_EVERY_N_MINUTES: "Every %d min"
+ STR_EVERY_N_PAGES: "Every %d pages"
+ STR_EVERY_CHAPTER: "Every chapter"
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+index 0926e1a8..403cf673 100644
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+@@ -58,6 +58,14 @@
+ #include "network/SavedWifiConnect.h"
+ #include "TailnetNetPhase.h"
+ #include "orbify/FinishSync.h"
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++#include <ctime>
++
++#include "components/CompactHeader.h"
++#include "orbify/CacheStore.h"
++#include "orbify/Mirror.h"
++#include "orbify/core/LocalFirst.h"
++#endif
+ 
+ namespace fui = freeink::ui;
+ 
+@@ -192,6 +200,7 @@ constexpr int HEADER_CONTROL_SIZE = 44;
+ constexpr int HEADER_CONTROL_GAP = 10;
+ constexpr int16_t HEADER_CONTROL_SORT = 0;
+ constexpr int16_t HEADER_CONTROL_FILTER = 1;
++constexpr int16_t HEADER_CONTROL_REFRESH = 2;  // Orbify (patch 0035)
+ 
+ // The Library's sort methods that BookOrbit can apply, in the Library's order. The server
+ // sorts authors by last name and has no first-name or genre order.
+@@ -256,7 +265,7 @@ std::string titleWithoutBadge(const Entry& entry) {
+ // and search. Sort, whose arrow shows the direction, then filter, right-aligned clear of
+ // the battery. A template, so a button-only build, whose call site is dead, never emits it.
+ template <typename Screen>
+-void addListHeaderControls(Screen& screen, const GfxRenderer& renderer, const bool descending) {
++void addListHeaderControls(Screen& screen, const GfxRenderer& renderer, const bool descending, const int shift = 0) {
+   int bounds[4]{};
+   renderer.getOrientedViewableTRBL(&bounds[0], &bounds[1], &bounds[2], &bounds[3]);
+   const Rect header = TouchHeaderBackButton::compactHeaderRect(renderer);
+@@ -268,11 +277,11 @@ void addListHeaderControls(Screen& screen, const GfxRenderer& renderer, const bo
+   control.styles = fui::plainStyles();
+   control.icon = fui::bitmapFromIcon(descending ? icon_arrow_down_wide_narrow_32 : icon_arrow_up_narrow_wide_32);
+   control.value = HEADER_CONTROL_SORT;
+-  screen.button(control, fui::Rect{static_cast<int16_t>(right - 2 * HEADER_CONTROL_SIZE - HEADER_CONTROL_GAP), y,
+-                                   HEADER_CONTROL_SIZE, HEADER_CONTROL_SIZE});
++  screen.button(control, fui::Rect{static_cast<int16_t>(right - shift - 2 * HEADER_CONTROL_SIZE - HEADER_CONTROL_GAP),
++                                   y, HEADER_CONTROL_SIZE, HEADER_CONTROL_SIZE});
+   control.icon = fui::bitmapFromIcon(icon_list_filter_32);
+   control.value = HEADER_CONTROL_FILTER;
+-  screen.button(control, fui::Rect{static_cast<int16_t>(right - HEADER_CONTROL_SIZE), y, HEADER_CONTROL_SIZE,
++  screen.button(control, fui::Rect{static_cast<int16_t>(right - shift - HEADER_CONTROL_SIZE), y, HEADER_CONTROL_SIZE,
+                                    HEADER_CONTROL_SIZE});
+ }
+ 
+@@ -282,6 +291,32 @@ void addCountBadge(Entry& entry, const int count) {
+   entry.setTitle(std::string(entry.title()) + " (" + std::to_string(count) + ")");
+ }
+ 
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++// Orbify (patch 0035): the ⟳ at the header's right on every view; tap = Refresh, hold = Full
++// refresh (docs/design/write-through-cache.md, "Refresh and Full refresh").
++template <typename Screen>
++void addRefreshControl(Screen& screen, const GfxRenderer& renderer) {
++  int bounds[4]{};
++  renderer.getOrientedViewableTRBL(&bounds[0], &bounds[1], &bounds[2], &bounds[3]);
++  const Rect header = TouchHeaderBackButton::compactHeaderRect(renderer);
++  const int right = renderer.getScreenWidth() - bounds[1] - TouchHeaderBackButton::controlRightInset();
++  const auto y = static_cast<int16_t>(header.y + header.height - HEADER_CONTROL_SIZE);
++  fui::ButtonProps control;
++  control.action = ACTION_CONTROL;
++  control.inputMask = static_cast<uint16_t>(fui::InputTouch | fui::InputLongPress);
++  control.styles = fui::plainStyles();
++  control.icon = fui::bitmapFromIcon(icon_refresh_cw_32);
++  control.value = HEADER_CONTROL_REFRESH;
++  screen.button(control, fui::Rect{static_cast<int16_t>(right - HEADER_CONTROL_SIZE), y, HEADER_CONTROL_SIZE,
++                                   HEADER_CONTROL_SIZE});
++}
++
++uint32_t nowEpoch() {
++  const time_t t = time(nullptr);
++  return t >= static_cast<time_t>(1700000000) ? static_cast<uint32_t>(t) : 0;
++}
++#endif
++
+ // Root sections that list facets (authors, series...) rather than books.
+ bool isFacetSection(const std::string& id) {
+   return id == "authors" || id == "series" || id == "collections" || id == "libraries" || id == "smart-scopes";
+@@ -392,6 +427,12 @@ BookOrbitCatalogBrowserActivity::~BookOrbitCatalogBrowserActivity() = default;
+ void BookOrbitCatalogBrowserActivity::onControlEvent(const fui::ActionEvent& event, void* user) {
+   auto* self = static_cast<BookOrbitCatalogBrowserActivity*>(user);
+   self->app.clearTapFlash();
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (event.value == HEADER_CONTROL_REFRESH) {
++    self->refreshTapped = event.longPress ? 2 : 1;  // run from loop()
++    return;
++  }
++#endif
+   if (!self->listOptionsAvailable()) return;
+   self->showListOptions(event.value == HEADER_CONTROL_FILTER ? ListOption::Filter : ListOption::Sort);
+ }
+@@ -546,9 +587,21 @@ void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connect
+     return;
+   }
+   if (!connected) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++    // Orbify (patch 0035): with a saved mirror the catalog opens offline from the cache.
++    if (OrbifyMirror::saved() && entryLink.bookId == 0) {
++      offlineSession = true;
++      LOG_INF("BookOrbit", "Catalog: no Wi-Fi; opening offline from the saved mirror");
++      if (!loadRoot(/*allowNetwork=*/false)) loadRoot();
++      return;
++    }
++#endif
+     leaveCatalog();
+     return;
+   }
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  offlineSession = false;
++#endif
+   sdFontSystem.releaseForNetwork(renderer);
+   // The catalog boot (not the download boot): one connection for all its requests.
+   if (networkBoot && !resumeDownload) BookOrbitCatalogClient::openBootSession();
+@@ -719,6 +772,9 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
+   search.type = EntryType::SEARCH;
+   search.setTitle(tr(STR_SEARCH));
+   entries.push_back(std::move(search));
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  markViewLoaded(cacheHit);
++#endif
+ 
+   state = entries.empty() ? BrowserState::ERROR : BrowserState::BROWSING;
+   if (entries.empty()) errorMessage = tr(STR_NO_ENTRIES);
+@@ -897,6 +953,9 @@ bool BookOrbitCatalogBrowserActivity::loadFacetEntries(const std::string& sectio
+     entry.setTexts(facet.title, "", facet.id, facet.seriesId, "");
+   }
+   logPageLoad(page, cacheHit);
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (load == PageLoad::Open) markViewLoaded(cacheHit);
++#endif
+   state = entries.empty() ? BrowserState::ERROR : BrowserState::BROWSING;
+   if (entries.empty()) errorMessage = tr(STR_NO_ENTRIES);
+   lock.unlock();
+@@ -961,6 +1020,9 @@ bool BookOrbitCatalogBrowserActivity::loadBooks(const BookOrbitBookQuery& query,
+   // The letters span the whole listing and only come with its first page.
+   if (page == 1) setListLetters(result.letters);
+   logPageLoad(page, cacheHit);
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (load == PageLoad::Open) markViewLoaded(cacheHit);
++#endif
+   state = entries.empty() ? BrowserState::ERROR : BrowserState::BROWSING;
+   if (entries.empty()) errorMessage = tr(STR_NO_ENTRIES);
+   lock.unlock();
+@@ -1240,6 +1302,14 @@ void BookOrbitCatalogBrowserActivity::restoreBookListAfterDownload() {
+ }
+ 
+ void BookOrbitCatalogBrowserActivity::launchSearch() {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (offlineSession) {
++    state = BrowserState::ERROR;
++    errorMessage = tr(STR_ORBIFY_SEARCH_NEEDS_CONNECTION);
++    requestUpdate();
++    return;
++  }
++#endif
+   consumeConfirm = true;
+   state = BrowserState::SEARCH_INPUT;
+   requestUpdate();
+@@ -2030,10 +2100,63 @@ void BookOrbitCatalogBrowserActivity::loop() {
+   if (state == BrowserState::DOWNLOADING) return;
+ 
+   if (state == BrowserState::BROWSING) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++    if (refreshTapped != 0) {
++      const bool full = refreshTapped == 2;
++      refreshTapped = 0;
++      refreshView(full);
++      return;
++    }
++#endif
+     if (longPressFired) {
+       if (!mappedInput.isPressed(MappedInputManager::Button::Confirm)) longPressFired = false;
+       return;
+     }
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++    // The ⟳ selected (button-only readers): Confirm refreshes, a hold is a Full refresh, Down
++    // goes back to the first row, Up wraps to the last.
++    if (refreshFocused) {
++      const auto released = [this](const auto& buttons) {
++        return mappedInput.wasReleased(buttons[0]) || mappedInput.wasReleased(buttons[1]);
++      };
++      if (mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
++          mappedInput.getHeldTime() >= LONG_PRESS_MS) {
++        longPressFired = true;
++        refreshView(/*full=*/true);
++        return;
++      }
++      if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
++        refreshView(/*full=*/false);
++        return;
++      }
++      if (backRequested) {
++        refreshFocused = false;
++        navigateBack();
++        return;
++      }
++      if (mappedInput.wasReleased(MappedInputManager::Button::Down) || released(ButtonNavigator::getNextButtons())) {
++        refreshFocused = false;
++        requestUpdate();
++        return;
++      }
++      if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
++          released(ButtonNavigator::getPreviousButtons())) {
++        refreshFocused = false;
++        if (!entries.empty()) {
++          if (!hasMorePages()) {
++            selectorIndex = loadedEnd() - 1;
++          } else if (!wrapToEndFromCache()) {
++            selectorIndex = 0;
++          }
++          topIndex = followListSelection(selectorIndex, topIndex, visibleRows, loadedEnd());
++          if (!revealRow(topIndex)) topIndex = windowStart;
++        }
++        requestUpdate();
++        return;
++      }
++      return;
++    }
++#endif
+     // Holding Confirm on a catalog book opens its action menu instead of acting.
+     const Entry* selected = entryAt(selectorIndex);
+     if (selected && selected->type == EntryType::BOOK && mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
+@@ -2144,6 +2267,15 @@ void BookOrbitCatalogBrowserActivity::loop() {
+           if (!appendNextPageForCurrentList()) break;
+         }
+       };
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++      // Up on the first row selects the header's ⟳ (design decision 37 (a)).
++      if (!mappedInput.hasTouchHardware() && selectorIndex == 0 &&
++          (mappedInput.wasReleased(previousButtons[0]) || mappedInput.wasReleased(previousButtons[1]))) {
++        refreshFocused = true;
++        requestUpdate();
++        return;
++      }
++#endif
+       buttonNavigator.onRelease(nextButtons, [this, extendIfOnLastPage, followSelection, reachSelection, holdPosition] {
+         if (selectorIndex + 1 >= loadedEnd() && hasMorePages() && !appendNextPageForCurrentList()) {
+           requestUpdate();  // could not load past the end (e.g. network); hold position, no wrap
+@@ -2209,8 +2341,14 @@ void BookOrbitCatalogBrowserActivity::buildListScreen(UiApp::ScreenType& screen)
+   screen.setContentMargin(fui::Insets{static_cast<int16_t>(CompactHeader::contentTop(metrics)), 0,
+                                       static_cast<int16_t>(metrics.buttonHintsHeight), 0});
+ 
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  const int refreshShift = HEADER_CONTROL_SIZE + HEADER_CONTROL_GAP;
++  if (mappedInput.hasTouchHardware()) addRefreshControl(screen, renderer);
++#else
++  const int refreshShift = 0;
++#endif
+   if (mappedInput.hasTouchHardware() && listOptionsAvailable()) {
+-    addListHeaderControls(screen, renderer, sortsDescending(listQuery));
++    addListHeaderControls(screen, renderer, sortsDescending(listQuery), refreshShift);
+   }
+   // A filter that matches nothing leaves the header controls to undo it; render() says
+   // the listing is empty.
+@@ -2237,7 +2375,10 @@ void BookOrbitCatalogBrowserActivity::buildListScreen(UiApp::ScreenType& screen)
+   fui::ListProps props;
+   props.items = items.data();
+   props.count = static_cast<uint16_t>(items.size());
+-  const int selected = entryAt(selectorIndex) ? selectorIndex - windowStart : -1;
++  int selected = entryAt(selectorIndex) ? selectorIndex - windowStart : -1;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (refreshFocused) selected = -1;  // the ⟳ holds the selection
++#endif
+   props.selectedIndex = static_cast<int16_t>(selected);
+   props.action = ACTION_ROW;
+   props.inputMask = static_cast<uint16_t>(fui::InputTouch | fui::InputLongPress);  // physical buttons stay in loop()
+@@ -2315,6 +2456,36 @@ void BookOrbitCatalogBrowserActivity::render(RenderLock&&) {
+ 
+   const std::string title = headerTitle();
+   const auto drawHeader = [this, &title, listOptionsShown] {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++    // Orbify (patch 0035): the ⟳ at the right, its "updated …" stamp beside it.
++    const std::string stamp = viewStamp();
++    if (mappedInput.hasTouchHardware()) {
++      const int controls = listOptionsShown ? 3 * HEADER_CONTROL_SIZE + 2 * HEADER_CONTROL_GAP : HEADER_CONTROL_SIZE;
++      TouchHeaderBackButton::draw(renderer, TouchHeaderBackButton::compactHeaderRect(renderer), title.c_str(),
++                                  /*readerContext=*/false,
++                                  controls + TouchHeaderBackButton::controlRightInset() + 10, stamp.c_str());
++      return;
++    }
++    const auto& metrics = UITheme::getInstance().getMetrics();
++    const Rect header = CompactHeader::headerRect(renderer);
++    constexpr int ICON = 32;
++    const int iconX =
++        header.x + header.width - 2 * metrics.contentSidePadding - metrics.batteryWidth - ICON - 4;
++    const int iconY = header.y + metrics.batteryBarHeight + (header.height - metrics.batteryBarHeight - ICON) / 2;
++    const int stampW = renderer.getTextWidth(SMALL_FONT_ID, stamp.c_str());
++    const int stampX = iconX - 8 - stampW;
++    const int titleW = std::max(1, stampX - 12 - (header.x + metrics.contentSidePadding));
++    CompactHeader::drawTitle(
++        renderer, renderer.truncatedText(UI_12_FONT_ID, title.c_str(), titleW, EpdFontFamily::BOLD).c_str());
++    renderer.drawText(SMALL_FONT_ID, stampX, iconY + (ICON - renderer.getLineHeight(SMALL_FONT_ID)) / 2,
++                      stamp.c_str());
++    // Selected: drawn inverted, like a selected row.
++    if (refreshFocused) renderer.fillRect(iconX - 4, iconY - 4, ICON + 8, ICON + 8, true);
++    uiTarget.bitmap(fui::Rect{static_cast<int16_t>(iconX), static_cast<int16_t>(iconY), ICON, ICON},
++                    fui::bitmapFromIcon(icon_refresh_cw_32), fui::BitmapMode::Center,
++                    fui::Paint::solid(refreshFocused ? fui::Color::White : fui::Color::Black));
++    return;
++#endif
+     if (mappedInput.hasTouchHardware() && listOptionsShown) {
+       // The title stops short of the sort and filter controls.
+       TouchHeaderBackButton::draw(
+@@ -2393,9 +2564,115 @@ void BookOrbitCatalogBrowserActivity::render(RenderLock&&) {
+   const Entry* selected = entryAt(selectorIndex);
+   const bool onRemoteBook = selected && selected->type == EntryType::BOOK && !selected->onDevice;
+   const char* confirmLabel = !selected ? "" : onRemoteBook ? tr(STR_DOWNLOAD) : tr(STR_OPEN);
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (refreshFocused) confirmLabel = tr(STR_ORBIFY_REFRESH);
++#endif
+   const bool listButtons = listOptionsShown && !mappedInput.hasTouchHardware();
+   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, listButtons ? tr(STR_SORT) : "",
+                                             listButtons ? tr(STR_BOOKORBIT_FILTER) : "");
+   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+   renderer.displayBuffer();
+ }
++
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++// Orbify (patch 0035): the header's ⟳, "Refresh and Full refresh" in
++// docs/design/write-through-cache.md. Refresh asks the server for this view now and keeps what
++// changed; Full refresh first saves the offline mirror (OrbifyMirror), then reloads the view
++// with the cache bypassed. Offline, either connects first.
++void BookOrbitCatalogBrowserActivity::refreshView(const bool full) {
++  const int level = static_cast<int>(navLevel);
++  LOG_INF("BookOrbit", "Catalog: %s of view %d%s", full ? "Full refresh" : "Refresh", level,
++          offlineSession ? " (offline: connecting)" : "");
++  if (WiFi.status() != WL_CONNECTED) {
++    {
++      RenderLock lock(*this);
++      state = BrowserState::LOADING;
++      statusMessage = tr(STR_CONNECTING);
++    }
++    requestUpdateAndWait();
++    if (!SavedWifiConnect::connect([] { return false; })) {
++      LOG_INF("BookOrbit", "Catalog: refresh could not connect");
++      viewNotUpdated[level] = true;
++      state = BrowserState::ERROR;
++      errorMessage = tr(STR_ORBIFY_COULDNT_CONNECT);
++      requestUpdate();
++      return;
++    }
++    offlineSession = false;
++    sdFontSystem.releaseForNetwork(renderer);
++  }
++  if (full) {
++    {
++      RenderLock lock(*this);
++      state = BrowserState::LOADING;
++      statusMessage = tr(STR_ORBIFY_FULL_REFRESH);
++    }
++    requestUpdateAndWait();
++    mirrorPaintedAt = millis();
++    // Asked for on the card first: a reset part-way resumes it at the next sleep sync.
++    OrbifyMirror::request();
++    const OrbifyMirror::Progress progress{this, &BookOrbitCatalogBrowserActivity::onMirrorStep};
++    OrbifyMirror::run(nullptr, 0, &progress);
++  }
++  // This session's own page copies would answer first: the view is read again.
++  BookOrbitCatalogListCache::clear();
++  OrbifyCache::ScopedMode mode(full ? orbify::cache::Mode::Full : orbify::cache::Mode::Refresh);
++  bool ok = true;
++  switch (navLevel) {
++    case NavLevel::Root:
++      ok = loadRoot(/*allowNetwork=*/true);
++      break;
++    case NavLevel::FacetList: {
++      const std::string id = facetSectionId;
++      const std::string title = facetTitle;
++      ok = loadFacetEntries(id, title, 1);
++      break;
++    }
++    case NavLevel::Books:
++      if (listIsLocal) {  // the card's own lists: nothing to ask the server
++        state = BrowserState::BROWSING;
++        requestUpdate();
++        break;
++      }
++      {
++        const BookOrbitBookQuery query = listQuery;
++        const std::string title = listTitle;
++        ok = loadBooks(query, title, 1, booksFromFacet);
++      }
++      break;
++  }
++  viewNotUpdated[level] = !ok;
++  LOG_INF("BookOrbit", "Catalog: %s %s", full ? "Full refresh" : "Refresh", ok ? "done" : "failed");
++}
++
++void BookOrbitCatalogBrowserActivity::markViewLoaded(const bool fromSessionList) {
++  const int level = static_cast<int>(navLevel);
++  // Back to a view read earlier this session keeps that view's stamp.
++  if (fromSessionList && viewLoadedAt[level] != 0) return;
++  viewLoadedAt[level] = offlineSession ? OrbifyMirror::savedAt() : nowEpoch();
++  viewNotUpdated[level] = false;
++}
++
++std::string BookOrbitCatalogBrowserActivity::viewStamp() const {
++  const int level = static_cast<int>(navLevel);
++  char out[64];
++  orbify::formatStamp(!offlineSession && WiFi.status() == WL_CONNECTED, viewLoadedAt[level], nowEpoch(),
++                      viewNotUpdated[level], out, sizeof(out));
++  return out;
++}
++
++void BookOrbitCatalogBrowserActivity::onMirrorStep(void* context, const size_t done, const size_t total) {
++  auto* self = static_cast<BookOrbitCatalogBrowserActivity*>(context);
++  // Each repaint is an e-ink refresh: a few seconds apart.
++  if (done < total && millis() - self->mirrorPaintedAt < 3000) return;
++  self->mirrorPaintedAt = millis();
++  char line[80];
++  snprintf(line, sizeof(line), tr(STR_ORBIFY_SAVING_OFFLINE), static_cast<unsigned>(done),
++           static_cast<unsigned>(total));
++  {
++    RenderLock lock(*self);
++    self->statusMessage = line;
++  }
++  self->requestUpdate();
++}
++#endif
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+index 8687d20a..a2a1136b 100644
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+@@ -175,6 +175,19 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
+   // Set once a Confirm hold has opened the book action menu; input is swallowed
+   // until Confirm is up again so its release does not also activate the row.
+   bool longPressFired = false;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Button-only readers: Up on the first row selects the header's ⟳ (design decision 37 (a)).
++  bool refreshFocused = false;
++  // Touch: the ⟳ was tapped (1) or held (2); run from loop().
++  int refreshTapped = 0;
++  // Opened without Wi-Fi from the saved mirror; every read comes from the cache.
++  bool offlineSession = false;
++  // When each level's view was last loaded (epoch s, 0 = unknown), and whether its last
++  // refresh failed.
++  uint32_t viewLoadedAt[3] = {};
++  bool viewNotUpdated[3] = {};
++  unsigned long mirrorPaintedAt = 0;
++#endif
+   std::string errorMessage;
+   std::string statusMessage;
+   size_t downloadProgress = 0;
+@@ -321,6 +334,16 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
+                         PageLoad load = PageLoad::Open, bool allowNetwork = true);
+   bool loadBooks(const BookOrbitBookQuery& query, const std::string& title, int page, bool fromFacet,
+                  PageLoad load = PageLoad::Open, bool allowNetwork = true);
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Orbify (patch 0035): the header's ⟳. full: hold ⟳ / long-press Confirm (Full refresh, which
++  // also saves the offline mirror); otherwise tap ⟳ / Confirm (Refresh: this view, checked now).
++  void refreshView(bool full);
++  // The view on screen was just loaded: from the server (or the cache) now, or offline.
++  void markViewLoaded(bool fromSessionList);
++  // "updated just now" / "Offline, saved 3 h ago" / "Not updated · saved 1 h ago".
++  std::string viewStamp() const;
++  static void onMirrorStep(void* context, size_t done, size_t total);
++#endif
+ 
+   // Row window over the current listing (see `entries`).
+   int loadedEnd() const { return windowStart + static_cast<int>(entries.size()); }
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+index 11a7622d..b992d368 100644
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+@@ -15,6 +15,9 @@
+ #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
+ #include "orbify/CopyRefresh.h"
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++#include "orbify/Mirror.h"
++#endif
+ #include "SdCardFontSystem.h"
+ #include "SilentRestart.h"
+ #include "activities/network/WifiSelectionActivity.h"
+@@ -76,6 +79,15 @@ void BookOrbitHomeRefreshActivity::onScanProgress(void* context, const BookOrbit
+   self->scanPaintedAt = millis();
+ }
+ 
++void BookOrbitHomeRefreshActivity::onMirrorStep(void* context, const size_t done, const size_t total) {
++  auto* self = static_cast<BookOrbitHomeRefreshActivity*>(context);
++  if (done < total && millis() - self->scanPaintedAt < SCAN_REPAINT_MS) return;
++  self->mirrorDone = done;
++  self->mirrorTotal = total;
++  self->showStep(State::Mirroring);
++  self->scanPaintedAt = millis();
++}
++
+ void BookOrbitHomeRefreshActivity::setScanSummary(const BookOrbitDeviceScan::Summary& summary) {
+   summaryLines[0].clear();
+   summaryLines[1].clear();
+@@ -111,6 +123,16 @@ void BookOrbitHomeRefreshActivity::runRefresh() {
+     OrbifyCopyRefresh::detect(nullptr);
+ #endif
+   }
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Orbify (patch 0035): a Full refresh asked for from settings (or the catalog's ⟳ hold that a
++  // reset cut short) saves the catalog for offline here, its progress on screen. Automatic ones
++  // (7 days, a new library version) wait for the sleep sync instead.
++  if (refreshed && OrbifyMirror::requested()) {
++    showStep(State::Mirroring);
++    const OrbifyMirror::Progress progress{this, &BookOrbitHomeRefreshActivity::onMirrorStep};
++    OrbifyMirror::run(nullptr, 0, &progress);
++  }
++#endif
+ 
+   SavedWifiConnect::disconnect();
+ 
+@@ -187,6 +209,11 @@ void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
+     case State::Refreshing:
+       status = tr(STR_HOME_FETCHING_STATS);
+       break;
++    case State::Mirroring:
++      status = tr(STR_ORBIFY_FULL_REFRESH);
++      done = mirrorDone;
++      total = mirrorTotal;
++      break;
+     case State::DecodingCovers:
+       status = tr(STR_HOME_PREPARING_COVERS);
+       showSummary = true;
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.h b/src/activities/network/BookOrbitHomeRefreshActivity.h
+index 8dfc556b..d8b493c3 100644
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.h
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.h
+@@ -25,7 +25,7 @@ class BookOrbitHomeRefreshActivity final : public Activity {
+   bool preventAutoSleep() override { return state != State::Failed; }
+ 
+  private:
+-  enum class State { Connecting, Scanning, Refreshing, DecodingCovers, ScanSummary, Failed };
++  enum class State { Connecting, Scanning, Refreshing, Mirroring, DecodingCovers, ScanSummary, Failed };
+ 
+   // Runs the scan's offline half, then joins Wi-Fi.
+   void connect();
+@@ -35,6 +35,8 @@ class BookOrbitHomeRefreshActivity final : public Activity {
+   // Repaints the scan's step: at once when the step changes, then at most every few seconds.
+   static void onScanProgress(void* context, BookOrbitDeviceScan::Step step, size_t done, size_t total);
+   void setScanSummary(const BookOrbitDeviceScan::Summary& summary);
++  // Orbify (patch 0035): the Full refresh's "saving for offline N/M", repainted every few seconds.
++  static void onMirrorStep(void* context, size_t done, size_t total);
+ 
+   State state = State::Connecting;
+   bool scanPending = false;
+@@ -46,6 +48,8 @@ class BookOrbitHomeRefreshActivity final : public Activity {
+   size_t scanDone = 0;
+   size_t scanTotal = 0;
+   unsigned long scanPaintedAt = 0;
++  size_t mirrorDone = 0;
++  size_t mirrorTotal = 0;
+   // What the scan did, shown under the covers step and before the restart; empty when it
+   // recognised nothing.
+   std::string summaryLines[2];
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index ad3743b5..316b80f9 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -24,6 +24,9 @@
+ #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
+ #include "orbify/CopyRefresh.h"
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++#include "orbify/Mirror.h"
++#endif
+ #include "BookOrbitHomeStore.h"
+ #include "BookOrbitRemotePosition.h"
+ #include "BookOrbitStatsUpload.h"
+@@ -368,6 +371,18 @@ void BookOrbitSyncActivity::runSleepSync() {
+     OrbifyCopyRefresh::detect(&sleepSyncWakeRequested);
+     if (!sleepSyncWakeRequested()) OrbifyCopyRefresh::run(&sleepSyncWakeRequested, 180000UL);
+   }
++#endif
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Orbify (patch 0035): the offline mirror, when asked for or due (never saved, 7 days old, a new
++  // library version): up to two minutes per sleep, resumed by the next one.
++  if (wifiConnectedForSleepSync && state != SYNC_FAILED && !sleepSyncWakeRequested()) {
++    const auto due = OrbifyMirror::dueNow();
++    if (OrbifyMirror::requested() || due != orbify::mirror::Due::None) {
++      LOG_INF("ORB", "Mirror: due (%s%s)", orbify::mirror::dueName(due),
++              OrbifyMirror::requested() ? ", asked for" : "");
++      OrbifyMirror::run(&sleepSyncWakeRequested, 120000UL);
++    }
++  }
+ #endif
+   SavedWifiConnect::disconnect();
+   if (refreshHome && !sleepSyncWakeRequested()) {
+diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
+index 455d20b9..6c319c1c 100644
+--- a/src/activities/settings/BookOrbitSettingsActivity.cpp
++++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
+@@ -29,6 +29,9 @@
+ #include "components/themes/bookorbit/BookOrbitHomeText.h"
+ #include "fontIds.h"
+ #include "network/SavedWifiConnect.h"
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++#include "orbify/Mirror.h"
++#endif
+ 
+ namespace fui = freeink::ui;
+ 
+@@ -64,11 +67,17 @@ constexpr int ORBIFY_MARK_ROW = 8;  // with ORBIFY_ROWS
+ constexpr int ORBIFY_KEEP_ROW = 8 + ORBIFY_MARK_ROWS;
+ constexpr int HOME_ROW = 8 + ORBIFY_ROWS;
+ constexpr int BACKGROUND_SYNC_ROW = 9 + ORBIFY_ROWS;
+-// The Home page: the top shelf, the bottom shelf, then the refresh.
+-constexpr int HOME_ITEMS = 3;
++// The Home page: the top shelf, the bottom shelf, then the refresh, and Orbify's Full refresh
++// (patch 0035: saves the catalog for offline, its value says when it last did).
++constexpr int HOME_ITEMS = 3 + (CROSSINK_TAILNET_ORBIFY_MIRROR ? 1 : 0);
+ constexpr int REFRESH_ROW = 2;
++constexpr int FULL_REFRESH_ROW = 3;
+ const StrId homeNames[HOME_ITEMS] = {StrId::STR_HOME_TOP_SHELF, StrId::STR_HOME_BOTTOM_SHELF,
+-                                     StrId::STR_HOME_REFRESH_LISTS};
++                                     StrId::STR_HOME_REFRESH_LISTS,
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++                                     StrId::STR_ORBIFY_FULL_REFRESH,
++#endif
++};
+ constexpr unsigned long FAILURE_MESSAGE_MS = 2500;
+ constexpr fui::ActionId ACTION_ROW = 1;
+ 
+@@ -314,6 +323,15 @@ void BookOrbitSettingsActivity::handleSelection() {
+ }
+ 
+ void BookOrbitSettingsActivity::handleHomeSelection() {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Full refresh: the Home's own sync boot runs it, with its progress on screen.
++  if (static_cast<int>(selectedIndex) == FULL_REFRESH_ROW) {
++    if (!BOOKORBIT_STORE.hasCredentials()) return;
++    OrbifyMirror::request();
++    silentRestartToNetwork(NetworkBootTarget::BOOKORBIT_HOME_REFRESH);
++    return;
++  }
++#endif
+   if (selectedIndex != REFRESH_ROW) {
+     showShelfSources(static_cast<int>(selectedIndex));
+     requestUpdate();
+@@ -414,6 +432,12 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+   const bool hasCredentials = BOOKORBIT_STORE.hasCredentials();
+   for (int i = 0; i < count; i++) {
+     if (page == Page::Home) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++      if (i == FULL_REFRESH_ROW) {
++        values[i] = renderer.truncatedText(UI_10_FONT_ID, OrbifyMirror::savedLine().c_str(),
++                                           renderer.getScreenWidth() / 2);
++      } else
++#endif
+       if (i != REFRESH_ROW) {
+         // The list gives a value all the width it asks for: a long collection name would
+         // cover the row's label. Half the screen, measured in a font at least as wide as

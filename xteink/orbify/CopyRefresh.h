@@ -35,4 +35,8 @@ bool enqueue(int64_t bookId, const std::string& path, const std::string& cardHas
 // Copies waiting (not given up).
 size_t pending();
 
+// The server's library version as the last full match-check pass saw it ("" = none yet): the
+// offline mirror's "the library changed" rule (orbify/Mirror).
+std::string libraryVersion();
+
 }  // namespace OrbifyCopyRefresh
