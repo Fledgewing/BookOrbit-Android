@@ -40,6 +40,19 @@ the newest pre-release `xteink-v…` release. Which one a build becomes is decid
 
 Every firmware release keeps `make_latest=false`: GitHub's "latest" stays an Android release.
 
+### When a release is made
+
+Releases are batched, so readers don't get a new build for every change:
+- **The daily run** publishes only when CrossInk-Bookorbit has a tag no release was built from yet
+  (a new rc, or the final, which becomes the stable entry). Otherwise it builds and publishes
+  nothing.
+- **Our own changes** go out only when someone runs the workflow by hand (`gh workflow run Xteink
+  --ref main`), which publishes what main has unless that exact overlay was already released
+  (`force_release` publishes it again).
+- Pushes and pull requests build and test, and never publish.
+
+The rule is `scripts/upstream-line.sh publish`, tested by `test/upstream_line_test.sh`.
+
 ## Readers
 
 | Reader | Env | Notes |
