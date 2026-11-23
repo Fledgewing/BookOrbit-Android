@@ -34,6 +34,7 @@
 #include "activities/browser/BookOrbitCatalogListCache.h"
 #include <CrossInkTailnetCuts.h>
 #include "network/SavedWifiConnect.h"
+#include "orbify/Quiet.h"
 
 extern GfxRenderer renderer;  // main.cpp
 
@@ -402,7 +403,9 @@ void catalogConnect() {
   }
   {
     RenderLock lock;
-    if (renderer.hasFrameBuffer()) GUI.drawPopup(renderer, "Connecting to Tailscale...");
+    if (renderer.hasFrameBuffer() && OrbifyQuiet::allow(orbify::quiet::Event::NetworkStatus)) {
+      GUI.drawPopup(renderer, "Connecting to Tailscale...");
+    }
   }
   LOG_INF("TNET", "Live catalog: connecting: free=%u maxAlloc=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   // A control session right after one would only repeat what failed.

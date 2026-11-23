@@ -1,0 +1,32 @@
+{
+  "rule": "Nothing interrupts reading. While a book is open in the reader, only what the reader reached or opened shows; everything else waits for a screen that is not the book, or is dropped.",
+  "events": {
+    "background-render": "a screen that is not on display asks for a repaint (a background sync)",
+    "message": "a toast or popup nobody asked for",
+    "update-prompt": "an update is available",
+    "network-status": "WiFi or Tailscale coming up, going down or failing",
+    "sync-status": "a sync's progress or result",
+    "restart": "a restart into another boot",
+    "end-of-book": "the End-of-Book page, reached by reading",
+    "user-opened": "a menu or screen the reader opened, and what it shows",
+    "during-sleep": "behind the sleep screen"
+  },
+  "cases": [
+    {"event": "background-render", "reading": true,  "show": false},
+    {"event": "background-render", "reading": false, "show": false},
+    {"event": "message",           "reading": true,  "show": false},
+    {"event": "message",           "reading": false, "show": true},
+    {"event": "update-prompt",     "reading": true,  "show": false},
+    {"event": "update-prompt",     "reading": false, "show": true},
+    {"event": "network-status",    "reading": true,  "show": false},
+    {"event": "network-status",    "reading": false, "show": true},
+    {"event": "sync-status",       "reading": true,  "show": false},
+    {"event": "sync-status",       "reading": false, "show": true},
+    {"event": "restart",           "reading": true,  "show": false},
+    {"event": "restart",           "reading": false, "show": true},
+    {"event": "end-of-book",       "reading": true,  "show": true},
+    {"event": "user-opened",       "reading": true,  "show": true},
+    {"event": "user-opened",       "reading": false, "show": true},
+    {"event": "during-sleep",      "reading": true,  "show": true}
+  ]
+}

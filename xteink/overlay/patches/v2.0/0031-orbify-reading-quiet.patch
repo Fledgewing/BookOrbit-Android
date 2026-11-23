@@ -1,0 +1,35 @@
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+index adb09426..32693e57 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+@@ -12,6 +12,9 @@
+ #include "BookOrbitSyncReporter.h"
+ #include "ProgressMapper.h"
+ #include "activities/Activity.h"
++#if CROSSINK_TAILNET_BACKGROUND_SYNC
++#include "orbify/Quiet.h"
++#endif
+ #include "util/BookOrbitSmartSync.h"
+ 
+ struct Rect;
+@@ -78,12 +81,17 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport
+   // their stores. `loadedEpub` is this task's own copy of the book. Returns the outcome
+   // logged for the run. `stop` is polled between steps.
+   const char* runInBackground(std::shared_ptr<Epub> loadedEpub, bool (*stop)());
+-  // Nothing is drawn for a background run.
++  // Nothing is drawn for a background run: the book stays as it is (Orbify, patch 0031: nothing
++  // interrupts reading; every repaint a background run asks for goes through OrbifyQuiet).
+   void requestUpdate(bool immediate = false) override {
+-    if (!backgroundSync) Activity::requestUpdate(immediate);
++    if (backgroundSync && !OrbifyQuiet::allow(orbify::quiet::Event::BackgroundRender)) return;
++    Activity::requestUpdate(immediate);
+   }
+   RequestUpdateResult requestUpdateAndWait() override {
+-    return backgroundSync ? RequestUpdateResult::Rendered : Activity::requestUpdateAndWait();
++    if (backgroundSync && !OrbifyQuiet::allow(orbify::quiet::Event::BackgroundRender)) {
++      return RequestUpdateResult::Rendered;  // the step goes on; nothing was meant to be seen
++    }
++    return Activity::requestUpdateAndWait();
+   }
+ #endif
+ 

@@ -194,6 +194,17 @@ also wait for that sync. Nothing is shown while reading; without a network it si
 again at the next interval. Not on the X3: a sync does not fit in its memory beside an open
 book.
 
+## Nothing interrupts reading
+
+While a book is open, Orbify never draws over it, repaints it or restarts the reader on its own:
+no message, no update prompt, no sync or WiFi status. The checks for updates run only from
+**Settings > Check for updates**; the sync while reading never repaints the page. What does show
+while reading: the End-of-Book page (you reached it), any menu or screen you open, and the sleep
+sync behind the sleep screen. Anything else waits for a screen that is not the book (Home, the
+catalog, the Library) or is dropped. The rule is one table (`orbify/core/ReadingQuiet`,
+`shared/fixtures/reading-quiet/cases.json`, host-tested), and every place the overlay could show
+something on its own asks it first (`orbify/Quiet.h`).
+
 ## Finished at the end of a book
 
 Turning past the last page marks the book finished on the reader, and the next BookOrbit sync

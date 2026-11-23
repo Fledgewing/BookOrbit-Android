@@ -102,6 +102,25 @@ Device check (X3, serial log): `WiFi tier parked (boot target 2)` at the update;
 `Download progress: … KB/s` well above 4 KB/s with "waiting" no longer the whole interval; heap
 min during the download.
 
+## Nothing interrupts reading (patch 0031, 2026-11-22)
+
+The user's standing rule: while a book is open, nothing the reader did not ask for appears. The
+rule is `orbify/core/ReadingQuiet` (table `shared/fixtures/reading-quiet/cases.json`, shared with
+Android); the firmware asks `OrbifyQuiet::allow()`, whose `reading()` is
+`activityManager.isReaderActivity()`. Audit of what the overlay can show on its own:
+
+| Path | While reading? | Now |
+|------|----------------|-----|
+| Sync while reading (0022) | Its BookOrbitSyncActivity asks for repaints at every step | Held as `background-render` (already dropped by 0022; now through the one check) |
+| Update check / download (0026, 0030) | Only from Settings > Check for updates; no check on a timer or at boot | User-opened |
+| "Connecting to Tailscale..." (live catalog) | Catalog boot only | Held as `network-status` if it ever ran over a book |
+| Parked-boot popups and restarts (0002, 0007, 0011, 0020) | Syncs and uploads the reader started from a menu, or the sleep sync | User-opened / during sleep |
+| Finish at end, End-of-Book page (0027, 0028) | The page the reader reached | Exception |
+| Cache writes (0029) | No UI | - |
+
+Upstream CrossInk's own reader toasts (page load errors, menu actions) answer what the reader did
+and are left alone. Flash: X3 +410 B (6,478,797, 98.86%).
+
 ## Measurements needed on a device
 
 Item 1 adds only small requests on the sync's existing TLS session, so no new memory measurement
