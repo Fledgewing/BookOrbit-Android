@@ -103,14 +103,8 @@ function NetworkMgr:turnOnWifiAndWaitForConnection(callback)
     end
 end
 
-function silentWifiOn()
-    if not (S.wifi_via_companion and Companion.installed()) then return end
-    local cur = G_reader_settings:readSetting("wifi_enable_action")
-    if cur ~= "turn_on" then
-        G_reader_settings:saveSetting("wifi_enable_action", "turn_on")
-        log("wifi: KOReader's \"Action when Wi-Fi is off\" was", tostring(cur), "-> turn_on (the companion switches Wi-Fi, no prompt)")
-    end
-end
+-- KOReader's "Action when Wi-Fi is off" → Turn on, through the recommended-settings engine
+-- (ko/recommended.lua silentWifiOn): only at KOReader's default, with a backup.
 silentWifiOn()
 
 wrapRequests("socket.http")

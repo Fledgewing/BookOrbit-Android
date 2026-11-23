@@ -1072,5 +1072,147 @@ test("end-of-book sheet: rows never overlap, widths are symmetric, rows fit thei
     end
 end)
 
+---------------------------------------------------------------- recommended settings (addon-mode §5)
+local R = M.Recommended
+-- A fake KOReader: values by item id, defaults by item id, unavailable ids.
+local function world(cur, opts)
+    opts = opts or {}
+    return function(it)
+        if opts.missing and opts.missing[it.id] then return { available = false, reason = "missing" } end
+        local defaults = opts.defaults or {}
+        local d = defaults[it.id]
+        if d == nil and it.kind == "gesture" then d = nil end
+        return { available = true, current = cur[it.id], default = d }
+    end
+end
+local BO_DEFAULTS = { ["bo.auto_sync"] = false, ["bo.sync_forward"] = 1, ["bo.home"] = "off" }
+local function fresh()
+    return { ["bo.auto_sync"] = false, ["bo.sync_forward"] = 1, ["bo.home"] = "off" }
+end
+local function states(plan)
+    local out = {}
+    for _, d in ipairs(plan.decisions) do out[d.item.id] = d.state end
+    return out
+end
+
+test("recommended: an item's state (BookOrbit key, gesture table, KOReader global)", function()
+    local bo = R.item("bo.sync_forward")
+    eq(R.classify(bo, { current = 2, default = 1 }), "already")
+    eq(R.classify(bo, { current = 1, default = 1 }), "at_default")
+    eq(R.classify(bo, { current = 3, default = 1 }), "conflict")
+    local g = R.item("g.apps")
+    eq(R.classify(g, { current = { increase_frontlight = 0 }, default = { increase_frontlight = 0 } }), "at_default", "table equal by value")
+    eq(R.classify(g, { current = nil, default = nil }), "at_default", "no light: nothing is the default")
+    eq(R.classify(g, { current = { orbit_open_apps = true }, default = nil }), "already")
+    eq(R.classify(g, { current = { toc = true }, default = { increase_frontlight = 0 } }), "conflict")
+    local ko = R.item("ko.wifi_on")
+    eq(R.classify(ko, { current = nil }), "at_default", "unset is the default")
+    eq(R.classify(ko, { current = "prompt" }), "at_default", "KOReader's own default value")
+    eq(R.classify(ko, { current = "ignore" }), "conflict")
+    eq(R.classify(ko, { current = "turn_on" }), "already")
+end)
+
+test("recommended: a fresh KOReader gets every available item, and one line saying how many", function()
+    local plan = R.plan(R.ITEMS, nil, world(fresh(), { defaults = BO_DEFAULTS }))
+    eq(plan.applied, #R.ITEMS, "all applied")
+    eq(plan.conflicts, 0)
+    local rec, n = R.record(nil, plan, 100)
+    eq(n, 8)
+    eq(R.lineText(n, plan.conflicts), "Applied 8 recommended settings · Review")
+    eq(R.reportState(rec), "applied")
+    eq(rec.unseen, 8)
+end)
+
+test("recommended: a customised KOReader keeps every changed value; those are listed for review", function()
+    local cur = fresh()
+    cur["bo.sync_forward"] = 3            -- the user picked Don't sync
+    cur["g.sync_all"] = { toc = true }     -- the user's own gesture
+    local plan = R.plan(R.ITEMS, nil, world(cur, { defaults = BO_DEFAULTS }))
+    local st = states(plan)
+    eq(st["bo.sync_forward"], "conflict")
+    eq(st["g.sync_all"], "conflict")
+    eq(st["bo.auto_sync"], "at_default")
+    eq(plan.applied, 6); eq(plan.conflicts, 2)
+    eq(R.lineText(plan.applied, plan.conflicts), "Applied 6 · 2 to review")
+    local rec = R.record(nil, plan, 1)
+    eq(rec.items["bo.sync_forward"], "conflict")
+    eq(R.reportState(rec), "partial")
+    eq(R.lineText(0, 2), "Review 2 recommended settings")
+    eq(R.lineText(0, 0), nil, "silent when nothing changed")
+end)
+
+test("recommended: an untouched-only item is at default only when nothing was changed", function()
+    local items = { { id = "o.x", kind = "orbit", ours = true, untouched_only = true }, R.item("bo.sync_forward") }
+    local w = function(cur) return function(it) return { available = true, current = cur[it.id], default = it.id == "bo.sync_forward" and 1 or nil } end end
+    eq(states(R.plan(items, nil, w({ ["bo.sync_forward"] = 1 })))["o.x"], "at_default", "untouched")
+    eq(states(R.plan(items, nil, w({ ["bo.sync_forward"] = 3 })))["o.x"], "conflict", "customised")
+    eq(states(R.plan(items, { items = { ["bo.sync_forward"] = "kept" } }, w({})))["o.x"], "conflict", "kept earlier counts")
+end)
+
+test("recommended: a later release adds an id: only that one is evaluated; kept and applied stay", function()
+    local rec = { items = { ["bo.auto_sync"] = "applied", ["bo.sync_forward"] = "kept", ["bo.home"] = "already",
+        ["ko.wifi_on"] = "applied", ["g.sync_sleep"] = "applied", ["g.sync_all"] = "conflict", ["g.this_book"] = "applied" } }
+    local looked = {}
+    local plan = R.plan(R.ITEMS, rec, function(it) looked[it.id] = true; return { available = true, current = nil, default = nil } end)
+    eq(#plan.decisions, 1, "one item")
+    ok(looked["g.apps"] and not looked["bo.sync_forward"], "only the new id")
+    eq(R.candidates(R.ITEMS, rec, nil)[1].id, "g.apps")
+end)
+
+test("recommended: a capability appears: only the unblocked items are evaluated", function()
+    local plan = R.plan(R.ITEMS, nil, world(fresh(), { defaults = BO_DEFAULTS, missing = { ["ko.wifi_on"] = true, ["g.apps"] = true } }))
+    eq(plan.unavailable, 2)
+    local rec = R.record(nil, plan, 1)
+    eq(rec.items["g.apps"], "unavailable")
+    eq(R.reportState(rec), "applied", "unavailable items don't hold the row")
+    local plan2 = R.plan(R.ITEMS, rec, world({}, {}))
+    eq(#plan2.decisions, 2, "only the two that were unavailable")
+    eq(plan2.applied, 2)
+    rec = R.record(rec, plan2, 2)
+    eq(rec.items["g.apps"], "applied")
+    eq(rec.unseen, 8)
+end)
+
+test("recommended: a failed apply stays unavailable, and isn't counted", function()
+    local plan = R.plan({ R.item("bo.home") }, nil, world(fresh(), { defaults = BO_DEFAULTS }))
+    local rec, n = R.record(nil, plan, 1, { ["bo.home"] = false })
+    eq(n, 0); eq(rec.items["bo.home"], "unavailable")
+end)
+
+test("recommended: backup and undo round trip; undo leaves a value the user changed since", function()
+    local it = R.item("g.apps")
+    local prior = { increase_frontlight = 0 }
+    local b = R.backup({ current = prior }, it, 5)
+    ok(b.had and R.equal(b.prior, prior) and b.prior ~= prior, "a copy of the prior value")
+    ok(R.undoable(b, { orbit_open_apps = true }), "still ours: undo")
+    ok(not R.undoable(b, { toc = true }), "changed since: left as is")
+    local b2 = R.backup({ current = nil }, R.item("ko.wifi_on"), 5)
+    ok(not b2.had and b2.prior == nil, "unset before")
+end)
+
+test("recommended: the same results with mode full, addon and no companion (the mode is not an input)", function()
+    local cur = fresh(); cur["bo.home"] = "filemanager"
+    local a = states(R.plan(R.ITEMS, nil, world(cur, { defaults = BO_DEFAULTS })))
+    for _, mode in ipairs({ "full", "addon", "none" }) do
+        local b = states(R.plan(R.ITEMS, nil, world(cur, { defaults = BO_DEFAULTS })))
+        for id, s in pairs(a) do eq(b[id], s, mode .. " " .. id) end
+    end
+end)
+
+test("recommended: lost capabilities undo only Orbit's applied items that need them", function()
+    local rec = { items = { ["ko.wifi_on"] = "applied", ["g.apps"] = "already", ["g.sync_all"] = "applied" } }
+    local lost = R.lostCaps(rec, function(cap) return cap ~= "wifi" and cap ~= "apps" end)
+    eq(#lost, 1); eq(lost[1].id, "ko.wifi_on")
+end)
+
+test("recommended: values in plain words", function()
+    eq(R.valueLabel(R.item("bo.sync_forward"), 1), "Ask")
+    eq(R.valueLabel(R.item("ko.wifi_on"), nil), "Ask")
+    eq(R.valueLabel(R.item("g.apps"), nil), "Nothing")
+    eq(R.valueLabel(R.item("g.apps"), { orbit_open_apps = true }), "Orbit: other apps")
+    eq(R.reportState(nil), "none")
+    eq(R.reportState({ items = { a = "kept", b = "applied" } }), "reviewed")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

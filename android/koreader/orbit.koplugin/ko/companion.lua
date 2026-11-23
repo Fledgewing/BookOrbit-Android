@@ -102,6 +102,11 @@ function Companion.installed()
     return Companion.state() == "ok"
 end
 
+-- A companion feature is available (docs/design/addon-mode.md §6).
+function Companion.has(cap)
+    return Companion.installed()
+end
+
 -- For menus and the test: what's wrong with the companion, or nil.
 function Companion.problem()
     local st = Companion.state()

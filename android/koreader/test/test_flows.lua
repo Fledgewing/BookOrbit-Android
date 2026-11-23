@@ -376,7 +376,7 @@ local function newPlugin()
     function p:onBookOrbitSyncBook(o) rec("syncbook"); o.on_done(nil) end
     function p:startSweep(o) rec("sweep"); o.on_done(nil) end
     function p:errorLabel(e) return tostring(e) end
-    function p:onBookOrbitToggleAutoSync(v) rec("toggle:" .. tostring(v)) end
+    function p:onBookOrbitToggleAutoSync(v) rec("toggle:" .. tostring(v)); p.settings.auto_sync = v end
     return p
 end
 
@@ -1021,28 +1021,184 @@ test("restart by an older patch: COMMAND=reopen_book opens KOReader's last book"
     ok(W.opened == nil, "a book already open stays")
 end)
 
-test("apply recommended settings: Make BookOrbit home, saved like the plugin's Opening page", function()
-    local ui, m = newUI(false)
-    ui.bookorbit.settings.catalog_auto_open = nil
-    local flushed = 0
-    local was = G_reader_settings.flush
-    G_reader_settings.flush = function() flushed = flushed + 1 end
+---------------------------------------------------------------- recommended settings (addon-mode §5)
+local RE = getfenv(Orbit.onSuspend)
+local BO_DEFAULTS = { auto_sync = false, sync_forward = 1, sync_backward = 3, catalog_auto_open = "off" }
+-- A KOReader with nothing changed: the plugin and gestures at their stock defaults.
+local function recWorld(in_book)
+    local ui, m = newUI(in_book)
+    local p = ui.bookorbit
+    p.default_settings = BO_DEFAULTS
+    p.settings.auto_sync, p.settings.sync_forward, p.settings.catalog_auto_open = false, 1, "off"
+    ui.gestures.default_settings = { data = { gesture_reader = { two_finger_swipe_north = { increase_frontlight = 0 },
+        tap_top_left_corner = { toggle_page_flipping = true } } } }
+    ui.gestures.data.gesture_reader = { two_finger_swipe_north = { increase_frontlight = 0 } }
+    store.orbit_android.recommended, store.orbit_android.recommended_backup = nil, nil
+    store.wifi_enable_action = nil
+    RE.Rec.session_applied, RE.Rec.line_pending = 0, false
+    RE.installed_cache.at = -1000
     W.shown = {}
-    m:applyRecommendedSettings()
-    local box
-    for _, w in ipairs(W.shown) do if w.ok_callback then box = w end end
-    ok(box and tostring(box.text):find("Make BookOrbit home", 1, true), "listed in the confirm")
-    box.ok_callback()
-    G_reader_settings.flush = was
-    ok(ui.bookorbit.settings.catalog_auto_open == "home", "open mode " .. tostring(ui.bookorbit.settings.catalog_auto_open))
-    ok(flushed >= 1, "flushed like the plugin's save")
-    -- A mode the patch doesn't know is left alone.
-    ui.bookorbit.settings.catalog_auto_open = "always"
+    return ui, m, p
+end
+local function shownText(pat)
+    for _, w in ipairs(W.shown) do if w.text and tostring(w.text):find(pat, 1, true) then return w end end
+end
+local function menuRow(menu, label)
+    for _, it in ipairs(menu.item_table) do if it.text == label then return it end end
+end
+local function pressDialog(label)
+    for i = #W.shown, 1, -1 do
+        local w = W.shown[i]
+        if w.buttons then
+            for _, b in ipairs(w.buttons[1]) do if b.text == label then b.callback(); return true end end
+        end
+    end
+    error("no dialog button " .. label)
+end
+
+test("recommended: a fresh KOReader at first start: every item applied with a backup, one line off-book", function()
+    local ui, m, p = recWorld(false)
+    m:recommendedPass("start")
+    ok(p.settings.auto_sync == true, "auto-sync through the plugin's toggle")
+    ok(p.settings.sync_forward == 2, "Silent")
+    ok(p.settings.catalog_auto_open == "home", "Make BookOrbit home")
+    ok(store.wifi_enable_action == "turn_on", "KOReader turns Wi-Fi on")
+    local g = ui.gestures.data.gesture_reader
+    ok(g.hold_top_right_corner.orbit_sync_and_sleep and g.hold_top_left_corner.bookorbit_sync_now
+        and g.one_finger_swipe_bottom_edge_right.bookorbit_this_book and g.two_finger_swipe_north.orbit_open_apps, "gestures")
+    ok(ui.gestures.flushed, "gestures flushed")
+    local b = store.orbit_android.recommended_backup
+    ok(b["g.apps"].had and b["g.apps"].prior.increase_frontlight == 0, "backup of the frontlight gesture")
+    ok(b["ko.wifi_on"] and not b["ko.wifi_on"].had, "backup: Wi-Fi action was unset")
+    ok(shownText("Applied 8 recommended settings · Review"), "the line")
+    ok(m:recommendedMenuText() == "Recommended settings: Applied 8 recommended settings · Review", m:recommendedMenuText())
+    -- A second start: nothing new, silent, and a value changed by hand since stays.
+    p.settings.sync_forward = 3
     W.shown = {}
-    m:applyRecommendedSettings()
-    for _, w in ipairs(W.shown) do if w.ok_callback then w.ok_callback() end end
-    ok(ui.bookorbit.settings.catalog_auto_open == "always", "unknown mode kept")
-    run(3)
+    m:recommendedPass("start")
+    ok(p.settings.sync_forward == 3, "never changed back")
+    ok(#W.shown == 0, "silent")
+    -- The review page clears the line.
+    local menu = m:showRecommended("test")
+    ok(menuRow(menu, "Applied"), "Applied section")
+    ok(m:recommendedMenuText() == "Recommended settings", "line cleared once seen")
+    run(1)
+end)
+
+test("recommended: a customised KOReader keeps every changed value; review offers Use Orbit's / Keep mine", function()
+    local ui, m, p = recWorld(false)
+    p.settings.sync_forward = 3
+    ui.gestures.data.gesture_reader.hold_top_left_corner = { toc = true }
+    m:recommendedPass("start")
+    ok(p.settings.sync_forward == 3, "the user's value stays")
+    ok(ui.gestures.data.gesture_reader.hold_top_left_corner.toc, "the user's gesture stays")
+    ok(p.settings.auto_sync == true, "at-default items still applied")
+    ok(shownText("Applied 6 · 2 to review"), "the line counts both")
+    local menu = m:showRecommended("test")
+    local row = menuRow(menu, "BookOrbit › When BookOrbit is further ahead")
+    ok(row and row.mandatory == "yours: Don't sync · Orbit's: Silent", row and row.mandatory)
+    row.callback()
+    pressDialog("Use Orbit's")
+    ok(p.settings.sync_forward == 2, "Use Orbit's applies")
+    ok(store.orbit_android.recommended.items["bo.sync_forward"] == "applied", "recorded")
+    run(1)
+    menu = m.rec_menu
+    menuRow(menu, "Gesture in books: hold top-left corner").callback()
+    pressDialog("Keep mine")
+    ok(store.orbit_android.recommended.items["g.sync_all"] == "kept", "kept")
+    ok(ui.gestures.data.gesture_reader.hold_top_left_corner.toc, "kept unchanged")
+    run(1)
+    -- Kept stays kept on later passes.
+    m:recommendedPass("start")
+    ok(ui.gestures.data.gesture_reader.hold_top_left_corner.toc, "a pass never revisits kept")
+    run(1)
+end)
+
+test("recommended: Undo restores the backup; a value changed since is left as is; Undo all", function()
+    local ui, m, p = recWorld(false)
+    m:recommendedPass("start")
+    local menu = m:showRecommended("test")
+    menuRow(menu, "Gesture in books: two-finger swipe up").callback()
+    pressDialog("Undo")
+    ok(ui.gestures.data.gesture_reader.two_finger_swipe_north.increase_frontlight == 0, "frontlight back")
+    ok(store.orbit_android.recommended.items["g.apps"] == "kept", "then shown under Kept yours")
+    run(1)
+    -- Changed by hand after Orbit set it: Undo leaves it.
+    p.settings.catalog_auto_open = "filemanager"
+    menuRow(m.rec_menu, "BookOrbit › Make BookOrbit home").callback()
+    pressDialog("Undo")
+    ok(p.settings.catalog_auto_open == "filemanager", "left as is")
+    ok(shownText("Changed since; left as is."), "says so")
+    run(1)
+    menuRow(m.rec_menu, "Undo all").callback()
+    ok(p.settings.auto_sync == false and p.settings.sync_forward == 1, "plugin values back")
+    ok(ui.gestures.data.gesture_reader.hold_top_right_corner == nil, "gesture back to nothing")
+    ok(store.wifi_enable_action == "turn_on", "KOReader's Wi-Fi action stays while Wi-Fi switching needs it")
+    ok(shownText("Wi-Fi switching needs it"), "says why")
+    run(1)
+end)
+
+test("recommended: in a book the settings are written, the line waits for the file browser", function()
+    local ui, m, p = recWorld(true)
+    m:recommendedPass("start")
+    ok(p.settings.auto_sync == true, "written in a book")
+    ok(not shownText("Applied"), "no line in a book")
+    local ui2, m2 = newUI(false)
+    m2:maybeSetupPrompt("home")
+    ok(shownText("Applied 8 recommended settings"), "shown off the book")
+    run(1)
+end)
+
+test("recommended: missing pieces wait: no BookOrbit plugin, Gestures off; applied on the start they appear", function()
+    local ui, m, p = recWorld(false)
+    ui.bookorbit = nil
+    local gestures = ui.gestures
+    ui.gestures = nil
+    m:recommendedPass("start")
+    local items = store.orbit_android.recommended.items
+    ok(items["bo.auto_sync"] == "unavailable" and items["g.apps"] == "unavailable", "unavailable, not failed")
+    ok(items["ko.wifi_on"] == "applied", "the rest applied")
+    local menu = m:showRecommended("test")
+    ok(menuRow(menu, "Gesture in books: hold top-right corner").mandatory == "Turn on KOReader's Gestures plugin", "the reason")
+    run(1)
+    ui.bookorbit, ui.gestures = p, gestures
+    m:recommendedPass("start")
+    ok(items["bo.auto_sync"] == "applied" and items["g.apps"] == "applied", "applied once they load")
+    run(1)
+end)
+
+test("recommended: at load, KOReader's Wi-Fi action is set only with the companion, and backed up", function()
+    recWorld(false)
+    W.companion = false
+    RE.installed_cache.at = -1000
+    RE.silentWifiOn()
+    ok(store.wifi_enable_action == nil, "no companion: left alone")
+    W.companion = true
+    RE.installed_cache.at = -1000
+    RE.silentWifiOn()
+    ok(store.wifi_enable_action == "turn_on", "with the companion")
+    ok(store.orbit_android.recommended_backup["ko.wifi_on"], "with a backup")
+    -- A value the user chose is never overwritten: listed instead.
+    recWorld(false)
+    store.wifi_enable_action = "ignore"
+    RE.silentWifiOn()
+    ok(store.wifi_enable_action == "ignore", "kept")
+    ok(store.orbit_android.recommended.items["ko.wifi_on"] == "conflict", "to review")
+    store.wifi_enable_action = "turn_on"
+end)
+
+test("recommended: Keep mine on KOReader's Wi-Fi action offers to turn Wi-Fi switching off instead", function()
+    local ui, m = recWorld(false)
+    store.wifi_enable_action = "ignore"
+    m:recommendedPass("start")
+    local menu = m:showRecommended("test")
+    menuRow(menu, "KOReader › Action when Wi-Fi is off").callback()
+    pressDialog("Turn Wi-Fi switching off")
+    ok(store.orbit_android.wifi_via_companion == false, "switching off")
+    ok(store.wifi_enable_action == "ignore", "theirs kept")
+    store.orbit_android.wifi_via_companion = true
+    store.wifi_enable_action = "turn_on"
+    run(1)
 end)
 
 test("the status ping says whether a book is open (the companion's restart waits for it)", function()
@@ -1697,12 +1853,8 @@ end)
 
 test("apps gesture: registered and in the recommended set", function()
     ok(actions.orbit_open_apps and actions.orbit_open_apps.title == "Orbit Companion: apps", "action title")
-    local ui, m = newUI(true)
-    W.shown = {}
-    m:applyRecommendedGestures()
-    local box = W.shown[#W.shown]
-    box.ok_callback()
-    ok(ui.gestures.data.gesture_reader.two_finger_swipe_north.orbit_open_apps, "two-finger swipe up")
+    local R = getfenv(Orbit.onSuspend).Recommended
+    ok(R.item("g.apps").ours.orbit_open_apps and R.item("g.apps").key == "two_finger_swipe_north", "two-finger swipe up")
 end)
 
 ---------------------------------------------------------------- self-update

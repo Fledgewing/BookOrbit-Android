@@ -498,6 +498,7 @@ end
 
 -- The one-time "Setup needs you" box (SetupPrompt). where: given (the menu) or looked up.
 function OrbitAndroid:maybeSetupPrompt(why, where)
+    pcall(self.maybeRecommendedLine, self, where)
     if not Companion.installed() then return end
     where = where or self:whereNow()
     local prompt = Shared.setup_prompt
