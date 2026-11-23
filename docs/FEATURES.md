@@ -30,6 +30,9 @@ Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "
 | BookOrbit home opens on its first page | yes | n/a | n/a | n/a |
 | Lists by series and by author (BookOrbit's Series and Authors views) | yes | no | no | no |
 | Reopen the open book after an update restart | yes | n/a | n/a | n/a |
+| Mark finished at the end of the book: final position, then read status and rating sent after the outbox, kept through the next state pull; a stale position push is held ([design](design/end-of-book/DESIGN.md); upstream: [progress finishes a book only at the library's threshold](server-contract.md#progress-finishes-a-book-only-at-the-librarys-threshold)) | yes (0.9.0) | planned (ROADMAP 1) | planned | planned |
+| End-of-book sheet: Undo, stars, next in series (open, or download and open), one suggestion, the author's books | yes (0.9.0) | planned (ROADMAP 2) | planned | if flash allows |
+| Local-first BookOrbit home: this device's reading shown at once, a refresh repaints only what changed, ⟳ and "updated" stamp on home and lists ([design](design/local-first/DESIGN.md)) | yes (0.9.0) | n/a (ROADMAP 4 is the Xteink catalog) | n/a | n/a |
 
 ## Device
 

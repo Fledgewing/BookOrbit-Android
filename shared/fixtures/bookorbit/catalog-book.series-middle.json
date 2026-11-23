@@ -1,0 +1,137 @@
+{
+  "id": 102,
+  "title": "Wayfarer Two",
+  "authors": [
+    "Ann Writer"
+  ],
+  "seriesId": 7,
+  "seriesName": "The Wayfarer",
+  "seriesIndex": "2",
+  "progressPercentage": 97.4,
+  "lastReadAt": "2026-11-20T19:02:11.000Z",
+  "readStatus": "reading",
+  "formats": [
+    "epub"
+  ],
+  "hasCover": true,
+  "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/102/thumbnail",
+  "detailUrl": "/api/v1/koreader/plugin/catalog/books/102",
+  "addedAt": "2026-01-04T10:00:00.000Z",
+  "updatedAt": "2026-11-01T10:00:00.000Z",
+  "libraryId": 1,
+  "libraryName": "Books",
+  "rating": null,
+  "files": [
+    {
+      "id": 1020,
+      "format": "epub",
+      "size": 1843200
+    }
+  ],
+  "relatedSections": [
+    {
+      "id": "series",
+      "title": "More in series",
+      "books": [
+        {
+          "id": 101,
+          "title": "Wayfarer One",
+          "authors": [
+            "Ann Writer"
+          ],
+          "seriesIndex": "1",
+          "hasCover": true,
+          "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/101/thumbnail"
+        },
+        {
+          "id": 103,
+          "title": "Wayfarer Three",
+          "authors": [
+            "Ann Writer"
+          ],
+          "seriesIndex": "3",
+          "hasCover": true,
+          "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/103/thumbnail"
+        }
+      ]
+    },
+    {
+      "id": "author",
+      "title": "Also by this author",
+      "books": [
+        {
+          "id": 201,
+          "title": "A Quiet Harbour",
+          "authors": [
+            "Ann Writer"
+          ],
+          "seriesIndex": null,
+          "hasCover": true,
+          "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/201/thumbnail"
+        },
+        {
+          "id": 202,
+          "title": "Salt Roads",
+          "authors": [
+            "Ann Writer"
+          ],
+          "seriesIndex": null,
+          "hasCover": true,
+          "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/202/thumbnail"
+        }
+      ]
+    },
+    {
+      "id": "similar",
+      "title": "Similar books",
+      "books": [
+        {
+          "id": 301,
+          "title": "Lanterns",
+          "authors": [
+            "Ben Other"
+          ],
+          "seriesIndex": null,
+          "hasCover": true,
+          "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/301/thumbnail"
+        },
+        {
+          "id": 302,
+          "title": "Night Ferry",
+          "authors": [
+            "Cy Third"
+          ],
+          "seriesIndex": null,
+          "hasCover": true,
+          "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/302/thumbnail"
+        }
+      ]
+    }
+  ],
+  "seriesMembers": [
+    {
+      "id": 101,
+      "title": "Wayfarer One",
+      "seriesIndex": "1",
+      "readStatus": "read"
+    },
+    {
+      "id": 102,
+      "title": "Wayfarer Two",
+      "seriesIndex": "2",
+      "readStatus": "reading"
+    },
+    {
+      "id": 103,
+      "title": "Wayfarer Three",
+      "seriesIndex": "3",
+      "readStatus": null
+    },
+    {
+      "id": 104,
+      "title": "Wayfarer Four",
+      "seriesIndex": "4",
+      "readStatus": null
+    }
+  ]
+}

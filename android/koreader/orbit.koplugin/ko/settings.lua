@@ -29,6 +29,9 @@ DEFAULTS = {
     home_book = nil,              -- the book Home closed (fallback path); cleared by a user close or another book
     saved_pages_before_update = nil, -- the plugin's Push while reading value, kept while ours is on
     key_log = true,               -- log every key KOReader gets (clicker diagnosis; v0.4.2 default on)
+    eob_sheet = true,             -- BookOrbit books: Orbit's end-of-book sheet instead of KOReader's end_document_action
+    eob_auto = true,              -- reaching the end marks the book finished (docs/design/end-of-book §4)
+    local_first = true,           -- BookOrbit Home shows this device's reading first (docs/design/local-first)
 }
 
 S = G_reader_settings:readSetting("orbit_android") or {}

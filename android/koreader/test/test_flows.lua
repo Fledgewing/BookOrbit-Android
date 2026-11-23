@@ -38,6 +38,7 @@ local UIManager = {
         if w and w.dismiss_callback then w.dismiss_callback() end
     end,
     forceRePaint = function() end,
+    setDirty = function() end,
     -- Android: Device:canRestart is no, so a restart is quit + the companion's RELAUNCH.
     quit = function() W.quits = (W.quits or 0) + 1 end,
     _refresh_stack = {},
@@ -273,6 +274,46 @@ local preload = {
     ["ffi/sha2"] = { sha256 = function(s) return W.fake_sha(s) end },
 }
 for k, v in pairs(preload) do package.preload[k] = function() return v end end
+
+-- KOReader's settings files (luasettings.lua), kept in W.lua_files by path.
+W.lua_files = {}
+package.preload["luasettings"] = function()
+    local LS = {}
+    LS.__index = LS
+    function LS:open(path)
+        W.lua_files[path] = W.lua_files[path] or {}
+        return setmetatable({ path = path }, LS)
+    end
+    function LS:readSetting(k) return W.lua_files[self.path][k] end
+    function LS:saveSetting(k, v) W.lua_files[self.path][k] = v end
+    function LS:flush() end
+    return LS
+end
+-- KOReader's ReaderStatus (readerstatus.lua:38, :212), cut to what end of book hooks.
+W.ReaderStatus = {}
+W.ReaderStatus.__index = W.ReaderStatus
+function W.ReaderStatus:onEndOfBook() W.stock_end = (W.stock_end or 0) + 1 end
+function W.ReaderStatus:markBook(mark_read)
+    local summary = self.ui.doc_settings:readSetting("summary")
+    summary.status = (not mark_read and summary.status == "complete") and "reading" or "complete"
+end
+function W.ReaderStatus:onShowBookStatus() W.book_status = true end
+package.preload["apps/reader/modules/readerstatus"] = function() return W.ReaderStatus end
+package.preload["datastorage"] = function() return { getSettingsDir = function() return "/settings" end } end
+-- The rest of KOReader's widgets and ui helpers the sheets build with: stand-ins that keep their
+-- arguments (no layout, no drawing).
+local function plain(_, o) return o or {} end
+preload.device.screen = { getWidth = function() return 600 end, getHeight = function() return 800 end }
+package.preload["ui/geometry"] = function() return { new = plain } end
+package.preload["ui/gesturerange"] = function() return { new = plain } end
+package.preload["ui/font"] = function() return { getFace = function() return {} end } end
+package.preload["ui/size"] = function() return { padding = { large = 10 }, radius = { button = 0 }, line = { thick = 3 } } end
+package.preload["ffi/blitbuffer"] = function() return { COLOR_BLACK = 0, COLOR_WHITE = 1 } end
+table.insert(package.loaders, 2, function(name)
+    if type(name) == "string" and name:match("^ui/widget/") and not package.preload[name] then
+        return function() return Widget:extend{} end
+    end
+end)
 
 -- The BookOrbit plugin, reduced to the calls the patch makes.
 local function newPlugin()
@@ -2131,6 +2172,285 @@ test("lists: pass-through when nothing is marked", function()
     cat.client:catalogBooks({ sort = "title", page = 1 })
     ok(#lists_server.urls == 1, "books from the server")
     package.loaded["bookorbit_catalog"], package.loaded["bookorbit_api"] = nil, nil
+end)
+
+
+---------------------------------------------------------------- end of book (ROADMAP 1, 2)
+local E = getfenv(Orbit.onSuspend)
+local eob = { calls = {} }
+local EApi = {}
+EApi.__index = EApi
+function EApi:catalogBook(id)
+    table.insert(eob.calls, "book:" .. id)
+    if eob.fail then return nil, eob.fail end
+    return eob.details[id]
+end
+function EApi:catalogSetReadStatus(id, st) table.insert(eob.calls, "status:" .. id .. ":" .. st); return {} end
+function EApi:catalogSetRating(id, r) table.insert(eob.calls, "rating:" .. id .. ":" .. tostring(r)); return {} end
+local function eobModules()
+    package.loaded["bookorbit_api"] = EApi
+    package.loaded["bookorbit_state_manager"] = {
+        getBook = function(d) return d == "d1" and { bookId = 42 } or nil end,
+        mutate = function(fn) fn({ getBook = function(_, h) eob.state = eob.state or { hash = h }; return eob.state end }) end,
+        onDeviceMaps = function() return { byBookId = eob.on_device or {} } end,
+    }
+    package.loaded["bookorbit_sidecar"] = {
+        rememberServerState = function(book, st) book.server = st end,
+        applyServerStateLive = function(_, st) eob.live = st end,
+        applyServerStateSidecar = function(f, st) eob.sidecar = { f, st } end,
+    }
+end
+local function bookUI(summary)
+    local ui, m = newUI(true)
+    ui.bookorbit.newClient = function() return setmetatable({}, EApi) end
+    ui.doc_settings = { data = { summary = summary or { status = "reading" } } }
+    function ui.doc_settings:readSetting(k) return self.data[k] end
+    function ui.doc_settings:saveSetting(k, v) self.data[k] = v end
+    ui.status = setmetatable({ ui = ui, document = ui.document }, W.ReaderStatus)
+    return ui, m
+end
+local function sheetRow(kind, text)
+    for _, r in ipairs(E.EOB.sheet and E.EOB.sheet:rows() or {}) do
+        if r.kind == kind and (not text or tostring(r.text):find(text, 1, true)) then return r end
+    end
+end
+local series_detail = { id = 42, title = "Sea of Monsters", authors = { "Rick Riordan" }, seriesId = 7,
+    seriesName = "Percy Jackson", seriesIndex = 2, readStatus = "reading",
+    seriesMembers = { { id = 41, title = "Lightning Thief", seriesIndex = 1, readStatus = "read" },
+        { id = 42, title = "Sea of Monsters", seriesIndex = 2, readStatus = "reading" },
+        { id = 43, title = "Titan's Curse", seriesIndex = 3 } },
+    relatedSections = {} }
+eob.details = { [42] = series_detail, [43] = { id = 43, title = "Titan's Curse", files = { { id = 9, format = "epub" } } } }
+
+test("end of book: a plugin without a module -> KOReader's own end screen", function()
+    package.loaded["bookorbit_state_manager"] = nil
+    local ui = bookUI()
+    W.stock_end = 0
+    ui.status:onEndOfBook()
+    ok(W.stock_end == 1 and E.EOB.sheet == nil, "stock end screen")
+    ok(ui.doc_settings.data.summary.status == "reading", "nothing marked")
+end)
+
+test("end of book: the last page marks it finished, opens the sheet; Undo takes it back", function()
+    eobModules()
+    E.EOB.remember(series_detail)
+    local ui = bookUI()
+    W.stock_end = 0
+    ui.status:onEndOfBook()
+    ok(W.stock_end == 0, "the Orbit sheet instead of KOReader's")
+    ok(ui.doc_settings.data.summary.status == "complete", "marked finished")
+    local job = E.EOB.queue()["d1"]
+    ok(job and job.book_id == 42 and job.ready == false, "a job, not sent while the book is open")
+    ok(sheetRow("status", "Marked as finished") and sheetRow("author", "Rick Riordan"), "status and author")
+    ok(sheetRow("next", "Next in series · Book 3"), "next card: " .. tostring((sheetRow("next") or {}).text))
+    ok(sheetRow("button", "Titan's Curse"), "download and open the next book")
+    sheetRow("status").action()
+    ok(ui.doc_settings.data.summary.status == "reading" and E.EOB.queue()["d1"] == nil, "Undo: reading, no job")
+    ok(E.EOB.sheet == nil, "sheet closed")
+    -- Auto-mark off: the sheet offers the mark instead.
+    E.S.eob_auto = false
+    ui.status:onEndOfBook()
+    ok(ui.doc_settings.data.summary.status == "reading" and sheetRow("status", "Not marked"), "not marked")
+    sheetRow("status").action()
+    ok(E.EOB.queue()["d1"] and sheetRow("status", "Marked as finished"), "marked from the sheet")
+    E.S.eob_auto = true
+    sheetRow("status").action()
+end)
+
+test("end of book: stars, leave, sync -> guard read, read-status, rating, written back", function()
+    eobModules()
+    local ui, m = bookUI()
+    ui.status:onEndOfBook()
+    sheetRow("star", nil) -- first star row
+    local stars = {}
+    for _, r in ipairs(E.EOB.sheet:rows()) do if r.kind == "star" then table.insert(stars, r) end end
+    stars[4].action()
+    ok(E.EOB.queue()["d1"].rating == 4 and ui.doc_settings.data.summary.rating == 4, "4 stars kept")
+    E.EOB.actions.back()
+    eob.calls = {}
+    E.Sync.waitOutbox(ui.bookorbit, 10, function() end)
+    run(5)
+    ok(#eob.calls == 0 or not table.concat(eob.calls, ","):find("status:", 1, true), "nothing sent with the book open")
+    m:onCloseWidget()
+    ok(E.EOB.queue()["d1"].ready, "ready once the book is left")
+    E.Sync.waitOutbox(ui.bookorbit, 10, function() W.waited = true end)
+    run(5)
+    local c = table.concat(eob.calls, ",")
+    ok(c:find("book:42,status:42:read,rating:42:4", 1, true), "in order: " .. c)
+    ok(E.EOB.queue()["d1"] == nil and W.waited, "sent, then the caller goes on")
+    ok(eob.state and eob.state.server and eob.state.server.status == "complete" and eob.state.server.rating == 4, "written back")
+end)
+
+test("end of book: a server error retries later; 404 drops", function()
+    eobModules()
+    local ui, m = bookUI()
+    ui.status:markBook(true)
+    m:onCloseWidget()
+    eob.fail, eob.calls = 503, {}
+    E.EOB.drain(ui.bookorbit, false)
+    local job = E.EOB.queue()["d1"]
+    ok(job and job.attempts == 1 and job.next_try_at and job.next_try_at > os.time(), "kept with a backoff")
+    eob.fail = 404
+    E.EOB.drain(ui.bookorbit, true)
+    ok(E.EOB.queue()["d1"] == nil, "dropped on 404")
+    eob.fail = nil
+end)
+
+test("end of book: Download and open, offline -> Couldn't connect, Get it at the next sync", function()
+    eobModules()
+    local ui = bookUI()
+    ui.status:onEndOfBook()
+    W.wifi, W.vpn = false, false
+    W.companion = false
+    sheetRow("button", "Titan's Curse").action()
+    run(60)
+    ok(sheetRow("card", "Couldn't connect"), "the card says so")
+    sheetRow("button", "Get it at the next sync").action()
+    ok(E.EOB.downloads()["43"], "remembered for the next sync")
+    W.wifi, W.vpn, W.companion = true, true, true
+    E.EOB.wants_download = {}
+    E.EOB.save()
+end)
+
+test("end of book: Download and open sends the finish first, downloads through the plugin, opens it", function()
+    eobModules()
+    local DCat = {}
+    DCat.__index = DCat
+    function DCat:downloadDefaultFile(detail, file) self:checkDownloadFile("/books/titan.epub", detail, file) end
+    function DCat:downloadFile(path, detail, file, rep)
+        ok(self.client and self.bookMode == false, "headless, the plugin's client")
+        table.insert(eob.calls, "download:" .. detail.id)
+        rep.progress(512, 1024)
+        rep.finished(true, nil, path)
+    end
+    function DCat:loadBooks() end
+    package.loaded["bookorbit_catalog"] = DCat
+    local ui = bookUI()
+    ui.status:onEndOfBook()
+    eob.calls, W.opened = {}, nil
+    sheetRow("button", "Titan's Curse").action()
+    run(60)
+    local c = table.concat(eob.calls, ",")
+    ok(c:find("status:42:read", 1, true) and c:find("download:43", 1, true)
+        and c:find("status:42:read", 1, true) < c:find("download:43", 1, true), "finish, then download: " .. c)
+    ok(W.opened == "/books/titan.epub", "opened: " .. tostring(W.opened))
+    ok(E.EOB.sheet == nil, "sheet closed")
+    package.loaded["bookorbit_catalog"] = nil
+end)
+
+test("end of book: a finished book's stale position is held", function()
+    eobModules()
+    local PCls = {}
+    PCls.__index = PCls
+    function PCls:enqueueLifecycleSnapshot(snap) eob.snap = snap end
+    function PCls:updateProgress() eob.live_push = true end
+    local ui, m = bookUI({ status = "complete" })
+    setmetatable(ui.bookorbit, PCls)
+    E.EOB.installPluginHooks(ui.bookorbit)
+    E.EOB.queue()["d1"] = E.Finish.newJob({ hash = "d1", book_id = 42, final_pos = { percentage = 1 }, now = os.time() })
+    E.EOB.session["d1"] = { forward = 0 }
+    ui.bookorbit:enqueueLifecycleSnapshot({ digest = "d1", percentage = 0.5, progress = "x", status = "complete" }, "close")
+    ok(eob.snap and eob.snap.percentage == nil, "position held")
+    ui.bookorbit:enqueueLifecycleSnapshot({ digest = "d1", percentage = 0.95, status = "complete" }, "close")
+    ok(eob.snap.percentage == 0.95, "near the end: sent")
+    E.EOB.queue()["d1"] = nil
+end)
+
+
+---------------------------------------------------------------- local-first Home (ROADMAP 3)
+local lf = {}
+local function lfModules(drop)
+    local BUI = {}
+    function BUI.statusCluster(d) return { kind = "status" } end
+    function BUI.hit(w, action) w.action = action; return w end
+    function BUI.icon(name) return { icon = name } end
+    function BUI.hstack(_, items) return { items = items } end
+    local BD = {}
+    function BD.build(_, context, now)
+        local body = context.dashboard or {}
+        lf.built = body
+        return { continue_reading = body.continueReading, online = true, date_long = "Sunday", now = now }
+    end
+    local LV = {}
+    local function region(w, action) return { region = action, w } end
+    function LV.header(w, o)
+        local _r = region
+        return { sub = o.sub, status = BUI.statusCluster({ clock = o.clock }) }
+    end
+    local Cat = {}
+    Cat.__index = Cat
+    local statusCluster = BUI.statusCluster
+    function Cat:boardHeader(d) return { date_long = d.date_long, status = statusCluster(d) } end
+    function Cat:switchTo(_, items, context) lf.stock_switch = (lf.stock_switch or 0) + 1; self.current_context = context end
+    function Cat:refreshOnDevice() end
+    function Cat:updateItems() lf.full_paint = (lf.full_paint or 0) + 1 end
+    function Cat:refreshCurrent() lf.refreshed = true end
+    function Cat:dashboardRootFetch() return {}, lf.next_context end
+    function Cat:boardRun(action) lf.stock_run = action.kind end
+    function Cat:boardRefreshTile(entry) table.insert(lf.repainted, entry.item.type) end
+    function Cat:boardRefreshClock() lf.header = (lf.header or 0) + 1 end
+    function Cat:listRun(action) lf.stock_list = action.kind end
+    function Cat:listHeader() return { title = "Books", sub = "12 books" } end
+    if drop then Cat[drop] = nil end
+    package.loaded["bookorbit_catalog"], package.loaded["bookorbit_board_data"] = Cat, BD
+    package.loaded["bookorbit_list_view"], package.loaded["bookorbit_board_ui"] = LV, BUI
+    return Cat, BD, LV, BUI
+end
+
+test("local-first: a plugin without a hook -> Home stays the plugin's", function()
+    local Cat, BD = lfModules("listRun")
+    local build = BD.build
+    newUI(false)
+    ok(not E.LF.installed and BD.build == build and rawget(Cat, "__orbit_stock") == nil, "nothing wrapped")
+end)
+
+test("local-first: Home paints this device's state; ⟳ refreshes; a refresh repaints changed tiles only", function()
+    local Cat, BD, LV, BUI = lfModules()
+    package.loaded["bookorbit_state_manager"] = { getBook = function(d) return d == "d7" and { bookId = 7 } or nil end }
+    newUI(false)
+    ok(E.LF.installed, "installed")
+    -- Finished here, not yet sent: Home shows it finished before the server knows.
+    E.LocalState.put("d7", { status = "complete", percent = 100, pending = true })
+    local body = { continueReading = { { id = 7, title = "A", progressPercentage = 40 }, { id = 8, title = "B", progressPercentage = 10 } } }
+    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = body } }, Cat)
+    local d = BD.build(cat, cat.current_context, os.time())
+    ok(lf.built ~= body and lf.built.orbit_overlay, "an overlaid copy")
+    ok(#body.continueReading == 2, "the saved body untouched")
+    ok(d.orbit_board, "marked for the header")
+    -- Header: ⟳ next to the device status, and the stamp.
+    E.LocalState.load().fetchedAt.dashboard = os.time() - 120
+    local h = cat:boardHeader(d)
+    ok(h.status.items and h.status.items[1].action.kind == "orbit-refresh", "⟳ in the header")
+    ok(h.date_long:find("Sunday · updated", 1, true), "stamp: " .. tostring(h.date_long))
+    cat:boardRun({ kind = "orbit-refresh" })
+    ok(lf.refreshed, "⟳ refreshes")
+    cat:boardRun({ kind = "menu" })
+    ok(lf.stock_run == "menu", "other actions: the plugin's")
+    -- List header: ⟳ and its stamp.
+    local lh = cat:listHeader("books", { kind = "books", params = {} })
+    local lv = LV.header(500, lh)
+    ok(lv.status.items and lv.status.items[1].region.kind == "orbit-refresh", "⟳ on lists")
+    lf.refreshed = nil
+    cat:listRun({ kind = "orbit-refresh" })
+    ok(lf.refreshed, "list ⟳ refreshes")
+    -- A refresh lands: one tile changed -> only it repaints, plus the header stamp.
+    cat._board_ctx = { d = d }
+    cat._board_tiles = { { item = { type = "hero" } }, { item = { type = "clock" } }, { item = { type = "shelf", source = "x" } } }
+    lf.repainted, lf.stock_switch, lf.header = {}, 0, 0
+    local fresh = { continueReading = { { id = 8, title = "B", progressPercentage = 30 } } }
+    lf.next_context = { kind = "dashboard", dashboard = fresh }
+    local items, ctx = cat:dashboardRootFetch({})
+    cat:switchTo("Home", items, ctx, false)
+    ok(lf.stock_switch == 0 and lf.header == 1, "no full repaint; header stamped")
+    ok(#lf.repainted == 1 and lf.repainted[1] == "hero", "only the hero tile: " .. table.concat(lf.repainted, ","))
+    ok(cat.current_context == ctx, "the new body adopted")
+    -- A different board (shelf set changed) -> the plugin's full repaint.
+    local other = { kind = "dashboard", dashboard = { continueReading = {}, boardShelves = { y = {} } }, orbit_refresh = true }
+    cat:switchTo("Home", {}, other, false)
+    ok(lf.stock_switch == 1, "full repaint")
+    for _, k in ipairs({ "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui", "bookorbit_state_manager" }) do
+        package.loaded[k] = nil
+    end
 end)
 
 print(string.format("%d passed, %d failed", passed, failed))

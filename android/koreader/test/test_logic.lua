@@ -787,5 +787,132 @@ test("lists: held books answer a request the way the server pages it", function(
     eq(G.held[token], nil, "the oldest held list goes")
 end)
 
+---------------------------------------------------------------- end of book (Finish)
+local F = M.Finish
+local FC = JSON.fixture(here, "bookorbit/finish-cases.json")
+
+test("end of book: next in series, suggestions and author from the shared fixtures", function()
+    for _, c in ipairs(FC.picker) do
+        local d = JSON.fixture(here, "bookorbit/" .. c.fixture)
+        local n = F.next(d)
+        if c.next == nil then eq(n, nil, c.fixture .. " no next card")
+        else
+            eq(n.kind, c.next.kind, c.fixture)
+            if c.next.id then eq(n.book.id, c.next.id, c.fixture .. " book") end
+            if c.next.number then eq(n.number, c.next.number, c.fixture .. " number") end
+            if c.next.read ~= nil then eq(n.read, c.next.read, c.fixture .. " read") end
+        end
+        local nid = n and n.book and n.book.id
+        for limit, want in pairs({ [1] = c.suggest1, [2] = c.suggest2 }) do
+            local got = F.suggestions(d, limit, nid)
+            eq(#got, #want, c.fixture .. " suggestions " .. limit)
+            for i, id in ipairs(want) do eq(got[i].book.id, id, c.fixture .. " suggestion " .. i) end
+        end
+        eq(F.author(d), c.author, c.fixture .. " author")
+    end
+end)
+
+test("end of book: the card's words", function()
+    local d = JSON.fixture(here, "bookorbit/catalog-book.series-gap.json")
+    eq(F.nextCard(F.next(d)).line, "Book 3 isn't in your library")
+    local m = F.nextCard(F.next(JSON.fixture(here, "bookorbit/catalog-book.series-middle.json")), true)
+    eq(m.line, "Next in series · Book 3"); eq(m.title, "Wayfarer Three"); eq(m.action, "open")
+    local f = F.nextCard(F.next(JSON.fixture(here, "bookorbit/catalog-book.series-fractional.json")), false)
+    eq(f.line, "Next in series · Book 2.5 · Read"); eq(f.action, "download")
+    eq(F.nextCard(F.next(JSON.fixture(here, "bookorbit/catalog-book.series-last-all-read.json"))).line, "You've finished the series")
+    eq(F.nextCard(F.next(JSON.fixture(here, "bookorbit/catalog-book.series-last-unread-earlier.json"))).line,
+        "Last book · not read yet: Book 2")
+end)
+
+test("end of book: drain plan, errors and the stale-push hold from the shared table", function()
+    for _, c in ipairs(FC.drain) do
+        local p = F.plan(F.newJob({ hash = "h", rating = c.job.rating, status_seen = c.job.status_seen }), c.server)
+        eq(p.read_status, c.expect.read_status, c.name)
+        eq(p.rating, c.expect.rating, c.name .. " rating")
+    end
+    for _, c in ipairs(FC.errors) do
+        local job = F.newJob({ hash = "h" }); job.attempts = c.attempts_before
+        eq(F.onError(job, c.code, 1000), c.expect, tostring(c.code))
+        if c.next_try_in then eq(job.next_try_at, 1000 + c.next_try_in, tostring(c.code) .. " backoff"); eq(job.parked, c.parked) end
+    end
+    for i, c in ipairs(FC.hold) do eq(F.holdPush(c.final, c.push, c.forward, c.released), c.expect, "hold " .. i) end
+end)
+
+test("end of book: one job per book; Undo deletes it; ratings toggle", function()
+    local q = {}
+    local a = F.put(q, F.newJob({ hash = "x", now = 5, finished_on = "2026-11-22" }))
+    F.setRating(a, 4, nil); eq(a.rating, 4)
+    F.setRating(a, 4, 4); eq(a.rating, "clear", "the same star again clears")
+    F.setRating(a, 3, nil)
+    local b = F.put(q, F.newJob({ hash = "x", now = 9 }))
+    eq(b.rating, 3, "the newer job keeps the rating"); eq(q.x, b)
+    F.put(q, F.newJob({ hash = "y", now = 7 }))
+    local due = F.due(q, 100)
+    eq(#due, 2); eq(due[1].hash, "y", "oldest first")
+    q.y.parked = true
+    eq(#F.due(q, 100), 1, "parked waits"); eq(#F.due(q, 100, true), 2, "a manual sync retries it")
+    q.x.next_try_at = 200
+    eq(#F.due(q, 100), 0, "backing off")
+    ok(F.cancel(q, "x")); eq(q.x, nil); ok(not F.cancel(q, "x"))
+    eq(F.day(0), nil, "an unset clock gives no day"); eq(F.day(1795000000, function() return "2026-11-18" end), "2026-11-18")
+end)
+
+---------------------------------------------------------------- local-first Home (LocalFirst)
+local LF = M.LocalFirst
+
+local function localState(t)
+    local by = {}
+    for k, v in pairs(t or {}) do by[tonumber(k)] = v end
+    return { byBookId = by }
+end
+
+test("local-first: overlay cases from the shared fixture", function()
+    for _, c in ipairs(JSON.fixture(here, "localfirst/overlay-cases.json").cases) do
+        local body = c.body
+        local before = LF.serialize(body)
+        local out = LF.overlay(body, localState(c["local"]))
+        eq(LF.serialize(body), before, c.name .. ": the server body is never modified")
+        for list, want in pairs(c.expect) do
+            if list == "goalDone" then
+                eq(out.readingGoal.completedBooks, want, c.name .. " goal")
+            else
+                local got = out[list] or {}
+                eq(#got, #want, c.name .. " " .. list .. " length")
+                for i, w in ipairs(want) do
+                    for k, v in pairs(w) do eq(got[i][k], v, c.name .. " " .. list .. "[" .. i .. "]." .. k) end
+                end
+            end
+        end
+        for id, want in pairs(c.notSynced or {}) do
+            eq(LF.notSynced(localState(c["local"]).byBookId[tonumber(id)], c.autoSync), want, c.name .. " not synced")
+        end
+    end
+end)
+
+test("local-first: freshness stamp cases from the shared fixture", function()
+    for i, c in ipairs(JSON.fixture(here, "localfirst/stamp-cases.json").cases) do
+        eq(LF.stamp(c), c.expect, "stamp " .. i)
+    end
+end)
+
+test("local-first: ISO times, content keys and changed tiles", function()
+    eq(LF.parseIso("1970-01-02T00:00:00.000Z"), 86400)
+    eq(LF.parseIso("2026-11-22T10:00:00Z") - LF.parseIso("2026-11-22"), 36000)
+    eq(LF.parseIso(nil), nil)
+    local d1 = { continue_reading = { { id = 1, progressPercentage = 40.2, readStatus = "reading" } }, shelves = { a = {} },
+        goal = { books = 24, done = 6, year = 2026 }, streak = { current = 3 }, week_min = 90, today_min = 10, now = 1 }
+    local d2 = { continue_reading = { { id = 1, progressPercentage = 39.8, readStatus = "reading" } }, shelves = { a = {} },
+        goal = { books = 24, done = 7, year = 2026 }, streak = { current = 3 }, week_min = 90, today_min = 10, now = 2 }
+    local tiles = { { key = "t1", kind = "hero" }, { key = "t2", kind = "goalpace" }, { key = "t3", kind = "clock" },
+        { key = "t4", kind = "shelf", source = "a" } }
+    local ch = LF.changedTiles(tiles, tiles, d1, d2)
+    eq(#ch, 1, "rounded % unchanged; only the goal"); eq(ch[1], "t2")
+    eq(#LF.changedTiles(tiles, tiles, d1, d1), 0, "an identical refresh changes no tile")
+    eq(LF.changedTiles(tiles, { tiles[1] }, d1, d2), nil, "a different tile set: full repaint")
+    ok(LF.tileKey("newwidget", d1) ~= LF.tileKey("newwidget", d2), "unknown types key on all of d")
+    eq(LF.tileKey("newwidget", d1), LF.tileKey("newwidget", (function() local c = {} for k, v in pairs(d1) do c[k] = v end c.now = 99 return c end)()),
+        "the clock alone changes nothing")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

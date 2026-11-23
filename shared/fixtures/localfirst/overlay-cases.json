@@ -1,0 +1,359 @@
+{
+  "_comment": "Local-first overlay (docs/design/local-first/DESIGN.md 'Shared concepts', 'The overlay'): server body + device state -> what the device shows. local is keyed by book id; times are epoch seconds; percent 0-100.",
+  "cases": [
+    {
+      "name": "a newer device position wins",
+      "body": {
+        "continueReading": [
+          {
+            "id": 1,
+            "title": "Book 1",
+            "progressPercentage": 40,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T11:06:40.000Z"
+          }
+        ]
+      },
+      "local": {
+        "1": {
+          "percent": 57,
+          "status": "reading",
+          "changedAt": 1795000600,
+          "pending": false
+        }
+      },
+      "expect": {
+        "continueReading": [
+          {
+            "id": 1,
+            "progressPercentage": 57,
+            "readStatus": "reading"
+          }
+        ]
+      },
+      "autoSync": true,
+      "notSynced": {
+        "1": false
+      }
+    },
+    {
+      "name": "acknowledged, and the server is newer: the server wins",
+      "body": {
+        "continueReading": [
+          {
+            "id": 1,
+            "title": "Book 1",
+            "progressPercentage": 62,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T11:21:40.000Z"
+          }
+        ]
+      },
+      "local": {
+        "1": {
+          "percent": 57,
+          "status": "reading",
+          "changedAt": 1795000600,
+          "pending": false
+        }
+      },
+      "expect": {
+        "continueReading": [
+          {
+            "id": 1,
+            "progressPercentage": 62,
+            "readStatus": "reading"
+          }
+        ]
+      }
+    },
+    {
+      "name": "pending: the device wins even when older",
+      "body": {
+        "continueReading": [
+          {
+            "id": 1,
+            "title": "Book 1",
+            "progressPercentage": 62,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T11:21:40.000Z"
+          }
+        ]
+      },
+      "local": {
+        "1": {
+          "percent": 57,
+          "status": "reading",
+          "changedAt": 1795000600,
+          "pending": true
+        }
+      },
+      "expect": {
+        "continueReading": [
+          {
+            "id": 1,
+            "progressPercentage": 57
+          }
+        ]
+      },
+      "autoSync": true,
+      "notSynced": {
+        "1": false
+      }
+    },
+    {
+      "name": "finished here: leaves Continue reading, joins Finished, goal +1",
+      "body": {
+        "continueReading": [
+          {
+            "id": 1,
+            "title": "Book 1",
+            "progressPercentage": 97,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T11:06:40.000Z"
+          },
+          {
+            "id": 2,
+            "title": "Book 2",
+            "progressPercentage": 30,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T11:05:00.000Z"
+          }
+        ],
+        "finishedThisYear": [
+          {
+            "id": 9,
+            "title": "Book 9",
+            "progressPercentage": 100,
+            "readStatus": "read",
+            "lastReadAt": "2026-11-18T08:36:40.000Z"
+          }
+        ],
+        "readingGoal": {
+          "goalBooks": 24,
+          "completedBooks": 6,
+          "year": 2026
+        }
+      },
+      "local": {
+        "1": {
+          "percent": 100,
+          "status": "complete",
+          "changedAt": 1795000060,
+          "pending": true
+        }
+      },
+      "expect": {
+        "continueReading": [
+          {
+            "id": 2
+          }
+        ],
+        "finishedThisYear": [
+          {
+            "id": 1,
+            "readStatus": "read"
+          },
+          {
+            "id": 9
+          }
+        ],
+        "goalDone": 7
+      }
+    },
+    {
+      "name": "finished here and the server already knows: no double count",
+      "body": {
+        "continueReading": [],
+        "finishedThisYear": [
+          {
+            "id": 1,
+            "title": "Book 1",
+            "progressPercentage": 100,
+            "readStatus": "read",
+            "lastReadAt": "2026-11-18T11:08:40.000Z"
+          }
+        ],
+        "readingGoal": {
+          "goalBooks": 24,
+          "completedBooks": 7,
+          "year": 2026
+        }
+      },
+      "local": {
+        "1": {
+          "percent": 100,
+          "status": "complete",
+          "changedAt": 1795000060,
+          "pending": false
+        }
+      },
+      "expect": {
+        "continueReading": [],
+        "finishedThisYear": [
+          {
+            "id": 1
+          }
+        ],
+        "goalDone": 7
+      }
+    },
+    {
+      "name": "read here more recently than the head: moves to the front",
+      "body": {
+        "continueReading": [
+          {
+            "id": 1,
+            "title": "Book 1",
+            "progressPercentage": 20,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T11:06:40.000Z"
+          },
+          {
+            "id": 2,
+            "title": "Book 2",
+            "progressPercentage": 50,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T10:58:20.000Z"
+          }
+        ]
+      },
+      "local": {
+        "2": {
+          "percent": 55,
+          "status": "reading",
+          "changedAt": 1795000300,
+          "pending": false
+        }
+      },
+      "expect": {
+        "continueReading": [
+          {
+            "id": 2,
+            "progressPercentage": 55
+          },
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "a book started here that the server lacks: added only with a saved record",
+      "body": {
+        "continueReading": [
+          {
+            "id": 1,
+            "title": "Book 1",
+            "progressPercentage": 20,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T11:06:40.000Z"
+          }
+        ],
+        "discover": [
+          {
+            "id": 5,
+            "title": "Saved Record",
+            "progressPercentage": null,
+            "readStatus": null,
+            "lastReadAt": "2026-11-17T07:20:01.000Z"
+          }
+        ]
+      },
+      "local": {
+        "5": {
+          "percent": 3,
+          "status": "reading",
+          "changedAt": 1795000030,
+          "pending": true
+        },
+        "6": {
+          "percent": 8,
+          "status": "reading",
+          "changedAt": 1795000040,
+          "pending": true
+        }
+      },
+      "expect": {
+        "continueReading": [
+          {
+            "id": 5,
+            "progressPercentage": 3
+          },
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "auto-sync on, upload blocked: not synced shows",
+      "body": {
+        "continueReading": [
+          {
+            "id": 1,
+            "title": "Book 1",
+            "progressPercentage": 40,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T11:06:40.000Z"
+          }
+        ]
+      },
+      "local": {
+        "1": {
+          "percent": 57,
+          "status": "reading",
+          "changedAt": 1795000600,
+          "pending": true,
+          "blocked": true
+        }
+      },
+      "expect": {
+        "continueReading": [
+          {
+            "id": 1,
+            "progressPercentage": 57
+          }
+        ]
+      },
+      "autoSync": true,
+      "notSynced": {
+        "1": true
+      }
+    },
+    {
+      "name": "auto-sync off, pending: not synced shows",
+      "body": {
+        "continueReading": [
+          {
+            "id": 1,
+            "title": "Book 1",
+            "progressPercentage": 40,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-18T11:06:40.000Z"
+          }
+        ]
+      },
+      "local": {
+        "1": {
+          "percent": 57,
+          "status": "reading",
+          "changedAt": 1795000600,
+          "pending": true
+        }
+      },
+      "expect": {
+        "continueReading": [
+          {
+            "id": 1,
+            "progressPercentage": 57
+          }
+        ]
+      },
+      "autoSync": false,
+      "notSynced": {
+        "1": true
+      }
+    }
+  ]
+}

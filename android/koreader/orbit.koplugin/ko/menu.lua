@@ -184,6 +184,9 @@ function OrbitAndroid:menuItems()
         toggle("wake_tailscale", _("Wake Tailscale before syncing")),
         toggle("sync_on_wake", _("Always sync on wake")),
         toggle("sync_on_sleep", _("Sync when the screen goes off")),
+        toggle("eob_sheet", _("End of book: Orbit's sheet for BookOrbit books")),
+        toggle("eob_auto", _("End of book: mark it finished")),
+        toggle("local_first", _("Home shows this device's reading first (restart to apply)")),
         toggle("key_log", _("Log every key (clicker diagnosis)")),
         {
             text_func = function() return _("Sync while reading: ") .. _(Schedule.option(S.reading_schedule).label) end,

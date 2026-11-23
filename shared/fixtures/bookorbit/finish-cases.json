@@ -1,0 +1,261 @@
+{
+  "_comment": "End-of-book picker (docs/design/end-of-book/DESIGN.md §6): fixture -> expected next card kind, the next/last book id, the gap number, suggestion ids (limit 1 Android, 2 Xteink) and the author link.",
+  "picker": [
+    {
+      "fixture": "catalog-book.series-middle.json",
+      "next": {
+        "kind": "next",
+        "id": 103,
+        "read": false
+      },
+      "suggest1": [
+        201
+      ],
+      "suggest2": [
+        201,
+        202
+      ],
+      "author": "Ann Writer"
+    },
+    {
+      "fixture": "catalog-book.series-fractional.json",
+      "next": {
+        "kind": "next",
+        "id": 105,
+        "read": true
+      },
+      "suggest1": [
+        201
+      ],
+      "suggest2": [
+        201,
+        202
+      ],
+      "author": "Ann Writer"
+    },
+    {
+      "fixture": "catalog-book.series-gap.json",
+      "next": {
+        "kind": "gap",
+        "number": 3
+      },
+      "suggest1": [
+        201
+      ],
+      "suggest2": [
+        201,
+        202
+      ],
+      "author": "Ann Writer"
+    },
+    {
+      "fixture": "catalog-book.series-last-all-read.json",
+      "next": {
+        "kind": "series_done"
+      },
+      "suggest1": [
+        201
+      ],
+      "suggest2": [
+        201,
+        202
+      ],
+      "author": "Ann Writer"
+    },
+    {
+      "fixture": "catalog-book.series-last-unread-earlier.json",
+      "next": {
+        "kind": "last_unread",
+        "id": 102,
+        "number": 2
+      },
+      "suggest1": [
+        201
+      ],
+      "suggest2": [
+        201,
+        202
+      ],
+      "author": "Ann Writer"
+    },
+    {
+      "fixture": "catalog-book.no-series.json",
+      "next": null,
+      "suggest1": [
+        201
+      ],
+      "suggest2": [
+        201,
+        202
+      ],
+      "author": "Ann Writer"
+    },
+    {
+      "fixture": "catalog-book.no-author.json",
+      "next": null,
+      "suggest1": [
+        301
+      ],
+      "suggest2": [
+        301,
+        302
+      ],
+      "author": null
+    }
+  ],
+  "drain": [
+    {
+      "name": "threshold miss: server still reading -> read-status, then the rating",
+      "job": {
+        "rating": 4,
+        "status_seen": "reading"
+      },
+      "server": "reading",
+      "expect": {
+        "read_status": true,
+        "rating": 4
+      }
+    },
+    {
+      "name": "server already read (threshold or book-states did it)",
+      "job": {
+        "status_seen": "reading"
+      },
+      "server": "read",
+      "expect": {
+        "read_status": false
+      }
+    },
+    {
+      "name": "rereading chosen elsewhere after we finished: don't fight it, rating still sent",
+      "job": {
+        "rating": 5,
+        "status_seen": "reading"
+      },
+      "server": "rereading",
+      "expect": {
+        "read_status": false,
+        "rating": 5
+      }
+    },
+    {
+      "name": "on hold seen when we finished: ours is newer",
+      "job": {
+        "status_seen": "on_hold"
+      },
+      "server": "on_hold",
+      "expect": {
+        "read_status": true
+      }
+    },
+    {
+      "name": "abandoned elsewhere",
+      "job": {
+        "status_seen": "reading"
+      },
+      "server": "abandoned",
+      "expect": {
+        "read_status": false
+      }
+    },
+    {
+      "name": "rating cleared",
+      "job": {
+        "rating": "clear",
+        "status_seen": "reading"
+      },
+      "server": "reading",
+      "expect": {
+        "read_status": true,
+        "rating": "clear"
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": null,
+      "attempts_before": 0,
+      "expect": "retry",
+      "next_try_in": 60,
+      "parked": false
+    },
+    {
+      "code": 503,
+      "attempts_before": 2,
+      "expect": "retry",
+      "next_try_in": 240,
+      "parked": false
+    },
+    {
+      "code": 500,
+      "attempts_before": 4,
+      "expect": "retry",
+      "next_try_in": 960,
+      "parked": true
+    },
+    {
+      "code": 502,
+      "attempts_before": 7,
+      "expect": "retry",
+      "next_try_in": 3600,
+      "parked": true
+    },
+    {
+      "code": 401,
+      "attempts_before": 0,
+      "expect": "auth"
+    },
+    {
+      "code": 403,
+      "attempts_before": 0,
+      "expect": "drop"
+    },
+    {
+      "code": 404,
+      "attempts_before": 0,
+      "expect": "drop"
+    },
+    {
+      "code": 400,
+      "attempts_before": 0,
+      "expect": "drop"
+    }
+  ],
+  "hold": [
+    {
+      "final": 100,
+      "push": 12,
+      "forward": 0,
+      "released": false,
+      "expect": true
+    },
+    {
+      "final": 100,
+      "push": 91,
+      "forward": 0,
+      "released": false,
+      "expect": false
+    },
+    {
+      "final": 100,
+      "push": 90,
+      "forward": 0,
+      "released": false,
+      "expect": true
+    },
+    {
+      "final": 100,
+      "push": 12,
+      "forward": 10,
+      "released": false,
+      "expect": false
+    },
+    {
+      "final": 100,
+      "push": 12,
+      "forward": 0,
+      "released": true,
+      "expect": false
+    }
+  ]
+}

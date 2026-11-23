@@ -134,13 +134,17 @@ function authorChips(on)
     }
 end
 
--- Wraps one class method once; the original stays callable as Cls.__orbit_stock[name].
-function wrap(Cls, name, make)
+-- Wraps one class method once per feature; the function it wrapped stays callable as
+-- Cls.__orbit_stock[key] (key: the method name for grouping, "<feature>:<name>" otherwise).
+-- Features share one chain per method, in install order: grouping (at init) first, then
+-- local-first and end of book (docs/design/local-first/DESIGN.md "Sharing hooks").
+function wrap(Cls, name, make, feature)
     local stock = rawget(Cls, "__orbit_stock") or {}
     rawset(Cls, "__orbit_stock", stock)
-    if stock[name] then return end
-    stock[name] = Cls[name]
-    Cls[name] = make(stock[name])
+    local key = feature and (feature .. ":" .. name) or name
+    if stock[key] then return end
+    stock[key] = Cls[name]
+    Cls[name] = make(stock[key])
 end
 
 function Grouping.install(why)

@@ -63,6 +63,24 @@ for _, f in ipairs({ "body.items", "body.total", "body.size", "body.buckets", "b
 end
 for _, f in ipairs({ "list_sheet", "dashboard_source_index", "series_summary" }) do need(f, "field") end
 has(lists, "params.q = opts.q", "listSectionParams sends q")
+-- End of book (ko/endofbook.lua EOB.COMPAT, EOB.CATALOG) and local-first Home (ko/localfirst.lua
+-- LF.*): the plugin functions they wrap or call.
+for _, name in ipairs({ "newClient", "getDocumentDigest", "getLastPercent", "enqueueLifecycleSnapshot",
+    "updateProgress", "pushProgressAfterBookSync", "catalogBook", "catalogSetReadStatus", "catalogSetRating", "getBook", "mutate",
+    "onDeviceMaps", "rememberServerState", "applyServerStateLive", "applyServerStateSidecar", "sidecarMtime",
+    "downloadDefaultFile", "downloadFile", "checkDownloadFile", "loadBooks", "switchTo", "refreshOnDevice",
+    "updateItems", "refreshCurrent", "dashboardRootFetch", "boardHeader", "boardRun", "boardRefreshTile",
+    "boardRefreshClock", "listRun", "listHeader", "build", "statusCluster", "hit", "icon", "hstack",
+    "header", "listMetadata", "isBlocked", "getLifecycleOutbox" }) do need(name, "function") end
+local board = src[dir .. "/bookorbit_catalog_board.lua"] or ""
+local list_view = src[dir .. "/bookorbit_list_view.lua"] or ""
+-- Upvalues local-first swaps or calls: the header's status cluster and the list view's region.
+has(board, "local statusCluster = BoardUI.statusCluster", "boardHeader's statusCluster upvalue")
+has(list_view, "local function region(", "ListView region upvalue")
+-- Snapshot and detail fields they read.
+for _, f in ipairs({ "percentage =", "seriesMembers", "relatedSections", "readStatus" }) do
+    if not any(esc(f)) then table.insert(missing, "field " .. f) end
+end
 -- Fields and events the patch reads or writes directly.
 for _, name in ipairs({ "catalog_browser", "pull_timestamp", "push_timestamp", "pages_before_update",
     "last_remote_progress", "PLUGIN_VERSION", "last_error", "sync_forward", "sync_backward",

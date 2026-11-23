@@ -1,0 +1,54 @@
+{
+  "_comment": "Freshness stamp text (docs/design/local-first/DESIGN.md 'Freshness stamp'): times in epoch seconds.",
+  "cases": [
+    {
+      "online": true,
+      "fetched_at": 1000,
+      "now": 1010,
+      "failed": false,
+      "expect": "updated just now"
+    },
+    {
+      "online": true,
+      "fetched_at": 1000,
+      "now": 1720,
+      "failed": false,
+      "expect": "updated 12 min ago"
+    },
+    {
+      "online": true,
+      "fetched_at": 1000,
+      "now": 11805,
+      "failed": false,
+      "expect": "updated 3 h ago"
+    },
+    {
+      "online": true,
+      "fetched_at": 1000,
+      "now": 11800,
+      "failed": true,
+      "expect": "Not updated · saved 3 h ago"
+    },
+    {
+      "online": false,
+      "fetched_at": 1000,
+      "now": 11800,
+      "failed": false,
+      "expect": "Offline, saved 3 h ago"
+    },
+    {
+      "online": false,
+      "fetched_at": 1000,
+      "now": 173807,
+      "failed": false,
+      "expect": "Offline, saved 2 d ago"
+    },
+    {
+      "online": false,
+      "fetched_at": null,
+      "now": 5000,
+      "failed": false,
+      "expect": "Offline"
+    }
+  ]
+}

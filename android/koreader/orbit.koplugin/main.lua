@@ -31,7 +31,7 @@ local PATCH_VERSION = "0.0.0-dev"
 local LOGIC = {
     "logic/schedule.lua", "logic/plan.lua", "logic/update.lua", "logic/wifi_plan.lua",
     "logic/home_plan.lua", "logic/compat.lua", "logic/stats.lua", "logic/clicks.lua",
-    "logic/prompts.lua", "logic/group.lua",
+    "logic/prompts.lua", "logic/group.lua", "logic/finish.lua", "logic/localfirst.lua",
 }
 local KO = {
     "ko/base.lua", "ko/settings.lua", "ko/jni.lua", "ko/companion.lua", "ko/shared.lua",
@@ -39,7 +39,8 @@ local KO = {
     "ko/background.lua", "ko/runtime.lua", "ko/clicks_channel.lua", "ko/keys.lua",
     "ko/module.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/reading_sync.lua",
     "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/recommended.lua", "ko/menu.lua",
-    "ko/wifi_backend.lua", "ko/grouping.lua",
+    "ko/wifi_backend.lua", "ko/grouping.lua", "ko/endsheet.lua", "ko/endofbook.lua",
+    "ko/localfirst.lua",
 }
 
 -- This plugin's folder: PluginLoader dofile()s <folder>/main.lua (frontend/pluginloader.lua:244).
@@ -68,7 +69,7 @@ if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = env.Schedule, Plan = env.Plan, Update = env.Update, WifiPlan = env.WifiPlan,
         HomePlan = env.HomePlan, disabledText = env.disabledText, Compat = env.Compat, Stats = env.Stats,
         Clicks = env.Clicks, SetupPrompt = env.SetupPrompt, MenuLock = env.MenuLock,
-        RestartPlan = env.RestartPlan, Group = env.Group, PATCH_VERSION = PATCH_VERSION }
+        RestartPlan = env.RestartPlan, Group = env.Group, Finish = env.Finish, LocalFirst = env.LocalFirst, PATCH_VERSION = PATCH_VERSION }
 end
 
 -- The old user patch still loaded (koreader/patches/2-orbit-android.lua; it hooks PluginLoader at

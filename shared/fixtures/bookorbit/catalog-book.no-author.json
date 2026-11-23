@@ -1,0 +1,58 @@
+{
+  "id": 160,
+  "title": "Anonymous Tales",
+  "authors": [],
+  "seriesId": null,
+  "seriesName": null,
+  "seriesIndex": null,
+  "progressPercentage": 97.4,
+  "lastReadAt": "2026-11-20T19:02:11.000Z",
+  "readStatus": "reading",
+  "formats": [
+    "epub"
+  ],
+  "hasCover": true,
+  "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/160/thumbnail",
+  "detailUrl": "/api/v1/koreader/plugin/catalog/books/160",
+  "addedAt": "2026-01-04T10:00:00.000Z",
+  "updatedAt": "2026-11-01T10:00:00.000Z",
+  "libraryId": 1,
+  "libraryName": "Books",
+  "rating": null,
+  "files": [
+    {
+      "id": 1600,
+      "format": "epub",
+      "size": 1843200
+    }
+  ],
+  "relatedSections": [
+    {
+      "id": "similar",
+      "title": "Similar books",
+      "books": [
+        {
+          "id": 301,
+          "title": "Lanterns",
+          "authors": [
+            "Ben Other"
+          ],
+          "seriesIndex": null,
+          "hasCover": true,
+          "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/301/thumbnail"
+        },
+        {
+          "id": 302,
+          "title": "Night Ferry",
+          "authors": [
+            "Cy Third"
+          ],
+          "seriesIndex": null,
+          "hasCover": true,
+          "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/302/thumbnail"
+        }
+      ]
+    }
+  ],
+  "seriesMembers": []
+}
