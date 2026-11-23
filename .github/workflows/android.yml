@@ -27,11 +27,13 @@ jobs:
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
       - name: KOReader plugin tests
+        timeout-minutes: 5
         run: |
           set -euo pipefail
           sudo apt-get install -y -qq luajit >/dev/null
-          luajit android/koreader/test/test_logic.lua
-          luajit android/koreader/test/test_flows.lua
+          # stdin closed: nothing in the tests may wait on a terminal.
+          luajit android/koreader/test/test_logic.lua </dev/null
+          luajit android/koreader/test/test_flows.lua </dev/null
           # The release zip builds, stamped, with everything under orbit.koplugin/.
           android/koreader/package.sh 0.0.0-ci "$RUNNER_TEMP/orbit.koplugin.zip"
           unzip -p "$RUNNER_TEMP/orbit.koplugin.zip" orbit.koplugin/main.lua | grep -qx 'local PATCH_VERSION = "0.0.0-ci"'

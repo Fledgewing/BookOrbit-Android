@@ -54,10 +54,18 @@ setmetatable(UIManager, { __index = function(_, k)
     end
 end })
 
+-- At most this many scheduled steps per run(): a task that keeps rescheduling itself with no
+-- delay never moves the fake clock past the limit, so it would spin forever.
+local RUN_MAX_STEPS = 20000
 local function run(limit)
     limit = limit or 120
     local stop = W.clock + limit
+    local steps = 0
     while #W.queue > 0 do
+        steps = steps + 1
+        if steps > RUN_MAX_STEPS then
+            error("run(): " .. RUN_MAX_STEPS .. " steps without the fake clock passing +" .. limit .. " s (a task rescheduling itself with no delay?)", 2)
+        end
         table.sort(W.queue, function(a, b) if a.at == b.at then return a.seq < b.seq end return a.at < b.at end)
         local t = table.remove(W.queue, 1)
         if t.at > stop then table.insert(W.queue, t) break end
@@ -370,9 +378,37 @@ local function lastBroadcast(suffix)
     end
 end
 
+-- Wall-clock seconds (gettimeofday): os.clock counts only this process's CPU, and a test stuck
+-- in a subprocess or a blocked call uses none.
+do
+    local ffi = require("ffi")
+    pcall(ffi.cdef, "typedef struct { long tv_sec; int tv_usec; } orbit_timeval; int gettimeofday(orbit_timeval *tv, void *tz);")
+    local tv = ffi.new("orbit_timeval")
+    function W.wall() ffi.C.gettimeofday(tv, nil); return tonumber(tv.tv_sec) + tonumber(tv.tv_usec) / 1e6 end
+end
 local passed, failed = 0, 0
-local function test(name, fn)
+-- Each test gets TEST_LIMIT_S seconds (CPU or wall clock); past that it fails with a traceback
+-- instead of hanging the suite. The hook runs every 10000 VM instructions; LuaJIT skips hooks in
+-- compiled traces, so the JIT is off here (the suite is small; it runs in about a second).
+local TEST_LIMIT_S = tonumber(os.getenv("ORBIT_TEST_LIMIT_S") or "") or 10
+if jit then jit.off() end
+local function withLimit(name, fn, limit)
+    local TEST_LIMIT_S = limit or TEST_LIMIT_S
+    local cpu0, wall0 = os.clock(), W.wall()
+    debug.sethook(function()
+        if os.clock() - cpu0 > TEST_LIMIT_S or W.wall() - wall0 > TEST_LIMIT_S then
+            debug.sethook()
+            error(debug.traceback("test timed out after " .. TEST_LIMIT_S .. " s: " .. name, 2), 0)
+        end
+    end, "", 10000)
     local ok, err = pcall(fn)
+    debug.sethook()
+    return ok, err
+end
+local function test(name, fn)
+    local t0 = W.wall()
+    local ok, err = withLimit(name, fn)
+    if os.getenv("ORBIT_TEST_TIMES") then print(string.format("%6.2f  %s", W.wall() - t0, name)) end
     if ok then passed = passed + 1 else
         failed = failed + 1; print("FAIL " .. name .. ": " .. tostring(err))
         if os.getenv("ORBIT_TEST_LOGS") then
@@ -381,6 +417,20 @@ local function test(name, fn)
     end
 end
 local function ok(v, what) if not v then error(what or "expected true", 2) end end
+
+-- The guards themselves: a hang fails its test fast, by name, with a traceback.
+test("harness: a test that never returns fails after its time limit", function()
+    local done, err = withLimit("spin", function() local n = 0 while true do n = n + 1 end end, 0.3)
+    ok(not done and tostring(err):find("timed out after 0.3 s: spin", 1, true), tostring(err))
+    ok(tostring(err):find("stack traceback", 1, true), "with a traceback")
+end)
+test("harness: run() stops a task that reschedules itself with no delay", function()
+    local function again() UIManager:nextTick(again) end
+    again()
+    local done, err = pcall(run, 5)
+    W.queue = {}
+    ok(not done and tostring(err):find("steps without the fake clock passing", 1, true), tostring(err))
+end)
 
 ---------------------------------------------------------------- load
 -- The previous KOReader process was killed with this book open (Smart Home cold start).
