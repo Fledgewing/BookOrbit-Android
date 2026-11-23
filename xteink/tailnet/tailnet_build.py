@@ -366,7 +366,10 @@ def _process_project_deps_with_tailnet(env):
                           # TailnetWifiMem.c: the WiFi init switches
                           "-Wl,--wrap=esp_wifi_init",
                           # TailnetStacks.c: MicroLink stops before WiFi goes off
-                          "-Wl,--wrap=esp_wifi_stop"])
+                          "-Wl,--wrap=esp_wifi_stop",
+                          # TailnetLwipLock.c: Arduino's hostByName clears the DNS cache
+                          # without the lwIP core lock (a panic beside MicroLink's lookups)
+                          "-Wl,--wrap=dns_clear_cache"])
     if SWITCH_VALUES.get("TAILNET_TASK_STACK_WRAP"):
         # TailnetStacks.c: task stack sizes by name, and the timer task's. CrossInk 2.x
         # wraps xTaskCreatePinnedToCore itself; its wrapper calls the shim's hooks (CrossInk

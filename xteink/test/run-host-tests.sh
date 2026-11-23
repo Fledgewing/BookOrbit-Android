@@ -46,3 +46,7 @@ orbify_test finish "$core/FinishQueue.cpp"
 orbify_test end_of_book "$core/SeriesCard.cpp" "$core/EndPagePlan.cpp" "$core/FinishQueue.cpp"
 orbify_test localfirst "$core/LocalFirst.cpp"
 orbify_test reading_quiet "$core/ReadingQuiet.cpp"
+# The lwIP core-lock wrapper (tailnet/shim/TailnetLwipLock.c) against stand-in lwIP headers.
+"${CC:-cc}" -std=c11 -Wall -Wextra -I"$here/stubs" "$here/lwip_lock_test.c" "$repo/xteink/tailnet/shim/TailnetLwipLock.c" \
+  -o "$out/lwip_lock_test"
+"$out/lwip_lock_test"
