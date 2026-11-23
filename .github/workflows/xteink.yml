@@ -125,14 +125,14 @@ jobs:
           asset_version="$(asset_of "$version")"
           channel="$(xteink/scripts/upstream-line.sh channel "$tag")"
 
-          # Only xteink/ decides: an Android-only commit never makes a firmware release.
+          # Only xteink/ decides: an Android-only commit never makes a firmware release. Releases are
+          # batched (README "When a release is made"): the daily run publishes only for a new upstream
+          # tag; our own changes go out by a manual run. The rule: upstream-line.sh publish.
           marker="upstream=$tag overlay-tree=$(git rev-parse HEAD:xteink)"
           publish=false
           if [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            if [ "$FORCE" = true ] || ! gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '.[].body' \
-                | grep -qF "$marker"; then
-              publish=true
-            fi
+            publish="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '.[].body' \
+              | xteink/scripts/upstream-line.sh publish "$GITHUB_EVENT_NAME" "$tag" "$marker" "${FORCE:-false}")"
           fi
           {
             echo "upstream_tag=$tag"

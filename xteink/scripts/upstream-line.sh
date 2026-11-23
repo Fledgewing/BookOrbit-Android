@@ -2,6 +2,13 @@
 # Which CrossInk-Bookorbit tags Orbify builds, and which release channel a build goes to.
 #   upstream-line.sh channel <tag>   prints "stable" or "prerelease"; refuses an unsupported tag
 #   upstream-line.sh pick            reads tags newest first on stdin, prints the first supported one
+#   upstream-line.sh publish <event> <tag> <marker> <force>
+#                                    reads the published releases' bodies on stdin, prints "true" or
+#                                    "false": does this run publish? Releases are batched (README
+#                                    "When a release is made"): a scheduled run publishes only for an
+#                                    upstream tag no release was built from; our own changes go out
+#                                    only by a manual run (workflow_dispatch), once per overlay tree
+#                                    (<marker> = "upstream=<tag> overlay-tree=<tree>") unless forced.
 # Supported: CrossInk 2.x and later (1.6 is retired; its readers stay on the feed's stable entry,
 # xteink-v1.6.1.114, until a final 2.x release takes its place).
 # Channel: a tag with a pre-release part (a "-" followed by a letter: -rc3, -beta2) is a
@@ -28,8 +35,22 @@ case "${1:-}" in
     echo "no supported CrossInk tag (2.x or later) on stdin" >&2
     exit 1
     ;;
+  publish)
+    event="${2:-}" tag="${3:-}" marker="${4:-}" force="${5:-false}"
+    bodies="$(cat)"
+    case "$event" in
+      schedule)
+        # Only a new upstream tag: "upstream=<tag> " with the space, so -rc3 never matches -rc30.
+        if printf '%s\n' "$bodies" | grep -qF -- "upstream=$tag "; then echo false; else echo true; fi
+        ;;
+      workflow_dispatch)
+        if [ "$force" = true ] || ! printf '%s\n' "$bodies" | grep -qF -- "$marker"; then echo true; else echo false; fi
+        ;;
+      *) echo false ;;
+    esac
+    ;;
   *)
-    echo "usage: upstream-line.sh channel <tag> | pick" >&2
+    echo "usage: upstream-line.sh channel <tag> | pick | publish <event> <tag> <marker> <force>" >&2
     exit 2
     ;;
 esac
