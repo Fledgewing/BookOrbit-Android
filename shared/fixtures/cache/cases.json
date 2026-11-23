@@ -1176,5 +1176,205 @@
         "items": null
       }
     ]
+  },
+  "storage": {
+    "_comment": "The storage limit (v0.11.2, docs/design/write-through-cache.md \"Storage limit\"): what goes, in order, when Orbit's storage is over the limit (Cache.storagePlan), whether the offline mirror may go on (Cache.storageRoom), and the note when it stops (Cache.limitText). Sizes in bytes.",
+    "plans": [
+      {
+        "name": "under the limit: nothing goes",
+        "limit": 10,
+        "items": [
+          {
+            "k": "a",
+            "bytes": 4,
+            "at": 1,
+            "kind": "cache"
+          },
+          {
+            "k": "c1",
+            "bytes": 4,
+            "at": 0,
+            "kind": "cover"
+          }
+        ],
+        "drop": [],
+        "after": 8
+      },
+      {
+        "name": "browsing entries and plain covers first, least recently used first; the mirror's covers stay",
+        "limit": 10,
+        "items": [
+          {
+            "k": "list",
+            "bytes": 5,
+            "at": 0,
+            "kind": "kept"
+          },
+          {
+            "k": "a",
+            "bytes": 3,
+            "at": 5,
+            "kind": "cache"
+          },
+          {
+            "k": "c1",
+            "bytes": 3,
+            "at": 2,
+            "kind": "cover"
+          },
+          {
+            "k": "m1",
+            "bytes": 3,
+            "at": 1,
+            "kind": "mirror_cover"
+          },
+          {
+            "k": "b",
+            "bytes": 3,
+            "at": 9,
+            "kind": "cache"
+          }
+        ],
+        "drop": [
+          "c1",
+          "a",
+          "b"
+        ],
+        "after": 8
+      },
+      {
+        "name": "then the mirror's covers, least recently seen first, until under; never its lists or details",
+        "limit": 10,
+        "items": [
+          {
+            "k": "list",
+            "bytes": 6,
+            "at": 0,
+            "kind": "kept"
+          },
+          {
+            "k": "a",
+            "bytes": 2,
+            "at": 5,
+            "kind": "cache"
+          },
+          {
+            "k": "m1",
+            "bytes": 3,
+            "at": 4,
+            "kind": "mirror_cover"
+          },
+          {
+            "k": "m2",
+            "bytes": 3,
+            "at": 2,
+            "kind": "mirror_cover"
+          },
+          {
+            "k": "m0",
+            "bytes": 1,
+            "at": 9,
+            "kind": "mirror_cover"
+          }
+        ],
+        "drop": [
+          "a",
+          "m2"
+        ],
+        "after": 10
+      },
+      {
+        "name": "kept alone over the limit: everything else goes, they stay",
+        "limit": 5,
+        "items": [
+          {
+            "k": "list",
+            "bytes": 8,
+            "at": 0,
+            "kind": "kept"
+          },
+          {
+            "k": "a",
+            "bytes": 1,
+            "at": 1,
+            "kind": "cache"
+          }
+        ],
+        "drop": [
+          "a"
+        ],
+        "after": 8
+      },
+      {
+        "name": "no limit",
+        "limit": 0,
+        "items": [
+          {
+            "k": "a",
+            "bytes": 99,
+            "at": 1,
+            "kind": "cache"
+          }
+        ],
+        "drop": [],
+        "after": 99
+      }
+    ],
+    "room": [
+      {
+        "name": "covers: room while the mirror's own share is under the limit",
+        "totals": {
+          "kept": 2,
+          "mirror_cover": 5
+        },
+        "limit": 10,
+        "what": "covers",
+        "room": true
+      },
+      {
+        "name": "covers: the mirror's share reached it: the cover pass stops",
+        "totals": {
+          "kept": 2,
+          "mirror_cover": 8
+        },
+        "limit": 10,
+        "what": "covers",
+        "room": false
+      },
+      {
+        "name": "lists and details go on while they alone fit",
+        "totals": {
+          "kept": 2,
+          "mirror_cover": 8
+        },
+        "limit": 10,
+        "what": "lists",
+        "room": true
+      },
+      {
+        "name": "lists and details alone fill it: the mirror stops",
+        "totals": {
+          "kept": 10,
+          "mirror_cover": 0
+        },
+        "limit": 10,
+        "what": "lists",
+        "room": false
+      }
+    ],
+    "notes": [
+      {
+        "what": "covers",
+        "done": 412,
+        "total": 855,
+        "text": "Storage limit reached: 412 of 855 covers saved. Raise the limit in Orbit settings."
+      },
+      {
+        "what": "lists",
+        "done": 120,
+        "total": 300,
+        "text": "Storage limit reached: 120 of 300 lists and books saved. Raise the limit in Orbit settings."
+      }
+    ]
   }
 }

@@ -113,6 +113,21 @@ function OrbitAndroid:menuItems()
         checked_func = function() return S.mirror_auto == false end,
         callback = function() S.mirror_auto = false; saveSettings() end,
     })
+    -- Storage limit (v0.11.2): one limit on everything Orbit stores (OC.storageEnforce).
+    local limit_items = {}
+    for _i, mb in ipairs(Cache.STORAGE_LIMITS_MB) do
+        table.insert(limit_items, {
+            text = mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%d GB"), mb / 1024) or string.format(_("%d MB"), mb)),
+            radio = true,
+            checked_func = function() return (tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB) == mb end,
+            callback = function()
+                S.storage_limit_mb = mb
+                saveSettings()
+                log("storage: limit set to", mb == 0 and "none" or (mb .. " MB"))
+                pcall(OC.storageEnforce, "limit changed")
+            end,
+        })
+    end
     local cap_items = {}
     for _i, c in ipairs({ 10, 15, 20 }) do
         table.insert(cap_items, {
@@ -230,6 +245,16 @@ function OrbitAndroid:menuItems()
                 log("mirror: every cover for offline", S.mirror_covers and "on" or "off")
                 if S.mirror_covers then pcall(Mirror.coverPass, "turned on") end
             end,
+        },
+        {
+            text_func = function()
+                local mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB
+                local okt, used = pcall(OC.storageText)
+                return _("Storage limit: ") .. (mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%d GB"), mb / 1024) or string.format(_("%d MB"), mb)))
+                    .. (okt and (" · " .. used) or "")
+            end,
+            help_text = _("One limit on everything Orbit stores: pages it saved, books saved for offline and covers. Book files and KOReader's own data don't count. Over it, the least recently used pages and covers go first, then covers saved for offline; the lists and book details saved for offline always stay."),
+            sub_item_table = limit_items,
         },
         {
             text_func = function()

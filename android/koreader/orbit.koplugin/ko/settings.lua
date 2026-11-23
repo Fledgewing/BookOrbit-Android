@@ -29,6 +29,7 @@ DEFAULTS = {
     mirror_ttl_days = 7,          -- the offline mirror's automatic Full refresh after this many days
     mirror_auto = true,
     mirror_covers = false,        -- Full refresh also saves every book's cover (off on every device, v0.11.2)
+    storage_limit_mb = 250,       -- one limit on everything Orbit stores; 0 = no limit (v0.11.2, Cache.storagePlan)
     keep_copies_current = true,   -- copies whose library file changed are downloaded again in the background           -- the automatic Full refresh (TTL, library changes) is on
     restart_book = nil,           -- the book open when a restart quit; reopened by the next start
     home_book = nil,              -- the book Home closed (fallback path); cleared by a user close or another book

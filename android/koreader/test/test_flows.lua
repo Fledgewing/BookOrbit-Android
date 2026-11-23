@@ -3276,6 +3276,7 @@ local function cacheTeardown()
     local lfs = require("libs/libkoreader-lfs")
     for k, v in pairs(cache.lfs_saved) do lfs[k] = v end
     sh("rm -rf", cache.dir)
+    E.OC.storage, E.OC.cover_dir = nil, nil
     for _, k in ipairs({ "bookorbit_api", "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui", "ui/trapper" }) do
         package.loaded[k] = nil
     end
@@ -4181,6 +4182,108 @@ test("local-first: Home's first paint has the on-device marks; a changed tile na
         { continue_reading = { { id = 7, progressPercentage = 40 } } },
         { continue_reading = { { id = 7, progressPercentage = 40, on_device = true } } })
     ok(W.logs[1] and W.logs[1]:find("local-first: tile 1 hero changed: book 7 on device no -> yes", 1, true), "the tile and field: " .. tostring(W.logs[1]))
+    cacheTeardown()
+end)
+
+test("storage limit: over it, browsing pages and plain covers go first (least recently used), then covers saved for offline; never the saved lists (v0.11.2)", function()
+    local client, Cat = cacheSetup()
+    local MB = 1048576
+    local lfs = require("libs/libkoreader-lfs")
+    local cdir = cache.dir .. "/covers"
+    E.OC.cover_dir = cdir
+    local covers = { ["a.jpg"] = { 20, 10 }, ["m1.jpg"] = { 20, 3 }, ["m2.jpg"] = { 20, 40 } } -- MB, last seen
+    for name in pairs(covers) do io.open(cdir .. "/" .. name, "w"):close() end
+    local attributes = lfs.attributes
+    lfs.attributes = function(f, k)
+        local c = covers[tostring(f):match("^" .. cdir:gsub("%p", "%%%0") .. "/(.+)$") or ""]
+        if c and io.open(f, "rb") then
+            local a = { mode = "file", size = c[1] * MB, modification = c[2] }
+            if k then return a[k] end
+            return a
+        end
+        if k == "size" then return nil end
+        return attributes(f, k)
+    end
+    local idx = E.OC.index()
+    idx.entries = {
+        list = { bytes = 30 * MB, used_at = 1, keep = true, mirror = true },
+        old = { bytes = 30 * MB, used_at = 2 },
+        new = { bytes = 30 * MB, used_at = 50 },
+    }
+    E.S.mirror_covers = true
+    E.Mirror.state().cover_keep = { ["m1.jpg"] = true, ["m2.jpg"] = true }
+    E.S.storage_limit_mb = 100
+    W.logs = {}
+    local st = E.OC.storageEnforce("start")
+    ok(idx.entries.old == nil and not io.open(cdir .. "/a.jpg", "rb"), "the oldest page and the plain cover went first")
+    ok(idx.entries.new and io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then it was under the limit")
+    ok(st.used == 100 * MB and E.OC.storageText() == "Using 100 MB", "Using: " .. E.OC.storageText())
+    ok(table.concat(W.logs, "\n"):find("storage: 150.0 MB of 100 MB (start); removed 1 browsing entries, 1 covers, 0 saved-for-offline covers -> 100.0 MB", 1, true), "logged: " .. table.concat(W.logs, " | "))
+    -- A lower limit: the last browsing page, then the least recently seen saved cover; the list stays.
+    E.S.storage_limit_mb = 55
+    E.OC.storageEnforce("limit changed")
+    ok(idx.entries.new == nil and not io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then saved covers, oldest first")
+    ok(idx.entries.list, "the saved list stays")
+    -- A write over the limit runs the plan at once.
+    E.S.storage_limit_mb = 60
+    E.OC.storageEnforce("count")
+    idx.entries.big = { bytes = 20 * MB, used_at = 99 }
+    E.OC.storageAdd(20 * MB, "cache")
+    ok(idx.entries.big == nil and io.open(cdir .. "/m2.jpg", "rb") and E.OC.storage.used == 50 * MB, "checked on the write")
+    -- No limit: nothing goes.
+    E.S.storage_limit_mb = 0
+    idx.entries.big = { bytes = 900 * MB, used_at = 99 }
+    E.OC.storageEnforce("limit changed")
+    ok(idx.entries.big, "no limit")
+    lfs.attributes = attributes
+    E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
+    cacheTeardown()
+end)
+
+test("storage limit: it stops the every-cover pass, then the run, and the Full refresh note says so (v0.11.2)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server_fn = libraryServer({ n_books = 4, series4 = 2, covers = true })
+    local cat = pluginCatalog(Cat, client)
+    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. b.id .. "_" .. tostring(b.updatedAt) .. ".jpg" end
+    local MB = 1048576
+    local notes = {}
+    E.OC.note = function(t) table.insert(notes, t) end
+    local totals, batch = E.OC.storageTotals, E.Mirror.COVER_BATCH
+    E.Mirror.COVER_BATCH = 1
+    E.S.mirror_covers, E.S.storage_limit_mb = true, 1
+    local kept = 0.2 * MB
+    E.OC.storageTotals = function()
+        local c = E.Mirror.state().covers or {}
+        local n = (c.ok or 0) + (c.not_modified or 0) + (c.failed or 0)
+        return { used = kept + n * 0.4 * MB, kept = kept, mirror_cover = n * 0.4 * MB, cache = 0, cover = 0 }
+    end
+    withHost(cat, function()
+        client:request("GET", DASH)
+        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
+        W.logs = {}
+        E.OC.fullRefresh(cat); run(900)
+        local m = E.Mirror.state()
+        local note = m.limit_note and m.limit_note.text or ""
+        ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. Raise the limit in Orbit settings%.$"), "the stop: " .. note)
+        local shown
+        for _, n in ipairs(notes) do if n == note then shown = true end end
+        ok(shown, "in the Full refresh note: " .. table.concat(notes, " | "))
+        ok(table.concat(W.logs, "\n"):find("mirror: " .. note, 1, true), "logged")
+        local c = m.covers
+        ok((c.ok or 0) + (c.not_modified or 0) + (c.failed or 0) == 2, "two covers, then the pass stopped")
+        ok(#m.queue == 0 and m.at, "the lists and details went on to the end")
+        ok(E.Mirror.savedText():find("storage limit reached", 1, true), "the menu line says so")
+        -- Lists and details alone fill it: the whole run stops.
+        kept = 2 * MB
+        notes = {}
+        E.OC.fullRefresh(cat); run(900)
+        note = m.limit_note and m.limit_note.text or ""
+        ok(note:find("^Storage limit reached: 0 of %d+ lists and books saved"), "the run stops: " .. note)
+        ok(#m.queue == 0 and notes[#notes] == note, "shown: " .. table.concat(notes, " | "))
+    end)
+    E.OC.storageTotals, E.Mirror.COVER_BATCH = totals, batch
+    E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
     cacheTeardown()
 end)
 

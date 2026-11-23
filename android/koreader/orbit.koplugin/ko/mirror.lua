@@ -195,7 +195,7 @@ function Mirror.start(reason, manual)
     m.queue, m.seen, m.done, m.total, m.bytes, m.requests = {}, {}, 0, 0, 0, 0
     m.cover_total, m.skipped = 0, 0
     m.covers = { ok = 0, not_modified = 0, failed = 0, bytes = 0 }
-    m.started_at, m.reason, m.revalidating = nowT(), reason, nil
+    m.started_at, m.reason, m.revalidating, m.limit_note = nowT(), reason, nil, nil
     m.next_lists = {}
     Mirror.seed(m, cat)
     Mirror.manual = manual
@@ -273,6 +273,7 @@ function Mirror.pump()
         Wifi.acquire("mirror")
         log("mirror: running;", #m.queue, "to go; Wi-Fi held until it ends")
     end
+    if Mirror.limited(m, job) then return UIManager:scheduleIn(0.05, Mirror.pump) end
     Mirror.busy = true
     local path = job.k == "page" and Cache.mirrorPage(job.identity, job.page, job.size) or job.path
     local function done(out, berr)
@@ -321,6 +322,43 @@ function Mirror.pump()
         local b, e = client:requestBlocking("GET", path)
         return Cache.encode({ body = b, err = e and tostring(e) or nil, status = type(e) == "number" and e or nil })
     end, 60, done)
+end
+
+-- The storage limit (Cache.storageRoom): the every-cover pass stops when the mirror's own share
+-- (lists, details, its covers) reaches the limit, so it never pushes out covers it saved; the run
+-- stops when its lists and details alone fill it. Each says so in the note and the log.
+-- -> true when the job was dropped (the queue moved on).
+function Mirror.limited(m, job)
+    local limit = OC.limitBytes()
+    if not limit then return false end
+    local covers = job.k == "covers"
+    if covers and not S.mirror_covers then return false end -- covers under the normal limit
+    local okt, totals = pcall(OC.storageTotals)
+    if not okt or Cache.storageRoom(totals, limit, covers and "covers" or "lists") then return false end
+    local text
+    if covers then
+        local c = m.covers or {}
+        local saved = (c.ok or 0) + (c.not_modified or 0)
+        local left = {}
+        for _, j in ipairs(m.queue) do if j.k ~= "covers" then table.insert(left, j) end end
+        m.total = (m.total or 0) - (#m.queue - #left)
+        m.queue = left
+        text = Cache.limitText("covers", saved, m.cover_total)
+    else
+        text = Cache.limitText("lists", m.done, m.total)
+        m.total = m.done
+        m.queue = {}
+    end
+    m.limit_note = { text = text, at = nowT(), limit = limit }
+    log("mirror: " .. text, string.format("(Orbit's storage %.1f MB, saved for offline %.1f MB)", (totals.used or 0) / 1048576,
+        ((totals.kept or 0) + (totals.mirror_cover or 0)) / 1048576))
+    if Mirror.manual then
+        Mirror.noted_at = nil
+        OC.note(text, 5)
+        Mirror.noted_at = nowT() + 5 -- the stop note stays up past the next progress note
+    end
+    OC.saveIndex()
+    return true
 end
 
 -- In the child: each cover by ETag (a file with an ETag asks If-None-Match; a missing one is
@@ -378,6 +416,7 @@ function Mirror.landed(cat, client, job, path, out)
     if job.k == "covers" then
         if type(r) ~= "table" then m.covers.failed = m.covers.failed + #job.batch; return end
         for _, k in ipairs({ "ok", "not_modified", "failed", "bytes" }) do m.covers[k] = (m.covers[k] or 0) + (r[k] or 0) end
+        OC.storageAdd(r.bytes or 0, S.mirror_covers and "mirror_cover" or "cover")
         for _, id in ipairs(r.written or {}) do
             for _, c in ipairs(job.batch) do
                 if c.id == id and cat and Compat.callable(cat.invalidateThumbnail) then
@@ -492,7 +531,7 @@ function Mirror.finish()
         for _, l in pairs(m.lists) do lists = lists + 1; pages = pages + Cache.pageCount(l.total, l.size) end
         log(string.format("mirror: Full refresh saved for offline in %ds: %d lists (%d pages), %d requests, %d skipped, %.1f MB of lists and books; covers %d new, %d unchanged (304), %d failed, %.1f MB",
             secs, lists, pages, m.requests or 0, m.skipped or 0, (m.bytes or 0) / 1048576, c.ok or 0, c.not_modified or 0, c.failed or 0, (c.bytes or 0) / 1048576))
-        if Mirror.manual then OC.note(Mirror.savedText(), 3) end
+        if Mirror.manual and not m.limit_note then OC.note(Mirror.savedText(), 3) end
     end
     m.seen = nil
     Mirror.manual = nil
@@ -506,7 +545,7 @@ end
 function Mirror.savedText()
     local m = Mirror.state()
     if not m.at then return _("Not saved for offline yet (hold ⟳ for a Full refresh)") end
-    return _("Saved for offline · ") .. os.date("%a %H:%M", m.at)
+    return _("Saved for offline · ") .. os.date("%a %H:%M", m.at) .. (m.limit_note and _(" · storage limit reached") or "")
 end
 
 -- Online: a run left over resumes; an automatic Full refresh starts when the mirror is older
@@ -525,6 +564,8 @@ function Mirror.tick(why)
     if Mirror.ticked_at and t - Mirror.ticked_at < 60 then return end
     Mirror.ticked_at = t
     local due = Cache.mirrorDue(m, t, S.mirror_ttl_days or Cache.MIRROR_TTL_DAYS, libraryVersion())
+    -- Stopped by the storage limit: no automatic run again until the limit changes.
+    if due and m.limit_note and m.limit_note.limit == OC.limitBytes() and due ~= "library" then due = nil end
     -- A new automatic run never starts in a book (it would hold Wi-Fi while reading); a paused one
     -- resumes above.
     if due and due ~= "never" and NetworkMgr:isConnected() and not reading() then

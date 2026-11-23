@@ -380,6 +380,52 @@ function Cache.evict(index, max_bytes, max_entries)
     return drop
 end
 
+---------------------------------------------------------------- the storage limit (v0.11.2)
+
+-- One limit on everything Orbit stores (Orbit menu › Storage limit; book files and KOReader's
+-- own data don't count). The 64 MB / 20000-entry cap above stays the browsing cache's share.
+Cache.STORAGE_LIMITS_MB = { 100, 250, 500, 1024, 0 } -- 0: no limit
+Cache.STORAGE_DEFAULT_MB = 250
+
+-- items: { { k, bytes, at, kind } }, kind: "cache" (a browsing-cache entry), "cover" (a cover the
+-- mirror didn't save), "mirror_cover" (saved by "Save every cover for offline") or "kept" (the
+-- mirror's lists and book details, Home: never removed). limit: bytes (nil or 0: none).
+-- -> { drop = keys in the order they go, used, after }: browsing entries and plain covers first,
+-- least recently used first; then the mirror's covers, least recently seen first; never "kept".
+function Cache.storagePlan(items, limit)
+    local used = 0
+    for _, e in ipairs(items or {}) do used = used + (e.bytes or 0) end
+    local out = { drop = {}, used = used, after = used }
+    if not limit or limit <= 0 or used <= limit then return out end
+    for _, tier in ipairs({ { cache = true, cover = true }, { mirror_cover = true } }) do
+        local list = {}
+        for _, e in ipairs(items) do if tier[e.kind] then table.insert(list, e) end end
+        table.sort(list, function(a, b) if (a.at or 0) ~= (b.at or 0) then return (a.at or 0) < (b.at or 0) end return a.k < b.k end)
+        for _, e in ipairs(list) do
+            if out.after <= limit then return out end
+            table.insert(out.drop, e.k)
+            out.after = out.after - (e.bytes or 0)
+        end
+    end
+    return out
+end
+
+-- Whether the offline mirror may save more under the limit. totals: { kept, mirror_cover } bytes.
+-- what: "covers" (the every-cover pass: room only while the mirror's own share is under the
+-- limit, so it never pushes out covers it saved) or "lists" (lists and details: they stop only
+-- when they alone fill it).
+function Cache.storageRoom(totals, limit, what)
+    if not limit or limit <= 0 or type(totals) ~= "table" then return true end
+    if what == "covers" then return (totals.kept or 0) + (totals.mirror_cover or 0) < limit end
+    return (totals.kept or 0) < limit
+end
+
+-- "Storage limit reached: 412 of 855 covers saved. Raise the limit in Orbit settings."
+function Cache.limitText(what, done, total)
+    return string.format("Storage limit reached: %d of %d %s saved. Raise the limit in Orbit settings.",
+        done or 0, total or 0, what == "covers" and "covers" or "lists and books")
+end
+
 ---------------------------------------------------------------- covers
 
 -- What one listed book's cover needs.
