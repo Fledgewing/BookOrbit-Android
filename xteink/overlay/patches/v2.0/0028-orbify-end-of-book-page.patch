@@ -1,0 +1,523 @@
+diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
+index 7623f367..98548aac 100644
+--- a/include/CrossInkTailnetCuts.h
++++ b/include/CrossInkTailnetCuts.h
+@@ -178,3 +178,11 @@ bool tlsArenaActive();                                // the arena is reserved (
+ #ifndef CROSSINK_TAILNET_ORBIFY_RATING
+ #define CROSSINK_TAILNET_ORBIFY_RATING 0
+ #endif
++// Patch 0028, the End-of-Book page: server suggestions shown (0..2) and the author row; the X3's
++// flash drop order lowers these first (docs/design/end-of-book/DESIGN.md §5).
++#ifndef CROSSINK_TAILNET_ORBIFY_SUGGESTIONS
++#define CROSSINK_TAILNET_ORBIFY_SUGGESTIONS 2
++#endif
++#ifndef CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW
++#define CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW 1
++#endif
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 0d787e58..3a1b1265 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -291,6 +291,24 @@ STR_BOOKORBIT_ON_DEVICE_ERROR: "Could not list the books on the SD card."
+ STR_BOOKORBIT_SYNC_ON_SLEEP: "Sync on Sleep"
+ STR_BOOKORBIT_SYNC_WHILE_READING: "Sync While Reading"
+ STR_ORBIFY_MARK_AT_END: "Mark Finished at End"
++STR_ORBIFY_FINISHED: "Finished"
++STR_ORBIFY_NOT_FINISHED: "Not finished"
++STR_ORBIFY_MARK_FINISHED: "Mark finished"
++STR_ORBIFY_UNDO: "Undo"
++STR_ORBIFY_SENDS_NEXT_SYNC: "sends at next sync"
++STR_ORBIFY_SIGN_IN_TO_SEND: "sign in to BookOrbit to send"
++STR_ORBIFY_RATING: "Rating"
++STR_ORBIFY_NO_RATING: "none"
++STR_ORBIFY_SAVE: "Save"
++STR_ORBIFY_NEXT_IN_SERIES: "Next in series"
++STR_ORBIFY_LAST_UNREAD: "Last book · not read yet"
++STR_ORBIFY_BOOK_N: "Book %s"
++STR_ORBIFY_READ: "Read"
++STR_ORBIFY_GAP: "Book %s isn't in your library"
++STR_ORBIFY_SERIES_DONE: "You've finished the series"
++STR_ORBIFY_ALSO_BY: "Also by %s"
++STR_ORBIFY_YOU_MIGHT_LIKE: "You might like"
++STR_ORBIFY_ALL_BY: "All books by %s"
+ STR_EVERY_N_MINUTES: "Every %d min"
+ STR_EVERY_N_PAGES: "Every %d pages"
+ STR_EVERY_CHAPTER: "Every chapter"
+diff --git a/scripts/gen_i18n.py b/scripts/gen_i18n.py
+index 3a3b1e69..f7175a2b 100755
+--- a/scripts/gen_i18n.py
++++ b/scripts/gen_i18n.py
+@@ -867,7 +867,8 @@ def main(
+     # Default paths (relative to project root)
+     default_translations_dir = "lib/I18n/translations"
+     default_output_dir = "lib/I18n/"
+-    default_src_dirs = ["src", "lib"]
++    # src/orbify: the Orbify overlay's sources, a symlink that rglob does not enter.
++    default_src_dirs = ["src", "lib", "src/orbify"]
+ 
+     if translations_dir is None or output_dir is None:
+         if len(sys.argv) == 3:
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+index e7617533..63c79a80 100644
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+@@ -53,6 +53,7 @@
+ #include "util/StringUtils.h"
+ #include "network/SavedWifiConnect.h"
+ #include "TailnetNetPhase.h"
++#include "orbify/FinishSync.h"
+ 
+ namespace fui = freeink::ui;
+ 
+@@ -473,7 +474,7 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
+   } else {
+     BookOrbitCatalogListCache::clear();
+     // A BOOKORBIT_CATALOG boot the BookOrbit Home asked for brings its link on the SD card.
+-    if (networkBoot && entryLink.bookId == 0 && entryLink.sectionId.empty()) {
++    if (networkBoot && entryLink.bookId == 0 && entryLink.sectionId.empty() && entryLink.author.empty()) {
+       BookOrbitCatalogListCache::takeEntryLink(entryLink);
+     }
+   }
+@@ -571,8 +572,13 @@ void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connect
+     booksFromFacet = false;
+     downloadFromHome = true;
+     // A sync sent this one to replace the open book's outdated copy: back to that book after,
+-    // whatever the outcome.
+-    reopenPath = link.replacePath;
++    // whatever the outcome. The End-of-Book page's "Download & open" (Orbify, patch 0028) also
++    // comes back to its book, and opens the new one once it is downloaded.
++    reopenPath = link.replacePath.empty() ? link.returnPath : link.replacePath;
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++    // Finished books go first, on this network session (G33).
++    if (!link.returnPath.empty()) OrbifyFinish::drain(std::string(), false);
++#endif
+     // A shelf book is selected as a catalog row is: a copy already at its place opens.
+     downloadBook(link.bookId, link.title, link.replacePath, /*openExisting=*/link.replacePath.empty());
+     return;
+@@ -581,6 +587,16 @@ void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connect
+     showLoadingBeforeFetch();
+     loadRoot();
+   }
++  // The End-of-Book page's author row (Orbify, patch 0028): that author's books, by series.
++  if (!entryLink.author.empty()) {
++    const BookOrbitCatalogLink link = std::move(entryLink);
++    entryLink = BookOrbitCatalogLink{};
++    BookOrbitBookQuery query;
++    query.author = link.author;
++    query.sort = "series";
++    openBookListing(query, link.author, /*fromFacet=*/false);
++    return;
++  }
+   // A linked section opens over the root, which Back returns to.
+   if (!entryLink.sectionId.empty()) {
+     const BookOrbitCatalogLink link = std::move(entryLink);
+diff --git a/src/activities/browser/BookOrbitCatalogLink.h b/src/activities/browser/BookOrbitCatalogLink.h
+index 5d875c47..ace03260 100644
+--- a/src/activities/browser/BookOrbitCatalogLink.h
++++ b/src/activities/browser/BookOrbitCatalogLink.h
+@@ -13,4 +13,9 @@ struct BookOrbitCatalogLink {
+   std::string sectionId;
+   std::string title;
+   std::string replacePath;
++  // Orbify (patch 0028), the End-of-Book page: `author` opens the catalog's list of that
++  // author's books (the server resolves the name); `returnPath` is the book to go back to,
++  // and with a bookId the downloaded book opens when it is done (design §5, X9).
++  std::string author;
++  std::string returnPath;
+ };
+diff --git a/src/activities/browser/BookOrbitCatalogListCache.cpp b/src/activities/browser/BookOrbitCatalogListCache.cpp
+index db0055df..29bbf4a8 100644
+--- a/src/activities/browser/BookOrbitCatalogListCache.cpp
++++ b/src/activities/browser/BookOrbitCatalogListCache.cpp
+@@ -415,6 +415,10 @@ bool saveEntryLink(const BookOrbitCatalogLink& link) {
+   appendJsonEscaped(json, link.title);
+   json += ",\"replacePath\":";
+   appendJsonEscaped(json, link.replacePath);
++  json += ",\"author\":";
++  appendJsonEscaped(json, link.author);
++  json += ",\"returnPath\":";
++  appendJsonEscaped(json, link.returnPath);
+   json += "}";
+   return writeJsonStringFile(BOOKORBIT_ENTRY_LINK_PATH, json);
+ }
+@@ -434,7 +438,9 @@ bool takeEntryLink(BookOrbitCatalogLink& outLink) {
+   outLink.sectionId = doc["sectionId"] | "";
+   outLink.title = doc["title"] | "";
+   outLink.replacePath = doc["replacePath"] | "";
+-  return outLink.bookId != 0 || !outLink.sectionId.empty();
++  outLink.author = doc["author"] | "";
++  outLink.returnPath = doc["returnPath"] | "";
++  return outLink.bookId != 0 || !outLink.sectionId.empty() || !outLink.author.empty();
+ }
+ 
+ void discardEntryLink() { Storage.remove(BOOKORBIT_ENTRY_LINK_PATH); }
+diff --git a/src/activities/reader/EndOfBookOptions.cpp b/src/activities/reader/EndOfBookOptions.cpp
+index c93d662c..2da4c55d 100644
+--- a/src/activities/reader/EndOfBookOptions.cpp
++++ b/src/activities/reader/EndOfBookOptions.cpp
+@@ -15,6 +15,9 @@
+ #include "fontIds.h"
+ #include "util/ButtonNavigator.h"
+ #include "util/NextBookFinder.h"
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++#include <Memory.h>
++#endif
+ 
+ namespace fui = freeink::ui;
+ 
+@@ -38,6 +41,24 @@ void EndOfBookOptions::loadOnce(const std::string& currentBookPath) {
+   folder = FsHelpers::extractFolderPath(currentBookPath);
+   names = NextBookFinder::findNextBooks(currentBookPath, MAX_SUGGESTIONS);
+   selector.store(0, std::memory_order_relaxed);
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  if (orbifyWanted) orbify = makeUniqueNoThrow<OrbifyEndPage>();
++  if (orbify) {
++    std::vector<std::string> labels;
++    std::vector<std::string> paths;
++    for (size_t i = 0; i < names.size(); ++i) {
++      labels.push_back(displayName(names[i]));
++      paths.push_back(fullPath(i));
++    }
++    orbify->load(currentBookPath, labels, paths);
++    selector.store(orbify->selected(), std::memory_order_relaxed);
++    applySharedUiTheme(app, uiTarget);
++    app.on(ACTION_ROW, &EndOfBookOptions::onRowEvent, this);
++    app.setScreen(&EndOfBookOptions::listScreen, this);
++    isLoaded.store(true, std::memory_order_release);
++    return;
++  }
++#endif
+   if (!names.empty()) {
+     rowLabels.reserve(names.size() + 1);
+     std::transform(names.begin(), names.end(), std::back_inserter(rowLabels), displayName);
+@@ -60,7 +81,35 @@ void EndOfBookOptions::loadOnce(const std::string& currentBookPath) {
+ 
+ bool EndOfBookOptions::loaded() const { return isLoaded.load(std::memory_order_acquire); }
+ 
+-bool EndOfBookOptions::menuActive() const { return loaded() && !names.empty(); }
++bool EndOfBookOptions::menuActive() const {
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  if (loaded() && orbify) return true;
++#endif
++  return loaded() && !names.empty();
++}
++
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++void EndOfBookOptions::orbifyFinishedChanged(const bool finished) {
++  if (!orbify) return;
++  orbify->finishedChanged(finished);
++  selector.store(orbify->selected(), std::memory_order_relaxed);
++}
++
++EndOfBookOptions::Action EndOfBookOptions::orbifyAct(OrbifyEndPage::Result result) {
++  selector.store(orbify->selected(), std::memory_order_relaxed);
++  switch (result.act) {
++    case OrbifyEndPage::Act::None:
++      return Action::None;
++    case OrbifyEndPage::Act::Redraw:
++      return Action::Redraw;
++    case OrbifyEndPage::Act::Home:
++      return Action::GoHome;
++    default:
++      orbifyResult = std::move(result);
++      return Action::Orbify;
++  }
++}
++#endif
+ 
+ std::string EndOfBookOptions::fullPath(const size_t index) const {
+   if (index >= names.size()) {
+@@ -71,6 +120,12 @@ std::string EndOfBookOptions::fullPath(const size_t index) const {
+ 
+ void EndOfBookOptions::onRowEvent(const fui::ActionEvent& event, void* user) {
+   auto* self = static_cast<EndOfBookOptions*>(user);
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  if (self->orbify) {
++    self->app.clearTapFlash();
++    return;  // handleMenuInput() acts on the routed event
++  }
++#endif
+   if (event.value < 0 || event.value > static_cast<int16_t>(self->names.size())) return;
+   self->selector.store(event.value, std::memory_order_relaxed);
+   // The tapped row leaves this screen (open book or home); a lingering flash
+@@ -79,6 +134,37 @@ void EndOfBookOptions::onRowEvent(const fui::ActionEvent& event, void* user) {
+ }
+ 
+ EndOfBookOptions::Action EndOfBookOptions::handleMenuInput(const MappedInputManager& input, std::string* openPath) {
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  if (orbify) {
++    if (uiReady.load(std::memory_order_acquire)) {
++      const fui::InputSnapshot snap = touchSnapshotFrom(input);
++      if (snap.touchPressed || snap.touchReleased) {
++        const auto event = app.route(snap);
++        if (event.action == ACTION_ROW && event.value >= 0) return orbifyAct(orbify->activate(event.value));
++        if (app.invalidated()) return Action::Redraw;
++      }
++    }
++    if (input.wasReleased(MappedInputManager::Button::Confirm)) return orbifyAct(orbify->activate());
++    if (input.wasReleased(MappedInputManager::Button::Back) && input.getHeldTime() < ReaderUtils::GO_HOME_MS) {
++      return Action::LastPage;
++    }
++    // Left/Right change the rating on its row; elsewhere every direction moves the selection.
++    const bool left = input.wasReleased(MappedInputManager::Button::Left);
++    const bool right = input.wasReleased(MappedInputManager::Button::Right);
++    if ((left || right) && orbify->adjust(right ? +1 : -1)) return Action::Redraw;
++    if (input.wasReleased(MappedInputManager::Button::Up) || left) {
++      orbify->move(-1);
++      selector.store(orbify->selected(), std::memory_order_relaxed);
++      return Action::Redraw;
++    }
++    if (input.wasReleased(MappedInputManager::Button::Down) || right) {
++      orbify->move(+1);
++      selector.store(orbify->selected(), std::memory_order_relaxed);
++      return Action::Redraw;
++    }
++    return Action::None;
++  }
++#endif
+   // Touch goes through the FreeInkApp: render() registered the row hit rects;
+   // route the snapshot and consume the dispatched row from the returned event.
+   if (uiReady.load(std::memory_order_acquire)) {
+@@ -153,6 +239,25 @@ void EndOfBookOptions::buildListScreen(UiApp::ScreenType& screen) {
+                   static_cast<int16_t>(safe.x)});
+ 
+   fui::ListProps props;
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  if (orbify) {
++    // The rows that fit this band (design §5's drop order), measured with the list font.
++    const int line = renderer.getLineHeight(UI_10_FONT_ID);
++    orbify::FitMetrics fit;
++    fit.rowHeight = orbifyTouch ? std::max(56, line + 16) + 6 : line + 16;
++    fit.headingHeight = line + 16;
++    fit.available = (safe.y + safe.height) - metrics.verticalSpacing - listTop;
++    orbify->fit(fit);
++    selector.store(orbify->selected(), std::memory_order_relaxed);
++    props.items = orbify->items();
++    props.count = orbify->count();
++    props.selectedIndex = static_cast<int16_t>(orbify->selected());
++    props.action = ACTION_ROW;
++    props.inputMask = fui::InputTouch;
++    screen.list(props);
++    return;
++  }
++#endif
+   props.items = rowItems.data();
+   props.count = rowCount;
+   props.selectedIndex = static_cast<int16_t>(selector.load(std::memory_order_relaxed));
+@@ -182,6 +287,13 @@ void EndOfBookOptions::render(GfxRenderer& renderer, const MappedInputManager& i
+   const int subtitleY = titleY + renderer.getLineHeight(UI_12_FONT_ID) + metrics.verticalSpacing;
+ 
+   UITheme::drawCenteredText(renderer, safe, UI_12_FONT_ID, titleY, tr(STR_END_OF_BOOK), true, EpdFontFamily::BOLD);
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  // Orbify: the book's author under the title; the rows carry their own headings.
++  orbifyTouch = input.hasTouchHardware();
++  if (orbify) {
++    if (!orbify->author().empty()) UITheme::drawCenteredText(renderer, safe, UI_10_FONT_ID, subtitleY, orbify->author().c_str());
++  } else
++#endif
+   UITheme::drawCenteredText(renderer, safe, UI_10_FONT_ID, subtitleY, tr(STR_EOB_CONTINUE_WITH));
+ 
+   // The list renders through the FreeInkApp so its rows register touch hit rects. The
+diff --git a/src/activities/reader/EndOfBookOptions.h b/src/activities/reader/EndOfBookOptions.h
+index f8096ab8..ad8fbfc3 100644
+--- a/src/activities/reader/EndOfBookOptions.h
++++ b/src/activities/reader/EndOfBookOptions.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <CrossInkTailnetCuts.h>
+ #include <FreeInkApp.h>
+ #include <FreeInkUIGfxRenderer.h>
+ 
+@@ -8,6 +9,12 @@
+ #include <string>
+ #include <vector>
+ 
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++#include <memory>
++
++#include "orbify/EndPage.h"
++#endif
++
+ class GfxRenderer;
+ class MappedInputManager;
+ 
+@@ -17,7 +24,8 @@ class MappedInputManager;
+ // plain-title look and behavior.
+ class EndOfBookOptions {
+  public:
+-  enum class Action { None, Redraw, OpenBook, GoHome, LastPage };
++  // Orbify (patch 0028): the reader reads the request with takeOrbifyResult().
++  enum class Action { None, Redraw, OpenBook, GoHome, LastPage, Orbify };
+ 
+   static constexpr size_t MAX_SUGGESTIONS = 3;
+ 
+@@ -45,11 +53,19 @@ class EndOfBookOptions {
+   // Draws the full end screen (plain title, or the suggestion menu) onto a cleared buffer.
+   void render(GfxRenderer& renderer, const MappedInputManager& input);
+ 
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  // Orbify's End-of-Book page (orbify/EndPage.h) instead of the folder menu: the EPUB reader
++  // calls this before loadOnce(). Its status row toggles the book's finish through the reader.
++  void enableOrbify() { orbifyWanted = true; }
++  OrbifyEndPage::Result takeOrbifyResult() { return std::move(orbifyResult); }
++  void orbifyFinishedChanged(bool finished);
++#endif
++
+  private:
+   // FreeInkApp hosts the suggestion list (themed rows, touch routing); the title and
+   // button hints stay on the legacy UITheme calls. 4 rows (3 suggestions + Home) is
+   // the whole interaction surface; 2 handler slots give the row action headroom.
+-  using UiApp = freeink::ui::FreeInkApp<6, 2>;
++  using UiApp = freeink::ui::FreeInkApp<12, 2>;
+ 
+   static void listScreen(UiApp::ScreenType& screen, void* user);
+   static void onRowEvent(const freeink::ui::ActionEvent& event, void* user);
+@@ -75,4 +91,12 @@ class EndOfBookOptions {
+   std::atomic<bool> uiReady{false};
+ 
+   std::string fullPath(size_t index) const;
++
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  bool orbifyWanted = false;
++  bool orbifyTouch = false;
++  std::unique_ptr<OrbifyEndPage> orbify;
++  OrbifyEndPage::Result orbifyResult;
++  Action orbifyAct(OrbifyEndPage::Result result);
++#endif
+ };
+diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
+index 34516cf3..220af4fa 100644
+--- a/src/activities/reader/EpubReaderActivity.cpp
++++ b/src/activities/reader/EpubReaderActivity.cpp
+@@ -3830,6 +3830,10 @@ void EpubReaderActivity::loop() {
+       if (!endOfBookOptions) {
+         LOG_ERR("ERS", "OOM: EndOfBookOptions (%u bytes)", static_cast<unsigned>(sizeof(EndOfBookOptions)));
+       }
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++      // Orbify (patch 0028): the End-of-Book page with the book's status, next and suggestions.
++      if (endOfBookOptions) endOfBookOptions->enableOrbify();
++#endif
+     }
+     if (endOfBookOptions) {
+       endOfBookOptions->loadOnce(epub->getPath());
+@@ -3874,10 +3878,42 @@ void EpubReaderActivity::loop() {
+     longPressMenuHandled = false;
+     lastPageTurnTime = millis();
+     std::string openPath;
+-    switch (endOfBookOptions->handleMenuInput(mappedInput, &openPath)) {
++    EndOfBookOptions::Action endAction;
++    {
++      // The Orbify page's rows are laid out on the render task.
++      RenderLock lock(*this);
++      endAction = endOfBookOptions->handleMenuInput(mappedInput, &openPath);
++    }
++    switch (endAction) {
+       case EndOfBookOptions::Action::OpenBook:
+         activityManager.goToReader(openPath);
+         return;
++      case EndOfBookOptions::Action::Orbify: {
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++        OrbifyEndPage::Result request = endOfBookOptions->takeOrbifyResult();
++        switch (request.act) {
++          case OrbifyEndPage::Act::ToggleFinished: {
++            // Undo, or mark it again: the queue follows through onFinishedChanged.
++            setBookCompleted(!stats.isCompleted);
++            RenderLock lock(*this);
++            endOfBookOptions->orbifyFinishedChanged(stats.isCompleted);
++            break;
++          }
++          case OrbifyEndPage::Act::OpenPath:
++            activityManager.goToReader(request.path);
++            return;
++          case OrbifyEndPage::Act::Catalog:
++            // Download & open (X9) or the author's books (S16). The C3 readers restart into the
++            // catalog; the X4s open it in place.
++            if (activityManager.goToBookOrbitCatalog(std::move(request.link))) return;
++            break;
++          default:
++            break;
++        }
++#endif
++        requestUpdate();
++        return;
++      }
+       case EndOfBookOptions::Action::GoHome:
+         onGoHome();
+         return;
+@@ -7088,6 +7124,10 @@ void EpubReaderActivity::render(RenderLock&& lock) {
+       if (!endOfBookOptions) {
+         LOG_ERR("ERS", "OOM: EndOfBookOptions (%u bytes)", static_cast<unsigned>(sizeof(EndOfBookOptions)));
+       }
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++      // Orbify (patch 0028): the End-of-Book page with the book's status, next and suggestions.
++      if (endOfBookOptions) endOfBookOptions->enableOrbify();
++#endif
+     }
+     renderer.clearScreen();
+     if (endOfBookOptions) {
+diff --git a/src/activities/reader/XtcReaderActivity.cpp b/src/activities/reader/XtcReaderActivity.cpp
+index c732f117..ebb5bab6 100644
+--- a/src/activities/reader/XtcReaderActivity.cpp
++++ b/src/activities/reader/XtcReaderActivity.cpp
+@@ -295,6 +295,7 @@ void XtcReaderActivity::loop() {
+       }
+       return;
+     case EndOfBookOptions::Action::None:
++    case EndOfBookOptions::Action::Orbify:  // EPUB only (overlay patch 0028)
+       break;
+   }
+ 
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index f0913acc..6e6178b4 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -103,6 +103,8 @@ void BookOrbitSyncActivity::completeAlreadySynced() {
+   // Orbify (patch 0027): books finished on this reader, on this sync's session.
+   OrbifyFinish::drain(hasRemoteProgress ? documentHash : std::string(), !sleepSync && !backgroundSync,
+                       sleepSync ? &sleepSyncWakeRequested : nullptr);
++  // Orbify (patch 0028): the open book's series card, near its end (design §5).
++  if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
+   syncSession.reset();  // no request follows; free the TLS session before the reader reloads
+   {
+     RenderLock lock(*this);
+@@ -770,6 +772,8 @@ void BookOrbitSyncActivity::performUpload() {
+   // Orbify (patch 0027): the final position is up; now the finished books, on the same session.
+   if (result == BookOrbitSyncClient::OK) {
+     OrbifyFinish::drain(documentHash, !sleepSync && !backgroundSync, sleepSync ? &sleepSyncWakeRequested : nullptr);
++    // Orbify (patch 0028): the open book's series card, near its end (design §5).
++    if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
+   }
+ 
+   syncSession.reset();
+diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+index e84140b5..fb6647e8 100644
+--- a/src/network/BookOrbitCatalogClient.cpp
++++ b/src/network/BookOrbitCatalogClient.cpp
+@@ -23,6 +23,9 @@
+ #include "DaysFromCivil.h"
+ #include "activities/reader/ReadingStatsUtils.h"
+ #include "Tailnet.h"
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++#include "orbify/FinishSync.h"
++#endif
+ #if CROSSINK_TAILNET_CATALOG_KEEPALIVE && defined(FREEINK_NET_WOLFSSL)
+ #include <Memory.h>
+ #include <SecureHttpClient.h>
+@@ -709,9 +712,16 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
+     bookOrbitSetFilter(filter,
+                        R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
+                        R"("devicePath":true}]})");
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++    // Orbify (patch 0028): the series card's fields ride on the same reply (design §5).
++    orbify::cardFilter(filter);
++#endif
+   };
+   JsonDocument doc;
+   if (!fetchJson(url, buildFilter, doc)) return false;
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  OrbifyFinish::storeCard(doc.as<JsonObjectConst>());
++#endif
+ 
+   outDetail.id = doc["id"] | bookId;
+   outDetail.title = std::string(doc["title"] | "");

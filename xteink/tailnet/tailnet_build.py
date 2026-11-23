@@ -209,6 +209,10 @@ SWITCHES = {
     "CROSSINK_TAILNET_ORBIFY_FINISH":     (1,      1,      1),
     # Ratings on the end-of-book page (item 2): not on the X3 (G31).
     "CROSSINK_TAILNET_ORBIFY_RATING":     (0,      1,      1),
+    # Patch 0028, the End-of-Book page (item 2). The X3's flash drop order (design §5): lower
+    # SUGGESTIONS to 0 first, then AUTHOR_ROW to 0, if `default` crosses the 99.5% CI gate.
+    "CROSSINK_TAILNET_ORBIFY_SUGGESTIONS": (2,     2,      2),
+    "CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW": (1,      1,      1),
 }
 # Switches that stand for wolfSSL defines rather than a define of their own.
 WOLFSSL_SWITCH_DEFINES = {
@@ -225,7 +229,8 @@ V2_ONLY_SWITCHES = ("CROSSINK_TAILNET_NO_NEARBY", "CROSSINK_TAILNET_NO_MDNS", "C
                     "CROSSINK_TAILNET_NO_ASSET_DOWNLOADS", "CROSSINK_TAILNET_WOLFSSL_NO_ERROR_STRINGS",
                     "CROSSINK_TAILNET_BACKGROUND_SYNC", "CROSSINK_TAILNET_SETTINGS_PIN",
                     "CROSSINK_TAILNET_BATTERY_STATS", "CROSSINK_TAILNET_ORBIFY_FINISH",
-                    "CROSSINK_TAILNET_ORBIFY_RATING")
+                    "CROSSINK_TAILNET_ORBIFY_RATING", "CROSSINK_TAILNET_ORBIFY_SUGGESTIONS",
+                    "CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW")
 try:
     CROSSINK_MAJOR = int(str(env.GetProjectConfig().get("crossink", "version")).split(".")[0])  # noqa: F821
 except Exception:

@@ -44,7 +44,45 @@ onwards, switches in `xteink/tailnet/tailnet_build.py`.
 | B12 | The D1 setting | **Settings > BookOrbit Sync > Mark Finished at End**, on by default, stored with the BookOrbit settings | It is a BookOrbit behaviour; the row sits before Home. |
 | B13 | Flash | Item 1 costs **13.3 KB** on the X3 `default` (6,454,127 → 6,467,459 bytes, 98.48% → 98.69%), 11.8 KB on `x4-pro` (94.86%) and `x4-classic` (92.51%) | Mostly ArduinoJson's filtered parse of the detail reply, which item 2 reuses. CI now reports every env's use and fails `default` above 99.5% (6,520,932 bytes). |
 
+## Item 2: the End-of-Book page (patch 0028)
+
+### Upstream lines at rc3
+
+| What | rc3 |
+|---|---|
+| The end page and its folder suggestions | `src/activities/reader/EndOfBookOptions.cpp:34` (`loadOnce`), `:81` (`handleMenuInput`), `:140` (`buildListScreen`) |
+| Book detail at download, with a JSON filter (X5) | `src/network/BookOrbitCatalogClient.cpp:560` (`fetchBookDetail`) |
+| Catalog link (X9) and its network-boot payload | `src/activities/browser/BookOrbitCatalogLink.h:11`; `BookOrbitCatalogListCache.cpp:386,397`; `ActivityManager.cpp:1159` |
+| Entry link downloads, and a set `reopenPath` opens the new copy after | `BookOrbitCatalogBrowserActivity.cpp:393`, `:1465` |
+| Book listing filter by author (S16) | `src/network/BookOrbitCatalogClient.h:74` (`BookOrbitBookQuery::author`) |
+| Server: `seriesMembers` and `relatedSections` (author, similar) on the detail | BookOrbit `koreader-catalog.service.ts:747`, `:1368`; `seriesIndex` is a decimal string (`db/schema/metadata.ts:179`); related books carry no read status (`:1435`) |
+
+### Decisions (two-way doors)
+
+| # | Question | Decision | Why |
+|---|---|---|---|
+| E1 | Card contents | next book (id, index, title, read), gap number or series-done, the server status, 2 suggestions (id, title, source), the first author; **no file id or size** | "Download & open" goes through the catalog link, which reads the detail and its files again; storing them would only go stale. |
+| E2 | Card file | `/.crosspoint/orbify_series/<bookId>.bin`, fixed record with a version and a CRC (`core/SeriesCard.cpp`) | Same policy as the queue; a bad file is ignored and rewritten. |
+| E3 | When the card is refreshed | At download (the detail fetch already happens) and in a sync (manual or on sleep) **when the book is at 90% or more, or has no card** | The card only matters at the end; this bounds the extra request to the last tenth of a book. Background syncs (while reading) skip it. |
+| E4 | "Read" for suggestions | Known only from `seriesMembers` | Related books carry no read status on the server (`:1435`). |
+| E5 | Ratings shown as | `‹ 4 / 5 ›` text | CrossInk's UI fonts have no star glyphs (`fontconvert.py` intervals stop before U+2605). |
+| E6 | X4 Pro touch on the rating | A tap on the rating row steps the rating and saves it | Five star targets need a custom-drawn row; the list routes row taps already (G32). |
+| E7 | Undo | The status row's Confirm (or tap) toggles the finish through the reader's own `setBookCompleted` | Every path stays one: the queue job is removed or rewritten by `onFinishedChanged`. |
+| E8 | Download & open | The catalog link gains `returnPath`; the catalog sets `reopenPath` from it, so a finished download opens the new book and Back or a failure returns to this book; the queue drains first (G33) | Reuses upstream's replace-and-reopen path; on the C3 it rides the one network boot. |
+| E9 | Author row | The catalog link gains `author`; the catalog opens a listing with `author=<name>`, sort `series` | The server resolves the name (S16). |
+| E10 | Rows that do not fit | Measured on the device each draw; dropped in the order suggestions, folder rows, author row, rating (`core/EndPagePlan.cpp`) | Landscape on a 480 px-tall panel cannot show every row; status, next and Home always stay. |
+| E11 | X3 flash drop order | Switches `CROSSINK_TAILNET_ORBIFY_SUGGESTIONS` (2 → 0) then `..._AUTHOR_ROW` (1 → 0) | The CI gate names the order; flipping a switch is one line in `tailnet_build.py`. |
+| E12 | XTC books | Keep upstream's page | The finish queue and the card are keyed by the EPUB's document hash and download index. |
+| E14 | Flash | Item 2 adds **10.7 KB** on the X3 `default` (6,478,163 bytes, 98.85%, 42.8 KB under the gate), 7.5 KB on `x4-pro` (94.97%) and 6.8 KB on `x4-classic` (92.62%) | Under the gate: the X3 keeps its suggestions and author row. |
+| E13 | "Get it at the next sync" (X4) | **Not in this release** | It needs a download queue in the sync; the page offers Download & open, Back to book, and the catalog's own retry. |
+
 ## Measurements needed on a device
 
 Item 1 adds only small requests on the sync's existing TLS session, so no new memory measurement
 is needed beyond the sync's own log lines (`ORB Finish …`, `BookOrbit PUT … -> 200`).
+
+Item 2, on an **X3** (`default`), serial log at 115200: read a downloaded book of a series past 90%,
+then sleep (the sleep sync refreshes the card). The lines `ORB Series card parse: heap free …,
+largest …` and `ORB Series card parsed (ok): <n>-byte reply, heap free …, largest …` give the heap
+while the detail reply (the design's "24 KB saved page" case) is parsed. A `failed` there, or a
+largest block under 16 KB, is the signal to stream the reply in smaller pieces.

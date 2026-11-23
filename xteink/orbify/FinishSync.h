@@ -9,8 +9,12 @@
 //     job in /.crosspoint/orbify_finish.bin (and .bak, the second slot).
 //   - Every BookOrbit sync drains the queue on its own connection, after the book's progress.
 //   - An automatic sync holds a stale position of a book finished here (holdPush).
+#include <ArduinoJson.h>
+
 #include <cstdint>
 #include <string>
+
+#include "core/SeriesCard.h"
 
 namespace OrbifyFinish {
 
@@ -29,5 +33,21 @@ void drain(const std::string& knownHash, bool manual, bool (*stop)() = nullptr);
 
 // True when an automatic sync must not push this position (0..1) of this book.
 bool holdPush(const std::string& bookPath, const std::string& hash, float percentage);
+
+// --- item 2, the End-of-Book page ------------------------------------------------------
+
+// Where this book's finish stands, for the page's status row.
+enum class JobState : uint8_t { None, Pending, Sent, SignIn };
+JobState jobState(const std::string& bookPath);
+// The rating saved with the book's finish (0 none, 1..5); setRating needs a finished book.
+int8_t rating(const std::string& bookPath);
+void setRating(const std::string& bookPath, int8_t rating);
+
+// The series card (core/SeriesCard) of a downloaded book, from /.crosspoint/orbify_series/.
+bool loadCard(const std::string& bookPath, orbify::SeriesCard& out);
+// The catalog's book detail just parsed (fetchBookDetail, with core's cardFilter fields).
+void storeCard(JsonObjectConst detail);
+// On a BookOrbit session: refreshes the open book's card when it has none or is near its end.
+void refreshCard(const std::string& bookPath, float percentage);
 
 }  // namespace OrbifyFinish

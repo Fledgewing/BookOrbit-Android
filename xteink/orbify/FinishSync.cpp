@@ -3,6 +3,7 @@
 #include <CrossInkTailnetCuts.h>
 
 #if CROSSINK_TAILNET_ORBIFY_FINISH
+#include <Arduino.h>
 #include <ArduinoJson.h>
 #include <HalStorage.h>
 #include <Logging.h>
@@ -19,6 +20,7 @@
 #include "KOReaderDocumentId.h"
 #include "activities/reader/BookReadingStats.h"
 #include "core/FinishQueue.h"
+#include "core/SeriesCard.h"
 #include "sync/BookSyncFile.h"
 
 namespace OrbifyFinish {
@@ -98,6 +100,24 @@ bool isEpub(const std::string& path) {
   return n > 5 && strcasecmp(path.c_str() + n - 5, ".epub") == 0;
 }
 
+// Parses the saved reply through an ArduinoJson filter.
+bool parseReply(JsonDocument& filter, JsonDocument& doc, size_t* outBytes = nullptr) {
+  HalFile file;
+  if (!Storage.openFileForRead(TAG, REPLY_PATH, file)) return false;
+  if (outBytes) *outBytes = file.fileSize();
+  struct Reader {
+    HalFile& f;
+    int read() { return f.read(); }
+    size_t readBytes(char* b, size_t n) {
+      const int r = f.read(b, n);
+      return r > 0 ? static_cast<size_t>(r) : 0;
+    }
+  } reader{file};
+  const bool ok = !deserializeJson(doc, reader, DeserializationOption::Filter(filter));
+  file.close();
+  return ok;
+}
+
 uint32_t nowEpoch() {
   const time_t now = time(nullptr);
   return now >= static_cast<time_t>(orbify::MIN_PLAUSIBLE_EPOCH) ? static_cast<uint32_t>(now) : 0;
@@ -148,24 +168,10 @@ class SyncTransport : public orbify::FinishTransport {
                              "?deviceId=" + BookOrbitSyncClient::deviceId();
     const int code = BookOrbitSyncClient::orbifyRequest("GET", path, nullptr, REPLY_PATH);
     if (code >= 200 && code < 300) {
-      HalFile file;
-      if (Storage.openFileForRead(TAG, REPLY_PATH, file)) {
-        JsonDocument filter;
-        filter["readStatus"] = true;
-        JsonDocument doc;
-        struct Reader {
-          HalFile& f;
-          int read() { return f.read(); }
-          size_t readBytes(char* b, size_t n) {
-            const int r = f.read(b, n);
-            return r > 0 ? static_cast<size_t>(r) : 0;
-          }
-        } reader{file};
-        if (!deserializeJson(doc, reader, DeserializationOption::Filter(filter))) {
-          outStatus = orbify::parseServerStatus(doc["readStatus"].as<const char*>());
-        }
-        file.close();
-      }
+      JsonDocument filter;
+      filter["readStatus"] = true;
+      JsonDocument doc;
+      if (parseReply(filter, doc)) outStatus = orbify::parseServerStatus(doc["readStatus"].as<const char*>());
     }
     Storage.remove(REPLY_PATH);
     return code;
@@ -189,6 +195,48 @@ class SyncTransport : public orbify::FinishTransport {
 };
 
 bool s_lastAtEnd = false;
+
+// --- the series card (item 2) ------------------------------------------------------------
+
+constexpr char CARD_DIR[] = "/.crosspoint/orbify_series";
+
+std::string cardPath(const int64_t bookId) { return std::string(CARD_DIR) + "/" + std::to_string(bookId) + ".bin"; }
+
+bool loadCardById(const int64_t bookId, orbify::SeriesCard& out) {
+  if (bookId <= 0) return false;
+  const std::string path = cardPath(bookId);
+  if (!Storage.exists(path.c_str())) return false;
+  std::unique_ptr<uint8_t[]> buf(new (std::nothrow) uint8_t[orbify::CARD_BYTES]);
+  if (!buf) return false;
+  HalFile file;
+  if (!Storage.openFileForRead(TAG, path.c_str(), file)) return false;
+  const int n = file.read(buf.get(), orbify::CARD_BYTES);
+  file.close();
+  return n == static_cast<int>(orbify::CARD_BYTES) && orbify::deserializeCard(buf.get(), orbify::CARD_BYTES, out);
+}
+
+int64_t bookIdOf(const std::string& bookPath) {
+  int64_t bookId = 0;
+  if (!BookOrbitDownloadIndex::bookIdForPath(bookPath, bookId)) bookId = 0;
+  BookOrbitDownloadIndex::unload();
+  return bookId;
+}
+
+// Loads the queue, applies change to this book's job, saves when change returns true.
+template <typename Change>
+bool withJob(const std::string& bookPath, Change change) {
+  if (!isEpub(bookPath) || (!Storage.exists(SLOT_PATHS[0]) && !Storage.exists(SLOT_PATHS[1]))) return false;
+  const std::string hash = KOReaderDocumentId::calculate(bookPath);
+  if (hash.size() != 32) return false;
+  std::unique_ptr<FinishQueue> queue(new (std::nothrow) FinishQueue());
+  if (!queue) return false;
+  Loaded loaded;
+  if (!load(*queue, loaded)) return false;
+  FinishJob* job = queue->find(hash.c_str());
+  if (!job) return false;
+  if (change(*job)) save(*queue, loaded);
+  return true;
+}
 
 }  // namespace
 
@@ -235,6 +283,9 @@ void onFinishedChanged(const std::string& bookPath, const bool finished) {
     }
     job.pagesAtFinish = stats.totalPagesTurned;
   }
+  // The server's status when the book was finished (G4), from the card when there is one.
+  orbify::SeriesCard card;
+  if (loadCardById(job.bookId, card)) job.statusSeen = card.status;
   job.createdAt = nowEpoch();
   job.finalPermille = 1000;
   queue->upsert(job);
@@ -295,6 +346,88 @@ bool holdPush(const std::string& bookPath, const std::string& hash, const float 
   return hold;
 }
 
+JobState jobState(const std::string& bookPath) {
+  JobState state = JobState::None;
+  withJob(bookPath, [&](FinishJob& job) {
+    state = (job.flags & FinishJob::AUTH_WAIT) ? JobState::SignIn : job.sent() ? JobState::Sent : JobState::Pending;
+    return false;
+  });
+  return state;
+}
+
+int8_t rating(const std::string& bookPath) {
+  int8_t value = 0;
+  withJob(bookPath, [&](FinishJob& job) {
+    value = job.rating > 0 ? job.rating : 0;
+    return false;
+  });
+  return value;
+}
+
+void setRating(const std::string& bookPath, const int8_t value) {
+  withJob(bookPath, [&](FinishJob& job) {
+    const int8_t next = value > 0 ? value : (job.rating > 0 ? -1 : 0);
+    if (next == job.rating) return false;
+    job.rating = next;
+    // Sent again at the next sync, rating included; the status steps are no-ops by then.
+    job.flags &= static_cast<uint8_t>(~(FinishJob::SENT | FinishJob::PARKED));
+    job.attempts = 0;
+    job.nextTryAt = 0;
+    LOG_INF(TAG, "Finish: %s rated %d", job.hash, static_cast<int>(next));
+    return true;
+  });
+}
+
+bool loadCard(const std::string& bookPath, orbify::SeriesCard& out) { return loadCardById(bookIdOf(bookPath), out); }
+
+void storeCard(JsonObjectConst detail) {
+  std::unique_ptr<orbify::SeriesCard> card(new (std::nothrow) orbify::SeriesCard());
+  std::unique_ptr<uint8_t[]> buf(new (std::nothrow) uint8_t[orbify::CARD_BYTES]);
+  if (!card || !buf || !orbify::pickCard(detail, CROSSINK_TAILNET_ORBIFY_SUGGESTIONS, *card)) return;
+  const size_t size = orbify::serializeCard(*card, buf.get(), orbify::CARD_BYTES);
+  Storage.mkdir("/.crosspoint");
+  Storage.mkdir(CARD_DIR);
+  const std::string path = cardPath(card->bookId);
+  HalFile file;
+  if (!size || !Storage.openFileForWrite(TAG, path.c_str(), file)) return;
+  const bool ok = file.write(buf.get(), size) == size;
+  file.close();
+  if (!ok) {
+    Storage.remove(path.c_str());
+    return;
+  }
+  LOG_INF(TAG, "Series card %lld: next %d (book %lld), %u suggestions", static_cast<long long>(card->bookId),
+          static_cast<int>(card->next), static_cast<long long>(card->nextBook.id),
+          static_cast<unsigned>(card->suggestionCount));
+}
+
+void refreshCard(const std::string& bookPath, const float percentage) {
+  if (!isEpub(bookPath) || !BOOKORBIT_STORE.hasCredentials()) return;
+  const int64_t bookId = bookIdOf(bookPath);
+  if (bookId <= 0) return;
+  // The card matters at the end: refreshed from 90% on, or when the book has none yet.
+  if (percentage < 0.9f && Storage.exists(cardPath(bookId).c_str())) return;
+  const std::string path = "/plugin/catalog/books/" + std::to_string(bookId) + "?deviceId=" + BookOrbitSyncClient::deviceId();
+  const int code = BookOrbitSyncClient::orbifyRequest("GET", path.c_str(), nullptr, REPLY_PATH);
+  if (code >= 200 && code < 300) {
+    // Device measurement (X3 heap while parsing the saved detail): these two lines.
+    LOG_INF(TAG, "Series card parse: heap free %u, largest %u", static_cast<unsigned>(ESP.getFreeHeap()),
+            static_cast<unsigned>(ESP.getMaxAllocHeap()));
+    JsonDocument filter;
+    orbify::cardFilter(filter);
+    JsonDocument doc;
+    size_t replyBytes = 0;
+    const bool parsed = parseReply(filter, doc, &replyBytes);
+    LOG_INF(TAG, "Series card parsed (%s): %u-byte reply, heap free %u, largest %u", parsed ? "ok" : "failed",
+            static_cast<unsigned>(replyBytes), static_cast<unsigned>(ESP.getFreeHeap()),
+            static_cast<unsigned>(ESP.getMaxAllocHeap()));
+    if (parsed) storeCard(doc.as<JsonObjectConst>());
+  } else {
+    LOG_INF(TAG, "Series card %lld not refreshed (http %d)", static_cast<long long>(bookId), code);
+  }
+  Storage.remove(REPLY_PATH);
+}
+
 }  // namespace OrbifyFinish
 
 #else
@@ -305,6 +438,12 @@ bool reachedEnd(bool) { return false; }
 void onFinishedChanged(const std::string&, bool) {}
 void drain(const std::string&, bool, bool (*)()) {}
 bool holdPush(const std::string&, const std::string&, float) { return false; }
+JobState jobState(const std::string&) { return JobState::None; }
+int8_t rating(const std::string&) { return 0; }
+void setRating(const std::string&, int8_t) {}
+bool loadCard(const std::string&, orbify::SeriesCard&) { return false; }
+void storeCard(JsonObjectConst) {}
+void refreshCard(const std::string&, float) {}
 }  // namespace OrbifyFinish
 
 #endif
