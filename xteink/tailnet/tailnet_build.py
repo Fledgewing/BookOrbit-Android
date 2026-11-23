@@ -219,6 +219,9 @@ SWITCHES = {
     # SUGGESTIONS to 0 first, then AUTHOR_ROW to 0, if `default` crosses the 99.5% CI gate.
     "CROSSINK_TAILNET_ORBIFY_SUGGESTIONS": (2,     2,      2),
     "CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW": (1,      1,      1),
+    # Patch 0029, the write-through cache in front of BookOrbit (item 4,
+    # docs/design/write-through-cache.md): X4 Pro and X4 only; the X3 keeps today's catalog.
+    "CROSSINK_TAILNET_ORBIFY_CACHE":      (0,      1,      1),
 }
 # Switches that stand for wolfSSL defines rather than a define of their own.
 WOLFSSL_SWITCH_DEFINES = {

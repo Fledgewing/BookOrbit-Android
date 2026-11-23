@@ -1,0 +1,250 @@
+diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
+index 98548aac..637436d3 100644
+--- a/include/CrossInkTailnetCuts.h
++++ b/include/CrossInkTailnetCuts.h
+@@ -186,3 +186,7 @@ bool tlsArenaActive();                                // the arena is reserved (
+ #ifndef CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW
+ #define CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW 1
+ #endif
++// Patch 0029, Orbify's write-through cache in front of BookOrbit (src/orbify/CacheStore.h): X4s.
++#ifndef CROSSINK_TAILNET_ORBIFY_CACHE
++#define CROSSINK_TAILNET_ORBIFY_CACHE 0
++#endif
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+index c747f475..7be018c2 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+@@ -423,6 +423,14 @@ void configureClient(freeink::SecureHttpClient& http, const bool reuse) {
+ // Returning false stops the reading, which closes the connection.
+ using ReplySink = std::function<bool(const uint8_t* data, size_t len, size_t announced)>;
+ 
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++}  // namespace
++// Orbify's write-through cache (src/orbify/CacheStore.cpp) learns of every write that went through.
++void orbifyCacheAfterWrite(const char* method, const std::string& url, const char* body, size_t bodyLength,
++                           int status) __attribute__((weak));
++namespace {
++#endif
++
+ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonBody* payload, const ReplySink& onBody) {
+   s_lastBodyRefusal = BodyRefusal::None;
+   const bool pooled = s_session != nullptr;
+@@ -488,6 +496,10 @@ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonB
+   CROSSINK_TAILNET_TLS_ARENA_LOG("BookOrbit request");
+ #if TAILNET_PROBE_CATALOG_LIVE
+   tailnet_probe_window_end("BookOrbit request", probeFirstBytes ? "whole request (no body)" : "body");
++#endif
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++  if (orbifyCacheAfterWrite && strcmp(method, "GET") != 0)
++    orbifyCacheAfterWrite(method, url, payload ? reinterpret_cast<const char*>(payload->bytes()) : nullptr, payload ? payload->length() : 0, code);
+ #endif
+   return code;
+ }
+diff --git a/src/BookOrbitHomeStore.cpp b/src/BookOrbitHomeStore.cpp
+index b177e6d9..2fbe13bd 100644
+--- a/src/BookOrbitHomeStore.cpp
++++ b/src/BookOrbitHomeStore.cpp
+@@ -18,6 +18,9 @@
+ #include "activities/reader/ReadingDailyMinutes.h"
+ #include "activities/reader/ReadingStatsUtils.h"
+ #include "network/BookOrbitCatalogClient.h"
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++#include "orbify/CacheStore.h"
++#endif
+ 
+ namespace BookOrbitHomeStore {
+ namespace {
+@@ -117,7 +120,42 @@ void fetchMissingCovers(const BookOrbitHomeSnapshot& snapshot, const StopCheck s
+       return;
+     }
+     fetched++;
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++    // Orbify's cache: a cover kept at an older version with its ETag is asked If-None-Match, so a
++    // metadata-only edit (a new updatedAt, the same cover file) costs a 304 and a rename.
++    orbify::cache::CoverRecord kept;
++    const bool hasKept = OrbifyCache::coverRecord(book.id, kept);
++    BookOrbitHomeBook old = book;
++    old.coverVersion = kept.version;
++    char oldPath[64];
++    coverPath(old, width, height, oldPath, sizeof(oldPath));
++    orbify::cache::CoverOnDisk disk;
++    disk.present = hasKept && kept.version != book.coverVersion && Storage.exists(oldPath);
++    disk.version = kept.version;
++    disk.file = disk.present ? orbify::cache::CoverFile::Ok : orbify::cache::CoverFile::Missing;
++    disk.hasEtag = !kept.etag.empty();
++    const auto plan = orbify::cache::planCover(OrbifyCache::currentMode(), true, book.coverVersion, disk, false);
++    std::string etag;
++    const auto result = BookOrbitCatalogClient::downloadThumbnail(
++        book.id, pending, shouldStop, plan.action == orbify::cache::CoverAction::Conditional ? kept.etag : "", &etag);
++    if (result != HttpDownloader::OK && HttpDownloader::lastHttpStatus == 304) {
++      // Every size of the kept cover takes the new version's name.
++      const int both[2][2] = {{sizes.rowWidth, sizes.rowHeight}, {sizes.shelfWidth, sizes.shelfHeight}};
++      for (const auto& wh : both) {
++        char from[64];
++        char to[64];
++        coverPath(old, wh[0], wh[1], from, sizeof(from));
++        coverPath(book, wh[0], wh[1], to, sizeof(to));
++        if (Storage.exists(from)) Storage.rename(from, to);
++      }
++      OrbifyCache::coverStored(book.id, book.coverVersion, kept.etag);
++      LOG_INF("BookOrbit", "Cover of book %ld unchanged (304)", static_cast<long>(book.id));
++      return;
++    }
++    if (result == HttpDownloader::OK) OrbifyCache::coverStored(book.id, book.coverVersion, etag);
++#else
+     const auto result = BookOrbitCatalogClient::downloadThumbnail(book.id, pending, shouldStop);
++#endif
+     if (result != HttpDownloader::OK) {
+       LOG_ERR("BookOrbit", "Cover of book %ld not fetched (err=%d, http=%d)", static_cast<long>(book.id),
+               static_cast<int>(result), HttpDownloader::lastHttpStatus);
+diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+index fb6647e8..65192e77 100644
+--- a/src/network/BookOrbitCatalogClient.cpp
++++ b/src/network/BookOrbitCatalogClient.cpp
+@@ -25,6 +25,9 @@
+ #include "Tailnet.h"
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+ #include "orbify/FinishSync.h"
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++#include "orbify/CacheStore.h"
++#endif
+ #endif
+ #if CROSSINK_TAILNET_CATALOG_KEEPALIVE && defined(FREEINK_NET_WOLFSSL)
+ #include <Memory.h>
+@@ -120,6 +123,14 @@ using FilterBuilder = std::function<void(JsonDocument&)>;
+ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDocument& outDoc) {
+   constexpr char TMP_PATH[] = "/.crosspoint/bookorbit_catalog.json";
+   BookOrbitCatalogClient::lastFetchBadResponse = false;
++  const char* parsePath = TMP_PATH;
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++  // Orbify's write-through cache (src/orbify/CacheStore.h): the saved reply when it was checked
++  // in the last minute or there is no network; else the request below, whose reply is kept, and
++  // the saved reply again if the request fails.
++  const OrbifyCache::Lookup cached = OrbifyCache::lookup(url);
++  if (cached.serve && !cached.fetch) parsePath = cached.path.c_str();
++#endif
+ 
+   // Two attempts: TLS on the C3 runs with a few KB of headroom, so a fetch can fail
+   // on a transient allocation race; a fresh connection usually succeeds.
+@@ -135,6 +146,9 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc
+ #if !CROSSINK_TAILNET_FILTER_AFTER_TLS
+   JsonDocument filter;
+   buildFilter(filter);
++#endif
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++  if (parsePath == TMP_PATH) {
+ #endif
+   HttpDownloader::DownloadError err = HttpDownloader::HTTP_ERROR;
+ #if TAILNET_PROBE_CATALOG_LIVE
+@@ -179,11 +193,21 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc
+       BookOrbitCatalogClient::lastFetchBadResponse = true;
+     }
+     LOG_ERR("BookOrbit", "Catalog request failed (err=%d, http=%d): %s", static_cast<int>(err), status, url.c_str());
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++    if (cached.hasEntry) {
++      LOG_INF("BookOrbit", "Showing the saved reply");
++      OrbifyCache::markNotUpdated(cached);
++      parsePath = cached.path.c_str();
++    } else
++#endif
+     return false;
+   }
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++  }
++#endif
+ 
+   FsFile file;
+-  if (!Storage.openFileForRead("BookOrbit", TMP_PATH, file)) {
++  if (!Storage.openFileForRead("BookOrbit", parsePath, file)) {
+     LOG_ERR("BookOrbit", "Failed to reopen catalog response");
+     Storage.remove(TMP_PATH);
+     return false;
+@@ -228,8 +252,21 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc
+   }
+ 
+   file.close();
++  const bool parsed = !error && !wrongShape;
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++  if (parsePath != TMP_PATH) {
++    // A saved reply that no longer parses is dropped: the next read asks the server.
++    if (parsed) OrbifyCache::markUsed(cached);
++    else Storage.remove(parsePath);
++    return parsed;
++  }
++  if (parsed && cached.cacheable) {
++    OrbifyCache::storeReply(cached, url, TMP_PATH);
++    return parsed;
++  }
++#endif
+   Storage.remove(TMP_PATH);
+-  return !error && !wrongShape;
++  return parsed;
+ }
+ 
+ // Sections we can browse: direct book listings plus the
+@@ -581,7 +618,9 @@ bool BookOrbitCatalogClient::fetchHomeDashboard(BookOrbitHomeSnapshot& out, HalF
+ }
+ 
+ HttpDownloader::DownloadError BookOrbitCatalogClient::downloadThumbnail(const int64_t bookId, const char* destPath,
+-                                                                        bool (*shouldStop)()) {
++                                                                        bool (*shouldStop)(),
++                                                                        const std::string& ifNoneMatch,
++                                                                        std::string* etagOut) {
+   if (!BOOKORBIT_STORE.hasCredentials()) return HttpDownloader::HTTP_ERROR;
+ 
+   // BookOrbit stores every book thumbnail as a JPEG and streams the file as-is, so the
+@@ -589,8 +628,10 @@ HttpDownloader::DownloadError BookOrbitCatalogClient::downloadThumbnail(const in
+   const std::string url =
+       BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/books/" + std::to_string(bookId) + "/thumbnail";
+   HttpDownloader::DownloadOptions options;
+-  const auto headers = authHeaders();
++  auto headers = authHeaders();
++  if (!ifNoneMatch.empty()) headers.emplace_back("If-None-Match", ifNoneMatch);
+   options.headers = &headers;
++  options.etag = etagOut;
+   options.transport = HttpDownloader::Transport::WOLFSSL;
+   options.wolfSslClient = catalogConnection();
+   if (shouldStop != nullptr) options.shouldCancel = shouldStop;
+diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
+index a8e9d68e..1555db50 100644
+--- a/src/network/BookOrbitCatalogClient.h
++++ b/src/network/BookOrbitCatalogClient.h
+@@ -221,7 +221,11 @@ class BookOrbitCatalogClient {
+   static bool fetchHomeDashboard(BookOrbitHomeSnapshot& out, HalFile& yearOut);
+ 
+   /** Download one book's catalog thumbnail (always a JPEG) to the SD card. */
+-  static HttpDownloader::DownloadError downloadThumbnail(int64_t bookId, const char* destPath, bool (*shouldStop)());
++  // ifNoneMatch: a kept cover's ETag; a 304 then fails with lastHttpStatus 304 and writes nothing.
++  // etagOut receives the new cover's ETag (Orbify's cache, CROSSINK_TAILNET_ORBIFY_CACHE).
++  static HttpDownloader::DownloadError downloadThumbnail(int64_t bookId, const char* destPath, bool (*shouldStop)(),
++                                                         const std::string& ifNoneMatch = std::string(),
++                                                         std::string* etagOut = nullptr);
+ 
+   /** Download a catalog file (by file id, not book id) to the SD card. */
+   static HttpDownloader::DownloadError downloadFile(
+diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
+index 219541af..a1669c0b 100644
+--- a/src/network/HttpDownloader.cpp
++++ b/src/network/HttpDownloader.cpp
+@@ -622,6 +622,7 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
+     progressNotifier.notify(sink.downloaded, true);
+     if (isCancelRequested(sink.cancelFlag, sink.shouldCancel)) return HttpDownloader::ABORTED;
+     if (sink.options->finalUrl) *sink.options->finalUrl = currentUrl;
++    if (sink.options->etag) *sink.options->etag = http.getHeader("etag");
+     if (sink.options->session &&
+         !retainHttpSessionFraming(http.hasContentLength(), http.getHeader("transfer-encoding")))
+       sink.options->session->reset();
+diff --git a/src/network/HttpDownloader.h b/src/network/HttpDownloader.h
+index ebe8ca5e..7f1386c2 100644
+--- a/src/network/HttpDownloader.h
++++ b/src/network/HttpDownloader.h
+@@ -76,6 +76,9 @@ class HttpDownloader {
+ 
+     Session* session = nullptr;       // Borrowed; default preserves one-request lifetime.
+     std::string* finalUrl = nullptr;  // Receives only a successful final response URL.
++    // WOLFSSL: receives a successful response's ETag (empty when it sent none). Orbify's cache
++    // keeps it to ask If-None-Match later (CROSSINK_TAILNET_ORBIFY_CACHE).
++    std::string* etag = nullptr;
+     uint8_t maxAttempts = 20;         // File reconnect budget, clamped to [1, 20].
+     // Borrowed for the synchronous call; never forwarded to a different origin. Treated
+     // as credentials (BookOrbit's x-auth-user/x-auth-key): see authorizationOrigin.

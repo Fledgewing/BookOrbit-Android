@@ -94,6 +94,23 @@ to PNGs. CI uploads the PNGs as the `eob-page-*` artifact.
 | P6 | Logs: `ORB End page: <state>, card <yes/no>, series <none/offline>, <n> rows`; `tap row <i> (kind <k>, star <s>)`; `row <i> acts (<act>)`; `tap … ignored`; `Back, to the last page`; `ERS End of book: Home` | Names the exit next time. |
 | P7 | Not in this patch: the next book's cover | Covers exist on the card only for Home shelves; a next-in-series cover needs a fetch with the series card and a radio-off JPEG decode (about 53 KB). |
 
+## Item 4: the write-through cache, seams (patch 0029)
+
+Design: [`write-through-cache.md`](write-through-cache.md) ("Xteink"). Rules in `orbify/core/CatalogCache` (host test
+`cache_test.cpp` runs `shared/fixtures/cache/cases.json`); disk and hooks in `orbify/CacheStore`.
+
+| # | Question | Decision | Why |
+|---|---|---|---|
+| C1 | Which readers | X4 Pro and X4 (`CROSSINK_TAILNET_ORBIFY_CACHE` 0,1,1); every hook sits behind the switch | The coordinator's call; the X3 has no PSRAM for whole-reply parses and 42 KB of flash left. |
+| C2 | Read hook | Inside `fetchJson`: the saved reply replaces the download, or the download's temp file is renamed into the cache | Every catalog read already goes through one file on the card; a rename costs no copy. |
+| C3 | "Same reply" | `canonicalHash` of the whole reply, parsed again into PSRAM | Matches the shared case (key order doesn't matter); the view's filtered fields would differ per caller. |
+| C4 | Write hook | A weak `orbifyCacheAfterWrite` called by `sendBookOrbitRequest` for every non-`GET` | `lib/BookOrbitSync` can't include `src/`; the same pattern as upstream's `tailnet_task_stack_*` hooks. |
+| C5 | Patching on a write | Only replies whose text contains `"id":<n>` are parsed, patched and rewritten | Writes are rare (a finish, a rating); progress writes only mark Home due and read nothing. |
+| C6 | Clock not set | Online, every read asks the server | The 60 s window can't be measured; offline still serves. |
+| C7 | Concurrency | One recursive mutex around the store | The sleep sync, the background sync and the catalog's revalidation run on their own tasks. |
+| C8 | Covers | Home covers only, by `planCover`: a missing file at the listed version with an older file that has an ETag is asked `If-None-Match`; 304 renames every size | The catalog browser draws no covers; Home's `<ver>` is already `updatedAt`'s hash. |
+| C9 | Flash | `x4-pro` +27.3 KB (95.39%), `x4-classic` +27.0 KB (93.03%); X3 +414 B (shared signature changes only) | |
+
 ## X3 update check and download (patch 0030, 2026-11-22)
 
 Field report from an X3 on the CrossInk-Tailnet bridge `v2.0.0.51+bookorbit.1-rc2` (serial log):

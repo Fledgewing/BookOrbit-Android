@@ -52,6 +52,7 @@ orbify_test finish "$core/FinishQueue.cpp"
 orbify_test end_of_book "$core/SeriesCard.cpp" "$core/EndPagePlan.cpp" "$core/FinishQueue.cpp"
 orbify_test localfirst "$core/LocalFirst.cpp"
 orbify_test reading_quiet "$core/ReadingQuiet.cpp"
+orbify_test cache "$core/CatalogCache.cpp" "$core/LocalFirst.cpp"
 orbify_test copy_check "$core/CopyCheck.cpp"
 orbify_test copy_queue "$core/CopyQueue.cpp" "$core/CopyCheck.cpp"
 # The End-of-Book page (orbify/core/EndPageLayout): touch rules on the X4 Pro and X4 layouts, and
