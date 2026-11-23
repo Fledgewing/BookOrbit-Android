@@ -21,7 +21,7 @@ name: Xteink
 # (RUN_BASE + the workflow run number): upstream v1.6.1+bookorbit.8 becomes
 # xteink-v1.6.1.<n>+bookorbit.8. CrossInk's updater compares four numeric parts, so a new
 # upstream release or an overlay-only rebuild both read as newer. RUN_BASE keeps the numbers
-# above the last CrossInk-Tailnet release (1.6.1.46) now that the run counter restarted.
+# above the last CrossInk-Tailnet releases (1.6.1.52, 2.0.0.51) now that the run counter restarted.
 on:
   push:
     branches: [main]
@@ -76,7 +76,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          sparse-checkout: xteink
+          sparse-checkout: |
+            xteink
+            tools
 
       - id: r
         env:
@@ -85,7 +87,16 @@ jobs:
           FORCE: ${{ inputs.force_release }}
         run: |
           set -euo pipefail
-          tag="${INPUT_REF:-$(gh api "repos/$UPSTREAM_REPO/releases/latest" -q .tag_name)}"
+          # Push and pull request builds use the CrossInk version pinned in tools/upstreams.lock,
+          # so an upstream release never turns an unrelated change red; daily and manual runs
+          # take upstream's latest release (a patch that stops applying shows up there).
+          if [ -n "$INPUT_REF" ]; then
+            tag="$INPUT_REF"
+          elif [ "$GITHUB_EVENT_NAME" = push ] || [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            tag="$(awk '$1 == "crossink-v1.6" {print $3}' tools/upstreams.lock)"
+          else
+            tag="$(gh api "repos/$UPSTREAM_REPO/releases/latest" -q .tag_name)"
+          fi
           base="${tag#v}"
           # 1.6.1+bookorbit.8 -> 1.6.1.<run>+bookorbit.8
           numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"

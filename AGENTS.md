@@ -73,7 +73,8 @@ One repo releases both platforms; the tag prefix says which.
   `bash tools/test/test-install-usb.sh`, and in `android/companion`
   `./gradlew testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
 - Xteink: `xteink/scripts/apply.sh <CrossInk checkout>`, `xteink/test/run-host-tests.sh <checkout>`,
-  then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers).
+  then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the
+  CrossInk pinned as `crossink-v1.6` in `tools/upstreams.lock`, daily runs build upstream's latest).
 - BookOrbit plugin hooks: `luajit android/koreader-patch/test/plugin_compat.lua <plugin dir>`
   (weekly in `.github/workflows/plugin-compat.yml`).
 
