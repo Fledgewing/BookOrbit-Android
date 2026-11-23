@@ -1,5 +1,5 @@
 {
-  "_comment": "Write-through cache (docs/design/write-through-cache.md). Both platforms' tests read this. Times are epoch seconds; 'now' is the time of the step. A cover version is the book's updatedAt as the server lists it. Cover files: ok | missing | empty | corrupt.",
+  "_comment": "Write-through cache (docs/design/write-through-cache.md). Both platforms' tests read this. Times are epoch seconds; 'now' is the time of the step. A cover version is the book's updatedAt as the server lists it. Cover files: ok | missing | empty | corrupt. A disk entry may carry the etag stored with it; a listed book may carry server_etag (the thumbnail's current ETag). download = covers whose body was transferred (200); not_modified = conditional requests answered 304 (file kept, renamed to the listed version); conditional = requests sent with If-None-Match.",
   "keys": [
     {
       "name": "query order and empty values don't matter",
@@ -525,6 +525,110 @@
       ],
       "disk": {},
       "download": [],
+      "remove": []
+    },
+    {
+      "name": "metadata-only edit -> 304, no download",
+      "mode": "refresh",
+      "_why": "updatedAt moved (metadata edit) but the cover file on the server did not",
+      "listed": [
+        {
+          "id": 7,
+          "updatedAt": "2026-11-21T08:00:00Z",
+          "server_etag": "\"1730000000000\""
+        }
+      ],
+      "disk": {
+        "7": {
+          "version": "2026-11-01T10:00:00Z",
+          "file": "ok",
+          "etag": "\"1730000000000\""
+        }
+      },
+      "conditional": [
+        7
+      ],
+      "not_modified": [
+        7
+      ],
+      "download": [],
+      "remove": [],
+      "after": {
+        "7": {
+          "version": "2026-11-21T08:00:00Z",
+          "etag": "\"1730000000000\""
+        }
+      }
+    },
+    {
+      "name": "a new cover behind a version change is downloaded and its ETag kept",
+      "mode": "refresh",
+      "listed": [
+        {
+          "id": 7,
+          "updatedAt": "2026-11-21T08:00:00Z",
+          "server_etag": "\"1732000000000\""
+        }
+      ],
+      "disk": {
+        "7": {
+          "version": "2026-11-01T10:00:00Z",
+          "file": "ok",
+          "etag": "\"1730000000000\""
+        }
+      },
+      "conditional": [
+        7
+      ],
+      "not_modified": [],
+      "download": [
+        7
+      ],
+      "remove": [],
+      "after": {
+        "7": {
+          "version": "2026-11-21T08:00:00Z",
+          "etag": "\"1732000000000\""
+        }
+      }
+    },
+    {
+      "name": "Full refresh asks If-None-Match for good covers: unchanged costs a 304, a silently changed one is replaced",
+      "mode": "full",
+      "listed": [
+        {
+          "id": 7,
+          "updatedAt": "2026-11-01T10:00:00Z",
+          "server_etag": "\"1\""
+        },
+        {
+          "id": 8,
+          "updatedAt": "2026-11-02T10:00:00Z",
+          "server_etag": "\"9\""
+        }
+      ],
+      "disk": {
+        "7": {
+          "version": "2026-11-01T10:00:00Z",
+          "file": "ok",
+          "etag": "\"1\""
+        },
+        "8": {
+          "version": "2026-11-02T10:00:00Z",
+          "file": "ok",
+          "etag": "\"2\""
+        }
+      },
+      "conditional": [
+        7,
+        8
+      ],
+      "not_modified": [
+        7
+      ],
+      "download": [
+        8
+      ],
       "remove": []
     }
   ],

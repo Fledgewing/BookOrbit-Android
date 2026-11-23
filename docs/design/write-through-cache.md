@@ -46,10 +46,19 @@ series membership, scans, moves, renames and uploads. Each of these costs one co
 book. That is rare, and is the price of a version the listing carries.
 
 The thumbnail itself has a cover-only version: `ETag` = the cover file's mtime, with
-`If-None-Match` answered by `304` (`koreader-catalog.service.ts:752-769`). The plugin's downloader
-neither sends nor keeps it (`bookorbit_api.lua:455-527`), so Android uses `updatedAt`. The
-firmware has its own downloader: it may store the ETag and send `If-None-Match` when `updatedAt`
-moved, turning a metadata-only change into a 304.
+`If-None-Match` answered by `304` (`koreader-catalog.service.ts:752-769`). Both platforms use it:
+
+- Every cover download stores the reply's ETag next to the file (Android `<cover>.jpg.etag`, which
+  the plugin's pruner ignores, `bookorbit_catalog_thumbnails.lua:526`; Xteink in its index).
+- When `updatedAt` moved and an older file of that book has an ETag, the request carries
+  `If-None-Match`. A `304` keeps the file and renames it (and its ETag) to the new version's name,
+  so the versioned path finds it. A `200` replaces it through the same temp-file-then-rename and
+  size cap (4 MB) as before, and the old file goes.
+- A metadata-only edit therefore costs one 304, not a cover.
+- Android: Orbit wraps the plugin's `downloadCatalogThumbnail` (`bookorbit_api.lua:747`) with its own
+  conditional GET that reuses the client's server, auth headers and the worker's temp path and size
+  cap. The plugin's downloader neither sends nor keeps ETags (`bookorbit_api.lua:455-527`). Behind a
+  proxy or on a redirect, it falls back to the plugin's download (no ETag).
 
 ## Refresh and Full refresh
 
@@ -59,7 +68,7 @@ The same two modes and words on both platforms.
 |---|---|---|
 | What starts it | Tap ⟳; every automatic background check. Xteink: Confirm on ⟳ (X4 Pro: tap). | Hold ⟳ (a short "Full refresh…" note); "Full refresh" in the Orbit menu / Xteink settings. Xteink: long-press Confirm on ⟳ (X4 Pro: hold). |
 | Data | Revalidate this view's entries (and Home's when on Home), skipping the 60 s window, and merge what changed. | Fetch this view and Home's sections from the server, ignoring the cache, and replace those entries. |
-| Covers | Fetch only missing, failed or re-versioned covers. | Also check every visible cover file: a missing, empty or unreadable file is removed and fetched again. A good file at the listed version is kept (verify and replace, never a blind re-download). |
+| Covers | Fetch only missing, failed or re-versioned covers (a re-versioned one with an ETag asks `If-None-Match`). | Also check every visible cover file: a missing, empty or unreadable file is removed and fetched again. A good file with an ETag is asked `If-None-Match`: a 304 keeps it, a 200 replaces it (this catches a cover changed without a new version). Never a blind re-download. |
 | Evicts | Nothing. | Only the entries and cover files it replaces. |
 | Overlay | Stays on top. | Stays on top: unsent local state is never lost to a Full refresh. |
 
