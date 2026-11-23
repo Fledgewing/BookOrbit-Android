@@ -187,6 +187,9 @@ function OrbitAndroid:menuItems()
         toggle("eob_sheet", _("End of book: Orbit's sheet for BookOrbit books")),
         toggle("eob_auto", _("End of book: mark it finished")),
         toggle("local_first", _("Home shows this device's reading first (restart to apply)")),
+        toggle("offline_cache", _("BookOrbit opens from Orbit's cache (restart to apply)")),
+        { text = _("Full refresh of BookOrbit"), callback = later(function() OC.menuFullRefresh() end),
+          help_text = _("Gets this view and Home fresh from the server and re-checks the covers. Tap ⟳ for a normal refresh; hold ⟳ for this.") },
         toggle("key_log", _("Log every key (clicker diagnosis)")),
         {
             text_func = function() return _("Sync while reading: ") .. _(Schedule.option(S.reading_schedule).label) end,

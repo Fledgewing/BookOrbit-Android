@@ -230,6 +230,8 @@ end
 -- "bookorbit" (home).
 function OrbitAndroid:smartHome(source, from_extra, mode)
     mode = mode or "smart"
+    -- Orbit's own sheets close first: they are not BookOrbit, and they'd cover whatever Home opens.
+    if EOB and EOB.leaveForHome(liveUI()) then log("home: closed the end-of-book sheet") end
     local ui = liveUI()
     local in_reader = ui ~= nil and ui.document ~= nil
     local p = bookorbit(ui)
@@ -414,8 +416,18 @@ function OrbitAndroid:bookorbitMain(p, over, desc)
 end
 
 function OrbitAndroid:onOrbitGoHome()
+    if EOB and EOB.leaveForHome(liveUI()) then log("home: closed the end-of-book sheet") end
     local ui = liveUI()
     local p = bookorbit(ui)
+    -- BookOrbit home already open: bring it up ourselves. The plugin's open action on an open
+    -- catalog opens its menu sheet instead (main.lua:1381-1385).
+    if p and p.catalog_browser then
+        local screen, over, desc = bookorbitScreen(p)
+        if screen ~= nil then return self:bookorbitMain(p, over, desc) end
+        log("home: BookOrbit home is open but not showing (" .. tostring(desc) .. "); reopening it")
+        closeWidget(p.catalog_browser)
+        p.catalog_browser = nil
+    end
     if ui and ui.document and hasHandler(p, "BookOrbitOpenDashboard") and p:isLoggedIn() then
         log("home: BookOrbit home over the open book")
         -- The plugin's public action bookorbit_open_dashboard (event BookOrbitOpenDashboard,

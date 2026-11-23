@@ -73,7 +73,9 @@ local NEEDS = {
     { "frontend/ui/event.lua", { "new" } },
     { "frontend/ui/time.lua", { "now", "to_s" } },
     { "frontend/ui/font.lua", { "getFace" } },
-    { "frontend/ui/size.lua", { { "padding", F }, { "radius", F }, { "line", F } } },
+    { "frontend/ui/size.lua", { { "padding", F }, { "radius", F }, { "line", F }, { "border", F } } },
+    -- The end-of-book sheet's footer: one ButtonTable row without separators.
+    { "frontend/ui/widget/buttontable.lua", { { "zero_sep", F }, { "sep_width", F } } },
     { "frontend/ui/geometry.lua", { "new" } },
     { "frontend/ui/gesturerange.lua", { { "GestureRange", T } } },
     { "frontend/socketutil.lua", { "set_timeout", "reset_timeout" } },
@@ -85,7 +87,8 @@ local NEEDS = {
 -- Widgets the plugin builds with: each module must still exist.
 for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "container/bottomcontainer",
     "container/framecontainer", "horizontalgroup", "horizontalspan", "linewidget", "textboxwidget",
-    "verticalgroup", "verticalspan" }) do
+    "verticalgroup", "verticalspan", "buttontable", "textwidget", "imagewidget", "container/centercontainer",
+    "container/leftcontainer" }) do
     table.insert(NEEDS, { "frontend/ui/widget/" .. w .. ".lua", {} })
 end
 -- koreader-base (the base/ submodule): ffi modules the plugin requires.

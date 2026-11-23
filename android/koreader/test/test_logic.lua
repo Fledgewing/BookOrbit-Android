@@ -860,9 +860,9 @@ end)
 ---------------------------------------------------------------- local-first Home (LocalFirst)
 local LF = M.LocalFirst
 
-local function localState(t)
+local function localState(t, keys)
     local by = {}
-    for k, v in pairs(t or {}) do by[tonumber(k)] = v end
+    for k, v in pairs(t or {}) do by[keys == "string" and tostring(k) or tonumber(k)] = v end
     return { byBookId = by }
 end
 
@@ -870,13 +870,14 @@ test("local-first: overlay cases from the shared fixture", function()
     for _, c in ipairs(JSON.fixture(here, "localfirst/overlay-cases.json").cases) do
         local body = c.body
         local before = LF.serialize(body)
-        local out = LF.overlay(body, localState(c["local"]))
+        local out = LF.overlay(body, localState(c["local"], c.localKeys))
         eq(LF.serialize(body), before, c.name .. ": the server body is never modified")
         for list, want in pairs(c.expect) do
             if list == "goalDone" then
                 eq(out.readingGoal.completedBooks, want, c.name .. " goal")
             else
-                local got = out[list] or {}
+                local shelf = list:match("^shelf:(.+)$")
+                local got = (shelf and (out.boardShelves or {})[shelf] or out[list]) or {}
                 eq(#got, #want, c.name .. " " .. list .. " length")
                 for i, w in ipairs(want) do
                     for k, v in pairs(w) do eq(got[i][k], v, c.name .. " " .. list .. "[" .. i .. "]." .. k) end
@@ -912,6 +913,163 @@ test("local-first: ISO times, content keys and changed tiles", function()
     ok(LF.tileKey("newwidget", d1) ~= LF.tileKey("newwidget", d2), "unknown types key on all of d")
     eq(LF.tileKey("newwidget", d1), LF.tileKey("newwidget", (function() local c = {} for k, v in pairs(d1) do c[k] = v end c.now = 99 return c end)()),
         "the clock alone changes nothing")
+end)
+
+---------------------------------------------------------------- write-through cache (shared cases)
+local C = M.Cache
+local CC = JSON.fixture(here, "cache/cases.json")
+local function set(list) local t = {} for _, v in ipairs(list or {}) do t[tostring(v)] = true end return t end
+local function sameSet(a, b, what)
+    local sa, sb = set(a), set(b)
+    for k in pairs(sa) do ok(sb[k], what .. ": unexpected " .. k) end
+    for k in pairs(sb) do ok(sa[k], what .. ": missing " .. k) end
+end
+
+test("cache: keys (shared cases)", function()
+    for _, c in ipairs(CC.keys) do eq(C.key(c.a) == C.key(c.b), c.same, c.name) end
+end)
+
+test("cache: what is cached (shared cases)", function()
+    for _, c in ipairs(CC.cacheable) do eq(C.cacheable(c.method, c.path), c.cached, c.method .. " " .. c.path) end
+end)
+
+test("cache: reads (shared cases)", function()
+    for _, c in ipairs(CC.reads) do
+        local serve, fetch = C.readPlan(c.entry, c.now, c.mode, c.offline)
+        eq(serve, c.serve, c.name .. " serve"); eq(fetch, c.fetch, c.name .. " fetch")
+    end
+end)
+
+test("cache: revalidation (shared cases)", function()
+    for _, c in ipairs(CC.revalidate) do
+        local changed, stored = C.revalidate(c.cached, c.reply, c.status)
+        eq(changed, c.changed, c.name .. " changed"); eq(stored, c.stored, c.name .. " stored")
+    end
+end)
+
+test("cache: writes patch what they change (shared cases)", function()
+    for _, c in ipairs(CC.writes) do
+        local entries = C.copy(c.entries)
+        local stale = {}
+        if c.write.status >= 200 and c.write.status < 300 then
+            local eff = C.writeEffect(c.write.method, c.write.path, c.write.body)
+            for _, body in pairs(entries) do if eff.id then C.patch(body, eff.id, eff.fields) end end
+            if eff.stale_home then stale = { "dashboard" } end
+        end
+        for k, want in pairs(c.expect) do eq(C.encode(entries[k]), C.encode(want), c.name .. " " .. k) end
+        sameSet(stale, c.stale, c.name .. " stale")
+    end
+end)
+
+test("cache: covers fetch only what changed; ETag 304s keep the file (shared cases)", function()
+    for _, c in ipairs(CC.covers) do
+        local failed = set(c.failed)
+        local download, conditional, not_modified, remove, after = {}, {}, {}, {}, {}
+        for _, b in ipairs(c.listed) do
+            local have = c.disk[tostring(b.id)]
+            local need = C.coverNeed(b, have, failed[tostring(b.id)], c.mode)
+            if need.remove then table.insert(remove, b.id) end
+            if need.fetch then
+                if need.conditional then table.insert(conditional, b.id) end
+                if need.conditional and need.conditional == b.server_etag then
+                    table.insert(not_modified, b.id)
+                else
+                    table.insert(download, b.id)
+                end
+                after[tostring(b.id)] = { version = b.updatedAt, etag = b.server_etag }
+            end
+        end
+        sameSet(download, c.download, c.name .. " download")
+        sameSet(remove, c.remove, c.name .. " remove")
+        if c.conditional then sameSet(conditional, c.conditional, c.name .. " conditional") end
+        if c.not_modified then sameSet(not_modified, c.not_modified, c.name .. " 304") end
+        for id, want in pairs(c.after or {}) do eq(C.encode(after[id]), C.encode(want), c.name .. " after " .. id) end
+    end
+end)
+
+test("cache: encode is canonical and round-trips", function()
+    local v = { b = { 1, 2, { z = "x\n" } }, a = 1.5, c = true, [10] = "ten" }
+    eq(C.encode(C.decode(C.encode(v))), C.encode(v))
+    eq(C.encode({ a = 1, b = 2 }), C.encode({ b = 2, a = 1 }))
+    ok(C.imageHeader("\255\216\255\224xxxx") and C.imageHeader("\137PNG\r\n") and not C.imageHeader("<html>"), "headers")
+end)
+
+test("cache: LRU eviction keeps Home and the open book", function()
+    local idx = { a = { bytes = 5, used_at = 1 }, home = { bytes = 5, used_at = 0, keep = true }, b = { bytes = 5, used_at = 2 }, c = { bytes = 5, used_at = 3 } }
+    local drop = C.evict(idx, 10, 10)
+    eq(table.concat(drop, ","), "a,b", "oldest first, Home kept")
+    eq(#C.evict(idx, 100, 3), 1, "entry cap")
+end)
+
+---------------------------------------------------------------- end-of-book sheet layout
+local SL = M.SheetLayout
+-- KOReader's Screen:scaleBySize (koreader-base ffi/framebuffer.lua fb:scaleBySize, no DPI override).
+local function scaler(w, h) return function(px) return math.ceil(px * (math.min(w, h) / 600)) end end
+local function sheetRows(kind)
+    local r = { { kind = "status", text = "✓ Marked as finished", label = "Undo" }, { kind = "title", text = "The Lighthouse Keepers" },
+        { kind = "author", text = "by Mara Quill ›" }, { kind = "series", text = "Harbour Lights · Book 2 of 4" } }
+    for n = 1, 5 do table.insert(r, { kind = "star", n = n }) end
+    table.insert(r, { kind = "hint", text = "Tap a star · tap it again to clear" })
+    table.insert(r, { kind = "review", text = "Review ›" })
+    table.insert(r, { kind = "label", text = "Next in series · Book 3" })
+    if kind == "failed" then
+        table.insert(r, { kind = "notice", text = "Couldn't connect" })
+        table.insert(r, { kind = "button", text = "Try again" })
+        table.insert(r, { kind = "button", text = "Get it at the next sync" })
+    else
+        table.insert(r, { kind = "card", text = "The Storm Signal", sub = "Book 3 · on this reader" })
+    end
+    table.insert(r, { kind = "label", text = "Also by Mara Quill" })
+    table.insert(r, { kind = "card", text = "Fog Days", sub = "on BookOrbit" })
+    table.insert(r, { kind = "footer", text = "‹ Back to book" }); table.insert(r, { kind = "footer", text = "Home" })
+    return r
+end
+
+test("end-of-book sheet: rows never overlap, widths are symmetric, rows fit their text (1404x1872 and others)", function()
+    for _, screen in ipairs({ { 1404, 1872 }, { 1072, 1448 }, { 758, 1024 } }) do
+        local w, h = screen[1], screen[2]
+        local scale = scaler(w, h)
+        local m = SL.metrics(w, scale)
+        for _, variant in ipairs({ "ok", "failed" }) do
+            local blocks = SL.blocks(sheetRows(variant))
+            local plan = SL.plan(blocks, m)
+            local where = w .. "x" .. h .. " " .. variant
+            eq(plan.items[1].kind, "status", where)
+            local stars, footer
+            for i, it in ipairs(plan.items) do
+                eq(it.x, m.pad, where .. " left pad " .. it.kind)
+                eq(w - (it.x + it.w), m.pad, where .. " right pad " .. it.kind)
+                if i > 1 then
+                    local prev = plan.items[i - 1]
+                    ok(it.y >= prev.y + prev.h + m.gap_small, where .. ": " .. it.kind .. " overlaps " .. prev.kind)
+                end
+                if it.kind == "stars" then stars = it end
+                if it.kind == "footer" then footer = it end
+            end
+            ok(plan.h <= h * 0.9, where .. " fits: " .. plan.h)
+            -- Each row is at least as tall as its text in KOReader's scaled font.
+            local function line(size) return math.ceil(scale(size) * SL.LINE) end
+            local F = SL.FONTS
+            for _, it in ipairs(plan.items) do
+                local need = ({ status = line(F.status), title = line(F.title), author = line(F.author), series = line(F.series),
+                    label = line(F.label), hint = line(F.hint), stars = line(F.star), notice = line(F.notice),
+                    card = line(F.card_title) + line(F.card_sub) })[it.kind]
+                if need then ok(it.h >= need, where .. ": " .. it.kind .. " " .. it.h .. " < " .. need) end
+            end
+            -- Stars: five equal targets centred as a group; footer: equal halves.
+            local cells = SL.centred(stars.w, 5, m.star * 2)
+            eq(cells[1].x, stars.w - (cells[5].x + cells[5].w) + ((stars.w - cells[1].w * 5) % 2), where .. " stars centred")
+            for _, c in ipairs(cells) do eq(c.w, cells[1].w); ok(c.w >= m.star, "star target") end
+            ok(#footer.block.items == 2, "two footer buttons")
+            local halves = SL.split(footer.w, 2)
+            eq(halves[1].w, halves[2].w, "equal footer buttons")
+            -- A widget that came out taller grows its row and pushes the rest down.
+            m.measured = { [plan.items[2].block] = plan.items[2].h + 30 }
+            local grown = SL.plan(blocks, m)
+            eq(grown.items[3].y, plan.items[3].y + 30, where .. " a taller row pushes the next")
+            m.measured = nil
+        end
+    end
 end)
 
 print(string.format("%d passed, %d failed", passed, failed))
