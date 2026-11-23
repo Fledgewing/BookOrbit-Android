@@ -605,6 +605,16 @@ object Setup {
             },
         )
 
+        // From the Orbit plugin's REPORT (docs/design/addon-mode.md §4.2, §7.3).
+        val signed = PluginReport.signedInRow(prefs.reportSignedIn)
+        list.add(Check("Signed in to BookOrbit", signed.done && !signed.pending, signed.detail, pending = signed.pending, action = "Open") { a ->
+            Koreader.start(a, "setup: sign in to BookOrbit", HomeCommands.SIGNIN)
+        })
+        val rec = PluginReport.recommendedRow(prefs.reportRecommended, prefs.reportConflicts)
+        list.add(Check("Recommended settings", rec.done && !rec.pending, rec.detail, pending = rec.pending, action = "Review", pinFree = false) { a ->
+            Koreader.start(a, "setup: recommended settings", HomeCommands.RECOMMENDED)
+        })
+
         val home = ctx.packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
         )?.activityInfo?.packageName

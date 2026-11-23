@@ -38,6 +38,8 @@ import kotlin.concurrent.thread
 class CommandReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         OLog.d("received ${Contract.shortName(intent.action)} extras=${intent.extras?.keySet()}")
+        // A record action: kept here, no service needed (docs/design/addon-mode.md §7.1).
+        if (intent.action == Contract.REPORT) return StatusFile.onReport(ctx, intent)
         OrbitService.start(ctx, intent)
     }
 }
@@ -554,6 +556,8 @@ class OrbitService : Service() {
 
     private fun statusJson(): String =
         "{\"proto\":\"${Contract.PROTOCOL}\",\"version\":\"${BuildConfig.VERSION_NAME}\"," +
+            // Mode and capabilities (docs/design/addon-mode.md §6.1); older plugins ignore them.
+            "\"mode\":\"${ModeLogic.effective(prefs.mode).key}\",\"caps\":${ModeLogic.caps(StatusFile.caps(this))}," +
             "\"wifi\":${Net.wifiConnected(this)},\"wifi_enabled\":${Net.wifiEnabled(this)}," +
             "\"wifi_owner\":\"${prefs.wifiOwner.key}\",\"tailscale\":${Net.vpnUp(this)}," +
             "\"screen_off_permission\":${Net.adminActive(this)},\"setup_needed\":${prefs.setupNeeded}," +

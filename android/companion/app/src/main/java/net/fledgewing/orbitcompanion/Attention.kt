@@ -72,6 +72,7 @@ object Attention {
             OLog.i("setup: $why: needs ${r.needed}${if (r.regressed.isNotEmpty()) " (regressed ${r.regressed})" else ""}, prompt ${r.show}${if (settling) " (update settling: held)" else ""}")
         }
         if (notify && !settling) notification(ctx, r)
+        StatusFile.write(ctx, why)
         return Eval(r, checks)
     }
 

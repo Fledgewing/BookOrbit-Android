@@ -221,6 +221,7 @@
                 <action android:name="net.fledgewing.orbitcompanion.action.STATS" />
                 <action android:name="net.fledgewing.orbitcompanion.action.RELAUNCH" />
                 <action android:name="net.fledgewing.orbitcompanion.action.SETUP_LATER" />
+                <action android:name="net.fledgewing.orbitcompanion.action.REPORT" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

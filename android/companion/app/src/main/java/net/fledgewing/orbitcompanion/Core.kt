@@ -32,6 +32,8 @@ object Contract {
     const val RELAUNCH = "$PACKAGE.action.RELAUNCH"
     const val SETUP_LATER = "$PACKAGE.action.SETUP_LATER"
     const val SHOW_SETUP = "$PACKAGE.action.SHOW_SETUP"
+    /** The Orbit plugin's report (docs/design/addon-mode.md §7.3): signed_in, recommended, conflicts. */
+    const val REPORT = "$PACKAGE.action.REPORT"
     const val EXTRA_FROM = "$PACKAGE.extra.FROM"
     const val EXTRA_COMMAND = "$PACKAGE.extra.COMMAND"
     const val PATCH_SENDER = "org.koreader.launcher"
@@ -99,6 +101,21 @@ class Prefs(ctx: Context) {
             return str("home_app")
         }
         set(v) = setStr("home_app", v)
+    /** Orbify's mode (docs/design/addon-mode.md): "" until chosen; behaves as Full until then. */
+    var mode: OrbitMode?
+        get() = OrbitMode.of(str("orbit_mode"))
+        set(v) = setStr("orbit_mode", v?.key ?: "")
+    /** The Orbit plugin's REPORT: signed in "1"/"0"/"" unknown; recommended state; conflicts. */
+    var reportSignedIn: String
+        get() = str("report_signed_in")
+        set(v) = setStr("report_signed_in", v)
+    var reportRecommended: String
+        get() = str("report_recommended")
+        set(v) = setStr("report_recommended", v)
+    var reportConflicts: Int
+        get() = sp.getInt("report_conflicts", 0)
+        set(v) = sp.edit().putInt("report_conflicts", v).apply()
+    var reportAt by LongPref("report_at")
     var notifyTailscale: Boolean
         get() = bool("notify_tailscale", true)
         set(v) = setBool("notify_tailscale", v)
