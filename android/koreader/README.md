@@ -1,29 +1,41 @@
-# orbit-android KOReader patch
+# Orbit KOReader plugin
 
 Gets an Android e-reader's network ready for the official BookOrbit KOReader plugin and tells
-the plugin when to sync. The plugin does every pull and push and holds the login; this patch
+the plugin when to sync. The plugin does every pull and push and holds the login; Orbit
 never calls BookOrbit's API. It only checks that the plugin's server answers at its base
 address, with no login.
 
-Needs the GitHub build of KOReader (`org.koreader.launcher`): the F-Droid build ignores user
-patches (`frontend/userpatch.lua:27-29`). Tested against KOReader v2026.07.2 and BookOrbit
-plugin 2.3.0.
+Up to Orbify 0.7.x this was the user patch `2-orbit-android.lua`; from 0.8.0 it is the plugin
+`orbit.koplugin`, with the same behaviour (design: [`docs/design/orbit-plugin.md`](../../docs/design/orbit-plugin.md)).
+Tested against KOReader v2026.07.2 and BookOrbit plugin 2.3.0.
 
 ## Install
 
-1. Download `2-orbit-android.lua` from the latest
-   [release](https://github.com/Fledgewing/Orbify/releases/latest) (it carries
-   its version; it then updates itself) and copy it to `koreader/patches/` on the device (create the folder if
-   needed), for example:
-   `adb shell mkdir -p /sdcard/koreader/patches && adb push 2-orbit-android.lua /sdcard/koreader/patches/`
-2. Restart KOReader (close it, or on firmwares that stop it after sleep: power button, wait, wake).
+Orbit Companion installs and updates it (Setup › "Orbit plugin installed"), and so does
+`tools/install-usb.sh`. By hand:
 
-`2-` is KOReader's `late` priority (`frontend/userpatch.lua:13`): it runs once UIManager is
-ready, before the file browser or a book opens. The patch is one file because the loader only
-runs files directly in `koreader/patches/`.
+1. Download `orbit.koplugin.zip` from the latest
+   [release](https://github.com/Fledgewing/Orbify/releases/latest) and unzip it into
+   `koreader/plugins/` on the device, so that `koreader/plugins/orbit.koplugin/main.lua` exists.
+   It carries its version and then updates itself.
+2. Delete `koreader/patches/2-orbit-android.lua` if it is there: while the old patch is loaded
+   the plugin stays off, so nothing is hooked twice.
+3. Restart KOReader (close it, or on firmwares that stop it after sleep: power button, wait, wake).
 
-Remove it by deleting the file. Its settings live under `orbit_android` in KOReader's
-`settings.reader.lua`.
+Remove it by deleting the `orbit.koplugin` folder (or turn it off in KOReader's Plugin
+manager). Its settings live under `orbit_android` in KOReader's `settings.reader.lua`, as they
+did for the patch.
+
+## Layout
+
+`main.lua` loads the files below into one environment shared by the plugin's files, in the
+order it lists them, so the code reads as the single patch file did:
+
+- `logic/`: pure logic, no KOReader modules (schedules, plans, update checks, compat, stats,
+  clicks, prompts, grouping). `test/test_logic.lua` loads only these.
+- `ko/`: the KOReader side (settings, the JNI bridge, the companion, the network, sync,
+  sleep, Home, menus, the self-update), ending with the module (`OrbitAndroid`) that
+  `main.lua` returns to KOReader's plugin loader.
 
 ## What it does
 
@@ -44,12 +56,14 @@ sync path; Wi-Fi (mode, idle minutes); Home button; Open Orbit Companion; Open a
 pre-releases; Check for patch update; update status; status.
 
 **Self-update** (top-level README "Updates"): at most once a day, after a start or wake whose
-network is already up, the patch asks GitHub for the latest release of this repo, and if it
-is newer than its `PATCH_VERSION`, downloads `2-orbit-android.lua` and `SHA256SUMS`, checks
-the SHA-256 with KOReader's own `ffi/sha2` (koreader-base `ffi/sha2.lua:5612`, also used by
-`frontend/util.lua`), writes `2-orbit-android.lua.new` and renames it over itself. The new
-version runs from the next KOReader start. A copy taken straight from the repo says
-`0.0.0-dev`; releases stamp the tag into it.
+network is already up, the plugin asks GitHub for the latest release of this repo, and if it
+is newer than its `PATCH_VERSION` (in `main.lua`), downloads `orbit.koplugin.zip` and
+`SHA256SUMS`, checks the SHA-256 with KOReader's own `ffi/sha2` (koreader-base
+`ffi/sha2.lua:5612`, also used by `frontend/util.lua`), unpacks it with KOReader's
+`ffi/archiver` into `orbit.koplugin.new` (every file must sit under `orbit.koplugin/`), checks
+the unpacked `main.lua` declares the release's version, and swaps the folder in through
+`orbit.koplugin.old`. The new version runs from the next KOReader start. A copy taken straight
+from the repo says `0.0.0-dev`; releases stamp the tag into it (`package.sh`).
 
 "Apply recommended settings" asks first, then sets the plugin's Auto-sync on, BookOrbit
 further ahead → Silent, further behind → Don't sync, Make BookOrbit home, and KOReader's
@@ -90,17 +104,17 @@ The companion interface is in [`android/docs/INTERFACE.md`](../docs/INTERFACE.md
 | Test sync path, step 5 (needs `on_done`) | `onBookOrbitSyncBook{quiet, on_done}` main.lua:1269-1288; `startSweep{quiet, on_done}` main.lua:1246-1253; `errorLabel` | the step is skipped |
 | Auto-sync toggle (also registers its events) | `onBookOrbitToggleAutoSync` main.lua:1416-1448 | not toggled |
 
-At start the patch checks each private symbol's type (`Compat.check`). A missing one turns off
+At start the plugin checks each private symbol's type (`Compat.check`). A missing one turns off
 only its feature, logs `OrbitAndroid: compat: <feature> unavailable (plugin <version>)`, and
 the menu status and Test sync path say e.g. "BookOrbit 2.5.0 changed: Sync while reading is
 off". CI (`.github/workflows/plugin-compat.yml`: pull requests, release tags, weekly) runs
 `test/plugin_compat.lua` against the latest `bookorbit/bookorbit` plugin and, on the weekly
 run, opens an issue "BookOrbit plugin <ver> changed: <symbols>".
 
-The patch adds itself to the plugin list KOReader instantiates (`PluginLoader:loadPlugins`,
-used by readerui.lua:464 and filemanager.lua:418), last, so it gets the same events as a
-plugin (Suspend, Resume, PageUpdate, ReaderReady) after the BookOrbit plugin has handled
-them. It is kept out of the Plugin manager list.
+KOReader loads it like any plugin (`PluginLoader:loadPlugins`, used by readerui.lua:464 and
+filemanager.lua:418), sorted by path, so `orbit.koplugin` comes after `bookorbit.koplugin` in
+the same plugins folder and gets each event (Suspend, Resume, PageUpdate, ReaderReady) after
+the BookOrbit plugin has handled it. It shows in the Plugin manager as "Orbit".
 
 ## Logs
 
@@ -116,12 +130,12 @@ Pure logic (scheduling, outbox verdicts, reading decisions, update version compa
 `SHA256SUMS` parsing), any Lua 5.1-5.4 or LuaJIT:
 
 ```
-luajit android/koreader-patch/test/test_logic.lua
+luajit android/koreader/test/test_logic.lua
 ```
 
 Flow wiring against stand-ins for KOReader, the JNI bridge and the plugin (LuaJIT only,
-because the patch uses `ffi`):
+because the plugin uses `ffi`):
 
 ```
-luajit android/koreader-patch/test/test_flows.lua
+luajit android/koreader/test/test_flows.lua
 ```

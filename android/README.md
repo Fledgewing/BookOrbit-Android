@@ -6,7 +6,7 @@ Keeps Android e-readers in sync with a BookOrbit server over Tailscale, the way 
 
 The official BookOrbit KOReader plugin does all syncing and keeps the login. This repo adds:
 
-- `android/koreader-patch/`: a KOReader user patch that brings the network up (Wi-Fi + Tailscale) before the plugin syncs, syncs on sleep and on a schedule, and sends Home to BookOrbit home.
+- `android/koreader/`: the Orbit KOReader plugin (`orbit.koplugin`; up to 0.7.x the user patch `2-orbit-android.lua`) that brings the network up (Wi-Fi + Tailscale) before the plugin syncs, syncs on sleep and on a schedule, and sends Home to BookOrbit home.
 - `android/companion/`: "Orbit Companion", an Android app that switches Wi-Fi, wakes Tailscale, holds a short wake lock, turns the screen off for "Sync and sleep", and acts as the Home launcher.
 
 Design and approved mockups: `android/docs/DESIGN.md`, `android/docs/mockups.html`.
@@ -29,7 +29,7 @@ open step in order and installs the rest with one tap each, every download check
   asset), each file checked against its git blob id, swapped into `koreader/plugins/`
   atomically, then KOReader restarts. Only when it's missing or older than the patch needs;
   after that the plugin updates itself from your server.
-- **KOReader patch**: `2-orbit-android.lua` from this release, checked against `SHA256SUMS`.
+- **Orbit KOReader plugin**: `orbit.koplugin.zip` from this release, checked against `SHA256SUMS`, unpacked and swapped into `koreader/plugins/orbit.koplugin` the same way; it deletes the old `koreader/patches/2-orbit-android.lua`.
 
 Up front, Setup explains in plain words what may get in the way: Play Protect's warnings,
 a launcher that freezes apps (Boox, Meebook), and Family Link or a managed profile ("approve it
@@ -60,9 +60,10 @@ doesn't match.
   **Include pre-releases** (off), **Check for patch update**, and a status line. The check
   runs about 8 s after a start or wake once the network is up, never with a book open (it
   waits for the file browser or BookOrbit home), and holds Wi-Fi until it ends. It runs in a
-  background process, so KOReader never waits on the network (v0.4.3). A newer `2-orbit-android.lua`
-  (it must also declare the release's version in `PATCH_VERSION`) is written next to the
-  running file and renamed over it, so the patch folder never holds a half-written file.
+  background process, so KOReader never waits on the network (v0.4.3). A newer `orbit.koplugin.zip`
+  (its `main.lua` must also declare the release's version in `PATCH_VERSION`) is unpacked next
+  to the running plugin and swapped in for it (0.8.0; earlier, the patch file was renamed over
+  itself), so the plugins folder never holds a half-written plugin.
   KOReader then restarts by itself to load it (v0.5.0): at once with no book open, otherwise
   right after the book is closed or when the device next sleeps; it never interrupts reading,
   and shows "Updated to vX (KOReader restarted)".
@@ -122,7 +123,7 @@ Every release asset has a keyless build-provenance attestation from the release 
 
 ```
 gh attestation verify orbit-companion-<version>.apk -R Fledgewing/Orbify
-gh attestation verify 2-orbit-android.lua -R Fledgewing/Orbify
+gh attestation verify orbit.koplugin.zip -R Fledgewing/Orbify
 sha256sum -c SHA256SUMS
 ```
 
@@ -244,6 +245,6 @@ installed. Meebook (Haoqing) is measured; Boox (Onyx) is an unverified stub.
 
 ## License
 
-- `koreader-patch/` is **AGPL-3.0-or-later** (`koreader-patch/LICENSE`). The patch runs inside KOReader and works with the BookOrbit KOReader plugin, both AGPL-3.0.
+- `koreader/` is **AGPL-3.0-or-later** (`koreader/LICENSE`). The Orbit plugin runs inside KOReader and works with the BookOrbit KOReader plugin, both AGPL-3.0.
 - `companion/` is **MIT** (`companion/LICENSE`). The companion app bundles the Kotlin standard library (Apache-2.0); its notices ship inside the app (Settings › Open-source licenses) and with each release (`THIRD-PARTY-NOTICES.txt`).
-- `docs/` is MIT, like the rest of the repo outside `android/koreader-patch/` and `xteink/` (see the root `LICENSE`).
+- `docs/` is MIT, like the rest of the repo outside `android/koreader/` and `xteink/` (see the root `LICENSE`).

@@ -448,6 +448,18 @@ class NetErrorsTest {
 
 class PatchFileTest {
     @Test
+    fun zipMembersStayInsideThePluginFolder() {
+        assertEquals("main.lua", PatchFile.zipMember("orbit.koplugin/main.lua"))
+        assertEquals("ko/home.lua", PatchFile.zipMember("orbit.koplugin/ko/home.lua"))
+        assertEquals("ko/", PatchFile.zipMember("orbit.koplugin/ko/"))
+        for (bad in listOf("main.lua", "orbit.koplugin/", "orbit.koplugin", "other.koplugin/main.lua",
+            "orbit.koplugin/../x.lua", "orbit.koplugin/ko/../../x", "orbit.koplugin//x", "orbit.koplugin/./x",
+            "orbit.koplugin/a\\b", "/orbit.koplugin/main.lua")) {
+            assertNull(bad, PatchFile.zipMember(bad))
+        }
+    }
+
+    @Test
     fun readsPatchVersion() {
         assertEquals("0.2.2", PatchFile.version("-- x\nlocal PATCH_VERSION = \"0.2.2\"\nlocal y = 1\n"))
         assertNull(PatchFile.version("-- nothing here"))
@@ -497,6 +509,8 @@ class SetupAttentionTest {
         assertEquals("home", SetupAttention.idOf("Set Orbit as Home app"))
         assertEquals("battery:KOReader", SetupAttention.idOf("Battery: Unrestricted (KOReader)"))
         assertEquals("patch", SetupAttention.idOf("KOReader patch installed (v0.2.3)"))
+        assertEquals("patch", SetupAttention.idOf("Orbit plugin installed (v0.8.0)"))
+        assertEquals("patch_seen", SetupAttention.idOf("Orbit plugin answered"))
         assertEquals("admin", SetupAttention.idOf("Allow \"lock screen\" (device admin)"))
     }
 
@@ -861,6 +875,6 @@ class UpdateFlowTest {
         assertTrue(UpdateFlow.loaded("0.5.1", "0.5.1"))
         assertTrue(UpdateFlow.loaded("0.5.1", "0.5.2"))
         assertEquals("Updated to v0.5.1 (KOReader restarted)", UpdateFlow.doneLine("0.5.1"))
-        assertTrue(UpdateFlow.manualLine("0.5.1", "storage access isn't allowed").endsWith("storage access isn't allowed. Setup > KOReader patch"))
+        assertTrue(UpdateFlow.manualLine("0.5.1", "storage access isn't allowed").endsWith("storage access isn't allowed. Setup > Orbit plugin"))
     }
 }

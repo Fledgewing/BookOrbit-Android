@@ -13,9 +13,11 @@ import java.io.File
 import kotlin.concurrent.thread
 
 /**
- * One-tap install of the KOReader patch: 2-orbit-android.lua from the release matching this
- * app (latest for a dev build), SHA-256 checked against SHA256SUMS, written as .new and
- * renamed into <shared storage>/koreader/patches/.
+ * One-tap install of the Orbit KOReader plugin: orbit.koplugin.zip from the release matching
+ * this app (latest for a dev build), SHA-256 checked against SHA256SUMS, unpacked beside
+ * <shared storage>/koreader/plugins/orbit.koplugin and swapped in for it (as Installers swaps the
+ * BookOrbit plugin). The old user patch koreader/patches/2-orbit-android.lua (0.7.x and older)
+ * is deleted: with both present the plugin stays off (docs/design/orbit-plugin.md).
  *
  * Storage: the companion targets SDK 28, below scoped storage (which applies from target 29;
  * developer.android.com/training/data-storage#scoped-storage), so WRITE_EXTERNAL_STORAGE,
@@ -32,15 +34,21 @@ object PatchInstaller {
 
     private fun log(msg: String) = OLog.i("patch install: $msg")
 
+    fun pluginDir(): File = File(Installers.pluginsDir(), PatchFile.PLUGIN)
+    fun file(): File = File(pluginDir(), "main.lua")
     @Suppress("DEPRECATION")
-    fun dir(): File = File(Environment.getExternalStorageDirectory(), "koreader/patches")
-    fun file(): File = File(dir(), PatchFile.NAME)
+    fun oldPatch(): File = File(Environment.getExternalStorageDirectory(), "koreader/patches/${PatchFile.OLD_PATCH}")
 
-    /** PATCH_VERSION of the installed file, or null (missing or unreadable). */
-    fun installedVersion(): String? = try {
-        file().takeIf { it.isFile }?.readText()?.let { PatchFile.version(it) }
+    /**
+     * PATCH_VERSION on disk, or null (missing or unreadable): the plugin's main.lua, else the old
+     * patch, so an app update over a 0.7.x patch installs the plugin like any patch update.
+     */
+    fun installedVersion(): String? = read(file()) ?: read(oldPatch())
+
+    private fun read(f: File): String? = try {
+        f.takeIf { it.isFile }?.readText()?.let { PatchFile.version(it) }
     } catch (e: Exception) {
-        OLog.d("patch install: can't read ${file()}: ${e.javaClass.simpleName}")
+        OLog.d("patch install: can't read $f: ${e.javaClass.simpleName}")
         null
     }
 
@@ -49,7 +57,7 @@ object PatchInstaller {
             ctx.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
 
     fun manualHint(): String =
-        "copy ${PatchFile.NAME} from the release page to koreader/patches/ on the device (README \"Install\")"
+        "unzip ${PatchFile.ZIP} from the release page into koreader/plugins/ on the device (README \"Install\")"
 
     /** Asks for storage first if needed; the activity calls [install] again on the grant. */
     fun installFrom(a: Activity, done: (String) -> Unit) {
@@ -241,38 +249,93 @@ object PatchInstaller {
         throw last ?: java.io.IOException("no release for v$v")
     }
 
+    /** Unpacks [zip] into [to] (emptied first); null when done, else the status text. */
+    private fun unpack(zip: File, to: File): String? {
+        to.deleteRecursively()
+        var files = 0
+        java.util.zip.ZipInputStream(zip.inputStream().buffered()).use { zin ->
+            while (true) {
+                val e = zin.nextEntry ?: break
+                val rel = PatchFile.zipMember(e.name) ?: return "unexpected file ${e.name} in ${PatchFile.ZIP}; not installed"
+                val f = File(to, rel)
+                if (e.isDirectory) {
+                    f.mkdirs()
+                    continue
+                }
+                f.parentFile?.mkdirs()
+                f.outputStream().use { zin.copyTo(it) }
+                files++
+            }
+        }
+        if (files == 0) return "${PatchFile.ZIP} holds no plugin files; not installed"
+        log("unpacked $files files")
+        return null
+    }
+
+    /** The user patch the plugin replaced: with both present the plugin stays off. */
+    private fun removeOldPatch() {
+        for (f in listOf(oldPatch(), File(oldPatch().path + ".new"))) {
+            if (f.exists() && !f.delete()) OLog.w("patch install: can't delete $f; the plugin stays off while it is there")
+        }
+    }
+
     private fun run(): String {
         val v = BuildConfig.VERSION_NAME
         val dev = Version.parse(v) == null || v.contains("dev")
         log("fetching ${if (dev) "the latest release" else "release v$v"}")
         val rel = Updater.release(JSONObject(if (dev) Updater.httpText("${Updater.API}/releases/latest") else releaseText(v)))
-        val luaUrl = rel.assets[PatchFile.NAME] ?: return "${rel.tag} has no ${PatchFile.NAME}"
+        val zipUrl = rel.assets[PatchFile.ZIP] ?: return "${rel.tag} has no ${PatchFile.ZIP}"
         val sumsUrl = rel.assets[UpdatePolicy.SUMS_NAME] ?: return "${rel.tag} has no ${UpdatePolicy.SUMS_NAME}"
-        val expected = Checksums.parse(Updater.httpText(sumsUrl))[PatchFile.NAME]
-            ?: return "${UpdatePolicy.SUMS_NAME} has no line for ${PatchFile.NAME}"
-        val dir = dir()
-        if (!dir.isDirectory && !dir.mkdirs()) {
-            log("can't create $dir")
+        val expected = Checksums.parse(Updater.httpText(sumsUrl))[PatchFile.ZIP]
+            ?: return "${UpdatePolicy.SUMS_NAME} has no line for ${PatchFile.ZIP}"
+        val parent = Installers.pluginsDir()
+        if (!parent.isDirectory && !parent.mkdirs()) {
+            log("can't create $parent")
             return "can't write to storage: ${manualHint()}"
         }
-        val tmp = File(dir, PatchFile.NAME + ".new")
+        val zip = File(parent, PatchFile.ZIP + ".new")
         val sha = try {
-            Updater.download(luaUrl, tmp)
+            Updater.download(zipUrl, zip)
         } catch (e: java.io.FileNotFoundException) {
-            log("can't write $tmp: ${e.message}")
+            log("can't write $zip: ${e.message}")
             return "can't write to storage: ${manualHint()}"
         }
         if (sha != expected) {
-            tmp.delete()
+            zip.delete()
             return "download failed its checksum; not installed"
         }
-        val stamped = PatchFile.version(tmp.readText())
-        if (!tmp.renameTo(file())) {
-            tmp.delete()
-            log("rename to ${file()} failed")
+        // Never *.koplugin while incomplete: KOReader must not load a half copy.
+        val staging = File(parent, PatchFile.PLUGIN + ".orbit-new")
+        val unpacked = try {
+            unpack(zip, staging)
+        } finally {
+            zip.delete()
+        }
+        if (unpacked != null) {
+            staging.deleteRecursively()
+            return unpacked
+        }
+        val stamped = PatchFile.version(File(staging, "main.lua").takeIf { it.isFile }?.readText())
+        if (stamped == null) {
+            staging.deleteRecursively()
+            return "${rel.tag}: the plugin has no main.lua version; not installed"
+        }
+        // Swap: old aside, new in, old gone.
+        val live = pluginDir()
+        val old = File(parent, PatchFile.PLUGIN + ".orbit-old")
+        old.deleteRecursively()
+        if (live.exists() && !live.renameTo(old)) {
+            staging.deleteRecursively()
             return "can't write to storage: ${manualHint()}"
         }
-        log("installed $stamped to ${file()} (sha256 ok)")
+        if (!staging.renameTo(live)) {
+            if (old.exists()) old.renameTo(live)
+            staging.deleteRecursively()
+            return "can't write to storage: ${manualHint()}"
+        }
+        old.deleteRecursively()
+        removeOldPatch()
+        log("installed $stamped to $live (sha256 ok)")
         return "installed v$stamped"
     }
 }

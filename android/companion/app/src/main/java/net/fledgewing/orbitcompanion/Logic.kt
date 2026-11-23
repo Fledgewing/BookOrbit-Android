@@ -492,9 +492,8 @@ object NetErrors {
     }
 }
 
-/** The KOReader patch file the companion installs (Setup "KOReader patch installed"). */
 /**
- * The Setup row "KOReader patch installed": the file decides "outdated"; the version the
+ * The Setup row "Orbit plugin installed" (the KOReader plugin the companion installs): the file decides "outdated"; the version the
  * running patch reports (broadcasts, /status ping) decides "restart to finish".
  */
 enum class PatchRowState { MISSING, OUTDATED, RESTART, CURRENT }
@@ -503,7 +502,7 @@ object PatchRow {
     /** The first patch that obeys COMMAND=restart (android/docs/INTERFACE.md). */
     const val RESTART_COMMAND_SINCE = "0.3.1"
 
-    /** file: PATCH_VERSION in koreader/patches (null: missing or unreadable). running: last reported. */
+    /** file: PATCH_VERSION on disk (the plugin, else the old patch; null: missing or unreadable). running: last reported. */
     fun state(file: String?, running: String?, app: String): PatchRowState {
         if (file == null && running == null) return PatchRowState.MISSING
         val have = file ?: running
@@ -627,7 +626,7 @@ object UpdateFlow {
 
     /** The manual fallback, with the reason. */
     fun manualLine(app: String, reason: String) =
-        "Updated to v$app, but the KOReader patch wasn't updated: $reason. Setup > KOReader patch"
+        "Updated to v$app, but the KOReader patch wasn't updated: $reason. Setup > Orbit plugin"
 }
 
 /** The pairs a stale-patch restart was sent (or a wait logged) for, in this process. */
@@ -674,9 +673,27 @@ object AfterUpdate {
     }
 }
 
+/**
+ * The Orbit KOReader plugin (android/koreader/orbit.koplugin): released as [ZIP], installed as
+ * koreader/plugins/[PLUGIN]; its main.lua declares PATCH_VERSION. Up to 0.7.x it was the user
+ * patch koreader/patches/[OLD_PATCH], which the install deletes (docs/design/orbit-plugin.md).
+ */
 object PatchFile {
-    const val NAME = "2-orbit-android.lua"
+    const val ZIP = "orbit.koplugin.zip"
+    const val PLUGIN = "orbit.koplugin"
+    const val OLD_PATCH = "2-orbit-android.lua"
     private val VERSION = Regex("""(?m)^local PATCH_VERSION = "([^"]+)"""")
+
+    /**
+     * A zip entry's path inside the plugin folder, or null when it is outside "orbit.koplugin/"
+     * or could escape it (absolute, "..", ".", backslashes, empty parts). Folder entries end in "/".
+     */
+    fun zipMember(name: String): String? {
+        val rel = name.removePrefix("$PLUGIN/").takeIf { it != name && it.isNotEmpty() } ?: return null
+        if ('\\' in rel) return null
+        val parts = rel.removeSuffix("/").split('/')
+        return if (parts.any { it.isEmpty() || it == "." || it == ".." }) null else rel
+    }
 
     /** PATCH_VERSION declared in the file's text, or null. */
     fun version(text: String?): String? = text?.let { VERSION.find(it)?.groupValues?.get(1) }
@@ -707,13 +724,14 @@ object SetupAttention {
         label.startsWith("Battery:") -> "battery:" + label.substringAfter("(", "").substringBefore(")")
         label.startsWith("Tailscale") -> "tailscale"
         label.startsWith("Allow \"lock screen\"") -> "admin"
-        label.startsWith("KOReader patch installed") -> "patch"
+        // "KOReader patch …" up to 0.7.x: kept so earlier snoozes and ignores still apply.
+        label.startsWith("Orbit plugin installed") || label.startsWith("KOReader patch installed") -> "patch"
         label.startsWith("KOReader app") -> "koreader"
         label.startsWith("BookOrbit plugin") -> "plugin"
         label.startsWith("Play Protect") -> "play_protect"
         label.startsWith("Launcher can freeze apps") -> "freeze_tip"
         label.startsWith("Family Link") || label.startsWith("Managed device") -> "managed"
-        label.startsWith("KOReader patch answered") -> "patch_seen"
+        label.startsWith("Orbit plugin answered") || label.startsWith("KOReader patch answered") -> "patch_seen"
         label.startsWith("Wi-Fi off/on test") -> "wifi_test"
         label.startsWith("Clicker buttons") -> "clicker"
         label.startsWith("Orbit keyboard") -> "keyboard"

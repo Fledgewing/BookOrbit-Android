@@ -40,4 +40,5 @@ Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "
 | Clicker buttons (page turns in KOReader and other apps, Send key) | yes | n/a | n/a | n/a |
 | Frontlight re-applied after the first paint of every boot | n/a | yes | yes | yes |
 | Setup installs KOReader and the BookOrbit plugin; USB installer (`tools/install-usb.sh`) | yes | n/a | n/a | n/a |
-| Self-update, SHA-256 checked | yes (app and patch) | yes (OTA) | yes (OTA) | yes (OTA) |
+| Orbit is a KOReader plugin (`orbit.koplugin`, in the Plugin manager; replaces the 0.7.x user patch on update, [design](design/orbit-plugin.md)) | yes (0.8.0) | n/a | n/a | n/a |
+| Self-update, SHA-256 checked | yes (app and plugin) | yes (OTA) | yes (OTA) | yes (OTA) |

@@ -1,7 +1,7 @@
 # Orbit Companion
 
 One APK (`net.fledgewing.orbitcompanion`, Kotlin, plain Views, targetSdk 28 so
-`WifiManager.setWifiEnabled` works) for the KOReader patch in `../koreader-patch/`. It never
+`WifiManager.setWifiEnabled` works) for the Orbit KOReader plugin in `../koreader/`. It never
 talks to BookOrbit and holds no login. Contract: [`../docs/INTERFACE.md`](../docs/INTERFACE.md).
 
 - **Service** (foreground, ongoing notification): `NET_UP` (Wi-Fi on, Tailscale

@@ -76,7 +76,7 @@ object PluginRelease {
     const val RAW = "https://raw.githubusercontent.com/bookorbit/bookorbit"
     const val SRC_DIR = "koreader-plugin"
     const val NAME = "bookorbit.koplugin"
-    /** The plugin the patch's hooks are checked against (android/koreader-patch/test/plugin_compat.lua in CI). */
+    /** The plugin the patch's hooks are checked against (android/koreader/test/plugin_compat.lua in CI). */
     const val MIN_VERSION = "2.3.0"
 
     private val VERSION = Regex("""(?m)^local PLUGIN_VERSION = "([^"]+)"""")

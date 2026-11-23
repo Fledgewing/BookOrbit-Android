@@ -1,6 +1,7 @@
 # KOReader patch ↔ Orbit Companion interface (protocol 1)
 
-The KOReader patch (`android/koreader-patch/2-orbit-android.lua`) and the Orbit Companion app talk
+The Orbit KOReader plugin (`android/koreader/orbit.koplugin`, up to 0.7.x the user patch
+`2-orbit-android.lua`; "the patch" below) and the Orbit Companion app talk
 through Android intents only. The companion never learns the server, the login or the sync
 state: the BookOrbit plugin owns all of that.
 

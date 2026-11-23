@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Set up an Android e-reader over USB (adb): KOReader, the BookOrbit plugin, Orbit Companion
-# and the KOReader patch, each downloaded from its official GitHub release and verified before
+# and the Orbit KOReader plugin, each downloaded from its official GitHub release and verified before
 # anything touches the device. macOS and Linux. See android/docs/SETUP.md "Set up over USB".
 #
 #   tools/install-usb.sh                  install or update everything
@@ -8,9 +8,9 @@
 #   tools/install-usb.sh --books out.csv  also write the device's book list (before any change)
 #   tools/install-usb.sh --books out.csv --no-install   only the book list
 #
-# Needs: adb, curl, jq, and shasum (macOS) or sha256sum/sha1sum (Linux).
-# It never deletes anything but an old /sdcard/koreader you confirmed (--fresh) and the
-# plugin folder it replaces.
+# Needs: adb, curl, jq, unzip, and shasum (macOS) or sha256sum/sha1sum (Linux).
+# It never deletes anything but an old /sdcard/koreader you confirmed (--fresh), the plugin
+# folders it replaces and the old Orbit user patch (koreader/patches/2-orbit-android.lua).
 set -euo pipefail
 
 KOREADER_API="https://api.github.com/repos/koreader/koreader/releases/latest"
@@ -18,8 +18,10 @@ BOOKORBIT_API="https://api.github.com/repos/bookorbit/bookorbit"
 BOOKORBIT_RAW="https://raw.githubusercontent.com/bookorbit/bookorbit"
 ORBIT_API="https://api.github.com/repos/Fledgewing/Orbify/releases/latest"
 PLUGIN_NAME="bookorbit.koplugin"
-PLUGIN_MIN="2.3.0" # the plugin the patch's hooks are checked against (companion PluginRelease.MIN_VERSION)
-PATCH_NAME="2-orbit-android.lua"
+PLUGIN_MIN="2.3.0" # the plugin Orbit's hooks are checked against (companion PluginRelease.MIN_VERSION)
+ORBIT_ZIP="orbit.koplugin.zip"
+ORBIT_PLUGIN="orbit.koplugin"
+OLD_PATCH="2-orbit-android.lua" # the user patch the plugin replaced (Orbify 0.7.x and older)
 KO_DIR="/sdcard/koreader"
 NEO_URI="content://com.onyx.content.database.ContentProvider/Metadata"
 
@@ -257,7 +259,7 @@ download_orbit() {
     json=$(fetch "$ORBIT_API")
     ORBIT_TAG=$(jq -r .tag_name <<<"$json")
     ver=$(orbit_version "$ORBIT_TAG")
-    for name in SHA256SUMS "$PATCH_NAME" "orbit-companion-$ver.apk"; do
+    for name in SHA256SUMS "$ORBIT_ZIP" "orbit-companion-$ver.apk"; do
         url=$(jq -r --arg n "$name" '.assets[] | select(.name == $n) | .browser_download_url' <<<"$json")
         [[ -n $url ]] || die "$ORBIT_TAG has no $name"
         fetch -o "$WORK/$name" "$url"
@@ -265,18 +267,55 @@ download_orbit() {
     local sum file checked=0
     while read -r sum file; do
         file=${file#\*}
-        case "$file" in "$PATCH_NAME" | orbit-companion-*.apk) ;; *) continue ;; esac
+        case "$file" in "$ORBIT_ZIP" | orbit-companion-*.apk) ;; *) continue ;; esac
         [[ $(sha256 "$WORK/$file") == "$sum" ]] || die "$file failed SHA256SUMS"
         checked=$((checked + 1))
     done <"$WORK/SHA256SUMS"
-    [[ $checked == 2 ]] || die "SHA256SUMS doesn't list the companion and the patch"
+    [[ $checked == 2 ]] || die "SHA256SUMS doesn't list the companion and the plugin"
     COMPANION_APK="$WORK/orbit-companion-$ver.apk"
     if command -v gh >/dev/null 2>&1 && gh attestation verify "$COMPANION_APK" -R Fledgewing/Orbify >/dev/null 2>&1 &&
-        gh attestation verify "$WORK/$PATCH_NAME" -R Fledgewing/Orbify >/dev/null 2>&1; then
-        say "Orbit $ORBIT_TAG: companion and patch match SHA256SUMS and their build attestations"
+        gh attestation verify "$WORK/$ORBIT_ZIP" -R Fledgewing/Orbify >/dev/null 2>&1; then
+        say "Orbit $ORBIT_TAG: companion and plugin match SHA256SUMS and their build attestations"
     else
-        say "Orbit $ORBIT_TAG: companion and patch match SHA256SUMS (install the gh CLI to also check build attestations)"
+        say "Orbit $ORBIT_TAG: companion and plugin match SHA256SUMS (install the gh CLI to also check build attestations)"
     fi
+    ORBIT_DIR=$(unpack_orbit "$WORK/$ORBIT_ZIP" "$WORK/orbit" "$ver")
+}
+
+# The release zip unpacked into <dest>/orbit.koplugin; prints that folder. Every member must sit
+# inside orbit.koplugin/ and its main.lua must declare <version>.
+unpack_orbit() { # zip dest version
+    local zip=$1 dest=$2 ver=$3 member
+    while IFS= read -r member; do
+        case "$member" in
+            "$ORBIT_PLUGIN"/*) ;;
+            *) die "$ORBIT_ZIP holds $member, outside $ORBIT_PLUGIN/" ;;
+        esac
+        case "/$member/" in */../* | */./*) die "$ORBIT_ZIP holds $member" ;; esac
+    done < <(unzip -Z1 "$zip")
+    mkdir -p "$dest"
+    unzip -q -o "$zip" -d "$dest"
+    local stamped
+    stamped=$(sed -n 's/^local PATCH_VERSION = "\([^"]*\)"$/\1/p' "$dest/$ORBIT_PLUGIN/main.lua" 2>/dev/null | head -n 1)
+    [[ $stamped == "$ver" ]] || die "$ORBIT_ZIP declares ${stamped:-no version}, not $ver"
+    printf '%s\n' "$dest/$ORBIT_PLUGIN"
+}
+
+# Pushes a plugin folder in beside the live one, then swaps it in: the live folder is never
+# half-written.
+push_plugin() { # local dir, plugin folder name
+    local live="$KO_DIR/plugins/$2" new="$KO_DIR/plugins/$2.orbit-new" old="$KO_DIR/plugins/$2.orbit-old"
+    dsh mkdir -p "$KO_DIR/plugins"
+    dsh rm -rf "$new" "$old"
+    "${ADB[@]}" push "$1" "$new" >/dev/null
+    dsh "if [ -d $live ]; then mv $live $old; fi && mv $new $live && rm -rf $old"
+}
+
+install_orbit_plugin() {
+    say "Pushing the Orbit KOReader plugin $ORBIT_TAG"
+    push_plugin "$ORBIT_DIR" "$ORBIT_PLUGIN"
+    # The plugin replaces the user patch; with both present the plugin stays off.
+    dsh rm -f "$KO_DIR/patches/$OLD_PATCH" "$KO_DIR/patches/$OLD_PATCH.new"
 }
 
 # ---------------------------------------------------------------- installs
@@ -294,17 +333,10 @@ install_all() {
         say "BookOrbit plugin $have already installed (it updates itself from your BookOrbit server): kept"
     else
         say "Pushing the BookOrbit plugin $PLUGIN_VER"
-        local live="$KO_DIR/plugins/$PLUGIN_NAME" new="$KO_DIR/plugins/$PLUGIN_NAME.orbit-new" old="$KO_DIR/plugins/$PLUGIN_NAME.orbit-old"
-        dsh mkdir -p "$KO_DIR/plugins"
-        dsh rm -rf "$new" "$old"
-        "${ADB[@]}" push "$PLUGIN_DIR" "$new" >/dev/null
-        dsh "if [ -d $live ]; then mv $live $old; fi && mv $new $live && rm -rf $old"
+        push_plugin "$PLUGIN_DIR" "$PLUGIN_NAME"
     fi
 
-    say "Pushing the KOReader patch $ORBIT_TAG"
-    dsh mkdir -p "$KO_DIR/patches"
-    "${ADB[@]}" push "$WORK/$PATCH_NAME" "$KO_DIR/patches/$PATCH_NAME.new" >/dev/null
-    dsh mv "$KO_DIR/patches/$PATCH_NAME.new" "$KO_DIR/patches/$PATCH_NAME"
+    install_orbit_plugin
     say "Done. Open Orbit Companion on the device and follow Setup (Fix next)."
 }
 
@@ -326,6 +358,7 @@ main() {
     if [[ $INSTALL == 1 ]]; then
         command -v curl >/dev/null 2>&1 || die "curl not found"
         command -v jq >/dev/null 2>&1 || die "jq not found (brew install jq / apt install jq)"
+        command -v unzip >/dev/null 2>&1 || die "unzip not found"
     fi
     pick_device
     detect

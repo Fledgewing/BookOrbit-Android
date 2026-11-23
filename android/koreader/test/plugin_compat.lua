@@ -1,11 +1,11 @@
--- Checks that every BookOrbit plugin internal the patch uses (Compat in 2-orbit-android.lua)
+-- Checks that every BookOrbit plugin internal Orbit uses (Compat, orbit.koplugin/logic/compat.lua)
 -- is still defined in a plugin checkout. Static: looks for each definition in the source.
 --   luajit plugin_compat.lua <path to bookorbit.koplugin>
 -- Prints the plugin version and any missing symbols; exits 1 when something is missing.
 local here = arg[0]:match("^(.*)/[^/]*$") or "."
 local dir = arg[1] or error("usage: plugin_compat.lua <bookorbit.koplugin dir>")
 _G.ORBIT_ANDROID_TEST = true
-local M = dofile(here .. "/../2-orbit-android.lua")
+local M = dofile(here .. "/../orbit.koplugin/main.lua")
 
 local function list(d)
     local p = io.popen('ls "' .. d .. '"')

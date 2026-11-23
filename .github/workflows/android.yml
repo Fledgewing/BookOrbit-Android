@@ -1,4 +1,4 @@
-# Android CI: the KOReader patch tests, the USB installer checks and the companion's unit
+# Android CI: the KOReader plugin tests, the USB installer checks and the companion's unit
 # tests, debug build and lint. Releases build in release.yml (android-v* tags).
 name: Android
 
@@ -26,17 +26,21 @@ jobs:
 
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
-      - name: KOReader patch tests
+      - name: KOReader plugin tests
         run: |
           set -euo pipefail
           sudo apt-get install -y -qq luajit >/dev/null
-          luajit android/koreader-patch/test/test_logic.lua
-          luajit android/koreader-patch/test/test_flows.lua
+          luajit android/koreader/test/test_logic.lua
+          luajit android/koreader/test/test_flows.lua
+          # The release zip builds, stamped, with everything under orbit.koplugin/.
+          android/koreader/package.sh 0.0.0-ci "$RUNNER_TEMP/orbit.koplugin.zip"
+          unzip -p "$RUNNER_TEMP/orbit.koplugin.zip" orbit.koplugin/main.lua | grep -qx 'local PATCH_VERSION = "0.0.0-ci"'
+          if unzip -Z1 "$RUNNER_TEMP/orbit.koplugin.zip" | grep -v '^orbit\.koplugin/'; then exit 1; fi
 
       - name: USB installer checks
         run: |
           set -euo pipefail
-          shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh tools/upstreams
+          shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh android/koreader/package.sh tools/upstreams
           bash tools/test/test-install-usb.sh
 
       - name: Companion tests, debug build and lint

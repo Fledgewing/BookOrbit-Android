@@ -1,7 +1,7 @@
 -- Loads the whole patch against small stand-ins for KOReader, the JNI bridge and the
 -- BookOrbit plugin, then drives the flows on a fake clock. It catches wiring mistakes
 -- (typos, nil calls, wrong order) that the pure tests can't; it proves nothing about
--- the device. Needs LuaJIT (the patch uses ffi): luajit android/koreader-patch/test/test_flows.lua
+-- the device. Needs LuaJIT (the patch uses ffi): luajit android/koreader/test/test_flows.lua
 local here = (arg and arg[0] or ""):match("^(.*)/[^/]*$") or "."
 
 ---------------------------------------------------------------- fake world
@@ -13,7 +13,10 @@ local W = {
 }
 function W.fake_sha(s) return string.format("%064x", #s) end
 local SELF = os.tmpname()
-ORBIT_ANDROID_SELF_PATH = SELF .. ".lua"
+-- The plugin folder the self-update replaces (the code itself loads from orbit.koplugin/).
+ORBIT_ANDROID_PLUGIN_DIR = SELF .. ".koplugin"
+local SELF_PATH = ORBIT_ANDROID_PLUGIN_DIR .. "/main.lua"
+local function sh(cmd, path) os.execute(cmd .. " '" .. path:gsub("'", "") .. "'") end
 
 local function schedule(delay, fn, ...)
     W.seq = W.seq + 1
@@ -240,10 +243,31 @@ local preload = {
         isSubProcessDone = function(pid) return W.children[pid].done end,
         readAllFromFD = function(child) return child.out or "" end,
         terminateSubProcess = function(pid) W.children[pid].killed = true; W.children[pid].done = true end,
+        purgeDir = function(dir) sh("rm -rf", dir) end,
     },
+    -- koreader-base ffi/archiver Reader over a fake zip: W.zips[<file content>] = { [path] = data }.
+    ["ffi/archiver"] = { Reader = { new = function()
+        local r = {}
+        function r:open(path)
+            local f = io.open(path, "rb"); if not f then return false end
+            self.files = W.zips[f:read("*a")]; f:close()
+            return self.files ~= nil
+        end
+        function r:iterate()
+            local list = {}
+            for k in pairs(self.files) do table.insert(list, k) end
+            table.sort(list)
+            local i = 0
+            return function() i = i + 1; if list[i] then return { path = list[i], mode = "file" } end end
+        end
+        function r:extractToMemory(path) return self.files[path] end
+        function r:close() end
+        return r
+    end } },
     -- KOReader's Android input module: waitForEvent returns what the test queues (default: EINTR).
     ["ffi/input_android"] = { waitForEvent = function() return false, 4 end },
-    ["libs/libkoreader-lfs"] = { attributes = function(f, k) return W.files[f] and "file" or nil end },
+    ["libs/libkoreader-lfs"] = { attributes = function(f, k) return W.files[f] and "file" or nil end,
+        mkdir = function(dir) sh("mkdir -p", dir) return true end },
     json = { decode = function(s) if W.json[s] then return W.json[s] end return { version = "1" } end },
     -- Stand-in hash: "sha:<length>" padded, enough to check the wiring (the real one is ffi/sha2).
     ["ffi/sha2"] = { sha256 = function(s) return W.fake_sha(s) end },
@@ -321,9 +345,8 @@ local function ok(v, what) if not v then error(what or "expected true", 2) end e
 -- The previous KOReader process was killed with this book open (Smart Home cold start).
 store.orbit_android = store.orbit_android or {}
 store.orbit_android.open_book_at_exit = "/books/killed.epub"
-dofile(here .. "/../2-orbit-android.lua")
-local plugins = PluginLoader:loadPlugins()
-local Orbit = plugins[#plugins]
+local PLUGIN_MAIN = here .. "/../orbit.koplugin/main.lua"
+local Orbit = dofile(PLUGIN_MAIN)
 
 local function newUI(in_book)
     local menu = { registered = {} }
@@ -343,9 +366,22 @@ local function newUI(in_book)
     return ui, m
 end
 
-test("module is appended after the plugins, hidden from the plugin manager", function()
-    ok(Orbit.name == "orbitandroid", "name")
-    ok(#PluginLoader:genPluginManagerSubItem() == 1, "plugin manager list")
+test("plugin: main.lua returns the module; it leaves KOReader's plugin list alone", function()
+    ok(Orbit.name == "orbit", "name")
+    ok(type(Orbit.init) == "function" and type(Orbit.onSuspend) == "function", "module")
+    ok(#PluginLoader:genPluginManagerSubItem() == 1, "plugin manager list untouched")
+end)
+
+test("plugin: stays off while the old patch is loaded (nothing hooked twice)", function()
+    local stock = PluginLoader.loadPlugins
+    -- What the patch leaves behind: PluginLoader.loadPlugins defined in koreader/patches/.
+    PluginLoader.loadPlugins = load("return function(self, ...) return stock(self, ...) end",
+        "@/sdcard/koreader/patches/2-orbit-android.lua")()
+    local wifi = NetworkMgr.turnOnWifi
+    local again = dofile(PLUGIN_MAIN)
+    PluginLoader.loadPlugins = stock
+    ok(type(again) == "table" and again.disabled == true, "disabled")
+    ok(NetworkMgr.turnOnWifi == wifi, "no second hook")
 end)
 
 test("dispatcher actions are registered", function()
@@ -1562,31 +1598,38 @@ end)
 
 ---------------------------------------------------------------- self-update
 local API = "https://api.github.com/repos/Fledgewing/Orbify/releases/latest"
-local LUA_URL, SUMS_URL = "https://dl.test/2-orbit-android.lua", "https://dl.test/SHA256SUMS"
+local ZIP_URL, SUMS_URL = "https://dl.test/orbit.koplugin.zip", "https://dl.test/SHA256SUMS"
 local NEW = '-- new\nlocal PATCH_VERSION = "0.2.0"\nreturn\n'
+local ZIP = "PK fake orbit.koplugin 0.2.0"
+W.zips = W.zips or {}
+W.zips[ZIP] = { ["orbit.koplugin/main.lua"] = NEW, ["orbit.koplugin/ko/x.lua"] = "-- x\n" }
 local function serveRelease(sha)
-    W.web = { [API] = "LATEST", [LUA_URL] = NEW, [SUMS_URL] = (sha or W.fake_sha(NEW)) .. "  2-orbit-android.lua\n" }
+    W.web = { [API] = "LATEST", [ZIP_URL] = ZIP, [SUMS_URL] = (sha or W.fake_sha(ZIP)) .. "  orbit.koplugin.zip\n" }
     W.json = { LATEST = { tag_name = "v0.2.0", assets = {
-        { name = "2-orbit-android.lua", browser_download_url = LUA_URL },
+        { name = "orbit.koplugin.zip", browser_download_url = ZIP_URL },
         { name = "SHA256SUMS", browser_download_url = SUMS_URL },
     } } }
 end
 local function selfText()
-    local f = io.open(ORBIT_ANDROID_SELF_PATH, "rb")
+    local f = io.open(SELF_PATH, "rb")
     if not f then return nil end
     local t = f:read("*a"); f:close(); return t
 end
 local function resetSelf()
-    local f = io.open(ORBIT_ANDROID_SELF_PATH, "wb"); f:write("-- old\n"); f:close()
+    sh("rm -rf", ORBIT_ANDROID_PLUGIN_DIR); sh("mkdir -p", ORBIT_ANDROID_PLUGIN_DIR)
+    local f = io.open(SELF_PATH, "wb"); f:write("-- old\n"); f:close()
 end
 
-test("update: menu check installs a verified newer patch over its own file", function()
+test("update: menu check installs a verified newer plugin over its own folder", function()
     resetSelf(); serveRelease()
     local _ui, orbit = newUI(false)
     orbit:checkPatchUpdate()
     run(5)
-    ok(selfText() == NEW, "file replaced")
-    ok(io.open(ORBIT_ANDROID_SELF_PATH .. ".new") == nil, "temp file gone")
+    ok(selfText() == NEW, "folder replaced")
+    ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. "/ko/x.lua") ~= nil, "every file unpacked")
+    for _, rest in ipairs({ ".new/main.lua", ".old/main.lua", ".zip.new" }) do
+        ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. rest) == nil, "temp " .. rest .. " gone")
+    end
     ok(store.orbit_android.patch_update_status.text:find("updated to 0.2.0", 1, true), "status")
 end)
 
@@ -1597,6 +1640,34 @@ test("update: checksum mismatch leaves the file alone", function()
     run(5)
     ok(selfText() == "-- old\n", "unchanged")
     ok(store.orbit_android.patch_update_status.text:find("checksum", 1, true), "status says checksum")
+end)
+
+test("update: a zip with a file outside orbit.koplugin/ is refused, the plugin left alone", function()
+    resetSelf(); serveRelease()
+    local evil = "PK fake evil"
+    W.zips[evil] = { ["orbit.koplugin/main.lua"] = NEW, ["orbit.koplugin/../x.lua"] = "-- x\n" }
+    W.web[ZIP_URL] = evil
+    W.web[SUMS_URL] = W.fake_sha(evil) .. "  orbit.koplugin.zip\n"
+    local _ui, orbit = newUI(false)
+    orbit:checkPatchUpdate()
+    run(5)
+    ok(selfText() == "-- old\n", "unchanged")
+    ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. ".new/main.lua") == nil, "nothing staged")
+    ok(store.orbit_android.patch_update_status.text:find("unexpected file", 1, true), "status says why")
+end)
+
+test("update: a zip whose main.lua declares another version is refused", function()
+    resetSelf(); serveRelease()
+    local other = "PK fake other"
+    W.zips[other] = { ["orbit.koplugin/main.lua"] = '-- x\nlocal PATCH_VERSION = "0.1.9"\n' }
+    W.web[ZIP_URL] = other
+    W.web[SUMS_URL] = W.fake_sha(other) .. "  orbit.koplugin.zip\n"
+    local _ui, orbit = newUI(false)
+    orbit:checkPatchUpdate()
+    run(5)
+    ok(selfText() == "-- old\n", "unchanged")
+    ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. ".new/main.lua") == nil, "staging removed")
+    ok(store.orbit_android.patch_update_status.text:find("declares 0.1.9", 1, true), "status says why")
 end)
 
 test("update: automatic check at most once a day, and only when connected", function()
@@ -1721,7 +1792,8 @@ test("update: never with a book open; deferred to the file browser", function()
 end)
 ---------------------------------------------------------------- one update covers everything
 local function stampSelf(v)
-    local f = io.open(ORBIT_ANDROID_SELF_PATH, "wb")
+    sh("mkdir -p", ORBIT_ANDROID_PLUGIN_DIR)
+    local f = io.open(SELF_PATH, "wb")
     f:write('-- BookOrbit-Android patch\nlocal PATCH_VERSION = "' .. v .. '"\nreturn\n'); f:close()
 end
 local function relaunches() return count(W.broadcasts, function(b) return b.action:sub(-9) == ".RELAUNCH" end) end
@@ -1829,7 +1901,7 @@ test("one update: a file that still didn't load after its restart is left to Set
     restartReset()
 end)
 W.screen_on = false
-os.remove(ORBIT_ANDROID_SELF_PATH)
+sh("rm -rf", ORBIT_ANDROID_PLUGIN_DIR)
 os.remove(SELF)
 
 test("settings PIN: a locked companion locks the Orbit menu and opens its keypad; unreachable stays usable", function()

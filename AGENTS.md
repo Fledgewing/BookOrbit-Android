@@ -1,7 +1,7 @@
 # Orbify
 
 Orbify is one ecosystem for e-readers syncing with a BookOrbit server over Tailscale: Android
-readers (KOReader + the Orbify patch + Orbit Companion) and Xteink readers (CrossInk-Bookorbit
+readers (KOReader + the Orbit plugin + Orbit Companion) and Xteink readers (CrossInk-Bookorbit
 firmware + the Tailnet overlay). Reason about both platforms together: a new feature ships on
 every platform whose hardware allows it.
 
@@ -9,9 +9,9 @@ every platform whose hardware allows it.
 
 | Path | What | License |
 |---|---|---|
-| `android/koreader-patch/` | KOReader user patch `2-orbit-android.lua` (later `android/koreader/`, the Orbit plugin) | AGPL-3.0-or-later |
+| `android/koreader/` | The Orbit KOReader plugin `orbit.koplugin` (the user patch `2-orbit-android.lua` up to 0.7.x), its tests and `package.sh` (the release zip) | AGPL-3.0-or-later |
 | `android/companion/` | Orbit Companion app, package `net.fledgewing.orbitcompanion` | MIT |
-| `android/docs/` | Android designs, the patch–companion interface, setup guide | MIT |
+| `android/docs/` | Android designs, the plugin–companion interface, setup guide | MIT |
 | `xteink/` | CrossInk-Tailnet overlay: MicroLink submodule, shim, UI, patch series per CrossInk line | MIT (binaries GPL-3.0, see `xteink/README.md`) |
 | `docs/FEATURES.md` | What Orbify ships, per platform | MIT |
 | `ROADMAP.md` | What Orbify plans: outcomes and status | MIT |
@@ -25,7 +25,7 @@ every platform whose hardware allows it.
 
 | Column | Device | Build |
 |---|---|---|
-| KOReader-Android | Android e-readers (Boox, Meebook…) | patch + companion |
+| KOReader-Android | Android e-readers (Boox, Meebook…) | plugin + companion |
 | X4 Pro | Xteink X4 Pro, ESP32-S3 + PSRAM | `x4-pro` |
 | X4 | Xteink X4 Classic, ESP32-S3 + PSRAM | `x4-classic` |
 | X3 | Xteink X3 and C3 X4, ESP32-C3, no PSRAM; flash nearly full | `default` |
@@ -53,12 +53,12 @@ commit when a design or `docs/server-contract.md` relies on upstream behaviour; 
 
 One repo releases both platforms; the tag prefix says which.
 
-- Android: `v<version>` (`.github/workflows/release.yml`): signed APK, stamped patch,
+- Android: `v<version>` (`.github/workflows/release.yml`): signed APK, stamped plugin zip,
   `SHA256SUMS`, attestations. Always marked "latest". Keep the package id and the signing
   certificate (SHA-256 `F5:07:8C:…:0A:15`, checked by the workflow): either change breaks updates.
 - Xteink: `xteink-v<version>` (`.github/workflows/xteink.yml`, daily or by hand): firmware per
   reader, source archive, licenses, `SHA256SUMS`, attestations. Always `make_latest=false`.
-- "latest" must stay an Android release: every companion and patch reads `releases/latest`
+- "latest" must stay an Android release: every companion and plugin (and the old patch) reads `releases/latest`
   (0.6.x through the old BookOrbit-Android URL, and it parses only `v<version>` tags).
 - GitHub orders the release list by version-like tag name: `v…` tags first, prefixed tags
   after all of them. So Android keeps plain `v…` tags (its pre-release check reads the list),
@@ -69,13 +69,13 @@ One repo releases both platforms; the tag prefix says which.
 
 ## Checks
 
-- Android: `luajit android/koreader-patch/test/test_logic.lua`, `.../test_flows.lua`,
+- Android: `luajit android/koreader/test/test_logic.lua`, `.../test_flows.lua`,
   `bash tools/test/test-install-usb.sh`, and in `android/companion`
   `./gradlew testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
 - Xteink: `xteink/scripts/apply.sh <CrossInk checkout>`, `xteink/test/run-host-tests.sh <checkout>`,
   then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the
   CrossInk pinned as `crossink-v1.6` in `tools/upstreams.lock`, daily runs build upstream's latest).
-- BookOrbit plugin hooks: `luajit android/koreader-patch/test/plugin_compat.lua <plugin dir>`
+- BookOrbit plugin hooks: `luajit android/koreader/test/plugin_compat.lua <plugin dir>`
   (weekly in `.github/workflows/plugin-compat.yml`).
 
 ## Repo rules

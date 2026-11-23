@@ -65,5 +65,30 @@ check "epub via OPF + KOReader sidecar" '"/sdcard/Books/plain.epub","Plain","Wri
 check "a pdf: path only" '"/sdcard/Books/doc.pdf","","","","",file' "$(grep doc.pdf "$out")"
 rm -f "$out"
 
+# ---- the Orbit plugin: unpack checks, then the push, the swap and the old patch removed
+zwork=$(mktemp -d)
+mkdir -p "$zwork/src/orbit.koplugin/ko"
+printf 'local PATCH_VERSION = "0.8.0"\n' >"$zwork/src/orbit.koplugin/main.lua"
+printf -- '-- x\n' >"$zwork/src/orbit.koplugin/ko/x.lua"
+(cd "$zwork/src" && zip -q -r "$zwork/ok.zip" orbit.koplugin)
+check "unpack: folder" "$zwork/u1/orbit.koplugin" "$(unpack_orbit "$zwork/ok.zip" "$zwork/u1" 0.8.0)"
+check "unpack: files" "-- x" "$(cat "$zwork/u1/orbit.koplugin/ko/x.lua")"
+check "unpack: wrong version refused" refused "$( (unpack_orbit "$zwork/ok.zip" "$zwork/u2" 0.9.0 >/dev/null 2>&1) && echo ok || echo refused)"
+printf 'x\n' >"$zwork/src/stray.lua"
+(cd "$zwork/src" && zip -q -r "$zwork/bad.zip" orbit.koplugin stray.lua)
+check "unpack: member outside the folder refused" refused "$( (unpack_orbit "$zwork/bad.zip" "$zwork/u3" 0.8.0 >/dev/null 2>&1) && echo ok || echo refused)"
+check "unpack: nothing written for a refused zip" no "$([[ -e $zwork/u3 ]] && echo yes || echo no)"
+
+log="$zwork/adb.log"
+rec_adb() { printf '%s\n' "$*" >>"$log"; } # dsh runs it in a pipeline (a subshell): log to a file
+ADB=(rec_adb)
+ORBIT_DIR="$zwork/u1/orbit.koplugin" ORBIT_TAG=v0.8.0
+install_orbit_plugin >/dev/null
+P="$KO_DIR/plugins/orbit.koplugin"
+check "plugin pushed beside the live one" "push $ORBIT_DIR $P.orbit-new" "$(sed -n 3p "$log")"
+check "then swapped in" "shell if [ -d $P ]; then mv $P $P.orbit-old; fi && mv $P.orbit-new $P && rm -rf $P.orbit-old" "$(sed -n 4p "$log")"
+check "old patch removed" "shell rm -f $KO_DIR/patches/2-orbit-android.lua $KO_DIR/patches/2-orbit-android.lua.new" "$(sed -n 5p "$log")"
+rm -rf "$zwork"
+
 printf '%d passed, %d failed\n' "$passed" "$failed"
 [[ $failed == 0 ]]

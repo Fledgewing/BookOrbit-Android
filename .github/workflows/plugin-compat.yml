@@ -34,7 +34,7 @@ jobs:
         run: |
           set -uo pipefail
           sudo apt-get install -y -qq luajit >/dev/null
-          luajit android/koreader-patch/test/plugin_compat.lua "$PLUGIN_DIR" | tee "$RUNNER_TEMP/compat.txt"
+          luajit android/koreader/test/plugin_compat.lua "$PLUGIN_DIR" | tee "$RUNNER_TEMP/compat.txt"
           status=${PIPESTATUS[0]}
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit "$status"
@@ -55,5 +55,5 @@ jobs:
           body=$(printf '%s\n\n%s\n\n%s\n' \
             "The weekly check found BookOrbit plugin internals the KOReader patch uses that are gone (bookorbit/bookorbit @ ${PLUGIN_SHA})." \
             "Missing: ${symbols}" \
-            "The patch turns off only the affected features and falls back to the plugin's own behaviour (android/koreader-patch/README.md \"Plugin hook points\"). Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
+            "The patch turns off only the affected features and falls back to the plugin's own behaviour (android/koreader/README.md \"Plugin hook points\"). Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
           gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"

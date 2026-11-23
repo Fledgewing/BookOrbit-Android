@@ -26,6 +26,6 @@ Every release carries `SHA256SUMS` and build attestations:
 
 ## License
 
-Per directory: `android/koreader-patch/` is AGPL-3.0-or-later; `android/companion/`, `xteink/`
+Per directory: `android/koreader/` is AGPL-3.0-or-later; `android/companion/`, `xteink/`
 (source) and everything else are MIT. Firmware binaries are GPL-3.0-or-later (they include
 wolfSSL; see `xteink/README.md`). Each directory has its `LICENSE`.

@@ -102,11 +102,13 @@ and copies the plugin and add-on into place. An existing plugin that is new enou
 updates itself). `--books` lists every book file with its title and author (from NeoReader's
 library on a Boox, and from the book itself), plus its reading status and when it was last
 opened in KOReader; it runs before any change. The script never deletes anything except the old
-`koreader` folder you confirmed with `--fresh` and the plugin folder it replaces. Then open
+`koreader` folder you confirmed with `--fresh`, the plugin folders it replaces and the old
+`koreader/patches/2-orbit-android.lua`. Then open
 Orbit Companion › Setup › **Fix next** on the reader for the steps that need a tap there.
 
-If you'd rather copy files by hand: `2-orbit-android.lua` goes into `koreader/patches/`, the
-plugin's `bookorbit.koplugin` folder into `koreader/plugins/`, then restart KOReader.
+If you'd rather copy files by hand: unzip `orbit.koplugin.zip` into `koreader/plugins/`, copy the
+BookOrbit plugin's `bookorbit.koplugin` folder there too, delete `koreader/patches/2-orbit-android.lua`
+if an older setup left it, then restart KOReader.
 
 ## 8. Recommended settings
 

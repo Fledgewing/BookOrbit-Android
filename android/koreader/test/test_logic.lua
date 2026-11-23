@@ -1,8 +1,8 @@
 -- Pure-Lua tests for the patch's scheduling and decision logic.
--- Run from anywhere: luajit android/koreader-patch/test/test_logic.lua  (or lua 5.1-5.4)
+-- Run from anywhere: luajit android/koreader/test/test_logic.lua  (or lua 5.1-5.4)
 local here = (arg and arg[0] or ""):match("^(.*)/[^/]*$") or "."
 ORBIT_ANDROID_TEST = true
-local M = dofile(here .. "/../2-orbit-android.lua")
+local M = dofile(here .. "/../orbit.koplugin/main.lua")
 local Schedule, Plan, Update, WifiPlan, HomePlan = M.Schedule, M.Plan, M.Update, M.WifiPlan, M.HomePlan
 
 local passed, failed = 0, 0
@@ -208,6 +208,13 @@ end)
 -- Update: checksum lines
 local A, B = string.rep("a", 64), string.rep("0123456789ABCDEF", 4)
 test("sums: sha256sum text and binary lines", function()
+    -- The plugin zip: members only inside orbit.koplugin/ (ko/updater.lua unpacks nothing else).
+    eq(Update.zipMember("orbit.koplugin/main.lua"), "main.lua")
+    eq(Update.zipMember("orbit.koplugin/ko/home.lua"), "ko/home.lua")
+    for _, bad in ipairs({ "main.lua", "orbit.koplugin/", "other.koplugin/main.lua", "orbit.koplugin/../x.lua",
+        "orbit.koplugin/ko/../../x", "orbit.koplugin//x", "orbit.koplugin/./x", "orbit.koplugin/a\\b", "/orbit.koplugin/x" }) do
+        eq(Update.zipMember(bad), nil)
+    end
     local s = Update.parseSums(A .. "  2-orbit-android.lua\n" .. B .. " *orbit-companion-0.1.0.apk\r\n")
     eq(s["2-orbit-android.lua"], A)
     eq(s["orbit-companion-0.1.0.apk"], B:lower())

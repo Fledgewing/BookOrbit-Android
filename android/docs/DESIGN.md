@@ -66,7 +66,7 @@ Code read:
 | # | Component | Does | Never does |
 |---|---|---|---|
 | 1 | **BookOrbit plugin** (official, unchanged) | Login, every pull and push, outbox, conflict policy, home and views, its own toasts | (unchanged) |
-| 2 | **orbit-android patch** (`koreader/patches/2-orbit-android.lua`) | Routes Wi-Fi on/off to the companion; on Resume: network ready, debounce reset; on Suspend with the screen off: network + wake lock, triggers the plugin's sync, waits ≤ 20 s, reports done/failed to the companion; "Sync and sleep" action; menu; "Apply recommended" sets plugin options | Hold credentials; call BookOrbit APIs (it only checks that the server answers at its base URL, with no login) |
+| 2 | **Orbit plugin** (`koreader/plugins/orbit.koplugin`; the user patch `2-orbit-android.lua` up to 0.7.x) | Routes Wi-Fi on/off to the companion; on Resume: network ready, debounce reset; on Suspend with the screen off: network + wake lock, triggers the plugin's sync, waits ≤ 20 s, reports done/failed to the companion; "Sync and sleep" action; menu; "Apply recommended" sets plugin options | Hold credentials; call BookOrbit APIs (it only checks that the server answers at its base URL, with no login) |
 | 3 | **Orbit Companion** (one APK, targetSdk 28) | Wi-Fi on/off (`setWifiEnabled`); Tailscale CONNECT; time-limited wake lock (25 s hard cap); `lockNow()` (device admin, `force-lock` policy); Wi-Fi-off timer; status, settings, setup checklist; launcher HOME activity + apps page | Know the server, the login or the sync state |
 | 4 | **Gesture profile** | Readest-style thirds; hold top-right = Sync and sleep; hold top-left = plugin Sync now; swipe up = plugin This book | — |
 
@@ -508,7 +508,7 @@ keeps the few private internals it needs (outbox wait, silent pull/push, positio
 without prompting, dashboard detection, `on_done` callbacks) behind a start-up compatibility
 check: a missing symbol turns off only that feature, which falls back to the plugin's own
 behaviour, and is shown in the menu status and Test sync path. CI checks the same list
-against the latest plugin weekly and opens an issue when it changes (android/koreader-patch/README.md
+against the latest plugin weekly and opens an issue when it changes (android/koreader/README.md
 "Plugin hook points").
 
 The plugin's event handlers (`onBookOrbitOpenDashboard`, `onBookOrbitSyncBook`,

@@ -24,7 +24,7 @@ Status: idea, designing, approved, building, shipped. Platforms: Android, X4 Pro
 | # | Outcome | Platforms | Status | Design |
 |---|---|---|---|---|
 | 7 | **Smarter cache**: BookOrbit's UI stays current with local state and syncs in the background, covering USB-added files, books finished while auto-sync is off, and linking Orbify downloads. | Android | idea | |
-| 8 | **Orbit KOReader plugin**: replaces the user patch; hooks the BookOrbit board (widget registry, `loadBookDetail`, `Activity`, `StateManager`) and replaces KOReader's menus with cleaner ones. | Android | idea | |
+| 8b | **Orbit plugin hooks the BookOrbit board** (widget registry, `loadBookDetail`, `Activity`, `StateManager`) and replaces KOReader's menus with cleaner ones. 8a (the plugin replaces the user patch) shipped in 0.8.0. | Android | idea | [orbit-plugin](docs/design/orbit-plugin.md) |
 | 9 | **No visible app switches**: KOReader stays in front and the companion runs as a background service. | Android | idea | |
 
 ## Ideas

@@ -201,7 +201,7 @@ class StatusActivity : EinkActivity() {
         }))
         root.addView(Ui.gap(this, 16))
         val card = Ui.card(this)
-        card.addView(Ui.row(this, "Last sleep sync", "reported by the KOReader patch", Ui.value(this, Status.lastSleepSync(this))))
+        card.addView(Ui.row(this, "Last sleep sync", "reported by the Orbit plugin", Ui.value(this, Status.lastSleepSync(this))))
         card.addView(Ui.row(this, "Last wake network ready in", right = Ui.value(this, Status.lastNetReady(this))))
         card.addView(Ui.row(this, "Wi-Fi turns off", right = Ui.value(this, Status.wifiTimer(this))))
         root.addView(card)
@@ -573,7 +573,7 @@ object Setup {
         val patchV = fileV ?: runningV
         list.add(
             Check(
-                "KOReader patch installed${patchV?.let { " (v$it)" } ?: ""}",
+                "Orbit plugin installed${patchV?.let { " (v$it)" } ?: ""}",
                 patchState == PatchRowState.CURRENT || patchState == PatchRowState.RESTART,
                 when {
                     PatchInstaller.busy -> "installing…"
@@ -582,7 +582,7 @@ object Setup {
                     patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) "Restart KOReader to finish (KOReader still runs v$runningV)"
                         else "Restart KOReader to finish: close KOReader from recent apps and reopen it (it still runs v$runningV)"
                     patchState == PatchRowState.MISSING && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"
-                    patchState == PatchRowState.MISSING -> "tap to install it into koreader/patches/"
+                    patchState == PatchRowState.MISSING -> "tap to install it into koreader/plugins/"
                     patchState == PatchRowState.OUTDATED -> "older than this app's release (v${BuildConfig.VERSION_NAME}) · tap to update"
                     else -> "up to date${prefs.patchInstallStatus.takeIf { it.startsWith("installed") }?.let { " · $it" } ?: ""}"
                 },
@@ -719,7 +719,7 @@ object Setup {
         val seen = prefs.patchSeenAt
         list.add(
             Check(
-                "KOReader patch answered",
+                "Orbit plugin answered",
                 seen > 0,
                 when {
                     seen > 0 -> "last ${Ui.clock(ctx, seen)} (${prefs.patchSeenVia})"
