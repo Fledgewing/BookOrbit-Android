@@ -155,7 +155,12 @@ local env = { [0] = env_fns }
 local jni = { env = env, to_string = function(_, j) return j.str end,
     context = function(self, _, fn) return fn(self) end }
 
-local NetworkMgr = { isConnected = function() return W.wifi end }
+-- On Android isConnected is JNI (device/android/device.lua:333 android.getNetworkInfo): a forked
+-- child that calls it dies and the plugin gets subprocess_no_result. W.in_child marks a child.
+local NetworkMgr = { isConnected = function()
+    if W.in_child then error("JNI from a forked child: NetworkMgr:isConnected", 2) end
+    return W.wifi
+end }
 function NetworkMgr:turnOnWifi(cb) W.settings_opened = true; if cb then cb() end end
 function NetworkMgr:turnOffWifi(cb) W.settings_opened = true; if cb then cb() end end
 -- Stock beforeWifiAction turn_on path: a centred "Connecting to Wi-Fi…" message (manager.lua:539).
@@ -243,7 +248,13 @@ local preload = {
     ["ffi/util"] = {
         runInSubProcess = function(fn)
             local child = { done = false }
-            child.run = function() fn(#W.children, child); child.done = true end
+            child.run = function()
+                W.in_child = true
+                local okc, e = pcall(fn, #W.children, child)
+                W.in_child = nil
+                child.done = true
+                if not okc then child.crashed = tostring(e) end
+            end
             table.insert(W.children, child)
             if not W.hold_child then schedule(0.1, child.run) end
             return #W.children, child
@@ -2395,6 +2406,37 @@ test("end of book: Download and open sends the finish first, downloads through t
     package.loaded["bookorbit_catalog"] = nil
 end)
 
+test("end of book: Download and open uses the reader's delivery variant and a supported file (hash_mismatch on M8C)", function()
+    eobModules()
+    local JSON = dofile(here .. "/json_mini.lua")
+    local fx = JSON.fixture(here, "bookorbit/catalog-book.delivery-variants.json")
+    local DCat = {}
+    DCat.__index = DCat
+    function DCat:fetchDeliveryBook(id) table.insert(eob.calls, "delivery:" .. id); return fx.with_variant end
+    function DCat:supportedFiles(detail)
+        local out = {}
+        for _, f in ipairs(detail.files) do if f.format == "epub" then table.insert(out, f) end end
+        return out
+    end
+    function DCat:downloadDefaultFile(detail, file) self:checkDownloadFile("/books/titan.epub", detail, file) end
+    function DCat:downloadFile(path, detail, file, rep)
+        eob.file = file
+        rep.finished(true, nil, path)
+    end
+    function DCat:loadBooks() end
+    package.loaded["bookorbit_catalog"] = DCat
+    local ui = bookUI()
+    ui.status:onEndOfBook()
+    eob.calls, eob.file = {}, nil
+    sheetRow("card", "Titan's Curse").action()
+    run(60)
+    local c = table.concat(eob.calls, ",")
+    ok(c:find("delivery:43", 1, true) and not c:find("book:43", 1, true), "the plugin's delivery detail: " .. c)
+    ok(eob.file and eob.file.id == 902 and eob.file.selection == "sel-902", "the EPUB with its selection")
+    ok(eob.file.fileHash == "hash-audioless-artifact", "checked against the artifact's hash")
+    package.loaded["bookorbit_catalog"] = nil
+end)
+
 test("end of book: Home from the companion with the sheet open closes it, opens BookOrbit home, sends the finish", function()
     eobModules()
     local ui, m = bookUI()
@@ -2666,21 +2708,31 @@ local function cacheSetup()
         return E.Cache.copy(b)
     end
     function Api:request(method, path, body, headers) return self:requestBlocking(method, path, body, headers) end
+    -- As bookorbit_api.lua:336-372 with canForkSubprocess true: fn runs in a forked child; a child
+    -- that dies (JNI) returns nothing, which the plugin reports as subprocess_no_result (:106).
     function Api:runInSubprocess(fn)
         self.subprocess_depth = (self.subprocess_depth or 0) + 1
-        local b, e, eb = fn()
+        W.in_child = true
+        local okc, b, e, eb = pcall(fn)
+        W.in_child = nil
         self.subprocess_depth = self.subprocess_depth - 1
+        if not okc then cache.child_crash = tostring(b); return true, { err = "subprocess_no_result" } end
         return true, { body = b, err = e, errbody = eb }
     end
     function Api:downloadCatalogThumbnail(id, path) cache.stock_cover = (cache.stock_cover or 0) + 1; return true end
     function Api:getProxy() return nil end
     package.loaded["bookorbit_api"] = Api
     local Cat = lfModules()
+    cache.connects = 0
+    function Cat:runConnected(fn) cache.connects = cache.connects + 1; fn() end
+    package.loaded["ui/trapper"] = { wrap = function(_, fn) return fn() end, isWrapped = function() return false end }
     E.LF.installed = nil
     ok(E.LF.install("test"), "local-first on this catalog")
     function Cat:loadDashboardRoot() cache.reloaded = (cache.reloaded or 0) + 1 end
     E.OC.installed, E.OC._dir, E.OC._index = nil, dir, nil
     E.OC.memo, E.OC.memo_order, E.OC.queue, E.OC.inflight, E.OC.pending, E.OC.active = {}, {}, {}, {}, {}, nil
+    E.OC.full, E.OC.child, E.OC.offline_pass, E.OC.running = nil, nil, nil, nil
+    E.OC.note = function() end
     E.OC.now = function() return math.floor(W.clock) end
     E.S.offline_cache = true
     ok(E.OC.install("test"), "installed")
@@ -2691,7 +2743,7 @@ local function cacheTeardown()
     local lfs = require("libs/libkoreader-lfs")
     for k, v in pairs(cache.lfs_saved) do lfs[k] = v end
     sh("rm -rf", cache.dir)
-    for _, k in ipairs({ "bookorbit_api", "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui" }) do
+    for _, k in ipairs({ "bookorbit_api", "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui", "ui/trapper" }) do
         package.loaded[k] = nil
     end
     E.OC.installed = nil
@@ -2845,6 +2897,98 @@ test("cache: covers keep their ETag; a moved version asks If-None-Match and a 30
     io.open(dir .. "/9_1.jpg.etag", "w"):close()
     ok(E.OC.cleanEtags(dir) == 1, "orphan ETag removed")
     http.request, ltn.sink.file = stock_http, stock_file
+    cacheTeardown()
+end)
+
+-- The request paths the pinned plugin builds (bookorbit_api.lua:676-738; query() sorts and drops
+-- empty parameters, :386). plugin_compat.lua checks these strings are still in the plugin.
+local PLUGIN_PATHS = {
+    root = "/koreader/plugin/catalog/root",
+    dashboard = "/koreader/plugin/catalog/dashboard",
+    discover = "/koreader/plugin/catalog/dashboard/discover",
+    dsection = "/koreader/plugin/catalog/dashboard/sections/recently-added",
+    section = "/koreader/plugin/catalog/sections/series?page=1&size=50",
+    books = "/koreader/plugin/catalog/books?page=2&size=24&sort=title",
+    manifest = "/koreader/plugin/catalog/manifest?page=1",
+    detail = "/koreader/plugin/catalog/books/549?deviceId=F00D",
+}
+
+test("cache: every catalog read the plugin makes in its child process is cached and served (M8C: Home and lists bypassed it)", function()
+    local client = cacheSetup()
+    W.wifi = true
+    for name, path in pairs(PLUGIN_PATHS) do cache.server[path] = { name = name, items = { { id = 1 } } } end
+    for name, path in pairs(PLUGIN_PATHS) do
+        local done, r = client:runInSubprocess(function() return client:request("GET", path) end)
+        ok(done and r.body and r.body.name == name, name .. ": answered in the child, err " .. tostring(r.err) .. " " .. tostring(cache.child_crash))
+    end
+    cache.calls = {}
+    for name, path in pairs(PLUGIN_PATHS) do
+        local _, r = client:runInSubprocess(function() return client:request("GET", path) end)
+        ok(r.body and r.body.name == name, name .. ": from the cache")
+    end
+    ok(#cache.calls == 0, "no request the second time: " .. table.concat(cache.calls, ","))
+    -- Offline: a cached list page pages without a request or an error.
+    W.wifi = false
+    W.clock = W.clock + 3600
+    local _, r = client:runInSubprocess(function() return client:request("GET", PLUGIN_PATHS.books) end)
+    ok(r.body and r.body.name == "books" and #cache.calls == 0, "offline: the cached page, err " .. tostring(r.err))
+    W.wifi = true
+    cacheTeardown()
+end)
+
+test("cache: offline, a cached page opens without connecting; an uncached one asks Connect and load more", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server[PLUGIN_PATHS.books] = { items = { { id = 1 } } }
+    client:runInSubprocess(function() return client:request("GET", PLUGIN_PATHS.books) end)
+    ok(rawget(Cat, "__orbit_stock") and Cat.__orbit_stock["cache:runConnected"], "runConnected wrapped")
+    local cat = setmetatable({ client = client }, Cat)
+    cache.connects = 0
+    W.wifi = false
+    local got, err
+    cat:runConnected(function() local _, r = client:runInSubprocess(function() return client:request("GET", PLUGIN_PATHS.books) end); got, err = r.body, r.err end)
+    ok(got and cache.connects == 0, "cached: no connect, no error")
+    local before = #W.shown
+    cat:runConnected(function() local _, r = client:runInSubprocess(function() return client:request("GET", "/koreader/plugin/catalog/books?page=9") end); got, err = r.body, r.err end)
+    ok(got == nil and err == "cancelled" and cache.connects == 0, "uncached: quiet (cancelled), not yet connected: " .. tostring(err))
+    local box = W.shown[#W.shown]
+    ok(#W.shown > before and box.ok_text == "Connect and load more", "asks: " .. tostring(box and box.ok_text))
+    box.ok_callback()
+    ok(cache.connects == 1, "then connects and loads")
+    W.wifi = true
+    cacheTeardown()
+end)
+
+test("cache: tap ⟳ says Refreshing (a tip to hold, once); hold says Full refresh, then done with the covers checked", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local notes = {}
+    E.OC.note = function(t) table.insert(notes, t) end
+    cache.server[DASH] = { continueReading = { { id = 7, hasCover = true } } }
+    client:request("GET", DASH)
+    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = cache.server[DASH] }, client = client }, Cat)
+    function cat:refreshCurrent() self.client:request("GET", DASH); self:switchTo("Home", {}, self.current_context, false) end
+    E.S.refresh_tip_shown = nil
+    E.OC.refresh(cat); E.OC.refresh(cat)
+    ok(notes[1]:find("Tip: hold ⟳ for a full refresh", 1, true) and notes[2] == "Refreshing…", "tip once: " .. table.concat(notes, " | "))
+    notes = {}
+    E.OC.fullRefresh(cat)
+    run(5)
+    ok(notes[1] == "Full refresh: reloading everything from BookOrbit…", "hold: " .. tostring(notes[1]))
+    ok(notes[#notes] and notes[#notes]:find("^Full refresh done · 1 covers checked"), "done: " .. tostring(notes[#notes]))
+    cacheTeardown()
+end)
+
+test("cache: a progress write leaves no false patch count; Continue reading moves at the next check", function()
+    local client = cacheSetup()
+    W.wifi = true
+    cache.server[DASH] = { continueReading = { { id = 7, progressPercentage = 10 } } }
+    client:request("GET", DASH)
+    client:request("PUT", "/koreader/syncs/progress", { document = "d7", percentage = 0.5 })
+    local m
+    for _, e in pairs(E.OC.index().entries) do if e.home then m = e end end
+    ok(m and m.stale, "Home marked to check")
+    for _, l in ipairs(W.logs) do ok(not l:find("patched 0", 1, true), "no 'patched 0' noise: " .. l) end
     cacheTeardown()
 end)
 

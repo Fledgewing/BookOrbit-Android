@@ -77,6 +77,19 @@ for _, name in ipairs({ "newClient", "getDocumentDigest", "getLastPercent", "enq
 -- Wi-Fi holds count only drainable outbox entries.
 has(catalog, "self:evictCachedCovers(", "refreshCurrent evicts through evictCachedCovers")
 has(src[dir .. "/bookorbit_lifecycle_outbox.lua"] or "", "drainable =", "outbox diagnostics() drainable")
+-- The cache (ko/cache.lua): the catalog request paths test_flows.lua's PLUGIN_PATHS copies, and the
+-- calls it wraps or uses; end of book downloads through the detail page's delivery path.
+local api = src[dir .. "/bookorbit_api.lua"] or ""
+for _, p in ipairs({ '"/koreader/plugin/catalog/root"', '"/koreader/plugin/catalog/dashboard"',
+    '"/koreader/plugin/catalog/dashboard/discover"', '"/koreader/plugin/catalog/dashboard/sections/"',
+    '"/koreader/plugin/catalog/sections/"', '"/koreader/plugin/catalog/books"', '"/koreader/plugin/catalog/manifest"',
+    '"/koreader/plugin/catalog/books/" .. tostring(book_id), { deviceId = self.device_id, variant = variant }' }) do
+    has(api, p, "catalog path " .. p)
+end
+for _, name in ipairs({ "runConnected", "download", "fetchDeliveryBook", "supportedFiles", "requestBlocking", "runInSubprocess" }) do
+    need(name, "function")
+end
+has(api, '"subprocess_no_result"', "runInSubprocess reports a child without a result")
 local board = src[dir .. "/bookorbit_catalog_board.lua"] or ""
 local list_view = src[dir .. "/bookorbit_list_view.lua"] or ""
 -- Upvalues local-first swaps or calls: the header's status cluster and the list view's region.
