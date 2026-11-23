@@ -66,6 +66,7 @@ int rowHeight(const Row& row, const Metrics& m, const bool touch) {
 int headerHeight(const Page& page, const Metrics& m) {
   int h = 28 + lh(m, Font::Title) + 6;
   if (!page.subtitle.empty()) h += lh(m, Font::Subtitle);
+  if (!page.seriesLine.empty()) h += lh(m, Font::Small);
   return h + 16;
 }
 
@@ -122,6 +123,11 @@ Layout layout(const Page& page, const Metrics& m, const int areaWidth, const int
     const std::string sub = ellipsize(m, Font::Subtitle, false, page.subtitle, inner);
     out.ops.push_back(text(Font::Subtitle, (areaWidth - width(m, Font::Subtitle, false, sub)) / 2, y, sub, false, true));
     y += lh(m, Font::Subtitle);
+  }
+  if (!page.seriesLine.empty()) {
+    const std::string line = ellipsize(m, Font::Small, false, page.seriesLine, inner);
+    out.ops.push_back(text(Font::Small, (areaWidth - width(m, Font::Small, false, line)) / 2, y, line, false));
+    y += lh(m, Font::Small);
   }
   y += 12;
   out.ops.push_back(rect(Op::Kind::FillRect, MARGIN, y, inner, 2));

@@ -105,6 +105,14 @@ void checkCase(const std::string& dir, JsonObjectConst c, const size_t maxSugges
   }
   const char* author = c["author"].isNull() ? "" : c["author"].as<const char*>();
   CHECK_NAMED(name.c_str(), std::strcmp(card.author, author) == 0);
+  // The page's "<series> · Book 2 of 4" line: the detail's own series name, index and member count.
+  JsonObjectConst detail = doc.as<JsonObjectConst>();
+  const char* seriesName = detail["seriesName"] | "";
+  CHECK_NAMED(name.c_str(), std::strncmp(card.seriesName, seriesName, sizeof(card.seriesName) - 1) == 0);
+  CHECK_NAMED(name.c_str(), card.seriesCount == detail["seriesMembers"].as<JsonArrayConst>().size());
+  if (const char* index = detail["seriesIndex"].as<const char*>()) {
+    CHECK_NAMED(name.c_str(), std::strcmp(card.seriesIndex, index) == 0);
+  }
 
   // The cache record round-trips, and any flipped byte is refused.
   uint8_t buf[CARD_BYTES];
@@ -112,7 +120,10 @@ void checkCase(const std::string& dir, JsonObjectConst c, const size_t maxSugges
   SeriesCard back;
   CHECK_NAMED(name.c_str(), deserializeCard(buf, sizeof(buf), back) && back.nextBook.id == card.nextBook.id &&
                                 std::strcmp(back.author, card.author) == 0 &&
-                                back.suggestionCount == card.suggestionCount);
+                                back.suggestionCount == card.suggestionCount &&
+                                std::strcmp(back.seriesName, card.seriesName) == 0 &&
+                                std::strcmp(back.seriesIndex, card.seriesIndex) == 0 &&
+                                back.seriesCount == card.seriesCount);
   bool allRefused = true;
   for (size_t i = 0; i < CARD_BYTES; i += 7) {
     buf[i] ^= 0x20;
@@ -126,8 +137,9 @@ void checkCase(const std::string& dir, JsonObjectConst c, const size_t maxSugges
 // The next book's cover (core/NextCover, X4 Pro and X4): the card's version 2, the version lookup,
 // the file names and the sync's plan.
 void checkCovers() {
-  // Version 2 keeps the cover versions; a version 1 record (before covers) reads as a card with none,
-  // never as a bad one, whatever its padding held.
+  // Version 3 keeps the cover versions and the series line. A version 1 record (before covers) reads
+  // as a card with none, never as a bad one, whatever its padding held; version 1 and 2 records
+  // (before the series line, a shorter record) read as cards with no series name, index or count.
   SeriesCard card;
   card.bookId = 7;
   card.next = SeriesCard::Next::Next;
@@ -138,19 +150,39 @@ void checkCovers() {
   card.suggestions[0].id = 9;
   card.suggestions[0].coverVer = 0x55u;
   std::strcpy(card.author, "Mara Quill");
+  std::strcpy(card.seriesName, "Harbour Lights");
+  std::strcpy(card.seriesIndex, "2");
+  card.seriesCount = 4;
   uint8_t buf[CARD_BYTES];
   SeriesCard back;
-  CHECK(serializeCard(card, buf, sizeof(buf)) == CARD_BYTES && buf[4] == 2);
+  CHECK(serializeCard(card, buf, sizeof(buf)) == CARD_BYTES && buf[4] == 3);
   CHECK(deserializeCard(buf, sizeof(buf), back) && back.nextBook.coverVer == 0xABCD1234u);
-  buf[4] = 1;  // what a version 1 firmware wrote: the same bytes, its padding where coverVer is now
-  uint32_t crc = slot::crc32(buf, CARD_BYTES - 4);
-  for (int i = 0; i < 4; ++i) buf[CARD_BYTES - 4 + i] = static_cast<uint8_t>(crc >> (8 * i));
-  CHECK(deserializeCard(buf, sizeof(buf), back));
+  CHECK(std::strcmp(back.seriesName, "Harbour Lights") == 0 && std::strcmp(back.seriesIndex, "2") == 0 &&
+        back.seriesCount == 4);
+  // What a version 2 firmware wrote: the same bytes up to the author, then its CRC.
+  const size_t legacy = legacyCardBytes();
+  CHECK(legacy < CARD_BYTES);
+  const size_t legacyStruct = legacy - 12;
+  auto relabel = [&](const uint8_t version) {
+    buf[4] = version;
+    buf[5] = static_cast<uint8_t>(legacyStruct & 0xFF);
+    buf[6] = static_cast<uint8_t>(legacyStruct >> 8);
+    const uint32_t c = slot::crc32(buf, 8 + legacyStruct);
+    for (int i = 0; i < 4; ++i) buf[8 + legacyStruct + i] = static_cast<uint8_t>(c >> (8 * i));
+  };
+  relabel(2);
+  CHECK(deserializeCard(buf, legacy, back));
+  CHECK(back.nextBook.id == 8 && back.nextBook.coverVer == 0xABCD1234u && std::strcmp(back.author, "Mara Quill") == 0);
+  CHECK(back.seriesName[0] == '\0' && back.seriesIndex[0] == '\0' && back.seriesCount == 0);
+  CHECK(!deserializeCard(buf, CARD_BYTES, back));  // a version 2 record is the shorter one
+  relabel(1);  // version 1: its padding where coverVer is now
+  CHECK(deserializeCard(buf, legacy, back));
   CHECK(back.nextBook.id == 8 && std::strcmp(back.nextBook.title, "The Storm Signal") == 0 &&
         std::strcmp(back.author, "Mara Quill") == 0 && back.suggestionCount == 1 && back.suggestions[0].id == 9);
   CHECK(back.nextBook.coverVer == 0 && back.suggestions[0].coverVer == 0);
-  buf[4] = 3;  // a newer version than this firmware knows
-  crc = slot::crc32(buf, CARD_BYTES - 4);
+  CHECK(serializeCard(card, buf, sizeof(buf)) == CARD_BYTES);
+  buf[4] = 4;  // a newer version than this firmware knows
+  uint32_t crc = slot::crc32(buf, CARD_BYTES - 4);
   for (int i = 0; i < 4; ++i) buf[CARD_BYTES - 4 + i] = static_cast<uint8_t>(crc >> (8 * i));
   CHECK(!deserializeCard(buf, sizeof(buf), back));
 

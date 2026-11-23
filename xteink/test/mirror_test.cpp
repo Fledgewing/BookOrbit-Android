@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "Mirror.h"
 #include "TestSupport.h"
@@ -83,9 +84,11 @@ static void plan() {
   Plan bad;
   CHECK(!bad.parse(""));
   CHECK(!bad.parse("something else\n0\n"));
-  CHECK(!bad.parse("orbify-mirror 1\nx\n"));
-  CHECK(!bad.parse("orbify-mirror 1\n9\nR\t\n"));  // done past the end
-  CHECK(!bad.parse("orbify-mirror 1\n0\nQ\tzz\n"));  // unknown kind
+  CHECK(!bad.parse("orbify-mirror 2\nx\n"));
+  CHECK(!bad.parse("orbify-mirror 2\n9\nR\t\n"));  // done past the end
+  CHECK(!bad.parse("orbify-mirror 2\n0\nQ\tzz\n"));  // unknown kind
+  // A version 1 plan joined a book list's fields with a space (a 400 on the device): not resumed.
+  CHECK(!bad.parse("orbify-mirror 1\n0\nB\tsort=recently_read readStatus=reading\n"));
   // The cap: the 200-entry cache keeps room for the views read by hand.
   Plan big;
   size_t added = 0;
@@ -114,6 +117,112 @@ static void queries() {
   CHECK(!decodeQuery("nonsense", back));
 }
 
+// Every kind of book list the mirror asks for, through the plan and back: what the walker sends is
+// what the browser sends. The X4 Pro test of rc3 sent "sort=recently_read readStatus=reading" as one
+// sort value (the plan turned the field separator into a space): the server answered 400.
+static void requestKinds() {
+  std::vector<FacetQuery> lists;
+  // The root's book sections (BookOrbitCatalogClient::sectionBookQuery).
+  FacetQuery reading;
+  reading.sort = "recently_read";
+  reading.readStatus = "reading";
+  lists.push_back(reading);
+  FacetQuery all;
+  all.sort = "title";
+  lists.push_back(all);
+  FacetQuery wanted;
+  wanted.shelf = "want-to-read";
+  lists.push_back(wanted);
+  FacetQuery added;
+  added.sort = "recently_added";
+  lists.push_back(added);
+  // A facet row's list, each facet section.
+  lists.push_back(facetQuery("series", "Harbour Lights", "4"));
+  lists.push_back(facetQuery("series", "Harbour Lights", ""));
+  lists.push_back(facetQuery("collections", "12", ""));
+  lists.push_back(facetQuery("libraries", "3", ""));
+  lists.push_back(facetQuery("smart-scopes", "9", ""));
+  lists.push_back(facetQuery("authors", "Quill, Mara", ""));
+  // Every field at once, in case a later list sets more than these.
+  FacetQuery every;
+  every.sort = "s";
+  every.order = "o";
+  every.readStatus = "r";
+  every.shelf = "sh";
+  every.query = "q w";
+  every.author = "a";
+  every.seriesId = "1";
+  every.series = "se";
+  every.collectionId = "2";
+  every.smartScopeId = "3";
+  every.libraryId = "4";
+  lists.push_back(every);
+
+  // The request each one sends after the mirror's plan file (booksPath, which booksUrl() uses on the
+  // X4s): one parameter per field, as BookOrbit's API takes them. The device's 400s were
+  // "sort=recently_read%20readStatus%3Dreading" and "sort=series%20seriesId%3D3964".
+  const char* B = "/plugin/catalog/books?page=1&size=20&format=epub";
+  const std::vector<std::string> urls = {
+      std::string(B) + "&sort=recently_read&readStatus=reading",
+      std::string(B) + "&sort=title",
+      "/plugin/catalog/dashboard/sections/want-to-read",
+      std::string(B) + "&sort=recently_added",
+      std::string(B) + "&sort=series&seriesId=4",
+      std::string(B) + "&sort=series&series=Harbour%20Lights",
+      std::string(B) + "&sort=title&collectionId=12",
+      std::string(B) + "&sort=title&libraryId=3",
+      std::string(B) + "&sort=title&smartScopeId=9",
+      std::string(B) + "&author=Quill%2C%20Mara",
+      "/plugin/catalog/dashboard/sections/sh",  // a shelf is listed alone
+  };
+  CHECK(urls.size() == lists.size());
+  FacetQuery noShelf = every;
+  noShelf.shelf.clear();
+  CHECK(booksPath(noShelf, 2, 20, true) ==
+        "/plugin/catalog/books?page=2&size=20&format=epub&buckets=true&sort=s&order=o&readStatus=r&q=q%20w&author=a"
+        "&seriesId=1&collectionId=2&smartScopeId=3&libraryId=4");
+  FacetQuery seriesId;
+  seriesId.sort = "series";
+  seriesId.seriesId = "3964";
+  CHECK(booksPath(seriesId, 1, 20, false) == std::string(B) + "&sort=series&seriesId=3964");
+
+  Plan p;
+  CHECK(p.add(Kind::Root, ""));
+  CHECK(p.add(Kind::Section, "series"));
+  CHECK(p.add(Kind::Detail, "1207"));
+  for (const FacetQuery& q : lists) CHECK(p.add(Kind::Books, encodeQuery(q)));
+  Plan back;
+  CHECK(back.parse(p.serialize()));
+  CHECK(back.total() == p.total());
+  size_t books = 0;
+  while (const Step* step = back.next()) {
+    if (step->kind == Kind::Root) CHECK(step->arg.empty());
+    if (step->kind == Kind::Section) CHECK(step->arg == "series");
+    if (step->kind == Kind::Detail) CHECK(step->arg == "1207");
+    if (step->kind == Kind::Books) {
+      FacetQuery got;
+      CHECK(decodeQuery(step->arg, got));
+      CHECK_NAMED(urls[books].c_str(), booksPath(got, 1, 20, false) == urls[books]);
+      const FacetQuery& want = lists[books++];
+      CHECK(got.sort == want.sort && got.order == want.order && got.readStatus == want.readStatus);
+      CHECK(got.shelf == want.shelf && got.query == want.query && got.author == want.author);
+      CHECK(got.seriesId == want.seriesId && got.series == want.series);
+      CHECK(got.collectionId == want.collectionId && got.smartScopeId == want.smartScopeId);
+      CHECK(got.libraryId == want.libraryId);
+      // No field value carries another field inside it.
+      CHECK(got.sort.find('=') == std::string::npos && got.sort.find(' ') == std::string::npos);
+    }
+    back.advance();
+  }
+  CHECK(books == lists.size());
+  // The exact device case.
+  Plan one;
+  one.add(Kind::Books, encodeQuery(reading));
+  FacetQuery got;
+  CHECK(decodeQuery(one.next()->arg, got));
+  CHECK(got.sort == "recently_read" && got.readStatus == "reading");
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) return 2;
   std::string dir = argv[1];
@@ -124,5 +233,6 @@ int main(int argc, char** argv) {
   facets();
   plan();
   queries();
+  requestKinds();
   return report("mirror");
 }

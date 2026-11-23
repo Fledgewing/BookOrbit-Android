@@ -309,6 +309,7 @@ int main(int argc, char** argv) {
     Scene s{"eob-x4pro-online.png", {}};
     s.page.title = "The End";
     s.page.subtitle = book;
+    s.page.seriesLine = "Book 2 of Harbour Lights";  // EndPage::page(), STR_ORBIFY_BOOK_N_OF
     s.page.touch = true;
     s.page.rating = 4;
     s.page.rows = {finished, rating,
@@ -407,6 +408,10 @@ int main(int argc, char** argv) {
     const char* name = touch ? "cover x4pro" : "cover x4";
     Page with = scenes[0].page, without = scenes[0].page;
     with.touch = without.touch = touch;
+    // This fixed row set fills the page without the series line (the device's fit() drops
+    // suggestion rows for it; checked below).
+    with.seriesLine.clear();
+    without.seriesLine.clear();
     with.rows[NEXT_ROW].image = "cover.bmp";
     const Layout a = orbify::eob::layout(with, m, 480, 760);
     const Layout b = orbify::eob::layout(without, m, 480, 760);
@@ -452,6 +457,22 @@ int main(int argc, char** argv) {
     for (const Target& t : a.targets) if (t.row == homeRow) homeA = t.y;
     for (const Target& t : u.targets) if (t.row == homeRow) homeU = t.y;
     CHECK(homeA > 0 && homeA == homeU, name);
+  }
+  // The series line under the book line ("Book 2 of Harbour Lights", mockups 1-5): one Small line
+  // more of header, centred, inside the margins.
+  {
+    Page with = scenes[0].page, without = scenes[0].page;
+    without.seriesLine.clear();
+    CHECK(orbify::eob::headerHeight(with, m) == orbify::eob::headerHeight(without, m) + m.lineHeight[static_cast<int>(Font::Small)],
+          "series line height");
+    const Layout a = orbify::eob::layout(with, m, 480, 760);
+    int found = 0;
+    for (const Op& op : a.ops) {
+      if (op.kind != Op::Kind::Text || op.text != with.seriesLine) continue;
+      ++found;
+      CHECK(op.x >= MARGIN && op.x + textWidth(nullptr, op.font, op.bold, op.text.c_str()) <= 480 - MARGIN, "series line inside");
+    }
+    CHECK(found == 1, "series line drawn");
   }
   // Long titles are cut with an ellipsis, never drawn past the row.
   {

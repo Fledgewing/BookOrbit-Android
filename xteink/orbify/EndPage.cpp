@@ -13,6 +13,9 @@
 #endif
 
 #include <cstdio>
+#if CROSSINK_SCALABLE_FONTS
+#include <ScalableBuiltins.h>
+#endif
 
 #include "BookOrbitDownloadIndex.h"
 #include "FinishSync.h"
@@ -172,6 +175,7 @@ void OrbifyEndPage::load(const std::string& path, const BookInfo& info, const st
   folderPaths = namePaths;
   const std::string cachePath = BookSyncFile::cachePathFor(bookPath);
   finished = !cachePath.empty() && BookReadingStats::load(cachePath).isCompleted;
+  cardGeneration = OrbifyFinish::cardGeneration();
   hasCard = OrbifyFinish::loadCard(bookPath, card);
   authorName = hasCard && card.author[0] ? card.author : book.author;
   savedRating = shownRating = finished ? OrbifyFinish::rating(bookPath) : 0;
@@ -198,6 +202,19 @@ void OrbifyEndPage::load(const std::string& path, const BookInfo& info, const st
   build();
   LOG_INF("ORB", "End page: %s, card %s, series %s, %u rows", finished ? "finished" : "not finished",
           hasCard ? "yes" : "no", book.series.empty() ? "none" : "offline", static_cast<unsigned>(plannedCount));
+}
+
+bool OrbifyEndPage::reloadIfCardArrived() {
+  if (hasCard || OrbifyFinish::cardGeneration() == cardGeneration) return false;
+  // The arguments are this page's own copies: load() takes copies before it reassigns them.
+  const std::string path = bookPath;
+  const BookInfo info = book;
+  const std::vector<std::string> names = folderNames;
+  const std::vector<std::string> namePaths = folderPaths;
+  load(path, info, names, namePaths);
+  if (!hasCard) return false;
+  LOG_INF("ORB", "End page: the series card arrived; drawn again");
+  return true;
 }
 
 void OrbifyEndPage::finishedChanged(const bool isFinished) {
@@ -375,6 +392,16 @@ eob::Page OrbifyEndPage::page(const bool touch) const {
   p.title = tr(STR_ORBIFY_THE_END);
   p.subtitle = book.title;
   if (!authorName.empty()) p.subtitle += (p.subtitle.empty() ? "" : DOT) + authorName;
+  // "Book 2 of Harbour Lights": the server's series (the card), else the one the EPUB names.
+  const char* seriesName = hasCard && card.seriesName[0] ? card.seriesName : book.series.c_str();
+  const char* seriesIndex = hasCard && card.seriesName[0] ? card.seriesIndex : book.seriesIndex.c_str();
+  if (seriesName[0] && seriesIndex[0]) {
+    char line[192];
+    snprintf(line, sizeof(line), tr(STR_ORBIFY_BOOK_N_OF), seriesIndex, seriesName);
+    p.seriesLine = line;
+  } else {
+    p.seriesLine = seriesName;
+  }
   p.touch = touch;
   p.rating = shownRating;
   p.selected = selection;
@@ -384,6 +411,13 @@ eob::Page OrbifyEndPage::page(const bool touch) const {
 
 void OrbifyEndPage::draw(GfxRenderer& renderer, const int x, const int y, const int width, const int height,
                          const bool touch) {
+#if CROSSINK_SCALABLE_FONTS
+  // The X4 Pro and X4 build their Bitter and Lexend Deca sizes from outlines, and only the reader's
+  // chosen family is registered with the renderer: the other one's text was not drawn at all
+  // ("GFX Font ... not found" on an X4 Pro reading in Bitter). The page uses both.
+  ensureScalableBuiltinFamily(renderer, 0);  // Lexend Deca
+  ensureScalableBuiltinFamily(renderer, 1);  // Bitter
+#endif
   const eob::Metrics metrics = metricsFor(renderer);
   fit(metrics, height - eob::headerHeight(page(touch), metrics), touch);
   lastLayout = eob::layout(page(touch), metrics, width, height);

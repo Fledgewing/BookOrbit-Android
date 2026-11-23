@@ -127,8 +127,10 @@ SWITCHES = {
     # --- CrossInk patches 0004 (memory cuts, include/CrossInkTailnetCuts.h) and 0005 (WiFi join).
     # BookOrbit sync: a new TLS session needs this much free heap (0 = upstream's 55000)...
     "CROSSINK_TAILNET_SYNC_TLS_FLOOR":    (35000,  35000,  35000),
-    # ...and a largest free block this big (measured X3 handshake peaks: up to 24.0 KB).
-    "CROSSINK_TAILNET_SYNC_TLS_BLOCK":    (24576,  24576,  24576),
+    # ...and a largest free block this big (measured X3 handshake peaks: up to 24.0 KB). The X4s put
+    # allocations over 4 KB in PSRAM, wolfSSL's buffers included: an 8 KB internal block is enough
+    # there, and 24 KB refused the copy refresh's match check at 39 KB free (patch 0037).
+    "CROSSINK_TAILNET_SYNC_TLS_BLOCK":    (24576,  8192,   8192),
     # Catalog bursts (open, Home refresh, shelf options) share one keep-alive connection.
     "CROSSINK_TAILNET_CATALOG_KEEPALIVE": (1,      1,      1),
     # ...and in the catalog boot (BOOKORBIT_CATALOG) one connection for the whole boot, not per

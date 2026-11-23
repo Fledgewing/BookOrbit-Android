@@ -5,10 +5,12 @@
 // them in place, one book at a time, with their reading position, highlights and bookmarks
 // carried over (BookUpdateMigration). core/CopyQueue holds the rules and the queue format.
 //
-// It never runs while a book is open. The sleep sync detects and replaces (up to three minutes
-// per sleep); the BookOrbit Home's refresh only detects. A replacement needs a 24 KB heap block
-// for its TLS session: where the heap has less (the X3's sleep sync may), the copy stays queued
-// and the sync's update offer remains the way to it.
+// It runs only in syncs where Wi-Fi is already up and no book is on screen (the user's ruling,
+// 2026-11-23: these readers cannot reach Wi-Fi when a book is closed): the sleep sync (every
+// queued copy, the book that was open included), the BookOrbit Home's refresh and a Full refresh.
+// A sync while reading only queues the open book's copy; nothing is offered or swapped on screen.
+// In the sleep sync the requests ride the sync's own connection (patch 0037) and need OrbifyHeap's
+// floor; short of it, or of time, the rest carries over to the next sync.
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -24,12 +26,14 @@ bool enabled();
 // batch. Returns the number of copies newly queued.
 size_t detect(bool (*cancelled)());
 
-// With Wi-Fi up: replaces queued copies one at a time until the queue is empty, cancelled()
-// says stop, or budgetMs is used. Each replacement is checked against the library file's hash
-// before it goes live. Returns the number replaced.
-size_t run(bool (*cancelled)(), unsigned long budgetMs);
+// With Wi-Fi up and no book on screen: replaces queued copies one at a time until the queue is
+// empty, cancelled() says stop, or budgetMs is used. Each replacement is checked against the
+// library file's hash before it goes live; the position, highlights and bookmarks move with it.
+// where: the sync, for the log ("sleep sync", "Home", "Full refresh"). Returns the number replaced.
+size_t run(bool (*cancelled)(), unsigned long budgetMs, const char* where);
 
-// The sync's "update this copy" (decision (a)): queues the open book's copy for the next run.
+// A sync that found the open book's copy is an older one of its library file: queued for the next
+// sync that may replace it.
 bool enqueue(int64_t bookId, const std::string& path, const std::string& cardHash);
 
 // Copies waiting (not given up).

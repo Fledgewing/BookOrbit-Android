@@ -1,5 +1,7 @@
 #include "Mirror.h"
 
+#include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -8,7 +10,9 @@ namespace mirror {
 
 namespace {
 constexpr uint32_t DAY_S = 86400;
-constexpr char HEADER[] = "orbify-mirror 1";
+// 2: a book list's fields keep their separator in the plan. Version 1 plans turned it into a space
+// (one "sort" field holding the whole query, a 400 from the server) and are not resumed.
+constexpr char HEADER[] = "orbify-mirror 2";
 constexpr char SEP = '\x1f';
 
 char kindLetter(const Kind kind) {
@@ -44,9 +48,18 @@ bool kindOf(const char letter, Kind& out) {
   }
 }
 
+// A query field's value: no line breaks, tabs or field separators.
 std::string clean(std::string value) {
   for (char& c : value)
     if (c == '\t' || c == '\n' || c == '\r' || c == SEP) c = ' ';
+  return value;
+}
+
+// A plan step's argument: one line of the plan file, so no line breaks or tabs. The field separator
+// stays: a book list's argument is encodeQuery's fields joined by it.
+std::string cleanLine(std::string value) {
+  for (char& c : value)
+    if (c == '\t' || c == '\n' || c == '\r') c = ' ';
   return value;
 }
 
@@ -155,7 +168,7 @@ bool decodeQuery(const std::string& text, FacetQuery& out) {
 
 bool Plan::add(const Kind kind, const std::string& arg) {
   if (steps.size() >= MAX_STEPS) return false;
-  const std::string value = clean(arg);
+  const std::string value = cleanLine(arg);
   for (const Step& s : steps)
     if (s.kind == kind && s.arg == value) return false;
   steps.push_back(Step{kind, value});
@@ -212,6 +225,51 @@ bool Plan::parse(const std::string& text) {
   steps = std::move(read);
   done = parsedDone;
   return true;
+}
+
+namespace {
+std::string urlEncode(const std::string& s) {
+  std::string out;
+  out.reserve(s.size() * 3);
+  for (const unsigned char c : s) {
+    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+      out += static_cast<char>(c);
+    } else {
+      char buf[4];
+      std::snprintf(buf, sizeof(buf), "%%%02X", c);
+      out += buf;
+    }
+  }
+  return out;
+}
+void param(std::string& url, const char* name, const std::string& value) {
+  if (value.empty()) return;
+  url += '&';
+  url += name;
+  url += '=';
+  url += urlEncode(value);
+}
+}  // namespace
+
+std::string booksPath(const FacetQuery& q, const int page, const int size, const bool withLetters) {
+  if (!q.shelf.empty()) return "/plugin/catalog/dashboard/sections/" + urlEncode(q.shelf);
+  std::string url = "/plugin/catalog/books?page=" + std::to_string(page) + "&size=" + std::to_string(size) + "&format=epub";
+  if (withLetters) url += "&buckets=true";
+  param(url, "sort", q.sort);
+  param(url, "order", q.order);
+  param(url, "readStatus", q.readStatus);
+  param(url, "q", q.query);
+  param(url, "author", q.author);
+  // BookOrbit's own plugin: the numeric series id when there is one, else the name.
+  if (!q.seriesId.empty()) {
+    param(url, "seriesId", q.seriesId);
+  } else {
+    param(url, "series", q.series);
+  }
+  param(url, "collectionId", q.collectionId);
+  param(url, "smartScopeId", q.smartScopeId);
+  param(url, "libraryId", q.libraryId);
+  return url;
 }
 
 }  // namespace mirror

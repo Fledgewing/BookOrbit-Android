@@ -15,8 +15,15 @@ static_assert(offsetof(CardBook, coverVer) == 92 && sizeof(CardBook) == 96, "Car
 
 constexpr uint8_t CARD_MAGIC[4] = {'O', 'S', 'C', '1'};
 // 2: CardBook::coverVer, in what version 1 left as padding (its bytes there are not zero).
-constexpr uint8_t CARD_VERSION = 2;
+// 3: the series name, this book's index and the series' size, after `author`.
+constexpr uint8_t CARD_VERSION = 3;
+constexpr uint8_t CARD_VERSION_NO_SERIES_LINE = 2;
 constexpr uint8_t CARD_VERSION_NO_COVERS = 1;
+// Versions 1 and 2 end with `author`, padded to the struct's alignment.
+constexpr size_t LEGACY_STRUCT = (offsetof(SeriesCard, author) + sizeof(SeriesCard::author) + alignof(SeriesCard) - 1) /
+                                 alignof(SeriesCard) * alignof(SeriesCard);
+static_assert(offsetof(SeriesCard, seriesName) >= offsetof(SeriesCard, author) + sizeof(SeriesCard::author),
+              "version 3 fields follow version 2's");
 
 void copyText(char* dst, size_t capacity, const char* src) {
   if (!src) src = "";
@@ -78,6 +85,7 @@ void cardFilter(JsonDocument& filter) {
   filter["id"] = true;
   filter["authors"] = true;
   filter["seriesId"] = true;
+  filter["seriesName"] = true;
   filter["seriesIndex"] = true;
   filter["readStatus"] = true;
   JsonObject member = filter["seriesMembers"].add<JsonObject>();
@@ -101,6 +109,9 @@ bool pickCard(JsonObjectConst detail, size_t maxSuggestions, SeriesCard& out) {
   if (!authors.isNull() && authors.size() > 0) copyText(out.author, sizeof(out.author), authors[0].as<const char*>());
 
   JsonArrayConst members = detail["seriesMembers"].as<JsonArrayConst>();
+  copyText(out.seriesName, sizeof(out.seriesName), detail["seriesName"].as<const char*>());
+  indexText(detail["seriesIndex"], out.seriesIndex, sizeof(out.seriesIndex));
+  out.seriesCount = members.isNull() ? 0 : static_cast<uint16_t>(members.size() > 0xFFFF ? 0xFFFF : members.size());
   const double c = indexOf(detail["seriesIndex"]);
   int64_t nextId = 0;
   if (!detail["seriesId"].isNull() && !std::isnan(c)) {
@@ -187,15 +198,30 @@ size_t serializeCard(const SeriesCard& card, uint8_t* out, const size_t capacity
   return CARD_BYTES;
 }
 
+size_t legacyCardBytes() { return 8 + LEGACY_STRUCT + 4; }
+
 bool deserializeCard(const uint8_t* data, const size_t size, SeriesCard& out) {
-  if (size != CARD_BYTES || std::memcmp(data, CARD_MAGIC, 4) != 0) return false;
-  if (data[4] != CARD_VERSION && data[4] != CARD_VERSION_NO_COVERS) return false;
-  if ((data[5] | (data[6] << 8)) != static_cast<int>(sizeof(SeriesCard))) return false;
+  if (size < 8 || std::memcmp(data, CARD_MAGIC, 4) != 0) return false;
+  const uint8_t version = data[4];
+  const size_t structBytes = version == CARD_VERSION ? sizeof(SeriesCard) : LEGACY_STRUCT;
+  if (version != CARD_VERSION && version != CARD_VERSION_NO_SERIES_LINE && version != CARD_VERSION_NO_COVERS) {
+    return false;
+  }
+  if (size != 8 + structBytes + 4 || (data[5] | (data[6] << 8)) != static_cast<int>(structBytes)) return false;
   uint32_t crc = 0;
-  for (int i = 0; i < 4; ++i) crc |= static_cast<uint32_t>(data[8 + sizeof(SeriesCard) + i]) << (8 * i);
-  if (crc != slot::crc32(data, 8 + sizeof(SeriesCard))) return false;
-  std::memcpy(&out, data + 8, sizeof(SeriesCard));
+  for (int i = 0; i < 4; ++i) crc |= static_cast<uint32_t>(data[8 + structBytes + i]) << (8 * i);
+  if (crc != slot::crc32(data, 8 + structBytes)) return false;
+  out = SeriesCard{};
+  std::memcpy(static_cast<void*>(&out), data + 8, structBytes);
+  if (version != CARD_VERSION) {
+    // The legacy record's tail padding lies where the series fields are now: they stay empty.
+    std::memset(out.seriesName, 0, sizeof(out.seriesName));
+    std::memset(out.seriesIndex, 0, sizeof(out.seriesIndex));
+    out.seriesCount = 0;
+  }
   out.author[sizeof(out.author) - 1] = '\0';
+  out.seriesName[sizeof(out.seriesName) - 1] = '\0';
+  out.seriesIndex[sizeof(out.seriesIndex) - 1] = '\0';
   out.nextBook.title[sizeof(out.nextBook.title) - 1] = '\0';
   if (out.suggestionCount > SeriesCard::MAX_SUGGESTIONS) return false;
   if (data[4] == CARD_VERSION_NO_COVERS) {

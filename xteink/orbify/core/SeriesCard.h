@@ -38,6 +38,11 @@ struct SeriesCard {
   CardBook suggestions[MAX_SUGGESTIONS];
   Source sources[MAX_SUGGESTIONS] = {};
   char author[48] = {};  // authors[0], "" when the book has none
+  // Version 3, after everything version 2 had (an older record is this record's prefix): the book's
+  // own place in its series, for the page's "<series> · Book 2 of 4" line.
+  char seriesName[48] = {};  // "" when the server names no series
+  char seriesIndex[12] = {};  // this book's seriesIndex as sent ("2", "1.5"); "" = none
+  uint16_t seriesCount = 0;   // books the server lists in the series (seriesMembers), 0 = unknown
 };
 
 // The fields pickCard reads, as an ArduinoJson filter for a streamed detail reply.
@@ -48,8 +53,11 @@ void cardFilter(JsonDocument& filter);
 bool pickCard(JsonObjectConst detail, size_t maxSuggestions, SeriesCard& out);
 
 // The cache record: fixed size, versioned, with a CRC; deserialize is false for anything else. A
-// version 1 record (before covers) reads as a card with no cover versions.
+// version 1 record (before covers) reads as a card with no cover versions; version 1 and 2 records
+// (before the series line) read as cards with no series name, index or count.
 constexpr size_t CARD_BYTES = 8 + sizeof(SeriesCard) + 4;
+// The record of versions 1 and 2: SeriesCard up to and including `author`.
+size_t legacyCardBytes();
 size_t serializeCard(const SeriesCard& card, uint8_t* out, size_t capacity);
 bool deserializeCard(const uint8_t* data, size_t size, SeriesCard& out);
 
