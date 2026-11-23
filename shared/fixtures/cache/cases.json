@@ -1,0 +1,137 @@
+{
+  "_comment": "Write-through cache (docs/design/write-through-cache.md). Both platforms' tests read this. Times are epoch seconds; 'now' is the time of the step. A cover version is the book's updatedAt as the server lists it. Cover files: ok | missing | empty | corrupt.",
+  "keys": [
+    {
+      "name": "query order and empty values don't matter",
+      "a": { "account": "reader", "server": "https://Books.Example/", "method": "GET", "path": "/koreader/plugin/catalog/books", "query": { "sort": "title", "page": "1", "q": "" } },
+      "b": { "account": "reader", "server": "https://books.example", "method": "GET", "path": "/koreader/plugin/catalog/books", "query": { "page": "1", "sort": "title" } },
+      "same": true
+    },
+    {
+      "name": "accounts never share an entry",
+      "a": { "account": "reader", "server": "https://books.example", "method": "GET", "path": "/koreader/plugin/catalog/dashboard", "query": {} },
+      "b": { "account": "kid", "server": "https://books.example", "method": "GET", "path": "/koreader/plugin/catalog/dashboard", "query": {} },
+      "same": false
+    },
+    {
+      "name": "servers never share an entry",
+      "a": { "account": "reader", "server": "https://books.example", "method": "GET", "path": "/koreader/plugin/catalog/dashboard", "query": {} },
+      "b": { "account": "reader", "server": "https://other.example", "method": "GET", "path": "/koreader/plugin/catalog/dashboard", "query": {} },
+      "same": false
+    }
+  ],
+  "cacheable": [
+    { "method": "GET", "path": "/koreader/plugin/catalog/dashboard", "cached": true },
+    { "method": "GET", "path": "/koreader/plugin/catalog/books", "cached": true },
+    { "method": "GET", "path": "/koreader/plugin/catalog/books/42", "cached": true },
+    { "method": "GET", "path": "/plugin/catalog/dashboard", "cached": true },
+    { "method": "GET", "path": "/koreader/plugin/version", "cached": false },
+    { "method": "GET", "path": "/koreader/plugin/catalog/books/42/thumbnail", "cached": false },
+    { "method": "PUT", "path": "/koreader/plugin/catalog/books/42/read-status", "cached": false },
+    { "method": "GET", "path": "/koreader/sync/progress", "cached": false }
+  ],
+  "reads": [
+    { "name": "missing: go to the server", "entry": null, "now": 1000, "mode": "open", "serve": false, "fetch": true },
+    { "name": "present and recently checked: served, not checked again", "entry": { "validated_at": 970 }, "now": 1000, "mode": "open", "serve": true, "fetch": false },
+    { "name": "present and older than 60 s: served, checked in the background", "entry": { "validated_at": 900 }, "now": 1000, "mode": "open", "serve": true, "fetch": true },
+    { "name": "Refresh skips the 60 s window", "entry": { "validated_at": 990 }, "now": 1000, "mode": "refresh", "serve": true, "fetch": true },
+    { "name": "Full refresh ignores the cache", "entry": { "validated_at": 990 }, "now": 1000, "mode": "full", "serve": false, "fetch": true },
+    { "name": "offline: served from the cache, no fetch", "entry": { "validated_at": 10 }, "now": 1000, "mode": "open", "offline": true, "serve": true, "fetch": false }
+  ],
+  "revalidate": [
+    { "name": "same reply: only stamped", "cached": { "a": 1, "b": [1, 2] }, "reply": { "b": [1, 2], "a": 1 }, "status": 200, "changed": false, "stored": true },
+    { "name": "different reply: replaced, view redraws", "cached": { "a": 1 }, "reply": { "a": 2 }, "status": 200, "changed": true, "stored": true },
+    { "name": "an error is never stored", "cached": { "a": 1 }, "reply": { "error": "x" }, "status": 500, "changed": false, "stored": false }
+  ],
+  "writes": [
+    {
+      "name": "a finish patches the book wherever it is cached and marks Home stale",
+      "write": { "method": "PUT", "path": "/koreader/plugin/catalog/books/7/read-status", "body": { "status": "read" }, "status": 200 },
+      "entries": {
+        "dashboard": { "continueReading": [ { "id": 7, "readStatus": "reading" }, { "id": 8, "readStatus": "reading" } ] },
+        "detail7": { "id": 7, "readStatus": "reading", "seriesMembers": [ { "id": 6, "readStatus": "read" } ] },
+        "series": { "items": [ { "id": 6, "readStatus": "read" }, { "id": 7, "readStatus": "reading" } ] }
+      },
+      "expect": {
+        "dashboard": { "continueReading": [ { "id": 7, "readStatus": "read" }, { "id": 8, "readStatus": "reading" } ] },
+        "detail7": { "id": 7, "readStatus": "read", "seriesMembers": [ { "id": 6, "readStatus": "read" } ] },
+        "series": { "items": [ { "id": 6, "readStatus": "read" }, { "id": 7, "readStatus": "read" } ] }
+      },
+      "stale": ["dashboard"]
+    },
+    {
+      "name": "a rating patches the rating",
+      "write": { "method": "PUT", "path": "/koreader/plugin/catalog/books/7/rating", "body": { "rating": 4 }, "status": 200 },
+      "entries": { "detail7": { "id": 7, "rating": null } },
+      "expect": { "detail7": { "id": 7, "rating": 4 } },
+      "stale": ["dashboard"]
+    },
+    {
+      "name": "a failed write changes nothing",
+      "write": { "method": "PUT", "path": "/koreader/plugin/catalog/books/7/read-status", "body": { "status": "read" }, "status": 503 },
+      "entries": { "detail7": { "id": 7, "readStatus": "reading" } },
+      "expect": { "detail7": { "id": 7, "readStatus": "reading" } },
+      "stale": []
+    }
+  ],
+  "covers": [
+    {
+      "name": "Refresh downloads no unchanged cover",
+      "mode": "refresh",
+      "listed": [ { "id": 7, "updatedAt": "2026-11-01T10:00:00Z" }, { "id": 8, "updatedAt": "2026-11-02T10:00:00Z" } ],
+      "disk": { "7": { "version": "2026-11-01T10:00:00Z", "file": "ok" }, "8": { "version": "2026-11-02T10:00:00Z", "file": "ok" } },
+      "download": [],
+      "remove": []
+    },
+    {
+      "name": "a version change downloads exactly that cover",
+      "mode": "refresh",
+      "listed": [ { "id": 7, "updatedAt": "2026-11-01T10:00:00Z" }, { "id": 8, "updatedAt": "2026-11-20T09:00:00Z" } ],
+      "disk": { "7": { "version": "2026-11-01T10:00:00Z", "file": "ok" }, "8": { "version": "2026-11-02T10:00:00Z", "file": "ok" } },
+      "download": [8],
+      "remove": []
+    },
+    {
+      "name": "Refresh fetches a missing cover and retries a failed one",
+      "mode": "refresh",
+      "listed": [ { "id": 7, "updatedAt": "2026-11-01T10:00:00Z" }, { "id": 9, "updatedAt": "2026-11-03T10:00:00Z" } ],
+      "disk": {},
+      "failed": [9],
+      "download": [7, 9],
+      "remove": []
+    },
+    {
+      "name": "Refresh never checks or removes a file at the listed version",
+      "mode": "refresh",
+      "listed": [ { "id": 7, "updatedAt": "2026-11-01T10:00:00Z" } ],
+      "disk": { "7": { "version": "2026-11-01T10:00:00Z", "file": "corrupt" } },
+      "download": [],
+      "remove": []
+    },
+    {
+      "name": "Full refresh replaces a missing or corrupt cover and keeps good ones",
+      "mode": "full",
+      "listed": [ { "id": 7, "updatedAt": "2026-11-01T10:00:00Z" }, { "id": 8, "updatedAt": "2026-11-02T10:00:00Z" }, { "id": 9, "updatedAt": "2026-11-03T10:00:00Z" }, { "id": 10, "updatedAt": "2026-11-04T10:00:00Z" } ],
+      "disk": { "7": { "version": "2026-11-01T10:00:00Z", "file": "ok" }, "8": { "version": "2026-11-02T10:00:00Z", "file": "corrupt" }, "9": { "version": "2026-11-03T10:00:00Z", "file": "empty" } },
+      "download": [8, 9, 10],
+      "remove": [8, 9]
+    },
+    {
+      "name": "a book listed without a cover is never fetched",
+      "mode": "full",
+      "listed": [ { "id": 7, "updatedAt": "2026-11-01T10:00:00Z", "hasCover": false } ],
+      "disk": {},
+      "download": [],
+      "remove": []
+    }
+  ],
+  "full_refresh_overlay": [
+    {
+      "name": "Full refresh keeps the unsent local finish on top",
+      "server": { "continueReading": [ { "id": 7, "progressPercentage": 40, "readStatus": "reading" } ] },
+      "local": { "7": { "status": "complete", "percent": 100, "pending": true } },
+      "expect_continue_reading": [],
+      "expect_entry_unchanged": true
+    }
+  ]
+}

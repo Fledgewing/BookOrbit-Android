@@ -14,7 +14,8 @@ Citations are to the pins in `tools/upstreams.lock` (plugin = BookOrbit
 
 ## Shared concept
 
-Semantics are fixed by `shared/fixtures/cache/cases.json`, which both platforms' tests read.
+Semantics are fixed by `shared/fixtures/cache/cases.json` (keys, reads, writes, covers, both refresh
+modes), which both platforms' tests read.
 
 | Part | Rule |
 |---|---|
@@ -22,12 +23,27 @@ Semantics are fixed by `shared/fixtures/cache/cases.json`, which both platforms'
 | Key | account + server + method + path + query, normalised: server URL lower-case without trailing `/`, query parameters sorted, empty values dropped. Account = the user name the request authenticates as. Entries of another account or server are never served; signing out or changing server/account drops them. |
 | Read | Entry present: return it at once (no network), then revalidate in the background unless it was validated in the last 60 s. Entry missing: go to the server (as today) and store a `2xx` reply. Errors are never stored. |
 | Revalidate | One background request per key at a time. Same reply (by canonical form): stamp `validated_at`, nothing else. Different: replace it and tell the view showing that key to redraw (see the platform hooks). Failure: keep the entry; the view's stamp says "Not updated". |
-| Force | ⟳ (and pull-to-refresh where a platform has it) skips the cache for that read and stores the reply. |
 | Writes | Every non-`GET` passes through untouched. On `2xx`, the write's effects are applied to the cache: `read-status` and `rating` on book *id* patch `readStatus`/`rating` of that book wherever a cached body lists it (detail, Home lists, series members, list pages) and mark Home stale; progress and book-states mark Home stale. Stale = revalidate on the next read (immediately if it is on screen). A failed write changes nothing. |
 | Size | Total cap (Android 8 MB, X4 2 MB on SD) and entry cap (400 / 200). Least recently used goes first; the Home body and the open book's detail are never evicted by a list page. |
 | Overlay | Unchanged: local-first's rules (device wins while newer or unsent; a local finish leaves Continue reading and counts toward the goal at once; design D4) are applied to what the cache returns, never written into it. |
 | Offline | Reads come from the cache, with the "Offline, saved …" stamp. Writes made offline use the existing queues (the plugin's outbox, Orbit's finish queue, the firmware's sync queue); the cache only learns of them when they succeed. |
-| Covers | Disk cache keyed by book id + cover version (the plugin already does this: `bookorbit_catalog_thumbnails.lua:61-85` coverToken/memoKey, files in `cache/bookorbit`, pruned at 600 files). Orbit's part: a cover that failed is retried on the next network-up instead of staying failed for the session, and the worker counts as network activity. |
+| Covers | Part of the cache: a disk file per book id + cover version, the version being the book's `updatedAt` as the server lists it (the plugin already names its files this way: `bookorbit_catalog_thumbnails.lua:58-85` coverToken/memoKey, files in `cache/bookorbit`, pruned at 600). A cover is downloaded only when it is missing, failed earlier, or listed with a version other than the one on disk; a cover whose version is unchanged is never downloaded again. A cover changed on the server without a new version is what Full refresh is for. |
+
+## Refresh and Full refresh
+
+The same two modes and words on both platforms.
+
+| | Refresh | Full refresh |
+|---|---|---|
+| What starts it | Tap ⟳; every automatic background check. Xteink: Confirm on ⟳ (X4 Pro: tap). | Hold ⟳ (a short "Full refresh…" note); "Full refresh" in the Orbit menu / Xteink settings. Xteink: long-press Confirm on ⟳ (X4 Pro: hold). |
+| Data | Revalidate this view's entries (and Home's when on Home), skipping the 60 s window, and merge what changed. | Fetch this view and Home's sections from the server, ignoring the cache, and replace those entries. |
+| Covers | Fetch only missing, failed or re-versioned covers. | Also check every visible cover file: a missing, empty or unreadable file is removed and fetched again. A good file at the listed version is kept (verify and replace, never a blind re-download). |
+| Evicts | Nothing. | Only the entries and cover files it replaces. |
+| Overlay | Stays on top. | Stays on top: unsent local state is never lost to a Full refresh. |
+
+BookOrbit's own refresh (plugin `refreshCurrent`, `bookorbit_catalog.lua:475-490`) deletes every
+cover on screen (`evictCachedCovers`, `bookorbit_catalog_thumbnails.lua:237`) and cancels the
+cover jobs. Neither of our modes goes through that deletion.
 
 ## Android (Orbit plugin)
 
@@ -42,8 +58,16 @@ Semantics are fixed by `shared/fixtures/cache/cases.json`, which both platforms'
   A different reply updates the entry, then calls the redraw hook for the view showing that key:
   - Home: local-first's quiet path (`ko/localfirst.lua` `LF.quietSwitch`): header stamp and the
     tiles whose content changed, nothing else.
-  - Lists and book detail: the catalog's own `refreshCurrent` (`bookorbit_catalog.lua:475`),
-    which reads the now-current entry from the cache, so it is one repaint with no request.
+  - Lists and book detail: the catalog's own reload (`refreshCurrent`, `bookorbit_catalog.lua:475`)
+    with its cover eviction turned off (Orbit wraps `evictCachedCovers`); it reads the
+    now-current entry from the cache, so it is one repaint with no request.
+- **Covers:** the plugin's queue already skips a cover whose versioned file exists
+  (`queueThumbnails`, `bookorbit_catalog_thumbnails.lua:257`). Orbit keeps the jobs alive across
+  its quiet Home repaint (the stock `switchTo` cancels them, `bookorbit_catalog.lua:848`), queues
+  the covers of books a refresh brings in, lets a cover that lands redraw its tile, and clears
+  the session's failed-cover memo on Refresh. Full refresh checks the visible files (size, JPEG
+  or PNG header) and removes the bad ones before queueing.
+- **⟳:** tap = Refresh, hold = Full refresh, on Home and on lists; the Orbit menu has "Full refresh".
 - **What it replaces:** local-first's Home-only body handling (the `dashboardRootFetch` tag and
   `fetchedAt` stamps) moves onto the cache: freshness stamps read `validated_at` per key, lists
   included. The overlay, tile diff, ⟳ and stamp UI stay.
@@ -62,6 +86,8 @@ Semantics are fixed by `shared/fixtures/cache/cases.json`, which both platforms'
   write-effect rules hook there on `2xx`. The Xteink builder confirms these seams on 2.x.
 - **Disk:** `/.crosspoint/bookorbit-cache/<hash>.json` + `index.bin`, 2 MB / 200 entries on X4
   and X4 Pro. Parsing stays streamed with the existing filters, so memory use doesn't grow.
+- **Covers:** `downloadThumbnail` (X `BookOrbitCatalogClient.cpp:469`) writes the file under a
+  name with the book id and its `updatedAt`, so a cover is fetched under the same rules.
 - **Revalidate:** only while Wi-Fi is already up (the firmware joins on demand); a catalog screen
   opened offline shows the cached copy with the saved stamp. No background task on the C3.
 - **X3:** not designed for now beyond "doesn't break": the cache stays off where the build lacks
@@ -79,6 +105,12 @@ Semantics are fixed by `shared/fixtures/cache/cases.json`, which both platforms'
 6. Account change: entries are keyed by account, and sign-out drops the cache directory.
 7. Sizes (8 MB / 2 MB): the Home body is about 30-60 KB and a list page 5-20 KB; this holds
    every view a reader visits in weeks.
-8. Covers: keep the plugin's cache rather than a second one; fix the retry and the network hold.
+8. Covers: keep the plugin's files (already versioned) and decide what to fetch in the cache
+   rules, not a second store.
+9. Full refresh and covers: verify and replace. A blind re-download of every visible cover costs
+   minutes of e-ink repaints and data for a case (a cover changed without a new version) that
+   doesn't occur in normal use; a broken file is the real failure, and checking finds it.
+10. Hold vs a second button: hold, so the header keeps one control; the menu entry makes it
+   findable.
 
 No one-way doors: everything is local, disposable and behind a setting.
