@@ -34,6 +34,7 @@ EOB.COMPAT = {
     sidecar = { rememberServerState = "function", applyServerStateLive = "function", applyServerStateSidecar = "function" },
 }
 EOB.CATALOG = { downloadDefaultFile = "function", downloadFile = "function", loadBooks = "function" }
+-- Used when present (the detail page's path): fetchDeliveryBook, supportedFiles.
 
 local function settingsDir()
     local okd, DataStorage = pcall(require, "datastorage")
@@ -414,10 +415,20 @@ end
 function EOB.download(p, book_id, done, progress)
     local cat = EOB.headlessCatalog(p)
     if not cat then return done(false, "the BookOrbit plugin changed") end
-    local detail, err = cat.client:catalogBook(book_id)
+    -- The detail page's Download button's own path: the detail with this reader's delivery variant
+    -- (bookorbit_catalog_download.lua:92 fetchDeliveryBook), whose files carry the selection and
+    -- the hash of what the server actually streams (server enrichDeliveryFiles). Without the
+    -- variant the hash is the source file's and an audio-free rebuild fails it (hash_mismatch).
+    local detail, err
+    if Compat.callable(cat.fetchDeliveryBook) then detail, err = cat:fetchDeliveryBook(book_id)
+    else detail, err = cat.client:catalogBook(book_id) end
     if type(detail) ~= "table" then return done(false, err) end
-    local file = detail.files and detail.files[1]
-    if not file then return done(false, "no file to download") end
+    -- A file this reader opens (detail supportedFiles :382), the primary one first.
+    local files = Compat.callable(cat.supportedFiles) and cat:supportedFiles(detail) or detail.files or {}
+    local file
+    for _, f in ipairs(files) do if f.role == "primary" then file = f break end end
+    file = file or files[1]
+    if not file then return done(false, "no file this reader can open") end
     local target
     -- downloadDefaultFile names the file the plugin's way, then hands over to checkDownloadFile.
     cat.checkDownloadFile = function(_self, local_path) target = local_path end
