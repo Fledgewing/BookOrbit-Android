@@ -6,8 +6,14 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 up="$(cd "${1:?usage: run-host-tests.sh /path/to/CrossInk-Bookorbit}" && pwd)"
-out="$(mktemp -d)"
-trap 'rm -rf "$out"' EXIT
+# ORBIFY_TEST_OUT keeps the binaries and the End-of-Book PNGs (CI uploads them); else a temp dir.
+if [ -n "${ORBIFY_TEST_OUT:-}" ]; then
+  out="$ORBIFY_TEST_OUT"
+  mkdir -p "$out"
+else
+  out="$(mktemp -d)"
+  trap 'rm -rf "$out"' EXIT
+fi
 
 # The streaming JSON parser moved into the FreeInk SDK in CrossInk 2.x.
 "$here/upstream_line_test.sh"
@@ -46,6 +52,19 @@ orbify_test finish "$core/FinishQueue.cpp"
 orbify_test end_of_book "$core/SeriesCard.cpp" "$core/EndPagePlan.cpp" "$core/FinishQueue.cpp"
 orbify_test localfirst "$core/LocalFirst.cpp"
 orbify_test reading_quiet "$core/ReadingQuiet.cpp"
+# The End-of-Book page (orbify/core/EndPageLayout): touch rules on the X4 Pro and X4 layouts, and
+# PNGs drawn with CrossInk's own font sources for review against the mockups (in $out). Needs
+# FreeType and libpng; CI sets ORBIFY_REQUIRE_RENDER=1 so a missing library fails there.
+if pkg-config --exists freetype2 libpng 2>/dev/null; then
+  "${CXX:-c++}" -std=c++17 -Wall -Wextra -O1 -I"$core" $(pkg-config --cflags freetype2 libpng) \
+    "$here/eob_render.cpp" "$core/EndPageLayout.cpp" $(pkg-config --libs freetype2 libpng) -o "$out/eob_render"
+  "$out/eob_render" "$up" "$out"
+elif [ "${ORBIFY_REQUIRE_RENDER:-0}" = 1 ]; then
+  echo "eob-render: FreeType and libpng are required (pkg-config freetype2 libpng)" >&2
+  exit 1
+else
+  echo "eob-render: skipped (no FreeType/libpng)"
+fi
 # The lwIP core-lock wrapper (tailnet/shim/TailnetLwipLock.c) against stand-in lwIP headers.
 "${CC:-cc}" -std=c11 -Wall -Wextra -I"$here/stubs" "$here/lwip_lock_test.c" "$repo/xteink/tailnet/shim/TailnetLwipLock.c" \
   -o "$out/lwip_lock_test"

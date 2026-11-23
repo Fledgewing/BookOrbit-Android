@@ -217,13 +217,20 @@ reader's old position would otherwise reopen it as a reread).
 
 **Settings > BookOrbit Sync > Mark Finished at End** turns the automatic mark off (on by default).
 
-The End-of-Book page then shows where the book stands and what comes next: **Finished · sends at
-next sync** (Confirm: Undo), a rating on the X4s (Left/Right, Confirm saves), the **next book in
-the series** (or the gap, or "You've finished the series"), up to two suggestions ("Also by" and
-"You might like"), **All books by <author>** and Home. A book that is not on the card offers
+The End-of-Book page, full screen in large type, then shows **The End** over the book's title and
+author, where the book stands, and what comes next:
+- **Finished · sends at next sync** (Undo).
+- Your rating as five stars on the X4s: tap a star on the X4 Pro, or Left/Right then Confirm.
+- The **next book in the series** (or the gap, or "You've finished the series").
+- Up to two suggestions ("Also by" and "You might like").
+- **All books by <author>**.
+- Home.
+
+Rows keep their places when you Undo, and a tap only counts once the page is on screen. A book that is not on the card offers
 **Download**: the catalog downloads it and opens it, and Back returns to the finished book. The
 next book and suggestions come from BookOrbit when the book is downloaded and are refreshed by
-syncs near its end; a book without them keeps CrossInk's folder suggestions.
+syncs near its end. Without them (offline, or never fetched), the page shows the series the book
+names with "Connect to see what's next", CrossInk's folder suggestions and the author's row.
 
 ## Settings PIN
 

@@ -2,21 +2,25 @@
 
 #include "EndPage.h"
 
+#include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
 
 #include <cstdio>
 
-#include "BookOrbitCredentialStore.h"
 #include "BookOrbitDownloadIndex.h"
 #include "FinishSync.h"
 #include "activities/reader/BookReadingStats.h"
+#include "fontIds.h"
 #include "sync/BookSyncFile.h"
 
 namespace {
 
 using orbify::RowKind;
 using orbify::SeriesCard;
+namespace eob = orbify::eob;
+
+const char* const DOT = " \xC2\xB7 ";  // " · "
 
 std::string format(const char* pattern, const char* text) {
   char buf[160];
@@ -26,20 +30,112 @@ std::string format(const char* pattern, const char* text) {
 
 std::string bookLabel(const orbify::CardBook& book) {
   if (!book.index[0]) return book.title;
-  return format(tr(STR_ORBIFY_BOOK_N), book.index) + " \xC2\xB7 " + book.title;  // "Book 3 · Title"
+  return format(tr(STR_ORBIFY_BOOK_N), book.index) + DOT + book.title;  // "Book 3 · Title"
+}
+
+// The page's fonts by role: large serif title, the reader's large UI sizes for the rows.
+struct FontRole {
+  int id;
+  EpdFontFamily::Style regular;
+};
+FontRole fontFor(const eob::Font font) {
+  switch (font) {
+    case eob::Font::Title:
+      return {BITTER_16_FONT_ID, EpdFontFamily::BOLD};
+    case eob::Font::Subtitle:
+      return {BITTER_12_FONT_ID, EpdFontFamily::ITALIC};
+    case eob::Font::Row:
+      return {LEXENDDECA_12_FONT_ID, EpdFontFamily::REGULAR};
+    case eob::Font::Small:
+      return {LEXENDDECA_10_FONT_ID, EpdFontFamily::REGULAR};
+    case eob::Font::Heading:
+    default:
+      return {LEXENDDECA_10_FONT_ID, EpdFontFamily::BOLD};
+  }
+}
+
+EpdFontFamily::Style styleOf(const eob::Font font, const bool bold, const bool italic) {
+  if (font == eob::Font::Title) return EpdFontFamily::BOLD;
+  if (font == eob::Font::Subtitle) return EpdFontFamily::ITALIC;
+  int style = EpdFontFamily::REGULAR;
+  if (bold) style |= EpdFontFamily::BOLD;
+  if (italic) style |= EpdFontFamily::ITALIC;
+  return static_cast<EpdFontFamily::Style>(style);
+}
+
+int measure(void* ctx, const eob::Font font, const bool bold, const char* text) {
+  const auto* renderer = static_cast<const GfxRenderer*>(ctx);
+  return renderer->getTextWidth(fontFor(font).id, text, styleOf(font, bold, false));
+}
+
+eob::Metrics metricsFor(GfxRenderer& renderer) {
+  eob::Metrics m;
+  for (int f = 0; f < static_cast<int>(eob::Font::COUNT); ++f) {
+    m.lineHeight[f] = renderer.getLineHeight(fontFor(static_cast<eob::Font>(f)).id);
+  }
+  m.textWidth = measure;
+  m.ctx = &renderer;
+  return m;
+}
+
+void drawOps(GfxRenderer& renderer, const eob::Layout& layout, const int dx, const int dy) {
+  for (eob::Op op : layout.ops) {
+    op.x += dx;
+    op.y += dy;
+    switch (op.kind) {
+      case eob::Op::Kind::Text:
+        renderer.drawText(fontFor(op.font).id, op.x, op.y, op.text.c_str(), !op.white,
+                          styleOf(op.font, op.bold, op.italic));
+        break;
+      case eob::Op::Kind::FillRect:
+        renderer.fillRect(op.x, op.y, op.w, op.h, !op.white);
+        break;
+      case eob::Op::Kind::Line:
+        renderer.fillRectDither(op.x, op.y, op.w, op.h, Color::DarkGray);
+        break;
+      case eob::Op::Kind::Check: {
+        int s[8];
+        eob::checkStrokes(op.x, op.y, op.w, s);
+        renderer.drawLine(s[0], s[1], s[2], s[3], 4, !op.white);
+        renderer.drawLine(s[4], s[5], s[6], s[7], 4, !op.white);
+        break;
+      }
+      case eob::Op::Kind::Star: {
+        int pts[20];
+        eob::starPoints(op.x, op.y, op.w, pts);
+        int xs[10], ys[10];
+        for (int i = 0; i < 10; ++i) {
+          xs[i] = pts[2 * i];
+          ys[i] = pts[2 * i + 1];
+        }
+        renderer.fillPolygon(xs, ys, 10, !op.white);
+        if (!op.filled) {
+          // An empty star: the outline, 3 px thick.
+          eob::starPoints(op.x, op.y, op.w - 4, pts);
+          for (int i = 0; i < 10; ++i) {
+            xs[i] = pts[2 * i];
+            ys[i] = pts[2 * i + 1];
+          }
+          renderer.fillPolygon(xs, ys, 10, op.white);
+        }
+        break;
+      }
+    }
+  }
 }
 
 }  // namespace
 
-void OrbifyEndPage::load(const std::string& path, const std::vector<std::string>& names,
+void OrbifyEndPage::load(const std::string& path, const BookInfo& info, const std::vector<std::string>& names,
                          const std::vector<std::string>& namePaths) {
   bookPath = path;
+  book = info;
   folderNames = names;
   folderPaths = namePaths;
   const std::string cachePath = BookSyncFile::cachePathFor(bookPath);
   finished = !cachePath.empty() && BookReadingStats::load(cachePath).isCompleted;
   hasCard = OrbifyFinish::loadCard(bookPath, card);
-  authorName = hasCard ? card.author : "";
+  authorName = hasCard && card.author[0] ? card.author : book.author;
   savedRating = shownRating = finished ? OrbifyFinish::rating(bookPath) : 0;
   sendState = finished ? OrbifyFinish::jobState(bookPath) : OrbifyFinish::JobState::None;
   // Which card books are on the device, looked up once (the index lives on the SD card).
@@ -48,8 +144,8 @@ void OrbifyEndPage::load(const std::string& path, const std::vector<std::string>
     for (uint8_t k = 0; k < card.suggestionCount; ++k) bookOnDevice(card.suggestions[k].id, suggestionPaths[k]);
   }
   build();
-  LOG_INF("ORB", "End page: %s, card %s, %u rows", finished ? "finished" : "not finished", hasCard ? "yes" : "no",
-          static_cast<unsigned>(plannedCount));
+  LOG_INF("ORB", "End page: %s, card %s, series %s, %u rows", finished ? "finished" : "not finished",
+          hasCard ? "yes" : "no", book.series.empty() ? "none" : "offline", static_cast<unsigned>(plannedCount));
 }
 
 void OrbifyEndPage::finishedChanged(const bool isFinished) {
@@ -67,26 +163,53 @@ void OrbifyEndPage::build() {
   input.folderCount = static_cast<uint8_t>(folderNames.size() < 3 ? folderNames.size() : 3);
   input.maxSuggestions = CROSSINK_TAILNET_ORBIFY_SUGGESTIONS;
   input.authorRow = CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW != 0;
+  input.offlineSeries = !book.series.empty();
+  input.offlineAuthor = !book.author.empty();
   plannedCount = orbify::planRows(input, planned, orbify::MAX_ROWS);
   rowCount = plannedCount;
   for (size_t i = 0; i < rowCount; ++i) {
     rows[i] = planned[i];
     labelRow(i);
   }
-  if (selection >= static_cast<int>(rowCount) || !orbify::selectable(rows[selection].kind)) selection = 0;
+  if (selection >= static_cast<int>(rowCount) || !rowEnabled(static_cast<size_t>(selection))) selection = 0;
 }
 
-void OrbifyEndPage::fit(const orbify::FitMetrics& metrics) {
+bool OrbifyEndPage::rowEnabled(const size_t i) const {
+  if (i >= rowCount || !orbify::selectable(rows[i].kind)) return false;
+  return rows[i].kind != RowKind::Rating || finished;
+}
+
+void OrbifyEndPage::fit(const eob::Metrics& metrics, const int available, const bool touch) {
   const RowKind selectedKind = rows[selection].kind;
   const uint8_t selectedIndex = rows[selection].index;
   rowCount = plannedCount;
-  for (size_t i = 0; i < rowCount; ++i) rows[i] = planned[i];
-  rowCount = orbify::fitRows(rows, rowCount, metrics);
+  for (size_t i = 0; i < rowCount; ++i) {
+    rows[i] = planned[i];
+    labelRow(i);
+  }
+  // Drop rows (core/EndPagePlan's order) until the tallest row shapes fit.
+  eob::Row twoLine;
+  twoLine.label = "A";
+  twoLine.sub = "a";
+  eob::Row heading = twoLine;
+  heading.heading = "A";
+  eob::Row rating;
+  rating.role = eob::RowRole::Rating;
+  rating.sub = "a";
+  orbify::FitMetrics fm;
+  fm.rowHeight = eob::rowHeight(twoLine, metrics, touch);
+  fm.headingHeight = eob::rowHeight(heading, metrics, touch) - fm.rowHeight;
+  fm.available = available;
+  for (size_t i = 0; i < rowCount; ++i) {
+    if (rows[i].kind == RowKind::Rating) fm.available -= eob::rowHeight(rating, metrics, touch) - fm.rowHeight;
+  }
+  rowCount = orbify::fitRows(rows, rowCount, fm);
   selection = 0;
   for (size_t i = 0; i < rowCount; ++i) {
     labelRow(i);
     if (rows[i].kind == selectedKind && rows[i].index == selectedIndex) selection = static_cast<int>(i);
   }
+  if (!rowEnabled(static_cast<size_t>(selection))) selection = 0;
 }
 
 bool OrbifyEndPage::bookOnDevice(const int64_t bookId, std::string& outPath) {
@@ -98,91 +221,133 @@ bool OrbifyEndPage::bookOnDevice(const int64_t bookId, std::string& outPath) {
 
 void OrbifyEndPage::labelRow(const size_t i) {
   const orbify::RowSpec& row = rows[i];
-  std::string& label = labels[i];
-  std::string& value = values[i];
-  std::string& heading = headings[i];
-  label.clear();
-  value.clear();
-  heading.clear();
+  eob::Row& out = shown[i];
+  out = eob::Row{};
   paths[i].clear();
   switch (row.kind) {
-    case RowKind::Status: {
+    case RowKind::Status:
+      out.role = eob::RowRole::Status;
       if (!finished) {
-        label = tr(STR_ORBIFY_NOT_FINISHED);
-        value = tr(STR_ORBIFY_MARK_FINISHED);
+        out.label = tr(STR_ORBIFY_NOT_FINISHED);
+        out.value = tr(STR_ORBIFY_MARK_FINISHED);
         break;
       }
-      label = tr(STR_ORBIFY_FINISHED);
-      switch (sendState) {
-        case OrbifyFinish::JobState::Pending:
-          label += std::string(" \xC2\xB7 ") + tr(STR_ORBIFY_SENDS_NEXT_SYNC);
-          break;
-        case OrbifyFinish::JobState::SignIn:
-          label += std::string(" \xC2\xB7 ") + tr(STR_ORBIFY_SIGN_IN_TO_SEND);
-          break;
-        default:
-          break;
-      }
-      value = tr(STR_ORBIFY_UNDO);
+      out.label = tr(STR_ORBIFY_FINISHED);
+      out.check = true;
+      if (sendState == OrbifyFinish::JobState::Pending) out.sub = tr(STR_ORBIFY_SENDS_NEXT_SYNC);
+      if (sendState == OrbifyFinish::JobState::SignIn) out.sub = tr(STR_ORBIFY_SIGN_IN_TO_SEND);
+      out.value = tr(STR_ORBIFY_UNDO);
       break;
-    }
-    case RowKind::Rating: {
-      label = tr(STR_ORBIFY_RATING);
-      char stars[32];
-      if (shownRating > 0) {
-        snprintf(stars, sizeof(stars), "\xE2\x80\xB9 %d / 5 \xE2\x80\xBA", shownRating);  // ‹ 4 / 5 ›
+    case RowKind::Rating:
+      out.role = eob::RowRole::Rating;
+      out.label = tr(STR_ORBIFY_YOUR_RATING);
+      out.enabled = finished;
+      if (!finished) {
+        out.sub = tr(STR_ORBIFY_RATE_WHEN_FINISHED);
+      } else if (shownRating != savedRating) {
+        out.sub = tr(STR_ORBIFY_RATE_CONFIRM);
       } else {
-        snprintf(stars, sizeof(stars), "\xE2\x80\xB9 %s \xE2\x80\xBA", tr(STR_ORBIFY_NO_RATING));
+        out.sub = tr(STR_ORBIFY_TAP_A_STAR);
       }
-      value = stars;
-      if (shownRating != savedRating) value += "  " + std::string(tr(STR_ORBIFY_SAVE));
       break;
-    }
-    case RowKind::Next: {
-      heading = card.next == SeriesCard::Next::LastUnread ? tr(STR_ORBIFY_LAST_UNREAD) : tr(STR_ORBIFY_NEXT_IN_SERIES);
-      label = bookLabel(card.nextBook);
-      if (card.nextRead) label += std::string(" \xC2\xB7 ") + tr(STR_ORBIFY_READ);
+    case RowKind::Next:
+      out.heading = card.next == SeriesCard::Next::LastUnread ? tr(STR_ORBIFY_LAST_UNREAD) : tr(STR_ORBIFY_NEXT_IN_SERIES);
+      out.label = bookLabel(card.nextBook);
+      if (card.nextRead) out.label += DOT + std::string(tr(STR_ORBIFY_READ));
       paths[i] = nextPath;
-      value = paths[i].empty() ? tr(STR_DOWNLOAD) : tr(STR_OPEN);
+      out.sub = paths[i].empty() ? tr(STR_ORBIFY_ON_SERVER_DOWNLOAD) : tr(STR_ORBIFY_ON_READER_OPEN);
       break;
-    }
-    case RowKind::Info: {
-      heading = tr(STR_ORBIFY_NEXT_IN_SERIES);
-      if (card.next == SeriesCard::Next::Gap) {
-        label = format(tr(STR_ORBIFY_GAP), std::to_string(card.missing).c_str());
+    case RowKind::Info:
+      out.role = eob::RowRole::Info;
+      out.heading = tr(STR_ORBIFY_NEXT_IN_SERIES);
+      out.enabled = false;
+      if (row.index == 1) {
+        // No card: the book after this one, from the series the EPUB names ("Book 3 of
+        // Harbour Lights"; its title is the server's), and what it takes to see it.
+        char next[8];
+        orbify::nextSeriesIndex(book.seriesIndex.c_str(), next, sizeof(next));
+        if (next[0]) {
+          char label[192];
+          snprintf(label, sizeof(label), tr(STR_ORBIFY_BOOK_N_OF), next, book.series.c_str());
+          out.label = label;
+        } else {
+          out.label = book.series;
+        }
+        out.sub = tr(STR_ORBIFY_CONNECT_NEXT);
+      } else if (card.next == SeriesCard::Next::Gap) {
+        out.label = format(tr(STR_ORBIFY_GAP), std::to_string(card.missing).c_str());
       } else {
-        label = tr(STR_ORBIFY_SERIES_DONE);
+        out.label = tr(STR_ORBIFY_SERIES_DONE);
       }
       break;
-    }
     case RowKind::Suggestion: {
       const bool byAuthor = card.sources[row.index] == SeriesCard::Source::Author;
-      if (row.heading) heading = byAuthor && card.author[0] ? format(tr(STR_ORBIFY_ALSO_BY), card.author) : tr(STR_ORBIFY_YOU_MIGHT_LIKE);
-      label = card.suggestions[row.index].title;
+      if (row.heading) {
+        out.heading = byAuthor && authorName[0] ? format(tr(STR_ORBIFY_ALSO_BY), authorName.c_str())
+                                                : std::string(tr(STR_ORBIFY_YOU_MIGHT_LIKE));
+      }
+      out.label = card.suggestions[row.index].title;
       paths[i] = suggestionPaths[row.index];
-      value = paths[i].empty() ? tr(STR_DOWNLOAD) : tr(STR_OPEN);
+      out.sub = paths[i].empty() ? tr(STR_ORBIFY_ON_SERVER_DOWNLOAD) : tr(STR_ORBIFY_ON_READER_OPEN);
       break;
     }
-    case RowKind::Folder: {
-      if (row.heading) heading = tr(STR_EOB_CONTINUE_WITH);
-      label = row.index < folderNames.size() ? folderNames[row.index] : "";
+    case RowKind::Folder:
+      if (row.heading) out.heading = tr(STR_EOB_CONTINUE_WITH);
+      out.label = row.index < folderNames.size() ? folderNames[row.index] : "";
+      out.sub = tr(STR_ORBIFY_ON_READER_OPEN);
       break;
-    }
     case RowKind::Author:
-      label = format(tr(STR_ORBIFY_ALL_BY), card.author);
-      value = "\xE2\x80\xBA";  // ›
+      out.label = format(tr(STR_ORBIFY_ALL_BY), authorName.c_str());
+      out.value = "\xE2\x80\xBA";  // ›
       break;
     case RowKind::Home:
-      label = tr(STR_HOME);
+      out.role = eob::RowRole::Home;
+      out.label = tr(STR_HOME);
       break;
   }
-  freeink::ui::ListItem& item = listItems[i];
-  item = freeink::ui::ListItem{};
-  item.label = label.c_str();
-  item.value = value.empty() ? nullptr : value.c_str();
-  item.sectionHeading = heading.empty() ? nullptr : heading.c_str();
-  item.enabled = orbify::selectable(row.kind);
-  item.actionValue = static_cast<int16_t>(i);
+}
+
+eob::Page OrbifyEndPage::page(const bool touch) const {
+  eob::Page p;
+  p.title = tr(STR_ORBIFY_THE_END);
+  p.subtitle = book.title;
+  if (!authorName.empty()) p.subtitle += (p.subtitle.empty() ? "" : DOT) + authorName;
+  p.touch = touch;
+  p.rating = shownRating;
+  p.selected = selection;
+  for (size_t i = 0; i < rowCount; ++i) p.rows.push_back(shown[i]);
+  return p;
+}
+
+void OrbifyEndPage::draw(GfxRenderer& renderer, const int x, const int y, const int width, const int height,
+                         const bool touch) {
+  const eob::Metrics metrics = metricsFor(renderer);
+  fit(metrics, height - eob::headerHeight(page(touch), metrics), touch);
+  lastLayout = eob::layout(page(touch), metrics, width, height);
+  originX = x;
+  originY = y;
+  drawOps(renderer, lastLayout, x, y);
+}
+
+OrbifyEndPage::Result OrbifyEndPage::tap(const int x, const int y) {
+  const eob::Target* target = eob::hit(lastLayout, x - originX, y - originY);
+  if (!target || target->row < 0 || static_cast<size_t>(target->row) >= rowCount) return Result{};
+  const size_t i = static_cast<size_t>(target->row);
+  selection = target->row;
+  if (target->star > 0) {
+    // A star rates at once (a second tap on the same star keeps it).
+    shownRating = static_cast<int8_t>(target->star);
+  } else if (rows[i].kind == RowKind::Rating) {
+    return Result{};  // the row around the stars: nothing to do
+  }
+  LOG_INF("ORB", "End page: tap row %u (kind %u, star %d)", static_cast<unsigned>(i),
+          static_cast<unsigned>(rows[i].kind), target->star);
+  return act(i);
+}
+
+OrbifyEndPage::Result OrbifyEndPage::activate() {
+  if (!rowEnabled(static_cast<size_t>(selection))) return Result{};
+  return act(static_cast<size_t>(selection));
 }
 
 void OrbifyEndPage::move(const int direction) {
@@ -190,7 +355,7 @@ void OrbifyEndPage::move(const int direction) {
   int next = selection;
   for (size_t step = 0; step < rowCount; ++step) {
     next = (next + direction + static_cast<int>(rowCount)) % static_cast<int>(rowCount);
-    if (orbify::selectable(rows[next].kind)) break;
+    if (rowEnabled(static_cast<size_t>(next))) break;
   }
   selection = next;
   // Leaving the rating row without Confirm drops the unsaved change.
@@ -203,26 +368,16 @@ void OrbifyEndPage::move(const int direction) {
 }
 
 bool OrbifyEndPage::adjust(const int direction) {
-  if (selection >= static_cast<int>(rowCount) || rows[selection].kind != RowKind::Rating) return false;
+  if (!rowEnabled(static_cast<size_t>(selection)) || rows[selection].kind != RowKind::Rating) return false;
   const int next = shownRating + direction;
   shownRating = static_cast<int8_t>(next < 0 ? 5 : (next > 5 ? 0 : next));
   labelRow(static_cast<size_t>(selection));
   return true;
 }
 
-OrbifyEndPage::Result OrbifyEndPage::activate(const int row) {
+OrbifyEndPage::Result OrbifyEndPage::act(const size_t i) {
   Result result;
-  if (row >= 0) {
-    if (row >= static_cast<int>(rowCount) || !orbify::selectable(rows[row].kind)) return result;
-    // A tap on the rating row steps the rating and saves it (X4 Pro touch).
-    if (rows[row].kind == RowKind::Rating) {
-      selection = row;
-      adjust(+1);
-    }
-    selection = row;
-  }
-  const size_t i = static_cast<size_t>(selection);
-  if (i >= rowCount) return result;
+  if (!rowEnabled(i)) return result;
   const orbify::RowSpec& spec = rows[i];
   switch (spec.kind) {
     case RowKind::Status:
@@ -232,22 +387,19 @@ OrbifyEndPage::Result OrbifyEndPage::activate(const int row) {
       OrbifyFinish::setRating(bookPath, shownRating);
       savedRating = shownRating;
       sendState = OrbifyFinish::jobState(bookPath);
-      for (size_t k = 0; k < rowCount; ++k) {
-        if (rows[k].kind == RowKind::Status) labelRow(k);
-      }
-      labelRow(i);
+      for (size_t k = 0; k < rowCount; ++k) labelRow(k);
       result.act = Act::Redraw;
       break;
     case RowKind::Next:
     case RowKind::Suggestion: {
-      const orbify::CardBook& book = spec.kind == RowKind::Next ? card.nextBook : card.suggestions[spec.index];
+      const orbify::CardBook& target = spec.kind == RowKind::Next ? card.nextBook : card.suggestions[spec.index];
       if (!paths[i].empty()) {
         result.act = Act::OpenPath;
         result.path = paths[i];
       } else {
         result.act = Act::Catalog;
-        result.link.bookId = book.id;
-        result.link.title = book.title;
+        result.link.bookId = target.id;
+        result.link.title = target.title;
         result.link.returnPath = bookPath;
       }
       break;
@@ -260,13 +412,16 @@ OrbifyEndPage::Result OrbifyEndPage::activate(const int row) {
       break;
     case RowKind::Author:
       result.act = Act::Catalog;
-      result.link.author = card.author;
+      result.link.author = authorName;
       break;
     case RowKind::Home:
       result.act = Act::Home;
       break;
     case RowKind::Info:
       break;
+  }
+  if (result.act != Act::None && result.act != Act::Redraw) {
+    LOG_INF("ORB", "End page: row %u acts (%u)", static_cast<unsigned>(i), static_cast<unsigned>(result.act));
   }
   return result;
 }
