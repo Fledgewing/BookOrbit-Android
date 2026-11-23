@@ -83,7 +83,8 @@ function Updater.check(why, done)
         setUpdateStatus(text)
         -- One update covers everything: load the new file now or when reading allows.
         if ok and Updater.onInstalled and tostring(text):find("^updated to") then
-            UIManager:scheduleIn(1, Updater.onInstalled)
+            -- The reader asked (the menu's Update): restart at once; automatic: when reading allows.
+            UIManager:scheduleIn(1, function() Updater.onInstalled(why == "menu" and "manual" or "check") end)
         end
         if done then done(ok, text) end
     end)

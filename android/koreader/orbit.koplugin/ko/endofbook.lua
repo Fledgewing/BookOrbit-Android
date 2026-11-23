@@ -193,6 +193,7 @@ function EOB.onLeave(ui)
         if okp and type(pct) == "number" then fields.percent = math.floor(pct * 1000 + 0.5) / 10 end
         if type(b.summary.status) == "string" then fields.status = b.summary.status end
         pcall(LocalState.put, b.digest, fields)
+        pcall(LF.noteOnDevice, b.book_id, ui and ui.document and ui.document.file)
         log("home: noted the open book for Home:", tostring(fields.percent) .. "%", tostring(fields.status))
     end
     local job = b and EOB.queue()[b.digest]
@@ -267,7 +268,7 @@ EOB.actions = {}
 function EOB.actions.undo(ui, b)
     ui.status:markBook(false) -- "Mark as reading": KOReader's own route; our hook drops the job
     EOB.closeSheet()
-    UIManager:show(require("ui/widget/infomessage"):new{ text = "Not marked as finished", timeout = 2 })
+    UIManager:show(require("ui/widget/infomessage"):new{ text = "Not marked as finished", timeout = 2 }) -- gate: exception (end-of-book sheet)
 end
 
 function EOB.actions.mark(ui, b)
@@ -320,6 +321,7 @@ function EOB.leaveForHome(ui)
         if okp and type(pct) == "number" then fields.percent = math.floor(pct * 1000 + 0.5) / 10 end
         if type(b.summary.status) == "string" then fields.status = b.summary.status end
         pcall(LocalState.put, b.digest, fields)
+        pcall(LF.noteOnDevice, b.book_id, ui and ui.document and ui.document.file)
         log("home: noted the open book for Home:", tostring(fields.percent) .. "%", tostring(fields.status))
     end
     local job = b and EOB.queue()[b.digest]
@@ -464,14 +466,14 @@ function EOB.actions.later(ui, b, book_id, title)
     EOB.save()
     EOB.card_state = nil
     EOB.closeSheet()
-    UIManager:show(require("ui/widget/infomessage"):new{ text = "It downloads at the next sync", timeout = 2 })
+    UIManager:show(require("ui/widget/infomessage"):new{ text = "It downloads at the next sync", timeout = 2 }) -- gate: exception (end-of-book sheet)
 end
 
 function EOB.showSheet(ui, b)
     EOB.closeSheet()
     EOB.card_state = nil
     EOB.sheet = EndSheet:new{ ui = ui, book = b, model = EOB.model(b) }
-    UIManager:show(EOB.sheet)
+    UIManager:show(EOB.sheet) -- gate: exception (the reader reached the end)
     log("end of book: sheet shown for", b.book_id)
 end
 
@@ -504,14 +506,14 @@ function EOB.drain(p, manual, done)
             local r = EOB.sendJob(p, m, client, job, now)
             if r == "sent" or r == "drop" then EOB.queue()[job.hash] = nil; sent = sent + 1 end
             if r == "auth" then
-                UIManager:show(require("ui/widget/infomessage"):new{ text = "Sign in to BookOrbit to send", timeout = 3 })
+                UIManager:show(require("ui/widget/infomessage"):new{ text = "Sign in to BookOrbit to send", timeout = 3 }) -- gate: exception (end-of-book sheet)
                 break
             end
         end
     end
     EOB.save()
     if sent > 0 then
-        UIManager:show(require("ui/widget/infomessage"):new{ text = "Finished · sent", timeout = 2 })
+        UIManager:show(require("ui/widget/infomessage"):new{ text = "Finished · sent", timeout = 2 }) -- gate: exception (end-of-book sheet)
     end
     EOB.refreshOpenDetail(p, client)
     EOB.pendingDownloads(p, done)
@@ -592,7 +594,10 @@ function EOB.pendingDownloads(p, done)
             if ok then
                 EOB.downloads()[it.k] = nil
                 EOB.save()
-                UIManager:show(require("ui/widget/infomessage"):new{ text = "Downloaded: " .. tostring(it.v.title or ""), timeout = 3 })
+                local title = tostring(it.v.title or "")
+                Gate.show("downloaded " .. title, function() -- gate: Gate.show
+                    UIManager:show(require("ui/widget/infomessage"):new{ text = "Downloaded: " .. title, timeout = 3 })
+                end)
             else
                 log("end of book: next-sync download failed:", tostring(res))
             end

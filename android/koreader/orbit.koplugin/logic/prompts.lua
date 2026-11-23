@@ -57,20 +57,28 @@ function RestartPlan.fileVersion(head)
 end
 
 -- want: the file's version; running: PATCH_VERSION; tried: the version a restart was already
--- made for (S.restart_tried); in_book; event: "check" (start, resume, after an update),
--- "close" (a book just closed) or "sleep" (screen off).
--- Returns "none" | "done" (already running it) | "restart" | "wait" | "gave_up".
-function RestartPlan.decide(want, running, tried, in_book, event)
+-- made for (S.restart_tried); reading (kept for callers; no longer decides); event: "manual" (the
+-- reader asked for this update: Update or Install), "check" (start, resume, an automatic
+-- update), "close" (a book just closed), "sleep" (screen off), "background" (another app in
+-- front) or "check_asleep" (screen off, and nothing can start KOReader again from the
+-- background: Add-on without the Home role).
+-- Returns "none" | "done" (already running it) | "restart" | "quit" | "wait" | "gave_up".
+-- An update the reader asked for restarts at once: the book is saved through KOReader's own close
+-- and reopens where it was (v0.11.1). An automatic one only when KOReader is out of the way: the
+-- screen off (restart), or another app in front ("quit": save and quit, the new plugin loads at
+-- the next start). A closed book or BookOrbit Home is not enough: the reader is still using it.
+function RestartPlan.decide(want, running, tried, reading, event)
     if not want then return "none" end
     if Update.compare(want, running) ~= 1 then return tried and "done" or "none" end
     if tried and Update.compare(tried, want) == 0 then return "gave_up" end
-    if not in_book or event == "sleep" or event == "close" then return "restart" end
+    if event == "manual" or event == "sleep" then return "restart" end
+    if event == "background" then return "quit" end
     return "wait"
 end
 
--- The one status line after a restart made for an update.
+-- The short note after a restart made for an update.
 function RestartPlan.doneText(version)
-    return string.format("Updated to v%s (KOReader restarted)", tostring(version))
+    return string.format("Updated to v%s", tostring(version))
 end
 
 ---------------------------------------------------------------------------------------------

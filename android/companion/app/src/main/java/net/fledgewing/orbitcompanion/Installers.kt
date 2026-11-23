@@ -138,17 +138,22 @@ object Installers {
                     return
                 }
                 log("$key $version: Android asks the user to confirm")
-                try {
-                    ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    p.koreaderInstallStatus = "confirm the install of KOReader $version"
-                } catch (e: Exception) {
-                    OLog.w("install: could not open the install prompt", e)
-                    p.koreaderInstallStatus = "could not open Android's install prompt · tap to try again"
-                    Pin.installEnded(key)
+                // The download takes a while: if a book is open by now, the prompt waits (Reading).
+                val app = ctx.applicationContext
+                p.koreaderInstallStatus = "confirm the install of KOReader $version"
+                Reading.show(app, Reading.installKey(key), "$key install prompt") {
+                    try {
+                        app.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (e: Exception) {
+                        OLog.w("install: could not open the install prompt", e)
+                        p.koreaderInstallStatus = "could not open Android's install prompt · tap to try again"
+                        Pin.installEnded(key)
+                    }
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> {
                 Pin.installEnded(key)
+                Reading.drop(Reading.installKey(key))
                 p.koreaderInstallStatus = "installed KOReader $version"
                 File(ctx.filesDir, "installs").listFiles()?.forEach { it.delete() }
                 log("$key $version installed")

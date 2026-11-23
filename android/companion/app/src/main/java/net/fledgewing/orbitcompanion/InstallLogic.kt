@@ -162,7 +162,10 @@ object SetupTips {
 
 /** Setup's "Fix next": the pending rows in order, each tried once per walk. */
 object SetupWalk {
-    /** [rows]: (id, done) in Setup order. The next one to fix, or null when the walk is over. */
-    fun next(rows: List<Pair<String, Boolean>>, tried: Set<String>): String? =
-        rows.firstOrNull { (id, done) -> !done && id !in SetupAttention.INFO_ONLY && id !in tried }?.first
+    /**
+     * [rows]: (id, done) in Setup order. The next one to fix, or null when the walk is over.
+     * [pending] rows wait for KOReader to report (e.g. the plugin's REPORT): never a step.
+     */
+    fun next(rows: List<Pair<String, Boolean>>, tried: Set<String>, pending: Set<String> = emptySet()): String? =
+        rows.firstOrNull { (id, done) -> !done && id !in SetupAttention.INFO_ONLY && id !in tried && id !in pending }?.first
 }

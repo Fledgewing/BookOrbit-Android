@@ -25,6 +25,15 @@ function OrbitAndroid:onSuspend()
             end
         end)
     end
+    -- Another app in front (still there two seconds on; a Home press comes straight back): an
+    -- automatic update waiting on disk saves and quits, and loads at the next start.
+    if patchFileVersion() then
+        UIManager:scheduleIn(2, function()
+            if Wifi.state().foreground == false and Jni.isInteractive() == true then
+                pcall(self.maybeRestart, self, "background")
+            end
+        end)
+    end
     if not S.sync_on_sleep then return end
     if now_s() - state.sas_done_at < 15 then
         log("suspend: just synced by Sync and sleep; skip")
@@ -43,6 +52,39 @@ function OrbitAndroid:onSuspend()
         return
     end
     self:sleepSync("sleep")
+end
+
+-- BookOrbit snapshots the open book into its outbox on every Suspend (main.lua:1340-1351), and
+-- Android sends Suspend on every app switch: each press of the Home key bounces through the
+-- companion's launcher and back (logged "home press: START_KOREADER"), so every press synced the
+-- book again ("book sync done reason=recovery", the label every outbox drain carries,
+-- bookorbit_book_sync.lua:169). With the screen on, a snapshot of a book that hasn't moved since
+-- its last one is skipped; a real sleep, a close and Sync and sleep always snapshot.
+function snapshotKey(p, ui)
+    local okd, digest = pcall(p.getDocumentDigest, p)
+    if not okd or not digest then return nil end
+    local okp, pct = pcall(p.getLastPercent, p)
+    local ann = ui and ui.annotation and ui.annotation.annotations
+    local okst, status = pcall(function() return ui.doc_settings:readSetting("summary").status end)
+    return table.concat({ tostring(digest), tostring(okp and pct or "?"), tostring(p.last_page or "?"),
+        tostring(type(ann) == "table" and #ann or "?"), tostring(okst and status or "?") }, "|")
+end
+
+function OrbitAndroid:hookSuspendSnapshot()
+    local p = bookorbit(self.ui)
+    if not p or type(p._onSuspend) ~= "function" or rawget(p, "_orbit_snapshot_hooked") then return end
+    local orig = p._onSuspend
+    p._orbit_snapshot_hooked = true
+    p._onSuspend = function(plugin, ...)
+        local key = snapshotKey(plugin, self.ui)
+        if not state.force_snapshot and key and key == state.last_snapshot_key and Jni.isInteractive() == true then
+            log("suspend: app switch and the book hasn't moved since its last snapshot; BookOrbit's snapshot skipped")
+            return
+        end
+        state.last_snapshot_key = key
+        return orig(plugin, ...)
+    end
+    if p.onSuspend == orig then p.onSuspend = p._onSuspend end
 end
 
 function OrbitAndroid:sleepSync(reason)
@@ -98,10 +140,10 @@ function sleepNow(reason)
             saveSettings()
             text = text .. "\n" .. _("Orbit Companion can do this for you: Screen off after Sync and sleep.")
         end
-        UIManager:show(InfoMessage:new{ text = text, timeout = 4 })
+        UIManager:show(InfoMessage:new{ text = text, timeout = 4 }) -- gate: user action (Sync and sleep)
     else
         log("sleep now: no companion; asking the reader to press the power button")
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new{ -- gate: user action (Sync and sleep)
             text = _("Synced. Press the power button to sleep.\n(Install Orbit Companion to turn the screen off by itself.)"),
             timeout = 4,
         })
@@ -124,7 +166,7 @@ function OrbitAndroid:onOrbitSyncAndSleep()
             end
         end,
     }
-    UIManager:show(msg)
+    UIManager:show(msg) -- gate: user action (Sync and sleep)
     UIManager:forceRePaint()
 
     local function finish(ok, detail)
@@ -147,7 +189,7 @@ function OrbitAndroid:onOrbitSyncAndSleep()
         if ok then
             sleepNow("sync_and_sleep")
         else
-            UIManager:show(InfoMessage:new{
+            UIManager:show(InfoMessage:new{ -- gate: user action (Sync and sleep)
                 text = _("Couldn't reach BookOrbit — saved on this device.") .. "\n"
                     .. _("It sends first when you next wake it. Sleeping now…"),
                 timeout = 3,
@@ -172,7 +214,9 @@ function OrbitAndroid:onOrbitSyncAndSleep()
         if inBook() and can(p, "sleep_snapshot") then
             -- Exactly what the plugin does on sleep: snapshot the open book into its
             -- durable outbox and drain it (main.lua:1340-1351).
-            p:_onSuspend()
+            state.force_snapshot = true
+            pcall(p._onSuspend, p)
+            state.force_snapshot = nil
         elseif can(p, "outbox") then
             p:requestLifecycleOutboxDrain("orbit_sync_and_sleep", true)
         end

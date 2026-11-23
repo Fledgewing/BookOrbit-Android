@@ -67,6 +67,27 @@ class ModeLogicTest {
         assertEquals("recommended", SetupAttention.idOf("Recommended settings"))
     }
 
+    /** v0.11.1, live: with plugin 0.10.1 running Fix next opened both rows; they are checking, not fixes. */
+    @Test
+    fun beforeAReportTheRowsAreCheckingNotAFix() {
+        val old = PluginReport.signedInRow("0", running = "0.10.1")
+        assertTrue("an old plugin can't report: pending", old.pending)
+        assertEquals("Checking… (after KOReader restarts)", old.detail)
+        val stale = PluginReport.recommendedRow("partial", 2, running = "0.10.1")
+        assertTrue(stale.pending)
+        assertEquals(PluginReport.CHECKING, stale.detail)
+        assertEquals("no REPORT yet", PluginReport.CHECKING, PluginReport.signedInRow("", running = "0.11.0").detail)
+        assertTrue(PluginReport.recommendedRow("", 0, running = "0.11.1").pending)
+        assertFalse("0.11.0 reported: a real fix", PluginReport.signedInRow("0", running = "0.11.0").pending)
+        assertFalse(PluginReport.recommendedRow("partial", 2, running = "0.11.0").pending)
+        assertFalse("running unknown: the REPORT decides", PluginReport.signedInRow("0", running = null).pending)
+        // Excluded from Fix next and from reminders.
+        val rows = listOf("signed_in" to false, "recommended" to false, "home" to false)
+        assertEquals("home", SetupWalk.next(rows, emptySet(), pending = setOf("signed_in", "recommended")))
+        val r = SetupAttention.evaluate(rows, SetupAttention.State(), 1, pending = setOf("signed_in", "recommended"))
+        assertEquals(listOf("home"), r.needed)
+    }
+
     @Test
     fun aSignedOutReaderIsASetupStepAndARecommendedConflictToo() {
         val rows = listOf("signed_in" to PluginReport.signedInRow("0").done, "recommended" to PluginReport.recommendedRow("partial", 1).done)

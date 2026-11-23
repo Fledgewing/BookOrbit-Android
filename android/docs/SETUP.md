@@ -75,8 +75,9 @@ which one you have. Install the official one from Setup; your books and the `kor
 stay. A KOReader signed by someone else has to be uninstalled first (Setup opens its app page).
 
 **Updates are one step.** When Orbit updates (it asks you to confirm), it installs the matching
-add-on itself, and KOReader restarts to load it once no book is open (or when the reader next
-sleeps). It never interrupts reading, and says "Updated to v… (KOReader restarted)".
+add-on itself. If you tapped Update or Install, KOReader restarts at once, reopens your book where
+you were (and BookOrbit Home if that was on screen), and says "Updated to v…". An automatic update
+waits until the screen goes off or KOReader is in the background: it never interrupts reading.
 
 ## 4. Install Tailscale (only for a private server)
 
