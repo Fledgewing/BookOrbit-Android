@@ -289,6 +289,50 @@ function LocalFirst.tileKey(kind, d, source)
     return LocalFirst.serialize(stripped)
 end
 
+-- What changed in one tile, for the log: per book "book <id> <field> <old> -> <new>" (percent,
+-- status, on device, cover), books added or removed, the order; else "content".
+local BOOK_FIELDS = { "id", "percent", "status", "on device", "cover" }
+local function split(s, sep)
+    local out = {}
+    if s == "" then return out end
+    for part in (s .. sep):gmatch("(.-)" .. sep) do table.insert(out, part) end
+    return out
+end
+function LocalFirst.tileDiff(kind, old_d, new_d, source)
+    local a, b = LocalFirst.tileKey(kind, old_d, source), LocalFirst.tileKey(kind, new_d, source)
+    if a == b then return nil end
+    if not (kind == "hero" or kind == "also" or kind == "forecast" or kind == "shelf") then return "content" end
+    local old_by, old_order, new_order, out = {}, {}, {}, {}
+    for _, part in ipairs(split(a, ",")) do
+        local f = split(part, ":")
+        old_by[f[1]] = f
+        table.insert(old_order, f[1])
+    end
+    local seen = {}
+    for _, part in ipairs(split(b, ",")) do
+        local f = split(part, ":")
+        seen[f[1]] = true
+        table.insert(new_order, f[1])
+        local o = old_by[f[1]]
+        if not o then
+            table.insert(out, "book " .. f[1] .. " added")
+        else
+            for j = 2, #BOOK_FIELDS do
+                if o[j] ~= f[j] then
+                    local function show(v)
+                        if j == 4 then return v == "d" and "yes" or "no" end
+                        return (v == nil or v == "") and "-" or v
+                    end
+                    table.insert(out, string.format("book %s %s %s -> %s", f[1], BOOK_FIELDS[j], show(o[j]), show(f[j])))
+                end
+            end
+        end
+    end
+    for _, id in ipairs(old_order) do if not seen[id] then table.insert(out, "book " .. id .. " removed") end end
+    if #out == 0 and table.concat(old_order, ",") ~= table.concat(new_order, ",") then table.insert(out, "order") end
+    return #out > 0 and table.concat(out, "; ") or "content"
+end
+
 -- Which tiles changed between two boards. tiles: { { key = id, kind, source } } (the same set on
 -- both). Returns the changed ids, or nil when the tile set itself differs (a full repaint).
 function LocalFirst.changedTiles(old_tiles, new_tiles, old_d, new_d)

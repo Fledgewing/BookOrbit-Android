@@ -177,7 +177,7 @@ function reading()
     local ui = liveUI()
     if not (ui and ui.document) then return false end
     if Wifi and Wifi.state and Wifi.state().foreground == false then return false end
-    if catalogOnTop(bookorbit(ui)) then return false end
+    if bookorbitOverBook(bookorbit(ui)) then return false end
     if ui.menu and ui.menu.menu_container then return false end -- a menu the reader opened
     if EOB and EOB.sheet then return false end                -- the reader reached the end
     return true
@@ -238,6 +238,30 @@ function orbitNote(text, timeout)
         UIManager:show(w) -- gate: inside Gate.show
         return w
     end)
+end
+
+-- BookOrbit is in front of the open book: its catalog (Home or any list), or one of its own
+-- views, menus or dialogs (widgets named bookorbit_*, e.g. bookorbit_book_sheet,
+-- bookorbit_menu_sheet, bookorbit_confirm), anywhere above the ReaderUI in the window stack.
+-- Not just the topmost widget: BookOrbit's loading and error pills (bookorbit_toast, not marked
+-- as toasts) and KOReader's widgets float over Home while the reader browses it (v0.11.1 on the
+-- M8C held Full refresh's progress "while reading" with Home on screen). The pills alone, over
+-- the book, don't count. Shared by reading() and the Wi-Fi plan's "browsing".
+function bookorbitOverBook(p)
+    local cb = p and p.catalog_browser
+    local okr, RUI = pcall(require, "apps/reader/readerui")
+    local reader = okr and type(RUI) == "table" and RUI.instance or nil
+    for _, w in ipairs(visibleStack()) do
+        if reader ~= nil and w == reader then return false end
+        if cb ~= nil and w == cb then return true end
+        local name = type(w) == "table" and rawget(w, "name") or nil
+        if name == nil and type(w) == "table" then
+            local okn, n = pcall(function() return w.name end)
+            name = okn and n or nil
+        end
+        if type(name) == "string" and name:find("^bookorbit") and name ~= "bookorbit_toast" then return true end
+    end
+    return false
 end
 
 -- What is really showing, by identity with the plugin's catalog widget (never its flag alone:
@@ -483,6 +507,7 @@ function checkDashboardOpened(p, why)
         if catalogOnTop(q) then
             log("home: BookOrbit home is on top (" .. why .. ")")
             Gate.drain("BookOrbit Home")
+            if Mirror and Mirror.kick then Mirror.kick("Home") end
         else
             log("home: BookOrbit home did NOT open (" .. why .. "); top:", widgetName(topWidget(), q))
         end

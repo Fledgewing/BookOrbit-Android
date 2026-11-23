@@ -260,7 +260,9 @@ function Group.select(books, author, key)
     return out
 end
 
--- Which list a book list is: { section, id } from its params, or nil (All books, a search...).
+-- Which list a book list is: { section, id } from its params, or nil (a search, a series or an
+-- author page, a list by id). Every other book list is the whole library with its filters
+-- (All books, Recently updated, Recently added...): { section = "all" } (v0.11.2).
 function Group.listOf(params)
     params = params or {}
     if params.smartScopeId then return { section = "smart-scopes", id = tonumber(params.smartScopeId) } end
@@ -269,7 +271,9 @@ function Group.listOf(params)
     -- On device: the plugin's list of this reader's books by id (bookorbit_catalog.lua:1187-1206,
     -- ids capped at 200 by the server, koreader-catalog-query.dto.ts:114). Its rows drill by id.
     if params.on_device_filter and params.ids and params.ids ~= "" then return { section = "on-device" } end
-    return nil
+    local function set(v) return v ~= nil and tostring(v) ~= "" end
+    if set(params.q) or set(params.ids) or set(params.seriesId) or set(params.series) or set(params.author) then return nil end
+    return { section = "all" }
 end
 
 -- The request for every book of the list, page by page: its params with the list's filters.

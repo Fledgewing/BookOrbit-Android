@@ -221,6 +221,17 @@ function OrbitAndroid:menuItems()
           help_text = _("Gets this view and Home fresh from the server, re-checks the covers, then saves everything reachable from Home for reading offline. Tap ⟳ for a normal refresh; hold ⟳ for this.") },
         { text_func = function() return Mirror.savedText() end, keep_menu_open = true, callback = function() end },
         {
+            text = _("Save every cover for offline (about 100 KB per book)"),
+            checked_func = function() return S.mirror_covers == true end,
+            help_text = _("A Full refresh also saves the cover of every book it saves, and keeps them. Off: covers are saved as you see books, and the oldest go when there are many. Turning it off deletes nothing."),
+            callback = function()
+                S.mirror_covers = not S.mirror_covers
+                saveSettings()
+                log("mirror: every cover for offline", S.mirror_covers and "on" or "off")
+                if S.mirror_covers then pcall(Mirror.coverPass, "turned on") end
+            end,
+        },
+        {
             text_func = function()
                 if S.mirror_auto == false then return _("Automatic Full refresh: off") end
                 return string.format(_("Automatic Full refresh: every %d days"), S.mirror_ttl_days or 7)

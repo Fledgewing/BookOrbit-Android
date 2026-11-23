@@ -7,10 +7,16 @@
 -- everything reachable from Home without typing, one request at a time in the background, in
 -- 100-book pages that answer any page size the plugin asks for (Cache.slice). A Refresh rechecks
 -- every saved page; a list whose total moved is re-paged. The queue is in the cache index, so a
--- run picks up where it stopped after sleep or going offline.
+-- run picks up where it stopped after sleep or going offline: it resumes at the next network up,
+-- wake or Home (Mirror.kick). A request with no answer is retried (5 s, 10 s; a list's first page
+-- in smaller pages) and then skipped: one slow request never stops the run (v0.11.2).
+-- Every book a saved list names gets its details saved too (so details open offline); covers only
+-- for the books on the reader and their neighbours, or for every book with "Save every cover for
+-- offline" on (S.mirror_covers), whose covers the plugin's 600-file pruner then leaves alone.
 ---------------------------------------------------------------------------------------------
 
 Mirror = { NOTE_EVERY_S = 10, COVER_BATCH = 20 }
+local real_remove = os.remove
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
 -- Section indexes Full refresh saves, in order; each entry's book list follows its index.
@@ -44,6 +50,12 @@ end
 Mirror.libraryVersion = libraryVersion
 
 ---------------------------------------------------------------- what to save
+
+-- The page size a list is mirrored in (nil: Cache.MIRROR_PAGE).
+function Mirror.pageSize(identity)
+    local l = Mirror.state().lists[identity]
+    return l and l.size or nil
+end
 
 local function push(m, job, front)
     m.seen = m.seen or {}
@@ -101,9 +113,10 @@ function Mirror.detailPath(client, id)
     return client:query("/koreader/plugin/catalog/books/" .. tostring(id), { deviceId = client.device_id, variant = variant })
 end
 
-local function addDetail(m, client, id)
+-- seed: one of the books whose covers are always saved (on the reader, Continue reading, Up next).
+local function addDetail(m, client, id, seed)
     if not id then return end
-    push(m, { k = "detail", path = Mirror.detailPath(client, id), id = tonumber(id) })
+    push(m, { k = "detail", path = Mirror.detailPath(client, id), id = tonumber(id), seed = seed })
 end
 
 -- Book ids in a dashboard-like body: Continue reading and every shelf.
@@ -138,10 +151,35 @@ function Mirror.seed(m, cat)
     local sorted = {}
     for id in pairs(ids) do table.insert(sorted, id) end
     table.sort(sorted)
-    for _, id in ipairs(sorted) do addDetail(m, client, id) end
+    for _, id in ipairs(sorted) do addDetail(m, client, id, true) end
 end
 
 ---------------------------------------------------------------- running
+
+-- A Full refresh saving now (not a Refresh's recheck): a second press keeps it.
+function Mirror.fullRunning()
+    local m = Mirror.state()
+    return (Mirror.active == true or Mirror.busy == true) and not m.revalidating and #m.queue > 0
+end
+
+function Mirror.progressText()
+    local m = Mirror.state()
+    local t = string.format(_("Full refresh · saving for offline %d/%d"), m.done or 0, m.total or m.done or 0)
+    if (m.cover_total or 0) > 0 then
+        local c = m.covers or {}
+        t = t .. string.format(_(" · covers %d/%d"), (c.ok or 0) + (c.not_modified or 0) + (c.failed or 0), m.cover_total)
+    end
+    return t
+end
+
+-- A Full refresh pressed while one is saving: keep that run and show where it is.
+function Mirror.showProgress(why)
+    local m = Mirror.state()
+    Mirror.manual = true
+    Mirror.noted_at = nil
+    log("mirror: Full refresh already running (" .. tostring(why) .. "); kept,", m.done or 0, "of", m.total or 0, "saved")
+    Mirror.note(Mirror.progressText())
+end
 
 function Mirror.start(reason, manual)
     local cat = Mirror.catalog()
@@ -149,8 +187,13 @@ function Mirror.start(reason, manual)
         log("mirror: no BookOrbit catalog yet; the Full refresh waits until BookOrbit opens")
         return false
     end
+    if Mirror.fullRunning() then
+        if manual then Mirror.showProgress(reason) end
+        return true
+    end
     local m = Mirror.state()
     m.queue, m.seen, m.done, m.total, m.bytes, m.requests = {}, {}, 0, 0, 0, 0
+    m.cover_total, m.skipped = 0, 0
     m.covers = { ok = 0, not_modified = 0, failed = 0, bytes = 0 }
     m.started_at, m.reason, m.revalidating = nowT(), reason, nil
     m.next_lists = {}
@@ -167,7 +210,7 @@ end
 function Mirror.revalidate(reason)
     local m = Mirror.state()
     if not m.at or (m.queue and #m.queue > 0) then return false end
-    m.seen, m.done, m.total, m.bytes, m.requests = {}, 0, 0, 0, 0
+    m.seen, m.done, m.total, m.bytes, m.requests, m.cover_total, m.skipped = {}, 0, 0, 0, 0, 0, 0
     m.covers = { ok = 0, not_modified = 0, failed = 0, bytes = 0 }
     m.revalidating, m.started_at = true, nowT()
     local identities = {}
@@ -175,8 +218,8 @@ function Mirror.revalidate(reason)
     table.sort(identities)
     for _, identity in ipairs(identities) do
         local l = m.lists[identity]
-        for n = 1, Cache.pageCount(l.total) do
-            push(m, { k = "page", identity = identity, page = n, kind = l.kind, section = l.section, check = true })
+        for n = 1, Cache.pageCount(l.total, l.size) do
+            push(m, { k = "page", identity = identity, page = n, kind = l.kind, section = l.section, check = true, size = l.size })
         end
     end
     log("mirror: Refresh rechecks", m.total, "saved pages (" .. tostring(reason) .. ")")
@@ -190,7 +233,7 @@ function Mirror.stop(why)
     if not Mirror.active then return end
     Mirror.active = nil
     Mirror.cat_wait = nil
-    log("mirror: paused (" .. why .. "),", #Mirror.state().queue, "left; it resumes when online")
+    log("mirror: paused (" .. why .. "),", #Mirror.state().queue, "left; it resumes at the next network up, wake or Home")
     Wifi.release("mirror")
 end
 
@@ -201,6 +244,19 @@ function Mirror.note(text)
     Mirror.noted_at = t
     OC.note(text, 2)
 end
+
+-- The progress line in the log (and the note, for a run started by hand), every NOTE_EVERY_S.
+function Mirror.progress()
+    local m = Mirror.state()
+    local t = nowT()
+    if Mirror.logged_at and t - Mirror.logged_at < Mirror.NOTE_EVERY_S and (m.done or 0) ~= (m.total or 0) then return end
+    Mirror.logged_at = t
+    local c = m.covers or {}
+    log(string.format("mirror: %d/%d saved%s", m.done or 0, m.total or 0, (m.cover_total or 0) > 0
+        and string.format(", covers %d/%d", (c.ok or 0) + (c.not_modified or 0) + (c.failed or 0), m.cover_total) or ""))
+end
+
+local function shortPath(path) return (tostring(path):gsub("^/koreader/plugin/catalog", "")) end
 
 -- One job at a time, in a child process; nothing redraws but the progress note.
 function Mirror.pump()
@@ -218,14 +274,43 @@ function Mirror.pump()
         log("mirror: running;", #m.queue, "to go; Wi-Fi held until it ends")
     end
     Mirror.busy = true
-    local path = job.k == "page" and Cache.mirrorPage(job.identity, job.page) or job.path
-    local function done(out)
+    local path = job.k == "page" and Cache.mirrorPage(job.identity, job.page, job.size) or job.path
+    local function done(out, berr)
         Mirror.busy = nil
-        table.remove(m.queue, 1)
-        m.done = (m.done or 0) + 1
-        local okl, err = pcall(Mirror.landed, cat, client, job, path, out)
-        if not okl then log("mirror: step failed:", tostring(err)) end
-        Mirror.note(string.format(_("Full refresh · saving for offline %d/%d"), m.done, m.total or m.done))
+        local r = Cache.decode(out or "")
+        if job.k ~= "covers" and (type(r) ~= "table" or type(r.body) ~= "table") then
+            local why = tostring(type(r) == "table" and r.err or berr or "no answer")
+            if not NetworkMgr:isConnected() then
+                log("mirror:", shortPath(path), "failed:", why .. "; the network is gone")
+                return Mirror.stop("offline")
+            end
+            -- One request with no answer is not "offline": retry, smaller pages, then skip. The
+            -- server's own answer (a 404, a 403) is final: skipped at once.
+            job.tries = (job.tries or 0) + 1
+            local status = type(r) == "table" and tonumber(r.status) or nil
+            local plan = (status and status < 500) and { skip = true }
+                or Cache.mirrorRetry(job.tries, job.k == "page" and (job.size or Cache.MIRROR_PAGE) or nil, job.page)
+            if not plan.skip then
+                local smaller = plan.size and plan.size ~= (job.size or Cache.MIRROR_PAGE)
+                if smaller then job.size = plan.size end
+                log(string.format("mirror: %s failed (%s), try %d of %d; again in %ds%s", shortPath(path), why, job.tries,
+                    Cache.MIRROR_TRIES, plan.wait_s, smaller and (", in pages of " .. plan.size) or ""))
+                OC.saveIndex()
+                UIManager:scheduleIn(plan.wait_s, Mirror.pump)
+                return
+            end
+            log("mirror:", shortPath(path), "skipped after", job.tries, "tries (" .. why .. "); the rest continues")
+            m.skipped = (m.skipped or 0) + 1
+            table.remove(m.queue, 1)
+            m.done = (m.done or 0) + 1
+        else
+            table.remove(m.queue, 1)
+            m.done = (m.done or 0) + 1
+            local okl, err = pcall(Mirror.landed, cat, client, job, path, out)
+            if not okl then log("mirror: step failed:", tostring(err)) end
+        end
+        Mirror.progress()
+        Mirror.note(Mirror.progressText())
         OC.saveIndex()
         UIManager:scheduleIn(0.05, Mirror.pump)
     end
@@ -234,7 +319,7 @@ function Mirror.pump()
     end
     Background.run("mirror", function()
         local b, e = client:requestBlocking("GET", path)
-        return Cache.encode({ body = b, err = e and tostring(e) or nil })
+        return Cache.encode({ body = b, err = e and tostring(e) or nil, status = type(e) == "number" and e or nil })
     end, 60, done)
 end
 
@@ -262,8 +347,10 @@ function Mirror.coverBatch(client, batch)
     return r
 end
 
+-- The covers the mirror saves: the seed books' always; every book's only with S.mirror_covers.
 local function coversFor(m, cat, items)
     if not (cat and Compat.callable(cat.thumbnailPath)) then return end
+    m.cover_keep = m.cover_keep or {}
     local batch = {}
     local function flush()
         if #batch == 0 then return end
@@ -274,7 +361,11 @@ local function coversFor(m, cat, items)
     for _, b in ipairs(items or {}) do
         if type(b) == "table" and b.id and b.hasCover then
             local okp, path = pcall(cat.thumbnailPath, cat, b)
-            if okp and path then table.insert(batch, { id = b.id, path = path, updatedAt = b.updatedAt }) end
+            if okp and path then
+                table.insert(batch, { id = b.id, path = path, updatedAt = b.updatedAt })
+                m.cover_total = (m.cover_total or 0) + 1
+                if S.mirror_covers then m.cover_keep[path:match("([^/]+)$") or path] = true end
+            end
             if #batch >= Mirror.COVER_BATCH then flush() end
         end
     end
@@ -296,10 +387,7 @@ function Mirror.landed(cat, client, job, path, out)
         end
         return
     end
-    if type(r) ~= "table" or type(r.body) ~= "table" then
-        log("mirror:", (tostring(path):gsub("^/koreader/plugin/catalog", "")), "failed:", tostring(type(r) == "table" and r.err or "no answer"))
-        return
-    end
+    if type(r) ~= "table" or type(r.body) ~= "table" then return end
     local body = r.body
     m.requests = (m.requests or 0) + 1
     local key = Cache.key({ account = OC.owner(client), server = client.server_url, method = "GET", path = path })
@@ -320,12 +408,12 @@ function Mirror.landed(cat, client, job, path, out)
         if not job.next_of and type(body.seriesMembers) == "table" then
             for _, s in ipairs(body.seriesMembers) do
                 if tonumber(s.id) ~= job.id and s.readStatus ~= "read" and (s.seriesIndex or 0) > (body.seriesIndex or 0) then
-                    push(m, { k = "detail", path = Mirror.detailPath(client, s.id), id = tonumber(s.id), next_of = job.id })
+                    push(m, { k = "detail", path = Mirror.detailPath(client, s.id), id = tonumber(s.id), next_of = job.id, seed = job.seed })
                     break
                 end
             end
         end
-        coversFor(m, cat, { body })
+        if job.seed or S.mirror_covers then coversFor(m, cat, { body }) end
         return
     end
     -- A list page.
@@ -333,17 +421,24 @@ function Mirror.landed(cat, client, job, path, out)
     local total = tonumber(body.total) or #(body.items or {})
     if job.page == 1 then
         local old_total = l and l.total
-        m.lists[job.identity] = { total = total, kind = job.kind, section = job.section }
+        local function dropPage(n, size)
+            local dk = Cache.key({ account = OC.owner(client), server = client.server_url, method = "GET", path = Cache.mirrorPage(job.identity, n, size) })
+            OC.index().entries[dk] = nil
+            OC.memo[dk] = nil
+        end
+        -- Saved before in another page size: those pages go (this list is now paged in job.size).
+        if l and l.size ~= job.size then
+            for n = 2, Cache.pageCount(l.total, l.size) do dropPage(n, l.size) end
+            dropPage(1, l.size)
+            old_total = nil
+        end
+        m.lists[job.identity] = { total = total, kind = job.kind, section = job.section, size = job.size }
         if not job.check or old_total ~= total then
-            local fetch, drop = Cache.repage(job.check and old_total or 0, total)
+            local fetch, drop = Cache.repage(job.check and old_total or 0, total, job.size)
             for _, n in ipairs(fetch) do
-                push(m, { k = "page", identity = job.identity, page = n, kind = job.kind, section = job.section, check = job.check })
+                push(m, { k = "page", identity = job.identity, page = n, kind = job.kind, section = job.section, check = job.check, size = job.size })
             end
-            for _, n in ipairs(drop) do
-                local dk = Cache.key({ account = OC.owner(client), server = client.server_url, method = "GET", path = Cache.mirrorPage(job.identity, n) })
-                OC.index().entries[dk] = nil
-                OC.memo[dk] = nil
-            end
+            for _, n in ipairs(drop) do dropPage(n, job.size) end
             if job.check and old_total ~= total then
                 log("mirror:", (job.identity:gsub("^/koreader/plugin/catalog", "")), "total", tostring(old_total), "->", total, "; re-paged")
             end
@@ -356,7 +451,11 @@ function Mirror.landed(cat, client, job, path, out)
             if okp and p then Mirror.addList(m, p) end
         end
     elseif job.kind == "books" and not job.check then
-        coversFor(m, cat, body.items)
+        -- Every book's details (they open offline); covers only with "Save every cover".
+        for _, b in ipairs(body.items or {}) do
+            if type(b) == "table" and b.id then addDetail(m, client, b.id) end
+        end
+        if S.mirror_covers then coversFor(m, cat, body.items) end
     end
     if job.check and changed and old then Mirror.changedOnScreen(job.identity) end
 end
@@ -390,9 +489,9 @@ function Mirror.finish()
     else
         m.at, m.lib_version = nowT(), libraryVersion()
         local lists, pages = 0, 0
-        for _, l in pairs(m.lists) do lists = lists + 1; pages = pages + Cache.pageCount(l.total) end
-        log(string.format("mirror: Full refresh saved for offline in %ds: %d lists (%d pages), %d requests, %.1f MB of lists and books; covers %d new, %d unchanged (304), %d failed, %.1f MB",
-            secs, lists, pages, m.requests or 0, (m.bytes or 0) / 1048576, c.ok or 0, c.not_modified or 0, c.failed or 0, (c.bytes or 0) / 1048576))
+        for _, l in pairs(m.lists) do lists = lists + 1; pages = pages + Cache.pageCount(l.total, l.size) end
+        log(string.format("mirror: Full refresh saved for offline in %ds: %d lists (%d pages), %d requests, %d skipped, %.1f MB of lists and books; covers %d new, %d unchanged (304), %d failed, %.1f MB",
+            secs, lists, pages, m.requests or 0, m.skipped or 0, (m.bytes or 0) / 1048576, c.ok or 0, c.not_modified or 0, c.failed or 0, (c.bytes or 0) / 1048576))
         if Mirror.manual then OC.note(Mirror.savedText(), 3) end
     end
     m.seen = nil
@@ -411,13 +510,13 @@ function Mirror.savedText()
 end
 
 -- Online: a run left over resumes; an automatic Full refresh starts when the mirror is older
--- than its TTL or the library changed.
+-- than its TTL or the library changed; with nothing to save, changed copies are replaced.
 function Mirror.tick(why)
     if Mirror.busy or Mirror.active then return end
     local m = Mirror.state()
     if #m.queue > 0 then
         if not NetworkMgr:isConnected() then return end
-        log("mirror: resuming (" .. tostring(why) .. ")")
+        log("mirror: resuming (" .. tostring(why) .. "),", #m.queue, "left")
         return Mirror.pump()
     end
     if Copies and Copies.tick then pcall(Copies.tick, why) end
@@ -426,10 +525,65 @@ function Mirror.tick(why)
     if Mirror.ticked_at and t - Mirror.ticked_at < 60 then return end
     Mirror.ticked_at = t
     local due = Cache.mirrorDue(m, t, S.mirror_ttl_days or Cache.MIRROR_TTL_DAYS, libraryVersion())
-    if due and due ~= "never" and NetworkMgr:isConnected() then
+    -- A new automatic run never starts in a book (it would hold Wi-Fi while reading); a paused one
+    -- resumes above.
+    if due and due ~= "never" and NetworkMgr:isConnected() and not reading() then
         log("mirror: automatic Full refresh:", due == "ttl" and "older than " .. tostring(S.mirror_ttl_days or Cache.MIRROR_TTL_DAYS) .. " days" or "the library changed")
         Mirror.start("auto: " .. due, false)
     end
 end
 
 OC.mirrorTick = function(why) return Mirror.tick(why) end
+
+-- The moments a paused run resumes and changed copies are looked for: the network coming up, a
+-- wake, BookOrbit Home opening. (Catalog reads mostly run in the plugin's child process, where
+-- nothing may start, so reads alone never resumed it: v0.11.1 on the M8C.)
+function Mirror.kick(why)
+    UIManager:scheduleIn(1, function()
+        local okt, err = pcall(Mirror.tick, why)
+        if not okt then log("mirror: tick failed:", tostring(err)) end
+    end)
+end
+
+-- "Save every cover for offline" turned on: the covers of every list the mirror saved.
+function Mirror.coverPass(why)
+    local cat = Mirror.catalog()
+    local client = cat and cat.client
+    if not client then return 0 end
+    local m = Mirror.state()
+    m.seen = m.seen or {}
+    local before = #m.queue
+    for identity, l in pairs(m.lists) do
+        if l.kind == "books" then
+            for n = 1, Cache.pageCount(l.total, l.size) do
+                local e = OC.get(Cache.key({ account = OC.owner(client), server = client.server_url, method = "GET", path = Cache.mirrorPage(identity, n, l.size) }))
+                if e and type(e.body) == "table" then coversFor(m, cat, e.body.items) end
+            end
+        end
+    end
+    local added = #m.queue - before
+    log("mirror: every cover for offline (" .. tostring(why) .. "):", added, "batch(es) queued")
+    OC.saveIndex()
+    if added > 0 then Mirror.kick(why) end
+    return added
+end
+
+-- The plugin keeps its newest 600 cover files (bookorbit_catalog_thumbnails.lua:480-555
+-- pruneThumbnailCache). With "Save every cover for offline" on, the mirror's covers are outside
+-- that cap: its pruner's removals of them are skipped (it counts them removed and goes on). Off,
+-- nothing is skipped, so they go back under the cap; nothing is deleted when it is turned off.
+function Mirror.guardPrune(Catalog)
+    if not Compat.callable(Catalog.pruneThumbnailCache) then return end
+    wrap(Catalog, "pruneThumbnailCache", function(stock) return function(self, ...)
+        local keep = S.mirror_covers and Mirror.state().cover_keep
+        if not keep then return stock(self, ...) end
+        os.remove = function(path)
+            local name = tostring(path):match("([^/]+)$")
+            if name and keep[name] then return true end
+            return real_remove(path)
+        end
+        local okp, err = pcall(stock, self, ...)
+        os.remove = real_remove
+        if not okp then error(err, 0) end
+    end end, "cache")
+end

@@ -34,6 +34,7 @@ function Net.up(p, opts, cb)
         res.failed_at = failed_at
         res.detail = detail
         Net.inflight = nil
+        if ok and Mirror and Mirror.kick then Mirror.kick("network up") end
         log("network up:", ok and "ok" or ("FAILED at " .. tostring(failed_at)), opts.reason,
             "wifi", res.wifi_s and fmt(res.wifi_s) or "-", "vpn", res.vpn_s and fmt(res.vpn_s) or "-",
             "server", res.server_s and fmt(res.server_s) or "-", "total", fmt(res.elapsed), detail or "")

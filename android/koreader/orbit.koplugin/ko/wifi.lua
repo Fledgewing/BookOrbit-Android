@@ -112,7 +112,7 @@ function Wifi.evaluate(why)
     Wifi.tx = tx
     local busy, busy_why = Wifi.busy()
     local screen_off = Jni.isInteractive() == false
-    local okb, browsing = pcall(function() return catalogOnTop(bookorbit()) end)
+    local okb, browsing = pcall(function() return bookorbitOverBook(bookorbit()) end) -- the reading gate's own test
     local action, reason, force = WifiPlan.decide(st, { now = now_s(), wifi_on = wifi_on, busy = busy,
         screen_off = screen_off, browsing = okb and browsing == true })
     if action == "off" then

@@ -259,16 +259,17 @@ function OC.lookup(client, key, path)
     if not w then return nil end
     local owner = OC.owner(client)
     local pages, oldest = {}, nil
-    local first = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, 1) }))
+    local size = Mirror and Mirror.pageSize and Mirror.pageSize(w.identity) or nil
+    local first = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, 1, size) }))
     if not first then return nil end
     pages[1] = first.body
     oldest = first.validated_at or 0
-    local n = Cache.pageCount(type(first.body) == "table" and first.body.total)
+    local n = Cache.pageCount(type(first.body) == "table" and first.body.total, size)
     for i = 2, n do
-        local pe = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, i) }))
+        local pe = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, i, size) }))
         if pe then pages[i] = pe.body; oldest = math.min(oldest, pe.validated_at or 0) end
     end
-    local b = Cache.slice(w, pages)
+    local b = Cache.slice(w, pages, size)
     if not b then return nil end
     return { key = key, body = b, validated_at = oldest, path = path, from_mirror = true }
 end
@@ -696,8 +697,13 @@ end
 -- Hold ⟳ / the menu: this view (and Home) from the server; bad cover files replaced, good ones
 -- asked If-None-Match.
 function OC.fullRefresh(cat)
+    -- A second press while one is saving keeps that run and shows its progress (v0.11.1 on the
+    -- M8C: four presses restarted it four times).
+    if Mirror and Mirror.fullRunning() then return Mirror.showProgress("pressed again") end
     if whenOnline("Full refresh", function() OC.fullRefresh(cat) end) then return end
     log("cache: Full refresh")
+    -- Copies whose library file changed are looked for now (and again once the details are saved).
+    if Copies and Copies.tick then UIManager:scheduleIn(2, function() pcall(Copies.tick, "full refresh") end) end
     OC.note(_("Full refresh: reloading everything from BookOrbit…"), 3)
     OC.begin("full")
     if type(cat.thumbnail_failures) == "table" then cat.thumbnail_failures = {} end
@@ -896,6 +902,8 @@ function OC.install(why)
     -- body; the local overlay goes on top in BoardData.build. Anything not saved -> the plugin's.
     if Compat.callable(Catalog.initialDashboardContext) and Compat.callable(Catalog.dashboardRootFetch) then
         wrap(Catalog, "initialDashboardContext", function(stock) return function(self, ...)
+            -- The first paint shows which books are on the reader (Resume, never Download first).
+            if LF and LF.primeOnDevice then pcall(LF.primeOnDevice, self) end
             if not OC.on() then return stock(self, ...) end
             OC.cache_only = true
             local prefer = self.prefer_cached_dashboard
@@ -932,6 +940,7 @@ function OC.install(why)
             return results
         end end, "cache")
     end
+    pcall(Mirror.guardPrune, Catalog)
     OC.installed = true
     log("cache: installed (" .. tostring(why) .. ")")
     UIManager:scheduleIn(5, function()

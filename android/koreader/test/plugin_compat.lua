@@ -81,7 +81,11 @@ for _, name in ipairs({ "newClient", "getDocumentDigest", "getLastPercent", "enq
     "listDecorateBookQuery", "listSectionParams", "loadOnDevice", "fetchBookPage", "cancelThumbnailJobs",
     "downloadThumbnailBatch", "boardDustRemove", "detailRemoveFromDevice", "_onSuspend",
     -- Keep book copies current: the state's own repair for a file whose bytes changed.
-    "repairFileIdentity", "linkDownloadedFile" }) do need(name, "function") end
+    "repairFileIdentity", "linkDownloadedFile",
+    -- v0.11.2: the first paint's on-device marks; mirrored covers outside the plugin's cover cap.
+    "hasOnDeviceMaps", "pruneThumbnailCache" }) do need(name, "function") end
+-- The cover pruner removes files with the global os.remove (Mirror.guardPrune skips mirrored ones).
+has(src[dir .. "/bookorbit_catalog_thumbnails.lua"] or "", "os.remove(removed.path)", "pruneThumbnailCache removes with os.remove")
 -- Our ⟳ keeps covers by wrapping evictCachedCovers, which refreshCurrent must still go through;
 -- Wi-Fi holds count only drainable outbox entries.
 has(catalog, "self:evictCachedCovers(", "refreshCurrent evicts through evictCachedCovers")
