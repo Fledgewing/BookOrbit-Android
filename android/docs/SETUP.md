@@ -26,6 +26,21 @@ and open it. When Android asks, allow your browser or file manager to install ap
 from outside the Play Store: tap **More details**, then **Install anyway**. It can warn again
 when Orbit installs KOReader or updates itself; the answer is the same.
 
+## 2b. Full or Add-on (companion 0.11.0+)
+
+The first time you open Orbit Companion it asks how it should run:
+
+- **Full**: Orbit is the Home app. Home opens your book or BookOrbit, and Orbit switches Wi-Fi,
+  keeps the reader awake for sleep syncs, and runs clicker buttons and the Settings PIN.
+- **Add-on**: your reader keeps its own Home screen and Wi-Fi. Orbit installs, updates and sets
+  up KOReader, BookOrbit and the Orbit plugin. Setup then has four required steps (KOReader, the
+  BookOrbit plugin, the Orbit plugin, signed in to BookOrbit); every other row is optional and
+  says what you get with it. Wi-Fi switching, sleep sync, clicker buttons and the PIN are
+  helpers in Settings, off until you turn them on.
+
+A reader already set up before 0.11.0 stays Full and is not asked. Switch either way later in
+Settings › **Mode**.
+
 ## 3. Open Orbit Companion › Setup › Fix next
 
 Open **Orbit Companion**, then **Setup**, and tap **Fix next**. It goes through every step that
@@ -116,7 +131,8 @@ In KOReader, open **Tools › Android sync**:
 
 - **Wi-Fi: Just in time.** Wi-Fi is on only while something needs it.
 - **Home button: Back to my book, then BookOrbit home.**
-- **Apply recommended settings**, then **Apply recommended gestures.**
+- **Recommended settings**: Orbit already applied the ones still at their default. Open it to
+  review any you had changed (Use Orbit's or Keep mine) or to Undo one.
 - Run **Test sync path**: every step should show ✓.
 
 The same Wi-Fi and Home settings are in Orbit Companion › Settings; changing one changes both.

@@ -1,0 +1,240 @@
+<title>Add-on Mode Mockups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  :root { --ink: #000; --g1: #444; --g2: #777; --g3: #bbb; --g4: #e6e6e6; --paper: #fff; --page: #eceeef; --pagefg: #15181a; --pagemuted: #4a5054; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #16191b; --pagefg: #e8ebed; --pagemuted: #a7aeb3; color-scheme: dark } }
+  :root[data-theme="dark"] { --page: #16191b; --pagefg: #e8ebed; --pagemuted: #a7aeb3; color-scheme: dark }
+  .screen { color: var(--ink); }
+  body { margin: 0; padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); background: var(--page); color: var(--pagefg);
+         font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 32px 0 12px; }
+  p.lead { margin: 0 0 24px; color: var(--pagemuted); max-width: 760px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  figure { margin: 0; width: 351px; max-width: 100%; }
+  figcaption { font-size: 13px; color: var(--pagemuted); margin-top: 8px; }
+  /* M8C: 1404 x 1872 px, shown at 1/4 scale */
+  .screen { width: 351px; max-width: 100%; height: 468px; background: var(--paper); border: 2px solid var(--ink);
+            border-radius: 6px; box-sizing: border-box; padding: 12px 14px; overflow: hidden;
+            display: flex; flex-direction: column; font-size: 13px; line-height: 1.3; position: relative; }
+  .hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .hdr b { font-size: 17px; }
+  .back { font-size: 12px; font-weight: 600; }
+  .btn { border: 1.5px solid var(--ink); border-radius: 5px; padding: 6px 10px; text-align: center; font-weight: 600; }
+  .btn.solid { background: var(--ink); color: var(--paper); }
+  .btn.sm { padding: 2px 8px; font-size: 11.5px; white-space: nowrap; }
+  .card { border: 1.5px solid var(--ink); border-radius: 6px; padding: 8px 9px; margin-bottom: 8px; }
+  .card.pick { border-width: 2.5px; }
+  .card b { font-size: 14px; }
+  .card ul { margin: 4px 0 0 0; padding-left: 16px; font-size: 11.5px; }
+  .card li { margin: 1px 0; }
+  .sub { display: block; color: var(--g2); font-size: 10.5px; }
+  .sec { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--g1); margin: 7px 0 3px; }
+  .foot { margin-top: auto; display: flex; gap: 8px; }
+  .foot .btn { flex: 1; }
+  .note { font-size: 11px; color: var(--g1); border-left: 3px solid var(--ink); padding-left: 7px; margin: 6px 0; }
+  .row { display: flex; align-items: center; gap: 7px; padding: 4px 0; border-bottom: 1px solid var(--g4); font-size: 12px; }
+  .row:last-child { border-bottom: 0; }
+  .row .t { flex: 1; min-width: 0; }
+  .row .t b { font-weight: 600; }
+  .chk { width: 13px; height: 13px; border: 1.5px solid var(--ink); border-radius: 2px; flex: none; font-size: 11px; line-height: 12px; text-align: center; font-weight: 700; }
+  .chk.on { background: var(--ink); color: var(--paper); }
+  .val { font-size: 11px; white-space: nowrap; }
+  .val.open { font-weight: 700; }
+  .state { font-size: 10.5px; color: var(--g1); }
+  .pill { display: inline-block; border: 1px solid var(--ink); border-radius: 9px; padding: 0 6px; font-size: 10px; font-weight: 700; }
+  .pill.solid { background: var(--ink); color: var(--paper); }
+  .toggle { width: 26px; height: 14px; border: 1.5px solid var(--ink); border-radius: 8px; position: relative; flex: none; }
+  .toggle::after { content: ""; position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+  .toggle.on { background: var(--ink); }
+  .toggle.on::after { left: auto; right: 1px; background: var(--paper); }
+  .toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--ink); color: var(--paper); border-radius: 6px;
+           padding: 8px 12px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .toast u { font-weight: 700; }
+  .dialog { position: absolute; left: 22px; right: 22px; top: 140px; background: var(--paper); border: 2.5px solid var(--ink); border-radius: 8px; padding: 12px; }
+  .dialog b.t { display: block; font-size: 14px; margin-bottom: 6px; }
+  .dialog p { margin: 0 0 8px; font-size: 12px; }
+  .dimmed > :not(.dialog) { opacity: .35; }
+  /* BookOrbit home behind dialogs */
+  .bo-top { display: flex; justify-content: space-between; border-bottom: 1.5px solid var(--ink); padding-bottom: 6px; margin-bottom: 8px; font-size: 12px; }
+  .bo-top b { font-size: 15px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .cover { height: 78px; border: 1.5px solid var(--ink); border-radius: 3px; background: repeating-linear-gradient(135deg, var(--paper) 0 6px, var(--g4) 6px 7px); }
+  .rec { border: 1.5px solid var(--ink); border-radius: 6px; padding: 5px 7px; margin-bottom: 6px; font-size: 11.5px; }
+  .rec .top { display: flex; justify-content: space-between; gap: 6px; }
+  .rec .vs { display: flex; gap: 10px; margin: 2px 0 4px; font-size: 11px; color: var(--g1); }
+  .rec .acts { display: flex; gap: 6px; }
+  .rec .acts .btn { flex: 1; padding: 2px 6px; font-size: 11px; }
+  .greyed { color: var(--g2); }
+</style>
+<h1>Add-on mode and recommended settings: mockups (draft 1)</h1>
+<p class="lead">Orbit Companion pages and KOReader screens, drawn as the M8C (1404 × 1872) at quarter scale, black on white. Mode only decides
+launcher and device management. Recommended settings follow KOReader's state, the same in both modes. In Add-on, only four items are required,
+and every permission says what you lose without it, never nags. Design and decisions: <code>DESIGN.md</code>.</p>
+
+<h2>Orbit Companion</h2>
+<div class="grid">
+
+<figure>
+  <div class="screen">
+    <div class="hdr"><b>Welcome to Orbit</b></div>
+    <div style="font-size:12px;margin-bottom:8px">How should Orbit work on this reader? Both install and set up KOReader, BookOrbit and Orbit, and keep them updated.</div>
+    <div class="card pick">
+      <b>Full: Orbit runs the reader</b>
+      <ul>
+        <li>Orbit is the Home screen; Home goes to your book, then BookOrbit</li>
+        <li>Turns Wi-Fi on and off, syncs when the screen goes off</li>
+        <li>Clicker buttons and a Settings PIN everywhere</li>
+        <li>Asks for several Android permissions</li>
+      </ul>
+    </div>
+    <div class="card pick">
+      <b>Add-on: keep your launcher</b>
+      <ul>
+        <li>Your reader's Home screen stays as it is</li>
+        <li>Orbit installs, updates and configures KOReader and both plugins</li>
+        <li>Wi-Fi, sleep sync, clicker and PIN only if you turn them on</li>
+        <li>Only four things are required</li>
+      </ul>
+    </div>
+    <div class="note">You can switch later in Settings › Mode. Nothing is chosen until you tap one.</div>
+  </div>
+  <figcaption>1. First-run mode choice. Two cards, neither preselected. Existing installs never see this: a reader where Orbit is already Home stays Full.</figcaption>
+</figure>
+
+<figure>
+  <div class="screen">
+    <div class="hdr"><span class="back">‹ Back</span><b>Full setup (12/14)</b><span></span></div>
+    <div class="state" style="margin-bottom:4px">Mode: Full · Settings › Mode to change</div>
+    <div class="btn solid" style="margin-bottom:4px">Fix next (2 to go)</div>
+    <div class="row"><span class="chk on">✓</span><span class="t">Not disabled by the system</span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">Install updates</span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">KOReader app installed (2026.07.1)</span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">BookOrbit plugin installed (v2.3.0)</span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">Orbit plugin installed (v0.11.0)</span><span class="val">done</span></div>
+    <div class="row"><span class="chk"></span><span class="t"><b>Signed in to BookOrbit</b><span class="sub">new · sign in inside KOReader</span></span><span class="val open">open ›</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t"><b>Recommended settings</b><span class="sub">new · applied 7 · Review</span></span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">Set Orbit as Home app</span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">Allow notifications</span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">Battery: Unrestricted (Orbit, KOReader, Tailscale)</span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">Tailscale signed in and connected</span><span class="val">done</span></div>
+    <div class="row"><span class="chk"></span><span class="t">Allow "lock screen" (device admin)<span class="sub">for Sync and sleep</span></span><span class="val open">open ›</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">Orbit plugin answered<span class="sub">last 8:02 PM</span></span><span class="val">done</span></div>
+  </div>
+  <figcaption>2. Full checklist: today's rows in today's order, plus <b>Signed in to BookOrbit</b> and <b>Recommended settings</b>. Every row is a step; Fix next walks the open ones.</figcaption>
+</figure>
+
+<figure>
+  <div class="screen">
+    <div class="hdr"><span class="back">‹ Back</span><b>Add-on setup (3/4)</b><span></span></div>
+    <div class="btn solid" style="margin-bottom:2px">Fix next (1 to go)</div>
+    <div class="sec">Required</div>
+    <div class="row"><span class="chk on">✓</span><span class="t">KOReader installed (2026.07.1)</span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">BookOrbit plugin installed (v2.3.0)</span><span class="val">done</span></div>
+    <div class="row"><span class="chk on">✓</span><span class="t">Orbit plugin installed (v0.11.0)</span><span class="val">done</span></div>
+    <div class="row"><span class="chk"></span><span class="t"><b>Signed in to BookOrbit</b></span><span class="val open">open ›</span></div>
+    <div class="state" style="padding:2px 0 0">Recommended settings: applied 4 · 2 to review ›</div>
+    <div class="sec">Optional: what you lose without each</div>
+    <div class="row"><span class="t"><b>Install apps</b><span class="sub">On: Orbit updates KOReader and itself</span></span></div>
+    <div class="row"><span class="t"><b>Notifications</b><span class="sub">Without it: updates and steps show only when you open Orbit</span></span><span class="btn sm">Allow</span></div>
+    <div class="row"><span class="t"><b>Wi-Fi switching</b><span class="sub">Without it: Wi-Fi stays as you leave it</span></span><span class="toggle"></span></div>
+    <div class="row"><span class="t"><b>Sleep sync</b><span class="sub">Without it: syncs on sleep may be cut short; they finish on wake</span></span><span class="toggle"></span></div>
+    <div class="row"><span class="t"><b>Clicker in other apps</b><span class="sub">Off: clicker buttons work only inside KOReader</span></span><span class="btn sm">Allow</span></div>
+    <div class="note" style="margin-top:auto">Optional items never count, never remind. Screen-off and Battery rows appear only with Sleep sync on.</div>
+  </div>
+  <figcaption>3. Add-on checklist. <b>Required</b> is four rows; Fix next walks only these. <b>Optional</b> rows say what is lost without each, with Allow or a switch. A declined one is a calm "Off: …" (the clicker row here), never "needs you".</figcaption>
+</figure>
+
+<figure>
+  <div class="screen">
+    <div class="hdr"><b>Switch to Add-on?</b><span class="back">Cancel</span></div>
+    <div class="sec">What changes</div>
+    <div class="row"><span class="t">Home goes back to <b>Boox Launcher</b></span></div>
+    <div class="row"><span class="t">Orbit stops switching Wi-Fi and keeping the reader awake for sleep sync</span></div>
+    <div class="row"><span class="t">The lock-screen permission is released</span></div>
+    <div class="row"><span class="t">KOReader's "Action when Wi-Fi is off" goes back to Ask (Orbit set it)</span></div>
+    <div class="row"><span class="t">Your books, KOReader settings and recommended settings stay</span></div>
+    <div class="sec">Keep any of these?</div>
+    <div class="row"><span class="chk"></span><span class="t">Settings PIN (locks Orbit's settings and guarded apps)</span></div>
+    <div class="row"><span class="chk"></span><span class="t">Clicker buttons in other apps</span></div>
+    <div class="row"><span class="chk"></span><span class="t">Sleep sync</span></div>
+    <div class="row"><span class="chk"></span><span class="t">Wi-Fi switching</span></div>
+    <div class="foot"><div class="btn">Stay Full</div><div class="btn solid">Switch to Add-on</div></div>
+  </div>
+  <figcaption>7. Switching modes (Settings › Mode). It says what changes, offers to keep each helper (all unticked), then gives up Home, releases device admin, stops the clicker service and the background service. Add-on → Full is the same page reversed, then opens the Full checklist.</figcaption>
+</figure>
+</div>
+
+<h2>KOReader (Orbit plugin)</h2>
+<div class="grid">
+
+<figure>
+  <div class="screen">
+    <div class="hdr"><span class="back">‹ Back</span><b>Recommended settings</b><span></span></div>
+    <div class="sec">To review: you changed these (2)</div>
+    <div class="rec"><div class="top"><b>When BookOrbit is further ahead</b></div>
+      <div class="vs"><span>Yours: <b>Don't sync</b></span><span>Orbit's: <b>Silent</b></span></div>
+      <div class="acts"><span class="btn">Use Orbit's</span><span class="btn">Keep mine</span></div></div>
+    <div class="rec"><div class="top"><b>Hold top-left corner (in books)</b></div>
+      <div class="vs"><span>Yours: <b>Bookmarks</b></span><span>Orbit's: <b>BookOrbit: sync all</b></span></div>
+      <div class="acts"><span class="btn">Use Orbit's</span><span class="btn">Keep mine</span></div></div>
+    <div class="sec">Applied (4)</div>
+    <div class="row"><span class="t">Auto-sync: on <span class="sub">was: off</span></span><span class="btn sm">Undo</span></div>
+    <div class="row"><span class="t">Open into BookOrbit home <span class="sub">was: off</span></span><span class="btn sm">Undo</span></div>
+    <div class="row"><span class="t">Hold top-right → Sync and sleep <span class="sub">was: nothing</span></span><span class="btn sm">Undo</span></div>
+    <div class="row"><span class="t">Swipe along the bottom → This book <span class="sub">was: nothing</span></span><span class="btn sm">Undo</span></div>
+    <div class="row greyed"><span class="t">Wi-Fi turns on by itself <span class="sub">needs Wi-Fi switching in Orbit Companion</span></span></div>
+    <div class="foot"><div class="btn">Undo all</div><div class="btn solid">Done</div></div>
+  </div>
+  <figcaption>4. Recommended-settings review, an existing KOReader. Items still at their default were applied with a backup; values the user changed are never overwritten and wait here: <b>Use Orbit's</b> / <b>Keep mine</b>. Items needing a missing helper are greyed with the reason. Same page in both modes.</figcaption>
+</figure>
+
+<figure>
+  <div class="screen">
+    <div class="bo-top"><b>BookOrbit</b><span>⟳ updated 8:04 PM</span></div>
+    <div class="sec" style="margin-top:0">Continue reading</div>
+    <div class="tiles"><div class="cover"></div><div class="cover"></div><div class="cover"></div><div class="cover"></div></div>
+    <div class="sec">Recently added</div>
+    <div class="tiles"><div class="cover"></div><div class="cover"></div><div class="cover"></div><div class="cover"></div></div>
+    <div class="tiles" style="margin-top:8px"><div class="cover"></div><div class="cover"></div><div class="cover"></div><div class="cover"></div></div>
+    <div class="toast">Applied 7 recommended settings · <u>Review</u></div>
+  </div>
+  <figcaption>5. Fresh KOReader installed by Orbit (either mode): everything was at default, so all 7 were applied with no question. One line for 4 s, off a book; the same text stays on Orbit settings until tapped. With conflicts it reads "Applied 4 · 2 to review".</figcaption>
+</figure>
+
+<figure>
+  <div class="screen dimmed">
+    <div class="hdr"><span class="back">‹ Back</span><b>Orbit settings</b><span></span></div>
+    <div class="sec">Sync &amp; Wi-Fi</div>
+    <div class="row"><span class="t">Sync on wake</span><span class="toggle on"></span></div>
+    <div class="row"><span class="t">Sync while reading<span class="sub">every 50 pages</span></span><span class="val">›</span></div>
+    <div class="row"><span class="t">Sync and sleep now</span><span class="val">›</span></div>
+    <div class="row"><span class="t">Test sync path</span><span class="val">›</span></div>
+    <div class="row"><span class="t greyed">Wi-Fi switching and sleep sync: in Orbit Companion ›</span></div>
+    <div class="sec">Buttons</div>
+    <div class="row"><span class="t greyed">Clicker buttons: in Orbit Companion ›</span></div>
+    <div class="dialog">
+      <b class="t">Synced</b>
+      <p>Press the power button to sleep.</p>
+      <p class="sub" style="font-size:11px">Orbit Companion can turn the screen off for you: Sleep sync › Screen off.</p>
+      <div class="foot"><div class="btn">Don't show again</div><div class="btn solid">OK</div></div>
+    </div>
+  </div>
+  <figcaption>6. The plugin's view of missing features (Add-on, no helpers). Rows that need a missing capability are hidden; each section gets one quiet line instead. A reachable action degrades: Sync and sleep syncs, then asks for the power button. No error, and the hint shows once.</figcaption>
+</figure>
+
+<figure>
+  <div class="screen dimmed">
+    <div class="bo-top"><b>BookOrbit</b><span>⟳</span></div>
+    <div class="tiles"><div class="cover"></div><div class="cover"></div><div class="cover"></div><div class="cover"></div></div>
+    <div class="tiles" style="margin-top:8px"><div class="cover"></div><div class="cover"></div><div class="cover"></div><div class="cover"></div></div>
+    <div class="dialog">
+      <b class="t">Orbit needs 1 step</b>
+      <p>• Sign in to BookOrbit, so your books and reading places sync.</p>
+      <p class="sub" style="font-size:11px">Only required steps show here. Optional permissions never do.</p>
+      <div class="foot"><div class="btn">Later</div><div class="btn solid">Sign in</div></div>
+    </div>
+  </div>
+  <figcaption>8. The Add-on reminder, replacing the Home-press prompt: KOReader's one-time setup box, off a book, fed from the companion's status file (no background service needed). It only ever lists the four required items or settings to review. "Later" is the companion's Later.</figcaption>
+</figure>
+</div>

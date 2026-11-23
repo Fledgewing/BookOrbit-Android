@@ -88,8 +88,17 @@ end
 ---------------------------------------------------------------------------------------------
 
 function sleepNow(reason)
-    if Companion.installed() then
+    if Companion.has("screen_off") then
         Companion.send(Companion.ACTION.SLEEP_NOW, { reason = reason })
+    elseif Companion.installed() then
+        log("sleep now: the companion can't turn the screen off here; asking for the power button")
+        local text = _("Synced. Press the power button to sleep.")
+        if not S.screen_off_hint_shown then
+            S.screen_off_hint_shown = true
+            saveSettings()
+            text = text .. "\n" .. _("Orbit Companion can do this for you: Screen off after Sync and sleep.")
+        end
+        UIManager:show(InfoMessage:new{ text = text, timeout = 4 })
     else
         log("sleep now: no companion; asking the reader to press the power button")
         UIManager:show(InfoMessage:new{

@@ -59,7 +59,7 @@ function OrbitAndroid:testSyncPath()
     end
     local was_on = Wifi.acquire("test")
     held = true
-    if was_on == false then add(Companion.installed(), _("Wi-Fi was off: turning it on for the test"), nil, Companion.problem()) end
+    if was_on == false then add(Companion.has("wifi"), _("Wi-Fi was off: turning it on for the test"), nil, Companion.problem()) end
     Net.up(p, { reason = "test", cap = 20, need_server = true }, function(ok, res)
         add(res.wifi_s ~= nil, _("Wi-Fi connected"), res.wifi_s, _("Turn Wi-Fi on, or check Orbit Companion's Wi-Fi permission."))
         add(res.vpn_s ~= nil, _("Tailscale up"), res.vpn_s, _("Tailscale not connected: open Tailscale and sign in."))

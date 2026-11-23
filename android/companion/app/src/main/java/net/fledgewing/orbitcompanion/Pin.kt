@@ -60,11 +60,12 @@ object Pin {
         return next
     }
 
-    fun isSet(ctx: Context): Boolean = live(ctx).pinSet
+    /** Add-on without the PIN helper: the PIN is off (its hash is kept for when it comes back). */
+    fun isSet(ctx: Context): Boolean = Mode.pinActive(ctx) && live(ctx).pinSet
 
     fun unlocked(): Boolean = watch().unlocked(now())
 
-    fun locked(ctx: Context): Boolean = live(ctx).also { watch() }.locked(now())
+    fun locked(ctx: Context): Boolean = Mode.pinActive(ctx) && live(ctx).also { watch() }.locked(now())
 
     /** The hard cap applies only while the accessibility service can't see the user leave. */
     private fun watch(): PinGate = gate.also { it.watching = ClickerService.connected }

@@ -29,7 +29,7 @@ end
 
 -- Sends the batch so far. content/open default to the open book (or none).
 function Stats.send(why, content, open)
-    if not Companion.installed() then return end
+    if not Companion.has("stats") then return end
     content = content or readerContent()
     if open == nil then open = content ~= "none" end
     local extras = Stats.take(stats_acc, now_s(), content, open,

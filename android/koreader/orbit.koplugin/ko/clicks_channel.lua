@@ -91,7 +91,7 @@ function wrapWait()
 end
 
 function Channel.connect(why)
-    if Channel.up or not Companion.installed() then return Channel.up end
+    if Channel.up or not Companion.has("clicker") then return Channel.up end
     local lp = looper()
     if not lp or not wrapWait() then return false end
     local oks, socket = pcall(require, "socket")

@@ -150,6 +150,30 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false" />
 
+        <!-- Orbify's mode (docs/design/addon-mode.md): the first-run choice and Settings › Mode. -->
+        <activity
+            android:name=".ModeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false" />
+
+        <!-- Add-on restarts: the plugin starts this just before KOReader quits (RELAUNCH_UI). -->
+        <activity
+            android:name=".RelaunchActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@style/Orbit.Invisible">
+            <intent-filter>
+                <action android:name="net.fledgewing.orbitcompanion.action.RELAUNCH_UI" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".DailyJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <activity
             android:name=".AttentionActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
@@ -221,6 +245,7 @@
                 <action android:name="net.fledgewing.orbitcompanion.action.STATS" />
                 <action android:name="net.fledgewing.orbitcompanion.action.RELAUNCH" />
                 <action android:name="net.fledgewing.orbitcompanion.action.SETUP_LATER" />
+                <action android:name="net.fledgewing.orbitcompanion.action.REPORT" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

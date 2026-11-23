@@ -26,6 +26,12 @@ Companion.ACTION = {
     SETUP_LATER = Companion.PACKAGE .. ".action.SETUP_LATER",
     -- Companion 0.4.4+: the Settings PIN keypad (activity).
     SHOW_PIN = Companion.PACKAGE .. ".action.SHOW_PIN",
+    -- Companion 0.11.0+ (docs/design/addon-mode.md §7.3): signed in yes/no and the recommended
+    -- settings' state, for its two Setup rows. Never the server, the account or the key.
+    REPORT = Companion.PACKAGE .. ".action.REPORT",
+    -- Companion 0.11.0+ in Add-on mode: its invisible window that starts KOReader again after a
+    -- restart (no Home role to do it from the background, docs/design/addon-mode.md §7.4).
+    RELAUNCH_UI = Companion.PACKAGE .. ".action.RELAUNCH_UI",
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
@@ -102,6 +108,59 @@ function Companion.installed()
     return Companion.state() == "ok"
 end
 
+-- The status file the companion writes (docs/design/addon-mode.md §6.2): koreader/settings/.
+function Companion.statusFile()
+    local okd, DataStorage = pcall(require, "datastorage")
+    if not okd or type(DataStorage) ~= "table" then return nil end
+    return DataStorage:getSettingsDir() .. "/orbit-companion.json"
+end
+
+-- The decoded status file, or nil (missing, unreadable or half-written: ignored).
+function Companion.readFile()
+    local path = Companion.statusFile()
+    local f = path and io.open(path, "rb")
+    if not f then return nil end
+    local body = f:read("*a")
+    f:close()
+    local okj, json = pcall(require, "json")
+    if not okj then return nil end
+    local okd, data = pcall(json.decode, body or "")
+    return okd and type(data) == "table" and data or nil
+end
+
+-- Resolve the companion's mode and caps (Caps.resolve) from /status (st, or nil) and the file.
+-- Returns the caps before, the caps now, and whether both are the companion's own word (so a
+-- change is real, not a first guess).
+function Companion.updateCaps(st, why)
+    local cached = S.companion_caps and { mode = S.companion_mode, caps = S.companion_caps } or nil
+    local cstate = Companion.state()
+    local file = Companion.readFile()
+    Companion.file = cstate == "ok" and file or nil
+    local caps, mode, source = Caps.resolve(cstate, file, st, cached)
+    Companion.caps_state = cstate
+    local before, was_known = Companion.cap_set, Companion.caps_known
+    Companion.cap_set, Companion.mode, Companion.caps_source = caps, mode, source
+    Companion.caps_known = source == "status" or source == "file" or source == "cache"
+    if source == "status" or source == "file" then
+        local list = Caps.list(caps)
+        if table.concat(list, ",") ~= table.concat(S.companion_caps or {}, ",") or mode ~= S.companion_mode then
+            S.companion_caps, S.companion_mode = list, mode
+            saveSettings()
+            log("companion: mode", tostring(mode), "caps", table.concat(list, ","), "(from " .. source .. ", " .. tostring(why) .. ")")
+        end
+    end
+    return before, caps, was_known and Companion.caps_known and (source == "status" or source == "file")
+end
+
+-- A companion feature is available (docs/design/addon-mode.md §6.3). The package being installed
+-- is Companion.installed(); this is what a feature needs. Before the first refresh: the file, or
+-- the caps seen last time (load-time hooks decide before any refresh, §6.2 step 5).
+function Companion.has(cap)
+    if not Companion.installed() then return false end
+    if not Companion.cap_set or Companion.caps_state ~= "ok" then Companion.updateCaps(nil, "first use") end
+    return Companion.cap_set[cap] == true
+end
+
 -- For menus and the test: what's wrong with the companion, or nil.
 function Companion.problem()
     local st = Companion.state()
@@ -139,7 +198,7 @@ end
 
 -- restore: "off" when Wi-Fi was off before this sleep sync (the companion turns it off again).
 function Companion.netDone(reason, ok, seconds, detail, restore)
-    if not Companion.installed() then return end
+    if not Companion.has("sleep_sync") then return end
     Companion.send(Companion.ACTION.NET_DONE, {
         reason = reason,
         ok = ok and "1" or "0",

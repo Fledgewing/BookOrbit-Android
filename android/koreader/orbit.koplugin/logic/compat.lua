@@ -35,7 +35,9 @@ Compat.FEATURES = {
     { id = "test_sync", needs = { onBookOrbitSyncBook = "function", startSweep = "function", errorLabel = "function" },
       fallback = "Test sync path skips the plugin step" },
     { id = "recommended", needs = { onBookOrbitToggleAutoSync = "function" },
-      fallback = "Apply recommended settings can't turn on Auto-sync" },
+      fallback = "Recommended settings can't turn on Auto-sync" },
+    { id = "signin", needs = { promptLogin = "function" },
+      fallback = "Orbit Companion's \"Sign in\" opens KOReader without BookOrbit's sign-in page" },
 }
 -- The feature that names each plugin event (advisory logging in pluginEvent).
 PLUGIN_EVENT_FEATURE = { BookOrbitOpenDashboard = "dashboard", BookOrbitSyncBook = "test_sync",
