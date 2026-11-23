@@ -1,0 +1,30 @@
+CrossInk-Bookorbit v2.0.0+bookorbit.1-rc3 with Tailscale (MicroLink): Orbify's Xteink firmware.
+
+Install over the air from the reader (Settings > Check for updates) once it runs a
+CrossInk-Tailnet or Orbify build, or flash the .bin for your reader from an SD card or USB.
+Verify: `sha256sum -c SHA256SUMS`, `gh attestation verify <file> -R Fledgewing/Orbify`.
+The X3 build leaves out Nearby transfer, mDNS, Plugins and language/hyphenation downloads (see "X3 (v2.0) differences" in the README for workarounds). The X4 Pro and X4 Classic keep everything.
+
+## Licenses and source
+
+The .bin files combine CrossInk-Bookorbit, MicroLink, the CrossInk-Tailnet overlay, the Arduino
+core, ESP-IDF and other third-party components, including wolfSSL (GPL-2.0-or-later). They are
+distributed under the **GNU General Public License v3.0 or later**. Every component, with its
+license and copyright, is listed in `THIRD_PARTY_LICENSES.md`; the license texts and notices are
+in `licenses.zip`. Both are attached to this release.
+
+Complete corresponding source:
+
+- CrossInk-Tailnet overlay: [`b99d58c`](https://github.com/Fledgewing/Orbify/tree/b99d58cee450f400e2d45874324494fcd65a9cd7/xteink/)
+  (build recipe: [`.github/workflows/xteink.yml`](https://github.com/Fledgewing/Orbify/blob/b99d58cee450f400e2d45874324494fcd65a9cd7/.github/workflows/xteink.yml),
+  instructions: [Building locally](https://github.com/Fledgewing/Orbify/blob/b99d58cee450f400e2d45874324494fcd65a9cd7/xteink/README.md#building-locally))
+- CrossInk-Bookorbit: [`v2.0.0+bookorbit.1-rc3`](https://github.com/agosez/CrossInk-Bookorbit/tree/v2.0.0%2Bbookorbit.1-rc3), with FreeInk SDK [`9d5bba3`](https://github.com/Free-Ink/freeink-sdk/tree/9d5bba3ef02a1c35363ecadbb50ad0e1ac279653)
+- MicroLink: [`5a9211f`](https://github.com/Fledgewing/microlink/tree/5a9211f1128969816b72c27c9f5515b984bf575c)
+- Libraries: the exact versions and commits in `lib_deps` of the tag's [`platformio.ini`](https://github.com/agosez/CrossInk-Bookorbit/blob/v2.0.0%2Bbookorbit.1-rc3/platformio.ini)
+- Platform: [pioarduino platform-espressif32 55.03.311](https://github.com/pioarduino/platform-espressif32/releases/download/55.03.311/platform-espressif32.zip) (Arduino core, prebuilt ESP-IDF, toolchain), PlatformIO Core 6.1.19
+
+All of the above, with every library's source exactly as built and the Arduino core source, is
+in `source-<version>.tar.gz` attached to this release (see `BUILD.md` inside).
+
+upstream=v2.0.0+bookorbit.1-rc3 overlay-tree=5674cf9301d6914f242fbb79d4dbd13131dc6acd
+

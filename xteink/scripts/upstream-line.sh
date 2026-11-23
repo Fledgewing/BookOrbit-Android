@@ -38,13 +38,17 @@ case "${1:-}" in
   publish)
     event="${2:-}" tag="${3:-}" marker="${4:-}" force="${5:-false}"
     bodies="$(cat)"
+    # Matched in the shell, never "printf | grep -q": grep -q exits at the first match, printf then
+    # dies of SIGPIPE on a page of bodies bigger than the pipe buffer, and pipefail turns the match
+    # into a miss (a scheduled run published an already-released upstream tag that way).
+    released() { [[ "$bodies" == *"$1"* ]]; }
     case "$event" in
       schedule)
         # Only a new upstream tag: "upstream=<tag> " with the space, so -rc3 never matches -rc30.
-        if printf '%s\n' "$bodies" | grep -qF -- "upstream=$tag "; then echo false; else echo true; fi
+        if released "upstream=$tag "; then echo false; else echo true; fi
         ;;
       workflow_dispatch)
-        if [ "$force" = true ] || ! printf '%s\n' "$bodies" | grep -qF -- "$marker"; then echo true; else echo false; fi
+        if [ "$force" = true ] || ! released "$marker"; then echo true; else echo false; fi
         ;;
       *) echo false ;;
     esac
