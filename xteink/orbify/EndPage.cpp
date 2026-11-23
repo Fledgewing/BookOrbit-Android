@@ -1,6 +1,5 @@
 #include <CrossInkTailnetCuts.h>
 
-#if CROSSINK_TAILNET_ORBIFY_FINISH
 #include "EndPage.h"
 
 #include <I18n.h>
@@ -271,5 +270,3 @@ OrbifyEndPage::Result OrbifyEndPage::activate(const int row) {
   }
   return result;
 }
-
-#endif

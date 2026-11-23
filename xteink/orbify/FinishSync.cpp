@@ -2,7 +2,6 @@
 
 #include <CrossInkTailnetCuts.h>
 
-#if CROSSINK_TAILNET_ORBIFY_FINISH
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <HalStorage.h>
@@ -429,21 +428,3 @@ void refreshCard(const std::string& bookPath, const float percentage) {
 }
 
 }  // namespace OrbifyFinish
-
-#else
-
-namespace OrbifyFinish {
-bool autoMarkEnabled() { return false; }
-bool reachedEnd(bool) { return false; }
-void onFinishedChanged(const std::string&, bool) {}
-void drain(const std::string&, bool, bool (*)()) {}
-bool holdPush(const std::string&, const std::string&, float) { return false; }
-JobState jobState(const std::string&) { return JobState::None; }
-int8_t rating(const std::string&) { return 0; }
-void setRating(const std::string&, int8_t) {}
-bool loadCard(const std::string&, orbify::SeriesCard&) { return false; }
-void storeCard(JsonObjectConst) {}
-void refreshCard(const std::string&, float) {}
-}  // namespace OrbifyFinish
-
-#endif

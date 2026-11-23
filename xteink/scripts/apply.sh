@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Layer the Tailnet overlay onto a CrossInk-Bookorbit checkout.
-#   scripts/apply.sh [--series v1.6|v2.0] /path/to/CrossInk-Bookorbit
-# The patch series follows the checkout's CrossInk version (1.6.x -> overlay/patches/v1.6,
-# 2.x -> overlay/patches/v2.0); --series (or CROSSINK_PATCH_SERIES) overrides it.
+#   scripts/apply.sh [--series v2.0] /path/to/CrossInk-Bookorbit
+# The patch series follows the checkout's CrossInk version (2.x -> overlay/patches/v2.0);
+# --series (or CROSSINK_PATCH_SERIES) overrides it. CrossInk 1.6 is no longer supported.
 # Idempotent. Touches only git-ignored paths in the checkout:
 #   platformio.local.ini  (copied from overlay/)
 #   tailnet               (symlink to this repo's tailnet/, excluded via .git/info/exclude)
@@ -18,10 +18,10 @@ set -euo pipefail
 overlay="$(cd "$(dirname "$0")/.." && pwd)"
 series_override="${CROSSINK_PATCH_SERIES:-}"
 if [ "${1:-}" = "--series" ]; then
-  series_override="${2:?usage: apply.sh [--series v1.6|v2.0] /path/to/CrossInk-Bookorbit}"
+  series_override="${2:?usage: apply.sh [--series v2.0] /path/to/CrossInk-Bookorbit}"
   shift 2
 fi
-target="${1:?usage: apply.sh [--series v1.6|v2.0] /path/to/CrossInk-Bookorbit}"
+target="${1:?usage: apply.sh [--series v2.0] /path/to/CrossInk-Bookorbit}"
 target="$(cd "$target" && pwd)"
 
 [ -f "$target/platformio.ini" ] || { echo "not a CrossInk checkout: $target" >&2; exit 1; }
@@ -57,8 +57,8 @@ for p in /tailnet /src/tailnet /src/orbify; do
   grep -qx "$p" "$exclude" 2>/dev/null || echo "$p" >> "$exclude"
 done
 
-# One patch series per upstream line: overlay/patches/v1.6/ for CrossInk 1.6.x,
-# overlay/patches/v2.0/ for 2.x. The version comes from the checkout's
+# One patch series per upstream line: overlay/patches/v2.0/ for CrossInk 2.x (1.6 is retired;
+# its series is in git history). The version comes from the checkout's
 # [crossink] version (what its build reports), else its tag.
 version="$(awk '/^\[crossink\]/{f=1;next} /^\[/{f=0} f&&/^version *=/{sub(/^version *= */,"");print;exit}' \
   "$target/platformio.ini")"
@@ -69,10 +69,9 @@ if [ -n "$series_override" ]; then
   echo "series $name chosen by override (checkout reports '${version:-unknown}')"
 else
   case "$version" in
-    1.6.*) name=v1.6 ;;
     2.*) name=v2.0 ;;
-    *) echo "no patch series for CrossInk '${version:-unknown}' in $target (known: 1.6.x -> v1.6, 2.x -> v2.0);" \
-         "pass --series v1.6|v2.0 to choose one" >&2
+    *) echo "no patch series for CrossInk '${version:-unknown}' in $target (known: 2.x -> v2.0; 1.6 is no" \
+         "longer supported); pass --series v2.0 to choose one" >&2
        exit 1 ;;
   esac
 fi

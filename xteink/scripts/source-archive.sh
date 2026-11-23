@@ -124,8 +124,7 @@ pio run -e x4-pro        # X4 Pro; x4-classic for the X4 Classic, default for th
 \`\`\`
 
 The overlay is already applied; \`crossink/tailnet\` and \`crossink/src/tailnet\` are
-symlinks into \`overlay/\`. The image is \`.pio/build/<env>/firmware-*.bin\`. CrossInk 1.6
-and 2.x use different platforms; keep a separate \`PLATFORMIO_CORE_DIR\` for each.
+symlinks into \`overlay/\`. The image is \`.pio/build/<env>/firmware-*.bin\`.
 EOF
 
 mkdir -p "$(dirname "$out")"

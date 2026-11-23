@@ -2,7 +2,6 @@
 # Clones the upstream projects Orbify builds on, at the versions pinned in tools/upstreams.lock,
 # into upstream/<name> (gitignored), so agents and people read the real source, not memory:
 #   bookorbit      BookOrbit server, web app and KOReader plugin (koreader-plugin/)
-#   crossink-v1.6  CrossInk-Bookorbit 1.6 (xteink/overlay/patches/v1.6 applies to it)
 #   crossink-v2.0  CrossInk-Bookorbit 2.x (xteink/overlay/patches/v2.0)
 #   koreader       KOReader
 #

@@ -1,7 +1,7 @@
 #pragma once
 // Orbify: mark done at the end of a book (docs/design/end-of-book/DESIGN.md, ROADMAP item 1), the
-// firmware side of core/FinishQueue. Compiled in with CROSSINK_TAILNET_ORBIFY_FINISH (overlay
-// patch 0027); every function is a no-op without it.
+// firmware side of core/FinishQueue. CrossInk calls it from the hooks of overlay patch 0027, which
+// CROSSINK_TAILNET_ORBIFY_FINISH turns off.
 //
 //   - Every finish or un-finish on the reader (the End-of-Book page, the 99% prompt, the menus,
 //     the book's stats page, the Library's long-press) passes through BookSyncFile's

@@ -16,11 +16,29 @@ This is an **overlay**, not a fork. CrossInk's source is used as released; the o
 | Shim | `tailnet/shim` | Starts MicroLink when WiFi gets an address, stops it when WiFi goes away; answers tailnet names (`bookorbit`, `bookorbit.<tailnet>.ts.net`) for every HTTP client in the firmware |
 | Settings screen | `tailnet/ui` | **Settings > Tailscale**: on/off, status and address, log in (QR code) and log out |
 | Build hook | `tailnet/tailnet_build.py` + `overlay/platformio.local.ini` | Compiles the above into CrossInk's normal PlatformIO build and points the updater at Orbify's `xteink-v…` releases (patch `ota-tag-prefix`) |
-| CrossInk patches | `overlay/patches/v1.6/` (CrossInk 1.6.x), `overlay/patches/v2.0/` (CrossInk 2.x) | One numbered series per upstream line: the Settings row (0001), the framebuffer freed while Tailscale runs in a network boot on the X3/X4 (0002, `tailnet/shim/TailnetNetPhase.h`), and the memory and download changes after them |
+| CrossInk patches | `overlay/patches/v2.0/` (CrossInk 2.x) | One numbered series per upstream line: the Settings row (0001), the framebuffer freed while Tailscale runs in a network boot on the X3/X4 (0002, `tailnet/shim/TailnetNetPhase.h`), and the memory and download changes after them |
 
-When CrossInk-Bookorbit releases, the daily CI run rebuilds the new tag with the overlay and
+**CrossInk 2.x only.** Orbify no longer builds or supports CrossInk 1.6 (its patch series is in git
+history). Readers still on 1.6 stay on the feed's stable entry, `xteink-v1.6.1.114+bookorbit.9`,
+until CrossInk 2.0 leaves its release candidates (below).
+
+When CrossInk-Bookorbit releases, the daily CI run rebuilds its newest 2.x tag with the overlay and
 publishes a release here. The only thing that can need hand work is the patch series for that upstream
-line, and CI says so if it stops applying. The shim, MicroLink and the switch table are shared by both lines.
+line, and CI says so if it stops applying.
+
+### Releases and the update feed
+
+Readers' updaters read `xteink/releases.json` on the `xteink-feed` branch: the newest stable and
+the newest pre-release `xteink-v…` release. Which one a build becomes is decided by the upstream tag
+(`scripts/upstream-line.sh channel`, tested by `test/upstream_line_test.sh`):
+
+| Upstream tag | Our release | Feed |
+|---|---|---|
+| a release candidate or beta (`v2.0.0+bookorbit.1-rc3`) | pre-release | the pre-release entry (readers with Include Release Candidates on) |
+| a final release (`v2.0.0+bookorbit.1`, no `-rc`/`-beta`) | stable | the stable entry: readers still on 1.6 are offered it at their next check |
+| 1.x | refused | — |
+
+Every firmware release keeps `make_latest=false`: GitHub's "latest" stays an Android release.
 
 ## Readers
 
@@ -169,7 +187,7 @@ also wait for that sync. Nothing is shown while reading; without a network it si
 again at the next interval. Not on the X3: a sync does not fit in its memory beside an open
 book.
 
-## Finished at the end of a book (CrossInk 2.x)
+## Finished at the end of a book
 
 Turning past the last page marks the book finished on the reader, and the next BookOrbit sync
 (on sleep, by hand, or while reading) tells BookOrbit: the book leaves Also Reading and counts as
@@ -242,14 +260,13 @@ cd CrossInk-Bookorbit && pio run -e x4-pro    # or x4-classic, default
 ```
 
 `apply.sh` picks the patch series from the checkout's CrossInk version (`[crossink] version` in its
-`platformio.ini`, else its tag): 1.6.x uses `overlay/patches/v1.6`, 2.x uses `overlay/patches/v2.0`, and
-any other version stops with an error. `apply.sh --series v1.6|v2.0 <checkout>` (or
+`platformio.ini`, else its tag): 2.x uses `overlay/patches/v2.0`, and any other version (1.6
+included) stops with an error. `apply.sh --series v2.0 <checkout>` (or
 `CROSSINK_PATCH_SERIES=v2.0`) chooses one explicitly. Besides that series it only touches git-ignored
 paths in CrossInk, and it is safe to rerun.
 
-CrossInk 1.6 and 2.x build on different pioarduino platforms that share one framework package
-directory, so keep a separate PlatformIO home for each, e.g.
-`PLATFORMIO_CORE_DIR=~/.platformio-2x pio run -e default` for 2.x.
+If you also build other CrossInk lines, keep a separate PlatformIO home for 2.x (they use different
+pioarduino platforms), e.g. `PLATFORMIO_CORE_DIR=~/.platformio-2x pio run -e default`.
 
 To rebuild a published release, use the commits from its notes: clone CrossInk-Bookorbit at the
 release's upstream tag (`git clone --recursive --branch <tag> ...`), check out Orbify at

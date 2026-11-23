@@ -181,12 +181,12 @@ SWITCHES = {
     # and shows the progress bar; else the static "Downloading" screen. The X4s never park.
     "CROSSINK_TAILNET_DOWNLOAD_PROGRESS": (1,      0,      0),
     "CROSSINK_TAILNET_DOWNLOAD_PROGRESS_MARGIN": (40000, 40000, 40000),
-    # Patch 0014 (1.6) / 0024 (2.x): the frontlight written to the driver again after the first paint of each boot
+    # Patch 0024: the frontlight written to the driver again after the first paint of each boot
     # and a second later (an X4 Pro could wake dark with its light on). No-op without a light.
     "CROSSINK_TAILNET_FRONTLIGHT_REAPPLY": (1,     1,      1),
     # --- CrossInk 2.x flash cuts (X3 only: rc2 plus Tailscale is ~199 KB over the C3's 6.25 MB app slot).
     # Each removes one upstream feature from the build the way upstream drops OPDS there: no menu entry,
-    # a saved setting that points at it reads as unavailable. Inert on CrossInk 1.6 (no such code).
+    # a saved setting that points at it reads as unavailable.
     "CROSSINK_TAILNET_NO_NEARBY":         (1,      0,      0),      # Nearby book/position/stats transfer
     "CROSSINK_TAILNET_NO_MDNS":           (1,      0,      0),      # web server/Calibre by IP only
     "CROSSINK_TAILNET_NO_PLUGINS":        (1,      0,      0),      # plugin hub, catalog, events, web routes
@@ -223,37 +223,15 @@ WOLFSSL_SWITCH_DEFINES = {
 SWITCH_COLUMN = pioenv if pioenv in SWITCH_ENVS else ("x4-pro" if has_psram else "default")
 
 
-# The CrossInk 2.x flash cuts: CrossInk 1.6 fits without them (and its X3 build still needs mDNS).
-# The 2.x features (patches 0022, 0023) exist only in the 2.x series.
-V2_ONLY_SWITCHES = ("CROSSINK_TAILNET_NO_NEARBY", "CROSSINK_TAILNET_NO_MDNS", "CROSSINK_TAILNET_NO_PLUGINS",
-                    "CROSSINK_TAILNET_NO_ASSET_DOWNLOADS", "CROSSINK_TAILNET_WOLFSSL_NO_ERROR_STRINGS",
-                    "CROSSINK_TAILNET_BACKGROUND_SYNC", "CROSSINK_TAILNET_SETTINGS_PIN",
-                    "CROSSINK_TAILNET_BATTERY_STATS", "CROSSINK_TAILNET_ORBIFY_FINISH",
-                    "CROSSINK_TAILNET_ORBIFY_RATING", "CROSSINK_TAILNET_ORBIFY_SUGGESTIONS",
-                    "CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW")
-try:
-    CROSSINK_MAJOR = int(str(env.GetProjectConfig().get("crossink", "version")).split(".")[0])  # noqa: F821
-except Exception:
-    CROSSINK_MAJOR = 1
-
-
 def switch_value(name):
     """The switch's value for this build (env var, else its row); None = header default."""
     if name in os.environ:
         return int(os.environ[name], 0)
-    if name in V2_ONLY_SWITCHES and CROSSINK_MAJOR < 2:
-        return 0
     return SWITCHES[name][SWITCH_ENVS.index(SWITCH_COLUMN)]
 
 
 SWITCH_VALUES = {name: switch_value(name) for name in SWITCHES}
 
-# CrossInk v2 (lib/hal/IpcTaskStack.cpp) links its own __wrap_xTaskCreatePinnedToCore;
-# CrossInk 1.6 does not. Only one wrapper can exist (see TailnetStacks.c).
-upstream_wraps_task_create = any(
-    "--wrap=xTaskCreatePinnedToCore" in str(f)
-    for f in list(env.get("BUILD_FLAGS", [])) + list(env.get("LINKFLAGS", []))  # noqa: F821
-)
 print(f"Tailnet switches for {pioenv} (column {SWITCH_COLUMN}):")
 for _name, _value in SWITCH_VALUES.items():
     _src = " (env override)" if _name in os.environ else ""
@@ -271,7 +249,6 @@ for _name, _value in SWITCH_VALUES.items():
         ML_DEFINES.append((_name, _value))
     else:
         _global_defines.append((_name, _value))
-_global_defines.append(("CROSSINK_TAILNET_CROSSINK_MAJOR", CROSSINK_MAJOR))  # string ids differ by version
 env.Append(CPPDEFINES=_global_defines)  # noqa: F821
 
 # CROSSINK_TAILNET_NO_MDNS: the Arduino ESPmDNS library is linked as objects, so its global MDNS
@@ -336,8 +313,6 @@ def _process_project_deps_with_tailnet(env):
     # (ml_config.h: 16; 8 on the C3): the reader only needs its servers, and
     # tailnet_ensure_peer() pins one that a large tailnet would otherwise leave out.
     ml_env.Append(CPPDEFINES=ML_DEFINES)
-    if upstream_wraps_task_create:
-        ml_env.Append(CPPDEFINES=[("TAILNET_TASK_STACK_HOOK", 1)])
 
     if derp_wolfssl:
         # ml_derp.c includes wolfSSL; the defines (WOLFSSL_USER_SETTINGS, ...)
@@ -389,11 +364,9 @@ def _process_project_deps_with_tailnet(env):
                           # TailnetStacks.c: MicroLink stops before WiFi goes off
                           "-Wl,--wrap=esp_wifi_stop"])
     if SWITCH_VALUES.get("TAILNET_TASK_STACK_WRAP"):
-        # TailnetStacks.c: task stack sizes by name, and the timer task's. CrossInk v2
-        # wraps xTaskCreatePinnedToCore itself; its wrapper then calls the shim's hooks
-        # (TAILNET_TASK_STACK_HOOK, CrossInk patch 0020) instead of a second wrapper.
-        if not upstream_wraps_task_create:
-            env.Append(LINKFLAGS=["-Wl,--wrap=xTaskCreatePinnedToCore"])
+        # TailnetStacks.c: task stack sizes by name, and the timer task's. CrossInk 2.x
+        # wraps xTaskCreatePinnedToCore itself; its wrapper calls the shim's hooks (CrossInk
+        # patch 0020) instead of a second wrapper.
         env.Append(LINKFLAGS=["-Wl,--wrap=vApplicationGetTimerTaskMemory"])
 
 
