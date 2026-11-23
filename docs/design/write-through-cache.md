@@ -110,19 +110,42 @@ cover jobs. Neither of our modes goes through that deletion.
 
 ## Xteink (CrossInk-Tailnet overlay)
 
-- **Choke point:** `fetchJson(url, filter, doc)` (X `src/network/BookOrbitCatalogClient.cpp:82`):
-  every catalog read already downloads to `/.crosspoint/bookorbit_catalog.json` and parses from
-  the file. The cache keeps that file per key instead of overwriting it. Writes go through
-  `sendBookOrbitRequest` (X `lib/BookOrbitSync/BookOrbitSyncClient.cpp:382`, :436); the
-  write-effect rules hook there on `2xx`. The Xteink builder confirms these seams on 2.x.
-- **Disk:** `/.crosspoint/bookorbit-cache/<hash>.json` + `index.bin`, 2 MB / 200 entries on X4
-  and X4 Pro. Parsing stays streamed with the existing filters, so memory use doesn't grow.
-- **Covers:** `downloadThumbnail` (X `BookOrbitCatalogClient.cpp:469`) writes the file under a
-  name with the book id and its `updatedAt`, so a cover is fetched under the same rules.
-- **Revalidate:** only while Wi-Fi is already up (the firmware joins on demand); a catalog screen
-  opened offline shows the cached copy with the saved stamp. No background task on the C3.
-- **X3:** not designed for now beyond "doesn't break": the cache stays off where the build lacks
-  the room (compile-time flag), and the code path is the one it has today.
+X4 Pro and X4 only (`CROSSINK_TAILNET_ORBIFY_CACHE`, overlay patch 0029 and on). The X3 keeps
+today's catalog and none of the cache code. Citations are to CrossInk 2.0.0+bookorbit.1-rc3 with
+the overlay's patches up to 0028 applied.
+
+- **Read seam:** `fetchJson(url, filter, doc)` (`src/network/BookOrbitCatalogClient.cpp:120`)
+  is every catalog read. It downloads to `/.crosspoint/bookorbit_catalog.json` and parses from the
+  file. The hook asks the cache first (`OrbifyCache::lookup`). If the entry is checked in the last
+  60 s, or there is no network, it parses the saved reply. Otherwise it downloads as before, and
+  keeps a `2xx` reply by renaming the temp file into the cache. A failed request falls back to the
+  saved reply, marked "Not updated". Full refresh skips the saved reply. Parsing stays streamed with
+  each caller's filter.
+- **Write seam:** `sendBookOrbitRequest` (`lib/BookOrbitSync/BookOrbitSyncClient.cpp:426`, which
+  the string form at :496 goes through) calls a weak hook with the method, URL, body and status
+  of every non-`GET`. On `2xx`, `read-status` and `rating` patch the book in every saved reply
+  that lists it, and progress or book states mark Home due.
+- **Disk:** `/.crosspoint/bookorbit-cache/<hash>.json` plus `index.bin`, 2 MB and 200 entries,
+  least recently used first. The Home body is never evicted by a list page. An index from another
+  server or account drops the folder. Whole replies are parsed only to hash or patch them, with
+  their nodes in PSRAM.
+- **Covers:** the X4 Home covers (`BookOrbitHomeStore`, files `<id>_<ver>_<w>x<h>.bmp`, `<ver>` =
+  FNV-1a of `updatedAt`) keep each book's version and ETag in the index.
+  - A cover missing at the listed version, whose older file has an ETag, is asked
+    `If-None-Match` (`downloadThumbnail`, `HttpDownloader` `DownloadOptions::etag`).
+  - A `304` renames the older files to the new version.
+  - A `200` replaces them and keeps the new ETag.
+- **Revalidation in the background (the catalog browser, patch 0030):**
+  - The browser opens a view from the cache and queues its keys that are due.
+  - A task like 0022's background sync (`BookOrbitBackgroundSync`) joins a saved network only
+    then. It fetches only those keys, and turns Wi-Fi off again if it brought it up.
+  - It runs only while the catalog is open and a visible key is due: never on a timer, and never
+    after the catalog closes (closing stops it and waits, as `readerClosed()` does).
+- **Paint once:** the browser's `loop()` polls the keys that changed. It reloads and repaints only
+  a view whose key changed, once per change. Nothing changed means no repaint; the stamp updates
+  with the next paint.
+- **Refresh and Full refresh:** Confirm on ⟳ (X4 Pro: tap) is Refresh. A long press of Confirm on
+  ⟳ (X4 Pro: hold) is Full refresh. Both use `OrbifyCache::ScopedMode` around the view's reload.
 
 ## Self-grill (all two-way doors; settled here)
 

@@ -207,6 +207,17 @@ the series** (or the gap, or "You've finished the series"), up to two suggestion
 next book and suggestions come from BookOrbit when the book is downloaded and are refreshed by
 syncs near its end; a book without them keeps CrossInk's folder suggestions.
 
+## Saved catalog replies (X4 Pro, X4 Classic)
+
+The catalog keeps every reply it reads from BookOrbit in `/.crosspoint/bookorbit-cache/` (at most
+2 MB and 200 replies; the least recently used go first). A screen checked in the last minute, or
+opened without Wi-Fi, comes from the card; otherwise the reader asks BookOrbit, keeps the answer,
+and shows the saved one if BookOrbit does not answer. A finish or rating sent to BookOrbit updates
+the saved replies that list the book. Home covers keep BookOrbit's ETag, so a book whose details
+change but whose cover doesn't costs a short "not modified" reply instead of a new cover. Another
+server or account clears the folder. The X3 keeps today's catalog
+([design](../docs/design/write-through-cache.md)).
+
 ## Settings PIN
 
 **Settings > System > Settings PIN** sets an optional 4-digit PIN (Up/Down change a digit,
