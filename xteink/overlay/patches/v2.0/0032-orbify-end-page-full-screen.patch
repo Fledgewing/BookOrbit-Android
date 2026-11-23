@@ -1,0 +1,233 @@
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 3a1b1265..5669bc1e 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -309,6 +309,15 @@ STR_ORBIFY_SERIES_DONE: "You've finished the series"
+ STR_ORBIFY_ALSO_BY: "Also by %s"
+ STR_ORBIFY_YOU_MIGHT_LIKE: "You might like"
+ STR_ORBIFY_ALL_BY: "All books by %s"
++STR_ORBIFY_THE_END: "The End"
++STR_ORBIFY_YOUR_RATING: "Your rating"
++STR_ORBIFY_RATE_WHEN_FINISHED: "rate it once it's finished"
++STR_ORBIFY_RATE_CONFIRM: "Confirm to save"
++STR_ORBIFY_TAP_A_STAR: "tap a star, or Left/Right and Confirm"
++STR_ORBIFY_ON_SERVER_DOWNLOAD: "On BookOrbit · Download & open"
++STR_ORBIFY_ON_READER_OPEN: "On this reader · Open"
++STR_ORBIFY_CONNECT_NEXT: "Connect to see what's next"
++STR_ORBIFY_BOOK_N_OF: "Book %s of %s"
+ STR_EVERY_N_MINUTES: "Every %d min"
+ STR_EVERY_N_PAGES: "Every %d pages"
+ STR_EVERY_CHAPTER: "Every chapter"
+diff --git a/src/activities/reader/EndOfBookOptions.cpp b/src/activities/reader/EndOfBookOptions.cpp
+index 2da4c55d..de997a7b 100644
+--- a/src/activities/reader/EndOfBookOptions.cpp
++++ b/src/activities/reader/EndOfBookOptions.cpp
+@@ -16,6 +16,8 @@
+ #include "util/ButtonNavigator.h"
+ #include "util/NextBookFinder.h"
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
++#include <Arduino.h>
++#include <Logging.h>
+ #include <Memory.h>
+ #endif
+ 
+@@ -50,11 +52,10 @@ void EndOfBookOptions::loadOnce(const std::string& currentBookPath) {
+       labels.push_back(displayName(names[i]));
+       paths.push_back(fullPath(i));
+     }
+-    orbify->load(currentBookPath, labels, paths);
++    // Patch 0032: the page draws itself on the whole screen (orbify/core/EndPageLayout) and
++    // takes taps itself; the FreeInkApp list is not used.
++    orbify->load(currentBookPath, orbifyBook, labels, paths);
+     selector.store(orbify->selected(), std::memory_order_relaxed);
+-    applySharedUiTheme(app, uiTarget);
+-    app.on(ACTION_ROW, &EndOfBookOptions::onRowEvent, this);
+-    app.setScreen(&EndOfBookOptions::listScreen, this);
+     isLoaded.store(true, std::memory_order_release);
+     return;
+   }
+@@ -99,7 +100,7 @@ EndOfBookOptions::Action EndOfBookOptions::orbifyAct(OrbifyEndPage::Result resul
+   selector.store(orbify->selected(), std::memory_order_relaxed);
+   switch (result.act) {
+     case OrbifyEndPage::Act::None:
+-      return Action::None;
++      return Action::Consumed;
+     case OrbifyEndPage::Act::Redraw:
+       return Action::Redraw;
+     case OrbifyEndPage::Act::Home:
+@@ -136,16 +137,21 @@ void EndOfBookOptions::onRowEvent(const fui::ActionEvent& event, void* user) {
+ EndOfBookOptions::Action EndOfBookOptions::handleMenuInput(const MappedInputManager& input, std::string* openPath) {
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+   if (orbify) {
+-    if (uiReady.load(std::memory_order_acquire)) {
+-      const fui::InputSnapshot snap = touchSnapshotFrom(input);
+-      if (snap.touchPressed || snap.touchReleased) {
+-        const auto event = app.route(snap);
+-        if (event.action == ACTION_ROW && event.value >= 0) return orbifyAct(orbify->activate(event.value));
+-        if (app.invalidated()) return Action::Redraw;
++    // Patch 0032: every tap and button on this page ends here (Consumed when it does nothing),
++    // so none reaches the reader's page turns, short-Back-to-Home or gestures behind it.
++    int tx = 0, ty = 0;
++    unsigned long heldMs = 0;
++    if (input.wasScreenTapped(tx, ty, heldMs)) {
++      const unsigned long shownAt = orbifyShownAt.load(std::memory_order_acquire);
++      if (shownAt == 0 || millis() - shownAt < heldMs) {
++        LOG_INF("ORB", "End page: tap at %d,%d ignored (it began before the page was shown)", tx, ty);
++        return Action::Consumed;
+       }
++      return orbifyAct(orbify->tap(tx, ty));
+     }
+     if (input.wasReleased(MappedInputManager::Button::Confirm)) return orbifyAct(orbify->activate());
+     if (input.wasReleased(MappedInputManager::Button::Back) && input.getHeldTime() < ReaderUtils::GO_HOME_MS) {
++      LOG_INF("ORB", "End page: Back, to the last page");
+       return Action::LastPage;
+     }
+     // Left/Right change the rating on its row; elsewhere every direction moves the selection.
+@@ -239,25 +245,6 @@ void EndOfBookOptions::buildListScreen(UiApp::ScreenType& screen) {
+                   static_cast<int16_t>(safe.x)});
+ 
+   fui::ListProps props;
+-#if CROSSINK_TAILNET_ORBIFY_FINISH
+-  if (orbify) {
+-    // The rows that fit this band (design §5's drop order), measured with the list font.
+-    const int line = renderer.getLineHeight(UI_10_FONT_ID);
+-    orbify::FitMetrics fit;
+-    fit.rowHeight = orbifyTouch ? std::max(56, line + 16) + 6 : line + 16;
+-    fit.headingHeight = line + 16;
+-    fit.available = (safe.y + safe.height) - metrics.verticalSpacing - listTop;
+-    orbify->fit(fit);
+-    selector.store(orbify->selected(), std::memory_order_relaxed);
+-    props.items = orbify->items();
+-    props.count = orbify->count();
+-    props.selectedIndex = static_cast<int16_t>(orbify->selected());
+-    props.action = ACTION_ROW;
+-    props.inputMask = fui::InputTouch;
+-    screen.list(props);
+-    return;
+-  }
+-#endif
+   props.items = rowItems.data();
+   props.count = rowCount;
+   props.selectedIndex = static_cast<int16_t>(selector.load(std::memory_order_relaxed));
+@@ -283,17 +270,23 @@ void EndOfBookOptions::render(GfxRenderer& renderer, const MappedInputManager& i
+   // positions derive from the safe-area height and font line heights so other panel
+   // resolutions scale (review request on #2532).
+   const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
++#if CROSSINK_TAILNET_ORBIFY_FINISH
++  // Patch 0032: the Orbify page fills the safe area in large type (mockup 7); the hints stay.
++  if (orbify) {
++    orbifyTouch = input.hasTouchHardware();
++    orbify->draw(renderer, safe.x, safe.y, safe.width, safe.height, orbifyTouch);
++    unsigned long none = 0;
++    orbifyShownAt.compare_exchange_strong(none, millis() | 1UL, std::memory_order_acq_rel);
++    const auto hints =
++        input.mapLabels(input.withBackArrow(tr(STR_BACK)), tr(STR_OPEN), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
++    GUI.drawButtonHints(renderer, hints.btn1, hints.btn2, hints.btn3, hints.btn4);
++    return;
++  }
++#endif
+   const int titleY = safe.y + safe.height / 8;
+   const int subtitleY = titleY + renderer.getLineHeight(UI_12_FONT_ID) + metrics.verticalSpacing;
+ 
+   UITheme::drawCenteredText(renderer, safe, UI_12_FONT_ID, titleY, tr(STR_END_OF_BOOK), true, EpdFontFamily::BOLD);
+-#if CROSSINK_TAILNET_ORBIFY_FINISH
+-  // Orbify: the book's author under the title; the rows carry their own headings.
+-  orbifyTouch = input.hasTouchHardware();
+-  if (orbify) {
+-    if (!orbify->author().empty()) UITheme::drawCenteredText(renderer, safe, UI_10_FONT_ID, subtitleY, orbify->author().c_str());
+-  } else
+-#endif
+   UITheme::drawCenteredText(renderer, safe, UI_10_FONT_ID, subtitleY, tr(STR_EOB_CONTINUE_WITH));
+ 
+   // The list renders through the FreeInkApp so its rows register touch hit rects. The
+diff --git a/src/activities/reader/EndOfBookOptions.h b/src/activities/reader/EndOfBookOptions.h
+index ad8fbfc3..ee7e406b 100644
+--- a/src/activities/reader/EndOfBookOptions.h
++++ b/src/activities/reader/EndOfBookOptions.h
+@@ -25,7 +25,9 @@ class MappedInputManager;
+ class EndOfBookOptions {
+  public:
+   // Orbify (patch 0028): the reader reads the request with takeOrbifyResult().
+-  enum class Action { None, Redraw, OpenBook, GoHome, LastPage, Orbify };
++  // Consumed (patch 0032): the page took the input and nothing changes; the reader must not
++  // hand it on to its own page-turn, Back-to-Home or gesture handling.
++  enum class Action { None, Redraw, OpenBook, GoHome, LastPage, Orbify, Consumed };
+ 
+   static constexpr size_t MAX_SUGGESTIONS = 3;
+ 
+@@ -57,6 +59,9 @@ class EndOfBookOptions {
+   // Orbify's End-of-Book page (orbify/EndPage.h) instead of the folder menu: the EPUB reader
+   // calls this before loadOnce(). Its status row toggles the book's finish through the reader.
+   void enableOrbify() { orbifyWanted = true; }
++  // What the book's own metadata says, for the title block and the offline series and author
++  // rows (patch 0032). Before loadOnce().
++  void setOrbifyBook(OrbifyEndPage::BookInfo info) { orbifyBook = std::move(info); }
+   OrbifyEndPage::Result takeOrbifyResult() { return std::move(orbifyResult); }
+   void orbifyFinishedChanged(bool finished);
+ #endif
+@@ -95,6 +100,10 @@ class EndOfBookOptions {
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+   bool orbifyWanted = false;
+   bool orbifyTouch = false;
++  OrbifyEndPage::BookInfo orbifyBook;
++  // millis() of the page's first draw: a tap whose finger went down before it is the tail of
++  // the gesture that turned to this page, never a choice on it (patch 0032).
++  std::atomic<unsigned long> orbifyShownAt{0};
+   std::unique_ptr<OrbifyEndPage> orbify;
+   OrbifyEndPage::Result orbifyResult;
+   Action orbifyAct(OrbifyEndPage::Result result);
+diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
+index 220af4fa..960e9d60 100644
+--- a/src/activities/reader/EpubReaderActivity.cpp
++++ b/src/activities/reader/EpubReaderActivity.cpp
+@@ -3832,7 +3832,19 @@ void EpubReaderActivity::loop() {
+       }
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+       // Orbify (patch 0028): the End-of-Book page with the book's status, next and suggestions.
+-      if (endOfBookOptions) endOfBookOptions->enableOrbify();
++      if (endOfBookOptions) {
++        endOfBookOptions->enableOrbify();
++        // Patch 0032: the title block and the offline series row come from the book itself.
++        OrbifyEndPage::BookInfo info;
++        info.title = epub->getTitle();
++        info.author = epub->getAuthor();
++        Epub::SyncMetadata meta;
++        if (epub->loadSyncMetadata(meta)) {
++          info.series = meta.series;
++          info.seriesIndex = meta.seriesIndex;
++        }
++        endOfBookOptions->setOrbifyBook(std::move(info));
++      }
+ #endif
+     }
+     if (endOfBookOptions) {
+@@ -3915,6 +3927,7 @@ void EpubReaderActivity::loop() {
+         return;
+       }
+       case EndOfBookOptions::Action::GoHome:
++        LOG_INF("ERS", "End of book: Home");
+         onGoHome();
+         return;
+       case EndOfBookOptions::Action::LastPage:
+@@ -3926,6 +3939,8 @@ void EpubReaderActivity::loop() {
+       case EndOfBookOptions::Action::Redraw:
+         requestUpdate();
+         return;
++      case EndOfBookOptions::Action::Consumed:
++        return;
+       case EndOfBookOptions::Action::None:
+         break;
+     }
+diff --git a/src/activities/reader/XtcReaderActivity.cpp b/src/activities/reader/XtcReaderActivity.cpp
+index ebb5bab6..571fb268 100644
+--- a/src/activities/reader/XtcReaderActivity.cpp
++++ b/src/activities/reader/XtcReaderActivity.cpp
+@@ -294,6 +294,8 @@ void XtcReaderActivity::loop() {
+         requestUpdate();
+       }
+       return;
++    case EndOfBookOptions::Action::Consumed:  // overlay patch 0032
++      return;
+     case EndOfBookOptions::Action::None:
+     case EndOfBookOptions::Action::Orbify:  // EPUB only (overlay patch 0028)
+       break;

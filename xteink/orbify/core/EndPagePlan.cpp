@@ -1,5 +1,7 @@
 #include "EndPagePlan.h"
 
+#include <cstdio>
+
 namespace orbify {
 
 size_t planRows(const PlanInput& input, RowSpec* out, const size_t capacity) {
@@ -8,7 +10,7 @@ size_t planRows(const PlanInput& input, RowSpec* out, const size_t capacity) {
     if (n < capacity) out[n++] = RowSpec{kind, index, heading};
   };
   add(RowKind::Status, 0, false);
-  if (input.ratings && input.finished) add(RowKind::Rating, 0, false);
+  if (input.ratings) add(RowKind::Rating, 0, false);
   const SeriesCard* card = input.card;
   if (card) {
     switch (card->next) {
@@ -30,7 +32,9 @@ size_t planRows(const PlanInput& input, RowSpec* out, const size_t capacity) {
     }
     if (input.authorRow && card->author[0]) add(RowKind::Author, 0, false);
   } else {
+    if (input.offlineSeries) add(RowKind::Info, 1, true);
     for (uint8_t i = 0; i < input.folderCount; ++i) add(RowKind::Folder, i, i == 0);
+    if (input.authorRow && input.offlineAuthor) add(RowKind::Author, 0, false);
   }
   add(RowKind::Home, 0, false);
   return n;
@@ -63,6 +67,25 @@ size_t fitRows(RowSpec* rows, size_t count, const FitMetrics& metrics) {
     }
   }
   return count;
+}
+
+void nextSeriesIndex(const char* finishedIndex, char* out, const size_t outSize) {
+  if (!out || outSize == 0) return;
+  out[0] = '\0';
+  if (!finishedIndex) return;
+  const char* p = finishedIndex;
+  while (*p == ' ') ++p;
+  unsigned long whole = 0;
+  int digits = 0;
+  for (; *p >= '0' && *p <= '9' && digits < 6; ++p, ++digits) whole = whole * 10 + static_cast<unsigned long>(*p - '0');
+  if (digits == 0 || (*p >= '0' && *p <= '9')) return;
+  if (*p == '.') {
+    ++p;
+    while (*p >= '0' && *p <= '9') ++p;
+  }
+  while (*p == ' ') ++p;
+  if (*p != '\0') return;
+  snprintf(out, outSize, "%lu", whole + 1);
 }
 
 }  // namespace orbify

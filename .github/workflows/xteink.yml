@@ -242,7 +242,22 @@ jobs:
 
       # After the build: Orbify's tests compile against the ArduinoJson the build fetched.
       - name: Host tests
-        run: orbify/xteink/test/run-host-tests.sh upstream
+        env:
+          ORBIFY_REQUIRE_RENDER: "1"
+          ORBIFY_TEST_OUT: ${{ runner.temp }}/orbify-host
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libfreetype-dev libpng-dev pkg-config
+          orbify/xteink/test/run-host-tests.sh upstream
+
+      # The End-of-Book page as the host test drew it (X4 Pro online, offline, not finished; X4).
+      - name: End-of-Book page images
+        if: matrix.environment == 'x4-pro'
+        uses: actions/upload-artifact@v7
+        with:
+          name: eob-page-${{ matrix.line.asset_version }}
+          path: ${{ runner.temp }}/orbify-host/eob-*.png
+          if-no-files-found: error
 
       # Complete corresponding source (GPL): the overlay with MicroLink, CrossInk after the
       # overlay, the FreeInk SDK, every env's library sources and the Arduino core. Packed once,

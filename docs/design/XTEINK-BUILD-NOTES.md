@@ -65,8 +65,8 @@ onwards, switches in `xteink/tailnet/tailnet_build.py`.
 | E2 | Card file | `/.crosspoint/orbify_series/<bookId>.bin`, fixed record with a version and a CRC (`core/SeriesCard.cpp`) | Same policy as the queue; a bad file is ignored and rewritten. |
 | E3 | When the card is refreshed | At download (the detail fetch already happens) and in a sync (manual or on sleep) **when the book is at 90% or more, or has no card** | The card only matters at the end; this bounds the extra request to the last tenth of a book. Background syncs (while reading) skip it. |
 | E4 | "Read" for suggestions | Known only from `seriesMembers` | Related books carry no read status on the server (`:1435`). |
-| E5 | Ratings shown as | `‹ 4 / 5 ›` text | CrossInk's UI fonts have no star glyphs (`fontconvert.py` intervals stop before U+2605). |
-| E6 | X4 Pro touch on the rating | A tap on the rating row steps the rating and saves it | Five star targets need a custom-drawn row; the list routes row taps already (G32). |
+| E5 | Ratings shown as | Five drawn stars (polygons, `core/EndPageLayout::starPoints`); superseded the `‹ 4 / 5 ›` text in patch 0032 | The fonts have no star glyphs, so they are drawn. |
+| E6 | X4 Pro touch on the rating | Each star is its own 52 px target and rates at once; superseded the row tap in patch 0032 | Mockup 7. |
 | E7 | Undo | The status row's Confirm (or tap) toggles the finish through the reader's own `setBookCompleted` | Every path stays one: the queue job is removed or rewritten by `onFinishedChanged`. |
 | E8 | Download & open | The catalog link gains `returnPath`; the catalog sets `reopenPath` from it, so a finished download opens the new book and Back or a failure returns to this book; the queue drains first (G33) | Reuses upstream's replace-and-reopen path; on the C3 it rides the one network boot. |
 | E9 | Author row | The catalog link gains `author`; the catalog opens a listing with `author=<name>`, sort `series` | The server resolves the name (S16). |
@@ -75,6 +75,24 @@ onwards, switches in `xteink/tailnet/tailnet_build.py`.
 | E12 | XTC books | Keep upstream's page | The finish queue and the card are keyed by the EPUB's document hash and download index. |
 | E14 | Flash | Item 2 adds **10.7 KB** on the X3 `default` (6,478,163 bytes, 98.85%, 42.8 KB under the gate), 7.5 KB on `x4-pro` (94.97%) and 6.8 KB on `x4-classic` (92.62%) | Under the gate: the X3 keeps its suggestions and author row. |
 | E13 | "Get it at the next sync" (X4) | **Not in this release** | It needs a download queue in the sync; the page offers Download & open, Back to book, and the catalog's own retry. |
+
+### The page rebuilt to the mockup (patch 0032, 2026-11-22)
+
+The first device test showed a plain list in small type, and a tap that dropped the reader back to
+Home. Patch 0032 draws the page itself, on the whole safe area, from `orbify/core/EndPageLayout`
+(pure; draw ops plus tap targets). The firmware draws those ops with GfxRenderer; the host test
+`eob_render` draws the same ops with FreeType, from the TTFs CrossInk's built-in fonts are made from,
+to PNGs. CI uploads the PNGs as the `eob-page-*` artifact.
+
+| # | Change | Why |
+|---|---|---|
+| P1 | Title "The End" in Bitter 16 bold, "<book> · <author>" in Bitter 12 italic, rows in Lexend Deca 12, second lines Lexend Deca 10, headings Lexend Deca 10 bold | Mockup 7's 34/19/20/15 px; the old page used UI 10/12. |
+| P2 | Touch rows at least 64 px (the floor is 44), stars 52 px; the host test checks every target is at least 44 px and that no two rows' targets overlap | The ask's 44 px floor. |
+| P3 | The rating row is always there (dimmed until finished), and the status and rating rows always keep their second line | Undo used to remove the rating row, so Home moved under the next tap: the "dropped back to Home" report. The host test checks Home's target stays put across Undo. |
+| P4 | Every tap and button on the page is consumed (`Action::Consumed`), and a tap whose finger went down before the page was drawn is ignored and logged | An unhandled input used to fall through to the reader's page turns, short-Back-to-Home and gestures. |
+| P5 | No card (offline, nothing fetched yet): the EPUB's own series (`Epub::loadSyncMetadata`) under "Next in series" with "Connect to see what's next", the folder rows under "Continue with", and "All books by <author>" from the EPUB's author | The ask's offline fallback; the rows no longer disappear. |
+| P6 | Logs: `ORB End page: <state>, card <yes/no>, series <none/offline>, <n> rows`; `tap row <i> (kind <k>, star <s>)`; `row <i> acts (<act>)`; `tap … ignored`; `Back, to the last page`; `ERS End of book: Home` | Names the exit next time. |
+| P7 | Not in this patch: the next book's cover | Covers exist on the card only for Home shelves; a next-in-series cover needs a fetch with the series card and a radio-off JPEG decode (about 53 KB). |
 
 ## X3 update check and download (patch 0030, 2026-11-22)
 

@@ -51,7 +51,8 @@ void checkLayouts(const std::string& name, const SeriesCard& card) {
       RowSpec rows[MAX_ROWS];
       const size_t planned = planRows(input, rows, MAX_ROWS);
       CHECK_NAMED(name.c_str(), planned >= 2 && rows[0].kind == RowKind::Status && rows[planned - 1].kind == RowKind::Home);
-      CHECK_NAMED(name.c_str(), (planned > 1 && rows[1].kind == RowKind::Rating) == (ratings && finished));
+      // The rating row is there whether or not the book is finished: rows never move under a tap.
+      CHECK_NAMED(name.c_str(), (planned > 1 && rows[1].kind == RowKind::Rating) == ratings);
       const bool hasNext = card.next == SeriesCard::Next::Next || card.next == SeriesCard::Next::LastUnread;
       for (const auto& panel : PANELS) {
         RowSpec fitted[MAX_ROWS];
@@ -172,5 +173,43 @@ int main(int argc, char** argv) {
   in.maxSuggestions = 0;
   in.authorRow = false;
   CHECK(planRows(in, rows, MAX_ROWS) == 4);
+  // No card (offline): the EPUB's series under "Next in series" with "Connect to see what's
+  // next" (Info index 1), the folder rows, then "All books by" from the EPUB's author.
+  PlanInput offline;
+  offline.ratings = true;
+  offline.offlineSeries = true;
+  offline.offlineAuthor = true;
+  offline.folderCount = 2;
+  n = planRows(offline, rows, MAX_ROWS);
+  CHECK(n == 7 && rows[0].kind == RowKind::Status && rows[1].kind == RowKind::Rating);
+  CHECK(rows[2].kind == RowKind::Info && rows[2].index == 1 && rows[2].heading);
+  CHECK(rows[3].kind == RowKind::Folder && rows[3].heading && rows[4].kind == RowKind::Folder);
+  CHECK(rows[5].kind == RowKind::Author && rows[6].kind == RowKind::Home);
+  // Unfinished: the same rows in the same places (the rating row is dimmed, not removed).
+  RowSpec unfinished[MAX_ROWS];
+  offline.finished = false;
+  CHECK(planRows(offline, unfinished, MAX_ROWS) == n);
+  offline.finished = true;
+  RowSpec finishedRows[MAX_ROWS];
+  CHECK(planRows(offline, finishedRows, MAX_ROWS) == n);
+  for (size_t i = 0; i < n; ++i) CHECK(unfinished[i].kind == finishedRows[i].kind);
+  // The offline series row names the next book, never the finished one.
+  {
+    char next[8];
+    const char* cases[][2] = {{"2", "3"}, {"2.5", "3"}, {" 7 ", "8"}, {"0", "1"}, {"12.0", "13"},
+                              {"", ""}, {"two", ""}, {"2a", ""}, {"-1", ""}, {"1234567", ""}};
+    for (const auto& c : cases) {
+      nextSeriesIndex(c[0], next, sizeof(next));
+      CHECK_NAMED(c[0], std::strcmp(next, c[1]) == 0);
+    }
+    nextSeriesIndex(nullptr, next, sizeof(next));
+    CHECK(next[0] == '\0');
+  }
+  // Nothing known about the book: no offline series row, no author row.
+  PlanInput bare;
+  CHECK(planRows(bare, rows, MAX_ROWS) == 2);
+  bare.authorRow = false;
+  bare.offlineAuthor = true;
+  CHECK(planRows(bare, rows, MAX_ROWS) == 2);
   return report("end-of-book");
 }
