@@ -7,7 +7,7 @@ address, with no login.
 
 Up to Orbify 0.7.x this was the user patch `2-orbit-android.lua`; from 0.8.0 it is the plugin
 `orbit.koplugin`, with the same behaviour (design: [`docs/design/orbit-plugin.md`](../../docs/design/orbit-plugin.md)).
-Tested against KOReader v2026.07.2 and BookOrbit plugin 2.3.0 (BookOrbit v3.9.0, the newest release); the hooks also check out against 2.4.1 (BookOrbit main, unreleased).
+Tested against KOReader v2026.07.1 (the pin) and v2026.07.2, and BookOrbit plugin 2.3.0 (BookOrbit v3.9.0, the newest release); the hooks also check out against 2.4.1 (BookOrbit main, unreleased).
 
 ## Install
 

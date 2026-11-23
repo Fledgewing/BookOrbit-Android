@@ -1,0 +1,150 @@
+-- Checks that every KOReader internal the Orbit plugin hooks or calls is still defined in a
+-- KOReader checkout (and its koreader-base, for the ffi/ modules). Static: it looks for each
+-- definition in the source, like plugin_compat.lua does for the BookOrbit plugin.
+--   luajit koreader_compat.lua <koreader checkout> [<koreader-base checkout>]
+-- Without a koreader-base checkout, the base checks are skipped and named.
+-- Prints the KOReader version and any missing symbols; exits 1 when something is missing.
+-- When the plugin starts using another KOReader symbol, add it here.
+local root = arg[1] or error("usage: koreader_compat.lua <koreader dir> [<koreader-base dir>]")
+local base = arg[2]
+
+local function read(path)
+    local h = io.open(path, "rb")
+    if not h then return nil end
+    local s = h:read("*a")
+    h:close()
+    return s
+end
+local function esc(s) return (s:gsub("[%-%.%+%[%]%(%)%$%^%%%?%*]", "%%%0")) end
+
+-- Every .lua file under dir (for symbols KOReader defines in more than one place).
+local function tree(dir)
+    local out = {}
+    local p = io.popen('find "' .. dir .. '" -name "*.lua" -type f 2>/dev/null')
+    for f in p:lines() do table.insert(out, f) end
+    p:close()
+    return out
+end
+
+-- kind: "fn" a function (function X:name( / X.name = function / name = function), "field" an
+-- assignment (name = / .name =), "text" a plain substring.
+local function defined(text, name, kind)
+    if kind == "text" then return text:find(name, 1, true) ~= nil end
+    if kind == "fn" then
+        return text:find("function%s+[%w_%.]+[:%.]" .. esc(name) .. "%s*%(") ~= nil
+            or text:find("[%.%s{,]" .. esc(name) .. "%s*=%s*function") ~= nil
+            -- a function another one stands for: isAndroid = yes, canRestart = no
+            or text:find("[%.%s{,]" .. esc(name) .. "%s*=%s*[%w_%.]+%s*[,\n}]") ~= nil
+    end
+    return text:find("[%.%s{,]" .. esc(name) .. "%s*=") ~= nil
+end
+
+-- { file (relative to the checkout, "*" for anywhere under frontend/ and plugins/), symbols, base? }
+-- Symbols: name (a function), or { name, kind }.
+local F, T = "field", "text"
+local NEEDS = {
+    { "frontend/ui/uimanager.lua", { "show", "close", "scheduleIn", "nextTick", "unschedule", "setDirty",
+        "forceRePaint", "getElapsedTimeSinceBoot", "getTopmostVisibleWidget", "quit", "restartKOReader",
+        "sendEvent", "broadcastEvent", "_repaint", { "_window_stack", F }, { "_refresh_stack", F },
+        { "refresh_methods", T } } },
+    { "*", { "isConnected", "isWifiOn", "turnOnWifi", "turnOffWifi", "beforeWifiAction",
+        "turnOnWifiAndWaitForConnection", "scheduleConnectivityCheck" } },
+    { "frontend/ui/network/manager.lua", { { "NetworkMgr", T } } },
+    { "frontend/device/generic/device.lua", { "canRestart", "exit", "isAndroid", { "screen", F }, { "input", F } } },
+    { "frontend/device/input.lua", { "handleKeyBoardEv" } },
+    { "frontend/apps/reader/readerui.lua", { "init", "showReader", "registerModule", "onHome",
+        { "instance", F }, { "registerModule(\"status\"", T }, { "registerModule(\"toc\"", T },
+        { "registerModule(\"menu\"", T } } },
+    { "frontend/apps/filemanager/filemanager.lua", { { "instance", F } } },
+    { "frontend/ui/widget/eventlistener.lua", { "handleEvent" } },
+    { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu",
+        { "menu_container", F } } },
+    { "frontend/apps/reader/modules/readertoc.lua", { "isChapterStart", "getPreviousChapter" } },
+    { "frontend/apps/reader/modules/readerstatus.lua", { "onEndOfBook", "markBook", "onShowBookStatus",
+        { "end_document_action", T } } },
+    { "frontend/dispatcher.lua", { "registerAction" } },
+    -- Plugin handlers are HandlerSandbox tables with __call (compat.lua Compat.callable).
+    { "frontend/pluginloader.lua", { "loadPlugins", "genPluginManagerSubItem", "getPluginInstance",
+        { "HandlerSandbox", T }, { "__call", T } } },
+    { "plugins/gestures.koplugin/main.lua", { "onFlushSettings", { "data", F }, { "updated", F } } },
+    { "frontend/docsettings.lua", { "open", { "LuaSettings:extend", T } } }, -- readSetting: LuaSettings'
+    { "frontend/luasettings.lua", { "open", "readSetting", "saveSetting", "flush" } },
+    { "datastorage.lua", { "getSettingsDir" } },
+    { "frontend/ui/event.lua", { "new" } },
+    { "frontend/ui/time.lua", { "now", "to_s" } },
+    { "frontend/ui/font.lua", { "getFace" } },
+    { "frontend/ui/size.lua", { { "padding", F }, { "radius", F }, { "line", F } } },
+    { "frontend/ui/geometry.lua", { "new" } },
+    { "frontend/ui/gesturerange.lua", { { "GestureRange", T } } },
+    { "frontend/socketutil.lua", { "set_timeout", "reset_timeout" } },
+    { "frontend/logger.lua", { { "info", T }, { "warn", T } } },
+    { "frontend/gettext.lua", { { "GetText", T } } },
+    { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T } } },
+    { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T } } },
+}
+-- Widgets the plugin builds with: each module must still exist.
+for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "container/bottomcontainer",
+    "container/framecontainer", "horizontalgroup", "horizontalspan", "linewidget", "textboxwidget",
+    "verticalgroup", "verticalspan" }) do
+    table.insert(NEEDS, { "frontend/ui/widget/" .. w .. ".lua", {} })
+end
+-- koreader-base (the base/ submodule): ffi modules the plugin requires.
+local BASE = {
+    { "ffi/archiver.lua", { { "Reader", F }, "iterate", "extractToMemory", "open" } },
+    { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
+        "terminateSubProcess", "purgeDir" } },
+    { "ffi/input_android.lua", { { "waitForEvent", T } } },
+    { "ffi/sha2.lua", { "sha256" } },
+    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F } } },
+}
+
+local missing = {}
+local function check(dir, list, label)
+    local all
+    for _, need in ipairs(list) do
+        local file, syms = need[1], need[2]
+        local text
+        if file == "*" then
+            if not all then
+                local parts = {}
+                for _, sub in ipairs({ "frontend", "plugins" }) do
+                    for _, f in ipairs(tree(dir .. "/" .. sub)) do table.insert(parts, read(f) or "") end
+                end
+                all = table.concat(parts, "\n")
+            end
+            text = all
+        else
+            text = read(dir .. "/" .. file)
+            if not text then table.insert(missing, label .. file .. " (file gone)") end
+        end
+        if text then
+            for _, s in ipairs(syms) do
+                local name, kind = s, "fn"
+                if type(s) == "table" then name, kind = s[1], s[2] end
+                if not defined(text, name, kind) then
+                    table.insert(missing, label .. (file == "*" and "" or file .. ": ") .. name)
+                end
+            end
+        end
+    end
+end
+
+-- KOREADER_REF names what was checked (CI passes the tag); else the checkout's commit.
+local function commit()
+    local p = io.popen('git -C "' .. root .. '" rev-parse --short HEAD 2>/dev/null')
+    local c = p:read("*l")
+    p:close()
+    return c
+end
+local version = os.getenv("KOREADER_REF") or commit() or "unknown"
+check(root, NEEDS, "")
+if base then check(base, BASE, "base ") end
+
+table.sort(missing)
+print("KOReader " .. tostring(version) .. (base and "" or " (koreader-base not given: ffi checks skipped)"))
+if #missing == 0 then
+    print("all hooked symbols present")
+    os.exit(0)
+end
+print("missing: " .. table.concat(missing, ", "))
+os.exit(1)

@@ -1,0 +1,91 @@
+# Checks that every KOReader internal the Orbit plugin hooks or calls still exists
+# (android/koreader/test/koreader_compat.lua): KOReader's frontend and plugins, and the ffi
+# modules of the koreader-base commit that KOReader pins.
+#   push / pull request: the KOReader pinned in tools/upstreams.lock.
+#   weekly / on demand: KOReader's newest stable tag (vYYYY.MM or vYYYY.MM.N), or the tag given.
+# The weekly run opens an issue here when something is gone.
+name: KOReader compatibility
+
+on:
+  push:
+    branches: [main]
+    tags: ["android-v*", "v*"]
+  pull_request:
+  schedule:
+    - cron: "41 6 * * 1" # Mondays
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "KOReader tag to check (empty: the newest stable tag)"
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  koreader-compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Pick the KOReader version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
+        run: |
+          set -euo pipefail
+          case "$GITHUB_EVENT_NAME" in
+            schedule | workflow_dispatch)
+              ref="${INPUT_REF:-}"
+              if [ -z "$ref" ]; then
+                # Newest stable tag by version (not by date): no -rc, nightly or other suffix.
+                ref=$(gh api --paginate 'repos/koreader/koreader/tags?per_page=100' -q '.[].name' \
+                  | grep -E '^v[0-9]{4}\.[0-9]{2}(\.[0-9]+)?$' | sort -V | tail -1)
+              fi
+              ;;
+            *)
+              ref=$(awk '$1 == "koreader" {print $3}' tools/upstreams.lock)
+              ;;
+          esac
+          [ -n "$ref" ] || { echo "no KOReader tag found" >&2; exit 1; }
+          echo "KOREADER_REF=$ref" >> "$GITHUB_ENV"
+          echo "checking KOReader $ref"
+
+      - name: Fetch KOReader and its koreader-base
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch "$KOREADER_REF" https://github.com/koreader/koreader "$RUNNER_TEMP/koreader"
+          base_sha=$(git -C "$RUNNER_TEMP/koreader" ls-tree HEAD base | awk '{print $3}')
+          git clone -q --filter=blob:none --no-checkout https://github.com/koreader/koreader-base "$RUNNER_TEMP/koreader-base"
+          git -C "$RUNNER_TEMP/koreader-base" sparse-checkout set ffi
+          git -C "$RUNNER_TEMP/koreader-base" -c advice.detachedHead=false checkout -q "$base_sha"
+          echo "koreader-base $base_sha"
+
+      - name: Check hooked symbols
+        run: |
+          set -uo pipefail
+          sudo apt-get install -y -qq luajit >/dev/null
+          luajit android/koreader/test/koreader_compat.lua "$RUNNER_TEMP/koreader" "$RUNNER_TEMP/koreader-base" </dev/null \
+            | tee "$RUNNER_TEMP/compat.txt"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Open an issue (weekly run)
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          symbols=$(sed -n 's/^missing: //p' "$RUNNER_TEMP/compat.txt")
+          [ -n "$symbols" ] || symbols="(the check did not run; see the log)"
+          title="KOReader ${KOREADER_REF} changed: ${symbols}"
+          if gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"KOReader ${KOREADER_REF} changed\" in:title" --json number --jq '.[0].number' | grep -q .; then
+            echo "an open issue already tracks KOReader ${KOREADER_REF}"
+            exit 0
+          fi
+          body=$(printf '%s\n\n%s\n\n%s\n' \
+            "The weekly check found KOReader internals the Orbit plugin uses that are gone in KOReader ${KOREADER_REF}." \
+            "Missing: ${symbols}" \
+            "Update the plugin (android/koreader/orbit.koplugin) and android/koreader/test/koreader_compat.lua, then re-pin with tools/upstreams pin koreader ${KOREADER_REF}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"

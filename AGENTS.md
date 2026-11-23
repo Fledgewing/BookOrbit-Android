@@ -77,6 +77,10 @@ One repo releases both platforms; the tag prefix says which.
   CrossInk pinned as `crossink-v1.6` in `tools/upstreams.lock`, daily runs build upstream's latest).
 - BookOrbit plugin hooks: `luajit android/koreader/test/plugin_compat.lua <plugin dir>`
   (weekly in `.github/workflows/plugin-compat.yml`).
+- KOReader hooks: `luajit android/koreader/test/koreader_compat.lua <koreader> [<koreader-base>]`
+  (`.github/workflows/koreader-compat.yml`: the pinned `koreader` from `tools/upstreams.lock` on
+  every push, KOReader's newest stable tag weekly and on demand). Add each new KOReader symbol the
+  plugin uses to that file's list.
 
 ## Repo rules
 
