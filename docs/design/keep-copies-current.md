@@ -41,5 +41,21 @@ progress, highlights and bookmarks stop syncing for that book.
 
 ## Xteink
 
-The firmware should match where it keeps a copy per book: on a changed `fileHash`, download again
-from the library screen (never in a book), keep the reading position and highlights file by path.
+Built in overlay patch 0034 (`CROSSINK_TAILNET_ORBIFY_COPY_REFRESH`, X4 Pro, X4 and X3); details
+in [XTEINK-BUILD-NOTES](XTEINK-BUILD-NOTES.md#keep-book-copies-current-patch-0034-2026-11-22).
+
+- **Find.** The sleep sync (and the BookOrbit Home's refresh) hashes the catalog's downloads and
+  sends them through the match check, 20 per request; a copy is queued when the server matched it
+  to the same book with `positionCompatible: false`. Unchanged library token: one batch only.
+- **When.** Only the sleep sync replaces copies (Wi-Fi up, no book open), one book at a time, for up
+  to 180 s per sleep, from `/.crosspoint/orbify/copy-refresh.tsv`, which resumes after a wake or a
+  reset. A sync that finds the open book changed queues it ("Updates when you leave the book").
+- **Replace in place.** Same path and name: the catalog's staged download (`.part`, resumed,
+  checked as an EPUB, the old copy kept at `.old`), then the copy's hash must equal the detail's
+  `fileHash`, or the old copy goes back. A file without `fileHash` is never downloaded.
+- **Carry over.** On the Xteink the position, highlights, bookmarks and sync state live under the
+  content hash (`/.crosspoint/book_<hash>`), so they are moved to the new hash by the fork's
+  `BookUpdateMigration`, the same step its catalog update runs.
+- **Log.** `ORB Copy refresh: <n> queued`, then per book `replaced: <old> -> <new>`, `already is
+  the library file`, or the failure (the old copy stays).
+- **Setting.** BookOrbit Sync › "Keep Book Copies Current", on by default.
