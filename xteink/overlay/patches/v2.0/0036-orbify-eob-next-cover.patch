@@ -1,24 +1,26 @@
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
+index 9ea55bd8..ea84f00a 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
-@@ -201,3 +201,8 @@
- #ifndef CROSSINK_TAILNET_ORBIFY_CACHE
- #define CROSSINK_TAILNET_ORBIFY_CACHE 0
+@@ -209,3 +209,8 @@ bool tlsArenaActive();                                // the arena is reserved (
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR && !CROSSINK_TAILNET_ORBIFY_CACHE
+ #error "CROSSINK_TAILNET_ORBIFY_MIRROR needs CROSSINK_TAILNET_ORBIFY_CACHE"
  #endif
-+// Patch 0035: the next book's cover on the End-of-Book page (src/orbify/core/NextCover.h), fetched by
++// Patch 0036: the next book's cover on the End-of-Book page (src/orbify/core/NextCover.h), fetched by
 +// a sync and decoded with the radio off. X4s; it needs the cache's ETags.
 +#ifndef CROSSINK_TAILNET_ORBIFY_EOB_COVER
 +#define CROSSINK_TAILNET_ORBIFY_EOB_COVER 0
 +#endif
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index 316b80f9..d48ececb 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-@@ -109,6 +109,12 @@
+@@ -112,6 +112,12 @@ void BookOrbitSyncActivity::completeAlreadySynced() {
    // Orbify (patch 0028): the open book's series card, near its end (design §5).
    if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
    syncSession.reset();  // no request follows; free the TLS session before the reader reloads
 +#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
-+  // Orbify (patch 0035): the next book's cover, on its own connection (decoded with the radio off).
++  // Orbify (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
 +  if (!backgroundSync && !wakeRequested()) {
 +    OrbifyFinish::fetchNextCover(epubPath, sleepSync ? &sleepSyncWakeRequested : nullptr);
 +  }
@@ -26,23 +28,23 @@ diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/act
    {
      RenderLock lock(*this);
      state = SYNC_COMPLETE;
-@@ -373,6 +379,10 @@
+@@ -388,6 +394,10 @@ void BookOrbitSyncActivity::runSleepSync() {
    if (refreshHome && !sleepSyncWakeRequested()) {
      BookOrbitHomeStore::decodePendingCovers(&sleepSyncWakeRequested, homeCoverSizes);
    }
 +#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
-+  // Orbify (patch 0035): the End-of-Book page's next cover, with the radio off like Home's.
++  // Orbify (patch 0036): the End-of-Book page's next cover, with the radio off like Home's.
 +  if (!sleepSyncWakeRequested()) OrbifyFinish::decodeNextCovers(&sleepSyncWakeRequested);
 +#endif
    LOG_INF("BookOrbit", "Sleep sync over (state=%d)", static_cast<int>(state));
  #ifdef SIMULATOR
    endSimulatorScenarioIfRequested(static_cast<int>(state));
-@@ -813,8 +823,18 @@
+@@ -828,8 +838,18 @@ void BookOrbitSyncActivity::performUpload() {
    }
  
    syncSession.reset();
 +#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
-+  // Orbify (patch 0035): the next book's cover, on its own connection (decoded with the radio off).
++  // Orbify (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
 +  if (result == BookOrbitSyncClient::OK && !backgroundSync && !wakeRequested()) {
 +    OrbifyFinish::fetchNextCover(epubPath, sleepSync ? &sleepSyncWakeRequested : nullptr);
 +  }

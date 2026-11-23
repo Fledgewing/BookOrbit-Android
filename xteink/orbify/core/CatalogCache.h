@@ -48,7 +48,8 @@ struct ReadPlan {
 ReadPlan planRead(bool hasEntry, uint32_t validatedAt, uint32_t now, Mode mode, bool offline);
 
 // A hash of a JSON value in canonical form (object keys sorted), so a reply whose keys come in
-// another order reads as the same reply.
+// another order reads as the same reply. A top-level generatedAt and discover are left out: they
+// change on every request.
 uint32_t canonicalHash(JsonVariantConst value);
 
 struct Revalidated {

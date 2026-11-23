@@ -331,6 +331,12 @@ size_t pending() {
   return queue.pending();
 }
 
+std::string libraryVersion() {
+  std::string token = readText(TOKEN_PATH);
+  while (!token.empty() && (token.back() == '\n' || token.back() == '\r')) token.pop_back();
+  return token;
+}
+
 }  // namespace OrbifyCopyRefresh
 
 #else
@@ -341,6 +347,7 @@ size_t detect(bool (*)()) { return 0; }
 size_t run(bool (*)(), unsigned long) { return 0; }
 bool enqueue(int64_t, const std::string&, const std::string&) { return false; }
 size_t pending() { return 0; }
+std::string libraryVersion() { return std::string(); }
 }  // namespace OrbifyCopyRefresh
 
 #endif

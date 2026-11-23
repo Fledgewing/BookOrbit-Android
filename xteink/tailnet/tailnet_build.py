@@ -222,7 +222,10 @@ SWITCHES = {
     # Patch 0029, the write-through cache in front of BookOrbit (item 4,
     # docs/design/write-through-cache.md): X4 Pro and X4 only; the X3 keeps today's catalog.
     "CROSSINK_TAILNET_ORBIFY_CACHE":      (0,      1,      1),
-    # Patch 0035, the next book's cover on the End-of-Book page: X4 Pro and X4 only (the X3's flash);
+    # Patch 0035, the offline mirror, Full refresh and the catalog's ⟳ (write-through-cache.md
+    # "Offline mirror", local-first DESIGN decisions 36-37): X4s, on the cache; X3 excluded.
+    "CROSSINK_TAILNET_ORBIFY_MIRROR":     (0,      1,      1),
+    # Patch 0036, the next book's cover on the End-of-Book page: X4 Pro and X4 only (the X3's flash);
     # it keeps its ETags in the cache above.
     "CROSSINK_TAILNET_ORBIFY_EOB_COVER":  (0,      1,      1),
 }
