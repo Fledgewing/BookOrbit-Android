@@ -4,9 +4,10 @@ What Orbify ships, per platform. Only what we add: KOReader's, BookOrbit's and C
 features are not listed. Planned work is in [`ROADMAP.md`](../ROADMAP.md); an item moves here when
 it ships (AGENTS.md "Features and roadmap").
 
-**yes**: shipped. Firmware builds: stable on CrossInk `1.6.1+bookorbit.9`, release candidate on
-`2.0.0+bookorbit.1-rc3`. **2.x rc**: in the CrossInk 2.x release-candidate build only (Include Release
-Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "Platforms".
+**yes**: shipped. Firmware is built on CrossInk 2.x only, now the release candidate
+`2.0.0+bookorbit.1-rc3`; CrossInk 1.6 is retired, and readers still on it keep the stable
+`xteink-v1.6.1.114`, which gets nothing new, until a final CrossInk 2.x release replaces it.
+**2.x rc**: in the CrossInk 2.x release-candidate build (Include Release Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "Platforms".
 
 ## Network and sync
 
@@ -30,8 +31,8 @@ Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "
 | BookOrbit home opens on its first page | yes | n/a | n/a | n/a |
 | Lists by series and by author (BookOrbit's Series and Authors views) | yes | no | no | no |
 | Reopen the open book after an update restart | yes | n/a | n/a | n/a |
-| Mark finished at the end of the book: final position, then read status and rating sent after the outbox, kept through the next state pull; a stale position push is held ([design](design/end-of-book/DESIGN.md); upstream: [progress finishes a book only at the library's threshold](server-contract.md#progress-finishes-a-book-only-at-the-librarys-threshold)) | yes (0.9.0) | planned (ROADMAP 1) | planned | planned |
-| End-of-book sheet: Undo, stars, next in series (open, or download and open), one suggestion, the author's books | yes (0.9.0) | planned (ROADMAP 2) | planned | if flash allows |
+| Mark finished at the end of the book: final position, then read status and rating sent after the outbox, kept through the next state pull; a stale position push is held ([design](design/end-of-book/DESIGN.md); upstream: [progress finishes a book only at the library's threshold](server-contract.md#progress-finishes-a-book-only-at-the-librarys-threshold)) | yes (0.9.0) | 2.x rc (xteink-v2.0.0.123) | 2.x rc | 2.x rc |
+| End-of-book sheet: Undo, stars, next in series (open, or download and open), one suggestion, the author's books | yes (0.9.0) | 2.x rc (xteink-v2.0.0.131) | 2.x rc | 2.x rc (no stars) |
 | Local-first BookOrbit home: this device's reading shown at once, a refresh repaints only what changed, ⟳ and "updated" stamp on home and lists ([design](design/local-first/DESIGN.md)) | yes (0.9.0) | n/a (ROADMAP 4 is the Xteink catalog) | n/a | n/a |
 | Write-through cache in front of BookOrbit: catalog screens open from Orbit's cache at once and are checked in the background; writes patch what they change; tap ⟳ = Refresh (check now, nothing evicted), hold ⟳ or the menu = Full refresh (fresh from the server, broken covers replaced); covers fetched only when missing or changed, with ETag 304s; offline, saved pages open and page without asking for Wi-Fi ([design](design/write-through-cache.md); upstream: the plugin's refresh deletes every cover on screen) | yes (0.10.1) | planned (ROADMAP 4) | planned | planned |
 

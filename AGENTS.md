@@ -30,10 +30,14 @@ every platform whose hardware allows it.
 | X4 | Xteink X4 Classic, ESP32-S3 + PSRAM | `x4-classic` |
 | X3 | Xteink X3 and C3 X4, ESP32-C3, no PSRAM; flash nearly full | `default` |
 
+Xteink firmware is built on CrossInk 2.x only. CrossInk 1.6 is retired: no builds, no patches
+(they are in git history); its readers stay on the stable `xteink-v1.6.1.114` until a final
+CrossInk 2.x release becomes the stable one (`xteink/README.md` "Releases and the update feed").
+
 ## Read the source, not memory
 
 `tools/upstreams` checks out BookOrbit (server, web app, `koreader-plugin/`), CrossInk-Bookorbit
-1.6 and 2.x, and KOReader at the commits in `tools/upstreams.lock`. Cite `file:line` at the pinned
+2.x, and KOReader at the commits in `tools/upstreams.lock`. Cite `file:line` at the pinned
 commit when a design or `docs/server-contract.md` relies on upstream behaviour; re-pin with
 `tools/upstreams pin <name> <ref>`.
 
@@ -58,6 +62,8 @@ One repo releases both platforms; the tag prefix says which.
   certificate (SHA-256 `F5:07:8C:…:0A:15`, checked by the workflow): either change breaks updates.
 - Xteink: `xteink-v<version>` (`.github/workflows/xteink.yml`, daily or by hand): firmware per
   reader, source archive, licenses, `SHA256SUMS`, attestations. Always `make_latest=false`.
+  An upstream rc or beta builds a pre-release, a final upstream release a stable one
+  (`xteink/scripts/upstream-line.sh`).
 - "latest" must stay an Android release: every companion and plugin (and the old patch) reads `releases/latest`
   (0.6.x through the old BookOrbit-Android URL, and it parses only `v<version>` tags).
 - GitHub orders the release list by version-like tag name: `v…` tags first, prefixed tags
@@ -74,7 +80,8 @@ One repo releases both platforms; the tag prefix says which.
   `./gradlew testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
 - Xteink: `xteink/scripts/apply.sh <CrossInk checkout>`, `xteink/test/run-host-tests.sh <checkout>`,
   then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the
-  CrossInk pinned as `crossink-v1.6` in `tools/upstreams.lock`, daily runs build upstream's latest).
+  CrossInk pinned as `crossink-v2.0` in `tools/upstreams.lock`, daily runs build upstream's newest
+  2.x tag, rc included).
 - BookOrbit plugin hooks: `luajit android/koreader/test/plugin_compat.lua <plugin dir>`
   (weekly in `.github/workflows/plugin-compat.yml`).
 - KOReader hooks: `luajit android/koreader/test/koreader_compat.lua <koreader> [<koreader-base>]`

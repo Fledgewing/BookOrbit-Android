@@ -2,9 +2,12 @@ name: Xteink
 # Builds CrossInk-Bookorbit's latest release with the Tailnet overlay (xteink/) applied.
 #
 # - push / pull request touching xteink/: host tests and every reader's build of both pinned
-#   CrossInk lines, crossink-v1.6 and crossink-v2.0 in tools/upstreams.lock (no release).
-# - daily schedule and manual runs: build, then publish a release when this
-#   (upstream tag, xteink/ tree) pair has not been released yet. Readers see it under
+#   pinned CrossInk line, crossink-v2.0 in tools/upstreams.lock (no release). Only CrossInk 2.x
+#   and later is built: 1.6 is retired (xteink/scripts/upstream-line.sh refuses it).
+# - daily schedule and manual runs: build upstream's newest 2.x tag (rc included) or the one
+#   given, then publish a release when this (upstream tag, xteink/ tree) pair has not been
+#   released yet. A final upstream tag (no -rc/-beta) is published as a stable release, which
+#   makes it the feed's stable entry; an rc or beta stays a pre-release (upstream-line.sh channel). Readers see it under
 #   Settings > Check for updates: the overlay points their updater at this repo's
 #   xteink-v releases (overlay patch ota-tag-prefix).
 #
@@ -19,8 +22,8 @@ name: Xteink
 # raw.githubusercontent.com (xteink/tailnet/tailnet_build.py OTA_FEED).
 #
 # Release versions keep upstream's and add a fourth number that only ever goes up
-# (RUN_BASE + the workflow run number): upstream v1.6.1+bookorbit.9 becomes
-# xteink-v1.6.1.<n>+bookorbit.9. CrossInk's updater compares four numeric parts, so a new
+# (RUN_BASE + the workflow run number): upstream v2.0.0+bookorbit.1-rc3 becomes
+# xteink-v2.0.0.<n>+bookorbit.1-rc3. CrossInk's updater compares four numeric parts, so a new
 # upstream release or an overlay-only rebuild both read as newer. RUN_BASE keeps the numbers
 # above the last CrossInk-Tailnet releases (1.6.1.52, 2.0.0.51) now that the run counter restarted.
 on:
@@ -38,7 +41,7 @@ on:
         required: false
         type: string
       patch_series:
-        description: "Overlay patch series (v1.6 or v2.0; empty = from the upstream version)"
+        description: "Overlay patch series (v2.0; empty = from the upstream version)"
         required: false
         type: string
       force_release:
@@ -74,6 +77,7 @@ jobs:
       version: ${{ steps.r.outputs.version }}
       asset_version: ${{ steps.r.outputs.asset_version }}
       publish: ${{ steps.r.outputs.publish }}
+      prerelease: ${{ steps.r.outputs.prerelease }}
       lines: ${{ steps.r.outputs.lines }}
     steps:
       - uses: actions/checkout@v6
@@ -89,18 +93,22 @@ jobs:
           FORCE: ${{ inputs.force_release }}
         run: |
           set -euo pipefail
-          # Push and pull request builds use the CrossInk versions pinned in tools/upstreams.lock
-          # (both lines), so an upstream release never turns an unrelated change red; daily and
-          # manual runs take one tag, upstream's latest release unless one is given (a patch that
-          # stops applying shows up there).
+          # Push and pull request builds use the CrossInk version pinned in tools/upstreams.lock,
+          # so an upstream release never turns an unrelated change red; daily and manual runs take
+          # one tag: upstream's newest 2.x release, rc included, unless one is given (a patch that
+          # stops applying shows up there). Upstream's "latest" skips pre-releases, so it would
+          # pick 1.6 while 2.0 is an rc.
           if [ -n "$INPUT_REF" ]; then
             tags="$INPUT_REF"
           elif [ "$GITHUB_EVENT_NAME" = push ] || [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            tags="$(awk '$1 == "crossink-v1.6" || $1 == "crossink-v2.0" {print $3}' tools/upstreams.lock)"
+            tags="$(awk '$1 == "crossink-v2.0" {print $3}' tools/upstreams.lock)"
           else
-            tags="$(gh api "repos/$UPSTREAM_REPO/releases/latest" -q .tag_name)"
+            tags="$(gh api "repos/$UPSTREAM_REPO/releases?per_page=50" -q '.[] | select(.draft | not) | .tag_name' \
+              | xteink/scripts/upstream-line.sh pick)"
           fi
-          version_of() { # 1.6.1+bookorbit.9 -> 1.6.1.<run>+bookorbit.9
+          # Refuses a 1.x tag; stable for a final release, prerelease for an rc or beta.
+          for t in $tags; do xteink/scripts/upstream-line.sh channel "$t" >/dev/null; done
+          version_of() { # 2.0.0+bookorbit.1-rc3 -> 2.0.0.<run>+bookorbit.1-rc3
             local base="${1#v}" numeric rest
             numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"
             rest="${base#"$numeric"}"
@@ -115,6 +123,7 @@ jobs:
           tag="$(printf '%s\n' $tags | head -1)"
           version="$(version_of "$tag")"
           asset_version="$(asset_of "$version")"
+          channel="$(xteink/scripts/upstream-line.sh channel "$tag")"
 
           # Only xteink/ decides: an Android-only commit never makes a firmware release.
           marker="upstream=$tag overlay-tree=$(git rev-parse HEAD:xteink)"
@@ -131,9 +140,10 @@ jobs:
             echo "version=$version"
             echo "asset_version=$asset_version"
             echo "publish=$publish"
+            echo "prerelease=$([ "$channel" = prerelease ] && echo true || echo false)"
             echo "lines=$lines"
           } >> "$GITHUB_OUTPUT"
-          echo "upstream $tags -> $lines (publish=$publish)"
+          echo "upstream $tags -> $lines (publish=$publish, $channel)"
 
   build:
     name: build ${{ matrix.line.upstream_tag }} ${{ matrix.environment }}
@@ -195,7 +205,7 @@ jobs:
           uv pip install --python ~/.platformio/penv/bin/python "pioarduino==${PIO_CORE}"
 
       - name: Apply the overlay
-        # overlay/patches/v1.6 for CrossInk 1.6.x, v2.0 for 2.x (picked from the tag).
+        # overlay/patches/v2.0 for CrossInk 2.x (picked from the tag).
         env:
           CROSSINK_PATCH_SERIES: ${{ inputs.patch_series }}
         run: orbify/xteink/scripts/apply.sh upstream
@@ -301,9 +311,7 @@ jobs:
             echo "Install over the air from the reader (Settings > Check for updates) once it runs a"
             echo "CrossInk-Tailnet or Orbify build, or flash the .bin for your reader from an SD card or USB."
             echo "Verify: \`sha256sum -c SHA256SUMS\`, \`gh attestation verify <file> -R $OVERLAY_REPO\`."
-            case "$TAG" in
-              v2.*) echo 'The X3 build leaves out Nearby transfer, mDNS, Plugins and language/hyphenation downloads (see "X3 (v2.0) differences" in the README for workarounds). The X4 Pro and X4 Classic keep everything.' ;;
-            esac
+            echo 'The X3 build leaves out Nearby transfer, mDNS, Plugins and language/hyphenation downloads (see "X3 (v2.0) differences" in the README for workarounds). The X4 Pro and X4 Classic keep everything.'
             echo
             orbify/xteink/scripts/licenses-section.sh "$TAG" "$GITHUB_SHA"
             echo
@@ -329,9 +337,10 @@ jobs:
           name: xteink-v${{ needs.resolve.outputs.version }}
           # "latest" stays an Android release (AGENTS.md "Releases").
           make_latest: false
-          # An upstream release candidate stays a pre-release here too: only
-          # readers with Include Release Candidates on are offered it.
-          prerelease: ${{ contains(needs.resolve.outputs.version, '-rc') }}
+          # An upstream rc or beta stays a pre-release here too: only readers with Include
+          # Release Candidates on are offered it. A final upstream release is stable, and the
+          # feed job makes it the stable entry (xteink/scripts/upstream-line.sh channel).
+          prerelease: ${{ needs.resolve.outputs.prerelease == 'true' }}
           body_path: notes.md
           files: |
             firmware/*.bin

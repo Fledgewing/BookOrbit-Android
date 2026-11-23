@@ -7,8 +7,8 @@
 // esp_event.c ("sys_evt"), the WiFi adapter esp_adapter.c ("wifi"), and
 // Arduino's NetworkEvents.cpp ("arduino_events"). They all call
 // xTaskCreatePinnedToCore (xTaskCreate is an inline wrapper around it in
-// ESP-IDF 5.5), so the link wraps that one symbol and this table swaps the
-// size by task name. The FreeRTOS timer task ("Tmr Svc") is created static
+// ESP-IDF 5.5); CrossInk wraps that one symbol and its wrapper asks this table
+// for the size by task name. The FreeRTOS timer task ("Tmr Svc") is created static
 // with the memory vApplicationGetTimerTaskMemory hands back; the link wraps
 // that too.
 //
@@ -87,29 +87,13 @@ static uint32_t sizeFor(const char* name, uint32_t requested) {
   return requested;
 }
 
-#if TAILNET_TASK_STACK_HOOK
-// CrossInk v2 wraps xTaskCreatePinnedToCore itself (lib/hal/IpcTaskStack.cpp, its IPC
+// CrossInk 2.x wraps xTaskCreatePinnedToCore itself (lib/hal/IpcTaskStack.cpp, its IPC
 // stack floor on the S3) and a symbol takes one wrapper: its wrapper calls these two
-// (CrossInk patch 0020), so both behaviours run. tailnet_build.py sets the switch when
-// upstream's build flags carry the wrap.
+// (CrossInk patch 0020), so both behaviours run.
 uint32_t tailnet_task_stack_size(const char* name, uint32_t requested) { return sizeFor(name, requested); }
 void tailnet_task_stack_created(const char* name, uint32_t requested, uint32_t used) {
   recordSize(name, requested, used);
 }
-#else
-BaseType_t __real_xTaskCreatePinnedToCore(TaskFunction_t fn, const char* const name, const uint32_t stack,
-                                          void* const arg, UBaseType_t prio, TaskHandle_t* const handle,
-                                          const BaseType_t core);
-
-BaseType_t __wrap_xTaskCreatePinnedToCore(TaskFunction_t fn, const char* const name, const uint32_t stack,
-                                          void* const arg, UBaseType_t prio, TaskHandle_t* const handle,
-                                          const BaseType_t core) {
-  const uint32_t size = sizeFor(name, stack);
-  const BaseType_t ret = __real_xTaskCreatePinnedToCore(fn, name, size, arg, prio, handle, core);
-  if (ret == pdPASS) recordSize(name, stack, size);
-  return ret;
-}
-#endif
 
 void __real_vApplicationGetTimerTaskMemory(StaticTask_t** tcb, StackType_t** stack, uint32_t* size);
 
