@@ -42,6 +42,7 @@ class CommandReceiver : BroadcastReceiver() {
         if (intent.action == Contract.REPORT) return StatusFile.onReport(ctx, intent)
         val action = intent.action ?: return
         if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) return OrbitService.start(ctx, intent)
+        if (!Mode.isAddon(ctx)) return OrbitService.start(ctx, intent) // Full: exactly as before 0.11.0
         // By capability (docs/design/addon-mode.md §7.1); in Full every action reaches the service as before.
         when (AddonLogic.route(action, Mode.caps(ctx), Mode.needsService(ctx))) {
             AddonLogic.Route.SERVICE -> OrbitService.start(ctx, intent)
