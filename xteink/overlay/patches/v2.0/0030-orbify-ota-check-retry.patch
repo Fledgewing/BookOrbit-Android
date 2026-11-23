@@ -1,0 +1,86 @@
+diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
+index 62a4ddfe..cd94dd10 100644
+--- a/src/network/OtaUpdater.cpp
++++ b/src/network/OtaUpdater.cpp
+@@ -7,6 +7,10 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() { return NO_UPDATE; }
+ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback, void*, std::atomic<bool>*) { return NO_UPDATE; }
+ #else
+ #include <Arduino.h>
++#include <CrossInkTailnetCuts.h>
++#ifndef CROSSINK_TAILNET_OTA_CHECK_RETRY  // Orbify patch 0030; on in tailnet_build.py
++#define CROSSINK_TAILNET_OTA_CHECK_RETRY 0
++#endif
+ #include <HalStorage.h>
+ #include <Logging.h>
+ #include <Memory.h>
+@@ -231,6 +235,36 @@ StagedHashResult verifyStagedHash(HalFile& file, const char* expectedHex, size_t
+   return sha256Matches(digest, expectedHex) ? StagedHashResult::OK : StagedHashResult::MISMATCH;
+ }
+ 
++#if CROSSINK_TAILNET_OTA_CHECK_RETRY
++// One GET of the release list or manifest through the parser in config.user_data: ESP_OK, the
++// transfer's error (ESP_FAIL for an answer that isn't a 2xx), or ESP_ERR_INVALID_STATE when the
++// client itself could not be set up.
++esp_err_t checkOnce(const esp_http_client_config_t& config) {
++  totalBytesReceived = 0;
++  esp_http_client_handle_t client = esp_http_client_init(&config);
++  if (!client) {
++    LOG_ERR("OTA", "HTTP Client Handle Failed");
++    return ESP_ERR_INVALID_STATE;
++  }
++  esp_err_t err = esp_http_client_set_header(client, "User-Agent", AppVersion::userAgent());
++  if (err != ESP_OK) {
++    LOG_ERR("OTA", "esp_http_client_set_header Failed : %s", esp_err_to_name(err));
++    esp_http_client_cleanup(client);
++    return ESP_ERR_INVALID_STATE;
++  }
++  err = esp_http_client_perform(client);
++  const int status = esp_http_client_get_status_code(client);
++  if (err != ESP_OK) LOG_ERR("OTA", "esp_http_client_perform Failed : %s", esp_err_to_name(err));
++  esp_http_client_cleanup(client);
++  if (err == ESP_OK && (status < 200 || status >= 300)) {
++    LOG_ERR("OTA", "Update check answered HTTP %d", status);
++    err = ESP_FAIL;
++  }
++  if (err == ESP_OK) LOG_DBG("OTA", "Response received: %zu bytes total", totalBytesReceived);
++  return err;
++}
++#endif
++
+ }  // namespace
+ 
+ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+@@ -274,6 +308,25 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+       .crt_bundle_attach = esp_crt_bundle_attach,
+       .keep_alive_enable = true,
+   };
++#if CROSSINK_TAILNET_OTA_CHECK_RETRY
++  // Orbify (patch 0030): an X3 reading the list with the heap at its lowest timed out mid-body
++  // (esp_tls_conn_read EAGAIN, ESP_ERR_HTTP_INCOMPLETE_DATA) and the user saw "update failed";
++  // the same check after a restart got through. A slow read gets more time, and a failed check
++  // is asked once more on a fresh connection, as the catalog's fetchJson does.
++  client_config.timeout_ms = 15000;
++  LOG_DBG("OTA", "Checking for update (current: %s, pre-releases: %s)", AppVersion::version(),
++          includePrereleases ? "yes" : "no");
++  for (int attempt = 1;; attempt++) {
++    esp_err = checkOnce(client_config);
++    if (esp_err == ESP_OK || esp_err == ESP_ERR_INVALID_STATE || attempt == 2) break;
++    LOG_ERR("OTA", "Update check attempt %d failed (%s); trying again", attempt, esp_err_to_name(esp_err));
++    releaseParser.reset();
++    if (newestListed) *newestListed = ReleaseJsonParser::Release{};
++    delay(500);
++  }
++  if (esp_err == ESP_ERR_INVALID_STATE) return INTERNAL_UPDATE_ERROR;
++  if (esp_err != ESP_OK) return HTTP_ERROR;
++#else
+ 
+   totalBytesReceived = 0;
+   LOG_DBG("OTA", "Checking for update (current: %s, pre-releases: %s)", AppVersion::version(),
+@@ -304,6 +357,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+     LOG_ERR("OTA", "esp_http_client_cleanup Failed : %s", esp_err_to_name(esp_err));
+     return INTERNAL_UPDATE_ERROR;
+   }
++#endif
+ 
+   LOG_DBG("OTA", "Response received: %zu bytes total", totalBytesReceived);
+ 

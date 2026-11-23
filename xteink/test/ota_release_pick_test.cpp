@@ -39,15 +39,36 @@ static void visit(void* ctx, const ReleaseJsonParser::Release& r) {
   ota_release_pick::keep(p->newest, r, p->filter);
 }
 
-// Feeds the list in small chunks, the way the HTTP client hands it over.
-static Pick pick(const char* prefix, bool pre, const char* device = "firmware-x4-pro") {
+// Feeds the list in small chunks, the way the HTTP client hands it over. retried: a first
+// attempt is cut off part-way (the X3's timed-out check), then the updater resets the parser and
+// the pick and reads the whole list again (OtaUpdater's retry, patch 0030).
+static Pick pick(const char* prefix, bool pre, const char* device = "firmware-x4-pro", size_t chunk = 97,
+                 bool retried = false, const std::string* body = nullptr) {
+  const std::string& text = body ? *body : fixture;
   stem = device;
   Pick p;
   p.filter = {prefix, pre};
   ReleaseJsonParser parser(matchesDevice, visit, &p);
-  for (size_t i = 0; i < fixture.size(); i += 97) parser.feed(fixture.data() + i, std::min<size_t>(97, fixture.size() - i));
+  if (retried) {
+    const size_t cut = text.size() * 2 / 3;
+    for (size_t i = 0; i < cut; i += chunk) parser.feed(text.data() + i, std::min<size_t>(chunk, cut - i));
+    parser.reset();
+    p.newest = ReleaseJsonParser::Release{};
+  }
+  for (size_t i = 0; i < text.size(); i += chunk) parser.feed(text.data() + i, std::min<size_t>(chunk, text.size() - i));
   CHECK(parser.isReleaseList());
   return p;
+}
+
+static std::string readFile(const char* path) {
+  std::string out;
+  FILE* f = std::fopen(path, "rb");
+  if (!f) return out;
+  char buf[4096];
+  size_t n;
+  while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) out.append(buf, n);
+  std::fclose(f);
+  return out;
 }
 
 int main(int argc, char** argv) {
@@ -90,6 +111,32 @@ int main(int argc, char** argv) {
   CHECK(ota_release_pick::versionOf("v0.7.0", "xteink-v") == nullptr);
   // Upstream behaviour without a prefix is unchanged.
   CHECK(std::string(ota_release_pick::versionOf("v1.6.1+bookorbit.8", "")) == "v1.6.1+bookorbit.8");
+
+  // Any chunking, and a retry after a cut-off first read, pick the same release.
+  for (const size_t chunk : {size_t(1), size_t(7), size_t(4096)}) {
+    for (const bool retried : {false, true}) {
+      CHECK(std::string(pick("xteink-v", true, "firmware-x3-x4", chunk, retried).newest.tagName) ==
+            "xteink-v2.0.0.102+bookorbit.1-rc2");
+      CHECK(std::string(pick("xteink-v", false, "firmware-x3-x4", chunk, retried).newest.firmwareUrl).find(
+                "firmware-x3-x4-v1.6.1.101") != std::string::npos);
+    }
+  }
+
+  // The feed the firmware reads (xteink/releases.json on the xteink-feed branch): the stable and
+  // the pre-release entry, in GitHub's release format.
+  if (argc > 2) {
+    const std::string feed = readFile(argv[2]);
+    CHECK(!feed.empty());
+    const Pick feedStable = pick("xteink-v", false, "firmware-x3-x4", 97, true, &feed);
+    const Pick feedRc = pick("xteink-v", true, "firmware-x3-x4", 1, false, &feed);
+    CHECK(feedStable.newest.tagFound && !feedStable.newest.prerelease);
+    CHECK(feedRc.newest.tagFound && feedRc.newest.prerelease);
+    CHECK(std::string(feedRc.newest.firmwareUrl).find("firmware-x3-x4-v2.") != std::string::npos);
+    // The feed's digest pins the image: the updater then downloads it over wolfSSL.
+    CHECK(std::strlen(feedRc.newest.firmwareSha256) == 64 && std::strlen(feedStable.newest.firmwareSha256) == 64);
+    CHECK(firmware_version::compare(ota_release_pick::versionOf(feedRc.newest.tagName, "xteink-v"),
+                                    ota_release_pick::versionOf(feedStable.newest.tagName, "xteink-v")) == 1);
+  }
 
   std::printf("%d passed, %d failed\n", passed, failed);
   return failed == 0 ? 0 : 1;

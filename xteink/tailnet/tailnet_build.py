@@ -118,6 +118,7 @@ SWITCHES = {
     "TAILNET_WIFI_PARKED_DYNAMIC_RX":     (8,      0,      0),
     "TAILNET_WIFI_PARKED_DYNAMIC_TX":     (8,      0,      0),
     "TAILNET_WIFI_PARKED_RX_MGMT":        (5,      0,      0),      # the framework's 5
+    # The OTA boot takes the parked tier as well (TailnetNetPhase.cpp tailnet_wifi_parked_boot).
     "TAILNET_WIFI_NO_NVS":                (1,      1,      1),      # WiFi driver config never in NVS
     "TAILNET_WIFI_ALLOC_COUNT":           (0,      0,      0),      # measurement: WiFi driver heap totals
     # --- Network boots (ui/TailnetNetPhase.cpp)
@@ -184,6 +185,9 @@ SWITCHES = {
     # Patch 0024: the frontlight written to the driver again after the first paint of each boot
     # and a second later (an X4 Pro could wake dark with its light on). No-op without a light.
     "CROSSINK_TAILNET_FRONTLIGHT_REAPPLY": (1,     1,      1),
+    # Patch 0030: the update check gets 15 s per read and one retry on a fresh connection (an X3
+    # timed out mid-list with the heap at its lowest; a retry after a restart got through).
+    "CROSSINK_TAILNET_OTA_CHECK_RETRY":   (1,      1,      1),
     # --- CrossInk 2.x flash cuts (X3 only: rc2 plus Tailscale is ~199 KB over the C3's 6.25 MB app slot).
     # Each removes one upstream feature from the build the way upstream drops OPDS there: no menu entry,
     # a saved setting that points at it reads as unavailable.

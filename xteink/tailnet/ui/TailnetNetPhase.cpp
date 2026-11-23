@@ -215,7 +215,12 @@ extern "C" void tailnet_network_phase_begin(uint32_t target) {
 
 extern "C" uint32_t tailnet_network_boot_target(void) { return s_target; }
 
-extern "C" bool tailnet_wifi_parked_boot(uint32_t target) { return parkedTier(target); }
+// The OTA boot takes the parked tier too, without parking or Tailscale (it reads GitHub): on the
+// small tier (2/4/4, RX BA window 4) an X3 staged the 6.3 MB image at 1-4 KB/s, almost all of
+// it waiting on the network, while that boot has the same ~115 KB free as the parked ones.
+extern "C" bool tailnet_wifi_parked_boot(uint32_t target) {
+  return parkedTier(target) || target == targetValue(NetworkBootTarget::OTA);
+}
 
 extern "C" bool tailnet_koreader_upload_redirect(void) {
   if (!tailnet_lite() || !tailnet_enabled() || !tailnet_joined()) return false;

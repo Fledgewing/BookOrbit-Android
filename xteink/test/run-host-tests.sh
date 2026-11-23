@@ -25,7 +25,7 @@ fi
   "$up/lib/JsonParser/ReleaseJsonParser.cpp" "$json_src" \
   "$up/src/network/FirmwareVersion.cpp" "$up/src/network/OtaReleasePick.cpp" \
   -o "$out/ota_release_pick_test"
-"$out/ota_release_pick_test" "$repo/shared/fixtures/github/orbify-releases.json"
+"$out/ota_release_pick_test" "$repo/shared/fixtures/github/orbify-releases.json" "$repo/shared/fixtures/github/xteink-feed.json"
 
 # Orbify's own logic (xteink/orbify/core): pure C++, tested with ArduinoJson, the JSON library the
 # firmware links: the build fetches it, so CI runs these after the build.

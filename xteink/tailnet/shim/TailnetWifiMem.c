@@ -119,7 +119,8 @@ typedef struct {
 // The tier for this boot, from its network boot target (TailnetNetPhase.cpp records it
 // before WiFi starts; the RTC token itself is cleared by then). Parked boots
 // (tailnet_wifi_parked_boot()): BookOrbit sync, sleep sync, download, Home refresh, Home
-// shelves, login and BookOrbit authentication. Everything else, the live catalog first,
+// shelves, login and BookOrbit authentication, and the OTA boot (which neither parks nor runs
+// Tailscale, but has the same heap and stages a 6 MB image). Everything else, the live catalog first,
 // keeps the small counts: its framebuffer stays allocated.
 static wifi_tier_t tierForBoot(uint32_t target) {
   wifi_tier_t tier = {"small", TAILNET_WIFI_STATIC_RX, TAILNET_WIFI_DYNAMIC_RX, TAILNET_WIFI_DYNAMIC_TX,
