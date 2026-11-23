@@ -81,6 +81,16 @@ cover jobs. Neither of our modes goes through that deletion.
 - **Choke point:** `BookOrbitApi:request(method, path, body, headers)` (plugin `bookorbit_api.lua:372-383`)
   is every JSON call; it runs `requestBlocking` (:261) inline or in a forked child
   (`runInSubprocess`, :336). Orbit wraps it on the API class (`wrap`, feature key `cache`).
+- **Child processes:** the catalog runs most requests inside a forked child (`fetch`,
+  `bookorbit_catalog.lua:881`), so the wrapper runs there. A child never calls JNI or the UI:
+  `NetworkMgr:isConnected` is JNI on Android (`device/android/device.lua:333`), and a child that
+  calls it dies, which the plugin reports as `subprocess_no_result` (v0.10.0 on the M8C). The parent
+  records its connectivity just before forking; the child reads that, and reports what it read,
+  stored, wants checked or missed as event files the parent applies when the child returns.
+- **Offline:** the catalog's `runConnected` (`bookorbit_catalog.lua:924`) would ask for Wi-Fi first.
+  Offline, Orbit runs the view's load from the cache instead. A page that isn't saved answers
+  "cancelled" (the plugin's quiet path) and then asks "Connect and load more", which runs the load
+  connected; a write or download in that load just connects, as before.
 - **Synchronous answer:** the wrapper returns the cached body directly, so the catalog code that
   called it (`fetch`, `loadBooks`, `dashboardRootFetch`, `loadBookDetail`, …) carries on as if
   the server answered, with no spinner and no network.

@@ -1,0 +1,18 @@
+{
+  "_comment": "GET /koreader/plugin/catalog/books/43 for a book with an audiobook and an EPUB with narration, shaped by the pinned server (koreader-catalog.service.ts:1218-1280 file mapping, :1318-1331 enrichDeliveryFiles). Without a variant the EPUB lists the source file's hash but the download streams an audio-free rebuild (:812-825), so a hash check fails; with the reader's delivery variant the file carries a selection and the prepared artifact's hash. Hashes are placeholders.",
+  "without_variant": {
+    "id": 43, "title": "The Titan's Curse",
+    "files": [
+      { "id": 901, "format": "m4b", "role": "content", "downloadVariant": "original", "fileHash": "hash-audiobook", "sizeBytes": 300000000 },
+      { "id": 902, "format": "epub", "role": "content", "downloadVariant": "original", "fileHash": "hash-source-epub", "sizeBytes": 9000000, "sourceMediaOverlayAvailable": true }
+    ]
+  },
+  "with_variant": {
+    "id": 43, "title": "The Titan's Curse",
+    "files": [
+      { "id": 901, "format": "m4b", "role": "content", "downloadVariant": "original", "fileHash": "hash-audiobook", "requestedVariant": "audioless_epub", "selection": "sel-901" },
+      { "id": 902, "format": "epub", "role": "content", "downloadVariant": "audioless_epub", "fileHash": "hash-audioless-artifact", "sizeBytes": 1200000, "requestedVariant": "audioless_epub", "selection": "sel-902",
+        "delivery": { "actualVariant": "audioless_epub", "fileHash": "hash-audioless-artifact", "sizeBytes": 1200000 } }
+    ]
+  }
+}

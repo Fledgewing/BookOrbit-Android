@@ -66,7 +66,16 @@ function OC.hash(s)
     return string.format("%08x", h % 4294967296)
 end
 
-local function inChild(client) return client and (client.subprocess_depth or 0) > 0 end
+-- In a forked child (the plugin's runInSubprocess, catalog.lua:881): never JNI (NetworkMgr on
+-- Android is JNI, device/android/device.lua:333; a child that calls it dies and the plugin gets
+-- subprocess_no_result), never the UI; the parent's state comes across the fork.
+local function inChild(client) return OC.child == true or (client and (client.subprocess_depth or 0) > 0) end
+
+-- Online? In a child: what the parent saw just before it forked.
+function OC.online(client)
+    if inChild(client) then return OC.parent_online ~= false end
+    return NetworkMgr:isConnected()
+end
 
 ---------------------------------------------------------------- index
 
@@ -81,7 +90,7 @@ function OC.index()
 end
 
 function OC.saveIndex()
-    if OC._save_pending then return end
+    if OC.child or OC._save_pending then return end
     OC._save_pending = true
     UIManager:scheduleIn(1, function()
         OC._save_pending = nil
@@ -170,6 +179,7 @@ function OC.adopt(key, e, bytes)
 end
 
 function OC.touch(key, validated)
+    if OC.child then return end
     local m = OC.index().entries[key]
     if not m then return end
     m.used_at = nowT()
@@ -207,6 +217,13 @@ function OC.drainEvents()
                 OC.check(nil, ev.key, ev.method, ev.path, ev.headers)
             elseif ev.kind == "write" then
                 OC.afterWrite(ev.method, ev.path, ev.body)
+            elseif ev.kind == "read" and ev.key then
+                table.insert(OC.pending, ev.key)
+                OC.source[ev.key] = ev.source
+            elseif ev.kind == "miss" then
+                OC.offline_miss = true
+            elseif ev.kind == "other" then
+                OC.offline_other = true
             end
         end
     end
@@ -235,12 +252,11 @@ function OC.read(client, stock, method, path, body, headers)
     local mode = OC.mode()
     -- Within one refresh each key is fetched or checked once; later reads are plain opens.
     if mode ~= "open" and OC.done[key] then mode = "open" end
-    local offline = not NetworkMgr:isConnected()
+    local offline = not OC.online(client)
     local serve, fetch = Cache.readPlan(entry, nowT(), mode, offline)
-    table.insert(OC.pending, key)
     local short = tostring(path):gsub("^/koreader/plugin/catalog", "")
     if serve then
-        OC.source[key] = "cache"
+        OC.saw(client, key, "cache")
         OC.touch(key)
         if fetch then
             OC.done[key] = true
@@ -252,15 +268,22 @@ function OC.read(client, stock, method, path, body, headers)
         end
         return true, Cache.copy(entry.body)
     end
+    if offline and OC.offline_pass then
+        -- Offline, not saved: quiet ("cancelled" is the plugin's no-error path) and the
+        -- runConnected wrapper asks to connect.
+        OC.missed(client)
+        log("cache:", short, "isn't saved on this reader (offline)")
+        return true, nil, "cancelled"
+    end
     local b, e, eb = stock(client, method, path, body, headers)
     if b ~= nil then
-        OC.source[key] = "server"
+        OC.saw(client, key, "server")
         OC.put(client, key, Cache.copy(b), path)
         log("cache:", short, "from the server (" .. mode .. ")")
         return true, b, e, eb
     end
     if entry then
-        OC.source[key] = "cache"
+        OC.saw(client, key, "cache")
         log("cache:", short, "server failed (" .. tostring(e) .. "); the cached copy instead")
         OC.failed[key] = true
         return true, Cache.copy(entry.body)
@@ -268,6 +291,18 @@ function OC.read(client, stock, method, path, body, headers)
     return true, b, e, eb
 end
 OC.pending, OC.source, OC.failed = {}, {}, {}
+
+-- A view read key (for redraws and the paint log); from a child, through an event.
+function OC.saw(client, key, source)
+    if inChild(client) then return OC.event("read", { key = key, source = source }) end
+    table.insert(OC.pending, key)
+    OC.source[key] = source
+end
+
+function OC.missed(client)
+    if inChild(client) then return OC.event("miss", {}) end
+    OC.offline_miss = true
+end
 
 ---------------------------------------------------------------- background checks
 
@@ -368,10 +403,12 @@ function OC.afterWrite(method, path, body)
             if OC.memo[key] then OC.memo[key].validated_at = 0 end
         end
     end
-    if patched > 0 or eff.stale_home then
+    -- A progress write names the book by document digest; the local overlay already shows this
+    -- device's position, and Home is checked against the server on its next read.
+    if patched > 0 then
         log("cache: a write to", (tostring(path):gsub("^/koreader/plugin/catalog", "")), "patched", patched, "entr(y/ies)")
-        OC.saveIndex()
     end
+    if patched > 0 or eff.stale_home then OC.saveIndex() end
 end
 
 ---------------------------------------------------------------- covers (ETag)
@@ -491,9 +528,35 @@ function OC.visibleBooks(cat)
     return {}
 end
 
+-- A short note on screen (the plugin's toast; its absence is no error).
+function OC.note(text, timeout)
+    log("cache: note:", text)
+    pcall(function() require("bookorbit_toast").show(text, { timeout = timeout or 2 }) end)
+end
+
+-- Full refresh is done when its view has painted and its covers are re-asked.
+function OC.fullStep(what, n)
+    local f = OC.full
+    if not f then return end
+    if what == "painted" then f.painted = true end
+    if what == "covers" then f.covers_done, f.replaced = true, n or 0 end
+    if f.painted and f.covers_done then
+        OC.full = nil
+        OC.note(string.format(_("Full refresh done · %d covers checked"), f.covers)
+            .. ((f.replaced or 0) > 0 and string.format(_(", %d replaced"), f.replaced) or ""), 3)
+    end
+end
+
 -- Tap ⟳ / background checks: revalidate this view, never evict, retry failed covers.
 function OC.refresh(cat)
     log("cache: Refresh")
+    if not S.refresh_tip_shown then
+        S.refresh_tip_shown = true
+        pcall(saveSettings)
+        OC.note(_("Refreshing… Tip: hold ⟳ for a full refresh"), 4)
+    else
+        OC.note(_("Refreshing…"), 2)
+    end
     OC.begin("refresh")
     if type(cat.thumbnail_failures) == "table" then cat.thumbnail_failures = {} end
     return LF.refreshKeepingCovers(cat)
@@ -503,7 +566,7 @@ end
 -- asked If-None-Match.
 function OC.fullRefresh(cat)
     log("cache: Full refresh")
-    pcall(function() require("bookorbit_toast").show(_("Full refresh…"), { timeout = 2 }) end)
+    OC.note(_("Full refresh: reloading everything from BookOrbit…"), 3)
     OC.begin("full")
     if type(cat.thumbnail_failures) == "table" then cat.thumbnail_failures = {} end
     local books, bad, recheck = OC.visibleBooks(cat), 0, {}
@@ -520,7 +583,8 @@ function OC.fullRefresh(cat)
         end
     end
     log("cache: Full refresh:", #books, "covers on screen,", bad, "broken (replaced),", #recheck, "re-asked")
-    if #recheck > 0 then OC.recheckCovers(cat, recheck) end
+    OC.full = { covers = #books }
+    if #recheck > 0 then OC.recheckCovers(cat, recheck) else OC.fullStep("covers", bad) end
     -- Home's sections are fetched with the view when on Home; elsewhere, Home is marked stale.
     for _, m in pairs(OC.index().entries) do if m.home then m.stale = true end end
     return LF.refreshKeepingCovers(cat)
@@ -528,7 +592,7 @@ end
 
 function OC.recheckCovers(cat, jobs)
     local client = cat.client
-    if not client or not NetworkMgr:isConnected() then return end
+    if not client or not NetworkMgr:isConnected() then return OC.fullStep("covers", 0) end
     Background.run("cover recheck", function()
         local changed = {}
         for _, j in ipairs(jobs) do
@@ -541,6 +605,7 @@ function OC.recheckCovers(cat, jobs)
     end, 120, function(out)
         local changed = Cache.decode(out or "") or {}
         log("cache: covers re-asked:", #jobs, "checked,", #changed, "replaced")
+        OC.fullStep("covers", #changed)
         if #changed > 0 and not cat.catalog_closed then
             if Compat.callable(cat.resetThumbnailMemo) then cat:resetThumbnailMemo() end
             if Compat.callable(cat.updateItems) then cat:updateItems(nil, true) end
@@ -580,6 +645,11 @@ function OC.install(why)
             if not okr then log("cache: read failed, straight to the server:", handled) end
             return stock(self, method, path, body, headers)
         end
+        if OC.offline_pass and OC.on() then
+            -- A write or other call in an offline view load: stop here quietly and connect.
+            if inChild(self) then pcall(OC.event, "other", {}) else OC.offline_other = true end
+            return nil, "cancelled"
+        end
         local b, e, eb = stock(self, method, path, body, headers)
         if b ~= nil and tostring(method):upper() ~= "GET" and OC.on() then
             if inChild(self) then pcall(OC.event, "write", { method = method, path = path, body = body })
@@ -587,11 +657,57 @@ function OC.install(why)
         end
         return b, e, eb
     end end, "cache")
-    wrap(Api, "runInSubprocess", function(stock) return function(self, ...)
-        local a, b = stock(self, ...)
-        if not inChild(self) then pcall(OC.drainEvents) end
+    wrap(Api, "runInSubprocess", function(stock) return function(self, fn, ...)
+        if inChild(self) then return stock(self, fn, ...) end
+        local okn, on = pcall(NetworkMgr.isConnected, NetworkMgr)
+        OC.parent_online = not okn or on == true
+        local a, b = stock(self, function(...)
+            OC.child = true -- this copy of the process is the child
+            local okf, r1, r2, r3 = pcall(fn, ...)
+            OC.child = nil
+            if not okf then error(r1, 0) end
+            return r1, r2, r3
+        end, ...)
+        pcall(OC.drainEvents)
         return a, b
     end end, "cache")
+    -- Offline: run the view's load from the cache, no connection asked. A page that isn't saved
+    -- answers "cancelled" (quiet) and then asks "Connect and load more" (local-first design,
+    -- "Paging past the saved pages"); a write or download just connects as before.
+    if Compat.callable(Catalog.runConnected) then
+        wrap(Catalog, "runConnected", function(stock) return function(self, fn)
+            if not OC.on() or OC.offline_pass or NetworkMgr:isConnected() then return stock(self, fn) end
+            OC.offline_pass, OC.offline_miss, OC.offline_other = true, false, false
+            local okr, err = pcall(function()
+                local Trapper = require("ui/trapper")
+                Trapper:wrap(function()
+                    local okf, ferr = pcall(fn)
+                    OC.offline_pass = nil
+                    pcall(OC.drainEvents)
+                    if not okf then log("cache: offline view failed:", ferr) end
+                    if OC.offline_other then return stock(self, fn) end
+                    if OC.offline_miss then
+                        log("cache: offline; asking to connect for a page that isn't saved")
+                        UIManager:show(require("ui/widget/confirmbox"):new{
+                            text = _("This page isn't saved on this reader."),
+                            ok_text = _("Connect and load more"),
+                            ok_callback = function() stock(self, fn) end,
+                        })
+                    end
+                end)
+            end)
+            if not okr then OC.offline_pass = nil; log("cache: offline pass failed:", err); return stock(self, fn) end
+        end end, "cache")
+    end
+    if Compat.callable(Api.download) then
+        wrap(Api, "download", function(stock) return function(self, ...)
+            if OC.offline_pass and OC.on() then
+                if inChild(self) then pcall(OC.event, "other", {}) else OC.offline_other = true end
+                return nil, "cancelled"
+            end
+            return stock(self, ...)
+        end end, "cache")
+    end
     wrap(Api, "downloadCatalogThumbnail", function(stock) return function(self, book_id, local_path, opts)
         if not OC.on() then return stock(self, book_id, local_path, opts) end
         local okd, r1, r2 = pcall(OC.coverDownload, self, stock, book_id, local_path, opts)
@@ -611,7 +727,9 @@ function OC.install(why)
             self._orbit_paint_source = table.concat(src, "+")
             OC.pending = {}
         end
-        return stock(self, title, item_table, context, push)
+        local r = stock(self, title, item_table, context, push)
+        if OC.full then OC.fullStep("painted") end
+        return r
     end end, "cache")
     OC.installed = true
     log("cache: installed (" .. tostring(why) .. ")")
