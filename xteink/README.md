@@ -225,6 +225,23 @@ the series** (or the gap, or "You've finished the series"), up to two suggestion
 next book and suggestions come from BookOrbit when the book is downloaded and are refreshed by
 syncs near its end; a book without them keeps CrossInk's folder suggestions.
 
+## Book copies kept current
+
+When BookOrbit rewrites a book's file (editing its tags or cover writes them into the EPUB), the copy on the
+card stops syncing highlights and bookmarks: the server knows it only as an older copy. **Keep Book Copies
+Current** (BookOrbit Sync settings, on by default) replaces those copies while the reader sleeps:
+
+- The sleep sync asks the server about every book the catalog downloaded, 20 at a time, and queues the
+  copies it calls older. The BookOrbit Home's **Refresh** finds them too.
+- Each sleep sync then replaces queued copies one at a time, for up to three minutes: same path and name,
+  downloaded beside the old copy, checked against the server's hash of the library file, then swapped in.
+  The reading position, highlights and bookmarks move to the new copy.
+- The queue is kept on the card, so a wake press or a reset carries on at the next sleep.
+- A sync that finds the open book out of date offers **Update**. It now shows "Updates when you leave the
+  book" and queues the copy instead of restarting.
+
+The log shows `ORB Copy refresh: <n> queued` and, per book, `replaced: <old hash> -> <new hash>`.
+
 ## Settings PIN
 
 **Settings > System > Settings PIN** sets an optional 4-digit PIN (Up/Down change a digit,

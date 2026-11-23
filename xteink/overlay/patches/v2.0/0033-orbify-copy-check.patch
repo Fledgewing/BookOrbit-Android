@@ -1,0 +1,113 @@
+diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
+index 98548aac..6b68f921 100644
+--- a/include/CrossInkTailnetCuts.h
++++ b/include/CrossInkTailnetCuts.h
+@@ -178,6 +178,11 @@ bool tlsArenaActive();                                // the arena is reserved (
+ #ifndef CROSSINK_TAILNET_ORBIFY_RATING
+ #define CROSSINK_TAILNET_ORBIFY_RATING 0
+ #endif
++// Patch 0033: an update compares the card copy's hash with the library file's before it
++// downloads, and logs both; a copy that already is the library file opens instead.
++#ifndef CROSSINK_TAILNET_ORBIFY_COPY_CHECK
++#define CROSSINK_TAILNET_ORBIFY_COPY_CHECK 0
++#endif
+ // Patch 0028, the End-of-Book page: server suggestions shown (0..2) and the author row; the X3's
+ // flash drop order lowers these first (docs/design/end-of-book/DESIGN.md §5).
+ #ifndef CROSSINK_TAILNET_ORBIFY_SUGGESTIONS
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+index 63c79a80..0926e1a8 100644
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+@@ -24,6 +24,10 @@
+ #include "BookOrbitCredentialStore.h"
+ #include "BookOrbitDownloadIndex.h"
+ #include "BookOrbitLocalBooks.h"
++#if CROSSINK_TAILNET_ORBIFY_COPY_CHECK
++#include "KOReaderDocumentId.h"
++#include "orbify/core/CopyCheck.h"
++#endif
+ #include "CrossPointState.h"
+ #include "MappedInputManager.h"
+ #include "RecentBooksStore.h"
+@@ -1436,6 +1440,24 @@ void BookOrbitCatalogBrowserActivity::downloadBook(const int64_t bookId, const s
+   // so a failure or a cancel never costs the user the copy they had, and a new book
+   // never sits half-written under its own name.
+   const std::string finalPath = replacePath.empty() ? catalogBookPath(detail, epubFile) : replacePath;
++#if CROSSINK_TAILNET_ORBIFY_COPY_CHECK
++  // Orbify (patch 0033): an update compares the copy on the card with the library file first.
++  // The sync only learns "the server keeps this copy as an older one of its file"; both hashes
++  // go to the log, and a copy that already is the library file opens instead of downloading.
++  if (!replacePath.empty()) {
++    const std::string deviceHash = KOReaderDocumentId::calculate(replacePath);
++    const auto verdict = orbify::copy::compare(deviceHash.c_str(), epubFile.fileHash.c_str());
++    LOG_INF("BookOrbit", "Update of book %lld: card copy %s (%s), library file %lld %s (changed %s): %s",
++            static_cast<long long>(bookId), deviceHash.empty() ? "-" : deviceHash.c_str(), replacePath.c_str(),
++            static_cast<long long>(epubFile.id), epubFile.fileHash.empty() ? "-" : epubFile.fileHash.c_str(),
++            epubFile.contentVersion.empty() ? "-" : epubFile.contentVersion.c_str(), orbify::copy::verdictName(verdict));
++    if (verdict == orbify::copy::Verdict::Same) {
++      BookOrbitDownloadIndex::record(bookId, replacePath);
++      openLocalBook(replacePath);
++      return;
++    }
++  }
++#endif
+   // A book another app sent or a copy over USB put at the very path the server's naming
+   // template gives it is not in the download index, so its row was not marked. The details
+   // name that path and the library file's size: a file there of that size is this book. It
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index 6e6178b4..9be03e28 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -217,7 +217,15 @@ void BookOrbitSyncActivity::resolveUpdateBook() {
+         &bookId, libraryVersion);
+   }
+   updateBookId = bookId;
++#if CROSSINK_TAILNET_ORBIFY_COPY_CHECK
++  // Orbify (patch 0033): the server answered positionIncompatible: it knows this hash as an
++  // older copy of the book's file. The library file's own hash is fetched and logged by the
++  // update step (BookOrbitCatalogBrowserActivity::downloadBook).
++  LOG_INF("BookOrbit", "This copy differs from the library file (book %lld): card copy %s (%s); the server keeps it as an older copy",
++          static_cast<long long>(updateBookId), documentHash.c_str(), epubPath.c_str());
++#else
+   LOG_INF("BookOrbit", "This copy differs from the library file (book %lld)", static_cast<long long>(updateBookId));
++#endif
+ }
+ 
+ bool BookOrbitSyncActivity::offerBookUpdate() {
+diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+index fb6647e8..974ccd64 100644
+--- a/src/network/BookOrbitCatalogClient.cpp
++++ b/src/network/BookOrbitCatalogClient.cpp
+@@ -711,7 +711,7 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
+   const auto buildFilter = [&](JsonDocument& filter) {
+     bookOrbitSetFilter(filter,
+                        R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
+-                       R"("devicePath":true}]})");
++                       R"("devicePath":true,"fileHash":true,"contentVersion":true}]})");
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+     // Orbify (patch 0028): the series card's fields ride on the same reply (design §5).
+     orbify::cardFilter(filter);
+@@ -737,6 +737,8 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
+     entry.format = std::string(file["format"] | "");
+     entry.sizeBytes = file["sizeBytes"] | 0;
+     entry.devicePath = std::string(file["devicePath"] | "");
++    entry.fileHash = std::string(file["fileHash"] | "");
++    entry.contentVersion = std::string(file["contentVersion"] | "");
+     outDetail.files.push_back(std::move(entry));
+   }
+   return true;
+diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
+index a8e9d68e..add148b2 100644
+--- a/src/network/BookOrbitCatalogClient.h
++++ b/src/network/BookOrbitCatalogClient.h
+@@ -27,6 +27,10 @@ struct BookOrbitCatalogFile {
+   // account and device. Empty on servers that predate the field; the caller then
+   // names the file itself.
+   std::string devicePath;
++  // Orbify (patch 0033): the library file's KOReader partial MD5 and when its bytes last
++  // changed. Empty when the server leaves them out (a converted delivery variant).
++  std::string fileHash;
++  std::string contentVersion;
+ };
+ 
+ /** One entry in a BookOrbit book listing. */

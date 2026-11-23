@@ -1,0 +1,276 @@
+diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
+index 6b68f921..b0799aad 100644
+--- a/include/CrossInkTailnetCuts.h
++++ b/include/CrossInkTailnetCuts.h
+@@ -183,6 +183,12 @@ bool tlsArenaActive();                                // the arena is reserved (
+ #ifndef CROSSINK_TAILNET_ORBIFY_COPY_CHECK
+ #define CROSSINK_TAILNET_ORBIFY_COPY_CHECK 0
+ #endif
++// Patch 0034, "Keep book copies current": the sleep sync and the Home refresh find card copies
++// the server rewrote and replace them in place, state carried over; the sync's update offer
++// queues the open book's copy instead of restarting.
++#ifndef CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++#define CROSSINK_TAILNET_ORBIFY_COPY_REFRESH 0
++#endif
+ // Patch 0028, the End-of-Book page: server suggestions shown (0..2) and the author row; the X3's
+ // flash drop order lowers these first (docs/design/end-of-book/DESIGN.md §5).
+ #ifndef CROSSINK_TAILNET_ORBIFY_SUGGESTIONS
+diff --git a/lib/BookOrbitSync/BookOrbitCredentialStore.cpp b/lib/BookOrbitSync/BookOrbitCredentialStore.cpp
+index 138a748d..697f23e2 100644
+--- a/lib/BookOrbitSync/BookOrbitCredentialStore.cpp
++++ b/lib/BookOrbitSync/BookOrbitCredentialStore.cpp
+@@ -62,6 +62,9 @@ void BookOrbitCredentialStore::toJson(JsonDocument& doc) const {
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+   doc["orbifyMarkAtEnd"] = orbifyMarkAtEnd;
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++  doc["orbifyKeepCopies"] = orbifyKeepCopiesCurrent;
++#endif
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   doc["backgroundSync"] = backgroundSync;
+ #endif
+@@ -99,6 +102,9 @@ bool BookOrbitCredentialStore::fromJson(JsonVariantConst doc) {
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+   orbifyMarkAtEnd = doc["orbifyMarkAtEnd"] | true;
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++  orbifyKeepCopiesCurrent = doc["orbifyKeepCopies"] | true;
++#endif
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   backgroundSync = doc["backgroundSync"] | static_cast<uint8_t>(0);
+ #endif
+diff --git a/lib/BookOrbitSync/BookOrbitCredentialStore.h b/lib/BookOrbitSync/BookOrbitCredentialStore.h
+index edee8363..4516bac3 100644
+--- a/lib/BookOrbitSync/BookOrbitCredentialStore.h
++++ b/lib/BookOrbitSync/BookOrbitCredentialStore.h
+@@ -44,6 +44,9 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+   bool orbifyMarkAtEnd = true;  // Orbify: the End-of-Book page marks the book finished (D1)
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++  bool orbifyKeepCopiesCurrent = true;  // Orbify (patch 0034): replace copies the server rewrote
++#endif
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   uint8_t backgroundSync = 0;  // a BookOrbitBackgroundSync::Interval; 0 = off
+ #endif
+@@ -108,6 +111,17 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
+     return orbifyMarkAtEnd;
+   }
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++  // Orbify (patch 0034): "Keep book copies current", on by default.
++  void setOrbifyKeepCopiesCurrent(const bool enabled) {
++    ensureLoaded();
++    orbifyKeepCopiesCurrent = enabled;
++  }
++  bool getOrbifyKeepCopiesCurrent() const {
++    ensureLoaded();
++    return orbifyKeepCopiesCurrent;
++  }
++#endif
+ 
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   // Sync the open book in the background while reading (CrossInk-Tailnet, X4s): how often,
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+index c747f475..2eca74b5 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+@@ -892,7 +892,9 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::matchCheck(const std::string& de
+                                                            const size_t count,
+                                                            void (*visit)(const char* hash, int64_t bookId,
+                                                                          int64_t bookFileId, void* context),
+-                                                           void* context, char* outLibraryVersion) {
++                                                           void* context, char* outLibraryVersion,
++                                                           void (*visitOlderCopy)(const char* hash, int64_t bookId,
++                                                                                  int64_t bookFileId, void* context)) {
+   outLibraryVersion[0] = '\0';
+   lastHttpCode = 0;
+   lastTransportError = 0;
+@@ -963,7 +965,9 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::matchCheck(const std::string& de
+   if (httpCode < 200 || httpCode >= 300) return SERVER_ERROR;
+ 
+   JsonDocument filter;
+-  bookOrbitSetFilter(filter, R"({"matches":[{"hash":true,"bookId":true,"bookFileId":true}],"libraryVersion":true})");
++  bookOrbitSetFilter(
++      filter,
++      R"({"matches":[{"hash":true,"bookId":true,"bookFileId":true,"positionCompatible":true}],"libraryVersion":true})");
+   JsonDocument doc;
+   if (deserializeJson(doc, response, DeserializationOption::Filter(filter)) != DeserializationError::Ok) {
+     LOG_ERR("BookOrbit", "Failed to parse match check response");
+@@ -974,6 +978,9 @@ BookOrbitSyncClient::Error BookOrbitSyncClient::matchCheck(const std::string& de
+     const int64_t bookId = match["bookId"] | static_cast<int64_t>(0);
+     const int64_t bookFileId = match["bookFileId"] | static_cast<int64_t>(0);
+     if (bookId != 0 && hash[0] != '\0' && visit != nullptr) visit(hash, bookId, bookFileId, context);
++    if (bookId != 0 && hash[0] != '\0' && visitOlderCopy != nullptr && match["positionCompatible"] == false) {
++      visitOlderCopy(hash, bookId, bookFileId, context);
++    }
+   }
+   snprintf(outLibraryVersion, LIBRARY_VERSION_SIZE, "%s", doc["libraryVersion"] | "");
+   return OK;
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.h b/lib/BookOrbitSync/BookOrbitSyncClient.h
+index 5106bba8..b124f635 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.h
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.h
+@@ -139,7 +139,11 @@ class BookOrbitSyncClient {
+    */
+   static Error matchCheck(const std::string& deviceModel, const MatchQuery* queries, size_t count,
+                           void (*visit)(const char* hash, int64_t bookId, int64_t bookFileId, void* context),
+-                          void* context, char* outLibraryVersion);
++                          void* context, char* outLibraryVersion,
++                          // Orbify (patch 0034): also called, after visit(), for each match the
++                          // server marks positionCompatible:false (an older hash of the file).
++                          void (*visitOlderCopy)(const char* hash, int64_t bookId, int64_t bookFileId,
++                                                 void* context) = nullptr);
+ 
+   /**
+    * Record a completed sync on the server (POST /plugin/sweeps), the same call BookOrbit's
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 3a1b1265..255f4800 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -291,6 +291,8 @@ STR_BOOKORBIT_ON_DEVICE_ERROR: "Could not list the books on the SD card."
+ STR_BOOKORBIT_SYNC_ON_SLEEP: "Sync on Sleep"
+ STR_BOOKORBIT_SYNC_WHILE_READING: "Sync While Reading"
+ STR_ORBIFY_MARK_AT_END: "Mark Finished at End"
++STR_ORBIFY_KEEP_COPIES: "Keep Book Copies Current"
++STR_ORBIFY_UPDATES_WHEN_LEFT: "Updates when you leave the book"
+ STR_ORBIFY_FINISHED: "Finished"
+ STR_ORBIFY_NOT_FINISHED: "Not finished"
+ STR_ORBIFY_MARK_FINISHED: "Mark finished"
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+index ca9a8831..11a7622d 100644
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+@@ -11,6 +11,10 @@
+ #include <cstdio>
+ 
+ #include "BookOrbitHomeStore.h"
++#include <CrossInkTailnetCuts.h>
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++#include "orbify/CopyRefresh.h"
++#endif
+ #include "SdCardFontSystem.h"
+ #include "SilentRestart.h"
+ #include "activities/network/WifiSelectionActivity.h"
+@@ -101,6 +105,11 @@ void BookOrbitHomeRefreshActivity::runRefresh() {
+   if (refreshed) {
+     const BookOrbitDeviceScan::Progress progress{this, &BookOrbitHomeRefreshActivity::onScanProgress};
+     setScanSummary(BookOrbitDeviceScan::run(nullptr, &progress));
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++    // Orbify (patch 0034): find copies the server rewrote; the next sleep sync replaces them
++    // (a download here would hold this screen for minutes).
++    OrbifyCopyRefresh::detect(nullptr);
++#endif
+   }
+ 
+   SavedWifiConnect::disconnect();
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index 9be03e28..ad3743b5 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -21,6 +21,9 @@
+ #include "BookOrbitCredentialStore.h"
+ #include "BookOrbitDeviceScan.h"
+ #include "BookOrbitDownloadIndex.h"
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++#include "orbify/CopyRefresh.h"
++#endif
+ #include "BookOrbitHomeStore.h"
+ #include "BookOrbitRemotePosition.h"
+ #include "BookOrbitStatsUpload.h"
+@@ -241,6 +244,23 @@ bool BookOrbitSyncActivity::offerBookUpdate() {
+ }
+ 
+ void BookOrbitSyncActivity::startBookUpdate() {
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++  // Orbify (patch 0034, decision (a)): nothing restarts while the book is open. The copy is
++  // queued; the next sleep sync replaces it in place, position and highlights carried over.
++  if (OrbifyCopyRefresh::enqueue(updateBookId, epubPath, documentHash)) {
++    {
++      RenderLock lock(*this);
++      state = SYNCING;
++      statusMessage = tr(STR_ORBIFY_UPDATES_WHEN_LEFT);
++      summaryLines[0].clear();
++      summaryLines[1].clear();
++    }
++    requestUpdateAndWait();
++    delay(1500);
++    returnToReader();
++    return;
++  }
++#endif
+   BookOrbitCatalogLink link;
+   link.bookId = updateBookId;
+   link.replacePath = epubPath;
+@@ -341,6 +361,14 @@ void BookOrbitSyncActivity::runSleepSync() {
+   const auto homeCoverSizes = BookOrbitHomeLayout::coverSizes(renderer);
+   if (refreshHome && !sleepSyncWakeRequested()) BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
+   if (refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++  // Orbify (patch 0034): the device is asleep, Wi-Fi is up: find copies the server rewrote,
++  // then replace queued ones, one book at a time, for up to three minutes per sleep.
++  if (wifiConnectedForSleepSync && state != SYNC_FAILED && !sleepSyncWakeRequested()) {
++    OrbifyCopyRefresh::detect(&sleepSyncWakeRequested);
++    if (!sleepSyncWakeRequested()) OrbifyCopyRefresh::run(&sleepSyncWakeRequested, 180000UL);
++  }
++#endif
+   SavedWifiConnect::disconnect();
+   if (refreshHome && !sleepSyncWakeRequested()) {
+     BookOrbitHomeStore::decodePendingCovers(&sleepSyncWakeRequested, homeCoverSizes);
+diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
+index 5947ca37..455d20b9 100644
+--- a/src/activities/settings/BookOrbitSettingsActivity.cpp
++++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
+@@ -35,7 +35,9 @@ namespace fui = freeink::ui;
+ namespace {
+ // CrossInk-Tailnet: "Sync While Reading" is the last row, listed only under Smart sync.
+ // Orbify (patch 0027): "Mark Finished at End" sits before Home.
+-constexpr int ORBIFY_ROWS = CROSSINK_TAILNET_ORBIFY_FINISH ? 1 : 0;
++// Orbify (patch 0034): "Keep book copies current" follows it.
++constexpr int ORBIFY_MARK_ROWS = CROSSINK_TAILNET_ORBIFY_FINISH ? 1 : 0;
++constexpr int ORBIFY_ROWS = ORBIFY_MARK_ROWS + (CROSSINK_TAILNET_ORBIFY_COPY_REFRESH ? 1 : 0);
+ constexpr int MENU_ITEMS = 9 + ORBIFY_ROWS + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);
+ // The folder row reuses the OPDS strings: "Download Folder" and "SD Root" are
+ // generic and already translated in every language file.
+@@ -49,6 +51,9 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+                                      StrId::STR_BOOKORBIT_SYNC_ON_SLEEP,
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+                                      StrId::STR_ORBIFY_MARK_AT_END,
++#endif
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++                                     StrId::STR_ORBIFY_KEEP_COPIES,
+ #endif
+                                      StrId::STR_HOME,
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+@@ -56,6 +61,7 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+ #endif
+ };
+ constexpr int ORBIFY_MARK_ROW = 8;  // with ORBIFY_ROWS
++constexpr int ORBIFY_KEEP_ROW = 8 + ORBIFY_MARK_ROWS;
+ constexpr int HOME_ROW = 8 + ORBIFY_ROWS;
+ constexpr int BACKGROUND_SYNC_ROW = 9 + ORBIFY_ROWS;
+ // The Home page: the top shelf, the bottom shelf, then the refresh.
+@@ -274,6 +280,12 @@ void BookOrbitSettingsActivity::handleSelection() {
+     BOOKORBIT_STORE.setOrbifyMarkAtEnd(!BOOKORBIT_STORE.getOrbifyMarkAtEnd());
+     BOOKORBIT_STORE.saveToFile();
+     requestUpdate();
++#endif
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++  } else if (selectedIndex == ORBIFY_KEEP_ROW) {
++    BOOKORBIT_STORE.setOrbifyKeepCopiesCurrent(!BOOKORBIT_STORE.getOrbifyKeepCopiesCurrent());
++    BOOKORBIT_STORE.saveToFile();
++    requestUpdate();
+ #endif
+   } else if (selectedIndex == HOME_ROW) {
+     startActivityForResult(std::make_unique<BookOrbitSettingsActivity>(renderer, mappedInput, Page::Home),
+@@ -439,6 +451,10 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+     } else if (i == ORBIFY_MARK_ROW) {
+       values[i] = BOOKORBIT_STORE.getOrbifyMarkAtEnd() ? tr(STR_ON) : tr(STR_OFF);
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++    } else if (i == ORBIFY_KEEP_ROW) {
++      values[i] = BOOKORBIT_STORE.getOrbifyKeepCopiesCurrent() ? tr(STR_ON) : tr(STR_OFF);
++#endif
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+     } else if (i == BACKGROUND_SYNC_ROW) {
+       char label[40];

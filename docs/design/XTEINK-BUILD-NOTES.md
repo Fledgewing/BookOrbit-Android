@@ -121,6 +121,68 @@ Android); the firmware asks `OrbifyQuiet::allow()`, whose `reading()` is
 Upstream CrossInk's own reader toasts (page load errors, menu actions) answer what the reader did
 and are left alone. Flash: X3 +410 B (6,478,797, 98.86%).
 
+## "This copy differs from the library file" (patch 0033, 2026-11-22)
+
+An X4 Pro sync of book 1207 (file 3563) ended with `Server has another copy of this document`,
+`positionIncompatible` and `This copy differs from the library file`, then offered the update.
+What decides it, read against BookOrbit `c1dd6b4f`:
+
+- The firmware compares no hashes. It sends the card file's KOReader partial MD5
+  (`KOReaderDocumentId::calculate`, BookOrbitSyncActivity.cpp:408) and reacts to the server's
+  `positionIncompatible` list (BookOrbitSyncActivity.h:238, .cpp:537).
+- The server lists a hash there when it resolves to the book's file but
+  `compatibleProgressHash` is false (`server/src/modules/koreader/koreader.repository.ts:32-42`,
+  `koreader-annotation-exchange.service.ts:146`): the hash is neither the file's current
+  `fileHash` nor a `kobo_download` (delivered variant) row with no later source change.
+- So the server knows `3dcf3eb3c005357c54c1f8a27320bf98` as an older hash of file 3563. The same
+  copy, same hash, synced with `unmatched=0` on 11-21 (X4 Pro log), and the X3 and X4 Classic
+  downloads of file 3563 give that hash too. The card bytes did not change; the library file's did,
+  between 11-21 01:25 and 11-22 22:00 PT.
+- What moves a file's hash on the server without a new upload: a metadata or cover write into the
+  EPUB (`file_write`, `file-write.service.ts:465,618,745`; scheduled by any metadata save, bulk
+  edit or cover change, `book.service.ts:2241,4246`, `cover.service.ts:104-151`) or a rescan that
+  finds new bytes (`rescan`, `scanner.repository.ts:540`). BookOrbit treats both as new content
+  for KOReader positions.
+- Not the delivery-variant case: no media overlay, so `/plugin/catalog/files/3563/download`
+  serves the library file itself (`koreader-catalog.service.ts:812-846`), and the device's name
+  has no " - Text Only". Not a hash mismatch between implementations: the server matched the hash.
+
+Patch 0033 (`CROSSINK_TAILNET_ORBIFY_COPY_CHECK`, all three devices) makes the next one
+explainable and stops a pointless re-download:
+
+| # | Change | Where |
+|---|---|---|
+| C1 | The sync's line names the card copy's hash and path. | BookOrbitSyncActivity::resolveUpdateBook |
+| C2 | The catalog detail keeps each file's `fileHash` and `contentVersion`. | BookOrbitCatalogClient::fetchBookDetail |
+| C3 | An update logs `card copy <hash> (<path>), library file <id> <hash> (changed <contentVersion>): same/differs/unknown`; `same` opens the copy instead of downloading. | BookOrbitCatalogBrowserActivity::downloadBook |
+| C4 | The compare rule, host-tested. | orbify/core/CopyCheck, test/copy_check_test.cpp |
+
+## Keep book copies current (patch 0034, 2026-11-22)
+
+After the tag rewrite above happened to almost every book, every card copy went `positionIncompatible`.
+`CROSSINK_TAILNET_ORBIFY_COPY_REFRESH` (all three devices) finds and replaces them; the rules and
+the queue are `orbify/core/CopyQueue` (host test `copy_queue`, 37 checks, mutation-checked).
+
+| # | Step | Where, and what it reuses |
+|---|---|---|
+| R1 | Detection: every download in the index is hashed (`BookContentId::contentHash`) and sent through the match check, 20 per request. A copy is queued only when the server matched it to the same book and returned `positionCompatible:false`. When the library token equals the last full pass's, it stops after one batch. | `OrbifyCopyRefresh::detect`; `BookOrbitSyncClient::matchCheck` gains an optional older-copy visitor (default null, other callers unchanged) |
+| R2 | Queue: `/.crosspoint/orbify/copy-refresh.tsv` (written to a temp file, then renamed), one book at a time, oldest first, 3 attempts, saved after every book. | `core/CopyQueue` |
+| R3 | Before a download: the book detail's `fileHash` must be present (otherwise nothing downloads), and a copy already equal to it is only re-recorded. | `beforeDownload`, patch 0033's detail fields |
+| R4 | Download: the catalog's own options (stage as `.part`, resume, free-space check, EPUB check, `keepReplaced`). | `BookOrbitCatalogClient::downloadFile` |
+| R5 | After: the new copy's hash must equal `fileHash`; if not, `<book>.old` goes back. If it does, `BookUpdateMigration::begin` moves progress, highlights, bookmarks and sync state to the new hash and rewinds the upload watermarks. | `afterDownload`; the fork's `util/BookUpdateMigration` (the same code the catalog's update path runs) |
+| R6 | When: the sleep sync (detect and replace, 180 s per sleep, stopped by a wake press) and the Home refresh (detect only). Never while a book is open. Each download needs a 24 KB heap block; X3 sleep syncs log 65-102 KB. | `BookOrbitSyncActivity::runSleepSync`, `BookOrbitHomeRefreshActivity` |
+| R7 | Decision (a): the sync offer's Update queues the open copy and shows "Updates when you leave the book". No restart. | `BookOrbitSyncActivity::startBookUpdate` |
+| R8 | The setting: Keep Book Copies Current, on by default (`orbifyKeepCopies`). | `BookOrbitCredentialStore`, `BookOrbitSettingsActivity` |
+
+Two-way doors taken:
+- (i) The Home refresh only detects, so a user-started refresh never holds the screen for minutes.
+- (ii) 180 s per sleep sync.
+- (iii) Charging is not a trigger yet: the sleep sync already covers every sleep.
+
+Not host-tested: the carry-over itself. It is the fork's `BookUpdateMigration`, which needs the card's
+storage layer; the test covers the queue entry that records the old hash and the hash check that gates the
+swap.
+
 ## Measurements needed on a device
 
 Item 1 adds only small requests on the sync's existing TLS session, so no new memory measurement
@@ -131,3 +193,8 @@ then sleep (the sleep sync refreshes the card). The lines `ORB Series card parse
 largest …` and `ORB Series card parsed (ok): <n>-byte reply, heap free …, largest …` give the heap
 while the detail reply (the design's "24 KB saved page" case) is parsed. A `failed` there, or a
 largest block under 16 KB, is the signal to stream the reply in smaller pieces.
+
+Keep book copies current (patch 0034), on any of the three, serial log: sleep the reader with Wi-Fi in
+reach. Expect `ORB Copy refresh: <n> queued (...)`, then per book `ORB Copy refresh: <path> (book <id>)
+replaced: <old> -> <new> in <s> s`, then `<k> replaced, <m> waiting`. On the X3, the line to watch is
+`heap too fragmented for a download`: that is when a copy waits for the next sleep instead.

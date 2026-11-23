@@ -211,6 +211,8 @@ SWITCHES = {
     # --- Orbify features (xteink/orbify, docs/design/end-of-book/DESIGN.md, ROADMAP items 1 and 2).
     # Patch 0027: reaching the end of a book marks it finished; BookOrbit syncs send it.
     "CROSSINK_TAILNET_ORBIFY_FINISH":     (1,      1,      1),
+    "CROSSINK_TAILNET_ORBIFY_COPY_CHECK": (1,      1,      1),
+    "CROSSINK_TAILNET_ORBIFY_COPY_REFRESH": (1,    1,      1),
     # Ratings on the end-of-book page (item 2): not on the X3 (G31).
     "CROSSINK_TAILNET_ORBIFY_RATING":     (0,      1,      1),
     # Patch 0028, the End-of-Book page (item 2). The X3's flash drop order (design §5): lower
