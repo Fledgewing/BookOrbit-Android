@@ -33,11 +33,11 @@ if [ -z "$ajson" ]; then
 fi
 [ -n "$ajson" ] || { echo "ArduinoJson not found: run 'pio pkg install -e <env>' in $up, or set ARDUINOJSON_DIR" >&2; exit 1; }
 core="$repo/xteink/orbify/core"
-orbify_test() { # name fixture [extra sources...]
-  local name="$1" fixture="$2"
-  shift 2
+orbify_test() { # name [sources...]: the test reads its tables from shared/fixtures/bookorbit
+  local name="$1"
+  shift
   "${CXX:-c++}" -std=c++17 -Wall -Wextra -O1 -I"$ajson" -I"$core" -I"$here" \
     "$here/${name}_test.cpp" "$@" -o "$out/${name}_test"
-  "$out/${name}_test" "$repo/shared/fixtures/$fixture"
+  "$out/${name}_test" "$repo/shared/fixtures/bookorbit"
 }
-orbify_test finish bookorbit/finish-steps.json "$core/FinishQueue.cpp"
+orbify_test finish "$core/FinishQueue.cpp"

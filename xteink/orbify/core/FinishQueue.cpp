@@ -65,18 +65,20 @@ DrainOutcome fail(FinishJob& job, int code, const DrainOptions& options) {
     return DrainOutcome::AuthWait;
   }
   if (code >= 400 && code < 500 && code != 408 && code != 429) return DrainOutcome::Dropped;
-  job.attempts++;
-  if (job.attempts >= MAX_ATTEMPTS) {
-    job.flags |= FinishJob::PARKED;
-    job.nextTryAt = 0;
-    return DrainOutcome::Parked;
-  }
+  if (job.attempts < 255) job.attempts++;
+  // 60 s doubling to 1 h. A parked job keeps its time too (the shared table's next_try_in);
+  // only a manual sync tries it again (isDue).
   if (options.now >= MIN_PLAUSIBLE_EPOCH) {
-    uint32_t wait = 60u << (job.attempts - 1);
+    const uint32_t shift = job.attempts - 1u < 6u ? job.attempts - 1u : 6u;
+    uint32_t wait = 60u << shift;
     if (wait > 3600) wait = 3600;
     job.nextTryAt = options.now + wait;
   } else {
     job.nextTryAt = 0;
+  }
+  if (job.attempts >= MAX_ATTEMPTS) {
+    job.flags |= FinishJob::PARKED;
+    return DrainOutcome::Parked;
   }
   return DrainOutcome::Retry;
 }

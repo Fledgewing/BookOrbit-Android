@@ -1,6 +1,7 @@
-// Host test for Orbify's finished-book queue (xteink/orbify/core/FinishQueue): the drain table in
-// shared/fixtures/bookorbit/finish-cases.json (read by Android's tests too), the stale-push hold,
-// the record format and the two-slot file under torn writes.
+// Host test for Orbify's finished-book queue (xteink/orbify/core/FinishQueue): the shared rules in
+// shared/fixtures/bookorbit/finish-cases.json (drain guard, errors, hold; Android's tests read the
+// same table), the Xteink request sequence in finish-steps.json, the record format and the
+// two-slot file under torn writes.
 #include <ArduinoJson.h>
 
 #include <cstdio>
@@ -212,6 +213,78 @@ void tornWriteTests() {
   CHECK(slot::decode(slotB, b, seq) == 0);
 }
 
+// finish-cases.json "drain": a known book, no finish day, the server's status at the guard.
+void sharedDrainCases(JsonDocument& doc) {
+  for (JsonObjectConst c : doc["drain"].as<JsonArrayConst>()) {
+    const char* name = c["name"];
+    FinishJob job;
+    std::strcpy(job.hash, "0123456789abcdef0123456789abcdef");
+    job.bookId = 12;
+    job.statusSeen = parseServerStatus(c["job"]["status_seen"].as<const char*>());
+    JsonVariantConst r = c["job"]["rating"];
+    job.rating = r.is<const char*>() ? -1 : static_cast<int8_t>(r.as<int>());
+    JsonDocument server;
+    server["detail"]["code"] = 200;
+    server["detail"]["readStatus"] = c["server"].as<const char*>();
+    FixtureTransport transport(server.as<JsonObjectConst>());
+    DrainOptions options;
+    options.now = 1795377600u;
+    CHECK_NAMED(name, drainOne(job, transport, options) == DrainOutcome::Sent);
+    bool readSent = false;
+    std::string ratingSent;
+    for (const std::string& req : transport.requests) {
+      readSent = readSent || req == "read-status read";
+      if (req.rfind("rating ", 0) == 0) ratingSent = req.substr(7);
+    }
+    CHECK_NAMED(name, readSent == c["expect"]["read_status"].as<bool>());
+    JsonVariantConst want = c["expect"]["rating"];
+    const std::string wanted = want.isNull() ? "" : want.is<const char*>() ? want.as<std::string>() : std::to_string(want.as<int>());
+    CHECK_NAMED(name, ratingSent == wanted);
+  }
+}
+
+// finish-cases.json "errors": the answer to the first request after attempts_before failures.
+void sharedErrorCases(JsonDocument& doc) {
+  for (JsonObjectConst c : doc["errors"].as<JsonArrayConst>()) {
+    const std::string name = "error " + (c["code"].isNull() ? std::string("network") : std::to_string(c["code"].as<int>()));
+    FinishJob job;
+    std::strcpy(job.hash, "0123456789abcdef0123456789abcdef");
+    job.bookId = 12;
+    job.statusSeen = ServerStatus::Reading;
+    job.attempts = c["attempts_before"].as<uint8_t>();
+    JsonDocument server;
+    server["detail"]["code"] = c["code"].isNull() ? -1 : c["code"].as<int>();
+    FixtureTransport transport(server.as<JsonObjectConst>());
+    DrainOptions options;
+    options.now = 1795377600u;
+    options.manual = true;  // a parked job is tried by a manual sync
+    const DrainOutcome outcome = drainOne(job, transport, options);
+    const std::string expect = c["expect"].as<std::string>();
+    if (expect == "retry") {
+      CHECK_NAMED(name.c_str(), outcome == DrainOutcome::Retry || outcome == DrainOutcome::Parked);
+      CHECK_NAMED(name.c_str(), job.nextTryAt - options.now == c["next_try_in"].as<uint32_t>());
+      CHECK_NAMED(name.c_str(), job.parked() == c["parked"].as<bool>());
+    } else if (expect == "auth") {
+      CHECK_NAMED(name.c_str(), outcome == DrainOutcome::AuthWait);
+    } else {
+      CHECK_NAMED(name.c_str(), expect == "drop" && outcome == DrainOutcome::Dropped);
+    }
+  }
+}
+
+// finish-cases.json "hold": final and push in percent, forward pages since the finish, released
+// = the finish was undone here.
+void sharedHoldCases(JsonDocument& doc) {
+  for (JsonObjectConst c : doc["hold"].as<JsonArrayConst>()) {
+    FinishJob job;
+    job.finalPermille = static_cast<uint16_t>(c["final"].as<int>() * 10);
+    job.pagesAtFinish = 300;
+    const bool hold = holdAutomaticPush(&job, !c["released"].as<bool>(), static_cast<uint16_t>(c["push"].as<int>() * 10),
+                                        300 + c["forward"].as<uint32_t>());
+    CHECK_NAMED(("hold push " + std::to_string(c["push"].as<int>())).c_str(), hold == c["expect"].as<bool>());
+  }
+}
+
 void dayTests() {
   CHECK(parseDay("2026-11-22") == 20261122);
   CHECK(parseDay("2026-13-01") == 0 && parseDay("") == 0 && parseDay(nullptr) == 0 && parseDay("1970-01-01") == 0);
@@ -224,11 +297,17 @@ void dayTests() {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::fprintf(stderr, "usage: %s shared/fixtures/bookorbit/finish-cases.json\n", argv[0]);
+    std::fprintf(stderr, "usage: %s shared/fixtures/bookorbit\n", argv[0]);
     return 2;
   }
+  const std::string dir = argv[1];
+  JsonDocument shared;
+  if (!loadJsonFile((dir + "/finish-cases.json").c_str(), shared)) return 2;
+  sharedDrainCases(shared);
+  sharedErrorCases(shared);
+  sharedHoldCases(shared);
   JsonDocument doc;
-  if (!loadJsonFile(argv[1], doc)) return 2;
+  if (!loadJsonFile((dir + "/finish-steps.json").c_str(), doc)) return 2;
   drainCases(doc);
   holdCases(doc);
   queueTests();

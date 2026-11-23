@@ -136,6 +136,7 @@ jobs:
           echo "upstream $tags -> $lines (publish=$publish)"
 
   build:
+    name: build ${{ matrix.line.upstream_tag }} ${{ matrix.environment }}
     needs: resolve
     runs-on: ubuntu-latest
     strategy:

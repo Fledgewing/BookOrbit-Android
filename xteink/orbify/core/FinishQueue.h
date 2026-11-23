@@ -4,7 +4,7 @@
 //
 // Pure C++: no Arduino, no SD card, no HTTP. The firmware glue (../FinishSync.cpp) gives it a
 // file and a transport; xteink/test/finish_test.cpp runs it against
-// shared/fixtures/bookorbit/finish-cases.json, the table Android's tests read too.
+// shared/fixtures/bookorbit/finish-cases.json (the table Android's tests read too) and finish-steps.json.
 #include <cstddef>
 #include <cstdint>
 
