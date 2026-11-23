@@ -164,11 +164,24 @@ function OrbitAndroid:menuItems()
             callback = function() Shared.set("home_button", "bookorbit") end,
         },
     }
-    return {
-        {
-            text_func = function() return _("Wi-Fi: ") .. _(WifiPlan.modeLabel(Shared.mode())) end,
-            sub_item_table = wifi_items,
-        },
+    -- A feature the companion doesn't offer here: its rows are hidden, with one line saying
+    -- where it lives (docs/design/addon-mode.md §6.4).
+    local wifi_rows
+    if Companion.has("wifi") then
+        wifi_rows = {
+            { text_func = function() return _("Wi-Fi: ") .. _(WifiPlan.modeLabel(Shared.mode())) end, sub_item_table = wifi_items },
+            toggle("wifi_via_companion", _("Wi-Fi via Orbit Companion")),
+        }
+    elseif Companion.installed() then
+        wifi_rows = { { text = _("Wi-Fi switching and sleep sync: in Orbit Companion ›"),
+            callback = later(function() self:onOrbitOpenCompanion() end) } }
+    else
+        wifi_rows = { { text_func = function()
+            return (Companion.problem() or "") .. " " .. _("Wi-Fi stays as you leave it: switching it needs Orbit Companion.")
+        end, keep_menu_open = true, callback = function() end } }
+    end
+    local items = {
+        wifi_rows[1],
         {
             text_func = function()
                 local t = _("In KOReader, Home goes to: ") .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
@@ -180,7 +193,7 @@ function OrbitAndroid:menuItems()
             sub_item_table = home_items,
             separator = true,
         },
-        toggle("wifi_via_companion", _("Wi-Fi via Orbit Companion")),
+        wifi_rows[2] or false,
         toggle("wake_tailscale", _("Wake Tailscale before syncing")),
         toggle("sync_on_wake", _("Always sync on wake")),
         toggle("sync_on_sleep", _("Sync when the screen goes off")),
@@ -204,13 +217,16 @@ function OrbitAndroid:menuItems()
         { text_func = function() return self:recommendedMenuText() end, callback = later(function() self:showRecommended("menu") end) },
         { text = _("Test sync path"), callback = later(function() self:testSyncPath() end), separator = true },
         { text = _("Open Orbit Companion"), callback = later(function() self:onOrbitOpenCompanion() end) },
-        { text = _("Open another app…"), callback = later(function() self:onOrbitOpenApps() end), separator = true },
+        Companion.has("apps") and { text = _("Open another app…"), callback = later(function() self:onOrbitOpenApps() end), separator = true } or false,
         toggle("auto_update_patch", _("Auto-update patch")),
         toggle("patch_update_prerelease", _("Include pre-releases")),
         { text = _("Check for patch update"), callback = later(function() self:checkPatchUpdate() end) },
         { text_func = function() return self:updateStatusText() end, keep_menu_open = true, callback = function() end, separator = true },
         { text_func = function() return self:statusText() end, keep_menu_open = true, callback = function() end },
     }
+    local out = {}
+    for i = 1, #items do if items[i] then table.insert(out, items[i]) end end
+    return out
 end
 
 -- Settings PIN set and locked: the companion's keypad, then open the menu again.

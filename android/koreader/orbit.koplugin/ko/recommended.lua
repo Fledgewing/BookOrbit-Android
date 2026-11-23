@@ -26,8 +26,9 @@ local function gestureDefaults(g)
 end
 
 -- { available, reason, current, default } for one item.
-function Rec.observe(it, ctx)
-    if it.needs and not Companion.has(it.needs) then
+-- raw: read the value even when the item's capability is missing (Undo after a cap went away).
+function Rec.observe(it, ctx, raw)
+    if it.needs and not raw and not Companion.has(it.needs) then
         return { available = false, reason = Rec.capReason(it.needs) }
     end
     if it.kind == "bo" then
@@ -43,7 +44,7 @@ function Rec.observe(it, ctx)
         end
         return { available = true, current = p.settings[it.key], default = defaults[it.key] }
     elseif it.kind == "ko" then
-        if it.required_by == "wifi" and not S.wifi_via_companion then
+        if it.required_by == "wifi" and not S.wifi_via_companion and not raw then
             return { available = false, reason = _("needs Wi-Fi via Orbit Companion") }
         end
         return { available = true, current = G_reader_settings:readSetting(it.key), default = nil }
@@ -134,7 +135,7 @@ function Rec.pass(why, ui, only)
         table.insert(parts, d.item.id .. "=" .. (record.items[d.item.id] or "?") .. (d.obs.reason and ("(" .. d.obs.reason .. ")") or ""))
     end
     log("recommended (" .. why .. "): applied", applied, "| to review", plan.conflicts, "|", table.concat(parts, " "))
-    if Rec.onPass then pcall(Rec.onPass, why) end
+    if why ~= "load" then pcall(Rec.report, "recommended " .. why, false, ui) end
     return plan
 end
 
@@ -160,6 +161,8 @@ end
 -- Start: a pass once the BookOrbit plugin instance can be found (module.lua's next-tick fallback).
 function OrbitAndroid:recommendedPass(why)
     local okp, err = pcall(Rec.pass, why, self.ui)
+    -- The first report of this process, changed or not: the companion may have been updated.
+    pcall(Rec.report, why, true, self.ui)
     if not okp then log("recommended: pass failed:", tostring(err)) return end
     self:maybeRecommendedLine()
 end
@@ -198,9 +201,7 @@ end
 -- Undo one applied item. Returns "undone" | "changed" (the user changed it since; left as is).
 function Rec.undo(it, ctx)
     local entry = (S.recommended_backup or {})[it.id]
-    local obs = Rec.observe(it, ctx)
-    local current = obs.current
-    if obs.available == false and it.kind == "ko" then current = G_reader_settings:readSetting(it.key) end
+    local current = Rec.observe(it, ctx, true).current
     if not Recommended.undoable(entry, current) then
         setStatus(it.id, "kept")
         log("recommended:", it.id, "undo: changed since; left as is")
@@ -381,8 +382,34 @@ function OrbitAndroid:recommendedMenuText()
     return line and (_("Recommended settings: ") .. _(line)) or _("Recommended settings")
 end
 
--- Told to the companion (slice 3 fills this in): a no-op until then.
-function Rec.report(why) if Rec.onReport then pcall(Rec.onReport, why) end end
+-- REPORT to the companion (docs/design/addon-mode.md §7.3): one yes/no about the BookOrbit
+-- login (isLoggedIn, never the server, the account or the key), the recommended settings'
+-- state and how many wait for review. Sent at start, after a pass or a review change, and
+-- whenever the answer changed (checked on each refresh: start, resume, menu). force: send even
+-- when unchanged.
+function Rec.reportFields(ui)
+    local p = bookorbit(liveUI() or ui)
+    local signed = nil
+    if p then
+        local okl, v = pcall(p.isLoggedIn, p)
+        if okl then signed = v and "1" or "0" end
+    end
+    return {
+        signed_in = signed or "",
+        recommended = Recommended.reportState(S.recommended),
+        conflicts = tostring(Recommended.counts(S.recommended).conflict),
+    }
+end
+
+function Rec.report(why, force, ui)
+    if not Companion.installed() then return end
+    local f = Rec.reportFields(ui)
+    local key = f.signed_in .. "|" .. f.recommended .. "|" .. f.conflicts
+    if not force and Rec.last_report == key then return end
+    Rec.last_report = key
+    f.reason = why
+    Companion.send(Companion.ACTION.REPORT, f)
+end
 
 -- KOReader's "Action when Wi-Fi is off" → Turn on, at load (before any UI): with the companion
 -- switching Wi-Fi, KOReader asks for Wi-Fi without a prompt. Through the engine: applied only

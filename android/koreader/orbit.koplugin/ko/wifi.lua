@@ -95,7 +95,7 @@ end
 -- Decide now; ask the companion when the answer is "off".
 function Wifi.evaluate(why)
     local st = Wifi.state()
-    if not Companion.installed() then return nil, "no companion" end
+    if not Companion.has("wifi") then return nil, "no Wi-Fi switching" end
     local wifi_on = Wifi.radioOn()
     if wifi_on == false then
         if st.restore_off or st.release_at or st.force_off_once then WifiPlan.wifiOff(st) end
@@ -122,7 +122,7 @@ end
 
 -- A cheap loop that only runs while Wi-Fi is on or a restore is pending.
 function Wifi.kick()
-    if Wifi.ticking or not Companion.installed() then return end
+    if Wifi.ticking or not Companion.has("wifi") then return end
     Wifi.ticking = true
     local function tick()
         local st = Wifi.state()

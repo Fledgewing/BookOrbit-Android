@@ -46,7 +46,7 @@ function OrbitAndroid:onCloseWidget()
         local st = Wifi.state()
         local restore = WifiPlan.bookClosed(st)
         log("wifi: book closed | mode", st.mode, restore == "on" and "| Wi-Fi was on before the book: turning it back on" or "")
-        if restore == "on" and Companion.installed() then
+        if restore == "on" and Companion.has("wifi") then
             Companion.netUp("book_closed", { owner = "auto" })
         end
     end
@@ -71,7 +71,7 @@ end
 -- A book opened: remember Wi-Fi for off while reading; in the off-while-reading and just-in-time
 -- modes, bring the network up for the plugin's open-time pull, then let Wi-Fi go off.
 function OrbitAndroid:bookOpenFlow()
-    if not Companion.installed() then return end
+    if not Companion.has("wifi") then return end
     local st = Wifi.state()
     local on = Wifi.radioOn()
     WifiPlan.bookOpened(st, on)

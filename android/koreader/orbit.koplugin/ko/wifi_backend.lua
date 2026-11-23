@@ -14,7 +14,7 @@ function NetworkMgr:turnOnWifi(complete_callback, interactive)
     if not S.wifi_via_companion then
         return stock_turnOnWifi(self, complete_callback, interactive)
     end
-    if Companion.installed() then
+    if Companion.has("wifi") then
         -- interactive: the reader's own Wi-Fi toggle (manager.lua:433 toggleWifiOn), so it is
         -- theirs to turn off. Otherwise beforeWifiAction/runWhenOnline (manager.lua:605-619,
         -- 698-719) needs the network for something: just in time may turn it off again.
@@ -34,7 +34,7 @@ function NetworkMgr:turnOnWifi(complete_callback, interactive)
 end
 
 function NetworkMgr:turnOffWifi(complete_callback)
-    if S.wifi_via_companion and Companion.installed() then
+    if S.wifi_via_companion and Companion.has("wifi") then
         log("wifi: OFF requested by KOReader's own toggle | mode", Shared.mode())
         Companion.wifiOff("koreader_wifi_off", false)
         if complete_callback then complete_callback() end
@@ -48,7 +48,7 @@ end
 -- (manager.lua:517-567) see real state.
 stock_isWifiOn = NetworkMgr.isWifiOn
 function NetworkMgr:isWifiOn()
-    if S.wifi_via_companion and Companion.installed() then
+    if S.wifi_via_companion and Companion.has("wifi") then
         local on = Jni.wifiEnabled()
         if on ~= nil then return on end
     end
@@ -78,7 +78,7 @@ end
 -- nothing on its 45 s give-up; a wake that can't connect still gets the patch's own banner.
 stock_turnOnWifiAndWait = NetworkMgr.turnOnWifiAndWaitForConnection
 function NetworkMgr:turnOnWifiAndWaitForConnection(callback)
-    if not (S.wifi_via_companion and Companion.installed()) or not self.requestToTurnOnWifi
+    if not (S.wifi_via_companion and Companion.has("wifi")) or not self.requestToTurnOnWifi
             or not self.scheduleConnectivityCheck then
         return stock_turnOnWifiAndWait(self, callback)
     end

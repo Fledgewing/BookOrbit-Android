@@ -342,7 +342,8 @@ local function newPlugin()
         page_update_counter = 0,
     }
     local function rec(name) table.insert(p.calls, name) end
-    function p:isLoggedIn() return true end
+    function p:isLoggedIn() return not p.signed_out end
+    function p:promptLogin() rec("promptLogin") end
     function p:requestLifecycleOutboxDrain(src) rec("drain:" .. src); UIManager:scheduleIn(1, function() p.pending = 0 end) end
     function p:getLifecycleOutbox() return { diagnostics = function() return { count = p.pending, blocked = 0 } end } end
     function p:getSyncCoordinator() return { isBusy = function() return false end, queuedCount = function() return 0 end } end
@@ -1198,6 +1199,169 @@ test("recommended: Keep mine on KOReader's Wi-Fi action offers to turn Wi-Fi swi
     ok(store.wifi_enable_action == "ignore", "theirs kept")
     store.orbit_android.wifi_via_companion = true
     store.wifi_enable_action = "turn_on"
+    run(1)
+end)
+
+---------------------------------------------------------------- companion caps (addon-mode §6)
+local CAPS_FILE = os.tmpname()
+RE.Companion.statusFile = function() return CAPS_FILE end
+local ADDON = { "install", "setup", "stats", "relaunch" }
+local FULL = { "install", "setup", "stats", "relaunch", "home", "apps", "wifi", "sleep_sync", "screen_off", "clicker", "pin" }
+local function capsFile(mode, caps)
+    local f = io.open(CAPS_FILE, "wb")
+    if mode then f:write("CAPSFILE"); W.json.CAPSFILE = { proto = "1", mode = mode, caps = caps } end
+    f:close()
+end
+local function capsReset()
+    capsFile(nil)
+    W.web["http://127.0.0.1:47913/status"], W.json.STATUS = nil, nil
+    store.orbit_android.companion_caps, store.orbit_android.companion_mode = nil, nil
+    RE.Companion.cap_set, RE.Companion.caps_known = nil, nil
+    RE.installed_cache.at = -1000
+    W.companion = true
+end
+
+test("caps: from the status file with no service; /status wins when it answers; a leftover file without the companion is ignored", function()
+    capsReset()
+    capsFile("addon", ADDON)
+    RE.Shared.refresh("test")
+    ok(RE.Companion.has("install") and not RE.Companion.has("wifi"), "file: Add-on caps")
+    ok(store.orbit_android.companion_mode == "addon", "cached for load-time hooks")
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.json.STATUS = { version = "0.11.0", mode = "full", caps = FULL }
+    RE.Shared.refresh("test")
+    ok(RE.Companion.has("wifi"), "/status wins")
+    W.json.STATUS = { version = "0.10.0" }
+    capsFile(nil)
+    RE.Shared.refresh("test")
+    ok(RE.Companion.has("home") and RE.Companion.has("screen_off"), "older companion: legacy, every cap")
+    capsFile("addon", ADDON)
+    W.companion = false
+    RE.installed_cache.at = -1000
+    ok(not RE.Companion.has("install"), "missing companion: no caps, the file is ignored")
+    capsReset()
+end)
+
+test("caps: Add-on degrades: Sync and sleep asks for the power button, Other apps says Home, no broadcasts, no errors", function()
+    capsReset()
+    capsFile("addon", ADDON)
+    RE.Shared.refresh("test")
+    local ui, m = newUI(true)
+    W.broadcasts, W.activities, W.shown = {}, {}, {}
+    store.orbit_android.screen_off_hint_shown = nil
+    m:onOrbitSyncAndSleep()
+    run(30)
+    ok(not lastBroadcast(".SLEEP_NOW"), "no SLEEP_NOW")
+    ok(not lastBroadcast(".NET_UP"), "no NET_UP: the plugin wakes Tailscale itself")
+    ok(lastBroadcast("CONNECT_VPN"), "Tailscale woken directly")
+    ok(shownText("Synced. Press the power button to sleep.\nOrbit Companion can do this for you"), "the hint, once")
+    W.shown = {}
+    m:onOrbitSyncAndSleep()
+    run(30)
+    ok(shownText("Synced. Press the power button to sleep.") and not shownText("can do this for you"), "hint only once")
+    W.shown = {}
+    m:onOrbitOpenApps()
+    ok(shownText("Use your reader's Home button for other apps."), "apps message")
+    ok(#W.activities == 0, "no activity started")
+    ok(m:openCompanionHome() == true and #W.activities == 0, "Home at BookOrbit home stays")
+    local hasWifiRow, hasHelperLine, hasApps = false, false, false
+    for _, it in ipairs(m:menuItems()) do
+        if it.text == "Wi-Fi via Orbit Companion" then hasWifiRow = true end
+        if it.text == "Wi-Fi switching and sleep sync: in Orbit Companion ›" then hasHelperLine = true end
+        if it.text == "Open another app…" then hasApps = true end
+    end
+    ok(not hasWifiRow and hasHelperLine and not hasApps, "rows hidden, one line instead")
+    ok(RE.Shared.mode() == "always_on", "Wi-Fi as left: Always on")
+    capsReset()
+    run(5)
+end)
+
+test("caps: without Wi-Fi switching, KOReader's Wi-Fi action is left alone at load", function()
+    capsReset()
+    capsFile("addon", ADDON)
+    recWorld(false)
+    capsFile("addon", ADDON)
+    RE.Companion.cap_set = nil
+    RE.silentWifiOn()
+    ok(store.wifi_enable_action == nil, "left alone")
+    ok(store.orbit_android.recommended.items["ko.wifi_on"] == "unavailable", "waits for the capability")
+    capsReset()
+    store.wifi_enable_action = "turn_on"
+end)
+
+test("caps: Full → Add-on undoes KOReader's Wi-Fi action and the apps gesture only; back to Full re-applies them", function()
+    capsReset()
+    local ui, m, p = recWorld(false)
+    capsFile("full", FULL)
+    RE.Shared.refresh("test")
+    m:recommendedPass("start")
+    ok(store.wifi_enable_action == "turn_on" and ui.gestures.data.gesture_reader.two_finger_swipe_north.orbit_open_apps, "applied in Full")
+    capsFile("addon", ADDON)
+    RE.Shared.refresh("resume")
+    ok(store.wifi_enable_action == nil, "Wi-Fi action undone")
+    ok(ui.gestures.data.gesture_reader.two_finger_swipe_north.increase_frontlight == 0, "apps gesture undone")
+    ok(p.settings.auto_sync == true and ui.gestures.data.gesture_reader.hold_top_right_corner.orbit_sync_and_sleep, "reading settings stay")
+    capsFile("full", FULL)
+    RE.Shared.refresh("resume")
+    ok(store.wifi_enable_action == "turn_on" and ui.gestures.data.gesture_reader.two_finger_swipe_north.orbit_open_apps, "picked up again")
+    capsReset()
+    store.wifi_enable_action = "turn_on"
+    run(5)
+end)
+
+test("caps: plugin only, a newer plugin on disk: asks to reopen KOReader, never quits with nobody to relaunch it", function()
+    capsReset()
+    W.companion = false
+    RE.installed_cache.at = -1000
+    local was = RE.patchFileVersion
+    RE.patchFileVersion = function() return "9.9.9" end
+    local _, m = newUI(false)
+    W.quits, W.shown = 0, {}
+    ok(m:maybeRestart("check") == "ask", "asks")
+    run(2)
+    ok(W.quits == 0, "no quit")
+    ok(shownText("Orbit v9.9.9 is installed: close KOReader and open it again to finish."), "message")
+    RE.patchFileVersion = was
+    capsReset()
+end)
+
+test("report: signed in yes/no and the recommended state go to the companion, never the login itself", function()
+    capsReset()
+    local ui, m, p = recWorld(false)
+    p.settings.sync_forward = 3
+    W.broadcasts = {}
+    RE.Rec.last_report = nil
+    m:recommendedPass("start")
+    local r = lastBroadcast(".REPORT")
+    ok(r, "REPORT sent")
+    ok(r.extras.signed_in == "1" and r.extras.recommended == "partial" and r.extras.conflicts == "1", "fields")
+    for k, v in pairs(r.extras) do
+        ok(not tostring(v):find("example.test", 1, true), "no server in " .. k)
+    end
+    ok(r.extras.server_url == nil and r.extras.username == nil and r.extras.userkey == nil, "no login fields")
+    -- Unchanged: not sent again on a refresh; a sign-out is.
+    W.broadcasts = {}
+    RE.Shared.refresh("resume")
+    ok(not lastBroadcast(".REPORT"), "nothing new: no report")
+    p.signed_out = true
+    RE.Shared.refresh("resume")
+    ok(lastBroadcast(".REPORT") and lastBroadcast(".REPORT").extras.signed_in == "0", "sign-out reported")
+    p.signed_out = nil
+    run(2)
+end)
+
+test("commands: signin opens BookOrbit's sign-in; recommended opens the review page", function()
+    local ui, m, p = recWorld(false)
+    p.signed_out = true
+    W.intent_extras[RE.Companion.EXTRA_COMMAND] = "signin"
+    ok(m:checkCommand("resume"), "handled")
+    run(1)
+    ok(has(p.calls, "promptLogin"), "BookOrbit's sign-in")
+    p.signed_out = nil
+    W.intent_extras[RE.Companion.EXTRA_COMMAND] = "recommended"
+    ok(m:checkCommand("resume"), "handled")
+    run(1)
+    ok(m.rec_menu and m.rec_menu.title == "Recommended settings", "review page")
     run(1)
 end)
 

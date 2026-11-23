@@ -20,7 +20,9 @@ function Net.up(p, opts, cb)
     local flight = { reason = opts.reason, waiters = { cb } }
     Net.inflight = flight
     local t0 = now_s()
-    local res = { companion = Companion.installed() }
+    -- The companion takes part when it switches Wi-Fi or holds the wake lock for sleep syncs;
+    -- otherwise the plugin wakes Tailscale itself (docs/design/addon-mode.md §3).
+    local res = { companion = Companion.has("wifi") or Companion.has("sleep_sync"), wifi_switch = Companion.has("wifi") }
     local url = opts.need_server and serverUrl(p) or nil
     log("network up: start", opts.reason, "cap", cap .. "s", "companion", res.companion and "yes" or "no",
         "server", url and "set" or "none")
@@ -43,12 +45,14 @@ function Net.up(p, opts, cb)
 
     -- Wi-Fi switched off (not just disconnected) and nobody to switch it on: say so now
     -- rather than wait out the cap.
-    if Jni.wifiEnabled() == false and not (res.companion and S.wifi_via_companion) then
+    if Jni.wifiEnabled() == false and not (res.wifi_switch and S.wifi_via_companion) then
         local why
         if Companion.state() == "frozen" then
             why = Companion.disabledText()
-        elseif res.companion then
+        elseif res.wifi_switch then
             why = "Wi-Fi is off and \"Wi-Fi via Orbit Companion\" is off"
+        elseif Companion.installed() then
+            why = "Wi-Fi is off and Wi-Fi switching is off in Orbit Companion"
         else
             why = "Wi-Fi is off and Orbit Companion isn't installed to turn it on"
         end

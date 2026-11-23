@@ -1214,5 +1214,33 @@ test("recommended: values in plain words", function()
     eq(R.reportState({ items = { a = "kept", b = "applied" } }), "reviewed")
 end)
 
+---------------------------------------------------------------- companion caps (addon-mode §6)
+local Caps = M.Caps
+test("caps: from the file only, /status only, both (/status wins), an old companion (legacy), none", function()
+    local file = { mode = "addon", caps = { "install", "setup", "stats", "relaunch" } }
+    local status = { mode = "full", caps = { "install", "home", "wifi" } }
+    local c, mode, src = Caps.resolve("ok", file, nil, nil)
+    ok(c.install and not c.wifi and mode == "addon" and src == "file", "file")
+    c, mode, src = Caps.resolve("ok", nil, status, nil)
+    ok(c.home and c.wifi and mode == "full" and src == "status", "status")
+    c, mode, src = Caps.resolve("ok", file, status, nil)
+    ok(c.wifi and src == "status", "/status wins")
+    c, mode, src = Caps.resolve("ok", nil, { version = "0.10.0" }, nil)
+    ok(c.wifi and c.home and c.screen_off and src == "legacy", "older companion: every cap")
+    c, mode, src = Caps.resolve("missing", file, nil, nil)
+    ok(next(c) == nil and src == "none", "a leftover file is ignored")
+    c, mode, src = Caps.resolve("frozen", file, status, nil)
+    ok(next(c) == nil, "frozen: nothing")
+    c, mode, src = Caps.resolve("ok", nil, nil, { mode = "addon", caps = { "install" } })
+    ok(c.install and not c.wifi and src == "cache", "the caps seen last time")
+    c, mode, src = Caps.resolve("ok", nil, nil, nil)
+    ok(c.wifi and src == "legacy", "nothing known yet: as before")
+end)
+
+test("caps: diff names what was lost and gained", function()
+    local lost, gained = Caps.diff({ wifi = true, home = true, install = true }, { install = true, pin = true })
+    eq(table.concat(lost, ","), "home,wifi"); eq(table.concat(gained, ","), "pin")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

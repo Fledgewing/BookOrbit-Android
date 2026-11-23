@@ -13,11 +13,11 @@ Shared = {}
 Channel = { up = false, service_on = false, buf = "" }
 
 function Shared.defaultMode()
-    return Companion.installed() and "jit" or "always_on"
+    return Companion.has("wifi") and "jit" or "always_on"
 end
 
 function Shared.mode()
-    if not Companion.installed() then return "always_on" end -- nothing can switch Wi-Fi
+    if not Companion.has("wifi") then return "always_on" end -- nothing can switch Wi-Fi
     return WifiPlan.validMode(S.wifi_mode) and S.wifi_mode or Shared.defaultMode()
 end
 
@@ -25,14 +25,20 @@ end
 -- "Orbit Companion: 1 setup step needs you", or nil.
 function Shared.setupNeededText()
     local n = Shared.setup_needed
-    if not n or n < 1 or not Companion.installed() then return nil end
+    if not n or n < 1 or not Companion.has("setup") then return nil end
     return string.format(n == 1 and _("Orbit Companion: %d setup step needs you (open the companion)")
         or _("Orbit Companion: %d setup steps need you (open the companion)"), n)
 end
 
 function Shared.refresh(why)
-    if not Companion.installed() then return false end
+    if not Companion.installed() then
+        Companion.updateCaps(nil, why)
+        return false
+    end
     local st = Companion.status(1)
+    Shared.capsChanged(why, Companion.updateCaps(st, why))
+    -- Signed in to BookOrbit changed since the last report (a sign-in on BookOrbit's page).
+    if why ~= "start" and Rec then pcall(Rec.report, "refresh " .. why) end
     -- Clicker buttons: the companion's key map (an empty map turns ours off).
     if st then
         local m = Clicks.parse(st.keymap)
@@ -85,6 +91,17 @@ function Shared.refresh(why)
         Shared.push("companion older (" .. why .. ")")
     end
     return false
+end
+
+-- The companion's caps changed (a mode switch or a helper, docs/design/addon-mode.md §8):
+-- recommended items that needed a lost cap are undone; newly available ones get a pass.
+function Shared.capsChanged(why, before, after, real)
+    if not real then return end
+    local lost, gained = Caps.diff(before, after)
+    if #lost == 0 and #gained == 0 then return end
+    log("companion: caps changed (" .. why .. "): lost", table.concat(lost, ","), "| gained", table.concat(gained, ","))
+    if #lost > 0 and Rec then pcall(Rec.capsLost, why) end
+    if #gained > 0 and Rec then pcall(Rec.pass, "caps " .. why) end
 end
 
 function Shared.push(why)
