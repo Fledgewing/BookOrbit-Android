@@ -158,12 +158,30 @@ object Attention {
 
     private fun nm(ctx: Context) = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    private fun cancel(ctx: Context) = nm(ctx).cancel(ID)
+    private fun cancel(ctx: Context) {
+        Reading.drop(Reading.KEY_SETUP)
+        nm(ctx).cancel(ID)
+    }
 
     private var lastNoteLog: String? = null
 
-    /** At most one notification: only for steps that truly need the user. */
+    /**
+     * At most one notification: only for steps that truly need the user. Never while reading
+     * (Reading): held, then evaluated again at the next moment nobody reads, so a step fixed
+     * meanwhile posts nothing.
+     */
     private fun notification(ctx: Context, r: SetupAttention.Result) {
+        if (!r.show || r.needed.isEmpty()) return cancel(ctx)
+        val app = ctx.applicationContext
+        var immediate = true
+        // Posted now runs inside show(); held, it runs later and looks again at what is still needed.
+        Reading.show(app, Reading.KEY_SETUP, "setup reminder") {
+            post(app, if (immediate) r else evaluate(app, "after reading", notify = false).result)
+        }
+        immediate = false
+    }
+
+    private fun post(ctx: Context, r: SetupAttention.Result) {
         if (!r.show || r.needed.isEmpty()) return cancel(ctx)
         val nm = nm(ctx)
         if (nm.getNotificationChannel(OLD_CHANNEL) != null) nm.deleteNotificationChannel(OLD_CHANNEL)

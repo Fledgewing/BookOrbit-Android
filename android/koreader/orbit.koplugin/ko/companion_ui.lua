@@ -8,11 +8,11 @@
 
 function openCompanion(action, what)
     if not Companion.installed() then
-        UIManager:show(InfoMessage:new{ text = _("Orbit Companion isn't installed."), timeout = 3 })
+        UIManager:show(InfoMessage:new{ text = _("Orbit Companion isn't installed."), timeout = 3 }) -- gate: user action (menu)
         log("open", what, ": companion not installed")
         return
     end
-    local ok = Jni.startActivity{ action = action, package = Companion.PACKAGE }
+    local ok = Jni.startActivity{ action = action, package = Companion.PACKAGE } -- gate: user action (menu)
     log("open", what, ok and "started" or "FAILED")
 end
 
@@ -30,9 +30,9 @@ function OrbitAndroid:openCompanionHome()
         log("home: the companion isn't Home here; staying on BookOrbit home")
         return true
     end
-    local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_LAUNCHER, package = Companion.PACKAGE }
+    local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_LAUNCHER, package = Companion.PACKAGE } -- gate: user action (Home button/menu)
     if not ok then
-        ok = Jni.startActivity{ action = Companion.ACTION.SHOW_APPS, package = Companion.PACKAGE }
+        ok = Jni.startActivity{ action = Companion.ACTION.SHOW_APPS, package = Companion.PACKAGE } -- gate: user action (Home button/menu)
         log("home: companion launcher page missing (older companion); apps page", ok and "started" or "FAILED")
     else
         log("home: companion launcher page started")
@@ -43,7 +43,7 @@ end
 function OrbitAndroid:onOrbitOpenApps()
     if Companion.installed() and not Companion.has("apps") then
         log("open apps: not offered by the companion here")
-        UIManager:show(InfoMessage:new{ text = _("Use your reader's Home button for other apps."), timeout = 3 })
+        UIManager:show(InfoMessage:new{ text = _("Use your reader's Home button for other apps."), timeout = 3 }) -- gate: user action (menu)
         return true
     end
     openCompanion(Companion.ACTION.SHOW_APPS, "apps")

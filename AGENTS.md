@@ -34,6 +34,16 @@ Xteink firmware is built on CrossInk 2.x only. CrossInk 1.6 is retired: no build
 (they are in git history); its readers stay on the stable `xteink-v1.6.1.114` until a final
 CrossInk 2.x release becomes the stable one (`xteink/README.md` "Releases and the update feed").
 
+## Product principles
+
+- **Nothing interrupts reading.** While a book is open in the foreground, nothing from Orbify,
+  the companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader
+  or takes focus. It waits for the next moment nobody is reading, or is dropped when stale. The
+  only exceptions are what the reader does in the book: menus they open, the end-of-book sheet.
+  Enforced by one gate per side (plugin `reading()`/`Gate.show`, companion `Reading`) and guard
+  tests that fail on a new show or notify path that bypasses it
+  ([design](docs/design/reading-gate.md)). Xteink firmware follows the same rule.
+
 ## Read the source, not memory
 
 `tools/upstreams` checks out BookOrbit (server, web app, `koreader-plugin/`), CrossInk-Bookorbit

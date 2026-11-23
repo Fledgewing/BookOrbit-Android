@@ -55,7 +55,10 @@ class CommandReceiver : BroadcastReceiver() {
     private fun record(ctx: Context, intent: Intent) {
         when (intent.action) {
             Contract.SETUP_LATER -> Attention.laterFromKoreader(ctx)
-            Contract.STATS -> PatchInstaller.onBook(ctx, UpdateFlow.bookFromStats(intent.getStringExtra("reason"), intent.getStringExtra("open")), "KOReader: ${intent.getStringExtra("reason") ?: "stats"}")
+            Contract.STATS -> {
+                Reading.onStats(ctx, intent)
+                PatchInstaller.onBook(ctx, UpdateFlow.bookFromStats(intent.getStringExtra("reason"), intent.getStringExtra("open")), "KOReader: ${intent.getStringExtra("reason") ?: "stats"}")
+            }
             else -> OLog.d("${Contract.shortName(intent.action)} kept no state without the service")
         }
     }
@@ -82,7 +85,9 @@ class OrbitService : Service() {
         const val ACTION_WIFI_TIMER = "${Contract.PACKAGE}.internal.WIFI_TIMER"
         const val ACTION_REFRESH = "${Contract.PACKAGE}.internal.REFRESH"
         private const val CHANNEL_STATUS = "status"
-        private const val CHANNEL_ALERTS = "alerts"
+        // "alerts" had a sound, which can't be changed once created: replaced by a quiet channel.
+        private const val OLD_CHANNEL_ALERTS = "alerts"
+        private const val CHANNEL_ALERTS = "alerts_quiet"
         private const val ID_STATUS = 1
         private const val ID_TAILSCALE_ALERT = 2
         private const val TAILSCALE_CHECK_MS = 20_000L
@@ -124,7 +129,10 @@ class OrbitService : Service() {
     private val tailscaleCheck = Runnable {
         val up = Net.vpnUp(this)
         OLog.i("tailscale check after ${TAILSCALE_CHECK_MS / 1000} s: ${if (up) "up" else "NOT up"}")
-        if (!up && prefs.notifyTailscale && Net.installed(this, Net.TAILSCALE_PKG)) showTailscaleAlert()
+        if (!up && prefs.notifyTailscale && Net.installed(this, Net.TAILSCALE_PKG)) {
+            // Never while reading (Reading); still down when it may show, or dropped.
+            Reading.show(this, Reading.KEY_TAILSCALE, "Tailscale alert") { if (!Net.vpnUp(this)) showTailscaleAlert() }
+        }
     }
 
     private val wifiCallback = object : ConnectivityManager.NetworkCallback() {
@@ -140,6 +148,7 @@ class OrbitService : Service() {
             OLog.i("tailscale (VPN) up")
             stats.record("vpn_up")
             main.removeCallbacks(tailscaleCheck)
+            Reading.drop(Reading.KEY_TAILSCALE)
             notificationManager().cancel(ID_TAILSCALE_ALERT)
             updateNotification()
         }
@@ -178,7 +187,7 @@ class OrbitService : Service() {
                 Intent.ACTION_SCREEN_OFF -> {
                     Pin.onScreenOff()
                     Pin.packagesChanged()
-                    PatchInstaller.follow(this@OrbitService, "screen off")
+                    PatchInstaller.follow(this@OrbitService, "screen off", screenOff = true)
                     if (offAtScreenOffUntil > SystemClock.elapsedRealtime()) {
                         OLog.i("screen off after sync and sleep: Wi-Fi off now (setting Off now)")
                         Net.setWifi(this@OrbitService, false, "after sleep sync, Off now")
@@ -228,7 +237,7 @@ class OrbitService : Service() {
         Attention.onStart(this)
         main.postDelayed({ Attention.evaluate(this, "service start") }, 5_000)
         // The last running patch reported is older than the file: same rule as on /status.
-        main.postDelayed({ PatchInstaller.follow(this, "companion start", quiet = false) }, 5_000)
+        main.postDelayed({ PatchInstaller.follow(this, "companion start") }, 5_000)
         // A timer that was pending when the process died is still in AlarmManager; nothing to do.
         OLog.i("service started v${BuildConfig.VERSION_NAME} in ${OLog.since(t0)} ms")
         main.postDelayed({ Updater.maybeAutoCheck(this, "service start") }, 30_000)
@@ -264,7 +273,8 @@ class OrbitService : Service() {
         val proto = intent.getStringExtra("proto")
         if (proto != null && proto != Contract.PROTOCOL) OLog.w("protocol $proto from the patch; this companion speaks ${Contract.PROTOCOL}")
         if (action == Contract.STATS) {
-            // The book's open/closed state drives the restart after a patch install.
+            // Reading or not (the reading gate), and the book's state.
+            Reading.onStats(this, intent)
             PatchInstaller.onBook(this, UpdateFlow.bookFromStats(intent.getStringExtra("reason"), intent.getStringExtra("open")), "KOReader: ${intent.getStringExtra("reason") ?: "stats"}")
             return stats.onStats(intent)
         }
@@ -272,10 +282,14 @@ class OrbitService : Service() {
         if (action == Contract.RELAUNCH) {
             // The patch saved and is quitting for a restart: start KOReader again once it's gone.
             // A restart sent with a book open reopens it (patch 0.5.5+, COMMAND=reopen_book).
+            // The plugin read the restart: the next start may carry its own command (RestartLatch).
+            Koreader.restartRead()
             val command = UpdateFlow.relaunchCommand(prefs.restartReopen == "1")
             prefs.restartReopen = ""
             OLog.i("koreader restart: relaunching in 2.5 s (${intent.getStringExtra("reason") ?: "-"})${if (command != null) ", reopening the book" else ""}")
-            main.postDelayed({ Koreader.start(this, "restart after patch update", command) }, 2_500)
+            // The plugin that reads the relaunch's command is the one on disk, not the one that quit.
+            val next = PatchInstaller.installedVersionCached() ?: prefs.patchVersionSeen.ifEmpty { null }
+            main.postDelayed({ Koreader.start(this, "restart after patch update", command, plugin = next) }, 2_500)
             return
         }
         if (action == Contract.NET_UP || action == Contract.NET_DONE || action == Contract.SLEEP_NOW) {
@@ -524,6 +538,7 @@ class OrbitService : Service() {
     private fun notificationManager() = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     private fun createChannels() {
+        if (notificationManager().getNotificationChannel(OLD_CHANNEL_ALERTS) != null) notificationManager().deleteNotificationChannel(OLD_CHANNEL_ALERTS)
         notificationManager().createNotificationChannels(
             listOf(
                 NotificationChannel(CHANNEL_STATUS, "Network status", NotificationManager.IMPORTANCE_LOW).apply {
@@ -532,6 +547,7 @@ class OrbitService : Service() {
                 NotificationChannel(CHANNEL_ALERTS, "Network alerts", NotificationManager.IMPORTANCE_DEFAULT).apply {
                     setShowBadge(false)
                     enableVibration(false)
+                    setSound(null, null)
                 },
             ),
         )
@@ -579,6 +595,7 @@ class OrbitService : Service() {
             .setSmallIcon(R.drawable.ic_stat)
             .setContentText("Tailscale didn't connect. Open Tailscale to sign in again.")
             .setStyle(Notification.BigTextStyle().bigText("Tailscale didn't connect. Open Tailscale to sign in again."))
+            .setOnlyAlertOnce(true)
             .setAutoCancel(true)
         if (open != null) {
             b.setContentIntent(PendingIntent.getActivity(this, 2, open, PendingIntent.FLAG_IMMUTABLE))
@@ -683,7 +700,7 @@ class OrbitService : Service() {
                         main.post { PatchInstaller.onBook(this@OrbitService, book, "KOReader status") }
                     }
                     // An older patch running than the file on disk, however it got there (v0.5.4).
-                    main.post { PatchInstaller.follow(this@OrbitService, "KOReader status", quiet = false) }
+                    main.post { PatchInstaller.follow(this@OrbitService, "KOReader status") }
                 }
                 OLog.i("status request ${parts.getOrNull(1)} -> ${if (ok) 200 else 404} in ${OLog.since(t0)} ms")
             }

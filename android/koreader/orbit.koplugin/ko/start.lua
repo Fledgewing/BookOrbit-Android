@@ -16,6 +16,8 @@ function OrbitAndroid:onResume()
     Wifi.state().foreground = true
     log("resume", state.paused_for and ("after " .. fmt(state.paused_for) .. " in the background") or "")
     Clicks.install("resume")
+    -- Back in front and not in a book (file browser, BookOrbit Home): what waited shows now.
+    UIManager:scheduleIn(2, function() Gate.drain("resume") end)
     UIManager:scheduleIn(0.3, function()
         Shared.refresh("resume")
         Wifi.applySettings("resume")
@@ -71,11 +73,13 @@ function OrbitAndroid:showWakeBanner(res)
     local text = _("Can't reach BookOrbit. Reading from this device's place.") .. "\n" .. (res.detail or "")
     local retry = function() self:wakeFlow("retry") end
     local okt, Toast = pcall(require, "bookorbit_toast")
-    if okt then
-        Toast.error(text, retry, { timeout = 6 })
-    else
-        UIManager:show(InfoMessage:new{ text = text, timeout = 6 })
-    end
+    Gate.show("wake banner", function()
+        if okt then
+            Toast.error(text, retry, { timeout = 6 }) -- gate: Gate.show
+        else
+            UIManager:show(InfoMessage:new{ text = text, timeout = 6 }) -- gate: Gate.show
+        end
+    end, 60)
 end
 
 ---------------------------------------------------------------------------------------------

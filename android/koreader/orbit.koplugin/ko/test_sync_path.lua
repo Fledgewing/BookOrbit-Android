@@ -11,7 +11,7 @@ function OrbitAndroid:testSyncPath()
     local lines = {}
     local t0 = now_s()
     local wait = InfoMessage:new{ text = _("Testing the sync path…") }
-    UIManager:show(wait)
+    UIManager:show(wait) -- gate: user action (menu)
     UIManager:forceRePaint()
     local function add(ok, label, seconds, hint)
         local line = string.format("%d. %s %s %s", #lines + 1, label, ok and "✓" or "✗", seconds and fmt(seconds) or "")
@@ -39,7 +39,7 @@ function OrbitAndroid:testSyncPath()
             .. "\n" .. _("Step 4 only checks that the server answers at its base address; it uses no login.")
         local cl = compatLines(bookorbit(self.ui))
         if #cl > 0 then text = text .. "\n\n" .. table.concat(cl, "\n") end
-        UIManager:show(TextViewer:new{ title = _("Test sync path"), text = text })
+        UIManager:show(TextViewer:new{ title = _("Test sync path"), text = text }) -- gate: user action (menu)
     end
 
     local c0 = now_s()

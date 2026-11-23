@@ -194,6 +194,8 @@ class RelaunchActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.setWindowAnimations(0)
         OLog.i("relaunch: KOReader is restarting; starting it again in 2.5 s")
+        // The plugin read the restart: this start is not a lost one (RestartLatch).
+        Koreader.restartRead()
         Handler(Looper.getMainLooper()).postDelayed({
             Koreader.start(this, "restart (add-on)", null)
             finish()

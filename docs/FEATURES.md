@@ -4,6 +4,10 @@ What Orbify ships, per platform. Only what we add: KOReader's, BookOrbit's and C
 features are not listed. Planned work is in [`ROADMAP.md`](../ROADMAP.md); an item moves here when
 it ships (AGENTS.md "Features and roadmap").
 
+**Principle: nothing interrupts reading.** While a book is open in front, nothing Orbify adds
+shows, restarts or takes focus; it waits for the next non-reading moment
+([design](design/reading-gate.md)). Exceptions: menus you open, the end-of-book sheet.
+
 **yes**: shipped. Firmware is built on CrossInk 2.x only, now the release candidate
 `2.0.0+bookorbit.1-rc3`; CrossInk 1.6 is retired, and readers still on it keep the stable
 `xteink-v1.6.1.114`, which gets nothing new, until a final CrossInk 2.x release replaces it.
@@ -30,7 +34,13 @@ it ships (AGENTS.md "Features and roadmap").
 | Home button: back to the book, then BookOrbit home; companion as launcher | yes | n/a | n/a | n/a |
 | BookOrbit home opens on its first page | yes | n/a | n/a | n/a |
 | Lists by series and by author (BookOrbit's Series and Authors views) | yes | no | no | no |
-| Reopen the open book after an update restart | yes | n/a | n/a | n/a |
+| Reopen the open book after an update restart, and BookOrbit Home if it was on top | yes | n/a | n/a | n/a |
+| Nothing interrupts reading: notes, update prompts, reminders and restarts wait until no book is open in front ([design](design/reading-gate.md)) | yes (0.11.1) | planned | planned | planned |
+| Updates you start restart KOReader at once and say "Updated to vX"; automatic ones restart only at screen-off or with KOReader in the background | yes (0.11.1) | n/a | n/a | n/a |
+| Offline mirror: a Full refresh saves every page reachable from Home (lists, section indexes, On device, details, covers) for browsing offline; Refresh rechecks every saved page; automatic Full refresh every 7 days or when the library changes; "Saved for offline · time" ([design](design/write-through-cache.md#offline-mirror-v0111); upstream: [catalog replies carry no version](server-contract.md#catalog-replies-carry-no-version)) | yes (0.11.1) | planned (smaller, on SD) | planned | no: no room |
+| On device grouped by author and series, like BookOrbit's lists | yes (0.11.1) | n/a | n/a | n/a |
+| Remove a book from the reader while another book is open | yes (0.11.1) | n/a | n/a | n/a |
+| Keep book copies current: a copy whose library file changed (BookOrbit writes tags into it) is downloaded again in the background, never while reading; position, highlights and bookmarks carried over ([design](design/keep-copies-current.md); upstream: [a metadata write changes the file hash](server-contract.md#a-metadata-write-changes-the-file-hash)) | yes (0.11.1) | planned | planned | planned |
 | Mark finished at the end of the book: final position, then read status and rating sent after the outbox, kept through the next state pull; a stale position push is held ([design](design/end-of-book/DESIGN.md); upstream: [progress finishes a book only at the library's threshold](server-contract.md#progress-finishes-a-book-only-at-the-librarys-threshold)) | yes (0.9.0) | 2.x rc (xteink-v2.0.0.123) | 2.x rc | 2.x rc |
 | End-of-book sheet: Undo, stars, next in series (open, or download and open), one suggestion, the author's books | yes (0.9.0) | 2.x rc (xteink-v2.0.0.131) | 2.x rc | 2.x rc (no stars) |
 | Local-first BookOrbit home: this device's reading shown at once, a refresh repaints only what changed, ⟳ and "updated" stamp on home and lists ([design](design/local-first/DESIGN.md)) | yes (0.9.0) | n/a (ROADMAP 4 is the Xteink catalog) | n/a | n/a |

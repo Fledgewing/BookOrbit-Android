@@ -99,16 +99,35 @@ object PluginReport {
     /** A Setup row's state: done, pending (waiting for KOReader to report), and its detail. */
     data class Row(val done: Boolean, val pending: Boolean, val detail: String)
 
-    fun signedInRow(signedIn: String): Row = when (signedIn) {
-        "1" -> Row(true, false, "done")
-        "0" -> Row(false, false, "not signed in · tap to open BookOrbit's sign-in in KOReader")
-        else -> Row(true, true, "KOReader reports this once the Orbit plugin runs")
+    /** The first plugin that sends REPORT (and obeys `signin`, `recommended`). */
+    const val REPORT_SINCE = "0.11.0"
+
+    /** Both rows while the running plugin can't report yet. */
+    const val CHECKING = "Checking… (after KOReader restarts)"
+
+    /**
+     * The running plugin ([running], /status?patch_version=) sends REPORT. Unknown counts as
+     * able: a REPORT that came decides. Older (v0.11.1: 0.10.1 running after the update): pending.
+     */
+    fun canReport(running: String?): Boolean {
+        val r = running?.let { Version.parse(it) } ?: return true
+        return r >= Version.parse(REPORT_SINCE)!!
     }
 
-    fun recommendedRow(state: String, conflicts: Int): Row = when (state) {
-        "applied" -> Row(true, false, "applied · tap to review")
-        "reviewed" -> Row(true, false, "reviewed · tap to change")
-        "partial" -> Row(false, false, "$conflicts to review · tap to open them in KOReader")
+    private val CHECKING_ROW = Row(true, true, CHECKING)
+
+    /** Pending, never a fix, while the plugin is older than [REPORT_SINCE] or no REPORT came yet. */
+    fun signedInRow(signedIn: String, running: String? = null): Row = when {
+        !canReport(running) || signedIn.isEmpty() -> CHECKING_ROW
+        signedIn == "1" -> Row(true, false, "done")
+        else -> Row(false, false, "not signed in · tap to open BookOrbit's sign-in in KOReader")
+    }
+
+    fun recommendedRow(state: String, conflicts: Int, running: String? = null): Row = when {
+        !canReport(running) || state.isEmpty() -> CHECKING_ROW
+        state == "applied" -> Row(true, false, "applied · tap to review")
+        state == "reviewed" -> Row(true, false, "reviewed · tap to change")
+        state == "partial" -> Row(false, false, "$conflicts to review · tap to open them in KOReader")
         else -> Row(true, true, "applied by the Orbit plugin at KOReader's next start")
     }
 }

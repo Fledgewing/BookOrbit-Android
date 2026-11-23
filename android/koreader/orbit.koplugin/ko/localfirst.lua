@@ -234,7 +234,7 @@ end
 -- Quiet update of the open board after local state changed (sidecar steps, a sync).
 function LF.quiet(cat)
     if not (cat and cat._board_ctx and cat._board_tiles and cat.current_context
-        and cat.current_context.kind == "dashboard") or cat.catalog_closed then return end
+        and cat.current_context.kind == "dashboard") or cat.catalog_closed then return 0 end
     local BoardData = package.loaded["bookorbit_board_data"]
     local old_d = cat._board_ctx.d
     local new_d = BoardData.build(cat, cat.current_context, os.time())
@@ -242,6 +242,7 @@ function LF.quiet(cat)
     local changed = LocalFirst.changedTiles(tiles, tiles, old_d, new_d) or {}
     cat._board_ctx.d = new_d
     for _, i in ipairs(changed) do pcall(cat.boardRefreshTile, cat, cat._board_tiles[i]) end
+    return #changed
 end
 
 function LF.tilesOf(cat)
@@ -397,7 +398,8 @@ function LF.install(why)
     -- A server refresh: tag it and stamp it; a failure marks "Not updated".
     wrap(Catalog, "dashboardRootFetch", function(stock) return function(self, opts)
         local items, context = stock(self, opts)
-        if type(context) == "table" and type(context.dashboard) == "table" and not context.stale then
+        if type(context) == "table" and type(context.dashboard) == "table" and not context.stale
+            and not (OC and OC.cache_only) then
             context.orbit_refresh = true
             LocalState.load().fetchedAt.dashboard = os.time()
             LF.failed.dashboard = nil
@@ -416,14 +418,18 @@ function LF.install(why)
         local function full(why)
             if type(context) == "table" then
                 log("paint:", tostring(context.kind), "full (" .. why .. ") from", tostring(self._orbit_paint_source or "the plugin")
-                    .. (context.stale and ", saved body" or ""))
+                    .. (context.stale and (context.orbit_first and ", first paint" or ", saved body") or ""))
             end
             return stock(self, title, item_table, context, push)
         end
-        if push or type(context) ~= "table" or context.kind ~= "dashboard" or not context.orbit_refresh then
+        local old = self.current_context
+        -- A saved body coming back over the Home on screen (a refresh that couldn't reach the
+        -- server) only updates what differs; it never repaints every tile.
+        local saved_over_home = type(context) == "table" and context.kind == "dashboard" and context.stale
+            and old and old.kind == "dashboard" and self._board_ctx ~= nil
+        if push or type(context) ~= "table" or context.kind ~= "dashboard" or not (context.orbit_refresh or saved_over_home) then
             return full(push and "opened" or "new view")
         end
-        local old = self.current_context
         if not (old and old.kind == "dashboard" and self._board_ctx and self._board_tiles) or self.board_edit then
             return full("first paint")
         end
@@ -442,9 +448,21 @@ function LF.install(why)
     end end, "lf")
 
     -- Hydration: when the on-device marks didn't change, the repaint after it is skipped.
+    -- Every change to the plugin's state file drops its on-device maps (bookorbit_state_manager
+    -- .lua:107-111 publish), and a new catalog starts with none (bookorbit_catalog.lua:322):
+    -- until the child process rebuilds them (:612), every book would draw "Download". The last
+    -- maps seen are kept here and stand in meanwhile, so a book on the reader shows "Resume"
+    -- on the first paint.
+    if Compat.callable(Catalog.hydrateOnDeviceMaps) then
+        wrap(Catalog, "hydrateOnDeviceMaps", function(stock) return function(self, ...)
+            pcall(LF.seedOnDevice, self)
+            return stock(self, ...)
+        end end, "lf")
+    end
     wrap(Catalog, "refreshOnDevice", function(stock) return function(self, ...)
         local before = LF.onDeviceKey(self)
         local r = stock(self, ...)
+        if r then pcall(LF.keepOnDevice, self) else pcall(LF.seedOnDevice, self) end
         if self.current_context and self.current_context.kind == "dashboard" and before ~= nil
             and before == LF.onDeviceKey(self) then
             self._orbit_skip_repaint = true
@@ -457,12 +475,60 @@ function LF.install(why)
             self._orbit_skip_repaint = nil
             -- Skipped as a full repaint, but whatever did change (a cover that just landed)
             -- still repaints its own tile.
-            pcall(LF.quiet, self)
+            local okq, n = pcall(LF.quiet, self)
+            if okq and (n or 0) > 0 then log("covers: late cover(s) landed;", n, "tile(s) redrawn") end
             return
         end
         return stock(self, ...)
     end end, "lf")
     return true
+end
+
+local function deviceOwner(cat)
+    local c = cat and cat.client
+    return c and (tostring(c.server_url) .. "|" .. tostring(c.username)) or nil
+end
+
+-- The plugin's current on-device map, kept for the next start (only when it changed).
+function LF.keepOnDevice(cat)
+    if type(cat.on_device) ~= "table" then return end
+    local map, n = {}, 0
+    for id, path in pairs(cat.on_device) do
+        if type(path) == "string" then map[tostring(id)] = path; n = n + 1 end
+    end
+    local saved = S.orbit_on_device
+    local sig = Cache.encode(map)
+    if saved and saved.owner == deviceOwner(cat) and saved.sig == sig then return end
+    S.orbit_on_device = { owner = deviceOwner(cat), map = map, sig = sig }
+    saveSettings()
+end
+
+-- A book this reader has open is on it, whatever the maps say (noted on the way to Home).
+function LF.noteOnDevice(book_id, path)
+    if not (book_id and type(path) == "string") then return end
+    local saved = S.orbit_on_device
+    if not saved then return end
+    if saved.map[tostring(book_id)] == path then return end
+    saved.map[tostring(book_id)] = path
+    saved.sig = nil
+    saveSettings()
+end
+
+-- While the plugin's maps are missing: the kept ones, for files that are still there.
+function LF.seedOnDevice(cat)
+    local saved = S.orbit_on_device
+    if not (saved and saved.owner == deviceOwner(cat) and type(saved.map) == "table") then return 0 end
+    cat.on_device = type(cat.on_device) == "table" and cat.on_device or {}
+    local n = 0
+    for id, path in pairs(saved.map) do
+        local nid = tonumber(id)
+        if nid and cat.on_device[nid] == nil and require("libs/libkoreader-lfs").attributes(path, "mode") == "file" then
+            cat.on_device[nid] = path
+            n = n + 1
+        end
+    end
+    if n > 0 then log("local-first: on-device marks from the last start for", n, "book(s) while BookOrbit rebuilds its own") end
+    return n
 end
 
 -- The board's ⟳ with its own hold: a hold on it is a Full refresh, not the tile's board editing
@@ -554,6 +620,8 @@ do
     function OrbitAndroid:init(...)
         local r = base_init(self, ...)
         if S.local_first ~= false then pcall(LF.install, "init") end
+        pcall(LF.installRemove)
+        pcall(Gate.installToast)
         local p = bookorbit(self.ui)
         if p then
             pcall(LocalState.fromOutbox, p)
@@ -571,5 +639,52 @@ do
             pcall(LF.quiet, cat)
         end
         if base_resume then return base_resume(self, ...) end
+    end
+end
+
+---------------------------------------------------------------- remove from this reader
+
+-- BookOrbit removes a book's file through the file browser's delete (which asks first and
+-- clears the sidecar, history and collections: filemanager.lua:1120-1191), and without a file
+-- browser it only says "Open the file browser to remove this book." (bookorbit_catalog_board.lua
+-- :955-966, bookorbit_catalog_detail.lua:764-776, bookorbit_book_peek.lua:155-167). With a book
+-- open there is no file browser: Home opens over the book. The same delete runs from KOReader's
+-- FileManager class (its file delete uses no file-browser state), with the same confirmation.
+-- The book that is open stays: removing it under the reader would break its sidecar.
+function LF.withFileManager(path, run)
+    local okf, FM = pcall(require, "apps/filemanager/filemanager")
+    if not okf or type(FM) ~= "table" or FM.instance or type(FM.showDeleteFileDialog) ~= "function" then return run() end
+    local okr, RUI = pcall(require, "apps/reader/readerui")
+    local open = okr and type(RUI) == "table" and RUI.instance and RUI.instance.document and RUI.instance.document.file
+    if open and path and open == path then
+        log("remove: the book is open; not removed")
+        pcall(function() require("bookorbit_toast").error(_("This book is open. Close it, then remove it.")) end) -- gate: user action (Remove)
+        return
+    end
+    log("remove: no file browser open; KOReader's delete (it asks first)")
+    FM.instance = setmetatable({}, { __index = FM })
+    local okc, err = pcall(run)
+    FM.instance = nil
+    if not okc then error(err, 0) end
+end
+
+function LF.installRemove()
+    local Catalog = package.loaded["bookorbit_catalog"]
+    if type(Catalog) == "table" and Compat.callable(Catalog.boardDustRemove) then
+        wrap(Catalog, "boardDustRemove", function(stock) return function(self, book)
+            local path = book and Compat.callable(self.onDeviceBookPath) and self:onDeviceBookPath(book)
+            return LF.withFileManager(path, function() return stock(self, book) end)
+        end end, "remove")
+    end
+    if type(Catalog) == "table" and Compat.callable(Catalog.detailRemoveFromDevice) then
+        wrap(Catalog, "detailRemoveFromDevice", function(stock) return function(self, d)
+            return LF.withFileManager(d and d.read_path, function() return stock(self, d) end)
+        end end, "remove")
+    end
+    local okp, Peek = pcall(require, "bookorbit_book_peek")
+    if okp and type(Peek) == "table" and Compat.callable(Peek.remove) then
+        wrap(Peek, "remove", function(stock) return function(catalog, path)
+            return LF.withFileManager(path, function() return stock(catalog, path) end)
+        end end, "remove")
     end
 end

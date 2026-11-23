@@ -234,6 +234,15 @@ class StatusActivity : EinkActivity() {
             })
         }
         root.addView(Ui.gap(this, 12))
+        // A background update is ready: "Install" any time here (the notification waits while reading).
+        val ready = Updater.readyToInstall()
+        if (ready != null) {
+            root.addView(Ui.row(this, "App version", "Update ready: v${ready.first}", Ui.button(this, "Install", heightDp = 56, sp = 18f) {
+                // Through the PIN keypad like the notification's tap (no PIN or unlocked: Android's prompt).
+                startActivity(PinActivity.thenInstall(this, ready.second))
+            }))
+            return
+        }
         root.addView(Ui.row(this, "App version", Updater.statusLine(this), Ui.button(this, if (Updater.busy) "Checking…" else "Check for updates", heightDp = 56, sp = 18f) {
             Pin.run(this) {
                 Updater.check(this, interactive = true, why = "status page") { if (!isFinishing) render() }
@@ -681,7 +690,7 @@ object Setup {
                 when {
                     PatchInstaller.busy -> "installing…"
                     patchState == PatchRowState.RESTART && PatchRow.canRestart(runningV) ->
-                        "KOReader restarts by itself to load it once no book is open; it still runs v$runningV · tap to restart now"
+                        "KOReader restarts to load it when the screen next goes off; it still runs v$runningV · tap to restart now"
                     patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) "Restart KOReader to finish (KOReader still runs v$runningV)"
                         else "Restart KOReader to finish: close KOReader from recent apps and reopen it (it still runs v$runningV)"
                     patchState == PatchRowState.MISSING && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"
@@ -709,11 +718,12 @@ object Setup {
         )
 
         // From the Orbit plugin's REPORT (docs/design/addon-mode.md §4.2, §7.3).
-        val signed = PluginReport.signedInRow(prefs.reportSignedIn)
+        // Pending ("Checking…") while the running plugin is older than REPORT or none came yet.
+        val signed = PluginReport.signedInRow(prefs.reportSignedIn, runningV)
         list.add(Check("Signed in to BookOrbit", signed.done && !signed.pending, signed.detail, pending = signed.pending, action = "Open") { a ->
             Koreader.start(a, "setup: sign in to BookOrbit", HomeCommands.SIGNIN)
         })
-        val rec = PluginReport.recommendedRow(prefs.reportRecommended, prefs.reportConflicts)
+        val rec = PluginReport.recommendedRow(prefs.reportRecommended, prefs.reportConflicts, runningV)
         list.add(Check("Recommended settings", rec.done && !rec.pending, rec.detail, pending = rec.pending, action = "Review", pinFree = false) { a ->
             Koreader.start(a, "setup: recommended settings", HomeCommands.RECOMMENDED)
         })
@@ -898,8 +908,10 @@ class SetupActivity : EinkActivity() {
         if (now - lastStep < 1_000) return
         val checks = Setup.checks(this).filter { !it.optional }
         val addon = Mode.isAddon(this)
+        // Pending rows (waiting for KOReader to report) are never a step.
+        val pending = checks.filter { it.pending }.map { SetupAttention.idOf(it.label) }.toSet()
         val id = SetupWalk.next(checks.map { SetupAttention.idOf(it.label) to it.done }
-            .filter { !addon || it.first in AddonLogic.REQUIRED }, tried)
+            .filter { !addon || it.first in AddonLogic.REQUIRED }, tried, pending)
         val c = checks.firstOrNull { SetupAttention.idOf(it.label) == id }
         if (id == null || c == null) {
             walking = false
@@ -966,7 +978,7 @@ class SetupActivity : EinkActivity() {
         }
         val open = checks.count {
             val id = SetupAttention.idOf(it.label)
-            !it.done && id !in SetupAttention.INFO_ONLY && (!addon || id in AddonLogic.REQUIRED)
+            !it.done && !it.pending && id !in SetupAttention.INFO_ONLY && (!addon || id in AddonLogic.REQUIRED)
         }
         if (open > 0) {
             root.addView(

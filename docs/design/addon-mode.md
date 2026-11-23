@@ -480,8 +480,10 @@ the login (one-way door 2).
 Today a restart works because `HomeActivity` is the visible window when KOReader quits, which
 lets the companion start KOReader from the background (cache-appswitch "Android constraints").
 Add-on has no such window. Instead:
-- The plugin restarts only **with the screen on, no book open, KOReader in front** (BookOrbit
-  home or the file browser), or at once when the user asked for it.
+- v0.11.1: an update the user started restarts at once (book or not; the book reopens). An
+  automatic one never restarts in front: with KOReader in the background the plugin saves and
+  quits, and the new plugin loads at the next start; at screen-off it waits, since nothing can
+  start KOReader again ([reading gate](reading-gate.md)).
 - Before quitting, the plugin itself starts the companion's translucent relaunch activity with
   `Jni.startActivity` (allowed: KOReader is in front). That activity, now the visible window,
   starts KOReader when the process has gone. If 9's `CurtainActivity` (cache-appswitch A5) has

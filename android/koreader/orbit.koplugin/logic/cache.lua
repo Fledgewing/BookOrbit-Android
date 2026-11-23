@@ -11,9 +11,13 @@
 
 Cache = {
     FRESH_S = 60,          -- a read within this of the last check is not checked again
-    MAX_BYTES = 8 * 1024 * 1024,
-    MAX_ENTRIES = 400,
+    -- Storage is plentiful on Android; the offline mirror is pinned and outside these caps'
+    -- LRU, which applies to everything else (design "Size").
+    MAX_BYTES = 64 * 1024 * 1024,
+    MAX_ENTRIES = 20000,
     VERSION = 1,
+    MIRROR_PAGE = 100,     -- the server's largest page (koreader-catalog-query.dto.ts:87, :284)
+    MIRROR_TTL_DAYS = 7,   -- an automatic Full refresh once the mirror is older than this
 }
 
 ---------------------------------------------------------------- values
@@ -103,6 +107,22 @@ local function normQuery(query)
     return table.concat(parts, "&")
 end
 
+local function escape(v)
+    return (tostring(v):gsub("[^%w%-_%.~]", function(c) return string.format("%%%02X", c:byte()) end))
+end
+
+-- normQuery, escaped for a request.
+local function encQuery(query)
+    local keys = {}
+    for k, v in pairs(query or {}) do
+        if v ~= nil and tostring(v) ~= "" then table.insert(keys, tostring(k)) end
+    end
+    table.sort(keys)
+    local parts = {}
+    for _, k in ipairs(keys) do table.insert(parts, escape(k) .. "=" .. escape(query[k])) end
+    return table.concat(parts, "&")
+end
+
 local function normServer(s)
     return (tostring(s or ""):lower():gsub("/+$", ""))
 end
@@ -133,6 +153,7 @@ end
 ---------------------------------------------------------------- reads
 
 -- entry: nil or { validated_at }; mode: "open" | "refresh" | "full". -> serve, fetch.
+-- entry.stale: a write since may have changed it (served, checked at once).
 function Cache.readPlan(entry, now, mode, offline)
     if mode == "full" then
         if offline then return entry ~= nil, false end
@@ -140,14 +161,129 @@ function Cache.readPlan(entry, now, mode, offline)
     end
     if not entry then return false, not offline end
     if offline then return true, false end
-    if mode == "refresh" then return true, true end
+    if mode == "refresh" or entry.stale then return true, true end
     return true, (now - (entry.validated_at or 0)) >= Cache.FRESH_S
+end
+
+-- Fields that differ on every request and say nothing about the data: generatedAt is the
+-- server's clock (koreader-catalog.service.ts:279); discover is a fresh random pick each time
+-- (:417-433, getRandomBooks), so a check never counts it and the saved pick is kept until a
+-- Full refresh.
+Cache.VOLATILE = { generatedAt = true }
+Cache.KEEP_SAVED = { discover = true }
+
+function Cache.normalize(body)
+    if type(body) ~= "table" then return body end
+    local out = {}
+    for k, v in pairs(body) do
+        if not Cache.VOLATILE[k] and not Cache.KEEP_SAVED[k] then out[k] = v end
+    end
+    return out
 end
 
 -- -> changed, stored
 function Cache.revalidate(cached, reply, status)
     if type(status) ~= "number" or status < 200 or status >= 300 or reply == nil then return false, false end
-    return Cache.encode(cached) ~= Cache.encode(reply), true
+    return Cache.encode(Cache.normalize(cached)) ~= Cache.encode(Cache.normalize(reply)), true
+end
+
+-- What a check stores: the reply, with the saved random pick kept (a Full refresh takes the new).
+function Cache.settle(cached, reply, mode)
+    if type(cached) ~= "table" or type(reply) ~= "table" or mode == "full" then return reply end
+    local out = {}
+    for k, v in pairs(reply) do out[k] = v end
+    for k in pairs(Cache.KEEP_SAVED) do if cached[k] ~= nil then out[k] = cached[k] end end
+    return out
+end
+
+---------------------------------------------------------------- the offline mirror
+
+-- A list read (a books page or a section page): its identity (the path without page, size and
+-- offset) and the window it asks for. nil for anything else (a book, the dashboard, a search).
+function Cache.listWindow(path)
+    local p, q = splitPath(path)
+    local books = p:find("/catalog/books$") ~= nil
+    local section = p:match("/catalog/sections/([%w%-]+)$")
+    if not books and not section then return nil end
+    local query = Cache.parseQuery(q)
+    if query.q and query.q ~= "" then return nil end -- search stays online
+    local w = { page = tonumber(query.page), size = tonumber(query.size), offset = tonumber(query.offset),
+        kind = books and "books" or "section", section = section }
+    query.page, query.size, query.offset = nil, nil, nil
+    local rest = encQuery(query)
+    w.identity = p .. (rest ~= "" and ("?" .. rest) or "")
+    return w
+end
+
+-- A search: never mirrored; offline it says it needs a connection.
+function Cache.isSearch(path)
+    local _, q = splitPath(path)
+    local query = Cache.parseQuery(q)
+    return query.q ~= nil and query.q ~= ""
+end
+
+-- The path of a mirror page of a list identity.
+function Cache.mirrorPage(identity, page)
+    local p, q = splitPath(identity)
+    local query = Cache.parseQuery(q)
+    query.page, query.size = page, Cache.MIRROR_PAGE
+    return p .. "?" .. encQuery(query)
+end
+
+function Cache.pageCount(total)
+    total = tonumber(total) or 0
+    if total <= 0 then return 1 end
+    return math.ceil(total / Cache.MIRROR_PAGE)
+end
+
+-- One list page answered from the mirror's pages.
+--   w: Cache.listWindow; pages: { [n] = body of mirror page n }; -> body, or nil when a page it
+--   needs isn't saved.
+local PAGING = { items = true, page = true, size = true, offset = true, hasNext = true, hasPrevious = true,
+    nextUrl = true, previousUrl = true }
+function Cache.slice(w, pages)
+    local first = pages[1]
+    if type(first) ~= "table" or type(first.items) ~= "table" then return nil end
+    local total = tonumber(first.total) or #first.items
+    local size = w.size or (w.kind == "books" and 20 or total)
+    if size < 1 then size = 1 end
+    local start = w.offset or ((w.page or 1) - 1) * size
+    local stop = math.min(total, start + size)
+    local items = {}
+    for i = start + 1, stop do
+        local n = math.floor((i - 1) / Cache.MIRROR_PAGE) + 1
+        local page = pages[n]
+        if type(page) ~= "table" or type(page.items) ~= "table" then return nil end
+        local item = page.items[i - (n - 1) * Cache.MIRROR_PAGE]
+        if item == nil then return nil end
+        table.insert(items, item)
+    end
+    local out = {}
+    for k, v in pairs(first) do if not PAGING[k] then out[k] = v end end
+    out.items, out.total, out.size = items, total, size
+    out.page = math.floor(start / size) + 1
+    if w.offset then out.offset = w.offset end
+    out.hasNext, out.hasPrevious = stop < total, start > 0
+    return out
+end
+
+-- A revalidated mirror page whose list total moved: the pages to fetch and to drop.
+function Cache.repage(old_total, new_total)
+    local old_n, new_n = Cache.pageCount(old_total), Cache.pageCount(new_total)
+    local fetch, drop = {}, {}
+    for n = 2, new_n do table.insert(fetch, n) end
+    for n = new_n + 1, old_n do table.insert(drop, n) end
+    return fetch, drop
+end
+
+-- Whether the mirror needs an automatic Full refresh.
+--   m: { at (last complete Full refresh), lib_version }; lib_version: the plugin's current one.
+-- -> reason ("never" | "ttl" | "library") or nil
+function Cache.mirrorDue(m, now, ttl_days, lib_version)
+    if type(m) ~= "table" or not m.at then return "never" end
+    if now - m.at >= (ttl_days or Cache.MIRROR_TTL_DAYS) * 86400 then return "ttl" end
+    if lib_version and m.lib_version and lib_version ~= m.lib_version then return "library" end
+    return nil
 end
 
 ---------------------------------------------------------------- writes

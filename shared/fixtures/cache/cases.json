@@ -164,6 +164,29 @@
       "offline": true,
       "serve": true,
       "fetch": false
+    },
+    {
+      "name": "stale (a write since): served and checked at once, whatever its age",
+      "entry": {
+        "validated_at": 995,
+        "stale": true
+      },
+      "now": 1000,
+      "mode": "open",
+      "serve": true,
+      "fetch": true
+    },
+    {
+      "name": "stale and offline: served, not checked",
+      "entry": {
+        "validated_at": 995,
+        "stale": true
+      },
+      "now": 1000,
+      "mode": "open",
+      "offline": true,
+      "serve": true,
+      "fetch": false
     }
   ],
   "revalidate": [
@@ -210,6 +233,82 @@
       "status": 500,
       "changed": false,
       "stored": false
+    },
+    {
+      "name": "only the server's clock moved (generatedAt): unchanged",
+      "cached": {
+        "generatedAt": "2026-11-22T20:54:46Z",
+        "continueReading": [
+          {
+            "id": 7
+          }
+        ]
+      },
+      "reply": {
+        "generatedAt": "2026-11-22T20:55:12Z",
+        "continueReading": [
+          {
+            "id": 7
+          }
+        ]
+      },
+      "status": 200,
+      "changed": false,
+      "stored": true
+    },
+    {
+      "name": "only Discover's random pick moved: unchanged, the saved pick stays",
+      "cached": {
+        "discover": [
+          {
+            "id": 1
+          }
+        ],
+        "continueReading": [
+          {
+            "id": 7
+          }
+        ]
+      },
+      "reply": {
+        "discover": [
+          {
+            "id": 2
+          }
+        ],
+        "continueReading": [
+          {
+            "id": 7
+          }
+        ]
+      },
+      "status": 200,
+      "changed": false,
+      "stored": true
+    },
+    {
+      "name": "progress moved along with the clock: changed",
+      "cached": {
+        "generatedAt": "a",
+        "continueReading": [
+          {
+            "id": 7,
+            "progressPercentage": 10
+          }
+        ]
+      },
+      "reply": {
+        "generatedAt": "b",
+        "continueReading": [
+          {
+            "id": 7,
+            "progressPercentage": 12
+          }
+        ]
+      },
+      "status": 200,
+      "changed": true,
+      "stored": true
     }
   ],
   "writes": [
@@ -654,5 +753,269 @@
       "expect_continue_reading": [],
       "expect_entry_unchanged": true
     }
-  ]
+  ],
+  "settle": [
+    {
+      "name": "a check keeps the saved Discover pick",
+      "cached": {
+        "discover": [
+          {
+            "id": 1
+          }
+        ],
+        "a": 1
+      },
+      "reply": {
+        "discover": [
+          {
+            "id": 2
+          }
+        ],
+        "a": 2
+      },
+      "mode": "open",
+      "expect": {
+        "discover": [
+          {
+            "id": 1
+          }
+        ],
+        "a": 2
+      }
+    },
+    {
+      "name": "a Full refresh takes the new pick",
+      "cached": {
+        "discover": [
+          {
+            "id": 1
+          }
+        ],
+        "a": 1
+      },
+      "reply": {
+        "discover": [
+          {
+            "id": 2
+          }
+        ],
+        "a": 2
+      },
+      "mode": "full",
+      "expect": {
+        "discover": [
+          {
+            "id": 2
+          }
+        ],
+        "a": 2
+      }
+    }
+  ],
+  "mirror": {
+    "_comment": "The offline mirror (docs/design/write-through-cache.md 'Offline mirror'): lists are saved in 100-item pages (the server's largest, koreader-catalog-query.dto.ts:87 and :284) and any page size the reader asks for is cut from them. Search is never mirrored.",
+    "windows": [
+      {
+        "path": "/koreader/plugin/catalog/books?page=2&size=12&sort=title&buckets=1&order=asc",
+        "identity_of": "/koreader/plugin/catalog/books?sort=title&order=asc&buckets=1&page=1&size=100",
+        "same": true
+      },
+      {
+        "path": "/koreader/plugin/catalog/sections/series?offset=11&size=11",
+        "identity_of": "/koreader/plugin/catalog/sections/series?page=3&size=100",
+        "same": true
+      },
+      {
+        "path": "/koreader/plugin/catalog/books?seriesId=4&sort=series",
+        "identity_of": "/koreader/plugin/catalog/books?seriesId=5&sort=series",
+        "same": false
+      },
+      {
+        "path": "/koreader/plugin/catalog/books?q=dune&page=1",
+        "list": false
+      },
+      {
+        "path": "/koreader/plugin/catalog/books/43?deviceId=x",
+        "list": false
+      },
+      {
+        "path": "/koreader/plugin/catalog/dashboard",
+        "list": false
+      }
+    ],
+    "slices": [
+      {
+        "name": "page 2 of 12 from the first saved page",
+        "total": 250,
+        "saved_pages": [
+          1,
+          2,
+          3
+        ],
+        "window": {
+          "page": 2,
+          "size": 12,
+          "kind": "books"
+        },
+        "items": [
+          13,
+          24
+        ],
+        "hasNext": true,
+        "hasPrevious": true
+      },
+      {
+        "name": "an offset window across two saved pages",
+        "total": 250,
+        "saved_pages": [
+          1,
+          2,
+          3
+        ],
+        "window": {
+          "offset": 95,
+          "size": 11,
+          "kind": "section"
+        },
+        "items": [
+          96,
+          106
+        ],
+        "hasNext": true,
+        "hasPrevious": true
+      },
+      {
+        "name": "the last short page",
+        "total": 250,
+        "saved_pages": [
+          1,
+          2,
+          3
+        ],
+        "window": {
+          "page": 21,
+          "size": 12,
+          "kind": "books"
+        },
+        "items": [
+          241,
+          250
+        ],
+        "hasNext": false,
+        "hasPrevious": true
+      },
+      {
+        "name": "a page that needs an unsaved page: not answered",
+        "total": 250,
+        "saved_pages": [
+          1,
+          2
+        ],
+        "window": {
+          "page": 21,
+          "size": 12,
+          "kind": "books"
+        },
+        "items": null
+      },
+      {
+        "name": "a series that grew to 21 books: page 2 of 20 has the new one",
+        "total": 21,
+        "saved_pages": [
+          1
+        ],
+        "window": {
+          "page": 2,
+          "size": 20,
+          "kind": "books"
+        },
+        "items": [
+          21,
+          21
+        ],
+        "hasNext": false,
+        "hasPrevious": true
+      }
+    ],
+    "repage": [
+      {
+        "name": "a 21st book in a series: still one page",
+        "old": 20,
+        "new": 21,
+        "fetch": [],
+        "drop": []
+      },
+      {
+        "name": "a list grows past a page",
+        "old": 100,
+        "new": 101,
+        "fetch": [
+          2
+        ],
+        "drop": []
+      },
+      {
+        "name": "a list shrinks by a page",
+        "old": 250,
+        "new": 180,
+        "fetch": [
+          2
+        ],
+        "drop": [
+          3
+        ]
+      }
+    ],
+    "due": [
+      {
+        "name": "never saved",
+        "mirror": null,
+        "now": 1000,
+        "ttl_days": 7,
+        "due": "never"
+      },
+      {
+        "name": "fresh, same library",
+        "mirror": {
+          "at": 1000,
+          "lib_version": "a"
+        },
+        "lib_version": "a",
+        "now": 1000,
+        "ttl_days": 7,
+        "due": null
+      },
+      {
+        "name": "older than the TTL",
+        "mirror": {
+          "at": 1000,
+          "lib_version": "a"
+        },
+        "lib_version": "a",
+        "now": 605801,
+        "ttl_days": 7,
+        "due": "ttl"
+      },
+      {
+        "name": "the library version moved",
+        "mirror": {
+          "at": 1000,
+          "lib_version": "a"
+        },
+        "lib_version": "b",
+        "now": 2000,
+        "ttl_days": 7,
+        "due": "library"
+      },
+      {
+        "name": "a one-day TTL",
+        "mirror": {
+          "at": 1000
+        },
+        "now": 87401,
+        "ttl_days": 1,
+        "due": "ttl"
+      }
+    ]
+  }
 }

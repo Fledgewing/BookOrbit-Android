@@ -90,7 +90,9 @@ function WifiPlan.wifiOff(st)
     st.force_off_once = false
 end
 
--- ctx = { now, wifi_on, busy, screen_off }. Returns action ("off" | nil), reason, force.
+-- ctx = { now, wifi_on, busy, screen_off, browsing }. Returns action ("off" | nil), reason, force.
+-- browsing: BookOrbit's catalog is on top (Home opens over the book): not reading, so the
+-- "done in a book" offs wait; just in time's idle rule still applies.
 -- force: off_reading's book-open off, which applies even to Wi-Fi turned on by hand.
 -- Never off while a flow holds the network, the plugin or a download is busy, or (except
 -- with the screen off) while another app is in front.
@@ -100,12 +102,13 @@ function WifiPlan.decide(st, ctx)
     if ctx.busy then return nil, "busy" end
     if not st.foreground and not ctx.screen_off then return nil, "KOReader not in front" end
     local released = st.release_at ~= nil and ctx.now >= st.release_at
-    if st.force_off_once and st.in_book and (released or st.release_at == nil) then
+    local in_book = st.in_book and not ctx.browsing
+    if st.force_off_once and in_book and (released or st.release_at == nil) then
         return "off", "book opened (off while reading)", true
     end
     if released then
         if st.restore_off then return "off", "restore previous state (off) after " .. tostring(st.last_flow) end
-        if st.in_book and st.mode ~= "always_on" then
+        if in_book and st.mode ~= "always_on" then
             return "off", (st.mode == "jit" and "just in time" or "off while reading") .. ": " .. tostring(st.last_flow) .. " done in a book"
         end
     end
