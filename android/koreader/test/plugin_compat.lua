@@ -79,7 +79,9 @@ for _, name in ipairs({ "newClient", "getDocumentDigest", "getLastPercent", "enq
     -- cover logging, Remove without a file browser, the suspend snapshot skip.
     "initialDashboardContext", "hydrateOnDeviceMaps", "paramsForEntry", "effectiveOrder",
     "listDecorateBookQuery", "listSectionParams", "loadOnDevice", "fetchBookPage", "cancelThumbnailJobs",
-    "downloadThumbnailBatch", "boardDustRemove", "detailRemoveFromDevice", "_onSuspend" }) do need(name, "function") end
+    "downloadThumbnailBatch", "boardDustRemove", "detailRemoveFromDevice", "_onSuspend",
+    -- Keep book copies current: the state's own repair for a file whose bytes changed.
+    "repairFileIdentity", "linkDownloadedFile" }) do need(name, "function") end
 -- Our ⟳ keeps covers by wrapping evictCachedCovers, which refreshCurrent must still go through;
 -- Wi-Fi holds count only drainable outbox entries.
 has(catalog, "self:evictCachedCovers(", "refreshCurrent evicts through evictCachedCovers")

@@ -2855,6 +2855,97 @@ test("end of book: Download and open uses the reader's delivery variant and a su
     package.loaded["bookorbit_catalog"] = nil
 end)
 
+-- Keep book copies current: BookOrbit rewrote the library files (tags), every copy is
+-- position-incompatible; each is downloaded again in place, one at a time, never while reading.
+local function copiesSetup(books, md5s)
+    eobModules()
+    local sm = package.loaded["bookorbit_state_manager"]
+    copies = { calls = {}, repaired = {}, md5s = md5s }
+    sm.state = function() return { books = books, global = {} } end
+    sm.repairFileIdentity = function(file, old, new) table.insert(copies.repaired, file .. ":" .. old .. ">" .. new) end
+    local DCat = {}
+    DCat.__index = DCat
+    function DCat:fetchDeliveryBook(id)
+        table.insert(copies.calls, "delivery:" .. id)
+        return { id = id, files = { { id = id * 10, role = "primary", fileHash = "new" .. id } } }
+    end
+    function DCat:downloadFile(path, detail, file, rep)
+        table.insert(copies.calls, "download:" .. path)
+        ok(file.fileHash == "new" .. detail.id, "checked against the library hash")
+        copies.md5s[path] = file.fileHash
+        rep.finished(true, nil, path)
+    end
+    function DCat:downloadDefaultFile() end
+    function DCat:loadBooks() end
+    package.loaded["bookorbit_catalog"] = DCat
+    E.Copies.md5 = function(path) return copies.md5s[path] end
+    E.Copies.exists = function(path) return copies.md5s[path] ~= nil end
+    E.Copies.state().queue = {}
+    E.Copies.scanned_at, E.Copies.active, E.Copies.busy = nil, nil, nil
+    W.wifi, W.vpn, W.companion = true, true, true
+end
+local function copiesUI(in_book)
+    local ui, m = newUI(in_book)
+    ui.bookorbit.newClient = function() return setmetatable({}, EApi) end
+    return ui, m
+end
+local function copyBooks()
+    return {
+        old1 = { file = "/books/a.epub", bookId = 1, fileId = 10, positionIncompatible = true },
+        old2 = { file = "/books/b.epub", bookId = 2, fileId = 20, positionIncompatible = true },
+        cur3 = { file = "/books/c.epub", bookId = 3, fileId = 30 },
+    }
+end
+
+test("copies: changed copies are replaced in place, one at a time, and their hashes move on", function()
+    copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2", ["/books/c.epub"] = "cur3" })
+    copiesUI(false)
+    E.Copies.tick("test")
+    run(10)
+    local c = table.concat(copies.calls, ",")
+    ok(c == "delivery:1,download:/books/a.epub,delivery:2,download:/books/b.epub", "one at a time: " .. c)
+    ok(table.concat(copies.repaired, ",") == "/books/a.epub:old1>new1,/books/b.epub:old2>new2", "state re-keyed: " .. table.concat(copies.repaired, ","))
+    ok(#E.Copies.state().queue == 0, "queue done")
+    package.loaded["bookorbit_catalog"] = nil
+end)
+
+test("copies: never while reading; the queue waits on disk and goes once the book closes", function()
+    copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2" })
+    local _ui, m = copiesUI(true)
+    E.Copies.tick("test")
+    E.Copies.scan("test")
+    run(5)
+    ok(#copies.calls == 0, "nothing while reading")
+    ok(#E.Copies.state().queue == 2, "queued: " .. #E.Copies.state().queue)
+    m:onCloseWidget()
+    copiesUI(false)
+    run(10)
+    ok(#copies.calls == 4, "replaced after the close: " .. table.concat(copies.calls, ","))
+    package.loaded["bookorbit_catalog"] = nil
+end)
+
+test("copies: offline or turned off, nothing is downloaded; a copy already current is left alone", function()
+    copiesSetup(copyBooks(), { ["/books/a.epub"] = "new1", ["/books/b.epub"] = "old2" })
+    copiesUI(false)
+    store.orbit_android.keep_copies_current = false
+    E.Copies.tick("test")
+    run(5)
+    ok(#copies.calls == 0, "off")
+    store.orbit_android.keep_copies_current = true
+    W.wifi = false
+    E.Copies.tick("test")
+    run(5)
+    ok(#copies.calls == 0, "offline")
+    W.wifi = true
+    E.Copies.scanned_at = nil
+    E.Copies.tick("test")
+    run(10)
+    local c = table.concat(copies.calls, ",")
+    ok(not c:find("download:/books/a.epub", 1, true), "a already matches the library: " .. c)
+    ok(c:find("download:/books/b.epub", 1, true), "b replaced")
+    package.loaded["bookorbit_catalog"] = nil
+end)
+
 test("end of book: Home from the companion with the sheet open closes it, opens BookOrbit home, sends the finish", function()
     eobModules()
     local ui, m = bookUI()

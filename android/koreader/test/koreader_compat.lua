@@ -71,7 +71,7 @@ local NEEDS = {
     { "plugins/gestures.koplugin/defaults.lua", { { "gesture_reader", F } } },
     { "frontend/docsettings.lua", { "open", { "LuaSettings:extend", T } } }, -- readSetting: LuaSettings'
     { "frontend/luasettings.lua", { "open", "readSetting", "saveSetting", "flush" } },
-    { "datastorage.lua", { "getSettingsDir" } },
+    { "datastorage.lua", { "getSettingsDir", "getDocSettingsHashDir" } },
     { "frontend/ui/event.lua", { "new" } },
     { "frontend/ui/time.lua", { "now", "to_s" } },
     { "frontend/ui/font.lua", { "getFace" } },

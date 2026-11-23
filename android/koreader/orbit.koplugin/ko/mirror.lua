@@ -399,6 +399,8 @@ function Mirror.finish()
     Mirror.manual = nil
     OC.saveIndex()
     Wifi.release("mirror")
+    -- The saved details now carry every book's file hash: copies that changed are replaced next.
+    UIManager:scheduleIn(1, function() if Copies and Copies.tick then pcall(Copies.tick, "full refresh") end end)
 end
 
 -- "Saved for offline · <time>" (the last complete Full refresh).
@@ -418,6 +420,7 @@ function Mirror.tick(why)
         log("mirror: resuming (" .. tostring(why) .. ")")
         return Mirror.pump()
     end
+    if Copies and Copies.tick then pcall(Copies.tick, why) end
     if S.mirror_auto == false then return end
     local t = nowT()
     if Mirror.ticked_at and t - Mirror.ticked_at < 60 then return end

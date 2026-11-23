@@ -6,9 +6,10 @@
 -- Menu (mockup screen 6): Tools › Android sync
 ---------------------------------------------------------------------------------------------
 
-function toggle(key, text)
+function toggle(key, text, help)
     return {
         text = text,
+        help_text = help,
         checked_func = function() return S[key] == true end,
         callback = function()
             S[key] = not S[key]
@@ -226,6 +227,8 @@ function OrbitAndroid:menuItems()
             end,
             sub_item_table = ttl_items,
         },
+        toggle("keep_copies_current", _("Keep book copies current"),
+            _("When a book's file changes in the library (BookOrbit writes tags into it), the copy on this reader is downloaded again in the background, never while you read. Position, highlights and bookmarks stay.")),
         toggle("key_log", _("Log every key (clicker diagnosis)")),
         {
             text_func = function() return _("Sync while reading: ") .. _(Schedule.option(S.reading_schedule).label) end,

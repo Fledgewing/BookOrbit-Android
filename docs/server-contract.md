@@ -176,3 +176,12 @@ whole replies. Two fields change on every request and are ignored in that compar
 List pages are at most 100 items (the DTOs, `:87`, `:284`). The library version that changes when
 books are added or removed comes from the progress sweep reply (`getLibraryVersion`,
 `koreader-plugin.service.ts:314-330`). Covers do send ETags.
+
+## A metadata write changes the file hash
+
+BookOrbit embeds metadata into the library file when tags or series change
+(`file-write.repository.ts:199`), so the file's partial MD5 moves. A copy matched by its old hash
+stays matched, but only hashes in the compatible set place positions and highlights
+(`koreader.repository.ts:32-42`): the copy is answered `positionCompatible: false`, and
+progress, highlights and bookmarks stop syncing for it until the copy is replaced
+([keep copies current](design/keep-copies-current.md)).
