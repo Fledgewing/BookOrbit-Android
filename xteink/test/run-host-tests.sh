@@ -42,3 +42,4 @@ orbify_test() { # name [sources...]: the test reads its tables from shared/fixtu
 }
 orbify_test finish "$core/FinishQueue.cpp"
 orbify_test end_of_book "$core/SeriesCard.cpp" "$core/EndPagePlan.cpp" "$core/FinishQueue.cpp"
+orbify_test localfirst "$core/LocalFirst.cpp"
