@@ -750,7 +750,18 @@ test("lists: which list a book list is, and the request that reads it all", func
     eq(G.listOf({ collectionId = 4, libraryId = 2 }).section, "collections")
     eq(G.listOf({ smartScopeId = "3" }).id, 3)
     eq(G.listOf({ libraryId = 2 }).section, "libraries")
-    eq(G.listOf({ sort = "title" }), nil, "All books")
+    -- v0.11.2: the whole library's lists group too (All books, Recently updated); a search, a
+    -- series or author page and a list by id don't.
+    eq(G.listOf({ sort = "title" }).section, "all", "All books")
+    eq(G.listOf({ sort = "recently_updated", order = "desc" }).section, "all", "Recently updated")
+    eq(G.listOf({ sort = "title", q = "dune" }), nil, "a search")
+    eq(G.listOf({ seriesId = 7, sort = "series" }), nil, "a series page")
+    eq(G.listOf({ author = "A", sort = "series" }), nil, "an author page")
+    eq(G.listOf({ ids = "1,2", sort = "title" }), nil, "a list by id")
+    local all = G.fetchParams({ sort = "recently_updated", order = "desc", readStatus = "unread", page = 4, size = 12 }, 1)
+    eq(all.readStatus, "unread", "its filter"); eq(all.sort, "title"); eq(all.order, nil); eq(all.size, 100)
+    local dp, dhow = G.drill({ section = "all" }, { readStatus = "unread", sort = "title" }, { { id = 1 } }, { seriesId = 4 }, {})
+    eq(dhow, "server", "a row of All books: the server's series page"); eq(dp.seriesId, 4); eq(dp.readStatus, "unread")
     local q = G.fetchParams({ collectionId = 4, readStatus = "unread", sort = "author", page = 3, size = 12, offset = 24, on_device_filter = true, orbitGroup = "g1" }, 2)
     eq(q.collectionId, 4); eq(q.readStatus, "unread", "the shelf's filters"); eq(q.size, 100); eq(q.page, 2); eq(q.sort, "title")
     eq(q.offset, nil); eq(q.on_device_filter, nil); eq(q.orbitGroup, nil)
@@ -1053,8 +1064,49 @@ end)
 test("cache: LRU eviction keeps Home and the open book", function()
     local idx = { a = { bytes = 5, used_at = 1 }, home = { bytes = 5, used_at = 0, keep = true }, b = { bytes = 5, used_at = 2 }, c = { bytes = 5, used_at = 3 } }
     local drop = C.evict(idx, 10, 10)
-    eq(table.concat(drop, ","), "a,b", "oldest first, Home kept")
-    eq(#C.evict(idx, 100, 3), 1, "entry cap")
+    eq(table.concat(drop, ","), "a", "oldest first, Home kept (and outside the cap)")
+    eq(#C.evict(idx, 100, 2), 1, "entry cap")
+end)
+
+test("cache: kept entries (Home, the mirror's lists and details) are outside the caps (shared cases)", function()
+    for _, c in ipairs(CC.mirror.evict) do
+        eq(table.concat(C.evict(c.index, c.max_bytes, c.max_entries), ","), table.concat(c.drop, ","), c.name)
+    end
+end)
+
+test("cache: the storage limit's eviction order, the mirror's room and its stop note (shared cases)", function()
+    for _, c in ipairs(CC.storage.plans) do
+        local r = C.storagePlan(c.items, c.limit)
+        eq(table.concat(r.drop, ","), table.concat(c.drop, ","), c.name)
+        eq(r.after, c.after, c.name .. " after")
+    end
+    for _, c in ipairs(CC.storage.room) do eq(C.storageRoom(c.totals, c.limit, c.what), c.room, c.name) end
+    for _, c in ipairs(CC.storage.notes) do eq(C.limitText(c.what, c.done, c.total), c.text, c.text) end
+    eq(C.STORAGE_DEFAULT_MB, 250, "250 MB by default")
+end)
+
+test("cache: a mirror request with no answer is retried, smaller pages, then skipped (shared cases)", function()
+    for _, c in ipairs(CC.mirror.retry) do
+        local r = C.mirrorRetry(c.tries, c.size, c.page)
+        eq(r.skip == true, c.skip == true, c.name .. " skip")
+        if not c.skip then eq(r.wait_s, c.wait_s, c.name .. " wait"); eq(r.size, c.size_next, c.name .. " size") end
+    end
+    for _, c in ipairs(CC.mirror.small_pages) do
+        local pages = {}
+        for _, n in ipairs(c.saved_pages) do
+            local items = {}
+            for i = (n - 1) * c.page_size + 1, math.min(c.total, n * c.page_size) do table.insert(items, { id = i }) end
+            pages[n] = { items = items, total = c.total, page = n, size = c.page_size }
+        end
+        eq(C.pageCount(c.total, c.page_size), c.pages, c.name .. " pages")
+        local w = C.listWindow(C.mirrorPage("/koreader/plugin/catalog/sections/series", 3, c.page_size))
+        eq(w.size, c.page_size, c.name .. " asks that size")
+        local b = C.slice(c.window, pages, c.page_size)
+        if c.items == nil then eq(b, nil, c.name) else
+            eq(b.items[1].id, c.items[1], c.name .. " first"); eq(b.items[#b.items].id, c.items[2], c.name .. " last")
+            eq(b.hasNext, c.hasNext, c.name .. " hasNext")
+        end
+    end
 end)
 
 ---------------------------------------------------------------- end-of-book sheet layout

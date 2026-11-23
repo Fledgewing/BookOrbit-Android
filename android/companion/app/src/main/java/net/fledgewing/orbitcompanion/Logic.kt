@@ -250,6 +250,49 @@ object UpdatePolicy {
         candidate != null && (current == null || candidate > current)
 }
 
+/**
+ * One app-update install session at a time (v0.11.2). On the M8C, with Play Protect's check held
+ * up by a Play Store self-update, the second and third Install taps sat with no feedback, each
+ * committing a new session, and were applied 30 s later; the first ended
+ * INSTALL_FAILED_ABORTED. Pure: Updater keeps the state and asks PackageInstaller whether the
+ * session still exists.
+ */
+object UpdateSession {
+    enum class Phase { COMMITTED, PROMPTED, CHECKING }
+
+    data class State(val id: Int, val version: String, val phase: Phase, val atMs: Long)
+
+    /** A session with no result after this long is treated as gone. */
+    const val STALE_MS = 10 * 60_000L
+    const val CHECKING = "Android is checking the update…"
+    const val CANCELLED = "Android cancelled the install; tap to try again"
+
+    /** PackageInstaller.STATUS_FAILURE_ABORTED. */
+    const val STATUS_ABORTED = 3
+
+    /** A new session may be committed: none pending, or the pending one is gone or stale. */
+    fun canCommit(s: State?, alive: Boolean, nowMs: Long): Boolean =
+        s == null || !alive || nowMs - s.atMs >= STALE_MS || nowMs < s.atMs
+
+    enum class Tap { NEW_CHECK, REOPEN_PROMPT, SAY_CHECKING }
+
+    /** A tap on Check for updates: a new check, Android's prompt again, or "Android is checking". */
+    fun onTap(s: State?, alive: Boolean, nowMs: Long): Tap = when {
+        canCommit(s, alive, nowMs) -> Tap.NEW_CHECK
+        s!!.phase == Phase.PROMPTED -> Tap.REOPEN_PROMPT
+        else -> Tap.SAY_CHECKING
+    }
+
+    /** Back on our page from Android's prompt with the session still open: confirmed, Android checks. */
+    fun afterPrompt(s: State?, alive: Boolean): State? =
+        if (s != null && alive && s.phase == Phase.PROMPTED) s.copy(phase = Phase.CHECKING) else s
+
+    /** The status line for a session that ended without installing. */
+    fun failureLine(status: Int, message: String?, version: String): String =
+        if (status == STATUS_ABORTED || message?.contains("INSTALL_FAILED_ABORTED") == true) CANCELLED
+        else "v$version install failed ($status${if (message != null) ": $message" else ""})"
+}
+
 /** `sha256sum` output: "<64 hex>  name" or "<64 hex> *name" per line. Bad lines are skipped. */
 object Checksums {
     private val LINE = Regex("""^([0-9a-fA-F]{64}) [ *](.+)$""")

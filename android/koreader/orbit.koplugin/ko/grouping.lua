@@ -9,7 +9,8 @@
 -- :1492-1496, so wrapping CatalogLists would change nothing) and on its API class
 -- (bookorbit_api.lua). Each wrapper passes through unchanged unless its own mark is there:
 --   - a list's Sort sheet (listSortSheetModel, :659; rows :707-713) gets "By series" and
---     "By author" (action orbit-group) on a library, collection or smart scope;
+--     "By author" (action orbit-group) on every book list: a library, collection, smart scope,
+--     On device, and the whole library's lists (All books, Recently updated; v0.11.2);
 --   - orbit-group reads the list's books once (catalogBooks, 100 a page, "Reading N of M
 --     books…"), holds them (Group.remember), and opens the plugin's Series or Authors view
 --     (loadSection, bookorbit_catalog.lua:974) for them: listSectionParams (:246) hands the
@@ -48,6 +49,7 @@ function Grouping.start(cat, section)
         return open(context.orbit_snapshot)
     end
     cat:runConnected(function()
+        local t0 = now_s()
         local books, total, page = {}, nil, 1
         while true do
             local label = total and string.format("Reading %d of %d books…", #books, total) or "Reading the list…"
@@ -67,7 +69,8 @@ function Grouping.start(cat, section)
         end
         local token = Group.remember({ list = list, params = params, title = context.title or "", books = books })
         context.orbit_snapshot = token
-        log("lists: read", #books, "books of", list.section, tostring(list.id), "for", section)
+        log("lists: read", #books, "books of", list.section, tostring(list.id or ""), "for", section,
+            string.format("in %d ms (%d page(s))", math.floor((now_s() - t0) * 1000 + 0.5), page))
         UIManager:nextTick(function() open(token) end)
     end)
 end
@@ -241,10 +244,22 @@ function Grouping.install(why)
             local snap = Group.held[nxt.group.token]
             if snap then
                 local og = nxt.group
-                local books = og.author and Group.select(snap.books, og.author, nil) or snap.books
-                local rows = og.section == "authors" and Group.authors(books) or Group.series(books)
+                local t0 = os.clock()
+                -- The groups are built once per held list (and author); paging, sort and filter
+                -- reuse them.
+                snap.rows = snap.rows or {}
+                local rk = og.section .. "|" .. tostring(og.author or "")
+                local built = snap.rows[rk]
+                if not built then
+                    local books = og.author and Group.select(snap.books, og.author, nil) or snap.books
+                    built = { rows = og.section == "authors" and Group.authors(books) or Group.series(books),
+                        extra = og.author and Group.standalone(books) or nil }
+                    snap.rows[rk] = built
+                    log(string.format("lists: grouped %d books of %s by %s in %d ms", #snap.books, tostring(snap.list.section),
+                        og.section == "authors" and "author" or "series", math.floor((os.clock() - t0) * 1000 + 0.5)))
+                end
                 self._orbit_tag = og
-                return Group.sectionBody(rows, og.section, nxt.params, og.author and Group.standalone(books) or nil)
+                return Group.sectionBody(built.rows, og.section, nxt.params, built.extra)
             end
         end
         return stock(self, text, fn, opts)

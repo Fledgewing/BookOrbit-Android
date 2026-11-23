@@ -44,10 +44,32 @@ local function openFile()
     return ui and ui.document and ui.document.file or nil
 end
 
--- What we saved of each book's detail: the end-of-book cache (files with their hashes).
-local function details()
+-- What we saved of each book's detail (files with their hashes), for the books in BookOrbit's
+-- state: the end-of-book cache, and the offline mirror's details (every book a saved list names,
+-- since v0.11.2), the newer of the two.
+function Copies.details(books)
+    local out = {}
     local okc, c = pcall(EOB.cache)
-    return okc and c or {}
+    for k, v in pairs(okc and type(c) == "table" and c or {}) do out[k] = v end
+    local want = {}
+    for _, b in pairs(books or {}) do
+        if type(b) == "table" and b.bookId ~= nil then want[tostring(b.bookId)] = true end
+    end
+    local okx, idx = pcall(OC.index)
+    for key, meta in pairs(okx and idx.entries or {}) do
+        local path = type(meta) == "table" and meta.path and tostring(meta.path) or ""
+        local id = path:match("/catalog/books/(%d+)$") or path:match("/catalog/books/(%d+)%?")
+        if id and want[id] then
+            local cur = out[id]
+            if not cur or (meta.validated_at or 0) >= (cur.saved_at or 0) then
+                local e = OC.get(key)
+                if e and type(e.body) == "table" and type(e.body.files) == "table" then
+                    out[id] = { id = e.body.id, files = e.body.files, saved_at = meta.validated_at }
+                end
+            end
+        end
+    end
+    return out
 end
 
 -- Finds the changed copies and queues them. Returns how many are queued.
@@ -57,19 +79,21 @@ function Copies.scan(why)
     if not sm then return 0 end
     local okb, books = pcall(function() local st = sm.state(); return st and st.books end)
     if not okb or type(books) ~= "table" then return 0 end
-    local found = CopiesPlan.candidates(books, details())
+    local found = CopiesPlan.candidates(books, Copies.details(books))
     local present = {}
     for _, c in ipairs(found) do
         if Copies.exists(c.path) then table.insert(present, c) end
     end
     local c = index()
     local added = CopiesPlan.enqueue(c.queue, present)
+    local n = 0
+    for _ in pairs(books) do n = n + 1 end
     if added > 0 then
-        log(string.format("copies: %d changed; replacing (%s)", #c.queue, tostring(why)))
+        log(string.format("copies: checked %d copies (%s); %d changed; replacing", n, tostring(why), #c.queue))
         OC.saveIndex()
-    elseif not Copies.logged_none and #c.queue == 0 then
-        Copies.logged_none = true
-        log("copies: all " .. tostring(#found == 0 and "copies match the library" or "changed copies are gone from the reader"))
+    elseif #c.queue == 0 then
+        log(string.format("copies: checked %d copies (%s); %s", n, tostring(why),
+            #found == 0 and "all match the library" or "the changed ones are gone from the reader"))
     end
     return #c.queue
 end
@@ -219,7 +243,10 @@ end
 -- Online and not reading: find changed copies (at most every 10 min) and work the queue.
 function Copies.tick(why)
     if S.keep_copies_current == false or Copies.busy or Copies.active then return end
-    if reading() or not NetworkMgr:isConnected() then return end
+    if reading() or not NetworkMgr:isConnected() then
+        if why == "full refresh" then log("copies: check waits (" .. (reading() and "reading" or "offline") .. ")") end
+        return
+    end
     local t = now_s()
     if not Copies.scanned_at or t - Copies.scanned_at > 600 or why == "full refresh" then
         Copies.scanned_at = t

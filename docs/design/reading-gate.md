@@ -12,8 +12,13 @@ the screen goes off).
 ## The gate
 
 **Plugin.** `reading()` (`ko/home.lua`) is true when a document is open, KOReader is in front
-(`Wifi.state().foreground`), BookOrbit Home or a list is not on top of it, no reader menu is open
-and the end-of-book sheet isn't showing. `Gate.show(what, fn, max_age_s)` runs `fn` at once when
+(`Wifi.state().foreground`), BookOrbit is not over the book, no reader menu is open and the
+end-of-book sheet isn't showing. "BookOrbit over the book" (`bookorbitOverBook`, v0.11.2) walks the
+window stack down to the ReaderUI: BookOrbit's catalog (Home or any list) or one of its views,
+menus or dialogs (`bookorbit_*` widgets) anywhere above the book counts, whatever floats over them
+(its loading pills, KOReader's messages: v0.11.1 held the Full refresh progress "while reading"
+with Home on screen). Its status pills alone over the book don't. Just in time Wi-Fi's "done in a
+book" off uses the same test (`ko/wifi.lua`). `Gate.show(what, fn, max_age_s)` runs `fn` at once when
 not reading, else queues it (one entry per kind, the newest wins). `Gate.drain` shows what is
 queued when BookOrbit Home comes on top, a book closes, and KOReader resumes; entries older than
 their `max_age_s` (default 10 min; the wake banner 1 min, BookOrbit toasts 2 min) are dropped and

@@ -240,9 +240,46 @@ function LF.quiet(cat)
     local new_d = BoardData.build(cat, cat.current_context, os.time())
     local tiles = LF.tilesOf(cat)
     local changed = LocalFirst.changedTiles(tiles, tiles, old_d, new_d) or {}
+    LF.logChanged(tiles, changed, old_d, new_d)
     cat._board_ctx.d = new_d
     for _, i in ipairs(changed) do pcall(cat.boardRefreshTile, cat, cat._board_tiles[i]) end
     return #changed
+end
+
+-- One line per changed tile: which one and what in it changed (why a quiet repaint happened).
+function LF.logChanged(tiles, changed, old_d, new_d)
+    for _, i in ipairs(changed or {}) do
+        local t = tiles[i] or {}
+        local okd, what = pcall(LocalFirst.tileDiff, t.kind, old_d, new_d, t.source)
+        log("local-first: tile", tostring(i), tostring(t.kind) .. (t.source and ("/" .. tostring(t.source)) or ""),
+            "changed:", okd and tostring(what) or ("? " .. tostring(what)))
+    end
+end
+
+-- The on-device marks for Home's first paint. The catalog is built with none
+-- (bookorbit_catalog.lua:322 on_device = {}) and paints Home (initialDashboardContext, :332)
+-- before it reads them (:353 hydrateOnDeviceMaps, next tick): every book on the reader drew
+-- "Download", then "Resume" once the refresh landed (v0.11.1 on the M8C, every Home open). The
+-- plugin's maps when it has them (BookOrbitStateManager.onDeviceMaps, what refreshOnDevice
+-- :592-611 adopts), else the ones kept from the last start.
+function LF.primeOnDevice(cat)
+    if type(cat) ~= "table" then return 0 end
+    if type(cat.on_device) == "table" and next(cat.on_device) ~= nil then return 0 end
+    local sm = package.loaded["bookorbit_state_manager"]
+    if type(sm) == "table" and Compat.callable(sm.hasOnDeviceMaps) and Compat.callable(sm.onDeviceMaps) then
+        local okh, has = pcall(sm.hasOnDeviceMaps)
+        local okm, maps = false, nil
+        if okh and has then okm, maps = pcall(sm.onDeviceMaps) end
+        if okm and type(maps) == "table" and type(maps.byBookId) == "table" then
+            cat.on_device, cat.on_device_files = maps.byBookId, maps.byFileId or cat.on_device_files
+            cat.on_device_generation = maps.generation
+            local n = 0
+            for _ in pairs(maps.byBookId) do n = n + 1 end
+            log("local-first: first paint with BookOrbit's on-device marks for", n, "book(s)")
+            return n
+        end
+    end
+    return LF.seedOnDevice(cat)
 end
 
 function LF.tilesOf(cat)
@@ -606,6 +643,7 @@ function LF.quietSwitch(cat, old, item_table, context)
     local tiles = LF.tilesOf(cat)
     local changed = LocalFirst.changedTiles(tiles, tiles, old_d, new_d)
     if not changed then return false end
+    LF.logChanged(tiles, changed, old_d, new_d)
     cat._board_ctx.d = new_d
     cat:boardRefreshClock() -- the header: "updated just now"
     for _, i in ipairs(changed) do cat:boardRefreshTile(cat._board_tiles[i]) end

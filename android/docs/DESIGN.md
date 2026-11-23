@@ -462,7 +462,8 @@ instrumented tests).
 ## Lists by series and by author (v0.6.0)
 
 Mockups reviewed 11-22 (the list's Sort sheet, Series in a list, a series in the list,
-Authors in a list, an author by series). On any library, collection or smart scope, the
+Authors in a list, an author by series). On every book list (a library, collection, smart scope, On device, and since v0.11.2 the
+whole library's lists: All books, Recently updated, Recently added), the
 Sort sheet gets "By series" and "By author" at the top. They open the plugin's own Series and
 Authors views, limited to that list; sort, Reading/Finished, the name filter, the A-Z rail and
 paging all work. Tapping a series shows the list's books in it ("Whole series" switches to the

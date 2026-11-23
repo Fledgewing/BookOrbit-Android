@@ -112,6 +112,7 @@ function OC.wipe(why)
     end
     OC._index = { v = Cache.VERSION, entries = {} }
     OC.memo, OC.memo_order = {}, {}
+    OC.storage = nil
     OC.saveIndex()
 end
 
@@ -169,12 +170,17 @@ function OC.adopt(key, e, bytes)
     local ids = {}
     for id in pairs(Cache.ids(e.body)) do table.insert(ids, id) end
     local old = idx.entries[key]
+    local old_bytes, old_kind = old and old.bytes or 0, old and (old.keep and "kept" or "cache")
     local mirror = (old and old.mirror) or e.mirror or nil
     idx.entries[key] = { bytes = bytes, fetched_at = e.fetched_at, validated_at = e.validated_at, used_at = nowT(),
         ids = ids, home = Cache.isHome(e.path) or nil, keep = (Cache.isHome(e.path) or mirror) and true or nil,
         mirror = mirror, path = e.path }
     OC.done[key] = true
+    local new = idx.entries[key]
+    if old_kind then OC.storageAdd(-old_bytes, old_kind) end
+    OC.storageAdd(bytes or 0, new.keep and "kept" or "cache")
     for _, k in ipairs(Cache.evict(idx.entries, Cache.MAX_BYTES, Cache.MAX_ENTRIES)) do
+        if idx.entries[k] then OC.storageAdd(-(idx.entries[k].bytes or 0), "cache") end
         idx.entries[k] = nil
         OC.memo[k] = nil
         os.remove(OC.dir() .. "/" .. OC.hash(k) .. ".lua")
@@ -259,16 +265,17 @@ function OC.lookup(client, key, path)
     if not w then return nil end
     local owner = OC.owner(client)
     local pages, oldest = {}, nil
-    local first = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, 1) }))
+    local size = Mirror and Mirror.pageSize and Mirror.pageSize(w.identity) or nil
+    local first = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, 1, size) }))
     if not first then return nil end
     pages[1] = first.body
     oldest = first.validated_at or 0
-    local n = Cache.pageCount(type(first.body) == "table" and first.body.total)
+    local n = Cache.pageCount(type(first.body) == "table" and first.body.total, size)
     for i = 2, n do
-        local pe = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, i) }))
+        local pe = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, i, size) }))
         if pe then pages[i] = pe.body; oldest = math.min(oldest, pe.validated_at or 0) end
     end
-    local b = Cache.slice(w, pages)
+    local b = Cache.slice(w, pages, size)
     if not b then return nil end
     return { key = key, body = b, validated_at = oldest, path = path, from_mirror = true }
 end
@@ -625,6 +632,113 @@ function OC.cleanEtags(dir)
     return n
 end
 
+---------------------------------------------------------------- the storage limit (v0.11.2)
+
+-- Everything Orbit stores counts (Orbit menu › Storage limit, S.storage_limit_mb): the cache
+-- directory (browsing entries, the mirror's lists and details, the index) and the covers in the
+-- plugin's cover directory, mirrored or not. Book files and KOReader's own data don't. The size is
+-- counted on start and kept up to date on each write; over the limit, Cache.storagePlan says
+-- what goes. The 64 MB / 20000-entry cap (Cache.evict in OC.adopt) is the browsing cache's share.
+local MB = 1048576
+
+function OC.limitBytes()
+    local mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB
+    return mb > 0 and mb * MB or nil
+end
+
+function OC.coverDir()
+    if OC.cover_dir then return OC.cover_dir end
+    local okd, DataStorage = pcall(require, "datastorage")
+    return okd and DataStorage:getDataDir() .. "/cache/bookorbit" or nil
+end
+
+local function fileSize(path) return lfs_ok and tonumber(lfs.attributes(path, "size")) or 0 end
+
+-- Every stored thing with its size, last use and kind (Cache.storagePlan's items).
+function OC.storageItems()
+    local items = {}
+    for k, e in pairs(OC.index().entries) do
+        table.insert(items, { k = "e:" .. k, bytes = e.bytes or 0, at = e.used_at or 0, kind = e.keep and "kept" or "cache" })
+    end
+    table.insert(items, { k = "index", bytes = fileSize(OC.dir() .. "/index.lua"), at = 0, kind = "kept" })
+    local dir = OC.coverDir()
+    if lfs_ok and dir and lfs.attributes(dir, "mode") == "directory" then
+        local keep = S.mirror_covers and Mirror and Mirror.state().cover_keep or {}
+        for name in lfs.dir(dir) do
+            if name:match("%.jpg$") then
+                local a = lfs.attributes(dir .. "/" .. name)
+                if type(a) == "table" and a.mode == "file" then
+                    table.insert(items, { k = "c:" .. name, bytes = (a.size or 0) + fileSize(dir .. "/" .. name .. ".etag"),
+                        at = a.modification or 0, kind = keep[name] and "mirror_cover" or "cover" })
+                end
+            end
+        end
+    end
+    return items
+end
+
+local function totalsOf(items, drop)
+    local gone = {}
+    for _, k in ipairs(drop or {}) do gone[k] = true end
+    local t = { used = 0, kept = 0, cache = 0, cover = 0, mirror_cover = 0 }
+    for _, e in ipairs(items) do
+        if not gone[e.k] then t.used = t.used + e.bytes; t[e.kind] = (t[e.kind] or 0) + e.bytes end
+    end
+    return t
+end
+
+-- Counts everything and, over the limit, removes what Cache.storagePlan says, in its order.
+function OC.storageEnforce(why)
+    if OC.child then return OC.storage end
+    local limit = OC.limitBytes()
+    local items = OC.storageItems()
+    local plan = Cache.storagePlan(items, limit)
+    if #plan.drop > 0 then
+        local idx, dir = OC.index(), OC.coverDir()
+        local kinds, n = {}, { cache = 0, cover = 0, mirror_cover = 0 }
+        for _, e in ipairs(items) do kinds[e.k] = e.kind end
+        for _, k in ipairs(plan.drop) do
+            local key, name = k:match("^e:(.*)$"), k:match("^c:(.*)$")
+            if key then
+                idx.entries[key] = nil
+                OC.memo[key] = nil
+                os.remove(OC.dir() .. "/" .. OC.hash(key) .. ".lua")
+            elseif name and dir then
+                os.remove(dir .. "/" .. name)
+                os.remove(dir .. "/" .. name .. ".etag")
+            end
+            n[kinds[k]] = (n[kinds[k]] or 0) + 1
+        end
+        OC.saveIndex()
+        log(string.format("storage: %.1f MB of %d MB (%s); removed %d browsing entries, %d covers, %d saved-for-offline covers -> %.1f MB",
+            plan.used / MB, math.floor(limit / MB), tostring(why), n.cache, n.cover, n.mirror_cover, plan.after / MB))
+    end
+    OC.storage = totalsOf(items, plan.drop)
+    return OC.storage
+end
+
+-- What Orbit stores now ({ used, kept, cache, cover, mirror_cover } bytes), counted once.
+function OC.storageTotals()
+    return OC.storage or OC.storageEnforce("count")
+end
+
+-- A write of delta bytes of a kind: over the limit, the storage plan runs.
+function OC.storageAdd(delta, kind)
+    local st = OC.storage
+    if OC.child or not st or delta == 0 then return end
+    st.used = st.used + delta
+    st[kind] = (st[kind] or 0) + delta
+    local limit = OC.limitBytes()
+    if limit and st.used > limit then OC.storageEnforce("over the limit") end
+end
+
+-- "Using 58 MB" (the setting's line).
+function OC.storageText()
+    local st = OC.storageTotals()
+    local mb = (st and st.used or 0) / MB
+    return string.format(mb < 10 and _("Using %.1f MB") or _("Using %d MB"), mb < 10 and mb or math.floor(mb + 0.5))
+end
+
 -- A cover file that is there and looks like an image.
 function OC.coverOk(path)
     local head = readFile(path, 16)
@@ -696,8 +810,13 @@ end
 -- Hold ⟳ / the menu: this view (and Home) from the server; bad cover files replaced, good ones
 -- asked If-None-Match.
 function OC.fullRefresh(cat)
+    -- A second press while one is saving keeps that run and shows its progress (v0.11.1 on the
+    -- M8C: four presses restarted it four times).
+    if Mirror and Mirror.fullRunning() then return Mirror.showProgress("pressed again") end
     if whenOnline("Full refresh", function() OC.fullRefresh(cat) end) then return end
     log("cache: Full refresh")
+    -- Copies whose library file changed are looked for now (and again once the details are saved).
+    if Copies and Copies.tick then UIManager:scheduleIn(2, function() pcall(Copies.tick, "full refresh") end) end
     OC.note(_("Full refresh: reloading everything from BookOrbit…"), 3)
     OC.begin("full")
     if type(cat.thumbnail_failures) == "table" then cat.thumbnail_failures = {} end
@@ -896,6 +1015,8 @@ function OC.install(why)
     -- body; the local overlay goes on top in BoardData.build. Anything not saved -> the plugin's.
     if Compat.callable(Catalog.initialDashboardContext) and Compat.callable(Catalog.dashboardRootFetch) then
         wrap(Catalog, "initialDashboardContext", function(stock) return function(self, ...)
+            -- The first paint shows which books are on the reader (Resume, never Download first).
+            if LF and LF.primeOnDevice then pcall(LF.primeOnDevice, self) end
             if not OC.on() then return stock(self, ...) end
             OC.cache_only = true
             local prefer = self.prefer_cached_dashboard
@@ -929,11 +1050,23 @@ function OC.install(why)
             for _, v in pairs(type(results) == "table" and results or {}) do if v then okn = okn + 1 else bad = bad + 1 end end
             log("covers: batch of", #(batch or {}), "->", results == nil and "interrupted" or (okn .. " saved, " .. bad .. " failed"),
                 generation ~= self.thumbnail_generation and "(view changed; not drawn)" or "")
+            -- Written in the child: counted at about 100 KB each; over the limit, counted for real.
+            if okn > 0 then pcall(OC.storageAdd, okn * 100 * 1024, "cover") end
             return results
         end end, "cache")
     end
+    pcall(Mirror.guardPrune, Catalog)
     OC.installed = true
     log("cache: installed (" .. tostring(why) .. ")")
+    -- The storage limit, counted on start.
+    UIManager:scheduleIn(8, function()
+        local okc, st = pcall(OC.storageEnforce, "start")
+        if okc and st then
+            local limit = OC.limitBytes()
+            log(string.format("storage: using %.1f MB of %s (lists and books saved for offline %.1f MB, covers %.1f MB, of them saved for offline %.1f MB)",
+                st.used / MB, limit and (math.floor(limit / MB) .. " MB") or "no limit", st.kept / MB, (st.cover + st.mirror_cover) / MB, st.mirror_cover / MB))
+        elseif not okc then log("storage: count failed:", tostring(st)) end
+    end)
     UIManager:scheduleIn(5, function()
         pcall(function() OC.cleanEtags(require("datastorage"):getDataDir() .. "/cache/bookorbit") end)
         pcall(OC.drainEvents)

@@ -102,6 +102,7 @@ end
 
 function OrbitAndroid:onNetworkConnected()
     Wifi.kick()
+    if Mirror and Mirror.kick then Mirror.kick("network up") end
 end
 
 function OrbitAndroid:onPageUpdate(page)

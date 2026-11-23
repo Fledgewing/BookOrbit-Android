@@ -159,6 +159,8 @@ class StatusActivity : EinkActivity() {
     override fun onResume() {
         super.onResume()
         OrbitService.start(this)
+        // Back from Android's install prompt: "Android is checking the update…" while it verifies.
+        Updater.onPageResumed(this)
         // The first-run choice (docs/design/addon-mode.md §4.1): existing installs were set to
         // Full by the migration in OrbitService.start, so only a new install sees it.
         if (!prompted && Prefs(this).mode == null) {

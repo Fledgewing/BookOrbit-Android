@@ -113,6 +113,21 @@ function OrbitAndroid:menuItems()
         checked_func = function() return S.mirror_auto == false end,
         callback = function() S.mirror_auto = false; saveSettings() end,
     })
+    -- Storage limit (v0.11.2): one limit on everything Orbit stores (OC.storageEnforce).
+    local limit_items = {}
+    for _i, mb in ipairs(Cache.STORAGE_LIMITS_MB) do
+        table.insert(limit_items, {
+            text = mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%d GB"), mb / 1024) or string.format(_("%d MB"), mb)),
+            radio = true,
+            checked_func = function() return (tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB) == mb end,
+            callback = function()
+                S.storage_limit_mb = mb
+                saveSettings()
+                log("storage: limit set to", mb == 0 and "none" or (mb .. " MB"))
+                pcall(OC.storageEnforce, "limit changed")
+            end,
+        })
+    end
     local cap_items = {}
     for _i, c in ipairs({ 10, 15, 20 }) do
         table.insert(cap_items, {
@@ -220,6 +235,27 @@ function OrbitAndroid:menuItems()
         { text = _("Full refresh of BookOrbit"), callback = later(function() OC.menuFullRefresh() end),
           help_text = _("Gets this view and Home fresh from the server, re-checks the covers, then saves everything reachable from Home for reading offline. Tap ⟳ for a normal refresh; hold ⟳ for this.") },
         { text_func = function() return Mirror.savedText() end, keep_menu_open = true, callback = function() end },
+        {
+            text = _("Save every cover for offline (about 100 KB per book)"),
+            checked_func = function() return S.mirror_covers == true end,
+            help_text = _("A Full refresh also saves the cover of every book it saves, and keeps them. Off: covers are saved as you see books, and the oldest go when there are many. Turning it off deletes nothing."),
+            callback = function()
+                S.mirror_covers = not S.mirror_covers
+                saveSettings()
+                log("mirror: every cover for offline", S.mirror_covers and "on" or "off")
+                if S.mirror_covers then pcall(Mirror.coverPass, "turned on") end
+            end,
+        },
+        {
+            text_func = function()
+                local mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB
+                local okt, used = pcall(OC.storageText)
+                return _("Storage limit: ") .. (mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%d GB"), mb / 1024) or string.format(_("%d MB"), mb)))
+                    .. (okt and (" · " .. used) or "")
+            end,
+            help_text = _("One limit on everything Orbit stores: pages it saved, books saved for offline and covers. Book files and KOReader's own data don't count. Over it, the least recently used pages and covers go first, then covers saved for offline; the lists and book details saved for offline always stay."),
+            sub_item_table = limit_items,
+        },
         {
             text_func = function()
                 if S.mirror_auto == false then return _("Automatic Full refresh: off") end

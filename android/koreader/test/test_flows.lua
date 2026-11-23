@@ -2643,8 +2643,8 @@ end)
 
 test("lists: pass-through when nothing is marked", function()
     lists_server.urls = {}
-    local cat = newCatalog(LCat, LApi, { kind = "books", title = "All books", params = { sort = "title" } })
-    ok(#cat:listSortSheetModel({}).rows == 1, "no list: no rows")
+    local cat = newCatalog(LCat, LApi, { kind = "books", title = "Search", params = { sort = "title", q = "sky" } })
+    ok(#cat:listSortSheetModel({}).rows == 1, "a search: no rows")
     cat:listRun({ kind = "back" })
     ok(cat.stock_run == "back", "other actions: the plugin's")
     cat.current_context = { kind = "section", section = "series" }
@@ -3215,6 +3215,7 @@ local function cacheSetup(prep)
         if not W.wifi and cache.strict_offline then return nil, "wantread" end
         if cache.server_fn then
             local b = cache.server_fn(path)
+            if b == false then return nil, "timeout" end -- no answer (a transport error, not HTTP)
             if b == nil then return nil, 404 end
             return E.Cache.copy(b)
         end
@@ -3275,6 +3276,7 @@ local function cacheTeardown()
     local lfs = require("libs/libkoreader-lfs")
     for k, v in pairs(cache.lfs_saved) do lfs[k] = v end
     sh("rm -rf", cache.dir)
+    E.OC.storage, E.OC.cover_dir = nil, nil
     for _, k in ipairs({ "bookorbit_api", "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui", "ui/trapper" }) do
         package.loaded[k] = nil
     end
@@ -3539,7 +3541,7 @@ local function libraryServer(lib)
             elseif query.ids then
                 for id in query.ids:gmatch("%d+") do table.insert(items, { id = tonumber(id), hasCover = false }) end
             else
-                for i = 1, lib.n_books do table.insert(items, { id = i, title = "B" .. i, hasCover = false }) end
+                for i = 1, lib.n_books do table.insert(items, { id = i, title = "B" .. i, hasCover = lib.covers == true, updatedAt = "u" .. i }) end
             end
             return page(items)
         end
@@ -3922,6 +3924,366 @@ test("cache: a progress write leaves no false patch count; Continue reading move
     for _, e in pairs(E.OC.index().entries) do if e.home then m = e end end
     ok(m and m.stale, "Home marked to check")
     for _, l in ipairs(W.logs) do ok(not l:find("patched 0", 1, true), "no 'patched 0' noise: " .. l) end
+    cacheTeardown()
+end)
+
+
+---------------------------------------------------------------- v0.11.2 (M8C test of v0.11.1)
+
+test("lists: All books and Recently updated offer By series and By author; read in 100-book pages, grouped once (v0.11.2)", function()
+    package.loaded["bookorbit_catalog"], package.loaded["bookorbit_api"] = LCat, LApi
+    newUI(false)
+    for _, params in ipairs({ { sort = "title" }, { sort = "recently_updated", order = "desc" } }) do
+        lists_server.urls = {}
+        W.logs = {}
+        local cat = newCatalog(LCat, LApi, { kind = "books", title = params.sort == "title" and "All books" or "Recently updated", params = params })
+        local m = cat:listSortSheetModel({})
+        ok(m.rows[1].key == "orbit-series" and m.rows[2].key == "orbit-authors", params.sort .. ": the rows are offered")
+        cat:listRun({ kind = "orbit-group", section = "series" })
+        run(1)
+        ok(#lists_server.urls == 3, params.sort .. ": three pages of two: " .. #lists_server.urls)
+        for _, u in ipairs(lists_server.urls) do
+            ok(u:find("size=100", 1, true) and u:find("sort=title", 1, true) and not u:find("recently", 1, true), "the paged read: " .. u)
+        end
+        local ctx = cat.current_context
+        ok(ctx.section == "series" and ctx.orbit_group and ctx.total == 3, "the Series view of the whole library")
+        local grouped, read
+        for _, l in ipairs(W.logs) do
+            if l:find("lists: grouped 5 books of all by series in", 1, true) then grouped = (grouped or 0) + 1 end
+            if l:find("lists: read 5 books of all", 1, true) and l:find(" ms (3 page(s))", 1, true) then read = true end
+        end
+        ok(grouped == 1 and read, "timed in the log: " .. table.concat(W.logs, " | "))
+        -- Page 2 of the view reuses the groups.
+        cat:loadSection("series", { replace = true, offset = 2 })
+        grouped = 0
+        for _, l in ipairs(W.logs) do if l:find("lists: grouped", 1, true) then grouped = grouped + 1 end end
+        ok(grouped == 1 and #lists_server.urls == 3, "built once per list")
+        -- A row: the server's series page with the list's filters (no ids).
+        cat:listRun({ kind = "open-series", entry = cat.current_context.entries[1] })
+        ok(cat.loaded.params.ids == nil and cat.loaded.params.orbitGroup, "a series of the library, from the server")
+    end
+    package.loaded["bookorbit_catalog"], package.loaded["bookorbit_api"] = nil, nil
+end)
+
+test("reading gate: BookOrbit over the book is not reading, whatever floats on top; Wi-Fi agrees (v0.11.2)", function()
+    RE.Gate.queue = {}
+    local ui = newUI(true)
+    local cat = { name = "catalog" }
+    ui.bookorbit.catalog_browser = cat
+    W.shown = {}
+    ok(RE.reading(), "the book alone: reading")
+    -- Home over the book, under BookOrbit's loading pill (not a toast) and a KOReader message.
+    W.shown = { ui, cat, { name = "bookorbit_toast" }, { name = "InfoMessage" } }
+    ok(not RE.reading(), "Home over the book with a pill and a message on top: not reading")
+    local shown
+    RE.Gate.show("BookOrbit show: Full refresh · saving for offline 1/146", function() shown = true end)
+    ok(shown and #RE.Gate.queue == 0, "the Full refresh progress shows at once")
+    W.shown = { ui, { name = "bookorbit_book_sheet" } }
+    ok(not RE.reading(), "a BookOrbit sheet over the book")
+    W.shown = { ui, { name = "bookorbit_menu_sheet" }, { name = "bookorbit_confirm" } }
+    ok(not RE.reading(), "a BookOrbit menu and dialog over the book")
+    W.shown = { ui, { name = "bookorbit_toast" } }
+    ok(RE.reading(), "a BookOrbit pill alone over the book: still reading")
+    W.shown = { cat, ui }
+    ok(RE.reading(), "the book over the catalog: reading")
+    -- The Wi-Fi plan's "browsing" is the same test: no "done in a book" off with Home over it.
+    W.shown = { ui, cat, { name = "bookorbit_toast" } }
+    local hosts = RE.bookorbit
+    RE.bookorbit = function() return ui.bookorbit end
+    ok(RE.bookorbitOverBook(RE.bookorbit()), "browsing for the Wi-Fi plan")
+    local st = RE.WifiPlan.new("jit", 2, 0)
+    st.in_book, st.last_flow, st.release_at, st.last_activity = true, "wake", W.clock - 1, W.clock
+    local a = RE.WifiPlan.decide(st, { now = W.clock, wifi_on = true, browsing = RE.bookorbitOverBook(RE.bookorbit()) })
+    ok(a == nil, "kept on while paging BookOrbit lists over the book")
+    RE.bookorbit = hosts
+    W.shown = {}
+end)
+
+test("mirror: a request with no answer is retried in smaller pages, then skipped; the run goes on (v0.11.2)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local base = libraryServer({ n_books = 3, series4 = 2 })
+    local asked = {}
+    cache.server_fn = function(path)
+        -- The series index never answers in pages of 100 (M8C: no answer after 60 s); authors never at all.
+        if path:find("/sections/series", 1, true) and path:find("size=100", 1, true) then table.insert(asked, path); return false end
+        if path:find("/sections/authors", 1, true) then return false end
+        return base(path)
+    end
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        client:request("GET", DASH)
+        W.logs = {}
+        E.OC.fullRefresh(cat)
+        run(900)
+        local m = E.Mirror.state()
+        ok(m.at and #m.queue == 0, "finished: " .. #m.queue .. " left")
+        local series = m.lists["/koreader/plugin/catalog/sections/series"]
+        ok(series and series.size == 50, "the series index saved in pages of 50: " .. tostring(series and series.size))
+        ok(m.lists["/koreader/plugin/catalog/sections/authors"] == nil and m.skipped == 1, "authors skipped: " .. tostring(m.skipped))
+        local log = table.concat(W.logs, "\n")
+        ok(log:find("sections/series?page=1&size=100 failed (timeout), try 1 of 3; again in 5s, in pages of 50", 1, true), "retried smaller")
+        ok(log:find("sections/authors?page=1&size=50 failed (timeout), try 2 of 3; again in 10s, in pages of 25", 1, true), "backed off")
+        ok(log:find("sections/authors?page=1&size=25 skipped after 3 tries (timeout); the rest continues", 1, true), "then skipped")
+        ok(log:find("mirror: %d+/%d+ saved"), "progress in the log")
+        ok(not log:find("paused (offline)", 1, true), "never offline")
+        -- Offline, the series index opens from its pages of 50.
+        W.wifi, cache.strict_offline = false, true
+        local b = offlineRead(cat, client, "/koreader/plugin/catalog/sections/series?offset=0&size=11")
+        ok(b and b.items[1].seriesId == 4, "the series index offline")
+        W.wifi, cache.strict_offline = true, nil
+    end)
+    cacheTeardown()
+end)
+
+test("mirror: a second Full refresh keeps the run; a paused run resumes at network up, wake or Home (v0.11.2)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server_fn = libraryServer({ n_books = 30, series4 = 2 })
+    local notes = {}
+    E.OC.note = function(t) table.insert(notes, t) end
+    local cat = pluginCatalog(Cat, client)
+    local _ui, mod = newUI(false)
+    withHost(cat, function()
+        client:request("GET", DASH)
+        E.OC.fullRefresh(cat)
+        run(3)
+        local m = E.Mirror.state()
+        local done, total = m.done, m.total
+        ok(E.Mirror.fullRunning() and done > 0, "saving: " .. tostring(done))
+        notes = {}
+        W.logs = {}
+        E.OC.fullRefresh(cat)
+        E.OC.fullRefresh(cat)
+        ok(m.done >= done and m.total >= total and #m.queue > 0, "the run is kept, not restarted")
+        ok(notes[1] and notes[1]:find("^Full refresh · saving for offline %d+/%d+"), "its progress shown: " .. tostring(notes[1]))
+        ok(table.concat(W.logs, "\n"):find("Full refresh already running (pressed again); kept", 1, true), "logged")
+        -- The network goes mid-run: paused; it comes back: resumed, no read needed.
+        W.wifi = false
+        run(5)
+        ok(not E.Mirror.active and #m.queue > 0, "paused offline")
+        W.wifi = true
+        W.logs = {}
+        mod:onNetworkConnected()
+        run(900)
+        ok(table.concat(W.logs, "\n"):find("mirror: resuming (network up)", 1, true), "resumed at network up: " .. table.concat(W.logs, " | "))
+        ok(#m.queue == 0 and m.at, "finished")
+    end)
+    cacheTeardown()
+end)
+
+test("mirror: Full refresh saves every book's details, outside the cap; covers only with 'Save every cover' (v0.11.2)", function()
+    local client, Cat = cacheSetup(function(Cat)
+        function Cat:pruneThumbnailCache() for _, p in ipairs(cache.prune or {}) do os.remove(p) end end
+    end)
+    W.wifi = true
+    cache.server_fn = libraryServer({ n_books = 4, series4 = 2, covers = true })
+    local cat = pluginCatalog(Cat, client)
+    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. b.id .. "_" .. tostring(b.updatedAt) .. ".jpg" end
+    withHost(cat, function()
+        client:request("GET", DASH)
+        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
+        E.S.mirror_covers = false
+        E.OC.fullRefresh(cat); run(900)
+        local details = {}
+        for _, c in ipairs(cache.calls) do
+            local id = c:match("^GET /koreader/plugin/catalog/books/(%d+)")
+            if id then details[tonumber(id)] = true end
+        end
+        ok(details[1] and details[2] and details[3] and details[4], "every listed book's details saved")
+        local kept = 0
+        for _, meta in pairs(E.OC.index().entries) do
+            if meta.path and meta.path:find("/catalog/books/%d") and meta.keep and meta.mirror then kept = kept + 1 end
+        end
+        ok(kept >= 4, "details are mirror entries, kept outside the cap: " .. kept)
+        ok((E.Mirror.state().cover_total or 0) == 0, "no covers fetched for lists with the setting off: " .. tostring(E.Mirror.state().cover_total))
+        -- On: Full refresh fetches every cover the mirror lists, shows them in its progress, and
+        -- the plugin's pruner leaves them.
+        E.S.mirror_covers = true
+        local notes = {}
+        E.OC.note = function(t) table.insert(notes, t) end
+        E.OC.fullRefresh(cat); run(900)
+        local m = E.Mirror.state()
+        ok((m.cover_total or 0) >= 4, "every book's cover queued: " .. tostring(m.cover_total))
+        local said
+        for _, n in ipairs(notes) do if n:find(" · covers %d+/%d+") then said = true end end
+        ok(said, "covers in the Full refresh note: " .. table.concat(notes, " | "))
+        local a, other = cache.dir .. "/covers/1_u1.jpg", cache.dir .. "/covers/999_x.jpg"
+        io.open(a, "w"):close(); io.open(other, "w"):close()
+        cache.prune = { a, other }
+        cat:pruneThumbnailCache()
+        ok(io.open(a, "rb") and not io.open(other, "rb"), "a mirrored cover stays, another goes")
+        -- Off again: nothing deleted now; the plugin's pruner treats them like any cover.
+        E.S.mirror_covers = false
+        ok(io.open(a, "rb"), "turning it off deletes nothing")
+        cat:pruneThumbnailCache()
+        ok(not io.open(a, "rb"), "back under the plugin's cap")
+        cache.prune = nil
+    end)
+    E.S.mirror_covers = nil
+    cacheTeardown()
+end)
+
+test("copies: a Full refresh and Home look for changed copies; the mirror's details find a changed hash (v0.11.2)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local base = libraryServer({ n_books = 3, series4 = 2 })
+    cache.server_fn = function(path)
+        local id = path:match("/catalog/books/(%d+)%f[^%d]")
+        if id then return { id = tonumber(id), files = { { id = tonumber(id) * 10, fileHash = "srv" .. id } } } end
+        return base(path)
+    end
+    local cat = pluginCatalog(Cat, client)
+    local whys = {}
+    local tick = E.Copies.tick
+    E.Copies.tick = function(why) table.insert(whys, why) end
+    E.EOB.details = {} -- only what the mirror saved
+    withHost(cat, function()
+        client:request("GET", DASH)
+        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
+        E.OC.fullRefresh(cat); run(900)
+        local all = table.concat(whys, ",")
+        ok(all:find("full refresh", 1, true), "Full refresh looks: " .. all)
+        whys = {}
+        E.Mirror.kick("Home"); run(3)
+        ok(whys[1] == "Home", "Home open looks (no catalog read needed): " .. table.concat(whys, ","))
+        -- Book 2's copy on the reader has the old hash; its saved detail lists the new one.
+        local books = { old2 = { file = "/books/b.epub", bookId = 2, fileId = 20 }, srv3 = { file = "/books/c.epub", bookId = 3, fileId = 30 } }
+        local d = E.Copies.details(books)
+        ok(d["2"] and d["2"].files[1].fileHash == "srv2", "the mirror's detail of book 2")
+        local found = E.CopiesPlan.candidates(books, d)
+        ok(#found == 1 and found[1].path == "/books/b.epub" and found[1].why == "hash", "the changed copy is found from the saved details")
+    end)
+    E.Copies.tick = tick
+    cacheTeardown()
+end)
+
+test("local-first: Home's first paint has the on-device marks; a changed tile names what changed (v0.11.2)", function()
+    local client, Cat = cacheSetup(function(Cat)
+        function Cat:initialDashboardContext() return {}, { kind = "dashboard", dashboard = {}, stale = true } end
+        function Cat:dashboardRootFetch() return {}, { kind = "dashboard", dashboard = self.client:request("GET", DASH) } end
+    end)
+    W.wifi = true
+    cache.server[DASH] = { continueReading = { { id = 7, progressPercentage = 40 } } }
+    client:request("GET", DASH)
+    local sm = package.loaded["bookorbit_state_manager"]
+    package.loaded["bookorbit_state_manager"] = {
+        hasOnDeviceMaps = function() return true end,
+        onDeviceMaps = function() return { byBookId = { [7] = "/books/seven.epub" }, byFileId = {}, generation = 3 } end,
+    }
+    local cat = setmetatable({ client = client, on_device = {} }, Cat)
+    W.logs = {}
+    cat:initialDashboardContext()
+    ok(cat.on_device[7] == "/books/seven.epub", "BookOrbit's marks before the first paint (Resume, not Download)")
+    ok(table.concat(W.logs, "\n"):find("first paint with BookOrbit's on-device marks for 1 book(s)", 1, true), "logged")
+    package.loaded["bookorbit_state_manager"] = sm
+    W.logs = {}
+    E.LF.logChanged({ { key = 1, kind = "hero" } }, { 1 },
+        { continue_reading = { { id = 7, progressPercentage = 40 } } },
+        { continue_reading = { { id = 7, progressPercentage = 40, on_device = true } } })
+    ok(W.logs[1] and W.logs[1]:find("local-first: tile 1 hero changed: book 7 on device no -> yes", 1, true), "the tile and field: " .. tostring(W.logs[1]))
+    cacheTeardown()
+end)
+
+test("storage limit: over it, browsing pages and plain covers go first (least recently used), then covers saved for offline; never the saved lists (v0.11.2)", function()
+    local client, Cat = cacheSetup()
+    local MB = 1048576
+    local lfs = require("libs/libkoreader-lfs")
+    local cdir = cache.dir .. "/covers"
+    E.OC.cover_dir = cdir
+    local covers = { ["a.jpg"] = { 20, 10 }, ["m1.jpg"] = { 20, 3 }, ["m2.jpg"] = { 20, 40 } } -- MB, last seen
+    for name in pairs(covers) do io.open(cdir .. "/" .. name, "w"):close() end
+    local attributes = lfs.attributes
+    lfs.attributes = function(f, k)
+        local c = covers[tostring(f):match("^" .. cdir:gsub("%p", "%%%0") .. "/(.+)$") or ""]
+        if c and io.open(f, "rb") then
+            local a = { mode = "file", size = c[1] * MB, modification = c[2] }
+            if k then return a[k] end
+            return a
+        end
+        if k == "size" then return nil end
+        return attributes(f, k)
+    end
+    local idx = E.OC.index()
+    idx.entries = {
+        list = { bytes = 30 * MB, used_at = 1, keep = true, mirror = true },
+        old = { bytes = 30 * MB, used_at = 2 },
+        new = { bytes = 30 * MB, used_at = 50 },
+    }
+    E.S.mirror_covers = true
+    E.Mirror.state().cover_keep = { ["m1.jpg"] = true, ["m2.jpg"] = true }
+    E.S.storage_limit_mb = 100
+    W.logs = {}
+    local st = E.OC.storageEnforce("start")
+    ok(idx.entries.old == nil and not io.open(cdir .. "/a.jpg", "rb"), "the oldest page and the plain cover went first")
+    ok(idx.entries.new and io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then it was under the limit")
+    ok(st.used == 100 * MB and E.OC.storageText() == "Using 100 MB", "Using: " .. E.OC.storageText())
+    ok(table.concat(W.logs, "\n"):find("storage: 150.0 MB of 100 MB (start); removed 1 browsing entries, 1 covers, 0 saved-for-offline covers -> 100.0 MB", 1, true), "logged: " .. table.concat(W.logs, " | "))
+    -- A lower limit: the last browsing page, then the least recently seen saved cover; the list stays.
+    E.S.storage_limit_mb = 55
+    E.OC.storageEnforce("limit changed")
+    ok(idx.entries.new == nil and not io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then saved covers, oldest first")
+    ok(idx.entries.list, "the saved list stays")
+    -- A write over the limit runs the plan at once.
+    E.S.storage_limit_mb = 60
+    E.OC.storageEnforce("count")
+    idx.entries.big = { bytes = 20 * MB, used_at = 99 }
+    E.OC.storageAdd(20 * MB, "cache")
+    ok(idx.entries.big == nil and io.open(cdir .. "/m2.jpg", "rb") and E.OC.storage.used == 50 * MB, "checked on the write")
+    -- No limit: nothing goes.
+    E.S.storage_limit_mb = 0
+    idx.entries.big = { bytes = 900 * MB, used_at = 99 }
+    E.OC.storageEnforce("limit changed")
+    ok(idx.entries.big, "no limit")
+    lfs.attributes = attributes
+    E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
+    cacheTeardown()
+end)
+
+test("storage limit: it stops the every-cover pass, then the run, and the Full refresh note says so (v0.11.2)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server_fn = libraryServer({ n_books = 4, series4 = 2, covers = true })
+    local cat = pluginCatalog(Cat, client)
+    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. b.id .. "_" .. tostring(b.updatedAt) .. ".jpg" end
+    local MB = 1048576
+    local notes = {}
+    E.OC.note = function(t) table.insert(notes, t) end
+    local totals, batch = E.OC.storageTotals, E.Mirror.COVER_BATCH
+    E.Mirror.COVER_BATCH = 1
+    E.S.mirror_covers, E.S.storage_limit_mb = true, 1
+    local kept = 0.2 * MB
+    E.OC.storageTotals = function()
+        local c = E.Mirror.state().covers or {}
+        local n = (c.ok or 0) + (c.not_modified or 0) + (c.failed or 0)
+        return { used = kept + n * 0.4 * MB, kept = kept, mirror_cover = n * 0.4 * MB, cache = 0, cover = 0 }
+    end
+    withHost(cat, function()
+        client:request("GET", DASH)
+        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
+        W.logs = {}
+        E.OC.fullRefresh(cat); run(900)
+        local m = E.Mirror.state()
+        local note = m.limit_note and m.limit_note.text or ""
+        ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. Raise the limit in Orbit settings%.$"), "the stop: " .. note)
+        local shown
+        for _, n in ipairs(notes) do if n == note then shown = true end end
+        ok(shown, "in the Full refresh note: " .. table.concat(notes, " | "))
+        ok(table.concat(W.logs, "\n"):find("mirror: " .. note, 1, true), "logged")
+        local c = m.covers
+        ok((c.ok or 0) + (c.not_modified or 0) + (c.failed or 0) == 2, "two covers, then the pass stopped")
+        ok(#m.queue == 0 and m.at, "the lists and details went on to the end")
+        ok(E.Mirror.savedText():find("storage limit reached", 1, true), "the menu line says so")
+        -- Lists and details alone fill it: the whole run stops.
+        kept = 2 * MB
+        notes = {}
+        E.OC.fullRefresh(cat); run(900)
+        note = m.limit_note and m.limit_note.text or ""
+        ok(note:find("^Storage limit reached: 0 of %d+ lists and books saved"), "the run stops: " .. note)
+        ok(#m.queue == 0 and notes[#notes] == note, "shown: " .. table.concat(notes, " | "))
+    end)
+    E.OC.storageTotals, E.Mirror.COVER_BATCH = totals, batch
+    E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
     cacheTeardown()
 end)
 

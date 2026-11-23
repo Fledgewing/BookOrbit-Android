@@ -17,8 +17,13 @@ progress, highlights and bookmarks stop syncing for that book.
   plugin has no path for updating a copy (its bulk download skips books already on the device,
   `bookorbit_catalog_bulk_download.lua:965`), so Orbit adds one.
 - **When.** Online only, never while reading (the [reading gate](reading-gate.md)), one book at a
-  time, from a queue kept on disk that resumes. It runs after a Full refresh, on BookOrbit's
-  catalog reads while online, and when a book closes. The open book is never replaced.
+  time, from a queue kept on disk that resumes. It looks when a Full refresh starts and again when
+  it ends, when BookOrbit Home opens (over a book too), at a wake or the network coming up, and
+  when a book closes (at most every 10 min, except a Full refresh). v0.11.1 looked only on catalog
+  reads, which run in the plugin's child process, so on the M8C it never ran. The open book is
+  never replaced.
+- **Saved details.** The hashes come from the offline mirror's details of every book (v0.11.2) and
+  the end-of-book cache, whichever is newer.
 - **Replace in place.** The plugin's own Download path: the detail with this reader's delivery
   variant (`fetchDeliveryBook`), its supported file (the same library file when listed), and
   `downloadFile` to the **same path**: the download is checked against `fileHash` and renamed

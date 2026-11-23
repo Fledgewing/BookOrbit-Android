@@ -965,3 +965,44 @@ class UpdateFlowTest {
         assertTrue(UpdateFlow.manualLine("0.5.1", "storage access isn't allowed").endsWith("storage access isn't allowed. Setup > Orbit plugin"))
     }
 }
+
+/** v0.11.2: one install session at a time; feedback while Android verifies; ABORTED in plain words. */
+class UpdateSessionTest {
+    private val t0 = 1_000_000L
+    private fun st(phase: UpdateSession.Phase) = UpdateSession.State(7, "0.11.2", phase, t0)
+
+    @Test
+    fun noSecondSessionWhileOneIsPending() {
+        assertTrue("nothing pending", UpdateSession.canCommit(null, alive = false, nowMs = t0))
+        assertFalse("committed, still open", UpdateSession.canCommit(st(UpdateSession.Phase.COMMITTED), alive = true, nowMs = t0 + 30_000))
+        assertFalse("Android checking", UpdateSession.canCommit(st(UpdateSession.Phase.CHECKING), alive = true, nowMs = t0 + 30_000))
+        assertTrue("the session is gone", UpdateSession.canCommit(st(UpdateSession.Phase.CHECKING), alive = false, nowMs = t0 + 30_000))
+        assertTrue("no result after 10 min", UpdateSession.canCommit(st(UpdateSession.Phase.CHECKING), alive = true, nowMs = t0 + UpdateSession.STALE_MS))
+    }
+
+    @Test
+    fun tapsWhilePendingReopenThePromptOrSayAndroidIsChecking() {
+        // The M8C case: the 2nd and 3rd taps came while Play Protect was held up.
+        assertEquals(UpdateSession.Tap.SAY_CHECKING, UpdateSession.onTap(st(UpdateSession.Phase.CHECKING), alive = true, nowMs = t0 + 10_000))
+        assertEquals(UpdateSession.Tap.SAY_CHECKING, UpdateSession.onTap(st(UpdateSession.Phase.COMMITTED), alive = true, nowMs = t0 + 10_000))
+        assertEquals(UpdateSession.Tap.REOPEN_PROMPT, UpdateSession.onTap(st(UpdateSession.Phase.PROMPTED), alive = true, nowMs = t0 + 10_000))
+        assertEquals(UpdateSession.Tap.NEW_CHECK, UpdateSession.onTap(st(UpdateSession.Phase.CHECKING), alive = false, nowMs = t0 + 10_000))
+        assertEquals(UpdateSession.Tap.NEW_CHECK, UpdateSession.onTap(null, alive = false, nowMs = t0))
+    }
+
+    @Test
+    fun backFromThePromptWithTheSessionOpenMeansAndroidIsChecking() {
+        assertEquals(UpdateSession.Phase.CHECKING, UpdateSession.afterPrompt(st(UpdateSession.Phase.PROMPTED), alive = true)!!.phase)
+        assertEquals(UpdateSession.Phase.PROMPTED, UpdateSession.afterPrompt(st(UpdateSession.Phase.PROMPTED), alive = false)!!.phase)
+        assertEquals(UpdateSession.Phase.COMMITTED, UpdateSession.afterPrompt(st(UpdateSession.Phase.COMMITTED), alive = true)!!.phase)
+        assertEquals("Android is checking the update…", UpdateSession.CHECKING)
+    }
+
+    @Test
+    fun abortedReadsAsCancelledWithARetry() {
+        assertEquals("Android cancelled the install; tap to try again",
+            UpdateSession.failureLine(3, "INSTALL_FAILED_ABORTED: User rejected permissions", "0.11.1"))
+        assertEquals("Android cancelled the install; tap to try again", UpdateSession.failureLine(1, "INSTALL_FAILED_ABORTED", "0.11.1"))
+        assertEquals("v0.11.1 install failed (4: INSTALL_FAILED_INVALID_APK)", UpdateSession.failureLine(4, "INSTALL_FAILED_INVALID_APK", "0.11.1"))
+    }
+}

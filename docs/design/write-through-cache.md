@@ -76,9 +76,34 @@ Search stays online; offline it says "Search needs a connection".
 
 - **Pages.** Lists are saved as 100-item pages (the server's page maximum). Any page or offset the
   plugin asks for offline is cut from them (`Cache.slice`), so paging never asks to connect.
-- **Pacing.** One request at a time, a "Full refresh · saving for offline N/M" note every 10 s,
-  and a queue kept on disk that resumes after a restart. Wi-Fi is held only while it runs, and it
-  stops when the network goes.
+- **Details (v0.11.2).** Every book a saved list names gets its details saved too
+  (`/books/{id}`, about 7-8 KB each), so details open offline. Covers are not fetched for every
+  book: only for the books on the reader, Continue reading, Up next and the next in each series,
+  unless "Save every cover for offline (about 100 KB per book)" is on (Orbit menu, off by
+  default). With it on, every listed book's cover is saved (paced like the details, ETag rules
+  unchanged) and the plugin's cover pruner (newest 600 files) leaves those files alone; turned off,
+  nothing is deleted and they go back under the pruner.
+- **Pacing.** One request at a time, a "Full refresh · saving for offline N/M" note every 10 s
+  (with "· covers N/M" when covers are saved), `mirror: N/M saved` in the log, and a queue kept on
+  disk that resumes after a restart. Wi-Fi is held only while it runs. A second Full refresh while
+  one is saving keeps that run and shows its progress.
+- **No answer (v0.11.2).** One request that times out is not "offline": it is retried after 5 s
+  and 10 s (a list's first page in pages of 50, then 25, so a list the server is slow to page by
+  100 is saved in smaller pages), then skipped, and the run goes on. Only the network really going
+  pauses the run; a paused run resumes at the next network up, wake or BookOrbit Home.
+- **Size.** The mirror's lists and details are kept outside the 64 MB / 20000-entry cap: they
+  neither count toward it nor are evicted (`shared/fixtures/cache/cases.json` `mirror.evict`).
+- **Storage limit (v0.11.2).** One limit on everything Orbit stores (Orbit menu › Storage limit:
+  100 MB, 250 MB (default), 500 MB, 1 GB or No limit; the line shows "Using N MB"): the browsing
+  cache, the mirror's lists and details and every cover, mirrored or not. Book files and
+  KOReader's own data don't count. It is counted on start and kept up to date on each write; over
+  it, browsing entries and plain covers go first, least recently used first, then covers saved by
+  "Save every cover", least recently seen first; the mirror's lists and details never go (about
+  7 MB for 850 books). The every-cover pass stops when the mirror's own share reaches the limit,
+  and the run stops when its lists and details alone fill it; the Full refresh note and the log
+  say "Storage limit reached: 412 of 855 covers saved. Raise the limit in Orbit settings." The
+  64 MB / 20000-entry cap stays the browsing cache's share inside the limit
+  (`shared/fixtures/cache/cases.json` `storage`).
 - **Refresh.** A normal Refresh rechecks **every saved page** of a list, never only the first one.
   When a list's total changes, the list is paged again (`Cache.repage`): a series that gains a
   21st book shows it after Refresh.

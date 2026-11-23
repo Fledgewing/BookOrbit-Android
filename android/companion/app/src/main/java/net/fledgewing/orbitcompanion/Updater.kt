@@ -84,11 +84,53 @@ object Updater {
         check(ctx, interactive = false, why = why)
     }
 
+    /** The app update's install session while it has no result yet (UpdateSession). */
+    @Volatile
+    private var session: UpdateSession.State? = null
+
+    /** Android's prompt for [session], to open it again. */
+    @Volatile
+    private var sessionPrompt: Intent? = null
+
+    private fun sessionAlive(ctx: Context, s: UpdateSession.State?): Boolean =
+        s != null && try { ctx.packageManager.packageInstaller.getSessionInfo(s.id) != null } catch (e: Exception) { false }
+
+    /** Our page is in front again: back from Android's prompt with the session open means confirmed. */
+    fun onPageResumed(ctx: Context) {
+        val s = session ?: return
+        val next = UpdateSession.afterPrompt(s, sessionAlive(ctx, s))
+        if (next != s) {
+            session = next
+            log("session ${s.id}: back from the prompt, still open; Android is checking v${s.version}")
+            status(ctx, UpdateSession.CHECKING)
+        }
+    }
+
     /** [done] runs on the main thread with the final status line. */
     fun check(ctx: Context, interactive: Boolean, why: String, done: ((String) -> Unit)? = null) {
         if (busy) {
             log("check already running; ignored ($why)")
             return
+        }
+        // An install still pending: never a second session. Its prompt again, or say Android checks.
+        val pending = session
+        when (UpdateSession.onTap(pending, sessionAlive(ctx, pending), System.currentTimeMillis())) {
+            UpdateSession.Tap.NEW_CHECK -> session = null
+            UpdateSession.Tap.REOPEN_PROMPT -> {
+                log("session ${pending!!.id} for v${pending.version} still waits for the user; its prompt again ($why)")
+                val prompt = sessionPrompt
+                if (interactive && prompt != null && openPrompt(ctx, prompt)) {
+                    done?.let { d -> main.post { d(Prefs(ctx).updateStatus) } }
+                    return
+                }
+                session = null
+            }
+            UpdateSession.Tap.SAY_CHECKING -> {
+                log("session ${pending!!.id} for v${pending.version} is with Android; no new session ($why)")
+                status(ctx, UpdateSession.CHECKING)
+                done?.let { d -> main.post { d(UpdateSession.CHECKING) } }
+                return
+            }
         }
         busy = true
         // Started by hand while unlocked (Pin.run): the install window opens now, so the guard
@@ -187,6 +229,10 @@ object Updater {
         log("signer matches the installed app")
         // A check by hand: the restart that finishes it doesn't wait for the book (v0.5.5).
         if (interactive) Prefs(ctx).userUpdateAt = System.currentTimeMillis()
+        if (!UpdateSession.canCommit(session, sessionAlive(ctx, session), System.currentTimeMillis())) {
+            log("a session is still pending; not committing another")
+            return UpdateSession.CHECKING
+        }
         installApk(ctx, apk, ctx.packageName, ver.toString(), interactive, INSTALL_KEY)
         return "installing v$ver"
     }
@@ -311,7 +357,20 @@ object Updater {
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
             s.commit(PendingIntent.getBroadcast(ctx, id, cb, flags).intentSender)
         }
+        if (key == INSTALL_KEY) {
+            session = UpdateSession.State(id, version, UpdateSession.Phase.COMMITTED, System.currentTimeMillis())
+            sessionPrompt = null
+        }
         log("session $id committed for $pkg v$version (interactive=$interactive)")
+    }
+
+    /** Android's install prompt (the user started the check, so our page is in front). */
+    private fun openPrompt(ctx: Context, confirm: Intent): Boolean = try {
+        ctx.startActivity(confirm)
+        true
+    } catch (e: Exception) {
+        OLog.w("update: could not open the install prompt", e)
+        false
     }
 
     // Called by InstallReceiver.
@@ -333,18 +392,11 @@ object Updater {
                 }
                 confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 log("Android asks the user to confirm v$version (interactive=$interactive)")
+                session = session?.copy(phase = UpdateSession.Phase.PROMPTED, atMs = System.currentTimeMillis())
+                sessionPrompt = confirm
                 // A check started by hand has our page in front, so the prompt may open now.
                 // In the background, Android blocks activity starts: post a notification instead.
-                var shown = false
-                if (interactive) {
-                    shown = try {
-                        ctx.startActivity(confirm)
-                        true
-                    } catch (e: Exception) {
-                        OLog.w("update: could not open the install prompt", e)
-                        false
-                    }
-                }
+                val shown = interactive && openPrompt(ctx, confirm)
                 if (!shown) {
                     // Nothing on screen until the notification is tapped (PinActivity reopens the window).
                     Pin.installEnded(INSTALL_KEY)
@@ -357,6 +409,8 @@ object Updater {
             }
             PackageInstaller.STATUS_SUCCESS -> {
                 Pin.installEnded(INSTALL_KEY)
+                session = null
+                sessionPrompt = null
                 ready = null
                 Reading.drop(Reading.KEY_UPDATE)
                 status(ctx, "updated to v$version")
@@ -364,7 +418,9 @@ object Updater {
             }
             else -> {
                 Pin.installEnded(INSTALL_KEY)
-                status(ctx, "v$version install failed ($st${if (msg != null) ": $msg" else ""})")
+                session = null
+                sessionPrompt = null
+                status(ctx, UpdateSession.failureLine(st, msg, version))
             }
         }
     }
