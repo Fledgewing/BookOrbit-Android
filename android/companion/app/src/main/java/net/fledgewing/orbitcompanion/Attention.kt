@@ -62,7 +62,9 @@ object Attention {
         val processAge = android.os.SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime()
         val held = AfterUpdate.pendingRows(settling, processAge, ClickerService.connected)
         val pending = checks.filterValues { it.pending }.keys + held.filter { it in checks }
-        val raw = SetupAttention.evaluate(checks.map { (id, c) -> id to c.done }, state(p), BuildConfig.VERSION_CODE, pending)
+        // Add-on: only the four required rows and recommended-settings conflicts remind (§4.4).
+        val rows = AddonLogic.attentionRows(p.mode, checks.filterValues { !it.optional }.map { (id, c) -> id to c.done })
+        val raw = SetupAttention.evaluate(rows, state(p), BuildConfig.VERSION_CODE, pending)
         val r = if (settling) raw.copy(show = false) else raw
         save(p, r.next)
         p.setupNeeded = r.needed.size

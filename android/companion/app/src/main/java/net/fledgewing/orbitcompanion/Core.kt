@@ -116,6 +116,26 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("report_conflicts", 0)
         set(v) = sp.edit().putInt("report_conflicts", v).apply()
     var reportAt by LongPref("report_at")
+    /** Add-on's helpers (docs/design/addon-mode.md §3), each off until switched on. */
+    var helperWifi: Boolean
+        get() = bool("helper_wifi", false)
+        set(v) = setBool("helper_wifi", v)
+    var helperSleepSync: Boolean
+        get() = bool("helper_sleep_sync", false)
+        set(v) = setBool("helper_sleep_sync", v)
+    var helperScreenOff: Boolean
+        get() = bool("helper_screen_off", false)
+        set(v) = setBool("helper_screen_off", v)
+    var helperClicker: Boolean
+        get() = bool("helper_clicker", false)
+        set(v) = setBool("helper_clicker", v)
+    var helperPin: Boolean
+        get() = bool("helper_pin", false)
+        set(v) = setBool("helper_pin", v)
+    /** Add-on's optional rows the user tapped Allow on (a row still off then says "Off: …"). */
+    var addonAsked: Set<String>
+        get() = sp.getStringSet("addon_asked", emptySet())?.toSet() ?: emptySet()
+        set(v) = sp.edit().putStringSet("addon_asked", v).apply()
     var notifyTailscale: Boolean
         get() = bool("notify_tailscale", true)
         set(v) = setBool("notify_tailscale", v)
@@ -326,6 +346,11 @@ object Net {
      */
     @Suppress("DEPRECATION")
     fun setWifi(ctx: Context, on: Boolean, why: String, owner: WifiOwner = WifiOwner.AUTO): Boolean {
+        // Add-on without Wi-Fi switching: Wi-Fi stays as the user leaves it (docs/design/addon-mode.md §7.5).
+        if (!Mode.wifiAllowed(ctx)) {
+            OLog.i("wifi: not switched ($why): Add-on without Wi-Fi switching")
+            return false
+        }
         val prefs = Prefs(ctx)
         if (on) {
             prefs.wifiPendingOwner = owner

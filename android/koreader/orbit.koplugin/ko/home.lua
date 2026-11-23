@@ -73,7 +73,14 @@ function OrbitAndroid:restartForCompanion(source)
     saveSettings()
     pcall(function() G_reader_settings:flush() end)
     Stats.send("restart", nil, false)
-    Companion.send(Companion.ACTION.RELAUNCH, { reason = "restart" })
+    if Companion.has("home") then
+        Companion.send(Companion.ACTION.RELAUNCH, { reason = "restart" })
+    else
+        -- Add-on: KOReader is in front, so it may start the companion's relaunch window, which
+        -- then starts KOReader again once it has gone (docs/design/addon-mode.md §7.4).
+        local ok = Jni.startActivity{ action = Companion.ACTION.RELAUNCH_UI, package = Companion.PACKAGE }
+        log("restart: companion relaunch window", ok and "started" or "FAILED (reopen KOReader by hand)")
+    end
     UIManager:scheduleIn(0.5, function()
         if Device.canRestart and Device:canRestart() then UIManager:restartKOReader() else UIManager:quit() end
     end)
@@ -93,7 +100,10 @@ end
 function OrbitAndroid:maybeRestart(event)
     if state.restarting_at and now_s() - state.restarting_at < 5 then return "restart" end
     local want = patchFileVersion()
-    local act = RestartPlan.decide(want, PATCH_VERSION, S.restart_tried, inBook(), event)
+    -- Without the Home role nothing can start KOReader from the background: no restart at
+    -- screen-off, only while KOReader is in front (docs/design/addon-mode.md §7.4).
+    if event == "sleep" and not Companion.has("home") then event = "check_asleep" end
+    local act = RestartPlan.decide(want, PATCH_VERSION, S.restart_tried, inBook() or event == "check_asleep", event)
     if act == "wait" then
         if state.restart_waiting ~= want then
             state.restart_waiting = want

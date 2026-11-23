@@ -112,3 +112,151 @@ object PluginReport {
         else -> Row(true, true, "applied by the Orbit plugin at KOReader's next start")
     }
 }
+
+/**
+ * Add-on mode's rules (docs/design/addon-mode.md §4, §7, §8): the first-run choice and the
+ * migration of existing installs, which broadcasts need the service, the checklist's required
+ * and optional rows, and the switch plans. Pure, unit-tested.
+ */
+object AddonLogic {
+    /**
+     * Existing installs never see the choice (§4.1): one that is Home, or has a Full-only step
+     * done (device admin, accessibility), is Full. Otherwise the choice shows (null).
+     */
+    fun migrate(current: OrbitMode?, isHome: Boolean, adminActive: Boolean, accessibilityOn: Boolean): OrbitMode? =
+        current ?: if (isHome || adminActive || accessibilityOn) OrbitMode.FULL else null
+
+    /** The service runs in Full, and in Add-on only while a helper needs it (§7.2). */
+    fun needsService(mode: OrbitMode?, h: Helpers): Boolean =
+        ModeLogic.effective(mode) == OrbitMode.FULL || h.wifi || h.sleepSync || h.clicker || h.pin
+
+    enum class Route { SERVICE, RECORD, DROP }
+
+    /**
+     * Where a broadcast from the plugin goes (§7.1). Service actions only with their cap;
+     * record actions are kept without the service; in Full every cap is on, so nothing changes.
+     */
+    fun route(action: String, caps: Collection<String>, service: Boolean): Route {
+        fun svc(ok: Boolean) = if (ok) Route.SERVICE else Route.DROP
+        return when (action) {
+            Contract.NET_UP -> svc("wifi" in caps || "sleep_sync" in caps)
+            Contract.NET_DONE -> svc("sleep_sync" in caps)
+            Contract.WIFI_OFF -> svc("wifi" in caps)
+            Contract.SLEEP_NOW -> svc("screen_off" in caps)
+            // RELAUNCH: the service starts KOReader again; without Home, the relaunch activity does (§7.4).
+            Contract.RELAUNCH -> svc(service && "home" in caps)
+            Contract.SETTINGS, Contract.STATS -> if (service) Route.SERVICE else Route.RECORD
+            Contract.SETUP_LATER, Contract.REPORT -> Route.RECORD
+            else -> if (service) Route.SERVICE else Route.DROP
+        }
+    }
+
+    /** Add-on's required rows (§4.3): the only ones counted, walked, notified or prompted. */
+    val REQUIRED = listOf("koreader", "plugin", "patch", "signed_in")
+
+    /** Rows that may remind in Add-on: the four required ones, and recommended-settings conflicts (§4.4). */
+    val REMINDS = REQUIRED.toSet() + "recommended"
+
+    /** The rows SetupAttention evaluates: in Add-on, every optional row is info only. */
+    fun attentionRows(mode: OrbitMode?, rows: List<Pair<String, Boolean>>): List<Pair<String, Boolean>> =
+        if (ModeLogic.effective(mode) == OrbitMode.FULL) rows else rows.filter { it.first in REMINDS }
+
+    /** An optional row's state: never allowed, allowed once and now off, or on. */
+    enum class OptState { NEVER, OFF, ON }
+
+    data class Optional(val id: String, val title: String, val without: String, val on: String, val off: String)
+
+    val OPTIONAL = listOf(
+        Optional("install_updates", "Install apps",
+            "Orbit can't install KOReader or update itself; you install updates yourself from the releases page.",
+            "Orbit installs KOReader and its own updates.", "Off: updates are a download link"),
+        Optional("notifications", "Notifications",
+            "Orbit can't tell you about an update or a setup step; you see them in KOReader's Orbit settings and when you open Orbit.",
+            "Orbit tells you about updates and setup steps.", "Off: updates and steps show in KOReader and in Orbit"),
+        Optional("clicker", "Clicker buttons in other apps",
+            "Clicker buttons work only inside KOReader, and the Settings PIN locks only Orbit's settings, not other apps.",
+            "Clicker buttons work in every app.", "Off: clicker buttons only inside KOReader"),
+        Optional("keyboard", "Orbit keyboard",
+            "Send-key clicker actions don't work in other apps.",
+            "Send-key actions work in every app.", "Off: Send-key actions only inside KOReader"),
+        Optional("admin", "Screen off after Sync and sleep",
+            "Sync and sleep syncs, then asks you to press the power button.",
+            "Sync and sleep turns the screen off.", "Off: Sync and sleep asks for the power button"),
+        Optional("battery", "Battery: Unrestricted",
+            "Android may pause Orbit or KOReader while the screen is off, so sleep syncs and Wi-Fi switching off can be late.",
+            "Sleep syncs and Wi-Fi switching run on time.", "Off: sleep syncs may be late"),
+    )
+
+    fun optional(id: String): Optional? = OPTIONAL.firstOrNull { it.id == id }
+
+    /** The optional row's one line: "Without it: …" never allowed, "Off: …" after Allow, else "On: …". */
+    fun optionalLine(o: Optional, st: OptState): String = when (st) {
+        OptState.NEVER -> "Without it: ${o.without}"
+        OptState.OFF -> o.off
+        OptState.ON -> "On: ${o.on}"
+    }
+
+    fun optState(granted: Boolean, asked: Boolean): OptState = when {
+        granted -> OptState.ON
+        asked -> OptState.OFF
+        else -> OptState.NEVER
+    }
+
+    /**
+     * Which optional rows Add-on shows (§4.3): clicker only once a button is mapped or a PIN is
+     * set; keyboard only with a Send-key action; screen off only with Sleep sync; battery only
+     * with Sleep sync or Wi-Fi switching.
+     */
+    fun optionalIds(h: Helpers, clickerMapped: Boolean, pinSet: Boolean, sendKeyMapped: Boolean): List<String> {
+        val out = mutableListOf("install_updates", "notifications")
+        if (clickerMapped || pinSet) out += "clicker"
+        if (sendKeyMapped) out += "keyboard"
+        if (h.sleepSync) out += "admin"
+        if (h.sleepSync || h.wifi) out += "battery"
+        return out
+    }
+
+    /** One step of a mode switch. */
+    enum class Step { REFUSE_NO_HOME, SET_MODE, DISABLE_HOME, ENABLE_HOME, REMOVE_ADMIN, STOP_ACCESSIBILITY, STOP_WIFI_TIMER, STOP_SERVICE, START_SERVICE, WRITE_STATUS, OPEN_SETUP }
+
+    /**
+     * Full → Add-on (§8): refused without another Home app; each step only when it still has
+     * something to do, so running a finished plan again does nothing.
+     */
+    fun toAddon(now: OrbitMode?, homeEnabled: Boolean, otherHome: Boolean, keep: Helpers, adminActive: Boolean, accessibilityOn: Boolean, serviceRunning: Boolean): List<Step> {
+        if (homeEnabled && !otherHome) return listOf(Step.REFUSE_NO_HOME)
+        val out = mutableListOf<Step>()
+        if (now != OrbitMode.ADDON) out += Step.SET_MODE
+        if (homeEnabled) out += Step.DISABLE_HOME
+        if (adminActive && !(keep.sleepSync && keep.screenOff)) out += Step.REMOVE_ADMIN
+        if (accessibilityOn && !(keep.clicker || keep.pin)) out += Step.STOP_ACCESSIBILITY
+        if (!keep.wifi) out += Step.STOP_WIFI_TIMER
+        if (serviceRunning && !needsService(OrbitMode.ADDON, keep)) out += Step.STOP_SERVICE
+        if (out.isNotEmpty()) out += Step.WRITE_STATUS
+        return out
+    }
+
+    /** Add-on → Full (§8): Home again, the service, then Setup walks the new rows. */
+    fun toFull(now: OrbitMode?, homeEnabled: Boolean, serviceRunning: Boolean): List<Step> {
+        val out = mutableListOf<Step>()
+        if (now != OrbitMode.FULL) out += Step.SET_MODE
+        if (!homeEnabled) out += Step.ENABLE_HOME
+        if (!serviceRunning) out += Step.START_SERVICE
+        if (out.isNotEmpty()) out += listOf(Step.WRITE_STATUS, Step.OPEN_SETUP)
+        return out
+    }
+
+    /** What Full → Add-on changes, for the page before it (§8 step 1). */
+    val TO_ADDON_CHANGES = listOf(
+        "Home goes back to your reader's own launcher.",
+        "Orbit stops switching Wi-Fi and keeping the reader awake for sleep syncs.",
+        "The lock-screen permission is released.",
+        "The clicker service and the Settings PIN stop, unless you keep them below.",
+        "KOReader keeps its reading settings. Orbit undoes only what needed Full mode: KOReader's Wi-Fi action and the two-finger swipe for other apps.",
+    )
+    val TO_FULL_CHANGES = listOf(
+        "Orbit becomes the Home app: Home opens your book or BookOrbit.",
+        "Orbit switches Wi-Fi, keeps the reader awake for sleep syncs and runs in the background.",
+        "Setup then walks the permissions Full mode needs.",
+    )
+}

@@ -17,15 +17,12 @@ object StatusFile {
 
     fun file(): File = File(Environment.getExternalStorageDirectory(), "koreader/settings/orbit-companion.json")
 
-    fun caps(ctx: Context): List<String> {
-        val p = Prefs(ctx)
-        // Full has every helper; Add-on's helpers come with Add-on mode itself (§13 slice 5).
-        return ModeLogic.caps(p.mode, Helpers(), Net.adminActive(ctx))
-    }
+    fun caps(ctx: Context): List<String> = Mode.caps(ctx)
 
     fun write(ctx: Context, why: String) {
         val p = Prefs(ctx)
-        val body = ModeLogic.statusFileBody(BuildConfig.VERSION_NAME, p.mode, caps(ctx), p.setupPromptKey, p.setupPromptRows)
+        val body = ModeLogic.statusFileBody(BuildConfig.VERSION_NAME, p.mode, caps(ctx), p.setupPromptKey, p.setupPromptRows) +
+            ",\"setup_needed\":${p.setupNeeded}"
         if (body == lastBody) return
         val f = file()
         val ok = runCatching {

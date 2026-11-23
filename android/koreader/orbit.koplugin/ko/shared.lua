@@ -51,8 +51,10 @@ function Shared.refresh(why)
         if n > 0 and not Channel.up then pcall(Channel.connect, why) end
     end
     -- "Setup needs you": the count in the menu status; setup_prompt for the one-time box.
-    Shared.setup_needed = st and tonumber(st.setup_needed) or nil
-    Shared.setup_prompt = st and type(st.setup_prompt) == "table" and st.setup_prompt or nil
+    -- With no service (Add-on), the companion's status file carries the same (§4.4).
+    local src = st or Companion.file
+    Shared.setup_needed = src and tonumber(src.setup_needed) or nil
+    Shared.setup_prompt = src and type(src.setup_prompt) == "table" and src.setup_prompt or nil
     -- The companion's "Home opens": koreader, launcher or app (nil: unknown, older companion).
     local so = st and type(st.settings) == "table" and st.settings.home_opens or nil
     Shared.home_opens = (so == "koreader" or so == "launcher" or so == "app") and so or nil

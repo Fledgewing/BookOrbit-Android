@@ -1365,6 +1365,45 @@ test("commands: signin opens BookOrbit's sign-in; recommended opens the review p
     run(1)
 end)
 
+test("add-on: a restart starts the companion's relaunch window, never at screen-off", function()
+    capsReset()
+    capsFile("addon", ADDON)
+    RE.Shared.refresh("test")
+    local was = RE.patchFileVersion
+    RE.patchFileVersion = function() return "9.9.8" end
+    local _, m = newUI(false)
+    W.activities, W.broadcasts, W.quits = {}, {}, 0
+    RE.state.restarting_at, store.orbit_android.restart_tried = nil, nil
+    ok(m:maybeRestart("sleep") == "wait", "no restart at screen-off without Home")
+    ok(m:maybeRestart("check") == "restart", "in front, no book: restart")
+    run(2)
+    ok(W.activities[#W.activities] and W.activities[#W.activities].action:match("RELAUNCH_UI$"), "relaunch window")
+    ok(not lastBroadcast(".RELAUNCH"), "no RELAUNCH broadcast")
+    ok(W.quits == 1, "then quits")
+    RE.patchFileVersion = was
+    RE.state.restarting_at, store.orbit_android.restart_tried = nil, nil
+    capsReset()
+end)
+
+test("add-on: with no service, the setup box reads the companion's status file", function()
+    capsReset()
+    local f = io.open(CAPS_FILE, "wb"); f:write("CAPSFILE"); f:close()
+    W.json.CAPSFILE = { proto = "1", mode = "addon", caps = ADDON, setup_needed = 1,
+        setup_prompt = { key = "signed_in", rows = { "Signed in to BookOrbit" } } }
+    store.orbit_android.setup_prompt_shown = nil
+    local _, m = newUI(false)
+    W.shown = {}
+    local code = W.server_code
+    W.server_code = nil -- no service: nothing answers on loopback
+    RE.Shared.refresh("resume")
+    W.server_code = code
+    m:maybeSetupPrompt("resume")
+    local box, line = shownText("Orbit Companion needs 1 setup step: Signed in to BookOrbit."), m:statusText()
+    capsReset()
+    ok(box, "box from the file")
+    ok(line:find("1 setup step needs you", 1, true), "status line: " .. line)
+end)
+
 test("the status ping says whether a book is open (the companion's restart waits for it)", function()
     local _, m = newUI(true)
     W.last_url = nil

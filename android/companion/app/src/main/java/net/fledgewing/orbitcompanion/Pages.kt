@@ -159,6 +159,13 @@ class StatusActivity : EinkActivity() {
     override fun onResume() {
         super.onResume()
         OrbitService.start(this)
+        // The first-run choice (docs/design/addon-mode.md §4.1): existing installs were set to
+        // Full by the migration in OrbitService.start, so only a new install sees it.
+        if (!prompted && Prefs(this).mode == null) {
+            prompted = true
+            startActivity(Intent(this, ModeActivity::class.java))
+            return
+        }
         // "Setup needs you": once per visit, only when a step needs the user or after an update.
         if (!prompted) {
             prompted = true
@@ -194,7 +201,11 @@ class StatusActivity : EinkActivity() {
         }
         root.addView(Ui.row(this, "Wi-Fi", right = Ui.value(this, wifi)))
         root.addView(Ui.row(this, "Tailscale", right = Ui.value(this, ts)))
-        root.addView(Ui.row(this, "Service", right = Ui.value(this, if (OrbitService.running) "Running" else "Starting")))
+        root.addView(Ui.row(this, "Service", right = Ui.value(this, when {
+            OrbitService.running -> "Running"
+            !Mode.needsService(this) -> "Off (Add-on, no helper)"
+            else -> "Starting"
+        })))
         root.addView(Ui.row(this, "Screen-off permission", right = Ui.value(this, if (Net.adminActive(this)) "Granted" else "Not granted")))
         root.addView(Ui.row(this, "Battery", "hours left, % per hour, by setting, history", Ui.value(this, "›"), onClick = {
             startActivity(Intent(this, BatteryActivity::class.java))
@@ -211,7 +222,7 @@ class StatusActivity : EinkActivity() {
             Ui.weightRow(
                 this,
                 Ui.button(this, if (test?.running == true) "Testing…" else "Test network") { runTest() },
-                Ui.button(this, "Setup (${Setup.progress(checks)})", solid = !SetupTips.complete(checks.map { SetupAttention.idOf(it.label) to it.done })) {
+                Ui.button(this, "Setup (${Setup.progress(checks, Mode.isAddon(this))})", solid = !SetupTips.complete(checks.filter { !it.optional }.map { SetupAttention.idOf(it.label) to it.done })) {
                     startActivity(Intent(this, SetupActivity::class.java))
                 },
             ),
@@ -274,6 +285,36 @@ class SettingsActivity : EinkActivity() {
     private fun render() {
         val root = page(scroll = true)
         root.addView(Ui.header(this, "Settings", "‹ Back") { finish() })
+        // Mode and Add-on's helpers (docs/design/addon-mode.md §3, §8); in Add-on, a feature's
+        // rows show only while its helper is on.
+        val addon = prefs.mode == OrbitMode.ADDON
+        root.addView(Ui.row(this, "Mode", when (prefs.mode) {
+            OrbitMode.ADDON -> "Add-on: your launcher stays · Switch"
+            OrbitMode.FULL -> "Full: Orbit runs the reader · Switch"
+            null -> "not chosen yet"
+        }, Ui.value(this, "›"), onClick = { startActivity(Intent(this, ModeActivity::class.java)) }))
+        if (addon) {
+            root.addView(Ui.text(this, "Helpers", 21f).apply { setPadding(0, Ui.dp(this@SettingsActivity, 8), 0, Ui.dp(this@SettingsActivity, 4)) })
+            helper(root, "Wi-Fi switching", "Orbit turns Wi-Fi on for a sync and off again", prefs.helperWifi) { prefs.helperWifi = it }
+            helper(root, "Sleep sync", "keeps the reader awake while it syncs on sleep", prefs.helperSleepSync) { prefs.helperSleepSync = it }
+            if (prefs.helperSleepSync) {
+                helper(root, "Screen off after Sync and sleep", if (Net.adminActive(this)) "uses the lock-screen permission" else "asks for the lock-screen permission", prefs.helperScreenOff) {
+                    prefs.helperScreenOff = it
+                    if (it && !Net.adminActive(this)) {
+                        tryStart(
+                            Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                                .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminReceiver.component(this))
+                                .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Lets \"Sync and sleep\" turn the screen off after syncing. It uses only the lock-screen permission."),
+                            "device admin",
+                        )
+                    }
+                }
+            }
+            helper(root, "Clicker buttons", "Bluetooth page clicker buttons", prefs.helperClicker) { prefs.helperClicker = it }
+            helper(root, "Settings PIN", "locks Orbit's settings (not your launcher's)", prefs.helperPin) { prefs.helperPin = it }
+            root.addView(Ui.gap(this, 8))
+        }
+        if (!addon || prefs.helperSleepSync) {
         root.addView(Ui.text(this, "Wi-Fi after sleep sync", 21f).apply { setPadding(0, 0, 0, Ui.dp(this@SettingsActivity, 8)) })
         val seg = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -303,6 +344,8 @@ class SettingsActivity : EinkActivity() {
             Ui.text(this, "Short naps keep Wi-Fi up, so waking syncs in about 1 s. The timer only turns Wi-Fi off if the screen is still off.", 16f, color = Ui.MID)
                 .apply { setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 12)) },
         )
+        }
+        if (!addon || prefs.helperWifi) {
         segmented(root, "Wi-Fi", WifiMode.entries.map { it to it.label }, prefs.wifiMode) {
             prefs.wifiMode = it
             prefs.sharedSettingsAt = System.currentTimeMillis()
@@ -320,11 +363,13 @@ class SettingsActivity : EinkActivity() {
                 prefs.sharedSettingsAt = System.currentTimeMillis()
             }
         }
+        }
         val schedule = ReadingSchedule.shown(prefs.readingSchedule, prefs.readingScheduleRequest)
         root.addView(Ui.row(this, "Sync while reading", ReadingSchedule.label(schedule) +
             if (prefs.readingScheduleRequest.isNotEmpty()) " · applies when KOReader opens" else "",
             Ui.value(this, "›"), onClick = { startActivity(Intent(this, ReadingScheduleActivity::class.java)) }))
         val homeChoice = prefs.homeApp
+        if (!addon) {
         root.addView(Ui.row(this, "Home opens", HomeApp.summary(homeChoice, if (HomeApp.isApp(homeChoice)) HomeTarget.label(this, homeChoice) else null),
             Ui.value(this, "›"), onClick = { startActivity(Intent(this, HomeAppActivity::class.java)) }))
         if (HomeApp.showsHomeButton(homeChoice)) {
@@ -337,12 +382,17 @@ class SettingsActivity : EinkActivity() {
                 setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 8))
             })
         }
-        root.addView(Ui.row(this, "Clicker buttons", "Bluetooth page clicker: page turns, Home, Back, Sleep", Ui.value(this, "›"), onClick = {
-            startActivity(Intent(this, ClickersActivity::class.java))
-        }))
+        }
+        if (!addon || prefs.helperClicker) {
+            root.addView(Ui.row(this, "Clicker buttons", "Bluetooth page clicker: page turns, Home, Back, Sleep", Ui.value(this, "›"), onClick = {
+                startActivity(Intent(this, ClickersActivity::class.java))
+            }))
+        }
         root.addView(Ui.gap(this, 8))
         toggle(root, "Wake Tailscale with Wi-Fi", null, prefs.wakeTailscaleWithWifi) { prefs.wakeTailscaleWithWifi = it }
-        toggle(root, "Wake lock while syncing", "released at the patch's 20 s cap · 25 s max", prefs.wakeLockEnabled) { prefs.wakeLockEnabled = it }
+        if (!addon || prefs.helperSleepSync) {
+            toggle(root, "Wake lock while syncing", "released at the patch's 20 s cap · 25 s max", prefs.wakeLockEnabled) { prefs.wakeLockEnabled = it }
+        }
         toggle(root, "Notify if Tailscale won't connect", null, prefs.notifyTailscale) { prefs.notifyTailscale = it }
         toggle(root, "Debug log", "more detail in logcat, tag OrbitCompanion", prefs.debugLog) { prefs.debugLog = it }
         toggle(root, "Auto-update app", "daily check of the GitHub releases", prefs.autoUpdate) { prefs.autoUpdate = it }
@@ -359,7 +409,9 @@ class SettingsActivity : EinkActivity() {
                 render()
             }))
         }
-        if (Pin.isSet(this)) {
+        if (addon && !prefs.helperPin) {
+            // The PIN is a helper in Add-on: its rows show once it is on.
+        } else if (Pin.isSet(this)) {
             root.addView(Ui.row(this, "Settings PIN", "on · tap to change", Ui.value(this, "›"), onClick = {
                 startActivity(PinActivity.intent(this, PinActivity.Mode.SET))
             }))
@@ -406,6 +458,15 @@ class SettingsActivity : EinkActivity() {
         root.addView(seg)
     }
 
+    /** An Add-on helper: starts or stops the service and tells the plugin. */
+    private fun helper(root: LinearLayout, label: String, sub: String, on: Boolean, set: (Boolean) -> Unit) {
+        root.addView(Ui.row(this, label, sub, Ui.toggle(this, on), onClick = {
+            set(!on)
+            Mode.helpersChanged(this, "helper $label ${if (on) "off" else "on"}")
+            render()
+        }))
+    }
+
     private fun toggle(root: LinearLayout, label: String, sub: String?, on: Boolean, set: (Boolean) -> Unit) {
         root.addView(Ui.row(this, label, sub, Ui.toggle(this, on), onClick = {
             set(!on)
@@ -429,6 +490,8 @@ class Check(
     val pinFree: Boolean = false,
     /** A tip, not a step (SetupTips): "Got it" hides it; never counted. */
     val advisory: Boolean = false,
+    /** Add-on's optional rows (docs/design/addon-mode.md §4.3): "Without it / Off / On", never counted. */
+    val optional: Boolean = false,
     val open: (EinkActivity) -> Unit,
 ) {
     /** Runs the row's action: behind the Settings PIN unless [pinFree]. */
@@ -458,15 +521,55 @@ object Setup {
     fun checks(ctx: Context): List<Check> {
         val all = allChecks(ctx)
         val keep = SetupTips.visible(all.map { SetupAttention.idOf(it.label) }, Prefs(ctx).hiddenTips).toSet()
-        return all.filter { SetupAttention.idOf(it.label) in keep }
+        val shown = all.filter { SetupAttention.idOf(it.label) in keep }
+        return if (Mode.isAddon(ctx)) addonChecks(ctx, shown) else shown
+    }
+
+    /**
+     * Add-on's checklist (docs/design/addon-mode.md §4.3): the four required rows, the
+     * recommended-settings status and info lines, then the optional rows, each saying what is
+     * lost without it ("Without it / Off / On"), never counted, walked or prompted.
+     */
+    private fun addonChecks(ctx: Context, full: List<Check>): List<Check> {
+        val byId = full.associateBy { SetupAttention.idOf(it.label) }
+        val out = mutableListOf<Check>()
+        // A frozen app is a warning on the app it breaks, only while it is frozen.
+        byId["disabled"]?.takeIf { !it.done }?.let { out += it }
+        AddonLogic.REQUIRED.forEach { id -> byId[id]?.let { out += it } }
+        byId["recommended"]?.let { out += it }
+        byId["patch_seen"]?.let { out += it }
+        if (Net.installed(ctx, Net.TAILSCALE_PKG)) byId["tailscale"]?.let { out += it }
+        val p = Prefs(ctx)
+        val map = ClickerStore.map(ctx)
+        val pm = ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        AddonLogic.optionalIds(Mode.helpers(ctx), map.mapped, Pin.isSet(ctx), map.sendsKeys).forEach { id ->
+            val o = AddonLogic.optional(id) ?: return@forEach
+            val granted = when (id) {
+                "keyboard" -> KeySender.enabled(ctx)
+                "battery" -> listOf(ctx.packageName, Koreader.PKG).all { pm.isIgnoringBatteryOptimizations(it) }
+                else -> AddonSetup.optionalGranted(ctx, id)
+            }
+            val fix = when (id) {
+                "battery" -> listOf("battery:Orbit", "battery:KOReader").mapNotNull { byId[it] }.firstOrNull { !it.done }
+                else -> byId[id]
+            }
+            val st = AddonLogic.optState(granted, id in p.addonAsked)
+            out += Check(o.title, granted, AddonLogic.optionalLine(o, st), action = if (granted) null else "Allow", optional = true) { a ->
+                p.addonAsked = p.addonAsked + id
+                OLog.i("setup: add-on optional $id: Allow")
+                fix?.open?.invoke(a)
+            }
+        }
+        return out
     }
 
     /** Dismissed tips that "Show hidden tips" would bring back. */
     fun hiddenTips(ctx: Context): Int = Prefs(ctx).hiddenTips.count { SetupTips.isTip(it) }
 
-    /** "First-run setup (done/total)": steps only. */
-    fun progress(checks: List<Check>): String {
-        val steps = SetupTips.steps(checks.map { SetupAttention.idOf(it.label) to it.done })
+    /** "First-run setup (done/total)": steps only. Add-on counts only its four required rows. */
+    fun progress(checks: List<Check>, addon: Boolean = false): String {
+        val rows = checks.map { SetupAttention.idOf(it.label) to it.done }
+        val steps = if (addon) rows.filter { it.first in AddonLogic.REQUIRED } else SetupTips.steps(rows)
         return "${steps.count { it.second }}/${steps.size}"
     }
 
@@ -765,8 +868,15 @@ class SetupActivity : EinkActivity() {
     private val tried = HashSet<String>()
     private var lastStep = 0L
 
+    private var choiceShown = false
+
     override fun onResume() {
         super.onResume()
+        Mode.migrate(this, "setup page")
+        if (!choiceShown && Prefs(this).mode == null) {
+            choiceShown = true
+            startActivity(Intent(this, ModeActivity::class.java))
+        }
         render()
         if (walking) continueWalk("back in Setup")
     }
@@ -786,8 +896,10 @@ class SetupActivity : EinkActivity() {
         if (!walking || isFinishing || installing()) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastStep < 1_000) return
-        val checks = Setup.checks(this)
-        val id = SetupWalk.next(checks.map { SetupAttention.idOf(it.label) to it.done }, tried)
+        val checks = Setup.checks(this).filter { !it.optional }
+        val addon = Mode.isAddon(this)
+        val id = SetupWalk.next(checks.map { SetupAttention.idOf(it.label) to it.done }
+            .filter { !addon || it.first in AddonLogic.REQUIRED }, tried)
         val c = checks.firstOrNull { SetupAttention.idOf(it.label) == id }
         if (id == null || c == null) {
             walking = false
@@ -838,9 +950,24 @@ class SetupActivity : EinkActivity() {
 
     private fun render() {
         val root = page(scroll = true)
-        val checks = Setup.checks(this)
-        root.addView(Ui.header(this, "First-run setup (${Setup.progress(checks)})", "‹ Back") { finish() })
-        val open = checks.count { !it.done && SetupAttention.idOf(it.label) !in SetupAttention.INFO_ONLY }
+        val all = Setup.checks(this)
+        val addon = Mode.isAddon(this)
+        val checks = all.filter { !it.optional }
+        val title = when (Prefs(this).mode) {
+            OrbitMode.ADDON -> "Add-on setup"
+            OrbitMode.FULL -> "Full setup"
+            null -> "First-run setup"
+        }
+        root.addView(Ui.header(this, "$title (${Setup.progress(all, addon)})", "‹ Back") { finish() })
+        Prefs(this).mode?.let { m ->
+            root.addView(Ui.row(this, "Mode: ${if (m == OrbitMode.ADDON) "Add-on" else "Full"}", "Settings › Mode to change", Ui.value(this, "›"), onClick = {
+                startActivity(Intent(this, ModeActivity::class.java))
+            }))
+        }
+        val open = checks.count {
+            val id = SetupAttention.idOf(it.label)
+            !it.done && id !in SetupAttention.INFO_ONLY && (!addon || id in AddonLogic.REQUIRED)
+        }
         if (open > 0) {
             root.addView(
                 Ui.button(this, if (walking) "Fixing… (tap to stop)" else "Fix next ($open to go)", solid = !walking) {
@@ -884,6 +1011,15 @@ class SetupActivity : EinkActivity() {
                     left = Ui.check(this, c.done),
                 ),
             )
+        }
+        val optional = all.filter { it.optional }
+        if (optional.isNotEmpty()) {
+            root.addView(Ui.gap(this, 12))
+            root.addView(Ui.text(this, "Optional: what you get with each", 20f, bold = true))
+            optional.forEach { c ->
+                val right: TextView = if (c.done) Ui.value(this, "On") else Ui.button(this, "Allow", heightDp = 56, sp = 18f) { c.run(this) }
+                root.addView(Ui.row(this, c.label, c.detail, right, onClick = { if (!c.done) c.run(this) }))
+            }
         }
         val hidden = Setup.hiddenTips(this)
         if (hidden > 0) {

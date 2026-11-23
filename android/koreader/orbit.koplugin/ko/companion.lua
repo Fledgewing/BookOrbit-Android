@@ -29,6 +29,9 @@ Companion.ACTION = {
     -- Companion 0.11.0+ (docs/design/addon-mode.md §7.3): signed in yes/no and the recommended
     -- settings' state, for its two Setup rows. Never the server, the account or the key.
     REPORT = Companion.PACKAGE .. ".action.REPORT",
+    -- Companion 0.11.0+ in Add-on mode: its invisible window that starts KOReader again after a
+    -- restart (no Home role to do it from the background, docs/design/addon-mode.md §7.4).
+    RELAUNCH_UI = Companion.PACKAGE .. ".action.RELAUNCH_UI",
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
@@ -131,7 +134,9 @@ end
 function Companion.updateCaps(st, why)
     local cached = S.companion_caps and { mode = S.companion_mode, caps = S.companion_caps } or nil
     local cstate = Companion.state()
-    local caps, mode, source = Caps.resolve(cstate, Companion.readFile(), st, cached)
+    local file = Companion.readFile()
+    Companion.file = cstate == "ok" and file or nil
+    local caps, mode, source = Caps.resolve(cstate, file, st, cached)
     Companion.caps_state = cstate
     local before, was_known = Companion.cap_set, Companion.caps_known
     Companion.cap_set, Companion.mode, Companion.caps_source = caps, mode, source
