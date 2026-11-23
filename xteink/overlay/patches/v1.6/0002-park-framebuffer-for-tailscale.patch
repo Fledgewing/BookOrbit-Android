@@ -1,5 +1,5 @@
 diff --git a/lib/hal/HalDisplay.h b/lib/hal/HalDisplay.h
-index 0af1308..0babbcc 100644
+index 0af13081..0babbccb 100644
 --- a/lib/hal/HalDisplay.h
 +++ b/lib/hal/HalDisplay.h
 @@ -72,6 +72,9 @@ class HalDisplay {
@@ -13,7 +13,7 @@ index 0af1308..0babbcc 100644
    // Lend the framebuffer's ~48 KB STORAGE to a memory-hungry phase (chapter
    // builds) without freeing it: the allocation never moves, so repeated loans
 diff --git a/src/SilentRestart.h b/src/SilentRestart.h
-index 164f9c4..e1e6ce3 100644
+index 495e70e4..4833b296 100644
 --- a/src/SilentRestart.h
 +++ b/src/SilentRestart.h
 @@ -3,6 +3,8 @@
@@ -25,7 +25,7 @@ index 164f9c4..e1e6ce3 100644
  // ESP.restart() with an RTC_NOINIT flag that survives the reboot, so setup()
  // skips the boot splash and routes straight to a destination. Used to clear
  // heap fragmentation accumulated during a wifi session.
-@@ -70,6 +72,8 @@ constexpr bool isNetworkBootTargetValue(const uint32_t value) {
+@@ -73,6 +75,8 @@ constexpr bool isNetworkBootTargetValue(const uint32_t value) {
      case NetworkBootTarget::BOOKORBIT_CATALOG:
      case NetworkBootTarget::BOOKORBIT_HOME_REFRESH:
      case NetworkBootTarget::BOOKORBIT_HOME_SHELVES:
@@ -35,7 +35,7 @@ index 164f9c4..e1e6ce3 100644
    }
    return false;
 diff --git a/src/activities/ActivityManager.cpp b/src/activities/ActivityManager.cpp
-index 933e79a..3793a7e 100644
+index 933e79ae..3793a7e7 100644
 --- a/src/activities/ActivityManager.cpp
 +++ b/src/activities/ActivityManager.cpp
 @@ -51,6 +51,7 @@
@@ -72,19 +72,20 @@ index 933e79a..3793a7e 100644
    // settings screens it is reached through hold 15-20KB that the handshake needs. Nothing
    // is lost by dropping them — the activity ends in a silentRestart() to the home screen
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index e703582..1654b08 100644
+index 4850c0a8..6af81d35 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-@@ -47,6 +47,8 @@
+@@ -48,6 +48,9 @@
  #include "util/BookCacheUtils.h"
  #include "util/BookOrbitDevicePath.h"
- #include "util/StringUtils.h"
+ #include "util/BookUpdateMigration.h"
++#include "util/StringUtils.h"
 +#include "network/SavedWifiConnect.h"
 +#include "TailnetNetPhase.h"
  
  namespace fui = freeink::ui;
  
-@@ -346,6 +348,13 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
+@@ -345,6 +348,13 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
      return;
    }
  
@@ -98,7 +99,7 @@ index e703582..1654b08 100644
    state = BrowserState::CHECK_WIFI;
    requestUpdate();
    checkAndConnectWifi();
-@@ -1399,6 +1408,9 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
+@@ -1443,6 +1453,9 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
              static_cast<int>(result));
    }
  
@@ -109,7 +110,7 @@ index e703582..1654b08 100644
    if (downloadFailed) {
      // preservePartial kept the staged file for resuming between attempts; don't
 diff --git a/src/activities/network/WifiSelectionActivity.cpp b/src/activities/network/WifiSelectionActivity.cpp
-index 44125d2..2070975 100644
+index 44125d26..20709756 100644
 --- a/src/activities/network/WifiSelectionActivity.cpp
 +++ b/src/activities/network/WifiSelectionActivity.cpp
 @@ -24,6 +24,7 @@
@@ -129,10 +130,10 @@ index 44125d2..2070975 100644
  #if defined(ENABLE_SERIAL_LOG) && LOG_LEVEL >= 2
      uint8_t connectedBssid[6] = {};
 diff --git a/src/main.cpp b/src/main.cpp
-index 4dbb32b..e12fc03 100644
+index 69a87b0f..25aa1b28 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -133,6 +133,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -134,6 +134,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "util/PowerButtonWakeWatcher.h"
  #include "util/ScreenshotUtil.h"
  #include "util/SleepWakePolicy.h"
@@ -140,7 +141,7 @@ index 4dbb32b..e12fc03 100644
  
  GfxRenderer renderer(display);
  MappedInputManager mappedInputManager(gpio, renderer);
-@@ -428,7 +429,7 @@ static void silentRestartToHome(const uint32_t payload, const char* const descri
+@@ -429,7 +430,7 @@ static void silentRestartToHome(const uint32_t payload, const char* const descri
    // Without an overlay, users don't see the reboot and fire input through to
    // Home. Select on the default selectorIndex=0 then opens the most-recent
    // book, looking like a trampoline back to the reader they just exited.
@@ -149,7 +150,7 @@ index 4dbb32b..e12fc03 100644
    delay(50);
    restartWithSilentToken();
  }
-@@ -473,7 +474,7 @@ static void silentRestartToReaderImpl(const bool cleanImageBaseOnEntry) {
+@@ -474,7 +475,7 @@ static void silentRestartToReaderImpl(const bool cleanImageBaseOnEntry) {
    silentRebootPayload = cleanImageBaseOnEntry ? SILENT_REBOOT_READER_CLEAN_IMAGE_BASE : 0;
    silentRebootMagic = SILENT_REBOOT_MAGIC;
    LOG_DBG("MAIN", "Silent restart (target=reader cleanImageBase=%d)", cleanImageBaseOnEntry ? 1 : 0);
@@ -158,16 +159,16 @@ index 4dbb32b..e12fc03 100644
    delay(50);
    restartWithSilentToken();
  }
-@@ -488,7 +489,7 @@ void silentRestartToNetwork(const NetworkBootTarget target, const uint32_t paylo
+@@ -492,7 +493,7 @@ void silentRestartToNetwork(const NetworkBootTarget target, const uint32_t paylo
    silentRebootMagic = SILENT_REBOOT_MAGIC;
    LOG_DBG("MAIN", "Silent restart (target=network/%lu payload=%lu)", static_cast<unsigned long>(silentRebootTarget),
-           static_cast<unsigned long>(payload));
+           static_cast<unsigned long>(silentRebootPayload));
 -  GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
 +  if (tailnet_display_ready(3000)) GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
    delay(50);
    restartWithSilentToken();
  }
-@@ -1341,6 +1342,7 @@ void wakeFromSleepSync() {
+@@ -1349,6 +1350,7 @@ void wakeFromSleepSync() {
  // running.
  static void redrawSleepScreenAfterSleepSync() {
    LOG_INF("SLP", "Drawing the sleep screen again after the BookOrbit sleep sync");
@@ -175,7 +176,7 @@ index 4dbb32b..e12fc03 100644
    if (sleepSyncAfterQuickResumeSleep) {
      HalFile file;
      if (!Storage.openFileForRead("SLP", SLEEP_FRAME_FILE, file)) return;
-@@ -1775,6 +1777,7 @@ void setup() {
+@@ -1783,6 +1785,7 @@ void setup() {
      case BootResume::Network:
        LOG_INF("BOOT", "Minimal network boot ready: target=%lu free=%u maxAlloc=%u",
                static_cast<unsigned long>(snapshotTarget), ESP.getFreeHeap(), ESP.getMaxAllocHeap());
@@ -183,7 +184,7 @@ index 4dbb32b..e12fc03 100644
        break;
      case BootResume::SplashlessWake:
        // One-shot flag: re-arm the splash for the next ordinary boot. Save
-@@ -1872,6 +1875,12 @@ void setup() {
+@@ -1883,6 +1886,12 @@ void setup() {
          }
          break;
        }
@@ -197,7 +198,7 @@ index 4dbb32b..e12fc03 100644
          auto shelves = makeUniqueNoThrow<BookOrbitSettingsActivity>(
              renderer, mappedInputManager, BookOrbitSettingsActivity::Page::Home, /*networkBoot=*/true);
 diff --git a/src/network/SavedWifiConnect.cpp b/src/network/SavedWifiConnect.cpp
-index 178cecc..cbd6c63 100644
+index 178cecc3..cbd6c63d 100644
 --- a/src/network/SavedWifiConnect.cpp
 +++ b/src/network/SavedWifiConnect.cpp
 @@ -11,6 +11,7 @@

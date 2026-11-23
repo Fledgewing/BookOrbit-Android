@@ -19,7 +19,7 @@ index f333c4d8..ee0bb49c 100644
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
 diff --git a/src/SilentRestart.h b/src/SilentRestart.h
-index e1e6ce32..9f95ecc0 100644
+index 4833b296..5afcae06 100644
 --- a/src/SilentRestart.h
 +++ b/src/SilentRestart.h
 @@ -46,6 +46,9 @@ constexpr uint32_t BOOKORBIT_SYNC_PAYLOAD_HAS_PARAGRAPH = 1u << 16;
@@ -32,20 +32,20 @@ index e1e6ce32..9f95ecc0 100644
  // BOOKORBIT_SLEEP_SYNC payload: Power was still held when the device went to sleep (a
  // long-press sleep), so that press belongs to the sleep gesture and must be released
  // before a press can wake the device out of the sync.
-diff --git a/src/activities/reader/BookOrbitSyncActivity.cpp b/src/activities/reader/BookOrbitSyncActivity.cpp
-index 233202a0..594bb340 100644
---- a/src/activities/reader/BookOrbitSyncActivity.cpp
-+++ b/src/activities/reader/BookOrbitSyncActivity.cpp
-@@ -9,6 +9,7 @@
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index 98da98c7..27fb01cd 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -8,6 +8,7 @@
+ #endif
  #include <HalClock.h>
- #include <HalStorage.h>
  #include <I18n.h>
 +#include <CrossInkTailnetCuts.h>
  #include <Logging.h>
  #include <Memory.h>
  #include <WallClock.h>
-@@ -573,6 +574,14 @@ void BookOrbitSyncActivity::performSync() {
-     if (stopIfWoken()) return;
+@@ -426,6 +427,14 @@ void BookOrbitSyncActivity::performSync() {
+     if (!exchangeReadingData()) return;
    }
  
 +  if (preAnsweredUpload && (result == BookOrbitSyncClient::OK || result == BookOrbitSyncClient::NOT_FOUND)) {
@@ -59,7 +59,7 @@ index 233202a0..594bb340 100644
    if (result == BookOrbitSyncClient::NOT_FOUND) {
      if (smartSyncEnabled() || sleepSync) {
        LOG_DBG("BookOrbit", "Smart sync: no remote progress, uploading local %.6f", localProgress.percentage);
-@@ -1836,6 +1845,23 @@ size_t BookOrbitSyncActivity::uploadQueuedStats() {
+@@ -629,6 +638,23 @@ bool BookOrbitSyncActivity::decideAutomatically(const BookOrbitSmartSync::Positi
  }
  
  void BookOrbitSyncActivity::performUpload() {
@@ -83,11 +83,11 @@ index 233202a0..594bb340 100644
    {
      RenderLock lock(*this);
      state = UPLOADING;
-diff --git a/src/activities/reader/BookOrbitSyncActivity.h b/src/activities/reader/BookOrbitSyncActivity.h
-index 03be4a28..2dc08f55 100644
---- a/src/activities/reader/BookOrbitSyncActivity.h
-+++ b/src/activities/reader/BookOrbitSyncActivity.h
-@@ -49,6 +49,9 @@ class BookOrbitSyncActivity final : public Activity {
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+index eface758..998fcee5 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+@@ -54,6 +54,9 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport
          remotePosition{},
          localProgress(std::move(localKoPos)) {}
  
@@ -97,7 +97,7 @@ index 03be4a28..2dc08f55 100644
    void onEnter() override;
    void onExit() override;
    void loop() override;
-@@ -100,6 +103,7 @@ class BookOrbitSyncActivity final : public Activity {
+@@ -109,6 +112,7 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport
    bool stopIfWoken();
  
    State state = WIFI_SELECTION;
@@ -106,10 +106,10 @@ index 03be4a28..2dc08f55 100644
    std::string documentHash;
  
 diff --git a/src/main.cpp b/src/main.cpp
-index f489265d..63e7534f 100644
+index 3030b51a..b6c5799b 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -666,6 +666,7 @@ bool startGlobalBookOrbitSync(const bool networkBootReady, const uint32_t payloa
+@@ -674,6 +674,7 @@ bool startGlobalBookOrbitSync(const bool networkBootReady, const uint32_t payloa
    auto syncActivity = makeUniqueNoThrow<BookOrbitSyncActivity>(
        renderer, mappedInputManager, epubPath, spineIndex, pageNumber, totalPagesInSpine, std::move(localKoPos),
        std::move(localChapterName), paragraphIndex, networkBootReady, readerOrientation, sleepSync);

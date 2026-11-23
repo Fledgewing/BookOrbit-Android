@@ -514,7 +514,7 @@ index 00000000..9a0bf38e
 +}  // namespace batterystats
 diff --git a/lib/BatteryStats/BatteryStatsCore.h b/lib/BatteryStats/BatteryStatsCore.h
 new file mode 100644
-index 00000000..e1ee497c
+index 00000000..dd17a3f5
 --- /dev/null
 +++ b/lib/BatteryStats/BatteryStatsCore.h
 @@ -0,0 +1,208 @@
@@ -727,10 +727,10 @@ index 00000000..e1ee497c
 +
 +}  // namespace batterystats
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index e0b50c3d..f08a759c 100644
+index 0e67a99f..4dd9a0b7 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
-@@ -718,6 +718,14 @@ STR_NO_SERVERS: "No OPDS servers configured"
+@@ -723,6 +723,14 @@ STR_NO_SERVERS: "No OPDS servers configured"
  STR_DELETE_SERVER: "Delete Server"
  STR_OPDS_SERVERS: "OPDS Servers"
  STR_TAILSCALE: "Tailscale"
@@ -746,7 +746,7 @@ index e0b50c3d..f08a759c 100644
  STR_ENTER_SETTINGS_PIN: "Enter Settings PIN"
  STR_NEW_PIN: "New PIN"
 diff --git a/lib/hal/HalDisplay.cpp b/lib/hal/HalDisplay.cpp
-index 8ad58fb6..d8c5659b 100644
+index 68079e72..e146e98d 100644
 --- a/lib/hal/HalDisplay.cpp
 +++ b/lib/hal/HalDisplay.cpp
 @@ -119,6 +119,7 @@ EInkDisplay::RefreshMode convertRefreshMode(HalDisplay::RefreshMode mode) {
@@ -773,7 +773,7 @@ index 8ad58fb6..d8c5659b 100644
    HalSpiBus::Lock spiLock;
  
    if (gpio.deviceIsX3() && mode == RefreshMode::HALF_REFRESH) {
-@@ -238,6 +241,7 @@ void HalDisplay::copyGrayscaleMsbBuffers(const uint8_t* msbBuffer) { einkDisplay
+@@ -240,6 +243,7 @@ void HalDisplay::copyGrayscaleMsbBuffers(const uint8_t* msbBuffer) { einkDisplay
  void HalDisplay::cleanupGrayscaleBuffers(const uint8_t* bwBuffer) { einkDisplay.cleanupGrayscaleBuffers(bwBuffer); }
  
  void HalDisplay::displayGrayBuffer(bool turnOffScreen) {
@@ -782,10 +782,10 @@ index 8ad58fb6..d8c5659b 100644
    einkDisplay.displayGrayBuffer(turnOffScreen);
  }
 diff --git a/lib/hal/HalDisplay.h b/lib/hal/HalDisplay.h
-index 41a31e46..19c0b19c 100644
+index e2fecddc..12767d46 100644
 --- a/lib/hal/HalDisplay.h
 +++ b/lib/hal/HalDisplay.h
-@@ -139,6 +139,26 @@ class HalDisplay {
+@@ -143,6 +143,26 @@ class HalDisplay {
    uint16_t getDisplayWidthBytes() const;
    uint32_t getBufferSize() const;
  
@@ -813,10 +813,10 @@ index 41a31e46..19c0b19c 100644
    void beginHardware();
    bool hardwareReady = false;
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index f1fffc9d..8a572ec2 100644
+index 028cdcef..175499b1 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
-@@ -1164,6 +1164,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
+@@ -1176,6 +1176,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
    systemSettings.push_back(SettingInfo::Submenu(StrId::STR_SYSTEM_DEVICE, SettingAction::SystemDevice));
    systemSettings.push_back(SettingInfo::Submenu(StrId::STR_SYSTEM_FILES_CACHE, SettingAction::SystemFilesCache));
    systemSettings.push_back(SettingInfo::Submenu(StrId::STR_READING_STATS, SettingAction::SystemReadingStats));
@@ -827,7 +827,7 @@ index f1fffc9d..8a572ec2 100644
    systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
  #if CROSSINK_APP_CAP_KOREADER_SYNC
 diff --git a/src/activities/network/UsbDriveActivity.cpp b/src/activities/network/UsbDriveActivity.cpp
-index cc9e4f5c..d536d1b1 100644
+index 79b92c4d..46e780a5 100644
 --- a/src/activities/network/UsbDriveActivity.cpp
 +++ b/src/activities/network/UsbDriveActivity.cpp
 @@ -1,5 +1,7 @@
@@ -1042,34 +1042,34 @@ index 2766cf72..8207d00a 100644
  
  struct SettingInfo {
 diff --git a/src/main.cpp b/src/main.cpp
-index 7d3c8ae0..4b1dc9df 100644
+index 4356642d..e57f815f 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -143,6 +143,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
- #include "simulator/SimulatorSmokeTest.h"
+@@ -146,6 +146,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #endif
  #include "util/BatteryDiagnosticLog.h"
+ #include "util/BookUpdateMigration.h"
 +#include "util/BatteryStats.h"  // CrossInk-Tailnet patch 0025
  #include "util/ButtonNavigator.h"
  #include "util/ButtonShortcutController.h"
  #include "util/Dictionary.h"
-@@ -468,6 +469,7 @@ static PowerButtonWakeWatcher sleepSyncWakeWatcher;
- static bool sleepSyncAfterQuickResumeSleep = false;
+@@ -501,6 +502,7 @@ static bool syncStorageBeforeTransition() {
  
- static void restartWithSilentToken(const bool restoreUsbSerial = false) {
-+  BatteryStats::onRestart();  // CrossInk-Tailnet patch 0025
-   // Capture the live state for every destination without changing wake preferences.
-   silentRebootTarget |= SILENT_REBOOT_FRONTLIGHT_VALID;
-   if (Frontlight.isOn()) silentRebootTarget |= SILENT_REBOOT_FRONTLIGHT_ON;
-@@ -1406,6 +1408,7 @@ static void powerDownForDeepSleep() {
+ static bool restartWithSilentToken(const uint32_t target, const uint32_t payload, const bool restoreUsbSerial = false) {
+   if (deepSleepInProgress) return false;
++  BatteryStats::onRestart();  // CrossInk-Tailnet patch 0025 (before the flush below)
+   // Tailnet overlay: the framebuffer may be parked while Tailscale runs; draw only once it is back.
+   const bool displayReady = tailnet_display_ready(3000);
+   std::optional<RenderLock> lock;
+@@ -1535,6 +1537,7 @@ static void powerDownForDeepSleep([[maybe_unused]] const bool monochromeSleepFra
    // Last chance to sample: startDeepSleep() cuts the SD rail on X3, so nothing
    // can be written again until the next wake.
    BatteryDiagnosticLog::record(BatteryDiagnosticLog::Event::Sleep, BoardConfig::ACTIVE.name);
 +  BatteryStats::onSleep();  // CrossInk-Tailnet patch 0025
-   // All sleep-time file writes are complete. Stop SDMMC before the power path
-   // cuts peripheral rails and isolates the bus pads; SPI boards are a no-op.
+   std::optional<RenderLock> storageSleepLock;
+   if (!RenderLock::heldByCurrentTask()) storageSleepLock.emplace();
    libraryScanSleepToken.save(!library::libraryIndexNeedsRefresh());
-@@ -1899,6 +1902,13 @@ void setup() {
+@@ -2024,6 +2027,13 @@ void setup() {
    // Needs SETTINGS for the clock's UTC offset, so it cannot run any earlier.
    BatteryDiagnosticLog::record(BatteryDiagnosticLog::Event::Wake, BoardConfig::ACTIVE.name,
                                 sleepSyncBoot ? "SleepSync" : wakeupRouteName(wakeupReason));
@@ -1083,7 +1083,7 @@ index 7d3c8ae0..4b1dc9df 100644
    const bool isSleepWake = wakeupReason == HalGPIO::WakeupReason::PowerButton;
    I18N.begin(SETTINGS.languageCode, SETTINGS.languageCacheGeneration);
    HyphenationPackStore::begin();
-@@ -2319,6 +2329,7 @@ static void reapplyFrontlightAfterFirstPaint() {
+@@ -2456,6 +2466,7 @@ static void reapplyFrontlightAfterFirstPaint() {
  #endif
  
  void loop() {
@@ -1353,7 +1353,7 @@ index 00000000..efc91cea
 +#endif  // CROSSINK_TAILNET_BATTERY_STATS >= 1
 diff --git a/src/util/BatteryStats.h b/src/util/BatteryStats.h
 new file mode 100644
-index 00000000..91fae1e5
+index 00000000..700dad81
 --- /dev/null
 +++ b/src/util/BatteryStats.h
 @@ -0,0 +1,47 @@
@@ -1405,10 +1405,10 @@ index 00000000..91fae1e5
 +
 +}  // namespace BatteryStats
 diff --git a/test/CMakeLists.txt b/test/CMakeLists.txt
-index c5ff83f1..d0ccc54b 100644
+index a147e9cf..ade05643 100644
 --- a/test/CMakeLists.txt
 +++ b/test/CMakeLists.txt
-@@ -125,6 +125,7 @@ add_subdirectory(library_recent_order)
+@@ -127,6 +127,7 @@ add_subdirectory(library_recent_order)
  add_subdirectory(scalable_fonts)
  add_subdirectory(glyph_bitmap)
  add_subdirectory(daily_reading_stats)

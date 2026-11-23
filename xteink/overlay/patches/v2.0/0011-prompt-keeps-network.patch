@@ -19,10 +19,10 @@ index f333c4d8..ee0bb49c 100644
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
 diff --git a/src/SilentRestart.h b/src/SilentRestart.h
-index 37ce218d..3852bf24 100644
+index 346181dd..bc2bc85b 100644
 --- a/src/SilentRestart.h
 +++ b/src/SilentRestart.h
-@@ -51,6 +51,9 @@ constexpr uint32_t BOOKORBIT_SYNC_PAYLOAD_HAS_PARAGRAPH = 1u << 16;
+@@ -53,6 +53,9 @@ constexpr uint32_t BOOKORBIT_SYNC_PAYLOAD_HAS_PARAGRAPH = 1u << 16;
  // (Mirrors the KOReader sync orientation payload.)
  constexpr uint32_t BOOKORBIT_SYNC_PAYLOAD_ORIENTATION_SHIFT = 17u;
  constexpr uint32_t BOOKORBIT_SYNC_PAYLOAD_ORIENTATION_MASK = 0x7u << BOOKORBIT_SYNC_PAYLOAD_ORIENTATION_SHIFT;
@@ -32,20 +32,20 @@ index 37ce218d..3852bf24 100644
  // BOOKORBIT_SLEEP_SYNC payload: Power was still held when the device went to sleep (a
  // long-press sleep), so that press belongs to the sleep gesture and must be released
  // before a press can wake the device out of the sync.
-diff --git a/src/activities/reader/BookOrbitSyncActivity.cpp b/src/activities/reader/BookOrbitSyncActivity.cpp
-index 5df39da5..86c5ceac 100644
---- a/src/activities/reader/BookOrbitSyncActivity.cpp
-+++ b/src/activities/reader/BookOrbitSyncActivity.cpp
-@@ -9,6 +9,7 @@
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index f2c3475c..5f079310 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -8,6 +8,7 @@
+ #endif
  #include <HalClock.h>
- #include <HalStorage.h>
  #include <I18n.h>
 +#include <CrossInkTailnetCuts.h>
  #include <Logging.h>
  #include <Memory.h>
  #include <WallClock.h>
-@@ -573,6 +574,14 @@ void BookOrbitSyncActivity::performSync() {
-     if (stopIfWoken()) return;
+@@ -426,6 +427,14 @@ void BookOrbitSyncActivity::performSync() {
+     if (!exchangeReadingData()) return;
    }
  
 +  if (preAnsweredUpload && (result == BookOrbitSyncClient::OK || result == BookOrbitSyncClient::NOT_FOUND)) {
@@ -59,8 +59,8 @@ index 5df39da5..86c5ceac 100644
    if (result == BookOrbitSyncClient::NOT_FOUND) {
      if (smartSyncEnabled() || sleepSync) {
        LOG_DBG("BookOrbit", "Smart sync: no remote progress, uploading local %.6f", localProgress.percentage);
-@@ -1857,6 +1866,23 @@ void BookOrbitSyncActivity::performUpload() {
-     requestUpdate(true);
+@@ -638,6 +647,23 @@ void BookOrbitSyncActivity::performUpload() {
+     fail(tr(STR_SYNC_FAILED_MSG));
      return;
    }
 +#if CROSSINK_TAILNET_PROMPT_KEEPS_NETWORK
@@ -83,11 +83,11 @@ index 5df39da5..86c5ceac 100644
    {
      RenderLock lock(*this);
      state = UPLOADING;
-diff --git a/src/activities/reader/BookOrbitSyncActivity.h b/src/activities/reader/BookOrbitSyncActivity.h
-index 03be4a28..2dc08f55 100644
---- a/src/activities/reader/BookOrbitSyncActivity.h
-+++ b/src/activities/reader/BookOrbitSyncActivity.h
-@@ -49,6 +49,9 @@ class BookOrbitSyncActivity final : public Activity {
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+index eface758..998fcee5 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+@@ -54,6 +54,9 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport
          remotePosition{},
          localProgress(std::move(localKoPos)) {}
  
@@ -97,7 +97,7 @@ index 03be4a28..2dc08f55 100644
    void onEnter() override;
    void onExit() override;
    void loop() override;
-@@ -100,6 +103,7 @@ class BookOrbitSyncActivity final : public Activity {
+@@ -109,6 +112,7 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport
    bool stopIfWoken();
  
    State state = WIFI_SELECTION;
@@ -106,10 +106,10 @@ index 03be4a28..2dc08f55 100644
    std::string documentHash;
  
 diff --git a/src/main.cpp b/src/main.cpp
-index 6b149fa6..35118dd5 100644
+index 043533ce..0fe6ba6d 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -699,6 +699,7 @@ bool startGlobalBookOrbitSync(const bool networkBootReady, const uint32_t payloa
+@@ -725,6 +725,7 @@ bool startGlobalBookOrbitSync(const bool networkBootReady, const uint32_t payloa
    auto syncActivity = makeUniqueNoThrow<BookOrbitSyncActivity>(
        renderer, mappedInputManager, epubPath, spineIndex, pageNumber, totalPagesInSpine, std::move(localKoPos),
        std::move(localChapterName), paragraphIndex, networkBootReady, readerOrientation, sleepSync);

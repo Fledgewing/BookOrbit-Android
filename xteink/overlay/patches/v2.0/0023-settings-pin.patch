@@ -13,10 +13,10 @@ index a4193789..87113b20 100644
 +#define CROSSINK_TAILNET_SETTINGS_PIN 0
 +#endif
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index fdf5c35c..e0b50c3d 100644
+index 87ff4924..0e67a99f 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
-@@ -718,6 +718,18 @@ STR_NO_SERVERS: "No OPDS servers configured"
+@@ -723,6 +723,18 @@ STR_NO_SERVERS: "No OPDS servers configured"
  STR_DELETE_SERVER: "Delete Server"
  STR_OPDS_SERVERS: "OPDS Servers"
  STR_TAILSCALE: "Tailscale"
@@ -36,10 +36,10 @@ index fdf5c35c..e0b50c3d 100644
  STR_OPDS_SD_ROOT: "SD Root"
  STR_OPDS_DEFAULT_FOLDER: "Default Folder"
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index 3a67b3cf..f1fffc9d 100644
+index 6f149f4a..028cdcef 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
-@@ -1174,6 +1174,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
+@@ -1186,6 +1186,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
    systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
  #endif
    systemSettings.push_back(SettingInfo::Action(StrId::STR_TAILSCALE, SettingAction::Tailscale));
@@ -72,10 +72,10 @@ index 8d290164..7bd048b5 100644
    // activity owning the open book should be the Home/Reader unwind target.
    virtual bool isBookReaderActivity() const { return false; }
 diff --git a/src/activities/ActivityManager.cpp b/src/activities/ActivityManager.cpp
-index 00b67cc9..83d282f6 100644
+index bccb15f9..0478a964 100644
 --- a/src/activities/ActivityManager.cpp
 +++ b/src/activities/ActivityManager.cpp
-@@ -61,6 +61,9 @@
+@@ -68,6 +68,9 @@
  #include "settings/OpdsServerListActivity.h"
  #include "settings/ReleaseNotesActivity.h"
  #include "settings/SettingsActivity.h"
@@ -84,8 +84,8 @@ index 00b67cc9..83d282f6 100644
 +#endif
  #include "util/FrontlightPanelActivity.h"
  #include "util/FullScreenMessageActivity.h"
- #include "util/SwipeAdjustment.h"
-@@ -653,6 +656,14 @@ void ActivityManager::processPendingActivities() {
+ #include "util/PluginEvents.h"
+@@ -667,6 +670,14 @@ void ActivityManager::processPendingActivities() {
        }
  
        const bool closedFrontlightPanel = currentActivity->name == "FrontlightPanel";
@@ -100,7 +100,7 @@ index 00b67cc9..83d282f6 100644
        ActivityResult pendingResult = std::move(currentActivity->result);
        if (afterReturnActivity && currentActivity.get() == afterReturnOwner) {
          afterReturnOwnerExited = true;
-@@ -662,6 +673,13 @@ void ActivityManager::processPendingActivities() {
+@@ -676,6 +687,13 @@ void ActivityManager::processPendingActivities() {
        // Destroy the current activity
        exitActivity(lock);
        pendingAction = PendingAction::None;
@@ -114,7 +114,7 @@ index 00b67cc9..83d282f6 100644
  
        if (stackActivities.empty()) {
          lock.unlock();  // goHome may acquire its own lock
-@@ -681,7 +699,12 @@ void ActivityManager::processPendingActivities() {
+@@ -695,7 +713,12 @@ void ActivityManager::processPendingActivities() {
          if (closedFrontlightPanel) currentActivity->onFrontlightPanelClosed();
  
          // Handle result if necessary
@@ -127,7 +127,7 @@ index 00b67cc9..83d282f6 100644
            // Move it here to avoid the case where handler calling another startActivityForResult()
            auto handler = std::move(currentActivity->resultHandler);
            currentActivity->resultHandler = nullptr;
-@@ -707,6 +730,24 @@ void ActivityManager::processPendingActivities() {
+@@ -721,6 +744,24 @@ void ActivityManager::processPendingActivities() {
        }
  
      } else if (pendingActivity) {
@@ -152,7 +152,7 @@ index 00b67cc9..83d282f6 100644
        if (pendingAction == PendingAction::Push && pendingActivity->requiresFreshBackdrop()) {
          if (restoredActivityNeedsRender.load()) {
            const RequestUpdateResult redraw = requestUpdateAndWait();
-@@ -798,6 +839,15 @@ void ActivityManager::processPendingActivities() {
+@@ -812,6 +853,15 @@ void ActivityManager::processPendingActivities() {
      }
    }
  
@@ -168,7 +168,7 @@ index 00b67cc9..83d282f6 100644
    if (APP_STATE.hasPendingAlert.load(std::memory_order_acquire) && pendingAction == PendingAction::None) {
      APP_STATE.hasPendingAlert.store(false, std::memory_order_relaxed);
      pushActivity(std::make_unique<AlertActivity>(renderer, mappedInput));
-@@ -922,6 +972,16 @@ bool ActivityManager::handleQuickLockUnlock(const QuickLockTrigger trigger) {
+@@ -936,6 +986,16 @@ bool ActivityManager::handleQuickLockUnlock(const QuickLockTrigger trigger) {
    return currentActivity && pendingAction == PendingAction::None && currentActivity->handleQuickLockUnlock(trigger);
  }
  
@@ -186,10 +186,10 @@ index 00b67cc9..83d282f6 100644
    if (currentActivity) currentActivity->onInputLockChanged(locked);
    for (const auto& activity : stackActivities) {
 diff --git a/src/activities/ActivityManager.h b/src/activities/ActivityManager.h
-index d63d3215..f9754474 100644
+index 73be4d22..06f684f0 100644
 --- a/src/activities/ActivityManager.h
 +++ b/src/activities/ActivityManager.h
-@@ -88,6 +88,12 @@ class ActivityManager {
+@@ -89,6 +89,12 @@ class ActivityManager {
    std::unique_ptr<Activity> pendingActivity;
    enum class PendingAction { None, Push, Pop, Replace };
    PendingAction pendingAction = PendingAction::None;
@@ -203,7 +203,7 @@ index d63d3215..f9754474 100644
    bool releaseNotesShown = false;
    // Set when an overlay is closed specifically to hand control back to the
 diff --git a/src/activities/home/FileBrowserActivity.cpp b/src/activities/home/FileBrowserActivity.cpp
-index 8b0250e7..cbfb0c9d 100644
+index 79776167..17d19aba 100644
 --- a/src/activities/home/FileBrowserActivity.cpp
 +++ b/src/activities/home/FileBrowserActivity.cpp
 @@ -19,6 +19,7 @@
@@ -214,7 +214,7 @@ index 8b0250e7..cbfb0c9d 100644
  #include "BookActions.h"
  #include "CrossPointSettings.h"
  #include "CrossPointState.h"
-@@ -1017,6 +1018,11 @@ void FileBrowserActivity::renameFile(const std::string& oldPath, const std::stri
+@@ -1024,6 +1025,11 @@ void FileBrowserActivity::renameFile(const std::string& oldPath, const std::stri
  }
  
  void FileBrowserActivity::toggleHiddenFiles() {
@@ -882,10 +882,10 @@ index 00000000..a42df86a
 +  void done(bool cancelled);
 +};
 diff --git a/src/main.cpp b/src/main.cpp
-index 4fc95b63..7769af05 100644
+index 148befb4..7e1b83b2 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -109,6 +109,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -111,6 +111,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "SdCardFontSystem.h"
  #include "SilentRestart.h"
  #include "WifiCredentialStore.h"
@@ -893,9 +893,9 @@ index 4fc95b63..7769af05 100644
  #include "activities/network/StatsUploadActivity.h"
  #include "activities/Activity.h"
  #include "activities/ActivityManager.h"
-@@ -1539,6 +1540,9 @@ void completeSleepAfterSleepSync() {
+@@ -1459,6 +1460,9 @@ static bool holdSleepWhileUsbPowered(bool monochrome = false) {
+ #endif
  
- // Enter deep sleep mode
  void enterDeepSleep(bool fromTimeout) {
 +#if CROSSINK_TAILNET_SETTINGS_PIN
 +  SettingsPin::relock();  // never unlocked past sleep
@@ -903,7 +903,7 @@ index 4fc95b63..7769af05 100644
  #ifndef SIMULATOR
    gpio.stopButtonCapture();
  #endif
-@@ -1868,6 +1872,9 @@ void setup() {
+@@ -1993,6 +1997,9 @@ void setup() {
    // Apply brightness and wake policy only after the saved settings are loaded.
    Frontlight.initializeHardware();
    SETTINGS.loadFromFile();
@@ -914,7 +914,7 @@ index 4fc95b63..7769af05 100644
    // Up + Down resets EEGO, so every boot must restore touch as the recovery path.
    SETTINGS.disableReaderTouchscreen = 0;
 diff --git a/src/network/CrossPointWebServer.cpp b/src/network/CrossPointWebServer.cpp
-index b5e027ff..e4e0c229 100644
+index 74585bc7..02dd82c8 100644
 --- a/src/network/CrossPointWebServer.cpp
 +++ b/src/network/CrossPointWebServer.cpp
 @@ -67,6 +67,7 @@

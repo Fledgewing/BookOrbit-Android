@@ -1,8 +1,8 @@
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index f804064b..567bf7d5 100644
+index f30dd92e..02d05d49 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
-@@ -712,6 +712,7 @@ STR_SERVER_NAME: "Server Name"
+@@ -717,6 +717,7 @@ STR_SERVER_NAME: "Server Name"
  STR_NO_SERVERS: "No OPDS servers configured"
  STR_DELETE_SERVER: "Delete Server"
  STR_OPDS_SERVERS: "OPDS Servers"
@@ -11,10 +11,10 @@ index f804064b..567bf7d5 100644
  STR_OPDS_SD_ROOT: "SD Root"
  STR_OPDS_DEFAULT_FOLDER: "Default Folder"
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index 8e00b54f..f19b021a 100644
+index 006f0b42..c6cdf4c7 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
-@@ -1173,6 +1173,7 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
+@@ -1185,6 +1185,7 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
  #if CROSSINK_APP_CAP_OPDS
    systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
  #endif

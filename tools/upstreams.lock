@@ -2,6 +2,6 @@
 # name  repository  ref  commit
 # Update a pin with `tools/upstreams pin <name> <ref>`; commit the change with the work it is for.
 bookorbit         bookorbit/bookorbit          v3.9.0                  c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7
-crossink-v1.6     agosez/CrossInk-Bookorbit    v1.6.1+bookorbit.8      d7b4aa85514afab262c52017c57fa68cd27bb695
-crossink-v2.0     agosez/CrossInk-Bookorbit    v2.0.0+bookorbit.1-rc2  5ec6eb03e49282d9e1de20c919a5ee52ebd14ffd
+crossink-v1.6     agosez/CrossInk-Bookorbit    v1.6.1+bookorbit.9      0665c915c830423b8db9546562cc14ec4692865b
+crossink-v2.0     agosez/CrossInk-Bookorbit    v2.0.0+bookorbit.1-rc3  87e2e1984481e8a3d996f12b34b50a383f9013b8
 koreader          koreader/koreader            v2026.07.1              9192014d8bd82a91dc1012473be0f238dedfdb54

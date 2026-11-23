@@ -1,8 +1,8 @@
 diff --git a/lib/hal/HalDisplay.h b/lib/hal/HalDisplay.h
-index 2851cc0b..41a31e46 100644
+index b48503da..e2fecddc 100644
 --- a/lib/hal/HalDisplay.h
 +++ b/lib/hal/HalDisplay.h
-@@ -91,6 +91,9 @@ class HalDisplay {
+@@ -95,6 +95,9 @@ class HalDisplay {
  
    // Access to frame buffer
    uint8_t* getFrameBuffer() const;
@@ -13,7 +13,7 @@ index 2851cc0b..41a31e46 100644
    // Lend the framebuffer's ~48 KB STORAGE to a memory-hungry phase (chapter
    // builds) without freeing it: the allocation never moves, so repeated loans
 diff --git a/src/SilentRestart.h b/src/SilentRestart.h
-index 02f6f783..37ce218d 100644
+index 7e875d48..346181dd 100644
 --- a/src/SilentRestart.h
 +++ b/src/SilentRestart.h
 @@ -3,6 +3,8 @@
@@ -25,7 +25,7 @@ index 02f6f783..37ce218d 100644
  // ESP.restart() with an RTC_NOINIT flag that survives the reboot, so setup()
  // skips the boot splash and routes straight to a destination. Used to clear
  // heap fragmentation accumulated during a wifi session.
-@@ -77,6 +79,8 @@ constexpr bool isNetworkBootTargetValue(const uint32_t value) {
+@@ -82,6 +84,8 @@ constexpr bool isNetworkBootTargetValue(const uint32_t value) {
      case NetworkBootTarget::BOOKORBIT_CATALOG:
      case NetworkBootTarget::BOOKORBIT_HOME_REFRESH:
      case NetworkBootTarget::BOOKORBIT_HOME_SHELVES:
@@ -35,18 +35,18 @@ index 02f6f783..37ce218d 100644
    }
    return false;
 diff --git a/src/activities/ActivityManager.cpp b/src/activities/ActivityManager.cpp
-index 846717aa..3c4a5ad4 100644
+index 42e01e21..aa7bb0a1 100644
 --- a/src/activities/ActivityManager.cpp
 +++ b/src/activities/ActivityManager.cpp
-@@ -61,6 +61,7 @@
- #include "util/FullScreenMessageActivity.h"
+@@ -69,6 +69,7 @@
+ #include "util/PluginEvents.h"
  #include "util/SwipeAdjustment.h"
  #include "util/TwoFingerSwipe.h"
 +#include "TailnetNetPhase.h"
  
  namespace {
  constexpr uint32_t FILE_TRANSFER_MODE_MASK = 0xFF;
-@@ -504,7 +505,7 @@ void ActivityManager::renderTaskLoop() {
+@@ -512,7 +513,7 @@ void ActivityManager::renderTaskLoop() {
      entryRenderRequested = false;
      TouchRegistry::getInstance().setEnabled(mappedInput.hasTouch());
      TouchRegistry::getInstance().beginFrame();
@@ -55,7 +55,7 @@ index 846717aa..3c4a5ad4 100644
        HalPowerManager::Lock powerLock;  // Ensure we don't go into low-power mode while rendering
        // Apply Night Mode to each activity's normal-polarity frame. SleepActivity
        // preserves it for retained pages and clears it for generated sleep screens.
-@@ -533,6 +534,7 @@ void ActivityManager::renderTaskLoop() {
+@@ -547,6 +548,7 @@ void ActivityManager::renderTaskLoop() {
  }
  
  void ActivityManager::loop() {
@@ -63,7 +63,7 @@ index 846717aa..3c4a5ad4 100644
    if (currentActivity && currentActivity->requiresExclusiveStorageLoop()) {
      currentActivity->loop();
      // USB Drive normally restarts the device rather than replacing itself. The
-@@ -1164,6 +1166,7 @@ bool ActivityManager::goToBookOrbitCatalog(BookOrbitCatalogLink link) {
+@@ -1178,6 +1180,7 @@ bool ActivityManager::goToBookOrbitCatalog(BookOrbitCatalogLink link) {
  }
  
  void ActivityManager::goToBookOrbitAuth() {
@@ -72,19 +72,20 @@ index 846717aa..3c4a5ad4 100644
    // settings screens it is reached through hold 15-20KB that the handshake needs. Nothing
    // is lost by dropping them — the activity ends in a silentRestart() to the home screen
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index 6e04d795..0192f6f0 100644
+index fca17355..9381bfee 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-@@ -47,6 +47,8 @@
+@@ -48,6 +48,9 @@
  #include "util/BookCacheUtils.h"
  #include "util/BookOrbitDevicePath.h"
- #include "util/StringUtils.h"
+ #include "util/BookUpdateMigration.h"
++#include "util/StringUtils.h"
 +#include "network/SavedWifiConnect.h"
 +#include "TailnetNetPhase.h"
  
  namespace fui = freeink::ui;
  
-@@ -346,6 +348,13 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
+@@ -345,6 +348,13 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
      return;
    }
  
@@ -98,7 +99,7 @@ index 6e04d795..0192f6f0 100644
    state = BrowserState::CHECK_WIFI;
    requestUpdate();
    checkAndConnectWifi();
-@@ -1399,6 +1408,9 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
+@@ -1443,6 +1453,9 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
              static_cast<int>(result));
    }
  
@@ -129,10 +130,10 @@ index 1824dffb..79eee67f 100644
  #if defined(ENABLE_SERIAL_LOG) && LOG_LEVEL >= 2
      uint8_t connectedBssid[6] = {};
 diff --git a/src/main.cpp b/src/main.cpp
-index b44b2471..a02d7493 100644
+index 37e92af9..36b0acdd 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -147,6 +147,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -150,6 +150,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "util/PowerButtonWakeWatcher.h"
  #include "util/ScreenshotUtil.h"
  #include "util/SleepWakePolicy.h"
@@ -140,58 +141,32 @@ index b44b2471..a02d7493 100644
  
  GfxRenderer renderer(display);
  MappedInputManager mappedInputManager(gpio, renderer);
-@@ -448,7 +449,7 @@ static void silentRestartToHome(const uint32_t payload, const char* const descri
-   // Without an overlay, users don't see the reboot and fire input through to
-   // Home. Select on the default selectorIndex=0 then opens the most-recent
-   // book, looking like a trampoline back to the reader they just exited.
+@@ -448,10 +449,14 @@ static bool syncStorageBeforeTransition() {
+ 
+ static bool restartWithSilentToken(const uint32_t target, const uint32_t payload, const bool restoreUsbSerial = false) {
+   if (deepSleepInProgress) return false;
++  // Tailnet overlay: the framebuffer may be parked while Tailscale runs; draw only once it is back.
++  const bool displayReady = tailnet_display_ready(3000);
+   std::optional<RenderLock> lock;
+   if (!RenderLock::heldByCurrentTask()) lock.emplace();
+-  if (target == static_cast<uint32_t>(NetworkBootTarget::KOREADER_SYNC)) renderer.clearScreen();
 -  GUI.drawPopup(renderer, tr(STR_LOADING));
-+  if (tailnet_display_ready(3000)) GUI.drawPopup(renderer, tr(STR_LOADING));
++  if (displayReady) {
++    if (target == static_cast<uint32_t>(NetworkBootTarget::KOREADER_SYNC)) renderer.clearScreen();
++    GUI.drawPopup(renderer, tr(STR_LOADING));
++  }
    delay(50);
-   restartWithSilentToken(restoreUsbSerial);
- }
-@@ -493,7 +494,7 @@ static void silentRestartToReaderImpl(const bool cleanImageBaseOnEntry) {
-   silentRebootPayload = cleanImageBaseOnEntry ? SILENT_REBOOT_READER_CLEAN_IMAGE_BASE : 0;
-   silentRebootMagic = SILENT_REBOOT_MAGIC;
-   LOG_DBG("MAIN", "Silent restart (target=reader cleanImageBase=%d)", cleanImageBaseOnEntry ? 1 : 0);
--  GUI.drawPopup(renderer, tr(STR_LOADING));
-+  if (tailnet_display_ready(3000)) GUI.drawPopup(renderer, tr(STR_LOADING));
-   delay(50);
-   restartWithSilentToken();
- }
-@@ -511,14 +512,16 @@ void silentRestartToNetwork(const NetworkBootTarget target, const uint32_t paylo
-   silentRebootMagic = SILENT_REBOOT_MAGIC;
-   LOG_DBG("MAIN", "Silent restart (target=network/%lu payload=%lu)", static_cast<unsigned long>(silentRebootTarget),
-           static_cast<unsigned long>(payload));
--  if (target == NetworkBootTarget::KOREADER_SYNC) {
--    RenderLock lock;
--    // A drawer close can queue a backdrop repaint. Serialize the handoff and
--    // replace that frame so only one loading notice remains visible.
--    renderer.clearScreen();
--    GUI.drawPopup(renderer, tr(STR_LOADING));
--  } else {
--    GUI.drawPopup(renderer, tr(STR_LOADING));
-+  if (tailnet_display_ready(3000)) {
-+    if (target == NetworkBootTarget::KOREADER_SYNC) {
-+      RenderLock lock;
-+      // A drawer close can queue a backdrop repaint. Serialize the handoff and
-+      // replace that frame so only one loading notice remains visible.
-+      renderer.clearScreen();
-+      GUI.drawPopup(renderer, tr(STR_LOADING));
-+    } else {
-+      GUI.drawPopup(renderer, tr(STR_LOADING));
-+    }
-   }
-   delay(50);
-   restartWithSilentToken();
-@@ -1452,6 +1455,7 @@ void wakeFromSleepSync() {
- // running.
- static void redrawSleepScreenAfterSleepSync() {
+   // The last popup can read SD fonts. Flush after it, while rendering is
+   // quiescent; a successfully detached USB volume must never be reopened here.
+@@ -1632,6 +1637,7 @@ void wakeFromSleepSync() {
+ // Returns whether the screen left on the panel is a complete black and white frame.
+ static bool redrawSleepScreenAfterSleepSync() {
    LOG_INF("SLP", "Drawing the sleep screen again after the BookOrbit sleep sync");
-+  if (!tailnet_display_ready(5000)) return;
++  if (!tailnet_display_ready(5000)) return false;
    if (sleepSyncAfterQuickResumeSleep) {
      HalFile file;
-     if (!Storage.openFileForRead("SLP", SLEEP_FRAME_FILE, file)) return;
-@@ -1949,6 +1953,7 @@ void setup() {
+     if (!Storage.openFileForRead("SLP", SLEEP_FRAME_FILE, file)) return false;
+@@ -2072,6 +2078,7 @@ void setup() {
      case BootResume::Network:
        LOG_INF("BOOT", "Minimal network boot ready: target=%lu free=%u maxAlloc=%u",
                static_cast<unsigned long>(snapshotTarget), ESP.getFreeHeap(), ESP.getMaxAllocHeap());
@@ -199,7 +174,7 @@ index b44b2471..a02d7493 100644
        break;
      case BootResume::SplashlessWake:
        // Like upstream, clean the first Home paint unless a saved frame restores
-@@ -2055,6 +2060,12 @@ void setup() {
+@@ -2181,6 +2188,12 @@ void setup() {
          }
          break;
        }

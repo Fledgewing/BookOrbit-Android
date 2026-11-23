@@ -1,8 +1,8 @@
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index b95b5d3..db6768d 100644
+index 32b02a21..8c80372d 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
-@@ -779,6 +779,7 @@ STR_NO_SERVERS: "No OPDS servers configured"
+@@ -784,6 +784,7 @@ STR_NO_SERVERS: "No OPDS servers configured"
  STR_DELETE_SERVER: "Delete Server"
  STR_DELETE_CONFIRM: "Delete this server?"
  STR_OPDS_SERVERS: "OPDS Servers"
@@ -11,7 +11,7 @@ index b95b5d3..db6768d 100644
  STR_OPDS_SD_ROOT: "SD Root"
  STR_MOVE_TO_READ_FAILED_TITLE: "Could not move book"
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index 62db6c0..a21c3e5 100644
+index 62db6c04..a21c3e5d 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
 @@ -1064,6 +1064,7 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
@@ -23,7 +23,7 @@ index 62db6c0..a21c3e5 100644
    addSettingByName(systemSettings, allSettings, StrId::STR_OTA_INCLUDE_PRERELEASES);
    systemSettings.push_back(SettingInfo::Action(StrId::STR_SD_FIRMWARE_UPDATE, SettingAction::SdFirmwareUpdate));
 diff --git a/src/activities/settings/SettingsActivity.cpp b/src/activities/settings/SettingsActivity.cpp
-index 2a97759..c980084 100644
+index 2a97759f..c9800849 100644
 --- a/src/activities/settings/SettingsActivity.cpp
 +++ b/src/activities/settings/SettingsActivity.cpp
 @@ -22,6 +22,7 @@
@@ -45,7 +45,7 @@ index 2a97759..c980084 100644
          startActivityForResult(std::make_unique<QuickActionsActivity>(renderer, mappedInput), resultHandler);
          break;
 diff --git a/src/activities/settings/SettingsActivity.h b/src/activities/settings/SettingsActivity.h
-index a1842ab..8ffa3b1 100644
+index a1842ab8..8ffa3b10 100644
 --- a/src/activities/settings/SettingsActivity.h
 +++ b/src/activities/settings/SettingsActivity.h
 @@ -54,6 +54,7 @@ enum class SettingAction {

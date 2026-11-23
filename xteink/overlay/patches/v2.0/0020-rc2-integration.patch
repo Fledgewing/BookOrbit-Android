@@ -1,8 +1,8 @@
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
-index ee0bb49c..428181a7 100644
+index 30fbae06..f2200820 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
-@@ -124,6 +124,7 @@ void tlsArenaArmForBoot(uint32_t networkBootTarget);  // main.cpp, loop task, ne
+@@ -137,6 +137,7 @@ void tlsArenaArmForBoot(uint32_t networkBootTarget);  // main.cpp, loop task, ne
  void tlsArenaReserve();                               // WiFi joined, before Tailscale starts
  void tlsArenaRelease();                               // network ends (freed once empty)
  void tlsArenaLogRequestPeak(const char* what);        // after each request; restarts the peak
@@ -39,10 +39,10 @@ index fea09075..5be9f137 100644
 +  return created;
  }
 diff --git a/src/SilentRestart.h b/src/SilentRestart.h
-index 3852bf24..ff5787df 100644
+index bc2bc85b..d7e8c425 100644
 --- a/src/SilentRestart.h
 +++ b/src/SilentRestart.h
-@@ -84,6 +84,7 @@ constexpr bool isNetworkBootTargetValue(const uint32_t value) {
+@@ -89,6 +89,7 @@ constexpr bool isNetworkBootTargetValue(const uint32_t value) {
      case NetworkBootTarget::BOOKORBIT_HOME_SHELVES:
      case static_cast<NetworkBootTarget>(TAILNET_LOGIN_TARGET):
      case static_cast<NetworkBootTarget>(TAILNET_BOOKORBIT_AUTH_TARGET):
@@ -190,10 +190,10 @@ index 2b0bbde5..6180ca1d 100644
    bool initialConfirm = false;
    std::string message;
 diff --git a/src/main.cpp b/src/main.cpp
-index 35118dd5..ade86acb 100644
+index 0fe6ba6d..41b9128e 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -109,6 +109,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -111,6 +111,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #include "SdCardFontSystem.h"
  #include "SilentRestart.h"
  #include "WifiCredentialStore.h"
@@ -201,7 +201,7 @@ index 35118dd5..ade86acb 100644
  #include "activities/Activity.h"
  #include "activities/ActivityManager.h"
  #include "activities/boot_sleep/ImageFolderIndex.h"
-@@ -392,6 +393,16 @@ constexpr uint32_t SLEEP_SYNC_WAKE_MAGIC = 0xC1EAB027;
+@@ -395,6 +396,16 @@ constexpr uint32_t SLEEP_SYNC_WAKE_MAGIC = 0xC1EAB027;
  constexpr uint32_t SILENT_READER_PAGE_BUILD_MAGIC = 0xC1EAB017;
  constexpr uint32_t SILENT_READER_PAGE_BUILD_AUTO_TURN = 1U << 0;
  
@@ -218,7 +218,7 @@ index 35118dd5..ade86acb 100644
  #if CROSSINK_TAILNET_NET_LOOP_STACK && defined(ARDUINO_ARCH_ESP32) && !defined(SIMULATOR)
  // The loopTask stack this boot was given (getArduinoLoopTaskStackSize() below).
  static size_t loopTaskStackBytes = 0;
-@@ -403,7 +414,8 @@ static size_t loopTaskStackBytes = 0;
+@@ -406,7 +417,8 @@ static size_t loopTaskStackBytes = 0;
  size_t getArduinoLoopTaskStackSize(void) {
    const uint32_t target = silentRebootTarget & ~(SILENT_REBOOT_FRONTLIGHT_VALID | SILENT_REBOOT_FRONTLIGHT_ON);
    const bool networkBoot = silentRebootMagic == SILENT_REBOOT_MAGIC && isNetworkBootTargetValue(target) &&
@@ -228,7 +228,7 @@ index 35118dd5..ade86acb 100644
    loopTaskStackBytes = networkBoot ? CROSSINK_TAILNET_NET_LOOP_STACK : 16 * 1024;
    return loopTaskStackBytes;
  }
-@@ -1611,7 +1623,9 @@ void setupDisplayAndFonts(const bool seamless, const bool loadReaderResources, c
+@@ -1723,7 +1735,9 @@ void setupDisplayAndFonts(const bool seamless, const bool loadReaderResources, c
    // parent screen before their deferred Wi-Fi child is promoted, so their
    // caller selects the reader-sized stack. Lightweight network targets use
    // 8 KB; reader rendering retains its 16 KB budget.
@@ -239,7 +239,7 @@ index 35118dd5..ade86acb 100644
  
    // Initialize font decompressor for compressed reader fonts
    if (!fontDecompressor.init()) {
-@@ -1710,6 +1724,7 @@ void setup() {
+@@ -1822,6 +1836,7 @@ void setup() {
        silentRebootTarget <= SILENT_REBOOT_TARGET_READER || isNetworkBootTargetValue(silentRebootTarget);
    const uint32_t snapshotTarget = (isSilentReboot && isValidSilentTarget) ? silentRebootTarget : 0;
    const uint32_t snapshotPayload = (isSilentReboot && isValidSilentTarget) ? silentRebootPayload : 0;
@@ -247,7 +247,7 @@ index 35118dd5..ade86acb 100644
    const bool cleanImageBaseOnEntry =
        snapshotTarget == SILENT_REBOOT_TARGET_READER && (snapshotPayload & SILENT_REBOOT_READER_CLEAN_IMAGE_BASE) != 0;
    const bool isNetworkResume = snapshotTarget >= static_cast<uint32_t>(NetworkBootTarget::OTA);
-@@ -2102,6 +2117,9 @@ void setup() {
+@@ -2230,6 +2245,9 @@ void setup() {
        case static_cast<NetworkBootTarget>(TAILNET_BOOKORBIT_AUTH_TARGET):
          launched = tailnet_bookorbit_auth_boot();
          break;
@@ -257,7 +257,7 @@ index 35118dd5..ade86acb 100644
        case NetworkBootTarget::BOOKORBIT_HOME_SHELVES: {
          auto shelves = makeUniqueNoThrow<BookOrbitSettingsActivity>(
              renderer, mappedInputManager, BookOrbitSettingsActivity::Page::Home, /*networkBoot=*/true);
-@@ -2558,7 +2576,10 @@ void loop() {
+@@ -2706,7 +2724,10 @@ void loop() {
    // refresh after input was sampled: a stale touch-down can become a false hold.
    if (!activityManager.isReaderActivity() && !activityManager.hasActivityNamed("KeyboardEntry")) {
      RenderLock lock(RenderLock::Mode::Try);
@@ -270,20 +270,20 @@ index 35118dd5..ade86acb 100644
    const unsigned long activityStartTime = millis();
    activityManager.loop();
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index e5c26421..e1a9e1fa 100644
+index 3c192cec..219541af 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
-@@ -26,6 +26,7 @@
+@@ -28,6 +28,7 @@
  #include "util/CardSpace.h"
  #include "util/UrlUtils.h"
  #include "Tailnet.h"
 +#include <CrossInkTailnetCuts.h>
  
- namespace {
- constexpr size_t PROGRESS_UPDATE_BYTES = 64 * 1024;
-@@ -276,7 +277,13 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
-     freeink::SecureHttpClient oneShot;
-     freeink::SecureHttpClient& http = keptWolfSslClient != nullptr ? *keptWolfSslClient : oneShot;
+ struct HttpDownloader::Session::State {
+ #if defined(FREEINK_NET_WOLFSSL) || defined(FREEINK_NET_EXTERNAL_TLS)
+@@ -450,7 +451,13 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
+     auto& http = retained ? *retained : localHttp;
+     http.setReuse(retained != nullptr);
      http.setTimeout(HTTP_TIMEOUT_MS);
 +#if CROSSINK_TAILNET_TLS_ARENA
 +    // The full-record buffer goes through wolfSSL's allocator: with the arena reserved

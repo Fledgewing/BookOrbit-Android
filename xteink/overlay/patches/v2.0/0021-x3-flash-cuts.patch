@@ -1,5 +1,5 @@
 diff --git a/src/CrossPointSettings.cpp b/src/CrossPointSettings.cpp
-index b293d575..85307aa0 100644
+index 92455abf..ae30dd19 100644
 --- a/src/CrossPointSettings.cpp
 +++ b/src/CrossPointSettings.cpp
 @@ -1125,6 +1125,9 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc, bool importingCrossPoint
@@ -28,10 +28,10 @@ index 6793b90c..161cd9d7 100644
    if (action == CrossPointSettings::READING_STATS && !SETTINGS.shouldTrackReadingStats()) return false;
    if (action == CrossPointSettings::PREVIOUS_PAGE || action == CrossPointSettings::NEARBY_POSITION_SYNC ||
 diff --git a/src/SettingsList.h b/src/SettingsList.h
-index f19b021a..3a67b3cf 100644
+index c6cdf4c7..6f149f4a 100644
 --- a/src/SettingsList.h
 +++ b/src/SettingsList.h
-@@ -1174,7 +1174,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
+@@ -1186,7 +1186,9 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
    systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
  #endif
    systemSettings.push_back(SettingInfo::Action(StrId::STR_TAILSCALE, SettingAction::Tailscale));
@@ -42,11 +42,12 @@ index f19b021a..3a67b3cf 100644
    // Picco retains the vendor recovery slot and has no spare application slot.
    systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
 diff --git a/src/activities/ActivityManager.cpp b/src/activities/ActivityManager.cpp
-index 3c4a5ad4..00b67cc9 100644
+index aa7bb0a1..bccb15f9 100644
 --- a/src/activities/ActivityManager.cpp
 +++ b/src/activities/ActivityManager.cpp
-@@ -1,6 +1,8 @@
- #include "ActivityManager.h"
+@@ -4,7 +4,9 @@
+ #include "util/BatteryDiagnosticLog.h"
+ #endif
  
 +#if !CROSSINK_TAILNET_NO_PLUGINS
  #include "activities/plugins/PluginCatalogActivity.h"
@@ -54,7 +55,7 @@ index 3c4a5ad4..00b67cc9 100644
  
  #if CROSSINK_SCALABLE_FONTS
  #include <HalScalableFont.h>
-@@ -45,8 +47,10 @@
+@@ -51,8 +53,10 @@
  #include "home/RecentBookProgress.h"
  #include "library/LibraryActivity.h"
  #include "network/CrossPointWebServerActivity.h"
@@ -65,7 +66,7 @@ index 3c4a5ad4..00b67cc9 100644
  #include "network/UsbDriveActivity.h"
  #include "reader/BookReadingStats.h"
  #include "reader/BookStatsActivity.h"
-@@ -975,6 +979,12 @@ void ActivityManager::goToFileTransfer(std::string returnBookPath) {
+@@ -989,6 +993,12 @@ void ActivityManager::goToFileTransfer(std::string returnBookPath) {
  }
  
  bool ActivityManager::goToNearbyBookSend(std::string path, const bool returnToReader) {
@@ -78,7 +79,7 @@ index 3c4a5ad4..00b67cc9 100644
    auto activity = makeUniqueNoThrow<NearbyBookTransferActivity>(
        renderer, mappedInput, NearbyBookTransferActivity::Mode::Send, std::move(path), returnToReader);
    if (!activity) {
-@@ -983,9 +993,11 @@ bool ActivityManager::goToNearbyBookSend(std::string path, const bool returnToRe
+@@ -997,9 +1007,11 @@ bool ActivityManager::goToNearbyBookSend(std::string path, const bool returnToRe
    }
    replaceActivity(std::move(activity));
    return true;
@@ -90,7 +91,7 @@ index 3c4a5ad4..00b67cc9 100644
    auto activity =
        makeUniqueNoThrow<NearbyBookTransferActivity>(renderer, mappedInput, NearbyBookTransferActivity::Mode::Receive);
    if (!activity) {
-@@ -993,6 +1005,7 @@ void ActivityManager::goToNearbyBookReceive() {
+@@ -1007,6 +1019,7 @@ void ActivityManager::goToNearbyBookReceive() {
      return;
    }
    replaceActivity(std::move(activity));
@@ -98,7 +99,7 @@ index 3c4a5ad4..00b67cc9 100644
  }
  
  void ActivityManager::goToCalibreWireless(const std::string& returnBookPath) {
-@@ -1051,8 +1064,10 @@ bool ActivityManager::resumeFileTransferFromNetworkBoot(const uint32_t payload)
+@@ -1065,8 +1078,10 @@ bool ActivityManager::resumeFileTransferFromNetworkBoot(const uint32_t payload)
  }
  
  void ActivityManager::goToNearbyStatsSync() {
@@ -109,7 +110,7 @@ index 3c4a5ad4..00b67cc9 100644
  }
  
  void ActivityManager::goToSettings(const bool dismissOnUpSwipe, const bool openLanguageDownloads,
-@@ -1086,6 +1101,11 @@ void ActivityManager::goToLibrary() {
+@@ -1100,6 +1115,11 @@ void ActivityManager::goToLibrary() {
  }
  
  bool ActivityManager::goToPlugins(const bool networkBootReady) {
@@ -121,7 +122,7 @@ index 3c4a5ad4..00b67cc9 100644
  #ifndef SIMULATOR
    if (!networkBootReady) {
      // Hub installation and catalog parsing need the same clean heap as OPDS.
-@@ -1102,6 +1122,7 @@ bool ActivityManager::goToPlugins(const bool networkBootReady) {
+@@ -1116,6 +1136,7 @@ bool ActivityManager::goToPlugins(const bool networkBootReady) {
    }
    replaceActivity(std::move(plugins));
    return true;
@@ -145,10 +146,10 @@ index 95eadea5..3fdf09e7 100644
           FsHelpers::hasPngExtension(path) || FsHelpers::hasBmpExtension(path);
  }
 diff --git a/src/activities/home/HomeActivity.cpp b/src/activities/home/HomeActivity.cpp
-index 01fe232a..ecc14598 100644
+index af8fc2e6..2fed1325 100644
 --- a/src/activities/home/HomeActivity.cpp
 +++ b/src/activities/home/HomeActivity.cpp
-@@ -821,7 +821,7 @@ void HomeActivity::onEnter() {
+@@ -825,7 +825,7 @@ void HomeActivity::onEnter() {
  
    Activity::onEnter();
  
@@ -158,7 +159,7 @@ index 01fe232a..ecc14598 100644
      coverGridUi = makeUniqueNoThrow<CoverGridHomeUi>(renderer);
      if (!coverGridUi) LOG_ERR("HOME", "Cannot allocate cover grid UI; using standard Home");
 diff --git a/src/activities/network/CalibreConnectActivity.cpp b/src/activities/network/CalibreConnectActivity.cpp
-index 9a45edbc..11115def 100644
+index ae8a8d67..e4f3622b 100644
 --- a/src/activities/network/CalibreConnectActivity.cpp
 +++ b/src/activities/network/CalibreConnectActivity.cpp
 @@ -1,6 +1,16 @@
@@ -280,10 +281,10 @@ index 265d8362..9a67610c 100644
  constexpr int MENU_ENTRY_COUNT = sizeof(MENU_ENTRIES) / sizeof(MENU_ENTRIES[0]);
  static_assert(MENU_ENTRY_COUNT <= NetworkModeSelectionActivity::MAX_MENU_ROWS, "Raise MAX_MENU_ROWS");
 diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
-index d6114592..9f072389 100644
+index 5d6d869d..27a44ea9 100644
 --- a/src/activities/reader/EpubReaderActivity.cpp
 +++ b/src/activities/reader/EpubReaderActivity.cpp
-@@ -64,7 +64,9 @@
+@@ -70,7 +70,9 @@
  #include "KOReaderSyncActivity.h"
  #include "LookedUpWordsActivity.h"
  #include "MappedInputManager.h"
@@ -293,7 +294,7 @@ index d6114592..9f072389 100644
  #include "PageWordGeometry.h"
  #include "ProgressMapper.h"
  #include "QrDisplayActivity.h"
-@@ -4809,6 +4811,9 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuAction action, const
+@@ -4957,6 +4959,9 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuAction action, const
        break;
      }
      case EpubReaderMenuAction::NEARBY_POSITION_SYNC: {
@@ -303,7 +304,7 @@ index d6114592..9f072389 100644
        const int currentPage = section ? section->currentPage : nextPageNumber;
        const int totalPages = section ? section->estimatedTotalPages() : std::max(1, cachedChapterTotalPageCount);
        std::optional<uint16_t> paragraphIndex;
-@@ -4879,6 +4884,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuAction action, const
+@@ -5027,6 +5032,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuAction action, const
        pauseReadingPaceTimer("nearby_position_sync");
        activityManager.replaceActivity(std::move(syncActivity));
        break;
@@ -312,10 +313,10 @@ index d6114592..9f072389 100644
      case EpubReaderMenuAction::BOOKMARK_TOGGLE: {
        const int bookmarkPageCount = section ? section->estimatedTotalPages() : 0;
 diff --git a/src/activities/reader/EpubReaderMenuModel.h b/src/activities/reader/EpubReaderMenuModel.h
-index 41944453..15d7ab9f 100644
+index 1bc78419..e3b355d2 100644
 --- a/src/activities/reader/EpubReaderMenuModel.h
 +++ b/src/activities/reader/EpubReaderMenuModel.h
-@@ -230,8 +230,10 @@ constexpr ReaderDrawerCatalog makeReaderDrawerCatalog(const ReaderDrawerAvailabi
+@@ -238,8 +238,10 @@ constexpr ReaderDrawerCatalog makeReaderDrawerCatalog(const ReaderDrawerAvailabi
    if (available.buttonDevice) {
      if (available.hasBookOrbitSync) location.add(ReaderDrawerCatalogItem::BookOrbitSync);
      if (available.hasKOReaderSync) location.add(ReaderDrawerCatalogItem::SyncProgress);
@@ -425,10 +426,10 @@ index 7bbc50eb..4190ebf3 100644
                                                     StrId::STR_NEARBY_POSITION_SYNC, StrId::STR_SEND_NEARBY_BOOK};
    static constexpr std::array<FrontlightPanelAction, 4> ACTIONS = {
 diff --git a/src/main.cpp b/src/main.cpp
-index ade86acb..4fc95b63 100644
+index 41b9128e..148befb4 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -2151,6 +2151,9 @@ void setup() {
+@@ -2279,6 +2279,9 @@ void setup() {
          launched = activityManager.resumeFileTransferFromNetworkBoot(snapshotPayload);
          break;
        case NetworkBootTarget::DOWNLOAD_ASSETS: {
@@ -439,7 +440,7 @@ index ade86acb..4fc95b63 100644
          auto assets = makeUniqueNoThrow<AssetDownloadActivity>(renderer, mappedInputManager, snapshotPayload);
          if (assets) {
 diff --git a/src/network/CrossPointWebServer.cpp b/src/network/CrossPointWebServer.cpp
-index 0485147a..b5e027ff 100644
+index b3d4b648..74585bc7 100644
 --- a/src/network/CrossPointWebServer.cpp
 +++ b/src/network/CrossPointWebServer.cpp
 @@ -475,6 +475,10 @@ void CrossPointWebServer::begin() {
@@ -469,10 +470,10 @@ index 0485147a..b5e027ff 100644
    server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
    server->on("/download", HTTP_GET, [this] { handleDownload(); });
 diff --git a/src/util/PluginEvents.cpp b/src/util/PluginEvents.cpp
-index b89acad7..60e58c7c 100644
+index 1898aa19..61775dca 100644
 --- a/src/util/PluginEvents.cpp
 +++ b/src/util/PluginEvents.cpp
-@@ -1,5 +1,19 @@
+@@ -1,5 +1,20 @@
  #include "PluginEvents.h"
  
 +#if CROSSINK_TAILNET_NO_PLUGINS
@@ -480,7 +481,8 @@ index b89acad7..60e58c7c 100644
 +namespace pluginevents {
 +void refreshSubscriptions() {}
 +void pollOnline() {}
-+void prepareSleep(const char*, int, bool) {}
++void queueSleep(const char*, int) {}
++void deliverSleepEvents() {}
 +bool anySubscriber(Event) { return false; }
 +uint8_t subscriptionMask(const char*) { return 0; }
 +bool wantsConnectAny() { return false; }
@@ -492,7 +494,7 @@ index b89acad7..60e58c7c 100644
  #include <ArduinoJson.h>
  #include <HalStorage.h>
  #include <LibraryBuilder.h>
-@@ -543,3 +557,4 @@ void prepareSleep(const char* book, int progress, bool allowNetwork) {
+@@ -546,3 +561,4 @@ void deliverSleepEvents() {
  }
  
  }  // namespace pluginevents

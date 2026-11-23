@@ -18,7 +18,7 @@ index 6ec7b3d3..6eabb941 100644
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index 391f7a0b..1bb1e34a 100644
+index 80196a55..b690fda0 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 @@ -321,22 +321,36 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
@@ -72,7 +72,7 @@ index 391f7a0b..1bb1e34a 100644
    } else {
      BookOrbitCatalogListCache::clear();
      // A BOOKORBIT_CATALOG boot the BookOrbit Home asked for brings its link on the SD card.
-@@ -403,6 +417,19 @@ void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connect
+@@ -404,6 +418,19 @@ void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connect
      return;
    }
    sdFontSystem.releaseForNetwork(renderer);
@@ -92,7 +92,7 @@ index 391f7a0b..1bb1e34a 100644
    if (entryLink.bookId != 0) {
      // Back from the download lands on the listing the Home shelf drew from.
      const BookOrbitCatalogLink link = std::move(entryLink);
-@@ -1275,24 +1302,11 @@ bool BookOrbitCatalogBrowserActivity::restartForDownload(const int64_t bookId, c
+@@ -1313,24 +1340,11 @@ bool BookOrbitCatalogBrowserActivity::restartForDownload(const int64_t bookId, c
              static_cast<long long>(bookId));
      return false;
    }
@@ -118,7 +118,7 @@ index 391f7a0b..1bb1e34a 100644
    if (!BookOrbitCatalogListCache::saveDownloadResume(resume)) {
      LOG_ERR("BookOrbit", "Cannot save the download for its restart; downloading in place");
      return false;
-@@ -1312,6 +1326,40 @@ bool BookOrbitCatalogBrowserActivity::restartForDownload(const int64_t bookId, c
+@@ -1350,6 +1364,40 @@ bool BookOrbitCatalogBrowserActivity::restartForDownload(const int64_t bookId, c
  #endif
  }
  
@@ -159,7 +159,7 @@ index 391f7a0b..1bb1e34a 100644
  void BookOrbitCatalogBrowserActivity::runPendingDownload(const bool wifiConnected) {
    const PendingDownload job = std::move(pendingDownload);
    pendingDownload = PendingDownload{};
-@@ -1426,9 +1474,11 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
+@@ -1471,9 +1519,11 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
              static_cast<int>(result));
    }
  
@@ -174,7 +174,7 @@ index 391f7a0b..1bb1e34a 100644
    const bool downloadFailed = result != HttpDownloader::OK && result != HttpDownloader::ABORTED;
    if (downloadFailed) {
      // preservePartial kept the staged file for resuming between attempts; don't
-@@ -1453,6 +1503,14 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
+@@ -1509,6 +1559,14 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
      errorMessage = result == HttpDownloader::INSUFFICIENT_SPACE ? tr(STR_SD_CARD_FULL) : tr(STR_DOWNLOAD_FAILED);
    }
  
@@ -190,7 +190,7 @@ index 391f7a0b..1bb1e34a 100644
    // its message, which Back dismisses to Home as well.
    if (downloadFromHome && !downloadFailed) {
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-index 5a999e6f..620753f9 100644
+index 13187bc6..961b1b69 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
 @@ -13,6 +13,8 @@
@@ -202,10 +202,10 @@ index 5a999e6f..620753f9 100644
  class OptionPopup;
  
  /**
-@@ -118,6 +120,11 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
-   // The download was started from a BookOrbit Home shelf: whatever its outcome, it ends
-   // on Home rather than on the listing it was fetched through.
-   bool downloadFromHome = false;
+@@ -122,6 +124,11 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
+   // session ends by reopening it rather than on Home, the download done or not.
+   std::string reopenPath;
+   void leaveCatalog();
 +  // CROSSINK_TAILNET_DOWNLOAD_BACK_TO_CATALOG: this catalog boot came back from a download
 +  // boot; the listing it saved is reopened once Wi-Fi is up, with the download's failure
 +  // (BookOrbitDownloadResume::failure) shown over it.
@@ -214,7 +214,7 @@ index 5a999e6f..620753f9 100644
  
    // Current book-list context, used to page and to return to the same list after a download.
    BookOrbitBookQuery listQuery;
-@@ -280,6 +287,11 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
+@@ -294,6 +301,11 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
    // boot. False when the download runs in place instead: on S3 boards, and for a
    // BookOrbit Home shelf book in the catalog's network boot.
    bool restartForDownload(int64_t bookId, int64_t fileId, const std::string& title, const std::string& path);
@@ -227,7 +227,7 @@ index 5a999e6f..620753f9 100644
    // The transfer itself, then the listing it freed is rebuilt.
    void transferBook(int64_t bookId, int64_t fileId, const std::string& finalPath);
 diff --git a/src/activities/browser/BookOrbitCatalogListCache.cpp b/src/activities/browser/BookOrbitCatalogListCache.cpp
-index 909aedd3..1ac389d5 100644
+index 33a1e910..db0055df 100644
 --- a/src/activities/browser/BookOrbitCatalogListCache.cpp
 +++ b/src/activities/browser/BookOrbitCatalogListCache.cpp
 @@ -17,6 +17,8 @@ constexpr char BOOKORBIT_LIST_CACHE_SUFFIX[] = ".json";

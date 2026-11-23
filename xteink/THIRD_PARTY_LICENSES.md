@@ -32,8 +32,8 @@ something different, they win.
 
 | Line | Releases | Upstream | Platform | Arduino core | ESP-IDF (prebuilt) | Toolchain |
 |---|---|---|---|---|---|---|
-| v1.6 | `v1.6.1.*+bookorbit.8` | [CrossInk-Bookorbit `v1.6.1+bookorbit.8`](https://github.com/agosez/CrossInk-Bookorbit/tree/v1.6.1%2Bbookorbit.8) | [pioarduino platform-espressif32 55.03.37](https://github.com/pioarduino/platform-espressif32/releases/tag/55.03.37) | arduino-esp32 3.3.7 | 5.5 (`release/v5.5` @ `87912cd291`, lib-builder `8cabf2c`) | GCC 14.2.0 (esp-14.2.0_20251107) |
-| v2.0 | `v2.0.0.*+bookorbit.1-rc2` | [CrossInk-Bookorbit `v2.0.0+bookorbit.1-rc2`](https://github.com/agosez/CrossInk-Bookorbit/tree/v2.0.0%2Bbookorbit.1-rc2) | [pioarduino platform-espressif32 55.03.311](https://github.com/pioarduino/platform-espressif32/releases/tag/55.03.311) | arduino-esp32 3.3.11 | 5.5.5 (`v5.5.5` @ `b774170ff46`, lib-builder `ee57070`) | GCC 14.2.0 (esp-14.2.0_20260121) |
+| v1.6 | `v1.6.1.*+bookorbit.9` | [CrossInk-Bookorbit `v1.6.1+bookorbit.9`](https://github.com/agosez/CrossInk-Bookorbit/tree/v1.6.1%2Bbookorbit.9) | [pioarduino platform-espressif32 55.03.37](https://github.com/pioarduino/platform-espressif32/releases/tag/55.03.37) | arduino-esp32 3.3.7 | 5.5 (`release/v5.5` @ `87912cd291`, lib-builder `8cabf2c`) | GCC 14.2.0 (esp-14.2.0_20251107) |
+| v2.0 | `v2.0.0.*+bookorbit.1-rc3` | [CrossInk-Bookorbit `v2.0.0+bookorbit.1-rc3`](https://github.com/agosez/CrossInk-Bookorbit/tree/v2.0.0%2Bbookorbit.1-rc3) | [pioarduino platform-espressif32 55.03.311](https://github.com/pioarduino/platform-espressif32/releases/tag/55.03.311) | arduino-esp32 3.3.11 | 5.5.5 (`v5.5.5` @ `b774170ff46`, lib-builder `ee57070`) | GCC 14.2.0 (esp-14.2.0_20260121) |
 
 Both lines are built with PlatformIO Core 6.1.19 (pioarduino), as in
 `.github/workflows/build.yml`.

@@ -19,7 +19,7 @@ index 6eabb941..007b1e7d 100644
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index 0137b091..a9dc1957 100644
+index 65869996..c7c228eb 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 @@ -380,6 +380,7 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
@@ -29,8 +29,8 @@ index 0137b091..a9dc1957 100644
 +  BookOrbitCatalogClient::closeBootSession("leaving the catalog");
    listOptions.reset();
    entries.clear();
-   BookOrbitDownloadIndex::unload();
-@@ -417,6 +418,8 @@ void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connect
+   if (onDeviceListing) BookOrbitLocalBooks::clear();
+@@ -418,6 +419,8 @@ void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connect
      return;
    }
    sdFontSystem.releaseForNetwork(renderer);
@@ -39,7 +39,7 @@ index 0137b091..a9dc1957 100644
  #if CROSSINK_TAILNET_DOWNLOAD_BACK_TO_CATALOG
    if (returnToListing) {
      returnToListing = false;
-@@ -1379,6 +1382,8 @@ void BookOrbitCatalogBrowserActivity::runPendingDownload(const bool wifiConnecte
+@@ -1417,6 +1420,8 @@ void BookOrbitCatalogBrowserActivity::runPendingDownload(const bool wifiConnecte
  
  void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const int64_t fileId,
                                                     const std::string& finalPath) {
@@ -49,10 +49,10 @@ index 0137b091..a9dc1957 100644
    // clean download boot in a field log. The version says which build wrote that log.
    LOG_INF("BookOrbit", "Downloading file %lld -> %s (free=%u maxAlloc=%u, firmware %s)", static_cast<long long>(fileId),
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index b5ad1da4..ac604f03 100644
+index e6fd7fef..45c895c2 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
-@@ -88,6 +88,14 @@ struct FileJsonReader {
+@@ -89,6 +89,14 @@ struct FileJsonReader {
  // (SecureHttpClient retries a dead kept socket once, on a fresh connection).
  std::unique_ptr<freeink::SecureHttpClient> s_catalogConnection;
  #endif
@@ -67,7 +67,7 @@ index b5ad1da4..ac604f03 100644
  
  // The connection a catalog request runs on: the Session's, or nullptr for a fresh one.
  freeink::SecureHttpClient* catalogConnection() {
-@@ -129,6 +137,10 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc
+@@ -130,6 +138,10 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc
    // Catalog requests go through HttpDownloader: a fresh wolfSSL session each, no heap
    // floor. BookOrbitSyncClient's kept session (floors 55000/20000) is not used here.
    tailnet_probe_window_begin("catalog request (HttpDownloader: fresh wolfSSL TLS, no heap floor)");
@@ -78,7 +78,7 @@ index b5ad1da4..ac604f03 100644
  #endif
    for (int attempt = 0; attempt < 2; attempt++) {
      options.extraHeaders = authHeaders();
-@@ -139,6 +151,21 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc
+@@ -140,6 +152,21 @@ bool fetchJson(const std::string& url, const FilterBuilder& buildFilter, JsonDoc
    }
    CROSSINK_TAILNET_LOG_STACK("after a catalog fetch");
    CROSSINK_TAILNET_TLS_ARENA_LOG("catalog request");
@@ -100,7 +100,7 @@ index b5ad1da4..ac604f03 100644
    if (err != HttpDownloader::OK) {
      // The server was reachable but didn't serve this path: 404/405 = endpoint missing
      // (BookOrbit version without the KOReader catalog API, or wrong server URL); a
-@@ -240,6 +267,37 @@ BookOrbitCatalogClient::Session::Session() {}
+@@ -241,6 +268,37 @@ BookOrbitCatalogClient::Session::Session() {}
  BookOrbitCatalogClient::Session::~Session() {}
  #endif
  

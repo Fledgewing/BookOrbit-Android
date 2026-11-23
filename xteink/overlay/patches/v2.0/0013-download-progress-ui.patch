@@ -23,7 +23,7 @@ index ee0bb49c..30fbae06 100644
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index d5b5b668..eb6c0a8d 100644
+index 322bb714..e7617533 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 @@ -489,7 +489,14 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
@@ -41,7 +41,7 @@ index d5b5b668..eb6c0a8d 100644
      return;
    }
    state = BrowserState::CHECK_WIFI;
-@@ -1492,6 +1499,11 @@ void BookOrbitCatalogBrowserActivity::runPendingDownload(const bool wifiConnecte
+@@ -1531,6 +1538,11 @@ void BookOrbitCatalogBrowserActivity::runPendingDownload(const bool wifiConnecte
      requestUpdate();
      return;
    }
@@ -53,7 +53,7 @@ index d5b5b668..eb6c0a8d 100644
    showDownloadScreen(job.title);
    transferBook(job.bookId, job.fileId, job.path);
  }
-@@ -1557,6 +1569,12 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
+@@ -1603,6 +1615,12 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
    unsigned long lastProgressUpdateMs = 0;
    unsigned long now = 0;
    int percent = 0;
@@ -66,7 +66,7 @@ index d5b5b668..eb6c0a8d 100644
    for (int attempt = 0; attempt < MAX_DOWNLOAD_ATTEMPTS; attempt++) {
      // Honor a Back press between attempts too: a failing download otherwise runs
      // all its retries (TLS handshake included) with the cancel request ignored.
-@@ -1567,8 +1585,18 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
+@@ -1613,8 +1631,18 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
      downloadOptions.resumePartial = attempt > 0;
      result = BookOrbitCatalogClient::downloadFile(
          fileId, finalPath,
@@ -87,7 +87,7 @@ index d5b5b668..eb6c0a8d 100644
            downloadProgress = downloaded;
            downloadTotal = total;
            percent = total > 0 ? static_cast<int>(static_cast<uint64_t>(downloaded) * 100 / total) : 0;
-@@ -1599,6 +1627,12 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
+@@ -1645,6 +1673,12 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
    // listing again (Tailscale is gone with the network), so the download either restarts
    // into the live catalog boot at the same listing (CROSSINK_TAILNET_DOWNLOAD_BACK_TO_CATALOG,
    // below) or ends on Home like one from there.
@@ -100,7 +100,7 @@ index d5b5b668..eb6c0a8d 100644
    const bool parkedNetworkEnded = tailnet_end_parked_network();
    const bool downloadFailed = result != HttpDownloader::OK && result != HttpDownloader::ABORTED;
    if (downloadFailed) {
-@@ -1833,6 +1867,13 @@ void BookOrbitCatalogBrowserActivity::navigateBack() {
+@@ -1901,6 +1935,13 @@ void BookOrbitCatalogBrowserActivity::navigateBack() {
  }
  
  void BookOrbitCatalogBrowserActivity::loop() {
@@ -115,10 +115,10 @@ index d5b5b668..eb6c0a8d 100644
      return;
    }
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-index 84944ca9..57915f50 100644
+index 353d6a81..8687d20a 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-@@ -187,6 +187,7 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
+@@ -191,6 +191,7 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
    // boot; the listing it saved is reopened once Wi-Fi is up, with the download's failure
    // (BookOrbitDownloadResume::failure) shown over it.
    bool returnToListing = false;

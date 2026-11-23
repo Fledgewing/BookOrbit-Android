@@ -16,10 +16,10 @@ index e9743f4a..6ec7b3d3 100644
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
 diff --git a/src/main.cpp b/src/main.cpp
-index d9f43fe2..6b149fa6 100644
+index 677401fa..043533ce 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -417,7 +417,11 @@ void crossinkTailnetLogStackHighWater(const char* where) {
+@@ -420,7 +420,11 @@ void crossinkTailnetLogStackHighWater(const char* where) {
  #elif CROSSINK_TAILNET_NET_LOOP_STACK
  void crossinkTailnetLogStackHighWater(const char*) {}
  #endif

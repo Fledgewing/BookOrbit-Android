@@ -32,7 +32,7 @@ line, and CI says so if it stops applying. The shim, MicroLink and the switch ta
 
 The partition table is never changed (that can only be done over USB).
 
-### X3 (rc2 / v2.0) differences
+### X3 (v2.0) differences
 
 CrossInk 2.x plus Tailscale does not fit the ESP32-C3's app slot, so the `default` build
 (X3 and the C3 X4) of CrossInk 2.x leaves out four upstream features. The X4 Pro and X4 Classic
@@ -229,7 +229,7 @@ paths in CrossInk, and it is safe to rerun.
 
 CrossInk 1.6 and 2.x build on different pioarduino platforms that share one framework package
 directory, so keep a separate PlatformIO home for each, e.g.
-`PLATFORMIO_CORE_DIR=~/.platformio-rc2 pio run -e default` for 2.x.
+`PLATFORMIO_CORE_DIR=~/.platformio-2x pio run -e default` for 2.x.
 
 To rebuild a published release, use the commits from its notes: clone CrossInk-Bookorbit at the
 release's upstream tag (`git clone --recursive --branch <tag> ...`), check out Orbify at

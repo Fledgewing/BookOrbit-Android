@@ -56,10 +56,10 @@ index 723c767e..61fb2446 100644
    uint8_t brightness() const { return lastBrightness; }
    uint8_t warmth() const { return manager.colorTemperature(); }
 diff --git a/src/main.cpp b/src/main.cpp
-index 63e7534f..69d3087f 100644
+index b6c5799b..2022b170 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -425,6 +425,13 @@ static bool deepSleepInProgress = false;
+@@ -426,6 +426,13 @@ static bool deepSleepInProgress = false;
  // The boot that runs the BookOrbit sleep sync (NetworkBootTarget::BOOKORBIT_SLEEP_SYNC).
  // It must end in sleep, so it never starts another sleep sync.
  static bool sleepSyncBoot = false;
@@ -73,7 +73,7 @@ index 63e7534f..69d3087f 100644
  static PowerButtonWakeWatcher sleepSyncWakeWatcher;
  // Set from BOOKORBIT_SLEEP_SYNC_PAYLOAD_QUICK_RESUME.
  static bool sleepSyncAfterQuickResumeSleep = false;
-@@ -2016,8 +2023,36 @@ void setup() {
+@@ -2027,8 +2034,36 @@ void setup() {
    }
  
    allowSleepAt = millis() + 2000;
@@ -110,7 +110,7 @@ index 63e7534f..69d3087f 100644
  void loop() {
    static unsigned long maxLoopDuration = 0;
    const unsigned long loopStartTime = millis();
-@@ -2030,6 +2065,9 @@ void loop() {
+@@ -2041,6 +2076,9 @@ void loop() {
      activityManager.loop();
      return;
    }

@@ -56,10 +56,10 @@ index 26477bb6..afed8f32 100644
    uint8_t brightness() const { return lastBrightness; }
    uint8_t warmth() const { return manager.colorTemperature(); }
 diff --git a/src/main.cpp b/src/main.cpp
-index 7769af05..7d3c8ae0 100644
+index 7e1b83b2..4356642d 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -456,6 +456,13 @@ static bool deepSleepInProgress = false;
+@@ -459,6 +459,13 @@ static bool deepSleepInProgress = false;
  // The boot that runs the BookOrbit sleep sync (NetworkBootTarget::BOOKORBIT_SLEEP_SYNC).
  // It must end in sleep, so it never starts another sleep sync.
  static bool sleepSyncBoot = false;
@@ -73,7 +73,7 @@ index 7769af05..7d3c8ae0 100644
  static PowerButtonWakeWatcher sleepSyncWakeWatcher;
  // Set from BOOKORBIT_SLEEP_SYNC_PAYLOAD_QUICK_RESUME.
  static bool sleepSyncAfterQuickResumeSleep = false;
-@@ -2250,6 +2257,9 @@ void setup() {
+@@ -2378,6 +2385,9 @@ void setup() {
    gpio.startButtonCapture();
  #endif
    allowSleepAt = millis() + 2000;
@@ -83,9 +83,9 @@ index 7769af05..7d3c8ae0 100644
  }
  
  #if FREEINK_DEVICE_PICCO
-@@ -2283,6 +2293,31 @@ static bool handleSlideSwitch() {
- }
+@@ -2420,6 +2430,31 @@ static void idleDisplayWhileAwake() {
  #endif
+ }
  
 +#if CROSSINK_TAILNET_FRONTLIGHT_REAPPLY
 +// Writes the frontlight to the driver again once the first paint of this boot is on the
@@ -115,7 +115,7 @@ index 7769af05..7d3c8ae0 100644
  void loop() {
    static unsigned long maxLoopDuration = 0;
    const unsigned long loopStartTime = millis();
-@@ -2295,6 +2330,9 @@ void loop() {
+@@ -2432,6 +2467,9 @@ void loop() {
      activityManager.loop();
      return;
    }

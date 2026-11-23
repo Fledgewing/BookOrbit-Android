@@ -1,4 +1,5 @@
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
+index ee0bb49c..30fbae06 100644
 --- a/include/CrossInkTailnetCuts.h
 +++ b/include/CrossInkTailnetCuts.h
 @@ -100,6 +100,19 @@
@@ -22,9 +23,10 @@ diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+index 226c3290..714109f2 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-@@ -1492,6 +1492,11 @@
+@@ -1531,6 +1531,11 @@ void BookOrbitCatalogBrowserActivity::runPendingDownload(const bool wifiConnecte
      requestUpdate();
      return;
    }
@@ -36,7 +38,7 @@ diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/ac
    showDownloadScreen(job.title);
    transferBook(job.bookId, job.fileId, job.path);
  }
-@@ -1557,6 +1562,12 @@
+@@ -1603,6 +1608,12 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
    unsigned long lastProgressUpdateMs = 0;
    unsigned long now = 0;
    int percent = 0;
@@ -49,7 +51,7 @@ diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/ac
    for (int attempt = 0; attempt < MAX_DOWNLOAD_ATTEMPTS; attempt++) {
      // Honor a Back press between attempts too: a failing download otherwise runs
      // all its retries (TLS handshake included) with the cancel request ignored.
-@@ -1567,8 +1578,18 @@
+@@ -1613,8 +1624,18 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
      downloadOptions.resumePartial = attempt > 0;
      result = BookOrbitCatalogClient::downloadFile(
          fileId, finalPath,
@@ -70,7 +72,7 @@ diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/ac
            downloadProgress = downloaded;
            downloadTotal = total;
            percent = total > 0 ? static_cast<int>(static_cast<uint64_t>(downloaded) * 100 / total) : 0;
-@@ -1599,6 +1620,12 @@
+@@ -1645,6 +1666,12 @@ void BookOrbitCatalogBrowserActivity::transferBook(const int64_t bookId, const i
    // listing again (Tailscale is gone with the network), so the download either restarts
    // into the live catalog boot at the same listing (CROSSINK_TAILNET_DOWNLOAD_BACK_TO_CATALOG,
    // below) or ends on Home like one from there.

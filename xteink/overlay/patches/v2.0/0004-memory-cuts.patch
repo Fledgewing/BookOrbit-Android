@@ -90,7 +90,7 @@ index 00000000..e9743f4a
 +#define CROSSINK_TAILNET_TLS_ARENA_LOG(what) ((void)0)
 +#endif
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
-index c5c18ec5..ded4e60d 100644
+index 8c43c2b7..1a0f9c4c 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 +++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 @@ -1,6 +1,7 @@
@@ -101,7 +101,7 @@ index c5c18ec5..ded4e60d 100644
  #include <ArduinoJson.h>
  #ifdef SIMULATOR
  #include <ArduinoJsonStringCompat.h>
-@@ -208,22 +209,26 @@ constexpr uint32_t MIN_HEAP_FOR_KEPT_SESSION = 20000;
+@@ -214,22 +215,26 @@ constexpr uint32_t MIN_HEAP_FOR_KEPT_SESSION = 20000;
  bool s_sessionHandshakePaid = false;
  
  #if TAILNET_PROBE_CATALOG_LIVE
@@ -139,7 +139,7 @@ index c5c18ec5..ded4e60d 100644
  }
  #else
  uint32_t requiredHeapFloor() { return s_sessionHandshakePaid ? MIN_HEAP_FOR_KEPT_SESSION : MIN_HEAP_FOR_TLS; }
-@@ -463,6 +468,8 @@ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonB
+@@ -469,6 +474,8 @@ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonB
      http.end();
    }
    logHeapStats("After request");
@@ -149,7 +149,7 @@ index c5c18ec5..ded4e60d 100644
    tailnet_probe_window_end("BookOrbit request", probeFirstBytes ? "whole request (no body)" : "body");
  #endif
 diff --git a/lib/GfxRenderer/FontCacheManager.cpp b/lib/GfxRenderer/FontCacheManager.cpp
-index a4437da0..85b93755 100644
+index ca800e15..222c381c 100644
 --- a/lib/GfxRenderer/FontCacheManager.cpp
 +++ b/lib/GfxRenderer/FontCacheManager.cpp
 @@ -7,6 +7,7 @@
@@ -160,7 +160,7 @@ index a4437da0..85b93755 100644
  #include <cstring>
  
  #include "FontCacheManager.h"
-@@ -144,8 +145,26 @@ uint8_t FontCacheManager::resolveScanStyle(int fontId, EpdFontFamily::Style styl
+@@ -155,8 +156,26 @@ uint8_t FontCacheManager::resolveScanStyle(int fontId, EpdFontFamily::Style styl
    return baseStyle;
  }
  
@@ -187,10 +187,10 @@ index a4437da0..85b93755 100644
  
    uint8_t fontSlot = scanFontCount_;
    for (uint8_t i = 0; i < scanFontCount_; i++) {
-@@ -206,11 +225,21 @@ FontCacheManager::PrewarmScope::PrewarmScope(FontCacheManager& manager, const Pr
-   manager_->scanFontCount_ = 0;
+@@ -222,11 +241,21 @@ FontCacheManager::PrewarmScope::PrewarmScope(FontCacheManager& manager, const Pr
    manager_->scanOverflowWarned_ = false;
    memset(manager_->scanGroupCounts_, 0, sizeof(manager_->scanGroupCounts_));
+   memset(manager_->scanGroupUses_, 0, sizeof(manager_->scanGroupUses_));
 +#if CROSSINK_TAILNET_FONT_SCAN_ON_DEMAND
 +  manager_->allocScanCodepoints();
 +#endif
@@ -207,12 +207,12 @@ index a4437da0..85b93755 100644
    if (manager_->scanCodepointCount_ == 0) return true;
 +#endif
  
-   std::sort(manager_->scanCodepoints_, manager_->scanCodepoints_ + manager_->scanCodepointCount_);
- 
-@@ -246,6 +275,9 @@ bool FontCacheManager::PrewarmScope::endScanAndPrewarm() {
-   manager_->scanCodepointCount_ = 0;
+   // Only reorder when compressed groups compete for the four page slots.
+   // Leave SD/scalable preparation at its original positions, including on mixed
+@@ -306,6 +335,9 @@ bool FontCacheManager::PrewarmScope::endScanAndPrewarm() {
    manager_->scanFontCount_ = 0;
    memset(manager_->scanGroupCounts_, 0, sizeof(manager_->scanGroupCounts_));
+   memset(manager_->scanGroupUses_, 0, sizeof(manager_->scanGroupUses_));
 +#if CROSSINK_TAILNET_FONT_SCAN_ON_DEMAND
 +  manager_->freeScanCodepoints();
 +#endif
@@ -220,7 +220,7 @@ index a4437da0..85b93755 100644
  }
  
 diff --git a/lib/GfxRenderer/FontCacheManager.h b/lib/GfxRenderer/FontCacheManager.h
-index 4a5c093b..1d450a75 100644
+index 8a7fbfb8..5b537d0c 100644
 --- a/lib/GfxRenderer/FontCacheManager.h
 +++ b/lib/GfxRenderer/FontCacheManager.h
 @@ -1,5 +1,6 @@
@@ -230,7 +230,7 @@ index 4a5c093b..1d450a75 100644
  #include <EpdFontFamily.h>
  
  #include <cstdint>
-@@ -67,7 +68,15 @@ class FontCacheManager {
+@@ -88,7 +89,15 @@ class FontCacheManager {
  
    uint8_t resolveScanStyle(int fontId, EpdFontFamily::Style style) const;
    int scanFontIds_[MAX_SCAN_FONTS] = {};
@@ -244,8 +244,8 @@ index 4a5c093b..1d450a75 100644
    uint32_t scanCodepoints_[MAX_SCAN_CODEPOINTS + 1] = {};
 +#endif
    uint16_t scanGroupCounts_[SCAN_GROUP_COUNT] = {};
+   uint16_t scanGroupUses_[SCAN_GROUP_COUNT] = {};  // Saturated occurrence counts; 32 bytes, no glyph storage.
    uint16_t scanCodepointCount_ = 0;
-   uint8_t scanFontCount_ = 0;
 diff --git a/lib/MiniBidi/BidiUtils.cpp b/lib/MiniBidi/BidiUtils.cpp
 index 88aabc0c..666cf83b 100644
 --- a/lib/MiniBidi/BidiUtils.cpp
@@ -338,7 +338,7 @@ index ea675cce..b177e6d9 100644
    // the count goes into the header at the end, and the old file stays until then.
    HalFile file;
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index 0192f6f0..391f7a0b 100644
+index 9381bfee..80196a55 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 @@ -1,6 +1,7 @@
@@ -357,7 +357,7 @@ index 0192f6f0..391f7a0b 100644
  #include <utility>
  
  #include "./BookOrbitCatalogListCache.h"
-@@ -53,6 +55,8 @@
+@@ -55,6 +57,8 @@
  namespace fui = freeink::ui;
  
  namespace {
@@ -366,7 +366,7 @@ index 0192f6f0..391f7a0b 100644
  using Entry = BookOrbitCatalogBrowserActivity::Entry;
  
  constexpr fui::ActionId ACTION_ROW = 1;
-@@ -444,6 +448,9 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
+@@ -454,6 +458,9 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
    if (!cacheHit && !allowNetwork) {
      return false;
    }
@@ -376,7 +376,7 @@ index 0192f6f0..391f7a0b 100644
    if (!cacheHit && !BookOrbitCatalogClient::fetchRootSections(sections)) {
      state = BrowserState::ERROR;
      errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
-@@ -460,10 +467,21 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
+@@ -470,10 +477,21 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
    // with the listings. Non-fatal — an older server without the dashboard just
    // shows the sections without counts.
    BookOrbitCatalogCounts counts;
@@ -398,7 +398,7 @@ index 0192f6f0..391f7a0b 100644
    const auto sectionCount = [&counts](const std::string& id) {
      if (id == "all-books" || id == "recent") return counts.totalBooks;
      if (id == "continue-reading") return counts.inProgress;
-@@ -493,11 +511,11 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
+@@ -505,11 +523,11 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
    }
    // The want-to-read shelf BookOrbit's own plugin shows, which the server does not list
    // among its sections. After them, so the rows above keep their places.
@@ -434,10 +434,10 @@ index 79eee67f..50125698 100644
  
  #if defined(ENABLE_SERIAL_LOG) && LOG_LEVEL >= 2
 diff --git a/src/main.cpp b/src/main.cpp
-index a02d7493..d9f43fe2 100644
+index 36b0acdd..677401fa 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -92,6 +92,8 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+@@ -94,6 +94,8 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
  #endif
  #endif
  
@@ -446,7 +446,7 @@ index a02d7493..d9f43fe2 100644
  #include "AppVersion.h"
  #include "BookOrbitCredentialStore.h"
  #include "CrossPointSettings.h"
-@@ -389,6 +391,32 @@ constexpr uint32_t SILENT_REBOOT_READER_CLEAN_IMAGE_BASE = 1U << 0;
+@@ -392,6 +394,32 @@ constexpr uint32_t SILENT_REBOOT_READER_CLEAN_IMAGE_BASE = 1U << 0;
  constexpr uint32_t SLEEP_SYNC_WAKE_MAGIC = 0xC1EAB027;
  constexpr uint32_t SILENT_READER_PAGE_BUILD_MAGIC = 0xC1EAB017;
  constexpr uint32_t SILENT_READER_PAGE_BUILD_AUTO_TURN = 1U << 0;
@@ -479,7 +479,7 @@ index a02d7493..d9f43fe2 100644
  constexpr uint32_t NETWORK_RENDER_TASK_STACK_BYTES = 8192;
  // FreeType's anti-aliased rasterizer reserves a 16 KiB scratch pool on its
  // caller's stack. Scalable fonts are S3-only, so leave C3's constrained reader
-@@ -1954,6 +1982,9 @@ void setup() {
+@@ -2079,6 +2107,9 @@ void setup() {
        LOG_INF("BOOT", "Minimal network boot ready: target=%lu free=%u maxAlloc=%u",
                static_cast<unsigned long>(snapshotTarget), ESP.getFreeHeap(), ESP.getMaxAllocHeap());
        tailnet_network_phase_begin(snapshotTarget);
@@ -490,7 +490,7 @@ index a02d7493..d9f43fe2 100644
      case BootResume::SplashlessWake:
        // Like upstream, clean the first Home paint unless a saved frame restores
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
-index 71d91cc9..f3241df8 100644
+index 043a6c26..69f795ee 100644
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
 @@ -4,6 +4,7 @@
@@ -510,7 +510,7 @@ index 71d91cc9..f3241df8 100644
  
  #include "BookOrbitCredentialStore.h"
  #include "BookOrbitHomeStore.h"
-@@ -19,6 +22,10 @@
+@@ -20,6 +23,10 @@
  #include "DaysFromCivil.h"
  #include "activities/reader/ReadingStatsUtils.h"
  #include "Tailnet.h"
@@ -521,7 +521,7 @@ index 71d91cc9..f3241df8 100644
  
  bool BookOrbitCatalogClient::lastFetchBadResponse = false;
  
-@@ -75,12 +82,30 @@ struct FileJsonReader {
+@@ -76,12 +83,30 @@ struct FileJsonReader {
    }
  };
  
@@ -553,7 +553,7 @@ index 71d91cc9..f3241df8 100644
    constexpr char TMP_PATH[] = "/.crosspoint/bookorbit_catalog.json";
    BookOrbitCatalogClient::lastFetchBadResponse = false;
  
-@@ -94,6 +119,11 @@ bool fetchJson(const std::string& url, const JsonDocument& filter, JsonDocument&
+@@ -95,6 +120,11 @@ bool fetchJson(const std::string& url, const JsonDocument& filter, JsonDocument&
    // Credentials: sent only to the request's own origin, never across a redirect.
    const auto headers = authHeaders();
    options.headers = &headers;
@@ -565,7 +565,7 @@ index 71d91cc9..f3241df8 100644
    HttpDownloader::DownloadError err = HttpDownloader::HTTP_ERROR;
  #if TAILNET_PROBE_CATALOG_LIVE
    // Catalog requests go through HttpDownloader: a fresh wolfSSL session each, no heap
-@@ -106,6 +136,8 @@ bool fetchJson(const std::string& url, const JsonDocument& filter, JsonDocument&
+@@ -107,6 +137,8 @@ bool fetchJson(const std::string& url, const JsonDocument& filter, JsonDocument&
      LOG_ERR("BookOrbit", "Catalog fetch attempt %d failed (err=%d, http=%d)", attempt + 1, static_cast<int>(err),
              HttpDownloader::lastHttpStatus);
    }
@@ -574,7 +574,7 @@ index 71d91cc9..f3241df8 100644
    if (err != HttpDownloader::OK) {
      // The server was reachable but didn't serve this path: 404/405 = endpoint missing
      // (BookOrbit version without the KOReader catalog API, or wrong server URL); a
-@@ -126,6 +158,12 @@ bool fetchJson(const std::string& url, const JsonDocument& filter, JsonDocument&
+@@ -127,6 +159,12 @@ bool fetchJson(const std::string& url, const JsonDocument& filter, JsonDocument&
      return false;
    }
  
@@ -587,7 +587,7 @@ index 71d91cc9..f3241df8 100644
    FileJsonReader reader{file};
    const DeserializationError error = deserializeJson(outDoc, reader, DeserializationOption::Filter(filter));
  
-@@ -177,16 +215,41 @@ bool isSupportedSection(const std::string& sectionId) {
+@@ -178,16 +216,41 @@ bool isSupportedSection(const std::string& sectionId) {
  }
  }  // namespace
  
@@ -633,7 +633,7 @@ index 71d91cc9..f3241df8 100644
  
    for (JsonObjectConst section : doc["sections"].as<JsonArrayConst>()) {
      const char* id = section["section"] | "";
-@@ -278,10 +341,11 @@ BookOrbitCatalogBook bookFromItem(JsonObjectConst item) {
+@@ -279,10 +342,11 @@ BookOrbitCatalogBook bookFromItem(JsonObjectConst item) {
  }  // namespace
  
  int BookOrbitCatalogClient::fetchBookTotal(const BookOrbitBookQuery& query) {
@@ -648,24 +648,16 @@ index 71d91cc9..f3241df8 100644
      LOG_ERR("BookOrbit", "Book total unavailable for sort=%s readStatus=%s", query.sort.c_str(),
              query.readStatus.c_str());
      return -1;
-@@ -312,15 +376,16 @@ bool BookOrbitCatalogClient::fetchCatalogCounts(BookOrbitCatalogCounts& outCount
+@@ -313,11 +377,12 @@ bool BookOrbitCatalogClient::fetchCatalogCounts(BookOrbitCatalogCounts& outCount
    // sections ignores the parameter, and the missing shelf hides the root's entry for it.
    const std::string url =
        BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/dashboard?section=" + std::string(WANT_TO_READ_SHELF);
 -  JsonDocument filter;
--  filter["browseCounts"]["libraries"] = true;
--  filter["browseCounts"]["authors"] = true;
--  filter["browseCounts"]["series"] = true;
--  filter["browseCounts"]["collections"] = true;
--  filter["browseCounts"]["smartScopes"] = true;
--  filter["section"]["books"][0]["formats"] = true;
+-  bookOrbitSetFilter(filter, R"({"browseCounts":{"libraries":true,"authors":true,"series":true,"collections":true,)"
+-                             R"("smartScopes":true},"section":{"books":[{"formats":true}]}})");
 +  const auto buildFilter = [&](JsonDocument& filter) {
-+    filter["browseCounts"]["libraries"] = true;
-+    filter["browseCounts"]["authors"] = true;
-+    filter["browseCounts"]["series"] = true;
-+    filter["browseCounts"]["collections"] = true;
-+    filter["browseCounts"]["smartScopes"] = true;
-+    filter["section"]["books"][0]["formats"] = true;
++    bookOrbitSetFilter(filter, R"({"browseCounts":{"libraries":true,"authors":true,"series":true,"collections":true,)"
++                               R"("smartScopes":true},"section":{"books":[{"formats":true}]}})");
 +  };
    JsonDocument doc;
 -  if (!fetchJson(url, filter, doc)) return false;
@@ -673,75 +665,39 @@ index 71d91cc9..f3241df8 100644
  
    outCounts.libraries = doc["browseCounts"]["libraries"] | -1;
    outCounts.authors = doc["browseCounts"]["authors"] | -1;
-@@ -387,37 +452,37 @@ int readBooks(JsonArrayConst books, BookOrbitHomeBook* out, const int capacity)
+@@ -384,19 +449,20 @@ int readBooks(JsonArrayConst books, BookOrbitHomeBook* out, const int capacity)
  bool BookOrbitCatalogClient::fetchHomeDashboard(BookOrbitHomeSnapshot& out, HalFile& yearOut) {
    if (!BOOKORBIT_STORE.hasCredentials()) return false;
  
 -  JsonDocument filter;
--  filter["displayName"] = true;
--  filter["totalBooks"] = true;
--  filter["browseCounts"]["authors"] = true;
--  filter["browseCounts"]["series"] = true;
--  filter["browseCounts"]["collections"] = true;
--  for (const char* list : {"continueReading", "discover"}) {
--    JsonObject book = filter[list][0].to<JsonObject>();
--    book["id"] = true;
--    book["title"] = true;
--    book["formats"] = true;
--    book["hasCover"] = true;
--    book["updatedAt"] = true;
--    book["progressPercentage"] = true;
--  }
--  filter["readingGoal"]["goalBooks"] = true;
--  filter["readingGoal"]["completedBooks"] = true;
--  filter["readingGoal"]["year"] = true;
--  filter["readingStreak"]["currentStreak"] = true;
--  filter["readingStreak"]["longestStreak"] = true;
--  filter["readingStreak"]["lastSevenDays"] = true;
--  filter["highlightOfTheDay"]["text"] = true;
--  filter["highlightOfTheDay"]["bookTitle"] = true;
--  filter["readingYear"]["startDate"] = true;
--  filter["readingYear"]["minutes"] = true;
--  filter["achievements"]["next"]["name"] = true;
--  filter["achievements"]["next"]["threshold"] = true;
--  filter["achievements"]["next"]["currentProgress"] = true;
--
+-  bookOrbitSetFilter(
+-      filter, R"({"displayName":true,"totalBooks":true,"browseCounts":{"authors":true,"series":true,)"
+-              R"("collections":true},"continueReading":[{"id":true,"title":true,"formats":true,"hasCover":true,)"
+-              R"("updatedAt":true,"progressPercentage":true}],"discover":[{"id":true,"title":true,"formats":true,)"
+-              R"("hasCover":true,"updatedAt":true,"progressPercentage":true}],"readingGoal":{"goalBooks":true,)"
+-              R"("completedBooks":true,"year":true},"readingStreak":{"currentStreak":true,"longestStreak":true,)"
+-              R"("lastSevenDays":true},"highlightOfTheDay":{"text":true,"bookTitle":true},)"
+-              R"("readingYear":{"startDate":true,"minutes":true},"achievements":{"next":{"name":true,)"
+-              R"("threshold":true,"currentProgress":true}}})");
 +  const auto buildFilter = [&](JsonDocument& filter) {
-+    filter["displayName"] = true;
-+    filter["totalBooks"] = true;
-+    filter["browseCounts"]["authors"] = true;
-+    filter["browseCounts"]["series"] = true;
-+    filter["browseCounts"]["collections"] = true;
-+    for (const char* list : {"continueReading", "discover"}) {
-+      JsonObject book = filter[list][0].to<JsonObject>();
-+      book["id"] = true;
-+      book["title"] = true;
-+      book["formats"] = true;
-+      book["hasCover"] = true;
-+      book["updatedAt"] = true;
-+      book["progressPercentage"] = true;
-+    }
-+    filter["readingGoal"]["goalBooks"] = true;
-+    filter["readingGoal"]["completedBooks"] = true;
-+    filter["readingGoal"]["year"] = true;
-+    filter["readingStreak"]["currentStreak"] = true;
-+    filter["readingStreak"]["longestStreak"] = true;
-+    filter["readingStreak"]["lastSevenDays"] = true;
-+    filter["highlightOfTheDay"]["text"] = true;
-+    filter["highlightOfTheDay"]["bookTitle"] = true;
-+    filter["readingYear"]["startDate"] = true;
-+    filter["readingYear"]["minutes"] = true;
-+    filter["achievements"]["next"]["name"] = true;
-+    filter["achievements"]["next"]["threshold"] = true;
-+    filter["achievements"]["next"]["currentProgress"] = true;
++    bookOrbitSetFilter(
++        filter, R"({"displayName":true,"totalBooks":true,"browseCounts":{"authors":true,"series":true,)"
++                R"("collections":true},"continueReading":[{"id":true,"title":true,"formats":true,"hasCover":true,)"
++                R"("updatedAt":true,"progressPercentage":true}],"discover":[{"id":true,"title":true,"formats":true,)"
++                R"("hasCover":true,"updatedAt":true,"progressPercentage":true}],"readingGoal":{"goalBooks":true,)"
++                R"("completedBooks":true,"year":true},"readingStreak":{"currentStreak":true,"longestStreak":true,)"
++                R"("lastSevenDays":true},"highlightOfTheDay":{"text":true,"bookTitle":true},)"
++                R"("readingYear":{"startDate":true,"minutes":true},"achievements":{"next":{"name":true,)"
++                R"("threshold":true,"currentProgress":true}}})");
 +  };
+ 
    JsonDocument doc;
 -  if (!fetchJson(BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/dashboard", filter, doc)) return false;
 +  if (!fetchJson(BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/dashboard", buildFilter, doc)) return false;
  
    copyText(out.displayName, doc["displayName"] | "");
    out.totalBooks = doc["totalBooks"] | -1;
-@@ -486,8 +551,11 @@ HttpDownloader::DownloadError BookOrbitCatalogClient::downloadThumbnail(const in
+@@ -465,8 +531,11 @@ HttpDownloader::DownloadError BookOrbitCatalogClient::downloadThumbnail(const in
    const auto headers = authHeaders();
    options.headers = &headers;
    options.transport = HttpDownloader::Transport::WOLFSSL;
@@ -754,20 +710,14 @@ index 71d91cc9..f3241df8 100644
  }
  
  bool BookOrbitCatalogClient::fetchBooks(const BookOrbitBookQuery& query, const int page, BookOrbitBookPage& outPage) {
-@@ -496,13 +564,14 @@ bool BookOrbitCatalogClient::fetchBooks(const BookOrbitBookQuery& query, const i
+@@ -475,10 +544,11 @@ bool BookOrbitCatalogClient::fetchBooks(const BookOrbitBookQuery& query, const i
  
    if (!query.shelf.empty()) {
      // A shelf is one short list in the server's order, and it is not narrowed to EPUBs.
 -    JsonDocument filter;
--    filter["section"]["books"][0]["id"] = true;
--    filter["section"]["books"][0]["title"] = true;
--    filter["section"]["books"][0]["authors"] = true;
--    filter["section"]["books"][0]["formats"] = true;
+-    bookOrbitSetFilter(filter, R"({"section":{"books":[{"id":true,"title":true,"authors":true,"formats":true}]}})");
 +    const auto buildFilter = [&](JsonDocument& filter) {
-+      filter["section"]["books"][0]["id"] = true;
-+      filter["section"]["books"][0]["title"] = true;
-+      filter["section"]["books"][0]["authors"] = true;
-+      filter["section"]["books"][0]["formats"] = true;
++      bookOrbitSetFilter(filter, R"({"section":{"books":[{"id":true,"title":true,"authors":true,"formats":true}]}})");
 +    };
      JsonDocument doc;
 -    if (!fetchJson(booksUrl(query, page, PAGE_SIZE), filter, doc)) return false;
@@ -775,17 +725,13 @@ index 71d91cc9..f3241df8 100644
      JsonArrayConst books = doc["section"]["books"].as<JsonArrayConst>();
      outPage.books.reserve(books.size());
      for (JsonObjectConst item : books) {
-@@ -519,22 +588,23 @@ bool BookOrbitCatalogClient::fetchBooks(const BookOrbitBookQuery& query, const i
+@@ -495,18 +565,19 @@ bool BookOrbitCatalogClient::fetchBooks(const BookOrbitBookQuery& query, const i
    const bool withLetters = page == 1 && (sort == "title" || sort == "author");
    const std::string url = booksUrl(query, page, PAGE_SIZE, withLetters);
  
 -  JsonDocument filter;
--  filter["page"] = true;
--  filter["total"] = true;
--  filter["size"] = true;
--  filter["items"][0]["id"] = true;
--  filter["items"][0]["title"] = true;
--  filter["items"][0]["authors"] = true;
+-  bookOrbitSetFilter(filter,
+-                     R"({"page":true,"total":true,"size":true,"items":[{"id":true,"title":true,"authors":true}]})");
 -  // Only what the sort's list sections need: a series name per row costs heap.
 -  if (bySeries) filter["items"][0]["seriesName"] = true;
 -  if (byDateAdded) filter["items"][0]["addedAt"] = true;
@@ -794,12 +740,8 @@ index 71d91cc9..f3241df8 100644
 -    filter["buckets"][0]["index"] = true;
 -  }
 +  const auto buildFilter = [&](JsonDocument& filter) {
-+    filter["page"] = true;
-+    filter["total"] = true;
-+    filter["size"] = true;
-+    filter["items"][0]["id"] = true;
-+    filter["items"][0]["title"] = true;
-+    filter["items"][0]["authors"] = true;
++    bookOrbitSetFilter(filter,
++                       R"({"page":true,"total":true,"size":true,"items":[{"id":true,"title":true,"authors":true}]})");
 +    // Only what the sort's list sections need: a series name per row costs heap.
 +    if (bySeries) filter["items"][0]["seriesName"] = true;
 +    if (byDateAdded) filter["items"][0]["addedAt"] = true;
@@ -814,24 +756,16 @@ index 71d91cc9..f3241df8 100644
  
    outPage.page = doc["page"] | page;
    outPage.total = doc["total"] | 0;
-@@ -566,15 +636,16 @@ bool BookOrbitCatalogClient::fetchSectionEntries(const std::string& sectionId, c
+@@ -538,11 +609,12 @@ bool BookOrbitCatalogClient::fetchSectionEntries(const std::string& sectionId, c
      url += "?page=" + std::to_string(page);
    }
  
 -  JsonDocument filter;
--  filter["page"] = true;
--  filter["hasNext"] = true;
--  filter["items"][0]["id"] = true;
--  filter["items"][0]["title"] = true;
--  filter["items"][0]["count"] = true;
--  filter["items"][0]["seriesId"] = true;
+-  bookOrbitSetFilter(filter,
+-                     R"({"page":true,"hasNext":true,"items":[{"id":true,"title":true,"count":true,"seriesId":true}]})");
 +  const auto buildFilter = [&](JsonDocument& filter) {
-+    filter["page"] = true;
-+    filter["hasNext"] = true;
-+    filter["items"][0]["id"] = true;
-+    filter["items"][0]["title"] = true;
-+    filter["items"][0]["count"] = true;
-+    filter["items"][0]["seriesId"] = true;
++    bookOrbitSetFilter(filter,
++                       R"({"page":true,"hasNext":true,"items":[{"id":true,"title":true,"count":true,"seriesId":true}]})");
 +  };
    JsonDocument doc;
 -  if (!fetchJson(url, filter, doc)) return false;
@@ -839,26 +773,18 @@ index 71d91cc9..f3241df8 100644
  
    outPage.page = doc["page"] | page;
    outPage.hasNext = doc["hasNext"] | false;
-@@ -607,16 +678,17 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
+@@ -575,12 +647,13 @@ bool BookOrbitCatalogClient::fetchBookDetail(const int64_t bookId, BookOrbitBook
    // per-reader id BookOrbitSyncClient reports as device_id in progress updates.
    const std::string url = BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/books/" + std::to_string(bookId) +
                            "?deviceId=" + BookOrbitSyncClient::deviceId();
 -  JsonDocument filter;
--  filter["id"] = true;
--  filter["title"] = true;
--  filter["authors"] = true;
--  filter["files"][0]["id"] = true;
--  filter["files"][0]["format"] = true;
--  filter["files"][0]["sizeBytes"] = true;
--  filter["files"][0]["devicePath"] = true;
+-  bookOrbitSetFilter(filter,
+-                     R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
+-                     R"("devicePath":true}]})");
 +  const auto buildFilter = [&](JsonDocument& filter) {
-+    filter["id"] = true;
-+    filter["title"] = true;
-+    filter["authors"] = true;
-+    filter["files"][0]["id"] = true;
-+    filter["files"][0]["format"] = true;
-+    filter["files"][0]["sizeBytes"] = true;
-+    filter["files"][0]["devicePath"] = true;
++    bookOrbitSetFilter(filter,
++                       R"({"id":true,"title":true,"authors":true,"files":[{"id":true,"format":true,"sizeBytes":true,)"
++                       R"("devicePath":true}]})");
 +  };
    JsonDocument doc;
 -  if (!fetchJson(url, filter, doc)) return false;
@@ -895,10 +821,10 @@ index 1bb8e078..81a5969e 100644
    static bool fetchRootSections(std::vector<BookOrbitCatalogSection>& outSections);
  
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index b102f0e1..e5c26421 100644
+index 533c4966..42641b83 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
-@@ -126,6 +126,17 @@ class ProgressNotifier {
+@@ -229,6 +229,17 @@ class ProgressNotifier {
    const HttpDownloader::ProgressCallback* progress_ = nullptr;
  };
  
@@ -916,18 +842,20 @@ index b102f0e1..e5c26421 100644
  struct Sink {
    const std::vector<HttpDownloader::Header>* headers = nullptr;
    std::function<bool(const uint8_t*, size_t)> write;
-@@ -262,7 +273,8 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
-     const bool sendAuthorization =
+@@ -367,7 +378,10 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
          currentParsed && HttpRedirectPolicy::shouldSendAuthorization(currentOrigin, credentialOrigin, hasCredentials);
  
--    freeink::SecureHttpClient http;
-+    freeink::SecureHttpClient oneShot;
-+    freeink::SecureHttpClient& http = keptWolfSslClient != nullptr ? *keptWolfSslClient : oneShot;
+     freeink::SecureHttpClient localHttp;
+-    auto* retained = sink.options->session ? sink.options->session->acquire(currentUrl) : nullptr;
++    // Tailnet overlay: a caller-owned kept client (DownloadOptions::wolfSslClient) comes first.
++    auto* retained = keptWolfSslClient != nullptr ? keptWolfSslClient
++                     : sink.options->session    ? sink.options->session->acquire(currentUrl)
++                                                : nullptr;
+     auto& http = retained ? *retained : localHttp;
+     http.setReuse(retained != nullptr);
      http.setTimeout(HTTP_TIMEOUT_MS);
-     http.setReserveFullRecord(sink.options->reserveFullRecord);
-     // SecureNet does not yet expose ESP-IDF's CA bundle. This matches the
-@@ -683,6 +695,10 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
-                                                              DownloadOptions options) {
+@@ -861,6 +875,10 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
+   if (options.transport != Transport::WOLFSSL && options.session) options.session->reset();
    WifiPowerSaveGuard wifiPowerSaveGuard;
    (void)wifiPowerSaveGuard;
 +#if defined(FREEINK_NET_WOLFSSL)
@@ -938,23 +866,12 @@ index b102f0e1..e5c26421 100644
    const size_t bufferSize = options.bufferSize > 0 ? options.bufferSize : DEFAULT_DOWNLOAD_BUFFER_SIZE;
    if (options.useServerFilename && !options.stageAsPart) {
 diff --git a/src/network/HttpDownloader.h b/src/network/HttpDownloader.h
-index 8f6c8353..f8eaa949 100644
+index 6a8a24da..ebe8ca5e 100644
 --- a/src/network/HttpDownloader.h
 +++ b/src/network/HttpDownloader.h
-@@ -11,6 +11,10 @@
- 
- #include "HttpRequestDiagnostics.h"
- 
-+namespace freeink {
-+class SecureHttpClient;
-+}
-+
- /**
-  * HTTP client utility for fetching content and downloading files.
-  * Streams requests through the configured HTTP transport so large downloads
-@@ -58,6 +62,11 @@ class HttpDownloader {
-     CancelCallback shouldCancel;
-     size_t bufferSize;
+@@ -91,6 +91,11 @@ class HttpDownloader {
+     // preserves the 4 KiB default; official small-header asset requests use 1 KiB.
+     uint16_t httpReceiveBufferSize = 0;
      Transport transport;
 +    // WOLFSSL transport only: run the request on this caller-owned client instead of a new
 +    // one, so a keep-alive connection it holds is reused (no handshake) and stays open for

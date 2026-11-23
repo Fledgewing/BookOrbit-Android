@@ -17,10 +17,10 @@ index 954d9541..f333c4d8 100644
  // Logs the calling task's stack high-water mark (bytes never used), for the
  // network-boot loopTask stack cut. Defined in main.cpp.
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-index 5a3701f4..d5b5b668 100644
+index 229712c4..322bb714 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
-@@ -54,6 +54,125 @@
+@@ -56,6 +56,125 @@
  
  namespace fui = freeink::ui;
  
@@ -146,7 +146,7 @@ index 5a3701f4..d5b5b668 100644
  namespace {
  // BookOrbitCatalogCounts::wantToRead when the shelf was not asked about (CROSSINK_TAILNET_SKIP_ROOT_COUNTS).
  constexpr int UNCOUNTED_WANT_TO_READ = -2;
-@@ -123,7 +242,7 @@ int readStatusChoiceIndex(const std::string& readStatus) {
+@@ -125,7 +244,7 @@ int readStatusChoiceIndex(const std::string& readStatus) {
  
  // A row's title without the count badge the root and facet listings give it.
  std::string titleWithoutBadge(const Entry& entry) {
@@ -155,7 +155,7 @@ index 5a3701f4..d5b5b668 100644
  }
  
  // A server book list's header controls on touch devices: the Library's, minus its refresh
-@@ -152,8 +271,8 @@ void addListHeaderControls(Screen& screen, const GfxRenderer& renderer, const bo
+@@ -154,8 +273,8 @@ void addListHeaderControls(Screen& screen, const GfxRenderer& renderer, const bo
  
  // Appends a row's " (count)" badge, remembering where the title itself ends.
  void addCountBadge(Entry& entry, const int count) {
@@ -166,7 +166,7 @@ index 5a3701f4..d5b5b668 100644
  }
  
  // Root sections that list facets (authors, series...) rather than books.
-@@ -533,10 +652,9 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
+@@ -545,10 +664,9 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
    for (auto& section : sections) {
      Entry entry;
      entry.type = isFacetSection(section.id) ? EntryType::FACET_SECTION : EntryType::SECTION;
@@ -178,7 +178,7 @@ index 5a3701f4..d5b5b668 100644
      entries.push_back(std::move(entry));
    }
    // The want-to-read shelf BookOrbit's own plugin shows, which the server does not list
-@@ -544,26 +662,23 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
+@@ -556,26 +674,23 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
    if (counts.wantToRead >= 0 || counts.wantToRead == UNCOUNTED_WANT_TO_READ) {
      Entry wantToRead;
      wantToRead.type = EntryType::SECTION;
@@ -191,9 +191,10 @@ index 5a3701f4..d5b5b668 100644
    Entry onDevice;
    onDevice.type = EntryType::LOCAL_SECTION;
 -  onDevice.title = tr(STR_BOOKORBIT_ON_DEVICE);
-+  onDevice.setTexts(tr(STR_BOOKORBIT_ON_DEVICE), "", "on-device", "", "");
-   addCountBadge(onDevice, static_cast<int>(localOnDeviceCount));
+-  addCountBadge(onDevice, localOnDeviceCount);
 -  onDevice.sectionId = "on-device";
++  onDevice.setTexts(tr(STR_BOOKORBIT_ON_DEVICE), "", "on-device", "", "");
++  addCountBadge(onDevice, static_cast<int>(localOnDeviceCount));
    entries.push_back(std::move(onDevice));
    Entry inProgress;
    inProgress.type = EntryType::LOCAL_SECTION;
@@ -209,40 +210,20 @@ index 5a3701f4..d5b5b668 100644
    entries.push_back(std::move(search));
  
    state = entries.empty() ? BrowserState::ERROR : BrowserState::BROWSING;
-@@ -588,9 +703,7 @@ size_t BookOrbitCatalogBrowserActivity::collectLocalBooks(const std::string& kin
-       if (!sink) continue;
-       Entry entry;
-       entry.type = EntryType::LOCAL_BOOK;
--      entry.title = book.title.empty() ? book.path : book.title;
--      entry.subtitle = book.author;
--      entry.path = book.path;
-+      entry.setTexts(book.title.empty() ? book.path : book.title, book.author, "", "", book.path);
-       sink->push_back(std::move(entry));
-     }
-     LOG_DBG("BookOrbit", "Local scan: kind=%s count=%u", kind.c_str(), static_cast<unsigned>(count));
-@@ -616,8 +729,7 @@ size_t BookOrbitCatalogBrowserActivity::collectLocalBooks(const std::string& kin
-         if (out->sink == nullptr) return;
-         Entry entry;
-         entry.type = EntryType::LOCAL_BOOK;
--        entry.title = bookTitleFromPath(path);
--        entry.path = path;
-+        entry.setTexts(bookTitleFromPath(path), "", "", "", path);
-         out->sink->push_back(std::move(entry));
-       },
-       &collector);
-@@ -647,8 +759,7 @@ size_t BookOrbitCatalogBrowserActivity::collectLocalBooks(const std::string& kin
-       if (!sink) continue;
-       Entry entry;
-       entry.type = EntryType::LOCAL_BOOK;
--      entry.title = std::string(name, nameLen - 5);  // strip ".epub"
--      entry.path = path;
-+      entry.setTexts(std::string_view(name, nameLen - 5), "", "", "", path);  // strip ".epub"
-       sink->push_back(std::move(entry));
-     }
-     dir.close();
-@@ -671,9 +782,10 @@ void BookOrbitCatalogBrowserActivity::loadLocalBooks(const std::string kind) {
+@@ -598,9 +713,7 @@ size_t BookOrbitCatalogBrowserActivity::collectInProgressBooks(std::vector<Entry
+     if (!sink) continue;
+     Entry entry;
+     entry.type = EntryType::LOCAL_BOOK;
+-    entry.title = book.title.empty() ? book.path : book.title;
+-    entry.subtitle = book.author;
+-    entry.path = book.path;
++    entry.setTexts(book.title.empty() ? book.path : book.title, book.author, "", "", book.path);
+     sink->push_back(std::move(entry));
+   }
+   LOG_DBG("BookOrbit", "Local scan: kind=in-progress count=%u", static_cast<unsigned>(count));
+@@ -620,9 +733,10 @@ void BookOrbitCatalogBrowserActivity::loadLocalBooks(const std::string kind) {
  
-   collectLocalBooks(kind, &entries);
+   collectInProgressBooks(&entries);
    std::sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) {
 -    if (FsHelpers::naturalLess(a.title, b.title)) return true;
 -    if (FsHelpers::naturalLess(b.title, a.title)) return false;
@@ -254,7 +235,17 @@ index 5a3701f4..d5b5b668 100644
    });
  
    // Local listings behave like a book list one level below the root. Neutralise
-@@ -738,10 +850,11 @@ bool BookOrbitCatalogBrowserActivity::loadFacetEntries(const std::string& sectio
+@@ -694,8 +808,7 @@ bool BookOrbitCatalogBrowserActivity::loadOnDevicePage(const int page, const Pag
+   for (size_t i = 0; i < paths.size(); i++) {
+     Entry& entry = entries[first + i];
+     entry.type = EntryType::LOCAL_BOOK;
+-    entry.title = bookTitleFromPath(paths[i]);
+-    entry.path = std::move(paths[i]);
++    entry.setTexts(bookTitleFromPath(paths[i]), "", "", "", paths[i]);
+   }
+   LOG_INF("BookOrbit", "On device page %d: %u rows in memory from row %d of %d (free=%u maxAlloc=%u)", page,
+           static_cast<unsigned>(entries.size()), windowStart, listTotal, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+@@ -750,10 +863,11 @@ bool BookOrbitCatalogBrowserActivity::loadFacetEntries(const std::string& sectio
      auto& facet = result.entries[i];
      Entry& entry = entries[first + i];
      entry.type = EntryType::FACET;
@@ -270,7 +261,7 @@ index 5a3701f4..d5b5b668 100644
    }
    logPageLoad(page, cacheHit);
    state = entries.empty() ? BrowserState::ERROR : BrowserState::BROWSING;
-@@ -797,17 +910,13 @@ bool BookOrbitCatalogBrowserActivity::loadBooks(const BookOrbitBookQuery& query,
+@@ -809,17 +923,13 @@ bool BookOrbitCatalogBrowserActivity::loadBooks(const BookOrbitBookQuery& query,
      Entry& entry = entries[first + i];
      entry.type = EntryType::BOOK;
      entry.bookId = book.id;
@@ -295,7 +286,7 @@ index 5a3701f4..d5b5b668 100644
    }
    // The letters span the whole listing and only come with its first page.
    if (page == 1) setListLetters(result.letters);
-@@ -874,11 +983,11 @@ const char* BookOrbitCatalogBrowserActivity::sectionHeading(const size_t index)
+@@ -886,11 +996,11 @@ const char* BookOrbitCatalogBrowserActivity::sectionHeading(const size_t index)
      return nullptr;
    }
    const Entry& entry = entries[index];
@@ -310,7 +301,7 @@ index 5a3701f4..d5b5b668 100644
  }
  
  void BookOrbitCatalogBrowserActivity::adoptRenderedViewport() {
-@@ -950,6 +1059,13 @@ void BookOrbitCatalogBrowserActivity::logPageLoad(const int page, const bool cac
+@@ -962,6 +1072,13 @@ void BookOrbitCatalogBrowserActivity::logPageLoad(const int page, const bool cac
    LOG_INF("BookOrbit", "Listing page %d from %s: %u rows in memory from row %d (free=%u maxAlloc=%u)", page,
            cacheHit ? "cache" : "server", static_cast<unsigned>(entries.size()), windowStart, ESP.getFreeHeap(),
            ESP.getMaxAllocHeap());
@@ -324,7 +315,7 @@ index 5a3701f4..d5b5b668 100644
  }
  
  // A swipe leaves the selection where it was while the viewport moves on, so a dropped
-@@ -1557,20 +1673,21 @@ void BookOrbitCatalogBrowserActivity::activateSelected() {
+@@ -1613,20 +1730,21 @@ void BookOrbitCatalogBrowserActivity::activateSelected() {
    const auto& entry = *selected;
    switch (entry.type) {
      case EntryType::SECTION:
@@ -352,7 +343,7 @@ index 5a3701f4..d5b5b668 100644
        break;
      case EntryType::FACET: {
        // Mirror BookOrbit's own plugin (paramsForEntry): author filters by the
-@@ -1580,22 +1697,22 @@ void BookOrbitCatalogBrowserActivity::activateSelected() {
+@@ -1636,22 +1754,22 @@ void BookOrbitCatalogBrowserActivity::activateSelected() {
        BookOrbitBookQuery query;
        if (facetSectionId == "series") {
          query.sort = "series";
@@ -382,19 +373,19 @@ index 5a3701f4..d5b5b668 100644
        }
        // Back reopens the facet listing on this row.
        facetSelectorIndex = selectorIndex;
-@@ -1608,9 +1725,9 @@ void BookOrbitCatalogBrowserActivity::activateSelected() {
+@@ -1664,9 +1782,9 @@ void BookOrbitCatalogBrowserActivity::activateSelected() {
        break;
      case EntryType::BOOK:
        if (entry.onDevice) {
 -        openLocalBook(entry.path);
 +        openLocalBook(std::string(entry.path()));
        } else {
--        downloadBook(entry.bookId, entry.title);
-+        downloadBook(entry.bookId, std::string(entry.title()));
+-        downloadBook(entry.bookId, entry.title, "", /*openExisting=*/true);
++        downloadBook(entry.bookId, std::string(entry.title()), "", /*openExisting=*/true);
        }
        break;
    }
-@@ -1641,7 +1758,7 @@ void BookOrbitCatalogBrowserActivity::showBookActionMenu(const bool ignoreInitia
+@@ -1707,7 +1825,7 @@ void BookOrbitCatalogBrowserActivity::showBookActionMenu(const bool ignoreInitia
  
    // Captured by row: the menu is modal, so the listing cannot change under it.
    const int row = selectorIndex;
@@ -403,7 +394,7 @@ index 5a3701f4..d5b5b668 100644
                                                                       std::move(items), ignoreInitialConfirmRelease),
                           [this, row](const ActivityResult& result) {
                             longPressFired = false;
-@@ -1658,13 +1775,13 @@ void BookOrbitCatalogBrowserActivity::showBookActionMenu(const bool ignoreInitia
+@@ -1724,13 +1842,13 @@ void BookOrbitCatalogBrowserActivity::showBookActionMenu(const bool ignoreInitia
                                     static_cast<long long>(entry.bookId));
                             switch (static_cast<FileBrowserAction>(actionResult->action)) {
                               case FileBrowserAction::Open:
@@ -420,7 +411,7 @@ index 5a3701f4..d5b5b668 100644
                                 return;
                               case FileBrowserAction::Delete:
                                 promptDeleteBook(row);
-@@ -1679,21 +1796,25 @@ void BookOrbitCatalogBrowserActivity::promptDeleteBook(const int row) {
+@@ -1745,22 +1863,26 @@ void BookOrbitCatalogBrowserActivity::promptDeleteBook(const int row) {
    const Entry* book = entryAt(row);
    if (!book) return;
    const std::string heading = tr(STR_DELETE) + std::string("? ");
@@ -442,6 +433,7 @@ index 5a3701f4..d5b5b668 100644
 -                           RECENT_BOOKS.removeByPath(entry.path);
 +                           RECENT_BOOKS.removeByPath(std::string(entry.path()));
                             library::invalidateLibraryIndex();
+                            localOnDeviceCount = -1;  // recounted by the next root
                             // Re-detect rather than just clearing the flag: another copy (the SD root,
                             // /Read) may still match. The index drops its now-stale entry on lookup.
 -                           entry.onDevice = bookOnDevice(entry.bookId, entry.title, entry.subtitle, entry.path);
@@ -452,7 +444,7 @@ index 5a3701f4..d5b5b668 100644
                             requestUpdate();
                           });
  }
-@@ -1956,10 +2077,10 @@ void BookOrbitCatalogBrowserActivity::buildListScreen(UiApp::ScreenType& screen)
+@@ -2023,10 +2145,10 @@ void BookOrbitCatalogBrowserActivity::buildListScreen(UiApp::ScreenType& screen)
    for (size_t i = 0; i < entries.size(); i++) {
      const auto& entry = entries[i];
      fui::ListItem item;
@@ -466,7 +458,7 @@ index 5a3701f4..d5b5b668 100644
      if (sections) item.sectionHeading = sectionHeading(i);
      item.actionValue = static_cast<int16_t>(i);
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
-index 620753f9..84944ca9 100644
+index 961b1b69..353d6a81 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
 +++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
 @@ -2,10 +2,14 @@
@@ -559,7 +551,7 @@ index 620753f9..84944ca9 100644
 +    size_t textBytes() const;
      int64_t bookId = 0;
      bool onDevice = false;  // BOOK entries: a matching file already exists on the device (at `path`)
-     uint16_t page = 0;      // server page the row came from; 0 for the root and the on-device lists
+     uint16_t page = 0;      // listing page the row came from; 0 for the root and In progress
      // Length of `title` before its " (count)" badge, 0 when it has none. A listing opened
      // from the row is titled without it: its header counts what the listing holds.
      uint16_t badgeAt = 0;

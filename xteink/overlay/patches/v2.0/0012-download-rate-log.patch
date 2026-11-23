@@ -1,8 +1,8 @@
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index e5c26421..de806134 100644
+index 42641b83..3c192cec 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
-@@ -126,6 +126,71 @@ class ProgressNotifier {
+@@ -229,6 +229,71 @@ class ProgressNotifier {
    const HttpDownloader::ProgressCallback* progress_ = nullptr;
  };
  
@@ -74,7 +74,7 @@ index e5c26421..de806134 100644
  #if defined(FREEINK_NET_WOLFSSL)
  // DownloadOptions::wolfSslClient for the request in progress (downloads are synchronous).
  freeink::SecureHttpClient* keptWolfSslClient = nullptr;
-@@ -826,7 +891,13 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
+@@ -1006,7 +1071,13 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
      return fileOpen;
    };
  
@@ -89,7 +89,7 @@ index e5c26421..de806134 100644
  
    DownloadError result = HTTP_ERROR;
    HttpDownloadResume::RetryBudget budget;
-@@ -874,6 +945,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
+@@ -1055,6 +1126,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
      }
    } while (true);
    if (insufficientSpace) result = INSUFFICIENT_SPACE;

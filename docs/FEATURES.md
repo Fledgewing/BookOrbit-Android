@@ -4,7 +4,8 @@ What Orbify ships, per platform. Only what we add: KOReader's, BookOrbit's and C
 features are not listed. Planned work is in [`ROADMAP.md`](../ROADMAP.md); an item moves here when
 it ships (AGENTS.md "Features and roadmap").
 
-**yes**: shipped. **2.x rc**: in the CrossInk 2.x release-candidate build only (Include Release
+**yes**: shipped. Firmware builds: stable on CrossInk `1.6.1+bookorbit.9`, release candidate on
+`2.0.0+bookorbit.1-rc3`. **2.x rc**: in the CrossInk 2.x release-candidate build only (Include Release
 Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "Platforms".
 
 ## Network and sync

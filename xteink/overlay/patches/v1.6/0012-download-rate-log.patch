@@ -1,5 +1,5 @@
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
-index a6f5de54..1042db6a 100644
+index 294dd02b..d76eae7c 100644
 --- a/src/network/HttpDownloader.cpp
 +++ b/src/network/HttpDownloader.cpp
 @@ -99,6 +99,71 @@ class ProgressNotifier {
