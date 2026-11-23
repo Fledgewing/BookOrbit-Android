@@ -24,8 +24,10 @@ end
 -- Home from BookOrbit home: the companion's launcher page (as on a double Home). A companion
 -- older than 0.2.1 has no SHOW_LAUNCHER; its apps page stands in.
 function OrbitAndroid:openCompanionHome()
-    if not Companion.installed() then
-        log("home: companion not usable; staying on BookOrbit home")
+    -- Without the companion as Home (Add-on, plugin only): BookOrbit home is the top; Android's
+    -- Home key goes to the reader's own launcher (docs/design/addon-mode.md §6.4).
+    if not Companion.has("home") then
+        log("home: the companion isn't Home here; staying on BookOrbit home")
         return true
     end
     local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_LAUNCHER, package = Companion.PACKAGE }
@@ -39,6 +41,11 @@ function OrbitAndroid:openCompanionHome()
 end
 
 function OrbitAndroid:onOrbitOpenApps()
+    if Companion.installed() and not Companion.has("apps") then
+        log("open apps: not offered by the companion here")
+        UIManager:show(InfoMessage:new{ text = _("Use your reader's Home button for other apps."), timeout = 3 })
+        return true
+    end
     openCompanion(Companion.ACTION.SHOW_APPS, "apps")
     return true
 end

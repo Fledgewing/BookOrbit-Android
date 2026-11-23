@@ -28,6 +28,7 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `STATS` | `seq`, `period_s`, `pages`, `full`, `partial`, `content` (`text`/`comic`/`webtoon`/`pdf`/`none`), `open` (`1`/`0`), `reading_min`, `wifi_mode`, `reading_schedule`, `reason` | Battery stats batch: store the counts with the current state; a book is "in front" while `open=1` (at most 6 min). Sent every 5 min with a book open, on open/Resume/Suspend/close, never per page (docs/design/STATS-DESIGN.md). |
 | `SETUP_LATER` | none | The setup box's "Later" in KOReader: the companion's own Later (quiet until an update or a step stops working). Companion 0.4.1+. |
 | `RELAUNCH` | `reason` (`restart`) | The patch is quitting for a restart (COMMAND `restart`, or from 0.5.0 by itself for a newer patch file on disk, DESIGN "One update"): start KOReader again after 2.5 s. Patch 0.3.1+. |
+| `REPORT` | `signed_in` (`"1"`/`"0"`), `recommended` (`none`/`partial`/`reviewed`/`applied`), `conflicts` (a count), `reason` | Companion 0.11.0+: one yes/no about the BookOrbit login and the recommended settings' state, for its Setup rows "Signed in to BookOrbit" and "Recommended settings". Never the server, the account or the key; other extras are ignored. Sent at start, after a recommended pass and when either value changes. Needs no service. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
 
 `reason` values: `start` (KOReader just started; on firmwares that stop KOReader after sleep,
@@ -47,6 +48,11 @@ message for 3 s first.
 The companion's setup row "KOReader patch answered" is ticked by any broadcast carrying
 `sender = "org.koreader.launcher"` or by a loopback `GET /status`.
 
+In Add-on mode (companion 0.11.0+, `docs/design/addon-mode.md` §7.1) the receiver routes by
+capability: an action reaches the service only when a helper keeps it running; `SETUP_LATER`,
+`REPORT` and the book state from `STATS` are recorded without it; the rest are logged and
+dropped. In Full every action reaches the service as before.
+
 ## Patch → companion: activities
 
 Started with `Context.startActivity`, `setPackage(...)` and `FLAG_ACTIVITY_NEW_TASK`. The
@@ -58,6 +64,7 @@ activity needs an intent filter with the action and `android.intent.category.DEF
 | `net.fledgewing.orbitcompanion.action.SHOW_APPS` | The launcher's apps page (mockup screen 2) |
 | `net.fledgewing.orbitcompanion.action.SHOW_SETUP` | The "Setup needs you" prompt (the setup box's "Fix now"). Companion 0.4.1+; the patch falls back to `SHOW_STATUS`. |
 | `net.fledgewing.orbitcompanion.action.SHOW_PIN` | The Settings PIN keypad (companion 0.4.4+). The patch's Orbit menu asks for it while `/status` says `pin_locked: true`; it closes at once when no PIN is set or it's already unlocked. The unlock state comes back through `/status`. |
+| `net.fledgewing.orbitcompanion.action.RELAUNCH_UI` | Companion 0.11.0+, Add-on only: an invisible window the plugin starts just before it quits for a restart; it starts KOReader again 2.5 s later (no Home role to do it from the background). |
 | `net.fledgewing.orbitcompanion.action.SHOW_LAUNCHER` | The launcher page (the one a double Home shows); Home pressed on BookOrbit home. Companions before 0.2.1 lack it; the patch then opens `SHOW_APPS`. |
 
 ## Companion → patch: "go home"
@@ -208,6 +215,25 @@ while unsnoozed rows need the user, else `null`. The patch shows a one-time box 
 Bind to `127.0.0.1` only. The patch uses it in "Test sync path" (step 1, "Companion
 answered", 1 s timeout) and treats any `200` as an answer; the fields are for display and
 may grow. A companion without the endpoint still works for everything else.
+
+## Mode and capabilities (companion 0.11.0+)
+
+The companion says what it offers in two places: `mode` and `caps` in `/status` (while its
+service runs), and the **status file** `koreader/settings/orbit-companion.json`, written
+atomically whenever its mode, caps or setup state change (only if a `koreader/` folder exists):
+
+    {"proto":"1","version":"0.11.0","mode":"addon","caps":["install","setup","stats","relaunch"],
+     "setup_prompt":{"key":"…","rows":["…"]},"setup_needed":1,"written_at":…}
+
+`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always); `home`,
+`apps` (Full); `wifi`, `sleep_sync`, `screen_off`, `clicker`, `pin` (Full, or Add-on with that
+helper on; `screen_off` also needs the lock-screen permission). The plugin reads `/status` first,
+then the file; a companion that answers `/status` without `caps` is older and offers everything.
+A file left behind by an uninstalled or frozen companion is ignored. The plugin logs
+`companion: mode … caps … (from status|file|legacy|cache, why)`.
+
+COMMANDs added in 0.11.0 (the same extra as `home`): `signin` opens BookOrbit's own sign-in
+(`promptLogin`), `recommended` opens the plugin's Recommended settings page.
 
 ## Without the companion
 

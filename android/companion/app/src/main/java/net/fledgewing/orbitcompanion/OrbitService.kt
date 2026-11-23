@@ -38,7 +38,26 @@ import kotlin.concurrent.thread
 class CommandReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         OLog.d("received ${Contract.shortName(intent.action)} extras=${intent.extras?.keySet()}")
-        OrbitService.start(ctx, intent)
+        // A record action: kept here, no service needed (docs/design/addon-mode.md §7.1).
+        if (intent.action == Contract.REPORT) return StatusFile.onReport(ctx, intent)
+        val action = intent.action ?: return
+        if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) return OrbitService.start(ctx, intent)
+        if (!Mode.isAddon(ctx)) return OrbitService.start(ctx, intent) // Full: exactly as before 0.11.0
+        // By capability (docs/design/addon-mode.md §7.1); in Full every action reaches the service as before.
+        when (AddonLogic.route(action, Mode.caps(ctx), Mode.needsService(ctx))) {
+            AddonLogic.Route.SERVICE -> OrbitService.start(ctx, intent)
+            AddonLogic.Route.RECORD -> record(ctx, intent)
+            AddonLogic.Route.DROP -> OLog.i("${Contract.shortName(action)} dropped: not offered in this mode")
+        }
+    }
+
+    /** Record actions, kept without the service. */
+    private fun record(ctx: Context, intent: Intent) {
+        when (intent.action) {
+            Contract.SETUP_LATER -> Attention.laterFromKoreader(ctx)
+            Contract.STATS -> PatchInstaller.onBook(ctx, UpdateFlow.bookFromStats(intent.getStringExtra("reason"), intent.getStringExtra("open")), "KOReader: ${intent.getStringExtra("reason") ?: "stats"}")
+            else -> OLog.d("${Contract.shortName(intent.action)} kept no state without the service")
+        }
     }
 }
 
@@ -72,7 +91,13 @@ class OrbitService : Service() {
         var running = false
             private set
 
+        /** Add-on: a helper went off or the mode changed; stop what is no longer needed. */
+        const val ACTION_MODE_CHANGED = "${Contract.PACKAGE}.internal.MODE_CHANGED"
+
         fun start(ctx: Context, intent: Intent? = null) {
+            Mode.migrate(ctx, Contract.shortName(intent?.action ?: "start"))
+            // Add-on runs no service unless a helper needs it (docs/design/addon-mode.md §7.2).
+            if (!Mode.needsService(ctx)) return Mode.withoutService(ctx, intent, "service not needed")
             val i = Intent(intent ?: Intent(ACTION_START)).setClass(ctx, OrbitService::class.java)
             try {
                 ctx.startForegroundService(i)
@@ -264,6 +289,7 @@ class OrbitService : Service() {
             Contract.SLEEP_NOW -> sleepNow(reason)
             ACTION_WIFI_TIMER -> wifiTimerFired()
             ACTION_REFRESH -> OLog.debug = prefs.debugLog
+            ACTION_MODE_CHANGED -> modeChanged()
             Intent.ACTION_MY_PACKAGE_REPLACED -> Updater.onReplaced(this)
             else -> OLog.d("start: ${Contract.shortName(action)}")
         }
@@ -271,6 +297,17 @@ class OrbitService : Service() {
             OLog.i("${Contract.shortName(action)} reason=${reason.ifEmpty { "-" }} handled in ${OLog.since(t0)} ms")
         }
         updateNotification()
+    }
+
+    /** Add-on: helpers off. No Wi-Fi switching: no timer; no service needed: stop. */
+    private fun modeChanged() {
+        if (!Mode.wifiAllowed(this)) cancelWifiTimer("mode changed")
+        wakeLock?.let { if (it.isHeld) it.release() }
+        if (!Mode.needsService(this)) {
+            OLog.i("mode: no helper needs the service; stopping")
+            stopForeground(true)
+            stopSelf()
+        }
     }
 
     private fun noteSender(intent: Intent) {
@@ -554,6 +591,8 @@ class OrbitService : Service() {
 
     private fun statusJson(): String =
         "{\"proto\":\"${Contract.PROTOCOL}\",\"version\":\"${BuildConfig.VERSION_NAME}\"," +
+            // Mode and capabilities (docs/design/addon-mode.md §6.1); older plugins ignore them.
+            "\"mode\":\"${ModeLogic.effective(prefs.mode).key}\",\"caps\":${ModeLogic.caps(StatusFile.caps(this))}," +
             "\"wifi\":${Net.wifiConnected(this)},\"wifi_enabled\":${Net.wifiEnabled(this)}," +
             "\"wifi_owner\":\"${prefs.wifiOwner.key}\",\"tailscale\":${Net.vpnUp(this)}," +
             "\"screen_off_permission\":${Net.adminActive(this)},\"setup_needed\":${prefs.setupNeeded}," +

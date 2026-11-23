@@ -45,5 +45,8 @@ it ships (AGENTS.md "Features and roadmap").
 | Clicker buttons (page turns in KOReader and other apps, Send key) | yes | n/a | n/a | n/a |
 | Frontlight re-applied after the first paint of every boot | n/a | yes | yes | yes |
 | Setup installs KOReader and the BookOrbit plugin; USB installer (`tools/install-usb.sh`) | yes | n/a | n/a | n/a |
+| Add-on mode: keep the reader's own launcher and Wi-Fi; Orbify installs, updates and sets up KOReader and the plugins; Wi-Fi switching, sleep sync, clicker buttons and the PIN are optional helpers; switch modes in Settings › Mode ([design](design/addon-mode.md)) | yes (0.11.0) | n/a | n/a | n/a |
+| Recommended settings applied at setup and on update: only values still at KOReader's or BookOrbit's default change, values you changed are listed for review, Undo from a backup (Tools › Android sync › Recommended settings) | yes (0.11.0) | n/a | n/a | n/a |
+| Companion Setup shows "Signed in to BookOrbit" (a yes/no from the plugin, never the server or account) and the recommended-settings state | yes (0.11.0) | n/a | n/a | n/a |
 | Orbit is a KOReader plugin (`orbit.koplugin`, in the Plugin manager; replaces the 0.7.x user patch on update, [design](design/orbit-plugin.md)) | yes (0.8.0) | n/a | n/a | n/a |
 | Self-update, SHA-256 checked | yes (app and plugin) | yes (OTA) | yes (OTA) | yes (OTA) |

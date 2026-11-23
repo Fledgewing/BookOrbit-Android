@@ -113,8 +113,8 @@ Two settings are shared by the patch (Tools › Android sync) and the companion
 Sort › "By series" or "By author" shows that list grouped, in BookOrbit's own Series and Authors
 views (android/docs/DESIGN.md "Lists by series and by author", with its known limits).
 
-The patch also adds the gesture action **Orbit Companion: apps**; *Apply recommended gestures*
-puts it on a two-finger swipe up.
+The patch also adds the gesture action **Orbit Companion: apps**; the recommended settings
+put it on a two-finger swipe up when that gesture is still at its default.
 
 ## Verify
 

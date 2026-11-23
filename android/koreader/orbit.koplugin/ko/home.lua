@@ -23,8 +23,35 @@ function OrbitAndroid:checkCommand(source)
         self:reopenAfterRestart(source)
         return true
     end
+    -- The companion's Setup rows (docs/design/addon-mode.md §4.2): BookOrbit's sign-in, and the
+    -- recommended settings' review page.
+    if cmd == "signin" then
+        UIManager:scheduleIn(0.5, function() self:openSignIn(source) end)
+        return true
+    end
+    if cmd == "recommended" then
+        UIManager:scheduleIn(0.5, function() self:showRecommended("companion") end)
+        return true
+    end
     log("unknown command ignored:", cmd)
     return false
+end
+
+-- BookOrbit's own sign-in page (promptLogin opens it, main.lua:967-974).
+function OrbitAndroid:openSignIn(source)
+    local p = bookorbit(self.ui)
+    if not p then
+        UIManager:show(InfoMessage:new{ text = _("The BookOrbit plugin isn't loaded."), timeout = 3 })
+        return
+    end
+    if p:isLoggedIn() then
+        log("sign in (" .. tostring(source) .. "): already signed in")
+        UIManager:show(InfoMessage:new{ text = _("Signed in to BookOrbit."), timeout = 2 })
+        pcall(Rec.report, "signin", true, self.ui)
+        return
+    end
+    local okc, err = pcall(function() p:promptLogin() end)
+    log("sign in (" .. tostring(source) .. "): BookOrbit's sign-in", okc and "opened" or ("FAILED: " .. tostring(err)))
 end
 
 -- COMMAND=restart (android/docs/INTERFACE.md): the companion installed a newer patch file; a restart
@@ -46,7 +73,14 @@ function OrbitAndroid:restartForCompanion(source)
     saveSettings()
     pcall(function() G_reader_settings:flush() end)
     Stats.send("restart", nil, false)
-    Companion.send(Companion.ACTION.RELAUNCH, { reason = "restart" })
+    if Companion.has("home") then
+        Companion.send(Companion.ACTION.RELAUNCH, { reason = "restart" })
+    else
+        -- Add-on: KOReader is in front, so it may start the companion's relaunch window, which
+        -- then starts KOReader again once it has gone (docs/design/addon-mode.md §7.4).
+        local ok = Jni.startActivity{ action = Companion.ACTION.RELAUNCH_UI, package = Companion.PACKAGE }
+        log("restart: companion relaunch window", ok and "started" or "FAILED (reopen KOReader by hand)")
+    end
     UIManager:scheduleIn(0.5, function()
         if Device.canRestart and Device:canRestart() then UIManager:restartKOReader() else UIManager:quit() end
     end)
@@ -66,7 +100,10 @@ end
 function OrbitAndroid:maybeRestart(event)
     if state.restarting_at and now_s() - state.restarting_at < 5 then return "restart" end
     local want = patchFileVersion()
-    local act = RestartPlan.decide(want, PATCH_VERSION, S.restart_tried, inBook(), event)
+    -- Without the Home role nothing can start KOReader from the background: no restart at
+    -- screen-off, only while KOReader is in front (docs/design/addon-mode.md §7.4).
+    if event == "sleep" and not Companion.has("home") then event = "check_asleep" end
+    local act = RestartPlan.decide(want, PATCH_VERSION, S.restart_tried, inBook() or event == "check_asleep", event)
     if act == "wait" then
         if state.restart_waiting ~= want then
             state.restart_waiting = want
@@ -82,6 +119,17 @@ function OrbitAndroid:maybeRestart(event)
             state.restart_gave_up = want
             setUpdateStatus("v" .. tostring(want) .. " is installed but didn't load after a restart: restart KOReader by hand (Orbit Companion > Setup)")
         end
+    elseif act == "restart" and not Companion.has("relaunch") then
+        -- Nobody can start KOReader again after a quit (no companion): ask once, never quit
+        -- (docs/design/addon-mode.md §3, "Restart KOReader after an update").
+        if state.restart_asked ~= want then
+            state.restart_asked = want
+            local text = string.format(_("Orbit v%s is installed: close KOReader and open it again to finish."), tostring(want))
+            setUpdateStatus(text)
+            log("restart: v" .. tostring(want) .. " installed; no companion to relaunch KOReader, asking the reader")
+            UIManager:show(InfoMessage:new{ text = text, timeout = 6 })
+        end
+        return "ask"
     elseif act == "restart" then
         S.restart_tried = want
         saveSettings()
@@ -498,7 +546,8 @@ end
 
 -- The one-time "Setup needs you" box (SetupPrompt). where: given (the menu) or looked up.
 function OrbitAndroid:maybeSetupPrompt(why, where)
-    if not Companion.installed() then return end
+    pcall(self.maybeRecommendedLine, self, where)
+    if not Companion.has("setup") then return end
     where = where or self:whereNow()
     local prompt = Shared.setup_prompt
     local show, reason = SetupPrompt.decide(prompt, where, S.setup_prompt_shown)

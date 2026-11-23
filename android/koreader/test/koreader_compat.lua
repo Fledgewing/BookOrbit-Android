@@ -66,7 +66,9 @@ local NEEDS = {
     -- Plugin handlers are HandlerSandbox tables with __call (compat.lua Compat.callable).
     { "frontend/pluginloader.lua", { "loadPlugins", "genPluginManagerSubItem", "getPluginInstance",
         { "HandlerSandbox", T }, { "__call", T } } },
-    { "plugins/gestures.koplugin/main.lua", { "onFlushSettings", { "data", F }, { "updated", F } } },
+    -- Recommended settings (ko/recommended.lua): the stock gesture defaults, Gestures.default_settings.
+    { "plugins/gestures.koplugin/main.lua", { "onFlushSettings", { "data", F }, { "updated", F }, { "default_settings", F } } },
+    { "plugins/gestures.koplugin/defaults.lua", { { "gesture_reader", F } } },
     { "frontend/docsettings.lua", { "open", { "LuaSettings:extend", T } } }, -- readSetting: LuaSettings'
     { "frontend/luasettings.lua", { "open", "readSetting", "saveSetting", "flush" } },
     { "datastorage.lua", { "getSettingsDir" } },
@@ -88,7 +90,7 @@ local NEEDS = {
 for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "container/bottomcontainer",
     "container/framecontainer", "horizontalgroup", "horizontalspan", "linewidget", "textboxwidget",
     "verticalgroup", "verticalspan", "buttontable", "textwidget", "imagewidget", "container/centercontainer",
-    "container/leftcontainer" }) do
+    "container/leftcontainer", "menu", "buttondialog" }) do
     table.insert(NEEDS, { "frontend/ui/widget/" .. w .. ".lua", {} })
 end
 -- koreader-base (the base/ submodule): ffi modules the plugin requires.

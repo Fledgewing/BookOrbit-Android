@@ -390,6 +390,9 @@ object HomeCommands {
     const val RESTART = "restart"
     /** After a restart with a book open: reopen it at its place (patch 0.5.5+; older ones ignore it). */
     const val REOPEN_BOOK = "reopen_book"
+    /** Setup's rows (plugin 0.11.0+): BookOrbit's sign-in page, the recommended settings' review page. */
+    const val SIGNIN = "signin"
+    const val RECOMMENDED = "recommended"
 
     fun forPress(button: HomeButton): String = if (button == HomeButton.SMART) HOME_SMART else HOME
 
@@ -734,6 +737,8 @@ object SetupAttention {
         label.startsWith("Orbit plugin answered") || label.startsWith("KOReader patch answered") -> "patch_seen"
         label.startsWith("Wi-Fi off/on test") -> "wifi_test"
         label.startsWith("Clicker buttons") -> "clicker"
+        label.startsWith("Signed in to BookOrbit") -> "signed_in"
+        label.startsWith("Recommended settings") -> "recommended"
         label.startsWith("Orbit keyboard") -> "keyboard"
         label.startsWith("Key Mapper") || label.startsWith("Another key mapper") -> "keymapper"
         else -> label.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
@@ -890,6 +895,9 @@ object WhatsNew {
         ),
         "0.7.0" to listOf(
             "Orbify: the app and the KOReader patch now update from github.com/Fledgewing/Orbify, one home for Android and Xteink readers. Nothing changes on the reader.",
+        ),
+        "0.11.0" to listOf(
+            "Recommended settings are applied by themselves in KOReader: only settings still at their default change, anything you set yourself is listed for review, and Undo puts back what was there. Setup shows them, and whether KOReader is signed in to BookOrbit.",
         ),
     )
 

@@ -32,6 +32,8 @@ object Contract {
     const val RELAUNCH = "$PACKAGE.action.RELAUNCH"
     const val SETUP_LATER = "$PACKAGE.action.SETUP_LATER"
     const val SHOW_SETUP = "$PACKAGE.action.SHOW_SETUP"
+    /** The Orbit plugin's report (docs/design/addon-mode.md §7.3): signed_in, recommended, conflicts. */
+    const val REPORT = "$PACKAGE.action.REPORT"
     const val EXTRA_FROM = "$PACKAGE.extra.FROM"
     const val EXTRA_COMMAND = "$PACKAGE.extra.COMMAND"
     const val PATCH_SENDER = "org.koreader.launcher"
@@ -99,6 +101,41 @@ class Prefs(ctx: Context) {
             return str("home_app")
         }
         set(v) = setStr("home_app", v)
+    /** Orbify's mode (docs/design/addon-mode.md): "" until chosen; behaves as Full until then. */
+    var mode: OrbitMode?
+        get() = OrbitMode.of(str("orbit_mode"))
+        set(v) = setStr("orbit_mode", v?.key ?: "")
+    /** The Orbit plugin's REPORT: signed in "1"/"0"/"" unknown; recommended state; conflicts. */
+    var reportSignedIn: String
+        get() = str("report_signed_in")
+        set(v) = setStr("report_signed_in", v)
+    var reportRecommended: String
+        get() = str("report_recommended")
+        set(v) = setStr("report_recommended", v)
+    var reportConflicts: Int
+        get() = sp.getInt("report_conflicts", 0)
+        set(v) = sp.edit().putInt("report_conflicts", v).apply()
+    var reportAt by LongPref("report_at")
+    /** Add-on's helpers (docs/design/addon-mode.md §3), each off until switched on. */
+    var helperWifi: Boolean
+        get() = bool("helper_wifi", false)
+        set(v) = setBool("helper_wifi", v)
+    var helperSleepSync: Boolean
+        get() = bool("helper_sleep_sync", false)
+        set(v) = setBool("helper_sleep_sync", v)
+    var helperScreenOff: Boolean
+        get() = bool("helper_screen_off", false)
+        set(v) = setBool("helper_screen_off", v)
+    var helperClicker: Boolean
+        get() = bool("helper_clicker", false)
+        set(v) = setBool("helper_clicker", v)
+    var helperPin: Boolean
+        get() = bool("helper_pin", false)
+        set(v) = setBool("helper_pin", v)
+    /** Add-on's optional rows the user tapped Allow on (a row still off then says "Off: …"). */
+    var addonAsked: Set<String>
+        get() = sp.getStringSet("addon_asked", emptySet())?.toSet() ?: emptySet()
+        set(v) = sp.edit().putStringSet("addon_asked", v).apply()
     var notifyTailscale: Boolean
         get() = bool("notify_tailscale", true)
         set(v) = setBool("notify_tailscale", v)
@@ -309,6 +346,11 @@ object Net {
      */
     @Suppress("DEPRECATION")
     fun setWifi(ctx: Context, on: Boolean, why: String, owner: WifiOwner = WifiOwner.AUTO): Boolean {
+        // Add-on without Wi-Fi switching: Wi-Fi stays as the user leaves it (docs/design/addon-mode.md §7.5).
+        if (!Mode.wifiAllowed(ctx)) {
+            OLog.i("wifi: not switched ($why): Add-on without Wi-Fi switching")
+            return false
+        }
         val prefs = Prefs(ctx)
         if (on) {
             prefs.wifiPendingOwner = owner

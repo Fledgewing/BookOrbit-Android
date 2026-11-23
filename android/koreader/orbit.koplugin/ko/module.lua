@@ -47,6 +47,8 @@ function OrbitAndroid:init()
             self:maybeRestart("check")
         end)
         UIManager:scheduleIn(1.5, function() self:wakeFlow("start") end)
+        -- Recommended settings: after the BookOrbit plugin's init (and its next-tick fallback).
+        UIManager:scheduleIn(1.2, function() self:recommendedPass("start") end)
         UIManager:scheduleIn(Stats.INTERVAL, statsTick)
     elseif state.pending_home and not in_reader then
         UIManager:scheduleIn(1, function() self:finishHome() end)

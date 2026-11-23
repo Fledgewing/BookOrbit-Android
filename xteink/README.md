@@ -82,6 +82,13 @@ an SD card or USB. After that, **Settings > Check for updates** installs new rel
 Orbify's `xteink-v…` firmware releases (a reader on a CrossInk-Tailnet build gets there through
 that repo's last release, which already points at Orbify). To go back to stock CrossInk-Bookorbit, flash its `.bin` the same way.
 
+The check reads Orbify's own small feed (`xteink/releases.json` on the `xteink-feed` branch, two
+releases), not GitHub's release API, and a failed check is tried once more. The download then runs
+with the larger WiFi buffers of the boots that park the screen (the X3's `parked` tier). The last
+CrossInk-Tailnet bridge (`v2.0.0.51+bookorbit.1-rc2`) still reads the GitHub API and the small
+buffers: on an X3 its first check can fail out of memory (try again) and its download can take
+30-50 minutes. Leave the reader on its charger; the next update from Orbify is fast.
+
 ## Joining your tailnet
 
 Tailscale ships **off**. Nothing tailnet-related runs until you turn it on.

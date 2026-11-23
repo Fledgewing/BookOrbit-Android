@@ -93,6 +93,32 @@ Design: [`write-through-cache.md`](write-through-cache.md) ("Xteink"). Rules in 
 | C8 | Covers | Home covers only, by `planCover`: a missing file at the listed version with an older file that has an ETag is asked `If-None-Match`; 304 renames every size | The catalog browser draws no covers; Home's `<ver>` is already `updatedAt`'s hash. |
 | C9 | Flash | `x4-pro` +27.3 KB (95.39%), `x4-classic` +27.0 KB (93.03%); X3 +414 B (shared signature changes only) | |
 
+## X3 update check and download (patch 0030, 2026-11-22)
+
+Field report from an X3 on the CrossInk-Tailnet bridge `v2.0.0.51+bookorbit.1-rc2` (serial log):
+
+- The check read `api.github.com/.../releases` (a ~30 KB chunked list) and failed mid-body:
+  `esp_tls_conn_read error, errno=No more processes` (EAGAIN, a read timeout),
+  `ESP_ERR_HTTP_INCOMPLETE_DATA`, heap min 52 KB, largest block 47 KB.
+- The download ran at 1-4 KB/s ("last 18 s: SD write 41 ms, waiting 18164 ms"), on the small WiFi
+  tier (`WiFi tier small (boot target 2)`: static RX 2, dynamic RX 4, RX BA window 4) with ~115 KB
+  free. At TCP_WND 5760 a 4 KB/s rate means seconds per window: frames dropped for want of an RX
+  buffer and recovered by TCP timeouts, not a slow server.
+
+| # | Change | Where |
+|---|--------|-------|
+| O1 | The check already reads the raw feed (`OTA_FEED`, two releases, a few KB) on every Orbify build; nothing to change. It streams through `ReleaseJsonParser` in whatever chunks arrive. Host test: 1-, 7-, 97- and 4096-byte chunks and the live feed (`shared/fixtures/github/xteink-feed.json`) pick the same release, with a 64-hex digest (so the download uses wolfSSL). | `tailnet_build.py` (OTA defines), `test/ota_release_pick_test.cpp` |
+| O2 | The check gets `timeout_ms` 15 s and one retry on a fresh connection, with the parser and the pick reset; a non-2xx answer is retried too. Host test: a list cut off at two thirds, then reset and read again, picks the same release. | patch 0030 (`OtaUpdater.cpp`), switch `CROSSINK_TAILNET_OTA_CHECK_RETRY` |
+| O3 | The OTA boot (target 2) takes the parked WiFi tier (X3: static RX 3, dynamic RX 8, dynamic TX 8, RX mgmt 5; RX BA window 6). It has the parked boots' heap (115 KB free before the download). Costs ~8 KB of WiFi buffers at worst. | `ui/TailnetNetPhase.cpp` `tailnet_wifi_parked_boot` |
+
+Two-way doors: one retry (not a loop: a second failure shows the error and the user can retry);
+the parked tier rather than a new larger OTA tier (the X4s keep the framework's counts and
+were never slow; a larger X3 tier is one more switch row if O3 is not enough).
+
+Device check (X3, serial log): `WiFi tier parked (boot target 2)` at the update; download lines
+`Download progress: … KB/s` well above 4 KB/s with "waiting" no longer the whole interval; heap
+min during the download.
+
 ## Measurements needed on a device
 
 Item 1 adds only small requests on the sync's existing TLS session, so no new memory measurement

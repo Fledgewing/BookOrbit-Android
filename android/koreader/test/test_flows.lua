@@ -342,7 +342,8 @@ local function newPlugin()
         page_update_counter = 0,
     }
     local function rec(name) table.insert(p.calls, name) end
-    function p:isLoggedIn() return true end
+    function p:isLoggedIn() return not p.signed_out end
+    function p:promptLogin() rec("promptLogin") end
     function p:requestLifecycleOutboxDrain(src) rec("drain:" .. src); UIManager:scheduleIn(1, function() p.pending = 0 end) end
     function p:getLifecycleOutbox() return { diagnostics = function() return { count = p.pending, blocked = 0 } end } end
     function p:getSyncCoordinator() return { isBusy = function() return false end, queuedCount = function() return 0 end } end
@@ -376,7 +377,7 @@ local function newPlugin()
     function p:onBookOrbitSyncBook(o) rec("syncbook"); o.on_done(nil) end
     function p:startSweep(o) rec("sweep"); o.on_done(nil) end
     function p:errorLabel(e) return tostring(e) end
-    function p:onBookOrbitToggleAutoSync(v) rec("toggle:" .. tostring(v)) end
+    function p:onBookOrbitToggleAutoSync(v) rec("toggle:" .. tostring(v)); p.settings.auto_sync = v end
     return p
 end
 
@@ -1021,28 +1022,386 @@ test("restart by an older patch: COMMAND=reopen_book opens KOReader's last book"
     ok(W.opened == nil, "a book already open stays")
 end)
 
-test("apply recommended settings: Make BookOrbit home, saved like the plugin's Opening page", function()
-    local ui, m = newUI(false)
-    ui.bookorbit.settings.catalog_auto_open = nil
-    local flushed = 0
-    local was = G_reader_settings.flush
-    G_reader_settings.flush = function() flushed = flushed + 1 end
+---------------------------------------------------------------- recommended settings (addon-mode §5)
+local RE = getfenv(Orbit.onSuspend)
+local BO_DEFAULTS = { auto_sync = false, sync_forward = 1, sync_backward = 3, catalog_auto_open = "off" }
+-- A KOReader with nothing changed: the plugin and gestures at their stock defaults.
+local function recWorld(in_book)
+    local ui, m = newUI(in_book)
+    local p = ui.bookorbit
+    p.default_settings = BO_DEFAULTS
+    p.settings.auto_sync, p.settings.sync_forward, p.settings.catalog_auto_open = false, 1, "off"
+    ui.gestures.default_settings = { data = { gesture_reader = { two_finger_swipe_north = { increase_frontlight = 0 },
+        tap_top_left_corner = { toggle_page_flipping = true } } } }
+    ui.gestures.data.gesture_reader = { two_finger_swipe_north = { increase_frontlight = 0 } }
+    store.orbit_android.recommended, store.orbit_android.recommended_backup = nil, nil
+    store.wifi_enable_action = nil
+    RE.Rec.session_applied, RE.Rec.line_pending = 0, false
+    RE.installed_cache.at = -1000
     W.shown = {}
-    m:applyRecommendedSettings()
-    local box
-    for _, w in ipairs(W.shown) do if w.ok_callback then box = w end end
-    ok(box and tostring(box.text):find("Make BookOrbit home", 1, true), "listed in the confirm")
-    box.ok_callback()
-    G_reader_settings.flush = was
-    ok(ui.bookorbit.settings.catalog_auto_open == "home", "open mode " .. tostring(ui.bookorbit.settings.catalog_auto_open))
-    ok(flushed >= 1, "flushed like the plugin's save")
-    -- A mode the patch doesn't know is left alone.
-    ui.bookorbit.settings.catalog_auto_open = "always"
+    return ui, m, p
+end
+local function shownText(pat)
+    for _, w in ipairs(W.shown) do if w.text and tostring(w.text):find(pat, 1, true) then return w end end
+end
+local function menuRow(menu, label)
+    for _, it in ipairs(menu.item_table) do if it.text == label then return it end end
+end
+local function pressDialog(label)
+    for i = #W.shown, 1, -1 do
+        local w = W.shown[i]
+        if w.buttons then
+            for _, b in ipairs(w.buttons[1]) do if b.text == label then b.callback(); return true end end
+        end
+    end
+    error("no dialog button " .. label)
+end
+
+test("recommended: a fresh KOReader at first start: every item applied with a backup, one line off-book", function()
+    local ui, m, p = recWorld(false)
+    m:recommendedPass("start")
+    ok(p.settings.auto_sync == true, "auto-sync through the plugin's toggle")
+    ok(p.settings.sync_forward == 2, "Silent")
+    ok(p.settings.catalog_auto_open == "home", "Make BookOrbit home")
+    ok(store.wifi_enable_action == "turn_on", "KOReader turns Wi-Fi on")
+    local g = ui.gestures.data.gesture_reader
+    ok(g.hold_top_right_corner.orbit_sync_and_sleep and g.hold_top_left_corner.bookorbit_sync_now
+        and g.one_finger_swipe_bottom_edge_right.bookorbit_this_book and g.two_finger_swipe_north.orbit_open_apps, "gestures")
+    ok(ui.gestures.flushed, "gestures flushed")
+    local b = store.orbit_android.recommended_backup
+    ok(b["g.apps"].had and b["g.apps"].prior.increase_frontlight == 0, "backup of the frontlight gesture")
+    ok(b["ko.wifi_on"] and not b["ko.wifi_on"].had, "backup: Wi-Fi action was unset")
+    ok(shownText("Applied 8 recommended settings · Review"), "the line")
+    ok(m:recommendedMenuText() == "Recommended settings: Applied 8 recommended settings · Review", m:recommendedMenuText())
+    -- A second start: nothing new, silent, and a value changed by hand since stays.
+    p.settings.sync_forward = 3
     W.shown = {}
-    m:applyRecommendedSettings()
-    for _, w in ipairs(W.shown) do if w.ok_callback then w.ok_callback() end end
-    ok(ui.bookorbit.settings.catalog_auto_open == "always", "unknown mode kept")
-    run(3)
+    m:recommendedPass("start")
+    ok(p.settings.sync_forward == 3, "never changed back")
+    ok(#W.shown == 0, "silent")
+    -- The review page clears the line.
+    local menu = m:showRecommended("test")
+    ok(menuRow(menu, "Applied"), "Applied section")
+    ok(m:recommendedMenuText() == "Recommended settings", "line cleared once seen")
+    run(1)
+end)
+
+test("recommended: a customised KOReader keeps every changed value; review offers Use Orbit's / Keep mine", function()
+    local ui, m, p = recWorld(false)
+    p.settings.sync_forward = 3
+    ui.gestures.data.gesture_reader.hold_top_left_corner = { toc = true }
+    m:recommendedPass("start")
+    ok(p.settings.sync_forward == 3, "the user's value stays")
+    ok(ui.gestures.data.gesture_reader.hold_top_left_corner.toc, "the user's gesture stays")
+    ok(p.settings.auto_sync == true, "at-default items still applied")
+    ok(shownText("Applied 6 · 2 to review"), "the line counts both")
+    local menu = m:showRecommended("test")
+    local row = menuRow(menu, "BookOrbit › When BookOrbit is further ahead")
+    ok(row and row.mandatory == "yours: Don't sync · Orbit's: Silent", row and row.mandatory)
+    row.callback()
+    pressDialog("Use Orbit's")
+    ok(p.settings.sync_forward == 2, "Use Orbit's applies")
+    ok(store.orbit_android.recommended.items["bo.sync_forward"] == "applied", "recorded")
+    run(1)
+    menu = m.rec_menu
+    menuRow(menu, "Gesture in books: hold top-left corner").callback()
+    pressDialog("Keep mine")
+    ok(store.orbit_android.recommended.items["g.sync_all"] == "kept", "kept")
+    ok(ui.gestures.data.gesture_reader.hold_top_left_corner.toc, "kept unchanged")
+    run(1)
+    -- Kept stays kept on later passes.
+    m:recommendedPass("start")
+    ok(ui.gestures.data.gesture_reader.hold_top_left_corner.toc, "a pass never revisits kept")
+    run(1)
+end)
+
+test("recommended: Undo restores the backup; a value changed since is left as is; Undo all", function()
+    local ui, m, p = recWorld(false)
+    m:recommendedPass("start")
+    local menu = m:showRecommended("test")
+    menuRow(menu, "Gesture in books: two-finger swipe up").callback()
+    pressDialog("Undo")
+    ok(ui.gestures.data.gesture_reader.two_finger_swipe_north.increase_frontlight == 0, "frontlight back")
+    ok(store.orbit_android.recommended.items["g.apps"] == "kept", "then shown under Kept yours")
+    run(1)
+    -- Changed by hand after Orbit set it: Undo leaves it.
+    p.settings.catalog_auto_open = "filemanager"
+    menuRow(m.rec_menu, "BookOrbit › Make BookOrbit home").callback()
+    pressDialog("Undo")
+    ok(p.settings.catalog_auto_open == "filemanager", "left as is")
+    ok(shownText("Changed since; left as is."), "says so")
+    run(1)
+    menuRow(m.rec_menu, "Undo all").callback()
+    ok(p.settings.auto_sync == false and p.settings.sync_forward == 1, "plugin values back")
+    ok(ui.gestures.data.gesture_reader.hold_top_right_corner == nil, "gesture back to nothing")
+    ok(store.wifi_enable_action == "turn_on", "KOReader's Wi-Fi action stays while Wi-Fi switching needs it")
+    ok(shownText("Wi-Fi switching needs it"), "says why")
+    run(1)
+end)
+
+test("recommended: in a book the settings are written, the line waits for the file browser", function()
+    local ui, m, p = recWorld(true)
+    m:recommendedPass("start")
+    ok(p.settings.auto_sync == true, "written in a book")
+    ok(not shownText("Applied"), "no line in a book")
+    local ui2, m2 = newUI(false)
+    m2:maybeSetupPrompt("home")
+    ok(shownText("Applied 8 recommended settings"), "shown off the book")
+    run(1)
+end)
+
+test("recommended: missing pieces wait: no BookOrbit plugin, Gestures off; applied on the start they appear", function()
+    local ui, m, p = recWorld(false)
+    ui.bookorbit = nil
+    local gestures = ui.gestures
+    ui.gestures = nil
+    m:recommendedPass("start")
+    local items = store.orbit_android.recommended.items
+    ok(items["bo.auto_sync"] == "unavailable" and items["g.apps"] == "unavailable", "unavailable, not failed")
+    ok(items["ko.wifi_on"] == "applied", "the rest applied")
+    local menu = m:showRecommended("test")
+    ok(menuRow(menu, "Gesture in books: hold top-right corner").mandatory == "Turn on KOReader's Gestures plugin", "the reason")
+    run(1)
+    ui.bookorbit, ui.gestures = p, gestures
+    m:recommendedPass("start")
+    ok(items["bo.auto_sync"] == "applied" and items["g.apps"] == "applied", "applied once they load")
+    run(1)
+end)
+
+test("recommended: at load, KOReader's Wi-Fi action is set only with the companion, and backed up", function()
+    recWorld(false)
+    W.companion = false
+    RE.installed_cache.at = -1000
+    RE.silentWifiOn()
+    ok(store.wifi_enable_action == nil, "no companion: left alone")
+    W.companion = true
+    RE.installed_cache.at = -1000
+    RE.silentWifiOn()
+    ok(store.wifi_enable_action == "turn_on", "with the companion")
+    ok(store.orbit_android.recommended_backup["ko.wifi_on"], "with a backup")
+    -- A value the user chose is never overwritten: listed instead.
+    recWorld(false)
+    store.wifi_enable_action = "ignore"
+    RE.silentWifiOn()
+    ok(store.wifi_enable_action == "ignore", "kept")
+    ok(store.orbit_android.recommended.items["ko.wifi_on"] == "conflict", "to review")
+    store.wifi_enable_action = "turn_on"
+end)
+
+test("recommended: Keep mine on KOReader's Wi-Fi action offers to turn Wi-Fi switching off instead", function()
+    local ui, m = recWorld(false)
+    store.wifi_enable_action = "ignore"
+    m:recommendedPass("start")
+    local menu = m:showRecommended("test")
+    menuRow(menu, "KOReader › Action when Wi-Fi is off").callback()
+    pressDialog("Turn Wi-Fi switching off")
+    ok(store.orbit_android.wifi_via_companion == false, "switching off")
+    ok(store.wifi_enable_action == "ignore", "theirs kept")
+    store.orbit_android.wifi_via_companion = true
+    store.wifi_enable_action = "turn_on"
+    run(1)
+end)
+
+---------------------------------------------------------------- companion caps (addon-mode §6)
+local CAPS_FILE = os.tmpname()
+RE.Companion.statusFile = function() return CAPS_FILE end
+local ADDON = { "install", "setup", "stats", "relaunch" }
+local FULL = { "install", "setup", "stats", "relaunch", "home", "apps", "wifi", "sleep_sync", "screen_off", "clicker", "pin" }
+local function capsFile(mode, caps)
+    local f = io.open(CAPS_FILE, "wb")
+    if mode then f:write("CAPSFILE"); W.json.CAPSFILE = { proto = "1", mode = mode, caps = caps } end
+    f:close()
+end
+local function capsReset()
+    capsFile(nil)
+    W.web["http://127.0.0.1:47913/status"], W.json.STATUS = nil, nil
+    store.orbit_android.companion_caps, store.orbit_android.companion_mode = nil, nil
+    RE.Companion.cap_set, RE.Companion.caps_known = nil, nil
+    RE.installed_cache.at = -1000
+    W.companion = true
+end
+
+test("caps: from the status file with no service; /status wins when it answers; a leftover file without the companion is ignored", function()
+    capsReset()
+    capsFile("addon", ADDON)
+    RE.Shared.refresh("test")
+    ok(RE.Companion.has("install") and not RE.Companion.has("wifi"), "file: Add-on caps")
+    ok(store.orbit_android.companion_mode == "addon", "cached for load-time hooks")
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.json.STATUS = { version = "0.11.0", mode = "full", caps = FULL }
+    RE.Shared.refresh("test")
+    ok(RE.Companion.has("wifi"), "/status wins")
+    W.json.STATUS = { version = "0.10.0" }
+    capsFile(nil)
+    RE.Shared.refresh("test")
+    ok(RE.Companion.has("home") and RE.Companion.has("screen_off"), "older companion: legacy, every cap")
+    capsFile("addon", ADDON)
+    W.companion = false
+    RE.installed_cache.at = -1000
+    ok(not RE.Companion.has("install"), "missing companion: no caps, the file is ignored")
+    capsReset()
+end)
+
+test("caps: Add-on degrades: Sync and sleep asks for the power button, Other apps says Home, no broadcasts, no errors", function()
+    capsReset()
+    capsFile("addon", ADDON)
+    RE.Shared.refresh("test")
+    local ui, m = newUI(true)
+    W.broadcasts, W.activities, W.shown = {}, {}, {}
+    store.orbit_android.screen_off_hint_shown = nil
+    m:onOrbitSyncAndSleep()
+    run(30)
+    ok(not lastBroadcast(".SLEEP_NOW"), "no SLEEP_NOW")
+    ok(not lastBroadcast(".NET_UP"), "no NET_UP: the plugin wakes Tailscale itself")
+    ok(lastBroadcast("CONNECT_VPN"), "Tailscale woken directly")
+    ok(shownText("Synced. Press the power button to sleep.\nOrbit Companion can do this for you"), "the hint, once")
+    W.shown = {}
+    m:onOrbitSyncAndSleep()
+    run(30)
+    ok(shownText("Synced. Press the power button to sleep.") and not shownText("can do this for you"), "hint only once")
+    W.shown = {}
+    m:onOrbitOpenApps()
+    ok(shownText("Use your reader's Home button for other apps."), "apps message")
+    ok(#W.activities == 0, "no activity started")
+    ok(m:openCompanionHome() == true and #W.activities == 0, "Home at BookOrbit home stays")
+    local hasWifiRow, hasHelperLine, hasApps = false, false, false
+    for _, it in ipairs(m:menuItems()) do
+        if it.text == "Wi-Fi via Orbit Companion" then hasWifiRow = true end
+        if it.text == "Wi-Fi switching and sleep sync: in Orbit Companion ›" then hasHelperLine = true end
+        if it.text == "Open another app…" then hasApps = true end
+    end
+    ok(not hasWifiRow and hasHelperLine and not hasApps, "rows hidden, one line instead")
+    ok(RE.Shared.mode() == "always_on", "Wi-Fi as left: Always on")
+    capsReset()
+    run(5)
+end)
+
+test("caps: without Wi-Fi switching, KOReader's Wi-Fi action is left alone at load", function()
+    capsReset()
+    capsFile("addon", ADDON)
+    recWorld(false)
+    capsFile("addon", ADDON)
+    RE.Companion.cap_set = nil
+    RE.silentWifiOn()
+    ok(store.wifi_enable_action == nil, "left alone")
+    ok(store.orbit_android.recommended.items["ko.wifi_on"] == "unavailable", "waits for the capability")
+    capsReset()
+    store.wifi_enable_action = "turn_on"
+end)
+
+test("caps: Full → Add-on undoes KOReader's Wi-Fi action and the apps gesture only; back to Full re-applies them", function()
+    capsReset()
+    local ui, m, p = recWorld(false)
+    capsFile("full", FULL)
+    RE.Shared.refresh("test")
+    m:recommendedPass("start")
+    ok(store.wifi_enable_action == "turn_on" and ui.gestures.data.gesture_reader.two_finger_swipe_north.orbit_open_apps, "applied in Full")
+    capsFile("addon", ADDON)
+    RE.Shared.refresh("resume")
+    ok(store.wifi_enable_action == nil, "Wi-Fi action undone")
+    ok(ui.gestures.data.gesture_reader.two_finger_swipe_north.increase_frontlight == 0, "apps gesture undone")
+    ok(p.settings.auto_sync == true and ui.gestures.data.gesture_reader.hold_top_right_corner.orbit_sync_and_sleep, "reading settings stay")
+    capsFile("full", FULL)
+    RE.Shared.refresh("resume")
+    ok(store.wifi_enable_action == "turn_on" and ui.gestures.data.gesture_reader.two_finger_swipe_north.orbit_open_apps, "picked up again")
+    capsReset()
+    store.wifi_enable_action = "turn_on"
+    run(5)
+end)
+
+test("caps: plugin only, a newer plugin on disk: asks to reopen KOReader, never quits with nobody to relaunch it", function()
+    capsReset()
+    W.companion = false
+    RE.installed_cache.at = -1000
+    local was = RE.patchFileVersion
+    RE.patchFileVersion = function() return "9.9.9" end
+    local _, m = newUI(false)
+    W.quits, W.shown = 0, {}
+    ok(m:maybeRestart("check") == "ask", "asks")
+    run(2)
+    ok(W.quits == 0, "no quit")
+    ok(shownText("Orbit v9.9.9 is installed: close KOReader and open it again to finish."), "message")
+    RE.patchFileVersion = was
+    capsReset()
+end)
+
+test("report: signed in yes/no and the recommended state go to the companion, never the login itself", function()
+    capsReset()
+    local ui, m, p = recWorld(false)
+    p.settings.sync_forward = 3
+    W.broadcasts = {}
+    RE.Rec.last_report = nil
+    m:recommendedPass("start")
+    local r = lastBroadcast(".REPORT")
+    ok(r, "REPORT sent")
+    ok(r.extras.signed_in == "1" and r.extras.recommended == "partial" and r.extras.conflicts == "1", "fields")
+    for k, v in pairs(r.extras) do
+        ok(not tostring(v):find("example.test", 1, true), "no server in " .. k)
+    end
+    ok(r.extras.server_url == nil and r.extras.username == nil and r.extras.userkey == nil, "no login fields")
+    -- Unchanged: not sent again on a refresh; a sign-out is.
+    W.broadcasts = {}
+    RE.Shared.refresh("resume")
+    ok(not lastBroadcast(".REPORT"), "nothing new: no report")
+    p.signed_out = true
+    RE.Shared.refresh("resume")
+    ok(lastBroadcast(".REPORT") and lastBroadcast(".REPORT").extras.signed_in == "0", "sign-out reported")
+    p.signed_out = nil
+    run(2)
+end)
+
+test("commands: signin opens BookOrbit's sign-in; recommended opens the review page", function()
+    local ui, m, p = recWorld(false)
+    p.signed_out = true
+    W.intent_extras[RE.Companion.EXTRA_COMMAND] = "signin"
+    ok(m:checkCommand("resume"), "handled")
+    run(1)
+    ok(has(p.calls, "promptLogin"), "BookOrbit's sign-in")
+    p.signed_out = nil
+    W.intent_extras[RE.Companion.EXTRA_COMMAND] = "recommended"
+    ok(m:checkCommand("resume"), "handled")
+    run(1)
+    ok(m.rec_menu and m.rec_menu.title == "Recommended settings", "review page")
+    run(1)
+end)
+
+test("add-on: a restart starts the companion's relaunch window, never at screen-off", function()
+    capsReset()
+    capsFile("addon", ADDON)
+    RE.Shared.refresh("test")
+    local was = RE.patchFileVersion
+    RE.patchFileVersion = function() return "9.9.8" end
+    local _, m = newUI(false)
+    W.activities, W.broadcasts, W.quits = {}, {}, 0
+    RE.state.restarting_at, store.orbit_android.restart_tried = nil, nil
+    ok(m:maybeRestart("sleep") == "wait", "no restart at screen-off without Home")
+    ok(m:maybeRestart("check") == "restart", "in front, no book: restart")
+    run(2)
+    ok(W.activities[#W.activities] and W.activities[#W.activities].action:match("RELAUNCH_UI$"), "relaunch window")
+    ok(not lastBroadcast(".RELAUNCH"), "no RELAUNCH broadcast")
+    ok(W.quits == 1, "then quits")
+    RE.patchFileVersion = was
+    RE.state.restarting_at, store.orbit_android.restart_tried = nil, nil
+    capsReset()
+end)
+
+test("add-on: with no service, the setup box reads the companion's status file", function()
+    capsReset()
+    local f = io.open(CAPS_FILE, "wb"); f:write("CAPSFILE"); f:close()
+    W.json.CAPSFILE = { proto = "1", mode = "addon", caps = ADDON, setup_needed = 1,
+        setup_prompt = { key = "signed_in", rows = { "Signed in to BookOrbit" } } }
+    store.orbit_android.setup_prompt_shown = nil
+    local _, m = newUI(false)
+    W.shown = {}
+    local code = W.server_code
+    W.server_code = nil -- no service: nothing answers on loopback
+    RE.Shared.refresh("resume")
+    W.server_code = code
+    m:maybeSetupPrompt("resume")
+    local box, line = shownText("Orbit Companion needs 1 setup step: Signed in to BookOrbit."), m:statusText()
+    capsReset()
+    ok(box, "box from the file")
+    ok(line:find("1 setup step needs you", 1, true), "status line: " .. line)
 end)
 
 test("the status ping says whether a book is open (the companion's restart waits for it)", function()
@@ -1697,12 +2056,8 @@ end)
 
 test("apps gesture: registered and in the recommended set", function()
     ok(actions.orbit_open_apps and actions.orbit_open_apps.title == "Orbit Companion: apps", "action title")
-    local ui, m = newUI(true)
-    W.shown = {}
-    m:applyRecommendedGestures()
-    local box = W.shown[#W.shown]
-    box.ok_callback()
-    ok(ui.gestures.data.gesture_reader.two_finger_swipe_north.orbit_open_apps, "two-finger swipe up")
+    local R = getfenv(Orbit.onSuspend).Recommended
+    ok(R.item("g.apps").ours.orbit_open_apps and R.item("g.apps").key == "two_finger_swipe_north", "two-finger swipe up")
 end)
 
 ---------------------------------------------------------------- self-update
