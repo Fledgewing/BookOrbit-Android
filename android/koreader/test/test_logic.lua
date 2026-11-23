@@ -638,14 +638,18 @@ test("restart plan: a newer file loads now, or after the book; one try per versi
     eq(R.decide(nil, "0.4.9", nil, false, "check"), "none", "no file")
     eq(R.decide("0.4.9", "0.4.9", nil, false, "check"), "none", "already running it")
     eq(R.decide("0.4.8", "0.4.9", nil, false, "check"), "none", "older file never restarts")
-    eq(R.decide("0.5.0", "0.4.9", nil, false, "check"), "restart", "no book: at once")
+    eq(R.decide("0.5.0", "0.4.9", nil, false, "check"), "wait", "automatic, in front (no book, Home, a list): waits")
     eq(R.decide("0.5.0", "0.4.9", nil, true, "check"), "wait", "a book open: never interrupts reading")
+    eq(R.decide("0.5.0", "0.4.9", nil, false, "close"), "wait", "a book closed: still in KOReader, waits")
+    eq(R.decide("0.5.0", "0.4.9", nil, true, "background"), "quit", "another app in front: save and quit")
     eq(R.decide("0.5.0", "0.4.9", nil, true, "sleep"), "restart", "the device sleeping")
     eq(R.decide("0.5.0", "0.4.9", "0.5.0", false, "check"), "gave_up", "restarted for it and still old")
-    eq(R.decide("0.5.1", "0.4.9", "0.5.0", false, "check"), "restart", "a newer file gets its own try")
+    eq(R.decide("0.5.1", "0.4.9", "0.5.0", false, "sleep"), "restart", "a newer file gets its own try")
     eq(R.decide("0.5.0", "0.5.0", "0.5.0", false, "check"), "done", "loaded after its restart")
     eq(R.decide("0.0.0-dev", "0.0.0-dev", nil, false, "check"), "none", "dev build")
-    eq(R.doneText("0.5.0"), "Updated to v0.5.0 (KOReader restarted)")
+    eq(R.decide("0.5.0", "0.4.9", nil, true, "manual"), "restart", "an update the reader asked for: at once, book or not")
+    eq(R.decide("0.5.0", "0.4.9", nil, true, "check_asleep"), "wait", "screen off, nobody to relaunch: waits")
+    eq(R.doneText("0.5.0"), "Updated to v0.5.0")
 end)
 
 test("compat: Make BookOrbit home is written only where the plugin knows the setting", function()
@@ -987,6 +991,58 @@ test("cache: covers fetch only what changed; ETag 304s keep the file (shared cas
     end
 end)
 
+test("cache: a check keeps the saved random pick; a Full refresh takes the new one (shared cases)", function()
+    for _, c in ipairs(CC.settle) do eq(C.encode(C.settle(c.cached, c.reply, c.mode)), C.encode(c.expect), c.name) end
+end)
+
+test("cache: the offline mirror's list identities, pages, re-paging and TTL (shared cases)", function()
+    for _, c in ipairs(CC.mirror.windows) do
+        local w = C.listWindow(c.path)
+        if c.list == false then
+            eq(w, nil, c.path .. " is not a mirrored list")
+        else
+            local o = C.listWindow(c.identity_of)
+            eq(C.key({ path = w.identity }) == C.key({ path = o.identity }), c.same, c.path)
+            eq(C.listWindow(C.mirrorPage(w.identity, 2)).identity, w.identity, "a mirror page keeps the identity")
+        end
+    end
+    for _, c in ipairs(CC.mirror.slices) do
+        local pages = {}
+        for _, n in ipairs(c.saved_pages) do
+            local items = {}
+            for i = (n - 1) * C.MIRROR_PAGE + 1, math.min(c.total, n * C.MIRROR_PAGE) do table.insert(items, { id = i }) end
+            pages[n] = { items = items, total = c.total, page = n, size = C.MIRROR_PAGE, seriesSummary = { total = c.total } }
+        end
+        local b = C.slice(c.window, pages)
+        if c.items == nil then
+            eq(b, nil, c.name)
+        else
+            ok(b, c.name .. ": answered")
+            eq(b.items[1].id, c.items[1], c.name .. " first"); eq(b.items[#b.items].id, c.items[2], c.name .. " last")
+            eq(b.total, c.total, c.name .. " total"); eq(b.hasNext, c.hasNext, c.name .. " hasNext"); eq(b.hasPrevious, c.hasPrevious, c.name .. " hasPrevious")
+            eq(b.seriesSummary.total, c.total, c.name .. " keeps the list's other fields")
+        end
+    end
+    for _, c in ipairs(CC.mirror.repage) do
+        local fetch, drop = C.repage(c.old, c.new)
+        eq(table.concat(fetch, ","), table.concat(c.fetch, ","), c.name .. " fetch")
+        eq(table.concat(drop, ","), table.concat(c.drop, ","), c.name .. " drop")
+    end
+    for _, c in ipairs(CC.mirror.due) do eq(C.mirrorDue(c.mirror, c.now, c.ttl_days, c.lib_version), c.due, c.name) end
+    ok(C.isSearch("/koreader/plugin/catalog/books?q=dune") and not C.isSearch("/koreader/plugin/catalog/books?page=1"), "search")
+end)
+
+test("lists: On device groups by series and author, its rows by id", function()
+    local G = M.Group
+    local list = G.listOf({ ids = "3,5,9", sort = "title", on_device_filter = true })
+    ok(list and list.section == "on-device", "On device is a list")
+    eq(G.listOf({ ids = "3,5" }), nil, "ids alone (a grouped row) is not")
+    local q = G.fetchParams({ ids = "3,5,9", sort = "title", on_device_filter = true, page = 2 }, 1)
+    eq(q.ids, "3,5,9", "reads by its ids"); eq(q.on_device_filter, nil, "never sends the plugin's mark")
+    local p, how = G.drill(list, { ids = "3,5,9" }, { { id = 9 }, { id = 3 } }, { seriesId = 4 }, {})
+    eq(how, "ids", "a row drills by id"); eq(p.ids, "3,9", "its books")
+end)
+
 test("cache: encode is canonical and round-trips", function()
     local v = { b = { 1, 2, { z = "x\n" } }, a = 1.5, c = true, [10] = "ten" }
     eq(C.encode(C.decode(C.encode(v))), C.encode(v))
@@ -1240,6 +1296,36 @@ end)
 test("caps: diff names what was lost and gained", function()
     local lost, gained = Caps.diff({ wifi = true, home = true, install = true }, { install = true, pin = true })
     eq(table.concat(lost, ","), "home,wifi"); eq(table.concat(gained, ","), "pin")
+end)
+
+-- Nothing interrupts reading (docs/design/reading-gate.md): every place in the plugin that shows
+-- something, takes focus or restarts says how the reading gate covers it ("-- gate: <why>" on its
+-- line or the line before). A new path without it fails here.
+test("reading gate: every show, toast, activity start and restart names its gate", function()
+    local dir = here .. "/../orbit.koplugin/ko/"
+    local pat = { "UIManager:show%(", "bookorbit_toast\"%)%.show", "bookorbit_toast\"%)%.error", "Toast%.show%(",
+        "Toast%.error%(", "Jni%.startActivity{", "restartKOReader%(%)", "UIManager:quit%(%)" }
+    local missing = {}
+    local p = io.popen('ls "' .. dir .. '"')
+    for name in p:lines() do
+        if name:match("%.lua$") and name ~= "jni.lua" then
+            local prev = ""
+            local n = 0
+            for line in io.lines(dir .. name) do
+                n = n + 1
+                local code = line:gsub("%-%-.*$", function(c) return c:find("gate:", 1, true) and c or "" end)
+                for _, q in ipairs(pat) do
+                    if code:find(q) and not code:match("^%s*%-%-") and not line:find("-- gate:", 1, true)
+                        and not prev:find("-- gate:", 1, true) then
+                        table.insert(missing, name .. ":" .. n)
+                    end
+                end
+                prev = line
+            end
+        end
+    end
+    p:close()
+    eq(table.concat(missing, " "), "", "ungated show paths")
 end)
 
 print(string.format("%d passed, %d failed", passed, failed))

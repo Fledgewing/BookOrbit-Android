@@ -1317,7 +1317,7 @@ test("caps: plugin only, a newer plugin on disk: asks to reopen KOReader, never 
     RE.patchFileVersion = function() return "9.9.9" end
     local _, m = newUI(false)
     W.quits, W.shown = 0, {}
-    ok(m:maybeRestart("check") == "ask", "asks")
+    ok(m:maybeRestart("manual") == "ask", "asks")
     run(2)
     ok(W.quits == 0, "no quit")
     ok(shownText("Orbit v9.9.9 is installed: close KOReader and open it again to finish."), "message")
@@ -1375,7 +1375,8 @@ test("add-on: a restart starts the companion's relaunch window, never at screen-
     W.activities, W.broadcasts, W.quits = {}, {}, 0
     RE.state.restarting_at, store.orbit_android.restart_tried = nil, nil
     ok(m:maybeRestart("sleep") == "wait", "no restart at screen-off without Home")
-    ok(m:maybeRestart("check") == "restart", "in front, no book: restart")
+    ok(m:maybeRestart("check") == "wait", "an automatic update in front: waits")
+    ok(m:maybeRestart("manual") == "restart", "the reader asked: restart")
     run(2)
     ok(W.activities[#W.activities] and W.activities[#W.activities].action:match("RELAUNCH_UI$"), "relaunch window")
     ok(not lastBroadcast(".RELAUNCH"), "no RELAUNCH broadcast")
@@ -2263,7 +2264,7 @@ end
 local function relaunches() return count(W.broadcasts, function(b) return b.action:sub(-9) == ".RELAUNCH" end) end
 local function restartReset() run(10); W.clock = W.clock + 10; store.orbit_android.restart_tried = nil; W.broadcasts = {} end
 
-test("one update: our own update with no book open restarts KOReader at once", function()
+test("one update: Update in the menu (the reader asked) restarts KOReader at once", function()
     restartReset(); resetSelf(); serveRelease()
     local _ui, orbit = newUI(false)
     orbit:checkPatchUpdate()
@@ -2274,26 +2275,88 @@ test("one update: our own update with no book open restarts KOReader at once", f
     restartReset()
 end)
 
-test("one update: a new file with no book open restarts on resume (the companion installed it)", function()
+test("one update: an automatic update waits in front (no book, Home or a list); the screen going off restarts it", function()
     restartReset(); stampSelf("0.3.0")
     local _ui, m = newUI(false)
     m:onResume()
     run(3)
-    ok(relaunches() == 1, "restarted: " .. relaunches())
+    ok(relaunches() == 0, "no restart in front: " .. relaunches())
+    ok(m:maybeRestart("sleep") == "restart", "the screen off")
+    run(2)
+    ok(relaunches() == 1, "restarted once: " .. relaunches())
     restartReset()
 end)
 
-test("one update: a book open waits, then restarts once the book is closed", function()
+test("one update: an update the reader asked for restarts at once, book open or not; the book reopens", function()
+    restartReset(); stampSelf("0.3.0")
+    W.screen_on = true
+    local ui, m = newUI(true)
+    ok(m:maybeRestart("manual") == "restart", "at once")
+    run(2)
+    ok(relaunches() == 1, "restarted: " .. relaunches())
+    ok(store.orbit_android.restart_book ~= nil, "the book is saved to reopen")
+    restartReset()
+end)
+
+test("reading gate: nothing shows while a book is open in front; it all shows once the book closes", function()
+    restartReset()
+    RE.Gate.queue = {}
+    local _ui, m = newUI(true)
+    W.shown = {}
+    ok(RE.reading(), "reading")
+    RE.orbitNote("Applied 4 recommended settings · Review", 4)
+    RE.orbitNote("Updated to v9.9.9", 3)
+    m:showWakeBanner({ detail = "x" })
+    local okt, Toast = pcall(require, "bookorbit_toast")
+    if okt and Toast.show then Toast.show("Synced") end
+    run(3)
+    ok(#W.shown == 0, "nothing on screen while reading: " .. #W.shown)
+    ok(#RE.Gate.queue >= 3, "held: " .. #RE.Gate.queue)
+    m:onCloseWidget()
+    newUI(false)
+    run(3)
+    ok(#RE.Gate.queue == 0, "drained")
+    local texts = {}
+    for _, w in ipairs(W.shown) do texts[#texts + 1] = tostring(w.text) end
+    ok(table.concat(texts, "|"):find("Updated to v9.9.9", 1, true), "shown after the close: " .. table.concat(texts, "|"))
+    restartReset()
+end)
+
+test("reading gate: a note held too long is dropped, not shown late", function()
+    RE.Gate.queue = {}
+    local _ui = newUI(true)
+    W.shown = {}
+    RE.Gate.show("old", function() UIManager:show({ text = "old" }) end, 5)
+    W.clock = W.clock + 60
+    newUI(false)
+    RE.Gate.drain("test")
+    ok(#W.shown == 0, "dropped")
+end)
+
+test("reading gate: recommended note pending + Home press -> Home opens the first time", function()
+    RE.Gate.queue = {}
+    local _ui, m = newUI(false)
+    W.shown = {}
+    RE.orbitNote("Applied 4 recommended settings · Review", 4)
+    ok(#W.shown == 1 and W.shown[1].orbit_note, "a note, not in Home's way")
+    ok(RE.topWidget() ~= W.shown[1], "Home logic sees through it")
+end)
+
+test("one update: KOReader in the background saves and quits (nothing relaunches it); the next start has the new plugin", function()
     restartReset(); stampSelf("0.3.0")
     W.screen_on = true
     local _ui, m = newUI(true)
     m:onResume()
     run(5)
     ok(relaunches() == 0, "never interrupts reading")
+    W.quits = 0
     m:onCloseWidget()
     newUI(false)
     run(3)
-    ok(relaunches() == 1, "restarted after the close: " .. relaunches())
+    ok(relaunches() == 0 and W.quits == 0, "a closed book doesn't restart it")
+    ok(m:maybeRestart("background") == "quit", "another app in front")
+    run(2)
+    ok(relaunches() == 0 and W.quits == 1, "saved and quit, no relaunch: " .. relaunches() .. " " .. W.quits)
     restartReset()
 end)
 
@@ -2347,10 +2410,10 @@ test("one update: after its restart the new patch shows one status line", functi
     m:onResume()
     run(3)
     local found = false
-    for _, w in ipairs(W.shown) do if tostring(w.text):find("Updated to v0.0.0-dev (KOReader restarted)", 1, true) then found = true end end
-    ok(found, "status line shown")
+    for _, w in ipairs(W.shown) do if tostring(w.text) == "Updated to v0.0.0-dev" and w.orbit_note then found = true end end
+    ok(found, "a short note, never in Home's way")
     ok(store.orbit_android.restart_tried == nil, "try cleared")
-    ok(store.orbit_android.patch_update_status.text:find("KOReader restarted", 1, true), "update status")
+    ok(store.orbit_android.patch_update_status.text == "Updated to v0.0.0-dev", "update status")
     restartReset()
 end)
 
@@ -3033,7 +3096,7 @@ end)
 local cache = {}
 -- A fake BookOrbit API client class (bookorbit_api.lua:372 request, :261 requestBlocking,
 -- :336 runInSubprocess, :747 downloadCatalogThumbnail) over cache.server (path -> body).
-local function cacheSetup()
+local function cacheSetup(prep)
     local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/events"); sh("mkdir -p", dir .. "/covers")
     local lfs = require("libs/libkoreader-lfs")
     cache.lfs_saved = { attributes = lfs.attributes, dir = lfs.dir, touch = lfs.touch }
@@ -3058,6 +3121,12 @@ local function cacheSetup()
     function Api:requestBlocking(method, path, body)
         table.insert(cache.calls, method .. " " .. path)
         if method ~= "GET" then table.insert(cache.writes, path); return {} end
+        if not W.wifi and cache.strict_offline then return nil, "wantread" end
+        if cache.server_fn then
+            local b = cache.server_fn(path)
+            if b == nil then return nil, 404 end
+            return E.Cache.copy(b)
+        end
         local b = cache.server[path]
         if b == nil then return nil, 404 end
         return E.Cache.copy(b)
@@ -3076,8 +3145,21 @@ local function cacheSetup()
     end
     function Api:downloadCatalogThumbnail(id, path) cache.stock_cover = (cache.stock_cover or 0) + 1; return true end
     function Api:getProxy() return nil end
+    -- As bookorbit_api.lua:386: sorted keys, empty values and on_device_filter dropped.
+    function Api:query(path, params)
+        local keys = {}
+        for k, v in pairs(params or {}) do if k ~= "on_device_filter" and v ~= nil and v ~= "" then table.insert(keys, k) end end
+        table.sort(keys)
+        if #keys == 0 then return path end
+        local parts = {}
+        for _, k in ipairs(keys) do
+            table.insert(parts, k .. "=" .. tostring(params[k]):gsub("[^%w%-_%.~]", function(c) return string.format("%%%02X", c:byte()) end))
+        end
+        return path .. "?" .. table.concat(parts, "&")
+    end
     package.loaded["bookorbit_api"] = Api
     local Cat = lfModules()
+    if prep then prep(Cat, Api) end
     cache.connects = 0
     function Cat:runConnected(fn) cache.connects = cache.connects + 1; fn() end
     package.loaded["ui/trapper"] = { wrap = function(_, fn) return fn() end, isWrapped = function() return false end }
@@ -3087,6 +3169,10 @@ local function cacheSetup()
     E.OC.installed, E.OC._dir, E.OC._index = nil, dir, nil
     E.OC.memo, E.OC.memo_order, E.OC.queue, E.OC.inflight, E.OC.pending, E.OC.active = {}, {}, {}, {}, {}, nil
     E.OC.full, E.OC.child, E.OC.offline_pass, E.OC.running = nil, nil, nil, nil
+    E.OC.redraw_scheduled, E.OC.redraw_key, E.OC.cache_only = nil, nil, nil
+    E.Mirror.active, E.Mirror.busy, E.Mirror.cat, E.Mirror.manual, E.Mirror.ticked_at = nil, nil, nil, nil, nil
+    cache.server_fn, cache.strict_offline = nil, nil
+    cache.reloaded = nil
     E.OC.note = function() end
     E.OC.now = function() return math.floor(W.clock) end
     E.S.offline_cache = true
@@ -3236,16 +3322,17 @@ test("cache: covers keep their ETag; a moved version asks If-None-Match and a 30
     local v1 = dir .. "/7_20261101.jpg"
     ok(client:downloadCatalogThumbnail(7, v1, { temp_path = v1 .. ".part", max_bytes = 4e6 }), "first download")
     local f = io.open(v1 .. ".etag"); ok(f and f:read("*a") == server_etag, "ETag kept"); if f then f:close() end
-    -- A metadata edit moved updatedAt: one 304, the file renamed, no body transferred.
+    -- A metadata edit moved updatedAt: one 304, the file copied to the new version's name, no
+    -- body transferred; the older file stays for a view painted from an older body.
     local v2 = dir .. "/7_20261121.jpg"
     ok(client:downloadCatalogThumbnail(7, v2, { temp_path = v2 .. ".part", max_bytes = 4e6 }), "304")
     ok(sent[2] == server_etag, "asked If-None-Match")
-    ok(io.open(v2) and not io.open(v1), "the file renamed to the new version")
+    ok(io.open(v2) and io.open(v1), "the new version's file is there, and the older one stays")
     -- The cover really changed: replaced, the old one gone, the new ETag kept.
     server_etag, cover = '"200"', "\137PNG\r\n\26\n" .. string.rep("y", 40)
     local v3 = dir .. "/7_20261122.jpg"
     ok(client:downloadCatalogThumbnail(7, v3, { temp_path = v3 .. ".part", max_bytes = 4e6 }), "200")
-    ok(io.open(v3) and not io.open(v2), "replaced")
+    ok(io.open(v3) and io.open(v2), "the new cover saved; the older version is the plugin's pruner's to drop")
     f = io.open(v3 .. ".etag"); ok(f and f:read("*a") == '"200"', "new ETag"); if f then f:close() end
     ok(cache.stock_cover == nil, "never the plugin's download")
     -- Orphaned ETags are cleaned.
@@ -3330,8 +3417,408 @@ test("cache: tap ⟳ says Refreshing (a tip to hold, once); hold says Full refre
     E.OC.fullRefresh(cat)
     run(5)
     ok(notes[1] == "Full refresh: reloading everything from BookOrbit…", "hold: " .. tostring(notes[1]))
-    ok(notes[#notes] and notes[#notes]:find("^Full refresh done · 1 covers checked"), "done: " .. tostring(notes[#notes]))
+    local saw
+    for _, n in ipairs(notes) do if n:find("^This page is refreshed · 1 covers checked") then saw = true end end
+    ok(saw, "done: " .. table.concat(notes, " | "))
     cacheTeardown()
+end)
+
+---------------------------------------------------------------- v0.11.1: first paint, covers, offline mirror
+
+-- A small library on a fake server: books 1..n_books (recently added = id order), series 4 with
+-- lib.series4 books, and the section indexes. Answers by the request's parameters, like the
+-- server: page/size or offset/size (koreader-catalog-query.dto.ts:66-88, :260-285).
+local function libraryServer(lib)
+    local Q = E.Cache.parseQuery
+    return function(path)
+        local p, q = path:match("^([^?]*)%??(.*)$")
+        local query = Q(q)
+        local function page(items)
+            local size = tonumber(query.size) or 20
+            local start = tonumber(query.offset) or ((tonumber(query.page) or 1) - 1) * size
+            local out = {}
+            for i = start + 1, math.min(#items, start + size) do table.insert(out, items[i]) end
+            return { items = out, total = #items, page = math.floor(start / size) + 1, size = size,
+                hasNext = start + size < #items, hasPrevious = start > 0, generatedAt = tostring(W.clock) }
+        end
+        if p:find("/catalog/books$") then
+            local items = {}
+            if query.seriesId == "4" then
+                for i = 1, lib.series4 do table.insert(items, { id = 1000 + i, title = "S" .. i, seriesIndex = i, hasCover = false }) end
+            elseif query.ids then
+                for id in query.ids:gmatch("%d+") do table.insert(items, { id = tonumber(id), hasCover = false }) end
+            else
+                for i = 1, lib.n_books do table.insert(items, { id = i, title = "B" .. i, hasCover = false }) end
+            end
+            return page(items)
+        end
+        local section = p:match("/catalog/sections/([%w%-]+)$")
+        if section == "series" then return page({ { id = "Saga", seriesId = 4, name = "Saga" } }) end
+        if section then return page({}) end
+        local id = p:match("/catalog/books/(%d+)$")
+        if id then return { id = tonumber(id), title = "B" .. id } end
+        if p:find("/catalog/dashboard$") then return { continueReading = { { id = 7, progressPercentage = 10 } }, generatedAt = tostring(W.clock) } end
+        return nil
+    end
+end
+
+-- The plugin's request builders (bookorbit_catalog.lua:1111 paramsForEntry, :1453 effectiveOrder,
+-- bookorbit_catalog_lists.lua:229 listDecorateBookQuery, :246 listSectionParams).
+local function pluginCatalog(Cat, client)
+    local cat = setmetatable({ client = client, on_device = {}, current_context = { kind = "dashboard", dashboard = {} } }, Cat)
+    function cat:paramsForEntry(section, entry)
+        local params = { sort = section == "series" and "series" or "title" }
+        if section == "series" then params.seriesId = tonumber(entry.seriesId) end
+        if section == "authors" then params.author = entry.id end
+        return params
+    end
+    function cat:effectiveOrder(q) return q.order or (q.sort == "recently_added" and "desc" or "asc") end
+    function cat:listDecorateBookQuery(q) if (q.sort or "title") == "title" then q.buckets = 1 end return q end
+    function cat:listSectionParams(section, opts) return { size = 11 } end
+    function cat:refreshCurrent() self.client:request("GET", DASH) end
+    return cat
+end
+
+-- What the plugin asks for when it pages a list (fetchBookPage, bookorbit_catalog.lua:1135).
+local function pagePath(cat, params, page, size)
+    local q = {}
+    for k, v in pairs(params) do q[k] = v end
+    q.page, q.size = page, size
+    q.order = cat:effectiveOrder(q)
+    cat:listDecorateBookQuery(q)
+    return cat.client:query("/koreader/plugin/catalog/books", q)
+end
+
+local function offlineRead(cat, client, path)
+    local got, err
+    cat:runConnected(function()
+        local _, r = client:runInSubprocess(function() return client:request("GET", path) end)
+        got, err = r.body, r.err
+    end)
+    return got, err
+end
+
+local function withHost(cat, fn)
+    local hosts = E.bookorbit
+    E.bookorbit = function() return { catalog_browser = cat } end
+    local okf, err = pcall(fn)
+    E.bookorbit = hosts
+    if not okf then error(err, 0) end
+end
+
+test("cache: after a Full refresh, offline paging through every page of a linked list never asks to connect", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local lib = { n_books = 30, series4 = 25 }
+    cache.server_fn = libraryServer(lib)
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        -- Home's shelf read page 1 of Recently added (12 a page); the series list was never opened.
+        client:request("GET", DASH)
+        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
+        E.OC.fullRefresh(cat)
+        run(600)
+        local m = E.Mirror.state()
+        ok(m.at and #m.queue == 0, "the Full refresh finished: " .. tostring(#m.queue) .. " left")
+        ok(m.lists["/koreader/plugin/catalog/books?order=desc&sort=recently_added"], "the Home shelf's list is mirrored")
+        ok(E.Mirror.savedText():find("^Saved for offline · "), "says when: " .. E.Mirror.savedText())
+        -- Offline: every page of the shelf's list, and every page of a series it never opened.
+        W.wifi, cache.strict_offline = false, true
+        cache.connects = 0
+        local before = #W.shown
+        for p = 1, 3 do
+            local b, err = offlineRead(cat, client, pagePath(cat, { sort = "recently_added" }, p, 12))
+            ok(b and #b.items == (p < 3 and 12 or 6), "recently added page " .. p .. ": " .. tostring(err))
+        end
+        for p = 1, 2 do
+            local b, err = offlineRead(cat, client, pagePath(cat, cat:paramsForEntry("series", { seriesId = 4 }), p, 20))
+            ok(b and b.items[1] and b.items[1].id == 1000 + (p - 1) * 20 + 1, "series page " .. p .. ": " .. tostring(err))
+        end
+        local b = offlineRead(cat, client, "/koreader/plugin/catalog/sections/series?offset=0&size=11")
+        ok(b and b.items[1].seriesId == 4, "the series index")
+        ok(cache.connects == 0 and #W.shown == before, "never asked to connect")
+        -- A search offline only says it needs a connection.
+        local notes = {}
+        E.OC.note = function(t) table.insert(notes, t) end
+        offlineRead(cat, client, "/koreader/plugin/catalog/books?q=dune&page=1&size=12")
+        ok(notes[1] == "Search needs a connection" and #W.shown == before, "search: " .. tostring(notes[1]))
+        W.wifi, cache.strict_offline = true, nil
+    end)
+    cacheTeardown()
+end)
+
+test("cache: a series gains a 21st book -> Refresh rechecks every saved page and shows it", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local lib = { n_books = 5, series4 = 20 }
+    cache.server_fn = libraryServer(lib)
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        client:request("GET", DASH)
+        E.OC.fullRefresh(cat); run(600)
+        local series = cat:paramsForEntry("series", { seriesId = 4 })
+        W.wifi = false
+        local b = offlineRead(cat, client, pagePath(cat, series, 2, 20))
+        ok(b and #b.items == 0 and b.total == 20, "20 books before")
+        W.wifi = true
+        lib.series4 = 21
+        cache.calls = {}
+        E.OC.refresh(cat); run(600)
+        local rechecked = 0
+        for _, c in ipairs(cache.calls) do if c:find("size=100") then rechecked = rechecked + 1 end end
+        ok(rechecked == 6, "every saved page rechecked (five section indexes and the series): " .. rechecked)
+        W.wifi = false
+        b = offlineRead(cat, client, pagePath(cat, series, 2, 20))
+        ok(b and #b.items == 1 and b.items[1].id == 1021 and b.total == 21, "the 21st book: " .. tostring(b and b.total))
+        W.wifi = true
+    end)
+    cacheTeardown()
+end)
+
+test("cache: the mirror's TTL starts an automatic Full refresh when online (default 7 days, a setting)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        client:request("GET", DASH)
+        E.OC.fullRefresh(cat); run(600)
+        local first = E.Mirror.state().at
+        ok(first, "saved once")
+        W.clock = W.clock + 6 * 86400
+        client:request("GET", DASH); run(600)
+        ok(E.Mirror.state().at == first, "6 days: not yet")
+        W.clock = W.clock + 2 * 86400
+        client:request("GET", DASH); run(600)
+        ok(E.Mirror.state().at > first, "8 days: refreshed by itself")
+        local second = E.Mirror.state().at
+        E.S.mirror_ttl_days = 1
+        W.clock = W.clock + 86400 + 61
+        client:request("GET", DASH); run(600)
+        ok(E.Mirror.state().at > second, "the setting: 1 day")
+        E.S.mirror_ttl_days = nil
+    end)
+    cacheTeardown()
+end)
+
+test("cache: Home's first paint after a progress write comes from this cache with the reader's book on it; no second full paint", function()
+    local saved_body = { continueReading = { { id = 7, progressPercentage = 1 } } }
+    local client, Cat = cacheSetup(function(Cat)
+        function Cat:initialDashboardContext() lf.saved_paint = true; return {}, { kind = "dashboard", dashboard = saved_body, stale = true } end
+        function Cat:dashboardRootFetch(opts)
+            local b = self.client:request("GET", DASH)
+            if not b then return {}, { kind = "dashboard", unavailable = true } end
+            return {}, { kind = "dashboard", dashboard = b }
+        end
+        function Cat:refreshOnDevice() if lf.maps then self.on_device = lf.maps; return true end self:hydrateOnDeviceMaps(); return false end
+        function Cat:hydrateOnDeviceMaps() lf.hydrating = true end
+    end)
+    W.wifi = true
+    local book = cache.dir .. "/book7.epub"
+    io.open(book, "w"):close()
+    cache.server[DASH] = { continueReading = { { id = 7, progressPercentage = 40 } }, generatedAt = "1" }
+    client:request("GET", DASH)
+    -- An earlier BookOrbit session knew book 7 is on the reader.
+    local old = setmetatable({ client = client, on_device = { [7] = book } }, Cat)
+    E.LF.keepOnDevice(old)
+    -- Reading moved the book on; the write marks Home stale.
+    client:request("PUT", "/koreader/plugin/syncs/progress", { percentage = 0.5 })
+    -- A new BookOrbit view: its plugin maps are gone (every state flush drops them).
+    lf.maps, lf.full_paint, lf.stock_switch = nil, 0, 0
+    local cat = setmetatable({ client = client }, Cat)
+    cat:refreshOnDevice()
+    ok(cat.on_device and cat.on_device[7] == book, "book 7 is on the reader before BookOrbit's own maps are back (Resume, not Download)")
+    local items, ctx = cat:initialDashboardContext()
+    ok(not lf.saved_paint and ctx.orbit_first and ctx.dashboard.continueReading[1].progressPercentage == 40, "first paint from this cache")
+    cat:switchTo("Home", items, ctx, false)
+    ok(lf.stock_switch == 1, "one full paint")
+    -- The open-time refresh: the stale Home is checked; only the server's clock moved.
+    cache.server[DASH] = { continueReading = { { id = 7, progressPercentage = 40 } }, generatedAt = "2" }
+    withHost(cat, function()
+        cat._board_ctx, cat._board_tiles = { d = {} }, { { item = { type = "hero" } } }
+        cache.calls = {}
+        local _, c2 = cat:dashboardRootFetch({})
+        run(5)
+        ok(#cache.calls == 1, "checked once: " .. table.concat(cache.calls, ","))
+        ok(cache.reloaded == nil, "unchanged (generatedAt only): no redraw")
+        -- BookOrbit's maps come back the same: no repaint.
+        lf.maps = { [7] = book }
+        cat:refreshOnDevice()
+        cat:updateItems(nil, true)
+        ok(lf.full_paint == 0 and lf.stock_switch == 1, "no second full paint")
+    end)
+    cacheTeardown()
+end)
+
+-- The thumbnail worker as the pinned plugin runs it (bookorbit_catalog_thumbnails.lua:368-408):
+-- a batch in the API's child process, each cover through downloadCatalogThumbnail, an ok table
+-- back; the parent marks each one there (:333-343) and the tile draws from the file.
+local function coverWorker(client, jobs)
+    local done, r = client:runInSubprocess(function()
+        local outcome = {}
+        for _, j in ipairs(jobs) do
+            local ok_, err = client:downloadCatalogThumbnail(j.id, j.path, { temp_path = j.path .. ".part", max_bytes = 4e6, background = false })
+            outcome[tostring(j.id)] = ok_ == true
+        end
+        return outcome
+    end)
+    return done and r.body or nil, r and r.err
+end
+
+local function coverServer(answers)
+    local http = require("socket.http")
+    local ltn = require("ltn12")
+    local saved = { http.request, ltn.sink.file }
+    ltn.sink.file = function(f) return function(chunk) if chunk then f:write(chunk) end return 1 end end
+    http.request = function(t)
+        local id = tonumber(t.url:match("/books/(%d+)/thumbnail"))
+        local a = answers[id] or { code = "timeout" }
+        if a.code == 304 and t.headers["If-None-Match"] == a.etag then return 1, 304, {} end
+        if a.code == "timeout" then return nil, "timeout" end
+        local body = "\255\216\255\224" .. string.rep("c", 30 + id)
+        t.sink(body); t.sink(nil)
+        return 1, 200, { ["content-type"] = "image/jpeg", etag = a.etag or '"e"', ["content-length"] = tostring(#body) }
+    end
+    return function() http.request, ltn.sink.file = saved[1], saved[2] end
+end
+
+test("covers: the plugin's worker in its child process: 200, 304 and an error; the drawn tiles have their files", function()
+    local client = cacheSetup()
+    W.wifi = true
+    local dir = cache.dir .. "/covers"
+    -- Book 2 has an older version with its ETag; the server's cover is the same (304).
+    local old2 = dir .. "/2_100.jpg"
+    local fh = io.open(old2, "wb"); fh:write("\255\216\255\224old"); fh:close()
+    fh = io.open(old2 .. ".etag", "w"); fh:write('"two"'); fh:close()
+    local restore = coverServer({ [1] = { code = 200, etag = '"one"' }, [2] = { code = 304, etag = '"two"' }, [3] = { code = "timeout" } })
+    local jobs = { { id = 1, path = dir .. "/1_100.jpg" }, { id = 2, path = dir .. "/2_200.jpg" }, { id = 3, path = dir .. "/3_100.jpg" } }
+    local out, err = coverWorker(client, jobs)
+    restore()
+    ok(out and not cache.child_crash, "the worker's batch answered: " .. tostring(err) .. " " .. tostring(cache.child_crash))
+    ok(out["1"] and out["2"] and not out["3"], "1 and 2 ok, 3 failed")
+    ok(io.open(jobs[1].path) and io.open(jobs[2].path), "tiles 1 and 2 draw from their files")
+    ok(io.open(old2), "the older version of 2 is still there for an older body")
+    ok(not io.open(jobs[3].path), "3 retries later")
+    cacheTeardown()
+end)
+
+test("covers: Full refresh and Refresh with every cover 304 never paint a tile without its cover", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local dir = cache.dir .. "/covers"
+    local books = {}
+    for id = 1, 3 do
+        books[id] = { id = id, hasCover = true, updatedAt = "200" }
+        local f = io.open(dir .. "/" .. id .. "_100.jpg", "wb"); f:write("\255\216\255\224v1"); f:close()
+        f = io.open(dir .. "/" .. id .. "_100.jpg.etag", "w"); f:write('"c' .. id .. '"'); f:close()
+    end
+    local function pathOf(b) return dir .. "/" .. b.id .. "_" .. tostring(b.updatedAt) .. ".jpg" end
+    function Cat:thumbnailPath(b) return pathOf(b) end
+    function Cat:cachedThumbnailPath(b) local f = io.open(pathOf(b)); if f then f:close(); return pathOf(b) end end
+    local blank = {}
+    local stock_switch = Cat.__orbit_stock["cache:switchTo"]
+    -- Every paint: each listed cover that the tile would draw must be on disk.
+    local function check(context)
+        for _, b in ipairs((context.dashboard or {}).continueReading or {}) do
+            if not io.open(pathOf(b)) then table.insert(blank, b.id .. "@" .. tostring(b.updatedAt)) end
+        end
+    end
+    local inner = Cat.__orbit_stock["lf:switchTo"]
+    Cat.__orbit_stock["lf:switchTo"] = function(self, title, items, context, push) check(context); return inner(self, title, items, context, push) end
+    local restore = coverServer({ [1] = { code = 304, etag = '"c1"' }, [2] = { code = 304, etag = '"c2"' }, [3] = { code = 304, etag = '"c3"' } })
+    -- The server's body names version 200; the plugin's saved body still names 100.
+    cache.server[DASH] = { continueReading = { books[1], books[2], books[3] } }
+    local cat = setmetatable({ client = client, current_context = { kind = "dashboard", dashboard = cache.server[DASH] } }, Cat)
+    function cat:refreshCurrent()
+        local b = self.client:request("GET", DASH)
+        self:switchTo("Home", {}, { kind = "dashboard", dashboard = b, orbit_refresh = true }, false)
+    end
+    withHost(cat, function()
+        -- The worker fetches version 200 of each: 304s, copied beside version 100.
+        coverWorker(client, { { id = 1, path = pathOf(books[1]) }, { id = 2, path = pathOf(books[2]) }, { id = 3, path = pathOf(books[3]) } })
+        cat:switchTo("Home", {}, cat.current_context, false)
+        E.OC.fullRefresh(cat); run(600)
+        E.OC.refresh(cat); run(600)
+        -- A refresh that couldn't reach the server brings back the saved body (version 100).
+        local saved = { continueReading = { { id = 1, hasCover = true, updatedAt = "100" }, { id = 2, hasCover = true, updatedAt = "100" } } }
+        cat:switchTo("Home", {}, { kind = "dashboard", dashboard = saved, stale = true }, false)
+    end)
+    restore()
+    Cat.__orbit_stock["lf:switchTo"] = inner
+    ok(#blank == 0, "no tile painted without its cover: " .. table.concat(blank, ","))
+    cacheTeardown()
+end)
+
+test("wifi: just in time keeps Wi-Fi on while BookOrbit's Home is over the book, and while the cache works", function()
+    local WP = E.WifiPlan
+    local st = WP.new("jit", 2, 0)
+    st.mode, st.foreground, st.in_book, st.last_flow, st.release_at, st.last_activity = "jit", true, true, "wake", 10, 100
+    local a, why = WP.decide(st, { now = 20, wifi_on = true, browsing = false })
+    ok(a == "off" and why:find("done in a book"), "reading: off after the wake (" .. tostring(why) .. ")")
+    a, why = WP.decide(st, { now = 20, wifi_on = true, browsing = true })
+    ok(a == nil, "BookOrbit's Home over the book: kept (" .. tostring(why) .. ")")
+    a = WP.decide(st, { now = 100 + 121, wifi_on = true, browsing = true })
+    ok(a == "off", "idle there for the just-in-time time: off")
+    E.OC.queue, E.OC.running = { {} }, nil
+    local busy, bwhy = E.Wifi.busy()
+    ok(busy and bwhy:find("cache"), "a cache check queued keeps it: " .. tostring(bwhy))
+    E.OC.queue = {}
+end)
+
+test("suspend: a Home press (app switch) with the book unmoved skips BookOrbit's snapshot; a page turn, Sync and sleep always snapshot", function()
+    local snaps = 0
+    local p = { last_page = 10 }
+    function p:getDocumentDigest() return "d1" end
+    function p:getLastPercent() return 0.25 end
+    function p:_onSuspend() snaps = snaps + 1 end
+    p.onSuspend = p._onSuspend
+    local ui = { annotation = { annotations = {} }, doc_settings = { readSetting = function() return { status = "reading" } end } }
+    local hosts, inter = E.bookorbit, E.Jni.isInteractive
+    E.bookorbit = function() return p end
+    E.Jni.isInteractive = function() return true end
+    E.state.last_snapshot_key = nil
+    local self = setmetatable({ ui = ui }, { __index = E.OrbitAndroid })
+    self:hookSuspendSnapshot()
+    p:onSuspend(); p:onSuspend(); p:onSuspend()
+    ok(snaps == 1, "three Home presses, one snapshot: " .. snaps)
+    p.last_page = 11
+    p:onSuspend()
+    ok(snaps == 2, "a page turned: snapshot")
+    E.state.force_snapshot = true; p:_onSuspend(); E.state.force_snapshot = nil
+    ok(snaps == 3, "Sync and sleep: always")
+    E.bookorbit, E.Jni.isInteractive = hosts, inter
+end)
+
+test("remove: with a book open (no file browser) BookOrbit's remove asks through KOReader's delete; the open book stays", function()
+    local asked, deleted = {}, {}
+    local FM = { instance = nil }
+    function FM:showDeleteFileDialog(path, after) table.insert(asked, path); if self:deleteFile(path, true) and after then after() end end
+    function FM:deleteFile(path) table.insert(deleted, path); return true end
+    local RUI = { instance = { document = { file = "/books/open.epub" } } }
+    local saved_fm, saved_rui = package.loaded["apps/filemanager/filemanager"], package.loaded["apps/reader/readerui"]
+    package.loaded["apps/filemanager/filemanager"], package.loaded["apps/reader/readerui"] = FM, RUI
+    local errors = {}
+    package.loaded["bookorbit_toast"] = { error = function(t) table.insert(errors, t) end, show = function() end }
+    local Peek = {}
+    -- As bookorbit_book_peek.lua:156-167.
+    function Peek.remove(catalog, path)
+        local fm = require("apps/filemanager/filemanager").instance
+        if not fm or not fm.showDeleteFileDialog then
+            require("bookorbit_toast").error("Open the file browser to remove this book.")
+            return
+        end
+        fm:showDeleteFileDialog(path, function() catalog.refreshed = true end)
+    end
+    package.loaded["bookorbit_book_peek"] = Peek
+    E.LF.installRemove()
+    local cat = {}
+    Peek.remove(cat, "/books/other.epub")
+    ok(asked[1] == "/books/other.epub" and deleted[1] == "/books/other.epub" and cat.refreshed, "asked, deleted, refreshed")
+    ok(#errors == 0 and FM.instance == nil, "no 'open the file browser'; no file browser left behind")
+    Peek.remove(cat, "/books/open.epub")
+    ok(#deleted == 1 and errors[1]:find("This book is open"), "the open book stays: " .. tostring(errors[1]))
+    package.loaded["apps/filemanager/filemanager"], package.loaded["apps/reader/readerui"] = saved_fm, saved_rui
+    package.loaded["bookorbit_toast"], package.loaded["bookorbit_book_peek"] = nil, nil
 end)
 
 test("cache: a progress write leaves no false patch count; Continue reading moves at the next check", function()

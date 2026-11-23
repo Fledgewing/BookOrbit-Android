@@ -407,6 +407,74 @@ object HomeCommands {
         if (companionPageInFront || uncovered) FROM_OTHER_APP else null
 }
 
+/**
+ * Which COMMAND each plugin version knows (android/docs/INTERFACE.md). The companion never sends
+ * one the running plugin doesn't know (v0.11.1: with 0.10.1 running, Setup's Fix next sent
+ * `signin` three times and `recommended` once; the plugin logged "unknown command ignored"):
+ * KOReader then starts with no command. The running version is /status?patch_version=.
+ */
+object PluginCommands {
+    /** command -> the first plugin version that obeys it. Absent: every plugin (home, home_smart). */
+    val SINCE = mapOf(
+        HomeCommands.RESTART to "0.3.1",
+        HomeCommands.REOPEN_BOOK to "0.5.5",
+        HomeCommands.SIGNIN to "0.11.0",
+        HomeCommands.RECOMMENDED to "0.11.0",
+    )
+
+    /** [running]: the plugin version KOReader runs (null: never reported; a versioned command then waits). */
+    fun known(command: String?, running: String?): Boolean {
+        val since = SINCE[command ?: return true] ?: return true
+        val r = running?.let { Version.parse(it) } ?: return false
+        return r >= Version.parse(since)!!
+    }
+
+    /** The command to send: [command] when the running plugin knows it, else none (null). */
+    fun allowed(command: String?, running: String?): String? = if (known(command, running)) command else null
+
+    /** The log line when a command is dropped. */
+    fun droppedLine(command: String, running: String?) =
+        "command=$command not sent: the running plugin (${running?.let { "v$it" } ?: "version unknown"}) doesn't know it (needs v${SINCE[command]}+)"
+}
+
+/**
+ * A restart command must not be replaced by the next start's intent before KOReader reads it
+ * (M8C v0.11.0: `command=restart` at 21:11:24.559, a Home press 0.9 s later sent `command=home`,
+ * which replaced the intent; the restart was lost). For [WINDOW_MS] after a RESTART, while the
+ * running plugin still reports the version it had then and no RELAUNCH came back, any other start
+ * sends RESTART again. Pure; Koreader.start holds one.
+ */
+class RestartLatch {
+    companion object {
+        const val WINDOW_MS = 10_000L
+    }
+
+    private var sentAt = -1L
+    private var sentRunning: String? = null
+
+    /** A RESTART went out at [nowMs] (monotonic) while [running] ran. */
+    fun sent(nowMs: Long, running: String?) {
+        sentAt = nowMs
+        sentRunning = running
+    }
+
+    /** KOReader read the restart (RELAUNCH came) or a new version runs: nothing to protect. */
+    fun clear() {
+        sentAt = -1L
+        sentRunning = null
+    }
+
+    /** The command to send instead of [command]: RESTART while a restart may still be unread. */
+    fun resolve(command: String?, nowMs: Long, running: String?): String? {
+        if (command == HomeCommands.RESTART || sentAt < 0) return command
+        if (nowMs - sentAt !in 0..WINDOW_MS || running != sentRunning) {
+            clear()
+            return command
+        }
+        return HomeCommands.RESTART
+    }
+}
+
 /** Setup's Wi-Fi off/on test leaves Wi-Fi as it found it. */
 object WifiTestPlan {
     enum class Step { OFF, ON }
@@ -553,40 +621,49 @@ object UpdateFlow {
 
     fun doneLine(app: String) = "Updated to v$app (KOReader restarted)"
 
-    /** The patch is installed; the companion (any patch) or the patch (0.5.0+) restarts KOReader. */
-    fun installedLine(app: String) = "Updated to v$app; KOReader restarts to load it (after the book, if one is open)"
+    /**
+     * The patch is installed. [now]: the user started the update, KOReader restarts at once;
+     * otherwise at the next screen-off (or the plugin's own save-and-quit in the background).
+     */
+    fun installedLine(app: String, now: Boolean = false) =
+        if (now) "Updated to v$app; KOReader restarts now to load it (an open book reopens)"
+        else "Updated to v$app; KOReader restarts to load it when the screen next goes off"
 
     enum class Restart { NOW, WAIT, NONE }
+
+    /**
+     * When the companion may restart KOReader (v0.11.1, user decision): a MANUAL update (the user
+     * tapped Update or Install) restarts at once, book open or not: the plugin saves the book and
+     * reopens it, and returns to BookOrbit Home if that was on top. An automatic update never
+     * restarts KOReader from the companion while the screen is on, not even with no book open or
+     * on BookOrbit Home: only at [screenOff] (the plugin also saves and quits by itself when
+     * KOReader goes to the background).
+     */
+    fun mayRestart(manual: Boolean, screenOff: Boolean): Restart = if (manual || screenOff) Restart.NOW else Restart.WAIT
 
     /**
      * The companion's side of the restart after a patch install (v0.5.2): COMMAND=restart, which
      * every patch since 0.3.1 obeys. [awaiting]: the installed version not yet running (""/null:
      * none); [sentFor]: the version a restart was already sent for (once per version, no loop);
-     * [book]: KOReader has a book open (null: unknown, e.g. KOReader not running).
+     * [manual]: the user started this update; [screenOff]: the trigger is the screen going off.
      */
-    fun restart(awaiting: String?, running: String?, sentFor: String?, book: Boolean?, now: Boolean = false): Restart = when {
+    fun restart(awaiting: String?, running: String?, sentFor: String?, manual: Boolean, screenOff: Boolean = false): Restart = when {
         awaiting.isNullOrEmpty() || loaded(awaiting, running) -> Restart.NONE
         sentFor == awaiting -> Restart.NONE
-        book == true && !now -> Restart.WAIT
-        else -> Restart.NOW
+        else -> mayRestart(manual, screenOff)
     }
 
     /**
      * KOReader runs an older patch than the file on disk, however the file got there (v0.5.4:
      * M8C 11-22 ran 0.4.6 with 0.5.3 installed, by an earlier companion, so no restart was
      * pending). One per (running, file) pair per process: [StaleRestart] keeps the pairs.
-     * [book]: a book is open (null: unknown); [quiet]: the trigger can't interrupt reading
-     * (screen off, Home pressed), so an unknown book state may restart there.
+     * Same rule as [restart]: at once when [manual], else only at [screenOff].
      */
-    fun staleRestart(running: String?, file: String?, book: Boolean?, quiet: Boolean, sent: Set<String>): Restart {
+    fun staleRestart(running: String?, file: String?, manual: Boolean, screenOff: Boolean, sent: Set<String>): Restart {
         val r = running?.let { Version.parse(it) } ?: return Restart.NONE
         val f = file?.let { Version.parse(it) } ?: return Restart.NONE
         if (f <= r || pairKey(running, file) in sent) return Restart.NONE
-        return when {
-            book == true -> Restart.WAIT
-            book == false || quiet -> Restart.NOW
-            else -> Restart.WAIT
-        }
+        return mayRestart(manual, screenOff)
     }
 
     fun pairKey(running: String, file: String) = "$running>$file"
@@ -638,15 +715,15 @@ class StaleRestart {
     private val waited = mutableSetOf<String>()
 
     /** The decision; NOW is recorded so the same pair never restarts again (no loop). [log] gets a line once per pair and outcome. */
-    fun decide(running: String?, file: String?, book: Boolean?, quiet: Boolean, log: (String) -> Unit = {}): UpdateFlow.Restart {
-        val d = UpdateFlow.staleRestart(running, file, book, quiet, sent)
+    fun decide(running: String?, file: String?, manual: Boolean, screenOff: Boolean, log: (String) -> Unit = {}): UpdateFlow.Restart {
+        val d = UpdateFlow.staleRestart(running, file, manual, screenOff, sent)
         if (d == UpdateFlow.Restart.NONE || running == null || file == null) return d
         val key = UpdateFlow.pairKey(running, file)
         if (d == UpdateFlow.Restart.NOW) {
             sent += key
             log(UpdateFlow.staleLine(running, file))
         } else if (waited.add(key)) {
-            log(UpdateFlow.staleLine(running, file) + "; ${if (book == true) "a book is open" else "book state unknown"}, after it")
+            log(UpdateFlow.staleLine(running, file) + "; restarting at the next screen-off")
         }
         return d
     }

@@ -22,6 +22,8 @@ function OrbitAndroid:onCloseWidget()
     if self.ui and self.ui.document and state.restart_waiting then
         UIManager:scheduleIn(1.5, function() OrbitAndroid.maybeRestart(self, "check") end)
     end
+    -- The book closed: what waited for the reader shows now (another book may be opening).
+    if self.ui and self.ui.document then UIManager:scheduleIn(1.5, function() Gate.drain("book closed") end) end
     -- A close (Back to file browser, Exit) runs this; a kill or suspend doesn't. A close Home
     -- started keeps the book as the current one (home_book); the user's own close clears it.
     if self.ui and self.ui.document then
@@ -64,6 +66,7 @@ function OrbitAndroid:onReaderReady()
     end
     self.schedule = Schedule.new(S.reading_schedule, now_s())
     self:hookPluginPagePush()
+    pcall(self.hookSuspendSnapshot, self)
     Stats.send("open", contentOfUI(self.ui), true)
     self:bookOpenFlow()
 end

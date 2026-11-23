@@ -74,7 +74,12 @@ for _, name in ipairs({ "newClient", "getDocumentDigest", "getLastPercent", "enq
     "updateItems", "refreshCurrent", "dashboardRootFetch", "boardHeader", "boardRun", "boardRefreshTile",
     "boardRefreshClock", "listRun", "listHeader", "build", "statusCluster", "hit", "icon", "hstack",
     "header", "listMetadata", "isBlocked", "getLifecycleOutbox", "evictCachedCovers",
-    "scheduleThumbnailDownloads", "dashboardBooks", "thumbnailDisplay" }) do need(name, "function") end
+    "scheduleThumbnailDownloads", "dashboardBooks", "thumbnailDisplay",
+    -- v0.11.1: first paint from the cache, the on-device seed, the offline mirror's list paths,
+    -- cover logging, Remove without a file browser, the suspend snapshot skip.
+    "initialDashboardContext", "hydrateOnDeviceMaps", "paramsForEntry", "effectiveOrder",
+    "listDecorateBookQuery", "listSectionParams", "loadOnDevice", "fetchBookPage", "cancelThumbnailJobs",
+    "downloadThumbnailBatch", "boardDustRemove", "detailRemoveFromDevice", "_onSuspend" }) do need(name, "function") end
 -- Our ⟳ keeps covers by wrapping evictCachedCovers, which refreshCurrent must still go through;
 -- Wi-Fi holds count only drainable outbox entries.
 has(catalog, "self:evictCachedCovers(", "refreshCurrent evicts through evictCachedCovers")

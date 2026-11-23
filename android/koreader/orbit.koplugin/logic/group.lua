@@ -266,6 +266,9 @@ function Group.listOf(params)
     if params.smartScopeId then return { section = "smart-scopes", id = tonumber(params.smartScopeId) } end
     if params.collectionId then return { section = "collections", id = tonumber(params.collectionId) } end
     if params.libraryId then return { section = "libraries", id = tonumber(params.libraryId) } end
+    -- On device: the plugin's list of this reader's books by id (bookorbit_catalog.lua:1187-1206,
+    -- ids capped at 200 by the server, koreader-catalog-query.dto.ts:114). Its rows drill by id.
+    if params.on_device_filter and params.ids and params.ids ~= "" then return { section = "on-device" } end
     return nil
 end
 
@@ -301,7 +304,7 @@ function Group.drill(list, list_params, books, target, marks, flat)
     local p = {}
     for k, v in pairs(target or {}) do p[k] = v end
     for k, v in pairs(marks or {}) do p[k] = v end
-    if not flat and list.section ~= "smart-scopes" then
+    if not flat and list.section ~= "smart-scopes" and list.section ~= "on-device" then
         for _, k in ipairs({ "libraryId", "collectionId", "readStatus", "format", "ids" }) do
             if list_params[k] ~= nil then p[k] = list_params[k] end
         end

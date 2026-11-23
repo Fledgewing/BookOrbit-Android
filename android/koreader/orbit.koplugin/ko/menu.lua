@@ -50,11 +50,11 @@ end
 -- By hand: bring Wi-Fi up if needed (through the companion), check, then put Wi-Fi back.
 function OrbitAndroid:checkPatchUpdate()
     local msg = InfoMessage:new{ text = _("Checking for a patch update…") }
-    UIManager:show(msg)
+    UIManager:show(msg) -- gate: user action (menu Update)
     UIManager:forceRePaint()
     local function report(text)
         UIManager:close(msg)
-        UIManager:show(InfoMessage:new{ text = _("Patch update: ") .. text, timeout = 6 })
+        UIManager:show(InfoMessage:new{ text = _("Patch update: ") .. text, timeout = 6 }) -- gate: user action (menu Update)
     end
     local function run(held)
         UIManager:scheduleIn(0.2, function()
@@ -97,6 +97,21 @@ function OrbitAndroid:menuItems()
             end,
         })
     end
+    -- The offline mirror's automatic Full refresh (docs/design/write-through-cache.md).
+    local ttl_items = {}
+    for _i, d in ipairs({ 1, 3, 7, 14, 30 }) do
+        table.insert(ttl_items, {
+            text = string.format(d == 1 and _("Every day") or _("Every %d days"), d),
+            radio = true,
+            checked_func = function() return S.mirror_auto ~= false and (S.mirror_ttl_days or 7) == d end,
+            callback = function() S.mirror_auto = true; S.mirror_ttl_days = d; saveSettings() end,
+        })
+    end
+    table.insert(ttl_items, {
+        text = _("Only by hand (hold ⟳)"), radio = true,
+        checked_func = function() return S.mirror_auto == false end,
+        callback = function() S.mirror_auto = false; saveSettings() end,
+    })
     local cap_items = {}
     for _i, c in ipairs({ 10, 15, 20 }) do
         table.insert(cap_items, {
@@ -202,7 +217,15 @@ function OrbitAndroid:menuItems()
         toggle("local_first", _("Home shows this device's reading first (restart to apply)")),
         toggle("offline_cache", _("BookOrbit opens from Orbit's cache (restart to apply)")),
         { text = _("Full refresh of BookOrbit"), callback = later(function() OC.menuFullRefresh() end),
-          help_text = _("Gets this view and Home fresh from the server and re-checks the covers. Tap ⟳ for a normal refresh; hold ⟳ for this.") },
+          help_text = _("Gets this view and Home fresh from the server, re-checks the covers, then saves everything reachable from Home for reading offline. Tap ⟳ for a normal refresh; hold ⟳ for this.") },
+        { text_func = function() return Mirror.savedText() end, keep_menu_open = true, callback = function() end },
+        {
+            text_func = function()
+                if S.mirror_auto == false then return _("Automatic Full refresh: off") end
+                return string.format(_("Automatic Full refresh: every %d days"), S.mirror_ttl_days or 7)
+            end,
+            sub_item_table = ttl_items,
+        },
         toggle("key_log", _("Log every key (clicker diagnosis)")),
         {
             text_func = function() return _("Sync while reading: ") .. _(Schedule.option(S.reading_schedule).label) end,
@@ -231,7 +254,7 @@ end
 
 -- Settings PIN set and locked: the companion's keypad, then open the menu again.
 function OrbitAndroid:showPinKeypad(why)
-    local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_PIN, package = Companion.PACKAGE }
+    local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_PIN, package = Companion.PACKAGE } -- gate: user action (menu)
     log("menu: locked by the Settings PIN; keypad (" .. why .. ")", ok and "started" or "FAILED")
     return ok
 end

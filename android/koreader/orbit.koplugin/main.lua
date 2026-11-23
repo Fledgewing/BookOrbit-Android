@@ -41,7 +41,7 @@ local KO = {
     "ko/module.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/reading_sync.lua",
     "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/recommended.lua", "ko/menu.lua",
     "ko/wifi_backend.lua", "ko/grouping.lua", "ko/endsheet.lua", "ko/endofbook.lua",
-    "ko/localfirst.lua", "ko/cache.lua",
+    "ko/localfirst.lua", "ko/cache.lua", "ko/mirror.lua",
 }
 
 -- This plugin's folder: PluginLoader dofile()s <folder>/main.lua (frontend/pluginloader.lua:244).

@@ -52,6 +52,12 @@ end
 
 function Wifi.busy()
     if Wifi.inflight_http > 0 then return true, "download in progress" end
+    -- The cache's background checks and the offline mirror run in child processes, which this
+    -- process's request counter never sees.
+    if OC and OC.busy then
+        local okc, why = pcall(OC.busy)
+        if okc and why then return true, why end
+    end
     local p = bookorbit()
     if p and can(p, "outbox") then
         local okb, busy = pcall(function()
@@ -106,7 +112,9 @@ function Wifi.evaluate(why)
     Wifi.tx = tx
     local busy, busy_why = Wifi.busy()
     local screen_off = Jni.isInteractive() == false
-    local action, reason, force = WifiPlan.decide(st, { now = now_s(), wifi_on = wifi_on, busy = busy, screen_off = screen_off })
+    local okb, browsing = pcall(function() return catalogOnTop(bookorbit()) end)
+    local action, reason, force = WifiPlan.decide(st, { now = now_s(), wifi_on = wifi_on, busy = busy,
+        screen_off = screen_off, browsing = okb and browsing == true })
     if action == "off" then
         log("wifi: OFF decided:", reason, "| mode", st.mode, force and "| forced" or "| only if turned on automatically", "(" .. why .. ")")
         Wifi.off_decided_at = now_s()

@@ -41,12 +41,12 @@ end
 function OrbitAndroid:openSignIn(source)
     local p = bookorbit(self.ui)
     if not p then
-        UIManager:show(InfoMessage:new{ text = _("The BookOrbit plugin isn't loaded."), timeout = 3 })
+        UIManager:show(InfoMessage:new{ text = _("The BookOrbit plugin isn't loaded."), timeout = 3 }) -- gate: user action (Setup's sign-in)
         return
     end
     if p:isLoggedIn() then
         log("sign in (" .. tostring(source) .. "): already signed in")
-        UIManager:show(InfoMessage:new{ text = _("Signed in to BookOrbit."), timeout = 2 })
+        UIManager:show(InfoMessage:new{ text = _("Signed in to BookOrbit."), timeout = 2 }) -- gate: user action (Setup's sign-in)
         pcall(Rec.report, "signin", true, self.ui)
         return
     end
@@ -60,29 +60,36 @@ end
 -- frontend/device/android/device.lua:86), so: save like a kill would leave it (the open book
 -- stays open_book_at_exit, so the cold start reopens it), ask the companion to start KOReader
 -- again (RELAUNCH), and quit (Android Device:exit finishes the activity, device.lua:492-497).
-function OrbitAndroid:restartForCompanion(source)
+-- quit_only: another app is in front; KOReader saves and quits without coming back, and the
+-- next start (Home, the launcher) loads the new plugin and reopens the book.
+function OrbitAndroid:restartForCompanion(source, quit_only)
     -- Once: the quit ends this process (a second request in the meantime is the same restart).
     if state.restarting_at and now_s() - state.restarting_at < 5 then return end
     state.restarting_at = now_s()
-    log("restart: requested by the companion (" .. tostring(source) .. "); saving, then quitting so the new patch loads")
+    log("restart:", quit_only and "KOReader is in the background; saving and quitting, the new plugin loads at the next start ("
+        .. tostring(source) .. ")" or ("requested (" .. tostring(source) .. "); saving, then quitting so the new patch loads"))
     local ui = liveUI()
     if ui and ui.document and ui.saveSettings then pcall(ui.saveSettings, ui) end
     -- The quit closes the reader (which clears open_book_at_exit): remember the book apart, so
     -- the next start reopens it where it was (v0.5.5).
     S.restart_book = ui and ui.document and ui.document.file or nil
+    -- The screen the reader was on comes back too: BookOrbit Home over the book.
+    S.restart_screen = catalogOnTop(bookorbit(ui)) and "bookorbit" or nil
     saveSettings()
     pcall(function() G_reader_settings:flush() end)
     Stats.send("restart", nil, false)
-    if Companion.has("home") then
+    if quit_only then
+        -- nothing relaunches it
+    elseif Companion.has("home") then
         Companion.send(Companion.ACTION.RELAUNCH, { reason = "restart" })
     else
         -- Add-on: KOReader is in front, so it may start the companion's relaunch window, which
         -- then starts KOReader again once it has gone (docs/design/addon-mode.md §7.4).
-        local ok = Jni.startActivity{ action = Companion.ACTION.RELAUNCH_UI, package = Companion.PACKAGE }
+        local ok = Jni.startActivity{ action = Companion.ACTION.RELAUNCH_UI, package = Companion.PACKAGE } -- gate: restarts only per RestartPlan (manual, screen off, background) or the companion's own restart
         log("restart: companion relaunch window", ok and "started" or "FAILED (reopen KOReader by hand)")
     end
     UIManager:scheduleIn(0.5, function()
-        if Device.canRestart and Device:canRestart() then UIManager:restartKOReader() else UIManager:quit() end
+        if Device.canRestart and Device:canRestart() then UIManager:restartKOReader() else UIManager:quit() end -- gate: restarts only per RestartPlan (manual, screen off, background) or the companion's own restart
     end)
 end
 
@@ -103,22 +110,26 @@ function OrbitAndroid:maybeRestart(event)
     -- Without the Home role nothing can start KOReader from the background: no restart at
     -- screen-off, only while KOReader is in front (docs/design/addon-mode.md §7.4).
     if event == "sleep" and not Companion.has("home") then event = "check_asleep" end
-    local act = RestartPlan.decide(want, PATCH_VERSION, S.restart_tried, inBook() or event == "check_asleep", event)
+    local act = RestartPlan.decide(want, PATCH_VERSION, S.restart_tried, inBook(), event)
     if act == "wait" then
         if state.restart_waiting ~= want then
             state.restart_waiting = want
-            log("restart: v" .. tostring(want) .. " is installed; restarting after the book closes or the device sleeps")
+            log("restart: v" .. tostring(want) .. " is installed; restarting when KOReader goes to the background or the screen goes off")
         end
     elseif act == "done" then
         local text = RestartPlan.doneText(PATCH_VERSION)
         S.restart_tried = nil
         setUpdateStatus(text)
-        UIManager:show(InfoMessage:new{ text = _(text), timeout = 3 })
+        orbitNote(_(text), 3)
     elseif act == "gave_up" then
         if state.restart_gave_up ~= want then
             state.restart_gave_up = want
             setUpdateStatus("v" .. tostring(want) .. " is installed but didn't load after a restart: restart KOReader by hand (Orbit Companion > Setup)")
         end
+    elseif act == "quit" then
+        S.restart_tried = want
+        saveSettings()
+        self:restartForCompanion("v" .. tostring(want) .. " installed (" .. event .. ")", true)
     elseif act == "restart" and not Companion.has("relaunch") then
         -- Nobody can start KOReader again after a quit (no companion): ask once, never quit
         -- (docs/design/addon-mode.md §3, "Restart KOReader after an update").
@@ -127,7 +138,7 @@ function OrbitAndroid:maybeRestart(event)
             local text = string.format(_("Orbit v%s is installed: close KOReader and open it again to finish."), tostring(want))
             setUpdateStatus(text)
             log("restart: v" .. tostring(want) .. " installed; no companion to relaunch KOReader, asking the reader")
-            UIManager:show(InfoMessage:new{ text = text, timeout = 6 })
+            Gate.show("restart ask", function() UIManager:show(InfoMessage:new{ text = text, timeout = 6 }) end) -- gate: Gate.show
         end
         return "ask"
     elseif act == "restart" then
@@ -142,9 +153,91 @@ end
 -- topmost (the plugin's own test, main.lua:1384) and shows its dashboard context
 -- (BookOrbitCatalog:dashboardMode, bookorbit_catalog.lua:1875-1877). Its other views
 -- (book details, lists, sheets over it) don't count.
+-- The topmost screen: notes (KOReader's toasts, Orbit's own notes) float over it and never count.
 function topWidget()
+    local okw, stack = pcall(function() return UIManager._window_stack end)
+    if okw and type(stack) == "table" and #stack > 0 then
+        for i = #stack, 1, -1 do
+            local w = stack[i] and stack[i].widget
+            if w and not w.invisible and not w.toast and not w.orbit_note then return w end
+        end
+        return nil
+    end
     local okt, top = pcall(function() return UIManager:getTopmostVisibleWidget() end)
     return okt and top or nil
+end
+
+-- Nothing interrupts reading (docs/design/reading-gate.md): while a book is open in front,
+-- nothing from Orbify shows, restarts or takes focus. reading() is the one gate; every note and
+-- message goes through Gate.show, which holds it until the next moment nobody is reading
+-- (BookOrbit Home or a list over the book, the book closed, KOReader back after another app)
+-- and drops it when it has gone stale. Exceptions are only what the reader does in the book:
+-- menus they open, the end-of-book sheet.
+function reading()
+    local ui = liveUI()
+    if not (ui and ui.document) then return false end
+    if Wifi and Wifi.state and Wifi.state().foreground == false then return false end
+    if catalogOnTop(bookorbit(ui)) then return false end
+    if ui.menu and ui.menu.menu_container then return false end -- a menu the reader opened
+    if EOB and EOB.sheet then return false end                -- the reader reached the end
+    return true
+end
+
+Gate = { queue = {}, MAX_AGE_S = 600 }
+
+-- what: for the log; fn: shows it; max_age_s: dropped after this long held.
+function Gate.show(what, fn, max_age_s)
+    if not reading() then return fn() end
+    for _, q in ipairs(Gate.queue) do
+        if q.what == what then q.fn, q.at = fn, now_s(); return end -- the newest of the same kind
+    end
+    table.insert(Gate.queue, { what = what, fn = fn, at = now_s(), max_age = max_age_s or Gate.MAX_AGE_S })
+    log("gate: held while reading:", what)
+end
+
+function Gate.drain(why)
+    if #Gate.queue == 0 or reading() then return end
+    local list = Gate.queue
+    Gate.queue = {}
+    for _, q in ipairs(list) do
+        if now_s() - q.at <= q.max_age then
+            log("gate: shown now (" .. tostring(why) .. "):", q.what)
+            pcall(q.fn)
+        else
+            log("gate: dropped (stale):", q.what)
+        end
+    end
+end
+
+-- BookOrbit's own toasts (sync results and the like) wait too: bookorbit_toast.show/error.
+function Gate.installToast()
+    local okt, Toast = pcall(require, "bookorbit_toast")
+    if not okt or type(Toast) ~= "table" then return end
+    for _, name in ipairs({ "show", "error" }) do
+        if type(Toast[name]) == "function" then
+            wrap(Toast, name, function(stock) return function(...)
+                local args = { n = select("#", ...), ... }
+                return Gate.show("BookOrbit " .. name .. ": " .. tostring(args[1]), function() return stock(unpack(args, 1, args.n)) end, 120)
+            end end, "gate")
+        end
+    end
+end
+
+-- A short note that never sits in the way: KOReader's Notification is a toast (it lets every
+-- tap through and closes on the next event, notification.lua:63), so Home opening under it
+-- still sees Home on top. Without it: an InfoMessage marked as a note. Held while reading.
+function orbitNote(text, timeout)
+    return Gate.show("note: " .. tostring(text), function()
+        local okn, Notification = pcall(require, "ui/widget/notification")
+        if okn and type(Notification) == "table" and type(Notification.new) == "function" then
+            local okw, w = pcall(Notification.new, Notification, { text = text, timeout = timeout or 4 })
+            if okw and w then w.orbit_note = true; UIManager:show(w); return w end -- gate: inside Gate.show
+        end
+        local w = InfoMessage:new{ text = text, timeout = timeout or 4 }
+        w.orbit_note = true
+        UIManager:show(w) -- gate: inside Gate.show
+        return w
+    end)
 end
 
 -- What is really showing, by identity with the plugin's catalog widget (never its flag alone:
@@ -389,6 +482,7 @@ function checkDashboardOpened(p, why)
         local q = bookorbit(liveUI()) or p
         if catalogOnTop(q) then
             log("home: BookOrbit home is on top (" .. why .. ")")
+            Gate.drain("BookOrbit Home")
         else
             log("home: BookOrbit home did NOT open (" .. why .. "); top:", widgetName(topWidget(), q))
         end
@@ -424,8 +518,16 @@ function OrbitAndroid:reopenAfterRestart(source)
     local p = bookorbit(ui)
     if p and p.catalog_browser then closeWidget(p.catalog_browser) end
     log("restart: reopening the book at its place (" .. source .. "):", file)
+    local screen = S.restart_screen
+    if screen then S.restart_screen = nil; saveSettings() end
     UIManager:nextTick(function()
         require("apps/reader/readerui"):showReader(file)
+        if screen == "bookorbit" then
+            UIManager:scheduleIn(2, function()
+                log("restart: back to BookOrbit Home, where the reader was")
+                pcall(self.smartHome, self, "restart", nil, "bookorbit")
+            end)
+        end
     end)
 end
 
@@ -555,13 +657,13 @@ function OrbitAndroid:maybeSetupPrompt(why, where)
     if not show then return end
     S.setup_prompt_shown = prompt.key
     saveSettings()
-    UIManager:show(ConfirmBox:new{
+    UIManager:show(ConfirmBox:new{ -- gate: SetupPrompt.decide never shows it in a book
         text = _(SetupPrompt.text(prompt)),
         ok_text = _("Fix now"),
         cancel_text = _("Later"),
         ok_callback = function()
-            local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_SETUP, package = Companion.PACKAGE }
-            if not ok then ok = Jni.startActivity{ action = Companion.ACTION.SHOW_STATUS, package = Companion.PACKAGE } end
+            local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_SETUP, package = Companion.PACKAGE } -- gate: user action (setup box button)
+            if not ok then ok = Jni.startActivity{ action = Companion.ACTION.SHOW_STATUS, package = Companion.PACKAGE } end -- gate: user action (setup box button)
             log("setup box: Fix now", ok and "opened the companion" or "FAILED to open the companion")
         end,
         cancel_callback = function()

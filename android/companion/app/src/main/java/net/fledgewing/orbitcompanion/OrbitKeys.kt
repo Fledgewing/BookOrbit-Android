@@ -202,9 +202,20 @@ object KeySender {
     fun keyboardNotification(ctx: Context, show: Boolean, typing: Boolean = false) {
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (!show || !Prefs(ctx).keepOrbitKeyboard) {
+            Reading.drop(Reading.KEY_KEYBOARD)
             nm.cancel(NOTE_ID)
             return
         }
+        // [typing]: the user just focused a text field, so it shows now. Otherwise never while
+        // reading (Reading), and only while the Orbit keyboard is still the current one.
+        if (typing) return postKeyboard(ctx, nm, true)
+        val app = ctx.applicationContext
+        Reading.show(app, Reading.KEY_KEYBOARD, "keyboard notification") {
+            if (OrbitKeysIme.instance != null && Prefs(app).keepOrbitKeyboard) postKeyboard(app, nm, false)
+        }
+    }
+
+    private fun postKeyboard(ctx: Context, nm: NotificationManager, typing: Boolean) {
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Orbit keyboard", NotificationManager.IMPORTANCE_DEFAULT).apply {
             setShowBadge(false)
             enableVibration(false)

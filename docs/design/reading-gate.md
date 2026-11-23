@@ -1,0 +1,92 @@
+# Nothing interrupts reading
+
+**Principle (v0.11.1).** While a book is open in the foreground, nothing from Orbify, Orbit
+Companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader or
+takes focus. Whatever would have shown waits for the next moment nobody is reading, or is dropped
+once it has gone stale.
+
+Exceptions, only where the reader acts inside the book: menus they open (and what those menus
+show), the end-of-book sheet (they reached the end), and Sync and sleep (they asked; it runs as
+the screen goes off).
+
+## The gate
+
+**Plugin.** `reading()` (`ko/home.lua`) is true when a document is open, KOReader is in front
+(`Wifi.state().foreground`), BookOrbit Home or a list is not on top of it, no reader menu is open
+and the end-of-book sheet isn't showing. `Gate.show(what, fn, max_age_s)` runs `fn` at once when
+not reading, else queues it (one entry per kind, the newest wins). `Gate.drain` shows what is
+queued when BookOrbit Home comes on top, a book closes, and KOReader resumes; entries older than
+their `max_age_s` (default 10 min; the wake banner 1 min, BookOrbit toasts 2 min) are dropped and
+logged.
+
+**Companion.** A `Reading` gate mirrors the plugin from `STATS`: the plugin adds `reading=1|0`
+to every `STATS` (0 on `close` and `suspend`); older plugins are read from `open` and
+`resume`/`suspend`. Notifications and activity starts the companion makes by itself wait while
+reading and are posted at the next non-reading moment (KOReader suspended or in the background,
+the book closed, BookOrbit Home, a companion page in front). Never at screen-off: nobody would see
+them. Posted quietly: no heads-up, no sound.
+
+## Restarts after an update
+
+| Update | When KOReader restarts |
+|---|---|
+| The reader asked (Update in the menu, Install in the companion) | at once, book or not: saved through KOReader's own close, the book reopens at its place, BookOrbit Home comes back if it was on top, then a short "Updated to vX" |
+| Automatic (background check, the companion's daily job) | only when KOReader is out of the way: the screen goes off (restart), or another app is in front (KOReader saves and quits; the new plugin loads at its next start). Never on a closed book, BookOrbit Home or a list: the reader is still using KOReader |
+
+`RestartPlan.decide` (`logic/prompts.lua`) and `UpdateFlow.restart` (companion `Logic.kt`) hold
+these rules; `test_logic.lua` and `LogicTest` cover each trigger.
+
+## Audit: plugin
+
+Every `UIManager:show`, BookOrbit toast, `Jni.startActivity` and restart in `ko/*.lua` carries a
+`-- gate: <why>` comment; `test_logic.lua` "reading gate" fails on a new one without it.
+
+| Where | What | Gate |
+|---|---|---|
+| `ko/home.lua` `orbitNote` | short notes: "Applied N recommended settings", "Updated to vX" | `Gate.show`; a toast, so Home logic sees through it (`topWidget` skips it) |
+| `ko/home.lua` `maybeRestart` | "close KOReader and open it again" (no companion) | `Gate.show` |
+| `ko/home.lua` `restartForCompanion` | relaunch window, restart, quit | `RestartPlan` (manual, screen off, background) or the companion's own restart, which follows the same rule |
+| `ko/home.lua` setup box | ConfirmBox | `SetupPrompt.decide` never shows it in a book; its buttons are user actions |
+| `ko/home.lua` sign-in notes | "Signed in", "plugin isn't loaded" | user action (Setup's sign-in) |
+| `ko/start.lua` `showWakeBanner` | "Can't reach BookOrbit" | `Gate.show`, dropped after 1 min |
+| `ko/endofbook.lua` next-sync downloads | "Downloaded: title" | `Gate.show` |
+| `ko/endofbook.lua` sheet and its notes | end-of-book sheet | exception: the reader reached the end |
+| `ko/cache.lua` `OC.note`, Full refresh note | BookOrbit toasts | `Gate.installToast` wraps `bookorbit_toast.show`/`error` |
+| `ko/cache.lua` offline miss | "This page isn't saved" ConfirmBox | user action (paging a list) |
+| `ko/localfirst.lua` Remove | "This book is open" | user action |
+| `ko/recommended.lua`, `ko/menu.lua`, `ko/companion_ui.lua`, `ko/test_sync_path.lua` | menus and their results | user action (menus) |
+| `ko/sleep.lua` Sync and sleep | "Syncing…", "Synced" | user action; the screen goes off |
+| BookOrbit toasts (sync results, conflicts shown as toasts) | `bookorbit_toast` | `Gate.installToast` |
+| Wi-Fi "Connecting…" | KOReader's turn-on message | not shown: `wifi_backend.lua` brings the network up quietly |
+
+BookOrbit's own modal dialogs (sync conflict, "further ahead") are not intercepted yet: they come
+from its sync, which Orbify runs at wake and sleep, not mid-book.
+
+## Audit: companion
+
+One gate: `Reading.show(ctx, key, what) { post }` (`Reading.kt`, pure part `ReadingLogic.kt`). A
+"reading" report lapses after 6 min without a new `STATS`. Held items post 1.5 s after a
+non-reading moment with the screen on, and are dropped when their reason is gone. The guard test
+`ReadingGuardTest` fails on a new `notify(` or `startActivity(` outside its allow-list (file, line
+text, count, why).
+
+| Where | What | Gate |
+|---|---|---|
+| `Attention.kt` setup reminder | notification | `Reading.show`; re-evaluated on release, so a step fixed meanwhile posts nothing |
+| `Updater.kt` update ready (background check) | notification | `Reading.show`; dropped on install or when no longer newer. The Status page shows "Update ready · Install" any time |
+| `Updater.kt` install prompt | activity | only for a check the reader started |
+| `OrbitService.kt` Tailscale alert | notification | `Reading.show`; dropped when the VPN comes up |
+| `OrbitService.kt` status | ongoing notification | low importance, never pops up |
+| `OrbitKeys.kt` keyboard | notification | `Reading.show`; at once only when the reader focused a text field |
+| `Installers.kt` KOReader install prompt | activity | `Reading.show`; dropped on success |
+| `Core.kt` KOReader starts | activity | Home press, Setup taps, `RELAUNCH`; restarts follow the rule above |
+| `Attention.kt`, `Pin.kt`, `Ui.kt`, `Launcher.kt`, `Clicker*.kt`, `Mode.kt`, `Pages.kt`, `ClickerService.kt` | pages, PIN | user actions |
+
+Notification channels are quiet: no sound, no vibration, no heads-up (`updates_quiet`,
+`alerts_quiet`; the old channels are deleted, since a channel's sound can't change).
+
+## Xteink
+
+The firmware should match: while a book is open, no OTA prompt, sync result banner or Tailscale
+notice draws over the page; they show on the library or home screen, or after the next wake on a
+non-reading screen. Automatic OTA installs only from the library screen or at sleep.

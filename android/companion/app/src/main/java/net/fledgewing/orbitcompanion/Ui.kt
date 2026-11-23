@@ -46,6 +46,8 @@ abstract class EinkActivity : Activity() {
         super.onResume()
         resumed++
         Pin.onPage(pinPage, javaClass.simpleName)
+        // A companion page is in front: nobody is reading; what waited may show (Reading).
+        Reading.onCompanionPage(this)
         if (pinGuarded && Pin.locked(this)) {
             if (pinAsked) return finish() // the keypad was cancelled
             pinAsked = true

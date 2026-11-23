@@ -90,7 +90,7 @@ local NEEDS = {
 for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "container/bottomcontainer",
     "container/framecontainer", "horizontalgroup", "horizontalspan", "linewidget", "textboxwidget",
     "verticalgroup", "verticalspan", "buttontable", "textwidget", "imagewidget", "container/centercontainer",
-    "container/leftcontainer", "menu", "buttondialog" }) do
+    "container/leftcontainer", "menu", "buttondialog", "notification" }) do
     table.insert(NEEDS, { "frontend/ui/widget/" .. w .. ".lua", {} })
 end
 -- koreader-base (the base/ submodule): ffi modules the plugin requires.

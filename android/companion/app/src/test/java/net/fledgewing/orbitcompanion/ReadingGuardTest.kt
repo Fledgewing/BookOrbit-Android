@@ -1,0 +1,73 @@
+package net.fledgewing.orbitcompanion
+
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Test
+import java.io.File
+
+/**
+ * "Nothing interrupts reading" guard (CLAUDE.md product principles): every `notify(` and
+ * `startActivity(` call site in the app is listed here, gated by Reading or exempt with a reason.
+ * A new call site fails this test until it goes through Reading.show (or is user-initiated) and
+ * is added below. A listed site that disappears fails it too, so the list stays true.
+ */
+class ReadingGuardTest {
+    /** [needle]: text on the call's line; [count]: how many lines of [file] carry it. */
+    private data class Site(val file: String, val needle: String, val count: Int, val why: String)
+
+    private val allowed = listOf(
+        // Gated by Reading.show (held while reading, posted at the next moment nobody reads).
+        Site("Attention.kt", "nm.notify(ID,", 1, "setup reminder: posted only from Reading.show(KEY_SETUP); re-evaluated when held"),
+        Site("Updater.kt", "nm.notify(ID_UPDATE", 1, "update ready: posted only from Reading.show(KEY_UPDATE); dropped once installed"),
+        Site("OrbitService.kt", "notify(ID_TAILSCALE_ALERT", 1, "Tailscale alert: posted only from Reading.show(KEY_TAILSCALE); dropped when the VPN comes up"),
+        Site("OrbitKeys.kt", "nm.notify(NOTE_ID", 1, "keyboard note: Reading.show(KEY_KEYBOARD), or at once when the user focused a text field"),
+        Site("Installers.kt", "app.startActivity(confirm", 1, "KOReader install prompt: inside Reading.show(installKey)"),
+        // Exempt: never pops up, or started by the user.
+        Site("OrbitService.kt", "notify(ID_STATUS", 1, "the ongoing foreground-service status: IMPORTANCE_LOW, setOnlyAlertOnce, never pops up"),
+        Site("Updater.kt", "ctx.startActivity(confirm)", 1, "install prompt only when interactive: the user tapped Check for updates"),
+        Site("Core.kt", "ctx.startActivity(i)", 2, "HomeTarget/Koreader starts: Home press, Setup taps, RELAUNCH; restarts follow UpdateFlow.restart (manual or screen-off only)"),
+        Site("Attention.kt", "a.startActivity(Intent(a, AttentionActivity", 2, "prompt after a change the user made in a companion page, or on the user's Home press"),
+        Site("ClickerService.kt", "PinActivity.Mode.GUARD", 1, "the PIN keypad over a guarded app the user just opened"),
+        Site("Pin.kt", "PinActivity.Mode.UNLOCK", 1, "Pin.run: the user tapped a PIN-guarded action"),
+        Site("Pin.kt", "CATEGORY_HOME", 1, "the user cancelled the guard keypad: back Home"),
+        Site("OrbitKeys.kt", "ACTION_INPUT_METHOD_SETTINGS", 1, "the user tapped the keyboard notification's Switch keyboard"),
+        Site("Mode.kt", "SetupActivity::class.java", 1, "the user switched mode on the Mode page"),
+        Site("Ui.kt", "PinActivity.Mode.UNLOCK", 1, "a PIN-guarded page the user opened"),
+        Site("Ui.kt", "override fun startActivity(", 1, "EinkActivity's own override (no animation)"),
+        Site("Ui.kt", "super.startActivity(intent, options)", 1, "EinkActivity's own override (no animation)"),
+        Site("Ui.kt", "        startActivity(intent)", 1, "tryStart: Setup Fix and Settings taps"),
+        Site("Launcher.kt", "startActivity(i)", 1, "the launcher page, shown by the Home activity (Home press or KOReader gone)"),
+        Site("Launcher.kt", "startActivity(Intent(this,", 3, "launcher page buttons"),
+        Site("Clicker.kt", "startActivity(", 4, "clicker pages: the user's taps and key captures"),
+        Site("Pages.kt", "startActivity(Intent(this,", 14, "companion pages: the user's taps, or opened from a page the user opened"),
+        Site("Pages.kt", "PinActivity.Mode.SET", 2, "Settings: the user sets a PIN"),
+        Site("Pages.kt", "PinActivity.thenInstall(this", 1, "Status: the user tapped Install on a ready update"),
+    )
+
+    private val call = Regex("""(^|[^A-Za-z0-9_])(notify|startActivity)\(""")
+
+    private fun sources(): File {
+        val rel = "src/main/java/net/fledgewing/orbitcompanion"
+        return listOf(File(rel), File("app/$rel")).firstOrNull { it.isDirectory } ?: error("sources not found from ${File(".").absolutePath}")
+    }
+
+    @Test
+    fun everyNotifyAndStartActivityIsGatedOrExempt() {
+        val counts = HashMap<Site, Int>()
+        val unknown = mutableListOf<String>()
+        sources().listFiles { f -> f.name.endsWith(".kt") }!!.sortedBy { it.name }.forEach { f ->
+            f.readLines().forEachIndexed { i, line ->
+                val t = line.trim()
+                if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || !call.containsMatchIn(line)) return@forEachIndexed
+                val site = allowed.firstOrNull { it.file == f.name && line.contains(it.needle) }
+                if (site == null) unknown += "${f.name}:${i + 1}: $t" else counts[site] = (counts[site] ?: 0) + 1
+            }
+        }
+        if (unknown.isNotEmpty()) {
+            fail("New notify/startActivity call sites: route them through Reading.show (nothing interrupts reading) or list them here with why they are exempt:\n" + unknown.joinToString("\n"))
+        }
+        val wrong = allowed.filter { (counts[it] ?: 0) != it.count }
+            .map { "${it.file} \"${it.needle}\": expected ${it.count}, found ${counts[it] ?: 0} (${it.why})" }
+        assertTrue("Allow-list out of date:\n" + wrong.joinToString("\n"), wrong.isEmpty())
+    }
+}

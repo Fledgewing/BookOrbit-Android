@@ -337,31 +337,35 @@ One update covers the companion, the patch and KOReader's restart, with one stat
   does) when the installed patch is older; never over a newer patch-only update, and a
   first install stays Setup's step. No prompt.
 - **Restart:** the patch (0.5.0+) compares the `PATCH_VERSION` its own file on disk declares
-  with the one running (`RestartPlan`). Newer on disk: with no book open it restarts at once
-  (at start, resume, or right after our own update); with a book open it waits and restarts
-  right after the book is closed (unless another book opened) or when the device next sleeps
-  (screen off, after the sleep sync). It never interrupts reading. The restart is the
+  with the one running (`RestartPlan`). Newer on disk (v0.11.1): an update the reader started
+  (the menu's Update, the companion's Install) restarts at once, book or not; the book reopens
+  at its place and BookOrbit Home comes back if it was on top. An automatic update restarts
+  only when the screen goes off (after the sleep sync), or saves and quits when another app is
+  in front (the new plugin loads at the next start); never on a closed book, Home or a list
+  ([reading gate](../../docs/design/reading-gate.md)). The restart is the
   existing one (save, `RELAUNCH`, quit; the companion starts KOReader again, the book at exit
   reopens). One try per version (`restart_tried`): a file that still doesn't load is left to
   Setup with the reason, never a restart loop.
-- **Status:** KOReader shows "Updated to vX (KOReader restarted)" after the restart; the
+- **Status:** KOReader shows a short "Updated to vX" after the restart (held while reading); the
   companion's update line says the same once the running patch reports the new version
   (`UpdateFlow`, `Prefs.patchAwaitVersion`).
 - **Patch-only update** (patch newer, companion the same): the patch's own updater writes the
   file, then the same restart path runs.
 - **The companion restarts too (v0.5.2):** after any patch install it sends `COMMAND=restart`,
   which every patch since 0.3.1 obeys (a 0.4.8 patch did, Boox Page 11-22 01:04), so no
-  version needs a manual restart: at once when KOReader has no book open or isn't running,
-  else when the book closes (`STATS` reason `close`), on the next Home press or at screen-off,
-  whenever KOReader reports no book. Book state: `/status?book=1|0` (patch 0.5.2+) and `STATS`
+  version needs a manual restart: at once when the reader started the update, else at
+  screen-off (v0.11.1; earlier: when the book closed or on the next Home press). Book state: `/status?book=1|0` (patch 0.5.2+) and `STATS`
   `open` (any patch; `suspend` always says 0 and is ignored). Once per version
   (`Prefs.patchRestartSentFor`), so a file that doesn't load never loops (`UpdateFlow.restart`).
 - **Any older running patch (v0.5.4):** on every `/status` and at companion start the companion
   compares the running `patch_version` with the file's `PATCH_VERSION`, however the file got
   there (M8C 11-22 ran 0.4.6 with 0.5.3 on disk, put there by an earlier companion, so no
-  restart was pending). Older and no book open (`/status?book=0` or `STATS open=0`): restart,
-  logged `restart: KOReader runs X, file has Y`. Book open or unknown: after the book, at
-  screen-off or the next Home (unknown counts as closed only there). Once per (running, file)
+  restart was pending). Older: restart, logged `restart: KOReader runs X, file has Y`, at once
+  when the reader started the update, else at screen-off (v0.11.1; the book reopens).
+- **Commands by plugin version (v0.11.1):** the companion sends a `COMMAND` only when the running
+  plugin knows it (`PluginCommands`: `signin`/`recommended` need 0.11.0); otherwise it starts
+  KOReader without one and logs why. A `restart` sent in the last 10 s wins over a following
+  start (`RestartLatch`), so a Home press can't swallow it. Once per (running, file)
   pair per process (`StaleRestart`), so a version that stays old never loops.
 - **No PIN, no false prompt, one notification (v0.5.2):** installing this release's patch,
   restarting KOReader and finishing an update (the update-ready notification) are never behind
