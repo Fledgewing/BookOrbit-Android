@@ -325,7 +325,7 @@ function LF.install(why)
     local stock_cluster = BoardUI.statusCluster
     debug.setupvalue(Catalog.boardHeader, board_status, function(d)
         if type(d) == "table" and d.orbit_board then
-            return withRefresh(stock_cluster, d, function(icon) return BoardUI.hit(icon, { kind = "orbit-refresh" }) end)
+            return withRefresh(stock_cluster, d, function(icon) return BoardUI.hit(LF.holdable(icon), { kind = "orbit-refresh" }) end)
         end
         return stock_cluster(d)
     end)
@@ -371,17 +371,28 @@ function LF.install(why)
     wrap(Catalog, "boardRun", function(stock) return function(self, action, tile)
         if type(action) == "table" and action.kind == "orbit-refresh" then
             log("local-first: ⟳ on Home")
-            return self:refreshCurrent()
+            return LF.refreshTap(self)
         end
         return stock(self, action, tile)
     end end, "lf")
     wrap(Catalog, "listRun", function(stock) return function(self, action, region, hold)
         if type(action) == "table" and action.kind == "orbit-refresh" then
-            log("local-first: ⟳ on a list")
-            return self:refreshCurrent()
+            log("local-first: ⟳ on a list" .. (hold and " (held)" or ""))
+            if hold then return LF.refreshHold(self) end
+            return LF.refreshTap(self)
         end
         return stock(self, action, region, hold)
     end end, "lf")
+
+    -- Covers are keyed by book id + cover version (plugin thumbnailPath), so a changed cover
+    -- arrives under a new name: our refresh never deletes them (plugin refreshCurrent,
+    -- bookorbit_catalog.lua:475-490, evicts every cover on screen). Failed ones retry.
+    if Compat.callable(Catalog.evictCachedCovers) then
+        wrap(Catalog, "evictCachedCovers", function(stock) return function(self, books)
+            if not self._orbit_keep_covers then return stock(self, books) end
+            if type(self.thumbnail_failures) == "table" then self.thumbnail_failures = {} end
+        end end, "lf")
+    end
 
     -- A server refresh: tag it and stamp it; a failure marks "Not updated".
     wrap(Catalog, "dashboardRootFetch", function(stock) return function(self, opts)
@@ -402,15 +413,30 @@ function LF.install(why)
         if type(context) == "table" and context.kind == "books" then
             LocalState.load().fetchedAt[LF.viewKey(context) or "books"] = os.time()
         end
-        if push or type(context) ~= "table" or context.kind ~= "dashboard" or not context.orbit_refresh then
+        local function full(why)
+            if type(context) == "table" then
+                log("paint:", tostring(context.kind), "full (" .. why .. ") from", tostring(self._orbit_paint_source or "the plugin")
+                    .. (context.stale and ", saved body" or ""))
+            end
             return stock(self, title, item_table, context, push)
+        end
+        if push or type(context) ~= "table" or context.kind ~= "dashboard" or not context.orbit_refresh then
+            return full(push and "opened" or "new view")
         end
         local old = self.current_context
         if not (old and old.kind == "dashboard" and self._board_ctx and self._board_tiles) or self.board_edit then
-            return stock(self, title, item_table, context, push)
+            return full("first paint")
         end
         local okq, done = pcall(LF.quietSwitch, self, old, item_table, context)
-        if okq and done then return end
+        log("paint: Home", (okq and done) and "quiet (changed tiles only)" or "full", "from", tostring(self._orbit_paint_source or "the plugin"))
+        if okq and done then
+            -- The stock switchTo would cancel the cover jobs and queue this body's covers; the
+            -- quiet path keeps the jobs running and queues the covers it doesn't have yet.
+            if Compat.callable(self.scheduleThumbnailDownloads) and Compat.callable(self.dashboardBooks) then
+                pcall(self.scheduleThumbnailDownloads, self, self.dashboardBooks(context.dashboard))
+            end
+            return
+        end
         if not okq then log("local-first: quiet update failed, full repaint:", done) end
         return stock(self, title, item_table, context, push)
     end end, "lf")
@@ -429,11 +455,54 @@ function LF.install(why)
     wrap(Catalog, "updateItems", function(stock) return function(self, ...)
         if self._orbit_skip_repaint and self.current_context and self.current_context.kind == "dashboard" then
             self._orbit_skip_repaint = nil
+            -- Skipped as a full repaint, but whatever did change (a cover that just landed)
+            -- still repaints its own tile.
+            pcall(LF.quiet, self)
             return
         end
         return stock(self, ...)
     end end, "lf")
     return true
+end
+
+-- The board's ⟳ with its own hold: a hold on it is a Full refresh, not the tile's board editing
+-- (the tile's HoldSelect, bookorbit_catalog_board.lua:75, sees it only if this one doesn't).
+function LF.holdable(icon)
+    local okw, wdg = pcall(function()
+        local InputContainer = require("ui/widget/container/inputcontainer")
+        local GestureRange = require("ui/gesturerange")
+        local area = InputContainer:new{ icon }
+        area.ges_events = { OrbitHold = { GestureRange:new{ ges = "hold", range = function() return area.dimen end } } }
+        area.onOrbitHold = function()
+            local p = bookorbit(liveUI())
+            local cat = p and p.catalog_browser
+            if cat then log("local-first: ⟳ on Home (held)"); LF.refreshHold(cat) end
+            return true
+        end
+        return area
+    end)
+    return okw and wdg or icon
+end
+
+-- Tap ⟳ = Refresh, hold ⟳ = Full refresh (docs/design/write-through-cache.md); without the
+-- cache, both are the plugin's refresh with the covers kept.
+function LF.refreshTap(cat)
+    if OC and OC.installed then return OC.refresh(cat) end
+    return LF.refreshKeepingCovers(cat)
+end
+
+function LF.refreshHold(cat)
+    if OC and OC.installed then return OC.fullRefresh(cat) end
+    return LF.refreshKeepingCovers(cat)
+end
+
+-- ⟳: the plugin's refresh of the current view, keeping the covers on disk.
+function LF.refreshKeepingCovers(cat)
+    cat._orbit_keep_covers = true
+    local okr, r = pcall(cat.refreshCurrent, cat)
+    cat._orbit_keep_covers = nil
+    if not okr then error(r, 0) end
+    return r
 end
 
 -- The view key for list stamps: the list's kind and its main filter.

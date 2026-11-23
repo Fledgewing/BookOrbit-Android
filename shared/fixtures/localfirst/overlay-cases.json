@@ -354,6 +354,93 @@
       "notSynced": {
         "1": true
       }
+    },
+    {
+      "name": "a finish marked here leaves Continue reading and In progress at once, and counts (D4)",
+      "_note": "The plugin may hold book ids as strings: localKeys \"string\" keeps them so.",
+      "body": {
+        "continueReading": [
+          {
+            "id": 1207,
+            "title": "Feeling Good",
+            "progressPercentage": 99,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-23T02:54:00.000Z"
+          },
+          {
+            "id": 8,
+            "title": "Dare",
+            "progressPercentage": 10,
+            "readStatus": "reading",
+            "lastReadAt": "2026-11-20T10:00:00.000Z"
+          }
+        ],
+        "boardShelves": {
+          "in-progress": [
+            {
+              "id": 1207,
+              "title": "Feeling Good",
+              "readStatus": "reading"
+            },
+            {
+              "id": 8,
+              "title": "Dare",
+              "readStatus": "reading"
+            }
+          ],
+          "pick-back-up": [
+            {
+              "id": 1207,
+              "title": "Feeling Good",
+              "readStatus": "reading"
+            }
+          ]
+        },
+        "finishedThisYear": [
+          {
+            "id": 5,
+            "title": "Older",
+            "readStatus": "read"
+          }
+        ],
+        "readingGoal": {
+          "goalBooks": 20,
+          "completedBooks": 4,
+          "year": 2026
+        }
+      },
+      "localKeys": "string",
+      "local": {
+        "1207": {
+          "percent": 100,
+          "status": "complete",
+          "changedAt": 1795316078,
+          "pending": true
+        }
+      },
+      "expect": {
+        "continueReading": [
+          {
+            "id": 8
+          }
+        ],
+        "shelf:in-progress": [
+          {
+            "id": 8
+          }
+        ],
+        "shelf:pick-back-up": [],
+        "finishedThisYear": [
+          {
+            "id": 1207,
+            "readStatus": "read"
+          },
+          {
+            "id": 5
+          }
+        ],
+        "goalDone": 5
+      }
     }
   ]
 }

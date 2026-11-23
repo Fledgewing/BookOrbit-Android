@@ -35,6 +35,9 @@ end
 -- KOReader's summary.status -> the server's readStatus.
 LocalFirst.STATUS = { complete = "read", reading = "reading", abandoned = "abandoned" }
 
+-- Book ids reach us as numbers (the server body) or strings (the plugin's state): one key each.
+local function idKey(id) return id ~= nil and tostring(id) or nil end
+
 -- "Device wins while newer" (design "Shared concepts"): the device's value is shown when its
 -- change is newer than the server's lastReadAt, or still waits to upload.
 function LocalFirst.deviceWins(server_book, loc)
@@ -76,7 +79,7 @@ local function records(body)
     local out = {}
     local function add(list)
         for _, b in ipairs(type(list) == "table" and list or {}) do
-            if type(b) == "table" and b.id ~= nil and not out[b.id] then out[b.id] = b end
+            if type(b) == "table" and b.id ~= nil and not out[idKey(b.id)] then out[idKey(b.id)] = b end
         end
     end
     add(body.continueReading); add(body.finishedThisYear); add(body.discover)
@@ -88,19 +91,30 @@ end
 -- The overlaid copy of a dashboard body. state.byBookId: { [bookId] = { percent (0-100),
 -- status ("reading"|"complete"|"abandoned"), changedAt (epoch s), pending, blocked, retrying } }.
 -- extra: more saved records (list pages) by id. Never modifies body.
+-- Shelves that list books being read: a book finished (or put down) here leaves them at once.
+LocalFirst.READING_SHELVES = { ["in-progress"] = true, ["pick-back-up"] = true }
+
+local function byKey(by_id)
+    local out = setmetatable({}, { __index = function(t, k)
+        if type(k) ~= "string" and k ~= nil then return rawget(t, tostring(k)) end
+    end })
+    for k, v in pairs(by_id or {}) do out[tostring(k)] = v end
+    return out
+end
+
 function LocalFirst.overlay(body, state, extra)
     if type(body) ~= "table" then return body end
-    local by_id = state and state.byBookId or {}
+    local by_id = byKey(state and state.byBookId)
     local out = copy(body)
     local known = records(body)
-    for id, b in pairs(extra or {}) do if not known[id] then known[id] = b end end
+    for id, b in pairs(extra or {}) do if not known[idKey(id)] then known[idKey(id)] = b end end
 
     -- Continue reading: overlay; a book finished here leaves; one read here more recently than
     -- the head moves to the front; a book started here joins only with a saved record.
     local cr, seen = {}, {}
     for _, b in ipairs(type(body.continueReading) == "table" and body.continueReading or {}) do
         local o = LocalFirst.overlayBook(b, by_id[b.id])
-        seen[b.id] = true
+        seen[idKey(b.id)] = true
         if o.readStatus ~= "read" and o.readStatus ~= "abandoned" then table.insert(cr, o) end
     end
     for id, loc in pairs(by_id) do
@@ -130,7 +144,7 @@ function LocalFirst.overlay(body, state, extra)
     -- server knows (the Xteink Home's localFinishedAtFetch rule).
     local finished = overlayList(body.finishedThisYear, by_id)
     local in_finished = {}
-    for _, b in ipairs(finished or {}) do if type(b) == "table" then in_finished[b.id] = true end end
+    for _, b in ipairs(finished or {}) do if type(b) == "table" then in_finished[idKey(b.id)] = true end end
     local added, front = 0, {}
     local ids = {}
     for id in pairs(by_id) do table.insert(ids, id) end
@@ -157,7 +171,19 @@ function LocalFirst.overlay(body, state, extra)
     out.discover = overlayList(body.discover, by_id)
     if type(body.boardShelves) == "table" then
         out.boardShelves = {}
-        for k, list in pairs(body.boardShelves) do out.boardShelves[k] = overlayList(list, by_id) end
+        for k, list in pairs(body.boardShelves) do
+            local o = overlayList(list, by_id)
+            if LocalFirst.READING_SHELVES[k] and type(o) == "table" then
+                local kept = {}
+                for _, b in ipairs(o) do
+                    if not (type(b) == "table" and b.orbit_local and (b.readStatus == "read" or b.readStatus == "abandoned")) then
+                        table.insert(kept, b)
+                    end
+                end
+                o = kept
+            end
+            out.boardShelves[k] = o
+        end
     end
     if type(body.yearAgo) == "table" and type(body.yearAgo.book) == "table" then
         out.yearAgo = copy(body.yearAgo)

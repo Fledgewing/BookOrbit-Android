@@ -58,7 +58,7 @@ function Wifi.busy()
             local c = p:getSyncCoordinator()
             if c:isBusy() or c:queuedCount() > 0 then return true end
             local d = p:getLifecycleOutbox():diagnostics()
-            return ((d.count or 0) - (d.blocked or 0)) > 0
+            return outboxPending(d) > 0
         end)
         if okb and busy then return true, "BookOrbit plugin syncing" end
     end

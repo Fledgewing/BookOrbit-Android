@@ -33,6 +33,7 @@ Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "
 | Mark finished at the end of the book: final position, then read status and rating sent after the outbox, kept through the next state pull; a stale position push is held ([design](design/end-of-book/DESIGN.md); upstream: [progress finishes a book only at the library's threshold](server-contract.md#progress-finishes-a-book-only-at-the-librarys-threshold)) | yes (0.9.0) | planned (ROADMAP 1) | planned | planned |
 | End-of-book sheet: Undo, stars, next in series (open, or download and open), one suggestion, the author's books | yes (0.9.0) | planned (ROADMAP 2) | planned | if flash allows |
 | Local-first BookOrbit home: this device's reading shown at once, a refresh repaints only what changed, ⟳ and "updated" stamp on home and lists ([design](design/local-first/DESIGN.md)) | yes (0.9.0) | n/a (ROADMAP 4 is the Xteink catalog) | n/a | n/a |
+| Write-through cache in front of BookOrbit: catalog screens open from Orbit's cache at once and are checked in the background; writes patch what they change; tap ⟳ = Refresh (check now, nothing evicted), hold ⟳ or the menu = Full refresh (fresh from the server, broken covers replaced); covers fetched only when missing or changed, with ETag 304s ([design](design/write-through-cache.md); upstream: the plugin's refresh deletes every cover on screen) | yes (0.10.0) | planned (ROADMAP 4) | planned | planned |
 
 ## Device
 

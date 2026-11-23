@@ -184,6 +184,16 @@ end
 -- Leaving the book (close, suspend, Home, another book): its job is ready to send.
 function EOB.onLeave(ui)
     local b = EOB.bookOf(ui)
+    -- Home is painted over the open book, which has sent nothing yet: its position and status
+    -- go into the local overlay first, so the first paint already shows them (item 4).
+    if b and LocalState then
+        local okp, pct = pcall(b.plugin.getLastPercent, b.plugin)
+        local fields = { pending = true, bookId = b.book_id }
+        if okp and type(pct) == "number" then fields.percent = math.floor(pct * 1000 + 0.5) / 10 end
+        if type(b.summary.status) == "string" then fields.status = b.summary.status end
+        pcall(LocalState.put, b.digest, fields)
+        log("home: noted the open book for Home:", tostring(fields.percent) .. "%", tostring(fields.status))
+    end
     local job = b and EOB.queue()[b.digest]
     if job and not job.ready then
         job.ready = true
@@ -288,8 +298,51 @@ end
 function EOB.actions.back() EOB.closeSheet() end
 
 function EOB.actions.home(ui)
-    EOB.closeSheet()
+    EOB.leaveForHome(ui)
     if state.module then state.module:onOrbitGoHome() end
+end
+
+-- Any Home while the book stays open underneath (BookOrbit home opens over the reader): the
+-- sheet closes first, and Home counts as leaving the book, so the finish is sent now rather
+-- than whenever the book is finally closed.
+function EOB.leaveForHome(ui)
+    local had_sheet = EOB.sheet ~= nil
+    EOB.closeSheet()
+    ui = ui or liveUI()
+    if not (ui and ui.document) then return had_sheet end
+    local b = EOB.bookOf(ui)
+    -- Home is painted over the open book, which has sent nothing yet: its position and status
+    -- go into the local overlay first, so the first paint already shows them (item 4).
+    if b and LocalState then
+        local okp, pct = pcall(b.plugin.getLastPercent, b.plugin)
+        local fields = { pending = true, bookId = b.book_id }
+        if okp and type(pct) == "number" then fields.percent = math.floor(pct * 1000 + 0.5) / 10 end
+        if type(b.summary.status) == "string" then fields.status = b.summary.status end
+        pcall(LocalState.put, b.digest, fields)
+        log("home: noted the open book for Home:", tostring(fields.percent) .. "%", tostring(fields.status))
+    end
+    local job = b and EOB.queue()[b.digest]
+    if job and not job.ready then
+        job.ready = true
+        EOB.save()
+        log("end of book: Home counts as leaving the book; sending the finish now")
+        EOB.sendSoon(b.plugin)
+    end
+    return had_sheet
+end
+
+-- Network up, then the plugin's outbox, then our drain (the Sync.waitOutbox hook below).
+function EOB.sendSoon(p)
+    if not p then return end
+    Wifi.acquire("eob_send")
+    Net.up(p, { reason = "eob_send", cap = 20, need_server = true }, function(ok)
+        if not ok then
+            Wifi.release("eob_send")
+            log("end of book: no network; the finish goes with the next sync")
+            return
+        end
+        Sync.waitOutbox(p, 20, function() Wifi.release("eob_send") end)
+    end)
 end
 
 -- Open or download-and-open a book from the sheet (§4 "Download & open").

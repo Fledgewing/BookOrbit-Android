@@ -348,7 +348,14 @@ local function newPlugin()
     -- Like the plugin: a catalog widget shown on top (main.lua:1206-1230), on its dashboard.
     function p:onBookOrbitOpenDashboard()
         rec("dashboard")
-        if p.catalog_browser then return true end
+        if p.catalog_browser then
+            -- Like the plugin (main.lua:1381-1385): already open and on top -> its menu sheet.
+            if UIManager:getTopmostVisibleWidget() == p.catalog_browser then
+                rec("menu_sheet")
+                UIManager:show({ name = "bookorbit_menu_sheet" })
+            end
+            return true
+        end
         local cb = { dashboardMode = function() return true end }
         cb.close_callback = function() UIManager:close(cb); p.catalog_browser = nil end
         p.catalog_browser = cb
@@ -2292,8 +2299,8 @@ test("end of book: the last page marks it finished, opens the sheet; Undo takes 
     local job = E.EOB.queue()["d1"]
     ok(job and job.book_id == 42 and job.ready == false, "a job, not sent while the book is open")
     ok(sheetRow("status", "Marked as finished") and sheetRow("author", "Rick Riordan"), "status and author")
-    ok(sheetRow("next", "Next in series · Book 3"), "next card: " .. tostring((sheetRow("next") or {}).text))
-    ok(sheetRow("button", "Titan's Curse"), "download and open the next book")
+    ok(sheetRow("label", "Next in series · Book 3"), "next card: " .. tostring((sheetRow("label") or {}).text))
+    ok(sheetRow("card", "Titan's Curse"), "download and open the next book")
     sheetRow("status").action()
     ok(ui.doc_settings.data.summary.status == "reading" and E.EOB.queue()["d1"] == nil, "Undo: reading, no job")
     ok(E.EOB.sheet == nil, "sheet closed")
@@ -2352,9 +2359,9 @@ test("end of book: Download and open, offline -> Couldn't connect, Get it at the
     ui.status:onEndOfBook()
     W.wifi, W.vpn = false, false
     W.companion = false
-    sheetRow("button", "Titan's Curse").action()
+    sheetRow("card", "Titan's Curse").action()
     run(60)
-    ok(sheetRow("card", "Couldn't connect"), "the card says so")
+    ok(sheetRow("notice", "Couldn't connect"), "the card says so")
     sheetRow("button", "Get it at the next sync").action()
     ok(E.EOB.downloads()["43"], "remembered for the next sync")
     W.wifi, W.vpn, W.companion = true, true, true
@@ -2378,7 +2385,7 @@ test("end of book: Download and open sends the finish first, downloads through t
     local ui = bookUI()
     ui.status:onEndOfBook()
     eob.calls, W.opened = {}, nil
-    sheetRow("button", "Titan's Curse").action()
+    sheetRow("card", "Titan's Curse").action()
     run(60)
     local c = table.concat(eob.calls, ",")
     ok(c:find("status:42:read", 1, true) and c:find("download:43", 1, true)
@@ -2386,6 +2393,74 @@ test("end of book: Download and open sends the finish first, downloads through t
     ok(W.opened == "/books/titan.epub", "opened: " .. tostring(W.opened))
     ok(E.EOB.sheet == nil, "sheet closed")
     package.loaded["bookorbit_catalog"] = nil
+end)
+
+test("end of book: Home from the companion with the sheet open closes it, opens BookOrbit home, sends the finish", function()
+    eobModules()
+    local ui, m = bookUI()
+    ui.status:onEndOfBook()
+    ok(E.EOB.sheet and W.shown[#W.shown] == E.EOB.sheet, "sheet on top")
+    eob.calls = {}
+    m:onSuspend(); W.clock = W.clock + 0.5
+    command(m, "home")
+    m:onResume()
+    run(30)
+    ok(E.EOB.sheet == nil, "sheet closed")
+    local cb = ui.bookorbit.catalog_browser
+    ok(cb and W.shown[#W.shown] == cb, "BookOrbit home on top: " .. tostring(W.shown[#W.shown] and W.shown[#W.shown].name))
+    ok(table.concat(eob.calls, ","):find("status:42:read", 1, true), "finish sent: " .. table.concat(eob.calls, ","))
+    cb.close_callback()
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = nil
+end)
+
+test("end of book: the sheet's Home opens BookOrbit home (never its menu) and sends the finish", function()
+    eobModules()
+    local ui, m = bookUI()
+    ui.status:onEndOfBook()
+    eob.calls = {}
+    sheetRow("footer", "Home").action()
+    run(30)
+    local top = W.shown[#W.shown]
+    ok(ui.bookorbit.catalog_browser and top == ui.bookorbit.catalog_browser, "BookOrbit home on top: " .. tostring(top and top.name))
+    ok(not has(ui.bookorbit.calls, "menu_sheet"), "no menu sheet")
+    local noted = E.LocalState.load().books["d1"]
+    ok(noted and noted.pending and noted.status == "complete", "the open book noted for Home's first paint")
+    ok(table.concat(eob.calls, ","):find("status:42:read", 1, true), "finish sent: " .. table.concat(eob.calls, ","))
+    -- Home again with BookOrbit home already on top: it stays, no menu sheet.
+    m:onOrbitGoHome()
+    run(5)
+    ok(not has(ui.bookorbit.calls, "menu_sheet") and W.shown[#W.shown] == ui.bookorbit.catalog_browser, "still Home, no menu")
+    ui.bookorbit.catalog_browser.close_callback()
+end)
+
+test("end of book: a finish marked here leaves Continue reading at once (plugin ids as strings)", function()
+    eobModules()
+    package.loaded["bookorbit_state_manager"].getBook = function(d) return d == "d1" and { bookId = "42" } or nil end
+    local ui = bookUI()
+    ui.status:onEndOfBook()
+    E.EOB.actions.back()
+    local body = { continueReading = { { id = 42, title = "Sea of Monsters", readStatus = "reading", progressPercentage = 99 },
+        { id = 8, title = "Dare", readStatus = "reading" } }, readingGoal = { goalBooks = 10, completedBooks = 2 } }
+    local out = E.LocalFirst.overlay(body, E.LocalState.view())
+    ok(#out.continueReading == 1 and out.continueReading[1].id == 8, "dropped from Continue reading")
+    ok(out.readingGoal.completedBooks == 3, "counted toward the goal")
+    ui.status:markBook(false)
+    E.LocalState.data.books["d1"] = nil
+end)
+
+test("outbox: an entry backing off (not drainable) neither holds Wi-Fi nor runs the wait to its cap", function()
+    local ui = newUI(true)
+    local p = ui.bookorbit
+    p.getLifecycleOutbox = function() return { diagnostics = function() return { count = 1, blocked = 0, drainable = 0 } end } end
+    local done_at
+    local t0 = W.clock
+    E.Sync.waitOutbox(p, 20, function(okw) done_at = W.clock; W.wait_ok = okw end)
+    run(25)
+    ok(done_at and done_at - t0 < 2 and W.wait_ok, "done at once, not at the cap: " .. tostring(done_at and done_at - t0))
+    local busy = E.Wifi.busy()
+    ok(not busy, "Wi-Fi not held for it")
+    p.getLifecycleOutbox = function() return { diagnostics = function() return { count = 1, blocked = 0, drainable = 1 } end } end
+    ok(E.Wifi.busy(), "a drainable entry still holds Wi-Fi")
 end)
 
 test("end of book: a finished book's stale position is held", function()
@@ -2410,6 +2485,7 @@ end)
 ---------------------------------------------------------------- local-first Home (ROADMAP 3)
 local lf = {}
 local function lfModules(drop)
+    lf.evicted, lf.scheduled = {}, {}
     local BUI = {}
     function BUI.statusCluster(d) return { kind = "status" } end
     function BUI.hit(w, action) w.action = action; return w end
@@ -2419,7 +2495,14 @@ local function lfModules(drop)
     function BD.build(_, context, now)
         local body = context.dashboard or {}
         lf.built = body
-        return { continue_reading = body.continueReading, online = true, date_long = "Sunday", now = now }
+        local cr = {}
+        for _, b in ipairs(body.continueReading or {}) do
+            local c = {}
+            for k, v in pairs(b) do c[k] = v end
+            c.cover_state = (lf.covers or {})[b.id] or "loading"
+            table.insert(cr, c)
+        end
+        return { continue_reading = cr, online = true, date_long = "Sunday", now = now }
     end
     local LV = {}
     local function region(w, action) return { region = action, w } end
@@ -2434,7 +2517,16 @@ local function lfModules(drop)
     function Cat:switchTo(_, items, context) lf.stock_switch = (lf.stock_switch or 0) + 1; self.current_context = context end
     function Cat:refreshOnDevice() end
     function Cat:updateItems() lf.full_paint = (lf.full_paint or 0) + 1 end
-    function Cat:refreshCurrent() lf.refreshed = true end
+    -- As plugin 2.3.0 (bookorbit_catalog.lua:475-490): a refresh evicts the covers on screen.
+    function Cat:refreshCurrent()
+        lf.refreshed = true
+        local ctx = self.current_context or {}
+        if ctx.kind == "dashboard" then self:evictCachedCovers(self.dashboardBooks(ctx.dashboard)) end
+    end
+    function Cat.dashboardBooks(body) return (body or {}).continueReading or {} end
+    function Cat:evictCachedCovers(books) for _, b in ipairs(books or {}) do table.insert(lf.evicted, b.id) end end
+    function Cat:cancelThumbnailJobs() lf.cancelled = (lf.cancelled or 0) + 1 end
+    function Cat:scheduleThumbnailDownloads(books) for _, b in ipairs(books or {}) do table.insert(lf.scheduled, b.id) end end
     function Cat:dashboardRootFetch() return {}, lf.next_context end
     function Cat:boardRun(action) lf.stock_run = action.kind end
     function Cat:boardRefreshTile(entry) table.insert(lf.repainted, entry.item.type) end
@@ -2501,6 +2593,259 @@ test("local-first: Home paints this device's state; ⟳ refreshes; a refresh rep
     for _, k in ipairs({ "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui", "bookorbit_state_manager" }) do
         package.loaded[k] = nil
     end
+end)
+
+test("local-first: ⟳ keeps covers; a quiet refresh keeps cover jobs; a late cover redraws its tile", function()
+    local Cat, BD = lfModules()
+    E.LF.installed = nil -- install again, onto this test's catalog
+    newUI(false)
+    lf.evicted, lf.scheduled, lf.cancelled, lf.covers, lf.refreshed = {}, {}, 0, {}, nil
+    local body = { continueReading = { { id = 7, title = "A", progressPercentage = 40 } } }
+    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = body } }, Cat)
+    local d = BD.build(cat, cat.current_context, os.time())
+    -- ⟳: the data refreshes, the covers stay (they are keyed by cover version).
+    cat:boardRun({ kind = "orbit-refresh" })
+    ok(lf.refreshed, "⟳ refreshes")
+    ok(#lf.evicted == 0, "no cover deleted: " .. table.concat(lf.evicted, ","))
+    -- The plugin's own refresh paths still evict, as before.
+    cat:refreshCurrent()
+    ok(#lf.evicted == 1, "the plugin's own refresh unchanged")
+    lf.evicted = {}
+    -- A refresh lands quietly: no cancelled cover jobs, and the new book's cover is fetched.
+    cat._board_ctx = { d = d }
+    cat._board_tiles = { { item = { type = "hero" } } }
+    lf.repainted, lf.stock_switch, lf.header = {}, 0, 0
+    lf.next_context = { kind = "dashboard", dashboard = { continueReading = { { id = 7, title = "A", progressPercentage = 40 }, { id = 9, title = "C", progressPercentage = 5 } } } }
+    local items, ctx = cat:dashboardRootFetch({})
+    cat:switchTo("Home", items, ctx, false)
+    ok(lf.stock_switch == 0 and lf.cancelled == 0, "quiet: cover jobs kept")
+    ok(table.concat(lf.scheduled, ",") == "7,9", "covers scheduled: " .. table.concat(lf.scheduled, ","))
+    -- A cover lands while a hydration repaint skip is pending: its tile still redraws.
+    lf.repainted, lf.full_paint = {}, 0
+    lf.covers[9] = "ready"
+    cat._orbit_skip_repaint = true
+    cat:updateItems(nil, true)
+    ok(lf.full_paint == 0, "no full repaint")
+    ok(#lf.repainted == 1 and lf.repainted[1] == "hero", "the cover's tile redrew: " .. table.concat(lf.repainted, ","))
+    for _, k in ipairs({ "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui" }) do
+        package.loaded[k] = nil
+    end
+end)
+
+---------------------------------------------------------------- write-through cache
+local cache = {}
+-- A fake BookOrbit API client class (bookorbit_api.lua:372 request, :261 requestBlocking,
+-- :336 runInSubprocess, :747 downloadCatalogThumbnail) over cache.server (path -> body).
+local function cacheSetup()
+    local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/events"); sh("mkdir -p", dir .. "/covers")
+    local lfs = require("libs/libkoreader-lfs")
+    cache.lfs_saved = { attributes = lfs.attributes, dir = lfs.dir, touch = lfs.touch }
+    lfs.dir = function(d)
+        local h = io.popen('ls -1 "' .. d .. '" 2>/dev/null'); local names = {}
+        for n in h:lines() do table.insert(names, n) end
+        h:close(); local i = 0
+        return function() i = i + 1; return names[i] end
+    end
+    lfs.touch = function() return true end
+    lfs.attributes = function(f, k)
+        if W.files[f] then return "file" end
+        if os.execute('test -d "' .. f .. '"') == 0 or os.execute('test -d "' .. f .. '"') == true then
+            return k == "modification" and 1 or "directory"
+        end
+        local h = io.open(f, "rb"); if h then h:close(); return k == "modification" and 1 or "file" end
+        return nil
+    end
+    cache.dir, cache.server, cache.calls, cache.writes = dir, {}, {}, {}
+    local Api = {}
+    Api.__index = Api
+    function Api:requestBlocking(method, path, body)
+        table.insert(cache.calls, method .. " " .. path)
+        if method ~= "GET" then table.insert(cache.writes, path); return {} end
+        local b = cache.server[path]
+        if b == nil then return nil, 404 end
+        return E.Cache.copy(b)
+    end
+    function Api:request(method, path, body, headers) return self:requestBlocking(method, path, body, headers) end
+    function Api:runInSubprocess(fn)
+        self.subprocess_depth = (self.subprocess_depth or 0) + 1
+        local b, e, eb = fn()
+        self.subprocess_depth = self.subprocess_depth - 1
+        return true, { body = b, err = e, errbody = eb }
+    end
+    function Api:downloadCatalogThumbnail(id, path) cache.stock_cover = (cache.stock_cover or 0) + 1; return true end
+    function Api:getProxy() return nil end
+    package.loaded["bookorbit_api"] = Api
+    local Cat = lfModules()
+    E.LF.installed = nil
+    ok(E.LF.install("test"), "local-first on this catalog")
+    function Cat:loadDashboardRoot() cache.reloaded = (cache.reloaded or 0) + 1 end
+    E.OC.installed, E.OC._dir, E.OC._index = nil, dir, nil
+    E.OC.memo, E.OC.memo_order, E.OC.queue, E.OC.inflight, E.OC.pending, E.OC.active = {}, {}, {}, {}, {}, nil
+    E.OC.now = function() return math.floor(W.clock) end
+    E.S.offline_cache = true
+    ok(E.OC.install("test"), "installed")
+    local client = setmetatable({ username = "reader", userkey = "k", server_url = "https://books.example" }, Api)
+    return client, Cat, Api
+end
+local function cacheTeardown()
+    local lfs = require("libs/libkoreader-lfs")
+    for k, v in pairs(cache.lfs_saved) do lfs[k] = v end
+    sh("rm -rf", cache.dir)
+    for _, k in ipairs({ "bookorbit_api", "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui" }) do
+        package.loaded[k] = nil
+    end
+    E.OC.installed = nil
+end
+local DASH = "/koreader/plugin/catalog/dashboard"
+
+test("cache: a read is answered from the cache at once, checked after 60 s, redrawn when it changed", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server[DASH] = { continueReading = { { id = 7, title = "A" } } }
+    local b = client:request("GET", DASH)
+    ok(b and b.continueReading[1].id == 7 and #cache.calls == 1, "first read: the server")
+    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = b }, client = client }, Cat)
+    cat:switchTo("Home", {}, cat.current_context, false)
+    ok(cat._orbit_view_keys, "the view knows its keys")
+    package.loaded["bookorbit_catalog"] = Cat
+    cache.calls = {}
+    b = client:request("GET", DASH)
+    ok(b.continueReading[1].id == 7 and #cache.calls == 0, "again within 60 s: the cache, no request")
+    -- Later: served at once, checked in the background; the server changed -> Home redraws.
+    W.clock = W.clock + 61
+    cache.server[DASH] = { continueReading = { { id = 8, title = "B" } } }
+    E.OC.client = function() return client end
+    local hosts = E.bookorbit
+    E.bookorbit = function() return { catalog_browser = cat } end
+    b = client:request("GET", DASH)
+    ok(b.continueReading[1].id == 7 and #cache.calls == 0, "served at once from the cache")
+    run(5)
+    ok(#cache.calls == 1, "one background check: " .. table.concat(cache.calls, ","))
+    ok(cache.reloaded == 1, "Home reloaded from the cache")
+    cache.calls = {}
+    b = client:request("GET", DASH)
+    ok(b.continueReading[1].id == 8 and #cache.calls == 0, "the new body, from the cache")
+    -- Unchanged on the next check: no redraw.
+    W.clock = W.clock + 61
+    client:request("GET", DASH); run(5)
+    ok(cache.reloaded == 1, "unchanged: no redraw")
+    -- Offline: the cache, no request.
+    W.wifi, cache.calls = false, {}
+    W.clock = W.clock + 600
+    b = client:request("GET", DASH); run(5)
+    ok(b.continueReading[1].id == 8 and #cache.calls == 0, "offline: the cache")
+    E.bookorbit = hosts
+    cacheTeardown()
+end)
+
+test("cache: Refresh checks now; Full refresh goes to the server; neither evicts covers", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server[DASH] = { continueReading = { { id = 7 } } }
+    client:request("GET", DASH)
+    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = cache.server[DASH] }, client = client }, Cat)
+    function cat:refreshCurrent()
+        self:evictCachedCovers(self.dashboardBooks(self.current_context.dashboard))
+        self.client:request("GET", DASH)
+    end
+    lf.evicted, cache.calls = {}, {}
+    E.OC.refresh(cat)
+    ok(#cache.calls == 0, "Refresh: answered from the cache")
+    run(5)
+    ok(#cache.calls == 1 and #lf.evicted == 0, "...and checked at once, no cover evicted")
+    cache.calls = {}
+    E.OC.fullRefresh(cat)
+    ok(#cache.calls == 1 and cache.calls[1] == "GET " .. DASH, "Full refresh: from the server")
+    ok(#lf.evicted == 0, "no cover evicted")
+    -- Hold ⟳ on a list = Full refresh; a broken cover file on screen is removed for re-download.
+    local bad = cache.dir .. "/covers/7_1.jpg"
+    local good = cache.dir .. "/covers/8_1.jpg"
+    local fh = io.open(bad, "wb"); fh:write("<html>oops</html>"); fh:close()
+    fh = io.open(good, "wb"); fh:write("\255\216\255\224jpeg"); fh:close()
+    cat.current_context = { kind = "books", books = { { id = 7, hasCover = true }, { id = 8, hasCover = true } } }
+    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. b.id .. "_1.jpg" end
+    function cat:invalidateThumbnail(b) cache.invalidated = b.id end
+    cache.calls = {}
+    cat:listRun({ kind = "orbit-refresh" }, nil, true)
+    ok(not io.open(bad) and io.open(good) and cache.invalidated == 7, "broken cover removed, good one kept")
+    ok(#cache.calls == 1, "Full refresh from a list: from the server")
+    cacheTeardown()
+end)
+
+test("cache: a write patches the cached book and marks Home stale; accounts never mix", function()
+    local client = cacheSetup()
+    W.wifi = true
+    local DET = "/koreader/plugin/catalog/books/7"
+    cache.server[DET] = { id = 7, readStatus = "reading", seriesMembers = { { id = 6, readStatus = "read" } } }
+    cache.server[DASH] = { continueReading = { { id = 7, readStatus = "reading" } } }
+    client:request("GET", DET); client:request("GET", DASH)
+    client:request("PUT", "/koreader/plugin/catalog/books/7/read-status", { status = "read" })
+    cache.calls = {}
+    local d = client:request("GET", DET)
+    ok(d.readStatus == "read" and #cache.calls == 0, "detail patched, from the cache")
+    local h = client:request("GET", DASH)
+    ok(h.continueReading[1].readStatus == "read", "Home patched")
+    run(5)
+    ok(#cache.calls == 1 and cache.calls[1] == "GET " .. DASH, "Home stale: checked")
+    -- Another account on the same server: nothing of the first is served.
+    local other = setmetatable({ username = "kid", userkey = "k2", server_url = "https://books.example" }, getmetatable(client))
+    cache.calls = {}
+    other:request("GET", DET)
+    ok(#cache.calls == 1, "another account: the server")
+    cacheTeardown()
+end)
+
+test("cache: a read made in the catalog's child process is stored and adopted by the parent", function()
+    local client = cacheSetup()
+    W.wifi = true
+    cache.server[DASH] = { continueReading = { { id = 9 } } }
+    local done, r = client:runInSubprocess(function() return client:request("GET", DASH) end)
+    ok(done and r.body.continueReading[1].id == 9, "the child's answer")
+    ok(E.OC.index().entries[next(E.OC.index().entries)] ~= nil, "the parent's index has it")
+    E.OC.memo, E.OC.memo_order = {}, {}
+    cache.calls = {}
+    local b = client:request("GET", DASH)
+    ok(b.continueReading[1].id == 9 and #cache.calls == 0, "then served from the cache")
+    cacheTeardown()
+end)
+
+test("cache: covers keep their ETag; a moved version asks If-None-Match and a 304 renames the file", function()
+    local client = cacheSetup()
+    local http = require("socket.http")
+    local stock_http = http.request
+    local sent = {}
+    local server_etag, cover = '"100"', "\255\216\255\224" .. string.rep("x", 60)
+    http.request = function(t)
+        local inm = t.headers and t.headers["If-None-Match"]
+        table.insert(sent, inm or "-")
+        if inm == server_etag then return 1, 304, {} end
+        t.sink(cover); t.sink(nil)
+        return 1, 200, { ["content-type"] = "image/jpeg", etag = server_etag, ["content-length"] = tostring(#cover) }
+    end
+    local ltn = require("ltn12")
+    local stock_file = ltn.sink.file
+    ltn.sink.file = function(f) return function(chunk) if chunk then f:write(chunk) end return 1 end end
+    local dir = cache.dir .. "/covers"
+    local v1 = dir .. "/7_20261101.jpg"
+    ok(client:downloadCatalogThumbnail(7, v1, { temp_path = v1 .. ".part", max_bytes = 4e6 }), "first download")
+    local f = io.open(v1 .. ".etag"); ok(f and f:read("*a") == server_etag, "ETag kept"); if f then f:close() end
+    -- A metadata edit moved updatedAt: one 304, the file renamed, no body transferred.
+    local v2 = dir .. "/7_20261121.jpg"
+    ok(client:downloadCatalogThumbnail(7, v2, { temp_path = v2 .. ".part", max_bytes = 4e6 }), "304")
+    ok(sent[2] == server_etag, "asked If-None-Match")
+    ok(io.open(v2) and not io.open(v1), "the file renamed to the new version")
+    -- The cover really changed: replaced, the old one gone, the new ETag kept.
+    server_etag, cover = '"200"', "\137PNG\r\n\26\n" .. string.rep("y", 40)
+    local v3 = dir .. "/7_20261122.jpg"
+    ok(client:downloadCatalogThumbnail(7, v3, { temp_path = v3 .. ".part", max_bytes = 4e6 }), "200")
+    ok(io.open(v3) and not io.open(v2), "replaced")
+    f = io.open(v3 .. ".etag"); ok(f and f:read("*a") == '"200"', "new ETag"); if f then f:close() end
+    ok(cache.stock_cover == nil, "never the plugin's download")
+    -- Orphaned ETags are cleaned.
+    io.open(dir .. "/9_1.jpg.etag", "w"):close()
+    ok(E.OC.cleanEtags(dir) == 1, "orphan ETag removed")
+    http.request, ltn.sink.file = stock_http, stock_file
+    cacheTeardown()
 end)
 
 print(string.format("%d passed, %d failed", passed, failed))

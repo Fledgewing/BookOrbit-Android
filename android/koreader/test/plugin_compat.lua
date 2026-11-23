@@ -71,7 +71,12 @@ for _, name in ipairs({ "newClient", "getDocumentDigest", "getLastPercent", "enq
     "downloadDefaultFile", "downloadFile", "checkDownloadFile", "loadBooks", "switchTo", "refreshOnDevice",
     "updateItems", "refreshCurrent", "dashboardRootFetch", "boardHeader", "boardRun", "boardRefreshTile",
     "boardRefreshClock", "listRun", "listHeader", "build", "statusCluster", "hit", "icon", "hstack",
-    "header", "listMetadata", "isBlocked", "getLifecycleOutbox" }) do need(name, "function") end
+    "header", "listMetadata", "isBlocked", "getLifecycleOutbox", "evictCachedCovers",
+    "scheduleThumbnailDownloads", "dashboardBooks", "thumbnailDisplay" }) do need(name, "function") end
+-- Our ⟳ keeps covers by wrapping evictCachedCovers, which refreshCurrent must still go through;
+-- Wi-Fi holds count only drainable outbox entries.
+has(catalog, "self:evictCachedCovers(", "refreshCurrent evicts through evictCachedCovers")
+has(src[dir .. "/bookorbit_lifecycle_outbox.lua"] or "", "drainable =", "outbox diagnostics() drainable")
 local board = src[dir .. "/bookorbit_catalog_board.lua"] or ""
 local list_view = src[dir .. "/bookorbit_list_view.lua"] or ""
 -- Upvalues local-first swaps or calls: the header's status cluster and the list view's region.

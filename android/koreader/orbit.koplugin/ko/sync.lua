@@ -24,6 +24,16 @@ function Sync.clearPullDebounce(p, reason)
     if okc and cleared then log("pull: cleared the plugin's 25 s debounce for this pull (" .. reason .. ")") end
 end
 
+-- Entries the plugin can send now. An entry backing off after a failure (next_attempt_at in
+-- the future) or in flight isn't drainable (bookorbit_lifecycle_outbox.lua:253-259, counted in
+-- diagnostics().drainable, :303-316): the plugin retries it on its own timer, and the
+-- coordinator's busy flag covers one in flight. Counting it held Wi-Fi on for minutes and made
+-- every wait run to its cap. Plugins without drainable: everything not parked.
+function outboxPending(diag)
+    if type(diag.drainable) == "number" then return diag.drainable end
+    return (diag.count or 0) - (diag.blocked or 0)
+end
+
 function Sync.waitOutbox(p, cap, cb)
     if not can(p, "outbox") then
         -- Can't see the plugin's outbox: leave it to the plugin's own sync.
@@ -43,7 +53,7 @@ function Sync.waitOutbox(p, cap, cb)
         local busy = coordinator:isBusy() or coordinator:queuedCount() > 0
         local err = p.settings.last_error
         local verdict = Plan.outboxVerdict{
-            pending = (diag.count or 0) - (diag.blocked or 0),
+            pending = outboxPending(diag),
             busy = busy,
             new_error = err ~= nil and (err.at or 0) >= start_os,
             elapsed = el,
@@ -57,7 +67,7 @@ function Sync.waitOutbox(p, cap, cb)
             log("outbox: plugin reported", err.event, err.message, "after", fmt(el))
             return cb(false, err.message or "plugin sync failed", el)
         elseif verdict == "timeout" then
-            log("outbox: still", (diag.count or 0) - (diag.blocked or 0), "pending at the", cap .. "s cap")
+            log("outbox: still", outboxPending(diag), "pending at the", cap .. "s cap")
             return cb(false, "time limit reached", el)
         elseif verdict == "nudge" then
             last_nudge = now_s()
