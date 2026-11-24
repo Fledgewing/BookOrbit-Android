@@ -29,9 +29,9 @@ namespace OrbifySleep {
 
 struct Settings {
   bool pick = false;              // BookOrbit Pick is the sleep screen (orbifySleep, S4)
-  std::string from = "up_next";   // Pick From (core parseFrom)
+  std::string from = "up_next";   // Pick From: a set, one item per line (core normalizeSources, R1c)
   std::string leaveTags;          // Leave Out Tags, comma-separated
-  std::string leaveScopes;        // Leave Out Scopes: "scope:<id>,collection:<id>"
+  std::string leaveScopes;        // Leave Out Scopes: "library", "scope:<id>", "collection:<id>", one per line
   int hours = orbify::sleep::DEFAULT_HOURS;  // Change Every; 0 = Every sleep
   std::string text;               // Sleep Text (60 code points)
   bool battery = false;           // Battery on Sleep Screen

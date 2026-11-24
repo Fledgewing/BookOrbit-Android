@@ -323,6 +323,98 @@ void settings() {
   CHECK(std::strlen(text) == 4 * TEXT_MAX);
 }
 
+// Pick from and Leave out as sets (R1c, X8): the cases Android's tests read too.
+std::string lines(JsonVariantConst v) { return v.isNull() ? std::string() : std::string(v.as<const char*>()); }
+
+struct Lists {
+  std::vector<uint32_t> list[LIST_KINDS];
+  bool known[LIST_KINDS] = {};
+};
+const uint32_t* listAtFor(const FromKind kind, size_t* count, void* ctx) {
+  auto* l = static_cast<Lists*>(ctx);
+  const size_t k = static_cast<size_t>(kind);
+  if (k >= LIST_KINDS || !l->known[k]) return nullptr;
+  *count = l->list[k].size();
+  return l->list[k].data();
+}
+
+struct Members {
+  JsonObjectConst sets;
+};
+Check inMembersFor(const From& rule, const uint32_t id, void* ctx) {
+  char key[32];
+  formatFrom(rule, key, sizeof(key));
+  JsonArrayConst set = static_cast<Members*>(ctx)->sets[key].as<JsonArrayConst>();
+  if (set.isNull()) return Check::Unknown;
+  for (JsonVariantConst v : set) {
+    if (v.as<uint32_t>() == id) return Check::Out;
+  }
+  return Check::Keep;
+}
+
+void sourceCases(JsonObjectConst sources) {
+  for (JsonObjectConst c : sources["from"].as<JsonArrayConst>()) {
+    char out[256];
+    CHECK(normalizeSources(c["wire"].as<const char*>(), out, sizeof(out)));
+    if (std::string(out) != lines(c["expect"])) std::printf("  from '%s': got '%s'\n", c["name"].as<const char*>(), out);
+    CHECK(std::string(out) == lines(c["expect"]));
+  }
+  for (JsonObjectConst c : sources["leave_out"].as<JsonArrayConst>()) {
+    char out[256];
+    CHECK(normalizeRules(c["wire"].as<const char*>(), out, sizeof(out)));
+    if (std::string(out) != lines(c["expect"])) std::printf("  leave_out '%s': got '%s'\n", c["name"].as<const char*>(), out);
+    CHECK(std::string(out) == lines(c["expect"]));
+  }
+  static const char* const NAMES[LIST_KINDS] = {"up_next", "want_to_read", "discover"};
+  for (JsonObjectConst c : sources["candidates"].as<JsonArrayConst>()) {
+    Lists l;
+    for (size_t k = 0; k < LIST_KINDS; k++) {
+      JsonArrayConst a = c["lists"][NAMES[k]].as<JsonArrayConst>();
+      if (a.isNull()) continue;
+      l.known[k] = true;
+      for (JsonVariantConst v : a) l.list[k].push_back(v.as<uint32_t>());
+    }
+    std::vector<uint32_t> bag;
+    for (JsonVariantConst v : c["bag"].as<JsonArrayConst>()) bag.push_back(v.as<uint32_t>());
+    uint32_t out[64];
+    const FromKind* fallback = nullptr;
+    const size_t n = candidates(c["from"].as<const char*>(), listAtFor, &l, bag.data(), bag.size(), out, 64, &fallback);
+    std::vector<uint32_t> want;
+    for (JsonVariantConst v : c["expect"].as<JsonArrayConst>()) want.push_back(v.as<uint32_t>());
+    const bool same = std::vector<uint32_t>(out, out + n) == want;
+    if (!same) std::printf("  candidates '%s'\n", c["name"].as<const char*>());
+    CHECK(same);
+    const char* fb = c["fallback"].isNull() ? nullptr : c["fallback"].as<const char*>();
+    CHECK(fb ? (fallback && std::strcmp(NAMES[static_cast<size_t>(*fallback)], fb) == 0) : fallback == nullptr);
+  }
+  for (JsonObjectConst c : sources["check"].as<JsonArrayConst>()) {
+    Members m{c["members"].as<JsonObjectConst>()};
+    std::vector<const char*> tags;
+    const bool known = !c["tags"].isNull();
+    for (JsonVariantConst v : c["tags"].as<JsonArrayConst>()) tags.push_back(v.as<const char*>());
+    const Check got = checkBook(c["id"].as<uint32_t>(), c["rules"].as<const char*>(), inMembersFor, &m,
+                                known ? tags.data() : nullptr, tags.size());
+    const char* want = c["expect"].as<const char*>();
+    const Check expect = std::strcmp(want, "out") == 0 ? Check::Out : std::strcmp(want, "keep") == 0 ? Check::Keep
+                                                                                                        : Check::Unknown;
+    if (got != expect) std::printf("  check '%s'\n", c["name"].as<const char*>());
+    CHECK(got == expect);
+  }
+  // Toggling (the X4s' list screens): Library stands alone both ways.
+  char out[256];
+  CHECK(toggleItem("up_next\nscope:3", "library", true, out, sizeof(out)) && std::string(out) == "library");
+  CHECK(toggleItem("library", "discover", true, out, sizeof(out)) && std::string(out) == "discover");
+  CHECK(toggleItem("up_next\nscope:3", "up_next", true, out, sizeof(out)) && std::string(out) == "scope:3");
+  CHECK(toggleItem("scope:3", "scope:3", true, out, sizeof(out)) && std::string(out) == "up_next");
+  CHECK(toggleItem("scope:3", "collection:4", false, out, sizeof(out)) && std::string(out) == "scope:3\ncollection:4");
+  CHECK(toggleItem("scope:3\ncollection:4", "library", false, out, sizeof(out)) && std::string(out) == "library");
+  CHECK(toggleItem("library", "library", false, out, sizeof(out)) && std::string(out).empty());
+  CHECK(hasLibrary("scope:3\nlibrary") && !hasLibrary("scope:3") && hasMemberSources("up_next\nlibrary") &&
+        !hasMemberSources("up_next\ndiscover"));
+  // The old comma-separated settings still read.
+  CHECK(normalizeSources("scope:3,up_next", out, sizeof(out)) && std::string(out) == "scope:3\nup_next");
+}
+
 void store() {
   Store s;
   s.sourceStamp = fnv1a("scope:12");
@@ -330,10 +422,11 @@ void store() {
   s.state = State{7, 1700000000123ull};
   s.battery = 82;
   s.listAt = 1700000000;
-  s.listKind = 1;
-  s.listCount = 2;
-  s.list[0] = 7;
-  s.list[1] = 9;
+  s.listCount[1] = 2;
+  s.list[1][0] = 7;
+  s.list[1][1] = 9;
+  s.listCount[2] = 1;
+  s.list[2][0] = 60;
   s.batch.admit(7, true, false, 0, nullptr);
   s.batch.admit(9, true, false, 0, nullptr);
   s.batch.entries[0].shows = 2;
@@ -344,7 +437,8 @@ void store() {
   CHECK(parse(buf, sizeof(buf), back));
   CHECK(back.sourceStamp == s.sourceStamp && back.rulesStamp == s.rulesStamp && back.state.shown == 7 &&
         back.state.changedAt == 1700000000123ull && back.battery == 82 && back.listAt == 1700000000 &&
-        back.listKind == 1 && back.listCount == 2 && back.list[1] == 9 && back.batch.count == 2 &&
+        back.listCount[0] == 0 && back.listCount[1] == 2 && back.list[1][1] == 9 && back.list[2][0] == 60 &&
+        back.batch.count == 2 &&
         back.batch.entries[0].shows == 2 && back.batch.entries[1].flags == 0x5);
   buf[20] ^= 1;  // a flipped bit: the CRC refuses it, the caller takes the other slot
   CHECK(!parse(buf, sizeof(buf), back));
@@ -413,6 +507,7 @@ int main(int argc, char** argv) {
   if (!loadJsonFile((dir + "/cases.json").c_str(), doc)) return 1;
   rotationCases(doc["cases"].as<JsonArrayConst>());
   batchCases(doc["batch"].as<JsonArrayConst>());
+  sourceCases(doc["sources"].as<JsonObjectConst>());
   noClock();
   everySleepOverSyncs();
   hoursFromList();

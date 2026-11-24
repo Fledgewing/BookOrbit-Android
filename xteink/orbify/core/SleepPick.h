@@ -146,12 +146,17 @@ inline Check combine(Check a, Check b) {
 
 // --- Pick from and the stored settings (R1, S3, S4) -----------------------------------------------------
 
-enum class FromKind : uint8_t { UpNext, WantToRead, Discover, Scope, Collection };
+// Library: every book the account can see (R1c, X8). The three dashboard lists come first, so a
+// list's kind is its slot in the store.
+enum class FromKind : uint8_t { UpNext, WantToRead, Discover, Scope, Collection, Library };
+constexpr size_t LIST_KINDS = 3;
+inline bool isList(FromKind k) { return k == FromKind::UpNext || k == FromKind::WantToRead || k == FromKind::Discover; }
 struct From {
   FromKind kind = FromKind::UpNext;
   uint32_t id = 0;  // Scope, Collection
 };
-// "up_next", "want_to_read", "discover", "scope:<id>", "collection:<id>" (Android's sleep_from).
+// "up_next", "want_to_read", "discover", "library", "scope:<id>", "collection:<id>" (one item of
+// Android's sleep_from).
 bool parseFrom(const char* text, From& out);
 // Writes the same form; false when the buffer is too small.
 bool formatFrom(const From& from, char* out, size_t size);
@@ -161,9 +166,43 @@ const char* sectionType(FromKind kind);
 // Writes up to 3 kinds, the chosen one first.
 size_t listOrder(FromKind chosen, FromKind* out);
 
-// One member rule ("scope:<id>" or "collection:<id>") of a comma-separated list; returns the next
-// position, or nullptr at the end. Malformed entries are skipped.
+// One member rule ("scope:<id>" or "collection:<id>") of a list (one per line; commas also
+// separate); returns the next position, or nullptr at the end. Other and malformed items are skipped.
 const char* nextScopeRule(const char* text, From& out);
+// One item of Pick from (any kind), the same way.
+const char* nextFrom(const char* text, From& out);
+
+// --- Pick from and Leave out as sets (R1c, X8; cases.json "sources") ----------------------------------
+
+// Pick from as stored: valid items, once each, in the order picked, one per line (commas are read as
+// separators too). Library stands alone; nothing valid is "up_next". Returns false when out is too small.
+bool normalizeSources(const char* text, char* out, size_t size);
+// Leave out as stored: rules ("tag:<text>" lower-cased, "scope:<id>", "collection:<id>", "library"),
+// one per line, once each; Library stands alone (it leaves out every book). Dashboard lists are not rules.
+bool normalizeRules(const char* text, char* out, size_t size);
+// Library is among the items (Pick from or Leave out).
+bool hasLibrary(const char* text);
+// Toggles one item of a set (R1c, X8): Library clears the others, another item clears Library.
+// `item` is one formatted item; out gets the new set (normalized when sources is true, else as rules).
+bool toggleItem(const char* text, const char* item, bool sources, char* out, size_t size);
+
+// The order a top-up tries books in (R1c): each picked list a stream in the server's order, and one
+// shuffle bag over every picked library, scope and collection, one more stream where its first source
+// was picked; the streams in turn, a book once. When every stream is empty: Up next, Want to read,
+// Discover, the first not picked that has books (*fallback; else nullptr). listAt(kind, &count, ctx)
+// gives a list's books (nullptr: none).
+using ListAt = const uint32_t* (*)(FromKind kind, size_t* count, void* ctx);
+size_t candidates(const char* sources, ListAt listAt, void* ctx, const uint32_t* bag, size_t bagCount, uint32_t* out,
+                  size_t max, const FromKind** fallback);
+// The picked sources that are listed by their members (library, scopes, collections).
+bool hasMemberSources(const char* sources);
+
+// One book against the Leave out rules (X1-X8): Library out; a tag rule needs the book's tags
+// (tags nullptr: not known yet); a scope or collection rule asks inMembers (Unknown while its list is
+// not complete). Out wins, then Unknown (failed closed, X7).
+using InMembers = Check (*)(const From& rule, uint32_t id, void* ctx);
+Check checkBook(uint32_t id, const char* rules, InMembers inMembers, void* ctx, const char* const* tags,
+                size_t tagCount);
 
 bool validHours(int hours);
 // Hours as stored: a bad value is the default.
@@ -182,14 +221,13 @@ struct Store {
   uint32_t rulesStamp = 0;   // fnv1a of the Leave out rules: other rules check every cover again
   State state;
   uint8_t battery = 0xFF;   // the level the first pass drew (the redraw draws the same), 0xFF none
-  uint32_t listAt = 0;      // epoch s of the source list (list sources), 0 never
+  uint32_t listAt = 0;      // epoch s of the dashboard lists, 0 never
   uint32_t scopesAt = 0;    // epoch s of the smart scope and collection names (the settings' lists)
-  uint8_t listKind = 0;     // the list that answered (FromKind; a fallback can answer)
-  uint8_t listCount = 0;
-  uint32_t list[BATCH] = {};  // the list source's books in its order (eligible ones only)
+  uint8_t listCount[LIST_KINDS] = {};
+  uint32_t list[LIST_KINDS][BATCH] = {};  // each dashboard list's books in its order (eligible ones only)
   Batch batch;
 };
-constexpr size_t STORE_BYTES = 4 + 2 + 4 + 4 + 4 + 8 + 1 + 4 + 4 + 1 + 1 + 4 * BATCH + 1 + 6 * BATCH + 4;
+constexpr size_t STORE_BYTES = 4 + 2 + 4 + 4 + 4 + 8 + 1 + 4 + 4 + LIST_KINDS * (1 + 4 * BATCH) + 1 + 6 * BATCH + 4;
 // Fixed-size little-endian record with a trailing CRC-32.
 size_t serialize(const Store& store, uint8_t* out, size_t size);
 bool parse(const uint8_t* in, size_t size, Store& out);

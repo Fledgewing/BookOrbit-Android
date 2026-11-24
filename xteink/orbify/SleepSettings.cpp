@@ -17,6 +17,9 @@ namespace OrbifySleep {
 
 using namespace orbify::sleep;
 
+// The list screens' items (defined below).
+void choices(bool pick, std::vector<std::string>& labels, std::vector<std::string>& items);
+
 namespace {
 
 // Option labels are runtime strings (enumStringValues): only row names need StrIds.
@@ -48,40 +51,55 @@ std::string ruleOf(const Scope& s) {
 
 std::string scopeLabel(const Scope& s) { return (s.collection ? "Collection: " : "Smart scope: ") + s.title; }
 
-// Pick From: the three lists, then each smart scope and collection by name.
-std::vector<std::string> fromLabels() {
-  std::vector<std::string> out = {"Up Next", "Want to Read", "Discover"};
-  for (const Scope& s : scopes()) out.push_back(scopeLabel(s));
-  const std::string& from = settings().from;
-  bool listed = from == "up_next" || from == "want_to_read" || from == "discover";
-  for (const Scope& s : scopes()) listed = listed || ruleOf(s) == from;
-  if (!listed) out.push_back(from);  // a scope the last sync did not list (yet)
-  return out;
+// A set as the web page shows and types it: comma-separated.
+std::string commas(std::string text) {
+  for (char& c : text) {
+    if (c == '\n') c = ',';
+  }
+  return text;
 }
 
-uint8_t fromIndex() {
-  const std::string& from = settings().from;
-  if (from == "want_to_read") return 1;
-  if (from == "discover") return 2;
-  if (from == "up_next") return 0;
-  uint8_t i = 3;
-  for (const Scope& s : scopes()) {
-    if (ruleOf(s) == from) return i;
-    i++;
+std::string setFromText(const std::string& text, const bool sources) {
+  std::string lines = text;
+  for (char& c : lines) {
+    if (c == ',') c = '\n';
   }
-  return i;  // the unlisted one, last
+  char out[1024];
+  const bool ok = sources ? normalizeSources(lines.c_str(), out, sizeof(out)) : normalizeRules(lines.c_str(), out, sizeof(out));
+  return ok ? std::string(out) : std::string(sources ? "up_next" : "");
 }
 
-void setFrom(const uint8_t index) {
-  static const char* const LISTS[] = {"up_next", "want_to_read", "discover"};
-  if (index < 3) {
-    edit().from = LISTS[index];
-  } else if (index - 3u < scopes().size()) {
-    edit().from = ruleOf(scopes()[index - 3]);
-  } else {
-    return;  // the unlisted one stays
+bool inSet(const std::string& set, const std::string& item) {
+  size_t at = 0;
+  while (at <= set.size()) {
+    size_t end = set.find('\n', at);
+    if (end == std::string::npos) end = set.size();
+    if (set.compare(at, end - at, item) == 0) return true;
+    at = end + 1;
   }
-  save();
+  return false;
+}
+
+size_t setSize(const std::string& set) {
+  if (set.empty()) return 0;
+  size_t n = 1;
+  for (const char c : set) n += c == '\n';
+  return n;
+}
+
+// The set's row value in Settings: its one item's name, or how many.
+std::string summary(const bool pick) {
+  std::vector<std::string> labels, items;
+  choices(pick, labels, items);
+  const std::string& set = pick ? settings().from : settings().leaveScopes;
+  const size_t n = setSize(set);
+  if (n == 0) return tr(STR_NONE_OPT);
+  if (n == 1) {
+    for (size_t i = 0; i < items.size(); i++) {
+      if (items[i] == set) return labels[i];
+    }
+  }
+  return std::to_string(n);
 }
 
 std::vector<std::string> hourLabels() {
@@ -95,32 +113,6 @@ uint8_t hoursIndex() {
     if (HOURS[i] == settings().hours) return static_cast<uint8_t>(i);
   }
   return 0;
-}
-
-bool leftOut(const std::string& rule) {
-  From r;
-  for (const char* p = nextScopeRule(settings().leaveScopes.c_str(), r); p; p = nextScopeRule(p, r)) {
-    char text[32];
-    if (formatFrom(r, text, sizeof(text)) && rule == text) return true;
-  }
-  return false;
-}
-
-void toggleRule(const std::string& rule) {
-  std::string next;
-  From r;
-  for (const char* p = nextScopeRule(settings().leaveScopes.c_str(), r); p; p = nextScopeRule(p, r)) {
-    char text[32];
-    if (!formatFrom(r, text, sizeof(text)) || rule == text) continue;
-    if (!next.empty()) next += ',';
-    next += text;
-  }
-  if (!leftOut(rule)) {
-    if (!next.empty()) next += ',';
-    next += rule;
-  }
-  edit().leaveScopes = next;
-  save();
 }
 
 SettingInfo onOff(const StrId name, bool Settings::* field, const char* key) {
@@ -156,7 +148,16 @@ SettingInfo text(const StrId name, std::string Settings::* field, const char* ke
       key, StrId::STR_CAT_DISPLAY);
 }
 
-SettingInfo fromRow() { return choice(StrId::STR_ORBIFY_SLEEP_FROM, fromLabels(), fromIndex, setFrom, "orbifySleepFrom"); }
+// The web page's row for a set: typed, comma-separated (the reader ticks them on a list screen).
+SettingInfo setRow(const StrId name, const bool sources, const char* key) {
+  return SettingInfo::DynamicString(
+      name, [sources] { return commas(sources ? settings().from : settings().leaveScopes); },
+      [sources](const std::string& v) {
+        (sources ? edit().from : edit().leaveScopes) = setFromText(v, sources);
+        save();
+      },
+      key, StrId::STR_CAT_DISPLAY);
+}
 
 SettingInfo hoursRow() {
   return choice(
@@ -208,10 +209,10 @@ SettingInfo cornerRow() {
 void addCatalogRows(void (*visitor)(SettingInfo&&, void*), void* context) {
   const auto add = [visitor, context](SettingInfo s) { visitor(std::move(s), context); };
   add(onOff(StrId::STR_ORBIFY_SLEEP_PICK, &Settings::pick, "orbifySleep"));
-  add(fromRow());
+  // The web page types the sets ("up_next,scope:<id>", "library"); the reader ticks them by name.
+  add(setRow(StrId::STR_ORBIFY_SLEEP_FROM, true, "orbifySleepFrom"));
   add(text(StrId::STR_ORBIFY_SLEEP_TAGS, &Settings::leaveTags, "orbifySleepLeaveTags", false));
-  // The web page types the rules ("scope:<id>,collection:<id>"); the reader toggles them by name.
-  add(text(StrId::STR_ORBIFY_SLEEP_SCOPES, &Settings::leaveScopes, "orbifySleepLeaveScopes", false));
+  add(setRow(StrId::STR_ORBIFY_SLEEP_SCOPES, false, "orbifySleepLeaveScopes"));
   add(hoursRow());
   add(text(StrId::STR_ORBIFY_SLEEP_TEXT, &Settings::text, "orbifySleepText", true));
   add(onOff(StrId::STR_ORBIFY_SLEEP_BATTERY, &Settings::battery, "orbifySleepBattery"));
@@ -220,29 +221,58 @@ void addCatalogRows(void (*visitor)(SettingInfo&&, void*), void* context) {
   add(cornerRow());
 }
 
-void scopeChoices(std::vector<std::string>& labels, std::vector<std::string>& rules) {
+void choices(const bool pick, std::vector<std::string>& labels, std::vector<std::string>& items) {
   labels.clear();
-  rules.clear();
+  items.clear();
+  // Library first: every book (R1c, X8). Pick from adds the three lists.
+  labels.emplace_back("Library");
+  items.emplace_back("library");
+  if (pick) {
+    labels.insert(labels.end(), {"Up Next", "Want to Read", "Discover"});
+    items.insert(items.end(), {"up_next", "want_to_read", "discover"});
+  }
   for (const Scope& s : scopes()) {
     labels.push_back(scopeLabel(s));
-    rules.push_back(ruleOf(s));
+    items.push_back(ruleOf(s));
+  }
+  // An item the last sync did not list (yet) stays visible, so it can be unticked.
+  const std::string& set = pick ? settings().from : settings().leaveScopes;
+  size_t at = 0;
+  while (at < set.size()) {
+    size_t end = set.find('\n', at);
+    if (end == std::string::npos) end = set.size();
+    const std::string item = set.substr(at, end - at);
+    at = end + 1;
+    bool listed = false;
+    for (const auto& i : items) listed = listed || i == item;
+    if (!listed && !item.empty()) {
+      labels.push_back(item);
+      items.push_back(item);
+    }
   }
 }
 
-bool leftOutRule(const std::string& rule) { return leftOut(rule); }
-
-void toggleLeaveOut(const std::string& rule) { toggleRule(rule); }
-
-const char* leaveScopesTitle() { return tr(STR_ORBIFY_SLEEP_SCOPES); }
-
-std::string leaveScopesSummary() {
-  size_t chosen = 0;
-  From r;
-  for (const char* p = nextScopeRule(settings().leaveScopes.c_str(), r); p; p = nextScopeRule(p, r)) chosen++;
-  return chosen == 0 ? std::string(tr(STR_NONE_OPT)) : std::to_string(chosen);
+bool chosen(const bool pick, const std::string& item) {
+  return inSet(pick ? settings().from : settings().leaveScopes, item);
 }
 
+void toggle(const bool pick, const std::string& item) {
+  char out[1024];
+  const std::string& set = pick ? settings().from : settings().leaveScopes;
+  if (!toggleItem(set.c_str(), item.c_str(), pick, out, sizeof(out))) return;
+  (pick ? edit().from : edit().leaveScopes) = out;
+  save();
+}
+
+const char* listTitle(const bool pick) { return pick ? tr(STR_ORBIFY_SLEEP_FROM) : tr(STR_ORBIFY_SLEEP_SCOPES); }
+
+std::string setSummary(const bool pick) { return summary(pick); }
+
 const char* statusLine(const SettingInfo& row) {
+  // X8: Library leaves out every book; the sleep screen shows the current book.
+  if (row.action == SettingAction::OrbifySleepScopes && hasLibrary(settings().leaveScopes.c_str())) {
+    return "Every book is left out: the current book shows";
+  }
   // R6: without Keep Clock in Sleep the X4 learns the time only in the sleep sync.
   if (row.nameId == StrId::STR_ORBIFY_SLEEP_EVERY && settings().hours != EVERY_SLEEP && !SETTINGS.keepClockInSleep) {
     return "Changes when the time is known";
@@ -283,9 +313,9 @@ SettingInfo sleepScreenRow(const SettingInfo& sleepScreen) {
 
 void addSleepRows(std::vector<SettingInfo>& rows) {
   if (settings().pick) {
-    rows.push_back(fromRow());
+    // Lists of toggles, opened straight from their rows (SleepListActivity, R1c and X8).
+    rows.push_back(SettingInfo::Action(StrId::STR_ORBIFY_SLEEP_FROM, SettingAction::OrbifySleepFrom));
     rows.push_back(text(StrId::STR_ORBIFY_SLEEP_TAGS, &Settings::leaveTags, "orbifySleepLeaveTags", false));
-    // A list of toggles, opened straight from the row (SleepScopesActivity).
     rows.push_back(SettingInfo::Action(StrId::STR_ORBIFY_SLEEP_SCOPES, SettingAction::OrbifySleepScopes));
     rows.push_back(hoursRow());
   }

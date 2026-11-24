@@ -24,14 +24,15 @@ SettingInfo sleepScreenRow(const SettingInfo& sleepScreen);
 // Then Orbify's rows, after CrossInk's own sleep rows; the rows that only apply show only then.
 void addSleepRows(std::vector<SettingInfo>& rows);
 
-// Leave Out Scopes' list screen (SleepScopesActivity): every smart scope and collection by name
-// with its rule ("scope:<id>"), whether a rule is left out, toggling one, the page's title, and the
-// row's value in Settings.
-void scopeChoices(std::vector<std::string>& labels, std::vector<std::string>& rules);
-bool leftOutRule(const std::string& rule);
-void toggleLeaveOut(const std::string& rule);
-const char* leaveScopesTitle();
-std::string leaveScopesSummary();
+// The list screens (SleepListActivity): Pick From (pick true: Library, the three lists, the smart
+// scopes and collections) and Leave Out Scopes (Library, the smart scopes and collections), each item
+// ticked on one page (R1c, X8). items are the stored form ("library", "up_next", "scope:<id>").
+void choices(bool pick, std::vector<std::string>& labels, std::vector<std::string>& items);
+bool chosen(bool pick, const std::string& item);
+void toggle(bool pick, const std::string& item);
+const char* listTitle(bool pick);
+// The row's value in Settings: the one item's name, or how many.
+std::string setSummary(bool pick);
 // A row's status, drawn on its own line under the row (never beside its value), or nullptr.
 const char* statusLine(const SettingInfo& row);
 

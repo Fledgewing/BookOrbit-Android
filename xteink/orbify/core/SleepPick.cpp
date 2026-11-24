@@ -333,6 +333,7 @@ bool parseFrom(const char* text, From& out) {
   if (std::strcmp(text, "up_next") == 0) return out = From{FromKind::UpNext, 0}, true;
   if (std::strcmp(text, "want_to_read") == 0) return out = From{FromKind::WantToRead, 0}, true;
   if (std::strcmp(text, "discover") == 0) return out = From{FromKind::Discover, 0}, true;
+  if (std::strcmp(text, "library") == 0) return out = From{FromKind::Library, 0}, true;
   uint32_t id = 0;
   if (parseRef(text, "scope:", id)) return out = From{FromKind::Scope, id}, true;
   if (parseRef(text, "collection:", id)) return out = From{FromKind::Collection, id}, true;
@@ -356,6 +357,9 @@ bool formatFrom(const From& from, char* out, const size_t size) {
       break;
     case FromKind::Collection:
       n = std::snprintf(out, size, "collection:%u", static_cast<unsigned>(from.id));
+      break;
+    case FromKind::Library:
+      n = std::snprintf(out, size, "library");
       break;
   }
   return n > 0 && static_cast<size_t>(n) < size;
@@ -381,6 +385,250 @@ size_t listOrder(const FromKind chosen, FromKind* out) {
     if (k != chosen) out[n++] = k;
   }
   return n;
+}
+
+namespace {
+// One trimmed item of a list separated by newlines and commas (seps), copied into item.
+const char* nextItem(const char* p, const char* seps, char* item, const size_t size, bool& got) {
+  got = false;
+  if (!p || !*p) return nullptr;
+  const char* e = p;
+  while (*e && !std::strchr(seps, *e)) e++;
+  const char* b = p;
+  const char* t = e;
+  trim(b, t);
+  const size_t len = static_cast<size_t>(t - b);
+  if (len > 0 && len < size) {
+    std::memcpy(item, b, len);
+    item[len] = '\0';
+    got = true;
+  }
+  return *e ? e + 1 : e;
+}
+
+struct Out {
+  char* p;
+  size_t size;
+  size_t used = 0;
+  bool ok = true;
+  bool contains(const char* item) const {
+    const size_t n = std::strlen(item);
+    for (const char* q = p; q < p + used;) {
+      const char* e = static_cast<const char*>(std::memchr(q, '\n', static_cast<size_t>(p + used - q)));
+      if (!e) e = p + used;
+      if (static_cast<size_t>(e - q) == n && std::memcmp(q, item, n) == 0) return true;
+      q = e + 1;
+    }
+    return false;
+  }
+  void add(const char* item) {
+    if (contains(item)) return;
+    const size_t n = std::strlen(item) + (used ? 1 : 0);
+    if (used + n + 1 > size) {
+      ok = false;
+      return;
+    }
+    if (used) p[used++] = '\n';
+    std::memcpy(p + used, item, std::strlen(item));
+    used += std::strlen(item);
+    p[used] = '\0';
+  }
+  void set(const char* item) {
+    used = 0;
+    if (size) p[0] = '\0';
+    add(item);
+  }
+};
+
+// A rule item as stored, or false.
+bool cleanRule(const char* item, char* out, const size_t size) {
+  if (std::strncmp(item, "tag:", 4) == 0) {
+    const char* b = item + 4;
+    const char* e = b + std::strlen(b);
+    trim(b, e);
+    const size_t n = static_cast<size_t>(e - b);
+    if (n == 0 || n + 5 > size) return false;
+    std::memcpy(out, "tag:", 4);
+    for (size_t i = 0; i < n; i++) out[4 + i] = lowerAscii(b[i]);
+    out[4 + n] = '\0';
+    return true;
+  }
+  From f;
+  if (!parseFrom(item, f) || isList(f.kind)) return false;
+  return formatFrom(f, out, size);
+}
+}  // namespace
+
+bool normalizeSources(const char* text, char* out, const size_t size) {
+  if (!out || size == 0) return false;
+  Out o{out, size};
+  out[0] = '\0';
+  char item[64];
+  bool got = false;
+  bool library = false;
+  for (const char* p = nextItem(text, ",\n", item, sizeof(item), got); p; p = nextItem(p, ",\n", item, sizeof(item), got)) {
+    From f;
+    char clean[32];
+    if (!got || !parseFrom(item, f) || !formatFrom(f, clean, sizeof(clean))) continue;
+    library = library || f.kind == FromKind::Library;
+    o.add(clean);
+  }
+  if (library) o.set("library");
+  if (o.used == 0) o.set("up_next");
+  return o.ok;
+}
+
+bool normalizeRules(const char* text, char* out, const size_t size) {
+  if (!out || size == 0) return false;
+  Out o{out, size};
+  out[0] = '\0';
+  char item[96];
+  bool got = false;
+  bool library = false;
+  for (const char* p = nextItem(text, "\n", item, sizeof(item), got); p; p = nextItem(p, "\n", item, sizeof(item), got)) {
+    char clean[96];
+    if (!got || !cleanRule(item, clean, sizeof(clean))) continue;
+    library = library || std::strcmp(clean, "library") == 0;
+    o.add(clean);
+  }
+  if (library) o.set("library");
+  return o.ok;
+}
+
+bool hasLibrary(const char* text) {
+  char item[96];
+  bool got = false;
+  for (const char* p = nextItem(text, ",\n", item, sizeof(item), got); p; p = nextItem(p, ",\n", item, sizeof(item), got)) {
+    if (got && std::strcmp(item, "library") == 0) return true;
+  }
+  return false;
+}
+
+bool toggleItem(const char* text, const char* item, const bool sources, char* out, const size_t size) {
+  if (!out || size == 0) return false;
+  Out o{out, size};
+  out[0] = '\0';
+  const bool isLib = std::strcmp(item, "library") == 0;
+  bool had = false;
+  char cur[96];
+  bool got = false;
+  for (const char* p = nextItem(text, sources ? ",\n" : "\n", cur, sizeof(cur), got); p;
+       p = nextItem(p, sources ? ",\n" : "\n", cur, sizeof(cur), got)) {
+    if (!got) continue;
+    if (std::strcmp(cur, item) == 0) {
+      had = true;
+      continue;
+    }
+    // Library stands alone: ticking it clears the others, ticking another clears it.
+    if (!isLib && std::strcmp(cur, "library") == 0) continue;
+    if (isLib) continue;
+    o.add(cur);
+  }
+  if (!had) o.add(item);
+  if (!o.ok) return false;
+  char tmp[1024];
+  if (std::strlen(out) >= sizeof(tmp)) return false;
+  std::strcpy(tmp, out);
+  return sources ? normalizeSources(tmp, out, size) : normalizeRules(tmp, out, size);
+}
+
+const char* nextFrom(const char* text, From& out) {
+  char item[32];
+  bool got = false;
+  for (const char* p = nextItem(text, ",\n", item, sizeof(item), got); p; p = nextItem(p, ",\n", item, sizeof(item), got)) {
+    if (got && parseFrom(item, out)) return p;
+  }
+  return nullptr;
+}
+
+bool hasMemberSources(const char* sources) {
+  From f;
+  for (const char* p = nextFrom(sources, f); p; p = nextFrom(p, f)) {
+    if (!isList(f.kind)) return true;
+  }
+  return false;
+}
+
+size_t candidates(const char* sources, const ListAt listAt, void* ctx, const uint32_t* bag, const size_t bagCount,
+                  uint32_t* out, const size_t max, const FromKind** fallback) {
+  static const FromKind KINDS[LIST_KINDS] = {FromKind::UpNext, FromKind::WantToRead, FromKind::Discover};
+  if (fallback) *fallback = nullptr;
+  // At most the three lists and the bag.
+  const uint32_t* streams[LIST_KINDS + 1] = {};
+  size_t counts[LIST_KINDS + 1] = {};
+  size_t n = 0;
+  bool picked[LIST_KINDS] = {};
+  bool bagAdded = false;
+  From f;
+  for (const char* p = nextFrom(sources, f); p; p = nextFrom(p, f)) {
+    if (isList(f.kind)) {
+      const size_t k = static_cast<size_t>(f.kind);
+      if (picked[k]) continue;
+      picked[k] = true;
+      size_t c = 0;
+      const uint32_t* l = listAt(f.kind, &c, ctx);
+      streams[n] = l;
+      counts[n++] = l ? c : 0;
+    } else if (!bagAdded) {
+      bagAdded = true;
+      streams[n] = bag;
+      counts[n++] = bag ? bagCount : 0;
+    }
+  }
+  size_t longest = 0;
+  for (size_t i = 0; i < n; i++) longest = std::max(longest, counts[i]);
+  size_t used = 0;
+  if (longest == 0) {
+    for (const FromKind& k : KINDS) {
+      if (picked[static_cast<size_t>(k)]) continue;
+      size_t c = 0;
+      const uint32_t* l = listAt(k, &c, ctx);
+      if (!l || c == 0) continue;
+      for (size_t i = 0; i < c && used < max; i++) {
+        if (!inList(out, used, l[i])) out[used++] = l[i];
+      }
+      if (fallback) *fallback = &k;
+      return used;
+    }
+    return 0;
+  }
+  for (size_t i = 0; i < longest; i++) {
+    for (size_t s = 0; s < n && used < max; s++) {
+      if (i < counts[s] && !inList(out, used, streams[s][i])) out[used++] = streams[s][i];
+    }
+  }
+  return used;
+}
+
+Check checkBook(const uint32_t id, const char* rules, const InMembers inMembers, void* ctx, const char* const* tags,
+                const size_t tagCount) {
+  bool unknown = false;
+  char item[96];
+  bool got = false;
+  for (const char* p = nextItem(rules, "\n", item, sizeof(item), got); p; p = nextItem(p, "\n", item, sizeof(item), got)) {
+    char rule[96];
+    if (!got || !cleanRule(item, rule, sizeof(rule))) continue;
+    if (std::strcmp(rule, "library") == 0) return Check::Out;
+    if (std::strncmp(rule, "tag:", 4) == 0) {
+      if (!tags) {
+        unknown = true;
+        continue;
+      }
+      for (size_t i = 0; i < tagCount; i++) {
+        const char* b = tags[i];
+        const char* e = b + std::strlen(b);
+        trim(b, e);
+        if (sameIgnoringCase(b, e, rule + 4, rule + std::strlen(rule))) return Check::Out;
+      }
+      continue;
+    }
+    From f;
+    if (!parseFrom(rule, f)) continue;
+    const Check c = inMembers ? inMembers(f, id, ctx) : Check::Unknown;
+    if (c == Check::Out) return Check::Out;
+    unknown = unknown || c == Check::Unknown;
+  }
+  return unknown ? Check::Unknown : Check::Keep;
 }
 
 const char* nextScopeRule(const char* text, From& out) {
@@ -480,7 +728,7 @@ uint32_t crc32(const uint8_t* data, const size_t size) {
 
 namespace {
 constexpr uint32_t MAGIC = 0x504C534Fu;  // "OSLP"
-constexpr uint16_t VERSION = 1;
+constexpr uint16_t VERSION = 2;  // 2: a list per dashboard list (Pick from as a set)
 
 struct Writer {
   uint8_t* p;
@@ -528,9 +776,10 @@ size_t serialize(const Store& s, uint8_t* out, const size_t size) {
   w.u8(s.battery);
   w.u32(s.listAt);
   w.u32(s.scopesAt);
-  w.u8(s.listKind);
-  w.u8(s.listCount);
-  for (size_t i = 0; i < BATCH; i++) w.u32(i < s.listCount ? s.list[i] : 0);
+  for (size_t k = 0; k < LIST_KINDS; k++) {
+    w.u8(s.listCount[k]);
+    for (size_t i = 0; i < BATCH; i++) w.u32(i < s.listCount[k] ? s.list[k][i] : 0);
+  }
   w.u8(static_cast<uint8_t>(s.batch.count));
   for (size_t i = 0; i < BATCH; i++) {
     const Entry e = i < s.batch.count ? s.batch.entries[i] : Entry{};
@@ -557,9 +806,10 @@ bool parse(const uint8_t* in, const size_t size, Store& out) {
   s.battery = r.u8();
   s.listAt = r.u32();
   s.scopesAt = r.u32();
-  s.listKind = r.u8();
-  s.listCount = std::min<uint8_t>(r.u8(), BATCH);
-  for (size_t i = 0; i < BATCH; i++) s.list[i] = r.u32();
+  for (size_t k = 0; k < LIST_KINDS; k++) {
+    s.listCount[k] = std::min<uint8_t>(r.u8(), BATCH);
+    for (size_t i = 0; i < BATCH; i++) s.list[k][i] = r.u32();
+  }
   s.batch.count = std::min<size_t>(r.u8(), BATCH);
   for (size_t i = 0; i < BATCH; i++) {
     Entry e;

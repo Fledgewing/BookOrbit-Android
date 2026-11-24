@@ -291,7 +291,7 @@ SWITCH_VALUES = {name: switch_value(name) for name in SWITCHES}
 # in the same process) leaves them out of its scan, so their strings stay out of the string table.
 _I18N_SKIP = []
 if not SWITCH_VALUES["CROSSINK_TAILNET_ORBIFY_SLEEP"]:
-    _I18N_SKIP += ["SleepSettings.cpp", "SleepScopesActivity.cpp"]
+    _I18N_SKIP += ["SleepSettings.cpp", "SleepListActivity.cpp"]
 os.environ["ORBIFY_I18N_SKIP"] = ",".join(_I18N_SKIP)
 
 print(f"Tailnet switches for {pioenv} (column {SWITCH_COLUMN}):")

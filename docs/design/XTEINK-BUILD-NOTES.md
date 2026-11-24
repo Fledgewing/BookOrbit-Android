@@ -321,23 +321,26 @@ S3, S4, X1-X7). Switch `CROSSINK_TAILNET_ORBIFY_SLEEP` (0, 1, 1): the X3 builds 
 
 | # | What | Where | How |
 |---|---|---|---|
-| P1 | BookOrbit Pick in the Sleep Screen list | `orbify/SleepSettings.cpp` `sleepScreenRow`, `SettingsList.h` | A dynamic enum over CrossInk's choices plus BookOrbit Pick, stored in `/.crosspoint/orbify_sleep/settings.json` (`pick`); `sleepScreen` keeps its value (S4). The rows that apply only to Pick, or to Overlay, show only then. The web settings page has the same keys (`orbifySleep*`). |
-| P2 | The batch | `orbify/SleepScreen.cpp` `topUp`, `core/SleepPick` | Up to 24 covers on the card whatever Pick From is; each sleep sync tops it up by at most 4 covers within a 40 s share of its budget, on the lent session, after the next cover. A list source is re-read once a day (empty: Up Next, Want to Read, Discover); a smart scope or collection is a shuffle bag of up to 500 (10 pages per sleep). Every sleep: a cover goes after 3 shows, never the one on screen. Hours mode from a list follows the list; from a bag, a shown cover makes room. |
+| P1 | BookOrbit Pick in the Sleep Screen list | `orbify/SleepSettings.cpp` `sleepScreenRow`, `SettingsList.h` | A dynamic enum over CrossInk's choices plus BookOrbit Pick, stored in `/.crosspoint/orbify_sleep/settings.json` (`pick`; `from` and `leaveScopes` one item per line); `sleepScreen` keeps its value (S4). The rows that apply only to Pick, or to Overlay, show only then. The web settings page has the same keys (`orbifySleep*`). |
+| P2 | The batch | `orbify/SleepScreen.cpp` `topUp`, `core/SleepPick` | Up to 24 covers on the card whatever Pick From is; each sleep sync tops it up by at most 4 covers within a 40 s share of its budget, on the lent session, after the next cover. Each picked list is re-read once a day (all picked sources empty: Up Next, Want to Read, Discover not picked); every picked library, smart scope and collection share one shuffle bag of up to 500 (10 pages per sleep). Every sleep: a cover goes after 3 shows, never the one on screen. Hours mode from a list follows the list; from a bag, a shown cover makes room. |
 | P3 | Leave out | `topUp`, `memberCheck`, `probe` | Tags from each candidate's detail (8 per sleep); smart scopes and collections as sorted ID files searched in place. A cover whose list is not complete yet is held back (X7). New rules check every kept cover again before it shows. |
 | P4 | Sharp covers | `topUp`, `decodeCovers` | The 400 x 600 catalog thumbnail (`downloadThumbnail`): the full-size OPDS cover needs an OPDS login the X4 does not have. Decoded with the radio off by `JpegToBmpConverter` to a 480 x 800 2-bit BMP for the panel's tone profile and Fit/Crop; the JPEG stays for a re-decode when those change. |
 | P5 | At sleep | `SleepActivity::renderOrbifyPick`, `pickCover` | Reads `state.bin`, decides by `core::decide` (the shared table), draws the BMP; no ready cover: the open book's cover, then the default screen (F1). A cover that does not draw leaves the batch (F6). Never the network. |
 | P6 | Text and battery | `drawExtras`, `prepareSleepBitmap`, `renderDefaultSleepScreen` | Bar: a band under the cover (the cover fits above it); Overlay: plates. Drawn on every grey plane; the redraw draws the battery level the first pass recorded. |
 | P7 | X3 i18n | `tailnet_build.py`, `gen_i18n.py` (0039) | `ORBIFY_I18N_SKIP=SleepSettings.cpp` when the switch is 0, so its strings stay out of the X3's table. |
-| F1 | Flash | | `x4-pro` 6,349,297 of 6,553,600 bytes (96.9%, +38,656 over 6,310,641); `x4-classic` 6,192,666 (94.5%, +38,100 over 6,154,566); `default` (X3) 6,512,919 (99.38%), unchanged byte for byte |
+| F1 | Flash | | `x4-pro` 6,352,693 of 6,553,600 bytes (96.9%, +42,052 over 6,310,641); `x4-classic` 6,196,246 (94.5%, +41,680 over 6,154,566); `default` (X3) 6,512,919 (99.38%), unchanged byte for byte |
 
-Settings UI rules shared with Android (the user's ruling, 2026-11-24): Leave Out Scopes opens
-straight onto one list of toggles (`orbify/SleepScopesActivity`, no screen in between, its title in
-the header only); a row's status goes on its own line under the row (the list's `subtitle`), as
-Change Every's "Changes when the time is known" without Keep Clock in Sleep (R6). Pick From is still
-one choice: making it, and Leave out, multi-select with Library as an item waits for the rules
-Android puts in `shared/fixtures/sleep/cases.json`; the toggle list screen is the one it will use.
-"Using the newest 500" is a log line only. Pick From's scope list and Leave Out Scopes fill after the
-first sleep sync saves `scopes.tsv`.
+Settings UI rules shared with Android (the user's ruling, 2026-11-24): Pick From and Leave Out Scopes
+each open straight onto one list of toggles (`orbify/SleepListActivity`, no screen in between, the
+title in the header only), with **Library** as an item (R1c, X8: it stands alone either way). Pick
+From is a set (`core::normalizeSources`, `candidates`: the picked lists in turn, one bag over every
+picked library, scope and collection, each listed into `src_<l|s|c><id>.bin`); Leave out with
+Library shows the current book. The rules are `shared/fixtures/sleep/cases.json` `sources`, which the
+host test reads as Android's tests do. A row's status goes on its own line under the row (the list's
+`subtitle`): Change Every's "Changes when the time is known" without Keep Clock in Sleep (R6), and
+Leave Out Scopes' "Every book is left out: the current book shows". The web settings page types the
+sets comma-separated. "Using the newest 500" is a log line only. The smart scopes and collections
+appear in the lists after the first sleep sync saves `scopes.tsv`.
 
 On a device (X4 Pro or X4, serial log): set Sleep Screen to BookOrbit Pick, Pick From, Change Every
 (try Every sleep), then sleep with Wi-Fi in reach a few times. Expect per sleep:

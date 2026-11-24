@@ -218,9 +218,9 @@ They fit, because nothing is held in memory longer than one page:
 
 - **Picker:** the sleep sync saves the two section lists (first 100 of each) once a day to
   `scopes.tsv`, which Settings reads; Settings never goes online for them. A section reply is a few
-  KB, parsed with an ArduinoJson filter for `id`, `title` and `count`. Pick From lists them by name;
-  Leave Out Scopes opens straight onto a list of toggles by name (the web settings page types
-  `scope:<id>,collection:<id>`).
+  KB, parsed with an ArduinoJson filter for `id`, `title` and `count`. Pick From and Leave Out Scopes
+  each open straight onto one list of toggles by name, Library first (R1c, X8; the web settings page
+  types the sets comma-separated, e.g. `up_next,scope:12`).
 - **Listing members:** the sleep sync fetches `books?…&size=100` pages on the lent session, at most
   10 pages per sleep (like the mirror's slices). Each reply is parsed as a stream with a filter for
   `items[].id`, `hasCover`, `updatedAt` and `hasNext`. The filtered document holds about 100 small

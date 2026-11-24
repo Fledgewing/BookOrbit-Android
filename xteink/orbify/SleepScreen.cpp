@@ -45,7 +45,6 @@ constexpr char STORE_BAK[] = "/.crosspoint/orbify_sleep/state.bak";
 constexpr char STORE_TMP[] = "/.crosspoint/orbify_sleep/state.tmp";
 constexpr char REPLY_PATH[] = "/.crosspoint/orbify_sleep/reply.json";
 constexpr char BAG_PATH[] = "/.crosspoint/orbify_sleep/bag.bin";
-constexpr char BAG_PART[] = "/.crosspoint/orbify_sleep/bag.part";
 
 // Batch entry flags (core Entry::flags).
 constexpr uint8_t READY = 0x01;    // <id>.bmp decoded
@@ -112,6 +111,12 @@ void removeCover(const uint32_t id) {
   }
 }
 
+// A set as one log line ("a, b").
+std::string oneLine(std::string text) {
+  for (size_t i = text.find('\n'); i != std::string::npos; i = text.find('\n', i)) text.replace(i, 1, ", ");
+  return text;
+}
+
 uint32_t jsonId(JsonVariantConst v) {
   if (v.is<const char*>()) return static_cast<uint32_t>(std::strtoul(v.as<const char*>(), nullptr, 10));
   return v.as<uint32_t>();
@@ -158,10 +163,15 @@ void loadSettings() {
   if (deserializeJson(doc, text)) return;
   Settings s;
   s.pick = doc["pick"] | false;
-  From f;
-  s.from = parseFrom(doc["from"] | "up_next", f) ? std::string(doc["from"] | "up_next") : std::string("up_next");
+  char set[1024];
+  s.from = normalizeSources(doc["from"] | "up_next", set, sizeof(set)) ? set : "up_next";
   s.leaveTags = doc["leaveTags"] | "";
-  s.leaveScopes = doc["leaveScopes"] | "";
+  // Leave Out Scopes holds the member rules and Library (tags have their own row).
+  std::string scopes = doc["leaveScopes"] | "";
+  for (char& c : scopes) {
+    if (c == ',') c = '\n';
+  }
+  s.leaveScopes = normalizeRules(scopes.c_str(), set, sizeof(set)) ? set : "";
   s.hours = cleanHours(doc["hours"] | DEFAULT_HOURS);
   char clean[4 * TEXT_MAX + 1];
   cleanText(doc["text"] | "", clean, sizeof(clean));
@@ -279,19 +289,26 @@ bool readScopes(void (*each)(const Scope&, void* ctx), void* ctx) {
 
 bool active() { return settings().pick; }
 
+namespace {
+Check memberCheck(const Settings& s, uint32_t id);  // the sleep sync's section below
+}  // namespace
+
 bool pickCover(const bool redraw, std::string& bmpPath) {
   const Settings& s = settings();
   Store st = loadStore();
   // The covers it may show: decoded, not held back by an incomplete Leave out list or unchecked tags,
   // and never the book open now (R2).
   const bool tagRules = hasTagRules(s.leaveTags.c_str());
+  const bool rulesChanged = st.rulesStamp != fnv1a(s.leaveScopes.c_str(), fnv1a(s.leaveTags.c_str()));
   const int64_t open = openBookId(APP_STATE.openEpubPath);
   Entry pool[BATCH];
   size_t at[BATCH];
   size_t n = 0;
   for (size_t i = 0; i < st.batch.count; i++) {
     const Entry& e = st.batch.entries[i];
-    if (!(e.flags & READY) || (e.flags & HIDDEN) || (tagRules && !(e.flags & TAGS_OK))) continue;
+    if (!(e.flags & READY) || (e.flags & HIDDEN) || (tagRules && (!(e.flags & TAGS_OK) || rulesChanged))) continue;
+    // Leave out as set now (Library, smart scopes, collections), from the lists on the card (X7, X8).
+    if (memberCheck(s, e.id) != Check::Keep) continue;
     if (open > 0 && e.id == static_cast<uint64_t>(open)) continue;
     pool[n] = e;
     at[n++] = i;
@@ -301,8 +318,7 @@ bool pickCover(const bool redraw, std::string& bmpPath) {
   const Decision d =
       decide(Mode::Recommended, s.hours, now, pool, n, true, st.state, !redraw, randomBelow, nullptr);
   for (size_t i = 0; i < n; i++) st.batch.entries[at[i]].shows = pool[i].shows;
-  From from;
-  const bool bag = parseFrom(s.from.c_str(), from) && (from.kind == FromKind::Scope || from.kind == FromKind::Collection);
+  const bool bag = hasMemberSources(s.from.c_str());
   if (d.show == Show::Pool && bag && s.hours != EVERY_SLEEP) {
     // From a bag in hours mode, a cover shown once makes room for the bag's next (core usedUp).
     const int i = st.batch.indexOf(d.id);
@@ -554,8 +570,8 @@ bool listPages(const char* query, const char* partPath, Ids& ids, Run& run, cons
     filter["hasNext"] = true;
     JsonDocument doc(OrbifyHeap::jsonAllocator());
     char path[192];
-    std::snprintf(path, sizeof(path), "/plugin/catalog/books?page=%" PRIu32 "&size=%d&sort=recently_added&order=desc&%s",
-                  page, PAGE_SIZE, query);
+    std::snprintf(path, sizeof(path), "/plugin/catalog/books?page=%" PRIu32 "&size=%d&sort=recently_added&order=desc%s%s",
+                  page, PAGE_SIZE, *query ? "&" : "", query);
     if (!getJson(path, filter, doc)) return false;
     for (JsonObjectConst item : doc["items"].as<JsonArrayConst>()) {
       if (eligibleOnly && (item["hasCover"] == false || std::strcmp(item["readStatus"] | "", "read") == 0)) continue;
@@ -581,6 +597,12 @@ bool listPages(const char* query, const char* partPath, Ids& ids, Run& run, cons
 }
 
 // --- Leave out's member lists: a sorted uint32 file per rule, searched in place (X5) -------------------
+
+// A Pick from source's members, in the server's order (eligible books only).
+void sourcePath(const From& f, char* out, const size_t size, const char* ext) {
+  const char k = f.kind == FromKind::Library ? 'l' : (f.kind == FromKind::Scope ? 's' : 'c');
+  std::snprintf(out, size, "%s/src_%c%" PRIu32 ".%s", DIR, k, f.id, ext);
+}
 
 void memberPath(const From& f, char* out, const size_t size, const char* ext) {
   std::snprintf(out, size, "%s/lo_%c%" PRIu32 ".%s", DIR, f.kind == FromKind::Scope ? 's' : 'c', f.id, ext);
@@ -613,6 +635,8 @@ bool readMember(const size_t i, uint32_t* id, void* ctx) {
 
 // Every member rule against one book: Out, Keep, or Unknown while a list is not complete (X7).
 Check memberCheck(const Settings& s, const uint32_t id) {
+  // Library leaves out every book (X8): the sleep shows the current book (F1).
+  if (hasLibrary(s.leaveScopes.c_str())) return Check::Out;
   Check result = Check::Keep;
   From rule;
   for (const char* p = nextScopeRule(s.leaveScopes.c_str(), rule); p; p = nextScopeRule(p, rule)) {
@@ -696,6 +720,83 @@ void saveBag(const BagFile& b) {
   f.close();
 }
 
+// One dashboard list into the store's slot for it: eligible books in the server's order.
+bool fetchList(const FromKind kind, Store& st) {
+  JsonDocument filter;
+  filter["section"]["books"][0]["id"] = true;
+  filter["section"]["books"][0]["hasCover"] = true;
+  filter["section"]["books"][0]["readStatus"] = true;
+  JsonDocument doc(OrbifyHeap::jsonAllocator());
+  if (!getJson(std::string("/plugin/catalog/dashboard/sections/") + sectionType(kind), filter, doc)) return false;
+  const size_t k = static_cast<size_t>(kind);
+  uint8_t count = 0;
+  for (JsonObjectConst b : doc["section"]["books"].as<JsonArrayConst>()) {
+    const uint32_t id = jsonId(b["id"]);
+    if (!id || b["hasCover"] == false || std::strcmp(b["readStatus"] | "", "read") == 0) continue;
+    if (count < BATCH) st.list[k][count++] = id;
+  }
+  st.listCount[k] = count;
+  return true;
+}
+
+// Every picked library, scope and collection listed (each its own file, re-listed once a day, 10 pages
+// per sleep in all); `members` gets their union in order, a book once, up to BAG_MAX. False while a
+// source has never been listed in full.
+bool listBagSources(const Settings& s, const uint32_t now, Run& run, Ids& members) {
+  bool complete = true;
+  From f;
+  for (const char* p = nextFrom(s.from.c_str(), f); p; p = nextFrom(p, f)) {
+    if (isList(f.kind)) continue;
+    char path[64], part[64];
+    sourcePath(f, path, sizeof(path), "bin");
+    sourcePath(f, part, sizeof(part), "part");
+    uint32_t head[3] = {};
+    bool have = false;
+    {
+      HalFile file;
+      if (Storage.exists(path) && Storage.openFileForRead(TAG, path, file)) {
+        have = file.read(head, sizeof(head)) == static_cast<int>(sizeof(head)) && head[0] == LO_MAGIC;
+        file.close();
+      }
+    }
+    if ((!have || due(head[1], now)) && !run.over()) {
+      Ids ids(BAG_MAX);
+      char query[48] = "";
+      if (f.kind != FromKind::Library) {
+        std::snprintf(query, sizeof(query), "%s=%" PRIu32, f.kind == FromKind::Scope ? "smartScopeId" : "collectionId",
+                      f.id);
+      }
+      if (ids.p && listPages(query, part, ids, run, true)) {
+        HalFile out;
+        if (Storage.openFileForWrite(TAG, path, out)) {
+          const uint32_t h[3] = {LO_MAGIC, now, static_cast<uint32_t>(ids.n)};
+          out.write(h, sizeof(h));
+          out.write(ids.p, ids.n * 4);
+          out.close();
+          have = true;
+          LOG_INF(TAG, "Sleep screen: Pick from %s lists %u books", f.kind == FromKind::Library ? "library" : path,
+                  static_cast<unsigned>(ids.n));
+        }
+      }
+    }
+    if (!have) {
+      complete = false;
+      continue;
+    }
+    HalFile file;
+    if (!Storage.openFileForRead(TAG, path, file)) continue;
+    file.read(head, sizeof(head));
+    uint32_t id = 0;
+    for (uint32_t i = 0; i < head[2] && members.n < members.cap && file.read(&id, 4) == 4; i++) {
+      bool seen = false;
+      for (size_t j = 0; j < members.n && !seen; j++) seen = members.p[j] == id;
+      if (!seen) members.add(id);
+    }
+    file.close();
+  }
+  return complete;
+}
+
 // --- one book's detail: tags (Leave out), and a bag book's own checks -------------------------------------
 
 enum class Probe : uint8_t { Keep, Skip, Out, Failed };
@@ -729,9 +830,9 @@ void topUp(const std::string& openBookPath, bool (*stop)()) {
   Store st = loadStore();
   Storage.mkdir(DIR);
 
-  From from;
-  if (!parseFrom(s.from.c_str(), from)) from = From{};
-  const bool isBag = from.kind == FromKind::Scope || from.kind == FromKind::Collection;
+  // Pick from is a set (R1c): the dashboard lists picked, and one bag over every picked library, smart
+  // scope and collection.
+  const bool isBag = hasMemberSources(s.from.c_str());
   const bool every = s.hours == EVERY_SLEEP;
   // Another source: the batch starts again (its covers were another list's).
   const uint32_t sourceStamp = fnv1a(s.from.c_str());
@@ -742,8 +843,7 @@ void topUp(const std::string& openBookPath, bool (*stop)()) {
     st.battery = battery;
     st.sourceStamp = sourceStamp;
     if (Storage.exists(BAG_PATH)) Storage.remove(BAG_PATH);
-    if (Storage.exists(BAG_PART)) Storage.remove(BAG_PART);
-    LOG_INF(TAG, "Sleep screen: source is now %s; the batch starts again", s.from.c_str());
+    LOG_INF(TAG, "Sleep screen: Pick from is now %s; the batch starts again", oneLine(s.from).c_str());
   }
   // Other rules: every cover is checked again before it shows.
   const uint32_t rulesStamp = fnv1a(s.leaveScopes.c_str(), fnv1a(s.leaveTags.c_str()));
@@ -758,64 +858,73 @@ void topUp(const std::string& openBookPath, bool (*stop)()) {
   refreshMembers(s, now, run);
 
   // The candidates, in the order they would be shown.
-  Ids candidates(isBag ? BAG_MAX : BATCH);
+  Ids candidates(BAG_MAX + LIST_KINDS * BATCH);
   BagFile bagFile;
   bagFile.bag.order = allocIds(BAG_MAX);
   bagFile.bag.capacity = bagFile.bag.order ? BAG_MAX : 0;
-  if (!candidates.p || (isBag && !bagFile.bag.order)) {
+  if (!candidates.p || !bagFile.bag.order) {
     heap_caps_free(bagFile.bag.order);
     LOG_ERR(TAG, "Sleep screen: no memory for the lists; next sync");
     return;
   }
-  if (!isBag) {
-    if ((due(st.listAt, now) || st.listCount == 0) && !run.over()) {
-      FromKind order[3];
-      const size_t kinds = listOrder(from.kind, order);
-      for (size_t k = 0; k < kinds && !run.over(); k++) {
-        JsonDocument filter;
-        filter["section"]["books"][0]["id"] = true;
-        filter["section"]["books"][0]["hasCover"] = true;
-        filter["section"]["books"][0]["readStatus"] = true;
-        JsonDocument doc(OrbifyHeap::jsonAllocator());
-        if (!getJson(std::string("/plugin/catalog/dashboard/sections/") + sectionType(order[k]), filter, doc)) break;
-        uint8_t count = 0;
-        for (JsonObjectConst b : doc["section"]["books"].as<JsonArrayConst>()) {
-          const uint32_t id = jsonId(b["id"]);
-          if (!id || b["hasCover"] == false || std::strcmp(b["readStatus"] | "", "read") == 0) continue;
-          if (count < BATCH) st.list[count++] = id;
-        }
-        if (count == 0) continue;  // R1: an empty list falls back to the next
-        st.listCount = count;
-        st.listKind = static_cast<uint8_t>(order[k]);
-        st.listAt = now;
-        if (k > 0) LOG_INF(TAG, "Sleep screen: %s is empty, using %s", sectionType(from.kind), sectionType(order[k]));
-        break;
-      }
+  // The picked dashboard lists, once a day.
+  bool picked[LIST_KINDS] = {};
+  {
+    From f;
+    for (const char* p = nextFrom(s.from.c_str(), f); p; p = nextFrom(p, f)) {
+      if (isList(f.kind)) picked[static_cast<size_t>(f.kind)] = true;
     }
-    for (size_t i = 0; i < st.listCount; i++) candidates.add(st.list[i]);
-  } else {
-    loadBag(bagFile, sourceStamp);
-    if (due(bagFile.at, now) && !run.over()) {
-      Ids members(BAG_MAX);
-      char query[48];
-      std::snprintf(query, sizeof(query), "%s=%" PRIu32, from.kind == FromKind::Scope ? "smartScopeId" : "collectionId",
-                    from.id);
-      if (members.p && listPages(query, BAG_PART, members, run, true)) {
-        bagSync(bagFile.bag, members.p, members.n, randomBelow, nullptr);
-        bagFile.at = now;
-        LOG_INF(TAG, "Sleep screen: bag of %s lists %u books", s.from.c_str(), static_cast<unsigned>(members.n));
-      }
-    }
-    const uint32_t* next = nullptr;
-    const size_t n = bagNext(bagFile.bag, randomBelow, nullptr, &next);
-    for (size_t i = 0; i < n; i++) candidates.add(next[i]);
   }
+  if (due(st.listAt, now) && !run.over()) {
+    bool all = true;
+    for (size_t k = 0; k < LIST_KINDS && !run.over(); k++) {
+      // The picked lists, and a fallback list in use (R1).
+      if (picked[k] || st.listCount[k]) all = fetchList(static_cast<FromKind>(k), st) && all;
+    }
+    if (all) st.listAt = now;
+  }
+  // The bag over the picked library, scopes and collections (each listed into its own file).
+  const uint32_t* next = nullptr;
+  size_t bagCount = 0;
+  if (isBag) {
+    loadBag(bagFile, sourceStamp);
+    Ids members(BAG_MAX);
+    if (members.p && listBagSources(s, now, run, members)) {
+      bagSync(bagFile.bag, members.p, members.n, randomBelow, nullptr);
+      bagFile.at = now;
+    }
+    bagCount = bagNext(bagFile.bag, randomBelow, nullptr, &next);
+  }
+  struct ListCtx {
+    Store* st;
+  } listCtx{&st};
+  const auto listAt = [](const FromKind kind, size_t* count, void* ctx) -> const uint32_t* {
+    Store& store = *static_cast<ListCtx*>(ctx)->st;
+    const size_t k = static_cast<size_t>(kind);
+    *count = store.listCount[k];
+    return store.list[k];
+  };
+  const FromKind* fallback = nullptr;
+  candidates.n = orbify::sleep::candidates(s.from.c_str(), listAt, &listCtx, next, bagCount, candidates.p, candidates.cap,
+                                           &fallback);
+  if (candidates.n == 0 && !run.over()) {
+    // R1: every picked source is empty: Up next, Want to read, Discover (not picked), fetched now.
+    for (size_t k = 0; k < LIST_KINDS && candidates.n == 0 && !run.over(); k++) {
+      if (picked[k] || st.listCount[k]) continue;
+      fetchList(static_cast<FromKind>(k), st);
+      candidates.n = orbify::sleep::candidates(s.from.c_str(), listAt, &listCtx, next, bagCount, candidates.p,
+                                               candidates.cap, &fallback);
+    }
+  }
+  if (fallback) LOG_INF(TAG, "Sleep screen: every picked source is empty, using %s", sectionType(*fallback));
 
   // The batch as it stands: covers now left out go, unknown ones wait hidden (X7); a list source in
   // hours mode follows the list.
   uint32_t gone[BATCH];
   size_t goneCount = 0;
-  if (!isBag && !every && st.listCount) goneCount = st.batch.followList(st.list, st.listCount, gone);
+  if (!isBag && !every && candidates.n) {
+    goneCount = st.batch.followList(candidates.p, std::min<size_t>(candidates.n, BATCH), gone);
+  }
   for (size_t i = 0; i < st.batch.count;) {
     Entry& e = st.batch.entries[i];
     const Check c = memberCheck(s, e.id);
@@ -910,7 +1019,7 @@ void topUp(const std::string& openBookPath, bool (*stop)()) {
           "source %s, %u candidates",
           static_cast<unsigned>(st.batch.count), static_cast<unsigned>(BATCH), static_cast<unsigned>(fetched),
           static_cast<unsigned>(replacedCount), static_cast<unsigned>(leftOut), static_cast<unsigned>(unknown),
-          static_cast<unsigned>(failed), s.from.c_str(), static_cast<unsigned>(candidates.n));
+          static_cast<unsigned>(failed), oneLine(s.from).c_str(), static_cast<unsigned>(candidates.n));
 }
 
 void decodeCovers(const GfxRenderer& renderer, bool (*stop)()) {

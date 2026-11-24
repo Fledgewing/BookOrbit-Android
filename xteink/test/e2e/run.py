@@ -547,6 +547,27 @@ def sleep_pick_offline(ctx: Context, tmp: Path) -> None:
     assert left == count, f"the batch had {count} covers, the card keeps {left}"
 
 
+@scenario(*X4S)
+def sleep_pick_library(ctx: Context, tmp: Path) -> None:
+    """R1c and X8 (Pick from and Leave out as sets, cases.json "sources"): Library picked with a list
+    stands alone and is listed into the bag with no filter; the batch fills from it. Library left out
+    leaves out every book: the covers leave the card and the sleep shows the current book (F1)."""
+    card = ctx.card(tmp)
+    sleep_pick(card, **{"from": "discover\nlibrary", "hours": 0})
+    first = sleep_sync(ctx, card, "sleep-1", timeout_s=150)
+    listed = re.search(r"Sleep screen: Pick from library lists (\d+) books", first.output)
+    assert listed and int(listed.group(1)) > 0, "the library was not listed into the bag"
+    assert not ctx.requests("/dashboard/sections/random"), "Discover was asked for though Library stands alone"
+    count, fetched = sleep_batch(first.output)
+    assert fetched >= 1, "nothing fetched from the library"
+    sleep_pick(card, **{"from": "library", "hours": 0, "leaveScopes": "library"})
+    second = sleep_sync(ctx, card, "sleep-2", timeout_s=150)
+    after(second.output, "Sleep: BookOrbit Pick -> current book")
+    count2, fetched2 = sleep_batch(second.output)
+    assert count2 == 0 and fetched2 == 0, f"Library left out, yet batch {count2} ({fetched2} fetched)"
+    assert not list((card.crosspoint / "orbify_sleep").glob("*.bmp")), "left-out covers stayed on the card"
+
+
 # --- Runner -----------------------------------------------------------------------------------
 
 # What only a reader shows (docs/design/emulated-release-tests.md 6.2): written beside the results.

@@ -1,4 +1,4 @@
-#include "SleepScopesActivity.h"
+#include "SleepListActivity.h"
 
 #if CROSSINK_TAILNET_ORBIFY_SLEEP
 
@@ -19,15 +19,15 @@ namespace {
 constexpr fui::ActionId ACTION_ROW = 1;
 }
 
-SleepScopesActivity::SleepScopesActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-    : Activity("OrbifySleepScopes", renderer, mappedInput),
+SleepListActivity::SleepListActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const bool pick)
+    : Activity("OrbifySleepList", renderer, mappedInput),
+      pick(pick),
       uiTarget(makeUiTarget(renderer)),
       app(uiTarget, uiTarget.deviceContext()) {}
 
-void SleepScopesActivity::onEnter() {
+void SleepListActivity::onEnter() {
   Activity::onEnter();
-  OrbifySleep::scopeChoices(labels, rules);
-  if (rules.empty()) labels.assign(1, "Listed after the next sleep sync");
+  OrbifySleep::choices(pick, labels, items);
   rowItems.reset(new (std::nothrow) fui::ListItem[count()]);
   if (!rowItems) {
     finish();
@@ -41,27 +41,27 @@ void SleepScopesActivity::onEnter() {
   visibleRows = 1;
   uiReady = false;
   applySharedUiTheme(app, uiTarget);
-  app.on(ACTION_ROW, &SleepScopesActivity::onRowEvent, this);
-  app.setScreen(&SleepScopesActivity::listScreen, this);
+  app.on(ACTION_ROW, &SleepListActivity::onRowEvent, this);
+  app.setScreen(&SleepListActivity::listScreen, this);
   requestUpdate();
 }
 
-void SleepScopesActivity::toggleSelected() {
-  if (selectedIndex >= 0 && selectedIndex < static_cast<int>(rules.size())) {
-    OrbifySleep::toggleLeaveOut(rules[selectedIndex]);
+void SleepListActivity::toggleSelected() {
+  if (selectedIndex >= 0 && selectedIndex < static_cast<int>(items.size())) {
+    OrbifySleep::toggle(pick, items[selectedIndex]);
   }
   app.clearTapFlash();
   requestUpdate();
 }
 
-void SleepScopesActivity::onRowEvent(const fui::ActionEvent& event, void* user) {
-  auto* self = static_cast<SleepScopesActivity*>(user);
+void SleepListActivity::onRowEvent(const fui::ActionEvent& event, void* user) {
+  auto* self = static_cast<SleepListActivity*>(user);
   if (event.value < 0 || event.value >= self->count()) return;
   self->selectedIndex = event.value;
   self->toggleSelected();
 }
 
-void SleepScopesActivity::loop() {
+void SleepListActivity::loop() {
   if (TouchHeaderBackButton::wasTapped(mappedInput, renderer) ||
       mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     finish();
@@ -103,11 +103,11 @@ void SleepScopesActivity::loop() {
       [this, n, &move] { move(ButtonNavigator::previousPageIndex(selectedIndex, n, visibleRows)); });
 }
 
-void SleepScopesActivity::listScreen(UiApp::ScreenType& screen, void* user) {
-  static_cast<SleepScopesActivity*>(user)->buildListScreen(screen);
+void SleepListActivity::listScreen(UiApp::ScreenType& screen, void* user) {
+  static_cast<SleepListActivity*>(user)->buildListScreen(screen);
 }
 
-void SleepScopesActivity::buildListScreen(UiApp::ScreenType& screen) {
+void SleepListActivity::buildListScreen(UiApp::ScreenType& screen) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   setUiContentMargin(screen, renderer,
                      fui::Insets{static_cast<int16_t>(TouchHeaderBackButton::contentTop(renderer, mappedInput)), 0,
@@ -115,9 +115,9 @@ void SleepScopesActivity::buildListScreen(UiApp::ScreenType& screen) {
   screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
   const int n = count();
   for (int i = 0; i < n; ++i) {
-    const bool real = i < static_cast<int>(rules.size());
+    const bool real = i < static_cast<int>(items.size());
     rowItems[i].toggle = real;
-    rowItems[i].toggleChecked = real && OrbifySleep::leftOutRule(rules[i]);
+    rowItems[i].toggleChecked = real && OrbifySleep::chosen(pick, items[i]);
   }
   fui::ListProps props;
   props.items = rowItems.get();
@@ -134,14 +134,14 @@ void SleepScopesActivity::buildListScreen(UiApp::ScreenType& screen) {
   screen.list(props);
 }
 
-void SleepScopesActivity::render(RenderLock&&) {
+void SleepListActivity::render(RenderLock&&) {
   renderer.clearScreen();
   const Rect header = TouchHeaderBackButton::headerRect(renderer, mappedInput);
   // The page title, once: the header only.
   if (mappedInput.hasTouchHardware()) {
-    TouchHeaderBackButton::draw(renderer, uiTarget, header, OrbifySleep::leaveScopesTitle(), false);
+    TouchHeaderBackButton::draw(renderer, uiTarget, header, OrbifySleep::listTitle(pick), false);
   } else {
-    GUI.drawHeader(renderer, header, OrbifySleep::leaveScopesTitle());
+    GUI.drawHeader(renderer, header, OrbifySleep::listTitle(pick));
   }
   uiReady = false;
   renderUiApp(app, uiTarget);
