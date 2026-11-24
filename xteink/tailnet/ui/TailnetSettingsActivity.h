@@ -43,6 +43,7 @@ class TailnetSettingsActivity final : public Activity {
   bool loggedOutNotice = false;
   ButtonNavigator buttonNavigator;
   int listTop = 0;
+  int listHeight = 0;
   uint32_t shownLogSeq = 0;
   unsigned long lastDiagRender = 0;  // y of the first row, from the last render (for taps)
 

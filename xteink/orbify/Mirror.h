@@ -24,7 +24,8 @@ orbify::mirror::Due dueNow();
 
 struct Progress {
   void* context = nullptr;
-  void (*step)(void* context, size_t done, size_t total) = nullptr;
+  // After each request: the one % (core Plan::percent), never lower than the last.
+  void (*step)(void* context, unsigned percent) = nullptr;
 };
 
 // Wi-Fi up. Runs or resumes the plan until it is finished, cancelled() says stop, the network
@@ -36,5 +37,30 @@ bool run(bool (*cancelled)(), unsigned long budgetMs, const Progress* progress =
 
 // "Saved for offline · 3 h ago" / "Not saved for offline yet", for the settings row.
 std::string savedLine();
+
+// A Full refresh asked for and not finished yet (a hand start, paused by leaving the catalog or the
+// refresh boot; the sleep syncs carry it on): its % (core Plan::percent), else -1. Reads the plan.
+int pendingPercent();
+
+// A Full refresh walked one request at a time from an activity's loop(), so the reader keeps
+// browsing between requests (docs/design/sqlite-cache.md "Xteink: the same rule"). The caller
+// holds the connection (the catalog's boot session, or a Session) and checks Wi-Fi.
+class Walk {
+ public:
+  // Asks for a Full refresh on the card (request()) and loads its plan, or seeds a new one.
+  void begin();
+  bool active() const { return started; }
+  bool finished() const { return started && plan.finished(); }
+  // One request, under OrbifyCache's Full mode. Saves the plan; on the last one, the mirror.
+  void step();
+  unsigned percent() const { return plan.percent(); }
+  size_t failures() const { return plan.failures(); }
+  void end() { started = false; }
+
+ private:
+  orbify::mirror::Plan plan;
+  bool started = false;
+  unsigned long startedAt = 0;
+};
 
 }  // namespace OrbifyMirror

@@ -279,8 +279,11 @@ the X4, press Up on the first row to select it, then Confirm:
 - **Refresh** (tap, or Confirm) asks BookOrbit for this screen now.
 - **Full refresh** (hold, or a long press of Confirm) saves the catalog for offline use: its root,
   the first page of each section and of the lists they lead to, and the details of the books on
-  the reader and the next books in their series. "Full refresh · saving for offline 12/140" shows
-  how far it is.
+  the reader and the next books in their series. One popup says it started ("Full refresh in
+  progress · about 0% · you can keep reading and browsing"), then a small % in the header, where
+  the "updated" text was, shows how far it is; it only goes up, and ends on "Done" (or "Done with
+  N errors"). You keep browsing meanwhile; leave the catalog and it carries on while the reader
+  sleeps, or the next time you open the catalog. Home's header shows the % while one is unfinished.
 
 **Settings › BookOrbit › Home › Full refresh** does the same from settings; its value says when
 the catalog was last saved. The reader also refreshes the saved catalog by itself while asleep

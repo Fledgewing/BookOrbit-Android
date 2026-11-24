@@ -12,7 +12,9 @@ namespace {
 constexpr uint32_t DAY_S = 86400;
 // 2: a book list's fields keep their separator in the plan. Version 1 plans turned it into a space
 // (one "sort" field holding the whole query, a 400 from the server) and are not resumed.
-constexpr char HEADER[] = "orbify-mirror 2";
+// 3: the done line also carries the % shown and the failures (one % that never goes down).
+constexpr char HEADER[] = "orbify-mirror 3";
+constexpr char HEADER_V2[] = "orbify-mirror 2";
 constexpr char SEP = '\x1f';
 
 char kindLetter(const Kind kind) {
@@ -177,8 +179,27 @@ bool Plan::add(const Kind kind, const std::string& arg) {
 
 const Step* Plan::next() const { return done < steps.size() ? &steps[done] : nullptr; }
 
-void Plan::advance() {
-  if (done < steps.size()) ++done;
+void Plan::advance(const bool failedStep) {
+  if (done >= steps.size()) return;
+  ++done;
+  if (failedStep) ++failed;
+  const unsigned now = rawPercent();
+  if (now > shown) shown = now;
+}
+
+unsigned Plan::rawPercent() const {
+  if (steps.empty()) return 0;
+  if (done >= steps.size()) return 100;
+  // Below 100 until the last step ran: a total that grows can still add steps.
+  const unsigned pct = static_cast<unsigned>(done * 100 / steps.size());
+  return pct > 99 ? 99 : pct;
+}
+
+unsigned Plan::percent() const {
+  if (!steps.empty() && done >= steps.size()) return 100;
+  const unsigned now = rawPercent();
+  const unsigned kept = shown > 99 ? 99 : shown;
+  return now > kept ? now : kept;
 }
 
 size_t Plan::count(const Kind kind) const {
@@ -188,7 +209,8 @@ size_t Plan::count(const Kind kind) const {
 }
 
 std::string Plan::serialize() const {
-  std::string out = std::string(HEADER) + "\n" + std::to_string(done) + "\n";
+  std::string out = std::string(HEADER) + "\n" + std::to_string(done) + "\t" + std::to_string(percent()) + "\t" +
+                    std::to_string(failed) + "\n";
   for (const Step& s : steps) {
     out += kindLetter(s.kind);
     out += '\t';
@@ -201,14 +223,26 @@ std::string Plan::serialize() const {
 bool Plan::parse(const std::string& text) {
   steps.clear();
   done = 0;
+  failed = 0;
+  shown = 0;
   size_t pos = text.find('\n');
-  if (pos == std::string::npos || text.compare(0, pos, HEADER) != 0) return false;
+  if (pos == std::string::npos) return false;
+  const bool v3 = text.compare(0, pos, HEADER) == 0;
+  if (!v3 && text.compare(0, pos, HEADER_V2) != 0) return false;
   size_t start = pos + 1;
   pos = text.find('\n', start);
   if (pos == std::string::npos || pos == start) return false;
   const std::string doneText = text.substr(start, pos - start);
   char* end = nullptr;
   const unsigned long parsedDone = std::strtoul(doneText.c_str(), &end, 10);
+  unsigned long parsedShown = 0;
+  unsigned long parsedFailed = 0;
+  if (v3) {
+    if (!end || *end != '\t') return false;
+    parsedShown = std::strtoul(end + 1, &end, 10);
+    if (!end || *end != '\t' || parsedShown > 100) return false;
+    parsedFailed = std::strtoul(end + 1, &end, 10);
+  }
   if (!end || *end != '\0') return false;
   start = pos + 1;
   std::vector<Step> read;
@@ -221,10 +255,29 @@ bool Plan::parse(const std::string& text) {
     read.push_back(Step{kind, line.substr(2)});
     start = pos + 1;
   }
-  if (parsedDone > read.size() || read.size() > MAX_STEPS) return false;
+  if (parsedDone > read.size() || read.size() > MAX_STEPS || parsedFailed > parsedDone) return false;
   steps = std::move(read);
   done = parsedDone;
+  failed = parsedFailed;
+  shown = static_cast<unsigned>(parsedShown);
   return true;
+}
+
+bool badgeDue(const int painted, const unsigned percent, const unsigned long paintedAt, const unsigned long now) {
+  if (painted < 0) return true;
+  if (static_cast<unsigned>(painted) == percent) return false;
+  return now - paintedAt >= BADGE_REPAINT_MS;
+}
+
+void badgeText(const unsigned percent, const bool finished, const size_t failures, char* out, const size_t size) {
+  if (size == 0) return;
+  if (!finished) {
+    std::snprintf(out, size, "%u%%", percent > 100 ? 100u : percent);
+  } else if (failures == 0) {
+    std::snprintf(out, size, "Done");
+  } else {
+    std::snprintf(out, size, "Done with %u error%s", static_cast<unsigned>(failures), failures == 1 ? "" : "s");
+  }
 }
 
 namespace {

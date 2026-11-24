@@ -228,27 +228,58 @@ Due dueNow() {
                              orbify::mirror::DEFAULT_TTL_DAYS);
 }
 
-bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* progress, const size_t maxSteps,
-         const bool heapFloor) {
-  const unsigned long started = millis();
-  Plan plan;
+namespace {
+// Loads the plan on the card, or seeds a new one. True when it resumed one.
+bool loadOrSeed(Plan& plan) {
   const bool resumed = loadPlan(plan) && !plan.empty();
   if (!resumed) {
     plan = Plan{};
     seed(plan);
     savePlan(plan);
   }
-  LOG_INF(TAG, "Mirror: Full refresh %s, %u/%u requests (free=%u maxAlloc=%u)", resumed ? "resumed" : "started",
-          static_cast<unsigned>(plan.doneCount()), static_cast<unsigned>(plan.total()), ESP.getFreeHeap(),
-          ESP.getMaxAllocHeap());
-  size_t failures = 0;
+  LOG_INF(TAG, "Mirror: Full refresh %s, %u/%u requests, %u%% (free=%u maxAlloc=%u)", resumed ? "resumed" : "started",
+          static_cast<unsigned>(plan.doneCount()), static_cast<unsigned>(plan.total()), plan.percent(),
+          ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+  return resumed;
+}
+
+void runOne(Plan& plan) {
+  const orbify::mirror::Step current = *plan.next();
+  const bool ok = runStep(current, plan);
+  if (!ok) {
+    LOG_ERR(TAG, "Mirror: request %u failed (kind %u, %s)", static_cast<unsigned>(plan.doneCount() + 1),
+            static_cast<unsigned>(current.kind), current.arg.c_str());
+  }
+  plan.advance(!ok);
+  savePlan(plan);
+}
+
+// The last request ran: the mirror is saved, the plan and the request go.
+void complete(const Plan& plan, const unsigned long seconds) {
+  const std::string library = OrbifyCopyRefresh::libraryVersion();
+  writeText(STATE_PATH, std::to_string(nowSeconds()) + "\t" + library + "\n");
+  Storage.remove(PLAN_PATH);
+  Storage.remove(REQUEST_PATH);
+  LOG_INF(TAG, "Mirror: saved for offline: %u lists, %u sections, %u details, %u requests (%u failed) in %lu s",
+          static_cast<unsigned>(plan.count(Kind::Books)), static_cast<unsigned>(plan.count(Kind::Section)),
+          static_cast<unsigned>(plan.count(Kind::Detail)), static_cast<unsigned>(plan.total()),
+          static_cast<unsigned>(plan.failures()), seconds);
+}
+}  // namespace
+
+bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* progress, const size_t maxSteps,
+         const bool heapFloor) {
+  const unsigned long started = millis();
+  Plan plan;
+  loadOrSeed(plan);
+  const size_t failedBefore = plan.failures();
   size_t ran = 0;
   unsigned long noteAt = started;
   {
     // Every request of the plan replaces its cache entry (Full refresh), on one TLS connection.
     OrbifyCache::ScopedMode full(orbify::cache::Mode::Full);
     BookOrbitCatalogClient::Session session;
-    while (const orbify::mirror::Step* step = plan.next()) {
+    while (plan.next() != nullptr) {
       if (cancelled && cancelled()) break;
       if (budgetMs != 0 && millis() - started >= budgetMs) break;
       if (maxSteps != 0 && ran >= maxSteps) break;
@@ -258,39 +289,49 @@ bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* prog
                 static_cast<unsigned>(plan.total()));
         break;
       }
-      const orbify::mirror::Step current = *step;
-      if (!runStep(current, plan)) {
-        failures++;
-        LOG_ERR(TAG, "Mirror: request %u failed (kind %u, %s)", static_cast<unsigned>(plan.doneCount() + 1),
-                static_cast<unsigned>(current.kind), current.arg.c_str());
-      }
-      plan.advance();
+      runOne(plan);
       ran++;
-      savePlan(plan);
-      if (progress && progress->step) progress->step(progress->context, plan.doneCount(), plan.total());
+      if (progress && progress->step) progress->step(progress->context, plan.percent());
       if (millis() - noteAt >= 10000) {
         noteAt = millis();
-        LOG_INF(TAG, "Full refresh · saving for offline %u/%u", static_cast<unsigned>(plan.doneCount()),
+        LOG_INF(TAG, "Mirror: Full refresh %u%% (%u/%u)", plan.percent(), static_cast<unsigned>(plan.doneCount()),
                 static_cast<unsigned>(plan.total()));
       }
     }
   }
   const unsigned long seconds = (millis() - started) / 1000;
   if (!plan.finished()) {
-    LOG_INF(TAG, "Mirror: paused at %u/%u (%u this run, %u failed, %lu s); resumes next time",
-            static_cast<unsigned>(plan.doneCount()), static_cast<unsigned>(plan.total()), static_cast<unsigned>(ran),
-            static_cast<unsigned>(failures), seconds);
+    LOG_INF(TAG, "Mirror: paused at %u/%u, %u%% (%u this run, %u failed, %lu s); resumes next time",
+            static_cast<unsigned>(plan.doneCount()), static_cast<unsigned>(plan.total()), plan.percent(),
+            static_cast<unsigned>(ran), static_cast<unsigned>(plan.failures() - failedBefore), seconds);
     return false;
   }
-  const std::string library = OrbifyCopyRefresh::libraryVersion();
-  writeText(STATE_PATH, std::to_string(nowSeconds()) + "\t" + library + "\n");
-  Storage.remove(PLAN_PATH);
-  Storage.remove(REQUEST_PATH);
-  LOG_INF(TAG, "Mirror: saved for offline: %u lists, %u sections, %u details, %u requests (%u failed) in %lu s",
-          static_cast<unsigned>(plan.count(Kind::Books)), static_cast<unsigned>(plan.count(Kind::Section)),
-          static_cast<unsigned>(plan.count(Kind::Detail)), static_cast<unsigned>(plan.total()),
-          static_cast<unsigned>(failures), seconds);
+  complete(plan, seconds);
   return true;
+}
+
+int pendingPercent() {
+  if (!requested()) return -1;
+  Plan plan;
+  if (!loadPlan(plan) || plan.empty()) return 0;
+  return static_cast<int>(plan.percent());
+}
+
+void Walk::begin() {
+  request();
+  plan = Plan{};
+  loadOrSeed(plan);
+  started = true;
+  startedAt = millis();
+}
+
+void Walk::step() {
+  if (!started || plan.next() == nullptr) return;
+  {
+    OrbifyCache::ScopedMode full(orbify::cache::Mode::Full);
+    runOne(plan);
+  }
+  if (plan.finished()) complete(plan, (millis() - startedAt) / 1000);
 }
 
 std::string savedLine() {

@@ -6,10 +6,23 @@
 // takes on a reader with Tailscale turned off in Settings.
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "Tailnet.h"
 #include "TailnetNetPhase.h"
+
+namespace {
+// ORBIFY_SIM_TAILSCALE=joined: the Tailscale settings screen of a reader that is on and logged in,
+// for the layout scenario (xteink/test/e2e/run.py tailscale_layout). Nothing connects either way.
+bool simJoined() {
+  static const bool joined = [] {
+    const char* v = std::getenv("ORBIFY_SIM_TAILSCALE");
+    return v && std::strcmp(v, "joined") == 0;
+  }();
+  return joined;
+}
+}  // namespace
 
 extern "C" {
 
@@ -20,9 +33,9 @@ bool tailnet_login_url(char* buf, size_t len) {
 }
 uint32_t tailnet_ip(void) { return 0; }
 uint32_t tailnet_generation(void) { return 0; }
-bool tailnet_enabled(void) { return false; }
+bool tailnet_enabled(void) { return simJoined(); }
 void tailnet_set_enabled(bool) {}
-bool tailnet_joined(void) { return false; }
+bool tailnet_joined(void) { return simJoined(); }
 void tailnet_logout(void) {}
 bool tailnet_wait_connected(uint32_t) { return false; }
 bool tailnet_wait_connected_for(const char*, uint32_t) { return false; }
