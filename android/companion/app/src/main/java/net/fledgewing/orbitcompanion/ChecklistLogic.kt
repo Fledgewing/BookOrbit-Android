@@ -70,7 +70,7 @@ object Checklist {
         "wifi_test" to "nothing breaks; the test only times how fast the reader reconnects.",
         "wifi_switching" to "Orbit leaves Wi-Fi as it is, so a sync waits until you turn Wi-Fi on.",
         "sleep_sync" to "the reader can fall asleep before a sync finishes; it finishes when you next wake it.",
-        "screen_saver" to "turning Sleep screen on or off needs a one-time USB command.",
+        "screen_saver" to "what the reader shows while it sleeps doesn't follow your Sleep screen setting until you run one USB command.",
         "reading_fonts" to "KOReader offers only its own fonts and the reader's; Bitter and Literata aren't among them.",
         "screen_mode" to "the sleep screen may show ghosting from the last page.",
     )
@@ -85,7 +85,6 @@ object Checklist {
         "battery" to "sleep syncs and Wi-Fi switching run on time.",
         "wifi_switching" to "Orbit turns Wi-Fi on for a sync and off again.",
         "sleep_sync" to "syncs finish as the reader sleeps.",
-        "screen_saver" to "Orbit's sleep screen shows when the reader sleeps.",
         "reading_fonts" to "Bitter and Literata are in KOReader's font menu.",
         "screen_mode" to "Orbit draws in the reader's clearest screen mode.",
     )
