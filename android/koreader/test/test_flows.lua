@@ -390,6 +390,16 @@ local function count(list, pred)
     for _, v in ipairs(list) do if pred(v) then n = n + 1 end end
     return n
 end
+-- Every row of the Orbit menu, submenus included (the menu is grouped by section).
+local function menuAll(items, out)
+    out = out or {}
+    for _, it in ipairs(items) do
+        table.insert(out, it)
+        if type(it.sub_item_table) == "table" then menuAll(it.sub_item_table, out) end
+    end
+    return out
+end
+
 local function lastBroadcast(suffix)
     for i = #W.broadcasts, 1, -1 do
         local b = W.broadcasts[i]
@@ -436,6 +446,7 @@ local function test(name, fn)
     end
 end
 local function ok(v, what) if not v then error(what or "expected true", 2) end end
+local function eq(a, b, what) if a ~= b then error((what or "value") .. ": expected " .. tostring(b) .. ", got " .. tostring(a), 2) end end
 
 -- The guards themselves: a hang fails its test fast, by name, with a traceback.
 test("harness: a test that never returns fails after its time limit", function()
@@ -678,7 +689,12 @@ test("menu is its own Tools entry, not inside the plugin's menu, and builds", fu
     local entry = items.orbit_android
     ok(entry and entry.text == "Android sync" and entry.sorting_hint == "tools", "Tools entry")
     local sub = entry.sub_item_table_func()
-    ok(#sub >= 13, "items " .. #sub)
+    ok(#sub >= 9, "items " .. #sub)
+    local titles = {}
+    for _, it in ipairs(sub) do if it.text then titles[it.text] = true end end
+    for _, t in ipairs({ "Reading and Home", "Sync and Wi-Fi", "Library and storage", "Updates and details" }) do
+        ok(titles[t], "section " .. t)
+    end
 end)
 
 test("pull debounce: cleared only when the last pull was within 25 s", function()
@@ -1265,8 +1281,8 @@ test("caps: Add-on degrades: Sync and sleep asks for the power button, Other app
     ok(#W.activities == 0, "no activity started")
     ok(m:openCompanionHome() == true and #W.activities == 0, "Home at BookOrbit home stays")
     local hasWifiRow, hasHelperLine, hasApps = false, false, false
-    for _, it in ipairs(m:menuItems()) do
-        if it.text == "Wi-Fi via Orbit Companion" then hasWifiRow = true end
+    for _, it in ipairs(menuAll(m:menuItems())) do
+        if it.text == "Let Orbit switch Wi-Fi for syncs" then hasWifiRow = true end
         if it.text == "Wi-Fi switching and sleep sync: in Orbit Companion ›" then hasHelperLine = true end
         if it.text == "Open another app…" then hasApps = true end
     end
@@ -1735,7 +1751,7 @@ test("home: the instance shows no handler but the UI routes the event -> BookOrb
 end)
 
 local function scheduleMenu(m)
-    for _, it in ipairs(m:menuItems()) do
+    for _, it in ipairs(menuAll(m:menuItems())) do
         local sub = it.sub_item_table
         if type(sub) == "table" and sub[1] and sub[1].text == "Off" and sub[1].checked_func then return sub end
     end
@@ -1780,16 +1796,16 @@ test("home button menu says it is about KOReader, and notes the companion's Home
     W.web[url] = "STATUS"
     local ui, m = newUI(false)
     local function homeText()
-        for _, it in ipairs(m:menuItems()) do
+        for _, it in ipairs(menuAll(m:menuItems())) do
             if it.text_func then
                 local t = it.text_func()
-                if t:find("In KOReader, Home goes to", 1, true) then return t end
+                if t:find("Home button in KOReader", 1, true) then return t end
             end
         end
     end
     W.json.STATUS = { version = "0.4.8", settings = { settings_at = 0, home_opens = "koreader" } }
     m:onResume(); run(1)
-    ok(homeText() == "In KOReader, Home goes to: Back to my book, then BookOrbit home", tostring(homeText()))
+    ok(homeText() == "Home button in KOReader: Back to my book, then BookOrbit home", tostring(homeText()))
     W.json.STATUS = { version = "0.4.8", settings = { settings_at = 0, home_opens = "launcher" } }
     m:onResume(); run(1)
     ok(homeText():find("(Home opens the Orbit launcher page)", 1, true), homeText())
@@ -2532,7 +2548,7 @@ W.screen_on = false
 sh("rm -rf", ORBIT_ANDROID_PLUGIN_DIR)
 os.remove(SELF)
 
-test("settings PIN: a locked companion locks the Orbit menu and opens its keypad; unreachable stays usable", function()
+test("settings PIN: a locked companion makes the Orbit menu read-only, with the keypad one tap away; unreachable stays usable", function()
     local url = "http://127.0.0.1:47913/status"
     local ui, m = newUI(true)
     local items = {}
@@ -2541,17 +2557,31 @@ test("settings PIN: a locked companion locks the Orbit menu and opens its keypad
     W.json.STATUS = { version = "0.4.4", pin_locked = true }
     W.activities = {}
     local sub = items.orbit_android.sub_item_table_func()
-    ok(#sub == 2 and sub[1].text:find("PIN", 1, true), "locked menu " .. #sub)
+    ok(sub[1].text:find("PIN", 1, true), "first row asks for the PIN")
+    -- Every value is still there to read; nothing that changes something is enabled.
+    local all = menuAll(sub)
+    ok(#all > 20, "the whole menu, read-only " .. #all)
+    local enabled = 0
+    for i, it in ipairs(all) do
+        if i > 1 and it.callback and not it.sub_item_table and not it.keep_menu_open and not (it.enabled_func and it.enabled_func() == false) then
+            enabled = enabled + 1
+        end
+    end
+    eq(enabled, 0, "no control enabled while locked")
+    local wifi = RE.S.sync_on_wake
+    for _, it in ipairs(all) do if it.text == "Sync on wake" then it.callback() end end
+    eq(RE.S.sync_on_wake, wifi, "a tap changes nothing")
     run(1)
-    ok(W.activities[#W.activities] and W.activities[#W.activities].action:match("SHOW_PIN$"), "keypad asked for")
+    for _, a in ipairs(W.activities) do ok(not a.action:match("SHOW_PIN$"), "no keypad until asked") end
     W.activities = {}
     sub[1].callback()
-    ok(W.activities[1] and W.activities[1].action:match("SHOW_PIN$"), "tap opens the keypad again")
+    ok(W.activities[1] and W.activities[1].action:match("SHOW_PIN$"), "the first row opens the keypad")
     W.json.STATUS = { version = "0.4.4", pin_locked = false }
-    ok(#items.orbit_android.sub_item_table_func() >= 13, "unlocked: full menu")
+    local open = items.orbit_android.sub_item_table_func()
+    ok(not open[1].text:find("PIN", 1, true), "unlocked: the usual menu")
     W.web[url], W.json.STATUS = nil, nil
     W.activities = {}
-    ok(#items.orbit_android.sub_item_table_func() >= 13, "companion unreachable: full menu")
+    ok(#items.orbit_android.sub_item_table_func() >= 9, "companion unreachable: full menu")
     run(1)
     for _, a in ipairs(W.activities) do ok(not a.action:match("SHOW_PIN$"), "no keypad without the companion") end
 end)
@@ -4713,8 +4743,6 @@ test("sleep screen: settings changed in the companion are applied; an older comp
     run(5)
 end)
 
-
-local function eq(a, b, what) if a ~= b then error((what or "value") .. ": expected " .. tostring(b) .. ", got " .. tostring(a), 2) end end
 
 test("settings v2: a change queued in the companion while KOReader was off applies, then is echoed", function()
     capsReset()

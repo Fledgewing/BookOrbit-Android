@@ -203,6 +203,8 @@ Unchanged rule, both UIs: the plugin menu stays locked while the companion says 
 through the channel was made behind one of those two locks, so it is applied without asking again.
 New: the companion's Settings opens **read-only** while locked (values and summaries, no controls,
 one **Unlock** button), as Setup already does ([companion-checklist](companion-checklist.md) §3.9).
+The plugin's menu does the same: while locked it shows the whole menu with every control disabled
+(submenus still open, so every value can be read), under a first row that opens the keypad.
 
 ### 4.8 Plugin-only
 

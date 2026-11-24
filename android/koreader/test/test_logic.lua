@@ -1700,6 +1700,16 @@ test("settings visible: rows show only while their parent has the value", functi
     eq(SettingsSync.visible(SIDX, "wifi_idle_min", v), true)
 end)
 
+test("settings schema: every shown key has a row in KOReader's menu", function()
+    local menu = readFile(here .. "/../orbit.koplugin/ko/menu.lua") .. readFile(here .. "/../orbit.koplugin/ko/sleepscreen.lua")
+    local missing = {}
+    for _, d in ipairs(SIDX.settings) do
+        if not d.hidden and not menu:find('"' .. d.key .. '"', 1, true) then table.insert(missing, d.key) end
+    end
+    eq(table.concat(missing, " "), "", "keys with no menu row")
+end)
+
+
 test("choices.json: the picker's lists and the tag counts", function()
     local SP = M.SleepPool
     local body = SP.choicesFile({ scopes = { { id = 3, title = "Short reads", count = 48 }, { id = "x" } },
