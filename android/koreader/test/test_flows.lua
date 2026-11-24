@@ -9,7 +9,7 @@ local W = {
     clock = 1000, queue = {}, seq = 0, shown = {}, logs = {},
     wifi = true, vpn = true, screen_on = false, companion = true, server_code = 200,
     broadcasts = {}, activities = {}, intent_extras = {},
-    fetched = {}, web = {}, json = {}, files = {}, children = {},
+    fetched = {}, web = {}, json = {}, files = {}, children = {}, ino = {},
 }
 function W.fake_sha(s) return string.format("%064x", #s) end
 local SELF = os.tmpname()
@@ -287,7 +287,16 @@ local preload = {
     end } },
     -- KOReader's Android input module: waitForEvent returns what the test queues (default: EINTR).
     ["ffi/input_android"] = { waitForEvent = function() return false, 4 end },
-    ["libs/libkoreader-lfs"] = { attributes = function(f, k) return W.files[f] and "file" or nil end,
+    ["libs/libkoreader-lfs"] = { attributes = function(f, k)
+        -- An inode for a real file (the SQLite database): W.ino[path] when a test replaces the file.
+        if k == "ino" then
+            local h = io.open(f, "rb")
+            if not h then return nil end
+            h:close()
+            return W.ino[f] or 1
+        end
+        return W.files[f] and "file" or nil
+    end,
         mkdir = function(dir) sh("mkdir -p", dir) return true end },
     json = { decode = function(s) if W.json[s] then return W.json[s] end return { version = "1" } end },
     -- Stand-in hash: "sha:<length>" padded, enough to check the wiring (the real one is ffi/sha2).
@@ -4962,10 +4971,20 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     ok(#got == 15, "2 headers, 12 scopes, 1 collection: " .. #got)
     ok(got[1] == "Smart scopes" and got[2] == "Cosy Mysteries · 5" and got[13] == "Holiday Picks", "scopes with counts, the last without: " .. tostring(got[13]))
     ok(got[14] == "Collections" and got[15] == "ToRead · 23", "the collection: " .. tostring(got[15]))
-    -- Tapping one picks it, and its name shows.
+    -- Tapping one ticks it beside Up next (Pick from is a set, R1c), and both names show.
     local tapped = picker.sub_item_table_func()
+    ok(tapped[15].checked_func and not tapped[15].checked_func(), "a tick box, not ticked yet")
     tapped[15].callback()
-    ok(S.sleep_from == "collection:7" and Sleep.fromLabel(S.sleep_from) == "ToRead", "picked: " .. tostring(S.sleep_from))
+    ok(S.sleep_from == "up_next\ncollection:7" and Sleep.fromLabel(S.sleep_from) == "Up next in series, ToRead", "picked: " .. tostring(S.sleep_from))
+    ok(picker.sub_item_table_func()[15].checked_func(), "ticked")
+    -- Library stands alone: ticking it clears the others; ticking a list clears it.
+    from[1].callback()
+    ok(S.sleep_from == "library" and Sleep.fromLabel(S.sleep_from) == "Library", "library: " .. tostring(S.sleep_from))
+    from[3].callback()
+    ok(S.sleep_from == "want_to_read", "a list clears Library: " .. tostring(S.sleep_from))
+    from[3].callback()
+    ok(S.sleep_from == "want_to_read", "the last one stays ticked")
+    tapped[15].callback()
     -- Offline, after a restart: the same lists from scopes.json, in Leave out too.
     down, W.wifi = true, false
     Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil
@@ -5252,6 +5271,115 @@ test("sqlite stress: a torn page and a locked file are caught and counted", func
     ok(r2.busy >= 1, "the wait is counted")
     ok(r2.reads > 0, "reads after the lock went")
     w:close(); w2:close(); os.remove(path); os.remove(path2)
+end)
+
+-- The offline cache's database, as CacheStoreTest reads it: the same fixture, the plugin's reads.
+local JSONF = dofile(here .. "/json_mini.lua")
+local DBFX = JSONF.decode(io.open(here .. "/../../../shared/fixtures/cache/db.json", "rb"):read("*a"))
+local FakeStore = dofile(here .. "/fake_store.lua")(RE.Cache, SQ3, here .. "/../../../shared/fixtures/cache/schema.sql")
+
+local function fixtureStore()
+    local dir = os.tmpname() .. "-store"
+    os.execute("mkdir -p '" .. dir .. "'")
+    local st = FakeStore.open(dir .. "/orbit.db")
+    st:own(DBFX.owner)
+    for i, sv in ipairs(DBFX.saves) do
+        local key = sv.key or RE.Cache.key({ account = DBFX.owner:match("^([^|]*)"), server = DBFX.owner:match("|(.*)$"), method = "GET", path = sv.path })
+        st:save(key, sv.path, sv.reply, 1000 + i, DBFX.detail_template)
+    end
+    return dir, st
+end
+
+local function withStore(dir, fn)
+    local saved = RE.OC._dir
+    RE.OC._dir = dir
+    local okf, err = pcall(fn)
+    RE.Db.close(dir .. "/orbit.db")
+    RE.OC._dir = saved
+    if not okf then error(err, 0) end
+end
+
+test("sqlite cache: the plugin's reads answer the shared fixture (db.json) from the rows", function()
+    local dir, st = fixtureStore()
+    withStore(dir, function()
+        for _, r in ipairs(DBFX.reads) do
+            local key = r.key or RE.Cache.key({ account = DBFX.owner:match("^([^|]*)"), server = DBFX.owner:match("|(.*)$"), method = "GET", path = r.path })
+            local e = RE.Store.read(DBFX.owner, key, r.path, DBFX.detail_template)
+            if r["null"] then
+                ok(e == nil, r.path .. " should not be saved")
+            else
+                ok(e ~= nil, r.path .. " not answered")
+                local b = e.body
+                if r.ids then
+                    local got = {}
+                    for _, it in ipairs(b.items) do table.insert(got, tostring(it.id)) end
+                    local want = {}
+                    for _, id in ipairs(r.ids) do table.insert(want, tostring(id)) end
+                    eq(table.concat(got, ","), table.concat(want, ","), r.path)
+                    if r.read_status_2 then
+                        for _, it in ipairs(b.items) do if it.id == 2 then eq(it.readStatus, r.read_status_2, "newest item wins") end end
+                    end
+                end
+                for _, k in ipairs({ "total", "page", "size", "offset", "hasNext", "hasPrevious" }) do
+                    if r[k] ~= nil then eq(b[k], r[k], r.path .. " " .. k) end
+                end
+                for _, k in ipairs(r.no or {}) do eq(b[k], nil, r.path .. " has " .. k) end
+                if r.head then eq(b.authorSummary.bookCount, 2) end
+                if r.titles then for i, t in ipairs(r.titles) do eq(b.items[i].title, t) end end
+                if r.detail then eq(b.id, r.detail); eq(#b.files, r.files) end
+                if r.continue then eq(b.continueReading[1].id, r.continue[1]) end
+            end
+        end
+        -- Another account's database answers nothing.
+        eq(RE.Store.read("other|http://x", "k", DBFX.reads[1].path, DBFX.detail_template), nil, "another owner")
+    end)
+    local n = st:run("SELECT count(*) FROM books")[1][1]
+    eq(tonumber(n), DBFX.books_rows, "each book is one row")
+    for id, text in pairs(DBFX.search_text) do
+        eq(st:run("SELECT search FROM books WHERE id = ?", tonumber(id))[1][1], text, "search text " .. id)
+    end
+    st:close()
+end)
+
+test("sqlite cache: offline search over the saved books", function()
+    local dir, st = fixtureStore()
+    withStore(dir, function()
+        for _, s in ipairs(DBFX.searches) do
+            local body = RE.Store.search(DBFX.owner, "/koreader/plugin/catalog/books?page=1&q=" .. s.q:gsub(" ", "%%20") .. "&size=20")
+            ok(body ~= nil, s.q)
+            local got = {}
+            for _, it in ipairs(body.items) do table.insert(got, tostring(it.id)) end
+            local want = {}
+            for _, id in ipairs(s.ids) do table.insert(want, tostring(id)) end
+            eq(table.concat(got, ","), table.concat(want, ","), "search " .. s.q)
+            eq(body.total, #s.ids)
+        end
+    end)
+    st:close()
+end)
+
+test("sqlite cache: a replaced or busy database is reopened or missed, never an error", function()
+    local dir, st = fixtureStore()
+    withStore(dir, function()
+        local path = DBFX.reads[1].path
+        ok(RE.Store.read(DBFX.owner, "k", path, nil) ~= nil, "first read")
+        -- The companion holds the commit lock: the read waits (busy timeout), then misses quietly.
+        local saved_busy = RE.Db.BUSY_MS
+        RE.Db.close(dir .. "/orbit.db"); RE.Db.BUSY_MS = 50
+        st.conn:exec("BEGIN EXCLUSIVE")
+        eq(RE.Store.read(DBFX.owner, "k", path, nil), nil, "busy: a miss")
+        st.conn:exec("COMMIT")
+        RE.Db.BUSY_MS = saved_busy
+        -- A new file (another inode): reopened. Here: an empty database of the same schema.
+        st:close()
+        os.remove(dir .. "/orbit.db")
+        local st2 = FakeStore.open(dir .. "/orbit.db")
+        st2:own(DBFX.owner)
+        W.ino[dir .. "/orbit.db"] = 2
+        eq(RE.Store.read(DBFX.owner, "k", path, nil), nil, "the new file is read, not the old one")
+        st2:close()
+        W.ino[dir .. "/orbit.db"] = nil
+    end)
 end)
 
 test("sqlite stress: the verdict line", function()

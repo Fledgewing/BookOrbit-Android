@@ -204,4 +204,38 @@ class SleepPoolTest {
         assertEquals("the last shown stays first", moved.prev, first)
         dir.deleteRecursively()
     }
+
+    /** R1c: two lists and a collection take turns; Library lists every book with no filter; Leave out Library empties the pool. */
+    @Test fun severalSourcesTakeTurnsAndLibraryListsEveryBook() {
+        val dir = Files.createTempDirectory("sleep").toFile()
+        val calls = mutableListOf<String>()
+        val server = object : CacheWorker.Http {
+            override fun get(url: String, headers: Map<String, String>, sink: File?, maxBytes: Long): CacheWorker.Reply {
+                calls.add(url)
+                if (url.contains("/thumbnail")) { sink!!.writeText("jpg"); return CacheWorker.Reply(200) }
+                fun list(vararg ids: Int) = """{"section":{"books":[${ids.joinToString(",") { """{"id":$it,"title":"B$it","hasCover":true}""" }}]}}"""
+                val body = when {
+                    url.contains("sections/up-next-in-series") -> list(1, 2, 3)
+                    url.contains("sections/want-to-read") -> list(20, 2)
+                    url.contains("collectionId=7") -> """{"items":[{"id":70}],"hasNext":false}"""
+                    url.contains("/catalog/books?") -> """{"items":[{"id":101},{"id":102}],"hasNext":false}"""
+                    else -> Regex("/catalog/books/(\\d+)$").find(url)?.groupValues?.get(1)?.let { """{"id":$it,"title":"B$it","hasCover":true}""" }
+                        ?: return CacheWorker.Reply(404)
+                }
+                return CacheWorker.Reply(200, body.toByteArray())
+            }
+        }
+        fun ids(): List<Long> = JSONObject(File(dir, "pool.json").readText()).getJSONArray("items").let { a -> (0 until a.length()).map { a.getJSONObject(it).getLong("id") } }
+        val b = SleepPoolBuilder(dir, server, now = { 5000L }, rand = { 1 })
+        b.build(SleepPoolBuilder.Ask("up_next\nwant_to_read\ncollection:7", emptyList(), null, false, null, creds))
+        assertEquals("in turn, a book once", listOf(1L, 20L, 70L, 2L, 3L), ids())
+        calls.clear()
+        val sum = b.build(SleepPoolBuilder.Ask("library", emptyList(), null, false, null, creds))
+        assertTrue("every book, no filter: $calls", calls.any { it.contains("/catalog/books?") && !it.contains("Id=") })
+        assertEquals(setOf(101L, 102L), ids().toSet())
+        assertEquals(null, sum["fallback"])
+        b.build(SleepPoolBuilder.Ask("library", listOf("library"), null, false, null, creds))
+        assertEquals("Leave out Library: nothing left, the current book shows", emptyList<Long>(), ids())
+        dir.deleteRecursively()
+    }
 }

@@ -75,6 +75,24 @@ object SleepPoolLogic {
         }
     }
 
+    /**
+     * Pick from with [id] ticked or unticked (R1c): Library clears the others and another clears
+     * Library; the last one stays ticked (none would be Up next anyway). Lua: SleepPool.togglePick.
+     */
+    fun togglePick(lines: String?, id: String): String {
+        val items = sources(lines)
+        if (id in items) return (items - id).ifEmpty { items }.joinToString("\n")
+        if (id == LIBRARY) return LIBRARY
+        return sources((items.filter { it != LIBRARY } + id).joinToString("\n")).joinToString("\n")
+    }
+
+    /** Leave out with [rule] added or removed (X8): Library stands for every rule. */
+    fun toggleRule(lines: String?, rule: String): String {
+        val r = rules(lines)
+        val key = parseRule(rule)?.key ?: return r.joinToString("\n")
+        return (if (key in r) r - key else r + key).let { rules(it.joinToString("\n")) }.joinToString("\n")
+    }
+
     /** The picked sources listed by their members: one shuffle bag over all of them (R1c). */
     fun memberSources(sources: List<String>): List<From> = sources.mapNotNull { parseFrom(it) }.filter { it.members }
 

@@ -154,6 +154,10 @@
    "default": "up_next",
    "values": [
     {
+     "id": "library",
+     "label": "Library"
+    },
+    {
      "id": "up_next",
      "label": "Up next in series"
     },
@@ -168,7 +172,7 @@
    ],
    "section": "sleep",
    "label": "Pick from",
-   "line": "The list the recommended cover comes from.",
+   "line": "Where recommended covers come from. Tick any: they take turns.",
    "reader": [
     "plugin"
    ],
@@ -182,7 +186,9 @@
     "smart scope",
     "collection",
     "list",
-    "cover"
+    "cover",
+    "library",
+    "every book"
    ],
    "applies": "now"
   },
@@ -206,7 +212,8 @@
     "hide",
     "tag",
     "exclude",
-    "age"
+    "age",
+    "library"
    ],
    "applies": "now"
   },

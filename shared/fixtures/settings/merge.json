@@ -36,6 +36,10 @@
    "remote_wins_tie": true, "taken": ["sleep_leave_out", "sleep_text"], "expect": {"sleep_leave_out": "tag:age:18\nscope:12", "sleep_text": "Line one line two"}},
   {"name": "scope source accepted, junk refused", "now": 1000000,
    "local": {"sleep_from": {"v": "up_next", "at": 1}}, "remote": {"sleep_from": {"v": "collection:7", "at": 9}, "sleep_mode": {"v": "sideways", "at": 9}},
-   "remote_wins_tie": true, "taken": ["sleep_from"], "expect": {"sleep_from": "collection:7"}}
+   "remote_wins_tie": true, "taken": ["sleep_from"], "expect": {"sleep_from": "collection:7"}},
+  {"name": "Pick from and Leave out as sets (lock-screen.md R1c, X8): several kept in order, Library alone", "now": 1000000,
+   "local": {"sleep_from": {"v": "up_next", "at": 1}, "sleep_leave_out": {"v": "", "at": 1}},
+   "remote": {"sleep_from": {"v": "want_to_read\nscope:3\nbogus\nscope:3", "at": 9}, "sleep_leave_out": {"v": "tag:horror\nlibrary", "at": 9}},
+   "remote_wins_tie": false, "taken": ["sleep_from", "sleep_leave_out"], "expect": {"sleep_from": "want_to_read\nscope:3", "sleep_leave_out": "library"}}
  ]
 }

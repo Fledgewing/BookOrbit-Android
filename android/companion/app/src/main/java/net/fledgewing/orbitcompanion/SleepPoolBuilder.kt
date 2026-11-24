@@ -38,12 +38,13 @@ class SleepPoolBuilder(
         "hasCover" to (if (o.has("hasCover")) o.optBoolean("hasCover") else null), "readStatus" to o.optString("readStatus").ifEmpty { null },
         "tags" to o.optJSONArray("tags")?.let { a -> (0 until a.length()).map { a.optString(it) } })
 
-    /** Every page of a smart scope's or collection's books, up to [max] ids. */
+    /** Every page of a smart scope's or collection's books, or the whole library's (R1c), up to [max] ids. */
     fun listMembers(c: CacheWorker.Creds, kind: String, id: Long, max: Int): List<Long>? {
         val ids = LinkedHashSet<Long>()
         for (page in 1..(max + SleepPoolLogic.PAGE_SIZE - 1) / SleepPoolLogic.PAGE_SIZE) {
-            val body = get(c, q("/koreader/plugin/catalog/books", listOf("page" to page, "size" to SleepPoolLogic.PAGE_SIZE,
-                "sort" to "recently_added", "order" to "desc", (if (kind == "scope") "smartScopeId" else "collectionId") to id))) as? JSONObject ?: return null
+            val params = listOf<Pair<String, Any>>("page" to page, "size" to SleepPoolLogic.PAGE_SIZE, "sort" to "recently_added", "order" to "desc") +
+                when (kind) { "scope" -> listOf("smartScopeId" to id); "collection" -> listOf("collectionId" to id); else -> emptyList() }
+            val body = get(c, q("/koreader/plugin/catalog/books", params)) as? JSONObject ?: return null
             val items = body.optJSONArray("items") ?: JSONArray()
             for (i in 0 until items.length()) {
                 val bid = items.optJSONObject(i)?.optLong("id") ?: 0
@@ -120,34 +121,49 @@ class SleepPoolBuilder(
         // The candidates, in the order they would be shown.
         val candidates = ArrayList<Long>()
         val known = HashMap<Long, Map<String, Any?>>()
-        val from = SleepPoolLogic.parseFrom(a.from) ?: SleepPoolLogic.From("list", type = SleepPoolLogic.LISTS[0].second)
+        // Pick from is a set (R1c): each dashboard list a stream, one bag over every library, scope
+        // and collection, taken in turn (SleepPoolLogic.candidates; cases.json "sources").
+        val sources = SleepPoolLogic.sources(a.from)
         var bag: SleepPoolLogic.Bag? = null
         val (shown, shows) = shown()
-        if (from.kind == "list") {
-            val order = listOf(from.type) + SleepPoolLogic.LISTS.map { it.second }.filter { it != from.type }
-            for (type in order) {
-                val books = ((get(a.creds, "/koreader/plugin/catalog/dashboard/sections/$type") as? JSONObject)
-                    ?.optJSONObject("section")?.optJSONArray("books")) ?: JSONArray()
-                if (books.length() == 0) continue
-                for (i in 0 until books.length()) {
-                    val b = books.optJSONObject(i)?.let { book(it) } ?: continue
-                    val id = b["id"] as? Long ?: continue
-                    candidates.add(id); known[id] = b
-                }
-                if (type != from.type) sum["fallback"] = type
-                break
+        val lists = HashMap<String, List<Long>>()
+        fun listBooks(id: String): List<Long> = lists.getOrPut(id) {
+            val type = SleepPoolLogic.LISTS.first { it.first == id }.second
+            val books = ((get(a.creds, "/koreader/plugin/catalog/dashboard/sections/$type") as? JSONObject)
+                ?.optJSONObject("section")?.optJSONArray("books")) ?: JSONArray()
+            (0 until books.length()).mapNotNull { i ->
+                val b = books.optJSONObject(i)?.let { book(it) } ?: return@mapNotNull null
+                (b["id"] as? Long)?.also { known[it] = b }
             }
-        } else {
+        }
+        sources.filter { s -> SleepPoolLogic.LISTS.any { it.first == s } }.forEach { listBooks(it) }
+        val memberSources = SleepPoolLogic.memberSources(sources)
+        if (memberSources.isNotEmpty()) {
+            val key = sources.filter { SleepPoolLogic.parseFrom(it)?.members == true }.joinToString("\n")
             bag = SleepPoolLogic.Bag.of(readLua("bag.lua"))
-            if (bag.source != a.from) bag = SleepPoolLogic.Bag(a.from)
+            if (bag.source != key) bag = SleepPoolLogic.Bag(key)
             if (SleepPoolLogic.due(bag.at, t)) {
-                val ids = listMembers(a.creds, from.kind, from.id, SleepPoolLogic.BAG_MAX)
-                if (ids != null) { SleepPoolLogic.bagSync(bag, ids, rand); bag.at = t; listed.add("${a.from}=${ids.size}") }
-                else listed.add("${a.from} failed")
+                val all = LinkedHashSet<Long>()
+                var failed = false
+                for (m in memberSources) {
+                    val ids = listMembers(a.creds, m.kind, m.id, SleepPoolLogic.BAG_MAX - all.size)
+                    val name = if (m.kind == SleepPoolLogic.LIBRARY) m.kind else "${m.kind}:${m.id}"
+                    if (ids == null) { failed = true; listed.add("$name failed") } else { all.addAll(ids); listed.add("$name=${ids.size}") }
+                    if (all.size >= SleepPoolLogic.BAG_MAX) break
+                }
+                if (!failed) { SleepPoolLogic.bagSync(bag, all.toList(), rand); bag.at = t }
             }
             if (!a.every) SleepPoolLogic.bagSeek(bag, shown)
-            candidates.addAll(SleepPoolLogic.bagNext(bag, rand))
         }
+        val bagNext = bag?.let { SleepPoolLogic.bagNext(it, rand) }.orEmpty()
+        var (order, fallback) = SleepPoolLogic.candidates(sources, lists, bagNext)
+        if (order.isEmpty() && bagNext.isEmpty()) {
+            // Every picked source empty: the fallback lists, fetched only now.
+            SleepPoolLogic.LISTS.map { it.first }.filter { it !in sources }.forEach { listBooks(it) }
+            SleepPoolLogic.candidates(sources, lists, bagNext).let { order = it.first; fallback = it.second }
+        }
+        fallback?.let { id -> sum["fallback"] = SleepPoolLogic.LISTS.first { it.first == id }.second }
+        candidates.addAll(order)
 
         // Checked one by one, covers fetched for the ones kept: BATCH of them (R3).
         val items = ArrayList<Map<String, Any?>>()
