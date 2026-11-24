@@ -46,6 +46,16 @@ struct ReadPlan {
   bool fetch = false;  // ask the server (in the background when serve is set)
 };
 ReadPlan planRead(bool hasEntry, uint32_t validatedAt, uint32_t now, Mode mode, bool offline);
+// What a read does with its plan (fetchJson, patch 0040): parse the saved reply with no request,
+// make the request (its reply is kept; the saved one stands in if it fails), or neither: offline
+// with nothing saved, the read fails at once and the caller connects or shows its error. Before,
+// that last case made the request anyway: with Wi-Fi never started (the cache-first catalog, X4
+// Pro .194) the lookup panicked in lwIP, whose TCP/IP stack did not exist yet.
+enum class ReadStep : uint8_t { Saved, Request, Miss };
+inline ReadStep readStep(const ReadPlan& plan) {
+  if (plan.fetch) return ReadStep::Request;
+  return plan.serve ? ReadStep::Saved : ReadStep::Miss;
+}
 
 // A hash of a JSON value in canonical form (object keys sorted), so a reply whose keys come in
 // another order reads as the same reply. A top-level generatedAt and discover are left out: they
