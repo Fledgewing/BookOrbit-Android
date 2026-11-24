@@ -18,8 +18,14 @@ When the reader goes to sleep, its screen shows one of:
 
 On top of either, two optional extras, both off by default:
 
-- **text** the user types, up to 60 characters on at most two lines;
+- **text** the user types, up to 60 characters;
 - **battery**: the level when the reader went to sleep, e.g. `▮ 82%`. It is not live.
+
+The extras have two **styles**:
+
+- **Bar**: a band below the cover holds them both.
+- **Overlay**: they are drawn on the cover. The text runs vertically along the left or right edge,
+  so you turn the reader to read it, and the battery sits in a corner.
 
 Nothing here runs while a book is being read. The image is drawn only when the reader goes to sleep
 (reading gate: [reading-gate.md](reading-gate.md)). It is prepared from files already on the device,
@@ -68,8 +74,7 @@ power-button sleep on battery, and a Boox sleep (Go Color 7 and Page).
 | The sleep sync runs only with an EPUB open and the battery above its minimum. | C `src/main.cpp:1540-1552` |
 | Orbify's sleep sync (X4s) lends the sync's TLS session to catalog requests: first Home and its covers, then the next cover for the End-of-Book page, then the copy refresh and the mirror slice. The covers are decoded with the radio off. | O `overlay/patches/v2.0/0037-…` (`runSleepSync`, `LentConnection`), `orbify/FinishSync.cpp:604` (`fetchNextCover`), `:670` (`decodeNextCovers`), `orbify/core/NextCover.h` |
 | Text settings exist: `SettingInfo::String`, edited with the on-device keyboard (buttons or touch) and on the web settings page in File Transfer. | C `src/activities/settings/SettingsActivity.h:180`, `src/SettingsList.cpp:307` (Device Name), `activities/settings/BookOrbitSettingsActivity.cpp:180` (keyboard), `src/network/CrossPointWebServer.cpp:510-512`, `:1915`, `:2032` |
-| The X4's clock does not survive deep sleep unless "Keep Clock in Sleep" is on. The X3 has a real RTC. | C `src/CrossPointSettings.h:525-529` |
-| The X3 `default` build is at 99.35% of its slot, about 10 KB under the 99.5% CI gate. The X4s are at 96.2% and 93.8%. | O `docs/design/XTEINK-BUILD-NOTES.md` S17 |
+| The X4's clock does not survive deep sleep unless "Keep Clock in Sleep" is on. | C `src/CrossPointSettings.h:525-529` |
 | The Settings PIN (patch 0023) guards Settings and the web settings endpoints. | O `overlay/patches/v2.0/0023-settings-pin.patch` (`CrossInkTailnetCuts.h` comment) |
 
 ### BookOrbit: where "recommended" comes from
@@ -89,7 +94,7 @@ power-button sleep on battery, and a Boox sleep (Go Color 7 and Page).
 
 | # | Question | Decision | Why |
 |---|---|---|---|
-| R1 | Where "recommended" comes from | A setting, **Pick from**: Up next in series (default), Want to read, Discover. If the chosen list is empty, the others are tried in that order. | Up next is the book the reader is most likely to want next, and it is personal. Continue reading is the Current book mode's job. Discover is random, so it is never the default. |
+| R1 | Where "recommended" comes from | A setting, **Pick from**: Up next in series (default), Want to read, Discover. If the chosen list is empty, the others are tried in that order. | Up next is the book the reader is most likely to want next, and it is personal. Continue reading is the Current book mode's job. Discover is random, so it is never the default. All three are offered on every reader, the kids' included: the account's own restrictions already filter what each list can hold (B :240). |
 | R2 | Which books count | Up to 12, in the server's order. Skipped: the book open now, books marked read, and books with no cover (`hasCover` false). | The section's own limit (B :147). Order carries meaning, e.g. series position. |
 | R3 | How covers get onto the device | **Android:** the plugin keeps a pool, `koreader/settings/orbit-sleep/pool.json`, plus a copy of each cover (≤12 × ~100 KB). It refreshes the pool with the dashboard section on every Home refresh, through the write-through cache (offline: from the cache). **Xteink X4s:** the sleep sync asks for the same section at most once a day on the lent session, stores `pool.bin` (two slots with a CRC, as B3) and fetches the cover **one ahead**: the next cover in the rotation, by `planCover` with the ETag, decoded radio-off to a screen-size BMP in `/.crosspoint/orbify_sleep/`. | Copies on Android, so a cache prune never takes a cover in use. One ahead, so a sleep always has its next cover on the card. The same request on both platforms gives the same list. Reuses NextCover's fetch, ETag and decode path. |
 | R4 | The rotation rule | At sleep: if no cover was shown yet, or now − last change ≥ X, and the next cover is on the device, show it and set *last change = now*. Otherwise show the same one. A clock that went backwards resets *last change* to now. | It is the user's rule. A missing next cover never blanks the screen: it waits for the next sleep. |
@@ -104,9 +109,9 @@ power-button sleep on battery, and a Boox sleep (Go Color 7 and Page).
 
 | # | Question | Decision | Why |
 |---|---|---|---|
-| S1 | Android: where | **KOReader › Tools › Android sync › Sleep screen** (the Orbit menu, behind the Settings PIN like the rest of it, O `ko/menu.lua:313`). The companion shows the same section under Settings › Sleep screen; in Add-on mode that is a helper. The values are shared through the existing `SETTINGS` broadcast (newest `settings_at` wins), with five new extras: `sleep_mode`, `sleep_from`, `sleep_hours`, `sleep_text`, `sleep_battery`. | The reader is in KOReader. The companion owns the sink and the system setup. `SETTINGS` already merges both sides (O `android/docs/INTERFACE.md:27`). |
-| S2 | Android: rows | Sleep screen: *The reader's own* (off) / *Recommended cover* / *Current book*. Pick from (Recommended only). Change cover every (Recommended only). Text… (a one-line input, 60 characters). Show battery level. How it is shown: "Orbit screen saver ✓" or "Set up ›". Preview. | Preview is a menu action, so the gate allows it. It shows the screen for 5 s or until a tap, so the user can see what the text does. |
-| S3 | Xteink: where | **Settings › Display**, beside CrossInk's own sleep rows. X4s: the Sleep Screen list gains **BookOrbit Pick**, then Pick From, Change Every, Sleep Text, Battery on Sleep Screen. X3: Sleep Text and Battery on Sleep Screen only. | It sits where users already choose a sleep screen. |
+| S1 | Android: where | **KOReader › Tools › Android sync › Sleep screen** (the Orbit menu, behind the Settings PIN like the rest of it, O `ko/menu.lua:313`). The companion shows the same section under Settings › Sleep screen; in Add-on mode that is a helper. The values are shared through the existing `SETTINGS` broadcast (newest `settings_at` wins), with eight new extras: `sleep_mode`, `sleep_from`, `sleep_hours`, `sleep_text`, `sleep_battery`, `sleep_style`, `sleep_text_side`, `sleep_battery_corner`. | The reader is in KOReader. The companion owns the sink and the system setup. `SETTINGS` already merges both sides (O `android/docs/INTERFACE.md:27`). |
+| S2 | Android: rows | Sleep screen: *The reader's own* (off) / *Recommended cover* / *Current book*. Pick from (Recommended only). Change cover every (Recommended only). Text… (a one-line input, 60 characters). Show battery level. Style: *Bar* / *Overlay*. Text side: *Left* / *Right* (Overlay only). Battery corner: *Top left* / *Top right* / *Bottom left* / *Bottom right* (Overlay only). How it is shown: "Orbit screen saver ✓" or "Set up ›". Preview. | Preview is a menu action, so the gate allows it. It shows the screen for 5 s or until a tap, so the user can see what the text does. |
+| S3 | Xteink: where | **Settings › Display**, beside CrossInk's own sleep rows. X4s: the Sleep Screen list gains **BookOrbit Pick**, then Pick From, Change Every, Sleep Text, Battery on Sleep Screen, Sleep Extras Style (Bar / Overlay), Sleep Text Side and Battery Corner (the last two shown only for Overlay). The X3 gets none of them. | It sits where users already choose a sleep screen. |
 | S4 | Xteink: how "BookOrbit Pick" is stored | In Orbify's own setting, `orbifySleep`. Upstream's `sleepScreen` keeps its value; the row is a dynamic enum whose getter and setter read and write both, like `boSyncOnSleep` (C `SettingsList.cpp:476-482`). Choosing BookOrbit Pick leaves `sleepScreen` alone, and choosing any CrossInk mode turns `orbifySleep` off. | No new value in upstream's numbered enum, which upstream may extend. Turning it off brings back exactly what was there. |
 | S5 | Text on the X4 Classic (buttons only) | The on-device keyboard (`KeyboardEntryActivity`, as for the BookOrbit user name), or the web settings page in File Transfer, from a phone. Both come with `SettingInfo::String`. | Upstream gives both, and they cost nothing new. No companion exists on Xteink. |
 | S6 | Defaults | Off on every reader, including after an update: an update never changes what a reader shows at sleep. A new Android setup offers it as an optional step, not a checklist row. When switched on: Recommended, Up next, 6 h, no text, no battery. | The vendor's or CrossInk's screen stays until the user asks. The extras are optional, as the user asked. |
@@ -117,13 +122,18 @@ power-button sleep on battery, and a Boox sleep (Go Color 7 and Page).
 |---|---|---|---|
 | L1 | Orientation | Always portrait, whatever the reading orientation. | CrossInk already draws sleep screens portrait (C `SleepActivity.cpp:699`). One layout per panel. |
 | L2 | Cover | Fit: the whole cover, centred, on white. On Xteink, CrossInk's Fit/Crop and filter settings apply. | A cropped title looks broken. Xteink users already chose Fit or Crop. |
-| L3 | Extras | A **band** at the bottom: white, with a 2-px black rule above it. Its height is 7% of the panel (M8C 131 px, Boox 118 px, X4 56 px, X3 55 px). The cover fits into the space *above* the band and never sits under it. The text is left-aligned, one or two lines (two lines make the band taller: 10% of the panel). The battery is right-aligned: an outline icon, then `82%`. With neither extra on, there is no band and the cover uses the full height. | Text never covers the art. On the X4 a 2:3 cover fit to 480 px is 720 px tall, which leaves exactly 80 px: the band costs the cover nothing. |
+| L3 | Bar style (the default) | A **band** at the bottom: white, with a 2-px black rule above it. Its height is 7% of the panel (M8C 131 px, Boox 118 px, X4 56 px). The cover fits into the space *above* the band and never sits under it. The text is left-aligned, one or two lines (two lines make the band taller: 10% of the panel). The battery is right-aligned: an outline icon, then `82%`. With neither extra on, there is no band and the cover uses the full height. | Text never covers the art. On the X4 a 2:3 cover fit to 480 px is 720 px tall, which leaves exactly 80 px: the band costs the cover nothing. |
+| L3a | Overlay style: the cover | No band: the cover uses the full height, placed as with no extras. | The extras go on top of it. |
+| L3b | Overlay style: the text | One line, rotated, centred along the chosen edge. On the **right** edge it runs top to bottom (turn the reader anticlockwise to read it). On the **left** edge it runs bottom to top (turn it clockwise). Either way the top of the letters faces the edge. It is cut with "…" at 90% of the edge's length, or where it would meet the battery plate when both are on the same side. **Default: Right.** | Right reads top to bottom, like the spine of an English book. It also stays clear of the battery's default corner, bottom left. |
+| L3c | Overlay style: the battery | The same icon and percent as the bar, horizontal, in the chosen corner. **Default: bottom left.** | The user's default. It is the corner least likely to hold a cover's title. |
+| L3d | Overlay legibility | Each extra sits on a **plate**: a white rectangle with a black outline (2 px on Android, 1 px on Xteink) and padding of half the font height. The plate's outer edge is inset from the panel edge by 2% of the panel's short side: M8C 28 px, Boox 25 px, X4 10 px. Font: the same as the bar (L5). | A plate is legible over any art, dark or busy, and draws the same everywhere. A halo would need a stroked font pass that Xteink's renderer lacks. |
+| L3e | Overlay per device | **M8C** (1404 × 1872, 16 grey levels): plates and text in black on white, 38-px text, about 70 px across the plate. **Boox Page** (mono, 1264 × 1680): the same, 34-px text. **Boox Go Color 7**: the cover in colour; the plates and text on the black-and-white layer only, with no colour, so they stay sharp at 300 ppi while the colour layer is 150 ppi. **X4 Pro and X4** (480 × 800): `UI_12`. The text is drawn by the renderer in a landscape orientation (`setOrientation`, the way upstream draws rotated screens; `drawTextRotated90CW`, C `lib/GfxRenderer/GfxRenderer.h:417-419`, is already linked). The plates are drawn in every grey plane by the same `drawSleepBitmap` hook as the bar, so a grey cover stays grey around them. | One plate design, sized per panel. |
 | L4 | Battery format | Percent only, as of sleep, with no time. | Xteink often has no clock (R6). The same on both platforms. |
-| L5 | Text | ≤ 60 characters, at most 2 lines (cut with "…"), in the UI font: Android 9 pt (~38 px on the M8C), Xteink `UI_12`. | Long enough for "If found, please return to the front desk". Short enough for one band. |
+| L5 | Text | ≤ 60 characters; in the Bar at most 2 lines, in Overlay one line (both cut with "…"), in the UI font: Android 9 pt (~38 px on the M8C), Xteink `UI_12`. | Long enough for "If found, please return to the front desk". Short enough for one band. |
 | L6 | Colour (Boox Go Color 7) | The cover in colour; the band in black and white. | Kaleido colour is low resolution (150 ppi), so text stays on the B/W layer. |
 | L7 | Recommended thumbnail on 300-ppi Android panels | The 400 × 600 thumbnail is scaled to fit, which is soft on the M8C (≈2.9×). If the recommended book is on the device, its own EPUB cover is used instead. | It is the only cover the plugin's login can fetch (B :92). A sharper source would need a server-contract check first. |
 | L8 | Labels | None, so nothing says "Recommended" on the screen. | The cover carries its title, and fewer pixels means less ghosting. |
-| L9 | Panel sizes | M8C 1404 × 1872, Boox Page and Go Color 7 1264 × 1680 (Boox's published spec, not measured), X4 480 × 800, X3 528 × 792. The sink draws at the panel's real size, read at run time. | Mockups only; nothing is hard-coded. |
+| L9 | Panel sizes | M8C 1404 × 1872, Boox Page and Go Color 7 1264 × 1680 (Boox's published spec, not measured), X4 480 × 800. The sink draws at the panel's real size, read at run time. | Mockups only; nothing is hard-coded. |
 
 ### Fallbacks
 
@@ -144,7 +154,7 @@ Every fallback logs one line (`ORB Sleep: <mode> -> <shown> (<why>)`, Android `s
 | # | Decision | Why |
 |---|---|---|
 | K1 | Every sleep-screen setting is behind the Settings PIN: Android's Orbit menu and companion settings, and Xteink's Settings and web settings (patch 0023). | A parent sets the text ("Bedtime 8 pm", "Please return to…") and the mode, and the child can't change them. |
-| K2 | Recommended covers come from the reader's own account, so the server's visibility rules decide what can appear (B :240). On a reader with a PIN, Discover is not offered. | Up next and Want to read are lists the reader already chose. Random picks are the parent's call, and they can still change this with the PIN. |
+| K2 | Recommended covers come from the reader's own account, so the server's visibility rules decide what can appear (B :240). All three sources, Discover included, are offered on kids' readers too. | BookOrbit's account restrictions already filter what each account can see (the user's ruling, 2026-11-23). |
 | K3 | The sleep screen shows no PIN and no unlock, and waking goes where it always went. | The PIN guards settings, not waking. |
 
 ### Add-on mode (Android)
@@ -154,7 +164,7 @@ Every fallback logs one line (`ORB Sleep: <mode> -> <shown> (<why>)`, Android `s
 | A1 | **Sleep screen** is a helper, off until switched on, like Wi-Fi switching and sleep sync ([addon-mode §3](addon-mode.md)). | Add-on leaves sleep to the vendor unless the user asks. |
 | A2 | It needs no foreground service. The system binds the dream at sleep. The picture sink redraws from a broadcast receiver and the alarm. | Add-on runs no service unless a helper needs one (addon-mode §7.2). |
 | A3 | Current book means the last book read **in KOReader**. A book read in the vendor's own reader isn't seen. | Orbify only sees KOReader. |
-| A4 | Switching the helper off: the dream sink puts back the vendor's screen saver (see door 1); the picture sink says "Pick another picture in the Boox Screensaver settings ›" and deletes `sleep.png`. | It leaves the reader as it was. |
+| A4 | Switching the helper off: the dream sink puts back the vendor's screen saver (P1); the picture sink says "Pick another picture in the Boox Screensaver settings ›" and deletes `sleep.png`. | It leaves the reader as it was. |
 
 ### Building blocks
 
@@ -164,46 +174,41 @@ Every fallback logs one line (`ORB Sleep: <mode> -> <shown> (<why>)`, Android `s
 | Rotation rule | companion `SleepScreenLogic.kt`; Xteink `orbify/core/SleepPick` | `shared/fixtures/sleep/cases.json` |
 | Dream sink | companion `SleepDream.kt` (`DreamService`, `BIND_DREAM_SERVICE`) | `Vendor` profile picks the sink |
 | Picture sink | companion `SleepPicture.kt` | the same renderer as the dream (one `SleepCanvas`) |
-| Xteink band and pick | patch `0038-orbify-sleep-screen.patch`: one line in `drawSleepBitmap` and one in `renderDefaultSleepScreen` (the band); one case in `renderSleepScreen` (BookOrbit Pick); the redraw record keeps the cover id and the battery level | `NextCover` fetch, ETag and decode; `LentConnection`; `SettingInfo::String` |
-| Switches | `CROSSINK_TAILNET_ORBIFY_SLEEP_BAND` (1,1,1), `CROSSINK_TAILNET_ORBIFY_SLEEP_PICK` (0,1,1) | `tailnet_build.py` |
+| Xteink band, overlay and pick | patch `0038-orbify-sleep-screen.patch`: one line in `drawSleepBitmap` and one in `renderDefaultSleepScreen` (the bar or the overlay plates); one case in `renderSleepScreen` (BookOrbit Pick); the redraw record keeps the cover id and the battery level | `NextCover` fetch, ETag and decode; `LentConnection`; `SettingInfo::String` |
+| Switches | `CROSSINK_TAILNET_ORBIFY_SLEEP_BAND`, `CROSSINK_TAILNET_ORBIFY_SLEEP_OVERLAY`, `CROSSINK_TAILNET_ORBIFY_SLEEP_PICK`, each (0,1,1): off on the X3 by design | `tailnet_build.py` |
 
-Tests: the rule table (both platforms), the band layout (`orbify/core` host test: text wrap, band
-height, cover rect for each panel), the pool parse (plugin `test_logic.lua`, recorded section reply
+Tests: the rule table (both platforms), the band and overlay layout (`orbify/core` host test: text wrap, band
+height, cover rect, plate rects for each side and corner on each panel), the pool parse (plugin `test_logic.lua`, recorded section reply
 in `shared/fixtures/`), and a `ReadingGuardTest` entry for the dream (system-started, never during
 reading).
 
 ## The X3
 
-- **It gets:** Current book (CrossInk's Cover mode, already there), with the band: **Sleep Text**
-  and **Battery on Sleep Screen**. Estimated at 2-3 KB: two settings rows, their strings, and the
-  band drawing, which uses renderer calls already linked. It is behind
-  `CROSSINK_TAILNET_ORBIFY_SLEEP_BAND`, and the 99.5% gate's drop order takes it out first if the
-  build measures over.
-- **It doesn't get Recommended.** That needs the pool request and parse, the one-ahead fetch and
-  decode, and the rotation state: an estimated 6-9 KB against ~10 KB left. The X3's sleep sync also
-  has no lent session for extra requests (0037 S2). This is the same call as the mirror and the
-  cache (C1, M9).
+The X3 is left out by design (the user's ruling, 2026-11-23): it keeps exactly the sleep screens
+upstream CrossInk ships, and Orbify adds no text, battery, Bar, Overlay, BookOrbit Pick or
+settings rows to it. Every sleep-screen switch is 0 for the `default` env in `tailnet_build.py`.
+This is not a flash fallback, and its CI gate needs no drop order for it.
 
-## One-way door
+## Open decisions
 
-1. **How the Orbit screen saver gets chosen on a dream-sink reader (Meebook).** Choosing it means
-   writing `screensaver_components` (with `screensaver_enabled` and
-   `screensaver_activate_on_sleep`), which are Android secure settings. The companion can't write
-   them without `WRITE_SECURE_SETTINGS`, which can only be granted over USB, and Meebook hides the
-   system Screen saver page (to check in the probe). The choices:
-   - (a) **One USB step, no lasting permission:** `tools/install-usb.sh --sleep-screen on|off` writes
-     the three values, keeping the vendor's previous ones in a file to restore. The companion's
-     "Set up ›" opens the system page where it exists, and otherwise shows that command.
-   - (b) **Grant the permission once over USB:** the companion then switches the screen saver on and
-     off itself. A guard test allows only those three keys. The permission stays with the app until
-     it is uninstalled, and it allows changing other system settings too.
+No open decisions. Everything above is a two-way door, settled here, or the user's ruling below.
 
-   **Recommendation: (a).** It touches the system only when asked, holds no new permission, and the
-   change is undone by `--sleep-screen off` or by uninstalling (the system then falls back to the
-   vendor's dream by itself). The clicker design kept the app from holding
-   `WRITE_SECURE_SETTINGS` (`android/docs/BTKEYS-DESIGN.md:250-253`), and (a) keeps that true.
+## Choosing the Orbit screen saver on the Meebook (the user's ruling, 2026-11-23)
 
-Everything else above is a two-way door.
+Choosing it means writing `screensaver_components` (with `screensaver_enabled` and
+`screensaver_activate_on_sleep`), which are Android secure settings that the companion can write
+only with `WRITE_SECURE_SETTINGS`. That permission can be granted only over USB, and the Meebook
+hides the system Screen saver page (to check in the probe).
+
+| # | Decision |
+|---|---|
+| P1 | **An optional permission, granted once over USB:** `tools/install-usb.sh --grant-screen-saver` runs `pm grant … WRITE_SECURE_SETTINGS`, and the manifest declares it. With it, the companion switches its screen saver on and off itself. It keeps the vendor's previous three values to restore them, and writes nothing else: a guard test fails on any other `Settings.Secure` key. |
+| P2 | **Without the permission:** the one-time command `tools/install-usb.sh --sleep-screen on\|off` writes or restores the three values. The companion's "Set up ›" opens the system Screen saver page where it exists, and otherwise shows that command. |
+| P3 | **In the checklist:** an optional row, in the Add-on design's style ([addon-mode](addon-mode.md), the "Optional" table). It is shown only while Sleep screen is on and the reader uses the dream sink. |
+
+| Optional | Without it | Allow does |
+|---|---|---|
+| **Switch the screen saver from Orbit** (`WRITE_SECURE_SETTINGS`, granted over USB) | Turning Sleep screen on or off needs a one-time USB command, `tools/install-usb.sh --sleep-screen on` (or `off`). | shows the one-line USB command that grants it |
 
 ## Before building
 
