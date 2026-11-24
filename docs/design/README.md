@@ -13,6 +13,8 @@ item moves to building. Android-only designs are in [`android/docs/`](../../andr
 - [`orbit-plugin.md`](orbit-plugin.md): Orbit as a KOReader plugin (ROADMAP 8a).
 - [`emulated-release-tests.md`](emulated-release-tests.md): the release-gate stage that runs the
   hand-tested device scenarios on emulators and simulators against a real BookOrbit (designing).
+- [`lock-screen.md`](lock-screen.md): the sleep screen: a recommended cover or the current book,
+  with optional text and battery level (ROADMAP 11, designing).
 - [`write-through-cache.md`](write-through-cache.md): one cache in front of BookOrbit on both
   platforms: reads from the cache and revalidated, writes through. ROADMAP 4 and 4a.
 - Mockups for end-of-book and local-first: `mockups.html` in each folder, also at
