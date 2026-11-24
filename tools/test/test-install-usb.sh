@@ -107,5 +107,42 @@ check "allowlist: added" yes "$(grep -q 'net.fledgewing.orbitcompanion unrestric
 check "allowlist: refusal reported" yes "$(grep -q "couldn't add org.koreader.launcher" <<<"$out" && echo yes || echo no)"
 rm -rf "$zwork"
 
+# ---- the sleep screen's one-time steps against a stand-in adb with secure settings in a file
+swork=$(mktemp -d)
+printf 'screensaver_components=com.vendor/.Dream\nscreensaver_enabled=1\nscreensaver_activate_on_sleep=null\n' >"$swork/secure"
+: >"$swork/saved"
+sleep_adb() {
+    printf '%s\n' "$*" >>"$swork/adb.log"
+    [[ $1 == shell ]] || return 1
+    shift
+    case "$*" in
+        "settings get secure "*) local v; v=$(grep "^$4=" "$swork/secure" | cut -d= -f2-); printf '%s\n' "${v:-null}" ;;
+        "settings put secure "*) grep -v "^$4=" "$swork/secure" >"$swork/s2"; printf '%s=%s\n' "$4" "$5" >>"$swork/s2"; mv "$swork/s2" "$swork/secure" ;;
+        "settings delete secure "*) grep -v "^$4=" "$swork/secure" >"$swork/s2"; mv "$swork/s2" "$swork/secure" ;;
+        "cat $SLEEP_SAVED") cat "$swork/saved" ;;
+        "mkdir -p "*) local c=${*//"$SLEEP_SAVED"/"$swork/saved"}; sh -c "${c//"${SLEEP_SAVED%/*}"/"$swork"}" ;;
+        "rm -f "*) : >"$swork/saved" ;;
+        "pm grant "*) ;;
+        *) printf 'unexpected: %s\n' "$*" >&2; return 1 ;;
+    esac
+}
+ADB=(sleep_adb)
+secure() { grep "^$1=" "$swork/secure" | cut -d= -f2-; }
+sleep_screen on >/dev/null
+check "sleep screen on: ours" "$SLEEP_DREAM" "$(secure screensaver_components)"
+check "sleep screen on: on sleep" 1 "$(secure screensaver_activate_on_sleep)"
+check "sleep screen on: the old values kept" "screensaver_components=com.vendor/.Dream" "$(sed -n 1p "$swork/saved")"
+sleep_screen on >/dev/null
+check "a second on keeps the first saved values" "screensaver_components=com.vendor/.Dream" "$(sed -n 1p "$swork/saved")"
+sleep_screen off >/dev/null
+check "sleep screen off: the vendor's back" "com.vendor/.Dream" "$(secure screensaver_components)"
+check "sleep screen off: an unset key unset again" "" "$(secure screensaver_activate_on_sleep)"
+check "sleep screen off: saved values removed" "" "$(cat "$swork/saved")"
+check "only the three keys written" "" "$(grep -E 'settings (put|delete) secure' "$swork/adb.log" | grep -vE 'screensaver_(components|enabled|activate_on_sleep)' || true)"
+grant_screen_saver >/dev/null
+check "grant" "shell pm grant $COMPANION_PKG android.permission.WRITE_SECURE_SETTINGS" "$(tail -1 "$swork/adb.log")"
+check "bad --sleep-screen value refused" refused "$( (main --sleep-screen maybe >/dev/null 2>&1) && echo ok || echo refused)"
+rm -rf "$swork"
+
 printf '%d passed, %d failed\n' "$passed" "$failed"
 [[ $failed == 0 ]]

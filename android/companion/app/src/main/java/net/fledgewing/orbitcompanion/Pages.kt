@@ -391,6 +391,10 @@ class SettingsActivity : EinkActivity() {
             })
         }
         }
+        // The sleep screen (docs/design/lock-screen.md): off until switched on, in either mode (A1).
+        val sleep = SleepScreen.settings(this)
+        root.addView(Ui.row(this, "Sleep screen", if (sleep.mode == SleepMode.OFF) "off · the reader's own" else "${sleep.mode.label} · ${SleepScreen.shownBy(this)}",
+            Ui.value(this, "›"), onClick = { startActivity(Intent(this, SleepScreenActivity::class.java)) }))
         if (!addon || prefs.helperClicker) {
             root.addView(Ui.row(this, "Clicker buttons", "Bluetooth page clicker: page turns, Home, Back, Sleep", Ui.value(this, "›"), onClick = {
                 startActivity(Intent(this, ClickersActivity::class.java))
@@ -545,7 +549,8 @@ object Setup {
         val all = allChecks(ctx)
         val keep = SetupTips.visible(all.map { it.id }, Prefs(ctx).hiddenTips).toSet()
         val shown = all.filter { it.id in keep }
-        return if (Mode.isAddon(ctx)) addonChecks(ctx, shown) else shown
+        // The sleep screen's one optional row (docs/design/lock-screen.md P3), in either mode.
+        return (if (Mode.isAddon(ctx)) addonChecks(ctx, shown) else shown) + listOfNotNull(SleepSetup.check(ctx))
     }
 
     /**

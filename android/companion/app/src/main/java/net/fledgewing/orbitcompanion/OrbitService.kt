@@ -40,6 +40,8 @@ class CommandReceiver : BroadcastReceiver() {
         OLog.d("received ${Contract.shortName(intent.action)} extras=${intent.extras?.keySet()}")
         // A record action: kept here, no service needed (docs/design/addon-mode.md §7.1).
         if (intent.action == Contract.REPORT) return StatusFile.onReport(ctx, intent)
+        // The sleep screen's files changed: a record action too (no service needed).
+        if (intent.action == SleepScreen.ACTION_POOL) return SleepScreen.onPool(ctx, intent.getStringExtra("reason") ?: "plugin")
         val action = intent.action ?: return
         if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) return OrbitService.start(ctx, intent)
         if (!Mode.isAddon(ctx)) return OrbitService.start(ctx, intent) // Full: exactly as before 0.11.0
@@ -55,6 +57,8 @@ class CommandReceiver : BroadcastReceiver() {
     private fun record(ctx: Context, intent: Intent) {
         when (intent.action) {
             Contract.SETUP_LATER -> Attention.laterFromKoreader(ctx)
+            // Only the sleep screen's settings are used without the service (docs/design/lock-screen.md A2).
+            Contract.SETTINGS -> SleepScreen.recordSettings(ctx, intent)
             Contract.STATS -> {
                 Reading.onStats(ctx, intent)
                 PatchInstaller.onBook(ctx, UpdateFlow.bookFromStats(intent.getStringExtra("reason"), intent.getStringExtra("open")), "KOReader: ${intent.getStringExtra("reason") ?: "stats"}")
@@ -181,6 +185,14 @@ class OrbitService : Service() {
         }
     }
 
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, intent: Intent) {
+            val level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+            val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+            if (level >= 0 && scale > 0) SleepScreen.onBattery(this@OrbitService, level * 100 / scale)
+        }
+    }
+
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) {
             when (intent.action) {
@@ -230,6 +242,8 @@ class OrbitService : Service() {
             vpnCallback, main,
         )
         registerReceiver(wifiStateReceiver, IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION))
+        // The sleep screen's picture is redrawn at every 1 % step (docs/design/lock-screen.md R7).
+        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         registerReceiver(screenReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
@@ -252,6 +266,7 @@ class OrbitService : Service() {
             cm.unregisterNetworkCallback(vpnCallback)
             unregisterReceiver(screenReceiver)
             unregisterReceiver(wifiStateReceiver)
+            unregisterReceiver(batteryReceiver)
             stats.stop()
         } catch (e: Exception) {
             OLog.w("service teardown", e)
@@ -414,6 +429,7 @@ class OrbitService : Service() {
         intent.getStringExtra("wifi_mode")?.takeIf { WifiMode.valid(it) }?.let { prefs.wifiMode = WifiMode.fromKey(it) }
         intent.getStringExtra("wifi_idle_min")?.toIntOrNull()?.takeIf { SharedSettings.validIdle(it) }?.let { prefs.wifiIdleMin = it }
         intent.getStringExtra("home_button")?.takeIf { HomeButton.valid(it) }?.let { prefs.homeButton = HomeButton.fromKey(it) }
+        SleepScreen.fromPlugin(this, intent)
         prefs.sharedSettingsAt = at
         OLog.i("settings from the patch: wifi_mode=${prefs.wifiMode.key} wifi_idle_min=${prefs.wifiIdleMin} home_button=${prefs.homeButton.key} (home opens ${HomeApp.kind(prefs.homeApp)})")
     }
@@ -628,7 +644,9 @@ class OrbitService : Service() {
             "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +
             "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}," +
             // Companion-only "Home opens", for the patch's menu: koreader, launcher or app.
-            "\"home_opens\":\"${HomeApp.kind(prefs.homeApp)}\"}," +
+            "\"home_opens\":\"${HomeApp.kind(prefs.homeApp)}\"," +
+            // The sleep screen's settings (docs/design/lock-screen.md S1) and how it is shown.
+            "${SleepScreen.settingsJson(this)}},\"sleep\":${SleepScreen.statusJson(this)}," +
             // Clicker buttons for the patch (keycode -> press/hold/double -> action), android/docs/INTERFACE.md.
             "\"keymap\":${ClickerStore.map(this).forPatch()}}"
 

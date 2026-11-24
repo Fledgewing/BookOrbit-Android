@@ -1,0 +1,50 @@
+{
+ "section": {
+  "type": "want-to-read",
+  "smartScopeId": null,
+  "books": [
+   {
+    "id": 8,
+    "title": "Signal Fires",
+    "authors": [
+     "Bram Tolle"
+    ],
+    "seriesId": 11,
+    "seriesName": "Harbor Lights",
+    "seriesIndex": "3",
+    "progressPercentage": null,
+    "lastReadAt": null,
+    "readStatus": "want_to_read",
+    "formats": [
+     "epub"
+    ],
+    "hasCover": true,
+    "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/8/thumbnail",
+    "detailUrl": "/api/v1/koreader/plugin/catalog/books/8",
+    "addedAt": "2026-11-24T04:08:49.345Z",
+    "updatedAt": "2026-11-24T04:08:49.361Z"
+   },
+   {
+    "id": 2,
+    "title": "The Pruning",
+    "authors": [
+     "Ada Quill"
+    ],
+    "seriesId": 1,
+    "seriesName": "The Glass Orchard",
+    "seriesIndex": "2",
+    "progressPercentage": null,
+    "lastReadAt": null,
+    "readStatus": "want_to_read",
+    "formats": [
+     "epub"
+    ],
+    "hasCover": true,
+    "thumbnailUrl": "/api/v1/koreader/plugin/catalog/books/2/thumbnail",
+    "detailUrl": "/api/v1/koreader/plugin/catalog/books/2",
+    "addedAt": "2026-11-24T04:08:49.206Z",
+    "updatedAt": "2026-11-24T04:08:49.229Z"
+   }
+  ]
+ }
+}

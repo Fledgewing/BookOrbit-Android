@@ -7,6 +7,8 @@
 #   tools/install-usb.sh --fresh          first clear an old /sdcard/koreader (lists it, asks y/N)
 #   tools/install-usb.sh --books out.csv  also write the device's book list (before any change)
 #   tools/install-usb.sh --books out.csv --no-install   only the book list
+#   tools/install-usb.sh --grant-screen-saver   let Orbit Companion switch the screen saver itself
+#   tools/install-usb.sh --sleep-screen on|off  Orbit's sleep screen as the screen saver, or the old one back
 #
 # Needs: adb, curl, jq, unzip, and shasum (macOS) or sha256sum/sha1sum (Linux).
 # It never deletes anything but an old /sdcard/koreader you confirmed (--fresh), the plugin
@@ -25,7 +27,16 @@ OLD_PATCH="2-orbit-android.lua" # the user patch the plugin replaced (Orbify 0.7
 KO_DIR="/sdcard/koreader"
 NEO_URI="content://com.onyx.content.database.ContentProvider/Metadata"
 
+COMPANION_PKG="net.fledgewing.orbitcompanion"
+# The sleep screen (docs/design/lock-screen.md P1, P2): Orbit's screen saver, the only three secure
+# settings it touches, and where --sleep-screen on keeps the values it replaced.
+SLEEP_DREAM="$COMPANION_PKG/$COMPANION_PKG.SleepDream"
+SLEEP_KEYS=(screensaver_components screensaver_enabled screensaver_activate_on_sleep)
+SLEEP_SAVED="$KO_DIR/settings/orbit-sleep/vendor-screensaver.txt"
+
 FRESH=0
+GRANT_SS=0
+SLEEP_SS=""
 BOOKS=""
 INSTALL=1
 ADB=(adb)
@@ -33,7 +44,7 @@ ADB=(adb)
 say() { printf '%s\n' "$*"; }
 die() { printf 'install-usb: %s\n' "$*" >&2; exit 1; }
 
-usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; }
 
 # ---------------------------------------------------------------- helpers (pure)
 
@@ -358,6 +369,57 @@ install_all() {
     say "Done. Open Orbit Companion on the device and follow Setup (Fix next)."
 }
 
+# ---------------------------------------------------------------- sleep screen
+
+# One saved line per key: "<key>=<value>" ("null": the key was unset).
+sleep_saved_lines() {
+    local k
+    for k in "${SLEEP_KEYS[@]}"; do printf '%s=%s\n' "$k" "$(dsh settings get secure "$k")"; done
+}
+
+grant_screen_saver() {
+    "${ADB[@]}" shell pm grant "$COMPANION_PKG" android.permission.WRITE_SECURE_SETTINGS ||
+        die "the grant failed: is Orbit Companion installed?"
+    say "Orbit Companion may now switch the screen saver itself (Settings › Sleep screen)."
+}
+
+sleep_screen() { # on | off
+    case "$1" in
+        on)
+            if [[ -z $(dsh cat "$SLEEP_SAVED" 2>/dev/null || true) ]]; then
+                local lines
+                lines=$(sleep_saved_lines)
+                dsh "mkdir -p $(q "${SLEEP_SAVED%/*}") && printf '%s\n' $(q "$lines") > $(q "$SLEEP_SAVED")" >/dev/null
+            fi
+            dsh settings put secure screensaver_components "$SLEEP_DREAM" >/dev/null
+            dsh settings put secure screensaver_enabled 1 >/dev/null
+            dsh settings put secure screensaver_activate_on_sleep 1 >/dev/null
+            say "Orbit's sleep screen is the screen saver now; tools/install-usb.sh --sleep-screen off puts the old one back."
+            ;;
+        off)
+            local saved line k v
+            saved=$(dsh cat "$SLEEP_SAVED" 2>/dev/null || true)
+            if [[ -z $saved ]]; then
+                dsh settings delete secure screensaver_components >/dev/null
+                say "Nothing saved from before: the reader's default screen saver is back."
+                return 0
+            fi
+            while IFS= read -r line; do
+                k=${line%%=*} v=${line#*=}
+                [[ " ${SLEEP_KEYS[*]} " == *" $k "* ]] || continue
+                if [[ $v == null || -z $v ]]; then
+                    dsh settings delete secure "$k" >/dev/null
+                else
+                    dsh settings put secure "$k" "$v" >/dev/null
+                fi
+            done <<<"$saved"
+            dsh rm -f "$(q "$SLEEP_SAVED")" >/dev/null
+            say "The reader's own screen saver is back."
+            ;;
+        *) die "--sleep-screen needs on or off" ;;
+    esac
+}
+
 # ---------------------------------------------------------------- main
 
 main() {
@@ -367,12 +429,22 @@ main() {
             --books) BOOKS=${2:?--books needs a file name}; shift ;;
             --no-install) INSTALL=0 ;;
             --serial) ADB=(adb -s "${2:?--serial needs a serial}"); shift ;;
+            --grant-screen-saver) GRANT_SS=1 ;;
+            --sleep-screen) SLEEP_SS=${2:?--sleep-screen needs on or off}; shift ;;
             -h | --help) usage; return 0 ;;
             *) usage >&2; die "unknown option $1" ;;
         esac
         shift
     done
     command -v adb >/dev/null 2>&1 || die "adb not found (Android platform-tools)"
+    # The sleep screen's one-time steps: nothing is installed with them.
+    if [[ $GRANT_SS == 1 || -n $SLEEP_SS ]]; then
+        [[ -z $SLEEP_SS || $SLEEP_SS == on || $SLEEP_SS == off ]] || die "--sleep-screen needs on or off"
+        pick_device
+        [[ $GRANT_SS == 1 ]] && grant_screen_saver
+        [[ -n $SLEEP_SS ]] && sleep_screen "$SLEEP_SS"
+        return 0
+    fi
     if [[ $INSTALL == 1 ]]; then
         command -v curl >/dev/null 2>&1 || die "curl not found"
         command -v jq >/dev/null 2>&1 || die "jq not found (brew install jq / apt install jq)"

@@ -1470,6 +1470,123 @@ test("copies: changed copies are found by the server's flag or a saved detail's 
     eq(#q, 2)
 end)
 
+---------------------------------------------------------------- sleep screen pool (lock-screen.md)
+local SP = M.SleepPool
+local function seq(list) local i = 0 return function(n) i = i % #list + 1; return math.min(n, list[i]) end end
+
+test("sleep screen settings: off by default, bad values fall back, text cut at 60", function()
+    local n = SP.normalize({})
+    eq(n.sleep_mode, "off"); eq(n.sleep_from, "up_next"); eq(n.sleep_hours, 6); eq(n.sleep_style, "bar")
+    eq(n.sleep_text_position, "right"); eq(n.sleep_battery_corner, "bottom_left"); eq(n.sleep_battery, false)
+    n = SP.normalize({ sleep_mode = "bogus", sleep_hours = 5, sleep_from = "scope:x", sleep_style = "halo",
+        sleep_text_position = "middle", sleep_battery_corner = "centre", sleep_battery = "1" })
+    eq(n.sleep_mode, "off"); eq(n.sleep_hours, 6); eq(n.sleep_from, "up_next"); eq(n.sleep_style, "bar")
+    eq(n.sleep_text_position, "right"); eq(n.sleep_battery_corner, "bottom_left"); eq(n.sleep_battery, true)
+    eq(SP.normalize({ sleep_hours = "12" }).sleep_hours, 12)
+    eq(SP.normalize({ sleep_from = "collection:4" }).sleep_from, "collection:4")
+    local long = string.rep("é", 70)
+    eq(#SP.cleanText(long), 120, "60 two-byte characters")
+    eq(SP.cleanText("  Bedtime\n8 pm  "), "Bedtime 8 pm")
+end)
+
+test("sleep screen: the SETTINGS extras are strings, rules one per line", function()
+    local x = SP.extras({ sleep_mode = "recommended", sleep_leave_out = { "tag:Age:18", "scope:3", "bogus", "scope:3" },
+        sleep_battery = true, sleep_hours = 3 })
+    eq(x.sleep_mode, "recommended"); eq(x.sleep_hours, "3"); eq(x.sleep_battery, "1")
+    eq(x.sleep_leave_out, "tag:age:18\nscope:3")
+    local back = SP.decodeRules(x.sleep_leave_out)
+    eq(#back, 2); eq(back[1], "tag:age:18"); eq(back[2], "scope:3")
+    eq(SP.parseRule("tag:   "), nil); eq(SP.parseRule("scope:0"), nil); eq(SP.parseRule("field:3"), nil)
+    eq(SP.parseFrom("discover").type, "random"); eq(SP.parseFrom("up_next").type, "up-next-in-series")
+end)
+
+test("sleep screen: text and battery never share a corner (L3b2)", function()
+    eq(SP.batteryCorner("bottom_left", "bottom"), "top_left")
+    eq(SP.batteryCorner("top_right", "top"), "bottom_right")
+    eq(SP.batteryCorner("bottom_right", "right"), "bottom_left")
+    eq(SP.batteryCorner("top_left", "left"), "top_right")
+    eq(SP.batteryCorner("bottom_left", "right"), "bottom_left", "default: apart already")
+    eq(SP.batteryCorner("top_left", "bottom"), "top_left")
+end)
+
+test("sleep screen: the dashboard section reply (recorded) and which books count (R2)", function()
+    local f = io.open(here .. "/../../../shared/fixtures/bookorbit/catalog-dashboard-section.want-to-read.json", "rb")
+    local body = JSON.decode(f:read("*a")); f:close()
+    local books = SP.sectionBooks(body)
+    ok(#books >= 1, "books")
+    for _, b in ipairs(books) do ok(tonumber(b.id), "id"); eq(type(b.hasCover), "boolean") end
+    eq(#SP.sectionBooks({}), 0); eq(#SP.sectionBooks(nil), 0)
+    ok(SP.eligible(books[1]))
+    eq(SP.eligible({ id = 3, hasCover = false }), false)
+    eq(SP.eligible({ id = 3, hasCover = true, readStatus = "read" }), false)
+    eq(SP.eligible({ id = 3, hasCover = true }, 3), false, "the book open now")
+    eq(SP.eligible({ id = 3, hasCover = true, readStatus = "want_to_read" }), true)
+    local e = SP.entries({ items = { { id = "12", title = "Romance", count = 40 }, { id = "x", title = "bad" } } })
+    eq(#e, 1); eq(e[1].id, 12); eq(e[1].count, 40)
+end)
+
+test("sleep screen: Leave out is OR-ed, tags ignore case, unchecked fails closed (X1-X7)", function()
+    local rules = { "tag:age:18", "scope:3" }
+    local members = { ["scope:3"] = { [10] = true } }
+    eq(SP.check(10, rules, members, {}), "out", "in the scope")
+    eq(SP.check(11, rules, members, { " AGE:18 " }), "out", "tag, any case")
+    eq(SP.check(11, rules, members, { "fantasy" }), "keep")
+    eq(SP.check(11, rules, members, nil), "unknown", "no detail yet")
+    eq(SP.check(11, rules, {}, { "fantasy" }), "unknown", "scope not listed yet")
+    eq(SP.check(10, rules, members, nil), "out", "a known match wins over an unchecked rule")
+    eq(SP.check(11, {}, {}, nil), "keep", "no rules")
+    eq(SP.needsTags(rules), true); eq(SP.needsTags({ "collection:2" }), false)
+    eq(#SP.memberRules(rules), 1)
+    eq(SP.due(nil, 100), true); eq(SP.due(100, 100 + 86399), false); eq(SP.due(100, 100 + 86400), true); eq(SP.due(200, 100), true)
+end)
+
+test("sleep screen: the tag picker counts tags in cached details", function()
+    local t = SP.tagCounts({ { tags = { "Age:18", "cosy" } }, { tags = { "age:18", "Age:18" } }, { tags = {} }, {} })
+    eq(#t, 2); eq(t[1].tag, "age:18"); eq(t[1].count, 2); eq(t[1].label, "Age:18"); eq(t[2].tag, "cosy")
+end)
+
+test("sleep screen: the shuffle bag never repeats until used up (R1b)", function()
+    local rand = seq({ 1, 3, 2, 1, 2 })
+    local bag = { order = {}, pos = 0 }
+    SP.bagSync(bag, { 1, 2, 3, 4 }, rand)
+    eq(#bag.order, 4)
+    local seen = {}
+    for _, id in ipairs(bag.order) do ok(not seen[id], "unique"); seen[id] = true end
+    local first = bag.order[1]
+    local next1 = SP.bagNext(bag, rand)
+    eq(#next1, 4, "nothing shown yet")
+    ok(SP.bagSeek(bag, bag.order[2]), "moves forward to the shown book")
+    eq(bag.pos, 2)
+    eq(SP.bagSeek(bag, first), false, "never back")
+    eq(SP.bagSeek(bag, bag.prev), false, "the same book again")
+    -- A member leaves before the cursor, a new one joins after it.
+    local gone = bag.order[1]
+    local keep = {}
+    for _, id in ipairs(bag.order) do if id ~= gone then table.insert(keep, id) end end
+    table.insert(keep, 9)
+    SP.bagSync(bag, keep, rand)
+    eq(#bag.order, 4); eq(bag.pos, 1, "cursor follows the removal")
+    local rest = SP.bagNext(bag, rand)
+    eq(#rest, 3)
+    local has9 = false
+    for _, id in ipairs(rest) do if id == 9 then has9 = true end end
+    ok(has9, "the new member is still to come")
+    -- Used up: shuffled again, never starting with the book just shown.
+    for i = 1, 20 do
+        local b = { order = { 1, 2, 3 }, pos = 3, prev = 3 }
+        local again, shuffled = SP.bagNext(b, function(n) return ((i + n) % n) + 1 end)
+        eq(shuffled, true); eq(#again, 3); ok(again[1] ~= 3, "not the book just shown first")
+    end
+end)
+
+test("sleep screen: pool.json is valid JSON the companion reads", function()
+    local doc = SP.poolDoc("scope:3", { { id = 5, title = 'Quote " and \\ slash', file = "covers/5.jpg" } }, 1700000000000)
+    local back = JSON.decode(SP.json(doc))
+    eq(back.v, 1); eq(back.source, "scope:3"); eq(back.at, 1700000000000)
+    eq(back.items[1].id, 5); eq(back.items[1].title, 'Quote " and \\ slash'); eq(back.items[1].file, "covers/5.jpg")
+    eq(SP.json({ items = {} }), '{"items":[]}')
+end)
+
 -- Nothing interrupts reading (docs/design/reading-gate.md): every place in the plugin that shows
 -- something, takes focus or restarts says how the reading gate covers it ("-- gate: <why>" on its
 -- line or the line before). A new path without it fails here.

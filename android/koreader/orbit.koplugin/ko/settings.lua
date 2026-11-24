@@ -39,6 +39,18 @@ DEFAULTS = {
     eob_auto = true,              -- reaching the end marks the book finished (docs/design/end-of-book §4)
     offline_cache = true,         -- BookOrbit reads from Orbit's cache, checked in the background (docs/design/write-through-cache.md)
     local_first = true,           -- BookOrbit Home shows this device's reading first (docs/design/local-first)
+    -- The sleep screen (docs/design/lock-screen.md), shared with the companion (SETTINGS); off on
+    -- every reader, also after an update. Checked by SleepPool.normalize wherever they are read.
+    sleep_mode = "off",           -- "off" | "recommended" | "current"
+    sleep_from = "up_next",       -- "up_next" | "want_to_read" | "discover" | "scope:<id>" | "collection:<id>"
+    sleep_leave_out = {},         -- rules: "tag:<text>", "scope:<id>", "collection:<id>" (replaced, never changed in place)
+    sleep_hours = 6,              -- Recommended changes after this many hours (1, 3, 6, 12, 24)
+    sleep_text = "",              -- up to 60 characters
+    sleep_battery = false,        -- the battery level at sleep
+    sleep_style = "bar",          -- "bar" | "overlay"
+    sleep_text_position = "right", -- overlay: "right" | "left" | "top" | "bottom"
+    sleep_battery_corner = "bottom_left", -- overlay: "top_left" | "top_right" | "bottom_left" | "bottom_right"
+    sleep_current_file = nil,     -- the book whose cover current.png holds
 }
 
 S = G_reader_settings:readSetting("orbit_android") or {}

@@ -32,6 +32,12 @@ Companion.ACTION = {
     -- Companion 0.11.0+ in Add-on mode: its invisible window that starts KOReader again after a
     -- restart (no Home role to do it from the background, docs/design/addon-mode.md §7.4).
     RELAUNCH_UI = Companion.PACKAGE .. ".action.RELAUNCH_UI",
+    -- Companion with the "sleep_screen" cap (docs/design/lock-screen.md): the files in
+    -- koreader/settings/orbit-sleep/ changed (broadcast); its preview and its Sleep screen page
+    -- (activities, from the menu).
+    SLEEP_POOL = Companion.PACKAGE .. ".action.SLEEP_POOL",
+    SLEEP_PREVIEW = Companion.PACKAGE .. ".action.SLEEP_PREVIEW",
+    SHOW_SLEEP = Companion.PACKAGE .. ".action.SHOW_SLEEP",
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
