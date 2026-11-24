@@ -95,6 +95,11 @@ local NEEDS = {
     { "frontend/gettext.lua", { { "GetText", T } } },
     { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T } } },
     { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T } } },
+    -- OrbiSmart (ko/orbismart.lua): places in this layout's pages, and the Yes / No popup (its
+    -- Back / tap outside runs cancel_callback).
+    { "frontend/document/credocument.lua", { "getPageCount", "getPageFromXPointer", "getCurrentPage" } },
+    { "frontend/ui/widget/confirmbox.lua", { { "ok_text", F }, { "cancel_text", F }, { "cancel_callback", F },
+        { "self.cancel_callback()", T } } },
     -- The sleep screen (ko/sleepscreen.lua): the open book's cover and title, and the text input.
     { "frontend/apps/filemanager/filemanagerbookinfo.lua", { "getCoverImage" } },
     { "frontend/apps/reader/readerui.lua", { { "doc_props", F } } },

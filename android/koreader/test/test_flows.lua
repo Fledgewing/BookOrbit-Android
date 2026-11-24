@@ -481,6 +481,9 @@ end)
 -- The previous KOReader process was killed with this book open (Smart Home cold start).
 store.orbit_android = store.orbit_android or {}
 store.orbit_android.open_book_at_exit = "/books/killed.epub"
+-- The flows below test Custom sync (Sync while reading, sync on wake / sleep as set); OrbiSmart's
+-- own flows switch it on (the "orbismart:" tests at the end).
+store.orbit_android.sync_mode = "custom"
 local PLUGIN_MAIN = here .. "/../orbit.koplugin/main.lua"
 local Orbit = dofile(PLUGIN_MAIN)
 
@@ -5380,6 +5383,315 @@ test("sqlite stress: the verdict line", function()
     eq(l2, "sqlite-stress: 0 writes, 5 reads, 1 errors, max busy wait 0 ms", "no writer answer is an error")
     ok(notes[1]:find("didn't answer") ~= nil)
 end)
+
+---------------------------------------------------------------- OrbiSmart sync (docs/design/orbismart.md)
+-- A 300-page book; places are pages, xpointers "/p<page>". The BookOrbit plugin's API client is
+-- a fake bookorbit_api (getProgress answers W.osm_server; updateProgress stores it), wrapped by
+-- ko/orbismart.lua like the real one.
+local OSMApi = { puts = 0 }
+function OSMApi:getProgress(d) return W.osm_server end
+function OSMApi:updateProgress(d, pct, progress, ts)
+    OSMApi.puts = OSMApi.puts + 1
+    W.osm_server = { percentage = pct, progress = progress, timestamp = ts, device = "M8C", device_id = "me" }
+    return { document = d, timestamp = ts }
+end
+package.loaded["bookorbit_api"] = OSMApi
+local OSM = RE.OSM
+local function osmLog(pat)
+    for i = #W.logs, 1, -1 do if W.logs[i]:find(pat, 1, true) then return W.logs[i] end end
+end
+local function osmPopup()
+    for i = #W.shown, 1, -1 do local w = W.shown[i]; if type(w) == "table" and w.ok_callback and w.cancel_callback then return w end end
+end
+local function osmAnswer(yes)
+    local w = osmPopup()
+    UIManager:close(w) -- KOReader's ConfirmBox closes itself, then runs the callback
+    if yes then w.ok_callback() else w.cancel_callback() end
+end
+local function osmServer(page, at, device)
+    W.osm_server = { percentage = page / 300, progress = "/p" .. page, timestamp = at, device = device or "Boox", device_id = "boox" }
+end
+-- A book open on this reader at page `page`, OrbiSmart on, with what this reader knew before.
+local function osmBook(page, rec)
+    store.orbit_android.sync_mode = "orbismart"
+    store.orbit_android.orbismart = { d1 = rec }
+    store.orbit_android.osm_saved_plugin = nil
+    W.page, W.logs, W.shown, OSMApi.puts = page, {}, {}, 0
+    W.osm_server = nil
+    local ui, m = newUI(true)
+    ui.document.info = {}
+    function ui.document:getPageCount() return 300 end
+    function ui.document:getCurrentPage() return W.page end
+    function ui.document:getPageFromXPointer(xp) return tonumber(xp:match("%d+")) end
+    ui.doc_settings = { readSetting = function(_, k) if k == "summary" then return { status = W.osm_status } end end }
+    local p = ui.bookorbit
+    p.device_id = "me"
+    function p:getLastPercent() return W.page / 300 end
+    function p:getLastProgress() return "/p" .. W.page end
+    function p:syncToProgress(progress) W.page = tonumber(progress:match("%d+")); table.insert(p.calls, "goto:" .. W.page) end
+    function p:noteProgressCompared() end
+    function p:fetchRemoteProgress(d, cb)
+        table.insert(p.calls, "fetch")
+        local body = require("bookorbit_api"):getProgress(d)
+        p.last_remote_progress = body and { digest = d, percentage = body.percentage, progress = body.progress, timestamp = body.timestamp } or nil
+        UIManager:nextTick(function() cb(body ~= nil) end)
+    end
+    function p:requestProgressPush(_, _, src)
+        table.insert(p.calls, "push:" .. src)
+        require("bookorbit_api"):updateProgress("d1", W.page / 300, "/p" .. W.page, os.time())
+    end
+    return ui, m, p
+end
+local function osmRec() return store.orbit_android.orbismart.d1 end
+
+test("orbismart: before render, a further place already known opens there with no popup", function()
+    local ui, m, p = osmBook(120, { server = { at = 5000, pct = 214 / 300, progress = "/p214", device = "Boox" } })
+    m:onReaderReady()
+    eq(W.page, 214, "opened at the further place")
+    ok(osmLog("orbismart: rule3 L=120 R=214 -> take (prerender, now)"), "decision logged")
+    run(30)
+    eq(osmPopup(), nil, "no popup")
+end)
+
+test("orbismart: after render, a further place asks; Yes moves there", function()
+    local ui, m, p = osmBook(120, nil)
+    m:onReaderReady()
+    run(5)
+    osmServer(214, 5000)
+    p:fetchRemoteProgress("d1", function() end)
+    run(2)
+    local w = osmPopup()
+    ok(w, "popup")
+    eq(w.text, "Continue from Boox, p. 214?")
+    eq(w.ok_text, "Yes"); eq(w.cancel_text, "No")
+    eq(W.page, 120, "not moved before the answer")
+    ok(osmLog("orbismart: rule3 L=120 R=214 -> take (open, ask)"), "decision logged")
+    osmAnswer(true)
+    eq(W.page, 214, "moved")
+    eq(osmRec().m.at, 5000, "marker")
+    ok(osmLog("orbismart: popup 120->214 yes"), "answer logged")
+end)
+
+test("orbismart: after render, No stays, pushes nothing and never asks again for that place", function()
+    local ui, m, p = osmBook(120, nil)
+    m:onReaderReady()
+    run(5)
+    osmServer(214, 5000)
+    p:fetchRemoteProgress("d1", function() end)
+    run(2)
+    osmAnswer(false)
+    eq(W.page, 120, "stayed")
+    eq(osmRec().declined_at, 5000, "declined")
+    eq(osmRec().override, nil, "No is not an override")
+    p:fetchRemoteProgress("d1", function() end)
+    run(2)
+    eq(osmPopup(), nil, "not asked again")
+    ok(osmLog("orbismart: declined L=120 R=214 -> stay (open, no)"), "declined logged")
+    eq(OSMApi.puts, 0, "nothing pushed")
+    -- A newer place elsewhere asks again.
+    osmServer(230, 5200)
+    p:fetchRemoteProgress("d1", function() end)
+    run(2)
+    ok(osmPopup() and osmPopup().text == "Continue from Boox, p. 230?", "a newer place asks")
+    osmAnswer(false)
+end)
+
+test("orbismart: a further place found while reading (a pause) asks once, no silent jump", function()
+    local ui, m, p = osmBook(100, nil)
+    osmServer(100, 4000)
+    m:onReaderReady()
+    run(30)
+    eq(osmPopup(), nil, "same place: no popup")
+    for pg = 101, 110 do W.page = pg; m:onPageUpdate(pg) end
+    osmServer(214, 5000)
+    run(150)
+    ok(has(p.calls, "fetch"), "the pause pulled")
+    local w = osmPopup()
+    ok(w and w.text == "Continue from Boox, p. 214?", "asked")
+    eq(W.page, 110, "no silent jump mid-book")
+    ok(osmLog("orbismart: rule3 L=110 R=214 -> take (pause, ask)"), "logged as a pause")
+    osmAnswer(true)
+    eq(W.page, 214)
+end)
+
+test("orbismart: a pause where this reader is further pushes", function()
+    local ui, m, p = osmBook(100, nil)
+    osmServer(100, 4000)
+    m:onReaderReady()
+    run(30)
+    for pg = 101, 140 do W.page = pg; m:onPageUpdate(pg) end
+    run(150)
+    ok(has(p.calls, "push:orbismart"), "pushed")
+    eq(W.osm_server.progress, "/p140")
+    ok(osmLog("orbismart: rule4 L=140 R=100 -> push (pause, no)"), "logged")
+end)
+
+test("orbismart: never push behind the server's place (the behind-hold), further goes", function()
+    local ui, m, p = osmBook(150, { server = { at = 5000, pct = 214 / 300, progress = "/p214" }, m = { at = 5000, pct = 214 / 300, progress = "/p214" } })
+    run(1)
+    OSM.installApi()
+    p:requestProgressPush(false, false, "close")
+    eq(OSMApi.puts, 0, "held")
+    ok(osmLog("orbismart: push held L=150 R=214 (behind the server)"), "held logged")
+    -- The outbox's snapshot goes through the same client.
+    local body = require("bookorbit_api"):updateProgress("d1", 150 / 300, "/p150", 6000)
+    ok(body and body.orbit_held, "answered as done, not sent")
+    eq(OSMApi.puts, 0)
+    W.page = 230
+    p:requestProgressPush(false, false, "close")
+    eq(OSMApi.puts, 1, "further: sent")
+    -- A closed book (no open document for it): compared by percent.
+    store.orbit_android.orbismart.d2 = { server = { at = 1, pct = 0.6 } }
+    require("bookorbit_api"):updateProgress("d2", 0.3, nil, 7000)
+    eq(OSMApi.puts, 1, "closed book held too")
+end)
+
+test("orbismart: Read from here everywhere online: sent now, skipping the hold", function()
+    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 214 / 300, progress = "/p214" }, m = { at = 5000, pct = 214 / 300, progress = "/p214" } })
+    run(1)
+    OSM.installApi()
+    OSM.readFromHere("test")
+    run(30)
+    eq(OSMApi.puts, 1, "sent")
+    eq(W.osm_server.progress, "/p50", "the server has this place")
+    eq(osmRec().override, nil, "done")
+    ok(osmLog("orbismart: override sent"), "logged")
+end)
+
+test("orbismart: Read from here everywhere offline: queued, then sent first at the next sync", function()
+    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 214 / 300, progress = "/p214" }, m = { at = 5000, pct = 214 / 300, progress = "/p214" } })
+    run(1)
+    OSM.installApi()
+    W.server_code = nil
+    OSM.readFromHere("test")
+    run(40)
+    W.server_code = 200
+    ok(osmLog("orbismart: override queued (offline)"), "queued")
+    eq(OSMApi.puts, 0)
+    ok(osmRec().override, "still queued")
+    -- The next sync (a wake): the override decides first and goes.
+    osmServer(214, 5000)
+    m:wakeFlow("wake")
+    run(40)
+    ok(osmLog("orbismart: override L=50 R=214 -> override (wake, no)"), "decided first")
+    eq(W.osm_server.progress, "/p50", "sent")
+    eq(osmRec().override, nil)
+end)
+
+test("orbismart: a further place found at sleep is asked at wake, before any network", function()
+    W.screen_on = false
+    local ui, m, p = osmBook(120, nil)
+    osmServer(120, 4000)
+    m:onReaderReady()
+    run(30)
+    osmServer(214, 5000)
+    m:onSuspend()
+    run(30)
+    eq(osmPopup(), nil, "nothing shown at sleep")
+    ok(osmRec().pending, "kept for the wake")
+    ok(osmLog("orbismart: rule3 L=120 R=214 -> take (sleep, wake)"), "logged")
+    W.server_code = nil -- the wake's network never comes up
+    m:onResume()
+    local w = osmPopup()
+    ok(w and w.text == "Continue from Boox, p. 214?", "asked at once")
+    osmAnswer(true)
+    eq(W.page, 214)
+    run(40)
+    W.server_code = 200
+end)
+
+test("orbismart: a move back elsewhere (an override there) is asked, labelled", function()
+    local ui, m, p = osmBook(214, { server = { at = 4000, pct = 214 / 300, progress = "/p214" }, m = { at = 4000, pct = 214 / 300, progress = "/p214" } })
+    m:onReaderReady()
+    run(5)
+    osmServer(12, 5000, "X4 Pro")
+    p:fetchRemoteProgress("d1", function() end)
+    run(2)
+    local w = osmPopup()
+    ok(w and w.text == "Continue from X4 Pro, p. 12 (moved back there)?", w and w.text)
+    osmAnswer(true)
+    eq(W.page, 12)
+end)
+
+test("orbismart: the plugin never moves the reader itself (today's newest-dated jump); Custom gives its settings back", function()
+    local ui, m, p = osmBook(120, nil)
+    p.settings.sync_forward, p.settings.sync_backward = 2, 3
+    m:onReaderReady()
+    eq(p.settings.sync_forward, 3, "further ahead: Don't sync")
+    eq(p.settings.sync_backward, 3, "further behind: Don't sync")
+    -- A newer-dated place behind this reader, while reading here: furthest wins, no move.
+    for pg = 121, 125 do W.page = pg; m:onPageUpdate(pg) end
+    p.last_page_turn_timestamp = os.time()
+    osmServer(60, os.time() - 30)
+    store.orbit_android.orbismart.d1 = { m = { at = 1, pct = 120 / 300, progress = "/p120" } }
+    p:fetchRemoteProgress("d1", function() end)
+    run(2)
+    eq(W.page, 125, "not moved back")
+    eq(osmPopup(), nil, "not asked either")
+    ok(osmLog("orbismart: rule6 L=125 R=60 -> push"), "furthest wins")
+    store.orbit_android.sync_mode = "custom"
+    OSM.modeChanged("test")
+    eq(p.settings.sync_forward, 2, "given back")
+    store.orbit_android.sync_mode = "orbismart"
+end)
+
+test("orbismart: Recommended settings review the plugin's own value kept for Custom", function()
+    local ui, m, p = osmBook(50, nil)
+    p.settings.sync_forward, p.settings.sync_backward = 1, 3
+    m:onReaderReady()
+    eq(OSM.savedPluginSetting("sync_forward").value, 1, "the reader's Ask, kept")
+    ok(OSM.setSavedPluginSetting("sync_forward", 2), "Recommended writes the kept value")
+    eq(p.settings.sync_forward, 3, "OrbiSmart's stays in force")
+    store.orbit_android.sync_mode = "custom"
+    OSM.modeChanged("test")
+    eq(p.settings.sync_forward, 2, "Custom gets the recommended value")
+    eq(OSM.savedPluginSetting("sync_forward"), nil, "nothing kept under Custom")
+    store.orbit_android.sync_mode = "orbismart"
+end)
+
+test("orbismart: This book sheet gets Read from here everywhere", function()
+    local made = {}
+    package.loaded["bookorbit_menu_ui"] = { row = function(w, o) local r = { row = o }; table.insert(made, r); return r end,
+        divider = function() return { divider = true } end }
+    package.loaded["bookorbit_menu_page"] = { runAction = function(page, action) page.ran = action.kind end }
+    package.loaded["bookorbit_board_ui"] = { vstack = function(o, kids) return { stack = kids } end }
+    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 0.7, progress = "/p210" } })
+    OSM.sheet_hooked = nil
+    m:onReaderReady()
+    local MenuUI = package.loaded["bookorbit_menu_ui"]
+    local auto = MenuUI.row(400, { label = "Auto-sync", action = { kind = "auto" } })
+    ok(auto.stack and auto.stack[3].row.label == "Read from here everywhere", "the row under Auto-sync")
+    local other = MenuUI.row(400, { label = "Book details", action = { kind = "details" } })
+    eq(other.stack, nil, "other rows unchanged")
+    local page = { close = function(pg) pg.closed = true end }
+    package.loaded["bookorbit_menu_page"].runAction(page, { kind = "orbit_read_here" })
+    ok(page.closed, "sheet closed")
+    run(1)
+    ok(osmLog("orbismart: override queued (This book)"), "override made from the sheet")
+    package.loaded["bookorbit_menu_page"].runAction(page, { kind = "sync" })
+    eq(page.ran, "sync", "the sheet's own actions still run")
+    run(40)
+end)
+
+test("orbismart: menu: Sync first in its section; the rows it sets hidden; the override in a book", function()
+    local ui, m = osmBook(50, nil)
+    local sync
+    for _, it in ipairs(m:menuItems()) do if it.text == "Sync and Wi-Fi" then sync = it.sub_item_table end end
+    ok(sync[1].text_func():find("Sync: OrbiSmart", 1, true), sync[1].text_func())
+    local texts = {}
+    for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts + 1] = it.text or (it.text_func and it.text_func()) or "" end
+    local all = table.concat(texts, "|")
+    ok(all:find("Read from here everywhere", 1, true), "override item")
+    ok(not all:find("Sync on wake", 1, true), "hidden under OrbiSmart")
+    store.orbit_android.sync_mode = "custom"
+    texts = {}
+    for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts + 1] = it.text or (it.text_func and it.text_func()) or "" end
+    all = table.concat(texts, "|")
+    ok(all:find("Sync on wake", 1, true), "shown under Custom")
+    ok(not all:find("Read from here everywhere", 1, true), "no override under Custom")
+end)
+
+store.orbit_android.sync_mode = "custom"
 
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then

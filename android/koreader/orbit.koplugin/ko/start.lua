@@ -35,7 +35,7 @@ function OrbitAndroid:onResume()
 end
 
 function OrbitAndroid:wakeFlow(reason)
-    if not S.sync_on_wake then
+    if not S.sync_on_wake and not (OSM and OSM.on()) then
         log(reason .. ": sync on wake is off")
         return
     end
@@ -52,6 +52,13 @@ function OrbitAndroid:wakeFlow(reason)
             Wifi.release(lease)
             self:showWakeBanner(res)
             return
+        end
+        -- OrbiSmart: pull and decide first, then the outbox under the behind-hold.
+        if OSM and OSM.on() and inBook() and can(p, "reading_sync") then
+            log(reason .. ": OrbiSmart pull, then the outbox; network ready in", fmt(now_s() - t0))
+            return OSM.pullThenDrain(p, "wake", "orbit_" .. reason, function()
+                UIManager:scheduleIn(1, function() Sync.waitOutbox(p, 20, function() Wifi.release(lease) end) end)
+            end)
         end
         if can(p, "outbox") then p:requestLifecycleOutboxDrain("orbit_" .. reason) end
         -- Hold Wi-Fi until the plugin's drain and pull are done, then restore.

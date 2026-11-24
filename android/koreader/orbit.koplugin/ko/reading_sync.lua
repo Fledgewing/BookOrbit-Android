@@ -91,6 +91,12 @@ function OrbitAndroid:bookOpenFlow()
     Wifi.acquire("open")
     Net.up(p, { reason = "open", cap = 20, need_server = true }, function(ok)
         if not ok then return Wifi.release("open") end
+        -- OrbiSmart: pull, decide, then the outbox under the behind-hold.
+        if OSM and OSM.on() and can(p, "reading_sync") then
+            return OSM.pullThenDrain(p, "open", "orbit_open", function()
+                UIManager:scheduleIn(1, function() Sync.waitOutbox(p, 20, function() Wifi.release("open") end) end)
+            end)
+        end
         -- The plugin pulls on open by itself, or on NetworkConnected when it was offline
         -- (main.lua:1353-1361); its 25 s debounce keeps this from doubling up.
         p:requestProgressPull(false, false, "orbit_open")
@@ -107,7 +113,8 @@ end
 
 function OrbitAndroid:onPageUpdate(page)
     if self.ui and self.ui.document then Stats.page(stats_acc) end
-    if S.reading_schedule == "off" or not (self.ui and self.ui.document) then return end
+    -- OrbiSmart replaces Sync while reading with its pause sync (ko/orbismart.lua).
+    if S.reading_schedule == "off" or (OSM and OSM.on()) or not (self.ui and self.ui.document) then return end
     local t = now_s()
     Schedule.onPage(self.schedule, self:chapterKey(page), t)
     if Schedule.isDue(self.schedule, t) then

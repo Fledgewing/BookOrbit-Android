@@ -448,6 +448,37 @@
    "applies": "now"
   },
   {
+   "key": "sync_mode",
+   "type": "choice",
+   "default": "orbismart",
+   "values": [
+    {
+     "id": "orbismart",
+     "label": "OrbiSmart (recommended)"
+    },
+    {
+     "id": "custom",
+     "label": "Custom"
+    }
+   ],
+   "section": "sync",
+   "label": "Sync",
+   "line": "OrbiSmart: the furthest place wins, and moving to another reader's place is asked once. Custom: set each sync yourself.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "orbismart",
+    "smart",
+    "sync",
+    "furthest",
+    "position",
+    "progress",
+    "page"
+   ],
+   "applies": "now"
+  },
+  {
    "key": "wifi_mode",
    "type": "choice",
    "default": "jit",
@@ -540,7 +571,13 @@
     "sync",
     "screen off"
    ],
-   "applies": "now"
+   "applies": "now",
+   "parent": {
+    "key": "sync_mode",
+    "is": [
+     "custom"
+    ]
+   }
   },
   {
    "key": "sleep_cap",
@@ -595,7 +632,13 @@
     "wake",
     "sync"
    ],
-   "applies": "now"
+   "applies": "now",
+   "parent": {
+    "key": "sync_mode",
+    "is": [
+     "custom"
+    ]
+   }
   },
   {
    "key": "reading_schedule",
@@ -655,7 +698,13 @@
     "pages",
     "chapter"
    ],
-   "applies": "now"
+   "applies": "now",
+   "parent": {
+    "key": "sync_mode",
+    "is": [
+     "custom"
+    ]
+   }
   },
   {
    "key": "wake_tailscale",

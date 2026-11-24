@@ -163,6 +163,7 @@ class SettingsPagesTest {
 
     @Test
     fun aSearchHitOpensItsSectionAtTheRow() {
+        SettingsStore.set(RuntimeEnvironment.getApplication(), "sync_mode", "custom", "test")
         val a = section("sync", focus = "sync_on_wake")
         assertNotNull(tagged(a, "key:sync_on_wake")!!.foreground)
     }

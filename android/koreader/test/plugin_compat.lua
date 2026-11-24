@@ -84,6 +84,16 @@ for _, name in ipairs({ "newClient", "getDocumentDigest", "getLastPercent", "enq
     "repairFileIdentity", "linkDownloadedFile",
     -- v0.11.2: the first paint's on-device marks; mirrored covers outside the plugin's cover cap.
     "hasOnDeviceMaps", "pruneThumbnailCache" }) do need(name, "function") end
+-- OrbiSmart sync (ko/orbismart.lua): every pull and push goes through the API client it wraps; the
+-- This book sheet's row it adds and the action it handles; the reader moves it makes.
+for name, kind in pairs(M.Compat.ORBISMART_API or {}) do need(name, kind) end
+for _, name in ipairs({ "syncToProgress", "noteProgressCompared", "fetchRemoteProgress", "requestProgressPush",
+    "row", "divider", "runAction", "vstack" }) do need(name, "function") end
+need("last_page_turn_timestamp", "field")
+has(src[dir .. "/bookorbit_api.lua"] or "", "function BookOrbitApi:getProgress(digest)", "BookOrbitApi:getProgress")
+has(src[dir .. "/bookorbit_api.lua"] or "", "function BookOrbitApi:updateProgress(digest, percentage, progress, timestamp)", "BookOrbitApi:updateProgress")
+has(src[dir .. "/bookorbit_book_sync.lua"] or "", "ctx.client:updateProgress(", "the outbox pushes through the API client")
+has(src[dir .. "/bookorbit_book_sheet.lua"] or "", 'action = { kind = "auto" }', "This book sheet's Auto-sync row")
 -- The cover pruner removes files with the global os.remove (Mirror.guardPrune skips mirrored ones).
 has(src[dir .. "/bookorbit_catalog_thumbnails.lua"] or "", "os.remove(removed.path)", "pruneThumbnailCache removes with os.remove")
 -- Our ⟳ keeps covers by wrapping evictCachedCovers, which refreshCurrent must still go through;
