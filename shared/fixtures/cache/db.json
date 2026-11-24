@@ -1,0 +1,331 @@
+{
+ "_comment": "The offline cache's database, both sides (docs/design/sqlite-cache.md): `saves` are replies stored at their paths in order (CacheStore.save; the flow tests' fake companion), then every `reads` path must answer as given (CacheStore.read; the plugin's Store.read). `null`: not saved. Lists keep each book once (`books_rows`); the newest item wins everywhere it is listed.",
+ "owner": "reader|http://bookorbit.test/api/v1",
+ "detail_template": "/koreader/plugin/catalog/books/987654321?deviceId=dev-1",
+ "saves": [
+  {
+   "path": "/koreader/plugin/catalog/books?order=asc&page=1&size=3&sort=title",
+   "reply": {
+    "items": [
+     {
+      "id": 1,
+      "title": "A Memory Called Empire",
+      "authors": [
+       "Arkady Martine"
+      ],
+      "seriesName": "Teixcalaan",
+      "hasCover": true,
+      "updatedAt": "2026-11-01T10:00:00Z",
+      "detailUrl": "/koreader/plugin/catalog/books/1"
+     },
+     {
+      "id": 2,
+      "title": "Ancillary Justice",
+      "authors": [
+       "Ann Leckie"
+      ],
+      "seriesName": "Imperial Radch",
+      "hasCover": true,
+      "updatedAt": "2026-11-02T10:00:00Z",
+      "detailUrl": "/koreader/plugin/catalog/books/2"
+     },
+     {
+      "id": 3,
+      "title": "Children of Time",
+      "authors": [
+       "Adrian Tchaikovsky"
+      ],
+      "hasCover": true,
+      "updatedAt": "2026-11-03T10:00:00Z",
+      "detailUrl": "/koreader/plugin/catalog/books/3"
+     }
+    ],
+    "total": 5,
+    "page": 1,
+    "size": 3,
+    "hasNext": true,
+    "hasPrevious": false,
+    "nextUrl": "/next",
+    "previousUrl": null
+   }
+  },
+  {
+   "path": "/koreader/plugin/catalog/books?order=asc&page=2&size=3&sort=title",
+   "reply": {
+    "items": [
+     {
+      "id": 4,
+      "title": "Ancillary Sword",
+      "authors": [
+       "Ann Leckie"
+      ],
+      "seriesName": "Imperial Radch",
+      "hasCover": true,
+      "updatedAt": "2026-11-04T10:00:00Z",
+      "detailUrl": "/koreader/plugin/catalog/books/4"
+     },
+     {
+      "id": 5,
+      "title": "Écrire",
+      "authors": [
+       "Émile Zola"
+      ],
+      "hasCover": true,
+      "updatedAt": "2026-11-05T10:00:00Z",
+      "detailUrl": "/koreader/plugin/catalog/books/5"
+     }
+    ],
+    "total": 5,
+    "page": 2,
+    "size": 3,
+    "hasNext": false,
+    "hasPrevious": true
+   }
+  },
+  {
+   "path": "/koreader/plugin/catalog/books?author=Ann%20Leckie&order=asc&page=1&size=100&sort=title",
+   "reply": {
+    "items": [
+     {
+      "id": 2,
+      "title": "Ancillary Justice",
+      "authors": [
+       "Ann Leckie"
+      ],
+      "seriesName": "Imperial Radch",
+      "hasCover": true,
+      "updatedAt": "2026-11-02T10:00:00Z",
+      "detailUrl": "/koreader/plugin/catalog/books/2",
+      "readStatus": "read"
+     },
+     {
+      "id": 4,
+      "title": "Ancillary Sword",
+      "authors": [
+       "Ann Leckie"
+      ],
+      "seriesName": "Imperial Radch",
+      "hasCover": true,
+      "updatedAt": "2026-11-04T10:00:00Z",
+      "detailUrl": "/koreader/plugin/catalog/books/4"
+     }
+    ],
+    "total": 2,
+    "page": 1,
+    "size": 100,
+    "hasNext": false,
+    "hasPrevious": false,
+    "authorSummary": {
+     "name": "Ann Leckie",
+     "bookCount": 2
+    }
+   }
+  },
+  {
+   "path": "/koreader/plugin/catalog/books?order=asc&page=1&series=Teixcalaan&size=1&sort=series",
+   "reply": {
+    "items": [
+     {
+      "id": 1,
+      "title": "A Memory Called Empire",
+      "authors": [
+       "Arkady Martine"
+      ],
+      "seriesName": "Teixcalaan",
+      "hasCover": true,
+      "updatedAt": "2026-11-01T10:00:00Z",
+      "detailUrl": "/koreader/plugin/catalog/books/1"
+     }
+    ],
+    "total": 3,
+    "page": 1,
+    "size": 1,
+    "hasNext": true,
+    "hasPrevious": false
+   }
+  },
+  {
+   "path": "/koreader/plugin/catalog/sections/authors?page=1&size=100",
+   "reply": {
+    "section": "authors",
+    "items": [
+     {
+      "id": "Ann Leckie",
+      "title": "Ann Leckie",
+      "count": 2
+     },
+     {
+      "id": "Émile Zola",
+      "title": "Émile Zola",
+      "count": 1
+     }
+    ],
+    "total": 2,
+    "page": 1,
+    "size": 100,
+    "hasNext": false
+   }
+  },
+  {
+   "path": "/koreader/plugin/catalog/books/2?deviceId=dev-1",
+   "reply": {
+    "id": 2,
+    "title": "Ancillary Justice",
+    "authors": [
+     "Ann Leckie"
+    ],
+    "files": [
+     {
+      "id": 20,
+      "hash": "abc"
+     }
+    ],
+    "tags": [
+     "sf"
+    ]
+   }
+  },
+  {
+   "path": "/koreader/plugin/catalog/dashboard",
+   "key": "reader|http://bookorbit.test/api/v1|GET|/koreader/plugin/catalog/dashboard|",
+   "reply": {
+    "continueReading": [
+     {
+      "id": 1,
+      "title": "A Memory Called Empire"
+     }
+    ],
+    "generatedAt": "2026-11-24T10:00:00Z"
+   }
+  }
+ ],
+ "books_rows": 5,
+ "search_text": {
+  "2": "Ancillary Justice\nAnn Leckie\nImperial Radch",
+  "5": "Écrire\nÉmile Zola\n"
+ },
+ "reads": [
+  {
+   "path": "/koreader/plugin/catalog/books?order=asc&page=2&size=2&sort=title",
+   "ids": [
+    3,
+    4
+   ],
+   "total": 5,
+   "page": 2,
+   "size": 2,
+   "hasNext": true,
+   "hasPrevious": true
+  },
+  {
+   "path": "/koreader/plugin/catalog/books?offset=4&order=asc&size=20&sort=title",
+   "ids": [
+    5
+   ],
+   "total": 5,
+   "page": 1,
+   "size": 20,
+   "offset": 4,
+   "hasNext": false,
+   "hasPrevious": true
+  },
+  {
+   "path": "/koreader/plugin/catalog/books?order=asc&page=1&sort=title",
+   "ids": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "total": 5,
+   "page": 1,
+   "size": 20,
+   "hasNext": false,
+   "hasPrevious": false,
+   "read_status_2": "read",
+   "no": [
+    "nextUrl",
+    "previousUrl"
+   ]
+  },
+  {
+   "path": "/koreader/plugin/catalog/books?author=Ann%20Leckie&order=asc&page=1&size=20&sort=title",
+   "ids": [
+    2,
+    4
+   ],
+   "total": 2,
+   "read_status_2": "read",
+   "head": {
+    "authorSummary.bookCount": 2
+   }
+  },
+  {
+   "path": "/koreader/plugin/catalog/books?order=asc&page=2&series=Teixcalaan&size=1&sort=series",
+   "null": true
+  },
+  {
+   "path": "/koreader/plugin/catalog/books?order=asc&page=1&sort=recently_added",
+   "null": true
+  },
+  {
+   "path": "/koreader/plugin/catalog/sections/authors?page=1&size=50",
+   "titles": [
+    "Ann Leckie",
+    "Émile Zola"
+   ],
+   "total": 2,
+   "size": 50
+  },
+  {
+   "path": "/koreader/plugin/catalog/books/2?deviceId=dev-1",
+   "detail": 2,
+   "files": 1
+  },
+  {
+   "path": "/koreader/plugin/catalog/books/3?deviceId=dev-1",
+   "null": true
+  },
+  {
+   "path": "/koreader/plugin/catalog/books/2?deviceId=dev-1&variant=audio",
+   "null": true
+  },
+  {
+   "path": "/koreader/plugin/catalog/dashboard",
+   "key": "reader|http://bookorbit.test/api/v1|GET|/koreader/plugin/catalog/dashboard|",
+   "continue": [
+    1
+   ]
+  }
+ ],
+ "searches": [
+  {
+   "q": "leckie",
+   "ids": [
+    2,
+    4
+   ]
+  },
+  {
+   "q": "ANCILLARY sword",
+   "ids": [
+    4
+   ]
+  },
+  {
+   "q": "Émile",
+   "ids": [
+    5
+   ]
+  },
+  {
+   "q": "nothing like this",
+   "ids": []
+  },
+  {
+   "q": "100%",
+   "ids": []
+  }
+ ]
+}

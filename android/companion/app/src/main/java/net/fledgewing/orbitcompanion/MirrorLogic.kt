@@ -12,6 +12,11 @@ package net.fledgewing.orbitcompanion
  */
 object MirrorLogic {
     const val PAGE = 100
+    /** The id a plan's templates carry in place of each entry's (Mirror.SENTINEL). */
+    const val SENTINEL = "987654321"
+
+    /** Cache.isHome: Home's replies (kept, marked stale by a write). */
+    fun isHome(path: String): Boolean = splitPath(path).first.contains("/catalog/dashboard")
     const val SMALL_PAGE = 25
     const val TRIES = 3
     const val RETRY_S = 5

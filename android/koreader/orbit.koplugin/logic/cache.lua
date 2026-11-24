@@ -316,6 +316,50 @@ function Cache.slice(w, pages, page_size)
     return out
 end
 
+-- The positions a list read asks for (docs/design/sqlite-cache.md "How KOReader reads"; the
+-- companion's CacheStore.windowOf). kind: "books" | "section"; page, size, offset: the read's own.
+-- -> start (0-based), stop (exclusive), size
+function Cache.window(kind, total, page, size, offset)
+    total = tonumber(total) or 0
+    size = tonumber(size) or (kind == "books" and 20 or total)
+    if size < 1 then size = 1 end
+    local start = tonumber(offset) or ((tonumber(page) or 1) - 1) * size
+    return start, math.max(start, math.min(total, start + size)), size
+end
+
+-- A list page from its saved head (the first page's other fields) and the items at start..stop-1.
+function Cache.assemble(head, items, total, start, stop, size, offset)
+    local out = {}
+    for k, v in pairs(type(head) == "table" and head or {}) do if not PAGING[k] then out[k] = v end end
+    out.items, out.total, out.size = items, total, size
+    out.page = math.floor(start / size) + 1
+    if offset then out.offset = tonumber(offset) end
+    out.hasNext, out.hasPrevious = stop < total, start > 0
+    return out
+end
+
+-- The book id when path is the detail template (the plugin's detail request with the sentinel id)
+-- filled with an id; the companion's CacheStore.detailId.
+function Cache.detailId(path, template, sentinel)
+    if type(template) ~= "string" or type(path) ~= "string" then return nil end
+    local i, j = template:find(sentinel, 1, true)
+    if not i then return nil end
+    local pre, post = template:sub(1, i - 1), template:sub(j + 1)
+    if #path <= #pre + #post or path:sub(1, #pre) ~= pre or (post ~= "" and path:sub(-#post) ~= post) then return nil end
+    local mid = path:sub(#pre + 1, #path - #post)
+    if not mid:match("^%d+$") or #mid > 12 then return nil end
+    return tonumber(mid)
+end
+
+-- An offline search's words, each as a LIKE pattern (% and _ escaped with \).
+function Cache.searchWords(q)
+    local out = {}
+    for w in tostring(q or ""):gmatch("%S+") do
+        table.insert(out, "%" .. w:gsub("[\\%%_]", "\\%0") .. "%")
+    end
+    return out
+end
+
 -- A revalidated mirror page whose list total moved: the pages to fetch and to drop.
 function Cache.repage(old_total, new_total, size)
     local old_n, new_n = Cache.pageCount(old_total, size), Cache.pageCount(new_total, size)

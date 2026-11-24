@@ -114,7 +114,7 @@ local BASE = {
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
     -- The offline cache's database (ko/db.lua; docs/design/sqlite-cache.md), as KOReader's statistics plugin uses it.
     { "thirdparty/lua-ljsqlite3/init.lua", { "open", "set_busy_timeout", "prepare", "exec", "rowexec", "step", "bind",
-        "reset", "close", { "ro = sql.SQLITE_OPEN_READONLY", T } } },
+        "reset", "close", "_ncol", { "ro = sql.SQLITE_OPEN_READONLY", T } } },
 }
 
 local missing = {}
