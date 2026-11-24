@@ -3825,6 +3825,43 @@ test("covers: the plugin's worker in its child process: 200, 304 and an error; t
     cacheTeardown()
 end)
 
+test("covers: Full refresh re-asks the covers on screen through the companion, never a forked child", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local dir = cache.dir .. "/covers"
+    local books = {}
+    for id = 1, 3 do
+        books[id] = { id = id, hasCover = true, updatedAt = "100" }
+        local f = io.open(dir .. "/" .. id .. "_100.jpg", "wb"); f:write("\255\216\255\224v1"); f:close()
+        if id < 3 then f = io.open(dir .. "/" .. id .. "_100.jpg.etag", "w"); f:write('"c' .. id .. '"'); f:close() end
+    end
+    local function pathOf(b) return dir .. "/" .. b.id .. "_" .. tostring(b.updatedAt) .. ".jpg" end
+    function Cat:thumbnailPath(b) return pathOf(b) end
+    cache.server[DASH] = { continueReading = books }
+    local cat = setmetatable({ client = client, current_context = { kind = "dashboard", dashboard = cache.server[DASH] } }, Cat)
+    function cat:refreshCurrent() self.client:request("GET", DASH) end
+    local redrawn = 0
+    function cat:updateItems() redrawn = redrawn + 1 end
+    -- Book 2's cover changed on the server; book 1's didn't (304). Book 3 has no ETag: left alone.
+    FC.cover = function(c) return c.id == 2 and 200 or 304 end
+    local calls, forks, bg_run = #FC.calls, {}, E.Background.run
+    E.Background.run = function(name, ...) table.insert(forks, name); return bg_run(name, ...) end
+    W.broadcasts = {}
+    withHost(cat, function() E.OC.fullRefresh(cat); run(30) end)
+    E.Background.run = bg_run
+    local ask = lastBroadcast(".RECHECK")
+    ok(ask and ask.extras.ids == "1\n2" and ask.extras.paths == pathOf(books[1]) .. "\n" .. pathOf(books[2]), "the companion is asked for 1 and 2: " .. tostring(ask and ask.extras.ids))
+    local rechecked = {}
+    for i = calls + 1, #FC.calls do if FC.calls[i]:find("^RECHECK") then table.insert(rechecked, FC.calls[i]) end end
+    ok(#rechecked == 2, "the companion re-asked both: " .. table.concat(rechecked, ","))
+    for _, name in ipairs(forks) do ok(name == "cache index", "no forked child but the index save: " .. name) end
+    local log = table.concat(W.logs, "\n")
+    ok(log:find("cache: covers re-asked: 2 checked, 1 replaced", 1, true), "logged")
+    ok(redrawn >= 1, "the view redrawn for the replaced cover")
+    FC.cover = nil
+    cacheTeardown()
+end)
+
 test("covers: Full refresh and Refresh with every cover 304 never paint a tile without its cover", function()
     local client, Cat = cacheSetup()
     W.wifi = true
@@ -4914,6 +4951,81 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil, nil
     S.sleep_mode, S.sleep_from, S.sleep_leave_out = "off", "up_next", {}
     sh("rm -rf", dir)
+    capsReset()
+    run(5)
+end)
+
+test("sleep screen: the tag picker opens from the companion's tags.json; KOReader reads no saved detail", function()
+    capsReset()
+    local caps = {}
+    for _, c in ipairs(FULL) do table.insert(caps, c) end
+    table.insert(caps, "sleep_screen")
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
+    local jm = require("json")
+    local JSON = dofile(here .. "/json_mini.lua")
+    local stub_decode = jm.decode
+    jm.decode = function(str) return W.json[str] or JSON.decode(str) end
+    local sdir = os.tmpname(); os.remove(sdir); sh("mkdir -p", sdir .. "/covers")
+    local S, Sleep = RE.S, RE.Sleep
+    Sleep.base_dir, Sleep.tags_cache, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = sdir, nil, nil, nil, nil
+    S.sleep_mode, S.sleep_leave_out = "recommended", {}
+    newUI(false)
+    RE.Shared.refresh("test")
+    local client = {}
+    function client:query(path, q) return path .. "?page=" .. q.page end
+    function client:requestBlocking(_, path)
+        if path:find("/sections/") then return { items = {}, hasNext = false } end
+        return nil, 404
+    end
+    local oc_client = RE.OC.client
+    RE.OC.client = function() return client end
+    local fc = sleepCompanion()
+    -- 400 saved details in the cache, each with tags; one in the offline mirror.
+    local cdir = RE.OC.dir()
+    sh("mkdir -p", cdir .. "/mirror")
+    local entries = {}
+    for i = 1, 400 do
+        local key = "detail-" .. i
+        entries[key] = { path = "/koreader/plugin/catalog/books/" .. i, validated_at = 1 }
+        local f = io.open(cdir .. "/" .. RE.OC.hash(key) .. ".lua", "wb")
+        f:write(RE.Cache.encode({ key = key, path = entries[key].path, body = { id = i, tags = { i % 2 == 0 and "Age:18" or "cosy", "Fantasy" } } })); f:close()
+    end
+    local f = io.open(cdir .. "/index.lua", "wb"); f:write(RE.Cache.encode({ v = RE.Cache.VERSION, entries = entries })); f:close()
+    f = io.open(cdir .. "/mirror/" .. RE.OC.hash("m") .. ".lua", "wb")
+    f:write(RE.Cache.encode({ key = "m", path = "/koreader/plugin/catalog/books/900?x=1", body = { id = 900, tags = { "Space" } } })); f:close()
+    -- Every file KOReader's UI thread opens in the cache folder while the picker opens.
+    local reads, open, get = 0, io.open, RE.OC.get
+    io.open = function(path, ...)
+        -- The companion's small answers (events/) are read; no saved detail or index is.
+        if not W.in_companion and tostring(path):find(cdir, 1, true) and not tostring(path):find("/events/", 1, true) then reads = reads + 1 end
+        return open(path, ...)
+    end
+    RE.OC.get = function(...) if not W.in_companion then reads = reads + 1 end return get(...) end
+    W.wifi = true
+    local item
+    for _, it in ipairs(select(2, newUI(false)):menuItems()) do if it.text == "Sleep screen" then item = it end end
+    local leave = item.sub_item_table_func()[3].sub_item_table_func()
+    local tagItem
+    for _, r in ipairs(leave) do if r.text == "Add a rule: Tag…" then tagItem = r end end
+    -- First open: nothing counted yet; the companion counts behind it.
+    local first = tagItem.sub_item_table_func()
+    ok(#first == 2 and first[2].text_func():find("Counting", 1, true), "counting: " .. tostring(first[2] and first[2].text_func and first[2].text_func()))
+    run(10)
+    ok(fc.sleep_asks == 1 and fc.sleep_last.scopes_only == "1", "the companion was asked for the pickers' lists")
+    local rows = tagItem.sub_item_table_func()
+    local texts = {}
+    for _, r in ipairs(rows) do table.insert(texts, r.text or "") end
+    ok(texts[2] == "Fantasy · 400" and texts[3] == "Age:18 · 200" and texts[4] == "cosy · 200" and texts[5] == "Space · 1", "counted by the companion: " .. table.concat(texts, " | "))
+    ok(reads == 0, "KOReader read no saved detail: " .. reads)
+    rows[3].callback()
+    ok(S.sleep_leave_out[1] == "tag:age:18", "picked: " .. tostring(S.sleep_leave_out[1]))
+    io.open, RE.OC.get = open, get
+    RE.OC.client, jm.decode = oc_client, stub_decode
+    fc.done()
+    Sleep.base_dir, Sleep.tags_cache, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil, nil, nil
+    S.sleep_mode, S.sleep_leave_out = "off", {}
+    sh("rm -rf", sdir)
     capsReset()
     run(5)
 end)

@@ -78,6 +78,25 @@ object SleepPoolLogic {
         return if (unknown) "unknown" else "keep"
     }
 
+    data class Tag(val tag: String, val label: String, val count: Int)
+
+    /** Tags seen in saved book details, with counts, most used first (X3's picker). One list of tags per detail. */
+    fun tagCounts(details: List<List<String>>): List<Tag> {
+        val counts = HashMap<String, Int>()
+        val shown = HashMap<String, String>()
+        for (d in details) {
+            val seen = HashSet<String>()
+            for (t in d) {
+                val k = lower(t.trim())
+                if (k.isNotEmpty() && seen.add(k)) {
+                    counts[k] = (counts[k] ?: 0) + 1
+                    shown.putIfAbsent(k, t.trim())
+                }
+            }
+        }
+        return counts.map { (k, n) -> Tag(k, shown[k]!!, n) }.sortedWith(compareBy<Tag>({ -it.count }, { it.tag }))
+    }
+
     /** A member list is due: never listed, a day old, or the clock went back. */
     fun due(at: Long?, now: Long): Boolean = at == null || now < at || now - at >= DAY_S
 

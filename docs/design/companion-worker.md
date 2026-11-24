@@ -163,7 +163,7 @@ at that moment, and even then its fetch side moves.
 | Copies' detail lookup and replacement (`Copies.details`, `Copies.tick`) | companion (step 3): `COPIES`; it reads the saved details, compares hashes and checks the files | **moved**; the replacement stays the plugin's own Download path (BookOrbit's delivery, forked) and its sidecar, statistics and state carry | per on-device book, at Home and network up |
 | Sleep screen pool: Up next, Leave out member lists and tag details, cover prefetch | companion (step 3): `SLEEP_REFRESH`, `SleepPoolBuilder` on the worker thread; the pickers' lists too (`scopes_only`) | **moved**; the companion redraws its picture itself | already off the UI thread (log 22:07:38.98 to :39.82, 0.8 s, UI free) |
 | Sleep screen current cover (`Sleep.writeCurrent`) | UI, once per book open | **stays** | needs the open document (`getCoverImage`) |
-| Sleep screen scope and collection picker | child; falls back to a cached read | stays | user action, small; the plugin's own read |
+| Sleep screen pickers: scopes, collections and Leave out's tags | companion: `SLEEP_REFRESH` with `scopes_only` writes `scopes.json` and `tags.json` (it counts the tags in the saved details, up to 2000); the picker opens from those files | **moved** | the tag picker read up to 400 saved details on the UI thread |
 | Reading fonts install | companion (`FontInstaller.kt`); the plugin has no trigger | stays | already outside KOReader |
 | Rotation patch (`1-orbit-start-rotation.lua`) | UI, at start | stays | needs the display; a few calls, no I/O |
 | Plugin self-update check and download (`Updater.check`) | companion (step 3): the menu's check sends `UPDATE`; the companion installs itself, then the plugin of its release | **moved**; the plugin's download, unpack and swap are deleted | the restart for a newer file on disk stays in KOReader (`maybeRestart`) |
@@ -171,6 +171,7 @@ at that moment, and even then its fetch side moves.
 | Outbox drain, progress, annotations, stats sync | BookOrbit plugin; forked when Trapper-wrapped (`bookorbit_api.lua:325-372`), otherwise blocking | not redirected now (see below) | upstream code; no measured stall |
 | Home dashboard, discover, search, series reads | BookOrbit plugin, forked (`runInSubprocess`); Orbit's cache answers inside the child | stays | upstream code; its result feeds the plugin's own view |
 | Cover and thumbnail downloads | BookOrbit plugin, forked (`bookorbit_catalog_thumbnails.lua:388, :571`) with Orbit's ETag download inside | stays | already off the UI thread; resizing is the plugin's, on draw |
+| Full refresh cover recheck (`OC.recheckCovers`) | companion: `RECHECK` with the covers on screen; it asks If-None-Match and answers `covers_rechecked`; the view redraws | **moved**; its forked child is gone | a child per Full refresh |
 | Index load at start (`OC.index`) | UI, once per start | stays | small since step 1 |
 
 **BookOrbit's own sync** runs inside KOReader and Orbify doesn't patch upstream. Orbify already

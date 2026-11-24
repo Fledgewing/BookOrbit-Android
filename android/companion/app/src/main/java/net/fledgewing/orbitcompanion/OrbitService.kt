@@ -47,7 +47,7 @@ class CommandReceiver : BroadcastReceiver() {
             return SleepScreen.onPool(ctx, intent.getStringExtra("reason") ?: "plugin")
         }
         // The cache worker's jobs (docs/design/companion-worker.md): every mode, no service needed.
-        if (intent.action == Worker.ACTION_MIRROR || intent.action == Worker.ACTION_CHECK || intent.action == Worker.ACTION_STORAGE || intent.action == Worker.ACTION_COPIES || intent.action == Worker.ACTION_SLEEP_REFRESH) return Worker.onIntent(ctx, intent)
+        if (intent.action == Worker.ACTION_MIRROR || intent.action == Worker.ACTION_CHECK || intent.action == Worker.ACTION_STORAGE || intent.action == Worker.ACTION_COPIES || intent.action == Worker.ACTION_SLEEP_REFRESH || intent.action == Worker.ACTION_RECHECK) return Worker.onIntent(ctx, intent)
         // The plugin's "Check for updates": every mode (the plugin downloads nothing itself).
         if (intent.action == Updater.ACTION_UPDATE) return Updater.onPluginAsked(ctx.applicationContext, intent.getStringExtra("reason") ?: "plugin")
         val action = intent.action ?: return

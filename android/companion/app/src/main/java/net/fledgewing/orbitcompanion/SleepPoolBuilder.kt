@@ -216,17 +216,31 @@ class SleepPoolBuilder(
             .put("server", a.creds.server).put("user", a.creds.user)
         a.storageLimitMb?.let { doc.put("storage_limit_mb", it) }
         write(File(dir, "pool.json"), doc.toString().toByteArray())
-        // Pick from's and Leave out's choices, for the plugin's pickers (scopes.json).
-        val scopes = listSection(a.creds, "smart-scopes")
-        val collections = listSection(a.creds, "collections")
-        if (scopes != null && collections != null) {
-            write(File(dir, "scopes.json"), JSONObject().put("v", 1).put("at", t).put("scopes", scopes).put("collections", collections).toString().toByteArray())
-            sum["scopes"] = true
-        }
+        if (scopes(a.creds)) sum["scopes"] = true
         sum["items"] = items.size.toLong(); sum["kept"] = (items.size - first).toLong(); sum["probed"] = probed.toLong()
         sum["left_out"] = leftOut.toLong(); sum["unknown"] = unknown.toLong(); sum["skipped"] = skipped.toLong()
         sum["retired"] = retired.size.toLong(); sum["listed"] = listed; sum["every"] = a.every
         return sum
+    }
+
+    /** Pick from's and Leave out's choices, for the plugin's pickers: scopes.json. */
+    fun scopes(c: CacheWorker.Creds): Boolean {
+        val scopes = listSection(c, "smart-scopes") ?: return false
+        val collections = listSection(c, "collections") ?: return false
+        return write(File(dir, "scopes.json"), JSONObject().put("v", 1).put("at", now()).put("scopes", scopes).put("collections", collections).toString().toByteArray())
+    }
+
+    /** Leave out's tag picker: the tags in the saved book details, with counts (tags.json). [details]: model byte strings. */
+    fun tags(details: List<List<String>>): Int {
+        val tags = SleepPoolLogic.tagCounts(details).take(TAGS_MAX)
+        val a = JSONArray(tags.map { JSONObject().put("tag", LuaValue.utf8(it.tag)).put("label", LuaValue.utf8(it.label)).put("count", it.count) })
+        write(File(dir, "tags.json"), JSONObject().put("v", 1).put("at", now()).put("details", details.size).put("tags", a).toString().toByteArray())
+        return tags.size
+    }
+
+    companion object {
+        const val TAGS_MAX = 200
+        const val TAG_DETAILS_MAX = 2000
     }
 
     /** Every page of one section list: { id, title, count }. */

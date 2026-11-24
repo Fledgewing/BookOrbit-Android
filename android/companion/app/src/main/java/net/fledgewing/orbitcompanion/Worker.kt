@@ -20,6 +20,7 @@ object Worker {
     const val ACTION_STORAGE = "${Contract.PACKAGE}.action.STORAGE"
     const val ACTION_COPIES = "${Contract.PACKAGE}.action.COPIES"
     const val ACTION_SLEEP_REFRESH = "${Contract.PACKAGE}.action.SLEEP_REFRESH"
+    const val ACTION_RECHECK = "${Contract.PACKAGE}.action.RECHECK"
 
     /** The cap the plugin needs before it hands work over (ModeLogic.BASE). */
     const val CAP = "cache_worker"
@@ -32,6 +33,8 @@ object Worker {
     private var storage: CacheWorker.StorageAsk? = null
     private var copies: String? = null
     private var sleep: Pair<String, SleepPoolBuilder.Ask>? = null
+    private var pickers: Pair<String, CacheWorker.Creds>? = null
+    private var recheck: Triple<String, CacheWorker.Creds, List<Pair<Long, String>>>? = null
     @Volatile private var app: Context? = null
     private var thread: Thread? = null
 
@@ -40,7 +43,7 @@ object Worker {
         private set
 
     /** Work in hand: an automatic Wi-Fi off waits for it. */
-    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || pending != null || storage != null || copies != null || sleep != null }
+    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || pending != null || storage != null || copies != null || sleep != null || pickers != null || recheck != null }
 
     private var worker: CacheWorker? = null
 
@@ -80,10 +83,19 @@ object Worker {
                     LuaValue.str(i.getStringExtra("owner") ?: ""))
                 synchronized(lock) { checks.addLast(c); lock.notifyAll() }
             }
-            ACTION_SLEEP_REFRESH -> {
+            ACTION_SLEEP_REFRESH -> if (i.getStringExtra("scopes_only") == "1") {
+                // The pickers' lists only (Pick from, Leave out and its tags); never a pool build.
+                synchronized(lock) { pickers = (i.getStringExtra("reason") ?: "picker") to creds; lock.notifyAll() }
+            } else {
                 val a = SleepPoolBuilder.Ask(i.getStringExtra("from") ?: "", SleepPoolLogic.rules(i.getStringExtra("rules")),
                     i.getStringExtra("open_id")?.toLongOrNull(), i.getStringExtra("every") == "1", i.getStringExtra("storage_limit_mb")?.toLongOrNull(), creds)
                 synchronized(lock) { sleep = (i.getStringExtra("reason") ?: "plugin") to a; lock.notifyAll() }
+            }
+            ACTION_RECHECK -> {
+                val ids = (i.getStringExtra("ids") ?: "").split('\n')
+                val paths = (i.getStringExtra("paths") ?: "").split('\n')
+                val items = ids.zip(paths).mapNotNull { (id, p) -> id.toLongOrNull()?.takeIf { p.isNotEmpty() }?.let { it to p } }
+                synchronized(lock) { recheck = Triple(i.getStringExtra("reason") ?: "plugin", creds, items); lock.notifyAll() }
             }
             ACTION_MIRROR -> {
                 val f = File(root(), "mirror/plan.lua")
@@ -111,8 +123,15 @@ object Worker {
         if (a != null) try { worker().storage(a) } catch (e: Exception) { OLog.w("worker: storage count failed", e) }
         val cp = synchronized(lock) { copies.also { copies = null } }
         if (cp != null) try { worker().copies(cp) } catch (e: Exception) { OLog.w("worker: copies lookup failed", e) }
+        val rc = synchronized(lock) { recheck.also { recheck = null } }
+        if (rc != null) try { worker().recheckCovers(rc.first, rc.second, rc.third) } catch (e: Exception) {
+            OLog.w("worker: cover recheck failed", e)
+            worker().event(sortedMapOf("kind" to "covers_rechecked", "why" to rc.first, "err" to e.javaClass.simpleName))
+        }
         val sp = synchronized(lock) { sleep.also { sleep = null } }
         if (sp != null) sleepPool(sp.first, sp.second)
+        val pk = synchronized(lock) { pickers.also { pickers = null } }
+        if (pk != null) pickers(pk.first, pk.second)
         while (true) {
             val c = synchronized(lock) { checks.removeFirstOrNull() } ?: return
             try { worker().check(c) } catch (e: Exception) { OLog.w("worker: check failed", e) }
@@ -123,7 +142,9 @@ object Worker {
     private fun sleepPool(why: String, a: SleepPoolBuilder.Ask) {
         val ev = sortedMapOf<String, Any?>("kind" to "sleep_pool", "why" to why)
         try {
-            ev.putAll(SleepPoolBuilder(SleepScreen.dir(), UrlHttp).build(a))
+            val b = SleepPoolBuilder(SleepScreen.dir(), UrlHttp)
+            ev.putAll(b.build(a))
+            ev["tags"] = b.tags(worker().detailTags(SleepPoolBuilder.TAG_DETAILS_MAX)).toLong()
             OLog.i("worker: sleep screen pool: ${ev["items"]} cover(s), ${ev["kept"]} new, ${ev["probed"]} checked ($why)")
             app?.let { SleepScreen.onPool(it, "pool") }
         } catch (e: Exception) {
@@ -133,12 +154,26 @@ object Worker {
         worker().event(ev)
     }
 
+    /** The pickers' lists: scopes.json from the server, tags.json from the saved details. */
+    private fun pickers(why: String, c: CacheWorker.Creds) {
+        val ev = sortedMapOf<String, Any?>("kind" to "sleep_pool", "why" to why, "scopes_only" to true)
+        try {
+            val b = SleepPoolBuilder(SleepScreen.dir(), UrlHttp)
+            ev["tags"] = b.tags(worker().detailTags(SleepPoolBuilder.TAG_DETAILS_MAX)).toLong()
+            if (b.scopes(c)) ev["scopes"] = true else ev["err"] = "not listed"
+        } catch (e: Exception) {
+            OLog.w("worker: sleep screen pickers failed", e)
+            ev["err"] = e.javaClass.simpleName
+        }
+        worker().event(ev)
+    }
+
     private fun loop() {
         while (true) {
             drainChecks()
             val p = synchronized(lock) {
-                if (checks.isEmpty() && pending == null && storage == null && copies == null && sleep == null) lock.wait(60_000)
-                if (checks.isEmpty() && pending == null && storage == null && copies == null && sleep == null) { thread = null; return }
+                if (checks.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) lock.wait(60_000)
+                if (checks.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) { thread = null; return }
                 pending.also { pending = null }
             } ?: continue
             mirrorRunning = true
