@@ -77,11 +77,31 @@ android {
     }
 }
 
+val robolectricAndroid: Configuration by configurations.creating
+
 dependencies {
     testImplementation("junit:junit:4.13.2")
     // Android ships org.json; plain JVM unit tests need the real one (StatsExport).
     testImplementation("org.json:json:20240303")
     testImplementation("org.robolectric:robolectric:4.14.1")
+    // Android 14 for @Config(sdk = [34]); Robolectric 4.14.1 also reads the app's resources with
+    // its newest SDK, 15.
+    robolectricAndroid("org.robolectric:android-all-instrumented:14-robolectric-10818077-i7")
+    robolectricAndroid("org.robolectric:android-all-instrumented:15-robolectric-12650502-i7")
+}
+
+// Robolectric's Android 14 jar comes through Gradle (cached, retried) instead of Robolectric's own
+// download at test time, which failed in CI (MavenArtifactFetcher); the tests then run offline.
+// The versions are the ones Robolectric 4.14.1 asks for (its DefaultSdkProvider).
+val robolectricJars = layout.buildDirectory.dir("robolectric-jars")
+val copyRobolectricJars = tasks.register<Copy>("copyRobolectricJars") {
+    from(robolectricAndroid)
+    into(robolectricJars)
+}
+tasks.withType<Test>().configureEach {
+    dependsOn(copyRobolectricJars)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", robolectricJars.get().asFile.absolutePath)
 }
 
 /**
