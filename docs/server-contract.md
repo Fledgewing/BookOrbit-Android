@@ -12,6 +12,8 @@ to that commit. Add a finding here, with its citation, before a design depends o
 - **Xteink**: CrossInk-Bookorbit's own client calls the catalog and exchange routes below, but
   pushes positions with KOSync's `PUT /koreader/syncs/progress` (`lib/BookOrbitSync/BookOrbitSyncClient.cpp`
   in `upstream/crossink-v1.6`). The overlay only makes the server reachable over Tailscale.
+- **Android, Orbit Companion**: one exception, the sleep screen's sharp covers (below, "OPDS
+  covers for the sleep screen"): the companion calls two OPDS routes itself.
 - Every route is under `/api/v1` ([`main.ts:74`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/main.ts#L74)).
 
 ## Endpoints
@@ -31,6 +33,28 @@ catalog routes under `/koreader/plugin/catalog`
 | `GET /koreader/plugin/catalog/books/:id` | Book detail, including `seriesMembers` |
 | `PUT /koreader/plugin/catalog/books/:id/read-status`, `/rating` | Status and rating set on the device |
 | `GET /koreader/plugin/catalog/files/:fileId/download` | Book downloads |
+| `GET /opds/recent` (Basic, OPDS login) | Companion: once at the sharp-covers sign-in, to read the cover token |
+| `GET /opds/:bookId/cover?t=<token>` | Companion: the sleep screen's full-size covers ([`opds.controller.ts:229`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/opds/opds.controller.ts#L229)) |
+
+## App attestation
+
+Routes with `@RequireAppAttest()` accept only requests signed by BookOrbit's own iOS and Android
+apps ([`app-attest.guard.ts:26`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/app-attest/app-attest.guard.ts#L26),
+[`:74`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/app-attest/app-attest.guard.ts#L74)). Orbify can't sign, so such a route is
+closed to it. `unsignedOutsideProduction` lets unsigned requests through only on non-production
+servers, so it is closed too. The guard is not global
+([`global-guards.ts:11`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/common/guards/global-guards.ts#L11)). At v3.9.0 it covers 51 routes
+(achievements, book journal, dashboard widgets, notebook, the `mobile/*` routes, smart-scope
+books, uploads, user preferences and statistics, TTS, watch downloads), none under
+`koreader/*` or `opds/*`.
+
+`tools/attest-check` enforces this: it reads the routes Orbify calls from the code (the Orbit
+plugin's Lua, the companion's Kotlin, and the stock plugin it hooks; `check.mjs --list` prints
+them) and fails when the pinned server puts the guard on one of them, at controller or handler
+level, or installs it globally (`GLOBAL_GUARDS`, `APP_GUARD`). It also fails when a route Orbify
+calls is gone from the server. `tools/upstreams pin bookorbit` runs it, and so does
+`plugin-compat.yml` on every pull request. Mark a string that only looks like a route with an
+`orbify:not-a-route` comment on its line.
 
 ## Progress finishes a book only at the library's threshold
 
@@ -185,3 +209,27 @@ stays matched, but only hashes in the compatible set place positions and highlig
 (`koreader.repository.ts:32-42`): the copy is answered `positionCompatible: false`, and
 progress, highlights and bookmarks stop syncing for it until the copy is replaced
 ([keep copies current](design/keep-copies-current.md)).
+
+## OPDS covers for the sleep screen
+
+The plugin login has only the 400 × 600 catalog thumbnail, soft on a 300-ppi panel. The full
+stored cover is served by OPDS (docs/design/lock-screen.md L7):
+
+- `GET /opds/:bookId/cover` streams the stored cover with `ETag: "<mtime ms>"` and answers 304
+  on a matching `If-None-Match` ([`opds.controller.ts:229-255`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/opds/opds.controller.ts#L229-L255)).
+- Every OPDS route needs OPDS on server-wide (`OpdsEnabledGuard`, 403 "OPDS server is disabled",
+  [`opds-enabled.guard.ts`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/opds/opds-enabled.guard.ts)) and the account's `OpdsAccess`
+  permission (403 "OPDS access revoked").
+- Auth is HTTP Basic with an **OPDS login**, its own account table (`opdsUserService.validateCredentials`,
+  [`opds-user.service.ts:95`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/opds/opds-user.service.ts#L95)), not the KOReader-sync one; a
+  user may give both the same name and password. Or, on `/opds/:id/cover` and `/thumbnail` only,
+  `?t=<coverToken>`: `<userId>.<first 32 hex of HMAC-SHA256(userId, jwtSecret)>`
+  ([`opds-auth.guard.ts`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/opds/opds-auth.guard.ts), `createCoverToken`, `isTokenImagePath`).
+  The token never expires; it stops working (401) only when the server's JWT secret changes or the
+  account is disabled.
+- Feeds carry the token in every book's image links
+  (`<link rel="http://opds-spec.org/image" href="/api/v1/opds/<id>/cover?t=…">`, only for books
+  with a cover, [`opds.service.ts:204-209`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/opds/opds.service.ts#L204-L209)). Fixture:
+  `shared/fixtures/opds/recent-feed.xml`.
+- Visibility: the cover route checks the book against the account's libraries and content filters
+  (`validateBookAccess`), as the catalog does.

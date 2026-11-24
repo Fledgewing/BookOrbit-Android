@@ -1,0 +1,14 @@
+{
+  "name": "orbify-attest-check",
+  "private": true,
+  "description": "Fails when the pinned BookOrbit server puts app attestation on a route Orbify calls (README.md).",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "check": "node check.mjs",
+    "test": "node --test test/check.test.mjs"
+  },
+  "dependencies": {
+    "typescript": "6.0.3"
+  }
+}

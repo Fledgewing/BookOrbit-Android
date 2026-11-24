@@ -87,6 +87,10 @@ Search stays online; offline it says "Search needs a connection".
   (with "· covers N/M" when covers are saved), `mirror: N/M saved` in the log, and a queue kept on
   disk that resumes after a restart. Wi-Fi is held only while it runs. A second Full refresh while
   one is saving keeps that run and shows its progress.
+- **Off the UI thread (v0.11.3).** The whole run happens in a worker (a forked child, the
+  companion next) that owns `orbit-cache/mirror/`; nothing of the mirror is in the index. Lists
+  are saved before details, so the total stops growing once the lists are in
+  ([companion-worker](companion-worker.md)).
 - **No answer (v0.11.2).** One request that times out is not "offline": it is retried after 5 s
   and 10 s (a list's first page in pages of 50, then 25, so a list the server is slow to page by
   100 is saved in smaller pages), then skipped, and the run goes on. Only the network really going

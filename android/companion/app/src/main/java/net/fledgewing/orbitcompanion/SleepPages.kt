@@ -41,6 +41,7 @@ class SleepScreenActivity : EinkActivity() {
             root.addView(Ui.row(this, "Pick from", "${s.fromLabel()} · set in KOReader › Tools › Android sync › Sleep screen"))
             root.addView(Ui.row(this, "Leave out", if (s.leaveOut.isEmpty()) "nothing" else "${s.leaveOut.size} rule(s) · set in KOReader"))
             segmented(root, "Change cover every", SleepSettings.HOURS.map { it to "$it h" }, s.hours) { set(s.copy(hours = it)) }
+            sharpRow(root)
         }
         root.addView(Ui.row(this, "Text", if (s.text.isEmpty()) "none · set in KOReader" else "${s.text} · set in KOReader"))
         root.addView(Ui.row(this, "Show battery level", "the level when the reader went to sleep", Ui.toggle(this, s.battery), onClick = {
@@ -58,6 +59,65 @@ class SleepScreenActivity : EinkActivity() {
         root.addView(Ui.row(this, "Preview", "5 s, or until you tap", Ui.value(this, "›"), onClick = {
             startActivity(Intent(this, SleepPreviewActivity::class.java))
         }))
+    }
+
+    /** L7: Sharp covers. Signed in once, or the thumbnail fallback (a state, not a mode). */
+    private fun sharpRow(root: LinearLayout) {
+        val acct = SharpCovers.account()
+        val state = SharpCovers.state(this)
+        val ids = SleepScreen.pool().map { it.id }
+        val (sub, value) = SharpCoversLogic.row(state, acct != null, SharpCovers.sharpCount(this, ids), ids.size, SharpCovers.lostWhy(this))
+        root.addView(Ui.row(this, SharpCoversLogic.TITLE, sub, if (value.isEmpty()) null else Ui.value(this, value), onClick = when {
+            acct == null -> null
+            state == SharpCoversLogic.State.ON -> { -> signOutAsk() }
+            else -> { -> signIn(acct) }
+        }))
+    }
+
+    private fun signOutAsk() {
+        android.app.AlertDialog.Builder(this)
+            .setMessage("Sleep-screen covers come from BookOrbit's full-size cover. Sign out to use the small thumbnail again.")
+            .setPositiveButton("Sign out") { _, _ -> SharpCovers.signOut(this, "companion page"); render() }
+            .setNegativeButton("Keep", null).show()
+    }
+
+    /** The OPDS login, once: the password goes to one request and is cleared; only the cover link is kept. */
+    private fun signIn(acct: SharpCovers.Account) {
+        val pad = Ui.dp(this, 16)
+        val user = android.widget.EditText(this).apply {
+            hint = "OPDS username"
+            setText(SharpCovers.user(this@SleepScreenActivity) ?: acct.user)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        }
+        val pass = android.widget.EditText(this).apply {
+            hint = "OPDS password"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(Ui.text(this@SleepScreenActivity, SharpCoversLogic.PROMPT, 16f, color = Ui.MID))
+            addView(user)
+            addView(pass)
+        }
+        android.app.AlertDialog.Builder(this).setTitle(SharpCoversLogic.TITLE).setView(box)
+            .setPositiveButton("Sign in") { _, _ ->
+                val name = user.text.toString().trim()
+                val e = pass.text
+                val pw = CharArray(e.length).also { e.getChars(0, e.length, it, 0) }
+                e.clear()
+                kotlin.concurrent.thread(name = "orbit-sharp-sign-in") {
+                    val msg = SharpCovers.signIn(this, acct.server, name, pw)
+                    if (msg == null) SharpCovers.sync(this, "signed in")
+                    runOnUiThread {
+                        if (isFinishing) return@runOnUiThread
+                        render()
+                        Ui.note(this, msg ?: "Signed in. Sharp covers download now while the reader is online.")
+                    }
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ -> pass.text.clear() }
+            .show()
     }
 
     /** P1-P3: choose Orbit's screen saver, or say how. */

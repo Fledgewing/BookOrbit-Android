@@ -69,6 +69,17 @@ function Copies.details(books)
             end
         end
     end
+    -- The offline mirror's details (outside the index since v0.11.3): one file per wanted book.
+    local client = Mirror and Mirror.detailEntry and OC.client and OC.client()
+    if client then
+        for id in pairs(want) do
+            local okm, e = pcall(Mirror.detailEntry, client, id)
+            local cur = out[id]
+            if okm and e and type(e.body.files) == "table" and (not cur or (e.validated_at or 0) >= (cur.saved_at or 0)) then
+                out[id] = { id = e.body.id, files = e.body.files, saved_at = e.validated_at }
+            end
+        end
+    end
     return out
 end
 
