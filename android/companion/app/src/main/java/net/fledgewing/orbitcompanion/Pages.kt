@@ -552,12 +552,11 @@ object Setup {
         if (Net.installed(ctx, Net.TAILSCALE_PKG)) byId["tailscale"]?.let { out += it }
         val p = Prefs(ctx)
         val map = ClickerStore.map(ctx)
-        val pm = ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
         AddonLogic.optionalIds(Mode.helpers(ctx), map.mapped, Pin.isSet(ctx), map.sendsKeys).forEach { id ->
             val o = AddonLogic.optional(id) ?: return@forEach
             val granted = when (id) {
                 "keyboard" -> KeySender.enabled(ctx)
-                "battery" -> listOf(ctx.packageName, Koreader.PKG).all { pm.isIgnoringBatteryOptimizations(it) }
+                "battery" -> listOf(ctx.packageName, Koreader.PKG).all { Net.batteryRow(ctx, it).done }
                 else -> AddonSetup.optionalGranted(ctx, id)
             }
             val fix = when (id) {
@@ -749,8 +748,8 @@ object Setup {
 
         listOf(ctx.packageName to "Orbit", Net.TAILSCALE_PKG to "Tailscale", Koreader.PKG to "KOReader").forEach { (pkg, name) ->
             val installed = Net.installed(ctx, pkg)
-            val ok = installed && (ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(pkg)
-            list.add(Check("Battery: Unrestricted ($name)", ok, if (!installed) "not installed" else if (ok) "done" else "set App battery usage › Unrestricted") { a ->
+            val row = Net.batteryRow(ctx, pkg)
+            list.add(Check("Battery: Unrestricted ($name)", row.done, row.detail) { a ->
                 if (installed) {
                     a.tryStart(Intent(BATTERY_DETAIL, Uri.parse("package:$pkg")), "battery page for $pkg") ||
                         a.tryStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")), "app info for $pkg")
