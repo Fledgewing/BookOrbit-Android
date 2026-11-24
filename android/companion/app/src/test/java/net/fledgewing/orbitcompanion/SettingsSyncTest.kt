@@ -154,6 +154,9 @@ class SettingsUiTest {
     fun everyExtraIsInASection() {
         SettingsUi.EXTRAS.forEach { assertTrue(it.id, schema.section(it.section) != null) }
         assertEquals(SettingsUi.EXTRAS.size, SettingsUi.EXTRAS.map { it.id }.toSet().size)
+    }
+}
+
 class EverySleepTest {
     private val schema = SettingsSchema.parse(File("../../../shared/settings/schema.json").readText())
 
