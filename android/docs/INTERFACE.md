@@ -68,6 +68,7 @@ only reads, except `state.json`.
 | `covers/<id>.jpg` | plugin | the pool's covers (400 × 600 thumbnails), fetched by ETag; others pruned. The companion's sharp covers (its own storage, `files/sharp-covers/`) replace them on screen when signed in |
 | `current.png`, `current.json` | plugin, when a book opens | the current book's cover and `{v, title, authors, path, id, file, at}` |
 | `state.json` | companion | `{v, shown, changed_at}`: the cover shown and when it changed; the plugin's shuffle bag moves past it |
+| `scopes.json` | plugin | `{v, at, scopes: [{id, title, count}], collections: [...]}`: every smart scope and collection, for the pickers |
 | `bag.lua`, `leave_out.lua` | plugin | private: the shuffle bag and the daily Leave-out members |
 | `vendor-screensaver.txt` | `tools/install-usb.sh --sleep-screen on` | the three screen-saver values it replaced, for `off` |
 

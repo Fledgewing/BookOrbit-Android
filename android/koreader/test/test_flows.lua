@@ -4713,6 +4713,98 @@ test("sleep screen: settings changed in the companion are applied; an older comp
     run(5)
 end)
 
+test("sleep screen: Pick from and Leave out list every smart scope and collection, all pages, with counts, saved for offline", function()
+    local JSON = dofile(here .. "/json_mini.lua")
+    local function fixture(name)
+        local f = assert(io.open(here .. "/../../../shared/fixtures/bookorbit/" .. name, "rb"))
+        local v = JSON.decode(f:read("*a")); f:close(); return v
+    end
+    local scopes, collections = fixture("catalog-sections.smart-scopes.json"), fixture("catalog-sections.collections.json")
+    -- scopes.json is read back with KOReader's json module: the real decoder here.
+    local jm = require("json")
+    local stub_decode = jm.decode
+    jm.decode = function(str) return W.json[str] or JSON.decode(str) end
+    capsReset()
+    local caps = {}
+    for _, c in ipairs(FULL) do table.insert(caps, c) end
+    table.insert(caps, "sleep_screen")
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
+    local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
+    local S, Sleep = RE.S, RE.Sleep
+    Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = dir, nil, nil, nil
+    S.sleep_mode = "recommended"
+    local ui, m = newUI(false)
+    RE.Shared.refresh("test")
+    -- Smart scopes come in two pages (hasNext), collections whole, as the server sends them.
+    local calls, down = {}, false
+    local client = {}
+    function client:query(path, q) return string.format("%s?page=%d&size=%d", path, q.page, q.size) end
+    function client:requestBlocking(_, path)
+        table.insert(calls, path)
+        if down then return nil, "offline" end
+        if path:find("/sections/smart%-scopes%?page=1&size=100") then
+            local items = {}
+            for i = 1, 7 do items[i] = scopes.items[i] end
+            return { section = "smart-scopes", items = items, hasNext = true }
+        end
+        if path:find("/sections/smart%-scopes%?page=2&size=100") then
+            local items = {}
+            for i = 8, #scopes.items do table.insert(items, scopes.items[i]) end
+            return { section = "smart-scopes", items = items, hasNext = false }
+        end
+        if path:find("/sections/collections%?page=1") then return collections end
+        return nil, 404
+    end
+    local oc_client = RE.OC.client
+    RE.OC.client = function() return client end
+    W.wifi = true
+    local item
+    for _, it in ipairs(m:menuItems()) do if it.text == "Sleep screen" then item = it end end
+    local rows = item.sub_item_table_func()
+    local from = rows[2].sub_item_table
+    local picker = from[#from]
+    -- First open: nothing saved yet, fetched behind the menu.
+    local first = picker.sub_item_table_func()
+    ok(#first == 1 and first[1].text_func():find("Loading", 1, true), "loading: " .. first[1].text_func())
+    run(10)
+    ok(#calls == 3, "two pages of scopes, one of collections: " .. table.concat(calls, " "))
+    local f = io.open(dir .. "/scopes.json", "rb")
+    ok(f, "scopes.json saved"); if f then f:close() end
+    local function texts(list)
+        local out = {}
+        for _, r in ipairs(list) do table.insert(out, r.text or (r.text_func and r.text_func())) end
+        return out
+    end
+    local got = texts(picker.sub_item_table_func())
+    ok(#got == 15, "2 headers, 12 scopes, 1 collection: " .. #got)
+    ok(got[1] == "Smart scopes" and got[2] == "Cosy Mysteries · 5" and got[13] == "Holiday Picks", "scopes with counts, the last without: " .. tostring(got[13]))
+    ok(got[14] == "Collections" and got[15] == "ToRead · 23", "the collection: " .. tostring(got[15]))
+    -- Tapping one picks it, and its name shows.
+    local tapped = picker.sub_item_table_func()
+    tapped[15].callback()
+    ok(S.sleep_from == "collection:7" and Sleep.fromLabel(S.sleep_from) == "ToRead", "picked: " .. tostring(S.sleep_from))
+    -- Offline, after a restart: the same lists from scopes.json, in Leave out too.
+    down, W.wifi = true, false
+    Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil
+    local leave = rows[3].sub_item_table_func()
+    local add
+    for _, r in ipairs(leave) do if r.text == "Add a rule: Smart scope or collection…" then add = r end end
+    local lo = texts(add.sub_item_table_func())
+    ok(#lo == 15 and lo[3] == "Space Opera · 8", "Leave out lists them offline: " .. #lo)
+    add.sub_item_table_func()[4].callback()
+    ok(S.sleep_leave_out[1] == "scope:103" and Sleep.ruleLabel("scope:103") == "Short Reads (smart scope)", "rule added: " .. tostring(S.sleep_leave_out[1]))
+    -- The companion's state.json is read the same way (the shuffle bag moves past what it showed).
+    local st = io.open(dir .. "/state.json", "wb"); st:write('{"v":1,"shown":103,"changed_at":5000}'); st:close()
+    ok(Sleep.state().shown == 103, "state.json read")
+    RE.OC.client, jm.decode = oc_client, stub_decode
+    Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil, nil
+    S.sleep_mode, S.sleep_from, S.sleep_leave_out = "off", "up_next", {}
+    sh("rm -rf", dir)
+    capsReset()
+    run(5)
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end
