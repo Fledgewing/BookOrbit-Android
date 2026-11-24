@@ -14,6 +14,9 @@ function OrbitAndroid:onSuspend()
     end
     state.suspended_at = now_s()
     Wifi.state().foreground = false
+    -- A real sleep (the screen went off, not an app switch): the wake tells the companion (Sleep.woke).
+    if Jni.isInteractive() == false then state.slept = true end
+    UIManager:scheduleIn(1, function() if Jni.isInteractive() == false then state.slept = true end end)
     -- A patch update waiting for the book: the device sleeping is the moment (after any sleep sync).
     if patchFileVersion() and RestartPlan.decide(patchFileVersion(), PATCH_VERSION, S.restart_tried, true, "check") == "wait" then
         UIManager:scheduleIn(1.5, function()

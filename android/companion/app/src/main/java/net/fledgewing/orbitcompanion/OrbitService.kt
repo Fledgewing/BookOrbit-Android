@@ -41,7 +41,11 @@ class CommandReceiver : BroadcastReceiver() {
         // A record action: kept here, no service needed (docs/design/addon-mode.md §7.1).
         if (intent.action == Contract.REPORT) return StatusFile.onReport(ctx, intent)
         // The sleep screen's files changed: a record action too (no service needed).
-        if (intent.action == SleepScreen.ACTION_POOL) return SleepScreen.onPool(ctx, intent.getStringExtra("reason") ?: "plugin")
+        if (intent.action == SleepScreen.ACTION_POOL) {
+            // The plugin back from a real sleep: the wake, also without the service (Add-on mode).
+            if (intent.getStringExtra("wake") == "1") return SleepScreen.onWake(ctx, "plugin resumed")
+            return SleepScreen.onPool(ctx, intent.getStringExtra("reason") ?: "plugin")
+        }
         val action = intent.action ?: return
         if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) return OrbitService.start(ctx, intent)
         if (!Mode.isAddon(ctx)) return OrbitService.start(ctx, intent) // Full: exactly as before 0.11.0
@@ -211,7 +215,7 @@ class OrbitService : Service() {
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     stats.record("screen_on")
-                    SleepScreen.onWake(this@OrbitService)
+                    SleepScreen.onWake(this@OrbitService, "screen on")
                     updateNotification(force = true)
                 }
             }

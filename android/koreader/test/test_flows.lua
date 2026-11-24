@@ -4575,6 +4575,34 @@ test("cache: the index is encoded and written by a child, one save at a time (v0
 end)
 
 ---------------------------------------------------------------- sleep screen (lock-screen.md)
+test("sleep screen: back from a real sleep the plugin tells the companion (no service needed); an app switch doesn't", function()
+    local on = RE.Sleep.on
+    RE.Sleep.on = function() return true end
+    local function wakes()
+        return count(W.broadcasts, function(x) return x.action:sub(-11) == ".SLEEP_POOL" and x.extras.wake == "1" end)
+    end
+    local _ui, m = newUI(false)
+    run(5)
+    W.broadcasts = {}
+    W.screen_on = false
+    m:onSuspend()
+    run(2)
+    W.screen_on = true
+    m:onResume()
+    run(1)
+    ok(wakes() == 1, "one wake: " .. wakes())
+    local b = lastBroadcast(".SLEEP_POOL")
+    ok(b.package == "net.fledgewing.orbitcompanion" and b.extras.reason == "wake", "to the companion")
+    -- Another app in front and back, the screen on throughout: no wake.
+    m:onSuspend()
+    run(2)
+    m:onResume()
+    run(1)
+    ok(wakes() == 1, "an app switch is no wake: " .. wakes())
+    RE.Sleep.on = on
+    W.screen_on = false
+end)
+
 test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next through Leave out, the current cover", function()
     local JSON = dofile(here .. "/json_mini.lua")
     capsReset()

@@ -93,6 +93,14 @@ function Sleep.notify(why)
     Companion.send(Companion.ACTION.SLEEP_POOL, { reason = why })
 end
 
+-- Back from a real sleep: the companion moves the picture on for the next one (Every sleep on
+-- a reader that shows a picture). Its service hears the screen come on too; without the service
+-- (Add-on mode) this is the wake it hears. It counts one wake once (SleepWake).
+function Sleep.woke()
+    if not Sleep.on() then return end
+    Companion.send(Companion.ACTION.SLEEP_POOL, { reason = "wake", wake = "1" })
+end
+
 ---------------------------------------------------------------- files
 
 function Sleep.load(name)

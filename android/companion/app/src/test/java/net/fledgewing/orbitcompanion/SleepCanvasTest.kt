@@ -147,7 +147,9 @@ class SleepCanvasTest {
             SleepScreen.redrawPicture(app, "battery 81%")
             assertEquals(first.shown, SleepScreen.state(app).shown)
             pic.delete()
-            SleepScreen.onWake(app)
+            // The plugin's resume after a real sleep, through the manifest receiver: no service
+            // needed, so Add-on mode moves on too (#43).
+            CommandReceiver().onReceive(app, Intent(SleepScreen.ACTION_POOL).putExtra("reason", "wake").putExtra("wake", "1"))
             val second = SleepScreen.state(app)
             assertTrue("a new picture for the next sleep", pic.isFile)
             assertTrue(second.shown in ids && second.shown != first.shown)
@@ -156,6 +158,14 @@ class SleepCanvasTest {
             val j = org.json.JSONObject(File(dir, "state.json").readText())
             assertEquals(second.shown, j.getLong("shown"))
             assertEquals(second.shows, SleepScreen.state(app).shows)
+            // The service's SCREEN_ON for the same wake: counted once.
+            SleepScreen.onWake(app, "screen on")
+            assertEquals(second, SleepScreen.state(app))
+            // The next wake moves on again.
+            org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(SleepWake.SAME_WAKE_MS))
+            SleepScreen.onWake(app, "screen on")
+            val third = SleepScreen.state(app)
+            assertTrue(third.shown in ids && third.shown != second.shown)
         } finally {
             SleepScreen.sinkForTest = null
             SleepScreen.save(app, SleepSettings.DEFAULT, "test", shared = false)
