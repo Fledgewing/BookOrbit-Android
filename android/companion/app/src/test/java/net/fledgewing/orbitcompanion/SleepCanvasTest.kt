@@ -127,4 +127,39 @@ class SleepCanvasTest {
         assertEquals(false, SleepScreen.chooseOurs(app, "test"))
         assertEquals(false, SleepScreen.restoreVendor(app, "test"))
     }
+
+    @Test
+    fun everySleepOnBooxWritesTheNextPictureAfterEachSleep() {
+        val dir = SleepScreen.dir().apply { deleteRecursively(); File(this, "covers").mkdirs() }
+        val ids = listOf(11L, 12L, 13L)
+        ids.forEach { id ->
+            File(dir, "covers/$id.jpg").outputStream().use { cover().compress(Bitmap.CompressFormat.JPEG, 80, it) }
+        }
+        File(dir, "pool.json").writeText("""{"v":1,"items":[""" + ids.joinToString(",") { """{"id":$it,"title":"","file":"covers/$it.jpg"}""" } + "]}")
+        SleepScreen.sinkForTest = SleepSink.PICTURE
+        try {
+            val pic = SleepScreen.picture().apply { delete() }
+            SleepScreen.save(app, SleepSettings.DEFAULT.copy(mode = SleepMode.RECOMMENDED, hours = SleepSettings.EVERY_SLEEP), "test", shared = false)
+            assertTrue("written when turned on", pic.isFile)
+            val first = SleepScreen.state(app)
+            assertTrue(first.shown in ids)
+            // A battery step redraws the same cover; only a wake moves on.
+            SleepScreen.redrawPicture(app, "battery 81%")
+            assertEquals(first.shown, SleepScreen.state(app).shown)
+            pic.delete()
+            SleepScreen.onWake(app)
+            val second = SleepScreen.state(app)
+            assertTrue("a new picture for the next sleep", pic.isFile)
+            assertTrue(second.shown in ids && second.shown != first.shown)
+            assertEquals(1, second.shows[second.shown])
+            // On disk for the plugin, and kept for after a reboot (read back from the prefs).
+            val j = org.json.JSONObject(File(dir, "state.json").readText())
+            assertEquals(second.shown, j.getLong("shown"))
+            assertEquals(second.shows, SleepScreen.state(app).shows)
+        } finally {
+            SleepScreen.sinkForTest = null
+            SleepScreen.save(app, SleepSettings.DEFAULT, "test", shared = false)
+            dir.deleteRecursively()
+        }
+    }
 }

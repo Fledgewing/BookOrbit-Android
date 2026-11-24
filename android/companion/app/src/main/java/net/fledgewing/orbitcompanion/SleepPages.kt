@@ -47,7 +47,7 @@ class SleepScreenActivity : EinkActivity() {
         if (s.mode == SleepMode.RECOMMENDED) {
             root.addView(Ui.row(this, "Pick from", "${s.fromLabel()} · set in KOReader › Tools › Android sync › Sleep screen"))
             root.addView(Ui.row(this, "Leave out", if (s.leaveOut.isEmpty()) "nothing" else "${s.leaveOut.size} rule(s) · set in KOReader"))
-            segmented(root, "Change cover every", SleepSettings.HOURS.map { it to "$it h" }, s.hours) { set(s.copy(hours = it)) }
+            segmented(root, "Change cover every", SleepSettings.HOURS.map { it to SleepSettings.hoursLabel(it) }, s.hours) { set(s.copy(hours = it)) }
             sharpRow(root)
         }
         root.addView(Ui.row(this, "Text", if (s.text.isEmpty()) "none · set in KOReader" else "${s.text} · set in KOReader"))
@@ -152,8 +152,12 @@ class SleepScreenActivity : EinkActivity() {
 
     private fun <T> segmented(root: LinearLayout, title: String, options: List<Pair<T, String>>, current: T, pick: (T) -> Unit) {
         root.addView(Ui.text(this, title, 21f).apply { setPadding(0, Ui.dp(this@SleepScreenActivity, 8), 0, Ui.dp(this@SleepScreenActivity, 8)) })
-        // Two rows of two when there are four (the corners and positions), else one row.
-        val rows = if (options.size == 4) options.chunked(2) else listOf(options)
+        // Two rows of two when there are four (the corners and positions), two of three for six.
+        val rows = when (options.size) {
+            4 -> options.chunked(2)
+            6 -> options.chunked(3) // Change cover every
+            else -> listOf(options)
+        }
         rows.forEach { row ->
             val seg = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
