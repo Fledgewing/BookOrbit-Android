@@ -116,9 +116,11 @@ object PatchInstaller {
             val running = p.patchVersionSeen.ifEmpty { null }
             // The app replace was confirmed by the user (UpdateFlow.restartNowAfter): a manual restart.
             if (file != null && running != null && UpdateFlow.staleRestart(running, file, manual = true, screenOff = false, sent = emptySet()) == UpdateFlow.Restart.NOW) {
-                log("after the update: patch v$file on disk, KOReader runs v$running: restarting now")
+                // Started from one of our pages: the user is back on it; KOReader waits for the screen-off.
+                val now = UpdateReturn.restartNow(userConfirmed = true, fromPage = UpdateReturn.fromPage())
+                log("after the update: patch v$file on disk, KOReader runs v$running: restarting ${if (now) "now" else "at the next screen-off (started from our page)"}")
                 p.patchAwaitVersion = file
-                p.patchRestartNow = file
+                p.patchRestartNow = if (now) file else ""
                 follow(ctx, "app updated")
             } else {
                 log("after the update: patch ${file ?: "not installed"}; nothing to do for v$app")
@@ -132,9 +134,13 @@ object PatchInstaller {
         }
         val p = Prefs(ctx)
         // An app replace is always user-confirmed (UpdateFlow.restartNowAfter): restart at once.
-        val user = UpdateFlow.restartNowAfter(appReplaced = true, nowMs = System.currentTimeMillis(), markAtMs = p.userUpdateAt)
+        // From one of our pages (UpdateReturn): the user stays there; KOReader restarts at the next screen-off.
+        val user = UpdateReturn.restartNow(
+            UpdateFlow.restartNowAfter(appReplaced = true, nowMs = System.currentTimeMillis(), markAtMs = p.userUpdateAt),
+            fromPage = UpdateReturn.fromPage(),
+        )
         p.userUpdateAt = 0
-        log("after the update: patch v$file is older than v$app; installing it (you confirmed the app update: KOReader restarts now, the book reopens)")
+        log("after the update: patch v$file is older than v$app; installing it (${if (user) "you confirmed the app update: KOReader restarts now, the book reopens" else "started from our page: KOReader restarts at the next screen-off"})")
         afterUpdateBusy = true
         install(ctx, userStarted = user) { result ->
             afterUpdateBusy = false

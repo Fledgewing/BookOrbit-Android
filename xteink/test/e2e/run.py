@@ -7,8 +7,9 @@ stage 1), against the seeded BookOrbit server behind the fault proxy (tools/e2e/
 
 The checkout has the overlay applied and the profile's simulator built
 (`pio run -e x4-pro-simulator`; profiles: x4-pro, x4-classic, x3). Each scenario gets its own SD
-card and fault rules; it asserts on the firmware's log, the card and the proxy's request log, never
-on pixels. Screenshots, logs and the proxy log land in --out (CI uploads them). Exit 1 on any
+card and fault rules; it asserts on the firmware's log, the card and the proxy's request log, and
+never compares screenshots (one scenario checks that a rectangle the log names has ink: the catalog's
+stamp, patch 0038). Screenshots, logs and the proxy log land in --out (CI uploads them). Exit 1 on any
 failure. Scenarios are named after the rows of the design's §1 table they cover (X1-X9).
 """
 
@@ -28,7 +29,7 @@ ROOT = HERE.parents[2]
 sys.path[:0] = [str(ROOT / "tools" / "e2e"), str(HERE)]
 import bofault  # noqa: E402
 import kit  # noqa: E402
-from sim import PROFILES, UI_THEME_BOOKORBIT, SdCard, Simulator  # noqa: E402
+from sim import PROFILES, UI_THEME_BOOKORBIT, SdCard, Simulator, dark_pixels  # noqa: E402
 
 FAULTS = ROOT / "shared" / "fixtures" / "e2e" / "faults"
 X4S = ("x4-pro", "x4-classic")
@@ -173,13 +174,43 @@ def copy_refresh_tight_heap(ctx: Context, tmp: Path) -> None:
 
 
 @scenario(*X4S)
+def sleep_sync_device_heap(ctx: Context, tmp: Path) -> None:
+    """X3/X6 on the heap the X4 Pro's sleep sync had on .167: 21 KB of internal RAM free with a 7 KB
+    largest block once Tailscale is up. Before patch
+    0038 the match check's reply was refused (match check failed (8)), the copy stopped as heap
+    starved and covers were deferred. With wolfSSL in PSRAM the X4s' floors count only what a
+    request still needs of internal RAM (12 KB beside a kept session, 8 KB while a transfer runs)
+    and a reply of 4 KB or more is measured against PSRAM: the copy check, the copy's download
+    (1 KB chunks to SD) and the covers all complete. The internal RAM wolfSSL no longer takes is
+    the device's to confirm (log lines in XTEINK-BUILD-NOTES.md), and so is the 15 KB dip the .167
+    transfer starved at: the simulator opens a new session per request where the device keeps one,
+    so it applies the 20 KB new-session floor there, not the 8 KB transfer floor."""
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)  # the sleep sync refreshes the BookOrbit Home and its covers
+    path, new_hash = stale_copy_on_card(ctx, card, "copy_refresh_open")
+    run = sleep_sync(ctx, card, "sleep", timeout_s=150,
+                     env={"ORBIFY_SIM_HEAP": "w0:21376/7156"})
+    after(run.output, "ORBIFY_SIM_HEAP t=w0 free=21376 largest=7156")
+    covers = re.search(r"covers: (\d+) needed, (\d+) on SD, (\d+) fetched", run.output)
+    assert covers, "the sleep sync did not refresh the Home's covers"
+    for refused in ("Copy refresh: match check failed", "heap starved", "waiting for heap", "deferred (heap",
+                    "Leaving the Home snapshot for the next sync"):
+        assert refused not in run.output, f"refused on the device's heap: {refused!r}"
+    after(run.output, "replaced")
+    after(run.output, "Sleep sync over")
+    on_card = kit.partial_md5((card.fs / path.lstrip("/")).read_bytes())
+    assert on_card == new_hash, f"the card holds {on_card}, the library {new_hash}"
+
+
+@scenario(*X4S)
 def heap_floor_waits(ctx: Context, tmp: Path) -> None:
     """X3: the sleep sync's extras start no request when the heap is under the floor (patch 0037
-    S1-S4, OrbifyHeap): the heap falls to 20 KB while the mirror's first request is held by the
-    proxy; the mirror then waits for the next sync instead of opening another request."""
+    S1-S4, OrbifyHeap): the heap falls to 10 KB (under the X4s' 12 KB floor, patch 0038) while the
+    mirror's first request is held by the proxy; the mirror then waits for the next sync instead of
+    opening another request."""
     card = ctx.card(tmp)
     ctx.faults([{"match": {"path": "/plugin/catalog/root$"}, "action": "delay", "ms": 4000, "times": 1}])
-    run = sleep_sync(ctx, card, "sleep", env={"ORBIFY_SIM_HEAP": "w2000:20000/14000"})
+    run = sleep_sync(ctx, card, "sleep", env={"ORBIFY_SIM_HEAP": "w2000:10000/6000"})
     tail = after(run.output, "ORBIFY_SIM_HEAP t=w2000")
     after(tail, "waiting for heap")
     after(tail, "Sleep sync over")
@@ -192,8 +223,8 @@ def heap_floor_waits(ctx: Context, tmp: Path) -> None:
 @scenario(*X4S)
 def next_cover_heap_floor(ctx: Context, tmp: Path) -> None:
     """X9: the End-of-Book page's next cover. A sync on its own connection fetches it only with
-    42 KB free (and a 20 KB block on the X3, 8 KB on the X4s); under that it is left for the next
-    sync. The sleep sync then fetches it on the connection it lends and decodes it with the radio
+    42 KB free and a 20 KB block on the X3, 20 KB and 4 KB on the X4s (wolfSSL in PSRAM, patch 0038);
+    under that it is left for the next sync. The sleep sync then fetches it on the connection it lends and decodes it with the radio
     off (patches 0036, 0037)."""
     card = ctx.card(tmp)
     path = card.add_book(ctx.source("eob_series_middle"))
@@ -201,7 +232,7 @@ def next_cover_heap_floor(ctx: Context, tmp: Path) -> None:
     card.open_book(path)
     card.progress(path, 4, 0, 1)
     tight = ctx.sim.run(card, "sync-tight", script="3000:POWER:120", timeout_s=60, choice="upload",
-                        env={"ORBIFY_SIM_HEAP": "w0:41000/30000"})
+                        env={"ORBIFY_SIM_HEAP": "w0:20200/30000"})
     after(tight.output, "Series card")
     after(tight.output, "Next cover: left for the next sync")
     roomy = sleep_sync(ctx, card, "sleep")
@@ -250,7 +281,7 @@ def eob_series_home_swipe(ctx: Context, tmp: Path) -> None:
     path = open_at_end(ctx, card, "eob_series_middle")
     card.open_book(path)
     sync = ctx.sim.run(card, "sync", script="3000:POWER:120", timeout_s=60, choice="upload")
-    after(sync.output, "series 'Harbor Lights' #2 of 4")
+    after(sync.output, "series 'Harbor Lights' #2 (")
     card.open_book(path, asleep=True)
     run = ctx.sim.run(card, "end", script="3000:RIGHT:120;6000:SWIPE:0.5,0.995,0.5,0.55,300;9000:QUIT",
                       timeout_s=30, wake=True, screenshots={5000: "x4-pro-end-page-series", 8000: "x4-pro-after-swipe"})
@@ -277,6 +308,26 @@ def sleep_sync_power_wake(ctx: Context, tmp: Path) -> None:
     at = int(woke.group(1) or woke.group(2))
     assert at < 3000 + 600 + 4000, f"woken {at} ms into the sleep-sync boot, the press was at 3000 ms"
     after(sync[woke.end():], "Wake route: PowerButton")
+
+
+@scenario(*X4S)
+def sleep_sync_quick_wake(ctx: Context, tmp: Path) -> None:
+    """X1, the press the sync can answer (X4 Pro, .167: every wake restarted from the watcher,
+    "not answered within 2000 ms", 0.6 s after the press). The watcher recorded the press and
+    checked its deadline in the same tick; on an even millisecond the press read as ~49 days old.
+    Now the sync answers between its steps and the next boot logs the press-to-screen time."""
+    card = ctx.card(tmp)
+    path = card.add_book(ctx.source("Standalone 05"))
+    card.open_book(path)
+    ctx.faults([{"match": {}, "action": "delay", "ms": 400}])
+    card.sync_on_sleep()
+    run = ctx.sim.run(card, "sleep", script="2500:POWER:120", after_reboot="2600:POWER:120", timeout_s=20)
+    sync = after(run.output, "Sleep sync starting")
+    assert "Wake press not answered" not in sync, "the watcher restarted before the sync could answer"
+    answered = after(sync, "Wake press answered by the sync")
+    woke = re.search(r"Wake: (\d+)ms from press to screen", answered)
+    assert woke, "the wake boot did not log its press-to-screen time"
+    assert int(woke.group(1)) < 15000, f"press to screen took {woke.group(1)} ms"
 
 
 @scenario("x4-pro")
@@ -308,6 +359,113 @@ def home_tile_refresh(ctx: Context, tmp: Path) -> None:
     run = ctx.sim.run(card, "hold", script="3000:DOWN:120;4500:CONFIRM:1300", timeout_s=40)
     tail = after(run.output, "Home: Full refresh asked for from the sync tile")
     after(tail, "Mirror: saved for offline")
+
+
+@scenario("x4-pro")
+def home_tile_touch(ctx: Context, tmp: Path) -> None:
+    """X8 by touch (X4 Pro, .167: a hold did nothing, a tap failed, a slow tap started a Full
+    refresh). A tap held 700 ms (past the SDK's 500 ms long press) is still a refresh; a 1.3 s hold
+    is a Full refresh. Each restart's popup names it before the restart."""
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    shot = ctx.sim.run(card, "home", script="4000:QUIT", timeout_s=10, screenshots={3000: "x4-pro-home"})
+    x, y = home_tile(shot.output, "sync")
+    tap = ctx.sim.run(card, "tap", script=f"3000:TAP:{x},{y},700", timeout_s=14)
+    after(tap.output, "Home: refresh asked for from the sync tile")
+    assert "Full refresh asked for" not in tap.output, "a 700 ms tap started a Full refresh"
+    hold = ctx.sim.run(card, "hold", script=f"3000:TAP:{x},{y},1300", timeout_s=40)
+    after(hold.output, "Home: Full refresh asked for from the sync tile")
+    assert "Home: refresh asked for from the sync tile" not in hold.output, "the hold was also a tap"
+
+
+def home_tile(output: str, which: str) -> tuple[int, int]:
+    """The centre of a BookOrbit Home tile, from the Home's log ("sync" or "catalog")."""
+    tile = re.search(rf"BookOrbit Home: {which} tile at (\d+),(\d+) (\d+)x(\d+)", output)
+    assert tile, f"the Home did not log its {which} tile"
+    return int(tile.group(1)) + int(tile.group(3)) // 2, int(tile.group(2)) + int(tile.group(4)) // 2
+
+
+STAMP = re.compile(r"\[(\d+)\] \[INF\] \[BookOrbit\] Catalog stamp '([^']*)' at (\d+),(\d+) (\d+)x(\d+); "
+                   r"refresh control at (\d+),(\d+)")
+
+
+@scenario("x4-pro")
+def catalog_refresh_stamp(ctx: Context, tmp: Path) -> None:
+    """The catalog's ⟳ (X4 Pro, .167: the log had "Refresh of view 1" and "Refresh done", the screen
+    neither "Refreshing…" nor "updated just now"). The stamp went to the header band's right edge,
+    under the ⟳ and the battery; it is drawn left of the controls now. The screenshots taken while
+    the refresh runs and after it must show it there."""
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
+    ctx.sim.run(card, "seed", script=f"3000:TAP:{sx},{sy}", timeout_s=30)  # the Home's snapshot: its Library page
+    first = ctx.sim.run(card, "library", script="3000:SWIPE:0.8,0.5,0.2,0.5,250;5000:QUIT", timeout_s=10)
+    cx, cy = home_tile(first.output, "catalog")
+    opened = ctx.sim.run(card, "open", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};14000:QUIT", timeout_s=20)
+    stamp = STAMP.search(opened.output)
+    assert stamp, "the catalog logged no stamp"
+    rx, ry = int(stamp.group(7)), int(stamp.group(8))
+    # Each catalog request waits 2 s at the proxy: the refresh is on screen long enough to see.
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 2000}])
+    # The simulator presents (and screenshots) only from its main loop, which the refresh holds:
+    # a screenshot cannot catch "Refreshing…" mid-fetch, and shots due during the fetch are all
+    # saved at once when it ends. So "Refreshing…" is judged from the log (drawn before the first
+    # request, on screen while they run) and the screenshots, taken well after the refresh and
+    # well before the QUIT, check the final stamp's ink.
+    shots = {ms: f"x4-pro-catalog-{ms}" for ms in range(26000, 30001, 1000)}
+    run = ctx.sim.run(card, "refresh", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};14000:TAP:{rx},{ry};40000:QUIT",
+                      timeout_s=75,
+                      screenshots=shots)
+    refresh = after(run.output, "Catalog: Refresh of view")
+    stamps = [(int(m.group(1)), m.group(2), *map(int, m.groups()[2:6])) for m in STAMP.finditer(refresh)]
+    busy = next((s for s in stamps if s[1].lower().startswith("refreshing")), None)
+    assert busy, f"the stamp never read 'Refreshing…' after the tap: {[s[1] for s in stamps]}"
+    first_get = re.search(r"\[(\d+)\] \[DBG\] \[HTTP\] \S+ GET: \S+/plugin/catalog/", refresh)
+    assert first_get and busy[0] <= int(first_get.group(1)), "'Refreshing…' was not drawn before the first request"
+    done = after(refresh, "Catalog: Refresh done")
+    final = [s for s in STAMP.finditer(done)]
+    assert final and final[-1].group(2).lower().startswith("updated just now"), \
+        f"the stamp after the refresh: {[m.group(2) for m in final]}"
+    at, _, x, y, w, h = int(final[-1].group(1)), final[-1].group(2), *map(int, final[-1].groups()[2:6])
+    later = [ms for ms in sorted(shots) if ms >= at + 300]
+    assert later, f"no screenshot after the final stamp was drawn at {at} ms"
+    shot = card.root / "shots" / f"x4-pro-catalog-{later[-1]}.bmp"
+    assert shot.exists(), f"the simulator saved no screenshot at {later[-1]} ms"
+    dark = dark_pixels(shot.read_bytes(), x, y, w, h)
+    assert dark > w // 4, f"'updated just now' is not on screen at {x},{y} ({dark} dark pixels)"
+
+
+@scenario("x4-pro")
+def catalog_cache_first(ctx: Context, tmp: Path) -> None:
+    """Cache-first catalog (the user's rule, .167): with a saved copy that is not stale, opening the
+    catalog brings no Wi-Fi up and asks the server nothing; ⟳ is what goes to the network. Before,
+    every open joined Wi-Fi first, even offline with Tailscale off."""
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
+    full = ctx.sim.run(card, "full", script=f"3000:TAP:{sx},{sy},1300", timeout_s=60)
+    after(full.output, "Mirror: saved for offline")
+    first = ctx.sim.run(card, "library", script="3000:SWIPE:0.8,0.5,0.2,0.5,250;5000:QUIT", timeout_s=10)
+    cx, cy = home_tile(first.output, "catalog")  # on the Library page
+    before = len(ctx.requests())
+    run = ctx.sim.run(card, "open", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};10000:QUIT", timeout_s=16)
+    after(run.output, "Catalog: opening from the cache, no Wi-Fi")
+    asked = ctx.requests()[before:]
+    assert not asked, f"opening a cached catalog asked the server: {[e['path'] for e in asked][:5]}"
+    assert "STA event: connected" not in run.output, "opening a cached catalog joined Wi-Fi"
+
+
+@scenario("x4-pro")
+def menu_home_swipe(ctx: Context, tmp: Path) -> None:
+    """On the BookOrbit Home's menu (Settings, BookOrbit, ...), a Home swipe goes to the BookOrbit
+    Home and stays there (X4 Pro, .167: it flashed the Home and reopened the menu). Back does the
+    same from the buttons."""
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    run = ctx.sim.run(card, "swipe", script="3000:SWIPE:0.5,0.6,0.5,0.3,250;5000:SWIPE:0.5,0.995,0.5,0.55,300;8000:QUIT",
+                      timeout_s=14, screenshots={4500: "x4-pro-menu", 7500: "x4-pro-menu-home-swipe"})
+    tail = after(run.output, "Home swipe on the menu: back to Home")
+    assert "Home: menu opened" not in tail, "the Home swipe reopened the menu"
 
 
 @scenario(*X4S)
