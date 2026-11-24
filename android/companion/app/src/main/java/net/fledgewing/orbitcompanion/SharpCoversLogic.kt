@@ -45,7 +45,7 @@ object SharpCoversLogic {
     fun apiBase(server: String): String? {
         val s = server.trim().trimEnd('/')
         if (!Regex("^https?://[^/?#]+.*$").matches(s)) return null
-        val base = s.removeSuffix("/koreader")
+        val base = s.removeSuffix("/koreader") // orbify:not-a-route: a base-URL suffix the plugin may keep, not a call
         return if (base.endsWith("/api/v1")) base else "$base/api/v1"
     }
 
@@ -57,7 +57,8 @@ object SharpCoversLogic {
 
     /** The token's shape at the pin: `<userId>.<32 hex>` (createCoverToken). */
     private val TOKEN = Regex("^\\d+\\.[0-9a-fA-F]{16,128}$")
-    private val IMAGE_LINK = Regex("""/opds/\d+/(?:cover|thumbnail)\?t=([^"'&<\s]+)""")
+    // orbify:not-a-route: a pattern for the feed's image links; the cover route is called in coverUrl.
+    private val IMAGE_LINK = Regex("""/opds/\d+/(?:cover|thumbnail)\?t=([^"'&<\s]+)""") // orbify:not-a-route
 
     /** The cover token from a feed's image links (B opds.service.ts:205), or null. */
     fun tokenFromFeed(xml: String): String? = IMAGE_LINK.findAll(xml).map { m ->
