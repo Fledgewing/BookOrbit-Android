@@ -131,6 +131,37 @@ local function normServer(s)
 end
 
 -- r: { account, server, method, path, query }. path may carry its own "?query".
+-- FNV-1a, 32 bits, as hex: an entry's file name (the companion's MirrorLogic.hash is the same,
+-- shared/fixtures/cache/worker.json).
+function Cache.hash(s)
+    local bit = require("bit")
+    local h = 2166136261
+    for i = 1, #s do
+        h = bit.bxor(h, s:byte(i))
+        h = bit.tobit(h * 16777619 % 4294967296)
+    end
+    return string.format("%08x", h % 4294967296)
+end
+
+-- A book's cover file name in the plugin's thumbnail folder (bookorbit_catalog_thumbnails.lua:61-85
+-- coverToken, normalizedBookId, memoKey), or nil. The companion saves covers under the same name
+-- (CacheWorker.coverPath; shared/fixtures/cache/worker.json "covers").
+function Cache.coverName(book)
+    local id = type(book) == "table" and book.id
+    if type(id) ~= "number" or id ~= math.floor(id) or id < 1 or id > 2147483647 then return nil end
+    local token = book.updatedAt and tostring(book.updatedAt):gsub("%D", "") or "0"
+    if #token > 32 then token = token:sub(1, 16) .. token:sub(-16) end
+    if token == "" then token = "0" end
+    return (book.author_photo and "a" or "") .. string.format("%.0f", id) .. "_" .. token .. ".jpg"
+end
+
+-- 8551 -> "8,551" (the Full refresh indicator).
+function Cache.count(n)
+    local s = tostring(math.floor(tonumber(n) or 0))
+    local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+    return (out:gsub("^,", ""))
+end
+
 function Cache.key(r)
     local path, q = splitPath(r.path)
     local query = Cache.parseQuery(q)

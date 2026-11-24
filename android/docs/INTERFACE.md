@@ -31,8 +31,10 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `STATS` | `seq`, `period_s`, `pages`, `full`, `partial`, `content` (`text`/`comic`/`webtoon`/`pdf`/`none`), `open` (`1`/`0`), `reading_min`, `wifi_mode`, `reading_schedule`, `reason`; plugin 0.11.1+: `reading` (`1` = a book open in front, not BookOrbit Home or a list over it; `0` on `close`/`suspend`) | Battery stats batch: store the counts with the current state; a book is "in front" while `open=1` (at most 6 min). `reading` drives the companion's reading gate (docs/design/reading-gate.md); without it, `open` and `resume`/`suspend` do. Sent every 5 min with a book open, on open/Resume/Suspend/close, never per page (docs/design/STATS-DESIGN.md). |
 | `SETUP_LATER` | none | The setup box's "Later" in KOReader: the companion's own Later (quiet until an update or a step stops working). Companion 0.4.1+. |
 | `RELAUNCH` | `reason` (`restart`) | The patch is quitting for a restart (COMMAND `restart`, or from 0.5.0 by itself for a newer patch file on disk, DESIGN "One update"): start KOReader again after 2.5 s. Patch 0.3.1+. |
-| `REPORT` | `signed_in` (`"1"`/`"0"`), `recommended` (`none`/`partial`/`reviewed`/`applied`), `conflicts` (a count), `reason` | Companion 0.11.0+: one yes/no about the BookOrbit login and the recommended settings' state, for its Setup rows "Signed in to BookOrbit" and "Recommended settings". Never the server, the account or the key; other extras are ignored. Sent at start, after a recommended pass and when either value changes. Needs no service. |
+| `REPORT` | `signed_in` (`"1"`/`"0"`), `recommended` (`none`/`partial`/`reviewed`/`applied`), `conflicts` (a count), `reason` | Companion 0.11.0+: one yes/no about the BookOrbit login and the recommended settings' state, for its Setup rows "Signed in to BookOrbit" and "Recommended settings". Never the server, the account or the key (those go only with `MIRROR` and `CHECK`); other extras are ignored. Sent at start, after a recommended pass and when either value changes. Needs no service. |
 | `SLEEP_POOL` | `reason`, `wake` | Companion cap `sleep_screen`: the files in `koreader/settings/orbit-sleep/` changed (below). The picture sink redraws `Pictures/Orbit/sleep.png`; the screen saver reads them at the next sleep. With `wake` = `"1"` (reason `wake`): KOReader resumed after a real sleep (the screen went off, not an app switch); with Every sleep the picture moves on for the next sleep, once per wake (the service's screen-on counts as the same wake). Needs no service. |
+| `MIRROR` | `reason`, `server`, `user`, `userkey` | Cap `cache_worker` (docs/design/companion-worker.md): run the offline mirror from `koreader/settings/orbit-cache/mirror/plan.lua` on the cache worker thread (below). The login is used only as `x-auth-user`/`x-auth-key` on requests to `server`, held in memory, never written or logged. A new `MIRROR` replaces a waiting one. Needs no service. |
+| `CHECK` | `reason`, `cache_key`, `path`, `mode` (`open`/`refresh`/`full`), `owner`, `server`, `user`, `userkey` | Cap `cache_worker`: ask `server` for `path`, compare with what the plugin would serve under `cache_key` (its entry, else the mirror's pages), save a changed reply and answer with an event (below). Checks go before mirror jobs. Needs no service. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
 
 `reason` values: `start` (KOReader just started; on firmwares that stop KOReader after sleep,
@@ -74,6 +76,29 @@ only reads, except `state.json`.
 
 `GET /status` and the status file carry the sleep keys in `settings` and
 `"sleep": {"shown_by": "…", "sink": "dream"|"picture"}`.
+
+## The cache worker's files (cap `cache_worker`)
+
+In `koreader/settings/orbit-cache/` (docs/design/companion-worker.md). Every file is a Lua literal
+in the cache's format (`Cache.encode`; `LuaValue.kt` reads and writes the same), written to a
+temp file and renamed. None holds the login. Keys, file names, list pages and cover names follow
+`shared/fixtures/cache/worker.json`, which both sides' tests check.
+
+| File | Written by | Holds |
+|---|---|---|
+| `index.lua`, `<hash>.lua` | plugin (and the companion for a changed `CHECK`) | the plugin's own cache: the index and its entries `{key, body, fetched_at, validated_at, path}`; the companion reads the index for the lists to save |
+| `events/<n>.lua` | companion | a check's answer: `{kind = "checked", key, changed, bytes, ids, at}`, `{…, unchanged, saved}` or `{…, err}` |
+| `mirror/plan.lua` | plugin, before each `MIRROR` | `run`, `op` (`full`/`resume`/`revalidate`/`covers`), `reason`, `owner`, `lib_version`, `sentinel`, `templates` (per section: `path`, `series_name_path`), `detail_template`, `sections`, `seed_lists`, `seed_details`, `legacy`, `legacy_lists`, `cover_dir`, `covers_on`, `limit`, `base_kept`, `base_mirror_cover` |
+| `mirror/<hash>.lua` | companion | the mirror's pages and details, in the entry format |
+| `mirror/status.lua` | companion, every 5 s and at the end | `{v = 3, runner, run, running, beat, op, at, lib_version, done, total, left, skipped, covers, cover_total, limit_note, revalidating, bytes, cover_keep_n, started_at}` |
+| `mirror/summary.lua` | companion, at the end of a run | `{run, why (finished/stopped/no answer/busy), jobs, status, changed, written, written_more, saved, revalidated, bytes_delta, cover_bytes_delta}` |
+| `mirror/cover_keep.lua` | companion | the cover names "Save every cover for offline" keeps, for the plugin's pruner |
+| `mirror/worker-state.lua` | companion | private: its queue, lists, sizes |
+| `mirror/stop` | plugin | stop the run after the job in hand |
+| covers, in the plugin's thumbnail folder | companion | `<memoKey>.jpg` and `.etag`, as the plugin names them |
+
+The plugin needs the companion of its own version for any of this (`Companion.workerProblem`):
+otherwise it shows "Orbit Companion needed" or "Update Orbit Companion" and sends nothing.
 
 ## Patch → companion: activities
 
@@ -275,7 +300,7 @@ atomically whenever its mode, caps or setup state change (only if a `koreader/` 
     {"proto":"1","version":"0.11.0","mode":"addon","caps":["install","setup","stats","relaunch"],
      "setup_prompt":{"key":"…","rows":["…"]},"setup_needed":1,"written_at":…}
 
-`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always), `sleep_screen` (always, from the sleep screen's release; an older companion never offers it, so the plugin hides the menu); `home`,
+`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always), `sleep_screen` (always, from the sleep screen's release; an older companion never offers it, so the plugin hides the menu), `cache_worker` (always, from the cache worker's release); `home`,
 `apps` (Full); `wifi`, `sleep_sync`, `screen_off`, `clicker`, `pin` (Full, or Add-on with that
 helper on; `screen_off` also needs the lock-screen permission). The plugin reads `/status` first,
 then the file; a companion that answers `/status` without `caps` is older and offers everything.
@@ -320,7 +345,10 @@ answers come back through the launch intent or the loopback status, never as bro
 ## Security
 
 The broadcasts are not authenticated: any app on the device could ask the companion to turn
-Wi-Fi on, hold a wake lock (25 s cap) or lock the screen. That is acceptable on a
+Wi-Fi on, hold a wake lock (25 s cap), lock the screen, or save a server of its choosing into
+`koreader/settings/orbit-cache/` (`MIRROR`, `CHECK`; any app with storage access can write there
+anyway). The BookOrbit login travels only from KOReader to the companion's package in an explicit
+broadcast, which no other app receives. That is acceptable on a
 single-user e-reader. Android 14 only reveals the sender when the sender opts in, so the
 companion should simply bound what each action can do (the wake-lock cap, at most one
 `SLEEP_NOW` per few seconds).

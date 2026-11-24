@@ -128,6 +128,17 @@ end
 
 table.sort(missing)
 print("BookOrbit plugin " .. version)
+-- The companion's cache worker (docs/design/companion-worker.md) asks with the client's login and
+-- saves covers under the plugin's own cover names (Cache.coverName, CacheWorker.coverName).
+local api = src[dir .. "/bookorbit_api.lua"] or ""
+has(api, '["x-auth-user"] = self.username', "client.username as x-auth-user")
+has(api, '["x-auth-key"] = self.userkey', "client.userkey as x-auth-key")
+has(api, "server_url = forkSafeServerUrl(opts.server_url)", "client.server_url")
+local thumbs = src[dir .. "/bookorbit_catalog_thumbnails.lua"] or ""
+has(thumbs, 'local token = tostring(value):gsub("%D", "")', "coverToken: updatedAt's digits")
+has(thumbs, 'token = token:sub(1, 16) .. token:sub(-16)', "coverToken: 16 + 16 digits")
+has(thumbs, 'return (book.author_photo and "a" or "") .. id .. "_" .. coverToken(book)', "memoKey")
+has(src[dir .. "/bookorbit_toast.lua"] or "", "function Toast.dismiss()", "Toast.dismiss")
 if #missing == 0 then
     print("all hooked symbols present")
     os.exit(0)

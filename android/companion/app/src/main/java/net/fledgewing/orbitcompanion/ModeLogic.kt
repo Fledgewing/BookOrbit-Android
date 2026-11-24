@@ -25,7 +25,7 @@ data class Helpers(
 
 object ModeLogic {
     /** Every mode: installs and updates, the setup rows, stats, a restart finished by the companion. */
-    val BASE = listOf("install", "setup", "stats", "relaunch", "sleep_screen")
+    val BASE = listOf("install", "setup", "stats", "relaunch", "sleep_screen", Worker.CAP)
 
     /** Before a mode is chosen, the companion behaves as Full (today's Orbify). */
     fun effective(mode: OrbitMode?): OrbitMode = mode ?: OrbitMode.FULL
@@ -86,7 +86,8 @@ object ModeLogic {
 
 /**
  * The Orbit plugin's REPORT (§7.3): one yes/no about the BookOrbit login and the recommended
- * settings' state. The companion never learns the server, the account or the key.
+ * settings' state. A REPORT never carries the server, the account or the key (only MIRROR and CHECK do,
+ * for the cache worker, which keeps them in memory: Worker.kt).
  */
 object PluginReport {
     /** The extras the companion keeps; anything else in a REPORT is ignored. */
