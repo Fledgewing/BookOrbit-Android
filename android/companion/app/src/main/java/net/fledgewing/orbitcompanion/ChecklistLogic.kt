@@ -23,6 +23,7 @@ object Checklist {
         "patch" to Group.APPS,
         "signed_in" to Group.BOOKORBIT,
         "recommended" to Group.BOOKORBIT,
+        "sharp_covers" to Group.BOOKORBIT,
         "home" to Group.PERMISSIONS,
         "install_updates" to Group.PERMISSIONS,
         "notifications" to Group.PERMISSIONS,
@@ -40,7 +41,7 @@ object Checklist {
 
     /** Needs you order (§3.1): what blocks the most first (a frozen app, installs, sign-in), then group order. */
     val NEED_ORDER = listOf(
-        "disabled", "install_updates", "koreader", "plugin", "patch", "signed_in", "recommended",
+        "disabled", "install_updates", "koreader", "plugin", "patch", "signed_in", "recommended", "sharp_covers",
         "home", "notifications", "battery", "admin", "clicker", "keyboard", "tailscale", "wifi_test",
     )
 
@@ -55,6 +56,7 @@ object Checklist {
         "plugin" to "no library, no sync.",
         "patch" to "new fixes don't reach KOReader.",
         "signed_in" to "nothing syncs.",
+        "sharp_covers" to "sleep-screen covers come from the small thumbnail and look soft.",
         "recommended" to "KOReader keeps settings that work against syncing. Nothing changes until you choose.",
         "home" to "Home doesn't open your book.",
         "install_updates" to "Orbit can't install KOReader or update itself; updates are a download link.",

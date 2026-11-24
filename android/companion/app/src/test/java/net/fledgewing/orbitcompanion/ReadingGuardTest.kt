@@ -44,6 +44,7 @@ class ReadingGuardTest {
         Site("Attention.kt", "startActivity(Intent(this, SetupBatteryActivity", 1, "the prompt: the user tapped Help on the Battery row"),
         Site("ChecklistUi.kt", "ctx.startActivity(Intent(ctx, SetupDetailsActivity", 1, "Setup: the user tapped Details"),
         Site("SleepPages.kt", "startActivity(Intent(this, SleepPreviewActivity", 1, "Sleep screen › Preview: the user's tap"),
+        Site("SharpCovers.kt", "a.startActivity(Intent(a, SleepScreenActivity", 1, "Setup: the user tapped Sign in again on the sharp covers row"),
         Site("Pages.kt", "PinActivity.Mode.SET", 2, "Settings: the user sets a PIN"),
         Site("Pages.kt", "PinActivity.thenInstall(this", 1, "Status: the user tapped Install on a ready update"),
     )
