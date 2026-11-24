@@ -243,7 +243,7 @@ object UpdatePolicy {
 
     /** The newest usable release: never a draft, a pre-release only when asked for. */
     fun pick(releases: List<ReleaseInfo>, includePre: Boolean): ReleaseInfo? =
-        releases.filter { !it.draft && (includePre || !it.prerelease) && it.version != null }
+        releases.filter { !it.draft && (includePre || !it.prerelease) && it.version != null && !TestBuild.isTest(it.version) }
             .maxWithOrNull(compareBy { it.version!! })
 
     fun isNewer(candidate: Version?, current: Version?): Boolean =
@@ -291,6 +291,21 @@ object UpdateSession {
     fun failureLine(status: Int, message: String?, version: String): String =
         if (status == STATUS_ABORTED || message?.contains("INSTALL_FAILED_ABORTED") == true) CANCELLED
         else "v$version install failed ($status${if (message != null) ": $message" else ""})"
+}
+
+/**
+ * A test build (release.yml run with publish off, sideloaded by tools/sideload-android.sh):
+ * `<next patch>-0.test.<run>`, e.g. 0.11.3-0.test.42 after v0.11.2. It is never published, so no
+ * updater ever sees it; and it sorts above the release it was built after but below every
+ * release or pre-release of the next patch (a numeric "0" sorts before "rc", "beta", ...), so
+ * the device leaves it for the next real release.
+ */
+object TestBuild {
+    const val PRE_PREFIX = "0.test."
+
+    fun isTest(v: Version?): Boolean = v?.pre?.startsWith(PRE_PREFIX) == true
+
+    fun isTest(versionName: String?): Boolean = isTest(Version.parse(versionName))
 }
 
 /** `sha256sum` output: "<64 hex>  name" or "<64 hex> *name" per line. Bad lines are skipped. */
@@ -343,30 +358,61 @@ object AppStates {
 }
 
 /**
- * The "Battery: Unrestricted (app)" setup row. PowerManager.isIgnoringBatteryOptimizations is true
- * only for the power-save allowlist; an app Android exempts another way reads false although
- * nobody can restrict it. On a Boox Page (v0.11.2) Orbit, as an active device admin, showed
- * "Battery optimization not available" and "Background usage can't be restricted" in Settings
- * (Settings' PowerAllowlistBackend counts active admins as allowlisted, and app standby exempts
- * them), yet the row stayed "not done". Such an app is met, with why on its sub-line.
+ * The "Battery: Unrestricted (app)" setup row, read from the settings that can break the app
+ * (AOSP android11-release):
+ *
+ * - Background restriction: the RUN_ANY_IN_BACKGROUND app-op (Settings'
+ *   BackgroundActivityPreferenceController:119-127); for Orbit, ActivityManager.isBackgroundRestricted.
+ * - Doze: only the deviceidle allowlist exempts an app (DeviceIdleController:2449-2453).
+ *   isIgnoringBatteryOptimizations reads exactly that list (PowerManager:1803,
+ *   PowerWhitelistManager:133-134).
+ * - App Standby: the RARE and RESTRICTED buckets defer jobs and alarms (Orbit's own bucket only).
+ *
+ * An active device admin is NOT on the deviceidle list: DeviceIdleController has no admin rule, only
+ * App Standby exempts it (AppStandbyController:1108-1109). Settings still shows such an app as
+ * "Battery optimization not available" and "Background usage can't be restricted"
+ * (SettingsLib PowerWhitelistBackend:79-81, 100-101), so Doze can defer it while Settings offers
+ * no switch. That was Orbit on a Boox Page (v0.11.2): the row then says Settings can't change it
+ * and names what can: Android's own "Allow" prompt (RequestIgnoreBatteryOptimizations:67-106,
+ * which doesn't check for an admin), or `tools/install-usb.sh`, whose
+ * `dumpsys deviceidle whitelist +pkg` is kept across reboots (DeviceIdleController:2261, saved to
+ * deviceidle.xml, :1958, read back at boot, :3720). Met only once the allowlist says so.
  */
 object BatteryRow {
-    /** UsageStatsManager.STANDBY_BUCKET_EXEMPTED (hidden constant): never restricted. */
-    const val BUCKET_EXEMPTED = 5
+    /** UsageStatsManager.STANDBY_BUCKET_RARE and STANDBY_BUCKET_RESTRICTED (API 30). */
+    const val BUCKET_RARE = 40
+    const val BUCKET_RESTRICTED = 45
 
-    data class Row(val done: Boolean, val detail: String)
+    const val FIX = "set App battery usage › Unrestricted"
+    const val LOCKED = "this reader won't let you change it in Settings: tap Open for Android's Allow prompt, or run tools/install-usb.sh over USB"
+    const val LOCKED_OTHER = "this reader won't let you change it in Settings: run tools/install-usb.sh over USB"
+
+    /** Where Open goes: Android's "Allow" prompt (Orbit only) or the app's battery page. */
+    enum class Open { PROMPT, BATTERY_PAGE }
+
+    data class Row(val done: Boolean, val detail: String, val open: Open = Open.BATTERY_PAGE)
 
     /**
-     * [ignoring]: isIgnoringBatteryOptimizations. [activeAdmin]: the package has an active device
-     * admin. [standbyBucket]: its app standby bucket where Android lets us read it (our own
-     * package only), else null.
+     * [own]: the row is Orbit's. [backgroundRestricted]: RUN_ANY_IN_BACKGROUND denied, null when
+     * Android won't say. [idleAllowlisted]: isIgnoringBatteryOptimizations. [standbyBucket]: Orbit's
+     * bucket where readable, else null. [settingsLocked]: Settings shows the app as "not
+     * available" (an active device admin), so its battery page has no switch to flip.
      */
-    fun of(installed: Boolean, ignoring: Boolean, activeAdmin: Boolean, standbyBucket: Int?): Row = when {
+    fun of(
+        installed: Boolean,
+        own: Boolean,
+        backgroundRestricted: Boolean?,
+        idleAllowlisted: Boolean,
+        standbyBucket: Int?,
+        settingsLocked: Boolean,
+    ): Row = when {
         !installed -> Row(false, "not installed")
-        ignoring -> Row(true, "done")
-        activeAdmin -> Row(true, "exempt (device admin): can't be restricted on this reader")
-        standbyBucket == BUCKET_EXEMPTED -> Row(true, "exempt (system): can't be restricted on this reader")
-        else -> Row(false, "set App battery usage › Unrestricted")
+        backgroundRestricted == true -> Row(false, "background usage is restricted: $FIX")
+        !idleAllowlisted && settingsLocked -> if (own) Row(false, LOCKED, Open.PROMPT) else Row(false, LOCKED_OTHER)
+        !idleAllowlisted -> Row(false, FIX, if (own) Open.PROMPT else Open.BATTERY_PAGE)
+        standbyBucket == BUCKET_RARE || standbyBucket == BUCKET_RESTRICTED ->
+            Row(false, "Android is holding Orbit back (rarely used): open Orbit, then $FIX")
+        else -> Row(true, "done")
     }
 }
 

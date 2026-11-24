@@ -277,11 +277,15 @@ class ChecklistLogicTest {
         assertTrue(r.done)
         assertEquals("Unrestricted for KOReader · set by the reader for Orbit", r.stateLine)
         assertTrue(BatteryMerge.row(listOf(orbit)).setByReader)
-        // Locked the wrong way: Needs you, with Help instead of a verb (§3.4).
-        val wrong = BatteryMerge.App("Orbit", BatteryRow.Row(false, "x"), locked = true)
+        // Locked the wrong way: Needs you, with Help instead of a verb (§3.4)…
+        val wrong = BatteryMerge.App("KOReader", BatteryRow.Row(false, BatteryRow.LOCKED_OTHER), locked = true)
         assertEquals(BatteryMerge.AppState.LOCKED_WRONG, BatteryMerge.state(wrong))
         assertEquals("Help", BatteryMerge.row(listOf(wrong)).verb)
-        assertEquals("Orbit: can't be changed in Settings on this reader", BatteryMerge.row(listOf(wrong)).stateLine)
+        assertEquals("KOReader: can't be changed in Settings on this reader", BatteryMerge.row(listOf(wrong)).stateLine)
+        // …unless Android's own Allow prompt can change it (Orbit, BatteryRow.Open.PROMPT).
+        val prompt = BatteryMerge.App("Orbit", BatteryRow.Row(false, BatteryRow.LOCKED, BatteryRow.Open.PROMPT), locked = true)
+        assertEquals("Allow", BatteryMerge.appVerb(prompt))
+        assertEquals("Fix", BatteryMerge.row(listOf(prompt)).verb)
     }
 
     // New in (§3.8, D14)

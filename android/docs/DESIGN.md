@@ -567,7 +567,7 @@ uninstalled until the approval is revoked.
 | Gesture for it | Hold top-right = Sync and sleep; hold top-left = Sync now; swipe up = This book | Both stay one gesture away; KOReader tap defaults kept |
 | Wi-Fi after sleep | "Off after 30 min" default (keep on / 30 min / off now), only while the screen is still off | Fresh sync beats battery |
 | Plugin options | Further ahead → Silent; further behind → Don't sync; Auto-sync on; BookOrbit home | Already decided |
-| Tailscale keep-alive | Battery Unrestricted (Tailscale, companion, KOReader); Always-on VPN with block-non-VPN off; deviceidle allowlist only if the survey shows Doze kills it; TailSocks last | Stop at the first that works |
+| Tailscale keep-alive | Battery Unrestricted (Tailscale, companion, KOReader), checked as: background not restricted, on the deviceidle allowlist, Orbit not in a RARE/RESTRICTED bucket (companion `BatteryRow`); where Settings shows "not available" (a device admin), Android's Allow prompt or `tools/install-usb.sh` adds it; Always-on VPN with block-non-VPN off; TailSocks last | Device admin exempts App Standby only, not Doze (AOSP android11 `AppStandbyController`:1108, `DeviceIdleController`:2449) |
 | Home button | Shows the launcher page; KOReader auto-opens only at boot | Other apps stay reachable |
 | Failure UI | Patch banner on wake; "Syncing…"/failed message for Sync and sleep; companion notifications only for network faults | Sync state belongs to the plugin and shows in its Sync status page |
 

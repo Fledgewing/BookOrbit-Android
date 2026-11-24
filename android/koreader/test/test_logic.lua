@@ -188,6 +188,21 @@ local rels = {
 }
 test("pick: newest stable by default", function() eq(Update.pick(rels, false).tag_name, "v0.2.0") end)
 test("pick: pre-releases when asked", function() eq(Update.pick(rels, true).tag_name, "v0.3.0-rc.1") end)
+test("version: a test build yields to the next release and is never picked", function()
+    local t = "0.11.3-0.test.42"
+    eq(Update.isTest(t), true)
+    eq(Update.isTest("0.11.3-rc.1"), false)
+    eq(Update.isTest("0.11.3"), false)
+    eq(Update.isTest("0.0.0-dev"), false)
+    eq(cmp("0.11.2", t), -1)
+    eq(cmp("0.11.3", t), 1)
+    eq(cmp("0.11.3-rc.1", t), 1)
+    eq(cmp("0.11.3-alpha", t), 1)
+    local list = { { tag_name = "v0.11.3-0.test.42" }, { tag_name = "v0.11.2" },
+        { tag_name = "v0.11.4-0.test.1", prerelease = true } }
+    eq(Update.pick(list, false).tag_name, "v0.11.2")
+    eq(Update.pick(list, true).tag_name, "v0.11.2")
+end)
 test("pick: nothing usable", function() eq(Update.pick({ { tag_name = "v1.0.0-rc.1", prerelease = true } }, false), nil) end)
 -- shared/fixtures/github/orbify-releases.json: Android and firmware releases in one list.
 local JSON = dofile(here .. "/json_mini.lua")

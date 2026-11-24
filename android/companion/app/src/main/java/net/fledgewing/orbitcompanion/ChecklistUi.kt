@@ -288,7 +288,8 @@ class SetupBatteryActivity : EinkActivity() {
             val item = Checklist.Item(row, state, Checklist.Group.PERMISSIONS, skipped = state == State.OFF, regressed = false, newIn = null)
             if (st == BatteryMerge.AppState.NEEDS_YOU && firstSet == null) firstSet = app.name
             root.addView(ChecklistUi.itemRow(this, item, locked, onVerb = {
-                if (st == BatteryMerge.AppState.LOCKED_WRONG) Ui.note(this, "${app.name}: ${app.row.detail}") else c.run(this)
+                // Help: what can change it where Settings can't (BatteryRow: the USB command).
+                if (BatteryMerge.appVerb(app) == "Help") Ui.note(this, "${app.name}: ${app.row.detail}") else c.run(this)
             }, onTap = {
                 if (st == BatteryMerge.AppState.SET_BY_READER) Ui.note(this, SET_BY_READER_NOTE.format(app.name))
             }))

@@ -332,8 +332,9 @@ object BatteryMerge {
     enum class AppState { DONE, SET_BY_READER, NEEDS_YOU, LOCKED_WRONG }
 
     /**
-     * One installed app. [locked]: the reader's Settings shows its battery setting as "not
-     * available" (Orbit as an active device admin), so nobody can change it there.
+     * One installed app, from BatteryRow (which decides done; this only words it). [locked]: the
+     * reader's Settings shows its battery setting as "not available" (Orbit as an active device
+     * admin), so nobody can change it there.
      */
     data class App(val name: String, val row: BatteryRow.Row, val locked: Boolean = false) {
         val id get() = "battery:$name"
@@ -341,7 +342,7 @@ object BatteryMerge {
 
     /** Set by the reader (§3.4): already right, and the reader doesn't let anyone change it. */
     fun state(a: App): AppState = when {
-        a.row.done && (a.locked || a.row.detail.startsWith("exempt")) -> AppState.SET_BY_READER
+        a.row.done && a.locked -> AppState.SET_BY_READER
         a.row.done -> AppState.DONE
         a.locked -> AppState.LOCKED_WRONG
         else -> AppState.NEEDS_YOU
@@ -355,10 +356,13 @@ object BatteryMerge {
         AppState.NEEDS_YOU -> "Restricted"
     }
 
-    /** One app's verb: Set opens its battery page; Help where Settings can't change it. */
+    /**
+     * One app's verb: Set opens its battery page; where Settings can't change it, Allow opens
+     * Android's own prompt (Orbit, BatteryRow.Open.PROMPT), else Help says what can (USB).
+     */
     fun appVerb(a: App): String? = when (state(a)) {
         AppState.NEEDS_YOU -> "Set"
-        AppState.LOCKED_WRONG -> "Help"
+        AppState.LOCKED_WRONG -> if (a.row.open == BatteryRow.Open.PROMPT) "Allow" else "Help"
         else -> null
     }
 
@@ -385,7 +389,7 @@ object BatteryMerge {
             id = "battery", label = "Battery", done = done, stateLine = line, short = "battery",
             optional = optional, pinFree = pinFree,
             setByReader = done && byReader.isNotEmpty() && unrestricted.isEmpty(),
-            verb = if (done) null else if (open.all { state(it) == AppState.LOCKED_WRONG }) "Help" else "Fix",
+            verb = if (done) null else if (open.all { appVerb(it) == "Help" }) "Help" else "Fix",
             ids = open.map { it.id },
         )
     }

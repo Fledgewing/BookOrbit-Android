@@ -857,7 +857,10 @@ object Setup {
             val row = Net.batteryRow(ctx, pkg)
             val app = BatteryMerge.App(name, row, locked = pkg == ctx.packageName && Net.adminActive(ctx))
             list.add(Check("Battery: $name", row.done, BatteryMerge.appLine(app), action = BatteryMerge.appVerb(app), id = "battery:$name", battery = app) { a ->
-                a.tryStart(Intent(BATTERY_DETAIL, Uri.parse("package:$pkg")), "battery page for $pkg") ||
+                // Android's "Allow" prompt works even where Settings shows "not available" (BatteryRow).
+                (row.open == BatteryRow.Open.PROMPT &&
+                    a.tryStart(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$pkg")), "battery prompt for $pkg")) ||
+                    a.tryStart(Intent(BATTERY_DETAIL, Uri.parse("package:$pkg")), "battery page for $pkg") ||
                     a.tryStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")), "app info for $pkg")
             })
         }

@@ -429,18 +429,39 @@ object Net {
     /** Present on the device, frozen or not. */
     fun installed(ctx: Context, pkg: String): Boolean = appState(ctx, pkg) != AppState.MISSING
 
-    /** The "Battery: Unrestricted" row for [pkg] (BatteryRow). The standby bucket is readable for our own package only. */
+    /**
+     * The "Battery: Unrestricted" row for [pkg] (BatteryRow), from the system's own settings.
+     * Another app's RUN_ANY_IN_BACKGROUND is read through AppOps (no permission on Android 11:
+     * AppOpsService.checkOperation has no caller check); unreadable counts as unknown.
+     */
     fun batteryRow(ctx: Context, pkg: String): BatteryRow.Row {
         val installed = installed(ctx, pkg)
-        val ignoring = installed && (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(pkg)
-        val admin = installed && try {
-            (ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager).activeAdmins.orEmpty().any { it.packageName == pkg }
-        } catch (e: Exception) { false }
-        val bucket = if (installed && pkg == ctx.packageName && android.os.Build.VERSION.SDK_INT >= 28) try {
+        val own = pkg == ctx.packageName
+        if (!installed) return BatteryRow.of(false, own, null, false, null, false)
+        val restricted: Boolean? = try {
+            if (own) {
+                if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    (ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).isBackgroundRestricted
+                } else null
+            } else {
+                val uid = ctx.packageManager.getApplicationInfo(pkg, PackageManager.MATCH_DISABLED_COMPONENTS).uid
+                @Suppress("DEPRECATION")
+                (ctx.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager)
+                    .checkOpNoThrow(OP_RUN_ANY_IN_BACKGROUND, uid, pkg) == android.app.AppOpsManager.MODE_IGNORED
+            }
+        } catch (e: Exception) { null }
+        val allowlisted = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(pkg)
+        val bucket = if (own && android.os.Build.VERSION.SDK_INT >= 28) try {
             (ctx.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager).appStandbyBucket
         } catch (e: Exception) { null } else null
-        return BatteryRow.of(installed, ignoring, admin, bucket)
+        val admin = try {
+            (ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager).activeAdmins.orEmpty().any { it.packageName == pkg }
+        } catch (e: Exception) { false }
+        return BatteryRow.of(true, own, restricted, allowlisted, bucket, settingsLocked = admin)
     }
+
+    /** AppOpsManager.OPSTR_RUN_ANY_IN_BACKGROUND (hidden). */
+    const val OP_RUN_ANY_IN_BACKGROUND = "android:run_any_in_background"
 
     fun usable(ctx: Context, pkg: String): Boolean = appState(ctx, pkg) == AppState.OK
 
