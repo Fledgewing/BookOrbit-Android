@@ -241,7 +241,7 @@ class LauncherActivity : EinkActivity() {
  * hold a tile to unpin. Also opened by the patch (SHOW_APPS).
  */
 class AppsActivity : EinkActivity() {
-    data class App(val label: String, val component: ComponentName)
+    data class App(val label: String, val component: ComponentName, val frozen: Boolean = false)
 
     companion object {
         const val MAX_PINS = 6
@@ -251,7 +251,17 @@ class AppsActivity : EinkActivity() {
     }
 
     private lateinit var prefs: Prefs
-    private var apps: List<App> = emptyList()
+    internal var apps: List<App> = emptyList()
+        private set
+    private var listening = false
+
+    /** Any package change while the page shows rebuilds the list, so it is never a stale copy. */
+    private val packages = AppList.receiver {
+        if (!isFinishing) {
+            apps = loadApps()
+            render()
+        }
+    }
     private var pageIndex = 0
     private var perPage = 0
     private var note: String = "hold to pin"
@@ -263,26 +273,31 @@ class AppsActivity : EinkActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!listening) {
+            AppList.register(this, packages)
+            listening = true
+        }
         apps = loadApps()
         if (prefs.pins == null) prefs.pins = defaultPins()
         seedSettingsPin()
         render()
     }
 
+    override fun onPause() {
+        super.onPause()
+        if (listening) {
+            unregisterReceiver(packages)
+            listening = false
+        }
+    }
+
     private fun loadApps(): List<App> {
-        val t0 = SystemClock.elapsedRealtime()
-        val pm = packageManager
-        val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val list = pm.queryIntentActivities(main, 0)
-            .filter { it.activityInfo.packageName != packageName }
-            .map { App(it.loadLabel(pm).toString(), ComponentName(it.activityInfo.packageName, it.activityInfo.name)) }
-            .toMutableList()
+        // Frozen apps included, each app kept even when its label fails (AppList).
+        val list = AppList.load(this).map { App(it.label, ComponentName(it.pkg, it.cls), it.frozen) }.toMutableList()
         // "<Vendor> home" from the vendor profile, if this device has one (Vendor.kt).
         Vendor.homeTile(this)?.let { (label, component) -> list.add(App(label, component)) }
         list.add(App("Android Settings", SETTINGS_TILE))
-        val sorted = list.distinctBy { it.component }.sortedBy { it.label.lowercase() }
-        OLog.d("apps page: ${sorted.size} apps in ${OLog.since(t0)} ms")
-        return sorted
+        return list.distinctBy { it.component }.sortedBy { it.label.lowercase() }
     }
 
     private fun defaultPins(): List<String> {
@@ -308,6 +323,12 @@ class AppsActivity : EinkActivity() {
     private fun launch(app: App) {
         if (app.component == SETTINGS_TILE) {
             Pin.run(this) { tryStart(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "Android Settings") }
+            return
+        }
+        if (app.frozen) {
+            // A disabled app can't start: open the page that unfreezes it.
+            note = "${app.label} is frozen"
+            tryStart(Vendor.reenablePage(this, app.component.packageName), "re-enable page for ${app.component.packageName}")
             return
         }
         val i = Intent(Intent.ACTION_MAIN).setComponent(app.component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -405,13 +426,24 @@ class AppsActivity : EinkActivity() {
                 Ui.row(
                     this, app.label,
                     left = Ui.letter(this, app.label),
-                    right = if (pinned) Ui.value(this, "pinned", bold = false) else null,
+                    right = listOfNotNull("frozen".takeIf { app.frozen }, "pinned".takeIf { pinned })
+                        .takeIf { it.isNotEmpty() }?.let { Ui.value(this, it.joinToString(" · "), bold = false) },
                     onClick = { launch(app) },
                     onLong = { togglePin(app) },
                 ),
             )
         }
         pager.text = "page ${pageIndex + 1} of $n"
+        // perPage assumes rows of ROW_DP; a taller row (a wrapped label, a large system font) would
+        // push the page's last app below the list's edge, clipped out of sight. Fewer per page then.
+        list.post {
+            val fit = AppListLogic.fits((0 until list.childCount).map { list.getChildAt(it).bottom }, list.height)
+            if (list.height > 0 && fit < list.childCount) {
+                OLog.d("apps page: $fit of ${list.childCount} rows fit, $perPage -> $fit per page")
+                perPage = fit
+                fillPage(list, pager)
+            }
+        }
     }
 
     private fun tile(app: App): View = LinearLayout(this).apply {

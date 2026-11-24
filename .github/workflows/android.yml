@@ -49,8 +49,10 @@ jobs:
       - name: USB installer checks
         run: |
           set -euo pipefail
-          shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh android/koreader/package.sh tools/upstreams
+          shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh android/koreader/package.sh tools/upstreams \
+            tools/android-test-version.sh tools/sideload-android.sh tools/sideload-xteink.sh tools/test/test-sideload.sh
           bash tools/test/test-install-usb.sh
+          bash tools/test/test-sideload.sh
 
       - name: Companion tests, debug build and lint
         working-directory: android/companion

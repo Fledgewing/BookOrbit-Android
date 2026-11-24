@@ -139,9 +139,9 @@ class SleepPreviewActivity : EinkActivity() {
  * design's style: shown only while Sleep screen is on and the reader uses the screen saver.
  */
 object SleepSetup {
+    /** The checklist's id for it (Checklist.GROUP_OF, its "On:" / "Without it:" lines). */
+    const val ID = "screen_saver"
     const val TITLE = "Switch the screen saver from Orbit"
-    const val WITHOUT = "Turning Sleep screen on or off needs a one-time USB command, tools/install-usb.sh --sleep-screen on (or off)."
-    const val ON = "Orbit switches the screen saver to the sleep screen and back."
     const val COMMAND = "Connect the reader to a computer and run, once:\n\ntools/install-usb.sh --grant-screen-saver\n\n" +
         "Without it: tools/install-usb.sh --sleep-screen on (or off) does the switch itself."
 
@@ -150,8 +150,9 @@ object SleepSetup {
     fun check(ctx: android.content.Context): Check? {
         if (!shown(SleepScreen.settings(ctx).mode, SleepScreen.sink(ctx))) return null
         val granted = SleepScreen.canSwitch(ctx)
-        return Check(TITLE, granted, if (granted) "On: $ON" else "Without it: $WITHOUT", action = if (granted) null else "Allow", optional = true) { a ->
-            OLog.i("setup: sleep screen optional row: Allow")
+        val line = Checklist.optionalLine(ID, granted).orEmpty()
+        return Check(TITLE, granted, line, action = if (granted) null else "Show how", optional = true, id = ID) { a ->
+            OLog.i("setup: sleep screen optional row: Show how")
             Ui.note(a, COMMAND)
         }
     }

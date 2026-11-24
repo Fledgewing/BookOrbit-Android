@@ -183,35 +183,31 @@ object AddonLogic {
     /** An optional row's state: never allowed, allowed once and now off, or on. */
     enum class OptState { NEVER, OFF, ON }
 
-    data class Optional(val id: String, val title: String, val without: String, val on: String, val off: String)
+    /**
+     * An optional row: its noun, and what you get with it or lose without it, read from the one
+     * table both modes share (Checklist.LOSS, Checklist.ON; companion-checklist §3.3).
+     */
+    data class Optional(val id: String, val title: String) {
+        val without: String get() = Checklist.LOSS.getValue(id)
+        val on: String get() = Checklist.ON.getValue(id)
+    }
 
     val OPTIONAL = listOf(
-        Optional("install_updates", "Install apps",
-            "Orbit can't install KOReader or update itself; you install updates yourself from the releases page.",
-            "Orbit installs KOReader and its own updates.", "Off: updates are a download link"),
-        Optional("notifications", "Notifications",
-            "Orbit can't tell you about an update or a setup step; you see them in KOReader's Orbit settings and when you open Orbit.",
-            "Orbit tells you about updates and setup steps.", "Off: updates and steps show in KOReader and in Orbit"),
-        Optional("clicker", "Clicker buttons in other apps",
-            "Clicker buttons work only inside KOReader, and the Settings PIN locks only Orbit's settings, not other apps.",
-            "Clicker buttons work in every app.", "Off: clicker buttons only inside KOReader"),
-        Optional("keyboard", "Orbit keyboard",
-            "Send-key clicker actions don't work in other apps.",
-            "Send-key actions work in every app.", "Off: Send-key actions only inside KOReader"),
-        Optional("admin", "Screen off after Sync and sleep",
-            "Sync and sleep syncs, then asks you to press the power button.",
-            "Sync and sleep turns the screen off.", "Off: Sync and sleep asks for the power button"),
-        Optional("battery", "Battery: Unrestricted",
-            "Android may pause Orbit or KOReader while the screen is off, so sleep syncs and Wi-Fi switching off can be late.",
-            "Sleep syncs and Wi-Fi switching run on time.", "Off: sleep syncs may be late"),
+        Optional("install_updates", "Install apps"),
+        Optional("notifications", "Notifications"),
+        Optional("clicker", "Clicker buttons"),
+        Optional("keyboard", "Orbit keyboard"),
+        Optional("wifi_switching", "Wi-Fi switching"),
+        Optional("sleep_sync", "Sleep sync"),
+        Optional("admin", "Screen lock"),
+        Optional("battery", "Battery"),
     )
 
     fun optional(id: String): Optional? = OPTIONAL.firstOrNull { it.id == id }
 
-    /** The optional row's one line: "Without it: …" never allowed, "Off: …" after Allow, else "On: …". */
+    /** The optional row's one line (§3.7): "On: …" when on, otherwise "Without it: …". */
     fun optionalLine(o: Optional, st: OptState): String = when (st) {
-        OptState.NEVER -> "Without it: ${o.without}"
-        OptState.OFF -> o.off
+        OptState.NEVER, OptState.OFF -> "Without it: ${o.without}"
         OptState.ON -> "On: ${o.on}"
     }
 
@@ -223,13 +219,14 @@ object AddonLogic {
 
     /**
      * Which optional rows Add-on shows (§4.3): clicker only once a button is mapped or a PIN is
-     * set; keyboard only with a Send-key action; screen off only with Sleep sync; battery only
-     * with Sleep sync or Wi-Fi switching.
+     * set; keyboard only with a Send-key action; the Wi-Fi switching and Sleep sync helpers
+     * always; screen off only with Sleep sync; battery only with Sleep sync or Wi-Fi switching.
      */
     fun optionalIds(h: Helpers, clickerMapped: Boolean, pinSet: Boolean, sendKeyMapped: Boolean): List<String> {
         val out = mutableListOf("install_updates", "notifications")
         if (clickerMapped || pinSet) out += "clicker"
         if (sendKeyMapped) out += "keyboard"
+        out += listOf("wifi_switching", "sleep_sync")
         if (h.sleepSync) out += "admin"
         if (h.sleepSync || h.wifi) out += "battery"
         return out

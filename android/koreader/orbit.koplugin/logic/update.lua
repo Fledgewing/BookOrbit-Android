@@ -88,13 +88,22 @@ function Update.stampedVersion(text)
     return (text or ""):match('\nlocal PATCH_VERSION = "([^"\n]+)"')
 end
 
+-- A test build (release.yml with publish off, tools/sideload-android.sh): <next patch>-0.test.<run>.
+-- Never published; it sorts below every release and pre-release of the next patch, so the
+-- device takes the next real release. Never picked, should one reach a release list.
+Update.TEST_PRE = "0.test."
+function Update.isTest(v)
+    v = type(v) == "table" and v or Update.parseVersion(v)
+    return v ~= nil and v.pre ~= nil and v.pre:sub(1, #Update.TEST_PRE) == Update.TEST_PRE
+end
+
 -- releases: decoded GitHub release objects. The newest that is not a draft and, unless
 -- include_pre, not a pre-release. Returns the release and its parsed version.
 function Update.pick(releases, include_pre)
     local best, best_v
     for _i, r in ipairs(releases or {}) do
         local v = type(r) == "table" and Update.parseVersion(r.tag_name)
-        if v and not r.draft and (include_pre or not r.prerelease) then
+        if v and not r.draft and (include_pre or not r.prerelease) and not Update.isTest(v) then
             if not best_v or Update.compare(v, best_v) > 0 then best, best_v = r, v end
         end
     end

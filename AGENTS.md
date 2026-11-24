@@ -19,6 +19,7 @@ every platform whose hardware allows it.
 | `docs/design/` | Cross-platform feature designs | MIT |
 | `shared/fixtures/` | Recorded responses that both platforms' tests read | MIT |
 | `tools/install-usb.sh` | One-shot Android install over USB | MIT |
+| `tools/sideload-android.sh`, `tools/sideload-xteink.sh` | Put a test build on a test device over USB ("Test builds" below) | MIT |
 | `tools/upstreams` | Clones pinned upstream source into `upstream/` (gitignored) | MIT |
 
 ## Platforms
@@ -85,10 +86,36 @@ One repo releases both platforms; the tag prefix says which.
 - Both release workflows first run the emulated release tests (`release-tests.yml`, below) on the
   release commit; nothing publishes unless they pass.
 
+## Test builds: sideload first, release after
+
+Test a change on a real device before any release: build a test build, sideload it over USB,
+and publish the release only once it works there. Test builds are workflow artifacts only: no
+tag, no release, never offered by any updater. The scripts print what they will change and
+ask before changing it (`--yes` skips the question). Agents never run them against a device.
+
+- Android: `gh workflow run release.yml --ref <branch> -f publish=false`, then
+  `tools/sideload-android.sh <run id> [--serial S] [--plugin-only]`. The build is release-signed
+  (the only key that updates an installed companion) and versioned `<next patch>-0.test.<run>`
+  (`tools/android-test-version.sh`): it installs over the last release, and the next release or
+  pre-release is newer, so the device updates normally afterwards. The companion and the plugin
+  never pick a test version from a release list (`TestBuild`, `Update.isTest`), and release.yml
+  refuses to publish one. The script checks SHA256SUMS and the signing certificate, `adb install
+  -r`s the APK (its settings stay), swaps in the plugin as the companion does, and restarts
+  KOReader with the companion's `restart` command.
+- Xteink: `gh workflow run xteink.yml --ref <branch> -f test_build=true` (a pull request's
+  build works too), then `tools/sideload-xteink.sh <run id> --port /dev/cu.usbmodemXXXX --env
+  x4-pro|x4|x3`. It checks the image's SHA-256 and chip, refuses a reader whose chip doesn't
+  match `--env` or a port another program holds (it stops nothing), reads the offsets from the
+  reader's partition table (checked against the build's `.parttable`), writes the image to
+  `ota_0` and blanks `otadata` so `ota_0` boots. NVS (Wi-Fi, Tailscale keys, settings) and the
+  SD card are untouched. The test build's fourth version number is below every later run's, so
+  the reader takes the next release over the air.
+- Tests: `bash tools/test/test-sideload.sh` (CI: android.yml).
+
 ## Checks
 
 - Android: `luajit android/koreader/test/test_logic.lua`, `.../test_flows.lua`,
-  `bash tools/test/test-install-usb.sh`, and in `android/companion`
+  `bash tools/test/test-install-usb.sh`, `bash tools/test/test-sideload.sh`, and in `android/companion`
   `./gradlew testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
 - Xteink: `xteink/scripts/apply.sh <CrossInk checkout>`, `xteink/test/run-host-tests.sh <checkout>`,
   then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the

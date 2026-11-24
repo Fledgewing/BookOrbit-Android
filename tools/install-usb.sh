@@ -331,6 +331,23 @@ install_orbit_plugin() {
 
 # ---------------------------------------------------------------- installs
 
+# Puts Orbit, KOReader and Tailscale (each if installed) on Android's Doze allowlist: what the
+# setup row "Battery: Unrestricted" checks. Some readers (the Boox Page) show Orbit, a device
+# admin, as "Battery optimization not available" with no switch, yet Doze still applies. Android
+# keeps the list across reboots (deviceidle.xml). Undo: dumpsys deviceidle whitelist -<package>.
+BATTERY_PKGS=(net.fledgewing.orbitcompanion org.koreader.launcher com.tailscale.ipn)
+allowlist_battery() {
+    local pkg
+    for pkg in "${BATTERY_PKGS[@]}"; do
+        [[ -n $(dsh pm path "$pkg" 2>/dev/null || true) ]] || continue
+        if dsh dumpsys deviceidle whitelist "+$pkg" | grep -q "^Added"; then
+            say "Battery: $pkg unrestricted (Doze allowlist)"
+        else
+            say "Battery: couldn't add $pkg to the Doze allowlist; set it in Settings › Apps › Battery"
+        fi
+    done
+}
+
 install_all() {
     say "Installing KOReader $KO_TAG"
     "${ADB[@]}" install -r "$KO_APK" ||
@@ -348,6 +365,7 @@ install_all() {
     fi
 
     install_orbit_plugin
+    allowlist_battery
     say "Done. Open Orbit Companion on the device and follow Setup (Fix next)."
 }
 

@@ -262,6 +262,8 @@ class ModeActivity : EinkActivity() {
 
     private fun choose(m: OrbitMode) {
         OLog.i("mode: first-run choice ${m.key}")
+        // Setup then greets with "Let's set up this reader" and Start (companion-checklist §3.8).
+        Prefs(this).setupWelcome = true
         if (m == OrbitMode.FULL) {
             Prefs(this).mode = OrbitMode.FULL
             OrbitService.start(this)
