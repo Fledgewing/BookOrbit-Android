@@ -1131,6 +1131,23 @@ test("companion: certificate fingerprints read as release.yml prints them", func
     ok(not RE.Companion.signedByUs({}) and not RE.Companion.signedByUs(nil), "none read")
 end)
 
+-- Settings defaults have one source, shared/settings/schema.json: the plugin's are the schema's
+-- (SettingsStoreTest checks the companion's), except where the device decides (DEVICE_DEFAULTS).
+test("settings defaults: every shared setting starts at the schema's default", function()
+    local SS = RE.SettingsSync
+    ok(#RE.SCHEMA.settings >= 30, "the schema loaded: " .. #RE.SCHEMA.settings)
+    for _, d in ipairs(RE.SCHEMA.settings) do
+        if RE.DEVICE_DEFAULTS[d.key] then
+            eq(RE.DEFAULTS[d.key], nil, d.key .. ": the device decides")
+        else
+            ok(RE.DEFAULTS[d.key] ~= nil, d.key .. " has a default")
+            eq(SS.toWire(d, RE.DEFAULTS[d.key]), SS.toWire(d, nil), d.key)
+        end
+    end
+    eq(RE.Shared.defaultMode(), RE.Companion.has("wifi") and "jit" or "always_on", "wifi_mode: jit where the companion switches Wi-Fi")
+    eq(RE.SCHEMA.byKey.wifi_mode.default, "jit", "the schema's wifi_mode")
+end)
+
 ---------------------------------------------------------------- recommended settings (addon-mode §5)
 local BO_DEFAULTS = { auto_sync = false, sync_forward = 1, sync_backward = 3, catalog_auto_open = "off" }
 -- A KOReader with nothing changed: the plugin and gestures at their stock defaults.
