@@ -190,7 +190,7 @@ required:
 | Recommended settings | a step | a status line in BookOrbit ("Applied 7 · Review"); its conflicts still remind |
 | Permissions group | yes | none: its rows are in Optional (`AddonLogic.optionalIds`), with Wi-Fi switching and Sleep sync |
 | Connection | Tailscale is a step | Tailscale info, only if installed |
-| Optional group | the rows the user may leave off: Screen saver (PR #17), and any skipped step | Install apps, Notifications, Clicker buttons, Orbit keyboard, Wi-Fi switching, Sleep sync, Screen lock, Battery, Screen saver |
+| Optional group | the rows the user may leave off: Screen saver (PR #17), Reading fonts ([reading-fonts](reading-fonts.md)), and any skipped step | Install apps, Notifications, Clicker buttons, Orbit keyboard, Wi-Fi switching, Sleep sync, Screen lock, Battery, Screen saver, Reading fonts |
 | Home app | a step | no row |
 
 In both, an Optional row shows "On: …" when on, otherwise "Without it: …" and **Allow**; never

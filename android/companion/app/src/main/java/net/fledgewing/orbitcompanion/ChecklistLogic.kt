@@ -35,6 +35,7 @@ object Checklist {
         "wifi_switching" to Group.OPTIONAL,
         "sleep_sync" to Group.OPTIONAL,
         "screen_saver" to Group.OPTIONAL,
+        "reading_fonts" to Group.OPTIONAL,
     )
 
     /** Needs you order (§3.1): what blocks the most first (a frozen app, installs, sign-in), then group order. */
@@ -67,6 +68,7 @@ object Checklist {
         "wifi_switching" to "Orbit leaves Wi-Fi as it is, so a sync waits until you turn Wi-Fi on.",
         "sleep_sync" to "the reader can fall asleep before a sync finishes; it finishes when you next wake it.",
         "screen_saver" to "turning Sleep screen on or off needs a one-time USB command.",
+        "reading_fonts" to "KOReader offers only its own fonts and the reader's; Bitter and Literata aren't among them.",
     )
 
     /** "On: …" on an optional row that is on. */
@@ -80,6 +82,7 @@ object Checklist {
         "wifi_switching" to "Orbit turns Wi-Fi on for a sync and off again.",
         "sleep_sync" to "syncs finish as the reader sleeps.",
         "screen_saver" to "Orbit's sleep screen shows when the reader sleeps.",
+        "reading_fonts" to "Bitter and Literata are in KOReader's font menu.",
     )
 
     /**
@@ -404,6 +407,7 @@ object NewIn {
     val SINCE: Map<String, String> = mapOf(
         "wifi_switching" to "0.12.0",
         "sleep_sync" to "0.12.0",
+        "reading_fonts" to "0.12.0",
     )
 
     /** versionCode = MAJOR*10000 + MINOR*100 + PATCH (app/build.gradle.kts). */

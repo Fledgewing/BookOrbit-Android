@@ -112,6 +112,13 @@ abstract class EinkActivity : Activity() {
             refresh()
             return
         }
+        if (requestCode == FontInstaller.REQUEST_CODE) {
+            OLog.i("reading fonts: storage permission ${if (granted) "granted" else "denied"}")
+            if (granted) FontInstaller.set(this, true) { refresh() }
+            else Prefs(this).fontsStatus = "no storage permission: allow it and tap Retry"
+            refresh()
+            return
+        }
         if (requestCode != PatchInstaller.REQUEST_CODE) return
         OLog.i("patch install: storage permission ${if (granted) "granted" else "denied"}")
         if (granted) {
