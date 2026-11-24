@@ -452,7 +452,7 @@ def catalog_cache_first(ctx: Context, tmp: Path) -> None:
     after(run.output, "Catalog: opening from the cache, no Wi-Fi")
     asked = ctx.requests()[before:]
     assert not asked, f"opening a cached catalog asked the server: {[e['path'] for e in asked][:5]}"
-    assert "STA event: connected" not in run.output, "opening a cached catalog joined Wi-Fi"
+    assert "[WIFI] Joined" not in run.output, "opening a cached catalog joined Wi-Fi"
     # Then ⟳ (X4 Pro, .194: the catalog opened from the cache with Wi-Fi never started, and the
     # next request panicked in lwIP, which has no TCP/IP stack before Wi-Fi first starts): no
     # request until Wi-Fi is up, then "Refreshing…" and "updated just now".
@@ -464,7 +464,7 @@ def catalog_cache_first(ctx: Context, tmp: Path) -> None:
                       timeout_s=45)
     opened = after(run.output, "Catalog: opening from the cache, no Wi-Fi")
     refresh = after(opened, "Catalog: Refresh of view")
-    connected = refresh.find("STA event: connected")
+    connected = refresh.find("[WIFI] Joined")
     assert connected >= 0, "⟳ on a catalog opened from the cache did not join Wi-Fi"
     assert not re.search(r"\[HTTP\] \S+ GET: ", refresh[:connected]), "a request went out before Wi-Fi was up"
     assert ctx.requests()[before:], "⟳ asked the server nothing"
