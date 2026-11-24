@@ -226,7 +226,8 @@ object SleepScreen {
             val d = SleepRotation.decide(s.mode, s.hours, now, pool.map { it.id }, cur != null, state(ctx))
             val item = d.poolId?.let { id -> pool.firstOrNull { it.id == id } }
             val cover = when {
-                item != null -> decode(item.file, w, h)
+                // L7: BookOrbit's full-size cover, fitted to this panel, when it is here; else the thumbnail.
+                item != null -> SharpCovers.fileFor(ctx, item.id)?.let { decode(it, w, h) } ?: decode(item.file, w, h)
                 d.show == "current" -> cur?.file?.let { decode(it, w, h) }
                 else -> null
             }
@@ -259,6 +260,8 @@ object SleepScreen {
     fun onPool(ctx: Context, why: String) {
         OLog.i("sleep screen: files changed ($why)")
         redrawPicture(ctx, why)
+        // The plugin refreshes the pool only while the network is up: the time to fetch sharp covers.
+        SharpCovers.sync(ctx, why)
     }
 
     @Volatile private var lastBattery = -1

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GET /api/v1/opds/recent?page=1&size=20 as BookOrbit v3.9.0 writes it (opds.service.ts
+     generateAcquisitionFeed, bookEntry :165-210, xmlLink in opds-xml.helpers.ts:29). Synthetic
+     books; the token is a made-up `<userId>.<32 hex>`. The first book has no cover, so no image links. -->
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/terms/" xmlns:opds="http://opds-spec.org/2010/catalog">
+  <id>urn:bookorbit:recent</id>
+  <title>Recent Books</title>
+  <updated>2026-11-23T20:00:00.000Z</updated>
+  <link rel="self" href="/api/v1/opds/recent?page=1&amp;size=20" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/api/v1/opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="next" href="/api/v1/opds/recent?page=2&amp;size=20" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+<entry>
+  <title>A Book Without a Cover</title>
+  <id>urn:bookorbit:book:41</id>
+  <updated>2026-11-22T10:00:00.000Z</updated>
+  <author><name>Ann Author</name></author>
+  <content type="text"/>
+  <link rel="http://opds-spec.org/acquisition" href="/api/v1/opds/41/download?fileId=90" type="application/epub+zip"/>
+</entry>
+<entry>
+  <title>The Second Book</title>
+  <id>urn:bookorbit:book:42</id>
+  <updated>2026-11-21T10:00:00.000Z</updated>
+  <author><name>Bea Writer</name></author>
+  <content type="text">A synthetic book.</content>
+  <link rel="http://opds-spec.org/sort/series" href="/api/v1/opds/catalog?seriesId=3" title="Synthetic #2"/>
+  <link rel="http://opds-spec.org/image" href="/api/v1/opds/42/cover?t=7.0123456789abcdef0123456789abcdef" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/api/v1/opds/42/thumbnail?t=7.0123456789abcdef0123456789abcdef" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition" href="/api/v1/opds/42/download?fileId=91" type="application/epub+zip"/>
+</entry>
+</feed>

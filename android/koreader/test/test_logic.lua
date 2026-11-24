@@ -1585,6 +1585,10 @@ test("sleep screen: pool.json is valid JSON the companion reads", function()
     eq(back.v, 1); eq(back.source, "scope:3"); eq(back.at, 1700000000000)
     eq(back.items[1].id, 5); eq(back.items[1].title, 'Quote " and \\ slash'); eq(back.items[1].file, "covers/5.jpg")
     eq(SP.json({ items = {} }), '{"items":[]}')
+    eq(back.server, nil); eq(back.user, nil)
+    -- The account the companion's sharp covers use (lock-screen.md L7): server and username, never the key.
+    local acct = JSON.decode(SP.json(SP.poolDoc("up_next", {}, 1, { server = "https://b.example/api/v1", user = "kid", userkey = "md5", storage_limit_mb = 100 })))
+    eq(acct.server, "https://b.example/api/v1"); eq(acct.user, "kid"); eq(acct.storage_limit_mb, 100); eq(acct.userkey, nil)
 end)
 
 -- Nothing interrupts reading (docs/design/reading-gate.md): every place in the plugin that shows

@@ -2,8 +2,11 @@
 
 The Orbit KOReader plugin (`android/koreader/orbit.koplugin`, up to 0.7.x the user patch
 `2-orbit-android.lua`; "the patch" below) and the Orbit Companion app talk
-through Android intents only. The companion never learns the server, the login or the sync
-state: the BookOrbit plugin owns all of that.
+through Android intents only. The companion never learns the login or the sync state: the
+BookOrbit plugin owns all of that. One exception: the sleep screen's sharp covers
+(docs/design/lock-screen.md L7) need the server URL and the KOReader username, which the plugin
+writes into `pool.json`; the companion signs in to OPDS with a login the user types once and keeps
+only the OPDS cover token. Never the KOReader key.
 
 Package: `net.fledgewing.orbitcompanion` (placeholder, used everywhere below).
 
@@ -61,8 +64,8 @@ only reads, except `state.json`.
 
 | File | Written by | Holds |
 |---|---|---|
-| `pool.json` | plugin, at a sync (never at sleep) | `{v, at, source, items: [{id, title, file}]}` in show order; `file` is `covers/<id>.jpg` |
-| `covers/<id>.jpg` | plugin | the pool's covers, fetched by ETag; others pruned |
+| `pool.json` | plugin, at a sync (never at sleep) | `{v, at, source, items: [{id, title, file}], server, user, storage_limit_mb}` in show order; `file` is `covers/<id>.jpg`; `server` is the plugin's `server_url` (`…/api/v1`), `user` its KOReader username (the OPDS sign-in's default), `storage_limit_mb` Orbit's storage limit (the sharp covers take at most a tenth of it, 24 MB cap) |
+| `covers/<id>.jpg` | plugin | the pool's covers (400 × 600 thumbnails), fetched by ETag; others pruned. The companion's sharp covers (its own storage, `files/sharp-covers/`) replace them on screen when signed in |
 | `current.png`, `current.json` | plugin, when a book opens | the current book's cover and `{v, title, authors, path, id, file, at}` |
 | `state.json` | companion | `{v, shown, changed_at}`: the cover shown and when it changed; the plugin's shuffle bag moves past it |
 | `scopes.json` | plugin | `{v, at, scopes: [{id, title, count}], collections: [...]}`: every smart scope and collection, for the pickers |
