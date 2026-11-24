@@ -26,6 +26,13 @@ enum class Step : uint8_t {
   SerialEnded,        // the USB serial port is torn down: nothing logs after this
   ReleaseWait,        // waiting for Power to be let go before arming the wake
   SleepEntered,       // esp_deep_sleep_start() called: a finished sleep
+  // Patch 0040, between "wake checked" and "setup done" (X4 Pro, .194: "Last run stopped at: wake
+  // checked" on the boot after the catalog's panic, with the device idle on USB). Added after the
+  // sleep steps so the words an earlier build stored keep their meaning.
+  ClockRead,          // the tilt sensor and the RTC (I2C) answered; the wall clock is set
+  StorageReady,       // the SD card is mounted and the last panic's report is checked
+  StateLoaded,        // settings, app state, translations and the theme are loaded
+  ActivityStarted,    // the boot's first activity is chosen; its first paint is next
   Count
 };
 
@@ -50,8 +57,20 @@ inline const char* name(const Step s) {
     case Step::SerialEnded: return "serial port closed for sleep";
     case Step::ReleaseWait: return "waiting for Power to be released";
     case Step::SleepEntered: return "deep sleep entered";
+    case Step::ClockRead: return "clock read";
+    case Step::StorageReady: return "SD card ready";
+    case Step::StateLoaded: return "settings loaded";
+    case Step::ActivityStarted: return "first screen started (its paint not done)";
     default: return "nothing recorded";
   }
+}
+
+// The reset that started the run the steps belong to (esp_reset_reason_t), in its own RTC word: a
+// run that stopped early after a panic reset is the boot that followed a crash. -1: not recorded.
+constexpr uint32_t RESET_MAGIC = 0x0B7A1200u;
+inline uint32_t packReset(const int reason) { return RESET_MAGIC | static_cast<uint8_t>(reason); }
+inline int unpackReset(const uint32_t word) {
+  return (word & 0xFFFFFF00u) == RESET_MAGIC ? static_cast<int>(word & 0xFFu) : -1;
 }
 
 // Whether the step a boot finds is where the last run stopped: a run ends in deep sleep, or in

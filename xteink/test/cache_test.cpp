@@ -61,7 +61,17 @@ void reads(JsonObjectConst all) {
     const ReadPlan p = planRead(has, validated, c["now"], modeOf(c["mode"]),
                                 c["offline"] | false);
     CHECK_NAMED(c["name"].as<const char*>(), p.serve == c["serve"].as<bool>() && p.fetch == c["fetch"].as<bool>());
+    // A read asks the server only when its plan fetches (offline: never).
+    CHECK_NAMED(c["name"].as<const char*>(), (readStep(p) == ReadStep::Request) == p.fetch);
   }
+  // The cache-first catalog's next page (X4 Pro, .194): offline, a page never saved is a miss with
+  // no request, in every mode; a saved one is read from the card.
+  for (const Mode m : {Mode::Open, Mode::Refresh, Mode::Full}) {
+    CHECK(readStep(planRead(false, 0, 5000, m, true)) == ReadStep::Miss);
+    CHECK(readStep(planRead(true, 4000, 5000, m, true)) == ReadStep::Saved);
+  }
+  CHECK(readStep(planRead(false, 0, 5000, Mode::Open, false)) == ReadStep::Request);
+  CHECK(readStep(planRead(true, 4990, 5000, Mode::Open, false)) == ReadStep::Saved);
   for (JsonObjectConst c : all["revalidate"].as<JsonArrayConst>()) {
     const Revalidated r = revalidate(c["status"], true, canonicalHash(c["cached"]), canonicalHash(c["reply"]));
     CHECK_NAMED(c["name"].as<const char*>(),
