@@ -4158,7 +4158,7 @@ test("local-first: Home's first paint has the on-device marks; a changed tile na
     cacheTeardown()
 end)
 
-test("storage limit: over it, browsing pages and plain covers go first (least recently used), then covers saved for offline; never the saved lists (v0.11.2)", function()
+test("storage limit: Orbit Companion counts and removes; browsing pages and plain covers go first (least recently used), then covers saved for offline; never the saved lists", function()
     local client, Cat = cacheSetup()
     local MB = 1048576
     local lfs = require("libs/libkoreader-lfs")
@@ -4183,33 +4183,63 @@ test("storage limit: over it, browsing pages and plain covers go first (least re
         old = { bytes = 30 * MB, used_at = 2 },
         new = { bytes = 30 * MB, used_at = 50 },
     }
+    -- The index as saved (the companion reads the file).
+    local function saved() E.OC.writeFile(cache.dir .. "/index.lua", E.Cache.encode(idx)) end
+    saved()
     E.S.mirror_covers = true
     E.OC.writeFile(E.Mirror.dir() .. "/cover_keep.lua", E.Cache.encode({ ["m1.jpg"] = true, ["m2.jpg"] = true }))
-    E.Mirror._status, E.Mirror._status_dir = { v = 2, cover_keep_n = 1 }, E.Mirror.dir()
     E.S.storage_limit_mb = 100
-    W.logs = {}
-    local st = E.OC.storageEnforce("start")
+    W.logs, W.broadcasts = {}, {}
+    local asks = FC.storage_asks
+    local walks = 0
+    local dir = lfs.dir
+    lfs.dir = function(d) if not W.in_companion and d == cdir then walks = walks + 1 end return dir(d) end
+    E.OC.storageCount("start")
+    local b = lastBroadcast(".STORAGE")
+    ok(b and b.extras.limit == tostring(100 * MB) and b.extras.cover_dir == cdir and b.extras.mirror_covers == "1", "asked the companion")
+    ok(b.extras.userkey == nil, "no login with it")
+    run(3)
+    ok(FC.storage_asks == asks + 1, "the companion counted")
+    ok(walks == 0, "the UI thread never walks the cover folder")
     ok(idx.entries.old == nil and not io.open(cdir .. "/a.jpg", "rb"), "the oldest page and the plain cover went first")
     ok(idx.entries.new and io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then it was under the limit")
-    ok(st.used == 100 * MB and E.OC.storageText() == "Using 100 MB", "Using: " .. E.OC.storageText())
+    ok(E.OC.storage.used == 100 * MB and E.OC.storageText() == "Using 100 MB", "Using: " .. E.OC.storageText())
     ok(table.concat(W.logs, "\n"):find("storage: 150.0 MB of 100 MB (start); removed 1 browsing entries, 1 covers, 0 saved-for-offline covers -> 100.0 MB", 1, true), "logged: " .. table.concat(W.logs, " | "))
     -- A lower limit: the last browsing page, then the least recently seen saved cover; the list stays.
+    saved()
     E.S.storage_limit_mb = 55
-    E.OC.storageEnforce("limit changed")
+    E.OC.storageCount("limit changed"); run(3)
     ok(idx.entries.new == nil and not io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then saved covers, oldest first")
     ok(idx.entries.list, "the saved list stays")
-    -- A write over the limit runs the plan at once.
+    -- A write over the limit asks for a count.
     E.S.storage_limit_mb = 60
-    E.OC.storageEnforce("count")
     idx.entries.big = { bytes = 20 * MB, used_at = 99 }
-    E.OC.storageAdd(20 * MB, "cache")
+    saved()
+    E.OC.storageAdd(20 * MB, "cache"); run(3)
     ok(idx.entries.big == nil and io.open(cdir .. "/m2.jpg", "rb") and E.OC.storage.used == 50 * MB, "checked on the write")
+    -- An entry used again after the count is kept.
+    idx.entries.big = { bytes = 20 * MB, used_at = 99 }
+    saved()
+    E.OC.storageCount("count")
+    idx.entries.big.used_at = 120
+    run(3)
+    ok(idx.entries.big, "used since the count: kept")
+    -- The totals are there at the next start.
+    E.OC.storage = nil
+    ok(E.OC.storageTotals() and E.OC.storageTotals().used > 0, "storage.lua read back")
     -- No limit: nothing goes.
     E.S.storage_limit_mb = 0
     idx.entries.big = { bytes = 900 * MB, used_at = 99 }
-    E.OC.storageEnforce("limit changed")
+    saved()
+    E.OC.storageCount("limit changed"); run(3)
     ok(idx.entries.big, "no limit")
-    lfs.attributes = attributes
+    -- Without the companion of this version nothing is counted on the UI thread.
+    cache.worker_problem = "Orbit Companion needed"
+    local n = FC.storage_asks
+    E.OC.storageCount("count"); run(3)
+    ok(FC.storage_asks == n and walks == 0, "nothing counted")
+    cache.worker_problem = nil
+    lfs.attributes, lfs.dir = attributes, dir
     E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
     cacheTeardown()
 end)
@@ -4223,13 +4253,19 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
     local MB = 1048576
     local notes = {}
     E.OC.note = function(t) table.insert(notes, t) end
-    local totals, batch = E.OC.storageTotals, FC.COVER_BATCH
+    local batch = FC.COVER_BATCH
     FC.COVER_BATCH = 1
     E.S.mirror_covers, E.S.storage_limit_mb = true, 1
     local kept = 0.2 * MB
-    -- The totals the plugin hands the companion with the plan; each cover the companion saves is 0.4 MB.
+    -- What else counts (the companion counts it at the run's start: here a kept entry of that size);
+    -- each cover the companion saves is 0.4 MB.
     FC.cover_bytes = 0.4 * MB
-    E.OC.storageTotals = function() return { used = kept, kept = kept, mirror_cover = 0, cache = 0, cover = 0 } end
+    local function keptEntry() E.OC.writeFile(cache.dir .. "/index.lua", E.Cache.encode({ entries = { k = { bytes = kept, keep = true } } })) end
+    local items = FC.storageItems
+    FC.storageItems = function(...)
+        keptEntry()
+        return items(...)
+    end
     withHost(cat, function()
         client:request("GET", DASH)
         client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
@@ -4254,7 +4290,7 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
         ok(note:find("^Storage limit reached: 0 of %d+ lists and books saved"), "the run stops: " .. note)
         ok(m.left == 0 and notes[#notes] == note, "shown: " .. table.concat(notes, " | "))
     end)
-    E.OC.storageTotals, FC.COVER_BATCH = totals, batch
+    FC.storageItems, FC.COVER_BATCH = items, batch
     E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
     cacheTeardown()
 end)

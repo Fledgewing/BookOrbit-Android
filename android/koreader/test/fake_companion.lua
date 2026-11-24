@@ -168,8 +168,8 @@ local function limited(st, plan, job)
     if not limit or limit <= 0 then return false end
     local covers = job.k == "covers"
     if covers and not plan.covers_on then return false end
-    local kept = (plan.base_kept or 0) + st.bytes - st.run_bytes0
-    local room = covers and (kept + (plan.base_mirror_cover or 0) + st.covers.bytes - st.run_cover0 < limit) or (not covers and kept < limit)
+    local kept = (st.base_other or 0) + st.bytes
+    local room = covers and (kept + (st.base_mirror_cover or 0) + st.covers.bytes - st.run_cover0 < limit) or (not covers and kept < limit)
     if room then return false end
     local text
     if covers then
@@ -316,6 +316,14 @@ function F.mirror(extras)
         return
     end
     st.run_bytes0, st.run_cover0 = st.bytes, st.covers.bytes
+    st.base_other, st.base_mirror_cover = 0, 0
+    if plan.limit then
+        -- Everything else that counts toward the limit, as it stands now (CacheWorker.run).
+        for _, e in ipairs(F.storageItems(plan.cover_dir, plan.covers_on, 0)) do
+            if e.kind == "kept" then st.base_other = st.base_other + e.bytes
+            elseif e.kind == "mirror_cover" then st.base_mirror_cover = st.base_mirror_cover + e.bytes end
+        end
+    end
     local out, jobs = { changed = {}, written = {} }, 0
     F.running, F.transport, F.trace = plan.run, 0, {}
     writeFile(mdir() .. "/status.lua", C().encode(status(st, plan, true)))
@@ -426,10 +434,95 @@ function F.checkNow(extras)
     end
 end
 
+---------------------------------------------------------------- the storage limit (CacheWorker.storage)
+
+-- StorageLogic.plan: browsing entries and plain covers first, least recently used first; then the
+-- covers saved for offline; never "kept".
+function F.storagePlan(items, limit)
+    local used = 0
+    for _, e in ipairs(items) do used = used + (e.bytes or 0) end
+    local out = { drop = {}, used = used, after = used }
+    if not limit or limit <= 0 or used <= limit then return out end
+    for _, tier in ipairs({ { cache = true, cover = true }, { mirror_cover = true } }) do
+        local list = {}
+        for _, e in ipairs(items) do if tier[e.kind] then table.insert(list, e) end end
+        table.sort(list, function(a, b) if (a.at or 0) ~= (b.at or 0) then return (a.at or 0) < (b.at or 0) end return a.k < b.k end)
+        for _, e in ipairs(list) do
+            if out.after <= limit then return out end
+            table.insert(out.drop, e.k)
+            out.after = out.after - (e.bytes or 0)
+        end
+    end
+    return out
+end
+
+local function fsize(p) return tonumber(require("libs/libkoreader-lfs").attributes(p, "size")) or 0 end
+
+function F.storageItems(cover_dir, mirror_covers, mirror_bytes)
+    local items = {}
+    local idx = load(dir() .. "/index.lua") or { entries = {} }
+    for k, e in pairs(idx.entries or {}) do
+        table.insert(items, { k = "e:" .. k, bytes = e.bytes or 0, at = e.used_at or 0, kind = e.keep and "kept" or "cache" })
+    end
+    table.insert(items, { k = "index", bytes = fsize(dir() .. "/index.lua"), at = 0, kind = "kept" })
+    table.insert(items, { k = "mirror", bytes = mirror_bytes or 0, at = 0, kind = "kept" })
+    if cover_dir and cover_dir ~= "" then
+        local keep = mirror_covers and load(mdir() .. "/cover_keep.lua") or {}
+        local lfs = require("libs/libkoreader-lfs")
+        local okd, it = pcall(lfs.dir, cover_dir)
+        for name in (okd and it or function() end) do
+            local a = name:match("%.jpg$") and lfs.attributes(cover_dir .. "/" .. name)
+            if type(a) == "table" and a.mode == "file" then
+                table.insert(items, { k = "c:" .. name, bytes = (a.size or 0) + fsize(cover_dir .. "/" .. name .. ".etag"),
+                    at = a.modification or 0, kind = keep[name] and "mirror_cover" or "cover" })
+            end
+        end
+    end
+    return items
+end
+
+F.storage_asks = 0
+function F.storageNow(extras)
+    F.storage_asks = F.storage_asks + 1
+    local st = F.state()
+    local limit = tonumber(extras.limit)
+    local cover_dir = extras.cover_dir ~= "" and extras.cover_dir or nil
+    local items = F.storageItems(cover_dir, extras.mirror_covers == "1", st and st.bytes or 0)
+    local plan = F.storagePlan(items, limit)
+    local by = {}
+    for _, e in ipairs(items) do by[e.k] = e end
+    local drop, removed = {}, { cache = 0, cover = 0, mirror_cover = 0 }
+    for _, k in ipairs(plan.drop) do
+        local e = by[k]
+        if k:match("^e:") then table.insert(drop, { key = k:sub(3), used_at = e.at })
+        elseif cover_dir then os.remove(cover_dir .. "/" .. k:sub(3)); os.remove(cover_dir .. "/" .. k:sub(3) .. ".etag") end
+        removed[e.kind] = removed[e.kind] + 1
+    end
+    local gone, totals = {}, { used = 0, kept = 0, cache = 0, cover = 0, mirror_cover = 0 }
+    for _, k in ipairs(plan.drop) do gone[k] = true end
+    for _, e in ipairs(items) do
+        if not gone[e.k] then totals.used = totals.used + e.bytes; totals[e.kind] = totals[e.kind] + e.bytes end
+    end
+    writeFile(dir() .. "/storage.lua", C().encode({ totals = totals, at = now() }))
+    F.seq = (F.seq or 0) + 1
+    writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode({ kind = "storage", why = extras.reason,
+        drop = drop, totals = totals, removed = removed, used = plan.used, after = plan.after, limit = limit }))
+end
+
+function F.storage(extras)
+    UIManager:scheduleIn(0.2, function()
+        W.in_companion = true
+        local okc, err = pcall(F.storageNow, extras)
+        W.in_companion = nil
+        if not okc then error(err, 0) end
+    end)
+end
+
 function F.receive(intent)
     if not (W.companion and intent.package == "net.fledgewing.orbitcompanion") then return end
     if intent.action:match("%.MIRROR$") then F.mirror(intent.extras)
-    elseif intent.action:match("%.CHECK$") then F.check(intent.extras) end
+    elseif intent.action:match("%.CHECK$") then F.check(intent.extras)
+    elseif intent.action:match("%.STORAGE$") then F.storage(intent.extras) end
 end
 
 -- The companion was stopped mid-run (its status stops moving).

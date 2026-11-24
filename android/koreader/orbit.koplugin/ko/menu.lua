@@ -85,7 +85,7 @@ function OrbitAndroid:menuItems()
         checked_func = function() return S.mirror_auto == false end,
         callback = function() S.mirror_auto = false; saveSettings() end,
     })
-    -- Storage limit (v0.11.2): one limit on everything Orbit stores (OC.storageEnforce).
+    -- Storage limit (v0.11.2): one limit on everything Orbit stores (OC.storageCount, counted by Orbit Companion).
     local limit_items = {}
     for _i, mb in ipairs(Cache.STORAGE_LIMITS_MB) do
         table.insert(limit_items, {
@@ -96,7 +96,7 @@ function OrbitAndroid:menuItems()
                 S.storage_limit_mb = mb
                 saveSettings()
                 log("storage: limit set to", mb == 0 and "none" or (mb .. " MB"))
-                pcall(OC.storageEnforce, "limit changed")
+                pcall(OC.storageCount, "limit changed")
             end,
         })
     end

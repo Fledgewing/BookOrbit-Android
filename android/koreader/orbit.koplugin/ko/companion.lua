@@ -15,6 +15,8 @@ Companion.ACTION = {
     -- The cache worker (docs/design/companion-worker.md): a mirror run, a cache check.
     MIRROR = Companion.PACKAGE .. ".action.MIRROR",
     CHECK = Companion.PACKAGE .. ".action.CHECK",
+    -- The storage limit: the companion counts and removes (OC.storageCount).
+    STORAGE = Companion.PACKAGE .. ".action.STORAGE",
     -- Updates: the companion checks, installs itself and then the plugin of its release.
     UPDATE = Companion.PACKAGE .. ".action.UPDATE",
     NET_UP = Companion.PACKAGE .. ".action.NET_UP",

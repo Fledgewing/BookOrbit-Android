@@ -159,7 +159,7 @@ at that moment, and even then its fetch side moves.
 | Background cache checks, `cache: ... checking (open)` | companion asks, compares and saves (step 2); the UI thread applies a few fields and redraws | **moved**; apply stays | the redraw needs the view |
 | Cache index save | child (step 1) | **move** (step 3): the index is the plugin's own state; the companion would need it pushed every time | small since step 1 |
 | Child stores (`stored` events) | metadata only on the UI thread (step 1) | stays | the store is the plugin's own read, inside its child |
-| Storage limit: count and LRU (`OC.storageEnforce`) | UI: index walk and cover-folder `lfs` scan, at start and when over the limit | **move** (step 3): the companion counts and deletes files; the UI thread drops index entries | about 600 files today, thousands with "Save every cover" |
+| Storage limit: count and LRU (`OC.storageEnforce`) | companion (step 3): `STORAGE`; it walks the index and the cover folder, deletes covers and names the entries to drop; a mirror run counts its own base | **moved**; the UI thread drops the named index entries | about 600 files today, thousands with "Save every cover" |
 | Copies' detail lookup and replacement (`Copies.details`, `Copies.tick`) | UI lookup; child download | **move** (step 3) | per on-device book, at Home and network up |
 | Sleep screen pool: Up next, Leave out member lists and tag details, cover prefetch | child (`Sleep.build`) | **move** (step 3): the companion already owns the sleep screen | already off the UI thread (log 22:07:38.98 to :39.82, 0.8 s, UI free) |
 | Sleep screen current cover (`Sleep.writeCurrent`) | UI, once per book open | **stays** | needs the open document (`getCoverImage`) |

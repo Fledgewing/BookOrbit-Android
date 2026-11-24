@@ -418,29 +418,6 @@ end
 Cache.STORAGE_LIMITS_MB = { 100, 250, 500, 1024, 0 } -- 0: no limit
 Cache.STORAGE_DEFAULT_MB = 250
 
--- items: { { k, bytes, at, kind } }, kind: "cache" (a browsing-cache entry), "cover" (a cover the
--- mirror didn't save), "mirror_cover" (saved by "Save every cover for offline") or "kept" (the
--- mirror's lists and book details, Home: never removed). limit: bytes (nil or 0: none).
--- -> { drop = keys in the order they go, used, after }: browsing entries and plain covers first,
--- least recently used first; then the mirror's covers, least recently seen first; never "kept".
-function Cache.storagePlan(items, limit)
-    local used = 0
-    for _, e in ipairs(items or {}) do used = used + (e.bytes or 0) end
-    local out = { drop = {}, used = used, after = used }
-    if not limit or limit <= 0 or used <= limit then return out end
-    for _, tier in ipairs({ { cache = true, cover = true }, { mirror_cover = true } }) do
-        local list = {}
-        for _, e in ipairs(items) do if tier[e.kind] then table.insert(list, e) end end
-        table.sort(list, function(a, b) if (a.at or 0) ~= (b.at or 0) then return (a.at or 0) < (b.at or 0) end return a.k < b.k end)
-        for _, e in ipairs(list) do
-            if out.after <= limit then return out end
-            table.insert(out.drop, e.k)
-            out.after = out.after - (e.bytes or 0)
-        end
-    end
-    return out
-end
-
 -- Whether the offline mirror may save more under the limit. totals: { kept, mirror_cover } bytes.
 -- what: "covers" (the every-cover pass: room only while the mirror's own share is under the
 -- limit, so it never pushes out covers it saved) or "lists" (lists and details: they stop only

@@ -13,7 +13,7 @@ import java.io.File
  * - `<hash>.lua`: a checked entry (the plugin's own browsing cache);
  * - `mirror/<hash>.lua`: the mirror's pages and details; `mirror/status.lua`, `mirror/summary.lua`,
  *   `mirror/cover_keep.lua`; `mirror/worker-state.lua` (this worker's queue, private);
- * - `events/<n>.lua`: a check's answer.
+ * - `events/<n>.lua`: a check's answer, a storage count; `storage.lua`: the last count's totals.
  *
  * Plain JVM (java.io and an [Http] port), so the unit tests run it against a fake server.
  */
@@ -112,6 +112,73 @@ class CacheWorker(
         event(ev)
     }
 
+    // ------------------------------------------------------------------ the storage limit
+
+    /** The plugin's STORAGE: count, and over [limit] remove (StorageLogic). [mirrorCovers]: "Save every cover" is on. */
+    data class StorageAsk(val reason: String, val limit: Long?, val coverDir: String?, val mirrorCovers: Boolean)
+
+    /**
+     * Everything Orbit stores: the cache's entries (from its index), the index, the offline
+     * mirror's lists and details ([mirrorBytes]), and the cover folder's files.
+     */
+    fun storageItems(coverDir: String?, mirrorCovers: Boolean, mirrorBytes: Long): List<StorageLogic.Item> {
+        val items = ArrayList<StorageLogic.Item>()
+        val index = File(root, "index.lua")
+        val entries = (read(index) as? Map<*, *>)?.get("entries") as? Map<*, *> ?: emptyMap<Any?, Any?>()
+        for ((k, v) in entries) {
+            val e = v as? Map<*, *> ?: continue
+            items.add(StorageLogic.Item("e:$k", (e["bytes"] as? Number)?.toLong() ?: 0L, (e["used_at"] as? Number)?.toLong() ?: 0L,
+                if (e["keep"] == true) "kept" else "cache"))
+        }
+        items.add(StorageLogic.Item("index", if (index.isFile) index.length() else 0L, 0L, "kept"))
+        items.add(StorageLogic.Item("mirror", mirrorBytes, 0L, "kept"))
+        val dir = coverDir?.let { File(it) }
+        if (dir != null && dir.isDirectory) {
+            val keep = if (mirrorCovers) (read(File(mirrorDir, "cover_keep.lua")) as? Map<*, *>)?.keys?.map { it.toString() }?.toHashSet() ?: emptySet() else emptySet()
+            for (f in dir.listFiles() ?: emptyArray()) {
+                if (!f.name.endsWith(".jpg") || !f.isFile) continue
+                val etag = File(dir, f.name + ".etag")
+                items.add(StorageLogic.Item("c:${f.name}", f.length() + (if (etag.isFile) etag.length() else 0L), f.lastModified() / 1000,
+                    if (f.name in keep) "mirror_cover" else "cover"))
+            }
+        }
+        return items
+    }
+
+    /**
+     * Counts, and over the limit removes covers itself; the cache entries to drop go to the plugin
+     * (it owns its index) in the event: { kind = "storage", why, drop = { {key, used_at} }, totals,
+     * removed = { cache, cover, mirror_cover }, used, after, limit }. The totals also go to
+     * storage.lua, which the plugin reads at start.
+     */
+    fun storage(a: StorageAsk) {
+        val items = storageItems(a.coverDir, a.mirrorCovers, loadState()?.bytes ?: 0L)
+        val plan = StorageLogic.plan(items, a.limit)
+        val byK = items.associateBy { it.k }
+        val drop = ArrayList<Map<String, Any?>>()
+        val removed = sortedMapOf("cache" to 0L, "cover" to 0L, "mirror_cover" to 0L)
+        for (k in plan.drop) {
+            val it = byK[k] ?: continue
+            if (k.startsWith("e:")) drop.add(sortedMapOf("key" to k.removePrefix("e:"), "used_at" to it.at))
+            else if (k.startsWith("c:") && a.coverDir != null) {
+                File(a.coverDir, k.removePrefix("c:")).delete()
+                File(a.coverDir, k.removePrefix("c:") + ".etag").delete()
+            }
+            removed[it.kind] = (removed[it.kind] ?: 0L) + 1
+        }
+        val totals = StorageLogic.totals(items, plan.drop)
+        write(File(root, "storage.lua"), LuaValue.encode(sortedMapOf<String, Any?>("totals" to totals, "at" to now())))
+        val ev = sortedMapOf<String, Any?>("kind" to "storage", "why" to a.reason, "drop" to drop, "totals" to totals,
+            "removed" to removed, "used" to plan.used, "after" to plan.after)
+        a.limit?.let { ev["limit"] = it }
+        event(ev)
+        if (plan.drop.isNotEmpty()) {
+            log("storage: ${"%.1f".format(java.util.Locale.ROOT, plan.used / MB)} MB over ${a.limit?.let { it / (1024 * 1024) }} MB (${a.reason}); " +
+                "${removed["cache"]} browsing entries, ${removed["cover"]} covers, ${removed["mirror_cover"]} saved-for-offline covers go -> " +
+                "%.1f MB".format(java.util.Locale.ROOT, plan.after / MB))
+        }
+    }
+
     private var eventSeq = 0
 
     private fun event(ev: Map<String, Any?>) {
@@ -182,8 +249,8 @@ class CacheWorker(
         var startedAt: Long = 0; var revalidating = false; var limitNote: Map<String, Any?>? = null; var keepN = 0L
         var keepDirty = false
         var detailsDone = 0
-        /** This run's starting bytes (the plugin's totals already count what was saved before). */
-        var runBytes0 = 0L; var runCover0 = 0L
+        /** This run's starting cover bytes, and what else counts toward the limit (counted at its start). */
+        var runCover0 = 0L; var baseOther = 0L; var baseMirrorCover = 0L
 
         fun left() = queues.values.sumOf { it.size }
         fun peek(): Pair<String, Job>? = queues.entries.firstOrNull { it.value.isNotEmpty() }?.let { it.key to it.value.first() }
@@ -245,8 +312,6 @@ class CacheWorker(
         val coversOn get() = m["covers_on"] == true
         val coverDir get() = m["cover_dir"] as? String
         val limit get() = (m["limit"] as? Long)?.takeIf { it > 0 }
-        val baseKept get() = (m["base_kept"] as? Long) ?: 0
-        val baseMirrorCover get() = (m["base_mirror_cover"] as? Long) ?: 0
         fun strings(k: String) = (m[k] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
         fun ids(k: String) = (m[k] as? List<*>)?.mapNotNull { it as? Long } ?: emptyList()
     }
@@ -413,8 +478,8 @@ class CacheWorker(
         val limit = plan.limit ?: return false
         val covers = job.k == "covers"
         if (covers && !plan.coversOn) return false
-        val kept = plan.baseKept + s.bytes - s.runBytes0
-        val room = if (covers) kept + plan.baseMirrorCover + s.covers[3] - s.runCover0 < limit else kept < limit
+        val kept = s.baseOther + s.bytes
+        val room = if (covers) kept + s.baseMirrorCover + s.covers[3] - s.runCover0 < limit else kept < limit
         if (room) return false
         val text: String
         if (covers) {
@@ -618,8 +683,13 @@ class CacheWorker(
             else -> if (s == null) s = State()
         }
         val st = s!!
-        st.runBytes0 = st.bytes
         st.runCover0 = st.covers[3]
+        if (plan.limit != null) {
+            // Everything else that counts toward the limit, as it stands now (StorageLogic).
+            val items = storageItems(plan.coverDir, plan.coversOn, 0L)
+            st.baseOther = items.filter { it.kind == "kept" }.sumOf { it.bytes }
+            st.baseMirrorCover = items.filter { it.kind == "mirror_cover" }.sumOf { it.bytes }
+        }
         val out = Out()
         val bytes0 = st.bytes
         val coverBytes0 = st.covers[3]
@@ -710,5 +780,6 @@ class CacheWorker(
         const val STATE_EVERY_S = 30
         const val MAX_BODY = 32L * 1024 * 1024
         const val MAX_COVER = 4L * 1024 * 1024
+        const val MB = 1048576.0
     }
 }

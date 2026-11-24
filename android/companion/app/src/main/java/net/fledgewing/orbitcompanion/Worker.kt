@@ -17,6 +17,7 @@ import java.net.URL
 object Worker {
     const val ACTION_MIRROR = "${Contract.PACKAGE}.action.MIRROR"
     const val ACTION_CHECK = "${Contract.PACKAGE}.action.CHECK"
+    const val ACTION_STORAGE = "${Contract.PACKAGE}.action.STORAGE"
 
     /** The cap the plugin needs before it hands work over (ModeLogic.BASE). */
     const val CAP = "cache_worker"
@@ -26,6 +27,7 @@ object Worker {
     private val lock = Object()
     private val checks = ArrayDeque<CacheWorker.Check>()
     private var pending: Pair<CacheWorker.Plan, CacheWorker.Creds>? = null
+    private var storage: CacheWorker.StorageAsk? = null
     private var thread: Thread? = null
 
     @Volatile
@@ -33,7 +35,7 @@ object Worker {
         private set
 
     /** Work in hand: an automatic Wi-Fi off waits for it. */
-    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || pending != null }
+    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || pending != null || storage != null }
 
     private var worker: CacheWorker? = null
 
@@ -47,6 +49,13 @@ object Worker {
     }
 
     fun onIntent(ctx: Context, i: Intent) {
+        if (i.action == ACTION_STORAGE) {
+            // No login: files only. A newer ask replaces a waiting one.
+            val a = CacheWorker.StorageAsk(i.getStringExtra("reason") ?: "plugin", i.getStringExtra("limit")?.toLongOrNull()?.takeIf { it > 0 },
+                i.getStringExtra("cover_dir")?.takeIf { it.isNotEmpty() }, i.getStringExtra("mirror_covers") == "1")
+            synchronized(lock) { storage = a; lock.notifyAll() }
+            return start()
+        }
         val creds = creds(i)
         if (creds == null) {
             OLog.w("worker: ${Contract.shortName(i.action)} without a BookOrbit login; ignored")
@@ -82,6 +91,8 @@ object Worker {
     }
 
     private fun drainChecks() {
+        val a = synchronized(lock) { storage.also { storage = null } }
+        if (a != null) try { worker().storage(a) } catch (e: Exception) { OLog.w("worker: storage count failed", e) }
         while (true) {
             val c = synchronized(lock) { checks.removeFirstOrNull() } ?: return
             try { worker().check(c) } catch (e: Exception) { OLog.w("worker: check failed", e) }
@@ -92,8 +103,8 @@ object Worker {
         while (true) {
             drainChecks()
             val p = synchronized(lock) {
-                if (checks.isEmpty() && pending == null) lock.wait(60_000)
-                if (checks.isEmpty() && pending == null) { thread = null; return }
+                if (checks.isEmpty() && pending == null && storage == null) lock.wait(60_000)
+                if (checks.isEmpty() && pending == null && storage == null) { thread = null; return }
                 pending.also { pending = null }
             } ?: continue
             mirrorRunning = true

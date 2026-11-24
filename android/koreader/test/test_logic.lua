@@ -1044,12 +1044,7 @@ test("cache: kept entries (Home, the mirror's lists and details) are outside the
     end
 end)
 
-test("cache: the storage limit's eviction order, the mirror's room and its stop note (shared cases)", function()
-    for _, c in ipairs(CC.storage.plans) do
-        local r = C.storagePlan(c.items, c.limit)
-        eq(table.concat(r.drop, ","), table.concat(c.drop, ","), c.name)
-        eq(r.after, c.after, c.name .. " after")
-    end
+test("cache: the mirror's room and its stop note (shared cases; the eviction order is StorageLogic's)", function()
     for _, c in ipairs(CC.storage.room) do eq(C.storageRoom(c.totals, c.limit, c.what), c.room, c.name) end
     for _, c in ipairs(CC.storage.notes) do eq(C.limitText(c.what, c.done, c.total), c.text, c.text) end
     eq(C.STORAGE_DEFAULT_MB, 250, "250 MB by default")
