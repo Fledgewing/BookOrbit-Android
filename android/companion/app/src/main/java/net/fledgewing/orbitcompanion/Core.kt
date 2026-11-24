@@ -173,7 +173,7 @@ class Prefs(ctx: Context) {
         get() = str("reading_schedule_request")
         set(v) = setStr("reading_schedule_request", v)
     var readingScheduleRequestAt by LongPref("reading_schedule_request_at")
-    /** The sleep screen's picker asked for fresh lists (choices.json), ms; 0 = never. */
+    /** The sleep screen's picker asked for fresh lists (scopes.json, tags.json), ms; 0 = never. */
     var wantChoicesAt by LongPref("want_choices_at")
 
     // Who turned Wi-Fi on (WifiOwnership).

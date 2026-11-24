@@ -1557,18 +1557,6 @@ test("sleep screen: Every sleep (sleep_hours 0) is a valid choice, listed first"
     eq(SettingsSync.fromWire(SIDX.byKey.sleep_hours, "0"), 0)
 end)
 
-test("choices.json: the picker's lists and the tag counts", function()
-    local SP = M.SleepPool
-    local body = SP.choicesFile({ scopes = { { id = 3, title = "Short reads", count = 48 }, { id = "x" } },
-        collections = { { id = 9, title = "Book club", count = 9 } }, cached = true },
-        { { tag = "age:18", label = "Age:18", count = 14 } }, 1234)
-    eq(#body.scopes, 1, "bad id dropped"); eq(body.collections[1].title, "Book club")
-    eq(body.tags[1].tag, "age:18"); eq(body.cached, true); eq(body.at, 1234)
-    local back = JSON.decode(SP.json(body))
-    eq(back.scopes[1].count, 48)
-    eq(SP.json(SP.choicesFile(nil, nil, 1)):find('"scopes":[]', 1, true) ~= nil, true, "empty lists are arrays")
-end)
-
 test("recommended choices from the companion", function()
     local c = SettingsSync.choices("bo.auto_sync=ours; g.apps=mine;x=bogus;all=undo")
     eq(#c, 3); eq(c[1].id, "bo.auto_sync"); eq(c[2].what, "mine"); eq(c[3].id, "all")

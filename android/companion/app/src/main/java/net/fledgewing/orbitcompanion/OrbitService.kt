@@ -661,7 +661,7 @@ class OrbitService : Service() {
             "\"reading_schedule_request\":${ReadingSchedule.statusJson(prefs.readingScheduleRequest, prefs.readingScheduleRequestAt)}," +
             // The KOReader setup box (android/docs/INTERFACE.md): only when unsnoozed rows need the user.
             "\"setup_prompt\":${setupPrompt()}," +
-            // The sleep screen's picker is open: the plugin writes choices.json (companion-settings §6.2).
+            // The sleep screen's picker is open: the plugin asks the worker for fresh lists (companion-settings §6.2).
             "\"want_choices\":${prefs.wantChoicesAt}," +
             "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +
             "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}," +
