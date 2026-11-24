@@ -1092,11 +1092,7 @@ class HomeAppActivity : EinkActivity() {
 
     override fun onResume() {
         super.onResume()
-        val pm = packageManager
-        val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val found = pm.queryIntentActivities(main, 0)
-            .filter { it.activityInfo.packageName != packageName }
-            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+        val found = AppList.load(this).map { it.pkg to it.label }
         readers = KnownApps.readers(Vendor.profile(this))
         apps = HomeApp.order(found, readers)
         render()
