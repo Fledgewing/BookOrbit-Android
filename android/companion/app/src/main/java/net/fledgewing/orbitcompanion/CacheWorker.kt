@@ -432,7 +432,7 @@ class CacheWorker(
         return true
     }
 
-    private fun shortPath(p: String) = LuaValue.utf8(p).removePrefix("/koreader/plugin/catalog")
+    private fun shortPath(p: String) = LuaValue.utf8(p).removePrefix("/koreader/plugin/catalog") // orbify:not-a-route: a log line's prefix, not a call
 
     /** One saved list page or detail: what it names joins the queue. */
     private fun landed(s: State, plan: Plan, creds: Creds, job: Job, path: String, body: Map<*, *>, out: Out) {
