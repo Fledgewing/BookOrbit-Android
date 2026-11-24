@@ -66,8 +66,8 @@ about this" and "Later" on the prompt (`AttentionActivity`, `SetupAttention.igno
 
 1. **Header:** "Setup", "‹ Back". (The mode moves to the bottom line, §3.9.)
 2. **Summary card**, always first, one of:
-   - **All set** ✓ "Everything this reader needs is done." and, when there are any, "1 skipped ·
-     2 optional off" (tappable: jumps to them).
+   - **All set** ✓ "Everything this reader needs is done." When any optional or skipped item is
+     shown, it reads "Everything this reader needs is done. Optional items below." (user's copy).
    - **2 things need you** with a solid **Fix next** button (today's `SetupWalk`) and "Goes
      through each one and comes back here."
    - **Checking…** "Waiting for KOReader to report. Open KOReader once." (only when nothing needs
@@ -147,10 +147,11 @@ Full and Add-on read the same table. A guard test fails on a row id with no loss
 | **Off / skipped** | box with a dash – | not counted | Optional rows: "Without it: …" and **Allow**. A Full step the user skipped ("Don't ask about this") goes to its group with "Skipped · Without it: …" and **Allow**; never in Needs you, never prompted, until the user taps Allow |
 | **Checking** | box with … | not counted, not open | "Checking… open KOReader once" (no spinner, no timer redraw) |
 
-**Set by the reader** is the Boox case: Orbit's battery page says "not available" because the
-reader already exempts the Home app or device admin. The separate fix makes the check count it as
-met; this design gives it its words. The ⓘ opens a one-screen note: "This reader keeps Orbit
-running because it is the Home app. There is no switch for it here, and none is needed." Rule: a
+**Set by the reader** is the Boox case: Orbit's battery page says "not available". A separate fix
+re-checks the battery settings directly; this state is shown only when the reader's own battery
+settings are already right and can't be changed. The words never name a cause. The ⓘ opens a
+one-screen note: "This reader's own battery settings already keep Orbit running, and they can't be
+changed here. There's nothing to do." Rule: a
 setting the reader doesn't let anyone change, and that is already in the state Orbit needs, is
 done. If the reader blocks it in the *wrong* state, the row is Needs you with "Can't be changed on
 this reader · Without it: …" and no button (Help instead).

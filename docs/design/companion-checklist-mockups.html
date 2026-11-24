@@ -41,7 +41,7 @@
   <li>Battery was three rows with one fix. <span>It's now one row, with a detail page for each app.</span></li>
   <li>"(NET_UP)", "(device admin)" and "Always-on on" are internals. <span>They move to Details, which has a Copy for support button.</span></li>
   <li>The label said what to do ("Set Orbit as Home app") and "done" sat on the right. <span>Labels are now nouns, with the state on the line below and one verb on the button.</span></li>
-  <li>The Boox can't change Orbit's battery setting, because as the Home app Orbit is already exempt. <span>That's a new state, "Set by the reader", and it counts as done.</span></li>
+  <li>On the Boox, Orbit's battery setting is already the way Orbit needs it, and the reader doesn't let anyone change it. <span>That's a new state, "Set by the reader", and it counts as done.</span></li>
   <li>E-ink: no animation, no spinner and no timed redraws. <span>Expanding a group takes one redraw, and state is shown by glyph and words, never by grey alone.</span></li>
 </ul>
 
@@ -149,7 +149,7 @@
 
   <figure><div class="scr"><div class="sb"><span>17:19</span><span>58%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
-    <div class="sum"><div class="t"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done.</div></div>
+    <div class="sum"><div class="t"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended settings on</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 5 · battery set by the reader for Orbit</div></div><span class="chev">›</span></div>
@@ -159,13 +159,13 @@
     <div class="grp"><span class="box chk" style="border-color:transparent">≡</span><div class="x"><div class="n">Details</div><div class="s">Last heard from KOReader 17:19</div></div><span class="chev">›</span></div>
     <div class="foot">Full mode · change in Settings</div>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
-  <figcaption>3. The redesign, in the same state. The Boox exempts Orbit from battery limits because it's the Home app, so that row now counts as done ("set by the reader"). The page shows "All set" and fits on one screen with no scrolling.</figcaption></figure>
+  <figcaption>3. The redesign, in the same state. The Boox's own battery settings for Orbit are already right and can't be changed, so that row now counts as done ("set by the reader"). The page shows "All set" and fits on one screen with no scrolling.</figcaption></figure>
 </div></template>
 
 <template id="t-g2"><div class="grid">
   <figure><div class="scr"><div class="sb"><span>09:41</span><span>81%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
-    <div class="sum"><div class="t"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done.</div><div class="l"><b>1 skipped</b> · 1 optional off ›</div></div>
+    <div class="sum"><div class="t"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended settings on</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 6 · Orbit keyboard skipped</div></div><span class="chev">›</span></div>
@@ -175,7 +175,7 @@
     <div class="grp"><span class="box chk" style="border-color:transparent">≡</span><div class="x"><div class="n">Details</div><div class="s">Last heard from KOReader 09:40</div></div><span class="chev">›</span></div>
     <div class="foot">Full mode · change in Settings</div>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
-  <figcaption>4. All set, M8C. A skipped step doesn't stop "All set", but the summary names it, and tapping that line opens the group it's in.</figcaption></figure>
+  <figcaption>4. All set, M8C. A skipped step doesn't stop "All set". When anything is optional or skipped, the summary adds "Optional items below."</figcaption></figure>
 
   <figure><div class="scr"><div class="sb"><span>09:41</span><span>81%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
@@ -222,7 +222,7 @@
   <figure><div class="scr"><div class="sb"><span>09:45</span><span>81%</span></div><div class="body">
     <div class="hd"><b>Battery: Orbit</b><span>‹ Battery</span></div>
     <div class="sum"><div class="t"><span class="box done">✓</span>Set by the reader</div><div class="l">Nothing to do.</div></div>
-    <p style="font-size:11.5px;margin:4px 0 8px">This reader keeps Orbit running because Orbit is the Home app. That's why the battery page says "not available": there's no switch for it here, and none is needed.</p>
+    <p style="font-size:11.5px;margin:4px 0 8px">This reader's own battery settings already keep Orbit running, and they can't be changed here. There's nothing to do.</p>
     <p style="font-size:11.5px;margin:0 0 8px">If this reader ever does start pausing Orbit, this row will say so and show what to do.</p>
     <span class="btn">OK</span>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
@@ -232,7 +232,7 @@
 <template id="t-g3"><div class="grid">
   <figure><div class="scr"><div class="sb"><span>20:10</span><span>66%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
-    <div class="sum" style="padding:6px 10px"><div class="t" style="font-size:13px"><span class="box done">✓</span>All set</div><div class="l">4 of 4 required · 2 of 6 optional on</div></div>
+    <div class="sum" style="padding:6px 10px"><div class="t" style="font-size:13px"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended: applied 7</div></div><span class="chev">›</span></div>
     <div class="grp open"><span class="box off">–</span><div class="x"><div class="n">Optional</div><div class="s">What you get with each</div></div><span class="chev">⌄</span></div>
@@ -249,7 +249,7 @@
 
   <figure><div class="scr"><div class="sb"><span>20:12</span><span>66%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
-    <div class="sum" style="padding:6px 10px"><div class="t" style="font-size:13px"><span class="box done">✓</span>All set</div><div class="l">1 skipped · 1 optional off</div></div>
+    <div class="sum" style="padding:6px 10px"><div class="t" style="font-size:13px"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps, BookOrbit, Connection</div><div class="s">all done</div></div><span class="chev">›</span></div>
     <div class="grp open"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 6</div></div><span class="chev">⌄</span></div>
     <div class="in">
@@ -339,7 +339,7 @@
     <div class="kv"><b>Plugin version KOReader runs</b><span>0.11.2</span></div>
     <div class="kv"><b>Signed in (from the plugin)</b><span>yes</span></div>
     <div class="kv"><b>Recommended settings</b><span>applied · 0 conflicts</span></div>
-    <div class="kv"><b>Battery: Orbit</b><span>not available (Home app)</span></div>
+    <div class="kv"><b>Battery: Orbit</b><span>already right · can't be changed</span></div>
     <div class="kv"><b>Battery: Tailscale, KOReader</b><span>unrestricted</span></div>
     <div class="kv"><b>Tailscale</b><span>connected · Always-on · no lockdown</span></div>
     <div class="kv"><b>Frozen apps</b><span>none</span></div>
