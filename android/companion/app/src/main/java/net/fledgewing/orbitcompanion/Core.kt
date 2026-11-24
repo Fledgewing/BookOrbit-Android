@@ -136,6 +136,16 @@ class Prefs(ctx: Context) {
     var helperPin: Boolean
         get() = bool("helper_pin", false)
         set(v) = setBool("helper_pin", v)
+    /** Reading fonts (ReadingFonts): the user turned the row on; a restart is owed; the last install's result. */
+    var fontsWanted: Boolean
+        get() = bool("fonts_wanted", false)
+        set(v) = setBool("fonts_wanted", v)
+    var fontsRestartPending: Boolean
+        get() = bool("fonts_restart_pending", false)
+        set(v) = setBool("fonts_restart_pending", v)
+    var fontsStatus: String
+        get() = str("fonts_status")
+        set(v) = setStr("fonts_status", v)
     /** Add-on's optional rows the user tapped Allow on (AddonLogic.optState). */
     var addonAsked: Set<String>
         get() = sp.getStringSet("addon_asked", emptySet())?.toSet() ?: emptySet()

@@ -187,7 +187,9 @@ class OrbitService : Service() {
                 Intent.ACTION_SCREEN_OFF -> {
                     Pin.onScreenOff()
                     Pin.packagesChanged()
-                    PatchInstaller.follow(this@OrbitService, "screen off", screenOff = true)
+                    if (!PatchInstaller.follow(this@OrbitService, "screen off", screenOff = true)) {
+                        FontInstaller.follow(this@OrbitService, "screen off", screenOff = true)
+                    }
                     if (offAtScreenOffUntil > SystemClock.elapsedRealtime()) {
                         OLog.i("screen off after sync and sleep: Wi-Fi off now (setting Off now)")
                         Net.setWifi(this@OrbitService, false, "after sleep sync, Off now")
