@@ -1,0 +1,206 @@
+# The emulated release tests (docs/design/emulated-release-tests.md): what a release must pass
+# before it is published, with no device. Called by release.yml (Android) and xteink.yml
+# (firmware) on the release commit; also run by hand.
+#
+#   stage 0  server kit: the fault proxy's tests, then the real BookOrbit (pinned by digest,
+#            tools/e2e/compose.yml) seeded with the synthetic library, checked through the proxy
+#   stage 1  Xteink: Orbify's overlay in upstream's SDL simulator, one job per reader, the
+#            scenarios in xteink/test/e2e/run.py against the stage-0 server
+#   stage 2  Android: the companion's JVM tests, Robolectric included (install-session states)
+#
+# Locally: AGENTS.md "Emulated release tests".
+name: release-tests
+
+on:
+  # A change to the tests themselves runs them; anything else waits for a release (§6.3).
+  pull_request:
+    paths:
+      - "tools/e2e/**"
+      - "shared/fixtures/e2e/**"
+      - "xteink/test/e2e/**"
+      - "xteink/tailnet/sim/**"
+      - "xteink/overlay/patches/v2.0/0090-orbify-simulator-build.patch"
+      - ".github/workflows/release-tests.yml"
+  workflow_call:
+    inputs:
+      platform:
+        description: "android, xteink or all"
+        type: string
+        default: all
+      ref:
+        description: "Orbify commit to test (default: the caller's)"
+        type: string
+        default: ""
+      upstream_ref:
+        description: "CrossInk tag or commit for stage 1 (default: tools/upstreams.lock)"
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "android, xteink or all"
+        type: choice
+        options: [all, xteink, android]
+        default: all
+      ref:
+        description: "Orbify commit to test (default: this run's)"
+        type: string
+        default: ""
+      upstream_ref:
+        description: "CrossInk tag or commit for stage 1 (default: tools/upstreams.lock)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  UPSTREAM_REPO: agosez/CrossInk-Bookorbit
+  PIO_CORE: "6.1.19"
+
+jobs:
+  kit:
+    name: stage 0 server kit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Fault proxy and library tests
+        run: python3 tools/e2e/test_kit.py </dev/null
+
+      - name: BookOrbit up and seeded
+        run: python3 tools/e2e/kit.py up </dev/null
+
+      - name: The seeded server through the proxy
+        env:
+          ORBIFY_E2E_LIVE: "1"
+        run: python3 tools/e2e/test_kit.py </dev/null
+
+      - name: Server logs
+        if: failure()
+        run: docker compose --env-file tools/e2e/e2e.env -f tools/e2e/compose.yml logs --no-color | tail -200
+
+  xteink:
+    name: stage 1 ${{ matrix.profile }} simulator
+    if: (inputs.platform || 'all') != 'android'
+    needs: kit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [x4-pro, x4-classic, x3]
+        include:
+          - profile: x4-pro
+            env: x4-pro-simulator
+          - profile: x4-classic
+            env: x4-classic-simulator
+          - profile: x3
+            env: simulator-X3
+    steps:
+      - name: Check out Orbify
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          path: orbify
+          submodules: recursive
+
+      - name: CrossInk version
+        id: up
+        env:
+          INPUT_REF: ${{ inputs.upstream_ref }}
+        run: |
+          set -euo pipefail
+          ref="${INPUT_REF:-$(awk '$1 == "crossink-v2.0" {print $3}' orbify/tools/upstreams.lock)}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Check out CrossInk-Bookorbit ${{ steps.up.outputs.ref }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ steps.up.outputs.ref }}
+          path: upstream
+          submodules: recursive
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: ${{ runner.os }}-pio-sim-${{ env.PIO_CORE }}-${{ hashFiles('upstream/platformio.ini') }}
+
+      - name: Install PlatformIO Core, SDL2, OpenSSL and wolfSSL
+        run: |
+          set -euo pipefail
+          uv pip install --system -U "https://github.com/pioarduino/platformio-core/archive/refs/tags/v${PIO_CORE}.zip"
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libsdl2-dev libssl-dev libwolfssl-dev pkg-config
+
+      - name: Apply the overlay
+        run: orbify/xteink/scripts/apply.sh upstream
+
+      - name: Build the ${{ matrix.profile }} simulator
+        working-directory: upstream
+        run: pio run -e "${{ matrix.env }}" </dev/null
+
+      - name: BookOrbit up and seeded
+        run: python3 orbify/tools/e2e/kit.py up </dev/null
+
+      - name: Scenarios
+        run: |
+          python3 orbify/xteink/test/e2e/run.py --checkout upstream --profile "${{ matrix.profile }}" \
+            --out "$RUNNER_TEMP/e2e" </dev/null
+
+      - name: Results
+        if: always()
+        run: |
+          python3 - "$RUNNER_TEMP/e2e/results-${{ matrix.profile }}.json" >> "$GITHUB_STEP_SUMMARY" <<'EOF' || true
+          import json, sys
+          rows = json.load(open(sys.argv[1]))
+          print("| scenario | result | seconds |\n|---|---|---|")
+          for r in rows:
+              print(f"| {r['scenario']} | {r['verdict']} | {r['seconds']} |")
+          EOF
+
+      - name: Logs, screenshots and the proxy's request log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-${{ matrix.profile }}
+          path: ${{ runner.temp }}/e2e
+          if-no-files-found: warn
+
+  android:
+    name: stage 2 companion JVM tests
+    if: (inputs.platform || 'all') != 'xteink'
+    needs: kit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+
+      - name: Companion unit and Robolectric tests
+        working-directory: android/companion
+        run: ./gradlew --no-daemon testDebugUnitTest </dev/null

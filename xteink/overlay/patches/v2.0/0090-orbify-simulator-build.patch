@@ -1,0 +1,259 @@
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+index c82786f..efda252 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+@@ -1084,11 +1084,43 @@ int BookOrbitSyncClient::orbifyRequest(const char* method, const std::string& pa
+   lastTransportError = 0;
+   if (!BOOKORBIT_STORE.hasCredentials()) return -1;
+ #ifdef SIMULATOR
+-  (void)method;
+-  (void)path;
+-  (void)jsonBody;
+-  (void)replyPath;
+-  return -1;
++  // Orbify's emulated release tests (xteink/test/e2e/): the same request over the simulator's
++  // host HTTP, as the sync's own calls above make it.
++  const std::string url = BOOKORBIT_STORE.getBaseUrl() + path;
++  HTTPClient http;
++  std::unique_ptr<WiFiClientSecure> secureClient;
++  WiFiClient plainClient;
++  if (isHttpsUrl(url)) {
++    secureClient.reset(new WiFiClientSecure);
++    secureClient->setInsecure();
++    http.begin(*secureClient, url.c_str());
++  } else {
++    http.begin(plainClient, url.c_str());
++  }
++  addAuthHeaders(http);
++  if (jsonBody) http.addHeader("Content-Type", "application/json");
++  int code = -1;
++  if (strcmp(method, "GET") == 0) {
++    code = http.GET();
++  } else if (strcmp(method, "POST") == 0) {
++    code = http.POST(jsonBody ? jsonBody : "");
++  } else if (strcmp(method, "PUT") == 0) {
++    code = http.PUT(jsonBody ? jsonBody : "");
++  }
++  if (code > 0 && replyPath) {
++    HalFile reply;
++    const String replyBody = http.getString();
++    if (!Storage.openFileForWrite("BookOrbit", replyPath, reply) ||
++        reply.write(reinterpret_cast<const uint8_t*>(replyBody.c_str()), replyBody.length()) != replyBody.length()) {
++      code = -1;
++    }
++    reply.close();
++  }
++  http.end();
++  lastHttpCode = code > 0 ? code : 0;
++  lastTransportError = code < 0 ? code : 0;
++  LOG_INF("BookOrbit", "%s %s -> %d", method, path.c_str(), code);
++  return code;
+ #else
+   const uint32_t freeHeap = ESP.getFreeHeap();
+   const uint32_t heapFloor = requiredHeapFloor();
+diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
+index a1669c0..cd021ea 100644
+--- a/src/network/HttpDownloader.cpp
++++ b/src/network/HttpDownloader.cpp
+@@ -295,7 +295,7 @@ class DownloadRateLog {
+   size_t lastLogBytes_ = 0;
+ };
+ 
+-#if defined(FREEINK_NET_WOLFSSL)
++#if defined(FREEINK_NET_WOLFSSL) || defined(FREEINK_NET_EXTERNAL_TLS)
+ // DownloadOptions::wolfSslClient for the request in progress (downloads are synchronous).
+ freeink::SecureHttpClient* keptWolfSslClient = nullptr;
+ 
+@@ -948,7 +948,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string&
+   if (options.transport != Transport::WOLFSSL && options.session) options.session->reset();
+   WifiPowerSaveGuard wifiPowerSaveGuard;
+   (void)wifiPowerSaveGuard;
+-#if defined(FREEINK_NET_WOLFSSL)
++#if defined(FREEINK_NET_WOLFSSL) || defined(FREEINK_NET_EXTERNAL_TLS)
+   const KeptWolfSslClientScope keptWolfSslClientScope(options.wolfSslClient);
+   (void)keptWolfSslClientScope;
+ #endif
+diff --git a/src/network/SavedWifiConnect.cpp b/src/network/SavedWifiConnect.cpp
+index 8aed509..27d04f9 100644
+--- a/src/network/SavedWifiConnect.cpp
++++ b/src/network/SavedWifiConnect.cpp
+@@ -85,11 +85,18 @@ void saveFastJoin(const std::string& ssid) {
+ #endif
+ 
+ void begin(const WifiCredential& credential, const int32_t channel = 0, const uint8_t* bssid = nullptr) {
++#ifdef SIMULATOR
++  // The simulator's WiFi joins its fake network; it takes no channel or BSSID.
++  (void)channel;
++  (void)bssid;
++  WiFi.begin(credential.ssid.c_str(), credential.password.empty() ? nullptr : credential.password.c_str());
++#else
+   if (credential.password.empty()) {
+     WiFi.begin(credential.ssid.c_str(), nullptr, channel, bssid);
+   } else {
+     WiFi.begin(credential.ssid.c_str(), credential.password.c_str(), channel, bssid);
+   }
++#endif
+ }
+ 
+ // Waits for the join begun just before.
+diff --git a/src/main.cpp b/src/main.cpp
+index 334d983..8c2f6a9 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1694,6 +1694,10 @@ static void forceSleepSyncExit(const bool wake) {
+     setSleepNowRestartToken();
+   }
+   silentRebootTarget |= SILENT_REBOOT_FRONTLIGHT_VALID;
++#ifdef SIMULATOR
++  // The simulator carries the restart token across its re-exec (Orbify's e2e tests).
++  SimulatorLifecycle::setSilentRebootToken(silentRebootMagic, silentRebootTarget, silentRebootPayload);
++#endif
+   ESP.restart();
+ }
+ 
+diff --git a/src/util/PowerButtonWakeWatcher.cpp b/src/util/PowerButtonWakeWatcher.cpp
+index 821f0d7..983c4d7 100644
+--- a/src/util/PowerButtonWakeWatcher.cpp
++++ b/src/util/PowerButtonWakeWatcher.cpp
+@@ -3,6 +3,49 @@
+ #include <HalGPIO.h>
+ #include <Logging.h>
+ 
++#ifdef SIMULATOR
++#include <cstdlib>
++#include <cstring>
++#include <string>
++#include <vector>
++
++namespace {
++// The Power presses of this process's input script ("<ms>:POWER[:<hold ms>]", times from process
++// start), read before main() can consume the script: the simulator's stand-in for the pin.
++struct ScriptedPress {
++  unsigned long at;
++  unsigned long hold;
++};
++std::vector<ScriptedPress> scriptedPowerPresses() {
++  std::vector<ScriptedPress> presses;
++  const char* script = std::getenv("CROSSPOINT_SIM_INPUT_SCRIPT");
++  std::string spec = script ? script : "";
++  size_t start = 0;
++  while (start < spec.size()) {
++    const size_t end = spec.find(';', start);
++    const std::string item = spec.substr(start, end == std::string::npos ? std::string::npos : end - start);
++    const size_t colon = item.find(':');
++    if (colon != std::string::npos && item.compare(colon + 1, 5, "POWER") == 0) {
++      const size_t holdAt = item.find(':', colon + 1);
++      presses.push_back({std::strtoul(item.c_str(), nullptr, 10),
++                         holdAt == std::string::npos ? 80UL : std::strtoul(item.c_str() + holdAt + 1, nullptr, 10)});
++    }
++    if (end == std::string::npos) break;
++    start = end + 1;
++  }
++  return presses;
++}
++const std::vector<ScriptedPress> kScriptedPower = scriptedPowerPresses();
++
++bool scriptedPowerHeld(const unsigned long now) {
++  for (const auto& press : kScriptedPower) {
++    if (now >= press.at && now < press.at + press.hold) return true;
++  }
++  return false;
++}
++}  // namespace
++#endif
++
+ #ifndef SIMULATOR
+ namespace {
+ // A GPIO read and a delay, and once per sync at most the forced exit: a log line and
+@@ -23,6 +66,9 @@ bool PowerButtonWakeWatcher::start(const unsigned long holdMs, const bool heldAt
+   forceExit.store(nullptr);
+   budgetMs.store(0);
+ #ifdef SIMULATOR
++  keyDetector = detector;
++  simStop.store(false);
++  simTask = std::thread(&PowerButtonWakeWatcher::simTaskEntry, this);
+   return true;
+ #else
+   // A heap stack rather than a static one: the task only exists for the sleep sync, and a
+@@ -38,6 +84,16 @@ bool PowerButtonWakeWatcher::start(const unsigned long holdMs, const bool heldAt
+ }
+ 
+ void PowerButtonWakeWatcher::stop() {
++#ifdef SIMULATOR
++  if (simTask.joinable()) {
++    simStop.store(true);
++    if (simTask.get_id() == std::this_thread::get_id()) {
++      simTask.detach();
++    } else {
++      simTask.join();
++    }
++  }
++#endif
+   if (taskHandle == nullptr) return;
+   // The task never returns on its own, so its handle stays valid until this delete.
+   vTaskDelete(taskHandle);
+@@ -72,7 +128,10 @@ bool PowerButtonWakeWatcher::wakeRequested() {
+   // so polling the key state whenever the sync asks is enough there.
+   gpio.update();
+   const bool pressed = gpio.isPressed(HalGPIO::BTN_POWER) || gpio.wasPressed(HalGPIO::BTN_POWER);
+-  if (detector.update(pressed, millis())) requested.store(true);
++  if (keyDetector.update(pressed, millis()) && !requested.load()) {
++    requestedAt.store(millis() | 1UL);
++    requested.store(true);
++  }
+ #endif
+   return requested.load();
+ }
+@@ -98,3 +157,24 @@ void PowerButtonWakeWatcher::taskEntry(void* context) {
+   }
+ }
+ #endif
++
++#ifdef SIMULATOR
++void PowerButtonWakeWatcher::simTaskEntry(PowerButtonWakeWatcher* self) {
++  while (!self->simStop.load()) {
++    const unsigned long now = millis();
++    if (self->detector.update(scriptedPowerHeld(now), now) && !self->requested.load()) {
++      self->requestedAt.store(now | 1UL);
++      self->requested.store(true);
++    }
++    const ForceExit exit = self->forceExit.load();
++    if (exit != nullptr) {
++      const auto verdict = orbify::sleepsync::check(self->deadlines(), now, self->requestedAt.load());
++      if (verdict != orbify::sleepsync::Exit::None) {
++        self->forceExit.store(nullptr);
++        exit(verdict == orbify::sleepsync::Exit::Wake);
++      }
++    }
++    delay(10);
++  }
++}
++#endif
+diff --git a/src/util/PowerButtonWakeWatcher.h b/src/util/PowerButtonWakeWatcher.h
+index 0753ec2..883c3f2 100644
+--- a/src/util/PowerButtonWakeWatcher.h
++++ b/src/util/PowerButtonWakeWatcher.h
+@@ -4,6 +4,9 @@
+ #include <freertos/task.h>
+ 
+ #include <atomic>
++#ifdef SIMULATOR
++#include <thread>
++#endif
+ 
+ #include "SleepWakePolicy.h"
+ #include "orbify/core/SleepSyncDeadline.h"
+@@ -55,4 +58,13 @@ class PowerButtonWakeWatcher {
+   std::atomic<unsigned long> budgetGraceMs{0};
+   std::atomic<unsigned long> requestedAt{0};  // bit 0 set: 0 means no press yet
+   orbify::sleepsync::Deadlines deadlines() const;
++#ifdef SIMULATOR
++  // Orbify's emulated release tests (xteink/test/e2e/): the sampling task as a host thread whose
++  // pin is the scripted Power presses (CROSSPOINT_SIM_INPUT_SCRIPT), so a press during a blocked
++  // request is seen as on a reader. Keys pressed by hand are still polled when the sync asks.
++  static void simTaskEntry(PowerButtonWakeWatcher* self);
++  std::thread simTask;
++  std::atomic<bool> simStop{false};
++  SleepWakePolicy::WakePressDetector keyDetector{0, false};
++#endif
+ };

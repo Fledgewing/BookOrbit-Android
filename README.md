@@ -22,7 +22,9 @@ One [releases page](https://github.com/Fledgewing/Orbify/releases) for both plat
   updates**, or flashed from an SD card or USB.
 
 Every release carries `SHA256SUMS` and build attestations:
-`gh attestation verify <file> -R Fledgewing/Orbify`.
+`gh attestation verify <file> -R Fledgewing/Orbify`. Before it is published, each release passes
+the emulated release tests: a real BookOrbit server behind a fault proxy, Xteink scenarios in
+the CrossInk simulator and the companion's JVM tests (`AGENTS.md`, "Emulated release tests").
 
 ## License
 

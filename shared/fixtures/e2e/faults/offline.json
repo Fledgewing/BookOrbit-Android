@@ -1,0 +1,4 @@
+{
+  "_comment": "The server is gone: every connection closes without a reply (tools/e2e/bofault.py drop).",
+  "rules": [{"match": {}, "action": "drop"}]
+}

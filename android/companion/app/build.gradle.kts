@@ -69,12 +69,19 @@ android {
     lint {
         disable += setOf("ExpiredTargetSdkVersion", "OldTargetApi")
     }
+
+    // Robolectric (UpdaterSessionTest): the install-session states against Android's own
+    // PackageInstaller, on the JVM (docs/design/emulated-release-tests.md, stage 2).
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
     // Android ships org.json; plain JVM unit tests need the real one (StatsExport).
     testImplementation("org.json:json:20240303")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }
 
 /**

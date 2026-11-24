@@ -12,6 +12,8 @@
 // the memory it lent is free again. If the heap still cannot give 52 KB in one
 // block, nothing is drawn (the panel keeps its image), the error is logged and
 // the render task keeps trying.
+// The simulator builds tailnet/sim/TailnetSim.cpp instead (no framebuffer to park, no Tailscale).
+#ifndef SIMULATOR
 #include "TailnetNetPhase.h"
 
 #include <Arduino.h>
@@ -456,3 +458,4 @@ extern "C" void tailnet_wifi_joined(void) {
   tailnet_wait_ready(20000);
   if (tailnet_status() == TAILNET_CONNECTED) tailnet_stack_report("Tailscale ready");
 }
+#endif  // SIMULATOR

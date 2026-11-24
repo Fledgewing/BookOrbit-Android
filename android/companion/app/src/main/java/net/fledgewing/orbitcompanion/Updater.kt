@@ -92,6 +92,9 @@ object Updater {
     @Volatile
     private var sessionPrompt: Intent? = null
 
+    /** The pending session, for UpdaterSessionTest. */
+    internal fun pendingSession(): UpdateSession.State? = session
+
     private fun sessionAlive(ctx: Context, s: UpdateSession.State?): Boolean =
         s != null && try { ctx.packageManager.packageInstaller.getSessionInfo(s.id) != null } catch (e: Exception) { false }
 

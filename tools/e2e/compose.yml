@@ -1,0 +1,48 @@
+# The emulated release tests' BookOrbit server (docs/design/emulated-release-tests.md, stage 0):
+# the real BookOrbit and its Postgres, pinned by digest. Devices never talk to it directly: they
+# go through the fault proxy (bofault.py) on BOFAULT_PORT. Test-only values live in e2e.env.
+# Re-pin: `docker buildx imagetools inspect <image>:<tag>` and copy the index digest; keep the
+# BookOrbit tag equal to the bookorbit pin in tools/upstreams.lock (test_kit.py checks).
+name: orbify-e2e
+
+services:
+  bookorbit:
+    image: ghcr.io/bookorbit/bookorbit:3.9.0@sha256:79cd9c66c990a82944514e3e82d5be5987f21eda96cb37a378ed1484043716fc
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${APP_PORT}:3000"
+    env_file:
+      - e2e.env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      TZ: UTC
+    volumes:
+      - appdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/v1/health || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+
+  postgres:
+    image: pgvector/pgvector:pg18@sha256:38681dc6eaf55308e2a4c6de392d131652dcfac70e1263e35cd9b5ea3fe39782
+    env_file:
+      - e2e.env
+    volumes:
+      # pg18 images keep PGDATA one level below this mount.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+volumes:
+  appdata:
+  pgdata:

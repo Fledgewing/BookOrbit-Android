@@ -32,7 +32,7 @@ grep -q '^extra_configs = platformio.local.ini' "$target/platformio.ini" \
 
 # The overlay appends to ${base.extra_scripts}; an env with its own list would
 # silently lose either upstream's scripts or ours.
-for env in x4-pro x4-classic default; do
+for env in x4-pro x4-classic default x4-pro-simulator x4-classic-simulator simulator-X3; do
   if awk -v sec="[env:$env]" '$0==sec{f=1;next} /^\[/{f=0} f&&/^extra_scripts/{found=1} END{exit !found}' \
       "$target/platformio.ini"; then
     echo "upstream [env:$env] now sets its own extra_scripts; update overlay/platformio.local.ini" >&2

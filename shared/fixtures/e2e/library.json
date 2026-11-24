@@ -1,0 +1,22 @@
+{
+  "_comment": "Not a recording: the synthetic library tools/e2e/kit.py generates and seeds into the e2e BookOrbit server (docs/design/emulated-release-tests.md stage 0). Every name is invented. Books are numbered in this order: each series in turn, then the standalones. A book's file is the same on every run (fixed timestamps), so its KOReader partial MD5 is too.",
+  "series": [
+    {"name": "The Glass Orchard", "author": "Ada Quill", "books": ["Seedfall", "The Pruning", "Lantern Rows", "Frost Graft", "Harvest of Panes"]},
+    {"name": "Harbor Lights", "author": "Bram Tolle", "books": ["Low Tide", "The Breakwater", "Signal Fires", "Last Ferry"]},
+    {"name": "Copper Hours", "author": "Ada Quill", "books": ["Gearwind", "The Second Spring"]}
+  ],
+  "authors": ["Cora Vantage", "Dov Marrow", "Elin Sorrel", "Fitz Harrowgate", "Gwen Oddly", "Hale Brightwater", "Ines Calder", "Jory Fenn"],
+  "standalones": 48,
+  "chapters": 5,
+  "paragraphs_per_chapter": 12,
+  "cover_every_but": 10,
+  "want_to_read": ["The Pruning", "Signal Fires"],
+  "roles": {
+    "_comment": "Books scenarios use by role; kit.py rewrite <role> makes BookOrbit write its metadata into the file, which changes the file's hash.",
+    "copy_refresh": "Frost Graft",
+    "copy_refresh_open": "Last Ferry",
+    "eob_series_middle": "The Breakwater",
+    "eob_series_last": "Harvest of Panes",
+    "eob_standalone": "Standalone 07"
+  }
+}

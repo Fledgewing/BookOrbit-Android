@@ -1,7 +1,8 @@
 # Emulated release tests
 
-Status: **designing** (2026-11-23). Not approved; nothing is built. This is test infrastructure,
-not a feature, so it has no ROADMAP row.
+Status: **stages 0-2 built** (2026-11-23), following §7; stages 3-5 not started. §8 says what was
+built and where it differs from the plan. This is test infrastructure, not a feature, so it has no
+ROADMAP row.
 
 **Outcome.** Before each release, a CI stage runs the device scenarios that are tested by hand
 today. It runs on both platforms and against a BookOrbit server with scripted faults. It leaves
@@ -392,17 +393,61 @@ input `platform: android | xteink | both`, and `ref`):
 |---|---|---|---|
 | D1 | Xteink emulation: upstream simulator vs QEMU vs host-only | two-way | **Simulator** for flows, **host** for logic and renders, QEMU only as stage 5 |
 | D2 | Our scenarios: in our repo vs added to upstream's harness | two-way | **Ours** (`xteink/test/e2e/`), reusing upstream's seed and compose files at the CrossInk pin |
-| D3 | Sending simulator, HAL or harness fixes upstream (CrossInk-Bookorbit, crossink-simulator) | **one-way** (public, someone else's repo) | **Not now**: keep fixes as overlay patches; offer upstream later if they prove general |
+| D3 | Sending simulator, HAL or harness fixes upstream (CrossInk-Bookorbit, crossink-simulator) | **one-way** (public, someone else's repo) | **Never** (the maintainer's rule, AGENTS.md "Upstream projects"): every fix stays in Orbify, as an overlay patch or a build-time edit of the fetched package |
 | D4 | Server: real BookOrbit 3.9.0 + fault proxy vs replay | two-way | **Real + proxy**; recorded fixtures stay for host tests |
 | D5 | Image pin: `:3.9.0` by digest vs `latest` | two-way | **Digest**, re-pinned with `tools/upstreams pin bookorbit` |
 | D6 | Android: desktop vs AVD | two-way | **Both**: desktop first (stage 3), AVD for the Android-only rows (stage 4) |
 | D7 | UI driver: in-KOReader plugin vs coordinate taps | two-way | **`orbit-e2e.koplugin`**, never packaged (`package.sh` zips only `orbit.koplugin/`) |
 | D8 | Assertions: JSONL events vs screenshot diffs | two-way | **JSONL**; screenshots are review artifacts, never compared |
 | D9 | Test-only code in shipped firmware | two-way | Only under `#ifdef SIMULATOR` (compiled out of reader builds, as upstream's scenario hooks are) |
-| D10 | Scripted heap in `HeapFloor` under `SIMULATOR` | two-way | **Yes**: tests the decisions; the numbers stay a device check |
+| D10 | Scripted heap under `SIMULATOR` | two-way | **Yes**: tests the decisions; the numbers stay a device check. Built at the HAL (the simulator's `heap_caps_*`), not in `HeapFloor` (§8) |
 | D11 | Robolectric in the companion's unit tests | two-way | **Yes** (test-only dependency) |
 | D12 | Gate placement: block `release` vs advisory | two-way | **Block**, with a dispatch run before tagging so a red never burns an Android version |
 | D13 | Xteink gate on the scheduled run (new upstream tag) | two-way | **Yes**, the same `e2e` job; an upstream rc that fails a scenario isn't published |
 | D14 | Stage 5 QEMU app | two-way | **Defer** until a second lwIP-class bug |
 
 No other one-way doors: everything is test-only, behind its own workflow, and removable.
+
+## 8. As built (stages 0-2)
+
+| Stage | Where | Runs | Time (local, Apple silicon) |
+|---|---|---|---|
+| 0 | `tools/e2e/`: `compose.yml` (BookOrbit 3.9.0 and Postgres, both by digest), `kit.py` (up, seed, rewrite, down), `bofault.py` (delay, status, timeout, drop; `after`/`times`; JSONL log), `test_kit.py`; library and faults in `shared/fixtures/e2e/` | `release-tests.yml` job `kit` | up ~10 s, seed ~2 s, tests ~7 s |
+| 1 | sim envs in `overlay/platformio.local.ini`; `tailnet_build.py` sim mode with `tailnet/sim/` (Tailnet stubs, `sim_package.py`); patch `0090-orbify-simulator-build`; `xteink/test/e2e/` (`run.py` scenarios, `sim.py` SD card and simulator driver) | job `xteink`, one per reader | build ~30 s per reader (cached packages), scenarios below |
+| 2 | `android/companion/.../UpdaterSessionTest.kt` (Robolectric 4.14.1, test-only) | `android.yml` on every push, and job `android` | ~15 s |
+
+Where it differs from §4-§6:
+- **Library.** `kit.py` generates its own EPUBs from `library.json` (three series, eight authors,
+  48 standalones, a want-to-read shelf, covers on 9 in 10) rather than adapting upstream's
+  `seed.py`, so nothing is copied from upstream and every hash is fixed. A changed hash comes from
+  the server's own write-back (`kit.py rewrite <role>`).
+- **Scripted heap.** `ORBIFY_SIM_HEAP` caps what the simulator's `heap_caps_get_free_size` and
+  `..._largest_free_block` report for internal RAM, so every floor (`HeapFloor`, the TLS floor, the
+  cover and Wi-Fi checks) sees it, not only `HeapFloor`. A step written `w<ms>` counts from the
+  process's first `WiFi.begin()`: a device's heap once Wi-Fi and Tailscale took their share, which
+  the check before starting Wi-Fi must not see. `sim_package.py` edits the fetched simulator
+  package at build time.
+- **Power watcher.** The firmware's watcher task samples a raw pin the simulator lacks. Under
+  `SIMULATOR` (patch 0090) it runs as a host thread whose pin is the input script's `POWER`
+  presses, so a press during a request the proxy holds is seen as on a reader (X1). 0090 also
+  carries the restart token across the watcher's forced restart, as the device's RTC memory does.
+- **X10** (OTA check UI) is not a simulator scenario: upstream's simulator build leaves
+  `OtaUpdater.cpp` out. It stays on the device checklist.
+
+Scenarios (`run.py --list --profile P`), all passing with 0037 on main; X3 has no mirror, no
+series-card cover fetch and no lent connection, so it runs the three that apply to it:
+
+| Scenario | Rows | Readers |
+|---|---|---|
+| `sync_through_proxy` | foundation | all |
+| `mirror_urls` | X5 | X4s |
+| `copy_refresh_sleep_sync` | X6 | all |
+| `copy_refresh_tight_heap` | X6, 0037 S1/S7 | X4s |
+| `heap_floor_waits` | X3 | X4s |
+| `next_cover_heap_floor` | X9 | X4s |
+| `eob_page_finish` | X7, finish queue | all |
+| `eob_series_home_swipe` | X7, 0037 S9 | X4 Pro |
+| `sleep_sync_power_wake` | X1 | X4s |
+| `sleep_sync_budget` | X2 (~255 s) | X4 Pro |
+| `home_tile_refresh` | X8, 0037 S12 | X4 Classic |
+| `offline_sleep_sync` | offline | X4s |

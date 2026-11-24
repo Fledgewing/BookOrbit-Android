@@ -287,8 +287,19 @@ jobs:
           path: upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin
           if-no-files-found: error
 
-  release:
+  # The emulated release tests (release-tests.yml) on the commit and CrossInk tag about to be
+  # published: only when this run publishes (upstream-line.sh decides), so pushes and the daily
+  # run with nothing new stay as they were. The release waits for them.
+  e2e:
     needs: [resolve, build]
+    if: needs.resolve.outputs.publish == 'true'
+    uses: ./.github/workflows/release-tests.yml
+    with:
+      platform: xteink
+      upstream_ref: ${{ needs.resolve.outputs.upstream_tag }}
+
+  release:
+    needs: [resolve, build, e2e]
     if: needs.resolve.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
