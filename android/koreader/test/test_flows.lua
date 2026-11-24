@@ -4805,6 +4805,88 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     run(5)
 end)
 
+test("sleep screen: 24 covers ready whatever the source; Every sleep retires the used-up and tops up", function()
+    local JSON = dofile(here .. "/json_mini.lua")
+    local jm = require("json")
+    local stub_decode = jm.decode
+    jm.decode = function(str) return W.json[str] or JSON.decode(str) end
+    capsReset()
+    local caps = {}
+    for _, c in ipairs(FULL) do table.insert(caps, c) end
+    table.insert(caps, "sleep_screen")
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
+    local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
+    local lfs = require("libs/libkoreader-lfs")
+    local saved = { attributes = lfs.attributes, dir = lfs.dir }
+    lfs.attributes = function(f, k)
+        local d = os.execute('test -d "' .. f .. '"')
+        if d == 0 or d == true then return "directory" end
+        local h = io.open(f, "rb"); if h then h:close(); return "file" end
+        return saved.attributes(f, k)
+    end
+    lfs.dir = function(d)
+        local h = io.popen('ls -1 "' .. d .. '" 2>/dev/null'); local names = {}
+        for n in h:lines() do table.insert(names, n) end
+        h:close(); local i = 0
+        return function() i = i + 1; return names[i] end
+    end
+    local S, Sleep = RE.S, RE.Sleep
+    Sleep.base_dir = dir
+    newUI(false)
+    RE.Shared.refresh("test")
+    S.sleep_mode, S.sleep_from, S.sleep_hours, S.sleep_leave_out = "recommended", "up_next", 6, {}
+    local books = {}
+    for i = 1, 30 do books[i] = { id = i, title = "Book " .. i, hasCover = true } end
+    local client = {}
+    function client:query(path) return path end
+    function client:requestBlocking(_, path)
+        if path:find("sections/up%-next%-in%-series") then return { section = { books = books } } end
+        return nil, 404
+    end
+    local oc_client, download = RE.OC.client, Sleep.download
+    RE.OC.client = function() return client end
+    Sleep.download = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
+    W.wifi = true
+    local function build()
+        Sleep.refreshed_at = nil
+        Sleep.kick("test"); run(60)
+        local ids, f = {}, io.open(dir .. "/pool.json", "rb")
+        for _, it in ipairs(JSON.decode(f:read("*a")).items) do table.insert(ids, it.id) end
+        f:close()
+        return ids
+    end
+    local function has(ids, id) for _, x in ipairs(ids) do if x == id then return true end end return false end
+    local function state(shows)
+        local f = io.open(dir .. "/state.json", "wb"); f:write(shows); f:close()
+    end
+    -- 30 in the source: the batch is 24, with hours too.
+    local ids = build()
+    ok(#ids == 24 and ids[1] == 1 and ids[24] == 24, "24 of 30: " .. #ids)
+    -- Every sleep: 1 and 2 were shown 3 times; they go, 25 and 26 come in; the rest stay.
+    S.sleep_hours = 0
+    state('{"v":1,"shown":3,"changed_at":1,"shows":{"1":3,"2":3,"3":1}}')
+    ids = build()
+    ok(#ids == 24 and not has(ids, 1) and not has(ids, 2) and has(ids, 3) and has(ids, 25) and has(ids, 26), "retired and topped up: " .. table.concat(ids, ","))
+    ok(not io.open(dir .. "/covers/1.jpg", "rb"), "a retired cover's file goes")
+    ok(table.concat(W.logs, "\n"):find("every sleep: 22 kept, 2 retired", 1, true), "logged")
+    -- A one-book source: fewer than 24 is fine, and a used-up last cover stays rather than nothing.
+    books = { { id = 40, title = "Only", hasCover = true } }
+    state('{"v":1,"shown":0,"changed_at":1,"shows":{}}')
+    ids = build()
+    ok(#ids == 1 and ids[1] == 40, "one book: " .. table.concat(ids, ","))
+    state('{"v":1,"shown":40,"changed_at":1,"shows":{"40":3}}')
+    ids = build()
+    ok(#ids == 1 and ids[1] == 40, "kept cycling: " .. table.concat(ids, ","))
+    RE.OC.client, Sleep.download, jm.decode = oc_client, download, stub_decode
+    lfs.attributes, lfs.dir = saved.attributes, saved.dir
+    Sleep.base_dir = nil
+    S.sleep_mode, S.sleep_from, S.sleep_hours, S.sleep_leave_out = "off", "up_next", 6, {}
+    sh("rm -rf", dir)
+    capsReset()
+    run(5)
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

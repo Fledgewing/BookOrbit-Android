@@ -211,6 +211,7 @@ class OrbitService : Service() {
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     stats.record("screen_on")
+                    SleepScreen.onWake(this@OrbitService)
                     updateNotification(force = true)
                 }
             }

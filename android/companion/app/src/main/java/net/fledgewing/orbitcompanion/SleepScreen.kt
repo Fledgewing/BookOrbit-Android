@@ -81,7 +81,10 @@ object SleepScreen {
 
     // ---------------------------------------------------------------- the sinks
 
-    fun sink(ctx: Context): SleepSink = SleepSystem.sink(Vendor.profile(ctx).id)
+    /** Tests only: the sink without a vendor profile. */
+    @Volatile var sinkForTest: SleepSink? = null
+
+    fun sink(ctx: Context): SleepSink = sinkForTest ?: SleepSystem.sink(Vendor.profile(ctx).id)
 
     fun dreamComponent(ctx: Context): String = ComponentName(ctx, SleepDream::class.java).flattenToString()
 
@@ -170,17 +173,19 @@ object SleepScreen {
 
     fun state(ctx: Context): SleepRotation.State {
         val p = sp(ctx)
-        return SleepRotation.State(p.getLong("shown", 0L), p.getLong("changed_at", 0L))
+        return SleepRotation.State(p.getLong("shown", 0L), p.getLong("changed_at", 0L), SleepRotation.decodeShows(p.getString("shows", null)))
     }
 
     /** Kept here, and in state.json for the plugin (its shuffle bag moves to what was shown). */
     private fun saveState(ctx: Context, st: SleepRotation.State) {
-        sp(ctx).edit().putLong("shown", st.shown).putLong("changed_at", st.changedAt).apply()
+        // commit, not apply: the counts must survive a power-off right after the sleep.
+        sp(ctx).edit().putLong("shown", st.shown).putLong("changed_at", st.changedAt)
+            .putString("shows", SleepRotation.encodeShows(st.shows)).commit()
         runCatching {
             val d = dir()
             if (!d.isDirectory) return
             val tmp = File(d, "state.json.orbit-new")
-            tmp.writeText("{\"v\":1,\"shown\":${st.shown},\"changed_at\":${st.changedAt}}")
+            tmp.writeText(SleepRotation.stateJson(st))
             if (!tmp.renameTo(File(d, "state.json"))) tmp.delete()
         }
     }
@@ -223,7 +228,7 @@ object SleepScreen {
         val cur = current(dir)
         var tries = 0
         while (true) {
-            val d = SleepRotation.decide(s.mode, s.hours, now, pool.map { it.id }, cur != null, state(ctx))
+            val d = SleepRotation.decide(s.mode, s.hours, now, pool.map { it.id }, cur != null, state(ctx), advance)
             val item = d.poolId?.let { id -> pool.firstOrNull { it.id == id } }
             val cover = when {
                 // L7: BookOrbit's full-size cover, fitted to this panel, when it is here; else the thumbnail.
@@ -273,13 +278,25 @@ object SleepScreen {
         if (!first && settings(ctx).battery) redrawPicture(ctx, "battery $level%")
     }
 
-    fun redrawPicture(ctx: Context, why: String) {
+    /**
+     * Every sleep on the picture sink: the reader shows the picture it already has, so the next
+     * one is written when it wakes (R4b), ready for the next sleep.
+     */
+    fun onWake(ctx: Context) {
+        val s = settings(ctx)
+        if (s.mode == SleepMode.RECOMMENDED && s.hours == SleepSettings.EVERY_SLEEP) redrawPicture(ctx, "woke", wake = true)
+    }
+
+    /** [wake]: after a sleep; with Every sleep only that moves to a new cover, other redraws keep it. */
+    fun redrawPicture(ctx: Context, why: String, wake: Boolean = false) {
         val s = settings(ctx)
         if (s.mode == SleepMode.OFF || sink(ctx) != SleepSink.PICTURE) return
         val out = picture()
         runCatching {
             val (w, h, dpi) = panel(ctx)
-            val bmp = render(ctx, w, h, dpi, advance = true, why = "picture: $why")
+            // Every sleep: a wake moves on; so does a picture whose cover left the batch (or none yet).
+            val advance = s.hours != SleepSettings.EVERY_SLEEP || wake || state(ctx).shown !in pool().map { it.id }
+            val bmp = render(ctx, w, h, dpi, advance = advance, why = "picture: $why")
             out.parentFile?.mkdirs()
             val tmp = File(out.parentFile, "sleep.png.orbit-new")
             tmp.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -300,7 +317,7 @@ object SleepScreen {
             ctx, 7, Intent(ctx, SleepReceiver::class.java).setAction(ACTION_REDRAW),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        if (s.mode != SleepMode.RECOMMENDED && s.mode != SleepMode.CURRENT) return am.cancel(pi)
+        if ((s.mode != SleepMode.RECOMMENDED && s.mode != SleepMode.CURRENT) || s.hours == SleepSettings.EVERY_SLEEP) return am.cancel(pi)
         val at = state(ctx).changedAt + s.hours * 3_600_000L
         am.set(AlarmManager.RTC, maxOf(at, System.currentTimeMillis() + 60_000L), pi)
     }

@@ -123,6 +123,18 @@ function Sleep.state()
     return readJson(d and (d .. "/state.json")) or {}
 end
 
+-- pool.json's ids, in order (the batch ready now).
+function Sleep.poolIds()
+    local d = Sleep.dir()
+    local v = readJson(d and (d .. "/pool.json"))
+    local out = {}
+    for _, it in ipairs(type(v) == "table" and type(v.items) == "table" and v.items or {}) do
+        local id = type(it) == "table" and tonumber(it.id)
+        if id then table.insert(out, id) end
+    end
+    return out
+end
+
 -- The BookOrbit id of a book file on this reader (the plugin's on-device map), or nil.
 function Sleep.bookId(path)
     local cat = Mirror and Mirror.catalog and Mirror.catalog()
@@ -274,15 +286,21 @@ function Sleep.build(client, plan, rand)
                 table.insert(sum.listed, plan.from_key .. " failed (" .. err .. ")")
             end
         end
-        SleepPool.bagSeek(bag, plan.shown)
+        if not plan.every then SleepPool.bagSeek(bag, plan.shown) end
         candidates = SleepPool.bagNext(bag, rand)
     end
 
-    -- Checked one by one, covers fetched for the ones kept.
-    local keep = from.kind == "list" and SleepPool.LIST_KEEP or SleepPool.BAG_KEEP
+    -- Checked one by one, covers fetched for the ones kept: BATCH of them (R3).
+    local keep = SleepPool.BATCH
     local items = {}
     local wanted = {}
+    local taken = {}
+    -- Every sleep: the ready covers not yet shown SHOWS_MAX times stay; retired ones make room.
+    local carry, retired = {}, {}
+    if plan.every then carry, retired = SleepPool.carry(plan.prev_ids, plan.shows, SleepPool.SHOWS_MAX) end
     local function try(id)
+        if taken[id] then return end
+        taken[id] = true
         sum.probed = sum.probed + 1
         local b = known[id]
         local detail
@@ -304,16 +322,26 @@ function Sleep.build(client, plan, rand)
         end
     end
     -- The bag's last shown book stays first, so the companion's "next" is the bag's next.
-    if bag and bag.prev and exists(d .. "/covers/" .. bag.prev .. ".jpg") then
+    if bag and not plan.every and bag.prev and exists(d .. "/covers/" .. bag.prev .. ".jpg") then
         if SleepPool.check(bag.prev, plan.rules, members, nil) == "keep" then
             table.insert(items, { id = bag.prev, title = "", file = "covers/" .. bag.prev .. ".jpg" })
             wanted["covers/" .. bag.prev .. ".jpg"] = true
         end
     end
     local first = #items
-    for _, id in ipairs(candidates) do
+    for _, id in ipairs(carry) do
         if #items - first >= keep or sum.probed >= SleepPool.PROBE_MAX then break end
         try(id)
+    end
+    sum.carried = #items - first
+    local fresh = {}
+    for _, id in ipairs(candidates) do
+        if #items - first >= keep or sum.probed >= SleepPool.PROBE_MAX then break end
+        if not retired[id] and not taken[id] then
+            local before = #items
+            try(id)
+            if #items > before then fresh[id] = true end
+        end
     end
     -- A bag whose rest is all left out or read: shuffled again, once.
     if bag and #items - first == 0 and #bag.order > 0 and sum.probed < SleepPool.PROBE_MAX then
@@ -323,8 +351,19 @@ function Sleep.build(client, plan, rand)
             try(id)
         end
     end
+    -- Every retired one and nothing new (a one-book list, offline): they stay, and the companion
+    -- keeps cycling them rather than showing nothing.
+    if #items - first == 0 and next(retired) then
+        for _, id in ipairs(plan.prev_ids or {}) do
+            if retired[tonumber(id)] then taken[tonumber(id)] = nil; try(tonumber(id)) end
+            if #items - first >= keep then break end
+        end
+    end
+    if bag and plan.every then SleepPool.bagTake(bag, fresh) end
     if bag then Sleep.save("bag.lua", bag) end
     sum.kept = #items - first
+    sum.retired = 0
+    for _ in pairs(retired) do sum.retired = sum.retired + 1 end
     -- Covers no longer in the pool go.
     if lfs_ok and lfs.attributes(d .. "/covers", "mode") == "directory" then
         for name in lfs.dir(d .. "/covers") do
@@ -367,6 +406,7 @@ function Sleep.refresh(why)
         leave_out = Sleep.load("leave_out.lua") or {}, bag = Sleep.load("bag.lua") or { order = {}, pos = 0 },
         shown = tonumber(Sleep.state().shown), open_id = Sleep.bookId(S.sleep_current_file),
         storage_limit_mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB,
+        every = s.sleep_hours == SleepPool.EVERY_SLEEP, prev_ids = Sleep.poolIds(), shows = Sleep.state().shows,
     }
     Sleep.busy = true
     Sleep.refreshed_at = t
@@ -386,8 +426,9 @@ function Sleep.refresh(why)
             log("sleep screen: pool not refreshed:", tostring(berr or out))
             return
         end
-        log(string.format("sleep screen: pool %d cover(s): %d new, %d checked, %d left out, %d unchecked (left out), %d skipped%s%s",
+        log(string.format("sleep screen: pool %d cover(s): %d new, %d checked, %d left out, %d unchecked (left out), %d skipped%s%s%s",
             sum.items or 0, sum.kept or 0, sum.probed or 0, sum.left_out or 0, sum.unknown or 0, sum.skipped or 0,
+            plan.every and string.format(", every sleep: %d kept, %d retired", sum.carried or 0, sum.retired or 0) or "",
             sum.fallback and (", from " .. sum.fallback .. " (the chosen list was empty)") or "",
             #(sum.listed or {}) > 0 and (", listed " .. table.concat(sum.listed, " ")) or ""))
         if sum.choices then Sleep.saveScopes(sum.choices) end
@@ -550,7 +591,7 @@ local function radios(list, key, after)
     for _i, o in ipairs(list) do
         local id = type(o) == "table" and o.id or o
         table.insert(out, {
-            text = type(o) == "table" and _(o.label) or (string.format(_("%d h"), o)),
+            text = type(o) == "table" and _(o.label) or _(SleepPool.hoursLabel(o)),
             radio = true,
             checked_func = function() return Sleep.settings()[key] == id end,
             callback = function() Sleep.set(key, id); if after then after(id) end end,
@@ -705,7 +746,7 @@ function Sleep.menuItem(_plugin, later)
                     sub_item_table_func = leaveOutItems,
                 },
                 {
-                    text_func = function() return string.format(_("Change cover every: %d h"), Sleep.settings().sleep_hours) end,
+                    text_func = function() return _("Change cover every: ") .. _(SleepPool.hoursLabel(Sleep.settings().sleep_hours)) end,
                     enabled_func = rec,
                     sub_item_table = radios(SleepPool.HOURS, "sleep_hours"),
                     separator = true,
