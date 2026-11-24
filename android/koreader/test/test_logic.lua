@@ -1448,5 +1448,109 @@ test("sleep screen, Every sleep: a setting value", function()
     eq(SP.hoursLabel(0), "Every sleep"); eq(SP.hoursLabel(12), "12 h")
 end)
 
+
+-- Shared settings (docs/design/companion-settings.md §4): one schema, per-key newest-wins merge.
+local SettingsSync = M.SettingsSync
+local function readFile(path) local f = assert(io.open(path, "rb")); local t = f:read("*a"); f:close(); return t end
+local schemaText = readFile(here .. "/../../../shared/settings/schema.json")
+local SIDX = SettingsSync.index(SettingsSync.decodeJson(schemaText))
+
+test("settings schema: the plugin's own JSON reader loads it", function()
+    ok(#SIDX.settings >= 30, "settings: " .. #SIDX.settings)
+    eq(#SIDX.sections, 8, "sections")
+    for _, d in ipairs(SIDX.settings) do
+        ok(d.label and d.label ~= "", d.key .. " label")
+        ok(d.line and d.line ~= "", d.key .. " line")
+        local known = false
+        for _, s in ipairs(SIDX.sections) do if s.id == d.section then known = true end end
+        ok(known, d.key .. " section")
+        if d.parent then ok(SIDX.byKey[d.parent.key] ~= nil, d.key .. " parent") end
+        ok(SettingsSync.fromWire(d, SettingsSync.toWire(d, nil)) ~= nil, d.key .. " default round-trips")
+    end
+end)
+
+test("settings schema: every plugin setting is in it, or listed as state", function()
+    local STATE = { last_sleep_sync = 1, shared_settings_at = 1, settings_at = 1, patch_update_checked_at = 1,
+        patch_update_status = 1, open_book_at_exit = 1, restart_screen = 1, restart_book = 1, home_book = 1,
+        saved_pages_before_update = 1, sleep_current_file = 1, choices_asked_at = 1 }
+    local src = readFile(here .. "/../orbit.koplugin/ko/settings.lua")
+    local body = src:match("DEFAULTS = (%b{})")
+    local missing = {}
+    for key in body:gmatch("\n%s+([%a_]+)%s*=") do
+        if not SIDX.byKey[key] and not STATE[key] then table.insert(missing, key) end
+    end
+    eq(table.concat(missing, " "), "", "plugin settings missing from shared/settings/schema.json")
+end)
+
+local MERGE = JSON.fixture(here, "settings/merge.json")
+for _, c in ipairs(MERGE.cases) do
+    test("settings merge: " .. c.name, function()
+        local vals, at, remote = {}, {}, {}
+        for k, e in pairs(c["local"]) do vals[k] = SettingsSync.fromWire(SIDX.byKey[k], e.v); at[k] = e.at end
+        for k, e in pairs(c.remote) do remote[k] = { v = e.v, at = e.at } end
+        local taken = SettingsSync.merge(SIDX, vals, at, remote, c.now, c.remote_wins_tie)
+        local keys = {}
+        for _, t in ipairs(taken) do table.insert(keys, t.key); vals[t.key] = t.value; at[t.key] = t.at end
+        eq(table.concat(keys, ","), table.concat(c.taken, ","), "taken")
+        for k, v in pairs(c.expect) do eq(SettingsSync.toWire(SIDX.byKey[k], vals[k]), v, k) end
+    end)
+end
+
+test("settings seed: legacy keys keep the old time, the rest get 1 ms", function()
+    local at = { key_log = 77 }
+    local n = SettingsSync.seed(SIDX, at, SettingsSync.LEGACY, 5000)
+    eq(at.wifi_mode, 5000); eq(at.sync_on_sleep, 1); eq(at.key_log, 77)
+    eq(n, #SIDX.settings - 1)
+    local at2 = {}
+    SettingsSync.seed(SIDX, at2, SettingsSync.LEGACY, 0)
+    eq(at2.wifi_mode, 1, "never shared before")
+end)
+
+test("settings encode: only keys with a time, as wire strings", function()
+    local out = SettingsSync.encode(SIDX, { sync_on_sleep = false, sleep_leave_out = { "tag:x", "scope:3" } },
+        { sync_on_sleep = 9, sleep_leave_out = 4 })
+    eq(out.sync_on_sleep.v, "0"); eq(out.sync_on_sleep.at, 9)
+    eq(out.sleep_leave_out.v, "tag:x\nscope:3")
+    eq(out.wifi_mode, nil)
+end)
+
+test("settings visible: rows show only while their parent has the value", function()
+    local v = { sleep_mode = "off", sleep_style = "overlay", sync_on_sleep = true, wifi_mode = "jit" }
+    eq(SettingsSync.visible(SIDX, "sleep_text", v), false)
+    eq(SettingsSync.visible(SIDX, "sleep_text_position", v), false, "grandparent off")
+    v.sleep_mode = "current"
+    eq(SettingsSync.visible(SIDX, "sleep_text_position", v), true)
+    eq(SettingsSync.visible(SIDX, "sleep_from", v), false, "Recommended only")
+    eq(SettingsSync.visible(SIDX, "sleep_cap", v), true)
+    v.sync_on_sleep = false
+    eq(SettingsSync.visible(SIDX, "sleep_cap", v), false)
+    eq(SettingsSync.visible(SIDX, "wifi_idle_min", v), true)
+end)
+
+test("sleep screen: Every sleep (sleep_hours 0) is a valid choice, listed first", function()
+    local SP = M.SleepPool
+    eq(SP.HOURS[1], 0)
+    eq(SP.normalize({ sleep_hours = 0 }).sleep_hours, 0, "kept, not the default")
+    eq(SIDX.byKey.sleep_hours.values[1].label, "Every sleep")
+    eq(SettingsSync.fromWire(SIDX.byKey.sleep_hours, "0"), 0)
+end)
+
+test("choices.json: the picker's lists and the tag counts", function()
+    local SP = M.SleepPool
+    local body = SP.choicesFile({ scopes = { { id = 3, title = "Short reads", count = 48 }, { id = "x" } },
+        collections = { { id = 9, title = "Book club", count = 9 } }, cached = true },
+        { { tag = "age:18", label = "Age:18", count = 14 } }, 1234)
+    eq(#body.scopes, 1, "bad id dropped"); eq(body.collections[1].title, "Book club")
+    eq(body.tags[1].tag, "age:18"); eq(body.cached, true); eq(body.at, 1234)
+    local back = JSON.decode(SP.json(body))
+    eq(back.scopes[1].count, 48)
+    eq(SP.json(SP.choicesFile(nil, nil, 1)):find('"scopes":[]', 1, true) ~= nil, true, "empty lists are arrays")
+end)
+
+test("recommended choices from the companion", function()
+    local c = SettingsSync.choices("bo.auto_sync=ours; g.apps=mine;x=bogus;all=undo")
+    eq(#c, 3); eq(c[1].id, "bo.auto_sync"); eq(c[2].what, "mine"); eq(c[3].id, "all")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

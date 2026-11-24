@@ -403,12 +403,77 @@ end
 
 function Rec.report(why, force, ui)
     if not Companion.installed() then return end
+    pcall(Rec.writeReview, ui)
     local f = Rec.reportFields(ui)
     local key = f.signed_in .. "|" .. f.recommended .. "|" .. f.conflicts
     if not force and Rec.last_report == key then return end
     Rec.last_report = key
     f.reason = why
     Companion.send(Companion.ACTION.REPORT, f)
+end
+
+-- The review list for the companion (docs/design/companion-settings.md §5.8):
+-- koreader/settings/orbit-recommended.json, { v, at, items = [{ id, label, state, yours, orbit, was }] }.
+function Rec.writeReview(ui)
+    local okd, DataStorage = pcall(require, "datastorage")
+    if not okd then return false end
+    local ctx = Rec.context(liveUI() or ui)
+    local status = type(S.recommended) == "table" and S.recommended.items or {}
+    local items = {}
+    for _i, it in ipairs(Recommended.ITEMS) do
+        local st = status[it.id]
+        if st then
+            local okc, obs = pcall(Rec.observe, it, ctx)
+            local entry = (S.recommended_backup or {})[it.id]
+            table.insert(items, { id = it.id, label = it.label, state = st,
+                yours = okc and obs and obs.available and Recommended.valueLabel(it, obs.current) or "",
+                orbit = Recommended.valueLabel(it, it.ours),
+                was = entry and Recommended.valueLabel(it, entry.prior) or "",
+                reason = okc and obs and obs.reason or "" })
+        end
+    end
+    local body = SleepPool.json({ v = 1, at = os.time() * 1000, items = items })
+    if Rec.review_body == body:gsub('"at":%d+,', "") then return true end
+    local path = DataStorage:getSettingsDir() .. "/orbit-recommended.json"
+    local f = io.open(path .. ".orbit-new", "wb")
+    if not f then return false end
+    f:write(body)
+    f:close()
+    if not os.rename(path .. ".orbit-new", path) then os.remove(path .. ".orbit-new"); return false end
+    Rec.review_body = body:gsub('"at":%d+,', "")
+    return true
+end
+
+-- The companion's choices on its review page (the shared key recommended_choice, "id=ours;…"):
+-- applied here, because only KOReader can write KOReader's and BookOrbit's settings; then cleared.
+function Rec.applyChoices(why)
+    local list = SettingsSync.choices(S.recommended_choice)
+    if #list == 0 then return end
+    local ctx = Rec.context(liveUI())
+    local status = type(S.recommended) == "table" and S.recommended.items or {}
+    local function each(id, fn)
+        for _i, it in ipairs(Recommended.ITEMS) do
+            if id == "all" or it.id == id then fn(it) end
+        end
+    end
+    for _i, c in ipairs(list) do
+        each(c.id, function(it)
+            local st = status[it.id]
+            if c.what == "ours" and (st == "conflict" or st == "kept") then
+                local okd, err = Rec.useOrbits(it, ctx)
+                log("recommended: " .. it.id .. " -> Orbit's (from the companion)", okd and "" or tostring(err))
+            elseif c.what == "mine" and st == "conflict" then
+                if it.required_by == "wifi" and S.wifi_via_companion and Companion.has("wifi") then Shared.set("wifi_via_companion", false) end
+                Rec.keepMine(it)
+                log("recommended: " .. it.id .. " -> kept yours (from the companion)")
+            elseif c.what == "undo" and st == "applied" and not (it.required_by == "wifi" and S.wifi_via_companion and Companion.has("wifi")) then
+                Rec.undo(it, ctx)
+                log("recommended: " .. it.id .. " -> undone (from the companion)")
+            end
+        end)
+    end
+    Shared.set("recommended_choice", "")
+    Rec.report("companion review " .. tostring(why), true)
 end
 
 -- KOReader's "Action when Wi-Fi is off" → Turn on, at load (before any UI): with the companion

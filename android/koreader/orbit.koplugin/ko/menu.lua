@@ -12,6 +12,8 @@ function toggle(key, text, help)
         help_text = help,
         checked_func = function() return S[key] == true end,
         callback = function()
+            -- A shared setting goes to the companion with its time (docs/design/companion-settings.md §4).
+            if SCHEMA.byKey[key] then return Shared.set(key, not S[key]) end
             S[key] = not S[key]
             saveSettings()
             log("setting", key, "=", tostring(S[key]))
@@ -61,12 +63,9 @@ function OrbitAndroid:menuItems()
             radio = true,
             checked_func = function() return S.reading_schedule == o.id end,
             callback = function()
-                S.reading_schedule = o.id
-                saveSettings()
+                Shared.set("reading_schedule", o.id)
                 self.schedule = Schedule.new(o.id, now_s())
                 self:hookPluginPagePush()
-                log("setting reading_schedule =", o.id)
-                Shared.push("menu: sync while reading")
             end,
         })
     end
@@ -77,13 +76,13 @@ function OrbitAndroid:menuItems()
             text = string.format(d == 1 and _("Every day") or _("Every %d days"), d),
             radio = true,
             checked_func = function() return S.mirror_auto ~= false and (S.mirror_ttl_days or 7) == d end,
-            callback = function() S.mirror_auto = true; S.mirror_ttl_days = d; saveSettings() end,
+            callback = function() Shared.set("mirror_auto", true); Shared.set("mirror_ttl_days", d) end,
         })
     end
     table.insert(ttl_items, {
         text = _("Only by hand (hold ⟳)"), radio = true,
         checked_func = function() return S.mirror_auto == false end,
-        callback = function() S.mirror_auto = false; saveSettings() end,
+        callback = function() Shared.set("mirror_auto", false) end,
     })
     -- Storage limit (v0.11.2): one limit on everything Orbit stores (OC.storageCount, counted by Orbit Companion).
     local limit_items = {}
@@ -93,8 +92,7 @@ function OrbitAndroid:menuItems()
             radio = true,
             checked_func = function() return (tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB) == mb end,
             callback = function()
-                S.storage_limit_mb = mb
-                saveSettings()
+                Shared.set("storage_limit_mb", mb)
                 log("storage: limit set to", mb == 0 and "none" or (mb .. " MB"))
                 pcall(OC.storageCount, "limit changed")
             end,
@@ -106,7 +104,7 @@ function OrbitAndroid:menuItems()
             text = string.format("%d s", c),
             radio = true,
             checked_func = function() return S.sleep_cap == c end,
-            callback = function() S.sleep_cap = c; saveSettings() end,
+            callback = function() Shared.set("sleep_cap", c) end,
         })
     end
     local function later(fn)
@@ -212,8 +210,7 @@ function OrbitAndroid:menuItems()
             checked_func = function() return S.mirror_covers == true end,
             help_text = _("A Full refresh also saves the cover of every book it saves, and keeps them. Off: covers are saved as you see books, and the oldest go when there are many. Turning it off deletes nothing."),
             callback = function()
-                S.mirror_covers = not S.mirror_covers
-                saveSettings()
+                Shared.set("mirror_covers", not S.mirror_covers)
                 log("mirror: every cover for offline", S.mirror_covers and "on" or "off")
                 if S.mirror_covers then pcall(Mirror.coverPass, "turned on") end
             end,

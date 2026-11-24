@@ -35,6 +35,20 @@ function OrbitAndroid:checkCommand(source)
         UIManager:scheduleIn(0.5, function() self:showRecommended("companion") end)
         return true
     end
+    -- The companion's Settings buttons (docs/design/companion-settings.md §3.2, A2, A4, A5): the work
+    -- happens here in KOReader, which the command brought to the front.
+    if cmd == "full_refresh" then
+        UIManager:scheduleIn(0.5, function() OC.menuFullRefresh() end)
+        return true
+    end
+    if cmd == "sync_sleep" then
+        UIManager:scheduleIn(0.5, function() self:onOrbitSyncAndSleep() end)
+        return true
+    end
+    if cmd == "test_sync_path" then
+        UIManager:scheduleIn(0.5, function() self:testSyncPath() end)
+        return true
+    end
     log("unknown command ignored:", cmd)
     return false
 end

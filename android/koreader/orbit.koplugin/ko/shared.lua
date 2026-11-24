@@ -63,6 +63,7 @@ function Shared.refresh(why)
     if req_id then
         local was = S.reading_schedule
         S.reading_schedule, S.reading_schedule_request_at = req_id, req_at
+        if (S.settings_at.reading_schedule or 0) < req_at then S.settings_at.reading_schedule = req_at end
         saveSettings()
         log("setting reading_schedule =", req_id, "(from the companion, was " .. tostring(was) .. ", " .. why .. ")")
         if Shared.onSchedule then pcall(Shared.onSchedule, req_id) end
@@ -75,10 +76,26 @@ function Shared.refresh(why)
     -- How the companion shows the sleep screen ("Orbit screen saver ✓", "Set up ›"), for the menu.
     local sl = (st and type(st.sleep) == "table" and st.sleep) or (Companion.file and type(Companion.file.sleep) == "table" and Companion.file.sleep) or nil
     Shared.sleep_shown_by = sl and type(sl.shown_by) == "string" and sl.shown_by or nil
-    -- With no service (Add-on), the status file carries the sleep settings (the only ones set there).
+    -- The companion asks for the sleep screen's lists (its picker is open): answer with choices.json.
+    local want = tonumber((st and st.want_choices) or (Companion.file and Companion.file.want_choices)) or 0
+    if want > (S.choices_asked_at or 0) and Sleep and Sleep.writeChoices then
+        S.choices_asked_at = want
+        saveSettings()
+        pcall(Sleep.writeChoices, "asked by the companion")
+        if Sleep.refreshScopes then pcall(Sleep.refreshScopes, "companion picker") end
+    end
+    -- The lists for the companion's sleep-screen picker, once per start (and on Home refreshes).
+    if why == "start" and Sleep and Sleep.writeChoices then
+        UIManager:scheduleIn(20, function() if Sleep.choicesDue() then pcall(Sleep.writeChoices, "start") end end)
+    end
+    -- The "look now" line needs the channel (docs/design/companion-settings.md §4.5).
+    if st and not Channel.up and Companion.has("settings2") then pcall(Channel.connect, why) end
+    -- With no service (Add-on), the status file carries the settings.
     local remote = (st and type(st.settings) == "table" and st.settings)
         or (Companion.file and type(Companion.file.settings) == "table" and Companion.file.settings) or nil
     if not remote then return false end
+    -- Per-key times (settings v2): the newest change to each key wins.
+    if type(remote.values) == "table" then return Shared.mergeValues(remote.values, why) end
     local at = tonumber(remote.settings_at) or 0
     if at > (S.shared_settings_at or 0) then
         local changed = {}
@@ -100,6 +117,53 @@ function Shared.refresh(why)
         Shared.push("companion older (" .. why .. ")")
     end
     return false
+end
+
+-- Settings v2 (docs/design/companion-settings.md §4.4): values = key -> { v = wire, at = ms }.
+-- Takes each key the companion changed later than this reader, runs what the change needs, and
+-- answers with this reader's values (the echo that ends the companion's "Waiting for KOReader").
+function Shared.mergeValues(values, why)
+    local now = os.time() * 1000
+    local taken = SettingsSync.merge(SCHEMA, S, S.settings_at, values, now, true)
+    local changed = {}
+    for _i, t in ipairs(taken) do
+        local d = SCHEMA.byKey[t.key]
+        S[t.key] = t.value
+        S.settings_at[t.key] = t.at
+        if t.at > (S.shared_settings_at or 0) then S.shared_settings_at = t.at end
+        if not t.same then
+            table.insert(changed, t.key)
+            log("setting", t.key, "=", (tostring(SettingsSync.toWire(d, t.value)):gsub("\n", ",")),
+                "(from the companion, was " .. (tostring(SettingsSync.toWire(d, t.was)):gsub("\n", ",")) .. ", " .. why .. ")")
+        end
+    end
+    if #taken > 0 then saveSettings() end
+    for _i, k in ipairs(changed) do Shared.onChange(k, why) end
+    local behind = #taken > 0
+    for k, t in pairs(S.settings_at) do
+        local r = values[k]
+        if SCHEMA.byKey[k] and t > 1 and (type(r) ~= "table" or (tonumber(r.at) or 0) < t) then behind = true end
+    end
+    if behind then Shared.push("settings " .. why) end
+    return #changed > 0
+end
+
+-- What a shared setting needs when the companion changed it (the menu's own callbacks do the same).
+function Shared.onChange(key, why)
+    local function try(fn, ...) if type(fn) == "function" then local okc, err = pcall(fn, ...); if not okc then log("setting", key, ": follow-up failed:", tostring(err)) end end end
+    if key == "wifi_mode" or key == "wifi_idle_min" or key == "wifi_via_companion" then
+        try(Wifi and Wifi.applySettings, "companion")
+    elseif key == "reading_schedule" then
+        try(Shared.onSchedule, S.reading_schedule)
+    elseif key == "sleep_mode" or key == "sleep_from" or key == "sleep_leave_out" then
+        try(Sleep and Sleep.changed, "companion settings")
+    elseif key == "storage_limit_mb" then
+        try(OC and OC.storageEnforce, "limit changed")
+    elseif key == "mirror_covers" then
+        if S.mirror_covers then try(Mirror and Mirror.coverPass, "turned on") end
+    elseif key == "recommended_choice" then
+        try(Rec and Rec.applyChoices, why)
+    end
 end
 
 -- The sleep-screen settings a newer companion sends (an older one sends none: nothing changes).
@@ -150,12 +214,16 @@ function Shared.push(why)
     }
     -- The sleep screen's settings (docs/design/lock-screen.md S1).
     for k, v in pairs(SleepPool.extras(S)) do extras[k] = v end
+    -- Settings v2: every shared key with the time it last changed (docs/design/companion-settings.md §4.3).
+    extras.settings_v = "2"
+    extras.values = SleepPool.json(SettingsSync.encode(SCHEMA, S, S.settings_at))
     Companion.send(Companion.ACTION.SETTINGS, extras)
 end
 
 function Shared.set(key, value)
     S[key] = value
     S.shared_settings_at = os.time() * 1000
+    if SCHEMA.byKey[key] then S.settings_at[key] = S.shared_settings_at end
     saveSettings()
     log("setting", key, "=", tostring(value), "(sent to the companion)")
     Shared.push("patch menu")

@@ -435,6 +435,12 @@ class OrbitService : Service() {
             }
             OLog.i("sync while reading in the patch: $v")
         }
+        // Settings v2 (docs/design/companion-settings.md §4.4): per key, the newest change wins.
+        intent.getStringExtra("values")?.let { v ->
+            val taken = SettingsStore.fromPlugin(this, v, "SETTINGS ${intent.getStringExtra("reason") ?: ""}".trim())
+            if (taken.any { it == "wifi_mode" || it == "wifi_idle_min" }) OLog.i("settings from the patch: wifi_mode=${prefs.wifiMode.key} wifi_idle_min=${prefs.wifiIdleMin}")
+            return
+        }
         val at = intent.getStringExtra("settings_at")?.toLongOrNull() ?: 0L
         if (at <= prefs.sharedSettingsAt) {
             OLog.i("settings from the patch ignored: older than ours ($at <= ${prefs.sharedSettingsAt})")
@@ -655,10 +661,14 @@ class OrbitService : Service() {
             "\"reading_schedule_request\":${ReadingSchedule.statusJson(prefs.readingScheduleRequest, prefs.readingScheduleRequestAt)}," +
             // The KOReader setup box (android/docs/INTERFACE.md): only when unsnoozed rows need the user.
             "\"setup_prompt\":${setupPrompt()}," +
+            // The sleep screen's picker is open: the plugin writes choices.json (companion-settings §6.2).
+            "\"want_choices\":${prefs.wantChoicesAt}," +
             "\"settings\":{\"wifi_mode\":\"${prefs.wifiMode.key}\",\"wifi_idle_min\":${prefs.wifiIdleMin}," +
             "\"home_button\":\"${prefs.homeButton.key}\",\"settings_at\":${prefs.sharedSettingsAt}," +
             // Companion-only "Home opens", for the patch's menu: koreader, launcher or app.
             "\"home_opens\":\"${HomeApp.kind(prefs.homeApp)}\"," +
+            // Settings v2: every shared key with its time (docs/design/companion-settings.md §4.3).
+            "\"values\":${SettingsStore.valuesJson(this)}," +
             // The sleep screen's settings (docs/design/lock-screen.md S1) and how it is shown.
             "${SleepScreen.settingsJson(this)}},\"sleep\":${SleepScreen.statusJson(this)}," +
             // Clicker buttons for the patch (keycode -> press/hold/double -> action), android/docs/INTERFACE.md.

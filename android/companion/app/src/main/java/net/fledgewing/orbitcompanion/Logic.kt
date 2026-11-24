@@ -510,6 +510,10 @@ object HomeCommands {
     /** Setup's rows (plugin 0.11.0+): BookOrbit's sign-in page, the recommended settings' review page. */
     const val SIGNIN = "signin"
     const val RECOMMENDED = "recommended"
+    /** Settings' "Do now" buttons (docs/design/companion-settings.md A2, A4, A5); the work runs in KOReader. */
+    const val FULL_REFRESH = "full_refresh"
+    const val SYNC_SLEEP = "sync_sleep"
+    const val TEST_SYNC_PATH = "test_sync_path"
 
     fun forPress(button: HomeButton): String = if (button == HomeButton.SMART) HOME_SMART else HOME
 
@@ -558,6 +562,10 @@ object PluginCommands {
         HomeCommands.REOPEN_BOOK to "0.5.5",
         HomeCommands.SIGNIN to "0.11.0",
         HomeCommands.RECOMMENDED to "0.11.0",
+        // The first plugin with them is the release after 0.11.2; its test builds are 0.11.3-0.test.N.
+        HomeCommands.FULL_REFRESH to "0.11.3-0",
+        HomeCommands.SYNC_SLEEP to "0.11.3-0",
+        HomeCommands.TEST_SYNC_PATH to "0.11.3-0",
     )
 
     /** [running]: the plugin version KOReader runs (null: never reported; a versioned command then waits). */

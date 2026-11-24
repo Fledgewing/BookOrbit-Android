@@ -31,6 +31,12 @@ function Channel.close(why)
 end
 
 function Channel.onLine(line)
+    -- "SETTINGS <ms>": a setting changed in the companion; read /status now (companion-settings §4.5).
+    local sat = line:match("^SETTINGS%s+(%d+)")
+    if sat then
+        UIManager:nextTick(function() pcall(Shared.refresh, "channel") end)
+        return true
+    end
     local kind, v = Clicks.parseLine(line)
     if kind == "service" then
         if v ~= Channel.service_on then
@@ -91,7 +97,7 @@ function wrapWait()
 end
 
 function Channel.connect(why)
-    if Channel.up or not Companion.has("clicker") then return Channel.up end
+    if Channel.up or not (Companion.has("clicker") or Companion.has("settings2")) then return Channel.up end
     local lp = looper()
     if not lp or not wrapWait() then return false end
     local oks, socket = pcall(require, "socket")
