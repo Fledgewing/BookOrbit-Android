@@ -156,3 +156,21 @@ class SettingsUiTest {
         assertEquals(SettingsUi.EXTRAS.size, SettingsUi.EXTRAS.map { it.id }.toSet().size)
     }
 }
+
+class EverySleepTest {
+    private val schema = SettingsSchema.parse(File("../../../shared/settings/schema.json").readText())
+
+    /** "Every sleep" (sleep_hours 0) is listed first, kept through the wire, and moves the cover at each sleep. */
+    @Test
+    fun everySleepIsFirstAndRotatesEachTime() {
+        val d = schema.byKey.getValue("sleep_hours")
+        assertEquals("0" to "Every sleep", d.values.first())
+        assertEquals("0", SettingsSync.fromWire(d, "0"))
+        assertEquals(0, SleepSettings.merge(SleepSettings.DEFAULT) { if (it == "sleep_hours") "0" else null }.hours)
+        val pool = listOf(11L, 22L, 33L)
+        val first = SleepRotation.decide(SleepMode.RECOMMENDED, 0, 1_000L, pool, false, SleepRotation.State(11L, 900L))
+        assertEquals("pool:22", first.show)
+        val second = SleepRotation.decide(SleepMode.RECOMMENDED, 0, 1_001L, pool, false, first.next)
+        assertEquals("pool:33", second.show)
+    }
+}

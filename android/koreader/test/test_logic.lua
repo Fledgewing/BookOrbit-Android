@@ -1710,6 +1710,14 @@ test("settings schema: every shown key has a row in KOReader's menu", function()
 end)
 
 
+test("sleep screen: Every sleep (sleep_hours 0) is a valid choice, listed first", function()
+    local SP = M.SleepPool
+    eq(SP.HOURS[1], 0)
+    eq(SP.normalize({ sleep_hours = 0 }).sleep_hours, 0, "kept, not the default")
+    eq(SIDX.byKey.sleep_hours.values[1].label, "Every sleep")
+    eq(SettingsSync.fromWire(SIDX.byKey.sleep_hours, "0"), 0)
+end)
+
 test("choices.json: the picker's lists and the tag counts", function()
     local SP = M.SleepPool
     local body = SP.choicesFile({ scopes = { { id = 3, title = "Short reads", count = 48 }, { id = "x" } },
