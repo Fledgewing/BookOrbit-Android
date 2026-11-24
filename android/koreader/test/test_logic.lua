@@ -1621,5 +1621,32 @@ test("reading gate: every show, toast, activity start and restart names its gate
     eq(table.concat(missing, " "), "", "ungated show paths")
 end)
 
+-- shared/fixtures/cache/worker.json: the cache's keys, file names, list pages, cover names and
+-- entry format, which the companion's cache worker must match byte for byte (CacheWorkerTest
+-- reads the same file). Regenerate only when the plugin's rules change, then fix the companion.
+test("cache worker fixture: the plugin's keys, hashes, pages, cover names and entry format", function()
+    local Cache = M.Cache
+    local fx = JSON.fixture(here, "cache/worker.json")
+    for _, k in ipairs(fx.keys) do
+        local key = Cache.key({ account = k.account, server = k.server, method = "GET", path = k.path })
+        eq((key:gsub(".", function(c) return string.format("%02x", c:byte()) end)), k.key_hex, "key of " .. k.path)
+        eq(Cache.hash(key), k.hash, "hash of " .. k.path)
+    end
+    for _, w in ipairs(fx.windows) do
+        local got = Cache.listWindow(w.path)
+        eq(got and got.identity, w.identity, "identity of " .. w.path)
+        if got then
+            eq(got.kind, w.kind, "kind"); eq(got.section, w.section, "section")
+            eq(Cache.mirrorPage(got.identity, 2, nil), w.page2, "page 2"); eq(Cache.mirrorPage(got.identity, 1, 50), w.page1_50, "page 1 of 50")
+        end
+    end
+    for _, c in ipairs(fx.covers) do
+        eq(Cache.coverName({ id = c.id, updatedAt = c.updatedAt, author_photo = c.author_photo or nil }), c.name, "cover of " .. c.id)
+    end
+    local e = fx.entry
+    local body = JSON.decode(e.body_json)
+    eq(Cache.encode({ key = e.key, body = body, fetched_at = e.fetched_at, validated_at = e.validated_at, path = e.path }), e.lua, "entry")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

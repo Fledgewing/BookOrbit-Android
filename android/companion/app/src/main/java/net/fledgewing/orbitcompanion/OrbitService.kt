@@ -42,6 +42,8 @@ class CommandReceiver : BroadcastReceiver() {
         if (intent.action == Contract.REPORT) return StatusFile.onReport(ctx, intent)
         // The sleep screen's files changed: a record action too (no service needed).
         if (intent.action == SleepScreen.ACTION_POOL) return SleepScreen.onPool(ctx, intent.getStringExtra("reason") ?: "plugin")
+        // The cache worker's jobs (docs/design/companion-worker.md): every mode, no service needed.
+        if (intent.action == Worker.ACTION_MIRROR || intent.action == Worker.ACTION_CHECK) return Worker.onIntent(ctx, intent)
         val action = intent.action ?: return
         if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) return OrbitService.start(ctx, intent)
         if (!Mode.isAddon(ctx)) return OrbitService.start(ctx, intent) // Full: exactly as before 0.11.0
@@ -397,6 +399,11 @@ class OrbitService : Service() {
         }
         if (auto && Updater.busy) {
             OLog.i("wifi: OFF deferred ($reason): an app update is downloading | owner ${owner.key} | mode $mode")
+            main.postDelayed({ wifiOff(intent, reason) }, 5_000)
+            return
+        }
+        if (auto && Worker.busy()) {
+            OLog.i("wifi: OFF deferred ($reason): the cache worker is saving BookOrbit for offline | owner ${owner.key} | mode $mode")
             main.postDelayed({ wifiOff(intent, reason) }, 5_000)
             return
         }

@@ -14,7 +14,7 @@
 -- (the runInSubprocess wrapper) and on a timer, so the index is only ever written by the parent.
 ---------------------------------------------------------------------------------------------
 
-OC = { memo = {}, memo_order = {}, inflight = {}, queue = {}, done = {}, MEMO = 12, MODE_S = 30 }
+OC = { memo = {}, memo_order = {}, inflight = {}, done = {}, MEMO = 12, MODE_S = 30 }
 
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
@@ -57,16 +57,8 @@ end
 
 OC.readFile, OC.writeFile = readFile, writeFile
 
--- FNV-1a, 32 bits, as hex: the entry's file name (the key is stored inside and checked).
-function OC.hash(s)
-    local bit = require("bit")
-    local h = 2166136261
-    for i = 1, #s do
-        h = bit.bxor(h, s:byte(i))
-        h = bit.tobit(h * 16777619 % 4294967296)
-    end
-    return string.format("%08x", h % 4294967296)
-end
+-- The entry's file name (Cache.hash; the key is stored inside and checked).
+function OC.hash(s) return Cache.hash(s) end
 
 -- In a forked child (the plugin's runInSubprocess, catalog.lua:881): never JNI (NetworkMgr on
 -- Android is JNI, device/android/device.lua:333; a child that calls it dies and the plugin gets
@@ -250,6 +242,10 @@ function OC.drainEvents()
                 local raw = readFile(file)
                 local e = Cache.decode(raw or "")
                 if type(e) == "table" and e.key == ev.key then OC.adopt(ev.key, e, #raw) end
+            elseif ev.kind == "checked" and ev.key then
+                local job = OC.inflight[ev.key]
+                OC.inflight[ev.key] = nil
+                if job then OC.landed(nil, job, ev) end
             elseif ev.kind == "check" and ev.key then
                 OC.check(nil, ev.key, ev.method, ev.path, ev.headers)
             elseif ev.kind == "write" then
@@ -383,12 +379,46 @@ end
 
 ---------------------------------------------------------------- background checks
 
--- Queues a check of key against the server; one request at a time, one per key.
+-- Asks the companion to check key against the server (docs/design/companion-worker.md): it
+-- asks, compares with what the plugin would serve (its entry, else the mirror's pages), saves a
+-- changed reply under the key and answers with a "checked" event (OC.drainEvents). KOReader only
+-- sends the job and reads the small answer: it never handles the reply's body (decoding and
+-- encoding it froze the UI on the M8C). One per key; none without the companion.
 function OC.check(_, key, method, path, headers, client)
-    if OC.inflight[key] then return end
-    OC.inflight[key] = true
-    table.insert(OC.queue, { key = key, method = method, path = path, headers = headers, client = client, mode = OC.mode() })
-    OC.pump()
+    if OC.inflight[key] or method ~= "GET" then return end
+    client = client or OC.client()
+    if not client or not NetworkMgr:isConnected() then return end
+    local problem = Companion.workerProblem()
+    if problem then
+        if OC.check_blocked ~= problem then log("cache: background checks off:", problem) end
+        OC.check_blocked = problem
+        return
+    end
+    OC.check_blocked = nil
+    OC.inflight[key] = { key = key, path = path, at = nowT() }
+    Companion.send(Companion.ACTION.CHECK, { reason = "check", cache_key = key, path = path, mode = OC.mode(),
+        owner = OC.owner(client), server = client.server_url, user = client.username, userkey = client.userkey })
+    OC.watchChecks()
+end
+
+-- While checks are out: their answers are read every second; one with no answer in CHECK_S fails.
+OC.CHECK_S = 60
+function OC.watchChecks()
+    if OC.watching then return end
+    OC.watching = true
+    local function tick()
+        pcall(OC.drainEvents)
+        local t = nowT()
+        for key, job in pairs(OC.inflight) do
+            if t - job.at >= OC.CHECK_S then
+                OC.inflight[key] = nil
+                OC.landed(nil, job, { err = "the companion didn't answer" })
+            end
+        end
+        if next(OC.inflight) == nil then OC.watching = nil; return end
+        UIManager:scheduleIn(1, tick)
+    end
+    UIManager:scheduleIn(1, tick)
 end
 
 function OC.client()
@@ -400,51 +430,6 @@ function OC.client()
         if okc then return c end
     end
     return nil
-end
-
-function OC.pump()
-    if OC.running then return end
-    local job = table.remove(OC.queue, 1)
-    if not job then return end
-    local client = job.client or OC.client()
-    if not client or not NetworkMgr:isConnected() then
-        OC.inflight[job.key] = nil
-        return OC.pump()
-    end
-    OC.running = true
-    -- The child asks, compares with what is saved and saves a changed reply itself; the UI thread
-    -- gets a few fields back (never the body: decoding and re-encoding it froze the UI on the M8C).
-    Background.run("cache check", function()
-        OC.child = true
-        local okc, res = pcall(OC.checkInChild, client, job)
-        OC.child = nil
-        if not okc then return Cache.encode({ err = "check failed: " .. tostring(res) }) end
-        return Cache.encode(res)
-    end, 60, function(out)
-        OC.running = nil
-        OC.inflight[job.key] = nil
-        local r = Cache.decode(out or "")
-        OC.landed(client, job, r)
-        OC.pump()
-    end)
-end
-
--- In the check's child: { err } | { unchanged, saved (an index entry of its own) } |
--- { changed, bytes, ids, at } (the new body is saved under job.key).
-function OC.checkInChild(client, job)
-    local b, e = client:requestBlocking(job.method, job.path, nil, job.headers)
-    if type(b) ~= "table" then return { err = e and tostring(e) or "no answer" } end
-    local entry = OC.lookup(client, job.key, job.path)
-    if not Cache.revalidate(entry and entry.body, b, 200) then
-        return { unchanged = true, saved = (entry and not entry.from_mirror) or nil }
-    end
-    local t = nowT()
-    local body = Cache.settle(entry and entry.body, b, job.mode)
-    local s = Cache.encode({ key = job.key, body = body, fetched_at = t, validated_at = t, path = job.path })
-    if not writeFile(OC.dir() .. "/" .. OC.hash(job.key) .. ".lua", s) then return { err = "not saved" } end
-    local ids = {}
-    for id in pairs(Cache.ids(body)) do table.insert(ids, id) end
-    return { changed = true, bytes = #s, ids = ids, at = t }
 end
 
 function OC.landed(client, job, r)
@@ -482,7 +467,7 @@ function OC.redraw_soon(key)
     if OC.redraw_scheduled then return end
     OC.redraw_scheduled = true
     local function flush()
-        if OC.running or #OC.queue > 0 then return UIManager:scheduleIn(0.5, flush) end
+        if next(OC.inflight) ~= nil then return UIManager:scheduleIn(0.5, flush) end
         OC.redraw_scheduled = nil
         local k = OC.redraw_key
         OC.redraw_key = nil
@@ -493,7 +478,7 @@ end
 
 -- What keeps Wi-Fi on (Wifi.busy): checks in flight or the offline mirror saving.
 function OC.busy()
-    if OC.running or #OC.queue > 0 then return "the Orbit cache checking BookOrbit" end
+    if next(OC.inflight) ~= nil then return "the Orbit cache checking BookOrbit" end
     if Mirror and Mirror.active then return "saving BookOrbit for offline" end
     return nil
 end
