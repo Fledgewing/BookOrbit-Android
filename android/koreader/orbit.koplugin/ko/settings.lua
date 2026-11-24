@@ -44,7 +44,7 @@ DEFAULTS = {
     sleep_mode = "off",           -- "off" | "recommended" | "current"
     sleep_from = "up_next",       -- "up_next" | "want_to_read" | "discover" | "scope:<id>" | "collection:<id>"
     sleep_leave_out = {},         -- rules: "tag:<text>", "scope:<id>", "collection:<id>" (replaced, never changed in place)
-    sleep_hours = 6,              -- Recommended changes after this many hours (1, 3, 6, 12, 24)
+    sleep_hours = 6,              -- Recommended changes after this many hours (0 = every sleep, 1, 3, 6, 12, 24)
     sleep_text = "",              -- up to 60 characters
     sleep_battery = false,        -- the battery level at sleep
     sleep_style = "bar",          -- "bar" | "overlay"

@@ -303,6 +303,8 @@ object SleepScreen {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         if (s.mode != SleepMode.RECOMMENDED && s.mode != SleepMode.CURRENT) return am.cancel(pi)
+        // Every sleep: nothing to wait for; the cover moves on at each sleep's draw.
+        if (s.hours == 0) return am.cancel(pi)
         val at = state(ctx).changedAt + s.hours * 3_600_000L
         am.set(AlarmManager.RTC, maxOf(at, System.currentTimeMillis() + 60_000L), pi)
     }

@@ -74,7 +74,8 @@ data class SleepSettings(
 ) {
     companion object {
         val DEFAULT = SleepSettings()
-        val HOURS = listOf(1, 3, 6, 12, 24)
+        /** 0 = every sleep: a new cover each time the reader sleeps. */
+        val HOURS = listOf(0, 1, 3, 6, 12, 24)
         const val TEXT_MAX = 60
         val KEYS = listOf(
             "sleep_mode", "sleep_from", "sleep_leave_out", "sleep_hours", "sleep_text", "sleep_battery",

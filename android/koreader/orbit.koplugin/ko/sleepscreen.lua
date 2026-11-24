@@ -507,7 +507,7 @@ local function radios(list, key, after)
     for _i, o in ipairs(list) do
         local id = type(o) == "table" and o.id or o
         table.insert(out, {
-            text = type(o) == "table" and _(o.label) or (string.format(_("%d h"), o)),
+            text = type(o) == "table" and _(o.label) or (o == 0 and _("Every sleep") or string.format(_("%d h"), o)),
             radio = true,
             checked_func = function() return Sleep.settings()[key] == id end,
             callback = function() Sleep.set(key, id); if after then after(id) end end,
@@ -659,7 +659,10 @@ function Sleep.menuItem(_plugin, later)
                     sub_item_table_func = leaveOutItems,
                 },
                 {
-                    text_func = function() return string.format(_("Change cover every: %d h"), Sleep.settings().sleep_hours) end,
+                    text_func = function()
+                        local h = Sleep.settings().sleep_hours
+                        return h == 0 and _("Change cover: every sleep") or string.format(_("Change cover every: %d h"), h)
+                    end,
                     enabled_func = rec,
                     sub_item_table = radios(SleepPool.HOURS, "sleep_hours"),
                     separator = true,
