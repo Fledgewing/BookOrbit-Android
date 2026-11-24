@@ -28,10 +28,27 @@ static void verdicts() {
     CHECK(stoppedEarly(s, false));
     CHECK(!stoppedEarly(s, true));  // the sleep sync's and the network boots' restarts leave steps behind
   }
+  // Patch 0040: the steps between "wake checked" and "setup done" (.194: a boot after the catalog's
+  // panic stopped there) are mid-setup too.
+  for (Step s : {Step::ClockRead, Step::StorageReady, Step::StateLoaded, Step::ActivityStarted}) {
+    CHECK(stoppedEarly(s, false));
+    CHECK(!stoppedEarly(s, true));
+  }
+  // The words .167-.194 stored keep their steps: new steps only go after SleepEntered.
+  CHECK(static_cast<uint8_t>(Step::WakeChecked) == 3 && static_cast<uint8_t>(Step::SetupDone) == 4);
+  CHECK(static_cast<uint8_t>(Step::SleepEntered) == 11 && static_cast<uint8_t>(Step::ClockRead) == 12);
   // Ordinary ends: deep sleep, or loop() until a reset.
   CHECK(!stoppedEarly(Step::SleepEntered, false));
   CHECK(!stoppedEarly(Step::SetupDone, false));
   CHECK(!stoppedEarly(Step::None, false));
+}
+
+static void runReset() {
+  // The reset that started the stopped run (esp_reset_reason_t: 4 = panic, 11 = USB).
+  for (int r : {0, 1, 4, 11, 15}) CHECK(unpackReset(packReset(r)) == r);
+  CHECK(unpackReset(0) == -1);                       // a power-on's noise, or a build before 0040
+  CHECK(unpackReset(pack(Step::WakeChecked)) == -1);  // the step word is not a reset word
+  CHECK(unpackReset(0xFFFFFFFFu) == -1);
 }
 
 static void crashRecordBuild() {
@@ -48,6 +65,7 @@ static void crashRecordBuild() {
 int main() {
   roundTrip();
   verdicts();
+  runReset();
   crashRecordBuild();
   return report("boot-trail");
 }

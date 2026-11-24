@@ -5199,6 +5199,80 @@ test("settings v2: the companion's look-now line refreshes at once", function()
     eq(refreshed, "channel")
 end)
 
+---------------------------------------------------------------- SQLite stress test (sqlite-cache.md)
+local SQ3 = dofile(here .. "/sqlite_shim.lua")
+
+-- The companion's writer, played here (SqliteStress.kt): one page of 100 rows per transaction.
+local function stressWrite(conn, gen, opts)
+    opts = opts or {}
+    local page = gen % RE.SqliteStress.PAGES
+    conn:exec("BEGIN IMMEDIATE")
+    local sum = 0
+    local st = conn:prepare("INSERT OR REPLACE INTO rows (page, pos, gen, val) VALUES (?, ?, ?, ?)")
+    for pos = 0, RE.SqliteStress.ROWS - 1 do
+        local len = RE.SqliteStress.len(gen, pos)
+        sum = sum + len
+        local g = (opts.torn and pos == 50) and gen - 1 or gen
+        st:bind(page, pos, g, string.rep("x", len)):step()
+        st:reset()
+    end
+    st:close()
+    conn:exec("INSERT OR REPLACE INTO head (page, gen, sum) VALUES (" .. page .. ", " .. gen .. ", " .. sum .. ")")
+    conn:exec("COMMIT")
+end
+
+local function stressDb()
+    local path = os.tmpname() .. ".db"
+    local w = SQ3.open(path, "rwc")
+    w:exec("PRAGMA journal_mode=TRUNCATE")
+    w:exec("CREATE TABLE rows (page INTEGER, pos INTEGER, gen INTEGER, val TEXT, PRIMARY KEY (page, pos)) WITHOUT ROWID")
+    w:exec("CREATE TABLE head (page INTEGER PRIMARY KEY, gen INTEGER, sum INTEGER)")
+    return path, w
+end
+
+-- A clock that moves 0.01 s per look, so a "2 s" read makes about 100 reads.
+local function tickClock() local t = 0; return function() t = t + 0.01; return t end end
+
+test("sqlite stress: the reader sees whole pages through lua-ljsqlite3, read-only", function()
+    local path, w = stressDb()
+    for gen = 1, 120 do stressWrite(w, gen) end
+    local r = RE.SqliteStress.read(path, 2, tickClock())
+    ok(r.reads > 20, "reads: " .. tostring(r.reads))
+    eq(r.errors, 0, "errors: " .. tostring(r.first_error))
+    -- Read-only: the reader's connection can't write.
+    local ro = RE.Db.connect(path, "ro")
+    ok(not pcall(ro.exec, ro, "DELETE FROM head"), "a read-only connection refuses writes")
+    ro:close()
+    w:close(); os.remove(path)
+end)
+
+test("sqlite stress: a torn page and a locked file are caught and counted", function()
+    local path, w = stressDb()
+    for gen = 1, 50 do stressWrite(w, gen, { torn = gen == 17 }) end
+    local r = RE.SqliteStress.read(path, 2, tickClock())
+    ok(r.errors > 0 and tostring(r.first_error):find("torn page") ~= nil, "torn: " .. tostring(r.first_error))
+    -- A writer holding the commit lock: the reader waits (busy) and goes on once it's released.
+    local path2, w2 = stressDb()
+    for gen = 1, 50 do stressWrite(w2, gen) end
+    w2:exec("BEGIN EXCLUSIVE")
+    local n, release = 0, nil
+    local clock = function() n = n + 1; if n == 30 then w2:exec("COMMIT") end; return n * 0.01 end
+    local r2 = RE.SqliteStress.read(path2, 1, clock)
+    eq(r2.errors, 0, "errors after the wait: " .. tostring(r2.first_error))
+    ok(r2.busy >= 1, "the wait is counted")
+    ok(r2.reads > 0, "reads after the lock went")
+    w:close(); w2:close(); os.remove(path); os.remove(path2)
+end)
+
+test("sqlite stress: the verdict line", function()
+    local line = RE.SqliteStress.verdict({ reads = 900, errors = 0, busy = 3, max_busy_ms = 41 },
+        { writes = 1200, errors = 0, max_wait_ms = 12, integrity = "ok" })
+    eq(line, "sqlite-stress: 1200 writes, 900 reads, 0 errors, max busy wait 41 ms")
+    local l2, notes = RE.SqliteStress.verdict({ reads = 5, errors = 0, max_busy_ms = 0 }, nil)
+    eq(l2, "sqlite-stress: 0 writes, 5 reads, 1 errors, max busy wait 0 ms", "no writer answer is an error")
+    ok(notes[1]:find("didn't answer") ~= nil)
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end
