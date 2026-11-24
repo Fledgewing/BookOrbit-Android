@@ -18,9 +18,12 @@
 #include "BookOrbitDownloadIndex.h"
 #include "BookOrbitSyncClient.h"
 #include "CrossPointSettings.h"
+#include "RecentBooksStore.h"
+#include "HeapFloor.h"
 #include "KOReaderDocumentId.h"
 #include "core/CopyQueue.h"
 #include "network/BookOrbitCatalogClient.h"
+#include "activities/home/RecentBookProgress.h"
 #include "network/HttpDownloader.h"
 #include "util/BookContentId.h"
 #include "util/BookUpdateMigration.h"
@@ -34,8 +37,9 @@ const char* const QUEUE_TMP = "/.crosspoint/orbify/copy-refresh.tmp";
 const char* const TOKEN_PATH = "/.crosspoint/orbify/copy-refresh.token";
 constexpr size_t BATCH = 20;
 constexpr size_t MAX_FILE = 64 * 1024;
-// A download needs a TLS session beside the book's buffers: the catalog's own floor.
-constexpr uint32_t DOWNLOAD_MIN_BLOCK = 24576;
+// A download on a new connection needs a TLS session beside the book's buffers: the sync's own
+// block (24 KB on the X3; 8 KB on the X4s, whose TLS buffers live in PSRAM).
+constexpr uint32_t DOWNLOAD_MIN_BLOCK = CROSSINK_TAILNET_SYNC_TLS_BLOCK ? CROSSINK_TAILNET_SYNC_TLS_BLOCK : 24576;
 
 std::string readText(const char* path) {
   std::string out;
@@ -186,7 +190,11 @@ Outcome refreshOne(const orbify::refresh::Entry& entry, bool (*cancelled)()) {
     LOG_INF(TAG, "Copy refresh: %s is gone from the card; dropped", entry.path.c_str());
     return Outcome::GiveUp;
   }
-  if (ESP.getMaxAllocHeap() < DOWNLOAD_MIN_BLOCK) {
+  // On a connection already open (the sleep sync lends its own, patch 0037) a request needs no
+  // TLS session of its own, only room beside the one there; a new connection needs the block.
+  const bool kept = BookOrbitCatalogClient::keptConnection() != nullptr;
+  if (kept && !OrbifyHeap::roomForRequest("Copy refresh")) return Outcome::Stop;
+  if (!kept && ESP.getMaxAllocHeap() < DOWNLOAD_MIN_BLOCK) {
     LOG_INF(TAG, "Copy refresh: heap too fragmented for a download (largest %u); later",
             static_cast<unsigned>(ESP.getMaxAllocHeap()));
     return Outcome::Stop;
@@ -215,17 +223,33 @@ Outcome refreshOne(const orbify::refresh::Entry& entry, bool (*cancelled)()) {
   // A replacement a reset interrupted moves its state first (as the catalog does).
   if (BookUpdateMigration::pending(entry.path)) BookUpdateMigration::begin(entry.path, /*renderCacheIsOld=*/false);
   const unsigned long started = millis();
+  // The saved position's percentage, for the log (read before the migration clears the render
+  // cache it lives beside; the position itself moves with the book's state).
+  RecentBook book;
+  book.path = entry.path;
+  const float percent = RecentBookProgress::loadCachedEpubPercent(book);
   bool cancel = false;
   HttpDownloader::DownloadOptions options = downloadOptions();
+  options.wolfSslClient = BookOrbitCatalogClient::keptConnection();
+  // Checked between the body's chunks: a wake press (or the sleep sync's time budget) stops the
+  // transfer there, and so does a heap the relay's TLS would starve on. The .part stays and the
+  // next run resumes it.
+  options.shouldCancel = [cancelled, kept]() { return (cancelled && cancelled()) || (kept && OrbifyHeap::starved()); };
   HttpDownloader::DownloadError result = HttpDownloader::HTTP_ERROR;
   for (int attempt = 0; attempt < 3; ++attempt) {
     if (cancelled && cancelled()) return Outcome::Stop;
-    options.resumePartial = attempt > 0;
+    // A transfer a wake press stopped resumes from its .part (the hash check below still decides).
+    options.resumePartial = attempt > 0 || Storage.exists((entry.path + ".part").c_str());
     result = BookOrbitCatalogClient::downloadFile(file.id, entry.path, nullptr, &cancel, options);
     if (result == HttpDownloader::OK || result == HttpDownloader::ABORTED ||
         result == HttpDownloader::INSUFFICIENT_SPACE) {
       break;
     }
+  }
+  if (result == HttpDownloader::ABORTED) {
+    // Not the book's fault: it keeps its attempts, and its .part for the resume.
+    LOG_INF(TAG, "Copy refresh: download of book %lld stopped; resumes next time", static_cast<long long>(entry.bookId));
+    return Outcome::Stop;
   }
   if (result != HttpDownloader::OK) {
     LOG_ERR(TAG, "Copy refresh: download of book %lld failed (err=%d)", static_cast<long long>(entry.bookId),
@@ -254,6 +278,14 @@ Outcome refreshOne(const orbify::refresh::Entry& entry, bool (*cancelled)()) {
   library::invalidateLibraryIndex();
   LOG_INF(TAG, "Copy refresh: %s (book %lld) replaced: %s -> %s in %lu s", entry.path.c_str(),
           static_cast<long long>(entry.bookId), entry.oldHash, newHash.c_str(), (millis() - started) / 1000);
+  // The position moved with the book's state (BookUpdateMigration): the reader opens there.
+  if (RecentBookProgress::hasPercent(percent)) {
+    LOG_INF(TAG, "Copy refresh: book %lld replaced, position kept at %.0f%%", static_cast<long long>(entry.bookId),
+            static_cast<double>(percent));
+  } else {
+    LOG_INF(TAG, "Copy refresh: book %lld replaced, position kept (not opened here yet)",
+            static_cast<long long>(entry.bookId));
+  }
   return Outcome::Replaced;
 }
 
@@ -288,7 +320,7 @@ size_t detect(bool (*cancelled)()) {
   return scan->queued;
 }
 
-size_t run(bool (*cancelled)(), const unsigned long budgetMs) {
+size_t run(bool (*cancelled)(), const unsigned long budgetMs, const char* where) {
   if (!enabled()) return 0;
   orbify::refresh::Queue queue;
   if (!load(queue) || queue.pending() == 0) return 0;
@@ -307,7 +339,7 @@ size_t run(bool (*cancelled)(), const unsigned long budgetMs) {
     replaced += outcome == Outcome::Replaced ? 1 : 0;
     save(queue);  // after every book: a wake press or a reset resumes here
   }
-  LOG_INF(TAG, "Copy refresh: %u replaced, %u waiting", static_cast<unsigned>(replaced),
+  LOG_INF(TAG, "Copy refresh: replaced %u (%s), %u carried over", static_cast<unsigned>(replaced), where,
           static_cast<unsigned>(queue.pending()));
   return replaced;
 }
@@ -344,7 +376,7 @@ std::string libraryVersion() {
 namespace OrbifyCopyRefresh {
 bool enabled() { return false; }
 size_t detect(bool (*)()) { return 0; }
-size_t run(bool (*)(), unsigned long) { return 0; }
+size_t run(bool (*)(), unsigned long, const char*) { return 0; }
 bool enqueue(int64_t, const std::string&, const std::string&) { return false; }
 size_t pending() { return 0; }
 std::string libraryVersion() { return std::string(); }

@@ -45,10 +45,15 @@ void setRating(const std::string& bookPath, int8_t rating);
 
 // The series card (core/SeriesCard) of a downloaded book, from /.crosspoint/orbify_series/.
 bool loadCard(const std::string& bookPath, orbify::SeriesCard& out);
+// Moves whenever this boot writes a card: an End-of-Book page shown before its card arrived (a sync
+// while the page is open) loads it then.
+uint32_t cardGeneration();
 // The catalog's book detail just parsed (fetchBookDetail, with core's cardFilter fields).
 void storeCard(JsonObjectConst detail);
 // On a BookOrbit session: refreshes the open book's card when it has none or is near its end.
 void refreshCard(const std::string& bookPath, float percentage);
+// The book has a series card on the card (a sync while reading fetches only a missing one).
+bool hasCard(const std::string& bookPath);
 
 // --- the next book's cover (X4 Pro and X4: CROSSINK_TAILNET_ORBIFY_EOB_COVER; core/NextCover) -----
 

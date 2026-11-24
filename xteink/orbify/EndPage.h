@@ -49,6 +49,9 @@ class OrbifyEndPage {
             const std::vector<std::string>& folderPaths);
   // The book was marked finished or unfinished from this page: status and rating rows again.
   void finishedChanged(bool finished);
+  // A sync wrote a series card since load() (FinishSync::cardGeneration) while the page had none:
+  // reads the book's state and card again. True when the page must be drawn again.
+  bool reloadIfCardArrived();
 
   // Lays the page out in this area of the screen (the safe area, hints excluded; the
   // orientation may have changed since the last draw) and draws it.
@@ -80,6 +83,7 @@ class OrbifyEndPage {
   std::string authorName;  // the card's, else the EPUB's
   bool finished = false;
   bool hasCard = false;
+  uint32_t cardGeneration = 0;  // FinishSync::cardGeneration() at load()
   orbify::SeriesCard card;
   int8_t savedRating = 0;
   int8_t shownRating = 0;

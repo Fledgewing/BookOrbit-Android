@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "CacheStore.h"
+#include "HeapFloor.h"
 #include "core/EndPageLayout.h"
 #include "core/NextCover.h"
 #include "network/BookOrbitCatalogClient.h"
@@ -222,8 +223,12 @@ bool loadCardById(const int64_t bookId, orbify::SeriesCard& out) {
   if (!Storage.openFileForRead(TAG, path.c_str(), file)) return false;
   const int n = file.read(buf.get(), orbify::CARD_BYTES);
   file.close();
-  return n == static_cast<int>(orbify::CARD_BYTES) && orbify::deserializeCard(buf.get(), orbify::CARD_BYTES, out);
+  // A card written before version 3 is the shorter record (core/SeriesCard legacyCardBytes).
+  return n > 0 && orbify::deserializeCard(buf.get(), static_cast<size_t>(n), out);
 }
+
+// Bumped by every card written this boot: an open End-of-Book page reloads when it moves.
+uint32_t s_cardGeneration = 0;
 
 int64_t bookIdOf(const std::string& bookPath) {
   int64_t bookId = 0;
@@ -256,7 +261,11 @@ bool writeCard(const orbify::SeriesCard& card) {
 namespace cover = orbify::cover;
 // The Home store's limits for a cover transfer and for the JPEG decoder (BookOrbitHomeStore.cpp).
 constexpr uint32_t MIN_FREE_HEAP_FOR_COVER = 42 * 1024;
+#if defined(BOARD_HAS_PSRAM)
+constexpr uint32_t MIN_MAX_ALLOC_FOR_COVER = 8 * 1024;  // TLS buffers in PSRAM (patch 0037)
+#else
 constexpr uint32_t MIN_MAX_ALLOC_FOR_COVER = 20 * 1024;
+#endif
 constexpr uint32_t MIN_MAX_ALLOC_FOR_DECODE = 54 * 1024;
 
 // What storeCard last found for the next book; refreshCard asks that book itself when no section
@@ -512,6 +521,13 @@ void setRating(const std::string& bookPath, const int8_t value) {
 
 bool loadCard(const std::string& bookPath, orbify::SeriesCard& out) { return loadCardById(bookIdOf(bookPath), out); }
 
+uint32_t cardGeneration() { return s_cardGeneration; }
+
+bool hasCard(const std::string& bookPath) {
+  const int64_t bookId = bookIdOf(bookPath);
+  return bookId > 0 && Storage.exists(cardPath(bookId).c_str());
+}
+
 namespace {
 // coverFields: the detail was read with cover::addToFilter (a sync's refresh); the catalog's download
 // reads it without, and keeps the cover version an earlier sync found.
@@ -537,9 +553,11 @@ void storeCardFrom(JsonObjectConst detail, const bool coverFields) {
   (void)coverFields;
 #endif
   if (!writeCard(*card)) return;
-  LOG_INF(TAG, "Series card %lld: next %d (book %lld), %u suggestions", static_cast<long long>(card->bookId),
-          static_cast<int>(card->next), static_cast<long long>(card->nextBook.id),
-          static_cast<unsigned>(card->suggestionCount));
+  s_cardGeneration++;
+  LOG_INF(TAG, "Series card %lld: next %d (book %lld), %u suggestions; series '%s' #%s of %u",
+          static_cast<long long>(card->bookId), static_cast<int>(card->next),
+          static_cast<long long>(card->nextBook.id), static_cast<unsigned>(card->suggestionCount), card->seriesName,
+          card->seriesIndex[0] ? card->seriesIndex : "-", static_cast<unsigned>(card->seriesCount));
 }
 }  // namespace
 
@@ -616,7 +634,11 @@ void fetchNextCover(const std::string& bookPath, bool (*stop)()) {
             home.c_str());
   } else if (step == cover::Step::Download || step == cover::Step::Conditional) {
     if (stop && stop()) return;
-    if (ESP.getFreeHeap() < MIN_FREE_HEAP_FOR_COVER || ESP.getMaxAllocHeap() < MIN_MAX_ALLOC_FOR_COVER) {
+    // On a connection already open (the sleep sync lends its own, patch 0037), only room beside it;
+    // a new connection takes the Home store's floor.
+    if (BookOrbitCatalogClient::keptConnection() != nullptr) {
+      if (!OrbifyHeap::roomForRequest("Next cover")) return;
+    } else if (ESP.getFreeHeap() < MIN_FREE_HEAP_FOR_COVER || ESP.getMaxAllocHeap() < MIN_MAX_ALLOC_FOR_COVER) {
       LOG_INF(TAG, "Next cover: left for the next sync (free=%u maxAlloc=%u)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
       return;
     }

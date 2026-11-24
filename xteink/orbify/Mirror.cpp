@@ -17,6 +17,7 @@
 #include "CacheStore.h"
 #include "CopyRefresh.h"
 #include "FinishSync.h"
+#include "HeapFloor.h"
 #include "core/LocalFirst.h"
 #include "network/BookOrbitCatalogClient.h"
 
@@ -222,7 +223,8 @@ Due dueNow() {
                              orbify::mirror::DEFAULT_TTL_DAYS);
 }
 
-bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* progress) {
+bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* progress, const size_t maxSteps,
+         const bool heapFloor) {
   const unsigned long started = millis();
   Plan plan;
   const bool resumed = loadPlan(plan) && !plan.empty();
@@ -244,6 +246,8 @@ bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* prog
     while (const orbify::mirror::Step* step = plan.next()) {
       if (cancelled && cancelled()) break;
       if (budgetMs != 0 && millis() - started >= budgetMs) break;
+      if (maxSteps != 0 && ran >= maxSteps) break;
+      if (heapFloor && !OrbifyHeap::roomForRequest("Mirror")) break;
       if (WiFi.status() != WL_CONNECTED) {
         LOG_INF(TAG, "Mirror: the network went; stopping at %u/%u", static_cast<unsigned>(plan.doneCount()),
                 static_cast<unsigned>(plan.total()));

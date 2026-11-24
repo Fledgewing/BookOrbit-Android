@@ -6,6 +6,7 @@
 //
 //                      The End                          title, large bold serif
 //            The Lighthouse Keepers · Mara Quill        book · author, italic
+//                Book 2 of Harbour Lights                its place in its series, small ("" = none)
 //   ─────────────────────────────────────────────
 //   ✓ Finished                                 Undo     status row
 //     sends at next sync
@@ -51,6 +52,7 @@ struct Row {
 struct Page {
   std::string title;     // "The End"
   std::string subtitle;  // "<book> · <author>"
+  std::string seriesLine;  // "Book 2 of Harbour Lights" (mockup 7's series line); "" = none
   std::vector<Row> rows;
   int rating = 0;        // stars shown, 0..5
   bool touch = false;    // X4 Pro: larger rows and star targets
