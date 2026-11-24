@@ -1484,11 +1484,14 @@ test("settings schema: every plugin setting is in it, or listed as state", funct
         saved_pages_before_update = 1, sleep_current_file = 1, choices_asked_at = 1 }
     local src = readFile(here .. "/../orbit.koplugin/ko/settings.lua")
     local body = src:match("DEFAULTS = (%b{})")
-    local missing = {}
+    local missing, shared = {}, {}
     for key in body:gmatch("\n%s+([%a_]+)%s*=") do
-        if not SIDX.byKey[key] and not STATE[key] then table.insert(missing, key) end
+        if SIDX.byKey[key] then table.insert(shared, key)
+        elseif not STATE[key] then table.insert(missing, key) end
     end
     eq(table.concat(missing, " "), "", "plugin settings missing from shared/settings/schema.json")
+    -- A shared setting's default is the schema's (ko/settings.lua fills DEFAULTS from it; test_flows checks the result).
+    eq(table.concat(shared, " "), "", "shared settings with a default in ko/settings.lua, not the schema")
 end)
 
 local MERGE = JSON.fixture(here, "settings/merge.json")
