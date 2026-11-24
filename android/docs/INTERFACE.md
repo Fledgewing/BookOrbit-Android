@@ -88,7 +88,6 @@ only reads, except `state.json`.
 | `tags.json` | companion, at a `SLEEP_REFRESH` | `{v, at, details, tags: [{tag, label, count}]}`: the tags in the saved book details, most used first, for Leave out's tag picker |
 | `scopes.json` | companion, at a `SLEEP_REFRESH` | `{v, at, scopes: [{id, title, count}], collections: [...]}`: every smart scope and collection, for the pickers |
 | `bag.lua`, `leave_out.lua` | companion, at a `SLEEP_REFRESH` | private (the plugin reads `leave_out.lua` for a rule's book count): the shuffle bag and the daily Leave-out members |
-| `choices.json` | plugin, at start, on a Home refresh (at most every 6 h) and when `/status` `want_choices` is newer than the last it answered | `{v, at, cached, scopes: [{id, title, count}], collections: [...], tags: [{tag, label, count}]}` for the companion's picker and tag list (docs/design/companion-settings.md §6.2) |
 | `vendor-screensaver.txt` | `tools/install-usb.sh --sleep-screen on` | the three screen-saver values it replaced, for `off` |
 
 `GET /status` and the status file carry the sleep keys in `settings` and
@@ -271,8 +270,9 @@ status file. For example:
 ```
 
 `settings` are the shared settings (above); with cap `settings2` they also carry `values` (settings v2,
-above), and the top level carries `want_choices` (ms: the sleep screen's picker is open; the plugin
-writes `choices.json` when it is newer than the last request it answered). The status file carries
+above), and the top level carries `want_choices` (ms: the sleep screen's picker is open; when it is
+newer than the last request it answered, the plugin sends `SLEEP_REFRESH scopes_only=1` with the
+login, and the worker writes fresh `scopes.json` and `tags.json`). The status file carries
 both too. The patch reads them on start, resume and when its
 menu opens; the newer `settings_at` wins, and the patch pushes its own with `SETTINGS` when they
 are newer. `keymap` (v0.4.0): clicker buttons for the patch, keyed by Android keycode, e.g.
