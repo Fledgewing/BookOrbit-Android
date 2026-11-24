@@ -4287,6 +4287,145 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
     cacheTeardown()
 end)
 
+---------------------------------------------------------------- sleep screen (lock-screen.md)
+test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next through Leave out, the current cover", function()
+    local JSON = dofile(here .. "/json_mini.lua")
+    capsReset()
+    local caps = {}
+    for _, c in ipairs(FULL) do table.insert(caps, c) end
+    table.insert(caps, "sleep_screen")
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps, sleep = { shown_by = "Orbit screen saver ✓" } }
+    local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
+    local lfs = require("libs/libkoreader-lfs")
+    local saved = { attributes = lfs.attributes, dir = lfs.dir }
+    lfs.attributes = function(f, k)
+        local d = os.execute('test -d "' .. f .. '"')
+        if d == 0 or d == true then return "directory" end
+        local h = io.open(f, "rb"); if h then h:close(); return "file" end
+        return saved.attributes(f, k)
+    end
+    lfs.dir = function(d)
+        local h = io.popen('ls -1 "' .. d .. '" 2>/dev/null'); local names = {}
+        for n in h:lines() do table.insert(names, n) end
+        h:close(); local i = 0
+        return function() i = i + 1; return names[i] end
+    end
+    local S, Sleep = RE.S, RE.Sleep
+    Sleep.base_dir = dir
+    local ui, m = newUI(false)
+    RE.Shared.refresh("test")
+    ok(RE.Companion.has("sleep_screen"), "the companion offers it")
+    local item
+    for _, it in ipairs(m:menuItems()) do if it.text == "Sleep screen" then item = it end end
+    ok(item, "Tools › Android sync › Sleep screen")
+    local rows = item.sub_item_table_func()
+    ok(rows[1].text_func() == "Sleep screen: The reader's own", "off by default: " .. rows[1].text_func())
+    ok(rows[2].enabled_func() == false, "Pick from waits for Recommended")
+    ok(rows[#rows - 1].text_func() == "Shown by: Orbit screen saver ✓", "how the companion shows it")
+    -- Recommended on: saved, and the companion gets every sleep extra.
+    W.broadcasts = {}
+    rows[1].sub_item_table[2].callback()
+    ok(S.sleep_mode == "recommended", "saved")
+    local b = lastBroadcast(".SETTINGS")
+    ok(b and b.extras.sleep_mode == "recommended" and b.extras.sleep_hours == "6" and b.extras.sleep_style == "bar"
+        and b.extras.sleep_battery == "0" and b.extras.sleep_from == "up_next", "SETTINGS extras")
+    Sleep.set("sleep_leave_out", { "tag:age:18" })
+    ok(lastBroadcast(".SETTINGS").extras.sleep_leave_out == "tag:age:18", "rules, one per line")
+    -- The pool: Up next is empty, so Want to read; one read, one without a cover, one left out by tag.
+    local calls = {}
+    local client = {}
+    function client:query(path, q)
+        local keys = {}
+        for k in pairs(q) do table.insert(keys, k) end
+        table.sort(keys)
+        local parts = {}
+        for _, k in ipairs(keys) do table.insert(parts, k .. "=" .. tostring(q[k])) end
+        return path .. "?" .. table.concat(parts, "&")
+    end
+    function client:requestBlocking(method, path)
+        table.insert(calls, path)
+        if path:find("sections/up%-next%-in%-series") then return { section = { books = {} } } end
+        if path:find("sections/want%-to%-read") then
+            return { section = { books = {
+                { id = 1, title = "Read One", hasCover = true, readStatus = "read" },
+                { id = 2, title = "Tagged", hasCover = true },
+                { id = 3, title = "Kept", hasCover = true },
+                { id = 4, title = "No Cover", hasCover = false },
+            } } }
+        end
+        local id = tonumber(path:match("/catalog/books/(%d+)$"))
+        if id == 2 then return { id = 2, title = "Tagged", hasCover = true, tags = { "Age:18" } } end
+        if id == 3 then return { id = 3, title = "Kept", hasCover = true, tags = { "cosy" } } end
+        return nil, 404
+    end
+    local oc_client, download = RE.OC.client, Sleep.download
+    RE.OC.client = function() return client end
+    Sleep.download = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
+    io.open(dir .. "/covers/99.jpg", "wb"):close() -- a cover from an earlier pool
+    W.broadcasts = {}
+    Sleep.refreshed_at = nil
+    Sleep.kick("test")
+    run(60)
+    local f = io.open(dir .. "/pool.json", "rb")
+    ok(f, "pool.json written")
+    local pool = JSON.decode(f:read("*a")); f:close()
+    ok(#pool.items == 1 and pool.items[1].id == 3 and pool.items[1].file == "covers/3.jpg", "only the kept book: " .. tostring(#pool.items))
+    ok(io.open(dir .. "/covers/3.jpg", "rb"), "its cover")
+    ok(not io.open(dir .. "/covers/99.jpg", "rb"), "the old cover went")
+    ok(lastBroadcast(".SLEEP_POOL"), "the companion is told")
+    local log = table.concat(W.logs, "\n")
+    ok(log:find("sleep screen: pool 1 cover(s)", 1, true) and log:find("from want-to-read (the chosen list was empty)", 1, true), "logged")
+    -- Not again within REFRESH_EVERY_S; never in a book.
+    local n = #calls
+    Sleep.kick("again"); run(10)
+    ok(#calls == n, "not again so soon")
+    -- The current book's cover, once per book.
+    package.loaded["apps/filemanager/filemanagerbookinfo"] = { getCoverImage = function()
+        return { writeToFile = function(_, path) local g = io.open(path, "wb"); g:write("png"); g:close(); return true end, free = function() end }
+    end }
+    local book = { document = { file = "/books/made-up.epub" }, doc_props = { display_title = "A Made-Up Book", authors = "Ann Example" } }
+    ok(Sleep.writeCurrent(book, "test") == true, "written")
+    ok(Sleep.writeCurrent(book, "test") == false, "once per book")
+    f = io.open(dir .. "/current.json", "rb")
+    local cur = JSON.decode(f:read("*a")); f:close()
+    ok(cur.title == "A Made-Up Book" and cur.file == "current.png" and cur.authors == "Ann Example", "current.json")
+    ok(io.open(dir .. "/current.png", "rb"), "current.png")
+    -- Off again: nothing more is written.
+    rows[1].sub_item_table[1].callback()
+    S.sleep_current_file = nil
+    ok(Sleep.writeCurrent(book, "off") == false, "off writes nothing")
+    package.loaded["apps/filemanager/filemanagerbookinfo"] = nil
+    RE.OC.client, Sleep.download = oc_client, download
+    lfs.attributes, lfs.dir = saved.attributes, saved.dir
+    Sleep.base_dir = nil
+    S.sleep_leave_out = {}
+    sh("rm -rf", dir)
+    capsReset()
+    run(5)
+end)
+
+test("sleep screen: settings changed in the companion are applied; an older companion changes nothing", function()
+    capsReset()
+    local S = RE.S
+    S.shared_settings_at = 1000
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.json.STATUS = { version = "0.11.0", mode = "full", caps = FULL, settings = { wifi_mode = "always_on", settings_at = 2000 } }
+    RE.Shared.refresh("test")
+    ok(S.sleep_mode == "off" and S.sleep_hours == 6, "no sleep keys: unchanged")
+    W.json.STATUS = { version = "0.12.0", mode = "full", caps = FULL, settings = { settings_at = 3000,
+        sleep_mode = "current", sleep_hours = 12, sleep_battery = true, sleep_style = "overlay",
+        sleep_leave_out = "tag:a\nscope:4", sleep_battery_corner = "nowhere" } }
+    RE.Shared.refresh("test")
+    ok(S.sleep_mode == "current" and S.sleep_hours == 12 and S.sleep_battery == true and S.sleep_style == "overlay", "applied")
+    ok(#S.sleep_leave_out == 2 and S.sleep_leave_out[2] == "scope:4", "rules")
+    ok(S.sleep_battery_corner == "bottom_left", "a bad value is the default")
+    for _, k in ipairs({ "sleep_mode", "sleep_hours", "sleep_battery", "sleep_style", "sleep_leave_out" }) do S[k] = nil end
+    S.sleep_mode, S.sleep_hours, S.sleep_battery, S.sleep_style, S.sleep_leave_out = "off", 6, false, "bar", {}
+    capsReset()
+    run(5)
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

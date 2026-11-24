@@ -9,7 +9,7 @@ class ModeLogicTest {
     @Test
     fun capsPerModeHelperAndPermission() {
         val full = ModeLogic.caps(OrbitMode.FULL, Helpers(), adminGranted = true)
-        assertEquals(listOf("install", "setup", "stats", "relaunch", "home", "apps", "wifi", "sleep_sync", "clicker", "pin", "screen_off"), full)
+        assertEquals(listOf("install", "setup", "stats", "relaunch", "sleep_screen", "home", "apps", "wifi", "sleep_sync", "clicker", "pin", "screen_off"), full)
         assertFalse("screen_off needs device admin granted", "screen_off" in ModeLogic.caps(OrbitMode.FULL, Helpers(), adminGranted = false))
         assertEquals("unset behaves as Full", full, ModeLogic.caps(null, Helpers(), adminGranted = true))
         assertEquals(ModeLogic.BASE, ModeLogic.caps(OrbitMode.ADDON, Helpers(), adminGranted = true))

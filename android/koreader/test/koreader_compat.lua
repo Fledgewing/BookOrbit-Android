@@ -85,6 +85,10 @@ local NEEDS = {
     { "frontend/gettext.lua", { { "GetText", T } } },
     { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T } } },
     { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T } } },
+    -- The sleep screen (ko/sleepscreen.lua): the open book's cover and title, and the text input.
+    { "frontend/apps/filemanager/filemanagerbookinfo.lua", { "getCoverImage" } },
+    { "frontend/apps/reader/readerui.lua", { { "doc_props", F } } },
+    { "frontend/ui/widget/inputdialog.lua", { "getInputText", "onShowKeyboard" } },
 }
 -- Widgets the plugin builds with: each module must still exist.
 for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "container/bottomcontainer",
@@ -100,7 +104,7 @@ local BASE = {
         "terminateSubProcess", "purgeDir" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
     { "ffi/sha2.lua", { "sha256" } },
-    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F } } },
+    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, "writeToFile", "free" } },
 }
 
 local missing = {}

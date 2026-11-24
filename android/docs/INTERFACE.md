@@ -24,11 +24,12 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `NET_UP` | `reason`, `request_id`, `wifi` (`"1"`/`"0"`), `tailscale` (`"1"`/`"0"`), `wake_lock_s` (`"0"` = none), `owner` (`"auto"`/`"manual"`), `mode` | Cancel any pending Wi-Fi-off timer. Wi-Fi it turns on is owned by `owner` (`manual`: the reader asked by hand; already-on Wi-Fi also becomes `manual`). If `wake_lock_s` > 0, hold a partial wake lock for that long, hard-capped at 25 s. If `wifi = "1"` and Wi-Fi is off, turn it on. If `tailscale = "1"`, send Tailscale `CONNECT_VPN`. Record the time it took Wi-Fi to come up, for its status page. |
 | `NET_DONE` | `reason`, `ok` (`"1"`/`"0"`), `seconds` (e.g. `"4.2"`), `detail`, `restore` (`"off"` when Wi-Fi was off before) | Release the wake lock. `restore = "off"` on a sleep sync acts as "off now" (unless the owner is `manual`). For `reason` `sleep` or `sync_and_sleep`: record "Last sleep sync", then apply "Wi-Fi after sleep sync": keep on; off after 30 min (the timer turns Wi-Fi off only if the screen is still off when it fires); or off now, only while the screen is off. For `sync_and_sleep` the screen is still on at `NET_DONE` (`SLEEP_NOW` follows), so "off now" waits for the next screen-off, up to 30 s later. |
 | `WIFI_OFF` | `reason`, `auto` (`"1"`/`"0"`), `mode` | Turn Wi-Fi off. `auto = "1"` (the patch's automatic off: idle, restore) is refused when the owner is `manual`, and waits while the companion downloads an update. `auto = "0"`: KOReader's own "Wi-Fi off" toggle, or "Off while reading" when a book opens. |
-| `SETTINGS` | `wifi_mode` (`always_on`/`off_reading`/`jit`), `wifi_idle_min` (`1`/`2`/`5`/`10`), `home_button` (`smart`/`bookorbit`), `settings_at` (ms since epoch); patch 0.4.8+: `reading_schedule` (an id below), `reading_schedule_applied_at` (ms, the last companion request it applied) | Store the shared settings when `settings_at` is newer than its own. Always record `reading_schedule` (the patch owns it) and drop its own pending request once `reading_schedule_applied_at` ≥ that request's `at`. Sent at start, on a menu change and after applying a request. |
+| `SETTINGS` | `wifi_mode` (`always_on`/`off_reading`/`jit`), `wifi_idle_min` (`1`/`2`/`5`/`10`), `home_button` (`smart`/`bookorbit`), `settings_at` (ms since epoch); patch 0.4.8+: `reading_schedule` (an id below), `reading_schedule_applied_at` (ms, the last companion request it applied) | Store the shared settings when `settings_at` is newer than its own. Always record `reading_schedule` (the patch owns it) and drop its own pending request once `reading_schedule_applied_at` ≥ that request's `at`. Sent at start, on a menu change and after applying a request. The sleep screen (cap `sleep_screen`, docs/design/lock-screen.md S1) adds `sleep_mode` (`off`/`recommended`/`current`), `sleep_from` (`up_next`/`want_to_read`/`discover`/`scope:<id>`/`collection:<id>`), `sleep_leave_out` (rules, one per line: `tag:<name>`, `scope:<id>`, `collection:<id>`), `sleep_hours` (`1`/`3`/`6`/`12`/`24`), `sleep_text` (≤ 60 characters), `sleep_battery` (`1`/`0`), `sleep_style` (`bar`/`overlay`), `sleep_text_position` (`right`/`left`/`top`/`bottom`), `sleep_battery_corner` (`bottom_left`/`bottom_right`/`top_left`/`top_right`); missing ones keep their value. In Add-on mode without the service only these are recorded. |
 | `STATS` | `seq`, `period_s`, `pages`, `full`, `partial`, `content` (`text`/`comic`/`webtoon`/`pdf`/`none`), `open` (`1`/`0`), `reading_min`, `wifi_mode`, `reading_schedule`, `reason`; plugin 0.11.1+: `reading` (`1` = a book open in front, not BookOrbit Home or a list over it; `0` on `close`/`suspend`) | Battery stats batch: store the counts with the current state; a book is "in front" while `open=1` (at most 6 min). `reading` drives the companion's reading gate (docs/design/reading-gate.md); without it, `open` and `resume`/`suspend` do. Sent every 5 min with a book open, on open/Resume/Suspend/close, never per page (docs/design/STATS-DESIGN.md). |
 | `SETUP_LATER` | none | The setup box's "Later" in KOReader: the companion's own Later (quiet until an update or a step stops working). Companion 0.4.1+. |
 | `RELAUNCH` | `reason` (`restart`) | The patch is quitting for a restart (COMMAND `restart`, or from 0.5.0 by itself for a newer patch file on disk, DESIGN "One update"): start KOReader again after 2.5 s. Patch 0.3.1+. |
 | `REPORT` | `signed_in` (`"1"`/`"0"`), `recommended` (`none`/`partial`/`reviewed`/`applied`), `conflicts` (a count), `reason` | Companion 0.11.0+: one yes/no about the BookOrbit login and the recommended settings' state, for its Setup rows "Signed in to BookOrbit" and "Recommended settings". Never the server, the account or the key; other extras are ignored. Sent at start, after a recommended pass and when either value changes. Needs no service. |
+| `SLEEP_POOL` | `reason` | Companion cap `sleep_screen`: the files in `koreader/settings/orbit-sleep/` changed (below). The picture sink redraws `Pictures/Orbit/sleep.png`; the screen saver reads them at the next sleep. Needs no service. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
 
 `reason` values: `start` (KOReader just started; on firmwares that stop KOReader after sleep,
@@ -53,6 +54,23 @@ capability: an action reaches the service only when a helper keeps it running; `
 `REPORT` and the book state from `STATS` are recorded without it; the rest are logged and
 dropped. In Full every action reaches the service as before.
 
+## The sleep screen's files (cap `sleep_screen`)
+
+In `koreader/settings/orbit-sleep/` (docs/design/lock-screen.md). The plugin writes; the companion
+only reads, except `state.json`.
+
+| File | Written by | Holds |
+|---|---|---|
+| `pool.json` | plugin, at a sync (never at sleep) | `{v, at, source, items: [{id, title, file}]}` in show order; `file` is `covers/<id>.jpg` |
+| `covers/<id>.jpg` | plugin | the pool's covers, fetched by ETag; others pruned |
+| `current.png`, `current.json` | plugin, when a book opens | the current book's cover and `{v, title, authors, path, id, file, at}` |
+| `state.json` | companion | `{v, shown, changed_at}`: the cover shown and when it changed; the plugin's shuffle bag moves past it |
+| `bag.lua`, `leave_out.lua` | plugin | private: the shuffle bag and the daily Leave-out members |
+| `vendor-screensaver.txt` | `tools/install-usb.sh --sleep-screen on` | the three screen-saver values it replaced, for `off` |
+
+`GET /status` and the status file carry the sleep keys in `settings` and
+`"sleep": {"shown_by": "…", "sink": "dream"|"picture"}`.
+
 ## Patch → companion: activities
 
 Started with `Context.startActivity`, `setPackage(...)` and `FLAG_ACTIVITY_NEW_TASK`. The
@@ -66,6 +84,8 @@ activity needs an intent filter with the action and `android.intent.category.DEF
 | `net.fledgewing.orbitcompanion.action.SHOW_PIN` | The Settings PIN keypad (companion 0.4.4+). The patch's Orbit menu asks for it while `/status` says `pin_locked: true`; it closes at once when no PIN is set or it's already unlocked. The unlock state comes back through `/status`. |
 | `net.fledgewing.orbitcompanion.action.RELAUNCH_UI` | Companion 0.11.0+, Add-on only: an invisible window the plugin starts just before it quits for a restart; it starts KOReader again 2.5 s later (no Home role to do it from the background). |
 | `net.fledgewing.orbitcompanion.action.SHOW_LAUNCHER` | The launcher page (the one a double Home shows); Home pressed on BookOrbit home. Companions before 0.2.1 lack it; the patch then opens `SHOW_APPS`. |
+| `net.fledgewing.orbitcompanion.action.SHOW_SLEEP` | Settings › Sleep screen (cap `sleep_screen`), behind the Settings PIN: the Orbit menu's "Shown by" row. |
+| `net.fledgewing.orbitcompanion.action.SLEEP_PREVIEW` | The sleep screen as it would show now, for 5 s or until a tap (cap `sleep_screen`); never moves the rotation on. |
 
 ## Companion → patch: "go home"
 
@@ -225,7 +245,7 @@ atomically whenever its mode, caps or setup state change (only if a `koreader/` 
     {"proto":"1","version":"0.11.0","mode":"addon","caps":["install","setup","stats","relaunch"],
      "setup_prompt":{"key":"…","rows":["…"]},"setup_needed":1,"written_at":…}
 
-`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always); `home`,
+`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always), `sleep_screen` (always, from the sleep screen's release; an older companion never offers it, so the plugin hides the menu); `home`,
 `apps` (Full); `wifi`, `sleep_sync`, `screen_off`, `clicker`, `pin` (Full, or Add-on with that
 helper on; `screen_off` also needs the lock-screen permission). The plugin reads `/status` first,
 then the file; a companion that answers `/status` without `caps` is older and offers everything.

@@ -39,7 +39,8 @@ class ReadingGuardTest {
         Site("Launcher.kt", "startActivity(i)", 1, "the launcher page, shown by the Home activity (Home press or KOReader gone)"),
         Site("Launcher.kt", "startActivity(Intent(this,", 3, "launcher page buttons"),
         Site("Clicker.kt", "startActivity(", 4, "clicker pages: the user's taps and key captures"),
-        Site("Pages.kt", "startActivity(Intent(this,", 14, "companion pages: the user's taps, or opened from a page the user opened"),
+        Site("Pages.kt", "startActivity(Intent(this,", 15, "companion pages: the user's taps, or opened from a page the user opened"),
+        Site("SleepPages.kt", "startActivity(Intent(this, SleepPreviewActivity", 1, "Sleep screen › Preview: the user's tap"),
         Site("Pages.kt", "PinActivity.Mode.SET", 2, "Settings: the user sets a PIN"),
         Site("Pages.kt", "PinActivity.thenInstall(this", 1, "Status: the user tapped Install on a ready update"),
     )
@@ -49,6 +50,19 @@ class ReadingGuardTest {
     private fun sources(): File {
         val rel = "src/main/java/net/fledgewing/orbitcompanion"
         return listOf(File(rel), File("app/$rel")).firstOrNull { it.isDirectory } ?: error("sources not found from ${File(".").absolutePath}")
+    }
+
+    /**
+     * The sleep screen's dream (docs/design/lock-screen.md) is started only by the system, at sleep:
+     * the manifest protects it with BIND_DREAM_SERVICE, and it never notifies or starts anything.
+     */
+    @Test
+    fun sleepDreamIsSystemStartedOnly() {
+        val src = File(sources(), "SleepDream.kt").readText()
+        assertTrue("SleepDream must not notify or start activities", !call.containsMatchIn(src))
+        val manifest = listOf(File("src/main/AndroidManifest.xml"), File("app/src/main/AndroidManifest.xml")).first { it.isFile }.readText()
+        val block = manifest.substringAfter("android:name=\".SleepDream\"").substringBefore("</service>")
+        assertTrue("SleepDream needs BIND_DREAM_SERVICE", block.contains("android:permission=\"android.permission.BIND_DREAM_SERVICE\""))
     }
 
     @Test

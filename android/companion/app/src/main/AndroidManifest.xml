@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
@@ -14,6 +15,12 @@
     <!-- Setup's one-tap KOReader patch install writes koreader/patches/ (targetSdk 28: legacy storage). -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <!-- Optional, granted only over USB (install-usb.sh, "grant-screen-saver"): Orbit switches the
+         screen saver to its sleep screen and back (docs/design/lock-screen.md P1). It writes only the
+         three screen-saver keys (SleepSystem.KEYS, SleepGuardTest). -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:requestLegacyExternalStorage="true"
@@ -232,6 +239,51 @@
             android:name=".OrbitService"
             android:exported="false" />
 
+        <!-- The sleep screen (docs/design/lock-screen.md): Orbit's screen saver, started only by the
+             system at sleep (BIND_DREAM_SERVICE); its settings page and preview, opened from KOReader's
+             Orbit menu (SHOW_SLEEP, SLEEP_PREVIEW); the picture sink's alarm. -->
+        <service
+            android:name=".SleepDream"
+            android:exported="true"
+            android:label="@string/sleep_dream_label"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <activity
+            android:name=".SleepScreenActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="net.fledgewing.orbitcompanion.action.SHOW_SLEEP" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".SleepPreviewActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:screenOrientation="portrait"
+            android:taskAffinity=""
+            tools:ignore="LockedOrientationActivity">
+            <intent-filter>
+                <action android:name="net.fledgewing.orbitcompanion.action.SLEEP_PREVIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".SleepReceiver"
+            android:exported="false" />
+
         <!-- android/docs/INTERFACE.md broadcasts. A manifest receiver, so a stopped companion still gets them. -->
         <receiver
             android:name=".CommandReceiver"
@@ -246,6 +298,7 @@
                 <action android:name="net.fledgewing.orbitcompanion.action.RELAUNCH" />
                 <action android:name="net.fledgewing.orbitcompanion.action.SETUP_LATER" />
                 <action android:name="net.fledgewing.orbitcompanion.action.REPORT" />
+                <action android:name="net.fledgewing.orbitcompanion.action.SLEEP_POOL" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

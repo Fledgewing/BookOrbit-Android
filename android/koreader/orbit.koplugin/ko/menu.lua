@@ -276,6 +276,7 @@ function OrbitAndroid:menuItems()
             text_func = function() return string.format(_("Sleep sync limit: %d s"), S.sleep_cap or 20) end,
             sub_item_table = cap_items,
         },
+        Sleep.menuItem(self, later),
         { text_func = function() return self:recommendedMenuText() end, callback = later(function() self:showRecommended("menu") end) },
         { text = _("Test sync path"), callback = later(function() self:testSyncPath() end), separator = true },
         { text = _("Open Orbit Companion"), callback = later(function() self:onOrbitOpenCompanion() end) },

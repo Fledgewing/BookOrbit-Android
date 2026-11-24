@@ -1,0 +1,300 @@
+{
+ "_comment": "Not a recording: the sleep screen's rotation rule (docs/design/lock-screen.md R4, F1, F4). At sleep (or a picture redraw): mode, X hours, now (ms), the pool's cover ids in order (only covers on the device), whether a current book cover exists, and the state (the cover shown last and when it last changed). show: pool:<id>, current, default (the drawn \"Sleeping\" page) or off; next: the state after.",
+ "cases": [
+  {
+   "name": "first sleep: nothing shown yet, the first cover",
+   "mode": "recommended",
+   "hours": 6,
+   "now": 1700000000000,
+   "pool": [
+    5,
+    7,
+    9
+   ],
+   "current": true,
+   "state": {
+    "shown": 0,
+    "changed_at": 0
+   },
+   "show": "pool:5",
+   "next": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   }
+  },
+  {
+   "name": "before X hours: the same cover",
+   "mode": "recommended",
+   "hours": 6,
+   "now": 1700021599999,
+   "pool": [
+    5,
+    7,
+    9
+   ],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   },
+   "show": "pool:5",
+   "next": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   }
+  },
+  {
+   "name": "X hours on: the next cover, last change moves",
+   "mode": "recommended",
+   "hours": 6,
+   "now": 1700021600000,
+   "pool": [
+    5,
+    7,
+    9
+   ],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   },
+   "show": "pool:7",
+   "next": {
+    "shown": 7,
+    "changed_at": 1700021600000
+   }
+  },
+  {
+   "name": "a day later still one step, not four",
+   "mode": "recommended",
+   "hours": 6,
+   "now": 1700086400000,
+   "pool": [
+    5,
+    7,
+    9
+   ],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   },
+   "show": "pool:7",
+   "next": {
+    "shown": 7,
+    "changed_at": 1700086400000
+   }
+  },
+  {
+   "name": "the last cover wraps to the first",
+   "mode": "recommended",
+   "hours": 1,
+   "now": 1700003600000,
+   "pool": [
+    5,
+    7,
+    9
+   ],
+   "current": false,
+   "state": {
+    "shown": 9,
+    "changed_at": 1700000000000
+   },
+   "show": "pool:5",
+   "next": {
+    "shown": 5,
+    "changed_at": 1700003600000
+   }
+  },
+  {
+   "name": "clock went backwards: same cover, last change reset to now",
+   "mode": "recommended",
+   "hours": 6,
+   "now": 1699996400000,
+   "pool": [
+    5,
+    7,
+    9
+   ],
+   "current": true,
+   "state": {
+    "shown": 7,
+    "changed_at": 1700000000000
+   },
+   "show": "pool:7",
+   "next": {
+    "shown": 7,
+    "changed_at": 1699996400000
+   }
+  },
+  {
+   "name": "the shown cover left the pool, not due: the pool's first, last change kept",
+   "mode": "recommended",
+   "hours": 6,
+   "now": 1700003600000,
+   "pool": [
+    11,
+    12
+   ],
+   "current": true,
+   "state": {
+    "shown": 7,
+    "changed_at": 1700000000000
+   },
+   "show": "pool:11",
+   "next": {
+    "shown": 11,
+    "changed_at": 1700000000000
+   }
+  },
+  {
+   "name": "the shown cover left the pool, due: the pool's first, last change moves",
+   "mode": "recommended",
+   "hours": 6,
+   "now": 1700025200000,
+   "pool": [
+    11,
+    12
+   ],
+   "current": true,
+   "state": {
+    "shown": 7,
+    "changed_at": 1700000000000
+   },
+   "show": "pool:11",
+   "next": {
+    "shown": 11,
+    "changed_at": 1700025200000
+   }
+  },
+  {
+   "name": "a pool of one, due: the same cover, last change moves",
+   "mode": "recommended",
+   "hours": 3,
+   "now": 1700010800000,
+   "pool": [
+    5
+   ],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   },
+   "show": "pool:5",
+   "next": {
+    "shown": 5,
+    "changed_at": 1700010800000
+   }
+  },
+  {
+   "name": "F1: no pool, the current book",
+   "mode": "recommended",
+   "hours": 6,
+   "now": 1700000000000,
+   "pool": [],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   },
+   "show": "current",
+   "next": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   }
+  },
+  {
+   "name": "F1: no pool and no current book, the default screen",
+   "mode": "recommended",
+   "hours": 6,
+   "now": 1700000000000,
+   "pool": [],
+   "current": false,
+   "state": {
+    "shown": 0,
+    "changed_at": 0
+   },
+   "show": "default",
+   "next": {
+    "shown": 0,
+    "changed_at": 0
+   }
+  },
+  {
+   "name": "Current book",
+   "mode": "current",
+   "hours": 6,
+   "now": 1700000000000,
+   "pool": [
+    5,
+    7
+   ],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   },
+   "show": "current",
+   "next": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   }
+  },
+  {
+   "name": "F4: Current book, never read one: the pool",
+   "mode": "current",
+   "hours": 6,
+   "now": 1700021600000,
+   "pool": [
+    5,
+    7
+   ],
+   "current": false,
+   "state": {
+    "shown": 5,
+    "changed_at": 1700000000000
+   },
+   "show": "pool:7",
+   "next": {
+    "shown": 7,
+    "changed_at": 1700021600000
+   }
+  },
+  {
+   "name": "F4: Current book, nothing at all: the default screen",
+   "mode": "current",
+   "hours": 6,
+   "now": 1700000000000,
+   "pool": [],
+   "current": false,
+   "state": {
+    "shown": 0,
+    "changed_at": 0
+   },
+   "show": "default",
+   "next": {
+    "shown": 0,
+    "changed_at": 0
+   }
+  },
+  {
+   "name": "off: the reader's own screen",
+   "mode": "off",
+   "hours": 6,
+   "now": 1700000000000,
+   "pool": [
+    5
+   ],
+   "current": true,
+   "state": {
+    "shown": 0,
+    "changed_at": 0
+   },
+   "show": "off",
+   "next": {
+    "shown": 0,
+    "changed_at": 0
+   }
+  }
+ ]
+}

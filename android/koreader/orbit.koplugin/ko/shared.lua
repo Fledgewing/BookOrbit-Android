@@ -72,7 +72,12 @@ function Shared.refresh(why)
     Shared.pin_locked = MenuLock.locked(st)
     -- The companion's lockdown reading (true/false; nil: unknown or no companion).
     if st then Shared.vpn_lockdown = type(st.vpn_lockdown) == "boolean" and st.vpn_lockdown or nil end
-    local remote = st and type(st.settings) == "table" and st.settings or nil
+    -- How the companion shows the sleep screen ("Orbit screen saver ✓", "Set up ›"), for the menu.
+    local sl = (st and type(st.sleep) == "table" and st.sleep) or (Companion.file and type(Companion.file.sleep) == "table" and Companion.file.sleep) or nil
+    Shared.sleep_shown_by = sl and type(sl.shown_by) == "string" and sl.shown_by or nil
+    -- With no service (Add-on), the status file carries the sleep settings (the only ones set there).
+    local remote = (st and type(st.settings) == "table" and st.settings)
+        or (Companion.file and type(Companion.file.settings) == "table" and Companion.file.settings) or nil
     if not remote then return false end
     local at = tonumber(remote.settings_at) or 0
     if at > (S.shared_settings_at or 0) then
@@ -85,14 +90,39 @@ function Shared.refresh(why)
         if (remote.home_button == "smart" or remote.home_button == "bookorbit") and remote.home_button ~= S.home_button then
             S.home_button = remote.home_button; table.insert(changed, "home_button=" .. remote.home_button)
         end
+        local sleep_changed = Shared.applySleep(remote, changed)
         S.shared_settings_at = at
         saveSettings()
         log("settings from companion (" .. why .. "):", #changed > 0 and table.concat(changed, " ") or "no change")
+        if sleep_changed and Sleep then pcall(Sleep.changed, "companion settings") end
         return #changed > 0
     elseif at < (S.shared_settings_at or 0) then
         Shared.push("companion older (" .. why .. ")")
     end
     return false
+end
+
+-- The sleep-screen settings a newer companion sends (an older one sends none: nothing changes).
+-- -> true when the mode, the source or the rules changed.
+function Shared.applySleep(remote, changed)
+    local present = {}
+    for _, k in ipairs(SleepPool.KEYS) do if remote[k] ~= nil then present[k] = remote[k] end end
+    if next(present) == nil then return false end
+    local merged = {}
+    for _, k in ipairs(SleepPool.KEYS) do merged[k] = present[k] ~= nil and present[k] or S[k] end
+    local n = SleepPool.normalize(merged)
+    local was = SleepPool.normalize(S)
+    local big = false
+    for _, k in ipairs(SleepPool.KEYS) do
+        local a, b = n[k], was[k]
+        if type(a) == "table" then a, b = table.concat(a, "\n"), table.concat(b, "\n") end
+        if a ~= b then
+            S[k] = n[k]
+            table.insert(changed, k .. "=" .. tostring(a):gsub("\n", ","))
+            if k == "sleep_mode" or k == "sleep_from" or k == "sleep_leave_out" then big = true end
+        end
+    end
+    return big
 end
 
 -- The companion's caps changed (a mode switch or a helper, docs/design/addon-mode.md §8):
@@ -108,7 +138,7 @@ end
 
 function Shared.push(why)
     if not Companion.installed() then return end
-    Companion.send(Companion.ACTION.SETTINGS, {
+    local extras = {
         reason = why,
         wifi_mode = S.wifi_mode or Shared.defaultMode(),
         wifi_idle_min = tostring(S.wifi_idle_min or 2),
@@ -117,7 +147,10 @@ function Shared.push(why)
         -- The patch owns Sync while reading; the companion shows it (and the request it applied).
         reading_schedule = S.reading_schedule or "off",
         reading_schedule_applied_at = string.format("%.0f", S.reading_schedule_request_at or 0),
-    })
+    }
+    -- The sleep screen's settings (docs/design/lock-screen.md S1).
+    for k, v in pairs(SleepPool.extras(S)) do extras[k] = v end
+    Companion.send(Companion.ACTION.SETTINGS, extras)
 end
 
 function Shared.set(key, value)

@@ -580,6 +580,8 @@ OC.mirrorTick = function(why) return Mirror.tick(why) end
 -- wake, BookOrbit Home opening. (Catalog reads mostly run in the plugin's child process, where
 -- nothing may start, so reads alone never resumed it: v0.11.1 on the M8C.)
 function Mirror.kick(why)
+    -- The sleep screen's pool refreshes at the same moments (docs/design/lock-screen.md R3).
+    if Sleep and Sleep.kick then Sleep.kick(why) end
     UIManager:scheduleIn(1, function()
         local okt, err = pcall(Mirror.tick, why)
         if not okt then log("mirror: tick failed:", tostring(err)) end

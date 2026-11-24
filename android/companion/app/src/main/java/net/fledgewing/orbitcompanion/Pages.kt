@@ -394,6 +394,10 @@ class SettingsActivity : EinkActivity() {
             })
         }
         }
+        // The sleep screen (docs/design/lock-screen.md): off until switched on, in either mode (A1).
+        val sleep = SleepScreen.settings(this)
+        root.addView(Ui.row(this, "Sleep screen", if (sleep.mode == SleepMode.OFF) "off · the reader's own" else "${sleep.mode.label} · ${SleepScreen.shownBy(this)}",
+            Ui.value(this, "›"), onClick = { startActivity(Intent(this, SleepScreenActivity::class.java)) }))
         if (!addon || prefs.helperClicker) {
             root.addView(Ui.row(this, "Clicker buttons", "Bluetooth page clicker: page turns, Home, Back, Sleep", Ui.value(this, "›"), onClick = {
                 startActivity(Intent(this, ClickersActivity::class.java))
@@ -533,7 +537,7 @@ object Setup {
         val all = allChecks(ctx)
         val keep = SetupTips.visible(all.map { SetupAttention.idOf(it.label) }, Prefs(ctx).hiddenTips).toSet()
         val shown = all.filter { SetupAttention.idOf(it.label) in keep }
-        return if (Mode.isAddon(ctx)) addonChecks(ctx, shown) else shown
+        return (if (Mode.isAddon(ctx)) addonChecks(ctx, shown) else shown) + listOfNotNull(SleepSetup.check(ctx))
     }
 
     /**
@@ -578,7 +582,7 @@ object Setup {
 
     /** "First-run setup (done/total)": steps only. Add-on counts only its four required rows. */
     fun progress(checks: List<Check>, addon: Boolean = false): String {
-        val rows = checks.map { SetupAttention.idOf(it.label) to it.done }
+        val rows = checks.filter { !it.optional }.map { SetupAttention.idOf(it.label) to it.done }
         val steps = if (addon) rows.filter { it.first in AddonLogic.REQUIRED } else SetupTips.steps(rows)
         return "${steps.count { it.second }}/${steps.size}"
     }

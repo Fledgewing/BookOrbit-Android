@@ -184,6 +184,27 @@ class LiveTest(unittest.TestCase):
         self.assertEqual(caught.exception.status, 400)
         self.proxy.state.set_rules([])
 
+    def test_sleep_pool_calls(self):
+        """The calls the sleep screen's pool makes (docs/design/lock-screen.md R1-R3, X5)."""
+        section = self.device.call("GET", "/plugin/catalog/dashboard/sections/want-to-read")["section"]
+        self.assertEqual(section["type"], "want-to-read")
+        self.assertTrue(all("id" in b and "title" in b for b in section["books"]))
+        # Leave-out membership pages at 100, the server's largest page.
+        first = self.device.call("GET", "/plugin/catalog/books?page=1&size=100&sort=recently_added&order=desc")
+        self.assertEqual(len(first["items"]), min(100, len(self.manifest["books"])))
+        self.assertIn("hasNext", first)
+        with self.assertRaises(kit.HttpError):
+            self.device.call("GET", "/plugin/catalog/books?page=1&size=200")
+        for kind in ("smart-scopes", "collections"):
+            self.assertIsInstance(self.device.call("GET", f"/plugin/catalog/sections/{kind}"), (list, dict))
+        book = first["items"][0]
+        self.assertIn("tags", self.device.call("GET", f"/plugin/catalog/books/{book['id']}"))
+        url = f"{self.device.base}/api/v1/koreader/plugin/catalog/books/{book['id']}/thumbnail"
+        status, body = kit.request("GET", url, self.device.headers)
+        self.assertIn(status, (200, 404))
+        if status == 200:
+            self.assertGreater(len(body), 0)
+
     def test_rewrite_changes_the_hash(self):
         changed = kit.rewrite("copy_refresh")
         self.assertNotEqual(changed["new_hash"], changed["old_hash"])
