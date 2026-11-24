@@ -27,6 +27,7 @@ object ClickRoute {
     /** Channel lines (android/docs/INTERFACE.md "/clicks"). */
     fun clickLine(action: ClickAction, seq: Int): String = "CLICK ${action.inKoreader.key} $seq\n"
     fun serviceLine(on: Boolean): String = "SERVICE ${if (on) "on" else "off"}\n"
+    fun settingsLine(at: Long): String = "SETTINGS $at\n"
 }
 
 /**
@@ -78,6 +79,11 @@ object ClickChannel {
         val line = ClickRoute.clickLine(a, ++seq)
         write(line)
         return true
+    }
+
+    /** A setting changed here: the plugin reads /status now (docs/design/companion-settings.md §4.5). */
+    fun settings(at: Long) {
+        if (clients.isNotEmpty()) write(ClickRoute.settingsLine(at))
     }
 
     /** The service came or went: the patch turns its own key path off or on. */

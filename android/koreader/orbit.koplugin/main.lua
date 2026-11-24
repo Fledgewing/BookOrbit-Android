@@ -32,7 +32,7 @@ local LOGIC = {
     "logic/schedule.lua", "logic/plan.lua", "logic/update.lua", "logic/wifi_plan.lua",
     "logic/home_plan.lua", "logic/compat.lua", "logic/stats.lua", "logic/clicks.lua",
     "logic/prompts.lua", "logic/group.lua", "logic/finish.lua", "logic/localfirst.lua", "logic/sheet_layout.lua", "logic/cache.lua",
-    "logic/recommended.lua", "logic/caps.lua", "logic/copies.lua", "logic/sleep_pool.lua",
+    "logic/recommended.lua", "logic/caps.lua", "logic/copies.lua", "logic/sleep_pool.lua", "logic/settings_sync.lua",
 }
 local KO = {
     "ko/base.lua", "ko/settings.lua", "ko/jni.lua", "ko/companion.lua", "ko/shared.lua",
@@ -51,6 +51,8 @@ local env = setmetatable({
     PATCH_VERSION = PATCH_VERSION,
     -- The folder the self-update replaces (ko/updater.lua); tests point it elsewhere.
     PLUGIN_DIR = rawget(_G, "ORBIT_ANDROID_PLUGIN_DIR") or DIR,
+    -- The folder this code loads from (the shared settings schema sits beside it, ko/settings.lua).
+    SOURCE_DIR = DIR,
 }, { __index = _G })
 
 local function load(files)
@@ -70,7 +72,7 @@ if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = env.Schedule, Plan = env.Plan, Update = env.Update, WifiPlan = env.WifiPlan,
         HomePlan = env.HomePlan, disabledText = env.disabledText, Compat = env.Compat, Stats = env.Stats,
         Clicks = env.Clicks, SetupPrompt = env.SetupPrompt, MenuLock = env.MenuLock,
-        RestartPlan = env.RestartPlan, Group = env.Group, Finish = env.Finish, LocalFirst = env.LocalFirst, Cache = env.Cache, SheetLayout = env.SheetLayout, Recommended = env.Recommended, Caps = env.Caps, CopiesPlan = env.CopiesPlan, SleepPool = env.SleepPool, PATCH_VERSION = PATCH_VERSION }
+        RestartPlan = env.RestartPlan, Group = env.Group, Finish = env.Finish, LocalFirst = env.LocalFirst, Cache = env.Cache, SheetLayout = env.SheetLayout, Recommended = env.Recommended, Caps = env.Caps, CopiesPlan = env.CopiesPlan, SleepPool = env.SleepPool, SettingsSync = env.SettingsSync, PATCH_VERSION = PATCH_VERSION }
 end
 
 -- The old user patch still loaded (koreader/patches/2-orbit-android.lua; it hooks PluginLoader at

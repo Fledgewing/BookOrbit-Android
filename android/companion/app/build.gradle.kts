@@ -190,8 +190,31 @@ abstract class OpenSourceNotices : DefaultTask() {
     }
 }
 
+/**
+ * The settings shared with the Orbit plugin (docs/design/companion-settings.md §4.1): one file,
+ * shared/settings/schema.json, copied into the assets as settings_schema.json.
+ */
+abstract class SettingsSchemaAsset : DefaultTask() {
+    @get:InputFile
+    abstract val schema: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile
+        out.mkdirs()
+        schema.get().asFile.copyTo(File(out, "settings_schema.json"), overwrite = true)
+    }
+}
+
 androidComponents {
     onVariants { variant ->
+        val schemaTask = tasks.register<SettingsSchemaAsset>("${variant.name}SettingsSchema") {
+            schema.set(layout.projectDirectory.file("../../../shared/settings/schema.json"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(schemaTask, SettingsSchemaAsset::outputDir)
         val task = tasks.register<OpenSourceNotices>("${variant.name}OpenSourceNotices") {
             apacheLicense.set(layout.projectDirectory.file("licenses/Apache-2.0.txt"))
             configurationName.set("${variant.name}RuntimeClasspath")

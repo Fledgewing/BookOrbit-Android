@@ -1,0 +1,879 @@
+{
+ "v": 1,
+ "comment": "Every setting shared by Orbit Companion and the Orbit KOReader plugin (docs/design/companion-settings.md). Wire values are strings: bool 1/0, numbers in decimal, rules one per line.",
+ "sections": [
+  {
+   "id": "reading",
+   "title": "Reading and Home"
+  },
+  {
+   "id": "sleep",
+   "title": "Sleep screen"
+  },
+  {
+   "id": "sync",
+   "title": "Sync and Wi-Fi"
+  },
+  {
+   "id": "library",
+   "title": "Library and storage"
+  },
+  {
+   "id": "buttons",
+   "title": "Buttons"
+  },
+  {
+   "id": "kids",
+   "title": "Kids and PIN"
+  },
+  {
+   "id": "setup",
+   "title": "Setup and mode"
+  },
+  {
+   "id": "updates",
+   "title": "Updates and details"
+  }
+ ],
+ "settings": [
+  {
+   "key": "home_button",
+   "type": "choice",
+   "default": "smart",
+   "values": [
+    {
+     "id": "smart",
+     "label": "Back to my book, then home"
+    },
+    {
+     "id": "bookorbit",
+     "label": "BookOrbit home"
+    }
+   ],
+   "section": "reading",
+   "label": "Home button in KOReader",
+   "line": "What Home does while you're in KOReader.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "home",
+    "button"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "local_first",
+   "type": "bool",
+   "default": true,
+   "section": "reading",
+   "label": "Home shows this reader's reading first",
+   "line": "Your latest page shows at once; BookOrbit fills in after.",
+   "reader": [
+    "plugin"
+   ],
+   "applies": "restart",
+   "search": [
+    "local",
+    "fast",
+    "home"
+   ]
+  },
+  {
+   "key": "eob_sheet",
+   "type": "bool",
+   "default": true,
+   "section": "reading",
+   "label": "End of book: Orbit's sheet",
+   "line": "Stars, next in series and a suggestion when you finish a BookOrbit book.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "finish",
+    "end",
+    "rating",
+    "stars"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "eob_auto",
+   "type": "bool",
+   "default": true,
+   "section": "reading",
+   "label": "End of book: mark it finished",
+   "line": "Reaching the end marks the book read in BookOrbit.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "finish",
+    "read",
+    "done"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_mode",
+   "type": "choice",
+   "default": "off",
+   "values": [
+    {
+     "id": "off",
+     "label": "The reader's own"
+    },
+    {
+     "id": "recommended",
+     "label": "Recommended cover"
+    },
+    {
+     "id": "current",
+     "label": "Current book"
+    }
+   ],
+   "section": "sleep",
+   "label": "Sleep screen",
+   "line": "What the screen shows while the reader sleeps.",
+   "reader": [
+    "companion",
+    "plugin"
+   ],
+   "search": [
+    "screensaver",
+    "screen saver",
+    "lock screen",
+    "sleep",
+    "cover"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_from",
+   "type": "source",
+   "default": "up_next",
+   "values": [
+    {
+     "id": "up_next",
+     "label": "Up next in series"
+    },
+    {
+     "id": "want_to_read",
+     "label": "Want to read"
+    },
+    {
+     "id": "discover",
+     "label": "Discover"
+    }
+   ],
+   "section": "sleep",
+   "label": "Pick from",
+   "line": "The list the recommended cover comes from.",
+   "reader": [
+    "plugin"
+   ],
+   "parent": {
+    "key": "sleep_mode",
+    "is": [
+     "recommended"
+    ]
+   },
+   "search": [
+    "smart scope",
+    "collection",
+    "list",
+    "cover"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_leave_out",
+   "type": "rules",
+   "default": "",
+   "section": "sleep",
+   "label": "Leave out",
+   "line": "Books that never show on the sleep screen.",
+   "reader": [
+    "plugin"
+   ],
+   "parent": {
+    "key": "sleep_mode",
+    "is": [
+     "recommended"
+    ]
+   },
+   "search": [
+    "hide",
+    "tag",
+    "exclude",
+    "age"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_hours",
+   "type": "choice",
+   "int": true,
+   "default": 6,
+   "values": [
+    {
+     "id": "1",
+     "label": "1 h"
+    },
+    {
+     "id": "3",
+     "label": "3 h"
+    },
+    {
+     "id": "6",
+     "label": "6 h"
+    },
+    {
+     "id": "12",
+     "label": "12 h"
+    },
+    {
+     "id": "24",
+     "label": "24 h"
+    }
+   ],
+   "section": "sleep",
+   "label": "Change cover every",
+   "line": "A new cover at the first sleep after this long.",
+   "reader": [
+    "companion"
+   ],
+   "parent": {
+    "key": "sleep_mode",
+    "is": [
+     "recommended"
+    ]
+   },
+   "search": [
+    "rotate",
+    "hours"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_text",
+   "type": "text",
+   "max": 60,
+   "default": "",
+   "section": "sleep",
+   "label": "Text",
+   "line": "Up to 60 characters on the sleep screen.",
+   "reader": [
+    "companion"
+   ],
+   "parent": {
+    "key": "sleep_mode",
+    "not": [
+     "off"
+    ]
+   },
+   "search": [
+    "message",
+    "name",
+    "return"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_battery",
+   "type": "bool",
+   "default": false,
+   "section": "sleep",
+   "label": "Show battery level",
+   "line": "The level when the reader went to sleep.",
+   "reader": [
+    "companion"
+   ],
+   "parent": {
+    "key": "sleep_mode",
+    "not": [
+     "off"
+    ]
+   },
+   "search": [
+    "battery",
+    "percent"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_style",
+   "type": "choice",
+   "default": "bar",
+   "values": [
+    {
+     "id": "bar",
+     "label": "Bar"
+    },
+    {
+     "id": "overlay",
+     "label": "Overlay"
+    }
+   ],
+   "section": "sleep",
+   "label": "Style",
+   "line": "Bar: a band below the cover. Overlay: on the cover.",
+   "reader": [
+    "companion"
+   ],
+   "parent": {
+    "key": "sleep_mode",
+    "not": [
+     "off"
+    ]
+   },
+   "search": [
+    "band",
+    "overlay"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_text_position",
+   "type": "choice",
+   "default": "right",
+   "values": [
+    {
+     "id": "right",
+     "label": "Right"
+    },
+    {
+     "id": "left",
+     "label": "Left"
+    },
+    {
+     "id": "top",
+     "label": "Top"
+    },
+    {
+     "id": "bottom",
+     "label": "Bottom"
+    }
+   ],
+   "section": "sleep",
+   "label": "Text position",
+   "line": "Where the text sits on the cover.",
+   "reader": [
+    "companion"
+   ],
+   "parent": {
+    "key": "sleep_style",
+    "is": [
+     "overlay"
+    ]
+   },
+   "search": [
+    "text",
+    "position"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_battery_corner",
+   "type": "choice",
+   "default": "bottom_left",
+   "values": [
+    {
+     "id": "top_left",
+     "label": "Top left"
+    },
+    {
+     "id": "top_right",
+     "label": "Top right"
+    },
+    {
+     "id": "bottom_left",
+     "label": "Bottom left"
+    },
+    {
+     "id": "bottom_right",
+     "label": "Bottom right"
+    }
+   ],
+   "section": "sleep",
+   "label": "Battery corner",
+   "line": "Moves beside the text only when they'd share a corner.",
+   "reader": [
+    "companion"
+   ],
+   "parent": {
+    "key": "sleep_style",
+    "is": [
+     "overlay"
+    ]
+   },
+   "search": [
+    "battery",
+    "corner"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "wifi_mode",
+   "type": "choice",
+   "default": "jit",
+   "values": [
+    {
+     "id": "always_on",
+     "label": "Always on"
+    },
+    {
+     "id": "off_reading",
+     "label": "Off while reading"
+    },
+    {
+     "id": "jit",
+     "label": "Just in time"
+    }
+   ],
+   "section": "sync",
+   "label": "Wi-Fi",
+   "line": "When Orbit turns Wi-Fi on and off.",
+   "reader": [
+    "companion",
+    "plugin"
+   ],
+   "cap": "wifi",
+   "search": [
+    "wifi",
+    "wi-fi",
+    "network",
+    "jit"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "wifi_idle_min",
+   "type": "choice",
+   "int": true,
+   "default": 2,
+   "values": [
+    {
+     "id": "1",
+     "label": "1 min"
+    },
+    {
+     "id": "2",
+     "label": "2 min"
+    },
+    {
+     "id": "5",
+     "label": "5 min"
+    },
+    {
+     "id": "10",
+     "label": "10 min"
+    }
+   ],
+   "section": "sync",
+   "label": "Off after idle",
+   "line": "Just in time: Wi-Fi goes off after this long with nothing to do.",
+   "reader": [
+    "companion",
+    "plugin"
+   ],
+   "cap": "wifi",
+   "parent": {
+    "key": "wifi_mode",
+    "is": [
+     "jit"
+    ]
+   },
+   "search": [
+    "wifi",
+    "idle",
+    "minutes"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sync_on_sleep",
+   "type": "bool",
+   "default": true,
+   "section": "sync",
+   "label": "Sync when the screen goes off",
+   "line": "Your place and highlights reach BookOrbit before the reader sleeps.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "sleep",
+    "sync",
+    "screen off"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sleep_cap",
+   "type": "choice",
+   "int": true,
+   "default": 20,
+   "values": [
+    {
+     "id": "10",
+     "label": "10 s"
+    },
+    {
+     "id": "15",
+     "label": "15 s"
+    },
+    {
+     "id": "20",
+     "label": "20 s"
+    }
+   ],
+   "section": "sync",
+   "label": "Sleep sync limit",
+   "line": "Gives up after this long so the reader can sleep.",
+   "reader": [
+    "plugin"
+   ],
+   "parent": {
+    "key": "sync_on_sleep",
+    "is": [
+     "1"
+    ]
+   },
+   "search": [
+    "sleep",
+    "limit",
+    "timeout",
+    "seconds"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "sync_on_wake",
+   "type": "bool",
+   "default": true,
+   "section": "sync",
+   "label": "Sync on wake",
+   "line": "Every wake checks BookOrbit for reading done elsewhere.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "wake",
+    "sync"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "reading_schedule",
+   "type": "choice",
+   "default": "off",
+   "values": [
+    {
+     "id": "off",
+     "label": "Off"
+    },
+    {
+     "id": "min10",
+     "label": "Every 10 minutes"
+    },
+    {
+     "id": "min15",
+     "label": "Every 15 minutes"
+    },
+    {
+     "id": "min30",
+     "label": "Every 30 minutes"
+    },
+    {
+     "id": "min60",
+     "label": "Every 60 minutes"
+    },
+    {
+     "id": "pg25",
+     "label": "Every 25 pages"
+    },
+    {
+     "id": "pg50",
+     "label": "Every 50 pages"
+    },
+    {
+     "id": "pg100",
+     "label": "Every 100 pages"
+    },
+    {
+     "id": "ch1",
+     "label": "Every chapter"
+    },
+    {
+     "id": "ch2",
+     "label": "Every 2 chapters"
+    }
+   ],
+   "section": "sync",
+   "label": "Sync while reading",
+   "line": "Sends your place while a book is open.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "sync",
+    "reading",
+    "pages",
+    "chapter"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "wake_tailscale",
+   "type": "bool",
+   "default": true,
+   "section": "sync",
+   "label": "Wake Tailscale for syncs",
+   "line": "Starts Tailscale before each sync, so a server on your tailnet answers.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "tailscale",
+    "vpn",
+    "tailnet"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "offline_cache",
+   "type": "bool",
+   "default": true,
+   "section": "library",
+   "label": "BookOrbit opens from Orbit's cache",
+   "line": "Pages open at once and offline, then are checked.",
+   "reader": [
+    "plugin"
+   ],
+   "applies": "restart",
+   "search": [
+    "cache",
+    "offline",
+    "fast"
+   ]
+  },
+  {
+   "key": "mirror_auto",
+   "type": "bool",
+   "default": true,
+   "section": "library",
+   "label": "Automatic Full refresh",
+   "line": "Saves everything Home reaches, for reading offline.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "offline",
+    "mirror",
+    "refresh"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "mirror_ttl_days",
+   "type": "choice",
+   "int": true,
+   "default": 7,
+   "values": [
+    {
+     "id": "1",
+     "label": "Every day"
+    },
+    {
+     "id": "3",
+     "label": "Every 3 days"
+    },
+    {
+     "id": "7",
+     "label": "Every 7 days"
+    },
+    {
+     "id": "14",
+     "label": "Every 14 days"
+    },
+    {
+     "id": "30",
+     "label": "Every 30 days"
+    }
+   ],
+   "section": "library",
+   "label": "Full refresh every",
+   "line": "Also when the library changes.",
+   "reader": [
+    "plugin"
+   ],
+   "parent": {
+    "key": "mirror_auto",
+    "is": [
+     "1"
+    ]
+   },
+   "search": [
+    "offline",
+    "days"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "mirror_covers",
+   "type": "bool",
+   "default": false,
+   "section": "library",
+   "label": "Save every cover for offline",
+   "line": "About 100 KB per book. Off: covers are kept as you see them.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "covers",
+    "offline",
+    "storage"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "storage_limit_mb",
+   "type": "choice",
+   "int": true,
+   "default": 250,
+   "values": [
+    {
+     "id": "100",
+     "label": "100 MB"
+    },
+    {
+     "id": "250",
+     "label": "250 MB"
+    },
+    {
+     "id": "500",
+     "label": "500 MB"
+    },
+    {
+     "id": "1024",
+     "label": "1 GB"
+    },
+    {
+     "id": "0",
+     "label": "No limit"
+    }
+   ],
+   "section": "library",
+   "label": "Storage limit",
+   "line": "Pages, offline lists and covers. Book files don't count.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "storage",
+    "space",
+    "disk",
+    "mb"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "keep_copies_current",
+   "type": "bool",
+   "default": true,
+   "section": "library",
+   "label": "Keep book copies current",
+   "line": "A book whose library file changed is downloaded again, never while you read.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "copies",
+    "download",
+    "update"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "auto_update_patch",
+   "type": "bool",
+   "default": true,
+   "section": "updates",
+   "label": "Automatic updates",
+   "line": "The app and the KOReader plugin, checked daily.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "update",
+    "automatic"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "patch_update_prerelease",
+   "type": "bool",
+   "default": false,
+   "section": "updates",
+   "label": "Include pre-releases",
+   "line": "Off: only finished releases.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "beta",
+    "pre-release",
+    "update"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "key_log",
+   "type": "bool",
+   "default": true,
+   "section": "updates",
+   "label": "Log every key",
+   "line": "For clicker problems. Keys go to KOReader's log.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "log",
+    "keys",
+    "clicker",
+    "debug"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "wifi_via_companion",
+   "type": "bool",
+   "default": true,
+   "section": "updates",
+   "label": "Let Orbit switch Wi-Fi for syncs",
+   "line": "Off: syncs fail when Wi-Fi is off instead of turning it on.",
+   "reader": [
+    "plugin"
+   ],
+   "search": [
+    "wifi",
+    "switch"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "recommended_choice",
+   "type": "text",
+   "default": "",
+   "section": "setup",
+   "label": "Recommended settings choices",
+   "line": "Your choices on the review page, applied by KOReader.",
+   "reader": [
+    "plugin"
+   ],
+   "hidden": true,
+   "search": [],
+   "applies": "now"
+  }
+ ]
+}

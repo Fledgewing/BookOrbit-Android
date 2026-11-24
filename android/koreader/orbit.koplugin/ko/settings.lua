@@ -51,6 +51,9 @@ DEFAULTS = {
     sleep_text_position = "right", -- overlay: "right" | "left" | "top" | "bottom"
     sleep_battery_corner = "bottom_left", -- overlay: "top_left" | "top_right" | "bottom_left" | "bottom_right"
     sleep_current_file = nil,     -- the book whose cover current.png holds
+    -- Shared settings (docs/design/companion-settings.md §4): key -> ms of its last change, either side.
+    settings_at = nil,
+    choices_asked_at = 0,         -- the companion's last want_choices request this plugin answered (ms)
 }
 
 S = G_reader_settings:readSetting("orbit_android") or {}
@@ -61,6 +64,25 @@ end
 function saveSettings()
     G_reader_settings:saveSetting("orbit_android", S)
 end
+
+-- The settings shared with the companion, one definition for both (shared/settings/schema.json;
+-- package.sh copies it in as settings_schema.json, a checkout reads it from shared/).
+function loadSchema()
+    for _i, path in ipairs({ SOURCE_DIR .. "/settings_schema.json", SOURCE_DIR .. "/../../../shared/settings/schema.json" }) do
+        local f = io.open(path, "rb")
+        if f then
+            local text = f:read("*a")
+            f:close()
+            local v = SettingsSync.decodeJson(text)
+            if v then return SettingsSync.index(v) end
+        end
+    end
+    return SettingsSync.index(nil)
+end
+SCHEMA = loadSchema()
+if type(S.settings_at) ~= "table" then S.settings_at = {} end
+-- First run with per-key times: the old whole-set time for the keys shared before, 1 ms for the rest.
+SETTINGS_SEEDED = SettingsSync.seed(SCHEMA, S.settings_at, SettingsSync.LEGACY, S.shared_settings_at)
 saveSettings()
 
 -- The book that was open when the previous KOReader process ended without a close (killed,

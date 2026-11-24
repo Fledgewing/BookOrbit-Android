@@ -341,6 +341,7 @@ function Sleep.kick(why)
 end
 
 function Sleep.refresh(why)
+    if Sleep.choicesDue() and NetworkMgr:isConnected() and not reading() then pcall(Sleep.writeChoices, "refresh " .. tostring(why)) end
     local s = Sleep.settings()
     if Sleep.busy or s.sleep_mode ~= "recommended" or not Sleep.available() then return false end
     local t = os.time()
@@ -430,6 +431,32 @@ function Sleep.cachedTags(max)
         end
     end
     return SleepPool.tagCounts(details)
+end
+
+-- The lists for the companion's picker and tag list: koreader/settings/orbit-sleep/choices.json
+-- (docs/design/companion-settings.md §6.2), then SLEEP_POOL reason=choices. Written at start, on
+-- a Home refresh at most every CHOICES_EVERY_S, and when the companion's picker asks.
+Sleep.CHOICES_EVERY_S = 6 * 3600
+function Sleep.writeChoices(why)
+    local d = Sleep.dir()
+    if not d or not Sleep.available() then return false end
+    Sleep.choices_at = os.time()
+    Sleep.scopes(function(lists)
+        local body = SleepPool.choicesFile(lists, Sleep.cachedTags(400), os.time() * 1000)
+        if writeFile(d .. "/choices.json", SleepPool.json(body)) then
+            log("sleep screen: choices.json written (" .. tostring(why) .. "):", #body.scopes, "smart scopes,",
+                #body.collections, "collections,", #body.tags, "tags", body.cached and "(from the cache)" or "")
+            Sleep.notify("choices")
+        else
+            log("sleep screen: choices.json NOT written (" .. tostring(why) .. ")")
+        end
+    end)
+    return true
+end
+
+function Sleep.choicesDue()
+    local t = Sleep.choices_at
+    return not t or os.time() < t or os.time() - t >= Sleep.CHOICES_EVERY_S
 end
 
 -- "Romance (smart scope)", "Scope 12 (not listed)" …

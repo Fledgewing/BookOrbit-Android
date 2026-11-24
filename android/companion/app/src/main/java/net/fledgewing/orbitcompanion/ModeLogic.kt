@@ -25,7 +25,7 @@ data class Helpers(
 
 object ModeLogic {
     /** Every mode: installs and updates, the setup rows, stats, a restart finished by the companion. */
-    val BASE = listOf("install", "setup", "stats", "relaunch", "sleep_screen")
+    val BASE = listOf("install", "setup", "stats", "relaunch", "sleep_screen", "settings2")
 
     /** Before a mode is chosen, the companion behaves as Full (today's Orbify). */
     fun effective(mode: OrbitMode?): OrbitMode = mode ?: OrbitMode.FULL

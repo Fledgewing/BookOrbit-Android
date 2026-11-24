@@ -65,6 +65,8 @@ object SleepScreen {
 
     /** Add-on without the service: SETTINGS is recorded here (only the sleep screen's keys matter then). */
     fun recordSettings(ctx: Context, intent: Intent) {
+        // Settings v2: every key, per-key times (docs/design/companion-settings.md §4.5).
+        intent.getStringExtra("values")?.let { SettingsStore.fromPlugin(ctx, it, "SETTINGS, recorded"); return }
         val at = intent.getStringExtra("settings_at")?.toLongOrNull() ?: 0L
         val p = Prefs(ctx)
         if (at <= p.sharedSettingsAt) return

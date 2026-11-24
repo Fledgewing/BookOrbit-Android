@@ -4527,6 +4527,53 @@ test("sleep screen: settings changed in the companion are applied; an older comp
     run(5)
 end)
 
+
+local function eq(a, b, what) if a ~= b then error((what or "value") .. ": expected " .. tostring(b) .. ", got " .. tostring(a), 2) end end
+
+test("settings v2: a change queued in the companion while KOReader was off applies, then is echoed", function()
+    capsReset()
+    local S = RE.S
+    local was = { sync_on_sleep = S.sync_on_sleep, storage_limit_mb = S.storage_limit_mb, wifi_mode = S.wifi_mode }
+    local at = S.settings_at
+    S.settings_at = { sync_on_sleep = 1, storage_limit_mb = 1, wifi_mode = 5000 }
+    S.sync_on_sleep, S.storage_limit_mb, S.wifi_mode = true, 250, "always_on"
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    -- The companion changed two keys while KOReader was closed; its Wi-Fi mode is older than ours.
+    W.json.STATUS = { version = "0.12.0", mode = "full", caps = FULL, settings = { settings_at = 9000, values = {
+        sync_on_sleep = { v = "0", at = 8000 }, storage_limit_mb = { v = "500", at = 8000 },
+        wifi_mode = { v = "jit", at = 100 } } } }
+    local n = #W.broadcasts
+    RE.Shared.refresh("start")
+    ok(S.sync_on_sleep == false and S.storage_limit_mb == 500, "the companion's newer changes applied")
+    ok(S.wifi_mode == "always_on", "our newer Wi-Fi mode kept (per key, not the whole set)")
+    eq(S.settings_at.sync_on_sleep, 8000, "the companion's time kept")
+    local echo
+    for i = n + 1, #W.broadcasts do if W.broadcasts[i].action:match("SETTINGS$") then echo = W.broadcasts[i] end end
+    ok(echo ~= nil, "echoed with SETTINGS")
+    eq(echo.extras.settings_v, "2")
+    ok(echo.extras.values:find('"sync_on_sleep":{"at":8000,"v":"0"}', 1, true), "echo carries the applied time: " .. tostring(echo.extras.values))
+    ok(echo.extras.values:find('"wifi_mode":{"at":5000,"v":"always_on"}', 1, true), "and our newer Wi-Fi mode")
+    -- A menu change gets its own time and goes out at once.
+    n = #W.broadcasts
+    RE.Shared.set("key_log", false)
+    ok(S.settings_at.key_log and S.settings_at.key_log > 1, "menu change stamped")
+    ok(#W.broadcasts > n, "sent")
+    S.sync_on_sleep, S.storage_limit_mb, S.wifi_mode, S.key_log = was.sync_on_sleep, was.storage_limit_mb, was.wifi_mode, true
+    S.settings_at = at
+    capsReset()
+    run(5)
+end)
+
+test("settings v2: the companion's look-now line refreshes at once", function()
+    local refreshed
+    local base = RE.Shared.refresh
+    RE.Shared.refresh = function(why) refreshed = why end
+    ok(RE.Channel.onLine("SETTINGS 12345") == true, "taken")
+    run(1)
+    RE.Shared.refresh = base
+    eq(refreshed, "channel")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

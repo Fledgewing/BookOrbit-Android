@@ -349,6 +349,28 @@ local function jsonString(s)
     end) .. '"'
 end
 
+-- choices.json for the companion's picker and tag list (docs/design/companion-settings.md §6.2):
+-- lists = { scopes = {…}, collections = {…}, cached = bool } (Sleep.scopes), tags = tagCounts().
+function SleepPool.choicesFile(lists, tags, at_ms)
+    lists = type(lists) == "table" and lists or {}
+    local function clean(list)
+        local out = {}
+        for _, e in ipairs(type(list) == "table" and list or {}) do
+            local id = tonumber(e.id)
+            if id and id > 0 then table.insert(out, { id = id, title = tostring(e.title or ""), count = tonumber(e.count) }) end
+        end
+        return out
+    end
+    local t = {}
+    for _, e in ipairs(tags or {}) do
+        if type(e) == "table" and e.tag then table.insert(t, { tag = e.tag, label = e.label or e.tag, count = tonumber(e.count) or 0 }) end
+        if #t >= SleepPool.CHOICE_TAGS then break end
+    end
+    return { v = 1, at = at_ms, cached = lists.cached == true, scopes = clean(lists.scopes),
+        collections = clean(lists.collections), tags = t }
+end
+SleepPool.CHOICE_TAGS = 200
+
 -- A small JSON writer for the files the companion reads (arrays: tables with [1]; empty: []).
 function SleepPool.json(v)
     local t = type(v)
