@@ -421,6 +421,19 @@ object Net {
     /** Present on the device, frozen or not. */
     fun installed(ctx: Context, pkg: String): Boolean = appState(ctx, pkg) != AppState.MISSING
 
+    /** The "Battery: Unrestricted" row for [pkg] (BatteryRow). The standby bucket is readable for our own package only. */
+    fun batteryRow(ctx: Context, pkg: String): BatteryRow.Row {
+        val installed = installed(ctx, pkg)
+        val ignoring = installed && (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(pkg)
+        val admin = installed && try {
+            (ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager).activeAdmins.orEmpty().any { it.packageName == pkg }
+        } catch (e: Exception) { false }
+        val bucket = if (installed && pkg == ctx.packageName && android.os.Build.VERSION.SDK_INT >= 28) try {
+            (ctx.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager).appStandbyBucket
+        } catch (e: Exception) { null } else null
+        return BatteryRow.of(installed, ignoring, admin, bucket)
+    }
+
     fun usable(ctx: Context, pkg: String): Boolean = appState(ctx, pkg) == AppState.OK
 
     /**

@@ -342,6 +342,34 @@ object AppStates {
     fun disabledShort(disabler: String?): String = if (disabler != null) "Disabled by $disabler" else "Disabled by the system"
 }
 
+/**
+ * The "Battery: Unrestricted (app)" setup row. PowerManager.isIgnoringBatteryOptimizations is true
+ * only for the power-save allowlist; an app Android exempts another way reads false although
+ * nobody can restrict it. On a Boox Page (v0.11.2) Orbit, as an active device admin, showed
+ * "Battery optimization not available" and "Background usage can't be restricted" in Settings
+ * (Settings' PowerAllowlistBackend counts active admins as allowlisted, and app standby exempts
+ * them), yet the row stayed "not done". Such an app is met, with why on its sub-line.
+ */
+object BatteryRow {
+    /** UsageStatsManager.STANDBY_BUCKET_EXEMPTED (hidden constant): never restricted. */
+    const val BUCKET_EXEMPTED = 5
+
+    data class Row(val done: Boolean, val detail: String)
+
+    /**
+     * [ignoring]: isIgnoringBatteryOptimizations. [activeAdmin]: the package has an active device
+     * admin. [standbyBucket]: its app standby bucket where Android lets us read it (our own
+     * package only), else null.
+     */
+    fun of(installed: Boolean, ignoring: Boolean, activeAdmin: Boolean, standbyBucket: Int?): Row = when {
+        !installed -> Row(false, "not installed")
+        ignoring -> Row(true, "done")
+        activeAdmin -> Row(true, "exempt (device admin): can't be restricted on this reader")
+        standbyBucket == BUCKET_EXEMPTED -> Row(true, "exempt (system): can't be restricted on this reader")
+        else -> Row(false, "set App battery usage › Unrestricted")
+    }
+}
+
 /** The shared "Wi-Fi" setting (android/docs/DESIGN.md "Wi-Fi modes"). The patch decides when; we switch. */
 enum class WifiMode(val key: String, val label: String) {
     ALWAYS_ON("always_on", "Always on"),
