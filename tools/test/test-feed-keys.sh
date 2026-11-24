@@ -25,7 +25,7 @@ RELEASE_SIGNING_KEY="$(cat "$t/keys/release-key-1.bundle")" \
 "$fk" verify --tag xteink-v2.0.0.150 --root "$root" "$t/SIGNATURES" "$t/firmware-x4-pro-v2.0.0.150.bin" "$t/orbit.koplugin.zip" >/dev/null \
   || fail "a valid signature was refused"
 field="$("$fk" feed-field "$t/SIGNATURES" firmware-x4-pro-v2.0.0.150.bin)"
-[[ "$field" =~ ^[0-9a-f]+$ ]] && [ "${#field}" -eq 328 ] || fail "feed-field: '$field'"
+if ! [[ "$field" =~ ^[0-9a-f]+$ ]] || [ "${#field}" -ne 328 ]; then fail "feed-field: '$field'"; fi
 
 other="$("$fk" new-root "$t/other" 2>/dev/null)"
 refuses "$fk" verify --tag xteink-v2.0.0.150 --root "$other" "$t/SIGNATURES" "$t/orbit.koplugin.zip"
