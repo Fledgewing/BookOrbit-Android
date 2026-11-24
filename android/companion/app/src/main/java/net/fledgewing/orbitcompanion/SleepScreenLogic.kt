@@ -71,14 +71,20 @@ data class SleepSettings(
     val style: SleepStyle = SleepStyle.BAR,
     val textPosition: TextPosition = TextPosition.RIGHT,
     val batteryCorner: Corner = Corner.BOTTOM_LEFT,
+    /** L10: a black, then white, frame before the cover (clears ghosting); off by default. */
+    val flash: Boolean = false,
 ) {
     companion object {
         val DEFAULT = SleepSettings()
-        val HOURS = listOf(1, 3, 6, 12, 24)
+        /** Change cover every: [EVERY_SLEEP] (a random ready cover at each sleep, R4b), else hours. */
+        const val EVERY_SLEEP = 0
+        val HOURS = listOf(EVERY_SLEEP, 1, 3, 6, 12, 24)
+
+        fun hoursLabel(h: Int): String = if (h == EVERY_SLEEP) "Every sleep" else "$h h"
         const val TEXT_MAX = 60
         val KEYS = listOf(
             "sleep_mode", "sleep_from", "sleep_leave_out", "sleep_hours", "sleep_text", "sleep_battery",
-            "sleep_style", "sleep_text_position", "sleep_battery_corner",
+            "sleep_style", "sleep_text_position", "sleep_battery_corner", "sleep_flash",
         )
         private val LISTS = setOf("up_next", "want_to_read", "discover")
         private val FROM = Regex("""^(scope|collection):([1-9]\d{0,9})$""")
@@ -115,6 +121,7 @@ data class SleepSettings(
             get("sleep_style")?.let { s = s.copy(style = SleepStyle.of(it) ?: DEFAULT.style) }
             get("sleep_text_position")?.let { s = s.copy(textPosition = TextPosition.of(it) ?: DEFAULT.textPosition) }
             get("sleep_battery_corner")?.let { s = s.copy(batteryCorner = Corner.of(it) ?: DEFAULT.batteryCorner) }
+            get("sleep_flash")?.let { s = s.copy(flash = it == "1" || it == "true") }
             return s
         }
     }
@@ -124,6 +131,7 @@ data class SleepSettings(
         "sleep_mode" to mode.key, "sleep_from" to from, "sleep_leave_out" to leaveOut.joinToString("\n"),
         "sleep_hours" to hours.toString(), "sleep_text" to text, "sleep_battery" to if (battery) "1" else "0",
         "sleep_style" to style.key, "sleep_text_position" to textPosition.key, "sleep_battery_corner" to batteryCorner.key,
+        "sleep_flash" to if (flash) "1" else "0",
     )
 
     /** "Up next in series", "Smart scope 12", … */
@@ -135,19 +143,47 @@ data class SleepSettings(
     }
 }
 
+/**
+ * One wake, two reporters: the service's SCREEN_ON (Full mode, or Add-on with the service) and the
+ * plugin's resume after a real sleep (every mode: a manifest receiver can't hear SCREEN_ON). The
+ * first moves the picture on; the other, within [SAME_WAKE_MS], is the same wake.
+ */
+object SleepWake {
+    const val SAME_WAKE_MS = 20_000L
+
+    /** [lastMs], [nowMs]: elapsedRealtime of the last wake handled and now (a reboot resets it). */
+    fun due(lastMs: Long, nowMs: Long): Boolean = lastMs <= 0L || nowMs < lastMs || nowMs - lastMs >= SAME_WAKE_MS
+}
+
 /** The rotation rule at sleep (R4) and the fallbacks (F1, F4). */
 object SleepRotation {
-    data class State(val shown: Long = 0L, val changedAt: Long = 0L)
+    /** With Every sleep a cover is shown this many times, then the plugin retires it (R4b). */
+    const val SHOWS_MAX = 3
+
+    /** [shows]: Every sleep's show counts per pool id, kept on disk (a reboot keeps them). */
+    data class State(val shown: Long = 0L, val changedAt: Long = 0L, val shows: Map<Long, Int> = emptyMap())
 
     /** [show]: "pool:<id>", "current", "default" (the drawn Sleeping page) or "off". */
     data class Decision(val show: String, val next: State) {
         val poolId: Long? get() = show.removePrefix("pool:").toLongOrNull()?.takeIf { show.startsWith("pool:") }
     }
 
-    fun decide(mode: SleepMode, hours: Int, now: Long, pool: List<Long>, hasCurrent: Boolean, st: State): Decision {
+    /**
+     * What to show. Hours: the next pool cover once X hours have passed (R4). Every sleep
+     * ([SleepSettings.EVERY_SLEEP]): with [advance] (a real sleep, or the picture written for the
+     * next one) a random ready cover, never the one just shown, preferring covers shown fewer than
+     * [SHOWS_MAX] times; when all are used up (nothing new arrived), any of them, so it keeps
+     * cycling. Without [advance] (a preview, a redraw for the battery) the current one stays.
+     * [rand]: n -> 0 until n.
+     */
+    fun decide(
+        mode: SleepMode, hours: Int, now: Long, pool: List<Long>, hasCurrent: Boolean, st: State,
+        advance: Boolean = true, rand: (Int) -> Int = { kotlin.random.Random.nextInt(it) },
+    ): Decision {
         if (mode == SleepMode.OFF) return Decision("off", st)
         if (mode == SleepMode.CURRENT && hasCurrent) return Decision("current", st)
         if (pool.isEmpty()) return Decision(if (hasCurrent) "current" else "default", st)
+        if (hours == SleepSettings.EVERY_SLEEP) return everySleep(now, pool, st, advance, rand)
         // A clock that went backwards resets the last change to now.
         val changed = if (now < st.changedAt) now else st.changedAt
         val idx = pool.indexOf(st.shown)
@@ -157,8 +193,35 @@ object SleepRotation {
             due -> pool[(idx + 1) % pool.size]
             else -> pool[idx]
         }
-        return Decision("pool:$next", State(next, if (due) now else changed))
+        return Decision("pool:$next", st.copy(shown = next, changedAt = if (due) now else changed))
     }
+
+    private fun everySleep(now: Long, pool: List<Long>, st: State, advance: Boolean, rand: (Int) -> Int): Decision {
+        if (!advance && st.shown in pool) return Decision("pool:${st.shown}", st)
+        val others = if (pool.size > 1) pool.filter { it != st.shown } else pool
+        val fresh = others.filter { (st.shows[it] ?: 0) < SHOWS_MAX }
+        val from = fresh.ifEmpty { others }
+        val pick = from[rand(from.size).coerceIn(0, from.size - 1)]
+        if (!advance) return Decision("pool:$pick", st)
+        // Counts only for the covers ready now: one that left and comes back later starts again.
+        val shows = pool.associateWith { st.shows[it] ?: 0 }.filterValues { it > 0 }.toMutableMap()
+        shows[pick] = (shows[pick] ?: 0) + 1
+        return Decision("pool:$pick", State(pick, now, shows))
+    }
+
+    /** "12:2,40:1" (the stored form) <-> counts. */
+    fun encodeShows(m: Map<Long, Int>): String = m.entries.joinToString(",") { "${it.key}:${it.value}" }
+
+    fun decodeShows(s: String?): Map<Long, Int> = (s ?: "").split(',').mapNotNull { p ->
+        val id = p.substringBefore(':').toLongOrNull() ?: return@mapNotNull null
+        val n = p.substringAfter(':', "").toIntOrNull() ?: return@mapNotNull null
+        if (id > 0 && n > 0) id to n else null
+    }.toMap()
+
+    /** state.json for the plugin: the cover shown, when, and Every sleep's counts (it retires the used-up). */
+    fun stateJson(st: State): String =
+        "{\"v\":1,\"shown\":${st.shown},\"changed_at\":${st.changedAt},\"shows\":{" +
+            st.shows.entries.joinToString(",") { "\"${it.key}\":${it.value}" } + "}}"
 }
 
 /** A rectangle in panel pixels. */

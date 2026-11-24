@@ -4682,6 +4682,34 @@ test("cache: the index is encoded and written by a child, one save at a time (v0
 end)
 
 ---------------------------------------------------------------- sleep screen (lock-screen.md)
+test("sleep screen: back from a real sleep the plugin tells the companion (no service needed); an app switch doesn't", function()
+    local on = RE.Sleep.on
+    RE.Sleep.on = function() return true end
+    local function wakes()
+        return count(W.broadcasts, function(x) return x.action:sub(-11) == ".SLEEP_POOL" and x.extras.wake == "1" end)
+    end
+    local _ui, m = newUI(false)
+    run(5)
+    W.broadcasts = {}
+    W.screen_on = false
+    m:onSuspend()
+    run(2)
+    W.screen_on = true
+    m:onResume()
+    run(1)
+    ok(wakes() == 1, "one wake: " .. wakes())
+    local b = lastBroadcast(".SLEEP_POOL")
+    ok(b.package == "net.fledgewing.orbitcompanion" and b.extras.reason == "wake", "to the companion")
+    -- Another app in front and back, the screen on throughout: no wake.
+    m:onSuspend()
+    run(2)
+    m:onResume()
+    run(1)
+    ok(wakes() == 1, "an app switch is no wake: " .. wakes())
+    RE.Sleep.on = on
+    W.screen_on = false
+end)
+
 test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next through Leave out, the current cover", function()
     local JSON = dofile(here .. "/json_mini.lua")
     capsReset()
@@ -4816,6 +4844,180 @@ test("sleep screen: settings changed in the companion are applied; an older comp
     ok(S.sleep_battery_corner == "bottom_left", "a bad value is the default")
     for _, k in ipairs({ "sleep_mode", "sleep_hours", "sleep_battery", "sleep_style", "sleep_leave_out" }) do S[k] = nil end
     S.sleep_mode, S.sleep_hours, S.sleep_battery, S.sleep_style, S.sleep_leave_out = "off", 6, false, "bar", {}
+    capsReset()
+    run(5)
+end)
+
+test("sleep screen: Pick from and Leave out list every smart scope and collection, all pages, with counts, saved for offline", function()
+    local JSON = dofile(here .. "/json_mini.lua")
+    local function fixture(name)
+        local f = assert(io.open(here .. "/../../../shared/fixtures/bookorbit/" .. name, "rb"))
+        local v = JSON.decode(f:read("*a")); f:close(); return v
+    end
+    local scopes, collections = fixture("catalog-sections.smart-scopes.json"), fixture("catalog-sections.collections.json")
+    -- scopes.json is read back with KOReader's json module: the real decoder here.
+    local jm = require("json")
+    local stub_decode = jm.decode
+    jm.decode = function(str) return W.json[str] or JSON.decode(str) end
+    capsReset()
+    local caps = {}
+    for _, c in ipairs(FULL) do table.insert(caps, c) end
+    table.insert(caps, "sleep_screen")
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
+    local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
+    local S, Sleep = RE.S, RE.Sleep
+    Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = dir, nil, nil, nil
+    S.sleep_mode = "recommended"
+    local ui, m = newUI(false)
+    RE.Shared.refresh("test")
+    -- Smart scopes come in two pages (hasNext), collections whole, as the server sends them.
+    local calls, down = {}, false
+    local client = {}
+    function client:query(path, q) return string.format("%s?page=%d&size=%d", path, q.page, q.size) end
+    function client:requestBlocking(_, path)
+        table.insert(calls, path)
+        if down then return nil, "offline" end
+        if path:find("/sections/smart%-scopes%?page=1&size=100") then
+            local items = {}
+            for i = 1, 7 do items[i] = scopes.items[i] end
+            return { section = "smart-scopes", items = items, hasNext = true }
+        end
+        if path:find("/sections/smart%-scopes%?page=2&size=100") then
+            local items = {}
+            for i = 8, #scopes.items do table.insert(items, scopes.items[i]) end
+            return { section = "smart-scopes", items = items, hasNext = false }
+        end
+        if path:find("/sections/collections%?page=1") then return collections end
+        return nil, 404
+    end
+    local oc_client = RE.OC.client
+    RE.OC.client = function() return client end
+    W.wifi = true
+    local item
+    for _, it in ipairs(m:menuItems()) do if it.text == "Sleep screen" then item = it end end
+    local rows = item.sub_item_table_func()
+    local from = rows[2].sub_item_table
+    local picker = from[#from]
+    -- First open: nothing saved yet, fetched behind the menu.
+    local first = picker.sub_item_table_func()
+    ok(#first == 1 and first[1].text_func():find("Loading", 1, true), "loading: " .. first[1].text_func())
+    run(10)
+    ok(#calls == 3, "two pages of scopes, one of collections: " .. table.concat(calls, " "))
+    local f = io.open(dir .. "/scopes.json", "rb")
+    ok(f, "scopes.json saved"); if f then f:close() end
+    local function texts(list)
+        local out = {}
+        for _, r in ipairs(list) do table.insert(out, r.text or (r.text_func and r.text_func())) end
+        return out
+    end
+    local got = texts(picker.sub_item_table_func())
+    ok(#got == 15, "2 headers, 12 scopes, 1 collection: " .. #got)
+    ok(got[1] == "Smart scopes" and got[2] == "Cosy Mysteries · 5" and got[13] == "Holiday Picks", "scopes with counts, the last without: " .. tostring(got[13]))
+    ok(got[14] == "Collections" and got[15] == "ToRead · 23", "the collection: " .. tostring(got[15]))
+    -- Tapping one picks it, and its name shows.
+    local tapped = picker.sub_item_table_func()
+    tapped[15].callback()
+    ok(S.sleep_from == "collection:7" and Sleep.fromLabel(S.sleep_from) == "ToRead", "picked: " .. tostring(S.sleep_from))
+    -- Offline, after a restart: the same lists from scopes.json, in Leave out too.
+    down, W.wifi = true, false
+    Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil
+    local leave = rows[3].sub_item_table_func()
+    local add
+    for _, r in ipairs(leave) do if r.text == "Add a rule: Smart scope or collection…" then add = r end end
+    local lo = texts(add.sub_item_table_func())
+    ok(#lo == 15 and lo[3] == "Space Opera · 8", "Leave out lists them offline: " .. #lo)
+    add.sub_item_table_func()[4].callback()
+    ok(S.sleep_leave_out[1] == "scope:103" and Sleep.ruleLabel("scope:103") == "Short Reads (smart scope)", "rule added: " .. tostring(S.sleep_leave_out[1]))
+    -- The companion's state.json is read the same way (the shuffle bag moves past what it showed).
+    local st = io.open(dir .. "/state.json", "wb"); st:write('{"v":1,"shown":103,"changed_at":5000}'); st:close()
+    ok(Sleep.state().shown == 103, "state.json read")
+    RE.OC.client, jm.decode = oc_client, stub_decode
+    Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil, nil
+    S.sleep_mode, S.sleep_from, S.sleep_leave_out = "off", "up_next", {}
+    sh("rm -rf", dir)
+    capsReset()
+    run(5)
+end)
+
+test("sleep screen: 24 covers ready whatever the source; Every sleep retires the used-up and tops up", function()
+    local JSON = dofile(here .. "/json_mini.lua")
+    local jm = require("json")
+    local stub_decode = jm.decode
+    jm.decode = function(str) return W.json[str] or JSON.decode(str) end
+    capsReset()
+    local caps = {}
+    for _, c in ipairs(FULL) do table.insert(caps, c) end
+    table.insert(caps, "sleep_screen")
+    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
+    local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
+    local lfs = require("libs/libkoreader-lfs")
+    local saved = { attributes = lfs.attributes, dir = lfs.dir }
+    lfs.attributes = function(f, k)
+        local d = os.execute('test -d "' .. f .. '"')
+        if d == 0 or d == true then return "directory" end
+        local h = io.open(f, "rb"); if h then h:close(); return "file" end
+        return saved.attributes(f, k)
+    end
+    lfs.dir = function(d)
+        local h = io.popen('ls -1 "' .. d .. '" 2>/dev/null'); local names = {}
+        for n in h:lines() do table.insert(names, n) end
+        h:close(); local i = 0
+        return function() i = i + 1; return names[i] end
+    end
+    local S, Sleep = RE.S, RE.Sleep
+    Sleep.base_dir = dir
+    newUI(false)
+    RE.Shared.refresh("test")
+    S.sleep_mode, S.sleep_from, S.sleep_hours, S.sleep_leave_out = "recommended", "up_next", 6, {}
+    local books = {}
+    for i = 1, 30 do books[i] = { id = i, title = "Book " .. i, hasCover = true } end
+    local client = {}
+    function client:query(path) return path end
+    function client:requestBlocking(_, path)
+        if path:find("sections/up%-next%-in%-series") then return { section = { books = books } } end
+        return nil, 404
+    end
+    local oc_client, download = RE.OC.client, Sleep.download
+    RE.OC.client = function() return client end
+    Sleep.download = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
+    W.wifi = true
+    local function build()
+        Sleep.refreshed_at = nil
+        Sleep.kick("test"); run(60)
+        local ids, f = {}, io.open(dir .. "/pool.json", "rb")
+        for _, it in ipairs(JSON.decode(f:read("*a")).items) do table.insert(ids, it.id) end
+        f:close()
+        return ids
+    end
+    local function has(ids, id) for _, x in ipairs(ids) do if x == id then return true end end return false end
+    local function state(shows)
+        local f = io.open(dir .. "/state.json", "wb"); f:write(shows); f:close()
+    end
+    -- 30 in the source: the batch is 24, with hours too.
+    local ids = build()
+    ok(#ids == 24 and ids[1] == 1 and ids[24] == 24, "24 of 30: " .. #ids)
+    -- Every sleep: 1 and 2 were shown 3 times; they go, 25 and 26 come in; the rest stay.
+    S.sleep_hours = 0
+    state('{"v":1,"shown":3,"changed_at":1,"shows":{"1":3,"2":3,"3":1}}')
+    ids = build()
+    ok(#ids == 24 and not has(ids, 1) and not has(ids, 2) and has(ids, 3) and has(ids, 25) and has(ids, 26), "retired and topped up: " .. table.concat(ids, ","))
+    ok(not io.open(dir .. "/covers/1.jpg", "rb"), "a retired cover's file goes")
+    ok(table.concat(W.logs, "\n"):find("every sleep: 22 kept, 2 retired", 1, true), "logged")
+    -- A one-book source: fewer than 24 is fine, and a used-up last cover stays rather than nothing.
+    books = { { id = 40, title = "Only", hasCover = true } }
+    state('{"v":1,"shown":0,"changed_at":1,"shows":{}}')
+    ids = build()
+    ok(#ids == 1 and ids[1] == 40, "one book: " .. table.concat(ids, ","))
+    state('{"v":1,"shown":40,"changed_at":1,"shows":{"40":3}}')
+    ids = build()
+    ok(#ids == 1 and ids[1] == 40, "kept cycling: " .. table.concat(ids, ","))
+    RE.OC.client, Sleep.download, jm.decode = oc_client, download, stub_decode
+    lfs.attributes, lfs.dir = saved.attributes, saved.dir
+    Sleep.base_dir = nil
+    S.sleep_mode, S.sleep_from, S.sleep_hours, S.sleep_leave_out = "off", "up_next", 6, {}
+    sh("rm -rf", dir)
     capsReset()
     run(5)
 end)

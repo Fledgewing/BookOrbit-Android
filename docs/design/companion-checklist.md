@@ -56,6 +56,7 @@ v0.11.2 on a Boox Page shows one flat list of up to 22 rows of equal weight, eac
 | `patch_seen` | Orbit plugin answered | always | last time (via) / never | open KOReader |
 | `wifi_test` | Wi-Fi off/on test | always | result / never run | Run |
 | `screen_saver` (PR #17) | Switch the screen saver from Orbit | Sleep screen on, dream sink | on / off | show the USB command |
+| `screen_mode` | Screen mode for Orbit | Sleep screen on (any sink) | set by the user / clearing flash on / off | How (I've set it, Use a clearing flash instead, Skip) |
 
 Plus, in Add-on, the optional rows from `AddonLogic.OPTIONAL` (`C/ModeLogic.kt:188`) and the two
 helper features (Wi-Fi switching, Sleep sync). Around the list: "Fix next" (`SetupWalk`), "Don't ask
@@ -129,6 +130,7 @@ When the row isn't done, a **loss line** says what doesn't work. The **button is
 | wifi_test | Wi-Fi off/on test | Passed 17:02 (reconnects in 4 s) | Not run yet · never counted | Run |
 | frozen | KOReader (or Tailscale, Orbit) | — | Frozen by the launcher · Until then: it can't start, sync or update | Re-enable |
 | screen_saver | Screen saver from Orbit | On | (optional) Without it: Sleep screen needs a USB command to turn on or off | Show how |
+| screen_mode | Screen mode for Orbit | On: Orbit draws in the reader's clearest screen mode. / On: the clearing flash runs before the cover. | (optional) Set Orbit Companion to the reader's clearest screen mode (often called HD, Clear or Quality) in its per-app display settings, so the sleep screen draws without ghosting. · Without it: the sleep screen may show ghosting from the last page. | How |
 
 Gone from the screen: "done", "open ›", "(device admin)", "Always-on on" (moved to Details),
 "(NET_UP)" (Details), "set App battery usage › Unrestricted" (the battery detail says it where it
@@ -190,7 +192,7 @@ required:
 | Recommended settings | a step | a status line in BookOrbit ("Applied 7 · Review"); its conflicts still remind |
 | Permissions group | yes | none: its rows are in Optional (`AddonLogic.optionalIds`), with Wi-Fi switching and Sleep sync |
 | Connection | Tailscale is a step | Tailscale info, only if installed |
-| Optional group | the rows the user may leave off: Screen saver (PR #17), Reading fonts ([reading-fonts](reading-fonts.md)), and any skipped step | Install apps, Notifications, Clicker buttons, Orbit keyboard, Wi-Fi switching, Sleep sync, Screen lock, Battery, Screen saver, Reading fonts |
+| Optional group | the rows the user may leave off: Screen saver (PR #17), Screen mode for Orbit (§3.11), Reading fonts ([reading-fonts](reading-fonts.md)), and any skipped step | Install apps, Notifications, Clicker buttons, Orbit keyboard, Wi-Fi switching, Sleep sync, Screen lock, Battery, Screen saver, Screen mode for Orbit, Reading fonts |
 | Home app | a step | no row |
 
 In both, an Optional row shows "On: …" when on, otherwise "Without it: …" and **Allow**; never
@@ -231,6 +233,28 @@ Setup stays readable without the PIN (today `SetupActivity` isn't `pinGuarded`; 
   full width.
 - State never by grey alone: glyph + words. The summary card has a 2 px black border.
 - A set-up reader fits on one screen; an expanded group may scroll.
+
+### 3.11 Screen mode for Orbit
+
+E-ink readers keep a display (refresh) mode per app; in a fast one the sleep screen's cover
+draws over the last page and it ghosts through. No Android API reads or sets that mode, so the
+row is purely **Optional**: never counted, walked or prompted, never in Needs you or the
+summary count, no "New in" badge. Left alone it shows only its hint and "Without it: the sleep
+screen may show ghosting from the last page." in the Optional group. Shown while Sleep screen is
+anything but the reader's own (either sink). Wording is generic: one or two common mode names
+(HD, Clear, Quality), never a brand.
+
+**How** opens the steps and three buttons:
+- **I've set it**: stored (`Prefs.screenModeDone`); the row reads "On: Orbit draws in the
+  reader's clearest screen mode."
+- **Use a clearing flash instead**: turns on Sleep screen › *Clearing flash before the cover*
+  (`sleep_flash`, lock-screen.md L10); the row reads "On: the clearing flash runs before the
+  cover." Turning the flash off again reopens the row.
+- **Skip**: nothing changes.
+
+First run: the Sleep screen page shows the same row, marked optional, right under the mode
+picker once a sleep screen is chosen, until it is finished; the first-run Setup page has it in
+Optional.
 
 ## 4. Self-grill log (two-way doors, settled)
 

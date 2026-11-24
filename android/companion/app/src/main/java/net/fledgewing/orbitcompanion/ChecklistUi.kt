@@ -109,7 +109,8 @@ object ChecklistUi {
         val stateLine = when {
             i.skipped -> "Skipped"
             i.state == State.SET_BY_READER -> "Set by the reader ⓘ"
-            r.optional -> ""
+            // An optional row that is off shows its own hint (what to do), if it has one.
+            r.optional -> if (i.state == State.OFF) r.stateLine else ""
             else -> r.stateLine
         }
         if (i.regressed) b.bold("Stopped working: ")

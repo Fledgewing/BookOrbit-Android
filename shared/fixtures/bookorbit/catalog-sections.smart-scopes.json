@@ -1,0 +1,119 @@
+{
+  "section": "smart-scopes",
+  "items": [
+    {
+      "id": "101",
+      "title": "Cosy Mysteries",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=101&sort=title",
+      "count": 5,
+      "readingCount": 0,
+      "previewBooks": []
+    },
+    {
+      "id": "102",
+      "title": "Space Opera",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=102&sort=title",
+      "count": 8,
+      "readingCount": 1,
+      "previewBooks": []
+    },
+    {
+      "id": "103",
+      "title": "Short Reads",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=103&sort=title",
+      "count": 11,
+      "readingCount": 2,
+      "previewBooks": []
+    },
+    {
+      "id": "104",
+      "title": "Award Winners",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=104&sort=title",
+      "count": 14,
+      "readingCount": 0,
+      "previewBooks": []
+    },
+    {
+      "id": "105",
+      "title": "Book Club",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=105&sort=title",
+      "count": 17,
+      "readingCount": 1,
+      "previewBooks": []
+    },
+    {
+      "id": "106",
+      "title": "Comfort Rereads",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=106&sort=title",
+      "count": 20,
+      "readingCount": 2,
+      "previewBooks": []
+    },
+    {
+      "id": "107",
+      "title": "Epic Fantasy",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=107&sort=title",
+      "count": 23,
+      "readingCount": 0,
+      "previewBooks": []
+    },
+    {
+      "id": "108",
+      "title": "Under 300 Pages",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=108&sort=title",
+      "count": 26,
+      "readingCount": 1,
+      "previewBooks": []
+    },
+    {
+      "id": "109",
+      "title": "Translated Fiction",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=109&sort=title",
+      "count": 29,
+      "readingCount": 2,
+      "previewBooks": []
+    },
+    {
+      "id": "110",
+      "title": "Classics",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=110&sort=title",
+      "count": 32,
+      "readingCount": 0,
+      "previewBooks": []
+    },
+    {
+      "id": "111",
+      "title": "Started Not Finished",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=111&sort=title"
+    },
+    {
+      "id": "112",
+      "title": "Holiday Picks",
+      "section": "smart-scopes",
+      "icon": null,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?smartScopeId=112&sort=title"
+    }
+  ]
+}
