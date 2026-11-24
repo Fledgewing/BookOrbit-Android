@@ -44,7 +44,7 @@ jobs:
         timeout-minutes: 5
         run: |
           set -euo pipefail
-          sudo apt-get install -y -qq luajit >/dev/null
+          sudo apt-get install -y -qq luajit libsqlite3-0 >/dev/null
           # stdin closed: nothing in the tests may wait on a terminal.
           luajit android/koreader/test/test_logic.lua </dev/null
           luajit android/koreader/test/test_flows.lua </dev/null
@@ -66,3 +66,12 @@ jobs:
       - name: Companion tests, debug build and lint
         working-directory: android/companion
         run: ./gradlew --no-daemon testDebugUnitTest assembleDebug lintDebug
+
+      # The pages as Robolectric draws them (PageLayoutTest), at the M8C's size and a phone's.
+      - name: Page screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: companion-screenshots
+          path: android/companion/app/build/screenshots/
+          if-no-files-found: ignore

@@ -128,25 +128,51 @@ class SleepPreviewActivity : EinkActivity() {
 }
 
 /**
- * Setup's one optional row for the sleep screen (docs/design/lock-screen.md P3), in the Add-on
- * design's style: shown only while Sleep screen is on and the reader uses the screen saver.
+ * Setup's screen-saver row (docs/design/lock-screen.md P1-P3, companion-checklist §3.3). What the
+ * USB-granted permission (WRITE_SECURE_SETTINGS) really does: when Sleep screen is turned on, Orbit
+ * makes its own screen saver the reader's, and when it is turned off, puts the reader's own back
+ * (SleepScreen.chooseOurs / restoreVendor). Without it nothing else changes: once Orbit's screen
+ * saver is chosen (the USB command, or the reader's Screen saver page), the sleep screen works.
+ *
+ * So the row shows only when it helps on this reader right now (M8C feedback, 2026-11-24): the
+ * reader uses a screen saver, Orbit can't switch it itself, the reader has no Screen saver page to
+ * do it by hand, and what it shows while asleep doesn't match the Sleep screen setting (on, but
+ * the reader's own screen saver is still chosen; or off, but Orbit's still is). Otherwise hidden.
  */
 object SleepSetup {
-    /** The checklist's id for it (Checklist.GROUP_OF, its "On:" / "Without it:" lines). */
+    /** The checklist's id for it (Checklist.GROUP_OF, its "Without it:" line). */
     const val ID = "screen_saver"
-    const val TITLE = "Switch the screen saver from Orbit"
-    const val COMMAND = "Connect the reader to a computer and run, once:\n\ntools/install-usb.sh --grant-screen-saver\n\n" +
-        "Without it: tools/install-usb.sh --sleep-screen on (or off) does the switch itself."
+    const val TITLE = "Screen saver"
+    const val GRANT = "tools/install-usb.sh --grant-screen-saver"
 
-    fun shown(mode: SleepMode, sink: SleepSink): Boolean = mode != SleepMode.OFF && sink == SleepSink.DREAM
+    /** What the reader shows while asleep doesn't follow Sleep screen, and Orbit can't fix that itself. */
+    fun shown(mode: SleepMode, sink: SleepSink, granted: Boolean, oursChosen: Boolean, hasSystemPage: Boolean): Boolean =
+        sink == SleepSink.DREAM && !granted && !hasSystemPage && (mode != SleepMode.OFF) != oursChosen
+
+    /** The state line: what is wrong now, in plain words. */
+    fun stateLine(mode: SleepMode): String = if (mode != SleepMode.OFF) {
+        "Sleep screen is on, but the reader still uses its own screen saver, so Orbit's cover doesn't show while it sleeps."
+    } else {
+        "Sleep screen is off, but Orbit's screen saver is still the reader's, so the reader's own sleep screen doesn't show."
+    }
+
+    /** "Show how": the one-time USB command for now, and the grant that makes it automatic. */
+    fun how(mode: SleepMode): String {
+        val now = "tools/install-usb.sh --sleep-screen ${if (mode != SleepMode.OFF) "on" else "off"}"
+        return "This reader hides its Screen saver settings, so Orbit can't change what it shows while it sleeps. " +
+            "Connect it to a computer and run, once:\n\n$now\n\n" +
+            "Or run $GRANT once instead: then Orbit switches the screen saver itself whenever you turn Sleep screen on or off."
+    }
+
+    fun hasSystemPage(ctx: android.content.Context): Boolean =
+        android.content.Intent(android.provider.Settings.ACTION_DREAM_SETTINGS).resolveActivity(ctx.packageManager) != null
 
     fun check(ctx: android.content.Context): Check? {
-        if (!shown(SleepScreen.settings(ctx).mode, SleepScreen.sink(ctx))) return null
-        val granted = SleepScreen.canSwitch(ctx)
-        val line = if (granted) Checklist.optionalLine(ID, true).orEmpty() else ""
-        return Check(TITLE, granted, line, action = if (granted) null else "Show how", optional = true, id = ID) { a ->
-            OLog.i("setup: sleep screen optional row: Show how")
-            Ui.note(a, COMMAND)
+        val mode = SleepScreen.settings(ctx).mode
+        if (!shown(mode, SleepScreen.sink(ctx), SleepScreen.canSwitch(ctx), SleepScreen.oursChosen(ctx), hasSystemPage(ctx))) return null
+        return Check(TITLE, false, stateLine(mode), action = "Show how", optional = true, id = ID) { a ->
+            OLog.i("setup: screen saver row: Show how (${mode.key})")
+            Ui.note(a, how(mode))
         }
     }
 }

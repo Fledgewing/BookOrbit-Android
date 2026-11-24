@@ -21,6 +21,8 @@ object Worker {
     const val ACTION_COPIES = "${Contract.PACKAGE}.action.COPIES"
     const val ACTION_SLEEP_REFRESH = "${Contract.PACKAGE}.action.SLEEP_REFRESH"
     const val ACTION_RECHECK = "${Contract.PACKAGE}.action.RECHECK"
+    /** The shared-storage stress test's writer (docs/design/sqlite-cache.md "Stress test"); no login. */
+    const val ACTION_SQLITE_STRESS = "${Contract.PACKAGE}.action.SQLITE_STRESS"
 
     /** The cap the plugin needs before it hands work over (ModeLogic.BASE). */
     const val CAP = "cache_worker"
@@ -57,6 +59,10 @@ object Worker {
     }
 
     fun onIntent(ctx: Context, i: Intent) {
+        if (i.action == ACTION_SQLITE_STRESS) {
+            val secs = i.getStringExtra("seconds")?.toIntOrNull()?.coerceIn(5, 600) ?: SqliteStress.SECONDS
+            return SqliteStress.start(root(), secs)
+        }
         if (i.action == ACTION_STORAGE) {
             // No login: files only. A newer ask replaces a waiting one.
             val a = CacheWorker.StorageAsk(i.getStringExtra("reason") ?: "plugin", i.getStringExtra("limit")?.toLongOrNull()?.takeIf { it > 0 },

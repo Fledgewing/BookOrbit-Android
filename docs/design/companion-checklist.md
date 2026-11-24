@@ -55,7 +55,7 @@ v0.11.2 on a Boox Page shows one flat list of up to 22 rows of equal weight, eac
 | `keyboard` | Orbit keyboard enabled | a Send-key action mapped | on / off | keyboard settings |
 | `patch_seen` | Orbit plugin answered | always | last time (via) / never | open KOReader |
 | `wifi_test` | Wi-Fi off/on test | always | result / never run | Run |
-| `screen_saver` (PR #17) | Switch the screen saver from Orbit | Sleep screen on, dream sink | on / off | show the USB command |
+| `screen_saver` (PR #17) | Screen saver | only when it helps now (§3.12) | mismatch | show the USB command |
 | `screen_mode` | Screen mode for Orbit | Sleep screen on (any sink) | set by the user / clearing flash on / off | How (I've set it, Use a clearing flash instead, Skip) |
 
 Plus, in Add-on, the optional rows from `AddonLogic.OPTIONAL` (`C/ModeLogic.kt:188`) and the two
@@ -129,7 +129,7 @@ When the row isn't done, a **loss line** says what doesn't work. The **button is
 | tailscale | Tailscale | Connected | Not connected · Until then: no sync with your server away from home Wi-Fi | Connect |
 | wifi_test | Wi-Fi off/on test | Passed 17:02 (reconnects in 4 s) | Not run yet · never counted | Run |
 | frozen | KOReader (or Tailscale, Orbit) | — | Frozen by the launcher · Until then: it can't start, sync or update | Re-enable |
-| screen_saver | Screen saver from Orbit | On | (optional) Without it: Sleep screen needs a USB command to turn on or off | Show how |
+| screen_saver | Screen saver | (hidden: nothing to do) | (optional, shown only when it helps, §3.12) Sleep screen is on, but the reader still uses its own screen saver, so Orbit's cover doesn't show while it sleeps / Sleep screen is off, but Orbit's screen saver is still the reader's · Without it: what the reader shows while it sleeps doesn't follow your Sleep screen setting until you run one USB command | Show how |
 | screen_mode | Screen mode for Orbit | On: Orbit draws in the reader's clearest screen mode. / On: the clearing flash runs before the cover. | (optional) Set Orbit Companion to the reader's clearest screen mode (often called HD, Clear or Quality) in its per-app display settings, so the sleep screen draws without ghosting. · Without it: the sleep screen may show ghosting from the last page. | How |
 
 Gone from the screen: "done", "open ›", "(device admin)", "Always-on on" (moved to Details),
@@ -255,6 +255,23 @@ anything but the reader's own (either sink). Wording is generic: one or two comm
 First run: the Sleep screen page shows the same row, marked optional, right under the mode
 picker once a sleep screen is chosen, until it is finished; the first-run Setup page has it in
 Optional.
+
+### 3.12 Screen saver (`screen_saver`)
+
+What the USB-granted permission (`WRITE_SECURE_SETTINGS`, lock-screen.md P1) really does: when
+Sleep screen is turned on, Orbit makes its own screen saver the reader's; when it is turned off, it
+puts the reader's own back (`SleepScreen.chooseOurs` / `restoreVendor`). Nothing else uses it. Once
+Orbit's screen saver is chosen (by the one-time `tools/install-usb.sh --sleep-screen on`, or the
+reader's own Screen saver page), the sleep screen works without it: the M8C case (user, 2026-11-24).
+
+So the row is shown **only when it helps on this reader right now** (`SleepSetup.shown`, detected):
+the reader uses a screen saver (dream sink), the permission is not granted, the reader hides its
+Screen saver page (`ACTION_DREAM_SETTINGS` doesn't resolve), and what it shows while asleep doesn't
+match Sleep screen: on while the reader's own screen saver is still chosen, or off while Orbit's
+still is. Otherwise it is hidden, granted or not. When shown, the state line says what is wrong in
+plain words and **Show how** gives the one command for now (`--sleep-screen on` or `off`) and the
+grant that makes it automatic from then on ("Orbit switches the screen saver itself whenever you
+turn Sleep screen on or off"). The Sleep screen settings' *Shown by* row keeps its own Set up.
 
 ## 4. Self-grill log (two-way doors, settled)
 

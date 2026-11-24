@@ -216,9 +216,29 @@ class SleepScreenLogicTest {
         assertEquals("Orbit screen saver ✓", SleepSystem.shownBy(SleepSink.DREAM, true, false))
         assertEquals("Set up ›", SleepSystem.shownBy(SleepSink.DREAM, false, true))
         assertEquals(listOf(ours, "1", "1"), SleepSystem.ourValues(ours))
-        assertTrue(SleepSetup.shown(SleepMode.RECOMMENDED, SleepSink.DREAM))
-        assertFalse(SleepSetup.shown(SleepMode.OFF, SleepSink.DREAM))
-        assertFalse(SleepSetup.shown(SleepMode.CURRENT, SleepSink.PICTURE))
+    }
+
+    /**
+     * Setup's screen-saver row shows only when it helps on this reader now (M8C feedback,
+     * 2026-11-24): a screen-saver reader, no permission, no Screen saver page, and what it shows
+     * asleep doesn't match Sleep screen. The M8C (Orbit's screen saver chosen, Sleep screen on) hides it.
+     */
+    @Test
+    fun screenSaverRowOnlyWhenItHelpsNow() {
+        fun shown(mode: SleepMode = SleepMode.RECOMMENDED, sink: SleepSink = SleepSink.DREAM, granted: Boolean = false, ours: Boolean = false, page: Boolean = false) =
+            SleepSetup.shown(mode, sink, granted, ours, page)
+        assertTrue("on, the reader's own still chosen, no page", shown())
+        assertTrue("off, Orbit's still chosen, no page", shown(mode = SleepMode.OFF, ours = true))
+        assertFalse("the M8C: on and Orbit's chosen: works without it", shown(ours = true))
+        assertFalse("off and the reader's own: nothing to change", shown(mode = SleepMode.OFF))
+        assertFalse("granted: Orbit switches it itself", shown(granted = true))
+        assertFalse("the reader's Screen saver page does it by hand", shown(page = true))
+        assertFalse("a picture reader (Boox) has no screen saver to switch", shown(sink = SleepSink.PICTURE))
+        assertTrue(SleepSetup.stateLine(SleepMode.CURRENT).contains("Orbit's cover doesn't show"))
+        assertTrue(SleepSetup.how(SleepMode.CURRENT).contains("--sleep-screen on"))
+        assertTrue(SleepSetup.how(SleepMode.OFF).contains("--sleep-screen off"))
+        assertTrue("says why you'd grant it", SleepSetup.how(SleepMode.OFF).contains("Orbit switches the screen saver itself"))
+        assertFalse("the loss line names what is lost, not a command", Checklist.LOSS.getValue(SleepSetup.ID).startsWith("turning"))
     }
 
     @Test

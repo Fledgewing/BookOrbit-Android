@@ -150,7 +150,7 @@ class ChecklistPageTest {
         val perms = texts(Checklist.page(items).drawn(frame.copy(open = Checklist.Group.PERMISSIONS.name)))
         assertTrue(perms.any { it.startsWith("Skipped\nWithout it: Sync and sleep asks you to press the power button.") })
         val opt = texts(Checklist.page(items).drawn(frame.copy(open = Checklist.Group.OPTIONAL.name)))
-        assertTrue(opt.any { it.contains("Without it: turning Sleep screen on or off needs a one-time USB command.") })
+        assertTrue(opt.any { it.contains("Without it: ${Checklist.LOSS.getValue("screen_saver")}") })
     }
 
     @Test

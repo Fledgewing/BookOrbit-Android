@@ -1,0 +1,86 @@
+package net.fledgewing.orbitcompanion
+
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteStatement
+import java.io.File
+
+/**
+ * The few SQLite calls the offline cache's database needs (docs/design/sqlite-cache.md), as a
+ * port: Android's own SQLite on the device ([AndroidSql]), JDBC in the plain JVM unit tests.
+ * Arguments: Long, Int, Double, String, ByteArray (a blob) or null.
+ */
+interface Sql : AutoCloseable {
+    fun exec(sql: String, vararg args: Any?)
+
+    /** Rows of a query, each mapped while the cursor is on it. */
+    fun <T> query(sql: String, vararg args: Any?, row: (Row) -> T): List<T>
+
+    /** BEGIN IMMEDIATE ... COMMIT (rolled back on an exception): readers keep reading until COMMIT. */
+    fun <T> transaction(block: () -> T): T
+
+    /** A PRAGMA's single answer (journal_mode, integrity_check, user_version). */
+    fun pragma(p: String): String? = query("PRAGMA $p") { it.text(0) }.firstOrNull()
+
+    interface Row {
+        fun long(i: Int): Long?
+        fun text(i: Int): String?
+        fun bytes(i: Int): ByteArray?
+    }
+}
+
+/** Android's SQLite, rollback journal (TRUNCATE), never WAL: WAL's shared memory is unreliable on FUSE storage. */
+class AndroidSql(file: File) : Sql {
+    private val db: SQLiteDatabase
+
+    init {
+        file.parentFile?.mkdirs()
+        db = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY)
+        db.disableWriteAheadLogging()
+        pragma("journal_mode=TRUNCATE")
+    }
+
+    private fun bind(st: SQLiteStatement, args: Array<out Any?>) {
+        args.forEachIndexed { n, a ->
+            val i = n + 1
+            when (a) {
+                null -> st.bindNull(i)
+                is Long -> st.bindLong(i, a)
+                is Int -> st.bindLong(i, a.toLong())
+                is Boolean -> st.bindLong(i, if (a) 1 else 0)
+                is Double -> st.bindDouble(i, a)
+                is ByteArray -> st.bindBlob(i, a)
+                else -> st.bindString(i, a.toString())
+            }
+        }
+    }
+
+    override fun exec(sql: String, vararg args: Any?) {
+        db.compileStatement(sql).use { st -> bind(st, args); st.execute() }
+    }
+
+    override fun <T> query(sql: String, vararg args: Any?, row: (Sql.Row) -> T): List<T> {
+        val out = ArrayList<T>()
+        db.rawQuery(sql, args.map { if (it is Boolean) (if (it) "1" else "0") else it?.toString() }.toTypedArray()).use { c ->
+            val r = object : Sql.Row {
+                override fun long(i: Int) = if (c.isNull(i)) null else c.getLong(i)
+                override fun text(i: Int) = if (c.isNull(i)) null else c.getString(i)
+                override fun bytes(i: Int) = if (c.isNull(i)) null else c.getBlob(i)
+            }
+            while (c.moveToNext()) out.add(row(r))
+        }
+        return out
+    }
+
+    override fun <T> transaction(block: () -> T): T {
+        db.beginTransactionNonExclusive()
+        try {
+            val r = block()
+            db.setTransactionSuccessful()
+            return r
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    override fun close() = db.close()
+}
