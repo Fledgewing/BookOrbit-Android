@@ -829,7 +829,7 @@
    "label": "Automatic updates",
    "line": "The app and the KOReader plugin, checked daily.",
    "reader": [
-    "plugin"
+    "companion"
    ],
    "search": [
     "update",
@@ -845,7 +845,7 @@
    "label": "Include pre-releases",
    "line": "Off: only finished releases.",
    "reader": [
-    "plugin"
+    "companion"
    ],
    "search": [
     "beta",

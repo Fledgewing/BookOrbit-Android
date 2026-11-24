@@ -1527,6 +1527,19 @@ test("settings visible: rows show only while their parent has the value", functi
     eq(SettingsSync.visible(SIDX, "wifi_idle_min", v), true)
 end)
 
+test("settings schema: every key KOReader reads has a row in its menu", function()
+    local menu = readFile(here .. "/../orbit.koplugin/ko/menu.lua") .. readFile(here .. "/../orbit.koplugin/ko/sleepscreen.lua")
+    local missing = {}
+    for _, d in ipairs(SIDX.settings) do
+        -- Keys KOReader reads need a row; the companion's own (the clearing flash, its updates) may not.
+        local plugin = false
+        for _, r in ipairs(d.reader or {}) do if r == "plugin" then plugin = true end end
+        if plugin and not d.hidden and not menu:find('"' .. d.key .. '"', 1, true) then table.insert(missing, d.key) end
+    end
+    eq(table.concat(missing, " "), "", "keys with no menu row")
+end)
+
+
 test("sleep screen: Every sleep (sleep_hours 0) is a valid choice, listed first", function()
     local SP = M.SleepPool
     eq(SP.HOURS[1], 0)
