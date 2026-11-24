@@ -68,14 +68,15 @@ class AddonLogicTest {
     @Test
     fun optionalRowsSayWhatIsLost() {
         val o = AddonLogic.optional("notifications")!!
-        assertTrue(AddonLogic.optionalLine(o, AddonLogic.optState(granted = false, asked = false)).startsWith("Without it: Orbit can't tell you"))
-        assertEquals("Off: updates and steps show in KOReader and in Orbit", AddonLogic.optionalLine(o, AddonLogic.optState(granted = false, asked = true)))
+        assertTrue(AddonLogic.optionalLine(o, AddonLogic.optState(granted = false, asked = false)).startsWith("Without it: you see updates"))
+        // Allowed once and now off still says what is lost (companion-checklist §3.7).
+        assertEquals(AddonLogic.optionalLine(o, AddonLogic.OptState.NEVER), AddonLogic.optionalLine(o, AddonLogic.optState(granted = false, asked = true)))
         assertTrue(AddonLogic.optionalLine(o, AddonLogic.optState(granted = true, asked = true)).startsWith("On: "))
-        assertEquals(listOf("install_updates", "notifications"), AddonLogic.optionalIds(Helpers(), false, false, false))
-        assertEquals("no battery, admin, Home or Wi-Fi test rows without helpers", 2, AddonLogic.optionalIds(Helpers(), false, false, false).size)
-        assertEquals(listOf("install_updates", "notifications", "clicker", "keyboard", "admin", "battery"),
+        assertEquals("no battery, admin, Home or Wi-Fi test rows without helpers",
+            listOf("install_updates", "notifications", "wifi_switching", "sleep_sync"), AddonLogic.optionalIds(Helpers(), false, false, false))
+        assertEquals(listOf("install_updates", "notifications", "clicker", "keyboard", "wifi_switching", "sleep_sync", "admin", "battery"),
             AddonLogic.optionalIds(Helpers(sleepSync = true), clickerMapped = true, pinSet = false, sendKeyMapped = true))
-        assertEquals(listOf("install_updates", "notifications", "battery"), AddonLogic.optionalIds(Helpers(wifi = true), false, false, false))
+        assertEquals(listOf("install_updates", "notifications", "wifi_switching", "sleep_sync", "battery"), AddonLogic.optionalIds(Helpers(wifi = true), false, false, false))
     }
 
     @Test

@@ -132,7 +132,7 @@ class Prefs(ctx: Context) {
     var helperPin: Boolean
         get() = bool("helper_pin", false)
         set(v) = setBool("helper_pin", v)
-    /** Add-on's optional rows the user tapped Allow on (a row still off then says "Off: …"). */
+    /** Add-on's optional rows the user tapped Allow on (AddonLogic.optState). */
     var addonAsked: Set<String>
         get() = sp.getStringSet("addon_asked", emptySet())?.toSet() ?: emptySet()
         set(v) = sp.edit().putStringSet("addon_asked", v).apply()
@@ -260,6 +260,14 @@ class Prefs(ctx: Context) {
     var whatsNewFromCode: Int
         get() = sp.getInt("whats_new_from_code", 0)
         set(v) = sp.edit().putInt("whats_new_from_code", v).apply()
+    /** The version code the last update came from, kept until the next update (Setup's "New in" tag). */
+    var updatedFromCode: Int
+        get() = sp.getInt("updated_from_code", 0)
+        set(v) = sp.edit().putInt("updated_from_code", v).apply()
+    /** The mode was just chosen on first run: Setup offers Start until it is tapped or nothing is left. */
+    var setupWelcome: Boolean
+        get() = bool("setup_welcome", false)
+        set(v) = setBool("setup_welcome", v)
 
     var settingsPinSeeded: Boolean
         get() = bool("settings_pin_seeded", false)

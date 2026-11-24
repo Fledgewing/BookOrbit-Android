@@ -219,16 +219,13 @@ class StatusActivity : EinkActivity() {
         card.addView(Ui.row(this, "Wi-Fi turns off", right = Ui.value(this, Status.wifiTimer(this))))
         root.addView(card)
         root.addView(Ui.gap(this, 16))
-        val checks = Setup.checks(this)
-        root.addView(
-            Ui.weightRow(
-                this,
-                Ui.button(this, if (test?.running == true) "Testing…" else "Test network") { runTest() },
-                Ui.button(this, "Setup (${Setup.progress(checks, Mode.isAddon(this))})", solid = !SetupTips.complete(checks.filter { !it.optional }.map { SetupAttention.idOf(it.label) to it.done })) {
-                    startActivity(Intent(this, SetupActivity::class.java))
-                },
-            ),
-        )
+        // The same summary as the Setup page (docs/design/companion-checklist.md §3.8).
+        val items = Setup.items(this)
+        root.addView(ChecklistUi.statusCard(this, Setup.summary(this, items), items) {
+            startActivity(Intent(this, SetupActivity::class.java))
+        })
+        root.addView(Ui.gap(this, 12))
+        root.addView(Ui.button(this, if (test?.running == true) "Testing…" else "Test network") { runTest() })
         testResult?.let { root.addView(Ui.text(this, it, 18f).apply { setPadding(0, Ui.dp(this@StatusActivity, 10), 0, 0) }) }
         Vendor.disabledApps(this).takeIf { it.isNotEmpty() }?.let { frozen ->
             root.addView(Ui.text(this, frozen.joinToString(" ") { Vendor.disabledMessage(this, it) }, 18f, bold = true).apply {
@@ -486,10 +483,10 @@ class SettingsActivity : EinkActivity() {
     }
 }
 
-/** One checklist row (mockup 5). */
 /**
  * A Setup row. pending: fine but waiting on something outside the app (shown, never counted).
- * action: the prompt's button label, null = no button (the detail says what to do).
+ * action: its one verb, null = no button. The label is a noun that never changes with the state;
+ * detail is the state line (docs/design/companion-checklist.md §3.3).
  */
 class Check(
     val label: String,
@@ -501,12 +498,27 @@ class Check(
     val pinFree: Boolean = false,
     /** A tip, not a step (SetupTips): "Got it" hides it; never counted. */
     val advisory: Boolean = false,
-    /** Add-on's optional rows (docs/design/addon-mode.md §4.3): "Without it / Off / On", never counted. */
+    /** An optional row ("On: …" / "Without it: …"), never counted, walked or prompted. */
     val optional: Boolean = false,
+    /** Stable id: stored skips and snoozes are keyed by it, never by the label (D17). */
+    val id: String = SetupAttention.idOf(label),
+    /** Its words in the group's one line when done. */
+    val short: String = label,
+    /** Shown, never counted (a test, Add-on's status lines). */
+    val info: Boolean = false,
+    /** A line of its own under the state. */
+    val extra: String? = null,
+    /** One app of the merged Battery row (BatteryMerge). */
+    val battery: BatteryMerge.App? = null,
     val open: (EinkActivity) -> Unit,
 ) {
     /** Runs the row's action: behind the Settings PIN unless [pinFree]. */
     fun run(a: EinkActivity) = if (pinFree) open(a) else Pin.fix(a) { open(a) }
+
+    fun row(extra: String? = this.extra): Checklist.Row = Checklist.Row(
+        id = id, label = label, done = done, stateLine = detail, short = short, pending = pending,
+        optional = optional, info = info, pinFree = pinFree, verb = action, extra = extra,
+    )
 }
 
 object Setup {
@@ -531,56 +543,124 @@ object Setup {
     /** Setup's rows: dismissed tips left out (SetupTips). */
     fun checks(ctx: Context): List<Check> {
         val all = allChecks(ctx)
-        val keep = SetupTips.visible(all.map { SetupAttention.idOf(it.label) }, Prefs(ctx).hiddenTips).toSet()
-        val shown = all.filter { SetupAttention.idOf(it.label) in keep }
+        val keep = SetupTips.visible(all.map { it.id }, Prefs(ctx).hiddenTips).toSet()
+        val shown = all.filter { it.id in keep }
         return if (Mode.isAddon(ctx)) addonChecks(ctx, shown) else shown
     }
 
     /**
-     * Add-on's checklist (docs/design/addon-mode.md §4.3): the four required rows, the
-     * recommended-settings status and info lines, then the optional rows, each saying what is
-     * lost without it ("Without it / Off / On"), never counted, walked or prompted.
+     * Add-on's checklist (docs/design/addon-mode.md §4.3, companion-checklist §3.7): the four
+     * required rows, the recommended-settings and Tailscale status lines, then the optional
+     * rows, each saying what you get with it or lose without it, never counted, walked or prompted.
      */
     private fun addonChecks(ctx: Context, full: List<Check>): List<Check> {
-        val byId = full.associateBy { SetupAttention.idOf(it.label) }
+        val byId = full.associateBy { it.id }
         val out = mutableListOf<Check>()
+        full.filter { it.advisory }.forEach { out += it }
         // A frozen app is a warning on the app it breaks, only while it is frozen.
         byId["disabled"]?.takeIf { !it.done }?.let { out += it }
         AddonLogic.REQUIRED.forEach { id -> byId[id]?.let { out += it } }
-        byId["recommended"]?.let { out += it }
-        byId["patch_seen"]?.let { out += it }
-        if (Net.installed(ctx, Net.TAILSCALE_PKG)) byId["tailscale"]?.let { out += it }
+        byId["recommended"]?.let { out += it.asInfo() }
+        if (Net.installed(ctx, Net.TAILSCALE_PKG)) byId["tailscale"]?.let { out += it.asInfo() }
         val p = Prefs(ctx)
         val map = ClickerStore.map(ctx)
+        val batteryApps = full.filter { it.battery != null && it.battery.name != "Tailscale" }
         AddonLogic.optionalIds(Mode.helpers(ctx), map.mapped, Pin.isSet(ctx), map.sendsKeys).forEach { id ->
             val o = AddonLogic.optional(id) ?: return@forEach
             val granted = when (id) {
                 "keyboard" -> KeySender.enabled(ctx)
-                "battery" -> listOf(ctx.packageName, Koreader.PKG).all { Net.batteryRow(ctx, it).done }
+                "battery" -> batteryApps.all { it.done }
+                "wifi_switching" -> p.helperWifi
+                "sleep_sync" -> p.helperSleepSync
                 else -> AddonSetup.optionalGranted(ctx, id)
             }
-            val fix = when (id) {
-                "battery" -> listOf("battery:Orbit", "battery:KOReader").mapNotNull { byId[it] }.firstOrNull { !it.done }
-                else -> byId[id]
+            val fix: ((EinkActivity) -> Unit)? = when (id) {
+                "battery" -> batteryApps.firstOrNull { !it.done }?.open
+                "wifi_switching", "sleep_sync" -> { a -> a.startActivity(Intent(a, SettingsActivity::class.java)) }
+                else -> byId[id]?.open
             }
-            val st = AddonLogic.optState(granted, id in p.addonAsked)
-            out += Check(o.title, granted, AddonLogic.optionalLine(o, st), action = if (granted) null else "Allow", optional = true) { a ->
+            val verb = if (id == "wifi_switching" || id == "sleep_sync") "Turn on" else "Allow"
+            out += Check(o.title, granted, if (granted) "On: ${o.on}" else "", action = if (granted) null else verb, optional = true, id = id,
+                battery = null) { a ->
                 p.addonAsked = p.addonAsked + id
-                OLog.i("setup: add-on optional $id: Allow")
-                fix?.open?.invoke(a)
+                OLog.i("setup: add-on optional $id: $verb")
+                fix?.invoke(a)
             }
         }
         return out
     }
 
+    private fun Check.asInfo() = Check(label, done, detail, pending, action, pinFree, advisory, optional, id, short, info = true, extra = extra, battery = battery, open = open)
+
     /** Dismissed tips that "Show hidden tips" would bring back. */
     fun hiddenTips(ctx: Context): Int = Prefs(ctx).hiddenTips.count { SetupTips.isTip(it) }
 
-    /** "First-run setup (done/total)": steps only. Add-on counts only its four required rows. */
-    fun progress(checks: List<Check>, addon: Boolean = false): String {
-        val rows = checks.map { SetupAttention.idOf(it.label) to it.done }
-        val steps = if (addon) rows.filter { it.first in AddonLogic.REQUIRED } else SetupTips.steps(rows)
-        return "${steps.count { it.second }}/${steps.size}"
+    /**
+     * The checklist's rows (pure) from [checks]: tips left out, the battery apps merged into one
+     * row, Key Mapper a line on the Clicker row, the frozen-app row only while something is frozen.
+     */
+    fun rows(checks: List<Check>): List<Checklist.Row> {
+        val out = mutableListOf<Checklist.Row>()
+        val battery = checks.filter { it.battery != null }
+        val keymapper = checks.firstOrNull { it.id == "keymapper" }?.label
+        checks.forEach { c ->
+            when {
+                c.advisory || c.id == "keymapper" -> Unit
+                c.id == "disabled" && c.done -> Unit
+                c.battery != null -> if (c === battery.first()) out += BatteryMerge.row(battery.map { it.battery!! })
+                c.id == "clicker" -> out += c.row(extra = keymapper?.let { "$it · two key filters fight: turn it off once Orbit's buttons work" })
+                else -> out += c.row()
+            }
+        }
+        return out
+    }
+
+    fun items(ctx: Context, checks: List<Check> = checks(ctx)): List<Checklist.Item> {
+        val p = Prefs(ctx)
+        val from = NewIn.versionOf(p.updatedFromCode)
+        val current = Version.parse(BuildConfig.VERSION_NAME)
+        return Checklist.items(rows(checks), p.setupIgnored, p.setupLastDone) { r -> NewIn.tag(r.id, r.done, from, current) }
+    }
+
+    /** The status page's card and the launcher: the same summary as the Setup page. */
+    fun summary(ctx: Context, items: List<Checklist.Item> = items(ctx)): Checklist.Summary =
+        Checklist.summary(items, firstRun = Prefs(ctx).setupWelcome, locked = Pin.locked(ctx))
+
+    /** The Check that runs an item's verb: for Battery, the first app not done. */
+    fun checkFor(i: Checklist.Item, checks: List<Check>): Check? =
+        if (i.id == "battery" && !i.row.optional) checks.firstOrNull { it.battery != null && it.id in i.row.ids }
+        else checks.firstOrNull { it.id == i.id }
+
+    /** The Details page's lines (§3.6): raw states, internals included, nothing counted. */
+    fun details(ctx: Context): List<Pair<String, String>> {
+        val p = Prefs(ctx)
+        val out = mutableListOf<Pair<String, String>>()
+        out += "Orbit plugin last answered" to if (p.patchSeenAt > 0) "${Ui.clock(ctx, p.patchSeenAt)} (${p.patchSeenVia})" else "never"
+        out += "Plugin version KOReader runs" to p.patchVersionSeen.ifEmpty { "not reported" }
+        out += "Plugin file version" to (PatchInstaller.installedVersion() ?: "unreadable")
+        out += "KOReader" to "${Installers.koreaderVersion(ctx) ?: "-"} (${Installers.koreaderState(ctx)})"
+        out += "BookOrbit plugin" to (Installers.pluginVersion() ?: "not found")
+        out += "Signed in (from the plugin)" to when (p.reportSignedIn) { "1" -> "yes"; "0" -> "no"; else -> "not reported" }
+        out += "Recommended settings" to "${p.reportRecommended.ifEmpty { "not reported" }} · ${p.reportConflicts} conflicts"
+        allChecks(ctx).mapNotNull { it.battery }.forEach { b -> out += "Battery: ${b.name}" to "${BatteryMerge.appLine(b)} (${b.row.detail})" }
+        val ts = Net.appState(ctx, Net.TAILSCALE_PKG)
+        out += "Tailscale" to listOf(
+            when { ts == AppState.MISSING -> "not installed"; ts == AppState.FROZEN -> "frozen"; Net.tailscaleVpnUp(ctx) -> "connected"; else -> "not connected" },
+            "Always-on: ${Net.alwaysOnVpnApp(ctx)?.ifEmpty { null } ?: "unknown"}",
+            when (Net.vpnLockdown(ctx)) { true -> "lockdown on"; false -> "no lockdown"; null -> "lockdown unknown" },
+        ).joinToString(" · ")
+        out += "Frozen apps" to Vendor.disabledApps(ctx).joinToString().ifEmpty { "none" }
+        val h = Mode.helpers(ctx)
+        out += "Mode, helpers" to when (p.mode) {
+            OrbitMode.ADDON -> "Add-on · " + listOfNotNull("Wi-Fi".takeIf { h.wifi }, "sleep sync".takeIf { h.sleepSync }, "screen off".takeIf { h.screenOff },
+                "clicker".takeIf { h.clicker }, "PIN".takeIf { h.pin }).joinToString().ifEmpty { "no helpers" }
+            OrbitMode.FULL -> "Full"
+            null -> "not chosen"
+        }
+        out += "Wi-Fi off/on test" to if (p.wifiTestAt > 0) "${Ui.clock(ctx, p.wifiTestAt)} ${if (p.wifiTestOk) "passed" else "failed"}: ${p.wifiTestSummary}" else "never run"
+        out += "Skipped steps" to p.setupIgnored.sorted().joinToString().ifEmpty { "none" }
+        out += "Reader" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, Android ${android.os.Build.VERSION.RELEASE}"
+        return out
     }
 
     private fun allChecks(ctx: Context): List<Check> {
@@ -594,63 +674,68 @@ object Setup {
             otherAdmins(ctx),
         )
         if (managed != null) {
-            list.add(Check(if (Net.installed(ctx, DeviceChecks.FAMILY_LINK)) "Family Link supervision" else "Managed device", false, managed, action = "Help", advisory = true) { a ->
+            list.add(Check(if (Net.installed(ctx, DeviceChecks.FAMILY_LINK)) "Family Link supervision" else "Managed device", false, managed, action = "Help", advisory = true, id = "managed") { a ->
                 Ui.note(a, managed)
             })
         }
         if (Net.appState(ctx, DeviceChecks.PLAY_STORE) == AppState.OK) {
-            list.add(Check("Play Protect scans installs", true, DeviceChecks.playProtect(), action = "Help", advisory = true) { a ->
+            list.add(Check("Play Protect scans installs", true, DeviceChecks.playProtect(), action = "Help", advisory = true, id = "play_protect") { a ->
                 Ui.note(a, DeviceChecks.playProtect())
             })
         }
 
-        // Some vendor launchers "freeze" (disable) apps behind our back (Vendor.kt).
+        // Some vendor launchers "freeze" (disable) apps behind our back (Vendor.kt). It is a
+        // fault, not a step: a row only while an app is frozen, named after the app it breaks.
         val frozen = Vendor.disabledApps(ctx)
         val disabler = Vendor.disablerLabel(ctx)
         list.add(
             Check(
-                "Not disabled by the system (KOReader, Tailscale, Orbit)",
+                frozen.joinToString().ifEmpty { "Apps" },
                 frozen.isEmpty(),
-                when {
-                    frozen.isNotEmpty() -> "${AppStates.disabledShort(disabler)}: ${frozen.joinToString()}. A frozen app can't start, sync or update until it's re-enabled · re-enable${Vendor.profile(ctx).freezeHint?.let { h -> " in ${disabler ?: "the launcher"} › $h" } ?: " in Settings › Apps"}"
-                    else -> "done"
-                },
+                if (frozen.isEmpty()) "Not frozen"
+                else "Frozen by ${disabler ?: "the system"}${Vendor.profile(ctx).freezeHint?.let { h -> ". Re-enable in ${disabler ?: "the launcher"} › $h" } ?: ""}",
+                action = "Re-enable",
+                id = "disabled",
             ) { a ->
                 a.tryStart(Vendor.reenablePage(ctx), "re-enable page")
             },
         )
         val freezeHint = Vendor.profile(ctx).freezeHint
         if (frozen.isEmpty() && freezeHint != null) {
-            val tip = "This ${disabler ?: "launcher"} can freeze apps it thinks are unused. If KOReader or Orbit stop working, the row above says so; to prevent it, set them to never freeze in $freezeHint."
-            list.add(Check("Launcher can freeze apps", true, tip, action = "Help", advisory = true) { a ->
+            val tip = "This ${disabler ?: "launcher"} can freeze apps it thinks are unused. If KOReader or Orbit stop working, Setup says so; to prevent it, set them to never freeze in $freezeHint."
+            list.add(Check("Launcher can freeze apps", true, tip, action = "Help", advisory = true, id = "freeze_tip") { a ->
                 a.tryStart(Vendor.reenablePage(ctx), "freeze settings")
             })
         }
 
         val canInstall = ctx.packageManager.canRequestPackageInstalls()
-        list.add(Check("Install updates", canInstall, if (canInstall) "done" else "allow Orbit to install apps: KOReader and its own updates") { a ->
+        list.add(Check("Install apps", canInstall, if (canInstall) "Allowed: KOReader and updates" else "Not allowed", action = "Allow", id = "install_updates") { a ->
             a.tryStart(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")), "install unknown apps")
         })
 
         // Setup installs the rest: KOReader, the BookOrbit plugin, the patch (Installers).
         val ko = Installers.koreaderState(ctx)
         val koV = Installers.koreaderVersion(ctx)
+        val koOk = ko == KoreaderRelease.State.OFFICIAL
         list.add(
             Check(
-                "KOReader app installed${if (ko == KoreaderRelease.State.OFFICIAL && koV != null) " ($koV)" else ""}",
-                ko == KoreaderRelease.State.OFFICIAL,
+                "KOReader",
+                koOk,
                 when {
-                    Installers.busy(Installers.KOREADER) -> "downloading…"
-                    ko == KoreaderRelease.State.OFFICIAL -> "official build${prefs.koreaderInstallStatus.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""} · tap to check for an update"
-                    prefs.koreaderInstallStatus.isNotEmpty() && ko == KoreaderRelease.State.MISSING -> "${prefs.koreaderInstallStatus} · tap to try again"
+                    Installers.busy(Installers.KOREADER) -> "Downloading…"
+                    koOk -> "Version ${koV ?: "?"}${prefs.koreaderInstallStatus.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""} · tap to check for an update"
+                    prefs.koreaderInstallStatus.isNotEmpty() && ko == KoreaderRelease.State.MISSING -> "Not installed: ${prefs.koreaderInstallStatus}"
+                    ko == KoreaderRelease.State.MISSING -> "Not installed"
                     else -> KoreaderRelease.explain(ko)
                 },
-                action = if (ko == KoreaderRelease.State.OFFICIAL) "Check" else "Install",
+                action = if (koOk) null else if (ko == KoreaderRelease.State.OTHER_SIGNER) "Open" else "Install",
+                id = "koreader",
+                short = "KOReader${koV?.let { " $it" } ?: ""}",
             ) { a ->
                 if (ko == KoreaderRelease.State.OTHER_SIGNER) {
                     a.tryStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${Koreader.PKG}")), "KOReader app info")
                 } else if (!a.packageManager.canRequestPackageInstalls()) {
-                    prefs.koreaderInstallStatus = "allow Orbit to install apps first (Install updates)"
+                    prefs.koreaderInstallStatus = "allow Orbit to install apps first (Install apps)"
                     a.tryStart(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${a.packageName}")), "install unknown apps")
                 } else {
                     Installers.koreader(a) { a.refresh() }
@@ -663,16 +748,18 @@ object Setup {
         val plNeeds = PluginRelease.needsInstall(plV)
         list.add(
             Check(
-                "BookOrbit plugin installed${plV?.let { " (v$it)" } ?: ""}",
+                "BookOrbit plugin",
                 !plNeeds,
                 when {
-                    Installers.busy(Installers.PLUGIN) -> "downloading…"
-                    !plNeeds -> "it updates itself from your BookOrbit server${prefs.pluginInstallStatus.takeIf { it.startsWith("installed") }?.let { " · $it" } ?: ""}"
-                    prefs.pluginInstallStatus.isNotEmpty() -> "${prefs.pluginInstallStatus} · tap to try again"
-                    plV == null -> "tap to install it from BookOrbit's GitHub release into koreader/plugins/"
-                    else -> "older than the patch needs (v${PluginRelease.MIN_VERSION}) · tap to update"
+                    Installers.busy(Installers.PLUGIN) -> "Downloading…"
+                    !plNeeds -> "Version $plV · it updates itself from your BookOrbit server"
+                    prefs.pluginInstallStatus.isNotEmpty() -> "Not installed: ${prefs.pluginInstallStatus}"
+                    plV == null -> "Not installed"
+                    else -> "Older than the Orbit plugin needs (v${PluginRelease.MIN_VERSION})"
                 },
-                action = if (plNeeds) "Install" else null,
+                action = if (!plNeeds) null else if (plV == null) "Install" else "Update",
+                id = "plugin",
+                short = "BookOrbit plugin",
             ) { a ->
                 if (plNeeds && !Installers.busy(Installers.PLUGIN)) Installers.pluginFrom(a) { a.refresh() }
                 a.refresh()
@@ -684,34 +771,40 @@ object Setup {
         val runningV = prefs.patchVersionSeen.takeIf { it.isNotEmpty() }
         val patchState = PatchRow.state(fileV, runningV, BuildConfig.VERSION_NAME)
         val patchV = fileV ?: runningV
+        // D8: never answered yet: "Checking…" until KOReader has run it once.
+        val neverSeen = patchState == PatchRowState.CURRENT && prefs.patchSeenAt <= 0L
         list.add(
             Check(
-                "Orbit plugin installed${patchV?.let { " (v$it)" } ?: ""}",
+                "Orbit plugin",
                 patchState == PatchRowState.CURRENT || patchState == PatchRowState.RESTART,
                 when {
-                    PatchInstaller.busy -> "installing…"
-                    patchState == PatchRowState.RESTART && PatchRow.canRestart(runningV) ->
-                        "KOReader restarts to load it when the screen next goes off; it still runs v$runningV · tap to restart now"
-                    patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) "Restart KOReader to finish (KOReader still runs v$runningV)"
-                        else "Restart KOReader to finish: close KOReader from recent apps and reopen it (it still runs v$runningV)"
-                    patchState == PatchRowState.MISSING && prefs.patchInstallStatus.isNotEmpty() -> "${prefs.patchInstallStatus} · tap to try again"
-                    patchState == PatchRowState.MISSING -> "tap to install it into koreader/plugins/"
-                    patchState == PatchRowState.OUTDATED -> "older than this app's release (v${BuildConfig.VERSION_NAME}) · tap to update"
-                    else -> "up to date${prefs.patchInstallStatus.takeIf { it.startsWith("installed") }?.let { " · $it" } ?: ""}"
-                },
-                pending = patchState == PatchRowState.RESTART,
-                action = when {
                     PatchInstaller.busy -> "Installing…"
-                    patchState != PatchRowState.RESTART -> "Fix"
-                    PatchRow.canRestart(runningV) -> "Restart KOReader"
+                    patchState == PatchRowState.RESTART && PatchRow.canRestart(runningV) ->
+                        "Installed; KOReader still runs $runningV. It restarts when the screen next goes off."
+                    patchState == PatchRowState.RESTART -> "Installed; KOReader still runs $runningV. Close KOReader from recent apps and open it again."
+                    patchState == PatchRowState.MISSING && prefs.patchInstallStatus.isNotEmpty() -> "Not installed: ${prefs.patchInstallStatus}"
+                    patchState == PatchRowState.MISSING -> "Not installed"
+                    patchState == PatchRowState.OUTDATED -> "Older than this app (${BuildConfig.VERSION_NAME})"
+                    neverSeen -> "Checking… open KOReader once"
+                    else -> "Version $patchV"
+                },
+                pending = patchState == PatchRowState.RESTART || neverSeen,
+                action = when {
+                    PatchInstaller.busy -> null
+                    patchState == PatchRowState.MISSING -> "Install"
+                    patchState == PatchRowState.OUTDATED -> "Update"
+                    patchState == PatchRowState.RESTART && PatchRow.canRestart(runningV) -> "Restart KOReader"
                     else -> null
                 },
                 // Update follow-through (this release's patch, a restart): changes no setting, no PIN.
                 pinFree = true,
+                id = "patch",
+                short = "Orbit plugin${patchV?.let { " $it" } ?: ""}",
             ) { a ->
                 when {
                     PatchInstaller.busy -> Unit
                     patchState == PatchRowState.RESTART -> if (PatchRow.canRestart(runningV)) Koreader.restart(a, "setup: new patch installed")
+                    neverSeen -> Koreader.start(a, "setup: patch check", null)
                     else -> PatchInstaller.installFrom(a) { a.refresh() }
                 }
                 a.refresh()
@@ -721,68 +814,82 @@ object Setup {
         // From the Orbit plugin's REPORT (docs/design/addon-mode.md §4.2, §7.3).
         // Pending ("Checking…") while the running plugin is older than REPORT or none came yet.
         val signed = PluginReport.signedInRow(prefs.reportSignedIn, runningV)
-        list.add(Check("Signed in to BookOrbit", signed.done && !signed.pending, signed.detail, pending = signed.pending, action = "Open") { a ->
+        list.add(Check("BookOrbit account", signed.done && !signed.pending,
+            when { signed.pending -> "Checking… open KOReader once"; signed.done -> "Signed in"; else -> "Not signed in" },
+            pending = signed.pending, action = if (signed.pending) null else "Sign in", id = "signed_in", short = "Signed in") { a ->
             Koreader.start(a, "setup: sign in to BookOrbit", HomeCommands.SIGNIN)
         })
         val rec = PluginReport.recommendedRow(prefs.reportRecommended, prefs.reportConflicts, runningV)
-        list.add(Check("Recommended settings", rec.done && !rec.pending, rec.detail, pending = rec.pending, action = "Review", pinFree = false) { a ->
+        list.add(Check("Recommended settings", rec.done && !rec.pending,
+            when {
+                rec.pending && prefs.reportRecommended == "none" -> "Applied at KOReader's next start"
+                rec.pending -> "Checking… open KOReader once"
+                prefs.reportRecommended == "reviewed" -> "Reviewed"
+                rec.done -> "Applied"
+                else -> "${prefs.reportConflicts} of yours differ"
+            },
+            pending = rec.pending, action = if (rec.pending) null else "Review", pinFree = false, id = "recommended",
+            short = if (prefs.reportRecommended == "reviewed") "recommended settings reviewed" else "recommended settings on") { a ->
             Koreader.start(a, "setup: recommended settings", HomeCommands.RECOMMENDED)
         })
 
         val home = ctx.packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
         )?.activityInfo?.packageName
-        list.add(Check("Set Orbit as Home app", home == ctx.packageName, if (home == ctx.packageName) "done" else "now: ${home ?: "ask every time"}") { a ->
+        val isHome = home == ctx.packageName
+        list.add(Check("Home app", isHome, if (isHome) "Orbit is the Home app" else "Now: ${home?.let { HomeTarget.label(ctx, it) } ?: "ask every time"}",
+            action = "Set", id = "home") { a ->
             a.tryStart(Intent(Settings.ACTION_HOME_SETTINGS), "Home app settings") ||
                 a.tryStart(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS), "default apps settings")
         })
 
         val notif = Net.notificationsEnabled(ctx)
-        list.add(Check("Allow notifications", notif, if (notif) "done" else "off") { a ->
+        list.add(Check("Notifications", notif, if (notif) "Allowed" else "Off", action = "Allow", id = "notifications") { a ->
             a.tryStart(
                 Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName),
                 "notification settings",
             )
         })
 
-
-        listOf(ctx.packageName to "Orbit", Net.TAILSCALE_PKG to "Tailscale", Koreader.PKG to "KOReader").forEach { (pkg, name) ->
-            val installed = Net.installed(ctx, pkg)
+        // Battery: one row per installed app, merged on the page (BatteryMerge); the ids stay per app.
+        listOf(ctx.packageName to "Orbit", Koreader.PKG to "KOReader", Net.TAILSCALE_PKG to "Tailscale").forEach { (pkg, name) ->
+            if (pkg != ctx.packageName && !Net.installed(ctx, pkg)) return@forEach
             val row = Net.batteryRow(ctx, pkg)
-            list.add(Check("Battery: Unrestricted ($name)", row.done, row.detail) { a ->
-                if (installed) {
-                    // Android's "Allow" prompt works even where Settings shows "not available" (BatteryRow).
-                    (row.open == BatteryRow.Open.PROMPT &&
-                        a.tryStart(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$pkg")), "battery prompt for $pkg")) ||
-                        a.tryStart(Intent(BATTERY_DETAIL, Uri.parse("package:$pkg")), "battery page for $pkg") ||
-                        a.tryStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")), "app info for $pkg")
-                }
+            val app = BatteryMerge.App(name, row, locked = pkg == ctx.packageName && Net.adminActive(ctx))
+            list.add(Check("Battery: $name", row.done, BatteryMerge.appLine(app), action = BatteryMerge.appVerb(app), id = "battery:$name", battery = app) { a ->
+                // Android's "Allow" prompt works even where Settings shows "not available" (BatteryRow).
+                (row.open == BatteryRow.Open.PROMPT &&
+                    a.tryStart(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$pkg")), "battery prompt for $pkg")) ||
+                    a.tryStart(Intent(BATTERY_DETAIL, Uri.parse("package:$pkg")), "battery page for $pkg") ||
+                    a.tryStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")), "app info for $pkg")
             })
         }
 
         val tsState = Net.appState(ctx, Net.TAILSCALE_PKG)
         // Done when a VPN is up and it is Tailscale's (owner UID, where Android lets us read it).
-        // Always-on is advice only: some firmwares hide "always_on_vpn_app" from apps (logged).
+        // Always-on is advice only (Details): some firmwares hide "always_on_vpn_app" from apps.
         val tsUp = Net.tailscaleVpnUp(ctx)
-        val alwaysOnApp = Net.alwaysOnVpnApp(ctx)
-        val alwaysOnNote = when (alwaysOnApp) {
-            Net.TAILSCALE_PKG -> "Always-on on"
-            null, "" -> "tip: VPN settings › Tailscale ⚙ › Always-on"
-            else -> "tip: Always-on is set to another app"
-        }
         // Tailscale routes only the tailnet: lockdown blocks everything else (updates included).
         val lockdown = Net.vpnLockdown(ctx) == true
         list.add(
             Check(
-                "Tailscale signed in and connected",
+                "Tailscale",
                 tsUp && !lockdown,
                 when {
-                    tsState == AppState.MISSING -> "not installed"
+                    tsState == AppState.MISSING -> "Not installed: get it from the Play Store"
                     tsState == AppState.FROZEN -> Vendor.disabledMessage(ctx, "Tailscale")
-                    !tsUp -> "not connected: open Tailscale and sign in"
+                    !tsUp -> "Not connected: open Tailscale and sign in"
                     lockdown -> NetErrors.LOCKDOWN_WARNING
-                    else -> "connected · $alwaysOnNote"
+                    else -> "Connected"
                 },
+                action = when {
+                    tsState == AppState.MISSING -> null
+                    tsState == AppState.FROZEN -> "Re-enable"
+                    lockdown -> "Fix"
+                    else -> "Connect"
+                },
+                id = "tailscale",
+                short = "Tailscale connected",
             ) { a ->
                 when {
                     tsState == AppState.FROZEN -> a.tryStart(Vendor.reenablePage(ctx, Net.TAILSCALE_PKG), "re-enable page")
@@ -793,7 +900,7 @@ object Setup {
         )
 
         val admin = Net.adminActive(ctx)
-        list.add(Check("Allow \"lock screen\" (device admin)", admin, if (admin) "done" else "for Sync and sleep") { a ->
+        list.add(Check("Screen lock", admin, if (admin) "Allowed: Sync and sleep turns the screen off" else "Not allowed", action = "Allow", id = "admin") { a ->
             a.tryStart(
                 Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
                     .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminReceiver.component(ctx))
@@ -805,29 +912,31 @@ object Setup {
             )
         })
 
-        // One-tap patch install (PatchInstaller): from this app's release, SHA-256 checked.
-        // The file when readable (storage permission), else what the running patch reports.
         // Clicker buttons: shown only once a clicker is mapped (android/docs/BTKEYS-DESIGN.md "Staying on").
         // With a Settings PIN set the app guard needs the same service, so the row shows then too.
         val pinSet = Pin.isSet(ctx)
         val clicker = ClickerRow.state(ClickerStore.map(ctx).mapped || pinSet, ClickerStore.enabled(ctx), ClickerService.connected)
         if (clicker != ClickerRowState.HIDDEN) {
             list.add(Check(
-                ClickerRow.label(pinSet),
+                if (pinSet) "Clicker buttons and app guard" else "Clicker buttons",
                 clicker == ClickerRowState.DONE,
                 when (clicker) {
-                    ClickerRowState.DONE -> "on · works in every app"
-                    ClickerRowState.OFF -> "Off: was it frozen or turned off? Clicker buttons work only in KOReader until it's on. Orbit uses it only to see button presses, which app is in front, and to send page taps, Home and Back. It can't read what's on screen."
-                    else -> "On in Android but not running yet: turn it off and on in Settings › Accessibility."
+                    ClickerRowState.DONE -> "On in every app"
+                    ClickerRowState.OFF -> "Off. Orbit uses it only to see button presses and which app is in front, and to send page taps, Home and Back. It can't read what's on screen."
+                    else -> "On in Android but not running yet: turn it off and on in Settings › Accessibility"
                 },
+                action = "Turn on",
+                id = "clicker",
             ) { a -> a.tryStart(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), "accessibility settings") })
             val others = ClickerRow.others(ClickerStore.accessibilitySetting(ctx), ctx.packageName)
             others.firstOrNull()?.let { other ->
                 val km = other == "io.github.sds100.keymapper"
                 list.add(Check(
-                    if (km) "Key Mapper also remaps keys" else "Another key mapper is on (${HomeTarget.label(ctx, other)})",
+                    if (km) "Key Mapper is also on" else "${HomeTarget.label(ctx, other)} is also on",
                     false,
                     "Turn it off once Orbit's buttons work; you can then uninstall it. Two key filters both see every key and can fight.",
+                    action = "Turn off",
+                    id = "keymapper",
                 ) { a -> a.tryStart(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), "accessibility settings") })
             }
         }
@@ -836,53 +945,52 @@ object Setup {
         if (ClickerStore.map(ctx).sendsKeys) {
             val on = KeySender.enabled(ctx)
             list.add(Check(
-                "Orbit keyboard enabled",
+                "Orbit keyboard",
                 on,
-                if (on) "on · switches in only for a key press, then your keyboard comes back"
-                else "Turn on \"Orbit clicker keys\" for Send Volume up/down and Send key. It has no keys, never stays your keyboard and never reads what you type; Android's warning about collecting text is the same for every keyboard.",
+                if (on) "On: switches in only for a key press, then your keyboard comes back"
+                else "Off. Turn on \"Orbit clicker keys\". It has no keys, never stays your keyboard and never reads what you type; Android's warning is the same for every keyboard.",
+                action = "Turn on",
+                id = "keyboard",
             ) { a -> a.tryStart(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS), "keyboard settings") })
         }
-
-        val seen = prefs.patchSeenAt
-        list.add(
-            Check(
-                "Orbit plugin answered",
-                seen > 0,
-                when {
-                    seen > 0 -> "last ${Ui.clock(ctx, seen)} (${prefs.patchSeenVia})"
-                    Koreader.problem(ctx) != null -> Koreader.problem(ctx)!!
-                    else -> "open KOReader with the patch, or run its Test sync path"
-                },
-            ) { a ->
-                if (Koreader.state(ctx) == AppState.FROZEN) {
-                    a.tryStart(Vendor.reenablePage(ctx, Koreader.PKG), "re-enable page")
-                } else if (!Koreader.start(a, "setup: patch check", null)) {
-                    OLog.i("setup: KOReader not startable")
-                }
-            },
-        )
 
         list.add(
             Check(
                 "Wi-Fi off/on test",
                 prefs.wifiTestOk,
-                if (prefs.wifiTestAt > 0) "${Ui.clock(ctx, prefs.wifiTestAt)}: ${prefs.wifiTestSummary}" else "times the reconnect; checks for a prompt",
+                when {
+                    prefs.wifiTestAt <= 0 -> "Not run yet"
+                    prefs.wifiTestOk -> "Passed ${Ui.clock(ctx, prefs.wifiTestAt)}: ${prefs.wifiTestSummary}"
+                    else -> "Failed ${Ui.clock(ctx, prefs.wifiTestAt)}: ${prefs.wifiTestSummary}"
+                },
+                action = "Run",
+                id = "wifi_test",
+                short = if (prefs.wifiTestOk) "Wi-Fi test passed ${Ui.clock(ctx, prefs.wifiTestAt)}" else "Wi-Fi test",
+                info = true,
             ) { a -> (a as? SetupActivity)?.runWifiTest() },
         )
         return list
     }
 }
 
-/** Mockup 5. Rows re-check on resume. */
-class SetupActivity : EinkActivity() {
+/** The Setup page (docs/design/companion-checklist.md). Rows re-check on resume. */
+class SetupActivity : EinkActivity(), ChecklistUi.Actions {
     private var test: NetTest? = null
 
-    /** "Fix next": walking the pending rows in order, each once (SetupWalk). */
+    /** "Fix next": walking the open rows in order, each once (SetupWalk). */
     private var walking = false
-    private val tried = HashSet<String>()
+    private val tried = LinkedHashSet<String>()
     private var lastStep = 0L
+    private var walkTotal = 0
+    private var walkLabel = ""
 
     private var choiceShown = false
+
+    /** The one open group (D2): a Group's name, "tips", or null. */
+    private var openGroup: String? = null
+
+    private var checks: List<Check> = emptyList()
+    private var model: Checklist.Page? = null
 
     override fun onResume() {
         super.onResume()
@@ -897,35 +1005,53 @@ class SetupActivity : EinkActivity() {
 
     private fun installing() = PatchInstaller.busy || Installers.busy(Installers.PLUGIN) || Installers.busy(Installers.KOREADER)
 
+    /** The ids Fix next walks, in Needs-you order: counted rows only, skipped ones left out. */
+    private fun walkable(): List<Pair<String, Boolean>> {
+        val all = Setup.checks(this).filter { !it.optional && !it.advisory && !it.info }
+        val addon = Mode.isAddon(this)
+        val ignored = Prefs(this).setupIgnored
+        val order = { id: String -> Checklist.NEED_ORDER.indexOf(id.substringBefore(':')).let { if (it < 0) Checklist.NEED_ORDER.size else it } }
+        return all.filter { (!addon || it.id in AddonLogic.REQUIRED) && it.id !in ignored && !it.pending }
+            .sortedBy { order(it.id) }
+            .map { it.id to it.done }
+    }
+
     private fun startWalk() {
         walking = true
         tried.clear()
         lastStep = 0
-        OLog.i("setup: Fix next started")
+        walkTotal = walkable().count { !it.second && it.first !in SetupAttention.INFO_ONLY }
+        Prefs(this).setupWelcome = false
+        OLog.i("setup: Fix next started ($walkTotal steps)")
         continueWalk("start")
     }
 
-    /** The next pending row, once the last step is back (a page closed, an install finished). */
+    private fun stopWalk() {
+        walking = false
+        OLog.i("setup: Fix next stopped")
+        render()
+    }
+
+    /** The next open row, once the last step is back (a page closed, an install finished). */
     private fun continueWalk(why: String) {
         if (!walking || isFinishing || installing()) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastStep < 1_000) return
-        val checks = Setup.checks(this).filter { !it.optional }
-        val addon = Mode.isAddon(this)
-        // Pending rows (waiting for KOReader to report) are never a step.
-        val pending = checks.filter { it.pending }.map { SetupAttention.idOf(it.label) }.toSet()
-        val id = SetupWalk.next(checks.map { SetupAttention.idOf(it.label) to it.done }
-            .filter { !addon || it.first in AddonLogic.REQUIRED }, tried, pending)
-        val c = checks.firstOrNull { SetupAttention.idOf(it.label) == id }
+        val rows = walkable()
+        val id = SetupWalk.next(rows, tried)
+        val c = Setup.checks(this).firstOrNull { it.id == id }
         if (id == null || c == null) {
             walking = false
-            OLog.i("setup: Fix next done ($why); ${checks.count { !it.done }} row(s) still open")
+            OLog.i("setup: Fix next done ($why); ${rows.count { !it.second }} row(s) still open")
             render()
             return
         }
         tried.add(id)
+        walkLabel = c.label
+        walkTotal = maxOf(walkTotal, tried.size)
         lastStep = now
         OLog.i("setup: Fix next -> $id ($why)")
+        render()
         c.run(this)
     }
 
@@ -965,86 +1091,92 @@ class SetupActivity : EinkActivity() {
     }
 
     private fun render() {
+        val p = Prefs(this)
+        checks = Setup.checks(this)
+        val items = Setup.items(this, checks).map { i ->
+            // The test row says it is running; no spinner, one redraw when it ends.
+            if (i.id == "wifi_test" && test?.running == true) i.copy(row = i.row.copy(stateLine = "Running…", verb = null)) else i
+        }
+        val locked = Pin.locked(this)
+        if (Checklist.count(items) == 0 && p.setupWelcome) p.setupWelcome = false
+        val walk = if (walking && tried.isNotEmpty()) Triple(tried.size, walkTotal, walkLabel) else null
+        val model = Checklist.page(items, firstRun = p.setupWelcome && !walking, walk = walk, locked = locked)
+        this.model = model
         val root = page(scroll = true)
-        val all = Setup.checks(this)
-        val addon = Mode.isAddon(this)
-        val checks = all.filter { !it.optional }
-        val title = when (Prefs(this).mode) {
-            OrbitMode.ADDON -> "Add-on setup"
-            OrbitMode.FULL -> "Full setup"
-            null -> "First-run setup"
+        root.addView(Ui.header(this, "Setup", "‹ Back") { finish() })
+        val tips = checks.filter { it.advisory }
+        val modeName = when (p.mode) { OrbitMode.ADDON -> "Add-on mode"; OrbitMode.FULL -> "Full mode"; null -> "No mode chosen yet" }
+        val frame = ChecklistUi.Frame(
+            tips = tips.filter { it.id != "managed" }.map { ChecklistUi.Tip(it.id, it.label, it.detail) },
+            managed = tips.firstOrNull { it.id == "managed" }?.detail,
+            hiddenTips = Setup.hiddenTips(this),
+            detailsLine = if (p.patchSeenAt > 0) "Last heard from KOReader ${Ui.clock(this, p.patchSeenAt)}" else "KOReader hasn't reported yet",
+            modeLine = "$modeName · change in Settings",
+            open = openGroup,
+        )
+        ChecklistUi.render(this, root, model, frame, this)
+    }
+
+    // ChecklistUi.Actions
+
+    override fun verb(i: Checklist.Item) {
+        if (i.skipped || (i.state == Checklist.State.OFF && !i.row.optional && i.id != "wifi_test")) {
+            // Allow on a skipped step: ask about it again, then fix it.
+            val p = Prefs(this)
+            p.setupIgnored = p.setupIgnored - i.row.ids.toSet()
+            OLog.i("setup: asking about ${i.row.ids} again")
         }
-        root.addView(Ui.header(this, "$title (${Setup.progress(all, addon)})", "‹ Back") { finish() })
-        Prefs(this).mode?.let { m ->
-            root.addView(Ui.row(this, "Mode: ${if (m == OrbitMode.ADDON) "Add-on" else "Full"}", "Settings › Mode to change", Ui.value(this, "›"), onClick = {
-                startActivity(Intent(this, ModeActivity::class.java))
-            }))
+        if (i.id == "battery" && i.row.verb == "Help") {
+            startActivity(Intent(this, SetupBatteryActivity::class.java))
+            return
         }
-        val open = checks.count {
-            val id = SetupAttention.idOf(it.label)
-            !it.done && !it.pending && id !in SetupAttention.INFO_ONLY && (!addon || id in AddonLogic.REQUIRED)
+        val c = Setup.checkFor(i, checks) ?: return
+        c.run(this)
+        render()
+    }
+
+    override fun tap(i: Checklist.Item) {
+        if (i.id == "battery" && !i.row.optional) {
+            startActivity(Intent(this, SetupBatteryActivity::class.java))
+            return
         }
-        if (open > 0) {
-            root.addView(
-                Ui.button(this, if (walking) "Fixing… (tap to stop)" else "Fix next ($open to go)", solid = !walking) {
-                    if (walking) {
-                        walking = false
-                        render()
-                    } else {
-                        startWalk()
-                    }
-                },
-            )
-            root.addView(Ui.text(this, "Goes through each step in order and comes back here after each one.", 15f, color = Ui.MID))
+        if (i.row.optional && i.row.done) return
+        if (i.id == "wifi_test" && test?.running == true) return
+        Setup.checkFor(i, checks)?.run(this)
+        render()
+    }
+
+    override fun summaryButton() {
+        when (val s = model?.summary) {
+            is Checklist.Summary.Walking -> stopWalk()
+            is Checklist.Summary.NeedsGrownUp -> Pin.run(this) { render() }
+            is Checklist.Summary.NeedsYou, is Checklist.Summary.FirstRun -> startWalk()
+            else -> OLog.i("setup: summary tapped ($s)")
         }
-        checks.forEach { c ->
-            val isTest = c.label == "Wi-Fi off/on test"
-            if (c.advisory) {
-                val id = SetupAttention.idOf(c.label)
-                root.addView(
-                    Ui.row(
-                        this, c.label, c.detail,
-                        Ui.button(this, "Got it", heightDp = 56, sp = 18f) {
-                            val p = Prefs(this)
-                            p.hiddenTips = SetupTips.hide(p.hiddenTips, id)
-                            OLog.i("setup: tip $id hidden")
-                            render()
-                        },
-                        onClick = { c.run(this) },
-                    ),
-                )
-                return@forEach
-            }
-            val right: TextView = if (isTest) {
-                Ui.button(this, if (test?.running == true) "Running…" else "Run", heightDp = 56, sp = 18f) { c.run(this) }
-            } else {
-                Ui.value(this, if (c.done) "done" else "open ›", bold = !c.done)
-            }
-            root.addView(
-                Ui.row(
-                    this, c.label, if (c.done && c.detail == "done") null else c.detail, right,
-                    onClick = { c.run(this) },
-                    left = Ui.check(this, c.done),
-                ),
-            )
-        }
-        val optional = all.filter { it.optional }
-        if (optional.isNotEmpty()) {
-            root.addView(Ui.gap(this, 12))
-            root.addView(Ui.text(this, "Optional: what you get with each", 20f, bold = true))
-            optional.forEach { c ->
-                val right: TextView = if (c.done) Ui.value(this, "On") else Ui.button(this, "Allow", heightDp = 56, sp = 18f) { c.run(this) }
-                root.addView(Ui.row(this, c.label, c.detail, right, onClick = { if (!c.done) c.run(this) }))
-            }
-        }
-        val hidden = Setup.hiddenTips(this)
-        if (hidden > 0) {
-            root.addView(Ui.row(this, "Show hidden tips ($hidden)", onClick = {
-                Prefs(this).hiddenTips = emptySet()
-                OLog.i("setup: hidden tips shown again")
-                render()
-            }))
-        }
+    }
+
+    override fun group(key: String) {
+        openGroup = Checklist.toggle(openGroup, key)
+        render()
+    }
+
+    override fun gotIt(tipId: String) {
+        val p = Prefs(this)
+        p.hiddenTips = SetupTips.hide(p.hiddenTips, tipId)
+        OLog.i("setup: tip $tipId hidden")
+        render()
+    }
+
+    override fun showHiddenTips() {
+        Prefs(this).hiddenTips = emptySet()
+        OLog.i("setup: hidden tips shown again")
+        render()
+    }
+
+    override fun details() = SetupDetailsActivity.open(this)
+
+    override fun mode() {
+        startActivity(Intent(this, ModeActivity::class.java))
     }
 }
 
