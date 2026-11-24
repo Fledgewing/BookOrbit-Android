@@ -32,6 +32,26 @@ catalog routes under `/koreader/plugin/catalog`
 | `PUT /koreader/plugin/catalog/books/:id/read-status`, `/rating` | Status and rating set on the device |
 | `GET /koreader/plugin/catalog/files/:fileId/download` | Book downloads |
 
+## App attestation
+
+Routes with `@RequireAppAttest()` accept only requests signed by BookOrbit's own iOS and Android
+apps ([`app-attest.guard.ts:26`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/app-attest/app-attest.guard.ts#L26),
+[`:74`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/modules/app-attest/app-attest.guard.ts#L74)). Orbify can't sign, so such a route is
+closed to it. `unsignedOutsideProduction` lets unsigned requests through only on non-production
+servers, so it is closed too. The guard is not global
+([`global-guards.ts:11`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/common/guards/global-guards.ts#L11)). At v3.9.0 it covers 51 routes
+(achievements, book journal, dashboard widgets, notebook, the `mobile/*` routes, smart-scope
+books, uploads, user preferences and statistics, TTS, watch downloads), none under
+`koreader/*` or `opds/*`.
+
+`tools/attest-check` enforces this: it reads the routes Orbify calls from the code (the Orbit
+plugin's Lua, the companion's Kotlin, and the stock plugin it hooks; `check.mjs --list` prints
+them) and fails when the pinned server puts the guard on one of them, at controller or handler
+level, or installs it globally (`GLOBAL_GUARDS`, `APP_GUARD`). It also fails when a route Orbify
+calls is gone from the server. `tools/upstreams pin bookorbit` runs it, and so does
+`plugin-compat.yml` on every pull request. Mark a string that only looks like a route with an
+`orbify:not-a-route` comment on its line.
+
 ## Progress finishes a book only at the library's threshold
 
 A progress push sets the status from the percentage: `read` once it reaches the library's

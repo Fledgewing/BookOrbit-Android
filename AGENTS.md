@@ -21,6 +21,7 @@ every platform whose hardware allows it.
 | `tools/install-usb.sh` | One-shot Android install over USB | MIT |
 | `tools/sideload-android.sh`, `tools/sideload-xteink.sh` | Put a test build on a test device over USB ("Test builds" below) | MIT |
 | `tools/upstreams` | Clones pinned upstream source into `upstream/` (gitignored) | MIT |
+| `tools/attest-check/` | Fails when the pinned BookOrbit server requires app attestation on a route Orbify calls | MIT |
 
 ## Platforms
 
@@ -121,6 +122,10 @@ ask before changing it (`--yes` skips the question). Agents never run them again
   then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the
   CrossInk pinned as `crossink-v2.0` in `tools/upstreams.lock`, daily runs build upstream's newest
   2.x tag, rc included).
+- BookOrbit app attestation: `tools/upstreams check` (CI: the app-attest job in
+  `.github/workflows/plugin-compat.yml`): fails when the pinned server requires app attestation on
+  a route Orbify calls (`docs/server-contract.md` "App attestation"). Tests:
+  `node --test tools/attest-check/test/check.test.mjs` after `npm ci --prefix tools/attest-check`.
 - BookOrbit plugin hooks: `luajit android/koreader/test/plugin_compat.lua <plugin dir>`
   (weekly in `.github/workflows/plugin-compat.yml`).
 - KOReader hooks: `luajit android/koreader/test/koreader_compat.lua <koreader> [<koreader-base>]`

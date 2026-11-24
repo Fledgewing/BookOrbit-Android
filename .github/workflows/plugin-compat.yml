@@ -1,6 +1,9 @@
 # Checks that every BookOrbit plugin internal the KOReader patch hooks still exists in the
 # latest plugin source (bookorbit/bookorbit, koreader-plugin/bookorbit.koplugin).
 # The weekly run opens an issue here when something is gone.
+# The app-attest job checks the pinned BookOrbit server (tools/upstreams.lock): it fails when a
+# route Orbify calls requires app attestation, which only BookOrbit's own apps can pass
+# (docs/server-contract.md "App attestation"). A bookorbit re-pin goes red here.
 name: Plugin compatibility
 
 on:
@@ -16,6 +19,27 @@ permissions:
   issues: write
 
 jobs:
+  app-attest:
+    name: app attestation on Orbify's routes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch the pinned BookOrbit source
+        run: tools/upstreams sync bookorbit </dev/null
+
+      - name: Check tests
+        run: |
+          set -euo pipefail
+          npm ci --prefix tools/attest-check --no-audit --no-fund </dev/null
+          node --test tools/attest-check/test/check.test.mjs </dev/null
+
+      - name: No route Orbify calls requires app attestation
+        run: node tools/attest-check/check.mjs --list </dev/null
+
   plugin-compat:
     runs-on: ubuntu-latest
     steps:
