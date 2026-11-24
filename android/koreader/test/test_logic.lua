@@ -1315,19 +1315,9 @@ test("caps: diff names what was lost and gained", function()
     eq(table.concat(lost, ","), "home,wifi"); eq(table.concat(gained, ","), "pin")
 end)
 
-test("copies: changed copies are found by the server's flag or a saved detail's hash", function()
+test("copies: the replacement file, the decision, the sidecar folder, the queue (the lookup is CopiesLogic's)", function()
     local P = M.CopiesPlan
-    local books = {
-        aaa = { file = "/b/a.epub", bookId = 1, fileId = 10, positionIncompatible = true },
-        bbb = { file = "/b/b.epub", bookId = 2, fileId = 20 },
-        ccc = { file = "/b/c.epub", bookId = 3, fileId = 30 },
-        ddd = { bookId = 4, fileId = 40, positionIncompatible = true }, -- no copy on this reader
-    }
-    local details = { ["2"] = { files = { { id = 20, fileHash = "new" } } }, ["3"] = { files = { { id = 30, fileHash = "ccc" } } } }
-    local c = P.candidates(books, details)
-    eq(#c, 2, "a (flag) and b (hash); c is current; d has no copy")
-    eq(c[1].path .. ":" .. c[1].why, "/b/a.epub:incompatible")
-    eq(c[2].path .. ":" .. c[2].why .. ":" .. c[2].md5, "/b/b.epub:hash:bbb")
+    local c = { { path = "/b/a.epub" }, { path = "/b/b.epub" } }
     local files = { { id = 9, role = "alternate" }, { id = 10, fileHash = "x" }, { id = 11, role = "primary" } }
     eq(P.pick(files, 10).id, 10, "the same library file")
     eq(P.pick(files, 99).id, 11, "else the primary")

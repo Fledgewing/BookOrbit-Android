@@ -518,11 +518,74 @@ function F.storage(extras)
     end)
 end
 
+---------------------------------------------------------------- copies (CacheWorker.copies)
+
+-- Seam: whether a copy's file is on the reader.
+function F.exists(path) local f = io.open(path, "rb"); if f then f:close() end return f ~= nil end
+
+function F.copiesNow(extras)
+    F.copies_asks = (F.copies_asks or 0) + 1
+    local ask = load(dir() .. "/copies/ask.lua")
+    local ev = { kind = "copies", why = extras.reason }
+    if not ask then ev.err = "no ask" else
+        local want, details = {}, {}
+        for _, b in ipairs(ask.books or {}) do want[tostring(b.book_id)] = true end
+        for id, d in pairs(ask.eob or {}) do details[tostring(id)] = { files = d.files, at = d.saved_at or 0 } end
+        local idx = load(dir() .. "/index.lua") or { entries = {} }
+        for key, meta in pairs(idx.entries or {}) do
+            local path = tostring(meta.path or "")
+            local id = path:match("/catalog/books/(%d+)$") or path:match("/catalog/books/(%d+)%?")
+            if id and want[id] and (not details[id] or (meta.validated_at or 0) >= details[id].at) then
+                local e = load(dir() .. "/" .. E.OC.hash(key) .. ".lua")
+                if e and e.key == key and type(e.body) == "table" and type(e.body.files) == "table" then details[id] = { files = e.body.files, at = meta.validated_at or 0 } end
+            end
+        end
+        if ask.owner and ask.server and ask.detail_template then
+            for id in pairs(want) do
+                local k = C().key({ account = ask.owner, server = ask.server, method = "GET", path = fill(ask.detail_template, ask.sentinel, id) })
+                local e = load(mdir() .. "/" .. E.OC.hash(k) .. ".lua")
+                if e and e.key == k and type(e.body) == "table" and type(e.body.files) == "table"
+                    and (not details[id] or (e.validated_at or 0) >= details[id].at) then
+                    details[id] = { files = e.body.files, at = e.validated_at or 0 }
+                end
+            end
+        end
+        local found, gone = {}, 0
+        for _, b in ipairs(ask.books or {}) do
+            local why = b.incompatible and "incompatible" or nil
+            local d = details[tostring(b.book_id)]
+            if not why and d then
+                for _, f in ipairs(d.files) do
+                    if f.id == b.file_id and type(f.fileHash) == "string" and f.fileHash ~= b.md5 then why = "hash" end
+                end
+            end
+            if why then
+                if F.exists(b.path) then table.insert(found, { md5 = b.md5, path = b.path, book_id = b.book_id, file_id = b.file_id, why = why })
+                else gone = gone + 1 end
+            end
+        end
+        table.sort(found, function(x, y) return x.path < y.path end)
+        ev.checked, ev.found, ev.gone = #(ask.books or {}), found, gone
+    end
+    F.seq = (F.seq or 0) + 1
+    writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode(ev))
+end
+
+function F.copies(extras)
+    UIManager:scheduleIn(0.2, function()
+        W.in_companion = true
+        local okc, err = pcall(F.copiesNow, extras)
+        W.in_companion = nil
+        if not okc then error(err, 0) end
+    end)
+end
+
 function F.receive(intent)
     if not (W.companion and intent.package == "net.fledgewing.orbitcompanion") then return end
     if intent.action:match("%.MIRROR$") then F.mirror(intent.extras)
     elseif intent.action:match("%.CHECK$") then F.check(intent.extras)
-    elseif intent.action:match("%.STORAGE$") then F.storage(intent.extras) end
+    elseif intent.action:match("%.STORAGE$") then F.storage(intent.extras)
+    elseif intent.action:match("%.COPIES$") then F.copies(intent.extras) end
 end
 
 -- The companion was stopped mid-run (its status stops moving).

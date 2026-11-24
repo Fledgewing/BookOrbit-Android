@@ -95,14 +95,6 @@ function Mirror.pageSize(identity, owner, server)
     return nil
 end
 
--- A book's saved details (Copies.details), or nil.
-function Mirror.detailEntry(client, id)
-    local key = Cache.key({ account = OC.owner(client), server = client.server_url, method = "GET", path = Mirror.detailPath(client, id) })
-    local e = Cache.decode(OC.readFile(Mirror.file(key)) or "")
-    if type(e) == "table" and e.key == key and type(e.body) == "table" then return e end
-    return nil
-end
-
 -- The catalog whose methods build the plugin's own requests (paramsForEntry, effectiveOrder,
 -- listDecorateBookQuery, listSectionParams): the open one, else the last one seen.
 function Mirror.catalog()

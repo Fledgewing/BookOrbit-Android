@@ -245,6 +245,8 @@ function OC.drainEvents()
                 if type(e) == "table" and e.key == ev.key then OC.adopt(ev.key, e, #raw) end
             elseif ev.kind == "storage" then
                 OC.storageCounted(ev)
+            elseif ev.kind == "copies" and Copies then
+                Copies.found(ev)
             elseif ev.kind == "checked" and ev.key then
                 local job = OC.inflight[ev.key]
                 OC.inflight[ev.key] = nil
@@ -422,7 +424,11 @@ function OC.watchChecks()
             log("storage: the companion didn't answer the count")
             OC.storage_asked = nil
         end
-        if next(OC.inflight) == nil and not OC.storage_asked then OC.watching = nil; return end
+        if Copies and Copies.asked and t - Copies.asked >= Copies.WAIT_S then
+            log("copies: the companion didn't answer the check")
+            Copies.asked = nil
+        end
+        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) then OC.watching = nil; return end
         UIManager:scheduleIn(1, tick)
     end
     UIManager:scheduleIn(1, tick)
@@ -692,7 +698,8 @@ end
 function OC.coverDir()
     if OC.cover_dir then return OC.cover_dir end
     local okd, DataStorage = pcall(require, "datastorage")
-    return okd and DataStorage:getDataDir() .. "/cache/bookorbit" or nil
+    local okp, d = pcall(function() return DataStorage:getDataDir() end)
+    return okd and okp and d and (d .. "/cache/bookorbit") or nil
 end
 
 -- Asks the companion to count (and, over the limit, remove). One ask at a time; one asked

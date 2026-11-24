@@ -17,7 +17,7 @@ class PluginActionsTest {
     fun workerActionsAreDeclaredOnBothSides() {
         val manifest = file("src/main/AndroidManifest.xml")
         val plugin = file("koreader/orbit.koplugin/ko/companion.lua", "android/koreader/orbit.koplugin/ko/companion.lua")
-        for (action in listOf(Worker.ACTION_MIRROR, Worker.ACTION_CHECK, Worker.ACTION_STORAGE, Updater.ACTION_UPDATE)) {
+        for (action in listOf(Worker.ACTION_MIRROR, Worker.ACTION_CHECK, Worker.ACTION_STORAGE, Worker.ACTION_COPIES, Updater.ACTION_UPDATE)) {
             assertTrue("$action on CommandReceiver", manifest.contains("<action android:name=\"$action\" />"))
             val short = action.substringAfterLast('.')
             assertTrue("$short in Companion.ACTION", plugin.contains("$short = Companion.PACKAGE .. \".action.$short\""))

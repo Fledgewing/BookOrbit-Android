@@ -2825,10 +2825,34 @@ local function copiesSetup(books, md5s)
     function DCat:loadBooks() end
     package.loaded["bookorbit_catalog"] = DCat
     E.Copies.md5 = function(path) return copies.md5s[path] end
-    E.Copies.exists = function(path) return copies.md5s[path] ~= nil end
+    -- Orbit Companion finds the changed copies (fake_companion.lua), on its own cache folder.
+    copies.dir = os.tmpname(); os.remove(copies.dir); sh("mkdir -p", copies.dir .. "/events"); sh("mkdir -p", copies.dir .. "/copies")
+    local lfs = require("libs/libkoreader-lfs")
+    copies.lfs_dir = lfs.dir
+    lfs.dir = function(d)
+        local h = io.popen('ls -1 "' .. d .. '" 2>/dev/null'); local names = {}
+        for n in h:lines() do table.insert(names, n) end
+        h:close(); local i = 0
+        return function() i = i + 1; return names[i] end
+    end
+    copies.saved_dir, copies.saved_problem = E.OC._dir, E.Companion.workerProblem
+    E.OC._dir, E.OC._index, E.OC.watching = copies.dir, nil, nil
+    E.Companion.workerProblem = function() return copies.problem end
+    copies.fc = dofile(here .. "/fake_companion.lua")
+    copies.fc.install(E, W, function() return nil, 404 end, UIManager)
+    copies.fc.exists = function(path) return copies.md5s[path] ~= nil end
+    W.on_broadcast = copies.fc.receive
     E.Copies.state().queue = {}
-    E.Copies.scanned_at, E.Copies.active, E.Copies.busy = nil, nil, nil
+    E.Copies.scanned_at, E.Copies.active, E.Copies.busy, E.Copies.asked = nil, nil, nil, nil
     W.wifi, W.vpn, W.companion = true, true, true
+end
+local function copiesTeardown()
+    package.loaded["bookorbit_catalog"] = nil
+    W.on_broadcast = nil
+    E.Companion.workerProblem = copies.saved_problem
+    E.OC._dir, E.OC._index = copies.saved_dir, nil
+    require("libs/libkoreader-lfs").dir = copies.lfs_dir
+    sh("rm -rf", copies.dir)
 end
 local function copiesUI(in_book)
     local ui, m = newUI(in_book)
@@ -2852,14 +2876,14 @@ test("copies: changed copies are replaced in place, one at a time, and their has
     ok(c == "delivery:1,download:/books/a.epub,delivery:2,download:/books/b.epub", "one at a time: " .. c)
     ok(table.concat(copies.repaired, ",") == "/books/a.epub:old1>new1,/books/b.epub:old2>new2", "state re-keyed: " .. table.concat(copies.repaired, ","))
     ok(#E.Copies.state().queue == 0, "queue done")
-    package.loaded["bookorbit_catalog"] = nil
+    copiesTeardown()
 end)
 
 test("copies: never while reading; the queue waits on disk and goes once the book closes", function()
     copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2" })
     local _ui, m = copiesUI(true)
     E.Copies.tick("test")
-    E.Copies.scan("test")
+    E.Copies.ask("test")
     run(5)
     ok(#copies.calls == 0, "nothing while reading")
     ok(#E.Copies.state().queue == 2, "queued: " .. #E.Copies.state().queue)
@@ -2867,7 +2891,7 @@ test("copies: never while reading; the queue waits on disk and goes once the boo
     copiesUI(false)
     run(10)
     ok(#copies.calls == 4, "replaced after the close: " .. table.concat(copies.calls, ","))
-    package.loaded["bookorbit_catalog"] = nil
+    copiesTeardown()
 end)
 
 test("copies: offline or turned off, nothing is downloaded; a copy already current is left alone", function()
@@ -2889,7 +2913,35 @@ test("copies: offline or turned off, nothing is downloaded; a copy already curre
     local c = table.concat(copies.calls, ",")
     ok(not c:find("download:/books/a.epub", 1, true), "a already matches the library: " .. c)
     ok(c:find("download:/books/b.epub", 1, true), "b replaced")
-    package.loaded["bookorbit_catalog"] = nil
+    copiesTeardown()
+end)
+
+test("copies: Orbit Companion finds the changed copies; the UI thread reads no saved detail and checks no file", function()
+    copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2", ["/books/c.epub"] = "cur3" })
+    copiesUI(false)
+    local reads, exists = 0, 0
+    local get, lfs = E.OC.get, require("libs/libkoreader-lfs")
+    local attributes = lfs.attributes
+    E.OC.get = function(...) reads = reads + 1; return get(...) end
+    lfs.attributes = function(f, ...) if not W.in_companion and tostring(f):find("^/books/") then exists = exists + 1 end return attributes(f, ...) end
+    W.broadcasts = {}
+    E.Copies.tick("test")
+    local b = lastBroadcast(".COPIES")
+    ok(b and b.extras.reason == "test" and b.extras.userkey == nil, "asked the companion, no login")
+    local ask = E.Cache.decode(E.OC.readFile(copies.dir .. "/copies/ask.lua") or "")
+    ok(ask and #ask.books == 3, "the ask lists the books from memory")
+    run(10)
+    E.OC.get, lfs.attributes = get, attributes
+    ok(copies.fc.copies_asks == 1, "the companion looked")
+    ok(reads == 0 and exists == 0, "no detail read, no file checked on the UI thread: " .. reads .. " " .. exists)
+    ok(#copies.calls == 4, "the two changed copies replaced: " .. table.concat(copies.calls, ","))
+    -- Without the companion of this version nothing is checked.
+    copies.problem = "Orbit Companion needed"
+    E.Copies.scanned_at = nil
+    E.Copies.tick("test"); run(5)
+    ok(copies.fc.copies_asks == 1, "not asked")
+    copies.problem = nil
+    copiesTeardown()
 end)
 
 test("end of book: Home from the companion with the sheet open closes it, opens BookOrbit home, sends the finish", function()
@@ -3134,6 +3186,12 @@ local cache = {}
 -- A fake BookOrbit API client class (bookorbit_api.lua:372 request, :261 requestBlocking,
 -- :336 runInSubprocess, :747 downloadCatalogThumbnail) over cache.server (path -> body).
 local FC = dofile(here .. "/fake_companion.lua")
+-- A book's detail as the companion's mirror saved it, or nil.
+local function detailEntry(client, id)
+    local key = E.Cache.key({ account = E.OC.owner(client), server = client.server_url, method = "GET", path = E.Mirror.detailPath(client, id) })
+    local e = E.Cache.decode(E.OC.readFile(E.Mirror.file(key)) or "")
+    if type(e) == "table" and e.key == key and type(e.body) == "table" then return e end
+end
 local function cacheSetup(prep)
     local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/events"); sh("mkdir -p", dir .. "/covers")
     local lfs = require("libs/libkoreader-lfs")
@@ -4065,7 +4123,7 @@ test("mirror: Full refresh saves every book's details, outside the cap; covers o
         end
         ok(details[1] and details[2] and details[3] and details[4], "every listed book's details saved")
         local kept, indexed = 0, 0
-        for id = 1, 4 do if E.Mirror.detailEntry(client, id) then kept = kept + 1 end end
+        for id = 1, 4 do if detailEntry(client, id) then kept = kept + 1 end end
         for _, meta in pairs(E.OC.index().entries) do if meta.mirror then indexed = indexed + 1 end end
         ok(kept == 4 and indexed == 0, "details are in the mirror's own files, not the cache's index: " .. kept .. ", " .. indexed)
         ok((E.Mirror.status().cover_total or 0) == 0, "no covers fetched for lists with the setting off: " .. tostring(E.Mirror.status().cover_total))
@@ -4122,10 +4180,19 @@ test("copies: a Full refresh and Home look for changed copies; the mirror's deta
         ok(whys[1] == "Home", "Home open looks (no catalog read needed): " .. table.concat(whys, ","))
         -- Book 2's copy on the reader has the old hash; its saved detail lists the new one.
         local books = { old2 = { file = "/books/b.epub", bookId = 2, fileId = 20 }, srv3 = { file = "/books/c.epub", bookId = 3, fileId = 30 } }
-        local d = E.Copies.details(books)
-        ok(d["2"] and d["2"].files[1].fileHash == "srv2", "the mirror's detail of book 2")
-        local found = E.CopiesPlan.candidates(books, d)
-        ok(#found == 1 and found[1].path == "/books/b.epub" and found[1].why == "hash", "the changed copy is found from the saved details")
+        local sm = package.loaded["bookorbit_state_manager"]
+        package.loaded["bookorbit_state_manager"] = { state = function() return { books = books } end }
+        local exists = FC.exists
+        FC.exists = function() return true end
+        local pump = E.Copies.pump
+        E.Copies.pump = function() end
+        E.Copies.state().queue, E.Copies.asked = {}, nil
+        ok(E.Copies.ask("test"), "asked")
+        run(3)
+        local q = E.Copies.state().queue
+        ok(#q == 1 and q[1].path == "/books/b.epub" and q[1].why == "hash", "the changed copy is found from the mirror's details: " .. #q)
+        package.loaded["bookorbit_state_manager"], FC.exists, E.Copies.pump = sm, exists, pump
+        E.Copies.state().queue = {}
     end)
     E.Copies.tick = tick
     cacheTeardown()
@@ -4409,7 +4476,7 @@ test("mirror: v0.11.2's mirror in the cache's index moves to the worker, keeps i
         run(600)
         ok(idx.mirror == nil and idx.entries[key] == nil, "out of the index")
         ok(io.open(E.Mirror.file(key), "rb") and not io.open(cache.dir .. "/" .. E.OC.hash(key) .. ".lua", "rb"), "its file moved to the mirror's folder")
-        ok(E.Mirror.detailEntry(client, 2) and E.Mirror.detailEntry(client, 3), "the old run's queue was saved")
+        ok(detailEntry(client, 2) and detailEntry(client, 3), "the old run's queue was saved")
         ok(E.Mirror.status().left == 0, "finished")
         ok(table.concat(W.logs, "\n"):find("v0.11.2's offline mirror leaves the cache's index; 1 files go to the companion's mirror/", 1, true), "logged")
         -- Offline, the moved page answers a list read.
@@ -4512,7 +4579,7 @@ test("companion: the cache worker needs the companion of the plugin's own versio
         local notes = {}
         E.OC.note = function(t) table.insert(notes, t) end
         E.OC.fullRefresh(cat); run(30)
-        ok(mirrors() == 0 and not E.Mirror.active, "no run without the companion")
+        ok(mirrors() == 0 and not E.Mirror.active, "no run without the companion: " .. mirrors() .. " " .. tostring(E.Mirror.active))
         ok(E.Mirror.savedText() == "Orbit Companion needed to save BookOrbit for offline", "menu: " .. E.Mirror.savedText())
         ok(table.concat(notes, "|"):find("Orbit Companion needed", 1, true), "said when pressed: " .. table.concat(notes, " | "))
         W.clock = W.clock + 61
@@ -4553,7 +4620,8 @@ test("cache: the index is encoded and written by a child, one save at a time (v0
         E.OC.saveIndex()
         run(10)
     end)
-    ok(biggest == 0, "no encode on the UI thread: " .. biggest)
+    -- The companion's small answers (the start's storage count) are read here; the index (20 KB) never.
+    ok(biggest < 1024, "no index encode on the UI thread: " .. biggest)
     local f = io.open(cache.dir .. "/index.lua", "rb")
     local d = f and E.Cache.decode(f:read("*a"))
     if f then f:close() end

@@ -160,7 +160,7 @@ at that moment, and even then its fetch side moves.
 | Cache index save | child (step 1) | **move** (step 3): the index is the plugin's own state; the companion would need it pushed every time | small since step 1 |
 | Child stores (`stored` events) | metadata only on the UI thread (step 1) | stays | the store is the plugin's own read, inside its child |
 | Storage limit: count and LRU (`OC.storageEnforce`) | companion (step 3): `STORAGE`; it walks the index and the cover folder, deletes covers and names the entries to drop; a mirror run counts its own base | **moved**; the UI thread drops the named index entries | about 600 files today, thousands with "Save every cover" |
-| Copies' detail lookup and replacement (`Copies.details`, `Copies.tick`) | UI lookup; child download | **move** (step 3) | per on-device book, at Home and network up |
+| Copies' detail lookup and replacement (`Copies.details`, `Copies.tick`) | companion (step 3): `COPIES`; it reads the saved details, compares hashes and checks the files | **moved**; the replacement stays the plugin's own Download path (BookOrbit's delivery, forked) and its sidecar, statistics and state carry | per on-device book, at Home and network up |
 | Sleep screen pool: Up next, Leave out member lists and tag details, cover prefetch | child (`Sleep.build`) | **move** (step 3): the companion already owns the sleep screen | already off the UI thread (log 22:07:38.98 to :39.82, 0.8 s, UI free) |
 | Sleep screen current cover (`Sleep.writeCurrent`) | UI, once per book open | **stays** | needs the open document (`getCoverImage`) |
 | Sleep screen scope and collection picker | child; falls back to a cached read | stays | user action, small; the plugin's own read |

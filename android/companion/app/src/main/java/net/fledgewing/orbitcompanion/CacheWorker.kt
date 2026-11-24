@@ -179,6 +179,61 @@ class CacheWorker(
         }
     }
 
+    // ------------------------------------------------------------------ copies (keep-copies-current.md)
+
+    /**
+     * The plugin's COPIES: which copies on this reader changed in the library. The ask
+     * (copies/ask.lua, written by the plugin; no login in it): `books` ({ md5, path, book_id,
+     * file_id, incompatible }), `eob` (book id -> { files, saved_at }: the end-of-book cache),
+     * `owner`, `server`, `detail_template`, `sentinel`. The details come from the newer of the
+     * end-of-book cache, the cache's entries and the mirror's (CopiesLogic). Answers with
+     * { kind = "copies", why, checked, found = { { md5, path, book_id, file_id, why } }, gone }.
+     */
+    fun copies(why: String) {
+        val ask = read(File(root, "copies/ask.lua")) as? Map<*, *>
+        if (ask == null) {
+            event(sortedMapOf("kind" to "copies", "why" to why, "err" to "no ask"))
+            return
+        }
+        val books = (ask["books"] as? List<*>)?.mapNotNull { it as? Map<*, *> } ?: emptyList()
+        val want = books.mapNotNull { (it["book_id"] as? Long)?.toString() }.toHashSet()
+        val details = HashMap<String, CopiesLogic.Detail>()
+        for ((k, v) in ask["eob"] as? Map<*, *> ?: emptyMap<Any?, Any?>()) {
+            val d = v as? Map<*, *> ?: continue
+            details[k.toString()] = CopiesLogic.Detail(d["files"] as? List<*>, (d["saved_at"] as? Number)?.toLong() ?: 0L)
+        }
+        // The cache's saved details: the index names them by path.
+        val entries = (read(File(root, "index.lua")) as? Map<*, *>)?.get("entries") as? Map<*, *> ?: emptyMap<Any?, Any?>()
+        for ((key, v) in entries) {
+            val meta = v as? Map<*, *> ?: continue
+            val id = CopiesLogic.detailId(meta["path"] as? String) ?: continue
+            if (id !in want) continue
+            val at = (meta["validated_at"] as? Number)?.toLong() ?: 0L
+            if (!CopiesLogic.newer(details[id], at)) continue
+            val body = entryBody(File(root, MirrorLogic.hash(key.toString()) + ".lua"), key.toString()) as? Map<*, *> ?: continue
+            (body["files"] as? List<*>)?.let { details[id] = CopiesLogic.Detail(it, at) }
+        }
+        // The offline mirror's details: one file per wanted book.
+        val owner = ask["owner"] as? String
+        val server = ask["server"] as? String
+        val template = ask["detail_template"] as? String
+        val sentinel = ask["sentinel"] as? String ?: "987654321"
+        if (owner != null && server != null && template != null) {
+            for (id in want) {
+                val key = MirrorLogic.key(owner, server, MirrorLogic.fillBytes(template, sentinel, id))
+                val e = read(File(mirrorDir, MirrorLogic.hash(key) + ".lua")) as? Map<*, *> ?: continue
+                if (e["key"] != key) continue
+                val at = (e["validated_at"] as? Number)?.toLong() ?: 0L
+                val files = (e["body"] as? Map<*, *>)?.get("files") as? List<*> ?: continue
+                if (CopiesLogic.newer(details[id], at)) details[id] = CopiesLogic.Detail(files, at)
+            }
+        }
+        val found = CopiesLogic.candidates(books, details)
+        val present = found.filter { File(LuaValue.utf8(it["path"] as String)).isFile }
+        event(sortedMapOf("kind" to "copies", "why" to why, "checked" to books.size.toLong(), "found" to present,
+            "gone" to (found.size - present.size).toLong()))
+    }
+
     private var eventSeq = 0
 
     private fun event(ev: Map<String, Any?>) {

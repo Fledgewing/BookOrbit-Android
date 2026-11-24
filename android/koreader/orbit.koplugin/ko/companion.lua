@@ -17,6 +17,8 @@ Companion.ACTION = {
     CHECK = Companion.PACKAGE .. ".action.CHECK",
     -- The storage limit: the companion counts and removes (OC.storageCount).
     STORAGE = Companion.PACKAGE .. ".action.STORAGE",
+    -- Keep copies current: the companion finds the changed copies (Copies.ask).
+    COPIES = Companion.PACKAGE .. ".action.COPIES",
     -- Updates: the companion checks, installs itself and then the plugin of its release.
     UPDATE = Companion.PACKAGE .. ".action.UPDATE",
     NET_UP = Companion.PACKAGE .. ".action.NET_UP",
