@@ -40,7 +40,7 @@ usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; }
 # ---------------------------------------------------------------- helpers (pure)
 
 # The release certificate's SHA-256 as release.yml declares it (one source of truth).
-expected_cert() { sed -nE 's/^ *EXPECTED_CERT_SHA256: *"([0-9A-F:]+)".*/\1/p' "${1:-$RELEASE_YML}" | head -n 1; }
+expected_cert() { sed -nE 's/^ *EXPECTED_CERT_SHA256: *"([0-9A-F:]+)".*/\1/p' "$RELEASE_YML" | head -n 1; }
 
 # apksigner --print-certs output -> the first certificate's SHA-256 as AA:BB:...
 cert_from_apksigner() {
