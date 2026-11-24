@@ -50,7 +50,7 @@ object SleepScreen {
         s.toMap().forEach { (k, v) -> e.putString(k, v) }
         e.apply()
         if (shared) Prefs(ctx).sharedSettingsAt = System.currentTimeMillis()
-        OLog.i("sleep screen: settings ${s.mode.key} from=${s.from} rules=${s.leaveOut.size} every=${s.hours}h text=${s.text.length} chars battery=${s.battery} style=${s.style.key} text_at=${s.textPosition.key} battery_at=${s.batteryCorner.key} ($why)")
+        OLog.i("sleep screen: settings ${s.mode.key} from=${s.from} rules=${s.leaveOut.size} every=${s.hours}h text=${s.text.length} chars battery=${s.battery} style=${s.style.key} text_at=${s.textPosition.key} battery_at=${s.batteryCorner.key} flash=${s.flash} ($why)")
         if (before.mode != s.mode) modeChanged(ctx, before.mode, s.mode, why)
         StatusFile.write(ctx, "sleep screen settings")
         redrawPicture(ctx, "settings")

@@ -37,6 +37,7 @@ object Checklist {
         "sleep_sync" to Group.OPTIONAL,
         "screen_saver" to Group.OPTIONAL,
         "reading_fonts" to Group.OPTIONAL,
+        "screen_mode" to Group.OPTIONAL,
     )
 
     /** Needs you order (§3.1): what blocks the most first (a frozen app, installs, sign-in), then group order. */
@@ -71,6 +72,7 @@ object Checklist {
         "sleep_sync" to "the reader can fall asleep before a sync finishes; it finishes when you next wake it.",
         "screen_saver" to "turning Sleep screen on or off needs a one-time USB command.",
         "reading_fonts" to "KOReader offers only its own fonts and the reader's; Bitter and Literata aren't among them.",
+        "screen_mode" to "the sleep screen may show ghosting from the last page.",
     )
 
     /** "On: …" on an optional row that is on. */
@@ -85,6 +87,7 @@ object Checklist {
         "sleep_sync" to "syncs finish as the reader sleeps.",
         "screen_saver" to "Orbit's sleep screen shows when the reader sleeps.",
         "reading_fonts" to "Bitter and Literata are in KOReader's font menu.",
+        "screen_mode" to "Orbit draws in the reader's clearest screen mode.",
     )
 
     /**

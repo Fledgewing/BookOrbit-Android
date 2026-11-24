@@ -71,6 +71,8 @@ data class SleepSettings(
     val style: SleepStyle = SleepStyle.BAR,
     val textPosition: TextPosition = TextPosition.RIGHT,
     val batteryCorner: Corner = Corner.BOTTOM_LEFT,
+    /** L10: a black, then white, frame before the cover (clears ghosting); off by default. */
+    val flash: Boolean = false,
 ) {
     companion object {
         val DEFAULT = SleepSettings()
@@ -78,7 +80,7 @@ data class SleepSettings(
         const val TEXT_MAX = 60
         val KEYS = listOf(
             "sleep_mode", "sleep_from", "sleep_leave_out", "sleep_hours", "sleep_text", "sleep_battery",
-            "sleep_style", "sleep_text_position", "sleep_battery_corner",
+            "sleep_style", "sleep_text_position", "sleep_battery_corner", "sleep_flash",
         )
         private val LISTS = setOf("up_next", "want_to_read", "discover")
         private val FROM = Regex("""^(scope|collection):([1-9]\d{0,9})$""")
@@ -115,6 +117,7 @@ data class SleepSettings(
             get("sleep_style")?.let { s = s.copy(style = SleepStyle.of(it) ?: DEFAULT.style) }
             get("sleep_text_position")?.let { s = s.copy(textPosition = TextPosition.of(it) ?: DEFAULT.textPosition) }
             get("sleep_battery_corner")?.let { s = s.copy(batteryCorner = Corner.of(it) ?: DEFAULT.batteryCorner) }
+            get("sleep_flash")?.let { s = s.copy(flash = it == "1" || it == "true") }
             return s
         }
     }
@@ -124,6 +127,7 @@ data class SleepSettings(
         "sleep_mode" to mode.key, "sleep_from" to from, "sleep_leave_out" to leaveOut.joinToString("\n"),
         "sleep_hours" to hours.toString(), "sleep_text" to text, "sleep_battery" to if (battery) "1" else "0",
         "sleep_style" to style.key, "sleep_text_position" to textPosition.key, "sleep_battery_corner" to batteryCorner.key,
+        "sleep_flash" to if (flash) "1" else "0",
     )
 
     /** "Up next in series", "Smart scope 12", … */
