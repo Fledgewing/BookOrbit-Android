@@ -453,6 +453,26 @@ def catalog_cache_first(ctx: Context, tmp: Path) -> None:
     asked = ctx.requests()[before:]
     assert not asked, f"opening a cached catalog asked the server: {[e['path'] for e in asked][:5]}"
     assert "STA event: connected" not in run.output, "opening a cached catalog joined Wi-Fi"
+    # Then ⟳ (X4 Pro, .194: the catalog opened from the cache with Wi-Fi never started, and the
+    # next request panicked in lwIP, which has no TCP/IP stack before Wi-Fi first starts): no
+    # request until Wi-Fi is up, then "Refreshing…" and "updated just now".
+    stamp = STAMP.search(run.output)
+    assert stamp, "the catalog logged no stamp"
+    rx, ry = int(stamp.group(7)), int(stamp.group(8))
+    before = len(ctx.requests())
+    run = ctx.sim.run(card, "refresh", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};10000:TAP:{rx},{ry};30000:QUIT",
+                      timeout_s=45)
+    opened = after(run.output, "Catalog: opening from the cache, no Wi-Fi")
+    refresh = after(opened, "Catalog: Refresh of view")
+    connected = refresh.find("STA event: connected")
+    assert connected >= 0, "⟳ on a catalog opened from the cache did not join Wi-Fi"
+    assert not re.search(r"\[HTTP\] \S+ GET: ", refresh[:connected]), "a request went out before Wi-Fi was up"
+    assert ctx.requests()[before:], "⟳ asked the server nothing"
+    stamps = [m.group(2) for m in STAMP.finditer(refresh)]
+    assert any(t.lower().startswith("refreshing") for t in stamps), f"no 'Refreshing…' stamp: {stamps}"
+    done = after(refresh, "Catalog: Refresh done")
+    final = [m.group(2) for m in STAMP.finditer(done)]
+    assert final and final[-1].lower().startswith("updated just now"), f"the stamp after the refresh: {final}"
 
 
 @scenario("x4-pro")

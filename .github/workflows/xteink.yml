@@ -300,13 +300,17 @@ jobs:
 
       # For tools/sideload-xteink.sh: the image's SHA-256 and the partition table the build used.
       # Neither name ends in .bin, so the release job's *.bin never picks them up.
-      - name: Checksum and partition table beside the image
+      # The ELF (gzipped: ~170 MB raw, mostly DWARF), named per reader, decodes a core dump read off
+      # a reader exactly: esp-coredump checks the dump's app SHA against it, and a rebuild elsewhere
+      # differs in its embedded paths. gunzip it, then `esp-coredump info_corefile -c <dump> <elf>`.
+      - name: Checksum, partition table and ELF beside the image
         working-directory: upstream/.pio/build/${{ matrix.environment }}
         run: |
           set -euo pipefail
           bin="${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin"
           sha256sum -- "$bin" > "$bin.sha256"
           cp partitions.bin "${bin%.bin}.parttable"
+          gzip -6 -c firmware.elf > "${bin%.bin}.elf.gz"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -315,6 +319,7 @@ jobs:
             upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin
             upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin.sha256
             upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.parttable
+            upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.elf.gz
           if-no-files-found: error
 
   # The emulated release tests (release-tests.yml) on the commit and CrossInk tag about to be
@@ -360,7 +365,7 @@ jobs:
           set -euo pipefail
           cp orbify/xteink/THIRD_PARTY_LICENSES.md firmware/
           (cd orbify/xteink && zip -qr ../../firmware/licenses.zip licenses LICENSE THIRD_PARTY_LICENSES.md)
-          (cd firmware && sha256sum -- *.bin *.tar.gz THIRD_PARTY_LICENSES.md licenses.zip > SHA256SUMS)
+          (cd firmware && sha256sum -- *.bin *.elf.gz *.tar.gz THIRD_PARTY_LICENSES.md licenses.zip > SHA256SUMS)
           {
             echo "CrossInk-Bookorbit $TAG with Tailscale (MicroLink): Orbify's Xteink firmware."
             echo
@@ -381,6 +386,7 @@ jobs:
         with:
           subject-path: |
             firmware/*.bin
+            firmware/*.elf.gz
             firmware/source-*.tar.gz
             firmware/THIRD_PARTY_LICENSES.md
             firmware/licenses.zip
@@ -400,6 +406,7 @@ jobs:
           body_path: notes.md
           files: |
             firmware/*.bin
+            firmware/*.elf.gz
             firmware/THIRD_PARTY_LICENSES.md
             firmware/licenses.zip
             firmware/source-*.tar.gz

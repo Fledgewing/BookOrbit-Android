@@ -55,9 +55,17 @@ bool isTailnetAddr(uint32_t ip) { return (ip & 0xFFC00000u) == 0x64400000u; }
 extern "C" int __real_lwip_getaddrinfo(const char* nodename, const char* servname, const struct addrinfo* hints,
                                        struct addrinfo** res);
 extern "C" int __real_lwip_connect(int s, const struct sockaddr* name, socklen_t namelen);
+extern "C" bool tailnet_lwip_started(void);  // TailnetLwipLock.c
 
 extern "C" int __wrap_lwip_getaddrinfo(const char* nodename, const char* servname, const struct addrinfo* hints,
                                        struct addrinfo** res) {
+  // No TCP/IP stack yet (Wi-Fi never started this boot): the real lookup would assert on the core
+  // lock (TailnetLwipLock.c). It fails like a lookup with Wi-Fi down.
+  if (!tailnet_lwip_started()) {
+    tailnet_log_emit("W (%lu) tailnet: lookup of %.48s refused: the network is not started\n",
+                     (unsigned long)esp_log_timestamp(), nodename ? nodename : "(null)");
+    return EAI_FAIL;
+  }
   const bool v4_ok = !hints || hints->ai_family == AF_UNSPEC || hints->ai_family == AF_INET;
   const bool numeric_only = hints && (hints->ai_flags & AI_NUMERICHOST);
   ip4_addr_t probe;
