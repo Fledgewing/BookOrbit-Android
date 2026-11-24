@@ -746,11 +746,14 @@ class OrbitService : Service() {
                 if (h.isEmpty()) break
             }
             val parts = requestLine.split(' ')
-            // GET /clicks: the patch's kept-open click channel (ClickChannel), not closed here.
-            if (parts.size >= 2 && parts[0] == "GET" && parts[1].substringBefore('?') == "/clicks") {
+            // GET /clicks?key=K: the plugin's kept-open click channel (ClickChannel), not closed here;
+            // only with a key it got through the caller-checked call.
+            val proof = if (parts.size >= 2 && parts[0] == "GET" && parts[1].substringBefore('?') == "/clicks")
+                ClickChannel.accept(Regex("[?&]key=([0-9a-f]+)").find(parts[1])?.groupValues?.get(1)) else null
+            if (proof != null) {
                 prefs.patchSeenAt = System.currentTimeMillis()
                 prefs.patchSeenVia = "clicks"
-                return ClickChannel.add(c, Regex("[?&]patch_version=([0-9A-Za-z.+-]+)").find(parts[1])?.groupValues?.get(1))
+                return ClickChannel.add(c, Regex("[?&]patch_version=([0-9A-Za-z.+-]+)").find(parts[1])?.groupValues?.get(1), proof)
             }
             c.use { s ->
                 val bytes = "{\"error\":\"not found\"}".toByteArray(Charsets.UTF_8)
