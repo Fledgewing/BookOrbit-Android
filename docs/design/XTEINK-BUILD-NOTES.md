@@ -359,6 +359,33 @@ covers from the card.
 | K2 | `Last run stopped at: wake checked` at the USB reset (device idle on USB, after the crash) | Not decided: the run that stopped was the one after the panic (its boot had already reported the crash record), and the trail had no step between "wake checked" and "setup done", which spans the I2C sensors and clock, the SD card and the panic report, settings and state, and the first screen's paint. | Four more steps (`orbify/core/BootTrail.h`, after the sleep steps so older words keep their meaning): clock read, SD card ready, settings loaded, first screen started (its paint not done). The stopped run's own reset is kept beside them and logged: `Last run stopped at: <step> (it started after reset=4(PANIC))`. Host test `boot_trail_test`. |
 | K3 | Decoding a dump | Releases did not ship the ELF; a rebuild from the tag matches the release's code segments in layout (same IROM/IRAM sizes and addresses) but not its ELF SHA, so `esp-coredump` refuses it until the check is bypassed. | Every build uploads `<firmware>-v<version>.elf.gz` per reader with the image (artifact and release asset, in SHA256SUMS and the attestation): `gunzip`, then `esp-coredump --chip esp32s3 info_corefile -t raw -c <dump.bin> <elf>`. |
 
+## One progress number and the layout rulings (patch 0041, 2026-11-24)
+
+The user's rulings from Android (PR #58, [sqlite-cache](sqlite-cache.md) "Progress display" and
+"Xteink: the same rule"; the settings layout rules of 11-24) brought to the X4 Pro and X4. The X3
+builds none of the Full refresh part (`CROSSINK_TAILNET_ORBIFY_MIRROR` 0,1,1).
+
+| # | What | Where | How |
+|---|---|---|---|
+| G1 | One number | `core/Mirror` `Plan::percent`, `badgeDue`, `badgeText` (host test `mirror_test.cpp` `progress`, `badge`) | `done * 100 / total`, kept at its highest: the plan's total grows while the root and the facet sections land (they add their lists), so the raw value can fall; 99 at most until the last step, 100 then. The % shown and the failures ride in the plan (`orbify-mirror 3`; a version 2 plan still resumes), so a wake or a reset never shows a lower one. |
+| G2 | The walk no longer blocks | `orbify/Mirror` `Walk`; the catalog's `tickMirror`, the Home refresh boot's `tickMirror` | One request per `loop()`, in the catalog only with a list on screen and a second after the last press; the catalog answers between requests on its boot session. Before, the whole walk ran inside the ⟳ hold with "Full refresh · saving for offline N/M" repainted every 3 s. |
+| G3 | The start popup | `orbify/RefreshBadge` `drawStartPopup` | "Full refresh in progress · about N% · you can keep reading and browsing", wrapped (the theme's popup is one line): shown once when a Full refresh starts by hand, closed by the next press (not the hold that started it) or after 5 s. A Full refresh resumed on opening the catalog shows the badge alone. |
+| G4 | The badge | The catalog header's stamp slot; the refresh boot's content corner; Home's top bar | While it runs the stamp reads "37%" in a slot as wide as "100%", so the title never moves; each change is drawn into that rectangle only and pushed with a fast refresh (the panel changes only there; CrossInk has no windowed update), at most every 3 s. "Done" or "Done with N errors" for 5 s, then the stamp again. Home makes no requests: its header shows "Full refresh N%" from the plan while one is unfinished. |
+| G5 | Home's hold | `BookOrbitHomeRefreshActivity` | The refresh boot runs the Home refresh, then the walk with the popup and the corner %; any press goes back to Home (the walk carries on in the catalog and at the sleep syncs), "Done" goes back by itself. Short press = Refresh, 1 s hold = Full refresh, as before. |
+| G6 | Errors | the log, "Done with N errors" | No details view: the counts and each failed request are in the serial log. |
+| L1 | Tailscale screen: the title once | `tailnet/ui/TailnetSettingsActivity` | The header names each page (Tailscale, Log in, Relay region, Setup help, Diagnostics); the first row is "Enabled", the Log in page and Setup help lose their bold second title. |
+| L2 | Status under its setting | same | The connection status is Enabled's second line (the list's subtitle); the key-expiry advice, the logged-out note and "Peer list full" go under their rows, shortened to one line. Before, the status sat centred above the list and the notes in two lines under it. Taps use the theme's own row math (`wasListItemTapped`). |
+| L3 | Checked, no change | Settings PIN (0023), Relay region | The PIN screen has one title, its message on its own line under the boxes and its hint above the number pad with room between them on every reader; Relay region has two rows, its note on its own line. Lists already keep the header still while they scroll (`drawList` under a fixed header). |
+| F1 | Flash | | `x4-pro` 6,357,937 of 6,553,600 bytes (97.0%, +4,752 over 6,353,185); `x4-classic` 6,201,342 (94.6%, +4,552 over 6,196,790); `default` (X3) 6,513,263 (99.38%, -160 over 6,513,423: the Tailscale screen's shorter notes and the dropped "saving for offline" string) |
+
+Tests: `mirror_test.cpp` (the % never goes down with a growing total, read back from the card;
+version 2 plans; badge timing and words); simulator scenarios `catalog_full_refresh_percent` (one
+popup, no per-step text, badge repaints only on change and 3 s apart, ink in the badge rectangle
+and the title kept), `home_full_refresh_percent` (the hold's popup, a press back to Home, Home's
+header %), `tailscale_layout` (ink: nothing between header and list, each status on its own line
+under its row, clear of the row's value). The simulator's Tailscale shim answers "on and logged
+in" with `ORBIFY_SIM_TAILSCALE=joined`.
+
 ## Measurements needed on a device
 
 Item 1 adds only small requests on the sync's existing TLS session, so no new memory measurement
@@ -376,8 +403,8 @@ replaced: <old> -> <new> in <s> s`, then `<k> replaced, <m> waiting`. On the X3,
 `heap too fragmented for a download`: that is when a copy waits for the next sleep instead.
 
 Offline mirror (patch 0035), X4 Pro or X4, serial log: Settings › BookOrbit › Home › Full refresh.
-Expect `ORB Mirror: Full refresh started, 0/<n> requests (free=…, maxAlloc=…)`, a `Full refresh ·
-saving for offline <i>/<n>` line every 10 s, then `ORB Mirror: saved for offline: <l> lists, <s>
+Expect `ORB Mirror: Full refresh started, 0/<n> requests, 0% (free=…, maxAlloc=…)`, then (patch 0041)
+`Home refresh: Full refresh popup: about 0%` and `Full refresh badge '<p>%'` lines, then `ORB Mirror: saved for offline: <l> lists, <s>
 sections, <d> details, <n> requests (<f> failed) in <t> s`. The cache's own `Couldn't keep the reply`
 or evictions in that run mean the 150-request plan is too big for 2 MB.
 

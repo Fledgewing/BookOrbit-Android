@@ -227,6 +227,75 @@ static void requestKinds() {
   CHECK(got.sort == "recently_read" && got.readStatus == "reading");
 }
 
+// One progress number for a Full refresh (docs/design/sqlite-cache.md "Xteink: the same rule"):
+// done * 100 / total, never down while the root and the sections add their lists, 100 only at the
+// end, kept across a wake or a reset with the plan.
+static void progress() {
+  Plan p;
+  CHECK(p.percent() == 0);
+  p.add(Kind::Root, "");
+  p.add(Kind::Books, "a");
+  CHECK(p.percent() == 0);
+  p.advance();  // 1 of 2
+  CHECK(p.percent() == 50);
+  // The root landed: its sections add lists, so done / total falls to 1 / 10...
+  for (int i = 0; i < 8; i++) p.add(Kind::Section, std::to_string(i));
+  CHECK(p.total() == 10);
+  // ...but the % shown never goes down.
+  CHECK(p.percent() == 50);
+  unsigned last = p.percent();
+  bool rose = false;
+  while (!p.finished()) {
+    p.advance(p.doneCount() == 3);  // one request fails
+    if (p.doneCount() == 4) {  // a section adds 20 more mid-run
+      for (int i = 0; i < 20; i++) p.add(Kind::Books, "s" + std::to_string(i));
+    }
+    const unsigned now = p.percent();
+    CHECK(now >= last);
+    if (!p.finished()) CHECK(now < 100);
+    rose = rose || now > last;
+    last = now;
+  }
+  CHECK(rose && p.percent() == 100 && p.failures() == 1);
+  // The fixed total: the plan's own (step count), whatever the walk added, read back from the card.
+  Plan half;
+  for (int i = 0; i < 40; i++) half.add(Kind::Detail, std::to_string(i));
+  for (int i = 0; i < 10; i++) half.advance(i == 0);
+  CHECK(half.percent() == 25 && half.total() == 40);
+  for (int i = 0; i < 40; i++) half.add(Kind::Books, "x" + std::to_string(i));  // 10 of 80 now
+  CHECK(half.percent() == 25);
+  Plan back;
+  CHECK(back.parse(half.serialize()));
+  CHECK(back.percent() == 25 && back.failures() == 1 && back.doneCount() == 10 && back.total() == 80);
+  back.advance();  // 11 / 80 = 13%: still 25
+  CHECK(back.percent() == 25);
+  // A version 2 plan (before the % was kept) still resumes, from its own done / total.
+  Plan old;
+  CHECK(old.parse("orbify-mirror 2\n1\nR\t\nB\tsort=title\n"));
+  CHECK(old.percent() == 50 && old.failures() == 0);
+  CHECK(!old.parse("orbify-mirror 3\n1\nR\t\n"));            // version 3 needs the % and failures
+  CHECK(!old.parse("orbify-mirror 3\n1\t101\t0\nR\t\n"));   // no % over 100
+  CHECK(!old.parse("orbify-mirror 3\n1\t10\t2\nR\t\n"));    // more failures than requests
+  CHECK(old.parse("orbify-mirror 3\n1\t70\t1\nR\t\nB\tsort=title\n") && old.percent() == 70);
+}
+
+static void badge() {
+  // The first paint is always due; then only a changed %, and at most every 3 s.
+  CHECK(badgeDue(-1, 0, 0, 0));
+  CHECK(!badgeDue(37, 37, 0, 99999));
+  CHECK(!badgeDue(37, 38, 1000, 1000 + BADGE_REPAINT_MS - 1));
+  CHECK(badgeDue(37, 38, 1000, 1000 + BADGE_REPAINT_MS));
+  char text[40];
+  badgeText(37, false, 2, text, sizeof(text));
+  CHECK(std::strcmp(text, "37%") == 0);
+  badgeText(100, true, 0, text, sizeof(text));
+  CHECK(std::strcmp(text, "Done") == 0);
+  badgeText(100, true, 1, text, sizeof(text));
+  CHECK(std::strcmp(text, "Done with 1 error") == 0);
+  badgeText(100, true, 12, text, sizeof(text));
+  CHECK(std::strcmp(text, "Done with 12 errors") == 0);
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) return 2;
   std::string dir = argv[1];
@@ -238,5 +307,7 @@ int main(int argc, char** argv) {
   plan();
   queries();
   requestKinds();
+  progress();
+  badge();
   return report("mirror");
 }

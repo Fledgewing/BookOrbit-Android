@@ -8,8 +8,8 @@ stage 1), against the seeded BookOrbit server behind the fault proxy (tools/e2e/
 The checkout has the overlay applied and the profile's simulator built
 (`pio run -e x4-pro-simulator`; profiles: x4-pro, x4-classic, x3). Each scenario gets its own SD
 card and fault rules; it asserts on the firmware's log, the card and the proxy's request log, and
-never compares screenshots (one scenario checks that a rectangle the log names has ink: the catalog's
-stamp, patch 0038). Screenshots, logs and the proxy log land in --out (CI uploads them). Exit 1 on any
+never compares screenshots (some scenarios check that a rectangle the log names has ink: the catalog's
+stamp, patch 0038; the Full refresh badge and the Tailscale rows, 0041). Screenshots, logs and the proxy log land in --out (CI uploads them). Exit 1 on any
 failure. Scenarios are named after the rows of the design's §1 table they cover (X1-X9).
 """
 
@@ -433,6 +433,124 @@ def catalog_refresh_stamp(ctx: Context, tmp: Path) -> None:
     assert shot.exists(), f"the simulator saved no screenshot at {later[-1]} ms"
     dark = dark_pixels(shot.read_bytes(), x, y, w, h)
     assert dark > w // 4, f"'updated just now' is not on screen at {x},{y} ({dark} dark pixels)"
+
+
+BADGE = re.compile(r"\[(\d+)\] \[INF\] \[BookOrbit\] Catalog: Full refresh badge '(\d+)%' at (\d+),(\d+) (\d+)x(\d+)")
+
+
+def open_catalog(ctx: Context, card: SdCard) -> tuple[int, int, int, int]:
+    """Home's snapshot, then the catalog from its Library page. Returns the catalog tile's centre and
+    the ⟳'s, from the logs."""
+    card.theme(UI_THEME_BOOKORBIT)
+    sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
+    ctx.sim.run(card, "seed", script=f"3000:TAP:{sx},{sy}", timeout_s=30)
+    first = ctx.sim.run(card, "library", script="3000:SWIPE:0.8,0.5,0.2,0.5,250;5000:QUIT", timeout_s=10)
+    cx, cy = home_tile(first.output, "catalog")
+    opened = ctx.sim.run(card, "open", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};14000:QUIT", timeout_s=20)
+    stamp = STAMP.search(opened.output)
+    assert stamp, "the catalog logged no stamp"
+    return cx, cy, int(stamp.group(7)), int(stamp.group(8))
+
+
+@scenario("x4-pro")
+def catalog_full_refresh_percent(ctx: Context, tmp: Path) -> None:
+    """One progress number (docs/design/sqlite-cache.md "Xteink: the same rule", patch 0041): holding
+    ⟳ shows one start popup, then the Full refresh walks while the catalog stays usable, its % in
+    the stamp's place, repainted in its own rectangle only, never going down; no per-step popups
+    ("saving for offline N/M"); "Done" at the end."""
+    card = ctx.card(tmp)
+    cx, cy, rx, ry = open_catalog(ctx, card)
+    # Each catalog request waits 400 ms at the proxy: the walk lasts long enough for the badge to move.
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400}])
+    shots = {ms: f"x4-pro-full-{ms}" for ms in range(16000, 60001, 2000)}
+    run = ctx.sim.run(card, "full", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};"
+                      f"14000:TAP:{rx},{ry},1300;90000:QUIT", timeout_s=110, screenshots=shots)
+    full = after(run.output, "Catalog: Full refresh popup: about")
+    assert run.output.count("Catalog: Full refresh popup: about") == 1, "the start popup was shown more than once"
+    assert "saving for offline" not in run.output.lower(), "a per-step popup was shown"
+    after(full, "Catalog: Full refresh popup closed")
+    badges = [(int(m.group(1)), int(m.group(2)), *map(int, m.groups()[2:6])) for m in BADGE.finditer(full)]
+    assert len(badges) >= 2, f"the badge was repainted {len(badges)} times"
+    stamps = [m.group(2) for m in STAMP.finditer(full)]
+    shown = [int(t[:-1]) for t in stamps if re.fullmatch(r"\d+%", t)] + [b[1] for b in badges]
+    order = sorted([(int(m.group(1)), int(m.group(2)[:-1])) for m in STAMP.finditer(full) if re.fullmatch(r"\d+%", m.group(2))]
+                   + [(b[0], b[1]) for b in badges])
+    pcts = [p for _, p in order]
+    assert pcts == sorted(pcts), f"the % went down: {pcts}"
+    assert all(0 <= p < 100 for p in shown), f"a % out of range: {shown}"
+    # Partial repaints: a few seconds apart, and only when the % changed.
+    for (t0, p0, *_), (t1, p1, *_) in zip(badges, badges[1:]):
+        assert p1 > p0, f"a badge repaint with no change: {p0} then {p1}"
+        assert t1 - t0 >= 2900, f"badge repaints {t1 - t0} ms apart"
+    done = after(full, "Mirror: saved for offline")
+    final = after(done, "Catalog: Full refresh done")
+    assert any(m.group(2).startswith("Done") for m in STAMP.finditer(final)), "the stamp never read 'Done'"
+    # The badge's rectangle has ink after a partial repaint; the title beside it is still there.
+    at, _, x, y, w, h = badges[-1]
+    later = [ms for ms in sorted(shots) if at + 300 <= ms]
+    assert later, f"no screenshot after the badge was repainted at {at} ms"
+    shot = (card.root / "shots" / f"x4-pro-full-{later[0]}.bmp").read_bytes()
+    assert dark_pixels(shot, x, y, w, h) > 10, f"the badge is not on screen at {x},{y}"
+    assert dark_pixels(shot, 60, y, max(1, x - 80), h) > 10, "the header's title went with the badge repaint"
+
+
+@scenario("x4-pro")
+def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
+    """One progress number from Home (patch 0041): the sync tile's hold runs the Full refresh in the
+    refresh boot with one start popup, then its % in the corner; a press goes back to Home, whose
+    header keeps the % (the walk carries on in the catalog and at the sleep syncs); no "N/M"."""
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 500}])
+    run = ctx.sim.run(card, "hold", script=f"3000:TAP:{sx},{sy},1300", after_reboot="16000:TAP:240,700",
+                      timeout_s=60)
+    walk = after(run.output, "Home refresh: Full refresh popup: about")
+    assert "saving for offline" not in run.output.lower(), "a per-step N/M was shown"
+    after(walk, "Home refresh: Full refresh popup closed")
+    paused = re.search(r"Home refresh: Full refresh paused at (\d+)% \(a press\)", walk)
+    assert paused, "a press did not take the refresh boot back to Home"
+    assert "Mirror: saved for offline" not in walk, "the walk finished before the press: make it slower"
+    pcts = [int(p) for p in re.findall(r"Full refresh badge '(\d+)%'", walk)]
+    assert pcts == sorted(pcts) and pcts[-1] <= int(paused.group(1)), f"the % went down: {pcts} / {paused.group(1)}"
+    home = ctx.sim.run(card, "home-after", script="4000:QUIT", timeout_s=10, screenshots={3000: "x4-pro-home-pending"})
+    shown = re.search(r"BookOrbit Home: Full refresh (\d+)% in the header", home.output)
+    assert shown and int(shown.group(1)) >= int(paused.group(1)), f"Home's header: {shown and shown.group(0)}"
+    shot = (card.root / "shots" / "x4-pro-home-pending.bmp").read_bytes()
+    assert dark_pixels(shot, 12, 4, 150, 20) > 20, "Home's header shows no Full refresh %"
+
+
+@scenario("x4-pro")
+def tailscale_layout(ctx: Context, tmp: Path) -> None:
+    """The Orbify layout rulings (2026-11-24, from Android) on the Tailscale screen: the title once
+    (the header), each status on its own line under its row, nothing over a control. A reader that
+    is on and logged in (the simulator's ORBIFY_SIM_TAILSCALE=joined): "On; connects when WiFi is on"
+    under Enabled, the key-expiry advice under Log out. Before, the status sat centred above the
+    list, the first row repeated the title, and the advice was two lines under the list."""
+    card = ctx.card(tmp)
+    # Home's Settings, the System tab, Tailscale (the Lyra theme's rows on the X4 Pro).
+    run = ctx.sim.run(card, "tailscale", script="3000:TAP:120,593;5000:TAP:410,111;7000:TAP:100,589;10000:QUIT",
+                      timeout_s=14, env={"ORBIFY_SIM_TAILSCALE": "joined"}, screenshots={9000: "x4-pro-tailscale"})
+    page = re.search(r"Tailscale page 'Tailscale': rows from (\d+), (\d+) high", run.output)
+    assert page, "the Tailscale screen did not open"
+    top, row = int(page.group(1)), int(page.group(2))
+    shot = (card.root / "shots" / "x4-pro-tailscale.bmp").read_bytes()
+    width = 480
+    # Nothing between the header and the first row: no status line above the list, no second title.
+    assert dark_pixels(shot, 0, 92, width, max(1, top - 96)) == 0, "text between the header and the list"
+    for n, what in ((0, "Enabled's status"), (1, "Log out's advice")):
+        y0 = top + n * row
+        title = dark_pixels(shot, 20, y0 + 4, 200, row // 2 - 6)
+        status = dark_pixels(shot, 20, y0 + row // 2 + 2, 300, row // 2 - 6)
+        assert title > 20 and status > 20, f"{what}: not on its own line under the row ({title}, {status})"
+    # The status line stops short of the row's value ("ON"), which sits on the title line: under the
+    # value there is only the selected row's shading, as in the empty stretch just left of it.
+    band = (top + row // 2 + 2, row // 2 - 6)
+    assert dark_pixels(shot, 380, top + 4, 80, row // 2 - 6) > dark_pixels(shot, 380, *band[:1], 80, band[1]) + 10, \
+        "Enabled's value is missing"
+    under_value = dark_pixels(shot, 380, band[0], 80, band[1])
+    shading = dark_pixels(shot, 300, band[0], 80, band[1])
+    assert under_value <= shading * 1.2 + 5, f"the status runs into the value ({under_value} vs {shading})"
 
 
 @scenario("x4-pro")

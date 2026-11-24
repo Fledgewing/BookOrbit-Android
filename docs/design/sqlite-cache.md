@@ -287,7 +287,11 @@ shows "Full refresh · saving for offline 12/140" as a popup per step
 - one number, `done * 100 / total`, never decreasing; no per-step popups; "Done" once at the end;
 - not in the reader on the X3 (flash) and only where the reader's status bar has room on the X4s.
 
-Routed separately: this change doesn't touch `xteink/`.
+Built in patch 0041 ([XTEINK-BUILD-NOTES](XTEINK-BUILD-NOTES.md) "One progress number"). The
+plan's total turned out not to be fixed (the root and the sections add their lists as they land),
+so the % keeps its highest value, as here. The walk now runs one request per idle loop, so the
+catalog stays usable; Home's hold runs it in the refresh boot, where any press goes back to Home.
+No details view: errors are in the log and the final "Done with N errors".
 
 ## Tests
 

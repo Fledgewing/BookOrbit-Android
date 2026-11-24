@@ -74,21 +74,46 @@ class Plan {
   // False when the step is already in the plan (done or not), or the plan is full.
   bool add(Kind kind, const std::string& arg);
   const Step* next() const;  // nullptr when finished
-  void advance();
+  // The step ran; failed: it was asked and did not land (counted for "Done with N errors").
+  void advance(bool failed = false);
   bool empty() const { return steps.empty(); }
   bool finished() const { return done >= steps.size(); }
   size_t total() const { return steps.size(); }
   size_t doneCount() const { return done; }
   size_t count(Kind kind) const;
+  size_t failures() const { return failed; }
+  // The one progress number (docs/design/sqlite-cache.md "Progress display", the Xteink rule):
+  // done * 100 / total, which never goes down. The total grows while the root and the facet
+  // sections land (they add their lists), so the % shown keeps the highest value it reached, kept
+  // in the plan across wakes and resets; 100 only once every step ran.
+  unsigned percent() const;
 
-  // "orbify-mirror 2\n<done>\n" then one "<kind letter>\t<arg>\n" per step.
+  // "orbify-mirror 3\n<done>\t<percent shown>\t<failed>\n" then one "<kind letter>\t<arg>\n" per
+  // step. A version 2 plan (no percent, no failures) is still read.
   std::string serialize() const;
   bool parse(const std::string& text);
 
  private:
+  unsigned rawPercent() const;
   std::vector<Step> steps;
   size_t done = 0;
+  size_t failed = 0;
+  unsigned shown = 0;
 };
+
+// --- the progress badge ------------------------------------------------------------------------------
+
+// The badge is redrawn (its own rectangle only) when the % changed, at most this often: each paint
+// is an e-ink refresh.
+constexpr unsigned long BADGE_REPAINT_MS = 3000;
+// The start popup closes by itself after this long (or at the next button press).
+constexpr unsigned long START_POPUP_MS = 5000;
+// "Done" / "Done with N errors" stays this long, then the header's stamp comes back.
+constexpr unsigned long DONE_MS = 5000;
+// painted: the % on screen now (-1 = none yet); paintedAt and now in ms.
+bool badgeDue(int painted, unsigned percent, unsigned long paintedAt, unsigned long now);
+// "37%" while it runs; "Done" or "Done with 3 errors" (1 error) once finished.
+void badgeText(unsigned percent, bool finished, size_t failures, char* out, size_t size);
 
 }  // namespace mirror
 }  // namespace orbify

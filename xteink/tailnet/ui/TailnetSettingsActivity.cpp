@@ -2,6 +2,7 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <Logging.h>
 #include <WiFi.h>
 
 #include <algorithm>
@@ -153,18 +154,11 @@ void TailnetSettingsActivity::loop() {
       activate(selected);
       return;
     }
-    int x = 0;
-    int y = 0;
-    if (mappedInput.wasScreenTapped(x, y)) {
-      const auto& metrics = UITheme::getInstance().getMetrics();
-      const int rowH = metrics.listRowHeight + metrics.listRowGap;
-      if (y >= listTop && rowH > 0) {
-        const int row = (y - listTop) / rowH;
-        if (row >= 0 && row < ROW_COUNT) {
-          selected = row;
-          activate(row);
-        }
-      }
+    // The rows carry their status on a second line (the list's subtitle): the theme's own row math.
+    int row = 0;
+    if (mappedInput.wasListItemTapped(row, ROW_COUNT, selected, listTop, listHeight, true)) {
+      selected = row;
+      activate(row);
       return;
     }
     buttonNavigator.onNextRelease([this] {
@@ -188,49 +182,46 @@ void TailnetSettingsActivity::loop() {
   }
 }
 
+// Layout rulings shared with Android (2026-11-24): the title once (the header), each status on its own
+// line under its row, nothing over a control.
 void TailnetSettingsActivity::renderMenu(const int top) {
-  const auto& metrics = UITheme::getInstance().getMetrics();
   const int pageWidth = renderer.getScreenWidth();
-  const int lineH = renderer.getLineHeight(UI_10_FONT_ID);
-
-  renderer.drawCenteredText(UI_10_FONT_ID, top, statusLine().c_str());
-  listTop = top + lineH + metrics.verticalSpacing;
+  listTop = top;
+  listHeight = renderer.getScreenHeight() - listTop - UITheme::getInstance().getMetrics().buttonHintsHeight;
 
   const bool joined = tailnet_joined();
+  tailnet_diag_t diag;
+  tailnet_get_diag(&diag);
+  // The tailnet sends this reader more devices than it can track: the server may be left out.
+  // Tagging the reader fixes it (Setup help).
+  const bool tableFull = diag.peer_capacity > 0 && diag.peer_count >= diag.peer_capacity;
+  const bool notice = loggedOutNotice;
   GUI.drawList(
-      renderer, Rect{0, listTop, pageWidth, ROW_COUNT * (metrics.listRowHeight + metrics.listRowGap)}, ROW_COUNT,
-      selected,
+      renderer, Rect{0, listTop, pageWidth, listHeight}, ROW_COUNT, selected,
       [joined](int i) -> std::string {
-        if (i == ROW_ENABLED) return "Tailscale";
+        if (i == ROW_ENABLED) return "Enabled";
         if (i == ROW_DIAG) return "Diagnostics";
         if (i == ROW_HELP) return "Setup help";
         if (i == ROW_RELAY) return "Relay region";
         return joined ? "Log out" : "Log in";
       },
-      nullptr, nullptr,
+      [joined, tableFull, notice](int i) -> std::string {
+        if (i == ROW_ENABLED) {
+          if (tableFull) return "Peer list full: tag this reader (Setup help)";
+          return tailnet_enabled() ? statusLine() : "";
+        }
+        if (i == ROW_ACCOUNT) {
+          if (notice) return "Logged out: remove the old device in the admin console";
+          if (joined) return "Turn off key expiry in the admin console";
+        }
+        return "";
+      },
+      nullptr,
       [this](int i) -> std::string {
         if (i == ROW_ENABLED) return tailnet_enabled() ? tr(STR_ON) : tr(STR_OFF);
         if (i == ROW_RELAY) return relayValue();
         return "";
       });
-
-  const int noteY = listTop + ROW_COUNT * (metrics.listRowHeight + metrics.listRowGap) + metrics.verticalSpacing;
-  tailnet_diag_t diag;
-  tailnet_get_diag(&diag);
-  const bool tableFull = diag.peer_capacity > 0 && diag.peer_count >= diag.peer_capacity;
-  if (tableFull) {
-    // The tailnet sends this reader more devices than it can track: the
-    // server may be left out. Tagging the reader fixes it (Setup help).
-    renderer.drawCenteredText(UI_10_FONT_ID, noteY, "Peer list full: tagging this reader", true,
-                              EpdFontFamily::BOLD);
-    renderer.drawCenteredText(UI_10_FONT_ID, noteY + lineH, "keeps it short (see Setup help)");
-  } else if (loggedOutNotice) {
-    renderer.drawCenteredText(UI_10_FONT_ID, noteY, "Logged out. Remove the old device");
-    renderer.drawCenteredText(UI_10_FONT_ID, noteY + lineH, "in the Tailscale admin console.");
-  } else if (joined) {
-    renderer.drawCenteredText(SMALL_FONT_ID, noteY, "Turn off key expiry for this reader");
-    renderer.drawCenteredText(SMALL_FONT_ID, noteY + lineH, "in the Tailscale admin console.");
-  }
 }
 
 void TailnetSettingsActivity::renderLogin(const int top) {
@@ -244,9 +235,8 @@ void TailnetSettingsActivity::renderLogin(const int top) {
   switch (tailnet_status()) {
     case TAILNET_NEEDS_LOGIN:
       if (tailnet_login_url(url, sizeof(url))) {
-        renderer.drawCenteredText(UI_12_FONT_ID, top, "Log in to your tailnet", true, EpdFontFamily::BOLD);
-        renderer.drawCenteredText(UI_10_FONT_ID, top + lineH + 8, "Scan with a phone signed in to Tailscale");
-        const int qrTop = top + 2 * lineH + 24;
+        renderer.drawCenteredText(UI_10_FONT_ID, top, "Scan with a phone signed in to Tailscale");
+        const int qrTop = top + lineH + 16;
         const int qrBottom = pageHeight - metrics.buttonHintsHeight - 3 * lineH;
         QrUtils::drawQrCode(renderer, Rect(20, qrTop, pageWidth - 40, qrBottom - qrTop), url);
         renderer.drawCenteredText(SMALL_FONT_ID, qrBottom + lineH / 2, url);  // to type on a computer
@@ -330,8 +320,6 @@ void TailnetSettingsActivity::renderHelp(const int top) {
   const int x = 12;
   int y = top;
 
-  renderer.drawText(UI_12_FONT_ID, x, y, "Recommended tailnet setup", true, EpdFontFamily::BOLD);
-  y += renderer.getLineHeight(UI_12_FONT_ID) + 4;
   // Short lines: they must fit the narrowest reader at UI_10.
   static const char* const kLines[] = {
       "Let this reader reach only your",
@@ -449,8 +437,12 @@ void TailnetSettingsActivity::renderRelay(const int top) {
   const int lineH = renderer.getLineHeight(UI_10_FONT_ID);
 
   renderer.drawCenteredText(SMALL_FONT_ID, top, "Where relayed traffic meets the tailnet");
-  renderer.drawCenteredText(SMALL_FONT_ID, top + lineH, relayRegionCount ? "" : "Connect once to list regions");
-  listTop = top + 2 * lineH + metrics.verticalSpacing;
+  int textBottom = top + lineH;
+  if (!relayRegionCount) {
+    renderer.drawCenteredText(SMALL_FONT_ID, textBottom, "Connect once to list regions");
+    textBottom += lineH;
+  }
+  listTop = textBottom + metrics.verticalSpacing;
   const int listH = renderer.getScreenHeight() - listTop - metrics.buttonHintsHeight;
   const int count = 2 + relayRegionCount;
   const tailnet_relay_mode_t current = tailnet_relay_mode();
@@ -474,12 +466,19 @@ void TailnetSettingsActivity::renderRelay(const int top) {
 void TailnetSettingsActivity::render(RenderLock&&) {
   renderer.clearScreen();
   const auto& metrics = UITheme::getInstance().getMetrics();
+  // The title once: the header names the page, the page never repeats it.
+  const char* title = mode == Mode::RELAY   ? "Relay region"
+                      : mode == Mode::HELP  ? "Setup help"
+                      : mode == Mode::DIAG  ? "Diagnostics"
+                      : mode == Mode::LOGIN ? "Log in"
+                                            : TITLE;
   const Rect header = TouchHeaderBackButton::headerRect(renderer, mappedInput);
   if (mappedInput.hasTouchHardware()) {
-    TouchHeaderBackButton::draw(renderer, header, TITLE, false);
+    TouchHeaderBackButton::draw(renderer, header, title, false);
   } else {
-    GUI.drawHeader(renderer, header, TITLE);
+    GUI.drawHeader(renderer, header, title);
   }
+
   const int top = header.y + header.height + metrics.verticalSpacing;
 
   if (mode == Mode::RELAY) {
@@ -501,6 +500,8 @@ void TailnetSettingsActivity::render(RenderLock&&) {
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else {
     renderMenu(top);
+    LOG_INF("TS", "Tailscale page '%s': rows from %d, %d high", title, listTop,
+            metrics.listWithSubtitleRowHeight + metrics.listRowGap);  // the scenarios' ink checks
     const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT),
                                               tr(STR_DIR_UP), tr(STR_DIR_DOWN));
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
