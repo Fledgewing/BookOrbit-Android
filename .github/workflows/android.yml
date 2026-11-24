@@ -23,6 +23,13 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          # Robolectric's Android jars (350 MB) from Maven Central, which answers shared runners
+          # with 429 Too Many Requests: downloaded once per build-file change, then cached.
+          cache: gradle
+          cache-dependency-path: |
+            android/companion/*.gradle.kts
+            android/companion/app/build.gradle.kts
+            android/companion/gradle/wrapper/gradle-wrapper.properties
 
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 

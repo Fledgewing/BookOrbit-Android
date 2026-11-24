@@ -30,7 +30,17 @@ env:
   EXPECTED_CERT_SHA256: "F5:07:8C:85:F8:23:18:30:C1:F1:8D:93:FE:30:D7:1F:87:93:6C:1D:94:24:F2:D8:15:98:3D:1D:21:A9:0A:15"
 
 jobs:
+  # The emulated release tests on the release commit (release-tests.yml): the server kit and the
+  # companion's JVM tests, Robolectric's install-session states included. Nothing publishes
+  # unless they pass.
+  tests:
+    uses: ./.github/workflows/release-tests.yml
+    with:
+      platform: android
+      ref: ${{ github.event.inputs.tag || github.ref_name }}
+
   release:
+    needs: tests
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -82,6 +82,8 @@ One repo releases both platforms; the tag prefix says which.
   branch (newest stable and pre-release, written by the xteink workflow), never the list. The
   Android pieces also read `android-v` tags and skip `xteink-v` ones.
 - A tag is never moved: fix forward with the next version.
+- Both release workflows first run the emulated release tests (`release-tests.yml`, below) on the
+  release commit; nothing publishes unless they pass.
 
 ## Checks
 
@@ -98,6 +100,32 @@ One repo releases both platforms; the tag prefix says which.
   (`.github/workflows/koreader-compat.yml`: the pinned `koreader` from `tools/upstreams.lock` on
   every push, KOReader's newest stable tag weekly and on demand). Add each new KOReader symbol the
   plugin uses to that file's list.
+
+## Emulated release tests
+
+What a release must pass with no device (`docs/design/emulated-release-tests.md`;
+CI: `.github/workflows/release-tests.yml`, called by both release workflows, run on pull requests
+that change the tests, or by hand from the Actions tab). Locally, with Docker:
+
+- Stage 0, the server kit: `python3 tools/e2e/kit.py up` starts BookOrbit (pinned by digest in
+  `tools/e2e/compose.yml`) and seeds the synthetic library (`shared/fixtures/e2e/library.json`);
+  `python3 tools/e2e/test_kit.py` tests the fault proxy, `ORBIFY_E2E_LIVE=1` adds the live server.
+  `kit.py down` removes it all.
+- Stage 1, Xteink: after `apply.sh`, `pio run -e x4-pro-simulator` (or `x4-classic-simulator`,
+  `simulator-X3`) in the CrossInk checkout, then
+  `python3 xteink/test/e2e/run.py --checkout <checkout> --profile x4-pro [--scenario NAME]`.
+  Logs, screenshots and the proxy's request log land in `--out`. Linux needs `libsdl2-dev
+  libssl-dev libwolfssl-dev pkg-config`.
+- Stage 2, Android: `./gradlew testDebugUnitTest` in `android/companion` (Robolectric included;
+  every push runs it in `android.yml`).
+- A failing scenario is a bug in the firmware or in the test, never retried into green.
+
+## Upstream projects
+
+Orbify only. Never open pull requests or issues, or send patches, to the projects we build on
+(CrossInk-Bookorbit, BookOrbit, KOReader, MicroLink, the CrossInk simulator). Work around
+anything upstream inside Orbify: an overlay patch, a build-time edit of a fetched package
+(`xteink/tailnet/sim/sim_package.py`), or a test-side shim.
 
 ## Repo rules
 

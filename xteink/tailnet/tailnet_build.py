@@ -9,6 +9,10 @@ Wired in by the overlay's platformio.local.ini, which upstream already loads
    initVariant() hook and lwip_getaddrinfo wrapper are always linked;
 3. points the over-the-air updater at this overlay's releases, so an update
    never swaps the reader back to a build without Tailscale.
+
+In a simulator env (SIM_ENVS below: upstream's SDL host build, xteink/test/e2e/) it sets the
+same switches from the matching reader's column and compiles tailnet/sim instead of MicroLink and
+the shim: Tailscale does not run on a host, so the test server is reached directly.
 """
 
 import os
@@ -36,14 +40,22 @@ wg_dir = os.path.join(ml_dir, "components", "wireguard_lwip", "src")
 shim_dir = os.path.join(here, "shim")
 config_h = os.path.join(here, "ml_config.h")
 
-if not os.path.isfile(os.path.join(ml_dir, "include", "microlink.h")):
+pioenv = env.subst("$PIOENV")  # noqa: F821
+# Upstream's simulator envs (platformio.ini [simulator-base]) and the reader whose switch column
+# each one takes. overlay/platformio.local.ini hooks this script into each of them.
+SIM_ENVS = {"x4-pro-simulator": "x4-pro", "x4-classic-simulator": "x4-classic", "simulator-X3": "default"}
+SIMULATOR = pioenv in SIM_ENVS
+sim_dir = os.path.join(here, "sim")
+
+if not SIMULATOR and not os.path.isfile(os.path.join(ml_dir, "include", "microlink.h")):
     raise RuntimeError(
         f"MicroLink not found at {ml_dir}; run `git submodule update --init` in the overlay repo"
     )
 
-pioenv = env.subst("$PIOENV")  # noqa: F821
 # Every CrossInk ESP32-S3 reader has 8 MB PSRAM; the ESP32-C3 (X3/X4) has none.
-has_psram = env.BoardConfig().get("build.mcu", "") == "esp32s3"  # noqa: F821
+# A simulator env has no board: it takes its reader's.
+has_psram = (SIM_ENVS[pioenv] != "default" if SIMULATOR
+             else env.BoardConfig().get("build.mcu", "") == "esp32s3")  # noqa: F821
 
 
 # --- Per-device switches ---------------------------------------------------------
@@ -237,13 +249,25 @@ WOLFSSL_SWITCH_DEFINES = {
     "CROSSINK_TAILNET_WOLFSSL_NO_SESSION_CACHE": ["NO_SESSION_CACHE"],
     "CROSSINK_TAILNET_WOLFSSL_NO_ERROR_STRINGS": ["NO_ERROR_STRINGS"],
 }
-SWITCH_COLUMN = pioenv if pioenv in SWITCH_ENVS else ("x4-pro" if has_psram else "default")
+SWITCH_COLUMN = SIM_ENVS.get(pioenv) or (pioenv if pioenv in SWITCH_ENVS else ("x4-pro" if has_psram else "default"))
+
+
+# Simulator builds: switches for radio and flash hardware a host does not have (the reader's
+# column otherwise).
+SIM_SWITCHES = {
+    "CROSSINK_TAILNET_WIFI_FAST_JOIN": 0,  # reads the Wi-Fi driver's NVS
+    "CROSSINK_TAILNET_BATTERY_STATS": 0,   # the fuel gauge, ADC and Wi-Fi driver events
+    "CROSSINK_TAILNET_SETTINGS_PIN": 0,    # NVS and RTC memory
+    "CROSSINK_TAILNET_TLS_ARENA": 0,       # X3: an arena in the on-device wolfSSL's allocator
+}
 
 
 def switch_value(name):
     """The switch's value for this build (env var, else its row); None = header default."""
     if name in os.environ:
         return int(os.environ[name], 0)
+    if SIMULATOR and name in SIM_SWITCHES:
+        return SIM_SWITCHES[name]
     return SWITCHES[name][SWITCH_ENVS.index(SWITCH_COLUMN)]
 
 
@@ -260,7 +284,8 @@ for _name, _value in SWITCH_VALUES.items():
     if _value is None:
         continue
     if _name in WOLFSSL_SWITCH_DEFINES:
-        if _value:
+        # The simulator links the host's wolfSSL library: its headers must keep that build's config.
+        if _value and not SIMULATOR:
             _global_defines += WOLFSSL_SWITCH_DEFINES[_name]
     elif _name.startswith(("ML_", "CONFIG_ML_")):
         ML_DEFINES.append((_name, _value))
@@ -283,7 +308,7 @@ if SWITCH_VALUES.get("CROSSINK_TAILNET_NO_MDNS"):
 # signed with ecdsa-with-SHA384 by P-384 keys) needs SHA-384, which that build
 # leaves out, and SP math for P-384 keeps the handshake peak at ~24 KB instead
 # of ~43 KB with fast-math bignums. These apply to the whole wolfSSL library.
-derp_wolfssl = bool(SWITCH_VALUES.get("ML_LITE_DERP_WOLFSSL"))
+derp_wolfssl = bool(SWITCH_VALUES.get("ML_LITE_DERP_WOLFSSL")) and not SIMULATOR
 if derp_wolfssl:
     env.Append(CPPDEFINES=["WOLFSSL_SHA384", "WOLFSSL_SHA512", "WOLFSSL_SP_384"])  # noqa: F821
 
@@ -390,7 +415,56 @@ def _process_project_deps_with_tailnet(env):
         env.Append(LINKFLAGS=["-Wl,--wrap=vApplicationGetTimerTaskMemory"])
 
 
-env.AddMethod(_process_project_deps_with_tailnet, "ProcessProjectDeps")  # noqa: F821
+if SIMULATOR:
+    import sys
+
+    # Upstream's cold-build fix (its platformio.local.example.ini): the LDF drops the simulator
+    # package's include path for lib/Memory and lib/MiniBidi.
+    env.Append(CPPPATH=[os.path.join(env.subst("$PROJECT_LIBDEPS_DIR"), pioenv, "simulator", "src")])  # noqa: F821
+    # The simulator package as fetched trails the firmware: upstream's own patcher (its CI's step),
+    # then Orbify's (heap_caps_get_minimum_free_size, the scripted heap).
+    import subprocess
+
+    sys.path.insert(0, sim_dir)
+    import sim_package  # noqa: E402
+
+    _project = env.subst("$PROJECT_DIR")  # noqa: F821
+    _upstream_patcher = os.path.join(_project, "test", "integration", "ci", "patch_simulator_package.py")
+    if os.path.isfile(_upstream_patcher):
+        subprocess.check_call([sys.executable, _upstream_patcher, pioenv], cwd=_project)
+    _changed = sim_package.patch(os.path.join(env.subst("$PROJECT_LIBDEPS_DIR"), pioenv, "simulator", "src"))  # noqa: F821
+    if _changed:
+        print(f"Tailnet overlay: simulator package patched: {', '.join(_changed)}")
+
+    if sys.platform.startswith("linux"):
+        # What upstream's CI passes in PLATFORMIO_BUILD_FLAGS: the package computes MD5 with
+        # OpenSSL on Linux, and GNU ld loads its firmware_link_stubs.o, which repeats definitions
+        # lib/Logging and lib/uzlib carry (same bodies).
+        env.Append(LIBS=["crypto"], LINKFLAGS=["-Wl,--allow-multiple-definition"])  # noqa: F821
+
+        # AnimatedGIF times its frames with millis() and delay() unless __MACH__ or __LINUX__ is
+        # defined, and includes Arduino.h only under ARDUINO: macOS skips the timing, GCC on Linux
+        # defines neither and stops there. The simulator's Arduino.h has both.
+        _sim_arduino = os.path.join(env.subst("$PROJECT_LIBDEPS_DIR"), pioenv, "simulator", "src", "Arduino.h")  # noqa: F821
+
+        def _animated_gif_with_arduino(node_env, node):
+            return node_env.Object(node, CCFLAGS=node_env["CCFLAGS"] + ["-include", _sim_arduino])
+
+        env.AddBuildMiddleware(_animated_gif_with_arduino, "*AnimatedGIF.cpp")  # noqa: F821
+
+
+def _process_project_deps_with_sim(env):
+    """Simulator: tailnet/sim stands in for MicroLink and the shim (Tailnet.h, TailnetNetPhase.h)."""
+    _orig_process_project_deps()
+    build_dir = os.path.join(env.subst("$BUILD_DIR"), "tailnet-sim")
+    env.Append(PIOBUILDFILES=[
+        env.Object(os.path.join(build_dir, os.path.splitext(f)[0] + ".o"), os.path.join(sim_dir, f))
+        for f in sorted(os.listdir(sim_dir)) if f.endswith(".cpp")
+    ])
+
+
+env.AddMethod(_process_project_deps_with_sim if SIMULATOR else _process_project_deps_with_tailnet,  # noqa: F821
+              "ProcessProjectDeps")
 env.Append(CPPPATH=[shim_dir])  # noqa: F821  lets optional UI code #include "Tailnet.h"
 
 # --- 3. OTA from this overlay's releases -----------------------------------------
@@ -405,4 +479,7 @@ flags = [f for f in flags if not any(f.startswith(f"-D{k}=") for k in ota_define
 flags += [f'-D{k}=\\"{v}\\"' for k, v in ota_defines.items()]
 env.Replace(BUILD_FLAGS=flags)  # noqa: F821
 
-print(f"Tailnet overlay: MicroLink + shim for {pioenv} (PSRAM: {has_psram}); OTA from {OTA_FEED} ({OTA_TAG_PREFIX}*)")
+if SIMULATOR:
+    print(f"Tailnet overlay: simulator {pioenv} (column {SWITCH_COLUMN}), no Tailscale; OTA from {OTA_FEED}")
+else:
+    print(f"Tailnet overlay: MicroLink + shim for {pioenv} (PSRAM: {has_psram}); OTA from {OTA_FEED} ({OTA_TAG_PREFIX}*)")
