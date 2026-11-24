@@ -5569,8 +5569,9 @@ test("orbismart: Read from here everywhere offline: queued, then sent first at t
     ok(osmLog("orbismart: override queued (offline)"), "queued")
     eq(OSMApi.puts, 0)
     ok(osmRec().override, "still queued")
-    -- The next sync (a wake): the override decides first and goes.
+    -- The next sync (a wake after a real sleep): the override decides first and goes.
     osmServer(214, 5000)
+    RE.state.paused_for = 900
     m:wakeFlow("wake")
     run(40)
     ok(osmLog("orbismart: override L=50 R=214 -> override (wake, no)"), "decided first")
@@ -5598,6 +5599,18 @@ test("orbismart: a further place found at sleep is asked at wake, before any net
     eq(W.page, 214)
     run(40)
     W.server_code = 200
+end)
+
+test("orbismart: no wake check after a short nap", function()
+    local ui, m, p = osmBook(120, nil)
+    run(30)
+    p.calls = {}
+    RE.state.paused_for = 60
+    m:wakeFlow("wake")
+    run(30)
+    ok(not has(p.calls, "fetch"), "no pull")
+    ok(osmLog("no wake check under 300 s"), "logged")
+    RE.state.paused_for = nil
 end)
 
 test("orbismart: a move back elsewhere (an override there) is asked, labelled", function()

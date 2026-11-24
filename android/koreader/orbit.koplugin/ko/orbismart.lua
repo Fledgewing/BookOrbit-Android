@@ -23,7 +23,7 @@
 -- pending (a move found at sleep, asked at wake), pushed (the place of the last push).
 ---------------------------------------------------------------------------------------------
 
-OSM = { PAUSE_S = 120, MAX_BOOKS = 300, MOMENT_S = 40, logged = {} }
+OSM = { PAUSE_S = 120, WAKE_MIN_S = 300, MAX_BOOKS = 300, MOMENT_S = 40, logged = {} }
 
 -- The stock plugin's strategy for "Don't sync" (main.lua:56-60, Plan.STRATEGY).
 local DONT = Plan.STRATEGY.DISABLE
