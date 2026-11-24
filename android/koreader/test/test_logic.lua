@@ -448,6 +448,24 @@ test("home: where Home came from", function()
     eq(HomePlan.cameFromOtherApp("koreader", 40), false)
 end)
 
+test("home: BookOrbit Home keeps the rotation the device is held in", function()
+    local R = HomePlan.rotation
+    -- The reported case: held upside down (left-handed) in another app; KOReader's file browser
+    -- had forced upright; Home opens BookOrbit Home -> turn back to the held rotation.
+    eq(R{ action = "dashboard", held = "reverse_portrait", current = 0 }, 2)
+    eq(R{ action = "bookorbit_main", held = "landscape", current = 0 }, 1)
+    eq(R{ action = "first_page", held = "reverse_landscape", current = 2 }, 3)
+    eq(R{ action = "dashboard", held = "portrait", current = 2 }, 0, "held upright, KOReader upside down")
+    eq(R{ action = "dashboard", held = "reverse_portrait", current = 2 }, nil, "already right")
+    eq(R{ action = "book", held = "reverse_portrait", current = 0 }, nil, "a book applies its own rotation")
+    eq(R{ action = "dashboard", held = "reverse_portrait", current = 0, in_reader = true }, nil,
+        "over an open book: the book's rotation, never saved into it")
+    eq(R{ action = "companion", held = "reverse_portrait", current = 0 }, nil, "the companion follows the system")
+    eq(R{ action = "dashboard", held = "reverse_portrait", current = 0, locked = true }, nil, "Lock auto rotation")
+    eq(R{ action = "dashboard", held = nil, current = 0 }, nil, "older companion: no extra")
+    eq(R{ action = "dashboard", held = "sideways", current = 0 }, nil, "unknown value")
+end)
+
 test("disabled text names the disabler at run time, or stays neutral", function()
     eq(M.disabledText("Orbit Companion", "Meebook Launcher", "Freeze management"),
         "Orbit Companion is disabled by Meebook Launcher: re-enable it in Meebook Launcher › Freeze management.")
