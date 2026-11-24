@@ -53,7 +53,8 @@ cmd="${1:-sync}"
 case "$cmd" in
     list) pins ;;
     check)
-        sync_one $(pins | awk '$1 == "bookorbit"')
+        read -r name repo ref commit < <(pins | awk '$1 == "bookorbit"')
+        sync_one "$name" "$repo" "$ref" "$commit"
         check_attest
         ;;
     pin)
