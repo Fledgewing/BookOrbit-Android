@@ -26,6 +26,7 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 | Wi-Fi modes: Always on, Off while reading, Just in time | yes | n/a | n/a | n/a |
 | Faster Wi-Fi join and catalog boot session | n/a | yes | yes | yes |
 | Download progress, and back to the catalog after a download | n/a | yes | yes | yes |
+| BookOrbit server certificate checked before credentials are sent: Let's Encrypt roots, or a certificate trusted at login by its fingerprint (re-trust when it changes); tailnet hosts exempt ([design](design/server-tls.md)) | n/a (Android's TLS) | 2.x rc | 2.x rc | no: flash |
 
 ## Library and home
 
