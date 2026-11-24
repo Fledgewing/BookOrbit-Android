@@ -4,17 +4,19 @@
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
 -- The write-through cache in front of BookOrbit (docs/design/write-through-cache.md "Android").
--- Rules: logic/cache.lua. This file: the store, the wrappers on the plugin's API client
--- (request, downloadCatalogThumbnail, runInSubprocess) and catalog (switchTo), background
--- checks, the view redraws, Refresh and Full refresh, and cover ETags.
+-- Rules: logic/cache.lua. This file: the wrappers on the plugin's API client (request,
+-- downloadCatalogThumbnail, runInSubprocess) and catalog (switchTo), background checks, the view
+-- redraws, Refresh and Full refresh, and cover ETags. What is saved lives in one SQLite file
+-- that only Orbit Companion writes (docs/design/sqlite-cache.md); the plugin reads it (ko/store.lua)
+-- and sends the companion what to save (a reply it fetched: CHECK mode "store") or patch (PATCH).
 --
 -- The catalog runs many requests inside a forked child (plugin Catalog:fetch, catalog.lua:881).
--- A child may serve from the cache (it has the parent's memory and the disk), and writes what it
--- learns as event files (stored / check / write); the parent applies them when the child returns
--- (the runInSubprocess wrapper) and on a timer, so the index is only ever written by the parent.
+-- A child may serve from the database (its own connection, ko/db.lua) and writes what it learns
+-- as event files (check / write / read); the parent applies them when the child returns (the
+-- runInSubprocess wrapper) and on a timer.
 ---------------------------------------------------------------------------------------------
 
-OC = { memo = {}, memo_order = {}, inflight = {}, done = {}, MEMO = 12, MODE_S = 30 }
+OC = { inflight = {}, done = {}, MODE_S = 30 }
 
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
@@ -71,148 +73,48 @@ function OC.online(client)
     return NetworkMgr:isConnected()
 end
 
----------------------------------------------------------------- index
+---------------------------------------------------------------- the plugin's own state
 
-function OC.index()
-    if OC._index then return OC._index end
-    local d = Cache.decode(readFile(OC.dir() .. "/index.lua") or "")
-    if type(d) ~= "table" or d.v ~= Cache.VERSION or type(d.entries) ~= "table" then
-        d = { v = Cache.VERSION, entries = {} }
-    end
-    OC._index = d
-    return d
+-- What the plugin keeps between starts besides the database: the detail variant it reads (for
+-- the companion's detail template) and the copies queue. A few lines, written in place.
+function OC.state()
+    if OC._state then return OC._state end
+    local d = Cache.decode(readFile(OC.dir() .. "/plugin-state.lua") or "")
+    OC._state = type(d) == "table" and d or {}
+    return OC._state
 end
 
--- Written by a forked child (Background.run): the child has the index as it was at the fork and
--- encodes and writes it there, so the UI thread never encodes it (v0.11.3 on the M8C: the index
--- held the mirror's queue, and encoding it after every saved item froze KOReader). One save at a
--- time, in order; a save asked for meanwhile follows it.
-function OC.saveIndex()
-    if OC.child or OC._save_pending then return end
-    OC._save_pending = true
-    UIManager:scheduleIn(3, function()
-        if OC._saving then OC._save_pending = nil; OC._save_again = true; return end
-        OC._save_pending, OC._saving = nil, true
-        local file = OC.dir() .. "/index.lua"
-        Background.run("cache index", function()
-            return writeFile(file, Cache.encode(OC.index())) and "ok" or "failed"
-        end, 60, function(out, berr)
-            OC._saving = nil
-            if out ~= "ok" then log("cache: index not saved:", tostring(berr or out)) end
-            if OC._save_again then OC._save_again = nil; OC.saveIndex() end
-        end)
-    end)
+function OC.saveState()
+    if OC.child then return end
+    writeFile(OC.dir() .. "/plugin-state.lua", Cache.encode(OC.state()))
 end
 
--- Everything goes: another account or server, the setting turned off, or on request.
+-- Everything goes: the setting turned off, or on request (another account or server: the
+-- companion clears the database itself when it next saves for another owner).
 function OC.wipe(why)
     log("cache: cleared (" .. tostring(why) .. ")")
     local dir = OC.dir()
     if lfs_ok then
-        for name in lfs.dir(dir) do
-            if name:match("%.lua$") or name:match("%.tmp") then os.remove(dir .. "/" .. name) end
-        end
         for name in lfs.dir(dir .. "/events") do
             if name ~= "." and name ~= ".." then os.remove(dir .. "/events/" .. name) end
         end
     end
-    OC._index = { v = Cache.VERSION, entries = {} }
-    OC.memo, OC.memo_order = {}, {}
+    OC._state = {}
+    OC.saveState()
     OC.storage = nil
-    OC.saveIndex()
+    if not Companion.workerProblem() then Companion.send(Companion.ACTION.PATCH, { reason = tostring(why), wipe = "1" }) end
     UIManager:scheduleIn(5, function() pcall(OC.storageCount, "cleared") end)
 end
 
--- The account and server this cache belongs to; a different one drops it.
+-- The account and server this cache belongs to (the database's owner; another one is a miss).
 function OC.owner(client)
-    local owner = tostring(client.username or "") .. "|" .. tostring(client.server_url or ""):lower()
-    local idx = OC.index()
-    if idx.owner ~= owner and not inChild(client) then
-        if idx.owner ~= nil then OC.wipe("account or server changed") end
-        OC.index().owner = owner
-        OC.saveIndex()
-    end
-    return owner
+    return tostring(client.username or "") .. "|" .. tostring(client.server_url or ""):lower()
 end
 
-local function remember(key, entry)
-    if not OC.memo[key] then table.insert(OC.memo_order, key) end
-    OC.memo[key] = entry
-    while #OC.memo_order > OC.MEMO do
-        OC.memo[table.remove(OC.memo_order, 1)] = nil
-    end
-end
-
-function OC.get(key)
-    if OC.memo[key] then return OC.memo[key] end
-    local meta = OC.index().entries[key]
-    local file = OC.dir() .. "/" .. OC.hash(key) .. ".lua"
-    local e = Cache.decode(readFile(file) or "")
-    if type(e) ~= "table" or e.key ~= key or type(e.body) ~= "table" then
-        if meta then OC.index().entries[key] = nil end
-        -- The offline mirror's copy (ko/mirror.lua), outside the index. Not memoized: the
-        -- worker rewrites it behind the UI thread's back.
-        e = Mirror and Cache.decode(readFile(Mirror.file(key)) or "")
-        if type(e) ~= "table" or e.key ~= key or type(e.body) ~= "table" then return nil end
-        return e
-    end
-    if meta and meta.validated_at then e.validated_at = math.max(e.validated_at or 0, meta.validated_at) end
-    -- Stale (a write since): checked at once, but its age stays its real age.
-    e.stale = meta and meta.stale or nil
-    remember(key, e)
-    return e
-end
-
--- Stores a server reply. In a child: the file and a "stored" event only.
-function OC.put(client, key, body, path)
-    local t = nowT()
-    local e = { key = key, body = body, fetched_at = t, validated_at = t, path = path }
-    local s = Cache.encode(e)
-    local file = OC.dir() .. "/" .. OC.hash(key) .. ".lua"
-    if not writeFile(file, s) then return end
-    remember(key, e)
-    local ids = {}
-    for id in pairs(Cache.ids(body)) do table.insert(ids, id) end
-    -- From a child, what the index needs comes with the event: the parent never reads the body back.
-    if inChild(client) then return OC.event("stored", { key = key, bytes = #s, ids = ids, path = path, at = t }) end
-    OC.adopt(key, e, #s, ids)
-end
-
--- The parent's index learns an entry, and the cache stays under its caps. ids: the book ids in
--- the body (Cache.ids), when the caller has them (then e needs no body).
-function OC.adopt(key, e, bytes, ids)
-    local idx = OC.index()
-    if not ids then
-        ids = {}
-        for id in pairs(Cache.ids(e.body)) do table.insert(ids, id) end
-    end
-    local old = idx.entries[key]
-    local old_bytes, old_kind = old and old.bytes or 0, old and (old.keep and "kept" or "cache")
-    local mirror = (old and old.mirror) or e.mirror or nil
-    idx.entries[key] = { bytes = bytes, fetched_at = e.fetched_at, validated_at = e.validated_at, used_at = nowT(),
-        ids = ids, home = Cache.isHome(e.path) or nil, keep = (Cache.isHome(e.path) or mirror) and true or nil,
-        mirror = mirror, path = e.path }
-    OC.done[key] = true
-    local new = idx.entries[key]
-    if old_kind then OC.storageAdd(-old_bytes, old_kind) end
-    OC.storageAdd(bytes or 0, new.keep and "kept" or "cache")
-    for _, k in ipairs(Cache.evict(idx.entries, Cache.MAX_BYTES, Cache.MAX_ENTRIES)) do
-        if idx.entries[k] then OC.storageAdd(-(idx.entries[k].bytes or 0), "cache") end
-        idx.entries[k] = nil
-        OC.memo[k] = nil
-        os.remove(OC.dir() .. "/" .. OC.hash(k) .. ".lua")
-    end
-    OC.saveIndex()
-end
-
-function OC.touch(key, validated)
-    if OC.child then return end
-    local m = OC.index().entries[key]
-    if not m then return end
-    m.used_at = nowT()
-    if validated then m.validated_at, m.stale = nowT(), nil end
-    if OC.memo[key] and validated then OC.memo[key].validated_at, OC.memo[key].stale = nowT(), nil end
-    OC.saveIndex()
+-- The plugin's detail request with Mirror.SENTINEL for the id (how the database names details).
+function OC.detailTemplate(client)
+    local okp, p = pcall(Mirror.detailPath, client, Mirror.SENTINEL)
+    return okp and p or nil
 end
 
 ---------------------------------------------------------------- child events
@@ -234,15 +136,8 @@ function OC.drainEvents()
         local ev = Cache.decode(readFile(dir .. "/" .. name) or "")
         os.remove(dir .. "/" .. name)
         if type(ev) == "table" then
-            if ev.kind == "stored" and ev.key and ev.bytes then
-                OC.memo[ev.key] = nil
-                OC.adopt(ev.key, { fetched_at = ev.at, validated_at = ev.at, path = ev.path }, ev.bytes, ev.ids or {})
-            elseif ev.kind == "stored" and ev.key then
-                OC.memo[ev.key] = nil
-                local file = OC.dir() .. "/" .. OC.hash(ev.key) .. ".lua"
-                local raw = readFile(file)
-                local e = Cache.decode(raw or "")
-                if type(e) == "table" and e.key == ev.key then OC.adopt(ev.key, e, #raw) end
+            if ev.kind == "stored" then
+                -- (0.11.x) nothing: the companion saves now.
             elseif ev.kind == "storage" then
                 OC.storageCounted(ev)
             elseif ev.kind == "covers_rechecked" then
@@ -256,7 +151,7 @@ function OC.drainEvents()
                 OC.inflight[ev.key] = nil
                 if job then OC.landed(nil, job, ev) end
             elseif ev.kind == "check" and ev.key then
-                OC.check(nil, ev.key, ev.method, ev.path, ev.headers)
+                OC.check(nil, ev.key, ev.method, ev.path, ev.headers, nil, ev.mode)
             elseif ev.kind == "write" then
                 OC.afterWrite(ev.method, ev.path, ev.body)
             elseif ev.kind == "read" and ev.key then
@@ -288,30 +183,12 @@ function OC.begin(mode)
     OC.done = {}
 end
 
--- The wrapper's body for a cacheable GET. Returns handled, body, err, errbody.
--- The entry for a read: its own, or a list page cut from the offline mirror's pages.
+-- The entry for a read: the database's answer (a list window, a detail, any other reply), or nil.
 function OC.lookup(client, key, path)
-    local e = OC.get(key)
-    if e then return e end
-    local w = Cache.listWindow(path)
-    if not w then return nil end
-    local owner = OC.owner(client)
-    local pages, oldest = {}, nil
-    local size = Mirror and Mirror.pageSize and Mirror.pageSize(w.identity, owner, client.server_url) or nil
-    local first = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, 1, size) }))
-    if not first then return nil end
-    pages[1] = first.body
-    oldest = first.validated_at or 0
-    local n = Cache.pageCount(type(first.body) == "table" and first.body.total, size)
-    for i = 2, n do
-        local pe = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, i, size) }))
-        if pe then pages[i] = pe.body; oldest = math.min(oldest, pe.validated_at or 0) end
-    end
-    local b = Cache.slice(w, pages, size)
-    if not b then return nil end
-    return { key = key, body = b, validated_at = oldest, path = path, from_mirror = true }
+    return Store.read(OC.owner(client), key, path, OC.detailTemplate(client))
 end
 
+-- The wrapper's body for a cacheable GET. Returns handled, body, err, errbody.
 function OC.read(client, stock, method, path, body, headers)
     local owner = OC.owner(client)
     local key = Cache.key({ account = owner, server = client.server_url, method = method, path = path })
@@ -323,17 +200,15 @@ function OC.read(client, stock, method, path, body, headers)
     local serve, fetch = Cache.readPlan(entry, nowT(), mode, offline)
     if OC.cache_only then fetch = false end
     local variant = tostring(path):match("/catalog/books/%d+%?.*variant=([%w_]+)")
-    if variant and not inChild(client) and OC.index().detail_variant ~= variant then
-        OC.index().detail_variant = variant
-        OC.saveIndex()
+    if variant and not inChild(client) and OC.state().detail_variant ~= variant then
+        OC.state().detail_variant = variant
+        OC.saveState()
     end
     local short = tostring(path):gsub("^/koreader/plugin/catalog", "")
-    if serve and entry.from_mirror then short = short .. " (offline mirror)" end
     if not serve and OC.cache_only then return true, nil, "cancelled" end
     if not offline and not OC.cache_only and not inChild(client) then pcall(OC.mirrorTick, "read") end
     if serve then
         OC.saw(client, key, "cache")
-        OC.touch(key)
         if fetch then
             OC.done[key] = true
             if inChild(client) then OC.event("check", { key = key, method = method, path = path, headers = headers })
@@ -349,6 +224,13 @@ function OC.read(client, stock, method, path, body, headers)
         -- Offline, not saved: quiet ("cancelled" is the plugin's no-error path) and the
         -- runConnected wrapper asks to connect; a search only says it needs a connection.
         if Cache.isSearch(path) then
+            -- Offline search: over the saved books (title, authors, series).
+            local found = Store.search(OC.owner(client), path)
+            if found and (found.total or 0) > 0 then
+                OC.saw(client, key, "cache")
+                log("cache:", short, "searched the saved books (offline):", found.total)
+                return true, found
+            end
             if inChild(client) then OC.event("search", {}) else OC.offline_search = true end
             log("cache:", short, "is a search; it needs a connection (offline)")
             return true, nil, "cancelled"
@@ -360,7 +242,7 @@ function OC.read(client, stock, method, path, body, headers)
     local b, e, eb = stock(client, method, path, body, headers)
     if b ~= nil then
         OC.saw(client, key, "server")
-        OC.put(client, key, Cache.copy(b), path)
+        OC.store(client, key, method, path, headers)
         log("cache:", short, "from the server (" .. mode .. ")")
         return true, b, e, eb
     end
@@ -373,6 +255,14 @@ function OC.read(client, stock, method, path, body, headers)
     return true, b, e, eb
 end
 OC.pending, OC.source, OC.failed = {}, {}, {}
+
+-- A reply read from the server: the companion asks again and saves it (CHECK mode "store"), so
+-- KOReader never encodes or writes a reply. A search isn't saved (offline search reads the books).
+function OC.store(client, key, method, path, headers)
+    if Cache.isSearch(path) then return end
+    if inChild(client) then return OC.event("check", { key = key, method = method, path = path, headers = headers, mode = "store" }) end
+    OC.check(nil, key, method, path, headers, client, "store")
+end
 
 -- A view read key (for redraws and the paint log); from a child, through an event.
 function OC.saw(client, key, source)
@@ -393,7 +283,7 @@ end
 -- changed reply under the key and answers with a "checked" event (OC.drainEvents). KOReader only
 -- sends the job and reads the small answer: it never handles the reply's body (decoding and
 -- encoding it froze the UI on the M8C). One per key; none without the companion.
-function OC.check(_, key, method, path, headers, client)
+function OC.check(_, key, method, path, headers, client, mode)
     if OC.inflight[key] or method ~= "GET" then return end
     client = client or OC.client()
     if not client or not NetworkMgr:isConnected() then return end
@@ -405,8 +295,9 @@ function OC.check(_, key, method, path, headers, client)
     end
     OC.check_blocked = nil
     OC.inflight[key] = { key = key, path = path, at = nowT() }
-    Companion.send(Companion.ACTION.CHECK, { reason = "check", cache_key = key, path = path, mode = OC.mode(),
-        owner = OC.owner(client), server = client.server_url, user = client.username, userkey = client.userkey })
+    Companion.send(Companion.ACTION.CHECK, { reason = "check", cache_key = key, path = path, mode = mode or OC.mode(),
+        owner = OC.owner(client), server = client.server_url, user = client.username, userkey = client.userkey,
+        template = OC.detailTemplate(client) or "" })
     OC.watchChecks()
 end
 
@@ -463,12 +354,9 @@ function OC.landed(client, job, r)
     end
     OC.failed[job.key] = nil
     if r.unchanged then
-        if r.saved then OC.touch(job.key, true) end
         log("cache:", short, "checked: unchanged")
         return
     end
-    OC.memo[job.key] = nil
-    OC.adopt(job.key, { fetched_at = r.at, validated_at = r.at, path = job.path }, r.bytes, r.ids or {})
     if OC.onScreen(job.key) then
         log("cache:", short, "checked: changed; redrawing once the checks are done")
         OC.redraw_soon(job.key)
@@ -523,31 +411,13 @@ end
 function OC.afterWrite(method, path, body)
     local eff = Cache.writeEffect(method, path, body)
     if not eff then return end
-    local idx = OC.index()
-    local patched = 0
-    for key, m in pairs(idx.entries) do
-        local has = false
-        for _, id in ipairs(m.ids or {}) do if id == eff.id then has = true break end end
-        if eff.id and has then
-            local e = OC.get(key)
-            if e and Cache.patch(e.body, eff.id, eff.fields) > 0 then
-                local s = Cache.encode(e)
-                writeFile(OC.dir() .. "/" .. OC.hash(key) .. ".lua", s)
-                m.bytes = #s
-                patched = patched + 1
-            end
-        end
-        if eff.stale_home and m.home then
-            m.stale = true
-            if OC.memo[key] then OC.memo[key].stale = true end
-        end
-    end
+    -- The companion patches the saved book (and the lists that name it) and marks Home stale.
     -- A progress write names the book by document digest; the local overlay already shows this
     -- device's position, and Home is checked against the server on its next read.
-    if patched > 0 then
-        log("cache: a write to", (tostring(path):gsub("^/koreader/plugin/catalog", "")), "patched", patched, "entr(y/ies)")
-    end
-    if patched > 0 or eff.stale_home then OC.saveIndex() end
+    if Companion.workerProblem() then return end
+    Companion.send(Companion.ACTION.PATCH, { reason = "write", id = eff.id and tostring(eff.id) or "",
+        fields = eff.fields and Cache.encode(eff.fields) or "", stale_home = eff.stale_home and "1" or "0" })
+    log("cache: a write to", (tostring(path):gsub("^/koreader/plugin/catalog", "")), "sent to the companion to patch")
 end
 
 ---------------------------------------------------------------- covers (ETag)
@@ -687,13 +557,11 @@ end
 
 ---------------------------------------------------------------- the storage limit (v0.11.2)
 
--- Everything Orbit stores counts (Orbit menu › Storage limit, S.storage_limit_mb): the cache
--- directory (browsing entries, the mirror's lists and details, the index) and the covers in the
--- plugin's cover directory, mirrored or not. Book files and KOReader's own data don't. Orbit
--- Companion counts (STORAGE, docs/design/companion-worker.md): it walks the index and the cover
--- folder, removes covers over the limit itself and names the browsing entries to drop, which the
--- UI thread takes out of its index. Between counts each write adds its size here. The 64 MB /
--- 20000-entry cap (Cache.evict in OC.adopt) is the browsing cache's share.
+-- Everything Orbit stores counts (Orbit menu › Storage limit, S.storage_limit_mb): the database
+-- (browsing replies, the lists and books saved for offline) and the covers in the plugin's cover
+-- directory, saved for offline or not. Book files and KOReader's own data don't. Orbit Companion
+-- counts and, over the limit, removes the oldest browsing replies and covers itself (STORAGE,
+-- docs/design/companion-worker.md); the plugin keeps the totals it answers with.
 local MB = 1048576
 OC.STORAGE_WAIT_S = 60
 
@@ -730,17 +598,8 @@ end
 -- The companion's count: dropped browsing entries leave the index (unless used since), totals kept.
 function OC.storageCounted(ev)
     OC.storage_asked = nil
-    local idx, dropped = OC.index(), 0
-    for _, d in ipairs(type(ev.drop) == "table" and ev.drop or {}) do
-        local meta = d.key and idx.entries[d.key]
-        if meta and (meta.used_at or 0) == (d.used_at or 0) then
-            idx.entries[d.key] = nil
-            OC.memo[d.key] = nil
-            os.remove(OC.dir() .. "/" .. OC.hash(d.key) .. ".lua")
-            dropped = dropped + 1
-        end
-    end
-    if dropped > 0 then OC.saveIndex() end
+    local rm0 = type(ev.removed) == "table" and ev.removed or {}
+    local dropped = rm0.cache or 0
     if type(ev.totals) == "table" then OC.storage = ev.totals end
     local st, limit, rm = OC.storage or {}, OC.limitBytes(), type(ev.removed) == "table" and ev.removed or {}
     if (ev.used or 0) ~= (ev.after or 0) then
@@ -755,10 +614,11 @@ function OC.storageCounted(ev)
 end
 
 -- What Orbit stores now ({ used, kept, cache, cover, mirror_cover } bytes): the last count (the
--- companion's storage.lua at start), or nil before the first.
+-- database's meta "storage" at start), or nil before the first.
 function OC.storageTotals()
     if OC.storage then return OC.storage end
-    local v = Cache.decode(readFile(OC.dir() .. "/storage.lua") or "")
+    local client = OC.child ~= true and OC.client() or nil
+    local v = client and Store.storage(OC.owner(client))
     if type(v) == "table" and type(v.totals) == "table" then OC.storage = v.totals end
     return OC.storage
 end
@@ -878,9 +738,7 @@ function OC.fullRefresh(cat)
     OC.full = { covers = #books }
     if #recheck > 0 then OC.recheckCovers(cat, recheck) else OC.fullStep("covers", bad) end
     -- Home's sections are fetched with the view when on Home; elsewhere, Home is marked stale.
-    for k, m in pairs(OC.index().entries) do
-        if m.home then m.stale = true; if OC.memo[k] then OC.memo[k].stale = true end end
-    end
+    if not Companion.workerProblem() then Companion.send(Companion.ACTION.PATCH, { reason = "Full refresh", id = "", fields = "", stale_home = "1" }) end
     local r = LF.refreshKeepingCovers(cat)
     -- Then everything reachable from Home, for offline (ko/mirror.lua).
     if Mirror then

@@ -45,7 +45,8 @@ class SqliteStressTest {
             db.close()
         }
         reader.start()
-        val r = SqliteStress({ JdbcSql(file) }, log = { lines.add(it) }).run(2)
+        // Until the reader has read enough pages (not a fixed 2 s: a slow CI runner gave it only 5).
+        val r = SqliteStress({ JdbcSql(file) }, log = { lines.add(it) }).run(60) { reads.get() > 40 }
         done.set(true)
         reader.join()
         assertEquals(0L, r.errors)

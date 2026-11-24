@@ -145,6 +145,15 @@ function Store.search(owner, path)
     end)
 end
 
+-- The companion's last storage count: { totals = { used, kept, cache, cover, mirror_cover }, at } or nil.
+function Store.storage(owner)
+    return within(owner, "storage", function(conn)
+        local v = Store.meta(conn, "storage")
+        local t = v and Cache.decode(v)
+        return type(t) == "table" and t or nil
+    end)
+end
+
 -- "Save every cover for offline" keeps this cover file (the plugin's pruner asks per file).
 function Store.coverKept(owner, name)
     return within(owner, "cover", function(conn)

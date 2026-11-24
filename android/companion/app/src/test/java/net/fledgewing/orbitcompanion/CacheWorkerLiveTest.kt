@@ -29,7 +29,7 @@ class CacheWorkerLiveTest {
                 "sections" to listOf("$c/sections/series", "$c/sections/authors"),
                 "seed_lists" to listOf("$c/books?order=asc&sort=title"), "covers_on" to false))
             val lines = ArrayList<String>()
-            val w = CacheWorker(root, Worker.UrlHttp, log = { synchronized(lines) { lines.add(it) } }, parallel = parallel)
+            val w = CacheWorker(root, Worker.UrlHttp, log = { synchronized(lines) { lines.add(it) } }, parallel = parallel, openSql = { JdbcSql(it) })
             val why = w.run(plan, creds)
             println("live, $parallel at a time: $why; " + lines.filter { it.startsWith("mirror: run ") || it.startsWith("mirror: Full refresh saved") }.joinToString(" | "))
             check(why == "finished") { lines.takeLast(5).joinToString("\n") }

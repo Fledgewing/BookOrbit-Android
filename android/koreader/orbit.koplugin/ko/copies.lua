@@ -16,10 +16,10 @@ Copies = {}
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
 local function index()
-    local idx = OC.index()
-    idx.copies = idx.copies or { queue = {} }
-    idx.copies.queue = idx.copies.queue or {}
-    return idx.copies
+    local st = OC.state()
+    st.copies = st.copies or { queue = {} }
+    st.copies.queue = st.copies.queue or {}
+    return st.copies
 end
 Copies.state = index
 
@@ -106,7 +106,7 @@ function Copies.found(ev)
     local n = ev.checked or 0
     if added > 0 then
         log(string.format("copies: checked %d copies (%s); %d changed; replacing", n, tostring(ev.why), #c.queue))
-        OC.saveIndex()
+        OC.saveState()
     elseif #c.queue == 0 then
         log(string.format("copies: checked %d copies (%s); %s", n, tostring(ev.why),
             (ev.gone or 0) == 0 and "all match the library" or "the changed ones are gone from the reader"))
@@ -194,7 +194,7 @@ end
 
 local function nextJob(c, outcome, job, detail)
     table.remove(c.queue, 1)
-    OC.saveIndex()
+    OC.saveState()
     log("copies:", outcome, tostring(job.path), detail or "")
     UIManager:scheduleIn(1, Copies.pump)
 end

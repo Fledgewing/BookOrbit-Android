@@ -226,10 +226,26 @@ it and never goes down (`max` with the last one shown; 100 only when the run fin
 so a book named by 6 lists is fetched once. A Refresh's recheck rechecks list pages and fetches
 details only for books that are new to `books`.
 
-**A pipeline, not batches.** A fixed number of requests in flight (`PARALLEL`, tuned with the kit,
-below), refilled as each finishes; covers on their own small pool alongside details. One writer
-thread takes landed replies and writes them in transactions of up to 100 rows or 1 s, whichever
-comes first. Network, parse and disk overlap.
+**A pipeline, not batches.** A fixed number of requests in flight (`PARALLEL` = 6), refilled as
+each finishes, with 4 jobs queued per pool thread (`AHEAD`) so the pool never waits on a write;
+covers on their own pool (`COVER_PARALLEL` = 4), picked from their own end of the queue so they run
+alongside the details, not after them. One writer thread takes landed replies and writes them in
+transactions of up to 100 replies or 250 ms (`BATCH`, `BATCH_MS`). Network, parse and disk overlap.
+
+**Speed (measured).** `CacheWorkerBench` (`ORBIFY_BENCH=1`, JVM, a server answering in 60 ms, 2,000
+books, covers on: 4,040 requests), the same test on both versions:
+
+| | Requests at once | Time | Items/s | 10,000 books |
+|---|---|---|---|---|
+| 0.12 rc.6 (files, batches of 16, covers in batches after the details) | 4 | 165 s | 24 | about 14 min |
+| SQLite pipeline | 6 + 4 covers | 35 s | 113 | about 3 min |
+
+126 transactions for the run (3 ms each on the JVM, 68 ms at most). On the stage 0 kit (real
+BookOrbit, no added latency, 59 books) `CacheWorkerLiveTest` runs 75 requests at 82 items/s one at
+a time and 132 items/s six at a time. The device adds Wi-Fi latency and slower commits on shared
+storage; at rc.6's measured 10 items/s, the same projection gives about 20 min for 10,000 books
+then, and the pipeline's 4.7 times about 4-5 min. Covers are the bound with "Save every cover" on;
+without it a run is details and lists only.
 
 **Timing lines.** Every 10 s: `mirror: 2,140/10,512 (20%) · 41 items/s · write 18 ms/batch
 (max 64) · ETA 3 min`. At the end: `mirror: Full refresh done: 10,300 books, 4,210 lists, 14,903

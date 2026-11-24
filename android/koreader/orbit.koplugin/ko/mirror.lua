@@ -40,8 +40,6 @@ function Mirror.dir()
     return d
 end
 
-function Mirror.file(key) return Mirror.dir() .. "/" .. OC.hash(key) .. ".lua" end
-
 local function load(name)
     local v = Cache.decode(OC.readFile(Mirror.dir() .. "/" .. name) or "")
     return type(v) == "table" and v or nil
@@ -55,45 +53,11 @@ function Mirror.status()
     if not Mirror._status or Mirror._status_dir ~= d then
         Mirror._status = load("status.lua") or {}
         Mirror._status_dir = d
-        local legacy = Mirror.legacy()
-        if legacy and not Mirror._status.v then
-            -- Saved by v0.11.2 or earlier in the cache's index: moved by the first companion run.
-            Mirror._status = { at = legacy.at, lib_version = legacy.lib_version, done = legacy.done, total = legacy.total,
-                left = #(legacy.queue or {}), limit_note = legacy.limit_note }
-        end
     end
     return Mirror._status
 end
 
 function Mirror.stopFile() return Mirror.dir() .. "/stop" end
-
--- The mirror v0.11.2 kept in the index (idx.mirror and entries marked mirror), if any.
-function Mirror.legacy()
-    local idx = OC.index()
-    return type(idx.mirror) == "table" and idx.mirror or nil
-end
-
--- The covers saved by "Save every cover for offline" (cover file names), for the plugin's pruner;
--- read again when the companion says it changed.
-function Mirror.coverKeep()
-    local s = Mirror.status()
-    local n = s.cover_keep_n or 0
-    if Mirror._keep and Mirror._keep_n == n and Mirror._keep_dir == Mirror.dir() then return Mirror._keep end
-    Mirror._keep = (n > 0 and load("cover_keep.lua")) or (Mirror.legacy() and Mirror.legacy().cover_keep) or {}
-    Mirror._keep_n, Mirror._keep_dir = n, Mirror.dir()
-    return Mirror._keep
-end
-
--- The page size a list is mirrored in (nil: Cache.MIRROR_PAGE): the size its first page is saved in.
-Mirror.SIZES = { false, 50, 25 }
-function Mirror.pageSize(identity, owner, server)
-    for _, size in ipairs(Mirror.SIZES) do
-        local key = Cache.key({ account = owner, server = server, method = "GET", path = Cache.mirrorPage(identity, 1, size or nil) })
-        local f = io.open(Mirror.file(key), "rb")
-        if f then f:close(); return size or nil end
-    end
-    return nil
-end
 
 -- The catalog whose methods build the plugin's own requests (paramsForEntry, effectiveOrder,
 -- listDecorateBookQuery, listSectionParams): the open one, else the last one seen.
@@ -159,14 +123,14 @@ function Mirror.onDevicePath(cat)
 end
 
 function Mirror.detailPath(client, id)
-    local variant = OC.index().detail_variant
+    local variant = OC.state().detail_variant
     return client:query("/koreader/plugin/catalog/books/" .. tostring(id), { deviceId = client.device_id, variant = variant })
 end
 
 -- The plan the companion runs (CacheWorker.Plan): the plugin's own requests as templates (the
 -- sentinel id stands for each entry's id), so the companion builds the same paths and keys the
--- plugin reads. Small: the lists the plugin has read come from its index file, which the companion
--- reads itself.
+-- plugin reads. Small: the lists the plugin has browsed are in the database, which the companion
+-- reads itself. all_books: the library's every book, whose total fixes the Full refresh's work.
 function Mirror.plan(cat, op, reason)
     local client = cat.client
     local SENT = Mirror.SENTINEL
@@ -200,23 +164,8 @@ function Mirror.plan(cat, op, reason)
     local plan = { run = string.format("%d-%d", nowT(), Mirror.seq), op = op, reason = reason, owner = OC.owner(client),
         lib_version = libraryVersion(), sentinel = SENT, templates = templates, detail_template = Mirror.detailPath(client, SENT),
         sections = sections, seed_lists = { Mirror.onDevicePath(cat) }, seed_details = seed_details,
+        all_books = client:query("/koreader/plugin/catalog/books", { sort = "title", order = "asc" }),
         cover_dir = cover_dir, covers_on = S.mirror_covers == true, limit = OC.limitBytes() }
-    local legacy = Mirror.legacy()
-    if legacy then
-        -- v0.11.2's mirror: its files move into the companion's mirror/ and its lists are saved again
-        -- (a Full refresh); the index forgets them now.
-        local idx = OC.index()
-        plan.op, plan.legacy, plan.legacy_lists = "full", {}, {}
-        for identity in pairs(type(legacy.lists) == "table" and legacy.lists or {}) do table.insert(plan.legacy_lists, identity) end
-        table.sort(plan.legacy_lists)
-        for key, meta in pairs(idx.entries) do
-            if meta.mirror then table.insert(plan.legacy, OC.hash(key)); idx.entries[key] = nil; OC.memo[key] = nil end
-        end
-        idx.mirror = nil
-        OC.saveIndex()
-        UIManager:scheduleIn(20, function() pcall(OC.storageCount, "the old mirror moved") end)
-        log("mirror: v0.11.2's offline mirror leaves the cache's index;", #plan.legacy, "files go to the companion's mirror/")
-    end
     return plan
 end
 
@@ -526,11 +475,12 @@ end
 function Mirror.guardPrune(Catalog)
     if not Compat.callable(Catalog.pruneThumbnailCache) then return end
     wrap(Catalog, "pruneThumbnailCache", function(stock) return function(self, ...)
-        local keep = S.mirror_covers and Mirror.coverKeep()
-        if not keep then return stock(self, ...) end
+        local client = S.mirror_covers and OC.client()
+        if not client then return stock(self, ...) end
+        local owner = OC.owner(client)
         os.remove = function(path)
             local name = tostring(path):match("([^/]+)$")
-            if name and keep[name] then return true end
+            if name and Store.coverKept(owner, name) then return true end
             return real_remove(path)
         end
         local okp, err = pcall(stock, self, ...)

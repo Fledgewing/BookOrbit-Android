@@ -1,13 +1,16 @@
 -- The Orbit Companion's cache worker, played by the flow tests (the real one is
 -- android/companion/.../CacheWorker.kt, tested in CacheWorkerTest against the same rules and
--- shared/fixtures/cache/worker.json). It answers the plugin's MIRROR and CHECK broadcasts through
--- the same files: mirror/plan.lua in; mirror/<hash>.lua, status.lua, summary.lua, cover_keep.lua
--- and events/<n>.lua out. It runs on the tests' fake clock, `rate` jobs a second, so a test sees a
--- run that spans many of the plugin's polls. It is test code: nothing of it ships.
+-- shared/fixtures/cache/). It answers the plugin's MIRROR, CHECK, PATCH, STORAGE and COPIES
+-- broadcasts the way the companion does: what it saves goes into orbit.db (through fake_store.lua,
+-- the same saves as CacheStore), its progress into mirror/status.lua and summary.lua, its answers
+-- into events/<n>.lua. A Full refresh is a set of jobs, each book's detail and cover once,
+-- `rate` jobs a second on the tests' fake clock, so a test sees a run that spans many of the
+-- plugin's polls. It is test code: nothing of it ships.
 
-local F = { rate = 1000, step_s = 1, PAGE = 100, COVER_BATCH = 20 }
+local F = { rate = 1000, step_s = 1, PAGE = 100 }
 
 local E, W, fetch, UIManager
+local here = (debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or ".")
 local function C() return E.Cache end
 local function dir() return E.OC.dir() end
 local function mdir() return dir() .. "/mirror" end
@@ -19,6 +22,100 @@ local function now() return math.floor(W.clock) end
 function F.install(env, world, fetcher, ui)
     E, W, fetch, UIManager = env, world, fetcher, ui
     F.rate, F.runs, F.calls, F.checks, F.creds, F.running, F.cover_bytes = 1000, 0, {}, 0, {}, nil, nil
+    F.closeDb()
+    F.run = nil
+end
+
+---------------------------------------------------------------- the database (CacheStore)
+
+function F.dbPath() return dir() .. "/orbit.db" end
+
+-- The companion's connection, opened (and the schema made) on first use, again for another file.
+function F.db()
+    local p = F.dbPath()
+    if F._st and F._st_path == p and readFile(p) then return F._st end
+    F.closeDb()
+    if not F.FakeStore then
+        F.FakeStore = dofile(here .. "/fake_store.lua")(C(), require("lua-ljsqlite3/init"), here .. "/../../../shared/fixtures/cache/schema.sql")
+    end
+    require("libs/libkoreader-lfs").mkdir(dir())
+    F._st, F._st_path = F.FakeStore.open(p), p
+    return F._st
+end
+
+function F.closeDb()
+    if F._st then pcall(F._st.close, F._st) end
+    F._st, F._st_path = nil, nil
+end
+
+local function rows(sql, ...) return F.db():run(sql, ...) end
+local function one(sql, ...) local r = rows(sql, ...)[1]; return r and r[1] end
+local function val(v) return E.Db.value(v) end
+
+function F.meta(k) return val(one("SELECT v FROM meta WHERE k = ?", k)) end
+function F.setMeta(k, v)
+    if v == nil then rows("DELETE FROM meta WHERE k = ?", k) else rows("INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)", k, v) end
+end
+
+local TABLES = { "meta", "books", "lists", "list_items", "entries", "cover_keep", "tags", "scopes", "leave_out", "jobs" }
+function F.wipe()
+    local st = F.db()
+    st:begin()
+    for _, t in ipairs(TABLES) do rows("DELETE FROM " .. t) end
+    st:commit()
+    F.run = nil
+end
+
+-- CacheStore.own: another owner clears everything first.
+function F.own(owner)
+    local was = F.meta("owner")
+    if was == owner then return end
+    if was ~= nil then F.wipe() end
+    F.setMeta("owner", owner)
+end
+
+local function decodeRow(v) local s = val(v); return type(s) == "string" and C().decode(s) or nil end
+function F.bookItem(id) return decodeRow(one("SELECT item FROM books WHERE id = ?", id)) end
+function F.detail(id)
+    local r = rows("SELECT detail, detail_at FROM books WHERE id = ? AND detail IS NOT NULL", id)[1]
+    return r and decodeRow(r[1]), r and tonumber(val(r[2]))
+end
+function F.count(sql, ...) return tonumber(val(one(sql, ...))) or 0 end
+
+-- A saved window's items (the change check of a recheck), as stored.
+local function windowDigest(identity, start, stop)
+    local out = {}
+    for _, r in ipairs(rows("SELECT li.pos, COALESCE(b.item, li.item) FROM list_items li LEFT JOIN books b ON b.id = li.book_id WHERE li.identity = ? AND li.pos >= ? AND li.pos < ? ORDER BY li.pos", identity, start, stop)) do
+        table.insert(out, tostring(val(r[1])) .. "=" .. tostring(val(r[2])))
+    end
+    return table.concat(out, "\n")
+end
+
+---------------------------------------------------------------- the run (CacheWorker.run)
+
+local ORDER = { page = 0, recheck = 1, detail = 2, cover = 3 }
+local function jobId(j) return j.kind .. "|" .. (j.id and tostring(j.id) or (j.page .. "|" .. j.size .. "|" .. j.identity)) end
+
+local function addJob(run, j)
+    local id = jobId(j)
+    if run.seen[id] then return end
+    run.seen[id] = true
+    j.state, j.tries, j.n = 0, 0, run.n
+    run.n = run.n + 1
+    table.insert(run.jobs, j)
+end
+local function pageJob(kind, identity, page, size) return { kind = kind, identity = identity, page = page, size = size or F.PAGE } end
+local function addList(run, path, kind)
+    local w = path and C().listWindow(path)
+    if w then addJob(run, pageJob(kind or "page", w.identity, 1)) end
+end
+
+local function nextJob(run)
+    local best
+    for _, j in ipairs(run.jobs) do
+        if j.state == 0 and (not best or ORDER[j.kind] < ORDER[best.kind] or (ORDER[j.kind] == ORDER[best.kind] and j.n < best.n)) then best = j end
+    end
+    return best
 end
 
 local function fill(t, sentinel, value)
@@ -26,357 +123,307 @@ local function fill(t, sentinel, value)
     return (t:gsub(sentinel, (v:gsub("%%", "%%%%"))))
 end
 
-local function push(st, job)
-    local id = job.k .. "|" .. tostring(job.identity or job.path or "") .. "|" .. (job.k == "page" and tostring(job.page) or "")
-    if st.seen[id] then return end
-    st.seen[id] = true
-    local q = job.k == "covers" and "covers" or job.seed and "seed" or job.k == "detail" and "details" or "lists"
-    table.insert(st.queues[q], job)
-    st.total = st.total + 1
-end
-local QUEUES = { "seed", "lists", "details", "covers" }
-local function left(st) local n = 0; for _, q in ipairs(QUEUES) do n = n + #st.queues[q] end return n end
-local function peek(st) for _, q in ipairs(QUEUES) do if st.queues[q][1] then return q, st.queues[q][1] end end end
-
-local function newState()
-    return { v = 3, queues = { seed = {}, lists = {}, details = {}, covers = {} }, seen = {}, lists = {}, sizes = {}, digests = {},
-        cover_keep = {}, done = 0, total = 0, skipped = 0, requests = 0, bytes = 0, cover_total = 0, cover_batch = 0, keep_n = 0,
-        covers = { ok = 0, not_modified = 0, failed = 0, bytes = 0 } }
-end
-
-local function key(plan, path) return C().key({ account = plan.owner, server = F.server, method = "GET", path = path }) end
-local function addList(st, path, seed)
-    local w = path and C().listWindow(path)
-    if w then push(st, { k = "page", identity = w.identity, page = 1, kind = w.kind, section = w.section, seed = seed }) end
-end
-local function addDetail(st, plan, id, seed, next_of)
-    push(st, { k = "detail", path = fill(plan.detail_template, plan.sentinel, id), id = id, seed = seed, next_of = next_of })
-end
-
-local function coversFor(st, plan, items, all)
-    if not plan.cover_dir then return end
-    local batch = {}
-    local function flush()
-        if #batch == 0 then return end
-        st.cover_batch = st.cover_batch + 1
-        push(st, { k = "covers", path = "covers#" .. st.cover_batch, batch = batch })
-        batch = {}
-    end
-    for _, b in ipairs(items or {}) do
-        local name = type(b) == "table" and b.hasCover and C().coverName(b)
-        if name then
-            table.insert(batch, { id = b.id, path = plan.cover_dir .. "/" .. name, updatedAt = b.updatedAt })
-            st.cover_total = st.cover_total + 1
-            if all then st.cover_keep[name] = true; st.keep_dirty = true end
-            if #batch >= F.COVER_BATCH then flush() end
+local function seed(run, plan)
+    addList(run, plan.all_books)
+    for _, p in ipairs(plan.seed_lists or {}) do addList(run, p) end
+    for _, p in ipairs(plan.sections or {}) do addList(run, p) end
+    local ids = {}
+    for _, r in ipairs(rows("SELECT identity FROM lists ORDER BY identity")) do addList(run, val(r[1])) end
+    for _, id in ipairs(plan.seed_details or {}) do ids[tonumber(id)] = true end
+    for _, r in ipairs(rows("SELECT body FROM entries WHERE home = 1")) do
+        local body = decodeRow(r[1]) or {}
+        for _, f in ipairs({ "continueReading", "items", "books" }) do
+            for _, b in ipairs(type(body[f]) == "table" and body[f] or {}) do if tonumber(b.id) then ids[tonumber(b.id)] = true end end
         end
     end
-    flush()
-end
-
-local function store(st, k, path, body)
-    local h = E.OC.hash(k)
-    local digest = C().encode(C().normalize and C().normalize(body) or body)
-    local changed = st.digests[h] ~= nil and st.digests[h] ~= digest
-    local s = C().encode({ key = k, body = body, fetched_at = now(), validated_at = now(), path = path })
-    if writeFile(mdir() .. "/" .. h .. ".lua", s) then
-        st.bytes = st.bytes - (st.sizes[h] or 0) + #s
-        st.sizes[h], st.digests[h] = #s, digest
+    local sorted = {}
+    for id in pairs(ids) do table.insert(sorted, id) end
+    table.sort(sorted)
+    for _, id in ipairs(sorted) do
+        addJob(run, { kind = "detail", id = id })
+        if plan.covers_on then addJob(run, { kind = "cover", id = id }) end
     end
-    return changed
 end
 
-local function drop(st, k)
-    local h = E.OC.hash(k)
-    os.remove(mdir() .. "/" .. h .. ".lua")
-    st.bytes = st.bytes - (st.sizes[h] or 0)
-    st.sizes[h], st.digests[h] = nil, nil
+local function listTotal(identity) local t = one("SELECT total FROM lists WHERE identity = ?", identity); return t and tonumber(val(t)) end
+
+local function estimate(run, plan)
+    local w = plan.all_books and C().listWindow(plan.all_books)
+    local books = w and listTotal(w.identity)
+    if not books then return 0 end
+    local est = C().pageCount(books) + books + (plan.covers_on and books or 0)
+    for _, s in ipairs(plan.sections or {}) do
+        local sw = C().listWindow(s)
+        local n = sw and listTotal(sw.identity)
+        if not n then return 0 end
+        est = est + C().pageCount(n) + n
+    end
+    return est
 end
 
-local function landed(st, plan, job, path, body, out)
-    st.requests = st.requests + 1
-    local changed = store(st, key(plan, path), path, body)
-    if job.k == "detail" then
-        if not job.next_of and type(body.seriesMembers) == "table" then
-            for _, s in ipairs(body.seriesMembers) do
-                if tonumber(s.id) ~= job.id and s.readStatus ~= "read" and (s.seriesIndex or 0) > (body.seriesIndex or 0) then
-                    addDetail(st, plan, tonumber(s.id), job.seed, job.id); break
-                end
+local function recount(run, plan, finished)
+    local total, done, covers = 0, 0, 0
+    for _, j in ipairs(run.jobs) do
+        total = total + 1
+        if j.state ~= 0 then done = done + 1 end
+        if j.kind == "cover" then covers = covers + 1 end
+    end
+    run.total, run.done, run.cover_total = total, done, covers
+    if (run.estimate or 0) == 0 and run.op == "full" then run.estimate = estimate(run, plan) end
+    local t = math.max(total, run.estimate or 0)
+    local pct = finished and 100 or (t == 0 and 0 or math.min(99, math.floor(done * 100 / t)))
+    run.pct = math.max(run.pct or 0, pct)
+end
+
+local function coverPath(plan, book)
+    if not plan.cover_dir or type(book) ~= "table" or book.hasCover ~= true then return nil end
+    local name = C().coverName(book)
+    return name and (plan.cover_dir .. "/" .. name), name
+end
+
+local function doCover(run, plan, j, out)
+    local book = F.bookItem(j.id)
+    local path, name = coverPath(plan, book)
+    if not path then return end
+    local exists = readFile(path) ~= nil
+    local etag = readFile(path .. ".etag")
+    if exists and not etag then return "kept", name end
+    table.insert(F.calls, "COVER " .. j.id)
+    local r = F.cover and F.cover({ id = j.id, path = path, updatedAt = book.updatedAt }, etag) or (etag and 304 or 200)
+    if r == 304 and exists then run.covers.not_modified = run.covers.not_modified + 1; return "not_modified", name end
+    if r == 200 then
+        writeFile(path, "\255\216\255\224fakejpeg"); writeFile(path .. ".etag", '"e"')
+        run.covers.ok, run.covers.bytes = run.covers.ok + 1, run.covers.bytes + (F.cover_bytes or 12)
+        table.insert(out.written, { id = j.id, updatedAt = book.updatedAt })
+        return "ok", name
+    end
+    run.covers.failed = run.covers.failed + 1
+end
+
+local function landPage(run, plan, j, body, out)
+    local t = now()
+    run.requests = run.requests + 1
+    local st = F.db()
+    if j.kind == "detail" then
+        st:putDetail(j.id, body, t)
+        local mine = tonumber(body.seriesIndex) or 0
+        for _, m in ipairs(type(body.seriesMembers) == "table" and body.seriesMembers or {}) do
+            local id = tonumber(m.id)
+            if id and id ~= j.id and m.readStatus ~= "read" and (tonumber(m.seriesIndex) or 0) > mine then
+                addJob(run, { kind = "detail", id = id }); break
             end
         end
-        if job.seed or plan.covers_on then coversFor(st, plan, { body }, plan.covers_on) end
         return
     end
-    local total = tonumber(body.total) or #(body.items or {})
-    if job.page == 1 then
-        local l = st.lists[job.identity]
-        local old_total = l and l.total
-        local function dropPage(n, size) drop(st, key(plan, C().mirrorPage(job.identity, n, size))) end
-        if l and l.size ~= job.size then
-            for n = 2, C().pageCount(l.total, l.size) do dropPage(n, l.size) end
-            dropPage(1, l.size); old_total = nil
-        end
-        st.lists[job.identity] = { total = total, kind = job.kind, section = job.section, size = job.size }
-        if not job.check or old_total ~= total then
-            local fetchp, gone = C().repage(job.check and old_total or 0, total, job.size)
-            for _, n in ipairs(fetchp) do
-                push(st, { k = "page", identity = job.identity, page = n, kind = job.kind, section = job.section, check = job.check, size = job.size, seed = job.seed })
-            end
-            for _, n in ipairs(gone) do dropPage(n, job.size) end
-        end
+    local w = C().listWindow(j.identity)
+    local recheck = j.kind == "recheck"
+    local old_total = j.page == 1 and listTotal(w.identity) or nil
+    local start = (j.page - 1) * j.size
+    local before = recheck and windowDigest(w.identity, start, start + j.size)
+    st:putWindow(w.identity, w.kind, w.section, start, body, t)
+    local changed = recheck and before ~= windowDigest(w.identity, start, start + j.size)
+    local total = tonumber(body.total) or 0
+    if j.page == 1 and (not recheck or old_total ~= total) then
+        for n = 2, C().pageCount(total, j.size) do addJob(run, pageJob(j.kind, w.identity, n, j.size)) end
     end
-    if job.kind == "section" then
-        local t = (plan.templates or {})[job.section] or {}
+    if w.kind == "section" then
+        local tm = (plan.templates or {})[w.section] or {}
         for _, e in ipairs(body.items or {}) do
             local p
-            if job.section == "series" and e.seriesId and t.path then p = fill(t.path, plan.sentinel, e.seriesId)
-            elseif job.section == "series" and t.series_name_path then p = fill(t.series_name_path, plan.sentinel, e.id)
-            elseif t.path and e.id ~= nil then p = fill(t.path, plan.sentinel, e.id) end
-            addList(st, p)
+            if w.section == "series" and e.seriesId and tm.path then p = fill(tm.path, plan.sentinel, e.seriesId)
+            elseif w.section == "series" and tm.series_name_path then p = fill(tm.series_name_path, plan.sentinel, e.id)
+            elseif tm.path and e.id ~= nil then p = fill(tm.path, plan.sentinel, e.id) end
+            addList(run, p, j.kind)
         end
-    elseif job.kind == "books" and (not job.check or changed) then
+    elseif not recheck or changed then
         for _, b in ipairs(body.items or {}) do
-            if type(b) == "table" and tonumber(b.id) then
-                local known = job.check and readFile(mdir() .. "/" .. E.OC.hash(key(plan, fill(plan.detail_template, plan.sentinel, b.id))) .. ".lua")
-                if not known then addDetail(st, plan, tonumber(b.id)) end
+            local id = type(b) == "table" and tonumber(b.id)
+            if id then
+                if not recheck or not F.detail(id) then addJob(run, { kind = "detail", id = id }) end
+                if plan.covers_on then addJob(run, { kind = "cover", id = id }) end
             end
         end
-        if plan.covers_on then coversFor(st, plan, body.items, true) end
     end
-    if job.check and changed and #out.changed < 50 then table.insert(out.changed, job.identity) end
+    if changed and #out.changed < 50 then table.insert(out.changed, w.identity) end
 end
 
-local function coverBatch(st, job, out)
-    for _, c in ipairs(job.batch) do
-        local exists = readFile(c.path) ~= nil
-        local etag = readFile(c.path .. ".etag")
-        if not exists or etag then
-            table.insert(F.calls, "COVER " .. c.id)
-            local r = F.cover and F.cover(c, etag) or (etag and 304 or 200)
-            if r == 304 and exists then st.covers.not_modified = st.covers.not_modified + 1
-            elseif r == 200 then
-                writeFile(c.path, "\255\216\255\224fakejpeg"); writeFile(c.path .. ".etag", '"e"')
-                st.covers.ok, st.covers.bytes = st.covers.ok + 1, st.covers.bytes + (F.cover_bytes or 12)
-                table.insert(out.written, { id = c.id, updatedAt = c.updatedAt })
-            else st.covers.failed = st.covers.failed + 1 end
-        end
-    end
+local function storageUsed(plan)
+    local n = 0
+    for _, e in ipairs(F.storageItems(plan.cover_dir, plan.covers_on)) do n = n + e.bytes end
+    return n
 end
 
-local function limited(st, plan, job)
+-- CacheWorker.limited: over the limit, the covers stop, then the run.
+local function limited(run, plan, j)
     local limit = plan.limit
     if not limit or limit <= 0 then return false end
-    local covers = job.k == "covers"
+    local covers = j.kind == "cover"
     if covers and not plan.covers_on then return false end
-    local kept = (st.base_other or 0) + st.bytes
-    local room = covers and (kept + (st.base_mirror_cover or 0) + st.covers.bytes - st.run_cover0 < limit) or (not covers and kept < limit)
-    if room then return false end
+    -- What was stored at the run's start, plus the covers it saved since (CacheWorker.limited).
+    if (run.base or 0) + run.covers.bytes < limit then return false end
+    if run.limit_note and not covers then return true end
     local text
     if covers then
-        st.total = st.total - #st.queues.covers
-        st.queues.covers = {}
-        text = C().limitText("covers", st.covers.ok + st.covers.not_modified, st.cover_total)
+        for _, x in ipairs(run.jobs) do if x.kind == "cover" and x.state == 0 then x.state = 2; run.skipped = run.skipped + 1 end end
+        text = C().limitText("covers", run.covers.ok + run.covers.not_modified, run.cover_total)
     else
-        text = C().limitText("lists", st.done, st.total)
-        for _, q in ipairs(QUEUES) do st.queues[q] = {} end
-        st.total = st.done
+        for _, x in ipairs(run.jobs) do if x.state == 0 then x.state = 2 end end
+        text = C().limitText("lists", run.done, run.total)
     end
-    st.limit_note = { text = text, at = now(), limit = limit }
+    run.limit_note = { text = text, at = now(), limit = limit }
     return true
 end
 
--- One job, retried like CacheWorker.doJob (no waits on the fake clock). -> true: no answer.
-local function doJob(st, plan, q, job, out)
-    if job.k == "covers" then
-        coverBatch(st, job, out); table.remove(st.queues[q], 1); st.done = st.done + 1
+-- One job, retried like CacheWorker (no waits on the fake clock). -> true: no answer.
+local function doJob(run, plan, j, out)
+    if j.kind == "cover" then
+        local outcome, name = doCover(run, plan, j, out)
+        if plan.covers_on and name and outcome then rows("INSERT OR IGNORE INTO cover_keep (name) VALUES (?)", name) end
+        j.state = 1
         return false
     end
     while true do
-        local path = job.k == "page" and C().mirrorPage(job.identity, job.page, job.size) or job.path
+        local path = (j.kind == "detail") and fill(plan.detail_template, plan.sentinel, j.id) or C().mirrorPage(j.identity, j.page, j.size ~= F.PAGE and j.size or nil)
         table.insert(F.calls, "GET " .. path)
         local b, e = fetch(path)
         if type(b) == "table" then
-            table.remove(st.queues[q], 1); st.done = st.done + 1
-            landed(st, plan, job, path, b, out)
+            j.state = 1
+            landPage(run, plan, j, b, out)
             return false
         end
-        job.tries = (job.tries or 0) + 1
+        j.tries = j.tries + 1
         local status = tonumber(e)
-        local r = (status and status < 500) and { skip = true } or C().mirrorRetry(job.tries, job.k == "page" and (job.size or F.PAGE) or nil, job.page)
+        local r = (status and status < 500) and { skip = true } or C().mirrorRetry(j.tries, j.kind ~= "detail" and j.size or nil, j.page)
         if r.skip then
-            st.skipped = st.skipped + 1; table.remove(st.queues[q], 1); st.done = st.done + 1
+            run.skipped = run.skipped + 1; j.state = 2
             return not status
         end
-        if r.size and r.size ~= (job.size or F.PAGE) then job.size = r.size end
+        if r.size and j.kind ~= "detail" and r.size ~= j.size then
+            j.state = 2
+            local s = pageJob(j.kind, j.identity, 1, r.size)
+            addJob(run, s)
+            s.tries = j.tries
+            j = s
+        end
     end
 end
 
-local function status(st, plan, running)
-    return { v = 3, runner = "fake companion", run = plan.run, running = running or nil, beat = now(), op = st.op, at = st.at,
-        lib_version = st.lib_version, done = st.done, total = st.total, left = left(st), skipped = st.skipped, covers = st.covers,
-        cover_total = st.cover_total, limit_note = st.limit_note, revalidating = st.revalidating, bytes = st.bytes,
-        cover_keep_n = st.keep_n, started_at = st.started_at }
+local function status(run, plan, running, why)
+    local left = math.max(0, (run.total or 0) - (run.done or 0))
+    return { v = 4, runner = "fake companion", run = plan.run, running = running or nil, beat = now(), op = run.op,
+        at = tonumber(F.meta("full_at")), lib_version = F.meta("lib_version"), done = run.done, total = run.total, left = left,
+        pct = run.pct, skipped = run.skipped, errors = 0, covers = run.covers, cover_total = run.cover_total,
+        limit_note = run.limit_note, revalidating = (run.op == "revalidate" and running) or nil,
+        started_at = run.started_at, why = why }
 end
 
-local function persist(st)
-    if st.keep_dirty then
-        st.keep_n, st.keep_dirty = st.keep_n + 1, nil
-        writeFile(mdir() .. "/cover_keep.lua", C().encode(st.cover_keep))
-    end
-    writeFile(mdir() .. "/worker-state.lua", C().encode(st))
-end
-
-function F.state() return load(mdir() .. "/worker-state.lua") end
-
-local function begin(plan)
-    local st = F.state()
-    if st and st.v ~= 3 then st = nil end
-    if plan.op == "full" then
-        local prev = st
-        st = newState()
-        if prev then
-            st.at, st.lib_version, st.lists, st.sizes, st.digests, st.bytes = prev.at, prev.lib_version, prev.lists, prev.sizes, prev.digests, prev.bytes
-            st.cover_keep, st.keep_n = prev.cover_keep, prev.keep_n
-        end
-        st.op, st.reason, st.started_at = "full", plan.reason, now()
-        for _, h in ipairs(plan.legacy or {}) do
-            local s = readFile(dir() .. "/" .. h .. ".lua")
-            if s and os.rename(dir() .. "/" .. h .. ".lua", mdir() .. "/" .. h .. ".lua") then st.sizes[h] = #s; st.bytes = st.bytes + #s end
-        end
-        for _, p in ipairs(plan.seed_lists or {}) do addList(st, p, true) end
-        for _, p in ipairs(plan.legacy_lists or {}) do addList(st, p) end
-        for _, p in ipairs(plan.sections or {}) do addList(st, p) end
-        local idx = load(dir() .. "/index.lua") or {}
-        local paths, ids = {}, {}
-        for _, id in ipairs(plan.seed_details or {}) do ids[id] = true end
-        for k, meta in pairs(idx.entries or {}) do
-            if not meta.mirror and meta.path then table.insert(paths, meta.path) end
-            if meta.home then
-                local e = load(dir() .. "/" .. E.OC.hash(k) .. ".lua")
-                local body = e and e.key == k and e.body or {}
-                for _, f in ipairs({ "continueReading", "items", "books" }) do
-                    for _, b in ipairs(type(body[f]) == "table" and body[f] or {}) do if tonumber(b.id) then ids[tonumber(b.id)] = true end end
-                end
-            end
-        end
-        table.sort(paths)
-        for _, p in ipairs(paths) do addList(st, p) end
-        local sorted = {}
-        for id in pairs(ids) do table.insert(sorted, id) end
-        table.sort(sorted)
-        for _, id in ipairs(sorted) do addDetail(st, plan, id, true) end
-    elseif plan.op == "revalidate" then
-        if not st or not st.at or left(st) > 0 then return nil end
-        st.seen, st.done, st.total, st.requests, st.skipped, st.cover_total = {}, 0, 0, 0, 0, 0
-        st.covers = { ok = 0, not_modified = 0, failed = 0, bytes = 0 }
-        st.revalidating, st.op, st.started_at = true, "revalidate", now()
-        local ids = {}
-        for identity in pairs(st.lists) do table.insert(ids, identity) end
-        table.sort(ids)
-        for _, identity in ipairs(ids) do
-            local l = st.lists[identity]
-            for n = 1, C().pageCount(l.total, l.size) do
-                push(st, { k = "page", identity = identity, page = n, kind = l.kind, section = l.section, check = true, size = l.size })
-            end
-        end
-    elseif plan.op == "covers" then
-        st = st or newState()
-        for identity, l in pairs(st.lists) do
-            if l.kind == "books" then
-                for n = 1, C().pageCount(l.total, l.size) do
-                    local k = key(plan, C().mirrorPage(identity, n, l.size))
-                    local e = load(mdir() .. "/" .. E.OC.hash(k) .. ".lua")
-                    if e and e.key == k then coversFor(st, plan, e.body.items, true) end
-                end
-            end
-        end
-    else
-        st = st or newState()
-    end
-    return st
-end
-
-local function summary(plan, why, st, out, jobs)
-    writeFile(mdir() .. "/summary.lua", C().encode({ run = plan.run, why = why, jobs = jobs, status = status(st, plan),
+local function summary(plan, why, run, out, jobs)
+    writeFile(mdir() .. "/summary.lua", C().encode({ run = plan.run, why = why, jobs = jobs, status = status(run, plan, false, why),
         changed = out.changed, written = out.written, saved = out.saved, revalidated = out.revalidated,
-        bytes_delta = st.bytes - st.run_bytes0, cover_bytes_delta = st.covers.bytes - st.run_cover0 }))
+        cover_bytes_delta = run.covers.bytes }))
 end
+
+local function newRun(op)
+    return { op = op, jobs = {}, seen = {}, n = 0, done = 0, total = 0, skipped = 0, requests = 0, cover_total = 0, pct = 0,
+        covers = { ok = 0, not_modified = 0, failed = 0, bytes = 0 }, started_at = now() }
+end
+
+local function pending(run)
+    for _, j in ipairs(run.jobs) do if j.state == 0 then return true end end
+    return false
+end
+
+-- The run as the companion keeps it (its jobs table): read by tests.
+function F.state() return F.run end
 
 function F.mirror(extras)
     local plan = load(mdir() .. "/plan.lua")
     assert(plan, "fake companion: no plan")
     F.runs, F.server, F.plan = F.runs + 1, extras.server, plan
     F.creds = { server = extras.server, user = extras.user, userkey = extras.userkey }
-    local st = begin(plan)
-    if not st then
-        local s = F.state() or newState()
-        s.run_bytes0, s.run_cover0 = s.bytes, s.covers.bytes
-        writeFile(mdir() .. "/status.lua", C().encode(status(s, plan)))
-        summary(plan, "busy", s, { changed = {}, written = {} }, 0)
-        return
-    end
-    st.run_bytes0, st.run_cover0 = st.bytes, st.covers.bytes
-    st.base_other, st.base_mirror_cover = 0, 0
-    if plan.limit then
-        -- Everything else that counts toward the limit, as it stands now (CacheWorker.run).
-        for _, e in ipairs(F.storageItems(plan.cover_dir, plan.covers_on, 0)) do
-            if e.kind == "kept" then st.base_other = st.base_other + e.bytes
-            elseif e.kind == "mirror_cover" then st.base_mirror_cover = st.base_mirror_cover + e.bytes end
+    local st = F.db()
+    F.own(plan.owner)
+    if plan.detail_template then F.setMeta("detail_template", plan.detail_template) end
+    local run = F.run
+    if plan.op == "full" then
+        run = newRun("full")
+        seed(run, plan)
+    elseif plan.op == "revalidate" then
+        if not F.meta("full_at") or (run and pending(run)) then
+            local r = run or newRun("revalidate")
+            writeFile(mdir() .. "/status.lua", C().encode(status(r, plan)))
+            summary(plan, "busy", r, { changed = {}, written = {} }, 0)
+            return
         end
+        run = newRun("revalidate")
+        for _, r in ipairs(rows("SELECT identity, total FROM lists ORDER BY identity")) do
+            for n = 1, C().pageCount(tonumber(val(r[2])) or 0) do addJob(run, pageJob("recheck", val(r[1]), n)) end
+        end
+    elseif plan.op == "covers" then
+        if not (run and pending(run)) then run = newRun("covers") end
+        for _, r in ipairs(rows("SELECT id FROM books WHERE item IS NOT NULL ORDER BY id")) do addJob(run, { kind = "cover", id = tonumber(val(r[1])) }) end
+    else
+        run = run or newRun("resume")
     end
+    F.run = run
+    run.covers.bytes = 0
+    run.base = plan.limit and storageUsed(plan) or 0
+    run.limit_note = nil
     local out, jobs = { changed = {}, written = {} }, 0
     F.running, F.transport, F.trace = plan.run, 0, {}
-    writeFile(mdir() .. "/status.lua", C().encode(status(st, plan, true)))
+    recount(run, plan, false)
+    writeFile(mdir() .. "/status.lua", C().encode(status(run, plan, true)))
     local function step()
         W.in_companion = true
-        local okr, err = pcall(F.step, st, plan, out, function() return jobs end, function(n) jobs = n end, step)
+        local okr, err = pcall(F.step, run, plan, out, function() return jobs end, function(n) jobs = n end, step)
         W.in_companion = nil
         if not okr then error(err, 0) end
     end
-    F.steps = F.steps or {}
     UIManager:scheduleIn(F.step_s, step)
 end
 
--- One second of the companion's run.
-function F.step(st, plan, out, getJobs, setJobs, again)
+-- One second of the companion's run: `rate` jobs, written in one transaction.
+function F.step(run, plan, out, getJobs, setJobs, again)
     local jobs = getJobs()
     local transport = F.transport or 0
-    do
-        if F.running ~= plan.run then return end -- the companion was stopped (F.kill)
-        local why
-        for _ = 1, F.rate do
-            local q, job = peek(st)
-            if not job then why = "finished"; break end
-            if readFile(mdir() .. "/stop") then why = "stopped"; break end
-            jobs = jobs + 1
-            setJobs(jobs)
-            if not limited(st, plan, job) then
-                if doJob(st, plan, q, job, out) then
-                    transport = transport + 1
-                    if transport >= 2 then why = "no answer"; break end
-                else transport = 0 end
-                table.insert(F.trace, { k = job.k, total = st.total })
-            end
+    if F.running ~= plan.run then return end -- the companion was stopped (F.kill)
+    local st = F.db()
+    local why
+    st:begin()
+    for _ = 1, F.rate do
+        local j = nextJob(run)
+        if not j then why = "finished"; break end
+        if readFile(mdir() .. "/stop") then why = "stopped"; break end
+        jobs = jobs + 1
+        setJobs(jobs)
+        if not limited(run, plan, j) then
+            if doJob(run, plan, j, out) then
+                transport = transport + 1
+                if transport >= 4 then why = "no answer"; break end
+            else transport = 0 end
+            recount(run, plan, false)
+            table.insert(F.trace, { k = j.kind, total = math.max(run.total, run.estimate or 0), pct = run.pct })
         end
-        F.transport = transport
-        if not why then
-            writeFile(mdir() .. "/status.lua", C().encode(status(st, plan, true)))
-            persist(st)
-            return UIManager:scheduleIn(F.step_s, again)
-        end
-        if why == "finished" then
-            if st.revalidating then st.revalidating, out.revalidated = nil, true
-            elseif st.op == "full" then st.at, st.lib_version, out.saved = now(), plan.lib_version, true end
-            st.seen = {}
-        end
-        F.running = nil
-        persist(st)
-        writeFile(mdir() .. "/status.lua", C().encode(status(st, plan)))
-        summary(plan, why, st, out, jobs)
     end
+    F.transport = transport
+    if why == "finished" then
+        if run.op == "revalidate" then out.revalidated = true
+        elseif run.op == "full" then F.setMeta("full_at", now()); F.setMeta("lib_version", plan.lib_version); out.saved = true end
+    end
+    st:commit()
+    recount(run, plan, why == "finished")
+    if not why then
+        writeFile(mdir() .. "/status.lua", C().encode(status(run, plan, true)))
+        return UIManager:scheduleIn(F.step_s, again)
+    end
+    if why == "finished" then F.run = nil end
+    F.running = nil
+    writeFile(mdir() .. "/status.lua", C().encode(status(run, plan, false, why)))
+    summary(plan, why, run, out, jobs)
 end
 
--- A cache check, as CacheWorker.check: answered with a "checked" event.
+---------------------------------------------------------------- checks and stores (CacheWorker.check)
+
 function F.check(extras)
     F.checks = F.checks + 1
     UIManager:scheduleIn(0.2, function()
@@ -387,51 +434,84 @@ function F.check(extras)
     end)
 end
 
+local function event(ev)
+    require("libs/libkoreader-lfs").mkdir(dir() .. "/events")
+    F.seq = (F.seq or 0) + 1
+    writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode(ev))
+end
+F.event = event
+
 function F.checkNow(extras)
-    do
-        local k, path = extras.cache_key, extras.path
-        table.insert(F.calls, "CHECK " .. path)
-        local ev = { kind = "checked", key = k }
-        local b, e = fetch(path)
-        if type(b) ~= "table" then ev.err = tostring(e or "no answer")
-        else
-            local own = load(dir() .. "/" .. E.OC.hash(k) .. ".lua")
-            own = own and own.key == k and type(own.body) == "table" and own or nil
-            local saved = own and own.body
-            if not saved then
-                -- The mirror's pages, as OC.lookup cuts them.
-                local w = C().listWindow(path)
-                if w then
-                    for _, size in ipairs({ false, 50, 25 }) do
-                        local fk = C().key({ account = extras.owner, server = extras.server, method = "GET", path = C().mirrorPage(w.identity, 1, size or nil) })
-                        local first = load(mdir() .. "/" .. E.OC.hash(fk) .. ".lua")
-                        if first and first.key == fk then
-                            local pages = { first.body }
-                            for n = 2, C().pageCount(first.body.total, size or nil) do
-                                local pk = C().key({ account = extras.owner, server = extras.server, method = "GET", path = C().mirrorPage(w.identity, n, size or nil) })
-                                local pe = load(mdir() .. "/" .. E.OC.hash(pk) .. ".lua")
-                                pages[n] = pe and pe.body
-                            end
-                            saved = C().slice(w, pages, size or nil)
-                            break
-                        end
-                    end
+    local k, path = extras.cache_key, extras.path
+    table.insert(F.calls, (extras.mode == "store" and "STORE " or "CHECK ") .. path)
+    local ev = { kind = "checked", key = k }
+    local b, e = fetch(path)
+    if type(b) ~= "table" then ev.err = tostring(e or "no answer"); return event(ev) end
+    local st = F.db()
+    F.own(extras.owner)
+    local template = extras.template ~= "" and extras.template or F.meta("detail_template")
+    if extras.template and extras.template ~= "" then F.setMeta("detail_template", extras.template) end
+    E.Db.close(F.dbPath())
+    local saved = E.Store.read(extras.owner, k, path, template)
+    E.Db.close(F.dbPath())
+    if saved and not C().revalidate(saved.body, b, 200) then
+        ev.unchanged, ev.saved = true, true
+        local t = now()
+        if saved.table == "lists" then rows("UPDATE lists SET validated_at = ? WHERE identity = ?", t, C().listWindow(path).identity)
+        elseif saved.table == "books" then rows("UPDATE books SET detail_at = ? WHERE id = ?", t, C().detailId(path, template, F.FakeStore.SENTINEL))
+        else rows("UPDATE entries SET validated_at = ?, stale = NULL WHERE key = ?", t, k) end
+        return event(ev)
+    end
+    st:save(k, path, C().settle(saved and saved.body, b, extras.mode), now(), template)
+    ev.changed, ev.at = true, now()
+    event(ev)
+end
+
+---------------------------------------------------------------- writes (CacheStore.patch)
+
+function F.patch(extras)
+    UIManager:scheduleIn(0.1, function()
+        W.in_companion = true
+        local okc, err = pcall(F.patchNow, extras)
+        W.in_companion = nil
+        if not okc then error(err, 0) end
+    end)
+end
+
+function F.patchNow(extras)
+    F.patches = (F.patches or 0) + 1
+    if extras.wipe == "1" then return F.wipe() end
+    local st = F.db()
+    local id = tonumber(extras.id)
+    local fields = extras.fields ~= "" and C().decode(extras.fields or "") or nil
+    st:begin()
+    local n = 0
+    if id and type(fields) == "table" then
+        local r = rows("SELECT item, detail FROM books WHERE id = ?", id)[1]
+        if r then
+            for i, col in ipairs({ "item", "detail" }) do
+                local body = decodeRow(r[i])
+                if type(body) == "table" and C().patch(body, id, fields) > 0 then
+                    rows("UPDATE books SET " .. col .. " = ? WHERE id = ?", C().encode(body), id); n = n + 1
                 end
             end
-            if not C().revalidate(saved, b, 200) then
-                ev.unchanged, ev.saved = true, own and true or nil
-            else
-                local body = C().settle(saved, b, extras.mode)
-                local s = C().encode({ key = k, body = body, fetched_at = now(), validated_at = now(), path = path })
-                writeFile(dir() .. "/" .. E.OC.hash(k) .. ".lua", s)
-                local ids = {}
-                for id in pairs(C().ids(body)) do table.insert(ids, id) end
-                ev.changed, ev.bytes, ev.ids, ev.at = true, #s, ids, now()
+        end
+        for _, row in ipairs(rows("SELECT key, body FROM entries")) do
+            local body = decodeRow(row[2])
+            if type(body) == "table" and C().patch(body, id, fields) > 0 then
+                rows("UPDATE entries SET body = ? WHERE key = ?", C().encode(body), val(row[1])); n = n + 1
             end
         end
-        F.seq = (F.seq or 0) + 1
-        writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode(ev))
+        for _, row in ipairs(rows("SELECT identity, pos, item FROM list_items WHERE item IS NOT NULL")) do
+            local body = decodeRow(row[3])
+            if type(body) == "table" and C().patch(body, id, fields) > 0 then
+                rows("UPDATE list_items SET item = ? WHERE identity = ? AND pos = ?", C().encode(body), val(row[1]), val(row[2])); n = n + 1
+            end
+        end
     end
+    if extras.stale_home == "1" then rows("UPDATE entries SET stale = 1 WHERE home = 1") end
+    st:commit()
+    F.patched = (F.patched or 0) + n
 end
 
 ---------------------------------------------------------------- the storage limit (CacheWorker.storage)
@@ -456,25 +536,28 @@ function F.storagePlan(items, limit)
     return out
 end
 
-local function fsize(p) return tonumber(require("libs/libkoreader-lfs").attributes(p, "size")) or 0 end
+local function fsize(p) local f = io.open(p, "rb"); if not f then return 0 end local n = f:seek("end"); f:close(); return n or 0 end
 
-function F.storageItems(cover_dir, mirror_covers, mirror_bytes)
-    local items = {}
-    local idx = load(dir() .. "/index.lua") or { entries = {} }
-    for k, e in pairs(idx.entries or {}) do
-        table.insert(items, { k = "e:" .. k, bytes = e.bytes or 0, at = e.used_at or 0, kind = e.keep and "kept" or "cache" })
+-- The database (its browsing entries apart) and the cover folder, as CacheWorker.storageItems.
+function F.storageItems(cover_dir, mirror_covers)
+    local items, eb = {}, 0
+    for _, r in ipairs(rows("SELECT key, bytes, fetched_at, home FROM entries")) do
+        local b = tonumber(val(r[2])) or 0
+        eb = eb + b
+        table.insert(items, { k = "e:" .. val(r[1]), bytes = b, at = tonumber(val(r[3])) or 0, kind = tonumber(val(r[4])) == 1 and "kept" or "cache" })
     end
-    table.insert(items, { k = "index", bytes = fsize(dir() .. "/index.lua"), at = 0, kind = "kept" })
-    table.insert(items, { k = "mirror", bytes = mirror_bytes or 0, at = 0, kind = "kept" })
+    table.insert(items, { k = "db", bytes = math.max(0, fsize(F.dbPath()) + fsize(F.dbPath() .. "-journal") - eb), at = 0, kind = "kept" })
     if cover_dir and cover_dir ~= "" then
-        local keep = mirror_covers and load(mdir() .. "/cover_keep.lua") or {}
+        local keep = {}
+        if mirror_covers then for _, r in ipairs(rows("SELECT name FROM cover_keep")) do keep[val(r[1])] = true end end
         local lfs = require("libs/libkoreader-lfs")
         local okd, it = pcall(lfs.dir, cover_dir)
         for name in (okd and it or function() end) do
-            local a = name:match("%.jpg$") and lfs.attributes(cover_dir .. "/" .. name)
-            if type(a) == "table" and a.mode == "file" then
-                table.insert(items, { k = "c:" .. name, bytes = (a.size or 0) + fsize(cover_dir .. "/" .. name .. ".etag"),
-                    at = a.modification or 0, kind = keep[name] and "mirror_cover" or "cover" })
+            if name:match("%.jpg$") and readFile(cover_dir .. "/" .. name) then
+                local a = lfs.attributes(cover_dir .. "/" .. name)
+                local size = tonumber(lfs.attributes(cover_dir .. "/" .. name, "size")) or fsize(cover_dir .. "/" .. name)
+                table.insert(items, { k = "c:" .. name, bytes = size + fsize(cover_dir .. "/" .. name .. ".etag"),
+                    at = type(a) == "table" and a.modification or 0, kind = keep[name] and "mirror_cover" or "cover" })
             end
         end
     end
@@ -484,17 +567,18 @@ end
 F.storage_asks = 0
 function F.storageNow(extras)
     F.storage_asks = F.storage_asks + 1
-    local st = F.state()
+    local st = F.db()
     local limit = tonumber(extras.limit)
     local cover_dir = extras.cover_dir ~= "" and extras.cover_dir or nil
-    local items = F.storageItems(cover_dir, extras.mirror_covers == "1", st and st.bytes or 0)
+    local items = F.storageItems(cover_dir, extras.mirror_covers == "1")
     local plan = F.storagePlan(items, limit)
     local by = {}
     for _, e in ipairs(items) do by[e.k] = e end
-    local drop, removed = {}, { cache = 0, cover = 0, mirror_cover = 0 }
+    local removed = { cache = 0, cover = 0, mirror_cover = 0 }
+    st:begin()
     for _, k in ipairs(plan.drop) do
         local e = by[k]
-        if k:match("^e:") then table.insert(drop, { key = k:sub(3), used_at = e.at })
+        if k:match("^e:") then rows("DELETE FROM entries WHERE key = ?", k:sub(3))
         elseif cover_dir then os.remove(cover_dir .. "/" .. k:sub(3)); os.remove(cover_dir .. "/" .. k:sub(3) .. ".etag") end
         removed[e.kind] = removed[e.kind] + 1
     end
@@ -503,10 +587,9 @@ function F.storageNow(extras)
     for _, e in ipairs(items) do
         if not gone[e.k] then totals.used = totals.used + e.bytes; totals[e.kind] = totals[e.kind] + e.bytes end
     end
-    writeFile(dir() .. "/storage.lua", C().encode({ totals = totals, at = now() }))
-    F.seq = (F.seq or 0) + 1
-    writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode({ kind = "storage", why = extras.reason,
-        drop = drop, totals = totals, removed = removed, used = plan.used, after = plan.after, limit = limit }))
+    F.setMeta("storage", C().encode({ totals = totals, at = now() }))
+    st:commit()
+    event({ kind = "storage", why = extras.reason, totals = totals, removed = removed, used = plan.used, after = plan.after, limit = limit })
 end
 
 function F.storage(extras)
@@ -531,23 +614,10 @@ function F.copiesNow(extras)
         local want, details = {}, {}
         for _, b in ipairs(ask.books or {}) do want[tostring(b.book_id)] = true end
         for id, d in pairs(ask.eob or {}) do details[tostring(id)] = { files = d.files, at = d.saved_at or 0 } end
-        local idx = load(dir() .. "/index.lua") or { entries = {} }
-        for key, meta in pairs(idx.entries or {}) do
-            local path = tostring(meta.path or "")
-            local id = path:match("/catalog/books/(%d+)$") or path:match("/catalog/books/(%d+)%?")
-            if id and want[id] and (not details[id] or (meta.validated_at or 0) >= details[id].at) then
-                local e = load(dir() .. "/" .. E.OC.hash(key) .. ".lua")
-                if e and e.key == key and type(e.body) == "table" and type(e.body.files) == "table" then details[id] = { files = e.body.files, at = meta.validated_at or 0 } end
-            end
-        end
-        if ask.owner and ask.server and ask.detail_template then
-            for id in pairs(want) do
-                local k = C().key({ account = ask.owner, server = ask.server, method = "GET", path = fill(ask.detail_template, ask.sentinel, id) })
-                local e = load(mdir() .. "/" .. E.OC.hash(k) .. ".lua")
-                if e and e.key == k and type(e.body) == "table" and type(e.body.files) == "table"
-                    and (not details[id] or (e.validated_at or 0) >= details[id].at) then
-                    details[id] = { files = e.body.files, at = e.validated_at or 0 }
-                end
+        for id in pairs(want) do
+            local body, at = F.detail(tonumber(id))
+            if type(body) == "table" and type(body.files) == "table" and (not details[id] or (at or 0) >= details[id].at) then
+                details[id] = { files = body.files, at = at or 0 }
             end
         end
         local found, gone = {}, 0
@@ -567,8 +637,7 @@ function F.copiesNow(extras)
         table.sort(found, function(x, y) return x.path < y.path end)
         ev.checked, ev.found, ev.gone = #(ask.books or {}), found, gone
     end
-    F.seq = (F.seq or 0) + 1
-    writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode(ev))
+    event(ev)
 end
 
 function F.copies(extras)
@@ -1023,13 +1092,11 @@ function FS.tags()
         if not (path:match("/catalog/books/%d+$") or path:match("/catalog/books/%d+%?")) then return end
         if type(body) == "table" and type(body.tags) == "table" then table.insert(details, body.tags) end
     end
-    local idx = load(dir() .. "/index.lua") or { entries = {} }
-    for key, meta in pairs(idx.entries or {}) do
-        local e = load(dir() .. "/" .. E.OC.hash(key) .. ".lua")
-        if e and e.key == key then add(meta.path, e.body) end
-    end
-    for name in lfs.dir(mdir()) do
-        if name:match("^%x+%.lua$") and #name == 12 then local e = load(mdir() .. "/" .. name); if e then add(e.path, e.body) end end
+    if F._st or io.open(F.dbPath(), "rb") then
+        for _, r in ipairs(rows("SELECT detail FROM books WHERE detail IS NOT NULL ORDER BY id")) do
+            local body = decodeRow(r[1])
+            if type(body) == "table" and type(body.tags) == "table" then table.insert(details, body.tags) end
+        end
     end
     local counts, shown = {}, {}
     for _, tags in ipairs(details) do
@@ -1123,7 +1190,8 @@ function F.receive(intent)
     elseif intent.action:match("%.STORAGE$") then F.storage(intent.extras)
     elseif intent.action:match("%.COPIES$") then F.copies(intent.extras)
     elseif intent.action:match("%.SLEEP_REFRESH$") then F.sleep(intent.extras)
-    elseif intent.action:match("%.RECHECK$") then F.recheck(intent.extras) end
+    elseif intent.action:match("%.RECHECK$") then F.recheck(intent.extras)
+    elseif intent.action:match("%.PATCH$") then F.patch(intent.extras) end
 end
 
 -- The companion was stopped mid-run (its status stops moving).

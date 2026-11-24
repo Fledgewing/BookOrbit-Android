@@ -24,24 +24,18 @@ class CopiesTest {
 
     @Test fun theNewestSavedDetailWinsAndOnlyCopiesOnTheReaderCount() {
         val root = Files.createTempDirectory("cp").toFile()
-        val w = CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, now = { 500L }, log = {})
+        val w = CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, now = { 500L }, log = {}, openSql = { JdbcSql(it) })
         val books = File(root, "books").apply { mkdirs() }
         File(books, "b.epub").writeText("x")
         File(books, "c.epub").writeText("x")
         val owner = "reader|https://books.example"
         val server = "https://books.example"
         val template = "/koreader/plugin/catalog/books/987654321?variant=v"
-        // Book 2: the end-of-book cache is older than the mirror's detail, which has the new hash.
-        val mkey = MirrorLogic.key(owner, server, MirrorLogic.fillBytes(template, "987654321", "2"))
-        File(root, "mirror").mkdirs()
-        File(root, "mirror/${MirrorLogic.hash(mkey)}.lua").writeBytes(LuaValue.encode(sortedMapOf<String, Any?>("key" to mkey,
-            "body" to sortedMapOf("id" to 2L, "files" to files(20, "srv2")), "validated_at" to 200L, "path" to "p")))
-        // Book 3: the cache's own entry, newer than the end-of-book cache, with a changed hash; its copy is gone.
-        val ckey = "k3"
-        File(root, "${MirrorLogic.hash(ckey)}.lua").writeBytes(LuaValue.encode(sortedMapOf<String, Any?>("key" to ckey,
-            "body" to sortedMapOf("id" to 3L, "files" to files(30, "srv3")), "validated_at" to 300L, "path" to "p")))
-        File(root, "index.lua").writeBytes(LuaValue.encode(sortedMapOf<String, Any?>("entries" to sortedMapOf(
-            ckey to sortedMapOf<String, Any?>("path" to "/koreader/plugin/catalog/books/3?variant=v", "validated_at" to 300L)))))
+        // Book 2: the end-of-book cache is older than the saved detail, which has the new hash.
+        w.store.own(owner)
+        w.store.putDetail(2L, sortedMapOf("id" to 2L, "files" to files(20, "srv2")), 200L)
+        // Book 3: a saved detail newer than the end-of-book cache, with a changed hash; its copy is gone.
+        w.store.putDetail(3L, sortedMapOf("id" to 3L, "files" to files(30, "srv3")), 300L)
         File(root, "copies").mkdirs()
         File(root, "copies/ask.lua").writeBytes(LuaValue.encode(sortedMapOf<String, Any?>(
             "books" to listOf(book("old2", "${books.path}/b.epub", 2, 20), book("old3", "${books.path}/gone.epub", 3, 30), book("cur4", "${books.path}/c.epub", 4, 40)),

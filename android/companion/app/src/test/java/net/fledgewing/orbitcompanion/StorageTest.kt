@@ -27,34 +27,39 @@ class StorageTest {
         }
     }
 
-    @Test fun countRemovesCoversAndNamesTheEntriesForThePlugin() {
+    @Test fun countRemovesBrowsingEntriesAndCoversButNeverTheSavedOnes() {
         val root = Files.createTempDirectory("s").toFile()
         val covers = File(root, "covers").apply { mkdirs() }
-        val w = CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, now = { 500L }, log = {})
-        File(root, "index.lua").writeBytes(LuaValue.encode(sortedMapOf<String, Any?>("entries" to sortedMapOf(
-            "list" to sortedMapOf<String, Any?>("bytes" to 3000L, "used_at" to 1L, "keep" to true),
-            "old" to sortedMapOf<String, Any?>("bytes" to 3000L, "used_at" to 2L),
-            "new" to sortedMapOf<String, Any?>("bytes" to 3000L, "used_at" to 50L),
-        ))))
+        var t = 0L
+        val w = CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, now = { t }, log = {}, openSql = { JdbcSql(it) })
+        val st = w.store
+        st.own("reader|https://books.example")
+        val big = sortedMapOf<String, Any?>("text" to "x".repeat(2900))
+        // Home is kept; two browsing entries, the older one used at 2.
+        t = 1; st.save("home", "/koreader/plugin/catalog/dashboard", big, 1, null)
+        st.save("old", "/koreader/plugin/catalog/collections", big, 2, null)
+        st.save("new", "/koreader/plugin/catalog/shelves", big, 50, null)
         fun cover(name: String, bytes: Int, at: Long) = File(covers, name).apply { writeBytes(ByteArray(bytes)); setLastModified(at * 1000) }
         cover("a.jpg", 2000, 10); cover("m1.jpg", 2000, 3); cover("m2.jpg", 2000, 40)
-        File(root, "mirror").mkdirs()
-        File(root, "mirror/cover_keep.lua").writeBytes(LuaValue.encode(sortedMapOf("m1.jpg" to true, "m2.jpg" to true)))
-        val index = File(root, "index.lua").length()
-        // 9000 entries + 6000 covers + the index; the limit leaves room for the index and 10000.
-        w.storage(CacheWorker.StorageAsk("start", 10_000L + index, covers.path, mirrorCovers = true))
+        st.keepCovers(listOf("m1.jpg", "m2.jpg"))
+        val before = w.storageItems(covers.path, true)
+        val used = before.sumOf { it.bytes }
+        val entry = before.first { it.k == "e:old" }.bytes
+        // Room for everything but one browsing entry and one cover.
+        t = 500
+        w.storage(CacheWorker.StorageAsk("start", used - entry - 1000, covers.path, mirrorCovers = true))
         assertFalse("the plain cover went", File(covers, "a.jpg").exists())
         assertTrue(File(covers, "m1.jpg").exists() && File(covers, "m2.jpg").exists())
+        assertEquals("the oldest browsing entry went; Home never", null, st.read("old", "/koreader/plugin/catalog/collections", null))
+        assertTrue(st.read("home", "/koreader/plugin/catalog/dashboard", null) != null && st.read("new", "/koreader/plugin/catalog/shelves", null) != null)
         val ev = File(root, "events").listFiles()!!.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
         assertEquals("storage", ev["kind"])
-        val drop = (ev["drop"] as List<*>).map { (it as Map<*, *>)["key"] }
-        assertEquals("the oldest browsing page; the kept list never", listOf("old"), drop)
-        assertEquals(2L, ((ev["drop"] as List<*>)[0] as Map<*, *>)["used_at"])
+        assertEquals(sortedMapOf("cache" to 1L, "cover" to 1L, "mirror_cover" to 0L), ev["removed"])
         val totals = ev["totals"] as Map<*, *>
-        assertEquals(10_000L + index, totals["used"])
         assertEquals(4000L, totals["mirror_cover"])
-        // The totals for the plugin's next start.
-        assertEquals(totals, (LuaValue.parse(File(root, "storage.lua").readBytes()) as Map<*, *>)["totals"])
+        assertEquals(used - entry - 2000, totals["used"])
+        // The totals for the plugin's next start, in the database.
+        assertEquals(totals, (LuaValue.parse(st.meta("storage")!!.toByteArray(Charsets.ISO_8859_1)) as Map<*, *>)["totals"])
         root.deleteRecursively()
     }
 }
