@@ -362,6 +362,29 @@ class HomeCommandsTest {
         assertEquals("other_app", HomeCommands.from(companionPageInFront = false, uncovered = true))
         assertNull(HomeCommands.from(companionPageInFront = false, uncovered = false))
     }
+
+    @Test
+    fun heldRotationNamesTheOrientation() {
+        // A portrait reader (Boox Page) held upside down (left-handed): ROTATION_180.
+        assertEquals("reverse_portrait", HeldRotation.name(2, naturalPortrait = true))
+        assertEquals("portrait", HeldRotation.name(0, naturalPortrait = true))
+        assertEquals("landscape", HeldRotation.name(1, naturalPortrait = true))
+        assertEquals("reverse_landscape", HeldRotation.name(3, naturalPortrait = true))
+        // A panel whose natural orientation is landscape.
+        assertEquals("landscape", HeldRotation.name(0, naturalPortrait = false))
+        assertEquals("reverse_portrait", HeldRotation.name(1, naturalPortrait = false))
+        assertEquals("reverse_landscape", HeldRotation.name(2, naturalPortrait = false))
+        assertEquals("portrait", HeldRotation.name(3, naturalPortrait = false))
+        assertNull(HeldRotation.name(4, naturalPortrait = true))
+    }
+
+    @Test
+    fun heldRotationOnlyWithHomeCommands() {
+        assertTrue(HeldRotation.sendsWith(HomeCommands.HOME))
+        assertTrue(HeldRotation.sendsWith(HomeCommands.HOME_SMART))
+        assertFalse(HeldRotation.sendsWith(HomeCommands.RESTART))
+        assertFalse(HeldRotation.sendsWith(null))
+    }
 }
 
 class WifiTestPlanTest {

@@ -13,6 +13,7 @@ function OrbitAndroid:init()
     state.module = self
     Grouping.install("init")
     Clicks.install("init")
+    keepRotationOnFileBrowser("init")
     self:onDispatcherRegisterActions()
     if self.ui and self.ui.menu then self.ui.menu:registerToMainMenu(self) end
     local in_reader = self.ui ~= nil and self.ui.document ~= nil

@@ -1909,6 +1909,68 @@ test("home: from the companion page while BookOrbit home is on top, no book -> B
     W.shown = {}
 end)
 
+-- Held left-handed (upside down) in another app; KOReader's file browser had forced upright
+-- (filemanager.lua:63-69). Home: BookOrbit Home turns back to how the device is held.
+test("home from another app with no book: BookOrbit Home keeps the held rotation", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    run(5)
+    local screen = preload.device.screen
+    local rot = 0
+    screen.getRotationMode = function() return rot end
+    local set = {}
+    function ui:onSetRotationMode(mode) table.insert(set, mode); rot = mode end
+    command(m, "home_smart", "other_app")
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.ROTATION"] = "reverse_portrait"
+    m:onResume()
+    run(2)
+    ok(#set == 1, "one turn"); ok(set[1] == 2, "upside down, as held")
+    ok(W.intent_extras["net.fledgewing.orbitcompanion.extra.ROTATION"] == nil, "extra consumed")
+    -- Already as held: nothing turns.
+    command(m, "home_smart", "other_app")
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.ROTATION"] = "reverse_portrait"
+    ui.bookorbit.catalog_browser = nil
+    m:onResume()
+    run(2)
+    ok(#set == 1, "no second turn")
+    screen.getRotationMode, ui.onSetRotationMode = nil, nil
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
+test("home from another app back to the open book: the book's rotation stays", function()
+    local ui, m = newUI(true)
+    run(5)
+    local screen = preload.device.screen
+    screen.getRotationMode = function() return 0 end
+    local turned = false
+    screen.setRotationMode = function() turned = true end
+    m:onSuspend(); W.clock = W.clock + 30
+    command(m, "home_smart", "other_app")
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.ROTATION"] = "reverse_portrait"
+    m:onResume()
+    run(2)
+    ok(not turned, "a book keeps its own rotation")
+    screen.getRotationMode, screen.setRotationMode = nil, nil
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
+test("a book closing: the new file browser keeps the book's rotation", function()
+    local calls = 0
+    FileManager.setRotationMode = function() calls = calls + 1 end
+    FileManager._orbit_keep_rotation = nil
+    local _, m = newUI(false)
+    run(1)
+    FileManager:setRotationMode()
+    ok(calls == 0, "KOReader's file browser rotation is not applied")
+    ok(FileManager._orbit_keep_rotation, "wrapped once")
+    local wrapped = FileManager.setRotationMode
+    newUI(false); run(1)
+    ok(FileManager.setRotationMode == wrapped, "not wrapped twice")
+    m = nil
+end)
+
 test("home: file browser on top of a stale BookOrbit home -> BookOrbit home brought to the top", function()
     store.lastfile = nil
     local ui, m = newUI(false)

@@ -44,6 +44,28 @@ function HomePlan.cameFromOtherApp(from_extra, suspended_s)
     return suspended_s == nil or suspended_s >= HomePlan.OTHER_APP_S
 end
 
+-- The rotation Home keeps (BookOrbit Home must never turn the device from how it is held).
+-- On Android, KOReader's rotation is the activity's requestedOrientation (koreader-base
+-- ffi/framebuffer_android.lua:78-91: mode 0-3 -> PORTRAIT, LANDSCAPE, REVERSE_PORTRAIT,
+-- REVERSE_LANDSCAPE), which turns the whole display. Every new file browser forces its own
+-- rotation, fm_rotation_mode or upright (filemanager.lua:63-69, from showFiles :1321: KOReader's
+-- start, reader.lua:291, and every book close, readerui.lua:594, since opening a book closes the
+-- file browser, readerui.lua:787-788), and BookOrbit Home sits over it.
+-- held: the companion's ROTATION extra, the display's orientation when Home was pressed.
+HomePlan.ROTATIONS = { portrait = 0, landscape = 1, reverse_portrait = 2, reverse_landscape = 3 }
+
+-- The KOReader rotation mode to set before Home's action, or nil to leave it. o: action
+-- (HomePlan.decide), held (ROTATION extra or nil), current (Screen:getRotationMode()), in_reader,
+-- locked (KOReader's "Lock auto rotation", lock_rotation). Never in a book: a book keeps its own
+-- rotation (readerview.lua:968-975), and one set here would be saved into it (:1220-1222).
+function HomePlan.rotation(o)
+    local mode = HomePlan.ROTATIONS[o.held or ""]
+    if mode == nil or o.locked or o.in_reader then return nil end
+    if o.action == "book" or o.action == "companion" then return nil end
+    if mode == o.current then return nil end
+    return mode
+end
+
 -- "<app> is disabled by <launcher label>: re-enable it in <label> › <hint>.", or a neutral text.
 -- Pure (tested): disabler is the label read at run time, or nil.
 function disabledText(app, disabler, hint)
