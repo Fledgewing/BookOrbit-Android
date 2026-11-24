@@ -9,6 +9,9 @@ on:
   pull_request:
     paths: ["android/**", "shared/**", "tools/**", ".github/workflows/android.yml"]
   workflow_dispatch:
+  # Keeps main's Gradle cache entry fresh: entries unused for 7 days are evicted.
+  schedule:
+    - cron: "17 9 * * 1"
 
 permissions:
   contents: read
@@ -23,13 +26,17 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          # Robolectric's Android jars (350 MB) from Maven Central, which answers shared runners
-          # with 429 Too Many Requests: downloaded once per build-file change, then cached.
-          cache: gradle
-          cache-dependency-path: |
-            android/companion/*.gradle.kts
-            android/companion/app/build.gradle.kts
-            android/companion/gradle/wrapper/gradle-wrapper.properties
+
+      # Gradle User Home (dependencies, Robolectric's 350 MB of Android jars, the wrapper) from
+      # the Actions cache. setup-java's `cache: gradle` keyed on an exact hash of the build files
+      # with no fallback, so any build-file change started from an empty cache and fetched
+      # everything from Maven Central, which answers shared runners with 429. setup-gradle falls
+      # back to the closest entry (restore keys), so a change downloads only what is new. PRs
+      # write too (into their own scope, which only that PR restores), so a PR that adds a
+      # dependency downloads it once, not on every push.
+      - uses: gradle/actions/setup-gradle@7296c772c13d12d9871528814b51fb2143c138ef # v6.4.1
+        with:
+          cache-read-only: false
 
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
