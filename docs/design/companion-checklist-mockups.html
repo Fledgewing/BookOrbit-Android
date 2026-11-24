@@ -1,0 +1,360 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Companion Setup Checklist</title>
+<style>
+  /* Layout: decisions first, what drove the design, then galleries of e-ink screens in shadow DOM. */
+  :root { --ink: #000; --g1: #444; --g2: #6e6e6e; --g3: #bbb; --g4: #e4e4e4; --paper: #fff;
+          --page: #eceeef; --pagefg: #15181a; --pagemuted: #4a5054; --rule: #c9cfd3; --card: #f7f8f9; --accent: #1d4e6e; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --page: #16191b; --pagefg: #e8ebed; --pagemuted: #a7aeb3; --rule: #343a3e; --card: #1e2225; --accent: #8cc3e6; color-scheme: dark } }
+  :root[data-theme="dark"] { --page: #16191b; --pagefg: #e8ebed; --pagemuted: #a7aeb3; --rule: #343a3e; --card: #1e2225; --accent: #8cc3e6; color-scheme: dark }
+  body { margin: 0; padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+         background: var(--page); color: var(--pagefg); font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.45; }
+  h1 { font-size: 26px; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 40px 0 6px; text-wrap: balance; }
+  .lead, .sub { color: var(--pagemuted); max-width: 70ch; margin: 0 0 18px; }
+  .doors { display: grid; gap: 10px; max-width: 900px; margin: 0 0 22px; padding: 0; list-style: none; }
+  .door { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; display: grid; grid-template-columns: 2.4em 1fr; gap: 4px 10px; }
+  .door .n { font-weight: 800; font-size: 18px; color: var(--accent); }
+  .door b { display: block; }
+  .door p { margin: 2px 0 0; color: var(--pagemuted); max-width: 75ch; }
+  .tag { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--pagemuted); }
+  .facts { max-width: 900px; margin: 0 0 8px; padding-left: 20px; }
+  .facts li { margin: 4px 0; }
+  .facts span { color: var(--pagemuted); }
+  .gallery { overflow-x: auto; padding-bottom: 8px; }
+</style>
+
+<h1>Companion setup checklist</h1>
+<p class="lead">ROADMAP 10a, Android. Today's Setup page is one flat list of up to 22 rows of equal weight. The redesign puts a summary first ("All set" or "2 things need you"), expands only what needs you, folds finished rows into one line per group and uses plain words. Every row that is off, skipped or not done yet says what doesn't work without it, in both Full and Add-on mode. Nothing has been built. I settled every reversible choice myself; the design doc lists them with their reasons.</p>
+
+<span class="tag">Decisions</span>
+<ol class="doors">
+  <li class="door"><span class="n">✓</span><div><b>No one-way doors.</b><p>All of it is wording and layout. Saved skips and snoozes keep their ids, so relabelling resets nothing.</p></div></li>
+  <li class="door"><span class="n">✓</span><div><b>"What you lose without it" shows in both modes</b><p>Your ruling: every optional or skipped row says "Without it: …", and every required row that isn't done says "Until then: …". One table holds the lines for both modes, and a test fails on any row without one.</p></div></li>
+</ol>
+
+<span class="tag">What drove the design</span>
+<ul class="facts">
+  <li>On a set-up Boox Page, 12 "done" rows pushed the one open row (Orbit's battery setting) halfway down. <span>Finished rows now take one line per group.</span></li>
+  <li>Battery was three rows with one fix. <span>It's now one row, with a detail page for each app.</span></li>
+  <li>"(NET_UP)", "(device admin)" and "Always-on on" are internals. <span>They move to Details, which has a Copy for support button.</span></li>
+  <li>The label said what to do ("Set Orbit as Home app") and "done" sat on the right. <span>Labels are now nouns, with the state on the line below and one verb on the button.</span></li>
+  <li>On the Boox, Orbit's battery setting is already the way Orbit needs it, and the reader doesn't let anyone change it. <span>That's a new state, "Set by the reader", and it counts as done.</span></li>
+  <li>E-ink: no animation, no spinner and no timed redraws. <span>Expanding a group takes one redraw, and state is shown by glyph and words, never by grey alone.</span></li>
+</ul>
+
+<h2>Before and after</h2>
+<p class="sub">Both are the same Boox Page in the same state: only Orbit's battery setting is open. Drawn at 3:4, which is the shape of all three readers (M8C 1404 × 1872, Boox Page and Go Color 7 1264 × 1680), at about 0.28 scale.</p>
+<div class="gallery"><div id="g1"></div></div>
+
+<h2>The five states</h2>
+<p class="sub">Black and white only. "Set by the reader" counts as done. Off or skipped rows and rows still checking are never counted and never prompt.</p>
+<div class="gallery"><div id="g0"></div></div>
+
+<h2>Ongoing: all set, needs you, a group, battery</h2>
+<p class="sub">The summary always comes first. Each open row sits under Needs you, expanded, with what doesn't work until it's fixed and one verb. Tap a group to open it; only one is open at a time.</p>
+<div class="gallery"><div id="g2"></div></div>
+
+<h2>Modes, skipped steps and kids' readers</h2>
+<p class="sub">Full and Add-on use the same page. Add-on counts only its four required rows and keeps its permissions under Optional. Both modes show "Without it: …" on every optional or skipped row.</p>
+<div class="gallery"><div id="g3"></div></div>
+
+<h2>First run, updates and details</h2>
+<p class="sub">First run is this same page with a Start button that runs the existing step-by-step walk. A step that arrives with an update gets a "New in" tag.</p>
+<div class="gallery"><div id="g4"></div></div>
+
+<template id="t-css"><style>
+  :host { display: block; }
+  .grid { display: flex; gap: 24px; align-items: flex-start; padding: 4px 2px 6px; width: max-content; }
+  figure { margin: 0; }
+  figcaption { font: 13px/1.4 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--pagemuted); margin-top: 8px; max-width: 360px; }
+  .scr { width: 360px; height: 480px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-radius: 6px; box-sizing: border-box; overflow: hidden;
+         display: flex; flex-direction: column; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; line-height: 1.3; position: relative; }
+  .sb { flex: none; display: flex; justify-content: space-between; padding: 5px 12px 3px; font-size: 9.5px; font-weight: 600; }
+  .nav { flex: none; margin-top: auto; display: flex; justify-content: space-around; padding: 5px 0 6px; font-size: 12px; color: var(--g1); border-top: 1px solid var(--g4); }
+  .body { flex: 1; min-height: 0; overflow: hidden; padding: 0 12px; }
+  .hd { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0 8px; }
+  .hd b { font-size: 16px; } .hd span { font-size: 11.5px; font-weight: 600; }
+  .sum { border: 2px solid var(--ink); border-radius: 5px; padding: 8px 10px; margin-bottom: 8px; }
+  .sum .t { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 7px; }
+  .sum .l { font-size: 10.5px; color: var(--g1); margin-top: 2px; }
+  .btn { display: block; text-align: center; border: 2px solid var(--ink); border-radius: 5px; font-weight: 700; font-size: 12.5px; padding: 6px 0; margin-top: 7px; }
+  .btn.solid { background: var(--ink); color: var(--paper); }
+  .sec { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin: 8px 0 2px; color: var(--g1); }
+  .row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--g4); }
+  .row .x { flex: 1; min-width: 0; }
+  .row .n { font-weight: 700; font-size: 12.5px; }
+  .row .s { font-size: 10.5px; color: var(--g1); }
+  .row .w { font-size: 10px; color: var(--g1); margin-top: 1px; }
+  .row .w b { color: var(--ink); }
+  .row .v { flex: none; font-weight: 700; font-size: 11.5px; }
+  .vb { flex: none; border: 2px solid var(--ink); border-radius: 5px; padding: 5px 9px; font-weight: 800; font-size: 11.5px; min-width: 34px; text-align: center; }
+  .vb.solid { background: var(--ink); color: var(--paper); }
+  .box { flex: none; width: 17px; height: 17px; box-sizing: border-box; border-radius: 3px; display: grid; place-items: center; font-size: 11px; font-weight: 900; line-height: 1; }
+  .box.done { background: var(--ink); color: var(--paper); }
+  .box.need { border: 2.5px solid var(--ink); }
+  .box.off { border: 1.5px dashed var(--ink); }
+  .box.chk { border: 1.5px solid var(--g2); color: var(--g1); font-size: 10px; letter-spacing: -1px; }
+  .grp { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--g4); }
+  .grp .x { flex: 1; min-width: 0; } .grp .n { font-weight: 800; font-size: 12.5px; } .grp .s { font-size: 10.5px; color: var(--g1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grp .chev { font-size: 15px; font-weight: 700; }
+  .grp.open { border-bottom: 2px solid var(--ink); }
+  .in { padding-left: 14px; border-left: 2px solid var(--ink); margin-left: 7px; }
+  .newt { display: inline-block; border: 1.5px solid var(--ink); border-radius: 3px; font-size: 8.5px; font-weight: 800; padding: 0 3px; margin-left: 4px; vertical-align: 1px; text-transform: uppercase; letter-spacing: .04em; }
+  .foot { font-size: 10px; color: var(--g1); padding: 7px 0; }
+  .note { border: 1.5px solid var(--ink); border-radius: 5px; padding: 6px 8px; font-size: 10.5px; margin-bottom: 8px; }
+  .i { display: inline-grid; place-items: center; width: 13px; height: 13px; border: 1.3px solid var(--ink); border-radius: 50%; font-size: 8.5px; font-weight: 800; font-style: normal; vertical-align: -1px; margin-left: 3px; }
+  .dim { color: var(--g2); }
+  /* Today's screen, redrawn from the device screenshot. */
+  .old .row { padding: 8px 0; border-bottom: 1px solid var(--g3); }
+  .old .n { font-weight: 400; font-size: 13.5px; } .old .s { font-size: 10px; color: var(--g2); }
+  .old .v { font-weight: 400; font-size: 12.5px; }
+  .old .ck { flex: none; width: 19px; height: 19px; box-sizing: border-box; border-radius: 3px; display: grid; place-items: center; font-size: 13px; font-weight: 900; background: var(--ink); color: var(--paper); }
+  .old .ck.e { background: none; border: 2px solid var(--ink); }
+  .legend { display: grid; gap: 0; width: 360px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); border-radius: 6px; padding: 4px 12px; box-sizing: border-box; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; }
+  .pin { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 30px; }
+  .pin span { border: 2px solid var(--ink); border-radius: 6px; text-align: center; font-size: 17px; font-weight: 700; padding: 9px 0; }
+  .dots { text-align: center; font-size: 20px; letter-spacing: 10px; margin: 8px 0 0; }
+  .kv { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--g4); font-size: 10.5px; }
+  .kv b { font-weight: 600; } .kv span { color: var(--g1); text-align: right; }
+</style></template>
+
+<template id="t-g0"><div class="grid">
+  <figure><div class="legend">
+    <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Done</div><div class="s">Folded into its group's one line</div></div></div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">Needs you</div><div class="s">Under Needs you, expanded, with "Until then: …" and one verb</div></div><span class="vb">Allow</span></div>
+    <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Set by the reader <i class="i">i</i></div><div class="s">This reader doesn't let anyone change it, and it's already as Orbit needs. Counts as done.</div></div></div>
+    <div class="row"><span class="box off">–</span><div class="x"><div class="n">Off or skipped</div><div class="s">Optional, or a step you skipped. "Without it: …" and Allow. Never counted, never prompts.</div></div><span class="vb">Allow</span></div>
+    <div class="row" style="border:none"><span class="box chk">…</span><div class="x"><div class="n">Checking</div><div class="s">Waiting for KOReader to report. Static text, no spinner. Not counted.</div></div></div>
+  </div><figcaption>1. The five states. Each has its own glyph and words, so they read on any e-ink panel without colour or grey.</figcaption></figure>
+</div></template>
+
+<template id="t-g1"><div class="grid">
+  <figure><div class="scr old"><div class="sb"><span>17:19</span><span>58%</span></div><div class="body">
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Orbit plugin installed (v0.11.2)</div><div class="s">up to date · installed v0.11.2</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Signed in to BookOrbit</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Recommended settings</div><div class="s">applied · tap to review</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Set Orbit as Home app</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Allow notifications</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck e"></span><div class="x"><div class="n">Battery: Unrestricted (Orbit)</div><div class="s">set App battery usage › Unrestricted</div></div><span class="v" style="font-weight:800">open ›</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Battery: Unrestricted (Tailscale)</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Battery: Unrestricted (KOReader)</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Tailscale signed in and connected</div><div class="s">connected · Always-on on</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Allow "lock screen" (device admin)</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Orbit plugin answered</div><div class="s">last 17:19 (NET_UP)</div></div><span class="v">done</span></div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>2. Today, v0.11.2 on a Boox Page, scrolled. Every row has the same weight. The one open row is sixth of about 20, Battery takes three rows, and internals like "NET_UP" and "device admin" are on the page.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>17:19</span><span>58%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum"><div class="t"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended settings on</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 5 · battery set by the reader for Orbit</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Connection</div><div class="s">Tailscale connected · Wi-Fi test passed 17:02</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box off">–</span><div class="x"><div class="n">Optional</div><div class="s">Screen saver from Orbit: off</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box chk" style="border-color:transparent">i</span><div class="x"><div class="n">Tips</div><div class="s">2 tips</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box chk" style="border-color:transparent">≡</span><div class="x"><div class="n">Details</div><div class="s">Last heard from KOReader 17:19</div></div><span class="chev">›</span></div>
+    <div class="foot">Full mode · change in Settings</div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>3. The redesign, in the same state. The Boox's own battery settings for Orbit are already right and can't be changed, so that row now counts as done ("set by the reader"). The page shows "All set" and fits on one screen with no scrolling.</figcaption></figure>
+</div></template>
+
+<template id="t-g2"><div class="grid">
+  <figure><div class="scr"><div class="sb"><span>09:41</span><span>81%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum"><div class="t"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended settings on</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 6 · Orbit keyboard skipped</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Connection</div><div class="s">Tailscale connected · Wi-Fi test passed</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box off">–</span><div class="x"><div class="n">Optional</div><div class="s">Screen saver from Orbit: off</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box chk" style="border-color:transparent">i</span><div class="x"><div class="n">Tips</div><div class="s">2 tips</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box chk" style="border-color:transparent">≡</span><div class="x"><div class="n">Details</div><div class="s">Last heard from KOReader 09:40</div></div><span class="chev">›</span></div>
+    <div class="foot">Full mode · change in Settings</div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>4. All set, M8C. A skipped step doesn't stop "All set". When anything is optional or skipped, the summary adds "Optional items below."</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>09:41</span><span>81%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum"><div class="t"><span class="box need"></span>2 things need you</div><span class="btn solid">Fix next</span><div class="l" style="margin-top:4px">Goes through each one and comes back here.</div></div>
+    <div class="sec">Needs you</div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">BookOrbit account</div><div class="s">Not signed in</div><div class="w"><b>Until then:</b> nothing syncs.</div></div><span class="vb">Sign in</span></div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">Battery</div><div class="s"><b>Stopped working:</b> KOReader is restricted again</div><div class="w"><b>Until then:</b> sleep syncs can be late.</div></div><span class="vb">Fix</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box need" style="border-width:1.5px"></span><div class="x"><div class="n">BookOrbit</div><div class="s">1 needs you · recommended settings on</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box need" style="border-width:1.5px"></span><div class="x"><div class="n">Permissions</div><div class="s">1 needs you · 4 of 5</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Connection</div><div class="s">Tailscale connected</div></div><span class="chev">›</span></div>
+    <div class="grp" style="border:none"><span class="box chk" style="border-color:transparent">≡</span><div class="x"><div class="n">Tips, Details</div></div><span class="chev">›</span></div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>5. Things need you. Open rows are lifted out of their groups and expanded, each with what doesn't work until it's fixed and one verb. A row that worked before and stopped says so. Fix next walks through them.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>09:44</span><span>81%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum" style="padding:6px 10px"><div class="t" style="font-size:13px"><span class="box done">✓</span>All set</div></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended settings on</div></div><span class="chev">›</span></div>
+    <div class="grp open"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div></div><span class="chev">⌄</span></div>
+    <div class="in">
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Home app</div><div class="s">Orbit is the Home app</div></div></div>
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Install apps</div><div class="s">Allowed: KOReader and updates</div></div></div>
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Notifications</div><div class="s">Allowed</div></div></div>
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Battery</div><div class="s">Unrestricted for Orbit, Tailscale, KOReader</div></div><span class="chev">›</span></div>
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Screen lock</div><div class="s">Sync and sleep turns the screen off</div></div></div>
+      <div class="row" style="border:none"><span class="box done">✓</span><div class="x"><div class="n">Clicker buttons</div><div class="s">On in every app</div></div></div>
+    </div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Connection</div><div class="s">Tailscale connected</div></div><span class="chev">›</span></div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>6. An expanded group. One tap opens it in place with a single redraw, and opening another group closes this one. Each row shows its state in plain words.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>09:45</span><span>81%</span></div><div class="body">
+    <div class="hd"><b>Battery</b><span>‹ Setup</span></div>
+    <p style="font-size:11px;margin:0 0 8px">Android pauses restricted apps while the screen is off. These three need to keep running, so sleep syncs and Wi-Fi switching happen on time.</p>
+    <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Orbit</div><div class="s">Set by the reader <i class="i">i</i></div></div></div>
+    <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Tailscale</div><div class="s">Unrestricted</div></div></div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">KOReader</div><div class="s">Restricted</div><div class="w"><b>Until then:</b> a sleep sync can be cut short; it finishes when you next wake the reader.</div></div><span class="vb">Set</span></div>
+    <div class="note" style="margin-top:12px"><b>Set</b> opens KOReader's battery page. Choose <b>Unrestricted</b>, then press Back to return here.</div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>7. Battery detail, Boox Page. One row per installed app, each with its own state and verb. The system page's path ("App battery usage › Unrestricted") is written once here, on the row that needs it.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>09:45</span><span>81%</span></div><div class="body">
+    <div class="hd"><b>Battery: Orbit</b><span>‹ Battery</span></div>
+    <div class="sum"><div class="t"><span class="box done">✓</span>Set by the reader</div><div class="l">Nothing to do.</div></div>
+    <p style="font-size:11.5px;margin:4px 0 8px">This reader's own battery settings already keep Orbit running, and they can't be changed here. There's nothing to do.</p>
+    <p style="font-size:11.5px;margin:0 0 8px">If this reader ever does start pausing Orbit, this row will say so and show what to do.</p>
+    <span class="btn">OK</span>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>8. "Can't be changed on this reader." The ⓘ opens this note. When the setting is already the way Orbit needs it, it counts as done. If the reader locked it the wrong way, the row would stay under Needs you with Help instead of a verb.</figcaption></figure>
+</div></template>
+
+<template id="t-g3"><div class="grid">
+  <figure><div class="scr"><div class="sb"><span>20:10</span><span>66%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum" style="padding:6px 10px"><div class="t" style="font-size:13px"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended: applied 7</div></div><span class="chev">›</span></div>
+    <div class="grp open"><span class="box off">–</span><div class="x"><div class="n">Optional</div><div class="s">What you get with each</div></div><span class="chev">⌄</span></div>
+    <div class="in">
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Install apps</div><div class="w"><b>On:</b> Orbit installs KOReader and its own updates.</div></div></div>
+      <div class="row"><span class="box off">–</span><div class="x"><div class="n">Notifications</div><div class="w"><b>Without it:</b> you see updates and steps only in KOReader and when you open Orbit.</div></div><span class="vb">Allow</span></div>
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Sleep sync</div><div class="w"><b>On:</b> syncs finish as the reader sleeps.</div></div></div>
+      <div class="row"><span class="box off">–</span><div class="x"><div class="n">Screen lock</div><div class="w"><b>Without it:</b> Sync and sleep asks you to press the power button.</div></div><span class="vb">Allow</span></div>
+      <div class="row" style="border:none"><span class="box off">–</span><div class="x"><div class="n">Battery</div><div class="w"><b>Without it:</b> sleep syncs can be late.</div></div><span class="vb">Allow</span></div>
+    </div>
+    <div class="foot">Add-on mode · change in Settings</div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>9. Add-on mode. Only the four required rows are counted. Its permissions sit under Optional, each saying what you get with it or lose without it. None of them is counted, walked or prompted.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>20:12</span><span>66%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum" style="padding:6px 10px"><div class="t" style="font-size:13px"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps, BookOrbit, Connection</div><div class="s">all done</div></div><span class="chev">›</span></div>
+    <div class="grp open"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 6</div></div><span class="chev">⌄</span></div>
+    <div class="in">
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Home app, Install apps, Notifications, Battery, Screen lock</div><div class="s">all allowed</div></div></div>
+      <div class="row" style="border:none"><span class="box off">–</span><div class="x"><div class="n">Orbit keyboard</div><div class="s">Skipped</div><div class="w"><b>Without it:</b> Send-key clicker actions work only inside KOReader.</div></div><span class="vb">Allow</span></div>
+    </div>
+    <div class="grp open"><span class="box off">–</span><div class="x"><div class="n">Optional</div></div><span class="chev">⌄</span></div>
+    <div class="in">
+      <div class="row" style="border:none"><span class="box off">–</span><div class="x"><div class="n">Screen saver from Orbit</div><div class="w"><b>Without it:</b> turning Sleep screen on or off needs a one-time USB command.</div></div><span class="vb">Show how</span></div>
+    </div>
+    <div class="foot">Full mode · change in Settings</div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>10. Full mode, with a skipped step and an optional row. Loss lines aren't limited to Add-on: a step you skipped with "Don't ask about this" stays calm and off in its group, says what you lose without it, and can be allowed again later. The screen-saver row comes from the sleep-screen design (PR #17).</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>16:05</span><span>44%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum"><div class="t"><span class="box need"></span>2 things need a grown-up</div><span class="btn solid">Unlock to fix</span><div class="l" style="margin-top:4px">Asks for the Settings PIN.</div></div>
+    <div class="sec">Needs a grown-up</div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">Tailscale</div><div class="s">Not connected</div><div class="w"><b>Until then:</b> no sync away from home Wi-Fi.</div></div></div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">Notifications</div><div class="s">Off</div><div class="w"><b>Until then:</b> updates show only when Orbit is opened.</div></div></div>
+    <div class="sec">Ready now</div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">Orbit plugin</div><div class="s">Updated; KOReader still runs 0.11.1</div><div class="w">It restarts when the screen next goes off.</div></div><span class="vb">Restart KOReader</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps, BookOrbit, Permissions</div><div class="s">all done</div></div><span class="chev">›</span></div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>11. A kid's reader with the Settings PIN set and locked. A kid can read what's wrong and tell a parent, but there are no verb buttons except PIN-free update follow-through, like Restart KOReader. Allow, "Don't ask about this" and Copy for support are hidden.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>16:06</span><span>44%</span></div><div class="body">
+    <div class="hd"><b>Settings PIN</b><span>Cancel</span></div>
+    <p style="font-size:12px;margin:0;text-align:center">Enter the PIN to fix setup.</p>
+    <div class="dots">● ● ○ ○</div>
+    <div class="pin"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span style="border:none"></span><span>0</span><span>⌫</span></div>
+    <p style="font-size:10.5px;margin:0;text-align:center;color:var(--g1)">After the PIN, Setup shows every button until the unlock ends.</p>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>12. "Unlock to fix" opens the existing PIN keypad. After the PIN, a parent sees the normal page (screens 4 and 5).</figcaption></figure>
+</div></template>
+
+<template id="t-g4"><div class="grid">
+  <figure><div class="scr"><div class="sb"><span>11:00</span><span>100%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum"><div class="t">Let's set up this reader</div><div class="l">8 steps, about 5 minutes. Each opens a page, and Back returns here.</div><span class="btn solid">Start</span></div>
+    <div class="sec">Steps</div>
+    <div class="row"><span class="box need" style="font-size:10px">1</span><div class="x"><div class="n">Install apps</div><div class="w"><b>Until then:</b> Orbit can't install KOReader.</div></div></div>
+    <div class="row"><span class="box need" style="font-size:10px">2</span><div class="x"><div class="n">KOReader</div><div class="w"><b>Until then:</b> nothing to read with.</div></div></div>
+    <div class="row"><span class="box need" style="font-size:10px">3</span><div class="x"><div class="n">BookOrbit plugin, Orbit plugin</div><div class="w"><b>Until then:</b> no library, no sync.</div></div></div>
+    <div class="row"><span class="box need" style="font-size:10px">4</span><div class="x"><div class="n">BookOrbit account</div><div class="w"><b>Until then:</b> nothing syncs.</div></div></div>
+    <div class="row"><span class="box need" style="font-size:10px">5</span><div class="x"><div class="n">Home app</div></div></div>
+    <div class="row" style="border:none"><span class="box need" style="font-size:10px">6</span><div class="x"><div class="n">Notifications, Battery, Screen lock, Tailscale</div></div></div>
+    <div class="foot">Full mode · chosen just now</div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>13. First run, after the mode choice. It's the same page: the summary offers Start, and the open rows are numbered. Start runs the existing step-by-step walk. There's no separate wizard.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>11:03</span><span>100%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum"><div class="t">Step 5 of 8: Home app</div><div class="l">Choose Orbit on the next page, then press Back.</div><span class="btn solid">Continue</span><span class="btn">Stop</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2</div></div></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended: applied 7</div></div></div>
+    <div class="grp"><span class="box need" style="border-width:1.5px"></span><div class="x"><div class="n">Permissions</div><div class="s">1 of 5</div></div></div>
+    <div class="grp"><span class="box need" style="border-width:1.5px"></span><div class="x"><div class="n">Connection</div><div class="s">Tailscale not connected</div></div></div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>14. During the walk. The summary names the current step, and finished groups collapse as you go. Stop leaves the rest under Needs you.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>08:15</span><span>72%</span></div><div class="body">
+    <div class="hd"><b>Setup</b><span>‹ Back</span></div>
+    <div class="sum"><div class="t"><span class="box need"></span>1 thing needs you</div><span class="btn solid">Fix next</span></div>
+    <div class="sec">Needs you</div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">Orbit keyboard <span class="newt">New in 0.12</span></div><div class="s">Off. Your clicker now has a Send key action.</div><div class="w"><b>Until then:</b> Send key works only inside KOReader.</div></div><span class="vb">Turn on</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps, BookOrbit, Connection</div><div class="s">all done</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box off">–</span><div class="x"><div class="n">Optional <span class="newt">New</span></div><div class="s">Screen saver from Orbit: off</div></div><span class="chev">›</span></div>
+    <div class="note" style="margin-top:8px">Updated to 0.12: what's new ›</div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>15. A new item after an update. A required one joins Needs you with a "New in" tag and the usual after-update prompt. An optional one only gets the tag, in Optional, and never prompts. The tag goes away once the row is done or at the next update.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>08:16</span><span>72%</span></div><div class="body">
+    <div class="hd"><b>Orbit Companion</b><span>Settings</span></div>
+    <div class="row"><div class="x"><div class="n">Wi-Fi</div></div><span class="v">On · connected</span></div>
+    <div class="row"><div class="x"><div class="n">Tailscale</div></div><span class="v">Connected</span></div>
+    <div class="row"><div class="x"><div class="n">Battery</div><div class="s">hours left, % per hour, history</div></div><span class="v">›</span></div>
+    <div class="sum" style="margin-top:10px"><div class="t"><span class="box need"></span>Setup: 1 thing needs you</div><div class="l">Orbit keyboard · tap to fix ›</div></div>
+    <span class="btn">Test network</span>
+    <div class="row" style="margin-top:6px"><div class="x"><div class="n">App version</div><div class="s">0.12.0 · up to date</div></div><span class="vb">Check</span></div>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>16. The ongoing status page. The "Setup (12/14)" button becomes the same summary card ("Setup: all set ✓" or what needs you). The "Setup needs you" prompt uses the same rows as screen 5.</figcaption></figure>
+
+  <figure><div class="scr"><div class="sb"><span>17:20</span><span>58%</span></div><div class="body">
+    <div class="hd"><b>Details</b><span>‹ Setup</span></div>
+    <div class="kv"><b>Orbit plugin last answered</b><span>17:19, after Wi-Fi came up (NET_UP)</span></div>
+    <div class="kv"><b>Plugin version KOReader runs</b><span>0.11.2</span></div>
+    <div class="kv"><b>Signed in (from the plugin)</b><span>yes</span></div>
+    <div class="kv"><b>Recommended settings</b><span>applied · 0 conflicts</span></div>
+    <div class="kv"><b>Battery: Orbit</b><span>already right · can't be changed</span></div>
+    <div class="kv"><b>Battery: Tailscale, KOReader</b><span>unrestricted</span></div>
+    <div class="kv"><b>Tailscale</b><span>connected · Always-on · no lockdown</span></div>
+    <div class="kv"><b>Frozen apps</b><span>none</span></div>
+    <div class="kv"><b>Mode, helpers</b><span>Full · all</span></div>
+    <div class="kv"><b>Wi-Fi off/on test</b><span>17:02 passed, reconnects in 4 s</span></div>
+    <span class="btn">Copy for support</span>
+  </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
+  <figcaption>17. Details. Internals like NET_UP, Always-on, lockdown and the raw battery states appear only here, ready to copy for a support conversation. Nothing on this page is counted.</figcaption></figure>
+</div></template>
+
+<script>
+  const css = document.getElementById("t-css").content;
+  for (const [host, t] of [["g0", "t-g0"], ["g1", "t-g1"], ["g2", "t-g2"], ["g3", "t-g3"], ["g4", "t-g4"]]) {
+    const root = document.getElementById(host).attachShadow({ mode: "open" });
+    root.appendChild(css.cloneNode(true));
+    root.appendChild(document.getElementById(t).content.cloneNode(true));
+  }
+</script>
