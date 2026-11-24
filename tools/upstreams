@@ -8,7 +8,11 @@
 #   tools/upstreams [sync] [name...]   clone or move each checkout to its pinned commit
 #   tools/upstreams list               print the pins
 #   tools/upstreams pin <name> <ref>   re-pin <name> to <ref> (a tag or branch) in the lock file
-# A checkout with local changes is left alone. Needs git; `pin` also needs gh.
+#   tools/upstreams check              run the upstream checks against the pinned source
+# Re-pinning bookorbit fetches it and runs the app-attestation check (tools/attest-check): it
+# fails when the new server requires attestation on a route Orbify calls. CI runs the same check
+# on every pull request (plugin-compat.yml).
+# A checkout with local changes is left alone. Needs git; `pin` also needs gh; `check` needs node.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 lock="$root/tools/upstreams.lock"
@@ -34,9 +38,24 @@ sync_one() { # name repo ref commit
     echo "$1: $2 $3 (${4:0:12}) in upstream/$1"
 }
 
+check_attest() {
+    if ! command -v node >/dev/null; then
+        echo "app-attestation check: needs node (tools/attest-check)" >&2
+        return 1
+    fi
+    if [ ! -d "$root/tools/attest-check/node_modules/typescript" ]; then
+        npm ci --prefix "$root/tools/attest-check" --no-audit --no-fund --silent </dev/null
+    fi
+    node "$root/tools/attest-check/check.mjs" --repo "$root" </dev/null
+}
+
 cmd="${1:-sync}"
 case "$cmd" in
     list) pins ;;
+    check)
+        sync_one $(pins | awk '$1 == "bookorbit"')
+        check_attest
+        ;;
     pin)
         name="${2:?usage: tools/upstreams pin <name> <ref>}"
         ref="${3:?usage: tools/upstreams pin <name> <ref>}"
@@ -48,6 +67,10 @@ case "$cmd" in
             '$1 == n && $0 !~ /^#/ {printf "%-17s %-28s %-23s %s\n", $1, $2, r, s; next} {print}' "$lock" >"$tmp"
         mv "$tmp" "$lock"
         echo "$name: $repo $ref ($sha)"
+        if [ "$name" = bookorbit ]; then
+            sync_one "$name" "$repo" "$ref" "$sha"
+            check_attest || { echo "bookorbit $ref breaks Orbify (above); the pin is written, don't land it as is" >&2; exit 1; }
+        fi
         ;;
     sync | *)
         if [ "$cmd" = sync ] && [ $# -gt 0 ]; then shift; fi
