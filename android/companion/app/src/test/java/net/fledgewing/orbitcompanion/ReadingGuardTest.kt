@@ -38,7 +38,7 @@ class ReadingGuardTest {
         Site("Ui.kt", "super.startActivity(intent, options)", 1, "EinkActivity's own override (no animation)"),
         Site("Ui.kt", "        startActivity(intent)", 1, "tryStart: Setup Fix and Settings taps"),
         Site("Launcher.kt", "startActivity(i)", 1, "the launcher page, shown by the Home activity (Home press or KOReader gone)"),
-        Site("Launcher.kt", "startActivity(Intent(this,", 3, "launcher page buttons"),
+        Site("Launcher.kt", "startActivity(Intent(this,", 2, "launcher page buttons"),
         Site("Clicker.kt", "startActivity(", 4, "clicker pages: the user's taps and key captures"),
         Site("Pages.kt", "startActivity(Intent(this,", 9, "companion pages: the user's taps, or opened from a page the user opened"),
         Site("Pages.kt", "a.startActivity(SettingsPage.section(a, \"sync\")", 1, "Setup (Add-on): the user tapped Turn on for a helper"),

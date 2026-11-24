@@ -50,6 +50,29 @@ object SettingsUi {
 
     fun extras(section: String): List<Extra> = EXTRAS.filter { it.section == section }
 
+    const val WAITING = "… Waiting for KOReader"
+
+    /** A shared row's line: what it does (and when it applies), then [status] on a line of its own. */
+    fun line(d: SettingDef, status: String?): String = buildString {
+        append(d.line)
+        if (d.applies == "restart") append(" Applies when KOReader restarts.")
+        if (!status.isNullOrEmpty()) append("\n").append(status)
+    }
+
+    /** A page the top page opens in place of a section that would only hold one row leading to it. */
+    enum class Direct { CLICKERS, PIN_SET }
+
+    /**
+     * No in-between screens (M8C feedback, 2026-11-24): Buttons in Full mode holds only "Clicker
+     * buttons ›" (its helper toggle is Add-on's), and Kids and PIN with no PIN only "Settings PIN
+     * ›": the top page opens that page directly. In Add-on each also has its helper switch, so the section stays.
+     */
+    fun direct(section: String, addon: Boolean, pinSet: Boolean): Direct? = when (section) {
+        "buttons" -> Direct.CLICKERS.takeIf { !addon }
+        "kids" -> Direct.PIN_SET.takeIf { !addon && !pinSet }
+        else -> null
+    }
+
     /** A search hit: a shared key or an extra's id, its section, and the parent to open instead when it is hidden. */
     data class Hit(val id: String, val section: String, val label: String, val shared: Boolean)
 
