@@ -777,6 +777,7 @@ local F = M.Finish
 local FC = JSON.fixture(here, "bookorbit/finish-cases.json")
 
 test("end of book: next in series, suggestions and author from the shared fixtures", function()
+    -- @fixture bookorbit/finish-cases.json#picker @fixture bookorbit/catalog-book.no-author.json @fixture bookorbit/catalog-book.no-series.json @fixture bookorbit/catalog-book.series-fractional.json @fixture bookorbit/catalog-book.series-gap.json @fixture bookorbit/catalog-book.series-last-all-read.json @fixture bookorbit/catalog-book.series-last-unread-earlier.json @fixture bookorbit/catalog-book.series-middle.json
     for _, c in ipairs(FC.picker) do
         local d = JSON.fixture(here, "bookorbit/" .. c.fixture)
         local n = F.next(d)
@@ -810,16 +811,19 @@ test("end of book: the card's words", function()
 end)
 
 test("end of book: drain plan, errors and the stale-push hold from the shared table", function()
+    -- @fixture bookorbit/finish-cases.json#drain
     for _, c in ipairs(FC.drain) do
         local p = F.plan(F.newJob({ hash = "h", rating = c.job.rating, status_seen = c.job.status_seen }), c.server)
         eq(p.read_status, c.expect.read_status, c.name)
         eq(p.rating, c.expect.rating, c.name .. " rating")
     end
+    -- @fixture bookorbit/finish-cases.json#errors
     for _, c in ipairs(FC.errors) do
         local job = F.newJob({ hash = "h" }); job.attempts = c.attempts_before
         eq(F.onError(job, c.code, 1000), c.expect, tostring(c.code))
         if c.next_try_in then eq(job.next_try_at, 1000 + c.next_try_in, tostring(c.code) .. " backoff"); eq(job.parked, c.parked) end
     end
+    -- @fixture bookorbit/finish-cases.json#hold
     for i, c in ipairs(FC.hold) do eq(F.holdPush(c.final, c.push, c.forward, c.released), c.expect, "hold " .. i) end
 end)
 
@@ -852,6 +856,7 @@ local function localState(t, keys)
 end
 
 test("local-first: overlay cases from the shared fixture", function()
+    -- @fixture localfirst/overlay-cases.json
     for _, c in ipairs(JSON.fixture(here, "localfirst/overlay-cases.json").cases) do
         local body = c.body
         local before = LF.serialize(body)
@@ -876,6 +881,7 @@ test("local-first: overlay cases from the shared fixture", function()
 end)
 
 test("local-first: freshness stamp cases from the shared fixture", function()
+    -- @fixture localfirst/stamp-cases.json
     for i, c in ipairs(JSON.fixture(here, "localfirst/stamp-cases.json").cases) do
         eq(LF.stamp(c), c.expect, "stamp " .. i)
     end
@@ -911,14 +917,17 @@ local function sameSet(a, b, what)
 end
 
 test("cache: keys (shared cases)", function()
+    -- @fixture cache/cases.json#keys
     for _, c in ipairs(CC.keys) do eq(C.key(c.a) == C.key(c.b), c.same, c.name) end
 end)
 
 test("cache: what is cached (shared cases)", function()
+    -- @fixture cache/cases.json#cacheable
     for _, c in ipairs(CC.cacheable) do eq(C.cacheable(c.method, c.path), c.cached, c.method .. " " .. c.path) end
 end)
 
 test("cache: reads (shared cases)", function()
+    -- @fixture cache/cases.json#reads
     for _, c in ipairs(CC.reads) do
         local serve, fetch = C.readPlan(c.entry, c.now, c.mode, c.offline)
         eq(serve, c.serve, c.name .. " serve"); eq(fetch, c.fetch, c.name .. " fetch")
@@ -926,6 +935,7 @@ test("cache: reads (shared cases)", function()
 end)
 
 test("cache: revalidation (shared cases)", function()
+    -- @fixture cache/cases.json#revalidate
     for _, c in ipairs(CC.revalidate) do
         local changed, stored = C.revalidate(c.cached, c.reply, c.status)
         eq(changed, c.changed, c.name .. " changed"); eq(stored, c.stored, c.name .. " stored")
@@ -933,13 +943,20 @@ test("cache: revalidation (shared cases)", function()
 end)
 
 test("cache: writes patch what they change (shared cases)", function()
+    -- @fixture cache/cases.json#writes
     for _, c in ipairs(CC.writes) do
         local entries = C.copy(c.entries)
         local stale = {}
         if c.write.status >= 200 and c.write.status < 300 then
             local eff = C.writeEffect(c.write.method, c.write.path, c.write.body)
+            -- What the companion is sent (CacheStore.patched applies it; CacheStoreTest reads the same cases).
+            eq(eff.id, c.effect.id, c.name .. " effect id"); eq(eff.stale_home, c.effect.stale_home, c.name .. " effect stale_home")
+            for k, v in pairs(c.effect.fields) do eq(C.encode(eff.fields[k]), C.encode(v), c.name .. " effect " .. k) end
+            for k, v in pairs(eff.fields) do ok(c.effect.fields[k] ~= nil or v == C.NULL, c.name .. " effect sets " .. k) end
             for _, body in pairs(entries) do if eff.id then C.patch(body, eff.id, eff.fields) end end
             if eff.stale_home then stale = { "dashboard" } end
+        else
+            eq(c.effect, nil, c.name .. ": a failed write sends nothing")
         end
         for k, want in pairs(c.expect) do eq(C.encode(entries[k]), C.encode(want), c.name .. " " .. k) end
         sameSet(stale, c.stale, c.name .. " stale")
@@ -947,6 +964,7 @@ test("cache: writes patch what they change (shared cases)", function()
 end)
 
 test("cache: covers fetch only what changed; ETag 304s keep the file (shared cases)", function()
+    -- @fixture cache/cases.json#covers
     for _, c in ipairs(CC.covers) do
         local failed = set(c.failed)
         local download, conditional, not_modified, remove, after = {}, {}, {}, {}, {}
@@ -973,10 +991,12 @@ test("cache: covers fetch only what changed; ETag 304s keep the file (shared cas
 end)
 
 test("cache: a check keeps the saved random pick; a Full refresh takes the new one (shared cases)", function()
+    -- @fixture cache/cases.json#settle
     for _, c in ipairs(CC.settle) do eq(C.encode(C.settle(c.cached, c.reply, c.mode)), C.encode(c.expect), c.name) end
 end)
 
 test("cache: the offline mirror's list identities, pages, re-paging and TTL (shared cases)", function()
+    -- @fixture cache/cases.json#mirror.windows
     for _, c in ipairs(CC.mirror.windows) do
         local w = C.listWindow(c.path)
         if c.list == false then
@@ -987,6 +1007,7 @@ test("cache: the offline mirror's list identities, pages, re-paging and TTL (sha
             eq(C.listWindow(C.mirrorPage(w.identity, 2)).identity, w.identity, "a mirror page keeps the identity")
         end
     end
+    -- @fixture cache/cases.json#mirror.slices
     for _, c in ipairs(CC.mirror.slices) do
         local pages = {}
         for _, n in ipairs(c.saved_pages) do
@@ -1004,11 +1025,13 @@ test("cache: the offline mirror's list identities, pages, re-paging and TTL (sha
             eq(b.seriesSummary.total, c.total, c.name .. " keeps the list's other fields")
         end
     end
+    -- @fixture cache/cases.json#mirror.repage
     for _, c in ipairs(CC.mirror.repage) do
         local fetch, drop = C.repage(c.old, c.new)
         eq(table.concat(fetch, ","), table.concat(c.fetch, ","), c.name .. " fetch")
         eq(table.concat(drop, ","), table.concat(c.drop, ","), c.name .. " drop")
     end
+    -- @fixture cache/cases.json#mirror.due
     for _, c in ipairs(CC.mirror.due) do eq(C.mirrorDue(c.mirror, c.now, c.ttl_days, c.lib_version), c.due, c.name) end
     ok(C.isSearch("/koreader/plugin/catalog/books?q=dune") and not C.isSearch("/koreader/plugin/catalog/books?page=1"), "search")
 end)
@@ -1039,23 +1062,27 @@ test("cache: LRU eviction keeps Home and the open book", function()
 end)
 
 test("cache: kept entries (Home, the mirror's lists and details) are outside the caps (shared cases)", function()
+    -- @fixture cache/cases.json#mirror.evict
     for _, c in ipairs(CC.mirror.evict) do
         eq(table.concat(C.evict(c.index, c.max_bytes, c.max_entries), ","), table.concat(c.drop, ","), c.name)
     end
 end)
 
 test("cache: the mirror's room and its stop note (shared cases; the eviction order is StorageLogic's)", function()
+    -- @fixture cache/cases.json#storage.room @fixture cache/cases.json#storage.notes
     for _, c in ipairs(CC.storage.room) do eq(C.storageRoom(c.totals, c.limit, c.what), c.room, c.name) end
     for _, c in ipairs(CC.storage.notes) do eq(C.limitText(c.what, c.done, c.total), c.text, c.text) end
     eq(C.STORAGE_DEFAULT_MB, 250, "250 MB by default")
 end)
 
 test("cache: a mirror request with no answer is retried, smaller pages, then skipped (shared cases)", function()
+    -- @fixture cache/cases.json#mirror.retry
     for _, c in ipairs(CC.mirror.retry) do
         local r = C.mirrorRetry(c.tries, c.size, c.page)
         eq(r.skip == true, c.skip == true, c.name .. " skip")
         if not c.skip then eq(r.wait_s, c.wait_s, c.name .. " wait"); eq(r.size, c.size_next, c.name .. " size") end
     end
+    -- @fixture cache/cases.json#mirror.small_pages
     for _, c in ipairs(CC.mirror.small_pages) do
         local pages = {}
         for _, n in ipairs(c.saved_pages) do
@@ -1361,6 +1388,7 @@ test("sleep screen: the SETTINGS extras are strings, rules one per line", functi
 end)
 
 test("sleep screen: Pick from and Leave out as sets, Library (shared/fixtures/sleep/cases.json sources)", function()
+    -- @fixture sleep/cases.json#sources
     local src = JSON.fixture(here, "sleep/cases.json").sources
     ok(#src.from >= 5 and #src.leave_out >= 3, "the shared cases")
     for _, c in ipairs(src.from) do eq(SP.normalizeFrom(c.wire), c.expect, c.name) end
@@ -1428,6 +1456,7 @@ end)
 -- reads the same file). Regenerate only when the plugin's rules change, then fix the companion.
 test("cache worker fixture: the plugin's keys, hashes, pages, cover names and entry format", function()
     local Cache = M.Cache
+    -- @fixture cache/worker.json
     local fx = JSON.fixture(here, "cache/worker.json")
     for _, k in ipairs(fx.keys) do
         local key = Cache.key({ account = k.account, server = k.server, method = "GET", path = k.path })
@@ -1491,6 +1520,7 @@ test("settings schema: every plugin setting is in it, or listed as state", funct
     eq(table.concat(missing, " "), "", "plugin settings missing from shared/settings/schema.json")
 end)
 
+-- @fixture settings/merge.json
 local MERGE = JSON.fixture(here, "settings/merge.json")
 for _, c in ipairs(MERGE.cases) do
     test("settings merge: " .. c.name, function()
@@ -1572,6 +1602,12 @@ end)
 test("recommended choices from the companion", function()
     local c = SettingsSync.choices("bo.auto_sync=ours; g.apps=mine;x=bogus;all=undo")
     eq(#c, 3); eq(c[1].id, "bo.auto_sync"); eq(c[2].what, "mine"); eq(c[3].id, "all")
+end)
+
+-- shared/fixtures/REGISTRY.json: every rule table has a row, and this suite reads what it names (test_registry.lua).
+test("fixture registry: the plugin reads every table it is named for, and every table has a row", function()
+    local problems = dofile(here .. "/test_registry.lua")(here)
+    eq(table.concat(problems, "\n"), "", "REGISTRY.json")
 end)
 
 print(string.format("%d passed, %d failed", passed, failed))

@@ -2817,6 +2817,7 @@ end)
 test("end of book: Download and open uses the reader's delivery variant and a supported file (hash_mismatch on M8C)", function()
     eobModules()
     local JSON = dofile(here .. "/json_mini.lua")
+    -- @fixture bookorbit/catalog-book.delivery-variants.json
     local fx = JSON.fixture(here, "bookorbit/catalog-book.delivery-variants.json")
     local DCat = {}
     DCat.__index = DCat
@@ -4906,6 +4907,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
         local f = assert(io.open(here .. "/../../../shared/fixtures/bookorbit/" .. name, "rb"))
         local v = JSON.decode(f:read("*a")); f:close(); return v
     end
+    -- @fixture bookorbit/catalog-sections.smart-scopes.json @fixture bookorbit/catalog-sections.collections.json
     local scopes, collections = fixture("catalog-sections.smart-scopes.json"), fixture("catalog-sections.collections.json")
     -- scopes.json is read back with KOReader's json module: the real decoder here.
     local jm = require("json")
@@ -5265,6 +5267,7 @@ end)
 
 -- The offline cache's database, as CacheStoreTest reads it: the same fixture, the plugin's reads.
 local JSONF = dofile(here .. "/json_mini.lua")
+-- @fixture cache/db.json @fixture cache/schema.sql
 local DBFX = JSONF.decode(io.open(here .. "/../../../shared/fixtures/cache/db.json", "rb"):read("*a"))
 local FakeStore = dofile(here .. "/fake_store.lua")(RE.Cache, SQ3, here .. "/../../../shared/fixtures/cache/schema.sql")
 

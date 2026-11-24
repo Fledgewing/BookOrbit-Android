@@ -25,6 +25,7 @@ import java.io.File
 class SharpCoversTest {
     private val ctx: Context = org.robolectric.RuntimeEnvironment.getApplication()
     private val password = "pw-Zq81-never-stored"
+    // @fixture opds/recent-feed.xml
     private val feed = File("../../../shared/fixtures/opds/recent-feed.xml").readBytes()
     private val requests = mutableListOf<Pair<String, Map<String, String>>>()
     private var reply: (String, Map<String, String>) -> SharpCovers.Resp = { _, _ -> SharpCovers.Resp(500, null, null) }

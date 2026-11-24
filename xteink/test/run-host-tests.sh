@@ -48,6 +48,8 @@ orbify_test() { # name [sources...]: the test reads its tables from shared/fixtu
     "$here/${name}_test.cpp" "$@" -o "$out/${name}_test"
   "$out/${name}_test" "$repo/shared/fixtures/bookorbit"
 }
+# shared/fixtures/REGISTRY.json: these tests read every rule table that names "cpp" (registry_test.cpp).
+orbify_test registry
 orbify_test finish "$core/FinishQueue.cpp"
 orbify_test end_of_book "$core/SeriesCard.cpp" "$core/EndPagePlan.cpp" "$core/FinishQueue.cpp" "$core/NextCover.cpp" \
   "$core/CatalogCache.cpp" "$core/LocalFirst.cpp"
