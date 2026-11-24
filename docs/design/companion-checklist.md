@@ -1,6 +1,8 @@
 # Companion setup checklist: one summary, grouped rows, plain words
 
-ROADMAP 10a. Android only (Orbit Companion). Status: **designing**. Nothing here is built.
+ROADMAP 10a. Android only (Orbit Companion). Status: **building**: approved (PR #20) and built in
+the companion (`C/ChecklistLogic.kt` for the rules, `C/ChecklistUi.kt` for the drawing,
+`Setup` in `C/Pages.kt` for the rows); not released yet.
 Mockups: [`companion-checklist-mockups.html`](companion-checklist-mockups.html).
 
 ## 1. Outcome

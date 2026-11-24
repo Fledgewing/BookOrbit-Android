@@ -37,6 +37,7 @@ object Attention {
         val last = p.lastSeenVersionCode
         if (last in 1 until now) {
             p.whatsNewFromCode = last
+            p.updatedFromCode = last
             p.updatedAt = System.currentTimeMillis()
             OLog.i("setup: updated from code $last to $now; what's new pending; prompts held ${AfterUpdate.GRACE_MS / 1000} s")
             // What is still wrong once the update settled prompts then.
@@ -52,7 +53,7 @@ object Attention {
     fun evaluate(ctx: Context, why: String, notify: Boolean = true): Eval {
         val p = Prefs(ctx)
         // A patch install or restart in progress isn't a step for the user.
-        val checks = Setup.checks(ctx).associateBy { SetupAttention.idOf(it.label) }
+        val checks = Setup.checks(ctx).associateBy { it.id }
             .let { all -> if (PatchInstaller.inProgress(ctx)) all - "patch" else all }
         // An update settling: the patch and a reconnecting clicker wait, and nothing prompts.
         val settling = AfterUpdate.settling(
@@ -254,34 +255,32 @@ class AttentionActivity : EinkActivity() {
             lines.forEach { root.addView(Ui.text(this, "• $it", 18f)) }
         }
         if (needed.isNotEmpty() || pending.isNotEmpty()) {
-            root.addView(Ui.gap(this, 12))
             val first = intent.getStringArrayExtra(EXTRA_FIRST).orEmpty().toList()
-            (first.filter { it in needed } + needed.filter { it !in first } + pending).forEach { id ->
-                val c = e.checks[id] ?: return@forEach
-                val card = Ui.card(this)
-                val label = c.label + if (id in e.result.regressed) " (changed since last time)" else ""
-                card.addView(Ui.text(this, label, 19f, bold = true))
-                card.addView(Ui.text(this, c.detail, 16f, color = Ui.MID))
-                card.addView(Ui.gap(this, 6))
-                val buttons = mutableListOf<android.view.View>()
-                c.action?.let { label ->
-                    // "Installing…" while the patch install runs: no second install.
-                    val busy = PatchInstaller.busy && id == "patch"
-                    buttons += Ui.button(this, label, solid = !busy, heightDp = 56, sp = 19f) {
-                        if (busy) return@button
-                        fixedHere = true
-                        c.run(this)
+            // The same rows as Setup's Needs you (companion-checklist D18): words, loss lines, verbs.
+            val checks = Setup.checks(this)
+            // Verbs stay: each goes through Pin.fix, which asks for the PIN first (Check.run).
+            val locked = false
+            val items = Setup.items(this, checks).filter { i -> i.row.ids.any { it in needed || it in pending } }
+            val rank = { i: Checklist.Item -> i.row.ids.minOf { id -> (first.indexOf(id).takeIf { it >= 0 } ?: (first.size + needed.indexOf(id).let { if (it < 0) needed.size else it })) } }
+            items.sortedBy(rank).forEach { i ->
+                val ids = i.row.ids.filter { it in needed }
+                // "Installing…" while the patch install runs: no second install.
+                val busy = PatchInstaller.busy && i.id == "patch"
+                val shown = if (ids.any { it in e.result.regressed }) i.copy(regressed = true) else i
+                val state = if (ids.isNotEmpty()) shown.copy(state = Checklist.State.NEEDS_YOU) else shown
+                root.addView(ChecklistUi.itemRow(this, state, locked, onVerb = {
+                    if (busy) return@itemRow
+                    fixedHere = true
+                    if (i.id == "battery" && i.row.verb == "Help") startActivity(Intent(this, SetupBatteryActivity::class.java))
+                    else Setup.checkFor(i, checks)?.run(this)
+                    render()
+                }, onTap = null))
+                if (ids.isNotEmpty()) {
+                    root.addView(Ui.button(this, "Don't ask about this", heightDp = 56, sp = 16f) {
+                        ids.forEach { Attention.ignore(this, it) }
                         render()
-                    }
+                    })
                 }
-                if (id in needed) {
-                    buttons += Ui.button(this, "Don't ask about this", heightDp = 56, sp = 16f) {
-                        Attention.ignore(this, id)
-                        render()
-                    }
-                }
-                if (buttons.isNotEmpty()) card.addView(Ui.weightRow(this, *buttons.toTypedArray()))
-                root.addView(card)
                 root.addView(Ui.gap(this, 8))
             }
             if (needed.isNotEmpty()) {
@@ -289,7 +288,7 @@ class AttentionActivity : EinkActivity() {
                     Attention.later(this, e)
                     finish()
                 })
-                root.addView(Ui.text(this, "Later: not again until the next update or until a step stops working. Skipped steps can be asked again in Settings.", 15f, color = Ui.MID))
+                root.addView(Ui.text(this, "Later: not again until the next update or until a step stops working. A step you skip stays in Setup, where Allow asks about it again.", 15f, color = Ui.MID))
             } else {
                 root.addView(Ui.button(this, "OK") { closeOut() })
             }
