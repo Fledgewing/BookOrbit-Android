@@ -63,6 +63,22 @@ int rowHeight(const Row& row, const Metrics& m, const bool touch) {
   return headingHeight(row, m) + bodyHeight(row, m, touch);
 }
 
+FontSpec fontSpec(const Font font) {
+  switch (font) {
+    case Font::Title:
+      return {Family::Bitter, 16, true, false};
+    case Font::Subtitle:
+      return {Family::Bitter, 12, false, true};
+    case Font::Row:
+      return {Family::LexendDeca, 12, false, false};
+    case Font::Small:
+      return {Family::LexendDeca, 10, false, false};
+    case Font::Heading:
+    default:
+      return {Family::LexendDeca, 10, true, false};
+  }
+}
+
 int headerHeight(const Page& page, const Metrics& m) {
   int h = 28 + lh(m, Font::Title) + 6;
   if (!page.subtitle.empty()) h += lh(m, Font::Subtitle);

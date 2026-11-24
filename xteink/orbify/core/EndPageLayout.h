@@ -28,6 +28,19 @@ namespace orbify::eob {
 
 enum class Font : uint8_t { Title, Subtitle, Row, Small, Heading, COUNT };
 
+// The built-in families the page's fonts come from, and each role's face: the device (EndPage.cpp)
+// registers and picks its fonts from this table, the host render loads the same TTFs from it, so a
+// role can't use a family the device never registered (rc3: every row blank on an X4 Pro reading
+// in Bitter, its Lexend Deca never loaded).
+enum class Family : uint8_t { LexendDeca, Bitter, COUNT };
+struct FontSpec {
+  Family family;
+  int points;
+  bool bold;
+  bool italic;
+};
+FontSpec fontSpec(Font font);
+
 // Fonts by role, measured on the device (GfxRenderer) or the host (FreeType, same TTFs and sizes).
 struct Metrics {
   int lineHeight[static_cast<int>(Font::COUNT)] = {};

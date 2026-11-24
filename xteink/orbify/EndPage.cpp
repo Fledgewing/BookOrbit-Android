@@ -12,6 +12,7 @@
 #include "core/NextCover.h"
 #endif
 
+#include <algorithm>
 #include <cstdio>
 #if CROSSINK_SCALABLE_FONTS
 #include <ScalableBuiltins.h>
@@ -42,33 +43,56 @@ std::string bookLabel(const orbify::CardBook& book) {
   return format(tr(STR_ORBIFY_BOOK_N), book.index) + DOT + book.title;  // "Book 3 · Title"
 }
 
-// The page's fonts by role: large serif title, the reader's large UI sizes for the rows.
-struct FontRole {
-  int id;
-  EpdFontFamily::Style regular;
-};
-FontRole fontFor(const eob::Font font) {
-  switch (font) {
-    case eob::Font::Title:
-      return {BITTER_16_FONT_ID, EpdFontFamily::BOLD};
-    case eob::Font::Subtitle:
-      return {BITTER_12_FONT_ID, EpdFontFamily::ITALIC};
-    case eob::Font::Row:
-      return {LEXENDDECA_12_FONT_ID, EpdFontFamily::REGULAR};
-    case eob::Font::Small:
-      return {LEXENDDECA_10_FONT_ID, EpdFontFamily::REGULAR};
-    case eob::Font::Heading:
-    default:
-      return {LEXENDDECA_10_FONT_ID, EpdFontFamily::BOLD};
+// The page's fonts by role (core/EndPageLayout's fontSpec): large serif title, the reader's large UI
+// sizes for the rows. draw() fills roleIds with what the renderer holds.
+int roleIds[static_cast<int>(eob::Font::COUNT)] = {};
+bool fallbackLogged = false;
+
+int builtinId(const eob::FontSpec spec) {
+  static constexpr int ids[2][4] = {
+      {LEXENDDECA_10_FONT_ID, LEXENDDECA_12_FONT_ID, LEXENDDECA_14_FONT_ID, LEXENDDECA_16_FONT_ID},
+      {BITTER_10_FONT_ID, BITTER_12_FONT_ID, BITTER_14_FONT_ID, BITTER_16_FONT_ID}};
+  const int size = std::min(3, std::max(0, (spec.points - 10) / 2));
+  return ids[spec.family == eob::Family::Bitter ? 1 : 0][size];
+}
+
+// Each role's font, registered first (the X4s build the families from outlines on demand: only the
+// reader's own family is there otherwise). A font the renderer still does not hold is drawn with
+// the UI font: plainer, never blank.
+void resolveFonts(GfxRenderer& renderer) {
+#if CROSSINK_SCALABLE_FONTS
+  bool needed[static_cast<int>(eob::Family::COUNT)] = {};
+  for (int f = 0; f < static_cast<int>(eob::Font::COUNT); ++f) {
+    needed[static_cast<int>(eob::fontSpec(static_cast<eob::Font>(f)).family)] = true;
+  }
+  if (needed[static_cast<int>(eob::Family::LexendDeca)]) ensureScalableBuiltinFamily(renderer, 0);
+  if (needed[static_cast<int>(eob::Family::Bitter)]) ensureScalableBuiltinFamily(renderer, 1);
+#endif
+  const auto& fonts = renderer.getFontMap();
+  for (int f = 0; f < static_cast<int>(eob::Font::COUNT); ++f) {
+    const int id = builtinId(eob::fontSpec(static_cast<eob::Font>(f)));
+    if (fonts.find(id) != fonts.end()) {
+      roleIds[f] = id;
+      continue;
+    }
+    roleIds[f] = UI_12_FONT_ID;
+    if (!fallbackLogged) {
+      fallbackLogged = true;
+      LOG_ERR("ORB", "End page: font %d not loaded; drawing with the UI font", id);
+    }
   }
 }
 
+struct FontRole {
+  int id;
+};
+FontRole fontFor(const eob::Font font) { return {roleIds[static_cast<int>(font)]}; }
+
 EpdFontFamily::Style styleOf(const eob::Font font, const bool bold, const bool italic) {
-  if (font == eob::Font::Title) return EpdFontFamily::BOLD;
-  if (font == eob::Font::Subtitle) return EpdFontFamily::ITALIC;
+  const eob::FontSpec spec = eob::fontSpec(font);
   int style = EpdFontFamily::REGULAR;
-  if (bold) style |= EpdFontFamily::BOLD;
-  if (italic) style |= EpdFontFamily::ITALIC;
+  if (bold || spec.bold) style |= EpdFontFamily::BOLD;
+  if (italic || spec.italic) style |= EpdFontFamily::ITALIC;
   return static_cast<EpdFontFamily::Style>(style);
 }
 
@@ -411,13 +435,7 @@ eob::Page OrbifyEndPage::page(const bool touch) const {
 
 void OrbifyEndPage::draw(GfxRenderer& renderer, const int x, const int y, const int width, const int height,
                          const bool touch) {
-#if CROSSINK_SCALABLE_FONTS
-  // The X4 Pro and X4 build their Bitter and Lexend Deca sizes from outlines, and only the reader's
-  // chosen family is registered with the renderer: the other one's text was not drawn at all
-  // ("GFX Font ... not found" on an X4 Pro reading in Bitter). The page uses both.
-  ensureScalableBuiltinFamily(renderer, 0);  // Lexend Deca
-  ensureScalableBuiltinFamily(renderer, 1);  // Bitter
-#endif
+  resolveFonts(renderer);
   const eob::Metrics metrics = metricsFor(renderer);
   fit(metrics, height - eob::headerHeight(page(touch), metrics), touch);
   lastLayout = eob::layout(page(touch), metrics, width, height);
