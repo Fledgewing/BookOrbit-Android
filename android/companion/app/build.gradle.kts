@@ -102,6 +102,8 @@ tasks.withType<Test>().configureEach {
     dependsOn(copyRobolectricJars)
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", robolectricJars.get().asFile.absolutePath)
+    // A failure in CI shows its message, not only the exception's class.
+    testLogging { exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
 }
 
 /**
