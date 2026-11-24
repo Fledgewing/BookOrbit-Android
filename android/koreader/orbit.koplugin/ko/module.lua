@@ -14,6 +14,10 @@ function OrbitAndroid:init()
     Grouping.install("init")
     Clicks.install("init")
     keepRotationOnFileBrowser("init")
+    if not state.start_patch_checked then
+        state.start_patch_checked = true
+        pcall(installStartPatch, "init")
+    end
     self:onDispatcherRegisterActions()
     if self.ui and self.ui.menu then self.ui.menu:registerToMainMenu(self) end
     local in_reader = self.ui ~= nil and self.ui.document ~= nil

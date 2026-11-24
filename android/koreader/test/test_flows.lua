@@ -1971,6 +1971,45 @@ test("a book closing: the new file browser keeps the book's rotation", function(
     m = nil
 end)
 
+test("start patch: installed into koreader/patches once, kept current", function()
+    local E = getfenv(Orbit.onSuspend)
+    local data = os.tmpname()
+    os.remove(data); os.execute("mkdir -p '" .. data .. "/patches'")
+    local saved_dir, saved_ds = E.PLUGIN_DIR, package.loaded.datastorage
+    E.PLUGIN_DIR = PLUGIN_MAIN:match("^(.*)/main%.lua$")
+    package.loaded.datastorage = { getDataDir = function() return data end }
+    local dest = data .. "/patches/1-orbit-start-rotation.lua"
+    local okr, first = pcall(E.installStartPatch, "test")
+    local second = okr and E.installStartPatch("test")
+    local h = io.open(dest, "wb"); h:write("-- an older copy\n"); h:close()
+    local third = okr and E.installStartPatch("test")
+    local src = io.open(E.PLUGIN_DIR .. "/patches/1-orbit-start-rotation.lua", "rb"):read("*a")
+    local got = io.open(dest, "rb"):read("*a")
+    E.PLUGIN_DIR, package.loaded.datastorage = saved_dir, saved_ds
+    os.execute("rm -rf '" .. data .. "'")
+    ok(okr, tostring(first))
+    ok(first == true, "installed"); ok(second == false, "already current"); ok(third == true, "replaced an older copy")
+    ok(got == src, "the plugin's copy")
+end)
+
+test("home at KOReader's start after the start patch: no second turn", function()
+    store.lastfile = nil
+    local ui, m = newUI(false)
+    run(5)
+    local screen = preload.device.screen
+    screen.getRotationMode = function() return 2 end
+    local set = {}
+    function ui:onSetRotationMode(mode) table.insert(set, mode) end
+    ORBIT_START_ROTATION = 2
+    m:smartHome("start", "other_app", "smart", "landscape")
+    run(2)
+    ORBIT_START_ROTATION = nil
+    ok(#set == 0, "the start kept the held rotation")
+    screen.getRotationMode, ui.onSetRotationMode = nil, nil
+    ui.bookorbit.catalog_browser = nil
+    W.shown = {}
+end)
+
 test("home: file browser on top of a stale BookOrbit home -> BookOrbit home brought to the top", function()
     store.lastfile = nil
     local ui, m = newUI(false)
