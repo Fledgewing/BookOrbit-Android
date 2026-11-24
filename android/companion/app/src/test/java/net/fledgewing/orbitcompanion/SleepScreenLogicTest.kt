@@ -18,11 +18,35 @@ class SleepScreenLogicTest {
         for (n in 0 until cases.length()) {
             val c = cases.getJSONObject(n)
             val pool = c.getJSONArray("pool").let { a -> (0 until a.length()).map { a.getLong(it) } }
-            val st = c.getJSONObject("state").let { SleepRotation.State(it.getLong("shown"), it.getLong("changed_at")) }
-            val d = SleepRotation.decide(SleepMode.of(c.getString("mode"))!!, c.getInt("hours"), c.getLong("now"), pool, c.getBoolean("current"), st)
-            val next = c.getJSONObject("next").let { SleepRotation.State(it.getLong("shown"), it.getLong("changed_at")) }
+            val st = c.getJSONObject("state").let { SleepRotation.State(it.getLong("shown"), it.getLong("changed_at"), shows(it)) }
+            // Every sleep's draws, in order (n -> 0 until n); the X4's host test reads the same.
+            val draws = c.optJSONArray("rand")?.let { a -> (0 until a.length()).map { a.getInt(it) } } ?: emptyList()
+            var drawn = 0
+            val d = SleepRotation.decide(
+                SleepMode.of(c.getString("mode"))!!, c.getInt("hours"), c.getLong("now"), pool, c.getBoolean("current"), st,
+                advance = c.optBoolean("advance", true),
+            ) { draws.getOrElse(drawn++) { 0 } }
+            val next = c.getJSONObject("next").let { SleepRotation.State(it.getLong("shown"), it.getLong("changed_at"), shows(it)) }
             assertEquals(c.getString("name"), c.getString("show"), d.show)
             assertEquals(c.getString("name"), next, d.next)
+        }
+    }
+
+    private fun shows(o: JSONObject): Map<Long, Int> =
+        o.optJSONObject("shows")?.let { s -> s.keys().asSequence().associate { it.toLong() to s.getInt(it) } } ?: emptyMap()
+
+    /** shared/fixtures/sleep/cases.json "batch": Every sleep's carry at a refresh (R4b), the X4's too. */
+    @Test
+    fun everySleepCarryFollowsTheSharedCases() {
+        val batch = JSONObject(File("../../../shared/fixtures/sleep/cases.json").readText()).getJSONArray("batch")
+        assertTrue(batch.length() >= 3)
+        for (n in 0 until batch.length()) {
+            val c = batch.getJSONObject(n)
+            val prev = c.getJSONArray("prev").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
+            val (carry, retired) = SleepPoolLogic.carry(prev.map { it.getLong("id") }, prev.associate { it.getLong("id") to it.getInt("shows") })
+            val ids = { k: String -> c.getJSONArray(k).let { a -> (0 until a.length()).map { a.getLong(it) } } }
+            assertEquals(c.getString("name"), ids("carry"), carry)
+            assertEquals(c.getString("name"), ids("retired"), retired.toList())
         }
     }
 

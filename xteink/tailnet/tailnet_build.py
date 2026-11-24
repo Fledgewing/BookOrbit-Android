@@ -252,6 +252,10 @@ SWITCHES = {
     # Patch 0036, the next book's cover on the End-of-Book page: X4 Pro and X4 only (the X3's flash);
     # it keeps its ETags in the cache above.
     "CROSSINK_TAILNET_ORBIFY_EOB_COVER":  (0,      1,      1),
+    # Patch 0039, the sleep screen (ROADMAP 11, docs/design/lock-screen.md): BookOrbit Pick, its
+    # batch of covers on the card, and the text and battery extras. X4 Pro and X4 only: the X3 builds
+    # none of it, its settings' strings included (ORBIFY_I18N_SKIP below).
+    "CROSSINK_TAILNET_ORBIFY_SLEEP":      (0,      1,      1),
 }
 # Switches that stand for wolfSSL defines rather than a define of their own.
 WOLFSSL_SWITCH_DEFINES = {
@@ -282,6 +286,13 @@ def switch_value(name):
 
 
 SWITCH_VALUES = {name: switch_value(name) for name in SWITCHES}
+
+# Sources whose StrIds a reader builds without: gen_i18n.py (patched by 0039, run after this script
+# in the same process) leaves them out of its scan, so their strings stay out of the string table.
+_I18N_SKIP = []
+if not SWITCH_VALUES["CROSSINK_TAILNET_ORBIFY_SLEEP"]:
+    _I18N_SKIP.append("SleepSettings.cpp")
+os.environ["ORBIFY_I18N_SKIP"] = ",".join(_I18N_SKIP)
 
 print(f"Tailnet switches for {pioenv} (column {SWITCH_COLUMN}):")
 for _name, _value in SWITCH_VALUES.items():

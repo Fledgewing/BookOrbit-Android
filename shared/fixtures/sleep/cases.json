@@ -1,5 +1,5 @@
 {
- "_comment": "Not a recording: the sleep screen's rotation rule (docs/design/lock-screen.md R4, F1, F4). At sleep (or a picture redraw): mode, X hours, now (ms), the pool's cover ids in order (only covers on the device), whether a current book cover exists, and the state (the cover shown last and when it last changed). show: pool:<id>, current, default (the drawn \"Sleeping\" page) or off; next: the state after.",
+ "_comment": "Not a recording: the sleep screen's rotation rule (docs/design/lock-screen.md R4, R4b, F1, F4). At sleep (or a picture redraw): mode, X hours (0 = Every sleep), now (ms), the pool's cover ids in order (only covers on the device), whether a current book cover exists, and the state (the cover shown last, when it last changed, and Every sleep's show counts per id, absent = none). Every sleep's random draws are given in rand (each n -> 0..n-1, in the order drawn); advance false is a redraw of the same sleep. show: pool:<id>, current, default (the drawn \"Sleeping\" page) or off; next: the state after. batch: Every sleep's carry at a sync (R4b): the ready covers before (in order) with their show counts, carried on or retired (shown 3 times); xteink_fresh is the order an X4 sync tries new candidates in (not in the batch, not retired).",
  "cases": [
   {
    "name": "first sleep: nothing shown yet, the first cover",
@@ -295,6 +295,386 @@
     "shown": 0,
     "changed_at": 0
    }
+  },
+  {
+   "name": "every sleep, first sleep: a random ready cover, shown once",
+   "mode": "recommended",
+   "hours": 0,
+   "now": 1700000000000,
+   "pool": [
+    5,
+    7,
+    9
+   ],
+   "current": true,
+   "state": {
+    "shown": 0,
+    "changed_at": 0,
+    "shows": {}
+   },
+   "rand": [
+    1
+   ],
+   "show": "pool:7",
+   "next": {
+    "shown": 7,
+    "changed_at": 1700000000000,
+    "shows": {
+     "7": 1
+    }
+   }
+  },
+  {
+   "name": "every sleep: never the cover just shown",
+   "mode": "recommended",
+   "hours": 0,
+   "now": 1700000000000,
+   "pool": [
+    5,
+    7,
+    9
+   ],
+   "current": true,
+   "state": {
+    "shown": 7,
+    "changed_at": 1699996400000,
+    "shows": {
+     "5": 1,
+     "7": 1
+    }
+   },
+   "rand": [
+    1
+   ],
+   "show": "pool:9",
+   "next": {
+    "shown": 9,
+    "changed_at": 1700000000000,
+    "shows": {
+     "5": 1,
+     "7": 1,
+     "9": 1
+    }
+   }
+  },
+  {
+   "name": "every sleep: covers shown 3 times give way to fresh ones",
+   "mode": "recommended",
+   "hours": 0,
+   "now": 1700000000000,
+   "pool": [
+    5,
+    7,
+    9
+   ],
+   "current": true,
+   "state": {
+    "shown": 9,
+    "changed_at": 1699996400000,
+    "shows": {
+     "5": 3,
+     "7": 1,
+     "9": 1
+    }
+   },
+   "rand": [
+    0
+   ],
+   "show": "pool:7",
+   "next": {
+    "shown": 7,
+    "changed_at": 1700000000000,
+    "shows": {
+     "5": 3,
+     "7": 2,
+     "9": 1
+    }
+   }
+  },
+  {
+   "name": "every sleep: all used up and nothing new, they keep cycling",
+   "mode": "recommended",
+   "hours": 0,
+   "now": 1700000000000,
+   "pool": [
+    5,
+    7
+   ],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1699996400000,
+    "shows": {
+     "5": 3,
+     "7": 3
+    }
+   },
+   "rand": [
+    0
+   ],
+   "show": "pool:7",
+   "next": {
+    "shown": 7,
+    "changed_at": 1700000000000,
+    "shows": {
+     "5": 3,
+     "7": 4
+    }
+   }
+  },
+  {
+   "name": "every sleep: counts of covers no longer ready are dropped",
+   "mode": "recommended",
+   "hours": 0,
+   "now": 1700000000000,
+   "pool": [
+    7,
+    9
+   ],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1699996400000,
+    "shows": {
+     "5": 2,
+     "7": 1
+    }
+   },
+   "rand": [
+    0
+   ],
+   "show": "pool:7",
+   "next": {
+    "shown": 7,
+    "changed_at": 1700000000000,
+    "shows": {
+     "7": 2
+    }
+   }
+  },
+  {
+   "name": "every sleep: a pool of one shows it again",
+   "mode": "recommended",
+   "hours": 0,
+   "now": 1700000000000,
+   "pool": [
+    5
+   ],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1699996400000,
+    "shows": {
+     "5": 1
+    }
+   },
+   "rand": [
+    0
+   ],
+   "show": "pool:5",
+   "next": {
+    "shown": 5,
+    "changed_at": 1700000000000,
+    "shows": {
+     "5": 2
+    }
+   }
+  },
+  {
+   "name": "every sleep, a redraw of the same sleep: the same cover, nothing counted",
+   "mode": "recommended",
+   "hours": 0,
+   "now": 1700000000000,
+   "pool": [
+    5,
+    7
+   ],
+   "current": true,
+   "state": {
+    "shown": 7,
+    "changed_at": 1699996400000,
+    "shows": {
+     "7": 1
+    }
+   },
+   "rand": [],
+   "show": "pool:7",
+   "next": {
+    "shown": 7,
+    "changed_at": 1699996400000,
+    "shows": {
+     "7": 1
+    }
+   },
+   "advance": false
+  },
+  {
+   "name": "every sleep, no pool: the current book",
+   "mode": "recommended",
+   "hours": 0,
+   "now": 1700000000000,
+   "pool": [],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1699996400000,
+    "shows": {
+     "5": 1
+    }
+   },
+   "rand": [],
+   "show": "current",
+   "next": {
+    "shown": 5,
+    "changed_at": 1699996400000,
+    "shows": {
+     "5": 1
+    }
+   }
+  },
+  {
+   "name": "every sleep with Current book: the current book",
+   "mode": "current",
+   "hours": 0,
+   "now": 1700000000000,
+   "pool": [
+    5,
+    7
+   ],
+   "current": true,
+   "state": {
+    "shown": 5,
+    "changed_at": 1699996400000,
+    "shows": {
+     "5": 1
+    }
+   },
+   "rand": [],
+   "show": "current",
+   "next": {
+    "shown": 5,
+    "changed_at": 1699996400000,
+    "shows": {
+     "5": 1
+    }
+   }
+  }
+ ],
+ "batch": [
+  {
+   "name": "nothing used up: all carried",
+   "prev": [
+    {
+     "id": 5,
+     "shows": 1
+    },
+    {
+     "id": 7,
+     "shows": 0
+    },
+    {
+     "id": 9,
+     "shows": 2
+    }
+   ],
+   "candidates": [
+    5,
+    11,
+    12
+   ],
+   "carry": [
+    5,
+    7,
+    9
+   ],
+   "retired": [],
+   "xteink_fresh": [
+    11,
+    12
+   ]
+  },
+  {
+   "name": "shown 3 times: retired, and never taken back from the list",
+   "prev": [
+    {
+     "id": 5,
+     "shows": 3
+    },
+    {
+     "id": 7,
+     "shows": 1
+    }
+   ],
+   "candidates": [
+    5,
+    7,
+    11
+   ],
+   "carry": [
+    7
+   ],
+   "retired": [
+    5
+   ],
+   "xteink_fresh": [
+    11
+   ]
+  },
+  {
+   "name": "duplicates count once",
+   "prev": [
+    {
+     "id": 5,
+     "shows": 0
+    },
+    {
+     "id": 5,
+     "shows": 0
+    },
+    {
+     "id": 7,
+     "shows": 3
+    }
+   ],
+   "candidates": [
+    7,
+    8,
+    8,
+    9
+   ],
+   "carry": [
+    5
+   ],
+   "retired": [
+    7
+   ],
+   "xteink_fresh": [
+    8,
+    9
+   ]
+  },
+  {
+   "name": "all used up and nothing new",
+   "prev": [
+    {
+     "id": 5,
+     "shows": 3
+    },
+    {
+     "id": 7,
+     "shows": 4
+    }
+   ],
+   "candidates": [
+    5,
+    7
+   ],
+   "carry": [],
+   "retired": [
+    5,
+    7
+   ],
+   "xteink_fresh": []
   }
  ]
 }

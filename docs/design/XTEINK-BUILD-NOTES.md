@@ -314,6 +314,35 @@ should stay near its pre-handshake 30 KB), `ORB wolfSSL allocates from PSRAM` at
 N fetched` with no `deferred (heap`, `SLP Wake: N ms from press to screen`, and at every boot
 `BOOT Last run ended at: ...` / `Last run stopped at: ...` and `BOOT Crash record: ...`.
 
+## The sleep screen (patch 0039, 2026-11-24)
+
+ROADMAP 11 on the X4 Pro and X4 ([lock-screen](lock-screen.md), Xteink rows R3, R4b, R6, R8, R10,
+S3, S4, X1-X7). Switch `CROSSINK_TAILNET_ORBIFY_SLEEP` (0, 1, 1): the X3 builds none of it.
+
+| # | What | Where | How |
+|---|---|---|---|
+| P1 | BookOrbit Pick in the Sleep Screen list | `orbify/SleepSettings.cpp` `sleepScreenRow`, `SettingsList.h` | A dynamic enum over CrossInk's choices plus BookOrbit Pick, stored in `/.crosspoint/orbify_sleep/settings.json` (`pick`); `sleepScreen` keeps its value (S4). The rows that apply only to Pick, or to Overlay, show only then. The web settings page has the same keys (`orbifySleep*`). |
+| P2 | The batch | `orbify/SleepScreen.cpp` `topUp`, `core/SleepPick` | Up to 24 covers on the card whatever Pick From is; each sleep sync tops it up by at most 4 covers within a 40 s share of its budget, on the lent session, after the next cover. A list source is re-read once a day (empty: Up Next, Want to Read, Discover); a smart scope or collection is a shuffle bag of up to 500 (10 pages per sleep). Every sleep: a cover goes after 3 shows, never the one on screen. Hours mode from a list follows the list; from a bag, a shown cover makes room. |
+| P3 | Leave out | `topUp`, `memberCheck`, `probe` | Tags from each candidate's detail (8 per sleep); smart scopes and collections as sorted ID files searched in place. A cover whose list is not complete yet is held back (X7). New rules check every kept cover again before it shows. |
+| P4 | Sharp covers | `topUp`, `decodeCovers` | The 400 x 600 catalog thumbnail (`downloadThumbnail`): the full-size OPDS cover needs an OPDS login the X4 does not have. Decoded with the radio off by `JpegToBmpConverter` to a 480 x 800 2-bit BMP for the panel's tone profile and Fit/Crop; the JPEG stays for a re-decode when those change. |
+| P5 | At sleep | `SleepActivity::renderOrbifyPick`, `pickCover` | Reads `state.bin`, decides by `core::decide` (the shared table), draws the BMP; no ready cover: the open book's cover, then the default screen (F1). A cover that does not draw leaves the batch (F6). Never the network. |
+| P6 | Text and battery | `drawExtras`, `prepareSleepBitmap`, `renderDefaultSleepScreen` | Bar: a band under the cover (the cover fits above it); Overlay: plates. Drawn on every grey plane; the redraw draws the battery level the first pass recorded. |
+| P7 | X3 i18n | `tailnet_build.py`, `gen_i18n.py` (0039) | `ORBIFY_I18N_SKIP=SleepSettings.cpp` when the switch is 0, so its strings stay out of the X3's table. |
+| F1 | Flash | | `x4-pro` 6,344,265 of 6,553,600 bytes (96.8%, +33,624 over 6,310,641); `x4-classic` 6,188,018 (94.4%, +33,452 over 6,154,566); `default` (X3) 6,512,919 (99.38%), unchanged byte for byte |
+
+Not done yet: the "Changes when the time is known" note (R6) and "Using the newest 500" in Settings
+(both are log lines today); Pick From's scope list and Leave Out Scopes fill after the first sleep sync
+saves `scopes.tsv`.
+
+On a device (X4 Pro or X4, serial log): set Sleep Screen to BookOrbit Pick, Pick From, Change Every
+(try Every sleep), then sleep with Wi-Fi in reach a few times. Expect per sleep:
+`ORB Sleep: BookOrbit Pick -> cover <id> (every sleep, <n> ready, shown <k> times)` (or `-> current
+book (0 of 0 covers ready)` on the first), then in the sync `ORB Sleep screen: batch <n> of 24 (<k>
+fetched, <r> retired, ...)`, `ORB Sleep cover: book <id> decoded (crop|fit, 480x800)` and `ORB Heap:
+after the sleep covers' decode ...`. Watch for `Sleep cover: decode waits for PSRAM`, `Sleep screen:
+... failed (http ...)` and `Sleep: cover <id> did not draw`. With Wi-Fi off the sleeps keep drawing
+covers from the card.
+
 ## Measurements needed on a device
 
 Item 1 adds only small requests on the sync's existing TLS session, so no new memory measurement

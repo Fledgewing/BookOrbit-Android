@@ -1,0 +1,300 @@
+diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
+index ea84f00..973d6f5 100644
+--- a/include/CrossInkTailnetCuts.h
++++ b/include/CrossInkTailnetCuts.h
+@@ -214,3 +214,8 @@ bool tlsArenaActive();                                // the arena is reserved (
+ #ifndef CROSSINK_TAILNET_ORBIFY_EOB_COVER
+ #define CROSSINK_TAILNET_ORBIFY_EOB_COVER 0
+ #endif
++// Patch 0039: the sleep screen (src/orbify/SleepScreen.h): BookOrbit Pick, a batch of covers kept
++// ready on the card, and the text and battery extras. X4s; the X3 builds none of it.
++#ifndef CROSSINK_TAILNET_ORBIFY_SLEEP
++#define CROSSINK_TAILNET_ORBIFY_SLEEP 0
++#endif
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 8aa8d40..3114508 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -327,6 +327,16 @@ STR_ORBIFY_SAVED_OFFLINE: "Saved for offline"
+ STR_ORBIFY_NOT_SAVED_OFFLINE: "Not saved for offline yet"
+ STR_ORBIFY_SEARCH_NEEDS_CONNECTION: "Search needs a connection"
+ STR_ORBIFY_COULDNT_CONNECT: "Couldn't connect"
++STR_ORBIFY_SLEEP_PICK: "BookOrbit Pick"
++STR_ORBIFY_SLEEP_FROM: "Pick From"
++STR_ORBIFY_SLEEP_TAGS: "Leave Out Tags"
++STR_ORBIFY_SLEEP_SCOPES: "Leave Out Scopes"
++STR_ORBIFY_SLEEP_EVERY: "Change Every"
++STR_ORBIFY_SLEEP_TEXT: "Sleep Text"
++STR_ORBIFY_SLEEP_BATTERY: "Battery on Sleep Screen"
++STR_ORBIFY_SLEEP_STYLE: "Sleep Extras Style"
++STR_ORBIFY_SLEEP_TEXT_POS: "Sleep Text Position"
++STR_ORBIFY_SLEEP_CORNER: "Battery Corner"
+ STR_EVERY_N_MINUTES: "Every %d min"
+ STR_EVERY_N_PAGES: "Every %d pages"
+ STR_EVERY_CHAPTER: "Every chapter"
+diff --git a/scripts/gen_i18n.py b/scripts/gen_i18n.py
+index f7175a2..a6c56a6 100755
+--- a/scripts/gen_i18n.py
++++ b/scripts/gen_i18n.py
+@@ -244,6 +244,9 @@ def find_used_string_keys(
+     """
+     if skip_filenames is None:
+         skip_filenames = _GENERATED_FILENAMES
++    # Orbify (patch 0039): tailnet_build.py names the sources a reader builds without
++    # (ORBIFY_I18N_SKIP, comma-separated), so their strings stay out of its table.
++    skip_filenames = set(skip_filenames) | {n for n in os.environ.get("ORBIFY_I18N_SKIP", "").split(",") if n}
+ 
+     pattern = re.compile(r"\bSTR_[A-Za-z0-9_]+\b")
+     used: Set[str] = set()
+diff --git a/src/SettingsList.cpp b/src/SettingsList.cpp
+index 98a7514..a6908bc 100644
+--- a/src/SettingsList.cpp
++++ b/src/SettingsList.cpp
+@@ -22,6 +22,10 @@ void forEachBaseSetting(SettingVisitor visitor, void* context) {
+                         "sleepScreenCoverFilter", StrId::STR_CAT_DISPLAY));
+   add(SettingInfo::Toggle(StrId::STR_QUICK_RESUME_TIMEOUT, &CrossPointSettings::quickResumeSleepScreen,
+                           "quickResumeSleepScreen", StrId::STR_CAT_DISPLAY));
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  // Orbify (patch 0039): the sleep screen's own settings, kept in its own file.
++  OrbifySleep::addCatalogRows(visitor, context);
++#endif
+   add(SettingInfo::Enum(StrId::STR_HIDE_CLOCK, &CrossPointSettings::hideClock,
+                         {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS}, "hideClock",
+                         StrId::STR_CAT_DISPLAY)
+diff --git a/src/SettingsList.h b/src/SettingsList.h
+index 175499b..d6b9af0 100644
+--- a/src/SettingsList.h
++++ b/src/SettingsList.h
+@@ -27,6 +27,9 @@
+ #include "util/DictionaryRegistry.h"
+ #include "util/FontFamilyLabel.h"
+ #include "util/FrontlightSchedule.h"
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++#include "orbify/SleepSettings.h"
++#endif
+ 
+ inline std::string fontSizePointLabel(const uint8_t pointSize) { return std::to_string(pointSize) + " pt"; }
+ 
+@@ -654,9 +657,14 @@ inline constexpr size_t BASE_SETTINGS_EEGO_ENTRIES = 1;
+ #else
+ inline constexpr size_t BASE_SETTINGS_EEGO_ENTRIES = 0;
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++inline constexpr size_t BASE_SETTINGS_ORBIFY_SLEEP_ENTRIES = OrbifySleep::CATALOG_ROWS;
++#else
++inline constexpr size_t BASE_SETTINGS_ORBIFY_SLEEP_ENTRIES = 0;
++#endif
+ inline constexpr size_t BASE_SETTINGS_CAPACITY = 108 + BASE_SETTINGS_SCALABLE_FONT_ENTRIES +
+                                                  (CROSSINK_APP_CAP_TOUCH ? 9 : 0) + BASE_SETTINGS_KOREADER_ENTRIES +
+-                                                 BASE_SETTINGS_EEGO_ENTRIES;
++                                                 BASE_SETTINGS_EEGO_ENTRIES + BASE_SETTINGS_ORBIFY_SLEEP_ENTRIES;
+ 
+ #if FREEINK_DEVICE_PICCO
+ inline constexpr size_t SLIDE_SWITCH_SETTINGS_COUNT = 1;
+@@ -1162,9 +1170,16 @@ inline std::vector<SettingInfo> buildDisplaySleepSettingsList(const std::vector<
+   };
+ 
+   addSleepSetting(StrId::STR_SLEEP_SCREEN, StrId::STR_SLEEP_SCREEN_WALLPAPER);
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  // Orbify (patch 0039): the Sleep Screen row gains BookOrbit Pick.
++  if (!sleepSettings.empty()) sleepSettings.back() = OrbifySleep::sleepScreenRow(sleepSettings.back());
++#endif
+   addSleepSetting(StrId::STR_SLEEP_COVER_MODE, StrId::STR_SLEEP_COVER_MODE);
+   addSleepSetting(StrId::STR_SLEEP_COVER_FILTER, StrId::STR_SLEEP_COVER_FILTER);
+   addSleepSetting(StrId::STR_QUICK_RESUME_TIMEOUT, StrId::STR_QUICK_RESUME_TIMEOUT);
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  OrbifySleep::addSleepRows(sleepSettings);
++#endif
+ 
+   return sleepSettings;
+ }
+diff --git a/src/activities/boot_sleep/SleepActivity.cpp b/src/activities/boot_sleep/SleepActivity.cpp
+index d5d3994..dc64757 100644
+--- a/src/activities/boot_sleep/SleepActivity.cpp
++++ b/src/activities/boot_sleep/SleepActivity.cpp
+@@ -44,6 +44,9 @@
+ #include "fontIds.h"
+ #include "images/Logo120.h"
+ #include "images/MoonIcon.h"
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++#include "orbify/SleepScreen.h"
++#endif
+ 
+ namespace {
+ 
+@@ -610,7 +613,16 @@ void SleepActivity::onEnter() {
+   if (pass == SleepScreenPass::RecordForRedraw) recordRandomImage();
+ }
+ 
+-bool SleepActivity::rendersQuickResume() const { return SETTINGS.usesQuickResumeSleep(fromTimeout); }
++bool SleepActivity::rendersQuickResume() const {
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  // BookOrbit Pick replaces the Sleep Screen choice (Quick Resume included); the timeout toggle stays.
++  if (OrbifySleep::active()) {
++    return fromTimeout &&
++           SETTINGS.quickResumeSleepScreen == CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT;
++  }
++#endif
++  return SETTINGS.usesQuickResumeSleep(fromTimeout);
++}
+ 
+ // A Page Overlay is drawn over the screen shown before sleep, which the sync boot never
+ // draws: keep it for the redraw. The frame buffer still holds it at this point, unless the
+@@ -698,6 +710,15 @@ void SleepActivity::renderSleepScreen() {
+   if (!sleepPopupShown && pass != SleepScreenPass::Redraw) showSleepPopup();
+   if (APP_STATE.lastSleepFromReader) renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+ 
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  if (OrbifySleep::active()) {
++    display.setInverted(false);
++    if (renderOrbifyPick()) return;
++    // No ready cover: the book's own cover, then the default screen (F1).
++    return renderCoverSleepScreen();
++  }
++#endif
++
+   switch (sleepScreen) {
+     case (CrossPointSettings::SLEEP_SCREEN_MODE::BLANK):
+       return renderBlankSleepScreen();
+@@ -750,7 +771,11 @@ void SleepActivity::showSleepPopup() {
+ 
+ bool SleepActivity::rendersBeforeExit() const {
+   // Quick Resume handles a visible reader page before plugin preparation.
+-  if (SETTINGS.usesQuickResumeSleep(fromTimeout)) return false;
++  if (rendersQuickResume()) return false;
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  // BookOrbit Pick may fall back to an uncached cover (F1): draw after the reader has let go.
++  if (OrbifySleep::active()) return false;
++#endif
+   // Keep the reader's cleanup first on devices without PSRAM. Covers and custom
+   // images can otherwise compete with the reader for scarce internal memory.
+   if (!psramHeapAvailable()) return false;
+@@ -895,6 +920,9 @@ void SleepActivity::renderDefaultSleepScreen() const {
+       renderer.truncatedText(SMALL_FONT_ID, buildInfo.c_str(), pageWidth - sleepBuildInfoSideMargin * 2);
+   renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 118, visibleBuildInfo.c_str(), lightSleepScreen);
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  OrbifySleep::drawExtras(renderer, pass == SleepScreenPass::Redraw);
++#endif
+ 
+   renderer.displayBuffer(HalDisplay::HALF_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+   monochromeFrame = true;
+@@ -903,7 +931,12 @@ void SleepActivity::renderDefaultSleepScreen() const {
+ SleepActivity::BitmapPlacement SleepActivity::prepareSleepBitmap(Bitmap& bitmap) const {
+   int x, y;
+   const auto pageWidth = renderer.getScreenWidth();
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  // Orbify (patch 0039): the cover fits above the Bar style's band (L3).
++  const auto pageHeight = renderer.getScreenHeight() - OrbifySleep::bandHeight(renderer);
++#else
+   const auto pageHeight = renderer.getScreenHeight();
++#endif
+   float cropX = 0, cropY = 0;
+ 
+   // Average source pixels before dithering on the screen-sized grid: skipping
+@@ -964,9 +997,30 @@ bool SleepActivity::drawSleepBitmap(Bitmap& bitmap, const BitmapPlacement& place
+   const bool success = renderer.drawBitmap(bitmap, placement.x, placement.y, placement.width, placement.height,
+                                            placement.cropX, placement.cropY, filtered);
+   if (SETTINGS.sleepScreenCoverFilter == CrossPointSettings::INVERTED_BLACK_AND_WHITE) renderer.invertScreen();
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  OrbifySleep::drawExtras(renderer, pass == SleepScreenPass::Redraw);
++#endif
+   return success;
+ }
+ 
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++bool SleepActivity::renderOrbifyPick() const {
++  std::string path;
++  if (!OrbifySleep::pickCover(pass == SleepScreenPass::Redraw, path)) return false;
++  FsFile file;
++  if (Storage.openFileForRead("SLP", path, file)) {
++    // Decoded for the panel's levels (SleepScreen.cpp decodeCovers), as the cover cache is.
++    const bool useImageLevels = bookCoverToneProfile(renderer) != ImageToneProfile::Legacy;
++    Bitmap bitmap(file, useImageLevels, imageToneProfile(useImageLevels));
++    const bool ok = bitmap.parseHeaders() == BmpReaderError::Ok && renderBitmapSleepScreen(bitmap);
++    file.close();
++    if (ok) return true;
++  }
++  OrbifySleep::coverFailed(path);
++  return false;
++}
++#endif
++
+ bool SleepActivity::renderBitmapSleepScreen(Bitmap& bitmap) const {
+   const auto placement = prepareSleepBitmap(bitmap);
+   renderer.clearScreen();
+diff --git a/src/activities/boot_sleep/SleepActivity.h b/src/activities/boot_sleep/SleepActivity.h
+index 607715f..f9352d2 100644
+--- a/src/activities/boot_sleep/SleepActivity.h
++++ b/src/activities/boot_sleep/SleepActivity.h
+@@ -1,4 +1,6 @@
+ #pragma once
++#include <CrossInkTailnetCuts.h>
++
+ #include <cstdint>
+ #include <string>
+ #include <utility>
+@@ -56,6 +58,10 @@ class SleepActivity final : public Activity {
+   bool drawSleepBitmap(Bitmap& bitmap, const BitmapPlacement& placement) const;
+   bool renderBitmapSleepScreen(Bitmap& bitmap) const;
+   void renderLastScreenSleepScreen() const;
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  // Orbify (patch 0039): BookOrbit Pick's cover, ready on the card (src/orbify/SleepScreen.h).
++  bool renderOrbifyPick() const;
++#endif
+   void renderBlankSleepScreen() const;
+   void renderOverlaySleepScreen(Bitmap* cover = nullptr) const;
+   mutable bool monochromeFrame = false;
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index 4531b6b..359ce03 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -52,6 +52,9 @@
+ #include "components/UITheme.h"
+ #include "components/themes/bookorbit/BookOrbitHomeLayout.h"
+ #include "orbify/FinishSync.h"
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++#include "orbify/SleepScreen.h"
++#endif
+ #include "fontIds.h"
+ #include "network/SavedWifiConnect.h"
+ #include "util/BookContentId.h"
+@@ -402,6 +405,10 @@ void BookOrbitSyncActivity::runSleepSync() {
+     // The End-of-Book page's next cover (decoded below, with the radio off).
+     if (extras && !sleepSyncWakeRequested()) OrbifyFinish::fetchNextCover(epubPath, &sleepSyncWakeRequested);
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++    // Orbify (patch 0039): BookOrbit Pick's batch, a few covers per sleep (decoded below).
++    if (extras && !sleepSyncWakeRequested()) OrbifySleep::topUp(epubPath, &sleepSyncWakeRequested);
++#endif
+ #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
+     // Copies the server rewrote: the match check on the session, then the replacements, one book
+     // at a time, the book that was open included (it is not on screen now; the user's ruling of
+@@ -435,6 +442,10 @@ void BookOrbitSyncActivity::runSleepSync() {
+ #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+   // Orbify (patch 0036): the End-of-Book page's next cover, with the radio off like Home's.
+   if (!sleepSyncWakeRequested()) OrbifyFinish::decodeNextCovers(&sleepSyncWakeRequested);
++#endif
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  // Orbify (patch 0039): the batch's new covers, with the radio off, before the redraw shows one.
++  if (!sleepSyncWakeRequested()) OrbifySleep::decodeCovers(renderer, &sleepSyncWakeRequested);
+ #endif
+   LOG_INF("BookOrbit", "Sleep sync over (state=%d)", static_cast<int>(state));
+ #ifdef SIMULATOR
+diff --git a/src/activities/settings/SettingsActivity.cpp b/src/activities/settings/SettingsActivity.cpp
+index c69f3f4..bb30d9d 100644
+--- a/src/activities/settings/SettingsActivity.cpp
++++ b/src/activities/settings/SettingsActivity.cpp
+@@ -649,7 +649,11 @@ void SettingsActivity::openEnumOptionPicker(const SettingInfo& setting) {
+           selectedSetting.valueSetter(static_cast<uint8_t>(selectedIndex));
+         }
+ 
+-        const bool sleepScreenChanged = selectedSetting.valuePtr == &CrossPointSettings::sleepScreen;
++        bool sleepScreenChanged = selectedSetting.valuePtr == &CrossPointSettings::sleepScreen;
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++        // Orbify (patch 0039): the Sleep Screen row with BookOrbit Pick has no member pointer.
++        sleepScreenChanged = sleepScreenChanged || (selectedSetting.key && strcmp(selectedSetting.key, "sleepScreen") == 0);
++#endif
+         const bool quickResumeTimeoutChanged = selectedSetting.valuePtr == &CrossPointSettings::quickResumeSleepScreen;
+         syncQuickResumeTimeoutForSleepScreen(sleepScreenChanged, quickResumeTimeoutChanged);
+         SETTINGS.saveToFile();

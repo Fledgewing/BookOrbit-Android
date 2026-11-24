@@ -482,6 +482,71 @@ def offline_sleep_sync(ctx: Context, tmp: Path) -> None:
     assert all(e["action"] == "drop" for e in ctx.requests()), "a request reached the server"
 
 
+def sleep_pick(card: SdCard, **settings) -> None:
+    """BookOrbit Pick on (patch 0039): its settings file, as Settings > Display writes it."""
+    folder = card.crosspoint / "orbify_sleep"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "settings.json").write_text(json.dumps({"pick": True, **settings}))
+
+
+def sleep_batch(run_output: str) -> tuple[int, int]:
+    """(covers in the batch, fetched this sync) from the top-up's summary line."""
+    m = re.search(r"Sleep screen: batch (\d+) of 24 \((\d+) fetched", run_output)
+    assert m, "the sleep sync did not top the batch up"
+    return int(m.group(1)), int(m.group(2))
+
+
+@scenario(*X4S)
+def sleep_pick_batch(ctx: Context, tmp: Path) -> None:
+    """ROADMAP 11 (docs/design/lock-screen.md R3, X4s): Every sleep from Discover. The first sleep
+    has no ready cover (the open book's cover shows, F1); its sleep sync fetches a few covers on the
+    lent connection and decodes them with the radio off. The next sleeps draw a ready cover at once
+    from the card, never the one just shown, and each sync tops the batch up. (The simulator's run
+    ends with the sync, before the redraw.)"""
+    card = ctx.card(tmp)
+    sleep_pick(card, **{"from": "discover", "hours": 0})
+    first = sleep_sync(ctx, card, "sleep-1", timeout_s=150)
+    after(first.output, "Sleep: BookOrbit Pick -> current book")
+    count, fetched = sleep_batch(first.output)
+    assert fetched >= 1 and count == fetched, f"the first top-up fetched {fetched}, batch {count}"
+    decoded = re.findall(r"Sleep cover: book (\d+) decoded", first.output)
+    assert len(decoded) == fetched, f"{fetched} fetched, {len(decoded)} decoded"
+    for book in decoded:
+        assert (card.crosspoint / "orbify_sleep" / f"{book}.bmp").exists(), f"cover {book} is not on the card"
+    thumbs = [e for e in ctx.requests("/thumbnail") if e["status"] == 200]
+    assert len(thumbs) >= fetched, f"{len(thumbs)} thumbnails served for {fetched} covers"
+
+    shown = []
+    for n in (2, 3):
+        run = sleep_sync(ctx, card, f"sleep-{n}", timeout_s=150)
+        drawn = re.search(r"Sleep: BookOrbit Pick -> cover (\d+) \(every sleep", run.output)
+        assert drawn, f"sleep {n} drew no ready cover"
+        shown.append(drawn.group(1))
+        assert (card.crosspoint / "orbify_sleep" / f"{drawn.group(1)}.bmp").exists(), f"sleep {n}: not on the card"
+        before = count
+        count, fetched = sleep_batch(run.output)
+        assert count == min(24, before + fetched), f"batch {before} -> {count} ({fetched} fetched)"
+    assert shown[0] != shown[1], "Every sleep showed the same cover twice in a row"
+
+
+@scenario(*X4S)
+def sleep_pick_offline(ctx: Context, tmp: Path) -> None:
+    """R3/F7: with the server gone, the sleep still draws from the card and the batch keeps what it
+    has; the sleep sync adds nothing and waits on nothing."""
+    card = ctx.card(tmp)
+    sleep_pick(card, **{"from": "discover", "hours": 0})
+    first = sleep_sync(ctx, card, "sleep-1", timeout_s=150)
+    count, _ = sleep_batch(first.output)
+    ctx.faults("offline")
+    second = sleep_sync(ctx, card, "sleep-2", timeout_s=120)
+    after(second.output, "Sleep sync over")
+    assert re.search(r"Sleep: BookOrbit Pick -> cover \d+", second.output), "no ready cover drawn offline"
+    for book in re.findall(r"Sleep: BookOrbit Pick -> cover (\d+)", second.output):
+        assert (card.crosspoint / "orbify_sleep" / f"{book}.bmp").exists(), f"cover {book} left the card"
+    left = len(list((card.crosspoint / "orbify_sleep").glob("*.bmp")))
+    assert left == count, f"the batch had {count} covers, the card keeps {left}"
+
+
 # --- Runner -----------------------------------------------------------------------------------
 
 # What only a reader shows (docs/design/emulated-release-tests.md 6.2): written beside the results.
