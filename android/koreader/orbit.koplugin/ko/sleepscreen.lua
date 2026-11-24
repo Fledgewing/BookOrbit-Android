@@ -195,7 +195,6 @@ local function ask(client, extras)
 end
 
 function Sleep.refresh(why)
-    if Sleep.choicesDue() and NetworkMgr:isConnected() and not reading() then pcall(Sleep.writeChoices, "refresh " .. tostring(why)) end
     local s = Sleep.settings()
     if Sleep.asked or s.sleep_mode ~= "recommended" or not Sleep.available() then return false end
     local t = os.time()
@@ -326,35 +325,6 @@ function Sleep.tags()
     end
     Sleep.tags_cache = out
     return out
-end
-
--- The lists for the companion's picker and tag list: koreader/settings/orbit-sleep/choices.json
--- (docs/design/companion-settings.md §6.2), then SLEEP_POOL reason=choices. Written at start, on
--- a Home refresh at most every CHOICES_EVERY_S, and when the companion's picker asks.
-Sleep.CHOICES_EVERY_S = 6 * 3600
-function Sleep.writeChoices(why)
-    local d = Sleep.dir()
-    if not d or not Sleep.available() then return false end
-    Sleep.choices_at = os.time()
-    -- The lists are the companion's scopes.json (it fetches them); this adds the cached tags, so
-    -- the companion's picker and tag list read one file (docs/design/companion-settings.md §6.2).
-    -- A fresh list comes from Sleep.refreshScopes, asked for when the companion's picker opens.
-    local lists = Sleep.scopes() or {}
-    local body = SleepPool.choicesFile({ scopes = lists.scopes, collections = lists.collections, cached = true },
-        Sleep.cachedTags(400), os.time() * 1000)
-    if writeFile(d .. "/choices.json", SleepPool.json(body)) then
-        log("sleep screen: choices.json written (" .. tostring(why) .. "):", #body.scopes, "smart scopes,",
-            #body.collections, "collections,", #body.tags, "tags")
-        Sleep.notify("choices")
-        return true
-    end
-    log("sleep screen: choices.json NOT written (" .. tostring(why) .. ")")
-    return false
-end
-
-function Sleep.choicesDue()
-    local t = Sleep.choices_at
-    return not t or os.time() < t or os.time() - t >= Sleep.CHOICES_EVERY_S
 end
 
 -- "Romance (smart scope)", "Scope 12 (not listed)" …
