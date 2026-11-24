@@ -328,11 +328,16 @@ S3, S4, X1-X7). Switch `CROSSINK_TAILNET_ORBIFY_SLEEP` (0, 1, 1): the X3 builds 
 | P5 | At sleep | `SleepActivity::renderOrbifyPick`, `pickCover` | Reads `state.bin`, decides by `core::decide` (the shared table), draws the BMP; no ready cover: the open book's cover, then the default screen (F1). A cover that does not draw leaves the batch (F6). Never the network. |
 | P6 | Text and battery | `drawExtras`, `prepareSleepBitmap`, `renderDefaultSleepScreen` | Bar: a band under the cover (the cover fits above it); Overlay: plates. Drawn on every grey plane; the redraw draws the battery level the first pass recorded. |
 | P7 | X3 i18n | `tailnet_build.py`, `gen_i18n.py` (0039) | `ORBIFY_I18N_SKIP=SleepSettings.cpp` when the switch is 0, so its strings stay out of the X3's table. |
-| F1 | Flash | | `x4-pro` 6,344,265 of 6,553,600 bytes (96.8%, +33,624 over 6,310,641); `x4-classic` 6,188,018 (94.4%, +33,452 over 6,154,566); `default` (X3) 6,512,919 (99.38%), unchanged byte for byte |
+| F1 | Flash | | `x4-pro` 6,349,297 of 6,553,600 bytes (96.9%, +38,656 over 6,310,641); `x4-classic` 6,192,666 (94.5%, +38,100 over 6,154,566); `default` (X3) 6,512,919 (99.38%), unchanged byte for byte |
 
-Not done yet: the "Changes when the time is known" note (R6) and "Using the newest 500" in Settings
-(both are log lines today); Pick From's scope list and Leave Out Scopes fill after the first sleep sync
-saves `scopes.tsv`.
+Settings UI rules shared with Android (the user's ruling, 2026-11-24): Leave Out Scopes opens
+straight onto one list of toggles (`orbify/SleepScopesActivity`, no screen in between, its title in
+the header only); a row's status goes on its own line under the row (the list's `subtitle`), as
+Change Every's "Changes when the time is known" without Keep Clock in Sleep (R6). Pick From is still
+one choice: making it, and Leave out, multi-select with Library as an item waits for the rules
+Android puts in `shared/fixtures/sleep/cases.json`; the toggle list screen is the one it will use.
+"Using the newest 500" is a log line only. Pick From's scope list and Leave Out Scopes fill after the
+first sleep sync saves `scopes.tsv`.
 
 On a device (X4 Pro or X4, serial log): set Sleep Screen to BookOrbit Pick, Pick From, Change Every
 (try Every sleep), then sleep with Wi-Fi in reach a few times. Expect per sleep:

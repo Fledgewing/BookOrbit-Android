@@ -282,10 +282,21 @@ index 4531b6b..359ce03 100644
    LOG_INF("BookOrbit", "Sleep sync over (state=%d)", static_cast<int>(state));
  #ifdef SIMULATOR
 diff --git a/src/activities/settings/SettingsActivity.cpp b/src/activities/settings/SettingsActivity.cpp
-index c69f3f4..bb30d9d 100644
+index c69f3f4..b5cdcd3 100644
 --- a/src/activities/settings/SettingsActivity.cpp
 +++ b/src/activities/settings/SettingsActivity.cpp
-@@ -649,7 +649,11 @@ void SettingsActivity::openEnumOptionPicker(const SettingInfo& setting) {
+@@ -45,6 +45,10 @@
+ #include "FrontlightTimePickerActivity.h"
+ #include "KOReaderSettingsActivity.h"
+ #include "KeyboardLayoutsActivity.h"
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++#include "orbify/SleepScopesActivity.h"
++#include "orbify/SleepSettings.h"
++#endif
+ #include "MappedInputManager.h"
+ #include "OpdsServerListActivity.h"
+ #include "QuickActions.h"
+@@ -649,7 +653,11 @@ void SettingsActivity::openEnumOptionPicker(const SettingInfo& setting) {
            selectedSetting.valueSetter(static_cast<uint8_t>(selectedIndex));
          }
  
@@ -298,3 +309,52 @@ index c69f3f4..bb30d9d 100644
          const bool quickResumeTimeoutChanged = selectedSetting.valuePtr == &CrossPointSettings::quickResumeSleepScreen;
          syncQuickResumeTimeoutForSleepScreen(sleepScreenChanged, quickResumeTimeoutChanged);
          SETTINGS.saveToFile();
+@@ -1737,6 +1745,11 @@ void SettingsActivity::toggleCurrentSetting() {
+       case SettingAction::KeyboardLayouts:
+         startActivityForResult(std::make_unique<KeyboardLayoutsActivity>(renderer, mappedInput), resultHandler);
+         break;
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++      case SettingAction::OrbifySleepScopes:
++        startActivityForResult(std::make_unique<SleepScopesActivity>(renderer, mappedInput), resultHandler);
++        break;
++#endif
+       case SettingAction::ClockSync:
+         startActivityForResult(std::make_unique<ClockSyncActivity>(renderer, mappedInput), resultHandler);
+         break;
+@@ -1918,6 +1931,11 @@ std::string SettingsActivity::settingValueText(const SettingInfo& setting) {
+   if (setting.type == SettingType::ACTION && setting.action == SettingAction::Language) {
+     return I18N.getName();
+   }
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  if (setting.type == SettingType::ACTION && setting.action == SettingAction::OrbifySleepScopes) {
++    return OrbifySleep::leaveScopesSummary();
++  }
++#endif
+   if (setting.type == SettingType::STRING) {
+     if (setting.nameId == StrId::STR_DEVICE_NAME) return SETTINGS.getEffectiveDeviceName();
+     if (setting.stringGetter) return setting.stringGetter();
+@@ -2125,6 +2143,10 @@ void SettingsActivity::buildSettingsScreen(UiApp::ScreenType& screen) {
+       item.toggleChecked = settings[i].valuePtr != nullptr && SETTINGS.*(settings[i].valuePtr) != 0;
+       item.value = nullptr;
+     }
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++    // Orbify (patch 0039): a sleep screen row's status, on its own line under the row.
++    item.subtitle = OrbifySleep::statusLine(settings[i]);
++#endif
+     item.actionValue = static_cast<int16_t>(i);
+     items.push_back(item);
+   }
+diff --git a/src/activities/settings/SettingsActivity.h b/src/activities/settings/SettingsActivity.h
+index 8207d00..cdab4aa 100644
+--- a/src/activities/settings/SettingsActivity.h
++++ b/src/activities/settings/SettingsActivity.h
+@@ -71,6 +71,9 @@ enum class SettingAction {
+ #if CROSSINK_TAILNET_BATTERY_STATS >= 2
+   BatteryStats,
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_SLEEP
++  OrbifySleepScopes,  // Orbify (patch 0039): Leave Out Scopes' list of toggles
++#endif
+ };
+ 
+ struct SettingInfo {

@@ -6,6 +6,7 @@
 
 #if CROSSINK_TAILNET_ORBIFY_SLEEP
 #include <cstddef>
+#include <string>
 #include <vector>
 
 struct SettingInfo;
@@ -22,6 +23,17 @@ void addCatalogRows(void (*visitor)(SettingInfo&&, void*), void* context);
 SettingInfo sleepScreenRow(const SettingInfo& sleepScreen);
 // Then Orbify's rows, after CrossInk's own sleep rows; the rows that only apply show only then.
 void addSleepRows(std::vector<SettingInfo>& rows);
+
+// Leave Out Scopes' list screen (SleepScopesActivity): every smart scope and collection by name
+// with its rule ("scope:<id>"), whether a rule is left out, toggling one, the page's title, and the
+// row's value in Settings.
+void scopeChoices(std::vector<std::string>& labels, std::vector<std::string>& rules);
+bool leftOutRule(const std::string& rule);
+void toggleLeaveOut(const std::string& rule);
+const char* leaveScopesTitle();
+std::string leaveScopesSummary();
+// A row's status, drawn on its own line under the row (never beside its value), or nullptr.
+const char* statusLine(const SettingInfo& row);
 
 }  // namespace OrbifySleep
 #endif

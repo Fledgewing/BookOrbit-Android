@@ -106,20 +106,7 @@ bool leftOut(const std::string& rule) {
   return false;
 }
 
-// Leave Out Scopes on the reader: the first option sums up, each other one toggles a scope.
-std::vector<std::string> leaveScopeLabels() {
-  size_t chosen = 0;
-  From r;
-  for (const char* p = nextScopeRule(settings().leaveScopes.c_str(), r); p; p = nextScopeRule(p, r)) chosen++;
-  std::vector<std::string> out;
-  out.push_back(chosen == 0 ? std::string(tr(STR_NONE_OPT)) : std::to_string(chosen) + " left out");
-  for (const Scope& s : scopes()) out.push_back((leftOut(ruleOf(s)) ? "[x] " : "[ ] ") + scopeLabel(s));
-  return out;
-}
-
-void toggleLeaveScope(const uint8_t index) {
-  if (index == 0 || index - 1u >= scopes().size()) return;
-  const std::string rule = ruleOf(scopes()[index - 1]);
+void toggleRule(const std::string& rule) {
   std::string next;
   From r;
   for (const char* p = nextScopeRule(settings().leaveScopes.c_str(), r); p; p = nextScopeRule(p, r)) {
@@ -233,6 +220,36 @@ void addCatalogRows(void (*visitor)(SettingInfo&&, void*), void* context) {
   add(cornerRow());
 }
 
+void scopeChoices(std::vector<std::string>& labels, std::vector<std::string>& rules) {
+  labels.clear();
+  rules.clear();
+  for (const Scope& s : scopes()) {
+    labels.push_back(scopeLabel(s));
+    rules.push_back(ruleOf(s));
+  }
+}
+
+bool leftOutRule(const std::string& rule) { return leftOut(rule); }
+
+void toggleLeaveOut(const std::string& rule) { toggleRule(rule); }
+
+const char* leaveScopesTitle() { return tr(STR_ORBIFY_SLEEP_SCOPES); }
+
+std::string leaveScopesSummary() {
+  size_t chosen = 0;
+  From r;
+  for (const char* p = nextScopeRule(settings().leaveScopes.c_str(), r); p; p = nextScopeRule(p, r)) chosen++;
+  return chosen == 0 ? std::string(tr(STR_NONE_OPT)) : std::to_string(chosen);
+}
+
+const char* statusLine(const SettingInfo& row) {
+  // R6: without Keep Clock in Sleep the X4 learns the time only in the sleep sync.
+  if (row.nameId == StrId::STR_ORBIFY_SLEEP_EVERY && settings().hours != EVERY_SLEEP && !SETTINGS.keepClockInSleep) {
+    return "Changes when the time is known";
+  }
+  return nullptr;
+}
+
 SettingInfo sleepScreenRow(const SettingInfo& sleepScreen) {
   // The Sleep Screen row: CrossInk's choices, then BookOrbit Pick (S4). Choosing Pick leaves
   // sleepScreen alone; choosing a CrossInk mode turns Pick off and brings that mode back.
@@ -268,8 +285,8 @@ void addSleepRows(std::vector<SettingInfo>& rows) {
   if (settings().pick) {
     rows.push_back(fromRow());
     rows.push_back(text(StrId::STR_ORBIFY_SLEEP_TAGS, &Settings::leaveTags, "orbifySleepLeaveTags", false));
-    rows.push_back(choice(StrId::STR_ORBIFY_SLEEP_SCOPES, leaveScopeLabels(), [] { return uint8_t{0}; },
-                          toggleLeaveScope, "orbifySleepLeaveScopes"));
+    // A list of toggles, opened straight from the row (SleepScopesActivity).
+    rows.push_back(SettingInfo::Action(StrId::STR_ORBIFY_SLEEP_SCOPES, SettingAction::OrbifySleepScopes));
     rows.push_back(hoursRow());
   }
   rows.push_back(text(StrId::STR_ORBIFY_SLEEP_TEXT, &Settings::text, "orbifySleepText", true));
