@@ -19,6 +19,7 @@ CrossInk 2.x only; 1.6 is retired).
 | 5 | **Tap to download**: a book tile downloads the book, or opens it when it is already on the device. | Android, X4 Pro, X4, X3 | idea | |
 | 6 | **Series view**: shows which books are on the device and which are only on the server. | Android, X4 Pro, X4, X3 | idea | |
 | 10 | **Add-on mode**: Orbify installs, updates and configures KOReader and both plugins without becoming the Home app or managing Wi-Fi and sleep; recommended settings are applied during setup in both modes (only values still at their default; the user's own are listed for review, with Undo). | Android | shipped (0.11.0); §16 lists what waits | [addon-mode](docs/design/addon-mode.md), [mockups](docs/design/addon-mode-mockups.html) |
+| 10a | **Setup checklist that reads at a glance**: a summary first ("All set" or "2 things need you"), finished rows folded into one line per group, plain words with one verb per row, and "what you lose without it" on every optional, skipped or unfinished row in both modes. | Android | designing | [companion-checklist](docs/design/companion-checklist.md), [mockups](docs/design/companion-checklist-mockups.html) |
 | 6a | **Group catalog lists by series or author on Xteink**, matching Android 0.6.0. | X4 Pro, X4; not X3 | approved | [local-first](docs/design/local-first/DESIGN.md), [mockups](https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk) |
 
 ## Later
