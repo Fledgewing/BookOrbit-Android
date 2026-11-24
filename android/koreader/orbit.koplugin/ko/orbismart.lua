@@ -40,18 +40,20 @@ end
 
 -- The first run of a build with this setting: OrbiSmart, unless the reader changed a sync
 -- setting it would override (docs/design/orbismart.md §6, the recommended-settings rule).
+-- S.sync_mode already holds the schema's default (ko/settings.lua); a value chosen on either side
+-- has a real time in S.settings_at (more than the 1 ms seed) and is left alone.
 function OSM.migrate()
-    if S.sync_mode ~= nil then return end
+    if S.orbismart_migrated then return end
+    S.orbismart_migrated = true
+    local chosen = (tonumber(S.settings_at and S.settings_at.sync_mode) or 0) > 1
     local bo = G_reader_settings:readSetting("bookorbit")
     bo = type(bo) == "table" and bo or {}
     local custom = (S.reading_schedule or "off") ~= "off" or S.sync_on_wake == false or S.sync_on_sleep == false
         or bo.sync_forward == DONT or (bo.sync_backward ~= nil and bo.sync_backward ~= DONT)
-    if custom then
+    if custom and not chosen then
         S.sync_mode = "custom"
         S.settings_at.sync_mode = os.time() * 1000
         log("orbismart: this reader's sync settings were changed by hand; Sync stays Custom")
-    else
-        S.sync_mode = "orbismart"
     end
     saveSettings()
 end

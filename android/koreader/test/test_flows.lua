@@ -5618,6 +5618,23 @@ test("orbismart: a further place found at sleep is asked at wake, before any net
     W.server_code = 200
 end)
 
+test("orbismart: an update keeps Custom for a reader whose sync settings were changed by hand", function()
+    local S0 = store.orbit_android
+    local saved = { S0.reading_schedule, S0.sync_mode, S0.settings_at.sync_mode }
+    S0.orbismart_migrated, S0.reading_schedule, S0.sync_mode, S0.settings_at.sync_mode = nil, "pg25", "orbismart", 1
+    OSM.migrate()
+    eq(S0.sync_mode, "custom", "Sync while reading was set by hand")
+    ok(S0.settings_at.sync_mode > 1, "sent to the companion")
+    S0.orbismart_migrated, S0.reading_schedule, S0.sync_mode, S0.settings_at.sync_mode = nil, "off", "orbismart", 1
+    OSM.migrate()
+    eq(S0.sync_mode, "orbismart", "untouched settings: OrbiSmart")
+    S0.orbismart_migrated, S0.reading_schedule, S0.settings_at.sync_mode = nil, "pg25", 5000
+    OSM.migrate()
+    eq(S0.sync_mode, "orbismart", "a Sync value chosen already stays")
+    OSM.migrate()
+    S0.reading_schedule, S0.sync_mode, S0.settings_at.sync_mode = saved[1], saved[2], saved[3]
+end)
+
 test("orbismart: no wake check after a short nap", function()
     local ui, m, p = osmBook(120, nil)
     run(30)
