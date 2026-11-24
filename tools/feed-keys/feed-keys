@@ -102,8 +102,9 @@ case "$cmd" in
       esac
     done
     [ -f "$root" ] || die "new-release-key: --root ROOT.pem is required"
-    [[ "$serial" =~ ^[0-9]+$ ]] && [ "$serial" -ge 1 ] && [ "$serial" -le 4294967295 ] \
-      || die "new-release-key: --serial must be 1..4294967295"
+    if ! [[ "$serial" =~ ^[0-9]+$ ]] || [ "$serial" -lt 1 ] || [ "$serial" -gt 4294967295 ]; then
+      die "new-release-key: --serial must be 1..4294967295"
+    fi
     out="${out:-$(dirname "$root")/release-key-$serial.bundle}"
     [ -e "$out" ] && die "$out exists"
     (umask 077 && openssl genpkey -algorithm ed25519 -out "$tmp/release.pem")
