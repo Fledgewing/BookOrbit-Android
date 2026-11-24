@@ -23,6 +23,8 @@ object Worker {
     const val ACTION_RECHECK = "${Contract.PACKAGE}.action.RECHECK"
     /** The shared-storage stress test's writer (docs/design/sqlite-cache.md "Stress test"); no login. */
     const val ACTION_SQLITE_STRESS = "${Contract.PACKAGE}.action.SQLITE_STRESS"
+    /** A write the plugin made, to patch into the saved replies (or a wipe); no login. */
+    const val ACTION_PATCH = "${Contract.PACKAGE}.action.PATCH"
 
     /** The cap the plugin needs before it hands work over (ModeLogic.BASE). */
     const val CAP = "cache_worker"
@@ -31,6 +33,7 @@ object Worker {
 
     private val lock = Object()
     private val checks = ArrayDeque<CacheWorker.Check>()
+    private val patches = ArrayDeque<() -> Unit>()
     private var pending: Pair<CacheWorker.Plan, CacheWorker.Creds>? = null
     private var storage: CacheWorker.StorageAsk? = null
     private var copies: String? = null
@@ -45,7 +48,7 @@ object Worker {
         private set
 
     /** Work in hand: an automatic Wi-Fi off waits for it. */
-    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || pending != null || storage != null || copies != null || sleep != null || pickers != null || recheck != null }
+    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || patches.isNotEmpty() || pending != null || storage != null || copies != null || sleep != null || pickers != null || recheck != null }
 
     private var worker: CacheWorker? = null
 
@@ -70,6 +73,15 @@ object Worker {
             synchronized(lock) { storage = a; lock.notifyAll() }
             return start()
         }
+        if (i.action == ACTION_PATCH) {
+            // The database only, no login; in order with the checks.
+            val wipe = i.getStringExtra("wipe") == "1"
+            val id = i.getStringExtra("id")?.toLongOrNull()
+            val fields = i.getStringExtra("fields")?.takeIf { it.isNotEmpty() }?.let { runCatching { LuaValue.parse(LuaValue.str(it).toByteArray(Charsets.ISO_8859_1)) }.getOrNull() } as? Map<*, *>
+            val staleHome = i.getStringExtra("stale_home") == "1"
+            synchronized(lock) { patches.addLast { worker().patch(id, fields ?: emptyMap<Any?, Any?>(), staleHome, wipe) }; lock.notifyAll() }
+            return start()
+        }
         if (i.action == ACTION_COPIES) {
             // Files only (copies/ask.lua), no login.
             synchronized(lock) { copies = i.getStringExtra("reason") ?: "plugin"; lock.notifyAll() }
@@ -86,7 +98,7 @@ object Worker {
                 val key = i.getStringExtra("cache_key") ?: return
                 val path = i.getStringExtra("path") ?: return
                 val c = CacheWorker.Check(LuaValue.str(key), LuaValue.str(path), i.getStringExtra("mode") ?: "open", creds,
-                    LuaValue.str(i.getStringExtra("owner") ?: ""))
+                    LuaValue.str(i.getStringExtra("owner") ?: ""), i.getStringExtra("template")?.takeIf { it.isNotEmpty() }?.let { LuaValue.str(it) })
                 synchronized(lock) { checks.addLast(c); lock.notifyAll() }
             }
             ACTION_SLEEP_REFRESH -> if (i.getStringExtra("scopes_only") == "1") {
@@ -139,6 +151,10 @@ object Worker {
         val pk = synchronized(lock) { pickers.also { pickers = null } }
         if (pk != null) pickers(pk.first, pk.second)
         while (true) {
+            val pt = synchronized(lock) { patches.removeFirstOrNull() } ?: break
+            try { pt() } catch (e: Exception) { OLog.w("worker: patch failed", e) }
+        }
+        while (true) {
             val c = synchronized(lock) { checks.removeFirstOrNull() } ?: return
             try { worker().check(c) } catch (e: Exception) { OLog.w("worker: check failed", e) }
         }
@@ -178,8 +194,8 @@ object Worker {
         while (true) {
             drainChecks()
             val p = synchronized(lock) {
-                if (checks.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) lock.wait(60_000)
-                if (checks.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) { thread = null; return }
+                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) lock.wait(60_000)
+                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) { thread = null; return }
                 pending.also { pending = null }
             } ?: continue
             mirrorRunning = true

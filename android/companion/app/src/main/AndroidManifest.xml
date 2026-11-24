@@ -328,6 +328,7 @@
                 <action android:name="net.fledgewing.orbitcompanion.action.SLEEP_REFRESH" />
                 <action android:name="net.fledgewing.orbitcompanion.action.RECHECK" />
                 <action android:name="net.fledgewing.orbitcompanion.action.SQLITE_STRESS" />
+                <action android:name="net.fledgewing.orbitcompanion.action.PATCH" />
                 <action android:name="net.fledgewing.orbitcompanion.action.UPDATE" />
             </intent-filter>
             <intent-filter>

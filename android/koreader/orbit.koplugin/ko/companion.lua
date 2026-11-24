@@ -25,6 +25,7 @@ Companion.ACTION = {
     RECHECK = Companion.PACKAGE .. ".action.RECHECK",
     -- Debug: the shared-storage SQLite stress test's writer (ko/sqlite_stress.lua).
     SQLITE_STRESS = Companion.PACKAGE .. ".action.SQLITE_STRESS",
+    PATCH = Companion.PACKAGE .. ".action.PATCH",
     -- Updates: the companion checks, installs itself and then the plugin of its release.
     UPDATE = Companion.PACKAGE .. ".action.UPDATE",
     NET_UP = Companion.PACKAGE .. ".action.NET_UP",

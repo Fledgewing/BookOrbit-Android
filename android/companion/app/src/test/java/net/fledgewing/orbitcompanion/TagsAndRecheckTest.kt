@@ -13,20 +13,9 @@ class TagsAndRecheckTest {
         assertEquals(listOf(SleepPoolLogic.Tag("age:18", "Age:18", 2), SleepPoolLogic.Tag("cosy", "cosy", 1)),
             SleepPoolLogic.tagCounts(listOf(listOf("Age:18", "cosy"), listOf("age:18", " Age:18 "), emptyList())))
         val root = Files.createTempDirectory("tags").toFile()
-        val w = CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, log = {})
-        fun entry(f: File, key: String, path: String, tags: List<String>) =
-            f.writeBytes(LuaValue.encode(sortedMapOf<String, Any?>("key" to key, "path" to path, "body" to sortedMapOf<String, Any?>("tags" to tags))))
-        val entries = sortedMapOf<String, Any?>()
-        for (i in 1..3) {
-            val key = "k$i"
-            entries[key] = sortedMapOf<String, Any?>("path" to "/koreader/plugin/catalog/books/$i")
-            entry(File(root, MirrorLogic.hash(key) + ".lua"), key, "/koreader/plugin/catalog/books/$i", listOf("Fantasy", LuaValue.str("Ünïcode")))
-        }
-        entries["list"] = sortedMapOf<String, Any?>("path" to "/koreader/plugin/catalog/books?page=1")
-        File(root, "index.lua").writeBytes(LuaValue.encode(sortedMapOf<String, Any?>("entries" to entries)))
-        File(root, "mirror").mkdirs()
-        entry(File(root, "mirror/" + MirrorLogic.hash("m") + ".lua"), "m", "/koreader/plugin/catalog/books/9?x=1", listOf("Space"))
-        File(root, "mirror/status.lua").writeText("{}")
+        val w = CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, log = {}, openSql = { JdbcSql(it) })
+        for (i in 1..3) w.store.putDetail(i.toLong(), sortedMapOf<String, Any?>("tags" to listOf("Fantasy", LuaValue.str("Ünïcode"))), 1L)
+        w.store.putDetail(9L, sortedMapOf<String, Any?>("tags" to listOf("Space")), 1L)
         val details = w.detailTags(2000)
         assertEquals(4, details.size)
         assertEquals("capped", 2, w.detailTags(2).size)
@@ -46,7 +35,7 @@ class TagsAndRecheckTest {
             sent[id] = h["If-None-Match"]
             if (id == 2L) { sink!!.writeText("new"); CacheWorker.Reply(200, etag = "\"n\"", contentType = "image/jpeg") } else CacheWorker.Reply(304)
         }
-        val w = CacheWorker(root, http, now = { 100L }, log = {})
+        val w = CacheWorker(root, http, now = { 100L }, log = {}, openSql = { JdbcSql(it) })
         val covers = File(root, "covers").apply { mkdirs() }
         for (id in 1..3) File(covers, "$id.jpg").writeText("old")
         File(covers, "1.jpg.etag").writeText("\"a\""); File(covers, "2.jpg.etag").writeText("\"b\"")

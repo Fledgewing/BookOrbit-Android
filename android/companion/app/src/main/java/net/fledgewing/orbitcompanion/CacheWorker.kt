@@ -1,21 +1,27 @@
 package net.fledgewing.orbitcompanion
 
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 
 /**
  * The Orbit cache's background work, done by the companion instead of KOReader
- * (docs/design/companion-worker.md): the offline mirror (a Full refresh, Refresh's recheck,
- * covers) and the cache's background checks. KOReader runs everything on one Lua thread; the
- * plugin only sends the job and reads the result files.
+ * (docs/design/companion-worker.md, docs/design/sqlite-cache.md): the Full refresh, Refresh's
+ * recheck and the covers, the cache's checks and stores, write patches, the storage limit and the
+ * copies lookup. Everything the cache keeps is in one SQLite file, orbit-cache/orbit.db
+ * ([CacheStore]), which only this class writes and the plugin reads.
  *
- * Files, under koreader/settings/orbit-cache/ (the plugin reads them; formats in
- * android/docs/INTERFACE.md "The cache worker's files"):
- * - `<hash>.lua`: a checked entry (the plugin's own browsing cache);
- * - `mirror/<hash>.lua`: the mirror's pages and details; `mirror/status.lua`, `mirror/summary.lua`,
- *   `mirror/cover_keep.lua`; `mirror/worker-state.lua` (this worker's queue, private);
- * - `events/<n>.lua`: a check's answer, a storage count; `storage.lua`: the last count's totals.
+ * Small files stay files (android/docs/INTERFACE.md "The cache worker's files"): the plugin's
+ * `mirror/plan.lua` and `mirror/stop` in, `mirror/status.lua` (the progress, every 2 s),
+ * `mirror/summary.lua` and `events/<n>.lua` out; covers are image files beside their `.etag`.
  *
- * Plain JVM (java.io and an [Http] port), so the unit tests run it against a fake server.
+ * A Full refresh counts each book once: its detail is one job and its cover one job, whichever
+ * lists name it, and the work is fixed once the library's size and the section indexes are in
+ * (the all-books list and the sections' first pages). Requests run [parallel] at a time and
+ * covers on their own pool; one thread writes the landed replies, up to [BATCH] per transaction.
+ *
+ * Plain JVM ([Sql] and an [Http] port), so the unit tests run it against a fake server and JDBC.
  */
 class CacheWorker(
     val root: File,
@@ -23,8 +29,10 @@ class CacheWorker(
     private val now: () -> Long = { System.currentTimeMillis() / 1000 },
     private val log: (String) -> Unit = { OLog.i(it) },
     private val sleep: (Int) -> Unit = { Thread.sleep(it * 1000L) },
-    /** Requests in flight at once (1: strictly in queue order). */
+    /** Requests in flight at once (1: strictly one after another). */
     private val parallel: Int = PARALLEL,
+    private val openSql: (File) -> Sql = { AndroidSql(it) },
+    private val clockMs: () -> Long = { System.currentTimeMillis() },
 ) {
     /** A GET. sink: write the body there (a cover) instead of returning it. */
     fun interface Http {
@@ -38,6 +46,8 @@ class CacheWorker(
 
     val mirrorDir get() = File(root, "mirror")
     private val eventsDir get() = File(root, "events")
+
+    val store: CacheStore by lazy { CacheStore(root, log, openSql).also { removeOldFiles() } }
 
     private fun headers(c: Creds, accept: String = "application/json") =
         mapOf("accept" to accept, "x-auth-user" to c.user, "x-auth-key" to c.key)
@@ -59,25 +69,34 @@ class CacheWorker(
 
     private fun read(f: File): Any? = if (f.isFile) LuaValue.parse(f.readBytes()) else null
 
-    /** A saved entry's body (the cache's format: { key, body, ... } with the key checked). */
-    fun entryBody(f: File, key: String): Any? {
-        val e = read(f) as? Map<*, *> ?: return null
-        if (e["key"] != key) return null
-        return e["body"] as? Map<*, *> ?: e["body"] as? List<*>
+    /**
+     * The files of the cache before the database (0.11.x): entries, the index, the mirror's pages
+     * and queue. No backwards compatibility: they go, and the next Full refresh saves everything.
+     */
+    private fun removeOldFiles() {
+        var n = 0
+        val entry = Regex("^[0-9a-f]{8}\\.lua$")
+        for (dir in listOf(root, mirrorDir)) for (f in dir.listFiles() ?: emptyArray()) {
+            if (f.isFile && (entry.matches(f.name) || f.name in OLD_FILES || f.name.contains(".lua.tmp"))) { f.delete(); n++ }
+        }
+        if (n > 0) log("store: removed $n files of the cache before the database")
     }
 
-    private fun entry(key: String, path: String, body: Any?, fetched: Long, validated: Long): ByteArray =
-        LuaValue.encode(sortedMapOf<String, Any?>("key" to key, "body" to body, "fetched_at" to fetched, "validated_at" to validated, "path" to path))
+    /** The detail template saved with the last plan (what a check of a detail path needs). */
+    private fun detailTemplate(): String? = store.meta("detail_template")
 
-    // ------------------------------------------------------------------ checks
-
-    /** A background check (the plugin's OC.check): mode "open" | "refresh" | "full". */
-    data class Check(val key: String, val path: String, val mode: String, val creds: Creds, val owner: String)
+    // ------------------------------------------------------------------ checks and stores
 
     /**
-     * Asks the server, compares with what the plugin would serve (its own entry, else a list page
-     * cut from the mirror), saves a changed reply under the key, and answers with an event:
-     * { kind = "checked", key, changed | unchanged, saved, bytes, ids, at } or { kind, key, err }.
+     * A background check or a store (the plugin's OC.check): mode "open" | "refresh" | "full", or
+     * "store" (the plugin read it from the server; save it). template: the plugin's detail request.
+     */
+    data class Check(val key: String, val path: String, val mode: String, val creds: Creds, val owner: String, val template: String? = null)
+
+    /**
+     * Asks the server, compares with what the plugin would serve, saves a changed reply where the
+     * plugin reads it, and answers: { kind = "checked", key, changed | unchanged, saved, at } or
+     * { kind, key, err }.
      */
     fun check(c: Check) {
         val r = http.get(url(c.creds, c.path), headers(c.creds), null, MAX_BODY)
@@ -91,25 +110,34 @@ class CacheWorker(
             ev["err"] = "not json"
             return event(ev)
         }
-        val own = entryBody(File(root, MirrorLogic.hash(c.key) + ".lua"), c.key)
-        val saved = own ?: mirrorSlice(c.owner, c.creds.server, c.path)
-        if (!LuaValue.changed(saved, reply)) {
+        val st = store
+        st.own(c.owner)
+        val template = c.template ?: detailTemplate()
+        if (c.template != null && c.template != st.meta("detail_template")) st.setMeta("detail_template", c.template)
+        val saved = st.read(c.key, c.path, template)
+        val t = now()
+        if (saved != null && !LuaValue.changed(saved.body, reply)) {
+            st.validated(saved, t)
             ev["unchanged"] = true
-            if (own != null) ev["saved"] = true
+            ev["saved"] = true
             return event(ev)
         }
-        val body = LuaValue.settle(saved, reply, c.mode)
-        val t = now()
-        val bytes = entry(c.key, c.path, body, t, t)
-        if (!write(File(root, MirrorLogic.hash(c.key) + ".lua"), bytes)) {
+        try {
+            st.save(c.key, c.path, LuaValue.settle(saved?.body, reply, c.mode), t, template)
+        } catch (e: Exception) {
             ev["err"] = "not saved"
             return event(ev)
         }
         ev["changed"] = true
-        ev["bytes"] = bytes.size.toLong()
-        ev["ids"] = LuaValue.ids(body).toList()
         ev["at"] = t
         event(ev)
+    }
+
+    /** A write the plugin made (PATCH): { id, fields (a Lua literal), stale_home }, or a wipe. */
+    fun patch(id: Long?, fields: Map<*, *>, staleHome: Boolean, wipe: Boolean) {
+        if (wipe) { store.wipe("the plugin asked"); return }
+        val n = store.patch(id, fields, staleHome)
+        if (n > 0) log("store: a write patched $n saved replies")
     }
 
     // ------------------------------------------------------------------ the storage limit
@@ -117,24 +145,15 @@ class CacheWorker(
     /** The plugin's STORAGE: count, and over [limit] remove (StorageLogic). [mirrorCovers]: "Save every cover" is on. */
     data class StorageAsk(val reason: String, val limit: Long?, val coverDir: String?, val mirrorCovers: Boolean)
 
-    /**
-     * Everything Orbit stores: the cache's entries (from its index), the index, the offline
-     * mirror's lists and details ([mirrorBytes]), and the cover folder's files.
-     */
-    fun storageItems(coverDir: String?, mirrorCovers: Boolean, mirrorBytes: Long): List<StorageLogic.Item> {
-        val items = ArrayList<StorageLogic.Item>()
-        val index = File(root, "index.lua")
-        val entries = (read(index) as? Map<*, *>)?.get("entries") as? Map<*, *> ?: emptyMap<Any?, Any?>()
-        for ((k, v) in entries) {
-            val e = v as? Map<*, *> ?: continue
-            items.add(StorageLogic.Item("e:$k", (e["bytes"] as? Number)?.toLong() ?: 0L, (e["used_at"] as? Number)?.toLong() ?: 0L,
-                if (e["keep"] == true) "kept" else "cache"))
-        }
-        items.add(StorageLogic.Item("index", if (index.isFile) index.length() else 0L, 0L, "kept"))
-        items.add(StorageLogic.Item("mirror", mirrorBytes, 0L, "kept"))
+    /** Everything Orbit stores: the database (browsing entries apart, as they can go) and the cover folder's files. */
+    fun storageItems(coverDir: String?, mirrorCovers: Boolean): List<StorageLogic.Item> {
+        val st = store
+        val entries = st.entrySizes()
+        val items = ArrayList<StorageLogic.Item>(entries)
+        items.add(StorageLogic.Item("db", maxOf(0L, st.fileBytes() - entries.sumOf { it.bytes }), 0L, "kept"))
         val dir = coverDir?.let { File(it) }
         if (dir != null && dir.isDirectory) {
-            val keep = if (mirrorCovers) (read(File(mirrorDir, "cover_keep.lua")) as? Map<*, *>)?.keys?.map { it.toString() }?.toHashSet() ?: emptySet() else emptySet()
+            val keep = if (mirrorCovers) st.coversKept() else emptySet()
             for (f in dir.listFiles() ?: emptyArray()) {
                 if (!f.name.endsWith(".jpg") || !f.isFile) continue
                 val etag = File(dir, f.name + ".etag")
@@ -146,29 +165,29 @@ class CacheWorker(
     }
 
     /**
-     * Counts, and over the limit removes covers itself; the cache entries to drop go to the plugin
-     * (it owns its index) in the event: { kind = "storage", why, drop = { {key, used_at} }, totals,
-     * removed = { cache, cover, mirror_cover }, used, after, limit }. The totals also go to
-     * storage.lua, which the plugin reads at start.
+     * Counts, and over the limit removes browsing entries and covers itself. Answers with
+     * { kind = "storage", why, totals, removed = { cache, cover, mirror_cover }, used, after, limit };
+     * the totals are also kept in the database (meta "storage") for the plugin's start.
      */
     fun storage(a: StorageAsk) {
-        val items = storageItems(a.coverDir, a.mirrorCovers, loadState()?.bytes ?: 0L)
+        val items = storageItems(a.coverDir, a.mirrorCovers)
         val plan = StorageLogic.plan(items, a.limit)
         val byK = items.associateBy { it.k }
-        val drop = ArrayList<Map<String, Any?>>()
         val removed = sortedMapOf("cache" to 0L, "cover" to 0L, "mirror_cover" to 0L)
-        for (k in plan.drop) {
-            val it = byK[k] ?: continue
-            if (k.startsWith("e:")) drop.add(sortedMapOf("key" to k.removePrefix("e:"), "used_at" to it.at))
-            else if (k.startsWith("c:") && a.coverDir != null) {
-                File(a.coverDir, k.removePrefix("c:")).delete()
-                File(a.coverDir, k.removePrefix("c:") + ".etag").delete()
+        store.transaction {
+            for (k in plan.drop) {
+                val it = byK[k] ?: continue
+                if (k.startsWith("e:")) store.dropEntry(k.removePrefix("e:"))
+                else if (k.startsWith("c:") && a.coverDir != null) {
+                    File(a.coverDir, k.removePrefix("c:")).delete()
+                    File(a.coverDir, k.removePrefix("c:") + ".etag").delete()
+                }
+                removed[it.kind] = (removed[it.kind] ?: 0L) + 1
             }
-            removed[it.kind] = (removed[it.kind] ?: 0L) + 1
         }
         val totals = StorageLogic.totals(items, plan.drop)
-        write(File(root, "storage.lua"), LuaValue.encode(sortedMapOf<String, Any?>("totals" to totals, "at" to now())))
-        val ev = sortedMapOf<String, Any?>("kind" to "storage", "why" to a.reason, "drop" to drop, "totals" to totals,
+        store.setMeta("storage", String(LuaValue.encode(sortedMapOf<String, Any?>("totals" to totals, "at" to now())), Charsets.ISO_8859_1))
+        val ev = sortedMapOf<String, Any?>("kind" to "storage", "why" to a.reason, "totals" to totals,
             "removed" to removed, "used" to plan.used, "after" to plan.after)
         a.limit?.let { ev["limit"] = it }
         event(ev)
@@ -179,42 +198,16 @@ class CacheWorker(
         }
     }
 
-    // ------------------------------------------------------------------ copies (keep-copies-current.md)
+    // ------------------------------------------------------------------ copies, tags, covers on screen
 
     /**
-     * The plugin's COPIES: which copies on this reader changed in the library. The ask
-     * (copies/ask.lua, written by the plugin; no login in it): `books` ({ md5, path, book_id,
-     * file_id, incompatible }), `eob` (book id -> { files, saved_at }: the end-of-book cache),
-     * `owner`, `server`, `detail_template`, `sentinel`. The details come from the newer of the
-     * end-of-book cache, the cache's entries and the mirror's (CopiesLogic). Answers with
-     * { kind = "copies", why, checked, found = { { md5, path, book_id, file_id, why } }, gone }.
+     * Tags in the saved book details, at most [max] details, for the Leave out tag picker. Model
+     * byte strings, as saved.
      */
-    /**
-     * Tags in the saved book details (the cache's, then the mirror's), at most [max] details, for the
-     * Leave out tag picker. Model byte strings, as saved.
-     */
-    fun detailTags(max: Int): List<List<String>> {
-        val out = ArrayList<List<String>>()
-        fun add(path: Any?, body: Any?) {
-            if (CopiesLogic.detailId(path as? String) == null) return
-            val tags = (body as? Map<*, *>)?.get("tags") as? List<*> ?: return
-            out.add(tags.mapNotNull { it as? String })
+    fun detailTags(max: Int): List<List<String>> =
+        store.db().query("SELECT detail FROM books WHERE detail IS NOT NULL LIMIT ?", max.toLong()) { it.bytes(0) }.mapNotNull { b ->
+            ((b?.let { LuaValue.parse(it) } as? Map<*, *>)?.get("tags") as? List<*>)?.mapNotNull { it as? String }
         }
-        val entries = (read(File(root, "index.lua")) as? Map<*, *>)?.get("entries") as? Map<*, *> ?: emptyMap<Any?, Any?>()
-        for ((key, v) in entries) {
-            if (out.size >= max) return out
-            val meta = v as? Map<*, *> ?: continue
-            if (CopiesLogic.detailId(meta["path"] as? String) == null) continue
-            add(meta["path"], entryBody(File(root, MirrorLogic.hash(key.toString()) + ".lua"), key.toString()))
-        }
-        for (f in mirrorDir.listFiles() ?: emptyArray()) {
-            if (out.size >= max) break
-            if (!ENTRY_FILE.matches(f.name)) continue
-            val e = read(f) as? Map<*, *> ?: continue
-            add(e["path"], e["body"])
-        }
-        return out
-    }
 
     /**
      * A Full refresh's covers on screen, asked again If-None-Match (was the plugin's forked
@@ -246,6 +239,13 @@ class CacheWorker(
         event(sortedMapOf("kind" to "covers_rechecked", "why" to why, "checked" to items.size.toLong(), "changed" to changed, "failed" to failed))
     }
 
+    /**
+     * The plugin's COPIES: which copies on this reader changed in the library. The ask
+     * (copies/ask.lua, written by the plugin; no login in it): `books` ({ md5, path, book_id,
+     * file_id, incompatible }), `eob` (book id -> { files, saved_at }: the end-of-book cache).
+     * The details come from the newer of the end-of-book cache and the database (CopiesLogic).
+     * Answers with { kind = "copies", why, checked, found = { { md5, path, book_id, file_id, why } }, gone }.
+     */
     fun copies(why: String) {
         val ask = read(File(root, "copies/ask.lua")) as? Map<*, *>
         if (ask == null) {
@@ -259,31 +259,10 @@ class CacheWorker(
             val d = v as? Map<*, *> ?: continue
             details[k.toString()] = CopiesLogic.Detail(d["files"] as? List<*>, (d["saved_at"] as? Number)?.toLong() ?: 0L)
         }
-        // The cache's saved details: the index names them by path.
-        val entries = (read(File(root, "index.lua")) as? Map<*, *>)?.get("entries") as? Map<*, *> ?: emptyMap<Any?, Any?>()
-        for ((key, v) in entries) {
-            val meta = v as? Map<*, *> ?: continue
-            val id = CopiesLogic.detailId(meta["path"] as? String) ?: continue
-            if (id !in want) continue
-            val at = (meta["validated_at"] as? Number)?.toLong() ?: 0L
-            if (!CopiesLogic.newer(details[id], at)) continue
-            val body = entryBody(File(root, MirrorLogic.hash(key.toString()) + ".lua"), key.toString()) as? Map<*, *> ?: continue
-            (body["files"] as? List<*>)?.let { details[id] = CopiesLogic.Detail(it, at) }
-        }
-        // The offline mirror's details: one file per wanted book.
-        val owner = ask["owner"] as? String
-        val server = ask["server"] as? String
-        val template = ask["detail_template"] as? String
-        val sentinel = ask["sentinel"] as? String ?: "987654321"
-        if (owner != null && server != null && template != null) {
-            for (id in want) {
-                val key = MirrorLogic.key(owner, server, MirrorLogic.fillBytes(template, sentinel, id))
-                val e = read(File(mirrorDir, MirrorLogic.hash(key) + ".lua")) as? Map<*, *> ?: continue
-                if (e["key"] != key) continue
-                val at = (e["validated_at"] as? Number)?.toLong() ?: 0L
-                val files = (e["body"] as? Map<*, *>)?.get("files") as? List<*> ?: continue
-                if (CopiesLogic.newer(details[id], at)) details[id] = CopiesLogic.Detail(files, at)
-            }
+        for (id in want) {
+            val (body, at) = store.detail(id.toLong()) ?: continue
+            val files = (body as? Map<*, *>)?.get("files") as? List<*> ?: continue
+            if (CopiesLogic.newer(details[id], at)) details[id] = CopiesLogic.Detail(files, at)
         }
         val found = CopiesLogic.candidates(books, details)
         val present = found.filter { File(LuaValue.utf8(it["path"] as String)).isFile }
@@ -299,119 +278,7 @@ class CacheWorker(
         write(File(eventsDir, "${now()}-0-c$eventSeq.lua"), LuaValue.encode(ev))
     }
 
-    /** `OC.lookup`'s mirror half: a list read answered from the mirror's pages. */
-    fun mirrorSlice(owner: String, server: String, path: String): Any? {
-        val w = MirrorLogic.listWindow(path) ?: return null
-        val (_, q) = MirrorLogic.splitPath(path)
-        val query = MirrorLogic.parseQuery(q)
-        for (size in listOf<Int?>(null, 50, 25)) {
-            val firstKey = MirrorLogic.key(owner, server, MirrorLogic.mirrorPage(w.identity, 1, size))
-            val first = entryBody(File(mirrorDir, MirrorLogic.hash(firstKey) + ".lua"), firstKey) as? Map<*, *> ?: continue
-            val pages = HashMap<Int, Any?>()
-            pages[1] = first
-            val n = MirrorLogic.pageCount((first["total"] as? Number)?.toInt() ?: 0, size)
-            for (i in 2..n) {
-                val k = MirrorLogic.key(owner, server, MirrorLogic.mirrorPage(w.identity, i, size))
-                pages[i] = entryBody(File(mirrorDir, MirrorLogic.hash(k) + ".lua"), k)
-            }
-            return LuaValue.slice(w.kind, query["page"]?.toIntOrNull(), query["size"]?.toIntOrNull(), query["offset"]?.toIntOrNull(), pages, size ?: MirrorLogic.PAGE)
-        }
-        return null
-    }
-
-    // ------------------------------------------------------------------ the mirror
-
-    /** One queued request. k: "page" | "detail" | "covers". */
-    data class Job(
-        val k: String, val identity: String? = null, val page: Int = 1, val kind: String? = null, val section: String? = null,
-        var size: Int? = null, val check: Boolean = false, val seed: Boolean = false, val path: String? = null, val id: Long? = null,
-        val nextOf: Long? = null, var tries: Int = 0, val batch: List<Cover> = emptyList(),
-    ) {
-        fun seenId() = "$k|${identity ?: path ?: ""}|${if (k == "page") page.toString() else ""}"
-        fun toModel(): Map<String, Any?> = sortedMapOf("k" to k, "identity" to identity, "page" to page.toLong(), "kind" to kind,
-            "section" to section, "size" to size?.toLong(), "check" to check.takeIf { it }, "seed" to seed.takeIf { it }, "path" to path,
-            "id" to id, "next_of" to nextOf, "tries" to tries.toLong().takeIf { it > 0 }, "batch" to batch.map { it.toModel() }.takeIf { it.isNotEmpty() })
-
-        companion object {
-            fun of(m: Map<*, *>) = Job(m["k"] as String, m["identity"] as? String, (m["page"] as? Long)?.toInt() ?: 1, m["kind"] as? String,
-                m["section"] as? String, (m["size"] as? Long)?.toInt(), m["check"] == true, m["seed"] == true, m["path"] as? String,
-                m["id"] as? Long, m["next_of"] as? Long, (m["tries"] as? Long)?.toInt() ?: 0,
-                (m["batch"] as? List<*>)?.mapNotNull { (it as? Map<*, *>)?.let(Cover::of) } ?: emptyList())
-        }
-    }
-
-    data class Cover(val id: Long, val path: String, val updatedAt: String?) {
-        fun toModel(): Map<String, Any?> = sortedMapOf("id" to id, "path" to path, "updatedAt" to updatedAt)
-        companion object { fun of(m: Map<*, *>) = Cover(m["id"] as Long, m["path"] as String, m["updatedAt"] as? String) }
-    }
-
-    data class ListInfo(val total: Int, val kind: String?, val section: String?, val size: Int?)
-
-    /** The run's state, kept in mirror/worker-state.lua across runs. */
-    class State {
-        val queues = linkedMapOf("seed" to ArrayDeque<Job>(), "lists" to ArrayDeque(), "details" to ArrayDeque(), "covers" to ArrayDeque())
-        val seen = HashSet<String>()
-        val lists = java.util.TreeMap<String, ListInfo>()
-        val sizes = HashMap<String, Long>()
-        val digests = HashMap<String, String>()
-        val coverKeep = java.util.TreeSet<String>()
-        var done = 0; var total = 0; var skipped = 0; var requests = 0; var bytes = 0L
-        var coverTotal = 0; var coverBatch = 0
-        var covers = longArrayOf(0, 0, 0, 0) // ok, not modified, failed, bytes
-        var at: Long? = null; var libVersion: Any? = null; var op: String? = null; var reason: String? = null
-        var startedAt: Long = 0; var revalidating = false; var limitNote: Map<String, Any?>? = null; var keepN = 0L
-        var keepDirty = false
-        var detailsDone = 0
-        /** This run's starting cover bytes, and what else counts toward the limit (counted at its start). */
-        var runCover0 = 0L; var baseOther = 0L; var baseMirrorCover = 0L
-
-        fun left() = queues.values.sumOf { it.size }
-        fun peek(): Pair<String, Job>? = queues.entries.firstOrNull { it.value.isNotEmpty() }?.let { it.key to it.value.first() }
-
-        fun push(job: Job): Boolean {
-            if (!seen.add(job.seenId())) return false
-            val q = when { job.k == "covers" -> "covers"; job.seed -> "seed"; job.k == "detail" -> "details"; else -> "lists" }
-            queues.getValue(q).addLast(job)
-            total++
-            return true
-        }
-
-        fun toModel(): Map<String, Any?> = sortedMapOf(
-            "v" to 3L, "queues" to queues.mapValues { (_, q) -> q.map { it.toModel() } }, "seen" to seen.toList(),
-            "lists" to lists.mapValues { (_, l) -> sortedMapOf<String, Any?>("total" to l.total.toLong(), "kind" to l.kind, "section" to l.section, "size" to l.size?.toLong()) },
-            "sizes" to sizes, "digests" to digests, "cover_keep" to coverKeep.toList(), "done" to done.toLong(), "total" to total.toLong(),
-            "skipped" to skipped.toLong(), "requests" to requests.toLong(), "bytes" to bytes, "cover_total" to coverTotal.toLong(),
-            "cover_batch" to coverBatch.toLong(), "covers" to covers.toList(), "at" to at, "lib_version" to libVersion, "op" to op,
-            "reason" to reason, "started_at" to startedAt, "revalidating" to revalidating.takeIf { it }, "limit_note" to limitNote, "keep_n" to keepN)
-
-        companion object {
-            fun of(m: Map<*, *>): State? {
-                if (m["v"] != 3L) return null
-                val s = State()
-                (m["queues"] as? Map<*, *>)?.forEach { (name, q) ->
-                    val dq = s.queues[name.toString()] ?: return@forEach
-                    (q as? List<*>)?.forEach { j -> (j as? Map<*, *>)?.let { dq.addLast(Job.of(it)) } }
-                }
-                (m["seen"] as? List<*>)?.forEach { s.seen.add(it.toString()) }
-                (m["lists"] as? Map<*, *>)?.forEach { (k, v) ->
-                    val l = v as? Map<*, *> ?: return@forEach
-                    s.lists[k.toString()] = ListInfo((l["total"] as? Long)?.toInt() ?: 0, l["kind"] as? String, l["section"] as? String, (l["size"] as? Long)?.toInt())
-                }
-                (m["sizes"] as? Map<*, *>)?.forEach { (k, v) -> s.sizes[k.toString()] = (v as? Long) ?: 0 }
-                (m["digests"] as? Map<*, *>)?.forEach { (k, v) -> s.digests[k.toString()] = v.toString() }
-                (m["cover_keep"] as? List<*>)?.forEach { s.coverKeep.add(it.toString()) }
-                fun n(k: String) = (m[k] as? Long) ?: 0
-                s.done = n("done").toInt(); s.total = n("total").toInt(); s.skipped = n("skipped").toInt(); s.requests = n("requests").toInt()
-                s.bytes = n("bytes"); s.coverTotal = n("cover_total").toInt(); s.coverBatch = n("cover_batch").toInt(); s.keepN = n("keep_n")
-                (m["covers"] as? List<*>)?.let { c -> s.covers = LongArray(4) { (c.getOrNull(it) as? Long) ?: 0 } }
-                s.at = m["at"] as? Long; s.libVersion = m["lib_version"]; s.op = m["op"] as? String; s.reason = m["reason"] as? String
-                s.startedAt = n("started_at"); s.revalidating = m["revalidating"] == true
-                @Suppress("UNCHECKED_CAST")
-                s.limitNote = m["limit_note"] as? Map<String, Any?>
-                return s
-            }
-        }
-    }
+    // ------------------------------------------------------------------ the plan
 
     /** What the plugin asks for (mirror/plan.lua, written by the plugin; no credentials in it). */
     data class Plan(val m: Map<*, *>) {
@@ -419,55 +286,15 @@ class CacheWorker(
         val op get() = m["op"] as? String ?: "resume"
         val reason get() = m["reason"] as? String
         val owner get() = m["owner"] as? String ?: ""
-        val sentinel get() = m["sentinel"] as? String ?: "987654321"
+        val sentinel get() = m["sentinel"] as? String ?: MirrorLogic.SENTINEL
         val templates get() = m["templates"] as? Map<*, *> ?: emptyMap<String, Any?>()
         val detailTemplate get() = m["detail_template"] as? String
+        val allBooks get() = m["all_books"] as? String
         val coversOn get() = m["covers_on"] == true
         val coverDir get() = m["cover_dir"] as? String
         val limit get() = (m["limit"] as? Long)?.takeIf { it > 0 }
         fun strings(k: String) = (m[k] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
         fun ids(k: String) = (m[k] as? List<*>)?.mapNotNull { it as? Long } ?: emptyList()
-    }
-
-    /** A run's output for the plugin (mirror/summary.lua). */
-    class Out {
-        val changed = ArrayList<String>()
-        val written = ArrayList<Map<String, Any?>>()
-        var writtenMore = false
-        var saved = false
-        var revalidated = false
-    }
-
-    fun loadState(): State? = (read(File(mirrorDir, STATE)) as? Map<*, *>)?.let { State.of(it) }
-
-    fun saveState(s: State) {
-        write(File(mirrorDir, STATE), LuaValue.encode(s.toModel()))
-    }
-
-    private fun status(s: State, plan: Plan, running: Boolean): Map<String, Any?> = sortedMapOf(
-        "v" to 3L, "runner" to "companion", "run" to plan.run, "running" to running.takeIf { it }, "beat" to now(), "op" to s.op,
-        "at" to s.at, "lib_version" to s.libVersion, "done" to s.done.toLong(), "total" to s.total.toLong(), "left" to s.left().toLong(),
-        "skipped" to s.skipped.toLong(), "covers" to sortedMapOf<String, Any?>("ok" to s.covers[0], "not_modified" to s.covers[1],
-            "failed" to s.covers[2], "bytes" to s.covers[3]),
-        "cover_total" to s.coverTotal.toLong(), "limit_note" to s.limitNote, "revalidating" to s.revalidating.takeIf { it },
-        "bytes" to s.bytes, "cover_keep_n" to s.keepN, "started_at" to s.startedAt)
-
-    fun writeStatus(s: State, plan: Plan, running: Boolean) {
-        write(File(mirrorDir, "status.lua"), LuaValue.encode(status(s, plan, running)))
-    }
-
-    private fun mirrorKey(plan: Plan, creds: Creds, path: String) = MirrorLogic.key(plan.owner, creds.server, path)
-
-    private fun detailPath(plan: Plan, id: Long): String? = plan.detailTemplate?.let { MirrorLogic.fillBytes(it, plan.sentinel, id.toString()) }
-
-    private fun addList(s: State, path: String, seed: Boolean = false) {
-        val w = MirrorLogic.listWindow(path) ?: return
-        s.push(Job("page", identity = w.identity, page = 1, kind = w.kind, section = w.section, seed = seed))
-    }
-
-    private fun addDetail(s: State, plan: Plan, id: Long, seed: Boolean, nextOf: Long? = null) {
-        val p = detailPath(plan, id) ?: return
-        s.push(Job("detail", path = p, id = id, seed = seed, nextOf = nextOf))
     }
 
     /** The plugin's cover file name: Cache.coverName (shared/fixtures/cache/worker.json "covers"). */
@@ -488,410 +315,505 @@ class CacheWorker(
         return coverName(book)?.let { "$dir/$it" }
     }
 
-    private fun coversFor(s: State, plan: Plan, items: List<*>, all: Boolean) {
-        val batch = ArrayList<Cover>()
-        fun flush() {
-            if (batch.isEmpty()) return
-            s.coverBatch++
-            s.push(Job("covers", path = "covers#${s.coverBatch}", batch = ArrayList(batch)))
-            batch.clear()
-        }
-        for (b in items) {
-            val book = b as? Map<*, *> ?: continue
-            val p = coverPath(plan, book) ?: continue
-            batch.add(Cover(book["id"] as Long, p, book["updatedAt"]?.let { LuaValue.text(it) }))
-            s.coverTotal++
-            if (all) { s.coverKeep.add(p.substringAfterLast('/')); s.keepDirty = true }
-            if (batch.size >= COVER_BATCH) flush()
-        }
-        flush()
+    // ------------------------------------------------------------------ the run
+
+    /**
+     * One job of the run (the `jobs` table: kind and ref, de-duplicated by both).
+     * - page: ref "<page>|<size>|<identity>", one list page (MirrorLogic.mirrorPage);
+     * - recheck: the same, for Refresh (a changed page fetches only new books' details);
+     * - detail: ref "<book id>";
+     * - cover: ref "<book id>" (the book's saved item names its cover).
+     */
+    private data class Job(val kind: String, val ref: String) {
+        val page get() = ref.substringBefore('|').toInt()
+        val size get() = ref.substringAfter('|').substringBefore('|').toInt()
+        val identity get() = ref.substringAfter('|').substringAfter('|')
+        val id get() = ref.toLong()
     }
 
-    /** Seeds a Full refresh from the plan: On device and the books on the reader first, then the lists. */
-    fun seed(s: State, plan: Plan) {
-        plan.strings("seed_lists").forEach { addList(s, it, seed = true) }
-        plan.strings("legacy_lists").forEach { addList(s, it) }
-        plan.strings("sections").forEach { addList(s, it) }
+    private fun pageJob(kind: String, identity: String, page: Int, size: Int = MirrorLogic.PAGE) = Job(kind, "$page|$size|$identity")
+
+    /** A fetched job, back from a pool thread. body: a page's or detail's reply; cover: the cover's outcome. */
+    private class Landed(val job: Job, val reply: Reply?, val path: String?, val cover: String? = null, val coverBytes: Long = 0, val coverWritten: Map<String, Any?>? = null)
+
+    /** The run's counters, in memory; the jobs table is the durable part. */
+    private class Run(val plan: Plan) {
+        var done = 0L; var total = 0L; var skipped = 0L; var requests = 0L; var pct = 0L; var estimate = 0L
+        var covers = longArrayOf(0, 0, 0, 0) // ok, not modified, failed, bytes
+        var coverTotal = 0L
+        var startedMs = 0L; var batches = 0L; var writeMs = 0L; var writeMax = 0L
+        var limitNote: Map<String, Any?>? = null
+        var errors = 0L
+        val changed = ArrayList<String>()
+        val written = ArrayList<Map<String, Any?>>()
+        var writtenMore = false
+        var details = 0L
+        var lists = HashSet<String>()
+    }
+
+
+    private fun addJob(j: Job) = store.db().exec("INSERT OR IGNORE INTO jobs (kind, ref, state, tries) VALUES (?, ?, 0, 0)", j.kind, CacheStore.u(j.ref))
+
+    private fun count(sql: String, vararg a: Any?): Long = store.db().query(sql, *a) { it.long(0) ?: 0L }.firstOrNull() ?: 0L
+
+    private fun metaLong(k: String) = store.meta(k)?.toLongOrNull()
+
+    private fun detailPath(plan: Plan, id: Long): String? = plan.detailTemplate?.let { MirrorLogic.fillBytes(it, plan.sentinel, id.toString()) }
+
+    private fun addList(identityOrPath: String, kind: String = "page") {
+        val w = MirrorLogic.listWindow(identityOrPath) ?: return
+        addJob(pageJob(kind, w.identity, 1))
+    }
+
+    /** Seeds a Full refresh: the all-books list, the sections, On device, every list saved, the books on the reader. */
+    private fun seed(plan: Plan) {
+        plan.allBooks?.let { addList(it) }
+        plan.strings("seed_lists").forEach { addList(it) }
+        plan.strings("sections").forEach { addList(it) }
+        // Every list saved before (the plugin's browsing too): saved again.
+        store.db().query("SELECT identity FROM lists") { LuaValue.str(it.text(0)!!) }.forEach { addList(it) }
         val ids = sortedSetOf<Long>()
         ids.addAll(plan.ids("seed_details"))
-        // Every list the plugin has read, and Home's entries, from its index (read here, not on
-        // KOReader's UI thread: up to Cache.MAX_ENTRIES of them).
-        val index = (read(File(root, "index.lua")) as? Map<*, *>)?.get("entries") as? Map<*, *> ?: emptyMap<String, Any?>()
-        val homeKeys = ArrayList<String>()
-        val paths = java.util.TreeSet<String>()
-        for ((key, meta) in index) {
-            val m = meta as? Map<*, *> ?: continue
-            if (m["mirror"] == true) continue
-            (m["path"] as? String)?.let { paths.add(it) }
-            if (m["home"] == true) homeKeys.add(key.toString())
-        }
-        paths.forEach { addList(s, it) }
-        // Continue reading and Home's shelves, from the plugin's own saved Home entries.
-        for (key in homeKeys) {
-            val body = entryBody(File(root, MirrorLogic.hash(key) + ".lua"), key) as? Map<*, *> ?: continue
+        // Continue reading and Home's shelves, from the saved Home entries.
+        for (body in store.db().query("SELECT body FROM entries WHERE home = 1") { it.bytes(0) }) {
+            val b = body?.let { LuaValue.parse(it) } as? Map<*, *> ?: continue
             for (field in listOf("continueReading", "items", "books")) {
-                for (b in body[field] as? List<*> ?: emptyList<Any?>()) ((b as? Map<*, *>)?.get("id") as? Long)?.let { ids.add(it) }
+                for (x in b[field] as? List<*> ?: emptyList<Any?>()) ((x as? Map<*, *>)?.get("id") as? Long)?.let { ids.add(it) }
             }
         }
-        ids.forEach { addDetail(s, plan, it, seed = true) }
-    }
-
-    /** "Save every cover for offline" turned on: the covers of every books list saved. */
-    fun coverPass(s: State, plan: Plan, creds: Creds) {
-        val n0 = s.left()
-        for ((identity, l) in s.lists) {
-            if (l.kind != "books") continue
-            for (n in 1..MirrorLogic.pageCount(l.total, l.size)) {
-                val key = mirrorKey(plan, creds, MirrorLogic.mirrorPage(identity, n, l.size))
-                val body = entryBody(File(mirrorDir, MirrorLogic.hash(key) + ".lua"), key) as? Map<*, *> ?: continue
-                coversFor(s, plan, body["items"] as? List<*> ?: emptyList<Any?>(), true)
-            }
+        for (id in ids) {
+            addJob(Job("detail", id.toString()))
+            if (plan.coversOn) addJob(Job("cover", id.toString()))
         }
-        log("mirror: every cover for offline (${plan.reason}): ${s.left() - n0} batch(es) queued")
     }
 
-    /** Refresh's delta: every saved page of every list. */
-    fun recheck(s: State) {
-        s.seen.clear(); s.done = 0; s.total = 0; s.requests = 0; s.skipped = 0; s.coverTotal = 0
-        s.covers = longArrayOf(0, 0, 0, 0)
-        s.revalidating = true; s.op = "revalidate"; s.startedAt = now()
-        for ((identity, l) in s.lists) {
-            for (n in 1..MirrorLogic.pageCount(l.total, l.size)) {
-                s.push(Job("page", identity = identity, page = n, kind = l.kind, section = l.section, check = true, size = l.size))
-            }
+    /** Refresh's delta: every saved page of every list, rechecked. */
+    private fun seedRecheck() {
+        for ((identity, total) in store.db().query("SELECT identity, total FROM lists") { LuaValue.str(it.text(0)!!) to (it.long(1) ?: 0L).toInt() }) {
+            for (n in 1..MirrorLogic.pageCount(total, null)) addJob(pageJob("recheck", identity, n))
         }
-        log("mirror: Refresh rechecks ${s.total} saved pages")
     }
 
-    /** Saves an entry. -> true when it changed from a page saved before (false for a new one). */
-    private fun store(s: State, key: String, path: String, body: Any?): Boolean {
-        val h = MirrorLogic.hash(key)
-        val digest = java.security.MessageDigest.getInstance("SHA-1").digest(LuaValue.encode(LuaValue.normalize(body)))
-            .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
-        val f = File(mirrorDir, "$h.lua")
-        val changed = s.digests[h] != null && s.digests[h] != digest
-        val t = now()
-        val bytes = entry(key, path, body, t, t)
-        if (write(f, bytes)) {
-            s.bytes += bytes.size - (s.sizes[h] ?: 0)
-            s.sizes[h] = bytes.size.toLong()
-            s.digests[h] = digest
+    /** "Save every cover for offline" turned on: the cover of every saved book. */
+    private fun seedCovers() {
+        store.db().query("SELECT id FROM books WHERE item IS NOT NULL") { it.long(0)!! }.forEach { addJob(Job("cover", it.toString())) }
+    }
+
+    /**
+     * The work, fixed once the library's size and the section indexes are known: every book's
+     * detail (and cover with "Save every cover"), every list a section names, and the pages of the
+     * all-books list and the sections. A list longer than one page adds its other pages as it lands.
+     */
+    private fun estimate(r: Run): Long {
+        val plan = r.plan
+        val books = plan.allBooks?.let { MirrorLogic.listWindow(it) }?.let { w ->
+            store.db().query("SELECT total FROM lists WHERE identity = ?", CacheStore.u(w.identity)) { it.long(0) }.firstOrNull()
+        } ?: return 0L
+        var est = MirrorLogic.pageCount(books.toInt(), null).toLong() + books + (if (plan.coversOn) books else 0L)
+        for (s in plan.strings("sections")) {
+            val w = MirrorLogic.listWindow(s) ?: continue
+            val n = store.db().query("SELECT total FROM lists WHERE identity = ?", CacheStore.u(w.identity)) { it.long(0) }.firstOrNull() ?: return 0L
+            est += MirrorLogic.pageCount(n.toInt(), null) + n
         }
-        return changed
-    }
-
-    private fun drop(s: State, key: String) {
-        val h = MirrorLogic.hash(key)
-        File(mirrorDir, "$h.lua").delete()
-        s.bytes -= s.sizes.remove(h) ?: 0
-        s.digests.remove(h)
-    }
-
-    private fun limited(s: State, plan: Plan, q: String, job: Job): Boolean {
-        val limit = plan.limit ?: return false
-        val covers = job.k == "covers"
-        if (covers && !plan.coversOn) return false
-        val kept = s.baseOther + s.bytes
-        val room = if (covers) kept + s.baseMirrorCover + s.covers[3] - s.runCover0 < limit else kept < limit
-        if (room) return false
-        val text: String
-        if (covers) {
-            val n = s.queues.getValue("covers").size
-            s.queues.getValue("covers").clear()
-            s.total -= n
-            text = MirrorLogic.limitText(true, (s.covers[0] + s.covers[1]).toInt(), s.coverTotal)
-        } else {
-            text = MirrorLogic.limitText(false, s.done, s.total)
-            s.queues.values.forEach { it.clear() }
-            s.total = s.done
-        }
-        s.limitNote = sortedMapOf("text" to text, "at" to now(), "limit" to limit)
-        log("mirror: $text")
-        return true
+        return est
     }
 
     private fun shortPath(p: String) = LuaValue.utf8(p).removePrefix("/koreader/plugin/catalog") // orbify:not-a-route: a log line's prefix, not a call
 
-    /** One saved list page or detail: what it names joins the queue. */
-    private fun landed(s: State, plan: Plan, creds: Creds, job: Job, path: String, body: Map<*, *>, out: Out) {
-        s.requests++
-        val key = mirrorKey(plan, creds, path)
-        val changed = store(s, key, path, body)
-        if (job.k == "detail") {
-            s.detailsDone++
-            if (job.nextOf == null) {
-                val mine = (body["seriesIndex"] as? Number)?.toDouble() ?: 0.0
-                for (m in body["seriesMembers"] as? List<*> ?: emptyList<Any?>()) {
-                    val sm = m as? Map<*, *> ?: continue
-                    val id = (sm["id"] as? Long) ?: continue
-                    if (id != job.id && sm["readStatus"] != "read" && ((sm["seriesIndex"] as? Number)?.toDouble() ?: 0.0) > mine) {
-                        addDetail(s, plan, id, job.seed, nextOf = job.id)
-                        break
-                    }
+    /** Fetches a job on a pool thread: a page or detail reply, or a cover written to its file. */
+    private fun fetch(r: Run, creds: Creds, job: Job): Landed {
+        val plan = r.plan
+        return when (job.kind) {
+            "page", "recheck" -> {
+                val path = MirrorLogic.mirrorPage(job.identity, job.page, job.size.takeIf { it != MirrorLogic.PAGE })
+                Landed(job, http.get(url(creds, path), headers(creds), null, MAX_BODY), path)
+            }
+            "detail" -> {
+                val path = detailPath(plan, job.id) ?: return Landed(job, Reply(404), null)
+                Landed(job, http.get(url(creds, path), headers(creds), null, MAX_BODY), path)
+            }
+            else -> fetchCover(plan, creds, job)
+        }
+    }
+
+    /** The cover's book item is read on the writer thread (the pool never touches the database): see [coverJobs]. */
+    private val coverItems = java.util.concurrent.ConcurrentHashMap<Long, Map<*, *>>()
+
+    private fun fetchCover(plan: Plan, creds: Creds, job: Job): Landed {
+        val book = coverItems.remove(job.id) ?: return Landed(job, null, null, "none")
+        val path = coverPath(plan, book) ?: return Landed(job, null, null, "none")
+        val f = File(path)
+        val etagFile = File("$path.etag")
+        val exists = f.isFile
+        // A file the plugin saved without an ETag is left alone.
+        if (exists && !etagFile.isFile) return Landed(job, null, null, "kept")
+        val h = headers(creds, "image/jpeg,image/*").toMutableMap()
+        h["Accept-Encoding"] = "identity"
+        if (exists) h["If-None-Match"] = etagFile.readText()
+        val part = File("$path.part${Thread.currentThread().id}")
+        part.parentFile?.mkdirs()
+        val rep = http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail", h, part, MAX_COVER)
+        return when {
+            rep.code == 304 && exists -> { part.delete(); Landed(job, rep, null, "not_modified") }
+            rep.code == 200 && rep.contentType?.lowercase()?.trim()?.startsWith("image/") == true && part.isFile && part.length() > 0 && part.renameTo(f) -> {
+                if (rep.etag != null) write(etagFile, rep.etag.toByteArray()) else etagFile.delete()
+                Landed(job, rep, null, "ok", f.length(), sortedMapOf("id" to job.id, "updatedAt" to book["updatedAt"]?.let { LuaValue.text(it) }))
+            }
+            rep.code == 0 -> { part.delete(); Landed(job, rep, null, "transport") }
+            else -> { part.delete(); Landed(job, rep, null, "failed") }
+        }
+    }
+
+    /** Saves a landed page or detail and queues what it names. Runs on the writer thread, in its batch's transaction. */
+    private fun landPage(r: Run, job: Job, path: String, body: Map<*, *>) {
+        val plan = r.plan
+        val t = now()
+        r.requests++
+        if (job.kind == "detail") {
+            store.putDetail(job.id, body, t)
+            r.details++
+            // The next unread book of its series (the reader's neighbour).
+            val mine = (body["seriesIndex"] as? Number)?.toDouble() ?: 0.0
+            for (m in body["seriesMembers"] as? List<*> ?: emptyList<Any?>()) {
+                val sm = m as? Map<*, *> ?: continue
+                val id = (sm["id"] as? Long) ?: continue
+                if (id != job.id && sm["readStatus"] != "read" && ((sm["seriesIndex"] as? Number)?.toDouble() ?: 0.0) > mine) {
+                    addJob(Job("detail", id.toString()))
+                    break
                 }
             }
-            if (job.seed || plan.coversOn) coversFor(s, plan, listOf(body), plan.coversOn)
             return
         }
-        val total = (body["total"] as? Number)?.toInt() ?: (body["items"] as? List<*>)?.size ?: 0
-        val identity = job.identity ?: return
+        val w = MirrorLogic.listWindow(job.identity) ?: return
+        val recheck = job.kind == "recheck"
+        val oldTotal = if (job.page == 1) store.db().query("SELECT total FROM lists WHERE identity = ?", CacheStore.u(w.identity)) { it.long(0) }.firstOrNull() else null
+        val changed = store.putWindow(w.identity, w.kind, w.section, (job.page - 1) * job.size, body, t)
+        r.lists.add(w.identity)
+        val total = (body["total"] as? Number)?.toInt() ?: 0
         if (job.page == 1) {
-            val l = s.lists[identity]
-            var oldTotal = l?.total
-            fun dropPage(n: Int, size: Int?) = drop(s, mirrorKey(plan, creds, MirrorLogic.mirrorPage(identity, n, size)))
-            if (l != null && l.size != job.size) {
-                for (n in 2..MirrorLogic.pageCount(l.total, l.size)) dropPage(n, l.size)
-                dropPage(1, l.size)
-                oldTotal = null
-            }
-            s.lists[identity] = ListInfo(total, job.kind, job.section, job.size)
-            if (!job.check || oldTotal != total) {
-                val (fetch, gone) = MirrorLogic.repage(if (job.check) oldTotal ?: 0 else 0, total, job.size)
-                fetch.forEach { s.push(Job("page", identity = identity, page = it, kind = job.kind, section = job.section, check = job.check, size = job.size, seed = job.seed)) }
-                gone.forEach { dropPage(it, job.size) }
-                if (job.check && oldTotal != total) log("mirror: ${shortPath(identity)} total $oldTotal -> $total; re-paged")
-            }
+            val pages = MirrorLogic.pageCount(total, job.size)
+            if (!recheck || oldTotal?.toInt() != total) for (n in 2..pages) addJob(pageJob(job.kind, w.identity, n, job.size))
+            if (recheck && oldTotal != null && oldTotal.toInt() != total) log("mirror: ${shortPath(w.identity)} total $oldTotal -> $total; re-paged")
         }
         val items = body["items"] as? List<*> ?: emptyList<Any?>()
-        if (job.kind == "section") {
-            val section = job.section ?: return
+        if (w.kind == "section") {
+            val section = w.section ?: return
             for (e in items) {
                 val entry = e as? Map<*, *> ?: continue
-                MirrorLogic.entryPath(plan.templates, plan.sentinel, section, entry)?.let { addList(s, it) }
+                MirrorLogic.entryPath(plan.templates, plan.sentinel, section, entry)?.let { addList(it, job.kind) }
             }
-        } else if (job.kind == "books" && (!job.check || changed)) {
-            // A rechecked page that changed: its new books' details, and its covers (304 when unchanged).
+        } else if (!recheck || changed) {
             for (b in items) ((b as? Map<*, *>)?.get("id") as? Long)?.let { id ->
-                val known = job.check && detailPath(plan, id)?.let { File(mirrorDir, MirrorLogic.hash(mirrorKey(plan, creds, it)) + ".lua").isFile } == true
-                if (!known) addDetail(s, plan, id, false)
-            }
-            if (plan.coversOn) coversFor(s, plan, items, true)
-        }
-        if (job.check && changed && out.changed.size < CHANGED_MAX) out.changed.add(identity)
-    }
-
-    private fun coverBatch(s: State, creds: Creds, job: Job, out: Out) {
-        for (c in job.batch) {
-            val f = File(c.path)
-            val etagFile = File(c.path + ".etag")
-            val exists = f.isFile
-            // A file the plugin saved without an ETag is left alone.
-            if (exists && !etagFile.isFile) continue
-            val h = headers(creds, "image/jpeg,image/*").toMutableMap()
-            h["Accept-Encoding"] = "identity"
-            if (exists) h["If-None-Match"] = etagFile.readText()
-            val part = File(c.path + ".part")
-            part.parentFile?.mkdirs()
-            val r = http.get(creds.server + "/koreader/plugin/catalog/books/${c.id}/thumbnail", h, part, MAX_COVER)
-            when {
-                r.code == 304 && exists -> { part.delete(); s.covers[1]++ }
-                r.code == 200 && r.contentType?.lowercase()?.trim()?.startsWith("image/") == true && part.isFile && part.length() > 0 -> {
-                    if (part.renameTo(f)) {
-                        if (r.etag != null) write(etagFile, r.etag.toByteArray()) else etagFile.delete()
-                        s.covers[0]++
-                        s.covers[3] += f.length()
-                        if (out.written.size < WRITTEN_MAX) out.written.add(sortedMapOf("id" to c.id, "updatedAt" to c.updatedAt)) else out.writtenMore = true
-                    } else { part.delete(); s.covers[2]++ }
-                }
-                else -> { part.delete(); s.covers[2]++ }
+                if (!recheck || !store.hasDetail(id)) addJob(Job("detail", id.toString()))
+                if (plan.coversOn) addJob(Job("cover", id.toString()))
             }
         }
+        if (recheck && changed && r.changed.size < CHANGED_MAX) r.changed.add(w.identity)
     }
 
-    /** Replies fetched ahead, by job (PARALLEL at a time over kept-alive connections). */
-    private val ahead = java.util.IdentityHashMap<Job, Reply>()
-    private val pool by lazy { java.util.concurrent.Executors.newFixedThreadPool(parallel) { r -> Thread(r, "orbit-cache-fetch").also { it.isDaemon = true } } }
-
-    private fun jobPath(job: Job) = if (job.k == "page") MirrorLogic.mirrorPage(job.identity!!, job.page, job.size) else job.path!!
-
-    /** The next AHEAD jobs of queue q that are requests, fetched at once (each still lands in order). */
-    private fun fetchAhead(s: State, creds: Creds, q: String) {
-        val jobs = s.queues.getValue(q).asSequence().filter { it.k != "covers" && it !in ahead }.take(AHEAD).toList()
-        if (parallel < 2 || jobs.size < 2) return
-        val futures = jobs.map { j -> j to pool.submit<Reply> { http.get(url(creds, jobPath(j)), headers(creds), null, MAX_BODY) } }
-        for ((j, f) in futures) ahead[j] = try { f.get() } catch (e: Exception) { Reply(0, err = e.javaClass.simpleName) }
-    }
-
-    /** One job, retried in place (5 s, 10 s; a list's first page in smaller pages), then skipped. -> true: skipped for no answer. */
-    private fun doJob(s: State, plan: Plan, creds: Creds, q: String, job: Job, out: Out): Boolean {
-        if (job.k == "covers") {
-            coverBatch(s, creds, job, out)
-            s.queues.getValue(q).removeFirst()
-            s.done++
-            return false
+    /** The storage limit (counted at the run's start, plus what it saved since). -> the job may not run. */
+    private fun limited(r: Run, kind: String, baseCovers: Long): Boolean {
+        val limit = r.plan.limit ?: return false
+        val covers = kind == "cover"
+        if (covers && !r.plan.coversOn) return false
+        val used = store.fileBytes() + baseCovers + r.covers[3]
+        if (used < limit || r.limitNote != null && !covers) return used >= limit
+        val text: String
+        if (covers) {
+            val n = count("SELECT count(*) FROM jobs WHERE kind = 'cover' AND state = 0")
+            store.db().exec("UPDATE jobs SET state = 2 WHERE kind = 'cover' AND state = 0")
+            r.skipped += n
+            text = MirrorLogic.limitText(true, (r.covers[0] + r.covers[1]).toInt(), r.coverTotal.toInt())
+        } else {
+            store.db().exec("UPDATE jobs SET state = 2 WHERE state = 0")
+            text = MirrorLogic.limitText(false, r.done.toInt(), r.total.toInt())
         }
-        if (job !in ahead) fetchAhead(s, creds, q)
-        while (true) {
-            val path = jobPath(job)
-            val r = ahead.remove(job) ?: http.get(url(creds, path), headers(creds), null, MAX_BODY)
-            val body = if (r.code == 200 && r.body != null) try { LuaValue.fromJson(String(r.body, Charsets.UTF_8)) } catch (e: Exception) { null } else null
-            if (body is Map<*, *>) {
-                s.queues.getValue(q).removeFirst()
-                s.done++
-                try { landed(s, plan, creds, job, path, body, out) } catch (e: Exception) { log("mirror: step failed: $e") }
-                return false
+        r.limitNote = sortedMapOf("text" to text, "at" to now(), "limit" to limit)
+        log("mirror: $text")
+        return true
+    }
+
+    private fun status(r: Run, running: Boolean, why: String? = null): Map<String, Any?> {
+        val left = maxOf(0L, r.total - r.done)
+        val secs = maxOf(1L, (clockMs() - r.startedMs) / 1000)
+        val rate = r.done.toDouble() / secs
+        return sortedMapOf(
+            "v" to 4L, "runner" to "companion", "run" to r.plan.run, "running" to running.takeIf { it }, "beat" to now(),
+            "op" to store.meta("run_op"), "at" to metaLong("full_at"), "lib_version" to store.meta("lib_version"),
+            "done" to r.done, "total" to r.total, "left" to left, "pct" to r.pct, "rate" to Math.round(rate * 10) / 10.0,
+            "eta_s" to (if (rate > 0 && left > 0) (left / rate).toLong() else null), "skipped" to r.skipped, "errors" to r.errors,
+            "covers" to sortedMapOf<String, Any?>("ok" to r.covers[0], "not_modified" to r.covers[1], "failed" to r.covers[2], "bytes" to r.covers[3]),
+            "cover_total" to r.coverTotal, "limit_note" to r.limitNote, "revalidating" to (store.meta("run_op") == "revalidate" && running).takeIf { it },
+            "bytes" to store.fileBytes(), "started_at" to metaLong("run_started"), "why" to why)
+    }
+
+    private fun writeStatus(r: Run, running: Boolean) = write(File(mirrorDir, "status.lua"), LuaValue.encode(status(r, running)))
+
+    /** The run's counts, from the jobs table; the % never goes down and is 100 only at the end. */
+    private fun recount(r: Run, finished: Boolean) {
+        val rows = store.db().query("SELECT kind, state, count(*) FROM jobs GROUP BY kind, state") { Triple(it.text(0)!!, it.long(1) ?: 0L, it.long(2) ?: 0L) }
+        r.total = rows.sumOf { it.third }
+        r.done = rows.filter { it.second != 0L }.sumOf { it.third }
+        r.coverTotal = rows.filter { it.first == "cover" }.sumOf { it.third }
+        if (r.estimate == 0L && store.meta("run_op") == "full") {
+            r.estimate = estimate(r)
+            if (r.estimate > 0) {
+                store.setMeta("run_estimate", r.estimate)
+                log("mirror: Full refresh: about ${r.estimate} requests (books, lists and pages, each once)")
             }
-            val why = r.err ?: if (r.code != 0) r.code.toString() else "no answer"
-            job.tries++
-            val status = r.code.takeIf { it in 1..499 }
-            val retry = if (status != null) MirrorLogic.Retry(true) else MirrorLogic.retry(job.tries, if (job.k == "page") job.size ?: MirrorLogic.PAGE else null, job.page)
-            if (retry.skip) {
-                log("mirror: ${shortPath(path)} skipped after ${job.tries} tries ($why); the rest continues")
-                s.skipped++
-                s.queues.getValue(q).removeFirst()
-                s.done++
-                return status == null
-            }
-            val smaller = retry.size != null && retry.size != (job.size ?: MirrorLogic.PAGE)
-            if (smaller) job.size = retry.size
-            log("mirror: ${shortPath(path)} failed ($why), try ${job.tries} of ${MirrorLogic.TRIES}; again in ${retry.waitS}s${if (smaller) ", in pages of ${retry.size}" else ""}")
-            sleep(retry.waitS)
         }
-    }
-
-    /** v0.11.2's mirror files (in the plugin's folder, named by the plan): moved into mirror/. */
-    private fun moveLegacy(s: State, plan: Plan) {
-        var moved = 0
-        for (h in plan.strings("legacy")) {
-            val from = File(root, "$h.lua")
-            val to = File(mirrorDir, "$h.lua")
-            if (from.isFile && from.renameTo(to)) { s.sizes[h] = to.length(); s.bytes += to.length(); moved++ }
-        }
-        if (moved > 0) log("mirror: moved $moved saved pages and details of v0.11.2's mirror into mirror/")
+        val total = maxOf(r.total, r.estimate)
+        val pct = if (finished) 100L else if (total == 0L) 0L else minOf(99L, r.done * 100 / total)
+        r.pct = maxOf(r.pct, pct)
+        store.setMeta("run_pct", r.pct)
     }
 
     /**
-     * A run. stop: asked between jobs (the plugin's mirror/stop file, or a check waiting: the
-     * worker answers it and comes back). Returns when the queue is done, stopped or nothing answers.
+     * A run. stop: the plugin's mirror/stop file, asked between batches, as are the checks waiting
+     * ([yieldTo]: the worker answers them and comes back). Returns when the work is done, stopped
+     * or nothing answers.
      */
     fun run(plan: Plan, creds: Creds, yieldTo: () -> Unit = {}): String {
         mirrorDir.mkdirs()
-        var s = loadState()
+        val st = store
+        st.own(plan.owner)
+        plan.detailTemplate?.let { st.setMeta("detail_template", it) }
+        val r = Run(plan)
+        r.startedMs = clockMs()
+        val pendingBefore = count("SELECT count(*) FROM jobs WHERE state = 0")
         when (plan.op) {
-            "full" -> {
-                val prev = s
-                s = State()
-                if (prev != null) {
-                    s.at = prev.at; s.libVersion = prev.libVersion; s.lists.putAll(prev.lists); s.sizes.putAll(prev.sizes)
-                    s.digests.putAll(prev.digests); s.bytes = prev.bytes; s.coverKeep.addAll(prev.coverKeep); s.keepN = prev.keepN
-                }
-                s.op = "full"; s.reason = plan.reason; s.startedAt = now()
-                moveLegacy(s, plan)
-                seed(s, plan)
-                log("mirror: Full refresh (${plan.reason}): ${s.left()} lists and books to save first")
+            "full" -> st.transaction {
+                st.db().exec("DELETE FROM jobs")
+                st.setMeta("run_op", "full"); st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null)
+                seed(plan)
             }
             "revalidate" -> {
-                if (s == null || s.at == null || s.left() > 0) {
-                    val st = s ?: State()
-                    writeStatus(st, plan, false)
-                    summary(plan, "busy", st, Out(), 0)
+                if (metaLong("full_at") == null || pendingBefore > 0) {
+                    writeStatus(r, false)
+                    summary(plan, "busy", r, 0)
                     return "busy"
                 }
-                recheck(s)
+                st.transaction {
+                    st.db().exec("DELETE FROM jobs")
+                    st.setMeta("run_op", "revalidate"); st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null)
+                    seedRecheck()
+                }
             }
-            "covers" -> {
-                if (s == null) s = State()
-                coverPass(s, plan, creds)
+            "covers" -> st.transaction {
+                if (pendingBefore == 0L) { st.db().exec("DELETE FROM jobs"); st.setMeta("run_op", "covers"); st.setMeta("run_started", now()); st.setMeta("run_pct", 0L) }
+                seedCovers()
             }
-            else -> if (s == null) s = State()
         }
-        val st = s!!
-        st.runCover0 = st.covers[3]
-        if (plan.limit != null) {
-            // Everything else that counts toward the limit, as it stands now (StorageLogic).
-            val items = storageItems(plan.coverDir, plan.coversOn, 0L)
-            st.baseOther = items.filter { it.kind == "kept" }.sumOf { it.bytes }
-            st.baseMirrorCover = items.filter { it.kind == "mirror_cover" }.sumOf { it.bytes }
-        }
-        val out = Out()
-        val bytes0 = st.bytes
-        val coverBytes0 = st.covers[3]
-        var jobs = 0
-        val runStartMs = System.currentTimeMillis()
-        val details0 = st.detailsDone
-        val requests0 = st.requests
-        var transport = 0
-        var statusAt = 0L
-        var stateAt = now()
-        var why: String
-        writeStatus(st, plan, true)
-        while (true) {
-            val next = st.peek()
-            if (next == null) { why = "finished"; break }
-            if (File(mirrorDir, "stop").isFile) { why = "stopped"; break }
-            yieldTo()
-            val (q, job) = next
-            jobs++
-            if (!limited(st, plan, q, job)) {
-                if (doJob(st, plan, creds, q, job, out)) {
-                    transport++
-                    if (transport >= 2) { why = "no answer"; break }
-                } else transport = 0
-                progress(st)
-            }
-            if (now() - statusAt >= STATUS_EVERY_S) { writeStatus(st, plan, true); statusAt = now() }
-            if (now() - stateAt >= STATE_EVERY_S) { persist(st); stateAt = now() }
-        }
-        ahead.clear()
-        val runMs = System.currentTimeMillis() - runStartMs
-        log(String.format(java.util.Locale.ROOT, "mirror: run %s (%s): %d jobs, %d books' details, %d requests in %.1f s (%.1f requests/s, %d at a time)",
-            plan.run, why, jobs, st.detailsDone - details0, st.requests - requests0, runMs / 1000.0, (st.requests - requests0) * 1000.0 / maxOf(1L, runMs), parallel))
+        r.pct = metaLong("run_pct") ?: 0L
+        r.estimate = metaLong("run_estimate") ?: 0L
+        val baseCovers = if (plan.limit != null) storageItems(plan.coverDir, plan.coversOn).filter { it.k.startsWith("c:") }.sumOf { it.bytes } else 0L
+        recount(r, false)
+        log("mirror: ${st.meta("run_op")} (${plan.reason}): ${r.total - r.done} jobs to go, $parallel requests at a time")
+        writeStatus(r, true)
+        val why = pump(r, creds, baseCovers, yieldTo)
+        val secs = (clockMs() - r.startedMs) / 1000.0
+        recount(r, why == "finished")
+        val rate = r.done / maxOf(0.001, secs)
+        log(String.format(java.util.Locale.ROOT, "mirror: run %s (%s): %d requests, %d books' details in %.1f s (%.1f items/s, %d at a time); write %d ms a batch (max %d), %d batches",
+            plan.run, why, r.requests, r.details, secs, rate, parallel, if (r.batches > 0) r.writeMs / r.batches else 0, r.writeMax, r.batches))
+        var saved = false
+        var revalidated = false
         if (why == "finished") {
-            val secs = now() - st.startedAt
-            if (st.revalidating) {
-                log("mirror: Refresh rechecked ${st.done} pages in ${secs}s, ${st.requests} requests")
-                st.revalidating = false
-                out.revalidated = true
-            } else if (plan.op == "full" || st.op == "full") {
-                st.at = now(); st.libVersion = plan.m["lib_version"]
-                log("mirror: Full refresh saved for offline in ${secs}s: ${st.lists.size} lists, ${st.requests} requests, ${st.skipped} skipped, " +
-                    String.format(java.util.Locale.ROOT, "%.1f MB", st.bytes / 1048576.0) + "; covers ${st.covers[0]} new, ${st.covers[1]} unchanged (304), ${st.covers[2]} failed")
-                out.saved = true
+            when (st.meta("run_op")) {
+                "full" -> {
+                    st.setMeta("full_at", now()); plan.m["lib_version"]?.let { st.setMeta("lib_version", LuaValue.text(it)) }
+                    val books = count("SELECT count(*) FROM books")
+                    val lists = count("SELECT count(*) FROM lists")
+                    log(String.format(java.util.Locale.ROOT, "mirror: Full refresh done: %d books, %d lists, %d jobs in %.0f s (%.1f items/s), %d skipped; " +
+                        "covers %d new, %d unchanged (304), %d failed; %.1f MB", books, lists, r.done, secs, rate, r.skipped,
+                        r.covers[0], r.covers[1], r.covers[2], st.fileBytes() / MB))
+                    saved = true
+                }
+                "revalidate" -> { log("mirror: Refresh rechecked ${r.done} pages in ${secs.toLong()} s"); revalidated = true }
             }
-            st.seen.clear()
+            st.db().exec("DELETE FROM jobs")
         }
-        persist(st)
-        writeStatus(st, plan, false)
-        summary(plan, why, st, out, jobs, st.bytes - bytes0, st.covers[3] - coverBytes0)
+        writeStatus(r, false)
+        summary(plan, why, r, r.done, saved, revalidated)
         return why
     }
 
-    private fun persist(s: State) {
-        saveState(s)
-        if (s.keepDirty) {
-            s.keepN++
-            write(File(mirrorDir, "cover_keep.lua"), LuaValue.encode(s.coverKeep.associateWith { true }))
-            s.keepDirty = false
+    /** The pipeline: requests in flight up to [parallel] (covers on their own pool), landed replies written in batches. */
+    private fun pump(r: Run, creds: Creds, baseCovers: Long, yieldTo: () -> Unit): String {
+        val st = store
+        val pool = Executors.newFixedThreadPool(maxOf(1, parallel)) { x -> Thread(x, "orbit-cache-fetch").also { it.isDaemon = true } }
+        val coverPool = Executors.newFixedThreadPool(COVER_PARALLEL) { x -> Thread(x, "orbit-cache-cover").also { it.isDaemon = true } }
+        val landed = LinkedBlockingQueue<Landed>()
+        val inFlight = HashSet<Job>()
+        val notBefore = HashMap<Job, Long>()
+        var transport = 0
+        var statusAt = 0L
+        var loggedAt = clockMs()
+        var why = "finished"
+        try {
+            while (true) {
+                if (File(mirrorDir, "stop").isFile) { why = "stopped"; break }
+                yieldTo()
+                // Refill: the next jobs by kind (lists first), those not in flight and not waiting to retry.
+                // AHEAD times the pool's size queued, so the pools never wait while the writer writes.
+                val reqSlots = parallel * AHEAD - inFlight.count { it.kind != "cover" }
+                val coverSlots = COVER_PARALLEL * AHEAD - inFlight.count { it.kind == "cover" }
+                if (reqSlots > 0 || coverSlots > 0) {
+                    val tnow = clockMs()
+                    // Requests (lists first) and covers each from their own end of the queue: covers run
+                    // alongside the details, not after them.
+                    val skip = (inFlight.size + notBefore.size).toLong()
+                    val next = st.db().query("SELECT kind, ref FROM jobs WHERE state = 0 AND kind <> 'cover' ORDER BY CASE kind WHEN 'page' THEN 0 WHEN 'recheck' THEN 1 ELSE 2 END LIMIT ?",
+                        skip + parallel * AHEAD) { Job(it.text(0)!!, LuaValue.str(it.text(1)!!)) } +
+                        st.db().query("SELECT kind, ref FROM jobs WHERE state = 0 AND kind = 'cover' LIMIT ?", skip + COVER_PARALLEL * AHEAD) { Job(it.text(0)!!, LuaValue.str(it.text(1)!!)) }
+                    var rs = reqSlots
+                    var cs = coverSlots
+                    for (j in next) {
+                        if (j in inFlight || (notBefore[j] ?: 0L) > tnow) continue
+                        if (j.kind == "cover") {
+                            if (cs <= 0) continue
+                            if (limited(r, "cover", baseCovers)) continue
+                            // The book's list item names its cover (else its detail); a book not saved yet waits for the lists.
+                            val item = (st.bookItem(j.id) ?: st.detail(j.id)?.first) as? Map<*, *>
+                            if (item == null) {
+                                if (inFlight.any { it.kind != "cover" } || count("SELECT count(*) FROM jobs WHERE state = 0 AND kind <> 'cover'") > 0) continue
+                                st.db().exec("UPDATE jobs SET state = 2 WHERE kind = 'cover' AND ref = ?", CacheStore.u(j.ref)); continue
+                            }
+                            coverItems[j.id] = item
+                            cs--
+                            inFlight.add(j); coverPool.submit { landed.put(try { fetch(r, creds, j) } catch (e: Exception) { Landed(j, Reply(0, err = e.javaClass.simpleName), null, "transport") }) }
+                        } else {
+                            if (rs <= 0) continue
+                            if (limited(r, j.kind, baseCovers)) break
+                            rs--
+                            inFlight.add(j); pool.submit { landed.put(try { fetch(r, creds, j) } catch (e: Exception) { Landed(j, Reply(0, err = e.javaClass.simpleName), null) }) }
+                        }
+                    }
+                }
+                if (inFlight.isEmpty()) {
+                    // Only retries left: wait for the first of them.
+                    if (count("SELECT count(*) FROM jobs WHERE state = 0") == 0L) break
+                    val first = notBefore.values.minOrNull() ?: break
+                    sleep(maxOf(1L, (first - clockMs() + 999) / 1000).toInt())
+                    continue
+                }
+                // Land a batch: the first reply waits, then what lands within BATCH_MS joins it (up to
+                // BATCH): one commit for many replies (a commit on shared storage costs milliseconds),
+                // while the pool keeps fetching from the jobs queued ahead.
+                val batch = ArrayList<Landed>()
+                landed.poll(30, TimeUnit.SECONDS)?.let { batch.add(it) } ?: continue
+                val until = clockMs() + BATCH_MS
+                while (batch.size < BATCH && batch.size < inFlight.size) {
+                    landed.drainTo(batch, BATCH - batch.size)
+                    if (batch.size >= BATCH || batch.size >= inFlight.size) break
+                    val wait = until - clockMs()
+                    if (wait <= 0) break
+                    landed.poll(wait, TimeUnit.MILLISECONDS)?.let { batch.add(it) } ?: break
+                }
+                val t0 = clockMs()
+                var allTransport = true
+                st.transaction {
+                    for (l in batch) {
+                        inFlight.remove(l.job)
+                        val j = l.job
+                        val ref = CacheStore.u(j.ref)
+                        if (j.kind == "cover") {
+                            when (l.cover) {
+                                "ok" -> { r.covers[0]++; r.covers[3] += l.coverBytes; l.coverWritten?.let { if (r.written.size < WRITTEN_MAX) r.written.add(it) else r.writtenMore = true } }
+                                "not_modified" -> r.covers[1]++
+                                "failed", "transport" -> r.covers[2]++
+                            }
+                            if (l.cover != "transport") allTransport = false
+                            // "Save every cover": the pruner keeps this file.
+                            if (r.plan.coversOn && l.cover in setOf("ok", "not_modified", "kept")) (st.bookItem(j.id) as? Map<*, *>)?.let { coverName(it) }
+                                ?.let { st.db().exec("INSERT OR IGNORE INTO cover_keep (name) VALUES (?)", it) }
+                            st.db().exec("UPDATE jobs SET state = 1 WHERE kind = ? AND ref = ?", j.kind, ref)
+                            continue
+                        }
+                        val rep = l.reply
+                        val body = if (rep != null && rep.code == 200 && rep.body != null) try { LuaValue.fromJson(String(rep.body, Charsets.UTF_8)) } catch (e: Exception) { null } else null
+                        if (body is Map<*, *> && l.path != null) {
+                            allTransport = false
+                            notBefore.remove(j)
+                            st.db().exec("UPDATE jobs SET state = 1 WHERE kind = ? AND ref = ?", j.kind, ref)
+                            try { landPage(r, j, l.path, body) } catch (e: Exception) { r.errors++; log("mirror: step failed: $e") }
+                            continue
+                        }
+                        val status = rep?.code?.takeIf { it in 1..499 }
+                        if (status != null) allTransport = false
+                        val tries = (st.db().query("SELECT tries FROM jobs WHERE kind = ? AND ref = ?", j.kind, ref) { it.long(0) ?: 0L }.firstOrNull() ?: 0L) + 1
+                        val p = l.path?.let { shortPath(it) } ?: j.ref
+                        val whyFail = rep?.err ?: rep?.code?.takeIf { it != 0 }?.toString() ?: "no answer"
+                        val retry = if (status != null) MirrorLogic.Retry(true) else MirrorLogic.retry(tries.toInt(), if (j.kind == "page" || j.kind == "recheck") j.size else null, if (j.kind == "detail") null else j.page)
+                        if (retry.skip) {
+                            log("mirror: $p skipped after $tries tries ($whyFail); the rest continues")
+                            r.skipped++
+                            notBefore.remove(j)
+                            st.db().exec("UPDATE jobs SET state = 2, tries = ? WHERE kind = ? AND ref = ?", tries, j.kind, ref)
+                        } else if ((j.kind == "page" || j.kind == "recheck") && retry.size != null && retry.size != j.size) {
+                            // A list's first page the server is slow to give by 100: in smaller pages.
+                            log("mirror: $p failed ($whyFail), try $tries of ${MirrorLogic.TRIES}; again in ${retry.waitS}s, in pages of ${retry.size}")
+                            notBefore.remove(j)
+                            st.db().exec("UPDATE jobs SET state = 2 WHERE kind = ? AND ref = ?", j.kind, ref)
+                            val smaller = pageJob(j.kind, j.identity, 1, retry.size)
+                            addJob(smaller)
+                            st.db().exec("UPDATE jobs SET tries = ? WHERE kind = ? AND ref = ?", tries, smaller.kind, CacheStore.u(smaller.ref))
+                            notBefore[smaller] = clockMs() + retry.waitS * 1000L
+                        } else {
+                            log("mirror: $p failed ($whyFail), try $tries of ${MirrorLogic.TRIES}; again in ${retry.waitS}s")
+                            st.db().exec("UPDATE jobs SET tries = ? WHERE kind = ? AND ref = ?", tries, j.kind, ref)
+                            notBefore[j] = clockMs() + retry.waitS * 1000L
+                        }
+                    }
+                }
+                val ms = clockMs() - t0
+                r.batches++; r.writeMs += ms; r.writeMax = maxOf(r.writeMax, ms)
+                recount(r, false)
+                transport = if (allTransport) transport + batch.size else 0
+                if (transport >= maxOf(4, parallel * 2)) { why = "no answer"; break }
+                if (clockMs() - statusAt >= STATUS_EVERY_MS) { writeStatus(r, true); statusAt = clockMs() }
+                if (clockMs() - loggedAt >= PROGRESS_EVERY_MS) {
+                    loggedAt = clockMs()
+                    val secs = maxOf(0.001, (clockMs() - r.startedMs) / 1000.0)
+                    val rate = r.done / secs
+                    val left = maxOf(0L, maxOf(r.total, r.estimate) - r.done)
+                    log(String.format(java.util.Locale.ROOT, "mirror: %d/%d (%d%%) · %.1f items/s · write %d ms/batch (max %d) · ETA %s",
+                        r.done, maxOf(r.total, r.estimate), r.pct, rate, if (r.batches > 0) r.writeMs / r.batches else 0, r.writeMax,
+                        if (rate > 0) "${(left / rate / 60).toLong()} min ${((left / rate) % 60).toLong()} s" else "?"))
+                }
+            }
+        } finally {
+            pool.shutdownNow()
+            coverPool.shutdownNow()
+            coverItems.clear()
         }
+        // Replies still in flight when it stopped: their jobs stay pending for the next run.
+        return why
     }
 
-    private var loggedAt = 0L
-
-    private fun progress(s: State) {
-        if (now() - loggedAt < 10 && s.left() > 0) return
-        loggedAt = now()
-        log("mirror: ${s.done}/${s.total} saved" + if (s.coverTotal > 0) ", covers ${s.covers[0] + s.covers[1] + s.covers[2]}/${s.coverTotal}" else "")
-    }
-
-    private fun summary(plan: Plan, why: String, s: State, out: Out, jobs: Int, bytesDelta: Long = 0, coverBytesDelta: Long = 0) {
+    private fun summary(plan: Plan, why: String, r: Run, jobs: Long, saved: Boolean = false, revalidated: Boolean = false) {
         write(File(mirrorDir, "summary.lua"), LuaValue.encode(sortedMapOf<String, Any?>(
-            "run" to plan.run, "why" to why, "jobs" to jobs.toLong(), "status" to status(s, plan, false),
-            "changed" to out.changed.toList(), "written" to out.written.toList(), "written_more" to out.writtenMore.takeIf { it },
-            "saved" to out.saved.takeIf { it }, "revalidated" to out.revalidated.takeIf { it },
-            "bytes_delta" to bytesDelta, "cover_bytes_delta" to coverBytesDelta)))
+            "run" to plan.run, "why" to why, "jobs" to jobs, "status" to status(r, false, why),
+            "changed" to r.changed.toList(), "written" to r.written.toList(), "written_more" to r.writtenMore.takeIf { it },
+            "saved" to saved.takeIf { it }, "revalidated" to revalidated.takeIf { it },
+            "cover_bytes_delta" to r.covers[3])))
     }
 
     companion object {
-        const val STATE = "worker-state.lua"
-        private val ENTRY_FILE = Regex("^[0-9a-f]{8}\\.lua$")
-        const val COVER_BATCH = 20
-        /** Requests in flight at once: polite to a home server, and ~4x one connection's rate over Tailscale. */
-        const val PARALLEL = 4
-        const val AHEAD = 16
+        /** The cache's files before the database (0.11.x), removed at the first open. */
+        val OLD_FILES = setOf("index.lua", "storage.lua", "worker-state.lua", "cover_keep.lua")
+        /** Requests in flight at once: tuned with the stage 0 kit (docs/design/sqlite-cache.md "Speed"). */
+        const val PARALLEL = 6
+        const val COVER_PARALLEL = 4
+        /** Landed replies written in one transaction, at most (or what landed within BATCH_MS). */
+        const val BATCH = 100
+        const val BATCH_MS = 250L
+        /** Jobs queued per pool thread (a batch's write must not starve the pools). */
+        const val AHEAD = 4
         const val CHANGED_MAX = 50
         const val WRITTEN_MAX = 100
-        const val STATUS_EVERY_S = 5
-        const val STATE_EVERY_S = 30
+        const val STATUS_EVERY_MS = 2000L
+        const val PROGRESS_EVERY_MS = 10_000L
         const val MAX_BODY = 32L * 1024 * 1024
         const val MAX_COVER = 4L * 1024 * 1024
         const val MB = 1048576.0

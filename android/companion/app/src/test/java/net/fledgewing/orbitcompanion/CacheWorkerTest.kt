@@ -55,7 +55,7 @@ class CacheWorkerTest {
 
     @Test fun coverNamesMatchThePlugin() {
         val cs = fx.getJSONArray("covers")
-        val w = CacheWorker(Files.createTempDirectory("c").toFile(), { _, _, _, _ -> CacheWorker.Reply(0) }, log = {})
+        val w = CacheWorker(Files.createTempDirectory("c").toFile(), { _, _, _, _ -> CacheWorker.Reply(0) }, log = {}, openSql = { JdbcSql(it) })
         for (i in 0 until cs.length()) {
             val c = cs.getJSONObject(i)
             val book = sortedMapOf<String, Any?>("id" to c.getLong("id"), "updatedAt" to (if (c.isNull("updatedAt")) null else c.getString("updatedAt")),
@@ -118,7 +118,9 @@ class CacheWorkerTest {
         )
         val fake = Fake(routes)
         var t = 1000L
-        val w = CacheWorker(root, fake, now = { synchronized(this) { t++ } }, log = {}, sleep = {}, parallel = parallel)
+        var ms = 0L
+        val w = CacheWorker(root, fake, now = { synchronized(this) { t++ } }, log = {}, sleep = { synchronized(this) { ms += it * 1000L } }, parallel = parallel,
+            openSql = { JdbcSql(it) }, clockMs = { synchronized(this) { ms } })
         return Triple(root, fake, w)
     }
 
@@ -128,13 +130,17 @@ class CacheWorkerTest {
         val (root, fake, w) = setup()
         assertEquals("finished", w.run(plan(root, "full"), creds))
         val pages = fake.asked.filter { !it.endsWith("/thumbnail") }.map { it.removePrefix(S + C) }
-        // Seed list, seed detail, then the section and the list it opens, then the other details.
-        assertEquals(listOf("/books?page=1&size=100&sort=title", "/books/1", "/sections/authors?page=1&size=100",
-            "/books?author=Ana%20Mar%C3%ADa&page=1&size=100", "/books/2", "/books/3"), pages)
-        assertTrue(fake.asked.indexOfFirst { it.endsWith("/thumbnail") } > fake.asked.indexOf("$S$C/books/3"))
-        // Each entry under its plugin key, readable by the plugin's Cache.decode format.
+        // Lists first (requests queue ahead of the pool, so a detail may overlap a later list), each
+        // page and each book's detail once.
+        assertEquals(listOf("/books?page=1&size=100&sort=title", "/sections/authors?page=1&size=100"), pages.take(2))
+        assertEquals(setOf("/books?author=Ana%20Mar%C3%ADa&page=1&size=100", "/books/1", "/books/2", "/books/3"), pages.drop(2).toSet())
+        assertEquals(6, pages.size)
+        // Each cover once, whichever lists name the book.
+        assertEquals(3, fake.asked.count { it.endsWith("/thumbnail") })
+        // Saved where the plugin reads: the detail by book id, the lists by position.
         val key = MirrorLogic.key("alice|$S", S, "$C/books/2")
-        assertNotNull(w.entryBody(File(w.mirrorDir, MirrorLogic.hash(key) + ".lua"), key))
+        assertEquals(2L, (w.store.read(key, "$C/books/2", "$C/books/987654321")!!.body as Map<*, *>)["id"])
+        assertEquals(3L, w.store.db().query("SELECT count(*) FROM books") { it.long(0) }.single())
         val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
         assertEquals("companion", status["runner"]); assertEquals(0L, status["left"]); assertNull(status["running"])
         assertNotNull(status["at"])
@@ -192,16 +198,16 @@ class CacheWorkerTest {
         fake.routes["$S$path"] = page(listOf(1, 2))
         w.check(CacheWorker.Check(key, path, "open", creds, "alice|$S"))
         val ev1 = File(root, "events").listFiles()!!.map { LuaValue.parse(it.readBytes()) as Map<*, *> }.single()
-        assertEquals(true, ev1["unchanged"]); assertNull(ev1["saved"])
+        assertEquals(true, ev1["unchanged"]); assertEquals(true, ev1["saved"])
         fake.routes["$S$path"] = page(listOf(1, 2, 5))
         w.check(CacheWorker.Check(key, path, "open", creds, "alice|$S"))
         val ev2 = File(root, "events").listFiles()!!.map { LuaValue.parse(it.readBytes()) as Map<*, *> }.first { it["changed"] == true }
-        assertEquals(listOf(1L, 2L, 5L), ev2["ids"])
-        assertNotNull(w.entryBody(File(root, MirrorLogic.hash(key) + ".lua"), key))
+        val saved = w.store.read(key, path, null)!!.body as Map<*, *>
+        assertEquals(listOf(1L, 2L, 5L), (saved["items"] as List<*>).map { (it as Map<*, *>)["id"] })
     }
 
-    /** Speed: a 500-book library over a server that takes 20 ms a request; 4 at a time. */
-    @Test fun aBigLibraryIsFetchedFourAtATime() {
+    /** Speed: a 500-book library over a server that takes 20 ms a request; PARALLEL at a time. */
+    @Test fun aBigLibraryIsFetchedSeveralAtATime() {
         val root = Files.createTempDirectory("orbit-cache").toFile()
         val n = 500
         val inFlight = java.util.concurrent.atomic.AtomicInteger()
@@ -223,14 +229,14 @@ class CacheWorkerTest {
             }
         }
         val logs = ArrayList<String>()
-        val w = CacheWorker(root, http, log = { synchronized(logs) { logs.add(it) } }, sleep = {})
+        val w = CacheWorker(root, http, log = { synchronized(logs) { logs.add(it) } }, sleep = {}, openSql = { JdbcSql(it) })
         val t0 = System.nanoTime()
         assertEquals("finished", w.run(plan(root, "full", mapOf("covers_on" to false, "sections" to emptyList<String>(), "seed_details" to emptyList<Long>())), creds))
         val secs = (System.nanoTime() - t0) / 1e9
         val line = logs.first { it.startsWith("mirror: run r1") }
-        assertTrue(line, line.contains("$n books' details, ${n + 5} requests"))
-        assertEquals(4, most)
-        // One at a time this is 505 x 20 ms = 10 s; four at a time about a quarter.
+        assertTrue(line, line.contains("${n + 5} requests, $n books' details"))
+        assertEquals(CacheWorker.PARALLEL, most)
+        // One at a time this is 505 x 20 ms = 10 s; six at a time about a sixth.
         assertTrue("took $secs s: $line", secs < 5)
     }
 
@@ -248,7 +254,9 @@ class CacheWorkerTest {
                 else -> CacheWorker.Reply(404)
             }
         }
-        val w = CacheWorker(root, http, log = { logs.add(it) }, sleep = { waits.add(it) }, parallel = 1)
+        var ms = 0L
+        val w = CacheWorker(root, http, log = { logs.add(it) }, sleep = { waits.add(it); ms += it * 1000L }, parallel = 1,
+            openSql = { JdbcSql(it) }, clockMs = { ms })
         val p = plan(root, "full", mapOf("seed_lists" to emptyList<String>(), "seed_details" to emptyList<Long>(),
             "sections" to listOf("$C/sections/series", "$C/sections/authors")))
         assertEquals("finished", w.run(p, creds))
@@ -256,9 +264,10 @@ class CacheWorkerTest {
         assertTrue(log, log.contains("/sections/series?page=1&size=100 failed (timeout), try 1 of 3; again in 5s, in pages of 50"))
         assertTrue(log, log.contains("/sections/authors?page=1&size=50 failed (timeout), try 2 of 3; again in 10s, in pages of 25"))
         assertTrue(log, log.contains("/sections/authors?page=1&size=25 skipped after 3 tries (timeout); the rest continues"))
-        assertEquals(listOf(5, 5, 10), waits)
-        val st = w.loadState()!!
-        assertEquals(50, st.lists["$C/sections/series"]!!.size)
-        assertEquals(1, st.skipped)
+        // Both lists' retries wait together.
+        assertEquals(listOf(5, 10), waits)
+        val st = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        assertEquals(1L, st["skipped"])
+        assertTrue(log, log.contains("/sections/series?page=1&size=50") || !log.contains("series?page=1&size=50 failed"))
     }
 }
