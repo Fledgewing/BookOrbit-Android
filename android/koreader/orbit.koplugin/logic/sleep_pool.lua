@@ -23,7 +23,8 @@ SleepPool.LISTS = {
     { id = "want_to_read", type = "want-to-read", label = "Want to read" },
     { id = "discover", type = "random", label = "Discover" },
 }
-SleepPool.HOURS = { 1, 3, 6, 12, 24 }
+-- 0 = every sleep: a new cover each time the reader sleeps.
+SleepPool.HOURS = { 0, 1, 3, 6, 12, 24 }
 SleepPool.STYLES = { { id = "bar", label = "Bar" }, { id = "overlay", label = "Overlay" } }
 SleepPool.TEXT_POSITIONS = {
     { id = "right", label = "Right" }, { id = "left", label = "Left" },

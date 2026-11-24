@@ -40,7 +40,7 @@ class SleepScreenActivity : EinkActivity() {
         if (s.mode == SleepMode.RECOMMENDED) {
             root.addView(Ui.row(this, "Pick from", "${s.fromLabel()} · set in KOReader › Tools › Android sync › Sleep screen"))
             root.addView(Ui.row(this, "Leave out", if (s.leaveOut.isEmpty()) "nothing" else "${s.leaveOut.size} rule(s) · set in KOReader"))
-            segmented(root, "Change cover every", SleepSettings.HOURS.map { it to "$it h" }, s.hours) { set(s.copy(hours = it)) }
+            segmented(root, "Change cover every", SleepSettings.HOURS.map { it to if (it == 0) "Every sleep" else "$it h" }, s.hours) { set(s.copy(hours = it)) }
             sharpRow(root)
         }
         root.addView(Ui.row(this, "Text", if (s.text.isEmpty()) "none · set in KOReader" else "${s.text} · set in KOReader"))
