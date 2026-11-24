@@ -81,7 +81,21 @@ action:    android.intent.action.MAIN
 flags:     FLAG_ACTIVITY_NEW_TASK
 extra:     net.fledgewing.orbitcompanion.extra.COMMAND = "home" | "home_smart"   (String)
 extra:     net.fledgewing.orbitcompanion.extra.FROM = "other_app"   (optional, home_smart only)
+extra:     net.fledgewing.orbitcompanion.extra.ROTATION = "portrait" | "landscape" | "reverse_portrait" | "reverse_landscape"   (companions after 0.11.2)
 ```
+
+`ROTATION` is how the display is held when Home is pressed (`Display.getRotation()` of the
+default display, named as the `SCREEN_ORIENTATION_*` it matches). On Android, KOReader's
+rotation is the activity's requested orientation, which turns the whole display (koreader-base
+`ffi/framebuffer_android.lua:78-91`), and every new file browser sets its own rotation,
+`fm_rotation_mode` or upright (`filemanager.lua:63-69`, from `showFiles` `:1321`: KOReader's start,
+`reader.lua:291`, and every book close, `readerui.lua:594`). BookOrbit Home sits over the file
+browser, so it came up in that rotation, not the held one. The plugin (`HomePlan.rotation`)
+turns KOReader to `ROTATION` before BookOrbit Home shows, through `FileManager:onSetRotationMode`;
+never with a book open (a book keeps its own rotation), nor with KOReader's "Lock auto rotation"
+on. Within KOReader, the plugin keeps the current rotation when a book close opens a new file
+browser (it replaces `FileManager.setRotationMode`); only KOReader's own start sets it before the
+plugin loads, which `ROTATION` then corrects. Older plugins ignore the extra.
 
 Both commands go through the patch's `HomePlan`. `home_smart` is sent when the shared "Home
 button" setting is "Back to my book, then BookOrbit home" (the default), `home` when it is

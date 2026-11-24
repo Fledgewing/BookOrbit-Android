@@ -55,7 +55,9 @@ local NEEDS = {
     { "frontend/apps/reader/readerui.lua", { "init", "showReader", "registerModule", "onHome",
         { "instance", F }, { "registerModule(\"status\"", T }, { "registerModule(\"toc\"", T },
         { "registerModule(\"menu\"", T } } },
-    { "frontend/apps/filemanager/filemanager.lua", { { "instance", F } } },
+    -- Home keeps the held rotation (ko/home.lua keepHeldRotation, keepRotationOnFileBrowser).
+    { "frontend/apps/filemanager/filemanager.lua", { { "instance", F }, "setRotationMode", "onSetRotationMode",
+        { "lock_rotation", T } } },
     { "frontend/ui/widget/eventlistener.lua", { "handleEvent" } },
     { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu",
         { "menu_container", F } } },
@@ -101,6 +103,7 @@ local BASE = {
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
     { "ffi/sha2.lua", { "sha256" } },
     { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F } } },
+    { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
 }
 
 local missing = {}

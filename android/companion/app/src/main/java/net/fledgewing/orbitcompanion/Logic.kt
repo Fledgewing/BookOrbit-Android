@@ -525,6 +525,25 @@ object HomeCommands {
 }
 
 /**
+ * The display's orientation for KOReader's Home (ROTATION extra, android/docs/INTERFACE.md "go
+ * home"): how the device is held when Home is pressed. KOReader's file browser locks its own
+ * rotation (fm_rotation_mode, else upright), which on Android turns the whole display; the
+ * plugin turns BookOrbit Home back to this one. [rotation] is Display.getRotation() (0-3, the
+ * Surface.ROTATION_* quarter turns); [naturalPortrait]: the panel's natural (rotation 0)
+ * orientation is portrait. Names are the SCREEN_ORIENTATION_* the plugin maps to KOReader's modes.
+ */
+object HeldRotation {
+    fun name(rotation: Int, naturalPortrait: Boolean): String? {
+        val portrait = listOf("portrait", "landscape", "reverse_portrait", "reverse_landscape")
+        val landscape = listOf("landscape", "reverse_portrait", "reverse_landscape", "portrait")
+        return (if (naturalPortrait) portrait else landscape).getOrNull(rotation)
+    }
+
+    /** Sent with Home commands only: the plugin reads it with "home"/"home_smart". */
+    fun sendsWith(command: String?): Boolean = command == HomeCommands.HOME || command == HomeCommands.HOME_SMART
+}
+
+/**
  * Which COMMAND each plugin version knows (android/docs/INTERFACE.md). The companion never sends
  * one the running plugin doesn't know (v0.11.1: with 0.10.1 running, Setup's Fix next sent
  * `signin` three times and `recommended` once; the plugin logged "unknown command ignored"):
