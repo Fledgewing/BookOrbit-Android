@@ -442,6 +442,16 @@ if SIMULATOR:
         # lib/Logging and lib/uzlib carry (same bodies).
         env.Append(LIBS=["crypto"], LINKFLAGS=["-Wl,--allow-multiple-definition"])  # noqa: F821
 
+        # AnimatedGIF times its frames with millis() and delay() unless __MACH__ or __LINUX__ is
+        # defined, and includes Arduino.h only under ARDUINO: macOS skips the timing, GCC on Linux
+        # defines neither and stops there. The simulator's Arduino.h has both.
+        _sim_arduino = os.path.join(env.subst("$PROJECT_LIBDEPS_DIR"), pioenv, "simulator", "src", "Arduino.h")  # noqa: F821
+
+        def _animated_gif_with_arduino(node_env, node):
+            return node_env.Object(node, CCFLAGS=node_env["CCFLAGS"] + ["-include", _sim_arduino])
+
+        env.AddBuildMiddleware(_animated_gif_with_arduino, "*AnimatedGIF.cpp")  # noqa: F821
+
 
 def _process_project_deps_with_sim(env):
     """Simulator: tailnet/sim stands in for MicroLink and the shim (Tailnet.h, TailnetNetPhase.h)."""
