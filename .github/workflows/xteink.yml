@@ -11,6 +11,14 @@ name: Xteink
 #   Settings > Check for updates: the overlay points their updater at this repo's
 #   xteink-v releases (overlay patch ota-tag-prefix).
 #
+# - test builds (AGENTS.md "Test builds: sideload first, release after"): a manual run with
+#   test_build on builds the same firmware as a release would and never publishes. Every build
+#   (pull request, push, test build) uploads per reader the artifact firmware-<env>-<asset_version>:
+#   the app image, its .sha256 and the partition table it was built for (.parttable, PlatformIO's
+#   partitions.bin). tools/sideload-xteink.sh <run id> flashes it over USB. Its fourth number
+#   (RUN_BASE + run number) is below every later run's, so a reader on a test build takes the
+#   next release over the air.
+#
 # Tags: xteink-v<version>. Firmware releases are published with make_latest=false: "latest"
 # is always an Android release (companions up to 0.6.x read releases/latest).
 #
@@ -54,6 +62,11 @@ on:
         required: false
         type: boolean
         default: false
+      test_build:
+        description: "Test build: firmware artifacts only, never a release (tools/sideload-xteink.sh)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -91,6 +104,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           INPUT_REF: ${{ inputs.upstream_ref }}
           FORCE: ${{ inputs.force_release }}
+          TEST_BUILD: ${{ inputs.test_build }}
         run: |
           set -euo pipefail
           # Push and pull request builds use the CrossInk version pinned in tools/upstreams.lock,
@@ -130,7 +144,10 @@ jobs:
           # tag; our own changes go out by a manual run. The rule: upstream-line.sh publish.
           marker="upstream=$tag overlay-tree=$(git rev-parse HEAD:xteink)"
           publish=false
-          if [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+          # A test build never publishes (the release and e2e jobs check test_build too).
+          if [ "${TEST_BUILD:-false}" = true ]; then
+            echo "Test build: firmware artifacts only, nothing published"
+          elif [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             publish="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '.[].body' \
               | xteink/scripts/upstream-line.sh publish "$GITHUB_EVENT_NAME" "$tag" "$marker" "${FORCE:-false}")"
           fi
@@ -281,10 +298,23 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
+      # For tools/sideload-xteink.sh: the image's SHA-256 and the partition table the build used.
+      # Neither name ends in .bin, so the release job's *.bin never picks them up.
+      - name: Checksum and partition table beside the image
+        working-directory: upstream/.pio/build/${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          bin="${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin"
+          sha256sum -- "$bin" > "$bin.sha256"
+          cp partitions.bin "${bin%.bin}.parttable"
+
       - uses: actions/upload-artifact@v7
         with:
           name: firmware-${{ matrix.environment }}-${{ matrix.line.asset_version }}
-          path: upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin
+          path: |
+            upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin
+            upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin.sha256
+            upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.parttable
           if-no-files-found: error
 
   # The emulated release tests (release-tests.yml) on the commit and CrossInk tag about to be
@@ -292,7 +322,7 @@ jobs:
   # run with nothing new stay as they were. The release waits for them.
   e2e:
     needs: [resolve, build]
-    if: needs.resolve.outputs.publish == 'true'
+    if: needs.resolve.outputs.publish == 'true' && !inputs.test_build
     uses: ./.github/workflows/release-tests.yml
     with:
       platform: xteink
@@ -300,7 +330,7 @@ jobs:
 
   release:
     needs: [resolve, build, e2e]
-    if: needs.resolve.outputs.publish == 'true'
+    if: needs.resolve.outputs.publish == 'true' && !inputs.test_build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v7
