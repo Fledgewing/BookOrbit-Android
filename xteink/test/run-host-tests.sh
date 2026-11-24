@@ -59,6 +59,8 @@ orbify_test copy_queue "$core/CopyQueue.cpp" "$core/CopyCheck.cpp"
 orbify_test mirror "$core/Mirror.cpp"
 orbify_test sleep_sync_deadline
 orbify_test boot_trail
+# The sleep screen (ROADMAP 11): the rotation and the batch read shared/fixtures/sleep/cases.json, as Android does.
+orbify_test sleep_pick "$core/SleepPick.cpp" "$core/SleepLayout.cpp"
 # The End-of-Book page (orbify/core/EndPageLayout): touch rules on the X4 Pro and X4 layouts, and
 # PNGs drawn with CrossInk's own font sources for review against the mockups (in $out). Needs
 # FreeType and libpng; CI sets ORBIFY_REQUIRE_RENDER=1 so a missing library fails there.
