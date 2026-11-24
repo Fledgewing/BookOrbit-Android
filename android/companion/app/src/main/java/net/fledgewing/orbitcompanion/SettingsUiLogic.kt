@@ -111,9 +111,14 @@ object SettingsUi {
     /** The value as the row shows it, in words. */
     fun valueLabel(d: SettingDef, wire: String, choices: SleepChoices? = null): String = when (d.type) {
         "bool" -> if (wire == "1") "On" else "Off"
-        "rules" -> wire.split('\n').count { it.isNotBlank() }.let { if (it == 0) "None" else if (it == 1) "1 rule" else "$it rules" }
+        "rules" -> SleepPoolLogic.rules(wire).let { r ->
+            if (r == listOf(SleepPoolLogic.LIBRARY)) "Library" else r.size.let { if (it == 0) "None" else if (it == 1) "1 rule" else "$it rules" }
+        }
         "text" -> wire.ifEmpty { "None" }
-        "source" -> d.values.firstOrNull { it.first == wire }?.second ?: choices?.title(wire) ?: SleepChoices.fallback(wire)
+        // Pick from is a set (R1c): its items' names, joined.
+        "source" -> SleepPoolLogic.sources(wire).joinToString(", ") { item ->
+            d.values.firstOrNull { it.first == item }?.second ?: choices?.title(item) ?: SleepChoices.fallback(item)
+        }
         else -> d.valueLabel(wire)
     }
 
@@ -150,10 +155,15 @@ data class SleepChoices(
     }
 
     /** A leave-out rule in words. */
-    fun ruleLabel(rule: String): String = if (rule.startsWith("tag:")) "Tag: ${rule.removePrefix("tag:")}" else title(rule) ?: fallback(rule)
+    fun ruleLabel(rule: String): String = when {
+        rule == SleepPoolLogic.LIBRARY -> LIBRARY_RULE
+        rule.startsWith("tag:") -> "Tag: ${rule.removePrefix("tag:")}"
+        else -> title(rule) ?: fallback(rule)
+    }
 
     companion object {
         const val FILE = "choices.json"
+        const val LIBRARY_RULE = "Library: every book (the sleep screen shows the current book)"
 
         /** "Scope not found" (X7) when an id is not in the lists. */
         fun fallback(wire: String): String = when (wire.substringBefore(':')) {

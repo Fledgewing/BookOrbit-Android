@@ -88,7 +88,6 @@ data class SettingTaken(val key: String, val v: String, val at: Long, val was: S
  */
 object SettingsSync {
     const val FUTURE_MS = 86_400_000L
-    private val RULE_ID = Regex("""^(scope|collection):(\d+)$""")
 
     /** The keys shared with one whole-set settings_at before per-key times. */
     val LEGACY = setOf(
@@ -102,11 +101,9 @@ object SettingsSync {
         return when (d.type) {
             "bool" -> when (s) { "1", "true" -> "1"; "0", "false" -> "0"; else -> null }
             "choice" -> s.takeIf { v -> d.values.any { it.first == v } }
-            "source" -> when {
-                d.values.any { it.first == s } -> s
-                else -> RULE_ID.matchEntire(s)?.let { m -> m.groupValues[2].toLongOrNull()?.takeIf { it > 0 }?.let { "${m.groupValues[1]}:$it" } }
-            }
-            "rules" -> s.split('\n').mapNotNull { rule(it.trim()) }.distinct().joinToString("\n")
+            // Pick from, a set, and Leave out: SleepPoolLogic's rules (docs/design/lock-screen.md R1c, X8).
+            "source" -> SleepPoolLogic.sources(s).joinToString("\n")
+            "rules" -> SleepPoolLogic.rules(s).joinToString("\n")
             "text" -> {
                 val t = s.replace(Regex("[\r\n\t]+"), " ").trim()
                 val n = t.codePointCount(0, t.length)
@@ -114,11 +111,6 @@ object SettingsSync {
             }
             else -> null
         }
-    }
-
-    private fun rule(r: String): String? {
-        if (r.startsWith("tag:")) return r.removePrefix("tag:").trim().lowercase().takeIf { it.isNotEmpty() }?.let { "tag:$it" }
-        return RULE_ID.matchEntire(r)?.let { m -> m.groupValues[2].toLongOrNull()?.takeIf { it > 0 }?.let { "${m.groupValues[1]}:$it" } }
     }
 
     /**

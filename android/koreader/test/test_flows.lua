@@ -4971,10 +4971,20 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     ok(#got == 15, "2 headers, 12 scopes, 1 collection: " .. #got)
     ok(got[1] == "Smart scopes" and got[2] == "Cosy Mysteries · 5" and got[13] == "Holiday Picks", "scopes with counts, the last without: " .. tostring(got[13]))
     ok(got[14] == "Collections" and got[15] == "ToRead · 23", "the collection: " .. tostring(got[15]))
-    -- Tapping one picks it, and its name shows.
+    -- Tapping one ticks it beside Up next (Pick from is a set, R1c), and both names show.
     local tapped = picker.sub_item_table_func()
+    ok(tapped[15].checked_func and not tapped[15].checked_func(), "a tick box, not ticked yet")
     tapped[15].callback()
-    ok(S.sleep_from == "collection:7" and Sleep.fromLabel(S.sleep_from) == "ToRead", "picked: " .. tostring(S.sleep_from))
+    ok(S.sleep_from == "up_next\ncollection:7" and Sleep.fromLabel(S.sleep_from) == "Up next in series, ToRead", "picked: " .. tostring(S.sleep_from))
+    ok(picker.sub_item_table_func()[15].checked_func(), "ticked")
+    -- Library stands alone: ticking it clears the others; ticking a list clears it.
+    from[1].callback()
+    ok(S.sleep_from == "library" and Sleep.fromLabel(S.sleep_from) == "Library", "library: " .. tostring(S.sleep_from))
+    from[3].callback()
+    ok(S.sleep_from == "want_to_read", "a list clears Library: " .. tostring(S.sleep_from))
+    from[3].callback()
+    ok(S.sleep_from == "want_to_read", "the last one stays ticked")
+    tapped[15].callback()
     -- Offline, after a restart: the same lists from scopes.json, in Leave out too.
     down, W.wifi = true, false
     Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil

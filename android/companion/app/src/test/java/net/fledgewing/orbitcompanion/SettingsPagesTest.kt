@@ -130,6 +130,37 @@ class SettingsPagesTest {
         assertEquals(SettingChoiceActivity::class.java.name, shadowOf(a).nextStartedActivity.component?.className)
     }
 
+    /** R1c, X8: Pick from and Leave out tick several items on one page; Library stands alone; both sync per key. */
+    @Test
+    fun pickFromAndLeaveOutAreMultiSelectWithLibrary() {
+        val app = RuntimeEnvironment.getApplication()
+        SettingsStore.set(app, "sleep_mode", "recommended", "test")
+        val pick = open<SettingChoiceActivity>(Intent(app, SettingChoiceActivity::class.java).putExtra(SettingsPage.EXTRA_KEY, "sleep_from"))
+        assertNotNull("Library is an item", tagged(pick, "option:library"))
+        tagged(pick, "option:want_to_read")!!.performClick()
+        assertFalse("the page stays for more", pick.isFinishing)
+        assertEquals("up_next\nwant_to_read", SettingsStore.get(app, "sleep_from"))
+        tagged(pick, "option:discover")!!.performClick()
+        assertEquals("up_next\nwant_to_read\ndiscover", SettingsStore.get(app, "sleep_from"))
+        assertTrue("sent to KOReader, per key", SettingsStore.pending(app, "sleep_from"))
+        val wire = SettingsSync.valuesJson(mapOf("sleep_from" to SettingEntry(SettingsStore.get(app, "sleep_from"), 1L)))
+        assertTrue("the set travels as one value", wire.contains("up_next\\nwant_to_read\\ndiscover"))
+        tagged(pick, "option:up_next")!!.performClick()
+        assertEquals("unticked", "want_to_read\ndiscover", SettingsStore.get(app, "sleep_from"))
+        tagged(pick, "option:library")!!.performClick()
+        assertEquals("Library alone", "library", SettingsStore.get(app, "sleep_from"))
+        assertEquals("Library", SettingsUi.valueLabel(schema.byKey.getValue("sleep_from"), "library"))
+        assertEquals("Want to read, Discover", SettingsUi.valueLabel(schema.byKey.getValue("sleep_from"), "want_to_read\ndiscover"))
+
+        val lo = open<LeaveOutActivity>()
+        all(lo.window.decorView).filterIsInstance<TextView>().first { it.text.toString().startsWith("Library, smart scopes") }.let { (it.parent.parent as View).performClick() }
+        tagged(lo, "pick:library")!!.performClick()
+        assertEquals("library", SettingsStore.get(app, "sleep_leave_out"))
+        assertNotNull("the list page stays for more", tagged(lo, "pick:library"))
+        tagged(lo, "pick:library")!!.performClick()
+        assertEquals("ticked off again", "", SettingsStore.get(app, "sleep_leave_out"))
+    }
+
     @Test
     fun aSearchHitOpensItsSectionAtTheRow() {
         val a = section("sync", focus = "sync_on_wake")

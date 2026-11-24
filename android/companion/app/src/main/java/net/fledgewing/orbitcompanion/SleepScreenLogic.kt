@@ -86,19 +86,6 @@ data class SleepSettings(
             "sleep_mode", "sleep_from", "sleep_leave_out", "sleep_hours", "sleep_text", "sleep_battery",
             "sleep_style", "sleep_text_position", "sleep_battery_corner", "sleep_flash",
         )
-        private val LISTS = setOf("up_next", "want_to_read", "discover")
-        private val FROM = Regex("""^(scope|collection):([1-9]\d{0,9})$""")
-
-        fun validFrom(v: String?): Boolean = v != null && (v in LISTS || FROM.matches(v))
-
-        /** One rule, normalised ("tag:<lower text>", "scope:<id>", "collection:<id>"), or null. */
-        fun rule(v: String): String? {
-            if (v.startsWith("tag:")) return v.removePrefix("tag:").trim().lowercase().takeIf { it.isNotEmpty() }?.let { "tag:$it" }
-            return v.trim().takeIf { FROM.matches(it) }
-        }
-
-        fun rules(v: String?): List<String> = (v ?: "").split('\n').mapNotNull { rule(it) }.distinct()
-
         /** One line, at most 60 characters (code points). */
         fun cleanText(s: String?): String {
             val t = (s ?: "").replace(Regex("[\r\n\t]+"), " ").trim()
@@ -113,8 +100,8 @@ data class SleepSettings(
         fun merge(base: SleepSettings, get: (String) -> String?): SleepSettings {
             var s = base
             get("sleep_mode")?.let { s = s.copy(mode = SleepMode.of(it) ?: DEFAULT.mode) }
-            get("sleep_from")?.let { s = s.copy(from = if (validFrom(it)) it else DEFAULT.from) }
-            get("sleep_leave_out")?.let { s = s.copy(leaveOut = rules(it)) }
+            get("sleep_from")?.let { s = s.copy(from = SleepPoolLogic.sources(it).joinToString("\n")) }
+            get("sleep_leave_out")?.let { s = s.copy(leaveOut = SleepPoolLogic.rules(it)) }
             get("sleep_hours")?.let { v -> s = s.copy(hours = v.toIntOrNull()?.takeIf { it in HOURS } ?: DEFAULT.hours) }
             get("sleep_text")?.let { s = s.copy(text = cleanText(it)) }
             get("sleep_battery")?.let { s = s.copy(battery = it == "1" || it == "true") }
@@ -134,12 +121,15 @@ data class SleepSettings(
         "sleep_flash" to if (flash) "1" else "0",
     )
 
-    /** "Up next in series", "Smart scope 12", … */
-    fun fromLabel(): String = when (from) {
-        "up_next" -> "Up next in series"
-        "want_to_read" -> "Want to read"
-        "discover" -> "Discover"
-        else -> from.substringBefore(':').let { if (it == "scope") "Smart scope" else "Collection" } + " " + from.substringAfter(':')
+    /** "Up next in series", "Smart scope 12", "Library", several joined with ", " (R1c). */
+    fun fromLabel(): String = SleepPoolLogic.sources(from).joinToString(", ") { item ->
+        when (item) {
+            SleepPoolLogic.LIBRARY -> "Library"
+            "up_next" -> "Up next in series"
+            "want_to_read" -> "Want to read"
+            "discover" -> "Discover"
+            else -> item.substringBefore(':').let { if (it == "scope") "Smart scope" else "Collection" } + " " + item.substringAfter(':')
+        }
     }
 }
 

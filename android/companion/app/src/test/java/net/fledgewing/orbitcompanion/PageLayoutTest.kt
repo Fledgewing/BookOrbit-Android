@@ -179,6 +179,17 @@ class PageLayoutTest {
         assertTrue("the value wraps", long.lineCount > 1)
     }
 
+    /** Pick from with several ticked (R1c): drawn for the screenshots, the header pinned. */
+    @Test
+    fun pickFromShowsTickBoxes() {
+        SettingsStore.set(app, "sleep_mode", "recommended", "test")
+        SettingsStore.set(app, "sleep_from", "up_next\ndiscover", "test")
+        val a = open<SettingChoiceActivity>(Intent(app, SettingChoiceActivity::class.java).putExtra(SettingsPage.EXTRA_KEY, "sleep_from"))
+        shot(a, "pick-from")
+        assertNotNull(tagged(a, "option:library"))
+        assertTrue(all(a.window.decorView).any { it is HeaderBar && (it.parent as View).tag == PINNED_TAG })
+    }
+
     @Test
     fun aPageTitleShowsOnce() {
         val a = sleepPage()

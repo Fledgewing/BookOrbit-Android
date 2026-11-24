@@ -109,6 +109,23 @@ function SleepPool.normalizeFrom(v)
     return table.concat(SleepPool.sources(v), "\n")
 end
 
+-- Pick from with [id] ticked or unticked (R1c): Library clears the others and another clears
+-- Library; the last one can't be unticked (nothing picked would be Up next anyway).
+function SleepPool.togglePick(v, id)
+    local items = SleepPool.sources(v)
+    local out, had = {}, false
+    for _i, it in ipairs(items) do if it == id then had = true else table.insert(out, it) end end
+    if had then
+        if #out == 0 then return table.concat(items, "\n") end
+        return table.concat(out, "\n")
+    end
+    if id == SleepPool.LIBRARY then return SleepPool.LIBRARY end
+    local keep = {}
+    for _i, it in ipairs(items) do if it ~= SleepPool.LIBRARY then table.insert(keep, it) end end
+    table.insert(keep, id)
+    return SleepPool.normalizeFrom(keep)
+end
+
 -- A Leave out rule: "tag:<text>", "scope:<id>", "collection:<id>" or "library". nil when not valid.
 function SleepPool.parseRule(v)
     if type(v) ~= "string" then return nil end
