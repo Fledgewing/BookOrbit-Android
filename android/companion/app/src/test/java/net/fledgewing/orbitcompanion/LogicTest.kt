@@ -229,6 +229,29 @@ class UpdatePolicyTest {
     }
 
     @Test
+    fun aTestBuildIsNeverOfferedAndYieldsToTheNextRelease() {
+        val test = Version.parse("0.11.3-0.test.42")!!
+        assertTrue(TestBuild.isTest(test))
+        assertTrue(TestBuild.isTest("0.11.3-0.test.1"))
+        assertFalse(TestBuild.isTest("0.11.3-rc.1"))
+        assertFalse(TestBuild.isTest("0.11.3"))
+        assertFalse(TestBuild.isTest("0.0.0-dev"))
+        // On the test device: the release it was built after is not an update...
+        assertFalse(UpdatePolicy.isNewer(Version.parse("0.11.2"), test))
+        // ...the next patch's release and every pre-release of it are.
+        assertTrue(UpdatePolicy.isNewer(Version.parse("0.11.3"), test))
+        assertTrue(UpdatePolicy.isNewer(Version.parse("0.11.3-rc.1"), test))
+        assertTrue(UpdatePolicy.isNewer(Version.parse("0.11.3-alpha"), test))
+        assertTrue(UpdatePolicy.isNewer(Version.parse("0.11.3-0.test.43"), test))
+        // A test version that ever reached a release list is never picked.
+        val list = listOf(r("v0.11.3-0.test.42"), r("v0.11.2"), r("v0.11.4-0.test.1", pre = true))
+        assertEquals("v0.11.2", UpdatePolicy.pick(list, includePre = false)?.tag)
+        assertEquals("v0.11.2", UpdatePolicy.pick(list, includePre = true)?.tag)
+        // It installs over the release it was built after (same or higher versionCode).
+        assertTrue(test.code >= Version.parse("0.11.2")!!.code)
+    }
+
+    @Test
     fun onlyStrictlyNewerUpdates() {
         assertTrue(UpdatePolicy.isNewer(Version.parse("0.1.1"), Version.parse("0.1.0")))
         assertFalse(UpdatePolicy.isNewer(Version.parse("0.1.0"), Version.parse("0.1.0")))

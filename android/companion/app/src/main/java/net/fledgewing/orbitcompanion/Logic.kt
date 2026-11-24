@@ -243,7 +243,7 @@ object UpdatePolicy {
 
     /** The newest usable release: never a draft, a pre-release only when asked for. */
     fun pick(releases: List<ReleaseInfo>, includePre: Boolean): ReleaseInfo? =
-        releases.filter { !it.draft && (includePre || !it.prerelease) && it.version != null }
+        releases.filter { !it.draft && (includePre || !it.prerelease) && it.version != null && !TestBuild.isTest(it.version) }
             .maxWithOrNull(compareBy { it.version!! })
 
     fun isNewer(candidate: Version?, current: Version?): Boolean =
@@ -291,6 +291,21 @@ object UpdateSession {
     fun failureLine(status: Int, message: String?, version: String): String =
         if (status == STATUS_ABORTED || message?.contains("INSTALL_FAILED_ABORTED") == true) CANCELLED
         else "v$version install failed ($status${if (message != null) ": $message" else ""})"
+}
+
+/**
+ * A test build (release.yml run with publish off, sideloaded by tools/sideload-android.sh):
+ * `<next patch>-0.test.<run>`, e.g. 0.11.3-0.test.42 after v0.11.2. It is never published, so no
+ * updater ever sees it; and it sorts above the release it was built after but below every
+ * release or pre-release of the next patch (a numeric "0" sorts before "rc", "beta", ...), so
+ * the device leaves it for the next real release.
+ */
+object TestBuild {
+    const val PRE_PREFIX = "0.test."
+
+    fun isTest(v: Version?): Boolean = v?.pre?.startsWith(PRE_PREFIX) == true
+
+    fun isTest(versionName: String?): Boolean = isTest(Version.parse(versionName))
 }
 
 /** `sha256sum` output: "<64 hex>  name" or "<64 hex> *name" per line. Bad lines are skipped. */

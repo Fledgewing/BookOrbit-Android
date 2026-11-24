@@ -283,6 +283,8 @@ object PatchInstaller {
 
     private fun run(): String {
         val v = BuildConfig.VERSION_NAME
+        // A test build has no release to fetch its plugin from: the sideload script pushed it.
+        if (TestBuild.isTest(v)) return "test build v$v: install its plugin with tools/sideload-android.sh; not installed"
         val dev = Version.parse(v) == null || v.contains("dev")
         log("fetching ${if (dev) "the latest release" else "release v$v"}")
         val rel = Updater.release(JSONObject(if (dev) Updater.httpText("${Updater.API}/releases/latest") else releaseText(v)))
