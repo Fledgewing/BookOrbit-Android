@@ -353,7 +353,7 @@ All of [lock-screen](lock-screen.md) S2, on one page in this order. Off: only th
 "The reader shows its own sleep screen."
 
 1. **Sleep screen**: The reader's own / Recommended cover / Current book (segmented).
-2. **Pick from** (Recommended): "Up next in series ›" opens the picker (§6.1).
+2. **Pick from** (Recommended): "Up next in series, ToRead ›" (every ticked source) opens the picker (§6.1).
 3. **Leave out** (Recommended): "2 rules ›" opens the rule list (§6.3).
 4. **Change cover every** (Recommended): 1 / 3 / 6 / 12 / 24 h (segmented, one row).
 5. **Text**: the text or "None", **Edit** opens a one-line input with "12 of 60".
@@ -370,8 +370,12 @@ A small live thumbnail of the current screen sits beside the Style row, redrawn 
 
 ### 6.1 The picker
 
-One page, three groups: **Lists** (Up next in series, Want to read, Discover), **Smart scopes** and
-**Collections**, each item with its book count, the chosen one marked ●. Under the groups: "Lists from
+One page: **Library** (every book) first, then three groups: **Lists** (Up next in series, Want to
+read, Discover), **Smart scopes** and **Collections**, each item with its book count and a tick box.
+Pick from is a set ([lock-screen](lock-screen.md) R1c, the user's ruling 2026-11-24): a tap ticks or
+unticks an item and the page stays; Library clears the others and another clears Library; the last
+item can't be unticked (`SleepPoolLogic.togglePick`, Lua `SleepPool.togglePick`). The value is one
+item per line in `sleep_from`, synced per key like any other. Under the groups: "Lists from
 KOReader, 14:02". The X2 note sits at the bottom: "For a custom field: make a smart scope with that
 condition in BookOrbit, then pick it here."
 
@@ -397,7 +401,10 @@ pool's titles (`pool.json` already holds book titles there).
 
 The rule list: each rule a row, "Tag: age:18" or "Romance (smart scope)", with **Remove**. Then
 **Add a rule**: **Tag…** opens the tag list from `choices.json` (tag and count, most first) with
-**Type a tag…** at the top; **Smart scope or collection…** opens the picker's two groups. The X2
+**Type a tag…** at the top; **Library, smart scopes and collections…** opens Library and the
+picker's two groups. Each item there has a tick box: a tap adds or removes its rule and the page
+stays, so several go in at once (X8). Library leaves out every book (the sleep screen then shows the
+current book) and stands alone. The X2
 custom-field note sits under Add a rule. Rules are the same `sleep_leave_out` strings.
 
 ## 7. Self-grill log (two-way doors, settled)

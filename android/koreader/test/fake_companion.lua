@@ -858,7 +858,8 @@ function FS.build(client, plan, rand)
 
     -- The candidates, in the order they would be shown.
     local candidates, known, source = {}, {}, plan.from_key
-    local from = SP.parseFrom(plan.from_key)
+    -- Plays one source (the first picked); the multi-source order is SleepPoolBuilder's (cases.json sources).
+    local from = SP.parseFrom(SP.sources(plan.from_key)[1])
     local bag
     if from.kind == "list" then
         local order = { from.type }

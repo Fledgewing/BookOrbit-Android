@@ -604,21 +604,26 @@ class SettingChoiceActivity : SettingsPage() {
             d.values.forEach { (id, label) -> option(id, label) }
             return
         }
+        // Pick from is a set (docs/design/lock-screen.md R1c): each item ticks on and off, the page stays.
+        val picked = SleepPoolLogic.sources(v)
+        fun tick(id: String, label: String, sub: String? = null) {
+            root.addView(Ui.row(this, label, sub, left = Ui.check(this, id in picked),
+                onClick = if (locked) null else ({ setShared(key, SleepPoolLogic.togglePick(v, id)) })).apply { tag = "option:$id" })
+        }
+        tick(SleepPoolLogic.LIBRARY, "Library", "Every book you can see. The others are part of it.")
         subhead(root, "Lists")
-        d.values.forEach { (id, label) -> option(id, label) }
+        d.values.filter { it.first != SleepPoolLogic.LIBRARY }.forEach { (id, label) -> tick(id, label) }
         val c = SleepChoices.read(SleepScreen.dir())
         if (c == null) {
             root.addView(note("Open KOReader once to load your smart scopes and collections."))
         } else {
             if (c.scopes.isNotEmpty()) subhead(root, "Smart scopes")
-            c.scopes.forEach { option("scope:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
+            c.scopes.forEach { tick("scope:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.collections.isNotEmpty()) subhead(root, "Collections")
-            c.collections.forEach { option("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
+            c.collections.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.at > 0) root.addView(note("Lists from KOReader, ${Ui.clock(this, c.at)}" + if (c.cached) " (saved, offline)" else ""))
         }
-        if (v.startsWith("scope:") || v.startsWith("collection:")) {
-            if (c?.title(v) == null) option(v, SleepChoices.fallback(v))
-        }
+        picked.filter { (it.startsWith("scope:") || it.startsWith("collection:")) && c?.title(it) == null }.forEach { tick(it, SleepChoices.fallback(it)) }
         root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then pick it here."))
     }
 }
@@ -633,11 +638,10 @@ class LeaveOutActivity : SettingsPage() {
         val c = SleepChoices.read(SleepScreen.dir())
         val rules = SettingsStore.get(this, d.key).split('\n').filter { it.isNotBlank() }
         val root = page(scroll = true)
-        fun add(rule: String) {
-            setShared(d.key, (rules + rule).joinToString("\n"))
-            view = View0.RULES
-            render()
-        }
+        // Ticks on and off; the page stays, so several can be added at once (X8).
+        fun toggle(rule: String) = setShared(d.key, SleepPoolLogic.toggleRule(rules.joinToString("\n"), rule))
+        fun tickRow(rule: String, label: String, sub: String?) =
+            root.addView(Ui.row(this, label, sub, left = Ui.check(this, rule in rules), onClick = if (locked) null else ({ toggle(rule) })).apply { tag = "pick:$rule" })
         when (view) {
             View0.RULES -> {
                 root.addView(Ui.header(this, "Leave out", "‹ Back") { finish() })
@@ -651,23 +655,22 @@ class LeaveOutActivity : SettingsPage() {
                 if (!locked) {
                     subhead(root, "Add a rule")
                     linkRow(root, "Tag…", "From your books' tags, or type one") { view = View0.TAGS; render() }
-                    linkRow(root, "Smart scope or collection…", null) { view = View0.LISTS; render() }
+                    linkRow(root, "Library, smart scopes and collections…", null) { view = View0.LISTS; render() }
                     root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then leave it out here."))
                 }
             }
             View0.TAGS -> {
                 root.addView(Ui.header(this, "Leave out a tag", "‹ Back") { view = View0.RULES; render() })
-                linkRow(root, "Type a tag…", null) { typeTag { add("tag:$it") } }
+                linkRow(root, "Type a tag…", null) { typeTag { if ("tag:$it" !in rules) toggle("tag:$it") } }
                 if (c == null) root.addView(note("Open KOReader once to list your tags here."))
-                c?.tags?.filter { "tag:${it.tag}" !in rules }?.forEach { t ->
-                    linkRow(root, t.label, "${t.count} books", "+") { add("tag:${t.tag}") }
-                }
+                c?.tags?.forEach { t -> tickRow("tag:${t.tag}", t.label, "${t.count} books") }
             }
             View0.LISTS -> {
                 root.addView(Ui.header(this, "Leave out a list", "‹ Back") { view = View0.RULES; render() })
+                tickRow(SleepPoolLogic.LIBRARY, "Library", "Every book: the sleep screen shows the current book instead.")
                 if (c == null) root.addView(note("Open KOReader once to load your smart scopes and collections."))
-                c?.scopes?.filter { "scope:${it.id}" !in rules }?.let { l -> if (l.isNotEmpty()) subhead(root, "Smart scopes"); l.forEach { s -> linkRow(root, s.title, s.count?.let { "$it books" }, "+") { add("scope:${s.id}") } } }
-                c?.collections?.filter { "collection:${it.id}" !in rules }?.let { l -> if (l.isNotEmpty()) subhead(root, "Collections"); l.forEach { s -> linkRow(root, s.title, s.count?.let { "$it books" }, "+") { add("collection:${s.id}") } } }
+                c?.scopes?.let { l -> if (l.isNotEmpty()) subhead(root, "Smart scopes"); l.forEach { s -> tickRow("scope:${s.id}", s.title, s.count?.let { "$it books" }) } }
+                c?.collections?.let { l -> if (l.isNotEmpty()) subhead(root, "Collections"); l.forEach { s -> tickRow("collection:${s.id}", s.title, s.count?.let { "$it books" }) } }
             }
         }
     }

@@ -37,14 +37,6 @@ local function utf8cut(s, max)
     return table.concat(out)
 end
 
-local function validRule(r)
-    local tag = r:match("^tag:(.*)$")
-    if tag then tag = trim(tag):lower(); return tag ~= "" and ("tag:" .. tag) or nil end
-    local kind, id = r:match("^(%a+):(%d+)$")
-    if (kind == "scope" or kind == "collection") and tonumber(id) > 0 then return kind .. ":" .. tonumber(id) end
-    return nil
-end
-
 local function hasValue(d, id)
     for _, v in ipairs(d.values or {}) do if tostring(v.id) == id then return true end end
     return false
@@ -64,17 +56,10 @@ function SettingsSync.fromWire(d, s)
         if d.int then return tonumber(s) end
         return s
     elseif t == "source" then
-        if hasValue(d, s) then return s end
-        local kind, id = s:match("^(%a+):(%d+)$")
-        if (kind == "scope" or kind == "collection") and tonumber(id) > 0 then return kind .. ":" .. tonumber(id) end
-        return nil
+        -- Pick from, a set (docs/design/lock-screen.md R1c): SleepPool's rule, one item per line.
+        return SleepPool.normalizeFrom(s)
     elseif t == "rules" then
-        local out, seen = {}, {}
-        for line in (s .. "\n"):gmatch("([^\n]*)\n") do
-            local r = validRule(trim(line))
-            if r and not seen[r] then seen[r] = true; table.insert(out, r) end
-        end
-        return out
+        return SleepPool.decodeRules(s)
     elseif t == "text" then
         return utf8cut(trim(s:gsub("[\r\n\t]+", " ")), tonumber(d.max) or 500)
     end
