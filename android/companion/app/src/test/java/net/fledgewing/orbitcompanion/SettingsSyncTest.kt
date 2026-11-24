@@ -106,3 +106,53 @@ class SettingsSyncTest {
         assertEquals("SETTINGS 42\n", ClickRoute.settingsLine(42))
     }
 }
+
+class SettingsUiTest {
+    private val schema = SettingsSchema.parse(File("../../../shared/settings/schema.json").readText())
+
+    @Test
+    fun searchMatchesWordsLabelsAndExtras() {
+        assertTrue(SettingsUi.search(schema, "lock screen").any { it.id == "sleep_mode" })
+        assertTrue(SettingsUi.search(schema, "kid").any { it.id == "pin" })
+        assertTrue(SettingsUi.search(schema, "test network").any { it.id == "do_test_network" })
+        assertTrue(SettingsUi.search(schema, "recommended settings choices").none { it.id == "recommended_choice" })
+        assertTrue(SettingsUi.search(schema, " ").isEmpty())
+    }
+
+    @Test
+    fun hiddenRowsSayWhatShowsThem() {
+        assertEquals("Shown when Sleep screen is Recommended cover", SettingsUi.shownWhen(schema, "sleep_from"))
+        assertEquals("Shown when Sync when the screen goes off is on", SettingsUi.shownWhen(schema, "sleep_cap"))
+    }
+
+    @Test
+    fun reviewChoicesMerge() {
+        assertEquals("a=ours", SettingsUi.withChoice("", "a", "ours"))
+        assertEquals("b=undo;a=mine", SettingsUi.withChoice("a=ours;b=undo", "a", "mine"))
+        assertEquals("all=ours", SettingsUi.withChoice("a=ours", "all", "ours"))
+        assertEquals("ours", SettingsUi.choiceFor("all=ours", "x"))
+    }
+
+    @Test
+    fun choicesFileParses() {
+        val c = SleepChoices.parse("""{"v":1,"at":5,"cached":true,"scopes":[{"id":3,"title":"Short reads","count":48},{"id":0}],"collections":[{"id":9,"title":"Book club"}],"tags":[{"tag":"a","label":"A","count":1},{"tag":"Age:18","count":14}]}""")!!
+        assertEquals(1, c.scopes.size)
+        assertEquals("Short reads (smart scope)", c.title("scope:3"))
+        assertEquals("age:18", c.tags.first().tag)
+        assertEquals("Smart scope 4 (not found)", c.ruleLabel("scope:4"))
+        assertNull(SleepChoices.parse("nope"))
+    }
+
+    @Test
+    fun reviewFileParses() {
+        val r = RecommendedReview.parse("""{"v":1,"at":1,"items":[{"id":"x","label":"X","state":"conflict","yours":"Off","orbit":"On"}]}""")!!
+        assertEquals(listOf("ours", "mine"), r.items[0].offers)
+        assertEquals("Yours: Off · Orbit's: On", r.items[0].stateLine)
+    }
+
+    @Test
+    fun everyExtraIsInASection() {
+        SettingsUi.EXTRAS.forEach { assertTrue(it.id, schema.section(it.section) != null) }
+        assertEquals(SettingsUi.EXTRAS.size, SettingsUi.EXTRAS.map { it.id }.toSet().size)
+    }
+}

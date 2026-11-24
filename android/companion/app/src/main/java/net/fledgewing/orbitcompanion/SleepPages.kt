@@ -11,99 +11,12 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 
 /**
- * Settings › Sleep screen (docs/design/lock-screen.md S1, S2): the same settings as KOReader's
- * Orbit menu, shared with it (newest wins). Pick from, Leave out and the text are set in KOReader,
- * where the lists and the keyboard are; this page shows them. Behind the Settings PIN (K1).
+ * Settings › Sleep screen (docs/design/lock-screen.md S1, S2; companion-settings §6): the section
+ * page for the shared sleep-screen keys, also opened by KOReader's menu (SHOW_SLEEP). Read-only
+ * behind the Settings PIN (K1).
  */
-class SleepScreenActivity : EinkActivity() {
-    override val pinGuarded = true
-
-    override fun onResume() {
-        super.onResume()
-        render()
-    }
-
-    private fun set(s: SleepSettings) {
-        SleepScreen.save(this, s, "companion page", shared = true)
-        render()
-    }
-
-    private fun render() {
-        val s = SleepScreen.settings(this)
-        val root = page(scroll = true)
-        root.addView(Ui.header(this, "Sleep screen", "‹ Back") { finish() })
-        segmented(root, "Sleep screen", SleepMode.entries.map { it to it.label }, s.mode) { set(s.copy(mode = it)) }
-        if (s.mode == SleepMode.OFF) {
-            root.addView(note("The reader shows its own sleep screen. Turn this on for a recommended BookOrbit cover or the current book."))
-            return
-        }
-        if (s.mode == SleepMode.RECOMMENDED) {
-            root.addView(Ui.row(this, "Pick from", "${s.fromLabel()} · set in KOReader › Tools › Android sync › Sleep screen"))
-            root.addView(Ui.row(this, "Leave out", if (s.leaveOut.isEmpty()) "nothing" else "${s.leaveOut.size} rule(s) · set in KOReader"))
-            segmented(root, "Change cover every", SleepSettings.HOURS.map { it to "$it h" }, s.hours) { set(s.copy(hours = it)) }
-        }
-        root.addView(Ui.row(this, "Text", if (s.text.isEmpty()) "none · set in KOReader" else "${s.text} · set in KOReader"))
-        root.addView(Ui.row(this, "Show battery level", "the level when the reader went to sleep", Ui.toggle(this, s.battery), onClick = {
-            set(s.copy(battery = !s.battery))
-        }))
-        segmented(root, "Style", SleepStyle.entries.map { it to it.label }, s.style) { set(s.copy(style = it)) }
-        if (s.style == SleepStyle.OVERLAY) {
-            segmented(root, "Text position", TextPosition.entries.map { it to it.label }, s.textPosition) { set(s.copy(textPosition = it)) }
-            segmented(root, "Battery corner", Corner.entries.map { it to it.label }, s.batteryCorner) { set(s.copy(batteryCorner = it)) }
-            val moved = SleepLayout.batteryCorner(s.batteryCorner, s.textPosition, s.text.isNotEmpty())
-            if (moved != s.batteryCorner) root.addView(note("The battery moves to ${moved.label.lowercase()} beside the text."))
-        }
-        root.addView(Ui.gap(this, 8))
-        root.addView(Ui.row(this, "Shown by", SleepScreen.shownBy(this), Ui.value(this, "›"), onClick = { setUp() }))
-        root.addView(Ui.row(this, "Preview", "5 s, or until you tap", Ui.value(this, "›"), onClick = {
-            startActivity(Intent(this, SleepPreviewActivity::class.java))
-        }))
-    }
-
-    /** P1-P3: choose Orbit's screen saver, or say how. */
-    private fun setUp() {
-        when (SleepScreen.sink(this)) {
-            SleepSink.DREAM -> when {
-                SleepScreen.oursChosen(this) -> Ui.note(this, "Orbit's screen saver shows the sleep screen.")
-                SleepScreen.chooseOurs(this, "Set up") -> render()
-                // The system Screen saver page, where the reader has one; else the USB command.
-                !tryStart(Intent(Settings.ACTION_DREAM_SETTINGS), "screen saver settings") -> Ui.note(this,
-                    "This reader hides its Screen saver settings. Connect it to a computer and run:\n\ntools/install-usb.sh --sleep-screen on\n\n" +
-                        "or, once, tools/install-usb.sh --grant-screen-saver so Orbit can switch it itself.")
-            }
-            SleepSink.PICTURE -> Ui.note(this,
-                "On the reader: Apps › Screensaver › Screensaver style, pick the picture Pictures/Orbit/sleep.png. Orbit keeps it up to date.")
-        }
-    }
-
-    private fun note(text: String) = Ui.text(this, text, 16f, color = Ui.MID).apply {
-        setPadding(0, Ui.dp(this@SleepScreenActivity, 6), 0, Ui.dp(this@SleepScreenActivity, 8))
-    }
-
-    private fun <T> segmented(root: LinearLayout, title: String, options: List<Pair<T, String>>, current: T, pick: (T) -> Unit) {
-        root.addView(Ui.text(this, title, 21f).apply { setPadding(0, Ui.dp(this@SleepScreenActivity, 8), 0, Ui.dp(this@SleepScreenActivity, 8)) })
-        // Two rows of two when there are four (the corners and positions), else one row.
-        val rows = if (options.size == 4) options.chunked(2) else listOf(options)
-        rows.forEach { row ->
-            val seg = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                background = Ui.box(this@SleepScreenActivity, Ui.PAPER)
-                val pad = Ui.dp(this@SleepScreenActivity, 2)
-                setPadding(pad, pad, pad, pad)
-            }
-            row.forEach { (value, label) ->
-                val sel = value == current
-                val t = Ui.text(this, label, 17f, bold = sel, color = if (sel) Ui.PAPER else Ui.INK).apply {
-                    gravity = Gravity.CENTER
-                    minHeight = Ui.dp(this@SleepScreenActivity, 64)
-                    setBackgroundColor(if (sel) Ui.INK else Ui.PAPER)
-                }
-                Ui.clickable(t, { if (!sel) pick(value) })
-                seg.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            }
-            root.addView(seg)
-        }
-    }
+class SleepScreenActivity : SettingsSectionActivity() {
+    override val fixedSection: String = "sleep"
 }
 
 /**

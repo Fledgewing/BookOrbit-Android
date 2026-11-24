@@ -316,6 +316,35 @@ item id to choice) and the plugin applies it at its next start or resume, becaus
 KOReader's and BookOrbit's own settings, which only KOReader can write. Until then the row shows
 Waiting for KOReader.
 
+### 5.9 The launcher page replaces the in-between Companion page
+
+In Full mode, the launcher page's "⚙ Companion" button opened `StatusActivity`, a status page with
+its own Settings button. That in-between page is gone: the button is now **⚙ Settings** and opens
+the top page (§5.1). What the page showed moved to the launcher page, which already had Network
+and Last sleep sync. What it let you do moved to the matching section. Every item keeps its id
+and its PIN behaviour (mockups 13-15).
+
+| Was on the Companion page | Now | PIN |
+|---|---|---|
+| Settings button | the launcher button, renamed **Settings** | Settings opens read-only while locked (§4.7) |
+| Wi-Fi | launcher page (its Wi-Fi row, which was already there) | open |
+| Tailscale, Service, Screen-off permission | launcher page (`StatusPanel`) | open |
+| Battery › | launcher page | open |
+| Last sleep sync, Last wake network ready in, Wi-Fi turns off | launcher page, in the Network card | open |
+| Setup summary card | launcher page | open (Setup's own rules) |
+| Frozen apps line | launcher page | open |
+| What's new line | launcher page | open |
+| App version: update ready, **Install** | launcher page | through the keypad, as before (`PinActivity.thenInstall`) |
+| Test network | Sync and Wi-Fi › Do now | hidden while locked |
+| App version, Check for updates | Updates and details, first row | `Pin.run`, as before |
+
+`StatusActivity` stays the app's launcher icon, the `SHOW_STATUS` target and the notification's
+target. It still runs the first-run Mode choice, the "Setup needs you" prompt and
+`Updater.onPageResumed`. In Full mode it then shows the launcher page, which also calls
+`Updater.onPageResumed` itself, since its Install row can open Android's prompt. In Add-on mode
+the launcher page isn't used, so `StatusActivity` stays the main page: the same `StatusPanel` rows
+under a Settings button.
+
 ## 6. The sleep screen in the companion
 
 All of [lock-screen](lock-screen.md) S2, on one page in this order. Off: only the first row, with
@@ -411,7 +440,9 @@ is reset, and turning the redesign back means drawing the old pages from the sam
 | Store and merge | plugin `logic/settings_sync.lua` (pure); companion `SettingsSync.kt` (pure, in `LogicTest`) | `Shared.refresh`/`push`, `SleepPool.normalize`, `ReadingSchedule` folded in |
 | Shared rule table | `shared/fixtures/settings/merge.json`: per-key merges, ties, future times, invalid values, queued echo | the way `shared/fixtures/sleep/cases.json` is read by both |
 | Settings pages | companion `SettingsPages.kt`: top page, section page drawn from the schema, radio page, search | `Ui.row`, `Ui.toggle`, segmented control from `C/Pages.kt:449-472` |
-| Sleep page | `C/SleepPages.kt`: picker, Leave out, text input | `SleepScreen.save`, `SleepLayout.batteryCorner` |
+| Sleep page | `SleepScreenActivity`, the Sleep screen section page (`SHOW_SLEEP` still opens it); the picker is `SettingChoiceActivity`, the rules page `LeaveOutActivity` | `SleepScreen.save` through `SettingsStore` |
+| Other features' rows | `SettingsSlots.register(section, slot)`: for example, Sharp covers' "sign in once" row in Sleep screen | — |
+| Status and info | `StatusPanel` (`C/Pages.kt`): the launcher page, and Add-on's main page | the old `StatusActivity` rows |
 | Choices and review files | plugin `ko/sleepscreen.lua` (`choices.json`), `ko/recommended.lua` (`orbit-recommended.json`) | `Sleep.scopes`, `Sleep.cachedTags`, `Rec.reportFields` |
 | Channel nudge, COMMANDs | `C/ClickChannel.kt`, `P/ko/clicks_channel.lua`, `PluginCommands` | existing |
 | Plugin menu | `P/ko/menu.lua` regrouped by schema section | `toggle`, `radios` |

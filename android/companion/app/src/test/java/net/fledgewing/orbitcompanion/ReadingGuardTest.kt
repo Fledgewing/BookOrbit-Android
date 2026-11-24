@@ -39,13 +39,12 @@ class ReadingGuardTest {
         Site("Launcher.kt", "startActivity(i)", 1, "the launcher page, shown by the Home activity (Home press or KOReader gone)"),
         Site("Launcher.kt", "startActivity(Intent(this,", 3, "launcher page buttons"),
         Site("Clicker.kt", "startActivity(", 4, "clicker pages: the user's taps and key captures"),
-        Site("Pages.kt", "startActivity(Intent(this,", 17, "companion pages: the user's taps, or opened from a page the user opened"),
-        Site("Pages.kt", "a.startActivity(Intent(a, SettingsActivity", 1, "Setup (Add-on): the user tapped Turn on for a helper"),
+        Site("Pages.kt", "startActivity(Intent(this,", 9, "companion pages: the user's taps, or opened from a page the user opened"),
+        Site("Pages.kt", "a.startActivity(SettingsPage.section(a, \"sync\")", 1, "Setup (Add-on): the user tapped Turn on for a helper"),
+        Site("Pages.kt", "a.startActivity(", 4, "status and info (StatusPanel, the launcher page): the user's taps"),
+        Site("SettingsPages.kt", "startActivity(", 16, "Settings pages: the user's taps"),
         Site("Attention.kt", "startActivity(Intent(this, SetupBatteryActivity", 1, "the prompt: the user tapped Help on the Battery row"),
         Site("ChecklistUi.kt", "ctx.startActivity(Intent(ctx, SetupDetailsActivity", 1, "Setup: the user tapped Details"),
-        Site("SleepPages.kt", "startActivity(Intent(this, SleepPreviewActivity", 1, "Sleep screen › Preview: the user's tap"),
-        Site("Pages.kt", "PinActivity.Mode.SET", 2, "Settings: the user sets a PIN"),
-        Site("Pages.kt", "PinActivity.thenInstall(this", 1, "Status: the user tapped Install on a ready update"),
     )
 
     private val call = Regex("""(^|[^A-Za-z0-9_])(notify|startActivity)\(""")

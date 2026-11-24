@@ -149,6 +149,8 @@ class LauncherActivity : EinkActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Back from Android's install prompt (the Install row is here now): "Android is checking…".
+        Updater.onPageResumed(this)
         // Unfrozen since: drop the stale message.
         if (why == Vendor.disabledMessage(this, "KOReader") && Koreader.state(this) != AppState.FROZEN) why = null
         render()
@@ -209,7 +211,7 @@ class LauncherActivity : EinkActivity() {
             Ui.weightRow(
                 this,
                 Ui.button(this, "⋯  Other apps") { startActivity(Intent(this, AppsActivity::class.java)) },
-                Ui.button(this, "⚙  Companion") { startActivity(Intent(this, StatusActivity::class.java)) },
+                Ui.button(this, "⚙  Settings") { startActivity(Intent(this, SettingsActivity::class.java)) },
             ),
         )
         root.addView(Ui.gap(this, 12))
@@ -223,11 +225,8 @@ class LauncherActivity : EinkActivity() {
             }
             android.os.Handler(mainLooper).postDelayed({ if (!isFinishing) render() }, 800)
         }))
-        root.addView(Ui.gap(this, 12))
-        val card = Ui.card(this)
-        card.addView(Ui.row(this, "Network", right = Ui.value(this, Status.networkLine(this))))
-        card.addView(Ui.row(this, "Last sleep sync", right = Ui.value(this, Status.lastSleepSync(this))))
-        root.addView(card)
+        // Status and info, moved here from the old "Companion" page (companion-settings §5.9).
+        StatusPanel.draw(this, root, wifiRow = false) { if (!isFinishing) render() }
     }
 
     @Deprecated("Deprecated in Java")
