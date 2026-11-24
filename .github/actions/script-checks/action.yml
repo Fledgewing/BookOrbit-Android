@@ -1,0 +1,15 @@
+name: Script checks
+description: >
+  shellcheck over the repo's shell tools and their tests (USB installer, sideload scripts,
+  upstream pins, release signing). android.yml and release.yml both run this.
+runs:
+  using: composite
+  steps:
+    - name: USB installer, sideload and signing tool checks
+      shell: bash
+      run: |
+        set -euo pipefail
+        shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh android/koreader/package.sh tools/upstreams \
+          tools/android-test-version.sh tools/sideload-android.sh tools/sideload-xteink.sh tools/test/test-sideload.sh
+        bash tools/test/test-install-usb.sh </dev/null
+        bash tools/test/test-sideload.sh </dev/null

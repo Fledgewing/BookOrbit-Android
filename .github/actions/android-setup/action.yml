@@ -1,0 +1,29 @@
+name: Android build setup
+description: >
+  Java 17, Gradle with the Actions cache (setup-gradle) and the Android SDK: the same setup for
+  android.yml, release.yml and release-tests.yml.
+inputs:
+  cache-read-only:
+    description: >
+      false lets this run write the Gradle cache (android.yml: main and each PR's own scope).
+      Default: setup-gradle's own rule (only the default branch writes).
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    # Gradle User Home (dependencies, Robolectric's 350 MB of Android jars, the wrapper) from
+    # the Actions cache. setup-java's `cache: gradle` keyed on an exact hash of the build files
+    # with no fallback, so any build-file change started from an empty cache and fetched
+    # everything from Maven Central, which answers shared runners with 429. setup-gradle falls
+    # back to the closest entry (restore keys), so a change downloads only what is new.
+    - uses: gradle/actions/setup-gradle@7296c772c13d12d9871528814b51fb2143c138ef # v6.4.1
+      with:
+        cache-read-only: ${{ inputs.cache-read-only || github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+    - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4

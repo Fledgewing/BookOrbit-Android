@@ -127,8 +127,11 @@ ask before changing it (`--yes` skips the question). Agents never run them again
   `./gradlew testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
 - Xteink: `xteink/scripts/apply.sh <CrossInk checkout>`, `xteink/test/run-host-tests.sh <checkout>`,
   then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the
-  CrossInk pinned as `crossink-v2.0` in `tools/upstreams.lock`, daily runs build upstream's newest
-  2.x tag, rc included).
+  CrossInk pinned as `crossink-v2.0` in `tools/upstreams.lock`; daily runs first move that pin to
+  upstream's newest 2.x tag, rc included, and always build the commit the lock records).
+- Workflows: `python3 tools/test/test-workflows.py` and actionlint (CI: `.github/workflows/workflow-lint.yml`):
+  actions pinned by SHA, no stored checkout credentials, and no write permission, secret or token
+  in a job that runs a build tool. Steps shared by several workflows live in `.github/actions/`.
 - BookOrbit app attestation: `tools/upstreams check` (CI: the app-attest job in
   `.github/workflows/plugin-compat.yml`): fails when the pinned server requires app attestation on
   a route Orbify calls (`docs/server-contract.md` "App attestation"). Tests:

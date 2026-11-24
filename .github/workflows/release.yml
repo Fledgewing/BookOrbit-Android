@@ -10,6 +10,11 @@
 # <next patch>-0.test.<run> (tools/android-test-version.sh) and uploaded as the workflow artifact
 # android-test-<version>. No tag, no release, no attestation: no updater ever sees a test build.
 # tools/sideload-android.sh <run id> installs it over USB.
+#
+# The signing key never meets Gradle: the build job compiles and packages with no secrets and
+# hands the unsigned APK over as an artifact; the sign job, which never runs Gradle or the
+# build's dependencies, signs it with apksigner, checks the certificate and publishes. Only
+# that job can write to the repo.
 name: release
 
 on:
@@ -28,9 +33,7 @@ on:
         default: true
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 concurrency:
   group: release-${{ (github.event_name == 'workflow_dispatch' && !inputs.publish) && format('test-{0}', github.run_id) || (github.event.inputs.tag || github.ref_name) }}
@@ -53,20 +56,29 @@ jobs:
       platform: android
       ref: ${{ github.event.inputs.tag || github.ref_name }}
 
-  release:
+  # Unsigned build: no secrets and a read-only token while Gradle and its dependencies run.
+  build:
     needs: tests
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      prerelease: ${{ steps.ver.outputs.prerelease }}
+      sha: ${{ steps.ver.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # A release builds its tag; a test build the commit it was started on.
           ref: ${{ env.PUBLISH == 'true' && env.TAG || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Version from the tag
         id: ver
         run: |
           set -euo pipefail
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ "$PUBLISH" != true ]; then
             VER="$(git tag -l | tools/android-test-version.sh "$GITHUB_RUN_NUMBER")"
             echo "version=$VER" >> "$GITHUB_OUTPUT"
@@ -88,35 +100,61 @@ jobs:
           echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
           echo "Releasing $VER (pre-release: $PRE)"
 
-      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
-        with:
-          distribution: temurin
-          java-version: "17"
-
       # Downloads only, as in android.yml: Gradle User Home restored read-only from main's cache
       # (tags never write it). No Gradle build cache (org.gradle.caching is off) and no project
       # build/ directories, so the release still builds from a clean checkout.
-      - uses: gradle/actions/setup-gradle@7296c772c13d12d9871528814b51fb2143c138ef # v6.4.1
+      - uses: ./.github/actions/android-setup
 
-      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      # The same checks android.yml runs; the companion's JVM tests ran in release-tests stage 2.
+      - uses: ./.github/actions/plugin-tests
+        timeout-minutes: 5
 
-      - name: KOReader patch tests
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y -qq luajit >/dev/null
-          luajit android/koreader/test/test_logic.lua
-          luajit android/koreader/test/test_flows.lua
+      - uses: ./.github/actions/script-checks
 
-      - name: USB installer checks
-        run: |
-          set -euo pipefail
-          shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh android/koreader/package.sh \
-            tools/android-test-version.sh tools/sideload-android.sh tools/sideload-xteink.sh tools/test/test-sideload.sh
-          bash tools/test/test-install-usb.sh
-          bash tools/test/test-sideload.sh
-
-      - name: Build the signed companion APK
+      - name: Build the unsigned companion APK
         working-directory: android/companion
+        run: ./gradlew --no-daemon -PorbitVersion="${{ steps.ver.outputs.version }}" assembleRelease </dev/null
+
+      - name: Stage the unsigned APK, the plugin zip and the license files
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.version }}"
+          mkdir -p dist
+          cp android/companion/app/build/outputs/apk/release/app-release-unsigned.apk "dist/orbit-companion-$VER-unsigned.apk"
+          # The Orbit KOReader plugin, zipped with its version stamped into main.lua (the
+          # script refuses a stamp that didn't take).
+          android/koreader/package.sh "$VER" dist/orbit.koplugin.zip
+          # Licenses: the companion (MIT), the plugin (AGPL-3.0-or-later).
+          cp android/companion/LICENSE dist/LICENSE-companion-MIT.txt
+          cp android/koreader/LICENSE dist/LICENSE-koreader-plugin-AGPL-3.0.txt
+          ls -l dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-unsigned
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Signs and publishes. Never checks out or runs the build: it takes the build job's files,
+  # signs the APK, checks the signing certificate and publishes.
+  sign:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      VER: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-unsigned
+          path: dist
+
+      # apksigner and zipalign from the runner image's Android SDK (no SDK setup action here).
+      - name: Sign the companion APK
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -124,39 +162,22 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          export ORBIT_KEYSTORE_FILE="$RUNNER_TEMP/release.p12"
-          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$ORBIT_KEYSTORE_FILE"
-          ./gradlew --no-daemon -PorbitVersion="${{ steps.ver.outputs.version }}" testDebugUnitTest assembleRelease
-          rm -f "$ORBIT_KEYSTORE_FILE"
-
-      - name: Assemble release assets
-        id: assets
-        run: |
-          set -euo pipefail
-          VER="${{ steps.ver.outputs.version }}"
-          mkdir -p dist
-          APK="dist/orbit-companion-$VER.apk"
-          cp android/companion/app/build/outputs/apk/release/app-release.apk "$APK"
-
-          # The Orbit KOReader plugin, zipped with its version stamped into main.lua (the
-          # script refuses a stamp that didn't take).
-          android/koreader/package.sh "$VER" dist/orbit.koplugin.zip
-
-          # Licenses: the companion (MIT), the plugin (AGPL-3.0-or-later) and the third-party
-          # notices the app shows in Settings (generated into the APK at build time).
-          cp android/companion/LICENSE dist/LICENSE-companion-MIT.txt
-          cp android/koreader/LICENSE dist/LICENSE-koreader-plugin-AGPL-3.0.txt
-          unzip -p "$APK" assets/open_source_licenses.txt > dist/THIRD-PARTY-NOTICES.txt
-          test -s dist/THIRD-PARTY-NOTICES.txt
-
-          (cd dist && sha256sum -- *.apk *.zip *.txt > SHA256SUMS)
-          cat dist/SHA256SUMS
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          ks="$RUNNER_TEMP/release.p12"
+          trap 'rm -f "$ks"' EXIT
+          (umask 077 && printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$ks")
+          unsigned="dist/orbit-companion-$VER-unsigned.apk"
+          "$BT/zipalign" -f 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$ks" --ks-type PKCS12 --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "dist/orbit-companion-$VER.apk" "$RUNNER_TEMP/aligned.apk"
+          rm -f "$unsigned" "$RUNNER_TEMP/aligned.apk" "dist/orbit-companion-$VER.apk.idsig"
 
       - name: Check the APK signing certificate
         id: cert
         run: |
           set -euo pipefail
-          APKSIGNER="$(ls -1 "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner | sort -V | tail -1)"
           OUT="$("$APKSIGNER" verify --print-certs dist/orbit-companion-*.apk)"
           echo "$OUT" | grep -i "certificate SHA-256" || true
           GOT="$(echo "$OUT" | sed -nE 's/.*[Cc]ertificate SHA-256 digest: ([0-9a-fA-F]+).*/\1/p' | head -1 | tr 'a-f' 'A-F' | sed -E 's/(..)/\1:/g; s/:$//')"
@@ -167,11 +188,20 @@ jobs:
           fi
           echo "sha256=$GOT" >> "$GITHUB_OUTPUT"
 
+      - name: Notices and checksums
+        run: |
+          set -euo pipefail
+          # The third-party notices the app shows in Settings (generated into the APK at build time).
+          unzip -p "dist/orbit-companion-$VER.apk" assets/open_source_licenses.txt > dist/THIRD-PARTY-NOTICES.txt
+          test -s dist/THIRD-PARTY-NOTICES.txt
+          (cd dist && sha256sum -- *.apk *.zip *.txt > SHA256SUMS)
+          cat dist/SHA256SUMS
+
       - name: Upload the test build
         if: env.PUBLISH != 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: android-test-${{ steps.ver.outputs.version }}
+          name: android-test-${{ env.VER }}
           path: |
             dist/*.apk
             dist/*.zip
@@ -193,9 +223,9 @@ jobs:
         if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
         run: |
           set -euo pipefail
-          VER="${{ steps.ver.outputs.version }}"
           cat > notes.md <<NOTES
           Orbit Companion $VER and the Orbit KOReader plugin $VER.
 
@@ -212,10 +242,10 @@ jobs:
           NOTES
           sed -i 's/^          //' notes.md
           FLAGS=()
-          [ "${{ steps.ver.outputs.prerelease }}" = "true" ] && FLAGS+=(--prerelease) || FLAGS+=(--latest)
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/* --clobber
-            gh release edit "$TAG" --notes-file notes.md
+          [ "$PRERELEASE" = "true" ] && FLAGS+=(--prerelease) || FLAGS+=(--latest)
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber -R "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --notes-file notes.md -R "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes-file notes.md "${FLAGS[@]}"
+            gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes-file notes.md "${FLAGS[@]}" -R "$GITHUB_REPOSITORY"
           fi
