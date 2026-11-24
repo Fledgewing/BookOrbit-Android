@@ -220,9 +220,11 @@ def open_at_end(ctx: Context, card: SdCard, title: str) -> str:
 
 @scenario(*ALL)
 def eob_page_finish(ctx: Context, tmp: Path) -> None:
-    """X7 and the finish queue: the turn past the last page shows the End-of-Book page and marks
-    the book finished; the next sync sends it (book-states, read-status) through the finish
-    queue's own requests."""
+    """X7 and the finish queue: the turn past the last page shows the End-of-Book page and queues
+    the book as finished; the next sync drains the queue and the server has the book read. Two
+    paths are right: the drain marks it (read-status), or the sync's 100% progress already did
+    and the drain's guard, reading the book first, finds it read (a server with no earlier
+    position for the book, as in CI)."""
     card = ctx.card(tmp)
     open_at_end(ctx, card, "eob_standalone")
     run = ctx.sim.run(card, "end", script="3000:RIGHT:120;6000:QUIT", timeout_s=30, wake=True,
@@ -231,12 +233,12 @@ def eob_page_finish(ctx: Context, tmp: Path) -> None:
     after(page, "Finish: ")
     after(page, "queued (book")
     sync = ctx.sim.run(card, "sync", script="3000:POWER:120", timeout_s=60, choice="upload")
-    after(sync.output, "Finish drain")
-    sent = [(e["method"], e["path"]) for e in ctx.requests("/plugin/")
-            if "book-states" in e["path"] or "read-status" in e["path"]]
-    assert ("POST", "/api/v1/koreader/plugin/book-states") in sent or any(
-        p.endswith("/read-status") for _, p in sent), f"the finish queue sent nothing: {sent}"
-    detail = kit.Device().call("GET", f"/plugin/catalog/books/{ctx.book('eob_standalone')['id']}")
+    drained = re.search(r"Finish drain \w+: (\w+)", sync.output)
+    assert drained and drained.group(1) == "sent", f"the queue was not drained: {drained and drained.group(0)}"
+    book_id = ctx.book("eob_standalone")["id"]
+    guard = [e for e in ctx.requests(f"/plugin/catalog/books/{book_id}") if e["method"] == "GET"]
+    assert guard, "the drain sent without reading the book first (its guard)"
+    detail = kit.Device().call("GET", f"/plugin/catalog/books/{book_id}")
     assert detail.get("readStatus") == "read", f"the server does not have it read: {detail.get('readStatus')}"
 
 
