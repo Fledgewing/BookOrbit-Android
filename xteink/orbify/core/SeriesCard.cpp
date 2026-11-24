@@ -200,6 +200,12 @@ size_t serializeCard(const SeriesCard& card, uint8_t* out, const size_t capacity
 
 size_t legacyCardBytes() { return 8 + LEGACY_STRUCT + 4; }
 
+PageSeries pageSeries(const bool hasCard, const SeriesCard& card, const char* epubName, const char* epubIndex) {
+  if (hasCard) return {card.seriesName, card.seriesName[0] ? card.seriesIndex : ""};
+  if (!epubName || !epubName[0]) return {"", ""};
+  return {epubName, epubIndex ? epubIndex : ""};
+}
+
 bool deserializeCard(const uint8_t* data, const size_t size, SeriesCard& out) {
   if (size < 8 || std::memcmp(data, CARD_MAGIC, 4) != 0) return false;
   const uint8_t version = data[4];

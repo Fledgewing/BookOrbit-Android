@@ -326,6 +326,27 @@ int main(int argc, char** argv) {
   JsonDocument none;
   deserializeJson(none, "{}");
   CHECK(!pickCard(none.as<JsonObjectConst>(), 2, card));
+  // The page's series line (X4 Pro, .167: "Series card 1207: series '' #- of 0"). A card that names
+  // no series wins over the EPUB's own; without a card the EPUB's is used; a name with no index
+  // stands alone.
+  {
+    SeriesCard named;
+    std::strcpy(named.seriesName, "Starbreaker");
+    std::strcpy(named.seriesIndex, "5");
+    named.seriesCount = 2;  // two of its books in the library, not the series' length
+    PageSeries s = pageSeries(true, named, "Epub Series", "9");
+    CHECK(std::strcmp(s.name, "Starbreaker") == 0 && std::strcmp(s.index, "5") == 0);
+    SeriesCard unnamed;
+    s = pageSeries(true, unnamed, "Epub Series", "9");
+    CHECK(s.name[0] == '\0' && s.index[0] == '\0');
+    s = pageSeries(false, unnamed, "Epub Series", "9");
+    CHECK(std::strcmp(s.name, "Epub Series") == 0 && std::strcmp(s.index, "9") == 0);
+    s = pageSeries(false, unnamed, "", "9");
+    CHECK(s.name[0] == '\0' && s.index[0] == '\0');
+    std::strcpy(unnamed.seriesName, "Loose");
+    s = pageSeries(true, unnamed, nullptr, nullptr);
+    CHECK(std::strcmp(s.name, "Loose") == 0 && s.index[0] == '\0');
+  }
   // No card: the folder rows under one heading; the drop order takes suggestions first, then
   // folder rows, then the author row.
   PlanInput folder;

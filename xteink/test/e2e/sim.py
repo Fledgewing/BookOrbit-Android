@@ -182,6 +182,22 @@ class Simulator:
         return Run(output, returncode)
 
 
+def dark_pixels(data: bytes, x: int, y: int, w: int, h: int) -> int:
+    """Pixels darker than mid-grey in a rectangle of a simulator BMP screenshot (logical pixels)."""
+    offset, = struct.unpack_from("<I", data, 10)
+    width, height, _, bpp = struct.unpack_from("<iiHH", data, 18)
+    stride = (width * bpp // 8 + 3) & ~3
+    step = bpp // 8
+    count = 0
+    for row in range(max(0, y), min(abs(height), y + h)):
+        src = height - 1 - row if height > 0 else row
+        for col in range(max(0, x), min(width, x + w)):
+            i = offset + src * stride + col * step
+            if data[i] + data[i + 1] + data[i + 2] < 3 * 128:
+                count += 1
+    return count
+
+
 def bmp_to_png(data: bytes) -> bytes:
     """The simulator's 24/32-bit BMP screenshots as PNG (review artifacts; never compared)."""
     offset, = struct.unpack_from("<I", data, 10)

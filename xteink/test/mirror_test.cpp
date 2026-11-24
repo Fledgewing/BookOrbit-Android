@@ -25,6 +25,10 @@ static void dueCases(JsonObjectConst all) {
   }
   // A clock that went backwards is not "older than the TTL"; no clock at all is never due by age.
   CHECK(due(true, 5000, "a", "a", 4000, 7) == Due::None);
+  // Patch 0038, cache-first: only a saved, current copy opens the catalog without Wi-Fi.
+  CHECK(catalogFromCache(true, Due::None));
+  CHECK(!catalogFromCache(true, Due::Ttl) && !catalogFromCache(true, Due::Library));
+  CHECK(!catalogFromCache(false, Due::None) && !catalogFromCache(false, Due::Never));
   CHECK(due(true, 5000, "a", "a", 0, 7) == Due::None);
   // A library version unknown on either side never makes it due.
   CHECK(due(true, 1000, "", "b", 2000, 7) == Due::None);
