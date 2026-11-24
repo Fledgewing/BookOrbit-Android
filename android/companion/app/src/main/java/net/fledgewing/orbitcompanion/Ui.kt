@@ -136,27 +136,78 @@ abstract class EinkActivity : Activity() {
      * The page's root column. Every page scrolls (v0.5.5: the status page ran off the M8C's
      * screen below "Test network"); fillViewport keeps a short page full height. Only a page
      * that pages its own content by the height it gets passes scroll = false (UiPagesTest).
+     * The page's header (Ui.header, a [HeaderBar]) is pinned above the scrolling part: the title
+     * and its "‹ Back" stay at the top while the rows scroll (M8C feedback, 2026-11-24).
      */
-    fun page(scroll: Boolean = true): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setBackgroundColor(Ui.PAPER)
-        val p = Ui.dp(this@EinkActivity, 20)
-        setPadding(p, p, p, p)
+    fun page(scroll: Boolean = true): LinearLayout {
         val keepY = scrollView?.scrollY ?: 0
         scrollView = null
-        if (scroll) {
-            setContentView(android.widget.ScrollView(this@EinkActivity).also {
+        val p = Ui.dp(this, 20)
+        val pinned = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Ui.PAPER)
+            setPadding(p, Ui.dp(this@EinkActivity, 12), p, 0)
+            tag = PINNED_TAG
+        }
+        val root = PageColumn(this, pinned).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Ui.PAPER)
+            setPadding(p, 0, p, Ui.dp(this@EinkActivity, 12))
+        }
+        val frame = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Ui.PAPER)
+            addView(pinned, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val body: View = if (scroll) {
+            android.widget.ScrollView(this).also {
                 it.setBackgroundColor(Ui.PAPER)
                 it.isVerticalScrollBarEnabled = true
                 it.isFillViewport = true
-                it.addView(this)
+                it.addView(root)
                 scrollView = it
                 // After layout, so the new content is tall enough; clamped by ScrollView itself.
                 if (keepY > 0) it.post { it.scrollTo(0, keepY) }
-            })
-        } else {
-            setContentView(this)
+            }
+        } else root
+        frame.addView(body, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        setContentView(frame)
+        return root
+    }
+}
+
+/** The view that holds a page's pinned header (EinkActivity.page). */
+const val PINNED_TAG = "page:pinned"
+
+/** A page's header bar (Ui.header): the page column moves it into the pinned slot above the scroll. */
+class HeaderBar(ctx: Context) : LinearLayout(ctx)
+
+/** A page's root column: a [HeaderBar] added to it goes to [pinned] instead, so it never scrolls away. */
+class PageColumn(ctx: Context, private val pinned: LinearLayout) : LinearLayout(ctx) {
+    override fun addView(child: View?, index: Int, params: ViewGroup.LayoutParams?) {
+        if (child is HeaderBar && child.parent == null) {
+            pinned.addView(child, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            return
         }
+        super.addView(child, index, params)
+    }
+}
+
+/**
+ * A list row (Ui.row): the text column, then the control, never overlapping. The control keeps a
+ * fixed gap from the text and is capped at [Ui.CONTROL_MAX] of the row's width (a long value
+ * wraps); the text column takes the rest and wraps (M8C feedback, 2026-11-24: "Applies when
+ * KOReader restarts" ran into its switch).
+ */
+class RowLayout(ctx: Context) : LinearLayout(ctx) {
+    var control: View? = null
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val w = MeasureSpec.getSize(widthMeasureSpec)
+        (control as? TextView)?.let { c ->
+            if (w > 0) c.maxWidth = (w * Ui.CONTROL_MAX).toInt()
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 }
 
@@ -168,7 +219,13 @@ object Ui {
     val PRESSED = Color.rgb(0xDD, 0xDD, 0xDD)
 
     const val ROW_DP = 76
+    /** A status row's height (Ui.row compact): read, rarely tapped. */
+    const val INFO_ROW_DP = 48
     const val BUTTON_DP = 88
+    /** The fixed gap between a row's text and its control. */
+    const val ROW_GAP_DP = 16
+    /** A row's control takes at most this share of the row's width. */
+    const val CONTROL_MAX = 0.45f
 
     fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
 
@@ -219,7 +276,7 @@ object Ui {
 
     /** Header: title on the left, an optional small button on the right. */
     fun header(ctx: Context, title: String, action: String? = null, onAction: (() -> Unit)? = null): LinearLayout =
-        LinearLayout(ctx).apply {
+        HeaderBar(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(text(ctx, title, 30f, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -241,11 +298,13 @@ object Ui {
         onClick: (() -> Unit)? = null,
         onLong: (() -> Unit)? = null,
         left: View? = null,
-    ): LinearLayout = LinearLayout(ctx).apply {
+        /** A status line, not a setting: shorter, so the main view fits on one screen. */
+        compact: Boolean = false,
+    ): LinearLayout = RowLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = dp(ctx, ROW_DP)
-        val p = dp(ctx, 6)
+        minimumHeight = dp(ctx, if (compact) INFO_ROW_DP else ROW_DP)
+        val p = dp(ctx, if (compact) 4 else 6)
         setPadding(p, p, p, p)
         val rule = GradientDrawable().apply { setColor(PAPER) }
         val normal = android.graphics.drawable.LayerDrawable(arrayOf(box(ctx, LIGHT, strokeDp = 0, radiusDp = 0), rule)).apply {
@@ -258,16 +317,26 @@ object Ui {
         if (left != null) addView(left)
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            addView(text(ctx, label, 21f))
-            if (!sub.isNullOrEmpty()) addView(text(ctx, sub, 16f, color = MID))
+            tag = ROW_TEXT_TAG
+            addView(text(ctx, label, if (compact) 19f else 21f))
+            if (!sub.isNullOrEmpty()) addView(text(ctx, sub, if (compact) 15f else 16f, color = MID))
         }
         addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        if (right != null) addView(right)
+        if (right != null) {
+            control = right
+            val lp = (right.layoutParams as? LinearLayout.LayoutParams)
+                ?: LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            lp.marginStart = dp(ctx, ROW_GAP_DP)
+            addView(right, lp)
+        }
         clickable(this, onClick, onLong)
     }
 
-    fun value(ctx: Context, s: CharSequence, bold: Boolean = true): TextView =
-        text(ctx, s, 20f, bold = bold).apply { gravity = Gravity.END }
+    /** The tag on a row's text column (tests: the no-overlap rule). */
+    const val ROW_TEXT_TAG = "row:text"
+
+    fun value(ctx: Context, s: CharSequence, bold: Boolean = true, sp: Float = 20f): TextView =
+        text(ctx, s, sp, bold = bold).apply { gravity = Gravity.END }
 
     /** On/Off control drawn as a box: filled when on. Changes instantly. */
     fun toggle(ctx: Context, on: Boolean): TextView = text(ctx, if (on) "On" else "Off", 18f, bold = true, color = if (on) PAPER else INK).apply {

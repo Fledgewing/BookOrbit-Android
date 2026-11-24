@@ -146,17 +146,6 @@ object Attention {
         Prefs(ctx).whatsNewFromCode = 0
     }
 
-    /** One line for the launcher page, or null. */
-    fun bannerText(ctx: Context): String? {
-        val n = Prefs(ctx).setupNeeded
-        val news = whatsNew(ctx).isNotEmpty()
-        return when {
-            n > 0 -> "$n setup step${if (n == 1) "" else "s"} need${if (n == 1) "s" else ""} you ›"
-            news -> "Updated to ${BuildConfig.VERSION_NAME}: what's new ›"
-            else -> null
-        }
-    }
-
     private fun nm(ctx: Context) = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     private fun cancel(ctx: Context) {

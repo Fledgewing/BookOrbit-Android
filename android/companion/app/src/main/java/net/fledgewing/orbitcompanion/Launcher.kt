@@ -176,7 +176,7 @@ class LauncherActivity : EinkActivity() {
             root.addView(Ui.gap(this, 8))
         }
         val koFirst = !HomeApp.isApp(choice)
-        val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) 120 else 88, sp = if (koFirst) 26f else 22f) {
+        val open = Ui.button(this, "Open KOReader\n", solid = koFirst, heightDp = if (koFirst) 96 else 80, sp = if (koFirst) 26f else 22f) {
             if (Koreader.goHome(this, "launcher button")) {
                 HomeActivity.decider.startedByHand(SystemClock.elapsedRealtime())
             } else {
@@ -202,21 +202,20 @@ class LauncherActivity : EinkActivity() {
             )
         }
         Attention.evaluate(this, "launcher", notify = false)
-        Attention.bannerText(this)?.let { t ->
-            root.addView(Ui.gap(this, 8))
-            root.addView(Ui.text(this, t, 19f, bold = true).also { v ->
-                Ui.clickable(v, { startActivity(Intent(this, AttentionActivity::class.java)) })
-            })
-        }
-        root.addView(Ui.gap(this, 16))
+        root.addView(Ui.gap(this, 12))
         root.addView(
             Ui.weightRow(
                 this,
-                Ui.button(this, "⋯  Other apps") { startActivity(Intent(this, AppsActivity::class.java)) },
-                Ui.button(this, "⚙  Settings") { startActivity(Intent(this, SettingsActivity::class.java)) },
+                Ui.button(this, "⋯  Other apps", heightDp = 72) { startActivity(Intent(this, AppsActivity::class.java)) },
+                Ui.button(this, "⚙  Settings", heightDp = 72) { startActivity(Intent(this, SettingsActivity::class.java)) },
             ),
         )
         root.addView(Ui.gap(this, 12))
+        // Setup right under the two buttons (M8C feedback: the main view fits on one screen, and
+        // "1 thing needs you" is the one line that matters); the old "N setup steps need you"
+        // banner said the same and is gone.
+        StatusPanel.setupCard(this, root)
+        root.addView(Ui.gap(this, 8))
         // Wi-Fi by hand: on here is the user's, so "Just in time" leaves it on until they turn it off.
         val wifiOn = Net.wifiEnabled(this)
         root.addView(Ui.row(this, "Wi-Fi", if (wifiOn) "on · ${Prefs(this).wifiOwner.key}" else "off", Ui.toggle(this, wifiOn), onClick = {
@@ -226,9 +225,9 @@ class LauncherActivity : EinkActivity() {
                 Net.setWifi(this, true, "launcher Wi-Fi tile", WifiOwner.MANUAL)
             }
             android.os.Handler(mainLooper).postDelayed({ if (!isFinishing) render() }, 800)
-        }))
+        }, compact = true))
         // Status and info, moved here from the old "Companion" page (companion-settings §5.9).
-        StatusPanel.draw(this, root, wifiRow = false) { if (!isFinishing) render() }
+        StatusPanel.draw(this, root, wifiRow = false, setup = false) { if (!isFinishing) render() }
     }
 
     @Deprecated("Deprecated in Java")

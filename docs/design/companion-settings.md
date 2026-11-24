@@ -276,7 +276,9 @@ parent's line says what it would open ("Recommended cover: pick the list, leave-
 
 ### 5.4 Search
 
-The search box is the top page's first row; tapping it opens the keyboard. Results replace the
+The search box is the top page's first row; tapping it opens the keyboard. Once it holds text, an
+**✕** at its right end clears it in one tap and brings the sections back at once (M8C feedback,
+2026-11-24). Results replace the
 section list after a 0.5 s pause in typing (one redraw per pause, none per key), grouped by section,
 each with the section as a small heading and the row's current value. It matches labels, lines,
 value labels and the schema's search words ("screensaver", "lock screen", "wifi", "kid", "cache",
@@ -287,7 +289,13 @@ parent.
 
 ### 5.5 Sections as pages
 
-Each section is its own page ("‹ Settings" back), one level deep. Choices with up to four values are
+Each section is its own page ("‹ Settings" back), one level deep. The page title and "‹ Settings"
+are pinned at the top while the rows scroll (`EinkActivity.page`: every `Ui.header` goes into the
+pinned slot). A row whose label is the page's own title (Sleep screen's mode) shows only its
+control, so a title never shows twice. **No in-between screens:** a section that would hold one row
+leading to another page opens that page directly (`SettingsUi.direct`): Buttons in Full mode opens
+Clicker buttons, Kids and PIN with no PIN opens Set a PIN; in Add-on each has its helper switch
+too, so the section stays (M8C feedback, 2026-11-24). Choices with up to four values are
 segmented controls inline; five or more open a radio page (Sync while reading, Storage limit,
 Automatic Full refresh, Pick from). Toggles are "On"/"Off" boxes in words (`Ui.toggle`). Actions are
 outlined buttons at the bottom of their section, under a "Do now" heading.
@@ -295,7 +303,13 @@ outlined buttons at the bottom of their section, under a "Do now" heading.
 ### 5.6 E-ink rules
 
 - No animation, no spinner, no timed redraw. A change redraws its page once (today's `render()`).
-- Rows at least `Ui.ROW_DP` (76 dp, `C/Ui.kt:170`), segmented controls 64 dp, buttons 56 dp.
+- Rows at least `Ui.ROW_DP` (76 dp), segmented controls 64 dp, buttons 56 dp; the launcher page's
+  status lines are compact rows (`Ui.INFO_ROW_DP`, 48 dp).
+- **Text never runs into the control** (`RowLayout`): a fixed 16 dp gap (`Ui.ROW_GAP_DP`) between
+  the text column and the control; the control takes at most 45% of the row (`Ui.CONTROL_MAX`) and
+  a longer value wraps; the text column takes the rest and wraps. "Waiting for KOReader" and
+  "Changed in KOReader at …" sit on a line of their own under the row's line
+  (`SettingsUi.line`).
 - State by glyph and words, never grey alone: On/Off in words, ● for the chosen radio, the
   checklist's boxes for Waiting for KOReader (…) and Needs you.
 - The top page fits one screen on the M8C, Boox Page and Go Color 7; a section may scroll.
@@ -333,7 +347,7 @@ and its PIN behaviour (mockups 13-15).
 | Tailscale, Service, Screen-off permission | launcher page (`StatusPanel`) | open |
 | Battery › | launcher page | open |
 | Last sleep sync, Last wake network ready in, Wi-Fi turns off | launcher page, in the Network card | open |
-| Setup summary card | launcher page | open (Setup's own rules) |
+| Setup summary card | launcher page, right under Other apps / Settings (the old "N setup steps need you" line under Open KOReader said the same and is gone; M8C feedback, 2026-11-24: the main view fits on one screen) | open (Setup's own rules) |
 | Frozen apps line | launcher page | open |
 | What's new line | launcher page | open |
 | App version: update ready, **Install** | launcher page | through the keypad, as before (`PinActivity.thenInstall`) |
