@@ -88,6 +88,23 @@ P="$KO_DIR/plugins/orbit.koplugin"
 check "plugin pushed beside the live one" "push $ORBIT_DIR $P.orbit-new" "$(sed -n 3p "$log")"
 check "then swapped in" "shell if [ -d $P ]; then mv $P $P.orbit-old; fi && mv $P.orbit-new $P && rm -rf $P.orbit-old" "$(sed -n 4p "$log")"
 check "old patch removed" "shell rm -f $KO_DIR/patches/2-orbit-android.lua $KO_DIR/patches/2-orbit-android.lua.new" "$(sed -n 5p "$log")"
+# Doze allowlist: only installed apps are added, and a refusal is reported, not fatal.
+: >"$log"
+batt_adb() {
+    printf '%s\n' "$*" >>"$log"
+    case "$*" in
+        "shell pm path com.tailscale.ipn") ;;
+        "shell pm path "*) echo "package:/data/app/x/base.apk" ;;
+        "shell dumpsys deviceidle whitelist +org.koreader.launcher") echo "Unknown package: org.koreader.launcher" ;;
+        "shell dumpsys deviceidle whitelist +"*) echo "Added: ${4#+}" ;;
+    esac
+}
+ADB=(batt_adb)
+out=$(allowlist_battery)
+check "allowlist: installed apps only" "shell dumpsys deviceidle whitelist +net.fledgewing.orbitcompanion|shell dumpsys deviceidle whitelist +org.koreader.launcher" \
+    "$(grep deviceidle "$log" | paste -sd '|' -)"
+check "allowlist: added" yes "$(grep -q 'net.fledgewing.orbitcompanion unrestricted' <<<"$out" && echo yes || echo no)"
+check "allowlist: refusal reported" yes "$(grep -q "couldn't add org.koreader.launcher" <<<"$out" && echo yes || echo no)"
 rm -rf "$zwork"
 
 printf '%d passed, %d failed\n' "$passed" "$failed"
