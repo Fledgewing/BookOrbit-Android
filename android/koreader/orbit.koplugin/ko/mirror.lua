@@ -781,7 +781,9 @@ function Mirror.launch(op, reason)
         OC.child, Mirror.run_st = nil, nil
         if not okw then error(r, 0) end
         return r
-    end, Mirror.RUN_S + 180, function(out, berr) Mirror.ran(cat, req, out, berr) end)
+    -- RUN_S, then the job in hand: up to 3 tries of a request (socketutil LARGE_TOTAL_TIMEOUT) and
+    -- the 5 s and 10 s waits.
+    end, Mirror.RUN_S + 3 * 60 + 15 + 60, function(out, berr) Mirror.ran(cat, req, out, berr) end)
     return true
 end
 
