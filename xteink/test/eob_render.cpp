@@ -273,6 +273,44 @@ Row row(RowRole role, std::string label, std::string sub = "", std::string value
   return r;
 }
 
+// Every row says what it is, selected or not: each row with a label has text that is not empty
+// and inks pixels against what is under it (no black on the selected row's black band, no text
+// lost). Drawn twice per row: once without its text, once with.
+void visibleText(Page page, const Metrics& m, const char* name) {
+  for (size_t sel = 0; sel < page.rows.size(); ++sel) {
+    page.selected = static_cast<int>(sel);
+    const Layout layout = orbify::eob::layout(page, m, 480, 760);
+    Layout bare = layout;
+    bare.ops.clear();
+    for (const Op& op : layout.ops)
+      if (op.kind != Op::Kind::Text) bare.ops.push_back(op);
+    Canvas under(480, 760), full(480, 760);
+    draw(under, bare);
+    draw(full, layout);
+    for (const Target& t : layout.targets) {
+      if (t.star > 0 || t.row < 0 || static_cast<size_t>(t.row) >= page.rows.size()) continue;
+      if (page.rows[static_cast<size_t>(t.row)].label.empty()) continue;
+      int texts = 0, inked = 0;
+      for (const Op& op : layout.ops) {
+        if (op.kind != Op::Kind::Text || op.y < t.y || op.y >= t.y + t.h) continue;
+        ++texts;
+        CHECK(!op.text.empty(), name);
+        const int w = textWidth(nullptr, op.font, op.bold, op.text.c_str());
+        const int h = m.lineHeight[static_cast<int>(op.font)];
+        int ink = 0;
+        for (int y = op.y; y < op.y + h && y < 760; ++y)
+          for (int x = op.x; x < op.x + w && x < 480; ++x)
+            ink += full.px[static_cast<size_t>(y * 480 + x)] != under.px[static_cast<size_t>(y * 480 + x)] ? 1 : 0;
+        inked += ink >= 20 ? 1 : 0;
+      }
+      CHECK(texts > 0 && inked == texts, name);
+      if (texts == 0 || inked != texts)
+        std::printf("  row %d (%s), row %zu selected: %d text(s), %d visible\n", t.row,
+                    page.rows[static_cast<size_t>(t.row)].label.c_str(), sel, texts, inked);
+    }
+  }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -283,18 +321,16 @@ int main(int argc, char** argv) {
   const std::string src = std::string(argv[1]) + "/lib/EpdFont/builtinFonts/source/";
   const std::string out = argv[2];
   FT_Init_FreeType(&ft);
-  auto set = [&](Font f, int pt, const char* regular, const char* bold, const char* italic) {
-    Face& face = faces[static_cast<int>(f)];
-    face.ppem = ppem(pt);
-    face.regular = load(src + regular, face.ppem);
-    if (bold) face.bold = load(src + bold, face.ppem);
-    if (italic) face.italic = load(src + italic, face.ppem);
-  };
-  set(Font::Title, 16, "Bitter/Bitter-Bold.ttf", "Bitter/Bitter-Bold.ttf", nullptr);
-  set(Font::Subtitle, 12, "Bitter/Bitter-Italic.ttf", nullptr, "Bitter/Bitter-Italic.ttf");
-  set(Font::Row, 12, "LexendDeca/LexendDeca-Regular.ttf", "LexendDeca/LexendDeca-Bold.ttf", nullptr);
-  set(Font::Small, 10, "LexendDeca/LexendDeca-Regular.ttf", "LexendDeca/LexendDeca-Bold.ttf", nullptr);
-  set(Font::Heading, 10, "LexendDeca/LexendDeca-Bold.ttf", "LexendDeca/LexendDeca-Bold.ttf", nullptr);
+  // The faces come from core/EndPageLayout's fontSpec, the table the device registers its fonts from.
+  for (int i = 0; i < static_cast<int>(Font::COUNT); ++i) {
+    const FontSpec spec = fontSpec(static_cast<Font>(i));
+    const std::string dir = spec.family == Family::Bitter ? "Bitter/Bitter-" : "LexendDeca/LexendDeca-";
+    Face& face = faces[i];
+    face.ppem = ppem(spec.points);
+    face.regular = load(src + dir + (spec.bold ? "Bold" : spec.italic ? "Italic" : "Regular") + ".ttf", face.ppem);
+    face.bold = load(src + dir + (spec.italic ? "BoldItalic" : "Bold") + ".ttf", face.ppem);
+    face.italic = load(src + dir + (spec.bold ? "BoldItalic" : "Italic") + ".ttf", face.ppem);
+  }
   const Metrics m = metrics();
 
   const std::string DOT = " \xC2\xB7 ";
@@ -354,6 +390,9 @@ int main(int argc, char** argv) {
     Scene s{"eob-x4pro-cover.png", {}};
     s.page = scenes[0].page;
     s.page.rows[NEXT_ROW].image = "/.crosspoint/orbify_series/103_0000abcd_60x90.bmp";
+    // With the series line and the cover the X4 Pro's rows run past the page: the device's fit()
+    // (core/EndPagePlan) drops the last suggestion first.
+    s.page.rows.erase(s.page.rows.begin() + 4);
     scenes.push_back(s);
   }
   {
@@ -378,6 +417,23 @@ int main(int argc, char** argv) {
     for (const Op& op : layout.ops) texts += op.kind == Op::Kind::Text ? 1 : 0;
     CHECK(layout.bottom <= area, s.file);
     CHECK(texts >= s.page.rows.size() + 2, s.file);
+    // No row is lost: every enabled row the page holds is laid out (Home included), so a page whose rows
+    // run past the screen fails here rather than dropping Home.
+    for (size_t r = 0; r < s.page.rows.size(); ++r) {
+      if (!s.page.rows[r].enabled) continue;  // a dimmed row is drawn but has no target
+      bool laid = false;
+      for (const Target& t : layout.targets) laid = laid || t.row == static_cast<int>(r);
+      CHECK(laid, s.file);
+      if (!laid) std::printf("  %s: row %zu (%s) not laid out\n", s.file, r, s.page.rows[r].label.c_str());
+    }
+  }
+  // Visible text on every row, each row selected in turn, on touch and button readers.
+  for (const Scene& s : scenes) {
+    for (const bool touch : {true, false}) {
+      Page p = s.page;
+      p.touch = touch;
+      visibleText(p, m, s.file);
+    }
   }
   // Rows keep their place across Undo / Mark finished: the same targets, row for row.
   {
