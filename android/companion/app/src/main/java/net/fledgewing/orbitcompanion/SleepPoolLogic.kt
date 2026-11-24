@@ -17,11 +17,17 @@ object SleepPoolLogic {
     /** Pick from's dashboard lists, in the order an empty one falls back (B koreader.ts:443-449). */
     val LISTS = listOf("up_next" to "up-next-in-series", "want_to_read" to "want-to-read", "discover" to "random")
 
-    /** kind: list (with [type]), scope or collection (with [id]). */
-    data class From(val kind: String, val id: Long = 0, val type: String = "")
+    /** Pick from's and Leave out's item for every book the account can see (R1c, X8). */
+    const val LIBRARY = "library"
+
+    /** kind: list (with [type]), library, scope or collection (with [id]). */
+    data class From(val kind: String, val id: Long = 0, val type: String = "") {
+        /** Listed by its members into the shuffle bag (library, scope, collection), not a dashboard list. */
+        val members get() = kind != "list"
+    }
 
     data class Rule(val kind: String, val id: Long = 0, val tag: String = "") {
-        val key get() = if (kind == "tag") "tag:$tag" else "$kind:$id"
+        val key get() = when (kind) { "tag" -> "tag:$tag"; LIBRARY -> LIBRARY; else -> "$kind:$id" }
     }
 
     private val REF = Regex("^([A-Za-z]+):(\\d+)$")
@@ -31,6 +37,7 @@ object SleepPoolLogic {
 
     fun parseFrom(v: String?): From? {
         if (v == null) return null
+        if (v == LIBRARY) return From(LIBRARY)
         LISTS.firstOrNull { it.first == v }?.let { return From("list", type = it.second) }
         val m = REF.find(v) ?: return null
         val id = m.groupValues[2].toLongOrNull() ?: return null
@@ -39,6 +46,7 @@ object SleepPoolLogic {
 
     fun parseRule(v: String?): Rule? {
         if (v == null) return null
+        if (v.trim() == LIBRARY) return Rule(LIBRARY)
         if (v.startsWith("tag:")) {
             val tag = lower(v.removePrefix("tag:").trim())
             return if (tag.isEmpty()) null else Rule("tag", tag = tag)
@@ -48,11 +56,57 @@ object SleepPoolLogic {
         return if ((m.groupValues[1] == "scope" || m.groupValues[1] == "collection") && id > 0) Rule(m.groupValues[1], id) else null
     }
 
-    fun rules(lines: String?): List<String> = (lines ?: "").split('\n').mapNotNull { parseRule(it)?.key }.distinct()
+    /** Leave out as stored: valid, unique, in order; Library alone leaves out every book, so it stands for all (X8). */
+    fun rules(lines: String?): List<String> {
+        val out = (lines ?: "").split('\n').mapNotNull { parseRule(it)?.key }.distinct()
+        return if (LIBRARY in out) listOf(LIBRARY) else out
+    }
+
+    /**
+     * Pick from as stored (R1c): its items, one per line in the wire value, valid, unique, in the
+     * order picked. Library is every book, so it stands alone; nothing valid is the default, Up next.
+     */
+    fun sources(lines: String?): List<String> {
+        val out = (lines ?: "").split('\n').map { it.trim() }.filter { parseFrom(it) != null }.distinct()
+        return when {
+            LIBRARY in out -> listOf(LIBRARY)
+            out.isEmpty() -> listOf(LISTS[0].first)
+            else -> out
+        }
+    }
+
+    /** The picked sources listed by their members: one shuffle bag over all of them (R1c). */
+    fun memberSources(sources: List<String>): List<From> = sources.mapNotNull { parseFrom(it) }.filter { it.members }
+
+    /**
+     * The order a refresh tries books in (R1c): each picked dashboard list is a stream in the
+     * server's order, and the bag over every picked library, scope and collection is one more,
+     * where its first source was picked. The streams are taken in turn, a book once. Only when
+     * every stream is empty, Up next, Want to read and Discover (not picked) are tried in that
+     * order. [lists]: a list id -> its books. Returns the ids and the fallback list used, if any.
+     */
+    fun candidates(sources: List<String>, lists: Map<String, List<Long>>, bag: List<Long>): Pair<List<Long>, String?> {
+        val streams = ArrayList<List<Long>>()
+        var bagAdded = false
+        for (src in sources) {
+            val f = parseFrom(src) ?: continue
+            if (f.members) { if (!bagAdded) { streams.add(bag); bagAdded = true } }
+            else streams.add(lists[src].orEmpty())
+        }
+        if (streams.all { it.isEmpty() }) {
+            val fb = LISTS.map { it.first }.firstOrNull { it !in sources && lists[it].orEmpty().isNotEmpty() } ?: return emptyList<Long>() to null
+            return lists[fb].orEmpty().distinct() to fb
+        }
+        val out = LinkedHashSet<Long>()
+        val longest = streams.maxOf { it.size }
+        for (i in 0 until longest) for (st in streams) if (i < st.size) out.add(st[i])
+        return out.toList() to null
+    }
 
     fun needsTags(rules: List<String>) = rules.any { parseRule(it)?.kind == "tag" }
 
-    fun memberRules(rules: List<String>) = rules.mapNotNull { parseRule(it) }.filter { it.kind != "tag" }
+    /** The rules checked by membership lists: smart scopes and collections (Library needs none). */
+    fun memberRules(rules: List<String>) = rules.mapNotNull { parseRule(it) }.filter { it.kind == "scope" || it.kind == "collection" }
 
     /** R2: a cover, not read, not the book open now. */
     fun eligible(b: Map<String, Any?>?, openId: Long?): Boolean {
@@ -67,6 +121,7 @@ object SleepPoolLogic {
         var unknown = false
         for (r in rules) {
             val p = parseRule(r) ?: continue
+            if (p.kind == LIBRARY) return "out"
             if (p.kind == "tag") {
                 if (tags == null) unknown = true
                 else if (tags.any { lower(it.trim()) == p.tag }) return "out"

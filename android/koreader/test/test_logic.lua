@@ -1360,6 +1360,15 @@ test("sleep screen: the SETTINGS extras are strings, rules one per line", functi
     eq(SP.parseFrom("discover").type, "random"); eq(SP.parseFrom("up_next").type, "up-next-in-series")
 end)
 
+test("sleep screen: Pick from and Leave out as sets, Library (shared/fixtures/sleep/cases.json sources)", function()
+    local src = JSON.fixture(here, "sleep/cases.json").sources
+    ok(#src.from >= 5 and #src.leave_out >= 3, "the shared cases")
+    for _, c in ipairs(src.from) do eq(SP.normalizeFrom(c.wire), c.expect, c.name) end
+    for _, c in ipairs(src.leave_out) do eq(SP.encodeRules(SP.decodeRules(c.wire)), c.expect, c.name) end
+    eq(SP.normalize({ sleep_from = "discover\nscope:3" }).sleep_from, "discover\nscope:3")
+    eq(SP.extras({ sleep_from = "library\nup_next" }).sleep_from, "library")
+end)
+
 test("sleep screen: text and battery never share a corner (L3b2)", function()
     eq(SP.batteryCorner("bottom_left", "bottom"), "top_left")
     eq(SP.batteryCorner("top_right", "top"), "bottom_right")

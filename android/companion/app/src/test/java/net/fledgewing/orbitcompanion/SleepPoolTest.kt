@@ -16,6 +16,35 @@ class SleepPoolTest {
         return { n -> val x = v[i % v.size]; i++; ((x - 1) % n) + 1 }
     }
 
+    private fun ids(a: org.json.JSONArray?): List<Long> = a?.let { (0 until it.length()).map { i -> it.getLong(i) } }.orEmpty()
+
+    /** shared/fixtures/sleep/cases.json "sources": Pick from and Leave out as sets, Library (R1c, X8). */
+    @Test fun pickFromAndLeaveOutFollowTheSharedCases() {
+        val src = JSONObject(File("../../../shared/fixtures/sleep/cases.json").readText()).getJSONObject("sources")
+        val from = src.getJSONArray("from")
+        for (n in 0 until from.length()) from.getJSONObject(n).let { c ->
+            assertEquals(c.getString("name"), c.getString("expect"), SleepPoolLogic.sources(c.getString("wire")).joinToString("\n"))
+        }
+        val lo = src.getJSONArray("leave_out")
+        for (n in 0 until lo.length()) lo.getJSONObject(n).let { c ->
+            assertEquals(c.getString("name"), c.getString("expect"), SleepPoolLogic.rules(c.getString("wire")).joinToString("\n"))
+        }
+        val cand = src.getJSONArray("candidates")
+        assertTrue(cand.length() >= 6)
+        for (n in 0 until cand.length()) cand.getJSONObject(n).let { c ->
+            val l = c.getJSONObject("lists").let { o -> o.keys().asSequence().associateWith { k -> ids(o.getJSONArray(k)) } }
+            val (got, fb) = SleepPoolLogic.candidates(SleepPoolLogic.sources(c.getString("from")), l, ids(c.getJSONArray("bag")))
+            assertEquals(c.getString("name"), ids(c.getJSONArray("expect")), got)
+            assertEquals(c.getString("name"), c.optString("fallback").takeIf { !c.isNull("fallback") }, fb)
+        }
+        val check = src.getJSONArray("check")
+        for (n in 0 until check.length()) check.getJSONObject(n).let { c ->
+            val m = c.getJSONObject("members").let { o -> o.keys().asSequence().associateWith { k -> ids(o.getJSONArray(k)).toSet() } }
+            val tags = if (c.isNull("tags")) null else c.getJSONArray("tags").let { a -> (0 until a.length()).map { a.getString(it) } }
+            assertEquals(c.getString("name"), c.getString("expect"), SleepPoolLogic.check(c.getLong("id"), SleepPoolLogic.rules(c.getString("rules")), m, tags))
+        }
+    }
+
     @Test fun whichBooksCountAndLeaveOutIsOredAndFailsClosed() {
         val fx = JSONObject(File("../../../shared/fixtures/bookorbit/catalog-dashboard-section.want-to-read.json").readText())
         val first = fx.getJSONObject("section").getJSONArray("books").getJSONObject(0)
