@@ -120,6 +120,7 @@ class SettingsPagesTest {
             val row = tagged(a, "key:$k")
             assertNotNull(k, row)
         }
+        assertNotNull("Sharp covers' slot sits in the section", tagged(a, "slot:sharp_covers"))
         assertTrue("Pick from opens the picker", tagged(a, "key:sleep_from")!!.hasOnClickListeners())
         tagged(a, "key:sleep_from")!!.performClick()
         assertEquals(SettingChoiceActivity::class.java.name, shadowOf(a).nextStartedActivity.component?.className)

@@ -20,6 +20,8 @@ object SettingsUi {
     val EXTRAS = listOf(
         Extra("home_opens", "reading", "Home opens", before = "home_button", words = listOf("launcher", "home app")),
         Extra("shown_by", "sleep", "Shown by", words = listOf("screen saver", "screensaver")),
+        // Drawn by its slot (SharpCoversRow); listed here so search finds it.
+        Extra("sharp_covers", "sleep", SharpCoversLogic.TITLE, words = listOf("opds", "full size", "sign in", "cover")),
         Extra("preview", "sleep", "Preview", words = listOf("screensaver")),
         Extra("helper_wifi", "sync", "Wi-Fi switching", before = "wifi_mode", words = listOf("helper", "wifi")),
         Extra("wifi_after_sleep", "sync", "Wi-Fi after sleep sync", words = listOf("wifi", "nap")),

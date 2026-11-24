@@ -271,6 +271,7 @@ open class SettingsSectionActivity : SettingsPage() {
         // A section's companion rows that lead (Home opens before the Home button, the helpers).
         schema.settings.filter { it.section == sectionId }.forEach { d ->
             extras.filter { it.before == d.key && !it.action }.forEach { extra(it) }
+            SettingsSlots.draw(this, sectionId, root, locked, before = d.key)
             val before = root.childCount
             drawShared(root, d)
             if (d.key == focus && root.childCount > before) focused += root.getChildAt(before)
@@ -539,14 +540,19 @@ object SettingsSlots {
         fun draw(a: SettingsPage, root: LinearLayout, locked: Boolean)
     }
 
-    private val slots = mutableListOf<Pair<String, Slot>>()
+    private data class Entry(val section: String, val before: String?, val slot: Slot)
+
+    private val slots = mutableListOf(Entry("sleep", "sleep_text", SharpCoversRow))
+
+    /** [before]: drawn just before that shared key's place (whether or not it shows); null: after the section's rows. */
+    @Synchronized
+    fun register(section: String, before: String? = null, slot: Slot) { slots += Entry(section, before, slot) }
 
     @Synchronized
-    fun register(section: String, slot: Slot) { slots += section to slot }
-
-    @Synchronized
-    fun draw(a: SettingsPage, section: String, root: LinearLayout, locked: Boolean) {
-        slots.filter { it.first == section }.forEach { runCatching { it.second.draw(a, root, locked) }.onFailure { e -> OLog.w("settings slot in $section", e) } }
+    fun draw(a: SettingsPage, section: String, root: LinearLayout, locked: Boolean, before: String? = null) {
+        slots.filter { it.section == section && it.before == before }.forEach {
+            runCatching { it.slot.draw(a, root, locked) }.onFailure { e -> OLog.w("settings slot in $section", e) }
+        }
     }
 }
 

@@ -20,6 +20,72 @@ class SleepScreenActivity : SettingsSectionActivity() {
 }
 
 /**
+ * L7: Sharp covers, the Sleep screen section's row (docs/design/sharp-sleep-covers, through
+ * SettingsSlots): signed in once, or the thumbnail fallback (a state, not a mode). Shown for
+ * Recommended cover, after Change cover every.
+ */
+object SharpCoversRow : SettingsSlots.Slot {
+    override fun draw(a: SettingsPage, root: LinearLayout, locked: Boolean) {
+        if (SettingsStore.get(a, "sleep_mode") != "recommended") return
+        val acct = SharpCovers.account()
+        val state = SharpCovers.state(a)
+        val ids = SleepScreen.pool().map { it.id }
+        val (sub, value) = SharpCoversLogic.row(state, acct != null, SharpCovers.sharpCount(a, ids), ids.size, SharpCovers.lostWhy(a))
+        root.addView(Ui.row(a, SharpCoversLogic.TITLE, sub, if (value.isEmpty()) null else Ui.value(a, value), onClick = when {
+            acct == null || locked -> null
+            state == SharpCoversLogic.State.ON -> { -> signOutAsk(a) }
+            else -> { -> signIn(a, acct) }
+        }).apply { tag = "slot:sharp_covers" })
+    }
+
+    private fun signOutAsk(a: SettingsPage) {
+        android.app.AlertDialog.Builder(a)
+            .setMessage("Sleep-screen covers come from BookOrbit's full-size cover. Sign out to use the small thumbnail again.")
+            .setPositiveButton("Sign out") { _, _ -> SharpCovers.signOut(a, "companion page"); a.render() }
+            .setNegativeButton("Keep", null).show()
+    }
+
+    /** The OPDS login, once: the password goes to one request and is cleared; only the cover link is kept. */
+    private fun signIn(a: SettingsPage, acct: SharpCovers.Account) {
+        val pad = Ui.dp(a, 16)
+        val user = android.widget.EditText(a).apply {
+            hint = "OPDS username"
+            setText(SharpCovers.user(a) ?: acct.user)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        }
+        val pass = android.widget.EditText(a).apply {
+            hint = "OPDS password"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val box = LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(Ui.text(a, SharpCoversLogic.PROMPT, 16f, color = Ui.MID))
+            addView(user)
+            addView(pass)
+        }
+        android.app.AlertDialog.Builder(a).setTitle(SharpCoversLogic.TITLE).setView(box)
+            .setPositiveButton("Sign in") { _, _ ->
+                val name = user.text.toString().trim()
+                val e = pass.text
+                val pw = CharArray(e.length).also { e.getChars(0, e.length, it, 0) }
+                e.clear()
+                kotlin.concurrent.thread(name = "orbit-sharp-sign-in") {
+                    val msg = SharpCovers.signIn(a, acct.server, name, pw)
+                    if (msg == null) SharpCovers.sync(a, "signed in")
+                    a.runOnUiThread {
+                        if (a.isFinishing) return@runOnUiThread
+                        a.render()
+                        Ui.note(a, msg ?: "Signed in. Sharp covers download now while the reader is online.")
+                    }
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ -> pass.text.clear() }
+            .show()
+    }
+}
+
+/**
  * The preview (S2): the sleep screen as it would show now, for 5 s or until a tap. Opened from
  * KOReader's menu (SLEEP_PREVIEW) or the page above: a user action, so the reading gate allows it.
  * It never moves the rotation on.

@@ -1,8 +1,8 @@
 # Companion settings: every setting in the companion, one definition, grouped and searchable
 
-ROADMAP 13. Android (Orbit Companion and the Orbit KOReader plugin). Status: **designing**. Nothing
-here is built; the design and its mockups need the user's approval first (AGENTS.md "Features and
-roadmap"). Mockups: `settings.html` (the design page that goes with this PR).
+ROADMAP 14. Android (Orbit Companion and the Orbit KOReader plugin). Status: **building** (approved).
+Part 1: the schema and per-key sync. Part 2: the companion's sections. Part 3: the KOReader menu.
+Mockups: `settings.html` (the design page that goes with the design PR).
 
 `P/` = `android/koreader/orbit.koplugin/`, `C/` = `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/`.
 Line numbers are at `4a57fc2` (main).

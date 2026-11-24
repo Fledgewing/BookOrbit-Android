@@ -18,7 +18,7 @@ item moves to building. Android-only designs are in [`android/docs/`](../../andr
 - [`companion-checklist.md`](companion-checklist.md): the companion's Setup page as a summary,
   grouped rows and plain words, with what you lose without each item (ROADMAP 10a, designing).
 - [`companion-settings.md`](companion-settings.md): every Orbit plugin setting in the companion,
-  one schema for both, per-key sync, eight sections with search (ROADMAP 13, designing).
+  one schema for both, per-key sync, eight sections with search (ROADMAP 14, building).
 - [`write-through-cache.md`](write-through-cache.md): one cache in front of BookOrbit on both
   platforms: reads from the cache and revalidated, writes through. ROADMAP 4 and 4a.
 - Mockups for end-of-book and local-first: `mockups.html` in each folder, also at

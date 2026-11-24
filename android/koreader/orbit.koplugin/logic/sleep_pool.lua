@@ -337,8 +337,17 @@ end
 
 -- pool.json: the covers in the order the companion shows them (android/docs/INTERFACE.md).
 -- items: { { id, title, file } } (file relative to the orbit-sleep folder).
-function SleepPool.poolDoc(source, items, at_ms)
-    return { v = 1, at = at_ms, source = source, items = items }
+-- account: { server, user, storage_limit_mb } or nil. The companion fetches the sharp covers
+-- (docs/design/lock-screen.md L7) from this server, signed in with an OPDS login it asks for;
+-- never the KOReader key.
+function SleepPool.poolDoc(source, items, at_ms, account)
+    local doc = { v = 1, at = at_ms, source = source, items = items }
+    if type(account) == "table" then
+        doc.server = account.server and tostring(account.server) or nil
+        doc.user = account.user and tostring(account.user) or nil
+        doc.storage_limit_mb = tonumber(account.storage_limit_mb)
+    end
+    return doc
 end
 
 local function jsonString(s)

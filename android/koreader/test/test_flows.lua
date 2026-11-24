@@ -3364,6 +3364,8 @@ local function cacheSetup(prep)
     E.OC.full, E.OC.child, E.OC.offline_pass, E.OC.running = nil, nil, nil, nil
     E.OC.redraw_scheduled, E.OC.redraw_key, E.OC.cache_only = nil, nil, nil
     E.Mirror.active, E.Mirror.busy, E.Mirror.cat, E.Mirror.manual, E.Mirror.ticked_at = nil, nil, nil, nil, nil
+    E.Mirror._status, E.Mirror.next, E.Mirror.polling, E.Mirror.logged_at, E.Mirror._keep = nil, nil, nil, nil, nil
+    E.OC._saving, E.OC._save_pending, E.OC._save_again = nil, nil, nil
     cache.server_fn, cache.strict_offline = nil, nil
     cache.reloaded = nil
     E.OC.note = function() end
@@ -3712,9 +3714,9 @@ test("cache: after a Full refresh, offline paging through every page of a linked
         client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
         E.OC.fullRefresh(cat)
         run(600)
-        local m = E.Mirror.state()
-        ok(m.at and #m.queue == 0, "the Full refresh finished: " .. tostring(#m.queue) .. " left")
-        ok(m.lists["/koreader/plugin/catalog/books?order=desc&sort=recently_added"], "the Home shelf's list is mirrored")
+        local m = E.Mirror.status()
+        ok(m.at and m.left == 0, "the Full refresh finished: " .. tostring(m.left) .. " left")
+        ok(E.Mirror.loadState().lists["/koreader/plugin/catalog/books?order=desc&sort=recently_added"], "the Home shelf's list is mirrored")
         ok(E.Mirror.savedText():find("^Saved for offline · "), "says when: " .. E.Mirror.savedText())
         -- Offline: every page of the shelf's list, and every page of a series it never opened.
         W.wifi, cache.strict_offline = false, true
@@ -4117,11 +4119,12 @@ test("mirror: a request with no answer is retried in smaller pages, then skipped
         W.logs = {}
         E.OC.fullRefresh(cat)
         run(900)
-        local m = E.Mirror.state()
-        ok(m.at and #m.queue == 0, "finished: " .. #m.queue .. " left")
-        local series = m.lists["/koreader/plugin/catalog/sections/series"]
+        local m = E.Mirror.status()
+        ok(m.at and m.left == 0, "finished: " .. tostring(m.left) .. " left")
+        local lists = E.Mirror.loadState().lists
+        local series = lists["/koreader/plugin/catalog/sections/series"]
         ok(series and series.size == 50, "the series index saved in pages of 50: " .. tostring(series and series.size))
-        ok(m.lists["/koreader/plugin/catalog/sections/authors"] == nil and m.skipped == 1, "authors skipped: " .. tostring(m.skipped))
+        ok(lists["/koreader/plugin/catalog/sections/authors"] == nil and m.skipped == 1, "authors skipped: " .. tostring(m.skipped))
         local log = table.concat(W.logs, "\n")
         ok(log:find("sections/series?page=1&size=100 failed (timeout), try 1 of 3; again in 5s, in pages of 50", 1, true), "retried smaller")
         ok(log:find("sections/authors?page=1&size=50 failed (timeout), try 2 of 3; again in 10s, in pages of 25", 1, true), "backed off")
@@ -4145,31 +4148,36 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
     E.OC.note = function(t) table.insert(notes, t) end
     local cat = pluginCatalog(Cat, client)
     local _ui, mod = newUI(false)
+    local jobs = E.Mirror.RUN_JOBS
+    E.Mirror.RUN_JOBS = 3 -- small worker runs, so the test sees one mid-way
     withHost(cat, function()
         client:request("GET", DASH)
         E.OC.fullRefresh(cat)
-        run(3)
-        local m = E.Mirror.state()
+        run(1.5)
+        local m = E.Mirror.status()
         local done, total = m.done, m.total
         ok(E.Mirror.fullRunning() and done > 0, "saving: " .. tostring(done))
         notes = {}
         W.logs = {}
         E.OC.fullRefresh(cat)
         E.OC.fullRefresh(cat)
-        ok(m.done >= done and m.total >= total and #m.queue > 0, "the run is kept, not restarted")
+        m = E.Mirror.status()
+        ok(m.done >= done and m.total >= total and m.left > 0, "the run is kept, not restarted")
         ok(notes[1] and notes[1]:find("^Full refresh · saving for offline %d+/%d+"), "its progress shown: " .. tostring(notes[1]))
         ok(table.concat(W.logs, "\n"):find("Full refresh already running (pressed again); kept", 1, true), "logged")
         -- The network goes mid-run: paused; it comes back: resumed, no read needed.
         W.wifi = false
         run(5)
-        ok(not E.Mirror.active and #m.queue > 0, "paused offline")
+        ok(not E.Mirror.active and E.Mirror.status().left > 0, "paused offline")
         W.wifi = true
         W.logs = {}
         mod:onNetworkConnected()
         run(900)
         ok(table.concat(W.logs, "\n"):find("mirror: resuming (network up)", 1, true), "resumed at network up: " .. table.concat(W.logs, " | "))
-        ok(#m.queue == 0 and m.at, "finished")
+        m = E.Mirror.status()
+        ok(m.left == 0 and m.at, "finished")
     end)
+    E.Mirror.RUN_JOBS = jobs
     cacheTeardown()
 end)
 
@@ -4192,19 +4200,18 @@ test("mirror: Full refresh saves every book's details, outside the cap; covers o
             if id then details[tonumber(id)] = true end
         end
         ok(details[1] and details[2] and details[3] and details[4], "every listed book's details saved")
-        local kept = 0
-        for _, meta in pairs(E.OC.index().entries) do
-            if meta.path and meta.path:find("/catalog/books/%d") and meta.keep and meta.mirror then kept = kept + 1 end
-        end
-        ok(kept >= 4, "details are mirror entries, kept outside the cap: " .. kept)
-        ok((E.Mirror.state().cover_total or 0) == 0, "no covers fetched for lists with the setting off: " .. tostring(E.Mirror.state().cover_total))
+        local kept, indexed = 0, 0
+        for id = 1, 4 do if E.Mirror.detailEntry(client, id) then kept = kept + 1 end end
+        for _, meta in pairs(E.OC.index().entries) do if meta.mirror then indexed = indexed + 1 end end
+        ok(kept == 4 and indexed == 0, "details are in the mirror's own files, not the cache's index: " .. kept .. ", " .. indexed)
+        ok((E.Mirror.status().cover_total or 0) == 0, "no covers fetched for lists with the setting off: " .. tostring(E.Mirror.status().cover_total))
         -- On: Full refresh fetches every cover the mirror lists, shows them in its progress, and
         -- the plugin's pruner leaves them.
         E.S.mirror_covers = true
         local notes = {}
         E.OC.note = function(t) table.insert(notes, t) end
         E.OC.fullRefresh(cat); run(900)
-        local m = E.Mirror.state()
+        local m = E.Mirror.status()
         ok((m.cover_total or 0) >= 4, "every book's cover queued: " .. tostring(m.cover_total))
         local said
         for _, n in ipairs(notes) do if n:find(" · covers %d+/%d+") then said = true end end
@@ -4312,7 +4319,8 @@ test("storage limit: over it, browsing pages and plain covers go first (least re
         new = { bytes = 30 * MB, used_at = 50 },
     }
     E.S.mirror_covers = true
-    E.Mirror.state().cover_keep = { ["m1.jpg"] = true, ["m2.jpg"] = true }
+    E.OC.writeFile(E.Mirror.dir() .. "/cover_keep.lua", E.Cache.encode({ ["m1.jpg"] = true, ["m2.jpg"] = true }))
+    E.Mirror._status, E.Mirror._status_dir = { v = 2, cover_keep_n = 1 }, E.Mirror.dir()
     E.S.storage_limit_mb = 100
     W.logs = {}
     local st = E.OC.storageEnforce("start")
@@ -4364,7 +4372,7 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
         client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
         W.logs = {}
         E.OC.fullRefresh(cat); run(900)
-        local m = E.Mirror.state()
+        local m = E.Mirror.status()
         local note = m.limit_note and m.limit_note.text or ""
         ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. Raise the limit in Orbit settings%.$"), "the stop: " .. note)
         local shown
@@ -4373,18 +4381,196 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
         ok(table.concat(W.logs, "\n"):find("mirror: " .. note, 1, true), "logged")
         local c = m.covers
         ok((c.ok or 0) + (c.not_modified or 0) + (c.failed or 0) == 2, "two covers, then the pass stopped")
-        ok(#m.queue == 0 and m.at, "the lists and details went on to the end")
+        ok(m.left == 0 and m.at, "the lists and details went on to the end")
         ok(E.Mirror.savedText():find("storage limit reached", 1, true), "the menu line says so")
         -- Lists and details alone fill it: the whole run stops.
         kept = 2 * MB
         notes = {}
         E.OC.fullRefresh(cat); run(900)
+        m = E.Mirror.status()
         note = m.limit_note and m.limit_note.text or ""
         ok(note:find("^Storage limit reached: 0 of %d+ lists and books saved"), "the run stops: " .. note)
-        ok(#m.queue == 0 and notes[#notes] == note, "shown: " .. table.concat(notes, " | "))
+        ok(m.left == 0 and notes[#notes] == note, "shown: " .. table.concat(notes, " | "))
     end)
     E.OC.storageTotals, E.Mirror.COVER_BATCH = totals, batch
     E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
+    cacheTeardown()
+end)
+
+---------------------------------------------------------------- v0.11.3: the mirror off the UI thread
+-- (docs/design/companion-worker.md). On the M8C, v0.11.3 showed "KOReader isn't responding": the
+-- mirror's queue (5262 jobs) lived in the cache's index, which the UI thread re-encoded after
+-- every saved item. These guard the UI thread: nothing of the mirror runs or is encoded there.
+
+-- Records Cache.encode and Cache.decode on the UI thread (W.in_child unset) while fn runs: the
+-- largest string either made or read, in bytes.
+local function uiEncodes(fn)
+    local encode, decode, biggest, n = E.Cache.encode, E.Cache.decode, 0, 0
+    E.Cache.encode = function(v, depth)
+        local out = encode(v, depth)
+        if not depth and not W.in_child then
+            n = n + 1
+            if #out > biggest then biggest = #out end
+        end
+        return out
+    end
+    E.Cache.decode = function(str)
+        if type(str) == "string" and not W.in_child and #str > biggest then biggest = #str end
+        return decode(str)
+    end
+    local okf, err = pcall(fn)
+    E.Cache.encode, E.Cache.decode = encode, decode
+    if not okf then error(err, 0) end
+    return biggest, n
+end
+
+test("mirror: a Full refresh of a big library does no request, entry write or queue encode on the UI thread (v0.11.3)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server_fn = libraryServer({ n_books = 450, series4 = 30 })
+    local on_ui = {}
+    local rb = client.requestBlocking
+    client.requestBlocking = function(self, method, path, ...)
+        if path:find("size=100", 1, true) or path:find("/catalog/books/%d") then
+            if not W.in_child then table.insert(on_ui, path) end
+        end
+        return rb(self, method, path, ...)
+    end
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        client:request("GET", DASH)
+        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
+        local biggest = uiEncodes(function()
+            E.OC.fullRefresh(cat)
+            run(1200)
+        end)
+        local m = E.Mirror.status()
+        ok(m.at and m.left == 0 and m.total > 450, "finished: " .. tostring(m.done) .. "/" .. tostring(m.total))
+        ok(#on_ui == 0, "every mirror request ran in the worker: " .. table.concat(on_ui, " | "))
+        -- The UI thread encodes only small things (a browsing entry, a log line's data): never the
+        -- queue or the index, whatever the library's size.
+        ok(biggest < 8 * 1024, "largest encode on the UI thread: " .. biggest .. " bytes")
+        local idx, indexed = E.OC.index(), 0
+        for _, meta in pairs(idx.entries) do if meta.mirror then indexed = indexed + 1 end end
+        ok(idx.mirror == nil and indexed == 0, "nothing of the mirror in the cache's index")
+        local f = io.open(cache.dir .. "/index.lua", "rb")
+        ok(f and #f:read("*a") < 8 * 1024, "the index on disk stays small")
+        if f then f:close() end
+    end)
+    client.requestBlocking = rb
+    cacheTeardown()
+end)
+
+test("mirror: lists are saved before details, so the total stops growing once the lists are in (v0.11.3)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server_fn = libraryServer({ n_books = 120, series4 = 30 })
+    local cat = pluginCatalog(Cat, client)
+    local order, totals = {}, {}
+    local rb = client.requestBlocking
+    client.requestBlocking = function(self, method, path, ...)
+        if path:find("size=100", 1, true) then table.insert(order, "list")
+        elseif path:find("/catalog/books/%d") then table.insert(order, "detail") end
+        local st = E.Mirror.run_st
+        if st then table.insert(totals, st.total) end
+        return rb(self, method, path, ...)
+    end
+    withHost(cat, function()
+        client:request("GET", DASH) -- Home: book 7 is a seed (Continue reading)
+        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
+        E.OC.fullRefresh(cat)
+        run(1200)
+        local last_list, first_detail = 0, nil
+        for i, k in ipairs(order) do
+            if k == "list" then last_list = i end
+        end
+        -- The seed's detail comes first; after it, no detail before the last list page.
+        for i, k in ipairs(order) do if k == "detail" and i > 2 then first_detail = first_detail or i end end
+        ok(first_detail and first_detail > last_list, "lists " .. last_list .. ", first detail " .. tostring(first_detail))
+        local final = E.Mirror.status().total
+        local grew_after = false
+        for i = last_list + 1, #totals do if totals[i] ~= final then grew_after = true end end
+        ok(not grew_after and final > 120, "the total held at " .. tostring(final) .. " once the lists were saved")
+    end)
+    client.requestBlocking = rb
+    cacheTeardown()
+end)
+
+test("mirror: v0.11.2's mirror in the cache's index moves to the worker, keeps its place and leaves the index (v0.11.3)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        local owner = E.OC.owner(client)
+        local saved = "/koreader/plugin/catalog/books?order=desc&page=1&size=100&sort=recently_added"
+        local key = E.Cache.key({ account = owner, server = client.server_url, method = "GET", path = saved })
+        local body = { items = { { id = 1 }, { id = 2 }, { id = 3 } }, total = 3 }
+        E.OC.writeFile(cache.dir .. "/" .. E.OC.hash(key) .. ".lua", E.Cache.encode({ key = key, body = body, validated_at = W.clock, path = saved }))
+        local idx = E.OC.index()
+        idx.entries[key] = { bytes = 100, keep = true, mirror = true, path = saved, used_at = W.clock }
+        idx.mirror = { at = W.clock - 60, done = 1, total = 3, lists = { ["/koreader/plugin/catalog/books?order=desc&sort=recently_added"] = { total = 3, kind = "books" } },
+            queue = { { k = "detail", path = E.Mirror.detailPath(client, 2), id = 2 }, { k = "detail", path = E.Mirror.detailPath(client, 3), id = 3 } }, seen = {} }
+        ok(E.Mirror.status().left == 2, "the old run's place is seen: " .. tostring(E.Mirror.status().left))
+        W.logs = {}
+        E.Mirror.kick("network up")
+        run(600)
+        ok(idx.mirror == nil and idx.entries[key] == nil, "out of the index")
+        ok(io.open(E.Mirror.file(key), "rb") and not io.open(cache.dir .. "/" .. E.OC.hash(key) .. ".lua", "rb"), "its file moved to the mirror's folder")
+        ok(E.Mirror.detailEntry(client, 2) and E.Mirror.detailEntry(client, 3), "the old run's queue was saved")
+        ok(E.Mirror.status().left == 0, "finished")
+        ok(table.concat(W.logs, "\n"):find("moved v0.11.2's offline mirror out of the cache's index: 1 saved pages and details, 2 left", 1, true), "logged")
+        -- Offline, the moved page answers a list read.
+        W.wifi, cache.strict_offline = false, true
+        local b = offlineRead(cat, client, pagePath(cat, { sort = "recently_added" }, 1, 12))
+        ok(b and #b.items == 3, "the moved page answers offline")
+        W.wifi, cache.strict_offline = true, nil
+    end)
+    cacheTeardown()
+end)
+
+test("cache: a background check of a big page compares and saves it in the child; the UI thread never handles the body (v0.11.3)", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local function shelf(n)
+        local items = {}
+        for i = 1, 400 do items[i] = { id = i, title = string.rep("T", 40) .. i, progressPercentage = n } end
+        return { continueReading = items }
+    end
+    cache.server[DASH] = shelf(1)
+    client:request("GET", DASH)
+    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = {} }, client = client }, Cat)
+    cat:switchTo("Home", {}, cat.current_context, false)
+    cache.server[DASH] = shelf(2)
+    W.clock = W.clock + 61
+    W.logs = {}
+    local biggest = uiEncodes(function()
+        client:request("GET", DASH)
+        run(10)
+    end)
+    ok(table.concat(W.logs, "\n"):find("checked: changed", 1, true), "checked and changed: " .. table.concat(W.logs, " | "))
+    ok(biggest < 8 * 1024, "the UI thread handled at most " .. biggest .. " bytes")
+    local e = E.OC.get(E.Cache.key({ account = E.OC.owner(client), server = client.server_url, method = "GET", path = DASH }))
+    ok(e and e.body.continueReading[1].progressPercentage == 2, "the new page is saved")
+    cacheTeardown()
+end)
+
+test("cache: the index is encoded and written by a child, one save at a time (v0.11.3)", function()
+    cacheSetup()
+    local idx = E.OC.index()
+    for i = 1, 300 do idx.entries["k" .. i] = { bytes = 10, used_at = i, path = "/koreader/plugin/catalog/books/" .. i } end
+    local biggest = uiEncodes(function()
+        E.OC.saveIndex()
+        E.OC.saveIndex()
+        run(5)
+        E.OC.saveIndex()
+        run(10)
+    end)
+    ok(biggest == 0, "no encode on the UI thread: " .. biggest)
+    local f = io.open(cache.dir .. "/index.lua", "rb")
+    local d = f and E.Cache.decode(f:read("*a"))
+    if f then f:close() end
+    ok(d and d.entries.k300, "written")
     cacheTeardown()
 end)
 

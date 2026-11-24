@@ -45,6 +45,7 @@ class ReadingGuardTest {
         Site("SettingsPages.kt", "startActivity(", 16, "Settings pages: the user's taps"),
         Site("Attention.kt", "startActivity(Intent(this, SetupBatteryActivity", 1, "the prompt: the user tapped Help on the Battery row"),
         Site("ChecklistUi.kt", "ctx.startActivity(Intent(ctx, SetupDetailsActivity", 1, "Setup: the user tapped Details"),
+        Site("SharpCovers.kt", "a.startActivity(Intent(a, SleepScreenActivity", 1, "Setup: the user tapped Sign in again on the sharp covers row"),
     )
 
     private val call = Regex("""(^|[^A-Za-z0-9_])(notify|startActivity)\(""")
