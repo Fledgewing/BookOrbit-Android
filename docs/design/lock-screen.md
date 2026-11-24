@@ -197,7 +197,7 @@ Every fallback logs one line (`ORB Sleep: <mode> -> <shown> (<why>)`, Android `s
 
 | Piece | Owner | Reuse |
 |---|---|---|
-| Pool, shuffle bag, leave-out set and current cover files | plugin `ko/sleepscreen.lua`; logic `logic/sleep_pool.lua` (bag, rules) | write-through cache reads, `Cache` covers, `FileManagerBookInfo:getCoverImage` |
+| Pool, shuffle bag and leave-out set | companion `SleepPoolBuilder.kt` (on the cache worker's thread, `SLEEP_REFRESH`); rules `SleepPoolLogic.kt` (bag, Leave out, Every sleep's batch). Current cover and settings: plugin `ko/sleepscreen.lua`, `logic/sleep_pool.lua` | write-through cache reads, `Cache` covers, `FileManagerBookInfo:getCoverImage` |
 | Rotation rule, bag and leave-out check | companion `SleepScreenLogic.kt`; Xteink `orbify/core/SleepPick` (bag order, sorted-ID file search) | `shared/fixtures/sleep/cases.json` |
 | Dream sink | companion `SleepDream.kt` (`DreamService`, `BIND_DREAM_SERVICE`) | `Vendor` profile picks the sink |
 | Picture sink | companion `SleepPicture.kt` | the same renderer as the dream (one `SleepCanvas`) |
@@ -206,7 +206,7 @@ Every fallback logs one line (`ORB Sleep: <mode> -> <shown> (<why>)`, Android `s
 | Switches | `CROSSINK_TAILNET_ORBIFY_SLEEP_BAND`, `CROSSINK_TAILNET_ORBIFY_SLEEP_OVERLAY`, `CROSSINK_TAILNET_ORBIFY_SLEEP_PICK`, each (0,1,1): off on the X3 by design | `tailnet_build.py` |
 
 Tests: the rule table (both platforms), the band and overlay layout (`orbify/core` host test: text wrap, band
-height, cover rect, plate rects for each text position and battery corner, and the battery's move, on each panel), the pool parse (plugin `test_logic.lua`, recorded section reply
+height, cover rect, plate rects for each text position and battery corner, and the battery's move, on each panel), the pool parse and build (companion `SleepPoolTest`, recorded section reply
 in `shared/fixtures/`), and a `ReadingGuardTest` entry for the dream (system-started, never during
 reading).
 

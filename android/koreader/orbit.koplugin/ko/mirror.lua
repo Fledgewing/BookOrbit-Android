@@ -95,14 +95,6 @@ function Mirror.pageSize(identity, owner, server)
     return nil
 end
 
--- A book's saved details (Copies.details), or nil.
-function Mirror.detailEntry(client, id)
-    local key = Cache.key({ account = OC.owner(client), server = client.server_url, method = "GET", path = Mirror.detailPath(client, id) })
-    local e = Cache.decode(OC.readFile(Mirror.file(key)) or "")
-    if type(e) == "table" and e.key == key and type(e.body) == "table" then return e end
-    return nil
-end
-
 -- The catalog whose methods build the plugin's own requests (paramsForEntry, effectiveOrder,
 -- listDecorateBookQuery, listSectionParams): the open one, else the last one seen.
 function Mirror.catalog()
@@ -204,14 +196,11 @@ function Mirror.plan(cat, op, reason)
         local okc, p = pcall(cat.thumbnailPath, cat, { id = 1, updatedAt = "1", hasCover = true })
         cover_dir = okc and type(p) == "string" and p:match("^(.*)/[^/]+$") or nil
     end
-    local okt, totals = pcall(OC.storageTotals)
-    totals = okt and type(totals) == "table" and totals or {}
     Mirror.seq = (Mirror.seq or 0) + 1
     local plan = { run = string.format("%d-%d", nowT(), Mirror.seq), op = op, reason = reason, owner = OC.owner(client),
         lib_version = libraryVersion(), sentinel = SENT, templates = templates, detail_template = Mirror.detailPath(client, SENT),
         sections = sections, seed_lists = { Mirror.onDevicePath(cat) }, seed_details = seed_details,
-        cover_dir = cover_dir, covers_on = S.mirror_covers == true, limit = OC.limitBytes(),
-        base_kept = totals.kept or 0, base_mirror_cover = totals.mirror_cover or 0 }
+        cover_dir = cover_dir, covers_on = S.mirror_covers == true, limit = OC.limitBytes() }
     local legacy = Mirror.legacy()
     if legacy then
         -- v0.11.2's mirror: its files move into the companion's mirror/ and its lists are saved again
@@ -224,8 +213,8 @@ function Mirror.plan(cat, op, reason)
             if meta.mirror then table.insert(plan.legacy, OC.hash(key)); idx.entries[key] = nil; OC.memo[key] = nil end
         end
         idx.mirror = nil
-        OC.storage = nil
         OC.saveIndex()
+        UIManager:scheduleIn(20, function() pcall(OC.storageCount, "the old mirror moved") end)
         log("mirror: v0.11.2's offline mirror leaves the cache's index;", #plan.legacy, "files go to the companion's mirror/")
     end
     return plan

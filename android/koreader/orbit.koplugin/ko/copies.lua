@@ -13,6 +13,8 @@
 
 Copies = {}
 
+local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
+
 local function index()
     local idx = OC.index()
     idx.copies = idx.copies or { queue = {} }
@@ -21,7 +23,7 @@ local function index()
 end
 Copies.state = index
 
--- Seams (tests): the file's partial MD5 and KOReader's folders.
+-- Seam (tests): the file's partial MD5.
 function Copies.md5(path)
     local oku, util = pcall(require, "util")
     if not oku or type(util.partialMD5) ~= "function" then return nil end
@@ -29,10 +31,9 @@ function Copies.md5(path)
     return okm and d or nil
 end
 
-function Copies.exists(path)
-    local okl, lfs = pcall(require, "libs/libkoreader-lfs")
-    return not okl or lfs.attributes(path, "mode") == "file"
-end
+Copies.WAIT_S = 60
+-- Replacements are numbered, so an answer to an ask made before one doesn't queue it again.
+Copies.seq, Copies.done_seq = 0, {}
 
 local function stateManager()
     local sm = package.loaded["bookorbit_state_manager"]
@@ -44,69 +45,73 @@ local function openFile()
     return ui and ui.document and ui.document.file or nil
 end
 
--- What we saved of each book's detail (files with their hashes), for the books in BookOrbit's
--- state: the end-of-book cache, and the offline mirror's details (every book a saved list names,
--- since v0.11.2), the newer of the two.
-function Copies.details(books)
-    local out = {}
+-- Asks Orbit Companion which copies changed (COPIES, docs/design/companion-worker.md). The ask
+-- is small and comes from memory: BookOrbit's state books, the end-of-book cache's file lists,
+-- and how the mirror names a book's detail; the companion reads the saved details (the cache's
+-- and the mirror's), compares the hashes and checks the files are on the reader. Returns true
+-- when asked.
+function Copies.ask(why)
+    if S.keep_copies_current == false then return false end
+    if Copies.asked and OC.now() - Copies.asked < Copies.WAIT_S then return false end
+    local problem = Companion.workerProblem(_("to keep copies current"))
+    if problem then
+        if Copies.problem ~= problem then Copies.problem = problem; log("copies: not checked:", problem) end
+        return false
+    end
+    Copies.problem = nil
+    local sm = stateManager()
+    if not sm then return false end
+    local okb, books = pcall(function() local st = sm.state(); return st and st.books end)
+    if not okb or type(books) ~= "table" then return false end
+    local list, want = {}, {}
+    for md5, b in pairs(books) do
+        if type(b) == "table" and type(b.file) == "string" and b.bookId ~= nil then
+            table.insert(list, { md5 = md5, path = b.file, book_id = b.bookId, file_id = b.fileId, incompatible = b.positionIncompatible == true })
+            want[tostring(b.bookId)] = true
+        end
+    end
+    local eob = {}
     local okc, c = pcall(EOB.cache)
-    for k, v in pairs(okc and type(c) == "table" and c or {}) do out[k] = v end
-    local want = {}
-    for _, b in pairs(books or {}) do
-        if type(b) == "table" and b.bookId ~= nil then want[tostring(b.bookId)] = true end
+    for id, v in pairs(okc and type(c) == "table" and c or {}) do
+        if want[tostring(id)] and type(v) == "table" and type(v.files) == "table" then eob[tostring(id)] = { files = v.files, saved_at = v.saved_at } end
     end
-    local okx, idx = pcall(OC.index)
-    for key, meta in pairs(okx and idx.entries or {}) do
-        local path = type(meta) == "table" and meta.path and tostring(meta.path) or ""
-        local id = path:match("/catalog/books/(%d+)$") or path:match("/catalog/books/(%d+)%?")
-        if id and want[id] then
-            local cur = out[id]
-            if not cur or (meta.validated_at or 0) >= (cur.saved_at or 0) then
-                local e = OC.get(key)
-                if e and type(e.body) == "table" and type(e.body.files) == "table" then
-                    out[id] = { id = e.body.id, files = e.body.files, saved_at = meta.validated_at }
-                end
-            end
-        end
+    local ask = { books = list, eob = eob, sentinel = Mirror.SENTINEL }
+    local client = OC.client()
+    -- How the mirror names a book's detail (its saved details count too).
+    local okp, path = pcall(function() return client and Mirror.detailPath(client, Mirror.SENTINEL) end)
+    if okp and path then ask.owner, ask.server, ask.detail_template = OC.owner(client), client.server_url, path end
+    if lfs_ok then lfs.mkdir(OC.dir() .. "/copies") end
+    if not OC.writeFile(OC.dir() .. "/copies/ask.lua", Cache.encode(ask)) then
+        log("copies: the ask wasn't written; not checked")
+        return false
     end
-    -- The offline mirror's details (outside the index since v0.11.3): one file per wanted book.
-    local client = Mirror and Mirror.detailEntry and OC.client and OC.client()
-    if client then
-        for id in pairs(want) do
-            local okm, e = pcall(Mirror.detailEntry, client, id)
-            local cur = out[id]
-            if okm and e and type(e.body.files) == "table" and (not cur or (e.validated_at or 0) >= (cur.saved_at or 0)) then
-                out[id] = { id = e.body.id, files = e.body.files, saved_at = e.validated_at }
-            end
-        end
-    end
-    return out
+    Copies.asked, Copies.asked_seq = OC.now(), Copies.seq
+    Companion.send(Companion.ACTION.COPIES, { reason = tostring(why) })
+    OC.watchChecks()
+    return true
 end
 
--- Finds the changed copies and queues them. Returns how many are queued.
-function Copies.scan(why)
-    if S.keep_copies_current == false then return 0 end
-    local sm = stateManager()
-    if not sm then return 0 end
-    local okb, books = pcall(function() local st = sm.state(); return st and st.books end)
-    if not okb or type(books) ~= "table" then return 0 end
-    local found = CopiesPlan.candidates(books, Copies.details(books))
-    local present = {}
-    for _, c in ipairs(found) do
-        if Copies.exists(c.path) then table.insert(present, c) end
-    end
+-- The companion's answer: the changed copies join the queue, which then runs when it may.
+function Copies.found(ev)
+    local asked = Copies.asked_seq or 0
+    Copies.asked = nil
+    if ev.err then return log("copies: not checked:", tostring(ev.err)) end
     local c = index()
-    local added = CopiesPlan.enqueue(c.queue, present)
-    local n = 0
-    for _ in pairs(books) do n = n + 1 end
+    -- A copy replaced while the companion looked was looked up with its old hash.
+    local fresh = {}
+    for _, f in ipairs(type(ev.found) == "table" and ev.found or {}) do
+        if (Copies.done_seq[f.path] or 0) <= asked then table.insert(fresh, f) end
+    end
+    local added = CopiesPlan.enqueue(c.queue, fresh)
+    local n = ev.checked or 0
     if added > 0 then
-        log(string.format("copies: checked %d copies (%s); %d changed; replacing", n, tostring(why), #c.queue))
+        log(string.format("copies: checked %d copies (%s); %d changed; replacing", n, tostring(ev.why), #c.queue))
         OC.saveIndex()
     elseif #c.queue == 0 then
-        log(string.format("copies: checked %d copies (%s); %s", n, tostring(why),
-            #found == 0 and "all match the library" or "the changed ones are gone from the reader"))
+        log(string.format("copies: checked %d copies (%s); %s", n, tostring(ev.why),
+            (ev.gone or 0) == 0 and "all match the library" or "the changed ones are gone from the reader"))
     end
-    return #c.queue
+    if #c.queue > 0 and not Copies.busy and not Copies.active then Copies.pump() end
 end
 
 function Copies.stop(why)
@@ -246,6 +251,8 @@ function Copies.pump()
             local new = Copies.md5(job.path) or file.fileHash
             Copies.carry(job.path, old, new)
             Copies.replaced = (Copies.replaced or 0) + 1
+            Copies.seq = Copies.seq + 1
+            Copies.done_seq[job.path] = Copies.seq
             nextJob(c, "replaced", job, string.format("(%s -> %s, %ds; sidecar kept)", tostring(old), tostring(new), now_s() - t0))
         end,
     })
@@ -260,8 +267,7 @@ function Copies.tick(why)
     end
     local t = now_s()
     if not Copies.scanned_at or t - Copies.scanned_at > 600 or why == "full refresh" then
-        Copies.scanned_at = t
-        Copies.scan(why)
+        if Copies.ask(why) then Copies.scanned_at = t end
     end
     if #index().queue > 0 then Copies.pump() end
 end

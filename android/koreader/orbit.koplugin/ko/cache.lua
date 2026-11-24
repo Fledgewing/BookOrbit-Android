@@ -120,6 +120,7 @@ function OC.wipe(why)
     OC.memo, OC.memo_order = {}, {}
     OC.storage = nil
     OC.saveIndex()
+    UIManager:scheduleIn(5, function() pcall(OC.storageCount, "cleared") end)
 end
 
 -- The account and server this cache belongs to; a different one drops it.
@@ -242,6 +243,12 @@ function OC.drainEvents()
                 local raw = readFile(file)
                 local e = Cache.decode(raw or "")
                 if type(e) == "table" and e.key == ev.key then OC.adopt(ev.key, e, #raw) end
+            elseif ev.kind == "storage" then
+                OC.storageCounted(ev)
+            elseif ev.kind == "sleep_pool" and Sleep then
+                Sleep.landed(ev)
+            elseif ev.kind == "copies" and Copies then
+                Copies.found(ev)
             elseif ev.kind == "checked" and ev.key then
                 local job = OC.inflight[ev.key]
                 OC.inflight[ev.key] = nil
@@ -415,7 +422,16 @@ function OC.watchChecks()
                 OC.landed(nil, job, { err = "the companion didn't answer" })
             end
         end
-        if next(OC.inflight) == nil then OC.watching = nil; return end
+        if OC.storage_asked and t - OC.storage_asked >= OC.STORAGE_WAIT_S then
+            log("storage: the companion didn't answer the count")
+            OC.storage_asked = nil
+        end
+        if Copies and Copies.asked and t - Copies.asked >= Copies.WAIT_S then
+            log("copies: the companion didn't answer the check")
+            Copies.asked = nil
+        end
+        local sleep_waits = Sleep and Sleep.waited(t)
+        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) and not sleep_waits then OC.watching = nil; return end
         UIManager:scheduleIn(1, tick)
     end
     UIManager:scheduleIn(1, tick)
@@ -669,10 +685,13 @@ end
 
 -- Everything Orbit stores counts (Orbit menu › Storage limit, S.storage_limit_mb): the cache
 -- directory (browsing entries, the mirror's lists and details, the index) and the covers in the
--- plugin's cover directory, mirrored or not. Book files and KOReader's own data don't. The size is
--- counted on start and kept up to date on each write; over the limit, Cache.storagePlan says
--- what goes. The 64 MB / 20000-entry cap (Cache.evict in OC.adopt) is the browsing cache's share.
+-- plugin's cover directory, mirrored or not. Book files and KOReader's own data don't. Orbit
+-- Companion counts (STORAGE, docs/design/companion-worker.md): it walks the index and the cover
+-- folder, removes covers over the limit itself and names the browsing entries to drop, which the
+-- UI thread takes out of its index. Between counts each write adds its size here. The 64 MB /
+-- 20000-entry cap (Cache.evict in OC.adopt) is the browsing cache's share.
 local MB = 1048576
+OC.STORAGE_WAIT_S = 60
 
 function OC.limitBytes()
     local mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB
@@ -682,89 +701,72 @@ end
 function OC.coverDir()
     if OC.cover_dir then return OC.cover_dir end
     local okd, DataStorage = pcall(require, "datastorage")
-    return okd and DataStorage:getDataDir() .. "/cache/bookorbit" or nil
+    local okp, d = pcall(function() return DataStorage:getDataDir() end)
+    return okd and okp and d and (d .. "/cache/bookorbit") or nil
 end
 
-local function fileSize(path) return lfs_ok and tonumber(lfs.attributes(path, "size")) or 0 end
-
--- Every stored thing with its size, last use and kind (Cache.storagePlan's items).
-function OC.storageItems()
-    local items = {}
-    for k, e in pairs(OC.index().entries) do
-        table.insert(items, { k = "e:" .. k, bytes = e.bytes or 0, at = e.used_at or 0, kind = e.keep and "kept" or "cache" })
+-- Asks the companion to count (and, over the limit, remove). One ask at a time; one asked
+-- meanwhile follows it.
+function OC.storageCount(why)
+    if OC.child then return end
+    if OC.storage_asked and nowT() - OC.storage_asked < OC.STORAGE_WAIT_S then OC.storage_again = why; return end
+    local problem = Companion.workerProblem()
+    if problem then
+        if OC.storage_problem ~= problem then OC.storage_problem = problem; log("storage: not counted:", problem) end
+        return
     end
-    table.insert(items, { k = "index", bytes = fileSize(OC.dir() .. "/index.lua"), at = 0, kind = "kept" })
-    -- The offline mirror's lists and details (the worker counts them).
-    if Mirror then table.insert(items, { k = "mirror", bytes = tonumber(Mirror.status().bytes) or 0, at = 0, kind = "kept" }) end
-    local dir = OC.coverDir()
-    if lfs_ok and dir and lfs.attributes(dir, "mode") == "directory" then
-        local keep = S.mirror_covers and Mirror and Mirror.coverKeep() or {}
-        for name in lfs.dir(dir) do
-            if name:match("%.jpg$") then
-                local a = lfs.attributes(dir .. "/" .. name)
-                if type(a) == "table" and a.mode == "file" then
-                    table.insert(items, { k = "c:" .. name, bytes = (a.size or 0) + fileSize(dir .. "/" .. name .. ".etag"),
-                        at = a.modification or 0, kind = keep[name] and "mirror_cover" or "cover" })
-                end
-            end
-        end
-    end
-    return items
-end
-
-local function totalsOf(items, drop)
-    local gone = {}
-    for _, k in ipairs(drop or {}) do gone[k] = true end
-    local t = { used = 0, kept = 0, cache = 0, cover = 0, mirror_cover = 0 }
-    for _, e in ipairs(items) do
-        if not gone[e.k] then t.used = t.used + e.bytes; t[e.kind] = (t[e.kind] or 0) + e.bytes end
-    end
-    return t
-end
-
--- Counts everything and, over the limit, removes what Cache.storagePlan says, in its order.
-function OC.storageEnforce(why)
-    if OC.child then return OC.storage end
+    OC.storage_problem = nil
+    OC.storage_asked, OC.storage_again = nowT(), nil
     local limit = OC.limitBytes()
-    local items = OC.storageItems()
-    local plan = Cache.storagePlan(items, limit)
-    if #plan.drop > 0 then
-        local idx, dir = OC.index(), OC.coverDir()
-        local kinds, n = {}, { cache = 0, cover = 0, mirror_cover = 0 }
-        for _, e in ipairs(items) do kinds[e.k] = e.kind end
-        for _, k in ipairs(plan.drop) do
-            local key, name = k:match("^e:(.*)$"), k:match("^c:(.*)$")
-            if key then
-                idx.entries[key] = nil
-                OC.memo[key] = nil
-                os.remove(OC.dir() .. "/" .. OC.hash(key) .. ".lua")
-            elseif name and dir then
-                os.remove(dir .. "/" .. name)
-                os.remove(dir .. "/" .. name .. ".etag")
-            end
-            n[kinds[k]] = (n[kinds[k]] or 0) + 1
+    Companion.send(Companion.ACTION.STORAGE, { reason = tostring(why), limit = limit and tostring(limit) or "",
+        cover_dir = OC.coverDir() or "", mirror_covers = S.mirror_covers and "1" or "0" })
+    OC.watchChecks()
+end
+
+-- The companion's count: dropped browsing entries leave the index (unless used since), totals kept.
+function OC.storageCounted(ev)
+    OC.storage_asked = nil
+    local idx, dropped = OC.index(), 0
+    for _, d in ipairs(type(ev.drop) == "table" and ev.drop or {}) do
+        local meta = d.key and idx.entries[d.key]
+        if meta and (meta.used_at or 0) == (d.used_at or 0) then
+            idx.entries[d.key] = nil
+            OC.memo[d.key] = nil
+            os.remove(OC.dir() .. "/" .. OC.hash(d.key) .. ".lua")
+            dropped = dropped + 1
         end
-        OC.saveIndex()
-        log(string.format("storage: %.1f MB of %d MB (%s); removed %d browsing entries, %d covers, %d saved-for-offline covers -> %.1f MB",
-            plan.used / MB, math.floor(limit / MB), tostring(why), n.cache, n.cover, n.mirror_cover, plan.after / MB))
     end
-    OC.storage = totalsOf(items, plan.drop)
+    if dropped > 0 then OC.saveIndex() end
+    if type(ev.totals) == "table" then OC.storage = ev.totals end
+    local st, limit, rm = OC.storage or {}, OC.limitBytes(), type(ev.removed) == "table" and ev.removed or {}
+    if (ev.used or 0) ~= (ev.after or 0) then
+        log(string.format("storage: %.1f MB of %d MB (%s); removed %d browsing entries, %d covers, %d saved-for-offline covers -> %.1f MB",
+            (ev.used or 0) / MB, math.floor((limit or 0) / MB), tostring(ev.why), dropped, rm.cover or 0, rm.mirror_cover or 0, (ev.after or 0) / MB))
+    elseif ev.why == "start" then
+        log(string.format("storage: using %.1f MB of %s (lists and books saved for offline %.1f MB, covers %.1f MB, of them saved for offline %.1f MB)",
+            (st.used or 0) / MB, limit and (math.floor(limit / MB) .. " MB") or "no limit", (st.kept or 0) / MB,
+            ((st.cover or 0) + (st.mirror_cover or 0)) / MB, (st.mirror_cover or 0) / MB))
+    end
+    if OC.storage_again then OC.storageCount(OC.storage_again) end
+end
+
+-- What Orbit stores now ({ used, kept, cache, cover, mirror_cover } bytes): the last count (the
+-- companion's storage.lua at start), or nil before the first.
+function OC.storageTotals()
+    if OC.storage then return OC.storage end
+    local v = Cache.decode(readFile(OC.dir() .. "/storage.lua") or "")
+    if type(v) == "table" and type(v.totals) == "table" then OC.storage = v.totals end
     return OC.storage
 end
 
--- What Orbit stores now ({ used, kept, cache, cover, mirror_cover } bytes), counted once.
-function OC.storageTotals()
-    return OC.storage or OC.storageEnforce("count")
-end
-
--- A write of delta bytes of a kind: over the limit, the storage plan runs.
+-- A write of delta bytes of a kind: over the limit, the companion counts and removes.
 function OC.storageAdd(delta, kind)
     local st = OC.storage
     if OC.child or not st or delta == 0 then return end
-    st.used = st.used + delta
+    st.used = (st.used or 0) + delta
     st[kind] = (st[kind] or 0) + delta
     local limit = OC.limitBytes()
-    if limit and st.used > limit then OC.storageEnforce("over the limit") end
+    if limit and st.used > limit then OC.storageCount("over the limit") end
 end
 
 -- "Using 58 MB" (the setting's line).
@@ -1095,12 +1097,9 @@ function OC.install(why)
     log("cache: installed (" .. tostring(why) .. ")")
     -- The storage limit, counted on start.
     UIManager:scheduleIn(8, function()
-        local okc, st = pcall(OC.storageEnforce, "start")
-        if okc and st then
-            local limit = OC.limitBytes()
-            log(string.format("storage: using %.1f MB of %s (lists and books saved for offline %.1f MB, covers %.1f MB, of them saved for offline %.1f MB)",
-                st.used / MB, limit and (math.floor(limit / MB) .. " MB") or "no limit", st.kept / MB, (st.cover + st.mirror_cover) / MB, st.mirror_cover / MB))
-        elseif not okc then log("storage: count failed:", tostring(st)) end
+        pcall(OC.storageTotals)
+        local okc, err = pcall(OC.storageCount, "start")
+        if not okc then log("storage: count failed:", tostring(err)) end
     end)
     UIManager:scheduleIn(5, function()
         pcall(function() OC.cleanEtags(require("datastorage"):getDataDir() .. "/cache/bookorbit") end)

@@ -17,6 +17,9 @@ import java.net.URL
 object Worker {
     const val ACTION_MIRROR = "${Contract.PACKAGE}.action.MIRROR"
     const val ACTION_CHECK = "${Contract.PACKAGE}.action.CHECK"
+    const val ACTION_STORAGE = "${Contract.PACKAGE}.action.STORAGE"
+    const val ACTION_COPIES = "${Contract.PACKAGE}.action.COPIES"
+    const val ACTION_SLEEP_REFRESH = "${Contract.PACKAGE}.action.SLEEP_REFRESH"
 
     /** The cap the plugin needs before it hands work over (ModeLogic.BASE). */
     const val CAP = "cache_worker"
@@ -26,6 +29,10 @@ object Worker {
     private val lock = Object()
     private val checks = ArrayDeque<CacheWorker.Check>()
     private var pending: Pair<CacheWorker.Plan, CacheWorker.Creds>? = null
+    private var storage: CacheWorker.StorageAsk? = null
+    private var copies: String? = null
+    private var sleep: Pair<String, SleepPoolBuilder.Ask>? = null
+    @Volatile private var app: Context? = null
     private var thread: Thread? = null
 
     @Volatile
@@ -33,7 +40,7 @@ object Worker {
         private set
 
     /** Work in hand: an automatic Wi-Fi off waits for it. */
-    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || pending != null }
+    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || pending != null || storage != null || copies != null || sleep != null }
 
     private var worker: CacheWorker? = null
 
@@ -47,6 +54,19 @@ object Worker {
     }
 
     fun onIntent(ctx: Context, i: Intent) {
+        if (i.action == ACTION_STORAGE) {
+            // No login: files only. A newer ask replaces a waiting one.
+            val a = CacheWorker.StorageAsk(i.getStringExtra("reason") ?: "plugin", i.getStringExtra("limit")?.toLongOrNull()?.takeIf { it > 0 },
+                i.getStringExtra("cover_dir")?.takeIf { it.isNotEmpty() }, i.getStringExtra("mirror_covers") == "1")
+            synchronized(lock) { storage = a; lock.notifyAll() }
+            return start()
+        }
+        if (i.action == ACTION_COPIES) {
+            // Files only (copies/ask.lua), no login.
+            synchronized(lock) { copies = i.getStringExtra("reason") ?: "plugin"; lock.notifyAll() }
+            return start()
+        }
+        app = ctx.applicationContext
         val creds = creds(i)
         if (creds == null) {
             OLog.w("worker: ${Contract.shortName(i.action)} without a BookOrbit login; ignored")
@@ -59,6 +79,11 @@ object Worker {
                 val c = CacheWorker.Check(LuaValue.str(key), LuaValue.str(path), i.getStringExtra("mode") ?: "open", creds,
                     LuaValue.str(i.getStringExtra("owner") ?: ""))
                 synchronized(lock) { checks.addLast(c); lock.notifyAll() }
+            }
+            ACTION_SLEEP_REFRESH -> {
+                val a = SleepPoolBuilder.Ask(i.getStringExtra("from") ?: "", SleepPoolLogic.rules(i.getStringExtra("rules")),
+                    i.getStringExtra("open_id")?.toLongOrNull(), i.getStringExtra("every") == "1", i.getStringExtra("storage_limit_mb")?.toLongOrNull(), creds)
+                synchronized(lock) { sleep = (i.getStringExtra("reason") ?: "plugin") to a; lock.notifyAll() }
             }
             ACTION_MIRROR -> {
                 val f = File(root(), "mirror/plan.lua")
@@ -82,18 +107,38 @@ object Worker {
     }
 
     private fun drainChecks() {
+        val a = synchronized(lock) { storage.also { storage = null } }
+        if (a != null) try { worker().storage(a) } catch (e: Exception) { OLog.w("worker: storage count failed", e) }
+        val cp = synchronized(lock) { copies.also { copies = null } }
+        if (cp != null) try { worker().copies(cp) } catch (e: Exception) { OLog.w("worker: copies lookup failed", e) }
+        val sp = synchronized(lock) { sleep.also { sleep = null } }
+        if (sp != null) sleepPool(sp.first, sp.second)
         while (true) {
             val c = synchronized(lock) { checks.removeFirstOrNull() } ?: return
             try { worker().check(c) } catch (e: Exception) { OLog.w("worker: check failed", e) }
         }
     }
 
+    /** The sleep screen's pool, then its picture redrawn; the plugin hears a sleep_pool event. */
+    private fun sleepPool(why: String, a: SleepPoolBuilder.Ask) {
+        val ev = sortedMapOf<String, Any?>("kind" to "sleep_pool", "why" to why)
+        try {
+            ev.putAll(SleepPoolBuilder(SleepScreen.dir(), UrlHttp).build(a))
+            OLog.i("worker: sleep screen pool: ${ev["items"]} cover(s), ${ev["kept"]} new, ${ev["probed"]} checked ($why)")
+            app?.let { SleepScreen.onPool(it, "pool") }
+        } catch (e: Exception) {
+            OLog.w("worker: sleep screen pool failed", e)
+            ev["err"] = e.javaClass.simpleName
+        }
+        worker().event(ev)
+    }
+
     private fun loop() {
         while (true) {
             drainChecks()
             val p = synchronized(lock) {
-                if (checks.isEmpty() && pending == null) lock.wait(60_000)
-                if (checks.isEmpty() && pending == null) { thread = null; return }
+                if (checks.isEmpty() && pending == null && storage == null && copies == null && sleep == null) lock.wait(60_000)
+                if (checks.isEmpty() && pending == null && storage == null && copies == null && sleep == null) { thread = null; return }
                 pending.also { pending = null }
             } ?: continue
             mirrorRunning = true

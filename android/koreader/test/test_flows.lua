@@ -2163,199 +2163,54 @@ test("apps gesture: registered and in the recommended set", function()
     ok(R.item("g.apps").ours.orbit_open_apps and R.item("g.apps").key == "two_finger_swipe_north", "two-finger swipe up")
 end)
 
----------------------------------------------------------------- self-update
-local API = "https://api.github.com/repos/Fledgewing/Orbify/releases/latest"
-local ZIP_URL, SUMS_URL = "https://dl.test/orbit.koplugin.zip", "https://dl.test/SHA256SUMS"
-local NEW = '-- new\nlocal PATCH_VERSION = "0.2.0"\nreturn\n'
-local ZIP = "PK fake orbit.koplugin 0.2.0"
-W.zips = W.zips or {}
-W.zips[ZIP] = { ["orbit.koplugin/main.lua"] = NEW, ["orbit.koplugin/ko/x.lua"] = "-- x\n" }
-local function serveRelease(sha)
-    W.web = { [API] = "LATEST", [ZIP_URL] = ZIP, [SUMS_URL] = (sha or W.fake_sha(ZIP)) .. "  orbit.koplugin.zip\n" }
-    W.json = { LATEST = { tag_name = "v0.2.0", assets = {
-        { name = "orbit.koplugin.zip", browser_download_url = ZIP_URL },
-        { name = "SHA256SUMS", browser_download_url = SUMS_URL },
-    } } }
-end
-local function selfText()
-    local f = io.open(SELF_PATH, "rb")
-    if not f then return nil end
-    local t = f:read("*a"); f:close(); return t
-end
-local function resetSelf()
-    sh("rm -rf", ORBIT_ANDROID_PLUGIN_DIR); sh("mkdir -p", ORBIT_ANDROID_PLUGIN_DIR)
-    local f = io.open(SELF_PATH, "wb"); f:write("-- old\n"); f:close()
-end
+---------------------------------------------------------------- updates (Orbit Companion)
+-- The plugin and the companion ship together: the menu's check asks the companion (UPDATE), and
+-- the plugin downloads, unpacks and installs nothing itself (docs/design/companion-worker.md).
+local function updateBroadcasts() return count(W.broadcasts, function(b) return b.action:sub(-7) == ".UPDATE" end) end
 
-test("update: menu check installs a verified newer plugin over its own folder", function()
-    resetSelf(); serveRelease()
+test("update: the menu's check asks Orbit Companion; the plugin fetches nothing and forks nothing", function()
+    local UE = getfenv(Orbit.onSuspend)
+    local real = UE.Companion.workerProblem
+    UE.Companion.workerProblem = function() return nil end
+    W.broadcasts, W.fetched, W.shown = {}, {}, {}
+    local children = #W.children
     local _ui, orbit = newUI(false)
     orbit:checkPatchUpdate()
     run(5)
-    ok(selfText() == NEW, "folder replaced")
-    ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. "/ko/x.lua") ~= nil, "every file unpacked")
-    for _, rest in ipairs({ ".new/main.lua", ".old/main.lua", ".zip.new" }) do
-        ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. rest) == nil, "temp " .. rest .. " gone")
-    end
-    ok(store.orbit_android.patch_update_status.text:find("updated to 0.2.0", 1, true), "status")
+    UE.Companion.workerProblem = real
+    ok(updateBroadcasts() == 1, "one UPDATE: " .. updateBroadcasts())
+    local b = W.broadcasts[#W.broadcasts]
+    ok(b.package == "net.fledgewing.orbitcompanion" and b.extras.reason == "menu", "to the companion, with the reason")
+    ok(b.extras.userkey == nil and b.extras.server == nil, "no login with it")
+    ok(count(W.fetched, function(u) return u:find("github", 1, true) ~= nil end) == 0, "no GitHub request")
+    ok(#W.children == children, "no background process")
+    ok(tostring(W.shown[#W.shown].text):find("Orbit Companion is checking", 1, true), "says the companion checks")
 end)
 
-test("update: checksum mismatch leaves the file alone", function()
-    resetSelf(); serveRelease(string.rep("b", 64))
+test("update: without the companion of this version the menu says what to do and asks nothing", function()
+    local UE = getfenv(Orbit.onSuspend)
+    local real = UE.Companion.workerProblem
+    local asked
+    UE.Companion.workerProblem = function(purpose) asked = purpose; return "Orbit Companion needed " .. tostring(purpose) end
+    W.broadcasts, W.shown = {}, {}
     local _ui, orbit = newUI(false)
     orbit:checkPatchUpdate()
-    run(5)
-    ok(selfText() == "-- old\n", "unchanged")
-    ok(store.orbit_android.patch_update_status.text:find("checksum", 1, true), "status says checksum")
-end)
-
-test("update: a zip with a file outside orbit.koplugin/ is refused, the plugin left alone", function()
-    resetSelf(); serveRelease()
-    local evil = "PK fake evil"
-    W.zips[evil] = { ["orbit.koplugin/main.lua"] = NEW, ["orbit.koplugin/../x.lua"] = "-- x\n" }
-    W.web[ZIP_URL] = evil
-    W.web[SUMS_URL] = W.fake_sha(evil) .. "  orbit.koplugin.zip\n"
-    local _ui, orbit = newUI(false)
-    orbit:checkPatchUpdate()
-    run(5)
-    ok(selfText() == "-- old\n", "unchanged")
-    ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. ".new/main.lua") == nil, "nothing staged")
-    ok(store.orbit_android.patch_update_status.text:find("unexpected file", 1, true), "status says why")
-end)
-
-test("update: a zip whose main.lua declares another version is refused", function()
-    resetSelf(); serveRelease()
-    local other = "PK fake other"
-    W.zips[other] = { ["orbit.koplugin/main.lua"] = '-- x\nlocal PATCH_VERSION = "0.1.9"\n' }
-    W.web[ZIP_URL] = other
-    W.web[SUMS_URL] = W.fake_sha(other) .. "  orbit.koplugin.zip\n"
-    local _ui, orbit = newUI(false)
-    orbit:checkPatchUpdate()
-    run(5)
-    ok(selfText() == "-- old\n", "unchanged")
-    ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. ".new/main.lua") == nil, "staging removed")
-    ok(store.orbit_android.patch_update_status.text:find("declares 0.1.9", 1, true), "status says why")
-end)
-
-test("update: automatic check at most once a day, and only when connected", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev" -- nothing newer: just count checks
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil -- the checksum test above failed a check
-    local _ui, orbit = newUI(false)
-    W.fetched = {}
-    W.wifi = false
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(not has(W.fetched, API), "no check without network")
-    W.wifi = true
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "one check")
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "still one check the same day")
-    store.orbit_android.auto_update_patch = false
-    store.orbit_android.patch_update_checked_at = 0
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "off means off")
-    store.orbit_android.auto_update_patch = true
-end)
-test("update: a failed automatic check backs off 1 h, then is tried again", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev"
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil
-    W.wifi = true
-    local _ui, orbit = newUI(false)
-    local saved = W.web[API]
-    W.web[API] = nil -- GitHub unreachable (404 here; EACCES on the device)
-    W.fetched = {}
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "first check ran")
-    ok(store.orbit_android.patch_update_checked_at == 0, "a failure doesn't start the 24 h wait")
-    ok((store.orbit_android.patch_update_failed_at or 0) > 0, "the failure is recorded")
-    W.web[API] = saved
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "no retry within the hour")
-    store.orbit_android.patch_update_failed_at = os.time() - 3601
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 2, "retried after the hour")
-    ok(store.orbit_android.patch_update_checked_at > 0, "success starts the wait")
-end)
-
-test("update: a timeout right after Wi-Fi comes up is retried, and the check then succeeds", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev"
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil
-    W.wifi = true
-    local http = require("socket.http")
-    local fast = http.request
-    local fails = 2
-    http.request = function(t)
-        if t.url == API and fails > 0 then fails = fails - 1; return nil, "timeout" end
-        return fast(t)
-    end
-    W.slept = {}
-    local _ui, orbit = newUI(false)
-    orbit:wakeFlow("wake")
-    run(40)
-    http.request = fast
-    ok(table.concat(W.slept, ",") == "3,10", "waited 3 s then 10 s: " .. table.concat(W.slept, ","))
-    ok(store.orbit_android.patch_update_checked_at > 0, "succeeded on the third try")
-    ok(not store.orbit_android.patch_update_failed_at, "no failure recorded")
-end)
-
-test("update: the check never blocks KOReader's UI thread, and holds Wi-Fi while it runs", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev"
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil
-    W.wifi = true
-    -- A slow network: each GitHub request takes 30 s of the caller's time.
-    local http = require("socket.http")
-    local fast = http.request
-    http.request = function(t)
-        if t.url:find("github", 1, true) then W.clock = W.clock + 30 end
-        return fast(t)
-    end
-    W.hold_child, W.fetched, W.logs = true, {}, {}
-    local _ui, orbit = newUI(false)
-    orbit:wakeFlow("wake")
-    local before = W.clock
-    run(20)
-    ok(#W.children > 0, "the check went to a background process")
-    ok(not has(W.fetched, API), "no GitHub request on the UI thread")
-    ok(W.clock - before <= 20.5, "the scheduler kept time: " .. (W.clock - before))
-    local logs = table.concat(W.logs, "\n")
-    ok(logs:find("wifi: hold for update", 1, true), "Wi-Fi held for the check")
-    ok(not logs:find("wifi: release update", 1, true), "still held while it runs")
-    W.children[#W.children].run()
     run(2)
-    ok(has(W.fetched, API), "the background process did the request")
-    ok(table.concat(W.logs, "\n"):find("wifi: release update", 1, true), "released when it ended")
-    ok(store.orbit_android.patch_update_checked_at > 0, "result reached the UI side")
-    http.request, W.hold_child = fast, nil
+    UE.Companion.workerProblem = real
+    ok(updateBroadcasts() == 0, "nothing sent")
+    ok(asked == "to check for updates", "the update's own wording: " .. tostring(asked))
+    ok(tostring(W.shown[#W.shown].text):find("Orbit Companion needed", 1, true), "says so")
+    ok(store.orbit_android.patch_update_status.text:find("Orbit Companion needed", 1, true), "status line too")
 end)
 
-test("update: never with a book open; deferred to the file browser", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev"
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil
-    W.wifi, W.fetched = true, {}
-    local _ui, orbit = newUI(true)
+test("update: start and wake never check for updates themselves", function()
+    W.broadcasts, W.fetched = {}, {}
+    W.wifi = true
+    local _ui, orbit = newUI(false)
     orbit:wakeFlow("wake")
     run(40)
-    ok(not has(W.fetched, API), "no check in a book")
-    newUI(false)
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "ran on reaching the file browser")
+    ok(updateBroadcasts() == 0, "no UPDATE")
+    ok(count(W.fetched, function(u) return u:find("github", 1, true) ~= nil end) == 0, "no GitHub request")
 end)
 ---------------------------------------------------------------- one update covers everything
 local function stampSelf(v)
@@ -2365,17 +2220,6 @@ local function stampSelf(v)
 end
 local function relaunches() return count(W.broadcasts, function(b) return b.action:sub(-9) == ".RELAUNCH" end) end
 local function restartReset() run(10); W.clock = W.clock + 10; store.orbit_android.restart_tried = nil; W.broadcasts = {} end
-
-test("one update: Update in the menu (the reader asked) restarts KOReader at once", function()
-    restartReset(); resetSelf(); serveRelease()
-    local _ui, orbit = newUI(false)
-    orbit:checkPatchUpdate()
-    run(5)
-    ok(selfText() == NEW, "file replaced")
-    ok(relaunches() == 1, "restarted once: " .. relaunches())
-    ok(store.orbit_android.restart_tried == "0.2.0", "one try recorded for 0.2.0")
-    restartReset()
-end)
 
 test("one update: an automatic update waits in front (no book, Home or a list); the screen going off restarts it", function()
     restartReset(); stampSelf("0.3.0")
@@ -2981,10 +2825,34 @@ local function copiesSetup(books, md5s)
     function DCat:loadBooks() end
     package.loaded["bookorbit_catalog"] = DCat
     E.Copies.md5 = function(path) return copies.md5s[path] end
-    E.Copies.exists = function(path) return copies.md5s[path] ~= nil end
+    -- Orbit Companion finds the changed copies (fake_companion.lua), on its own cache folder.
+    copies.dir = os.tmpname(); os.remove(copies.dir); sh("mkdir -p", copies.dir .. "/events"); sh("mkdir -p", copies.dir .. "/copies")
+    local lfs = require("libs/libkoreader-lfs")
+    copies.lfs_dir = lfs.dir
+    lfs.dir = function(d)
+        local h = io.popen('ls -1 "' .. d .. '" 2>/dev/null'); local names = {}
+        for n in h:lines() do table.insert(names, n) end
+        h:close(); local i = 0
+        return function() i = i + 1; return names[i] end
+    end
+    copies.saved_dir, copies.saved_problem = E.OC._dir, E.Companion.workerProblem
+    E.OC._dir, E.OC._index, E.OC.watching = copies.dir, nil, nil
+    E.Companion.workerProblem = function() return copies.problem end
+    copies.fc = dofile(here .. "/fake_companion.lua")
+    copies.fc.install(E, W, function() return nil, 404 end, UIManager)
+    copies.fc.exists = function(path) return copies.md5s[path] ~= nil end
+    W.on_broadcast = copies.fc.receive
     E.Copies.state().queue = {}
-    E.Copies.scanned_at, E.Copies.active, E.Copies.busy = nil, nil, nil
+    E.Copies.scanned_at, E.Copies.active, E.Copies.busy, E.Copies.asked = nil, nil, nil, nil
     W.wifi, W.vpn, W.companion = true, true, true
+end
+local function copiesTeardown()
+    package.loaded["bookorbit_catalog"] = nil
+    W.on_broadcast = nil
+    E.Companion.workerProblem = copies.saved_problem
+    E.OC._dir, E.OC._index = copies.saved_dir, nil
+    require("libs/libkoreader-lfs").dir = copies.lfs_dir
+    sh("rm -rf", copies.dir)
 end
 local function copiesUI(in_book)
     local ui, m = newUI(in_book)
@@ -3008,14 +2876,14 @@ test("copies: changed copies are replaced in place, one at a time, and their has
     ok(c == "delivery:1,download:/books/a.epub,delivery:2,download:/books/b.epub", "one at a time: " .. c)
     ok(table.concat(copies.repaired, ",") == "/books/a.epub:old1>new1,/books/b.epub:old2>new2", "state re-keyed: " .. table.concat(copies.repaired, ","))
     ok(#E.Copies.state().queue == 0, "queue done")
-    package.loaded["bookorbit_catalog"] = nil
+    copiesTeardown()
 end)
 
 test("copies: never while reading; the queue waits on disk and goes once the book closes", function()
     copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2" })
     local _ui, m = copiesUI(true)
     E.Copies.tick("test")
-    E.Copies.scan("test")
+    E.Copies.ask("test")
     run(5)
     ok(#copies.calls == 0, "nothing while reading")
     ok(#E.Copies.state().queue == 2, "queued: " .. #E.Copies.state().queue)
@@ -3023,7 +2891,7 @@ test("copies: never while reading; the queue waits on disk and goes once the boo
     copiesUI(false)
     run(10)
     ok(#copies.calls == 4, "replaced after the close: " .. table.concat(copies.calls, ","))
-    package.loaded["bookorbit_catalog"] = nil
+    copiesTeardown()
 end)
 
 test("copies: offline or turned off, nothing is downloaded; a copy already current is left alone", function()
@@ -3045,7 +2913,35 @@ test("copies: offline or turned off, nothing is downloaded; a copy already curre
     local c = table.concat(copies.calls, ",")
     ok(not c:find("download:/books/a.epub", 1, true), "a already matches the library: " .. c)
     ok(c:find("download:/books/b.epub", 1, true), "b replaced")
-    package.loaded["bookorbit_catalog"] = nil
+    copiesTeardown()
+end)
+
+test("copies: Orbit Companion finds the changed copies; the UI thread reads no saved detail and checks no file", function()
+    copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2", ["/books/c.epub"] = "cur3" })
+    copiesUI(false)
+    local reads, exists = 0, 0
+    local get, lfs = E.OC.get, require("libs/libkoreader-lfs")
+    local attributes = lfs.attributes
+    E.OC.get = function(...) reads = reads + 1; return get(...) end
+    lfs.attributes = function(f, ...) if not W.in_companion and tostring(f):find("^/books/") then exists = exists + 1 end return attributes(f, ...) end
+    W.broadcasts = {}
+    E.Copies.tick("test")
+    local b = lastBroadcast(".COPIES")
+    ok(b and b.extras.reason == "test" and b.extras.userkey == nil, "asked the companion, no login")
+    local ask = E.Cache.decode(E.OC.readFile(copies.dir .. "/copies/ask.lua") or "")
+    ok(ask and #ask.books == 3, "the ask lists the books from memory")
+    run(10)
+    E.OC.get, lfs.attributes = get, attributes
+    ok(copies.fc.copies_asks == 1, "the companion looked")
+    ok(reads == 0 and exists == 0, "no detail read, no file checked on the UI thread: " .. reads .. " " .. exists)
+    ok(#copies.calls == 4, "the two changed copies replaced: " .. table.concat(copies.calls, ","))
+    -- Without the companion of this version nothing is checked.
+    copies.problem = "Orbit Companion needed"
+    E.Copies.scanned_at = nil
+    E.Copies.tick("test"); run(5)
+    ok(copies.fc.copies_asks == 1, "not asked")
+    copies.problem = nil
+    copiesTeardown()
 end)
 
 test("end of book: Home from the companion with the sheet open closes it, opens BookOrbit home, sends the finish", function()
@@ -3290,6 +3186,12 @@ local cache = {}
 -- A fake BookOrbit API client class (bookorbit_api.lua:372 request, :261 requestBlocking,
 -- :336 runInSubprocess, :747 downloadCatalogThumbnail) over cache.server (path -> body).
 local FC = dofile(here .. "/fake_companion.lua")
+-- A book's detail as the companion's mirror saved it, or nil.
+local function detailEntry(client, id)
+    local key = E.Cache.key({ account = E.OC.owner(client), server = client.server_url, method = "GET", path = E.Mirror.detailPath(client, id) })
+    local e = E.Cache.decode(E.OC.readFile(E.Mirror.file(key)) or "")
+    if type(e) == "table" and e.key == key and type(e.body) == "table" then return e end
+end
 local function cacheSetup(prep)
     local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/events"); sh("mkdir -p", dir .. "/covers")
     local lfs = require("libs/libkoreader-lfs")
@@ -4221,7 +4123,7 @@ test("mirror: Full refresh saves every book's details, outside the cap; covers o
         end
         ok(details[1] and details[2] and details[3] and details[4], "every listed book's details saved")
         local kept, indexed = 0, 0
-        for id = 1, 4 do if E.Mirror.detailEntry(client, id) then kept = kept + 1 end end
+        for id = 1, 4 do if detailEntry(client, id) then kept = kept + 1 end end
         for _, meta in pairs(E.OC.index().entries) do if meta.mirror then indexed = indexed + 1 end end
         ok(kept == 4 and indexed == 0, "details are in the mirror's own files, not the cache's index: " .. kept .. ", " .. indexed)
         ok((E.Mirror.status().cover_total or 0) == 0, "no covers fetched for lists with the setting off: " .. tostring(E.Mirror.status().cover_total))
@@ -4278,10 +4180,19 @@ test("copies: a Full refresh and Home look for changed copies; the mirror's deta
         ok(whys[1] == "Home", "Home open looks (no catalog read needed): " .. table.concat(whys, ","))
         -- Book 2's copy on the reader has the old hash; its saved detail lists the new one.
         local books = { old2 = { file = "/books/b.epub", bookId = 2, fileId = 20 }, srv3 = { file = "/books/c.epub", bookId = 3, fileId = 30 } }
-        local d = E.Copies.details(books)
-        ok(d["2"] and d["2"].files[1].fileHash == "srv2", "the mirror's detail of book 2")
-        local found = E.CopiesPlan.candidates(books, d)
-        ok(#found == 1 and found[1].path == "/books/b.epub" and found[1].why == "hash", "the changed copy is found from the saved details")
+        local sm = package.loaded["bookorbit_state_manager"]
+        package.loaded["bookorbit_state_manager"] = { state = function() return { books = books } end }
+        local exists = FC.exists
+        FC.exists = function() return true end
+        local pump = E.Copies.pump
+        E.Copies.pump = function() end
+        E.Copies.state().queue, E.Copies.asked = {}, nil
+        ok(E.Copies.ask("test"), "asked")
+        run(3)
+        local q = E.Copies.state().queue
+        ok(#q == 1 and q[1].path == "/books/b.epub" and q[1].why == "hash", "the changed copy is found from the mirror's details: " .. #q)
+        package.loaded["bookorbit_state_manager"], FC.exists, E.Copies.pump = sm, exists, pump
+        E.Copies.state().queue = {}
     end)
     E.Copies.tick = tick
     cacheTeardown()
@@ -4314,7 +4225,7 @@ test("local-first: Home's first paint has the on-device marks; a changed tile na
     cacheTeardown()
 end)
 
-test("storage limit: over it, browsing pages and plain covers go first (least recently used), then covers saved for offline; never the saved lists (v0.11.2)", function()
+test("storage limit: Orbit Companion counts and removes; browsing pages and plain covers go first (least recently used), then covers saved for offline; never the saved lists", function()
     local client, Cat = cacheSetup()
     local MB = 1048576
     local lfs = require("libs/libkoreader-lfs")
@@ -4339,33 +4250,63 @@ test("storage limit: over it, browsing pages and plain covers go first (least re
         old = { bytes = 30 * MB, used_at = 2 },
         new = { bytes = 30 * MB, used_at = 50 },
     }
+    -- The index as saved (the companion reads the file).
+    local function saved() E.OC.writeFile(cache.dir .. "/index.lua", E.Cache.encode(idx)) end
+    saved()
     E.S.mirror_covers = true
     E.OC.writeFile(E.Mirror.dir() .. "/cover_keep.lua", E.Cache.encode({ ["m1.jpg"] = true, ["m2.jpg"] = true }))
-    E.Mirror._status, E.Mirror._status_dir = { v = 2, cover_keep_n = 1 }, E.Mirror.dir()
     E.S.storage_limit_mb = 100
-    W.logs = {}
-    local st = E.OC.storageEnforce("start")
+    W.logs, W.broadcasts = {}, {}
+    local asks = FC.storage_asks
+    local walks = 0
+    local dir = lfs.dir
+    lfs.dir = function(d) if not W.in_companion and d == cdir then walks = walks + 1 end return dir(d) end
+    E.OC.storageCount("start")
+    local b = lastBroadcast(".STORAGE")
+    ok(b and b.extras.limit == tostring(100 * MB) and b.extras.cover_dir == cdir and b.extras.mirror_covers == "1", "asked the companion")
+    ok(b.extras.userkey == nil, "no login with it")
+    run(3)
+    ok(FC.storage_asks == asks + 1, "the companion counted")
+    ok(walks == 0, "the UI thread never walks the cover folder")
     ok(idx.entries.old == nil and not io.open(cdir .. "/a.jpg", "rb"), "the oldest page and the plain cover went first")
     ok(idx.entries.new and io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then it was under the limit")
-    ok(st.used == 100 * MB and E.OC.storageText() == "Using 100 MB", "Using: " .. E.OC.storageText())
+    ok(E.OC.storage.used == 100 * MB and E.OC.storageText() == "Using 100 MB", "Using: " .. E.OC.storageText())
     ok(table.concat(W.logs, "\n"):find("storage: 150.0 MB of 100 MB (start); removed 1 browsing entries, 1 covers, 0 saved-for-offline covers -> 100.0 MB", 1, true), "logged: " .. table.concat(W.logs, " | "))
     -- A lower limit: the last browsing page, then the least recently seen saved cover; the list stays.
+    saved()
     E.S.storage_limit_mb = 55
-    E.OC.storageEnforce("limit changed")
+    E.OC.storageCount("limit changed"); run(3)
     ok(idx.entries.new == nil and not io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then saved covers, oldest first")
     ok(idx.entries.list, "the saved list stays")
-    -- A write over the limit runs the plan at once.
+    -- A write over the limit asks for a count.
     E.S.storage_limit_mb = 60
-    E.OC.storageEnforce("count")
     idx.entries.big = { bytes = 20 * MB, used_at = 99 }
-    E.OC.storageAdd(20 * MB, "cache")
+    saved()
+    E.OC.storageAdd(20 * MB, "cache"); run(3)
     ok(idx.entries.big == nil and io.open(cdir .. "/m2.jpg", "rb") and E.OC.storage.used == 50 * MB, "checked on the write")
+    -- An entry used again after the count is kept.
+    idx.entries.big = { bytes = 20 * MB, used_at = 99 }
+    saved()
+    E.OC.storageCount("count")
+    idx.entries.big.used_at = 120
+    run(3)
+    ok(idx.entries.big, "used since the count: kept")
+    -- The totals are there at the next start.
+    E.OC.storage = nil
+    ok(E.OC.storageTotals() and E.OC.storageTotals().used > 0, "storage.lua read back")
     -- No limit: nothing goes.
     E.S.storage_limit_mb = 0
     idx.entries.big = { bytes = 900 * MB, used_at = 99 }
-    E.OC.storageEnforce("limit changed")
+    saved()
+    E.OC.storageCount("limit changed"); run(3)
     ok(idx.entries.big, "no limit")
-    lfs.attributes = attributes
+    -- Without the companion of this version nothing is counted on the UI thread.
+    cache.worker_problem = "Orbit Companion needed"
+    local n = FC.storage_asks
+    E.OC.storageCount("count"); run(3)
+    ok(FC.storage_asks == n and walks == 0, "nothing counted")
+    cache.worker_problem = nil
+    lfs.attributes, lfs.dir = attributes, dir
     E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
     cacheTeardown()
 end)
@@ -4379,13 +4320,19 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
     local MB = 1048576
     local notes = {}
     E.OC.note = function(t) table.insert(notes, t) end
-    local totals, batch = E.OC.storageTotals, FC.COVER_BATCH
+    local batch = FC.COVER_BATCH
     FC.COVER_BATCH = 1
     E.S.mirror_covers, E.S.storage_limit_mb = true, 1
     local kept = 0.2 * MB
-    -- The totals the plugin hands the companion with the plan; each cover the companion saves is 0.4 MB.
+    -- What else counts (the companion counts it at the run's start: here a kept entry of that size);
+    -- each cover the companion saves is 0.4 MB.
     FC.cover_bytes = 0.4 * MB
-    E.OC.storageTotals = function() return { used = kept, kept = kept, mirror_cover = 0, cache = 0, cover = 0 } end
+    local function keptEntry() E.OC.writeFile(cache.dir .. "/index.lua", E.Cache.encode({ entries = { k = { bytes = kept, keep = true } } })) end
+    local items = FC.storageItems
+    FC.storageItems = function(...)
+        keptEntry()
+        return items(...)
+    end
     withHost(cat, function()
         client:request("GET", DASH)
         client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
@@ -4410,7 +4357,7 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
         ok(note:find("^Storage limit reached: 0 of %d+ lists and books saved"), "the run stops: " .. note)
         ok(m.left == 0 and notes[#notes] == note, "shown: " .. table.concat(notes, " | "))
     end)
-    E.OC.storageTotals, FC.COVER_BATCH = totals, batch
+    FC.storageItems, FC.COVER_BATCH = items, batch
     E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
     cacheTeardown()
 end)
@@ -4529,7 +4476,7 @@ test("mirror: v0.11.2's mirror in the cache's index moves to the worker, keeps i
         run(600)
         ok(idx.mirror == nil and idx.entries[key] == nil, "out of the index")
         ok(io.open(E.Mirror.file(key), "rb") and not io.open(cache.dir .. "/" .. E.OC.hash(key) .. ".lua", "rb"), "its file moved to the mirror's folder")
-        ok(E.Mirror.detailEntry(client, 2) and E.Mirror.detailEntry(client, 3), "the old run's queue was saved")
+        ok(detailEntry(client, 2) and detailEntry(client, 3), "the old run's queue was saved")
         ok(E.Mirror.status().left == 0, "finished")
         ok(table.concat(W.logs, "\n"):find("v0.11.2's offline mirror leaves the cache's index; 1 files go to the companion's mirror/", 1, true), "logged")
         -- Offline, the moved page answers a list read.
@@ -4632,7 +4579,7 @@ test("companion: the cache worker needs the companion of the plugin's own versio
         local notes = {}
         E.OC.note = function(t) table.insert(notes, t) end
         E.OC.fullRefresh(cat); run(30)
-        ok(mirrors() == 0 and not E.Mirror.active, "no run without the companion")
+        ok(mirrors() == 0 and not E.Mirror.active, "no run without the companion: " .. mirrors() .. " " .. tostring(E.Mirror.active))
         ok(E.Mirror.savedText() == "Orbit Companion needed to save BookOrbit for offline", "menu: " .. E.Mirror.savedText())
         ok(table.concat(notes, "|"):find("Orbit Companion needed", 1, true), "said when pressed: " .. table.concat(notes, " | "))
         W.clock = W.clock + 61
@@ -4673,7 +4620,8 @@ test("cache: the index is encoded and written by a child, one save at a time (v0
         E.OC.saveIndex()
         run(10)
     end)
-    ok(biggest == 0, "no encode on the UI thread: " .. biggest)
+    -- The companion's small answers (the start's storage count) are read here; the index (20 KB) never.
+    ok(biggest < 1024, "no index encode on the UI thread: " .. biggest)
     local f = io.open(cache.dir .. "/index.lua", "rb")
     local d = f and E.Cache.decode(f:read("*a"))
     if f then f:close() end
@@ -4709,6 +4657,25 @@ test("sleep screen: back from a real sleep the plugin tells the companion (no se
     RE.Sleep.on = on
     W.screen_on = false
 end)
+
+-- Orbit Companion refreshes the sleep screen's pool (fake_companion.lua plays SleepPoolBuilder).
+local function sleepCompanion()
+    local fc = dofile(here .. "/fake_companion.lua")
+    fc.install(RE, W, function() return nil, 404 end, UIManager)
+    local saved = { dir = RE.OC._dir, index = RE.OC._index, problem = RE.Companion.workerProblem, companion = W.companion }
+    local d = os.tmpname(); os.remove(d); sh("mkdir -p", d .. "/events")
+    RE.OC._dir, RE.OC._index, RE.OC.watching = d, nil, nil
+    RE.Companion.workerProblem = function() return fc.problem end
+    RE.Sleep.asked, RE.Sleep.scopes_asked, RE.Sleep.problem = nil, nil, nil
+    W.on_broadcast, W.companion = fc.receive, true
+    function fc.done()
+        W.on_broadcast, W.companion = nil, saved.companion
+        RE.OC._dir, RE.OC._index, RE.Companion.workerProblem = saved.dir, saved.index, saved.problem
+        RE.Sleep.asked, RE.Sleep.scopes_asked = nil, nil
+        sh("rm -rf", d)
+    end
+    return fc
+end
 
 test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next through Leave out, the current cover", function()
     local JSON = dofile(here .. "/json_mini.lua")
@@ -4765,8 +4732,10 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
         for _, k in ipairs(keys) do table.insert(parts, k .. "=" .. tostring(q[k])) end
         return path .. "?" .. table.concat(parts, "&")
     end
+    local ui_calls = 0
     function client:requestBlocking(method, path)
         table.insert(calls, path)
+        if not W.in_companion then ui_calls = ui_calls + 1 end
         if path:find("sections/up%-next%-in%-series") then return { section = { books = {} } } end
         if path:find("sections/want%-to%-read") then
             return { section = { books = {
@@ -4781,9 +4750,10 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
         if id == 3 then return { id = 3, title = "Kept", hasCover = true, tags = { "cosy" } } end
         return nil, 404
     end
-    local oc_client, download = RE.OC.client, Sleep.download
+    local oc_client = RE.OC.client
     RE.OC.client = function() return client end
-    Sleep.download = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
+    local fc = sleepCompanion()
+    fc.sleepDownload = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
     io.open(dir .. "/covers/99.jpg", "wb"):close() -- a cover from an earlier pool
     W.broadcasts = {}
     Sleep.refreshed_at = nil
@@ -4795,7 +4765,15 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
     ok(#pool.items == 1 and pool.items[1].id == 3 and pool.items[1].file == "covers/3.jpg", "only the kept book: " .. tostring(#pool.items))
     ok(io.open(dir .. "/covers/3.jpg", "rb"), "its cover")
     ok(not io.open(dir .. "/covers/99.jpg", "rb"), "the old cover went")
-    ok(lastBroadcast(".SLEEP_POOL"), "the companion is told")
+    local ask = lastBroadcast(".SLEEP_REFRESH")
+    ok(ask and ask.extras.from == "up_next" and ask.extras.rules == "tag:age:18" and ask.extras.every == "0", "the companion is asked")
+    ok(ui_calls == 0 and fc.sleep_asks == 1, "the companion lists, checks and fetches; KOReader asks nothing: " .. ui_calls)
+    -- Without the right companion nothing is asked.
+    local at = Sleep.refreshed_at
+    fc.problem = "Update Orbit Companion"
+    Sleep.refreshed_at = nil
+    ok(Sleep.refresh("old companion") == false and fc.sleep_asks == 1, "an older companion: not asked")
+    fc.problem, Sleep.refreshed_at = nil, at
     local log = table.concat(W.logs, "\n")
     ok(log:find("sleep screen: pool 1 cover(s)", 1, true) and log:find("from want-to-read (the chosen list was empty)", 1, true), "logged")
     -- Not again within REFRESH_EVERY_S; never in a book.
@@ -4818,7 +4796,8 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
     S.sleep_current_file = nil
     ok(Sleep.writeCurrent(book, "off") == false, "off writes nothing")
     package.loaded["apps/filemanager/filemanagerbookinfo"] = nil
-    RE.OC.client, Sleep.download = oc_client, download
+    RE.OC.client = oc_client
+    fc.done()
     lfs.attributes, lfs.dir = saved.attributes, saved.dir
     Sleep.base_dir = nil
     S.sleep_leave_out = {}
@@ -4893,6 +4872,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     end
     local oc_client = RE.OC.client
     RE.OC.client = function() return client end
+    local fc = sleepCompanion()
     W.wifi = true
     local item
     for _, it in ipairs(m:menuItems()) do if it.text == "Sleep screen" then item = it end end
@@ -4929,10 +4909,8 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     ok(#lo == 15 and lo[3] == "Space Opera · 8", "Leave out lists them offline: " .. #lo)
     add.sub_item_table_func()[4].callback()
     ok(S.sleep_leave_out[1] == "scope:103" and Sleep.ruleLabel("scope:103") == "Short Reads (smart scope)", "rule added: " .. tostring(S.sleep_leave_out[1]))
-    -- The companion's state.json is read the same way (the shuffle bag moves past what it showed).
-    local st = io.open(dir .. "/state.json", "wb"); st:write('{"v":1,"shown":103,"changed_at":5000}'); st:close()
-    ok(Sleep.state().shown == 103, "state.json read")
     RE.OC.client, jm.decode = oc_client, stub_decode
+    fc.done()
     Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil, nil
     S.sleep_mode, S.sleep_from, S.sleep_leave_out = "off", "up_next", {}
     sh("rm -rf", dir)
@@ -4979,9 +4957,10 @@ test("sleep screen: 24 covers ready whatever the source; Every sleep retires the
         if path:find("sections/up%-next%-in%-series") then return { section = { books = books } } end
         return nil, 404
     end
-    local oc_client, download = RE.OC.client, Sleep.download
+    local oc_client = RE.OC.client
     RE.OC.client = function() return client end
-    Sleep.download = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
+    local fc = sleepCompanion()
+    fc.sleepDownload = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
     W.wifi = true
     local function build()
         Sleep.refreshed_at = nil
@@ -5013,7 +4992,8 @@ test("sleep screen: 24 covers ready whatever the source; Every sleep retires the
     state('{"v":1,"shown":40,"changed_at":1,"shows":{"40":3}}')
     ids = build()
     ok(#ids == 1 and ids[1] == 40, "kept cycling: " .. table.concat(ids, ","))
-    RE.OC.client, Sleep.download, jm.decode = oc_client, download, stub_decode
+    RE.OC.client, jm.decode = oc_client, stub_decode
+    fc.done()
     lfs.attributes, lfs.dir = saved.attributes, saved.dir
     Sleep.base_dir = nil
     S.sleep_mode, S.sleep_from, S.sleep_hours, S.sleep_leave_out = "off", "up_next", 6, {}

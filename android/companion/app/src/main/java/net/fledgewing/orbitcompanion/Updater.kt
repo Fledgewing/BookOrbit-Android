@@ -54,6 +54,21 @@ object Updater {
 
     private fun log(msg: String) = OLog.i("update: $msg")
 
+    /** The plugin's "Check for updates" (android/docs/INTERFACE.md): it downloads nothing itself. */
+    const val ACTION_UPDATE = "${Contract.PACKAGE}.action.UPDATE"
+
+    /**
+     * The plugin asked: a check by hand. The plugin and the companion ship together, so a companion
+     * that is up to date still brings the plugin of its own release when the one on disk is older
+     * (PatchInstaller.afterAppUpdate); a newer companion brings it after its own install.
+     */
+    fun onPluginAsked(ctx: Context, why: String) {
+        log("the plugin asked for a check ($why)")
+        check(ctx, interactive = true, why = "plugin: $why") { result ->
+            if (!result.startsWith("installing")) PatchInstaller.afterAppUpdate(ctx)
+        }
+    }
+
     /** The install window key (Pin.installStarted) for app updates. */
     const val INSTALL_KEY = "update"
 
