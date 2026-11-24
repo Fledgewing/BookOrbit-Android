@@ -55,6 +55,8 @@ local function writeFile(path, s)
     return true
 end
 
+OC.readFile, OC.writeFile = readFile, writeFile
+
 -- FNV-1a, 32 bits, as hex: the entry's file name (the key is stored inside and checked).
 function OC.hash(s)
     local bit = require("bit")
@@ -89,12 +91,24 @@ function OC.index()
     return d
 end
 
+-- Written by a forked child (Background.run): the child has the index as it was at the fork and
+-- encodes and writes it there, so the UI thread never encodes it (v0.11.3 on the M8C: the index
+-- held the mirror's queue, and encoding it after every saved item froze KOReader). One save at a
+-- time, in order; a save asked for meanwhile follows it.
 function OC.saveIndex()
     if OC.child or OC._save_pending then return end
     OC._save_pending = true
     UIManager:scheduleIn(3, function()
-        OC._save_pending = nil
-        writeFile(OC.dir() .. "/index.lua", Cache.encode(OC.index()))
+        if OC._saving then OC._save_pending = nil; OC._save_again = true; return end
+        OC._save_pending, OC._saving = nil, true
+        local file = OC.dir() .. "/index.lua"
+        Background.run("cache index", function()
+            return writeFile(file, Cache.encode(OC.index())) and "ok" or "failed"
+        end, 60, function(out, berr)
+            OC._saving = nil
+            if out ~= "ok" then log("cache: index not saved:", tostring(berr or out)) end
+            if OC._save_again then OC._save_again = nil; OC.saveIndex() end
+        end)
     end)
 end
 
@@ -143,7 +157,11 @@ function OC.get(key)
     local e = Cache.decode(readFile(file) or "")
     if type(e) ~= "table" or e.key ~= key or type(e.body) ~= "table" then
         if meta then OC.index().entries[key] = nil end
-        return nil
+        -- The offline mirror's copy (ko/mirror.lua), outside the index. Not memoized: the
+        -- worker rewrites it behind the UI thread's back.
+        e = Mirror and Cache.decode(readFile(Mirror.file(key)) or "")
+        if type(e) ~= "table" or e.key ~= key or type(e.body) ~= "table" then return nil end
+        return e
     end
     if meta and meta.validated_at then e.validated_at = math.max(e.validated_at or 0, meta.validated_at) end
     -- Stale (a write since): checked at once, but its age stays its real age.
@@ -160,15 +178,21 @@ function OC.put(client, key, body, path)
     local file = OC.dir() .. "/" .. OC.hash(key) .. ".lua"
     if not writeFile(file, s) then return end
     remember(key, e)
-    if inChild(client) then return OC.event("stored", { key = key }) end
-    OC.adopt(key, e, #s)
+    local ids = {}
+    for id in pairs(Cache.ids(body)) do table.insert(ids, id) end
+    -- From a child, what the index needs comes with the event: the parent never reads the body back.
+    if inChild(client) then return OC.event("stored", { key = key, bytes = #s, ids = ids, path = path, at = t }) end
+    OC.adopt(key, e, #s, ids)
 end
 
--- The parent's index learns an entry, and the cache stays under its caps.
-function OC.adopt(key, e, bytes)
+-- The parent's index learns an entry, and the cache stays under its caps. ids: the book ids in
+-- the body (Cache.ids), when the caller has them (then e needs no body).
+function OC.adopt(key, e, bytes, ids)
     local idx = OC.index()
-    local ids = {}
-    for id in pairs(Cache.ids(e.body)) do table.insert(ids, id) end
+    if not ids then
+        ids = {}
+        for id in pairs(Cache.ids(e.body)) do table.insert(ids, id) end
+    end
     local old = idx.entries[key]
     local old_bytes, old_kind = old and old.bytes or 0, old and (old.keep and "kept" or "cache")
     local mirror = (old and old.mirror) or e.mirror or nil
@@ -217,7 +241,10 @@ function OC.drainEvents()
         local ev = Cache.decode(readFile(dir .. "/" .. name) or "")
         os.remove(dir .. "/" .. name)
         if type(ev) == "table" then
-            if ev.kind == "stored" and ev.key then
+            if ev.kind == "stored" and ev.key and ev.bytes then
+                OC.memo[ev.key] = nil
+                OC.adopt(ev.key, { fetched_at = ev.at, validated_at = ev.at, path = ev.path }, ev.bytes, ev.ids or {})
+            elseif ev.kind == "stored" and ev.key then
                 OC.memo[ev.key] = nil
                 local file = OC.dir() .. "/" .. OC.hash(ev.key) .. ".lua"
                 local raw = readFile(file)
@@ -265,7 +292,7 @@ function OC.lookup(client, key, path)
     if not w then return nil end
     local owner = OC.owner(client)
     local pages, oldest = {}, nil
-    local size = Mirror and Mirror.pageSize and Mirror.pageSize(w.identity) or nil
+    local size = Mirror and Mirror.pageSize and Mirror.pageSize(w.identity, owner, client.server_url) or nil
     local first = OC.get(Cache.key({ account = owner, server = client.server_url, method = "GET", path = Cache.mirrorPage(w.identity, 1, size) }))
     if not first then return nil end
     pages[1] = first.body
@@ -385,9 +412,14 @@ function OC.pump()
         return OC.pump()
     end
     OC.running = true
+    -- The child asks, compares with what is saved and saves a changed reply itself; the UI thread
+    -- gets a few fields back (never the body: decoding and re-encoding it froze the UI on the M8C).
     Background.run("cache check", function()
-        local b, e = client:requestBlocking(job.method, job.path, nil, job.headers)
-        return Cache.encode({ body = b, err = e and tostring(e) or nil })
+        OC.child = true
+        local okc, res = pcall(OC.checkInChild, client, job)
+        OC.child = nil
+        if not okc then return Cache.encode({ err = "check failed: " .. tostring(res) }) end
+        return Cache.encode(res)
     end, 60, function(out)
         OC.running = nil
         OC.inflight[job.key] = nil
@@ -397,23 +429,39 @@ function OC.pump()
     end)
 end
 
+-- In the check's child: { err } | { unchanged, saved (an index entry of its own) } |
+-- { changed, bytes, ids, at } (the new body is saved under job.key).
+function OC.checkInChild(client, job)
+    local b, e = client:requestBlocking(job.method, job.path, nil, job.headers)
+    if type(b) ~= "table" then return { err = e and tostring(e) or "no answer" } end
+    local entry = OC.lookup(client, job.key, job.path)
+    if not Cache.revalidate(entry and entry.body, b, 200) then
+        return { unchanged = true, saved = (entry and not entry.from_mirror) or nil }
+    end
+    local t = nowT()
+    local body = Cache.settle(entry and entry.body, b, job.mode)
+    local s = Cache.encode({ key = job.key, body = body, fetched_at = t, validated_at = t, path = job.path })
+    if not writeFile(OC.dir() .. "/" .. OC.hash(job.key) .. ".lua", s) then return { err = "not saved" } end
+    local ids = {}
+    for id in pairs(Cache.ids(body)) do table.insert(ids, id) end
+    return { changed = true, bytes = #s, ids = ids, at = t }
+end
+
 function OC.landed(client, job, r)
     local short = tostring(job.path):gsub("^/koreader/plugin/catalog", "")
-    if type(r) ~= "table" or type(r.body) ~= "table" then
+    if type(r) ~= "table" or not (r.changed or r.unchanged) then
         OC.failed[job.key] = true
         log("cache:", short, "check failed (network:", tostring(type(r) == "table" and r.err or "no answer") .. "); the saved copy stays")
         return
     end
     OC.failed[job.key] = nil
-    local entry = OC.lookup(client, job.key, job.path)
-    local changed = Cache.revalidate(entry and entry.body, r.body, 200)
-    if job.mirror then pcall(OC.mirrorChecked, client, job, entry, r.body, changed) end
-    if not changed then
-        if entry and not entry.from_mirror then OC.touch(job.key, true) end
+    if r.unchanged then
+        if r.saved then OC.touch(job.key, true) end
         log("cache:", short, "checked: unchanged")
         return
     end
-    OC.put(client, job.key, Cache.settle(entry and entry.body, r.body, job.mode), job.path)
+    OC.memo[job.key] = nil
+    OC.adopt(job.key, { fetched_at = r.at, validated_at = r.at, path = job.path }, r.bytes, r.ids or {})
     if OC.onScreen(job.key) then
         log("cache:", short, "checked: changed; redrawing once the checks are done")
         OC.redraw_soon(job.key)
@@ -661,9 +709,11 @@ function OC.storageItems()
         table.insert(items, { k = "e:" .. k, bytes = e.bytes or 0, at = e.used_at or 0, kind = e.keep and "kept" or "cache" })
     end
     table.insert(items, { k = "index", bytes = fileSize(OC.dir() .. "/index.lua"), at = 0, kind = "kept" })
+    -- The offline mirror's lists and details (the worker counts them).
+    if Mirror then table.insert(items, { k = "mirror", bytes = tonumber(Mirror.status().bytes) or 0, at = 0, kind = "kept" }) end
     local dir = OC.coverDir()
     if lfs_ok and dir and lfs.attributes(dir, "mode") == "directory" then
-        local keep = S.mirror_covers and Mirror and Mirror.state().cover_keep or {}
+        local keep = S.mirror_covers and Mirror and Mirror.coverKeep() or {}
         for name in lfs.dir(dir) do
             if name:match("%.jpg$") then
                 local a = lfs.attributes(dir .. "/" .. name)

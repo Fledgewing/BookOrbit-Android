@@ -23,6 +23,7 @@ CrossInk 2.x only; 1.6 is retired).
 | 6a | **Group catalog lists by series or author on Xteink**, matching Android 0.6.0. | X4 Pro, X4; not X3 | approved | [local-first](docs/design/local-first/DESIGN.md), [mockups](https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk) |
 | 11 | **Sleep screen**: a recommended BookOrbit cover that changes every X hours, or the current book's cover, with optional text and the battery level at sleep. | Android, X4 Pro, X4; not X3 | building: Android (Xteink next) | [lock-screen](docs/design/lock-screen.md) |
 | 12 | **Reading fonts**: an optional Setup item, off by default, that installs Bitter and Literata into KOReader. On Xteink both are already there (Bitter built in, Literata in CrossInk's Download Fonts). | Android | building | [reading-fonts](docs/design/reading-fonts.md) |
+| 13 | **KOReader never freezes on background work**: the offline mirror, cache checks and other network, parse and file work run outside KOReader's UI thread (a child process now, the companion next), so menus stay responsive during a Full refresh. | Android | building: step 1 (child process) | [companion-worker](docs/design/companion-worker.md) |
 
 ## Later
 
