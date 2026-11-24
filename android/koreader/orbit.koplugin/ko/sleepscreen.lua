@@ -187,7 +187,7 @@ function Sleep.kick(why)
     end)
 end
 
--- The login travels only in the package-targeted broadcast (Companion.send), never in a file.
+-- The login travels only in the caller-checked call to the verified companion (Companion.send), never in a file.
 local function ask(client, extras)
     extras.server, extras.user, extras.userkey = client.server_url, client.username, client.userkey
     Companion.send(Companion.ACTION.SLEEP_REFRESH, extras)
