@@ -240,6 +240,49 @@ class CacheWorkerTest {
         assertTrue("took $secs s: $line", secs < 5)
     }
 
+    /**
+     * rc.6 showed "2,805 of 197,709" and "covers 0/57,409" for about 10,300 books: totals that grew
+     * with every list page and counted a cover per list a book is in. Now each book's detail and
+     * cover is one job, the total is fixed once the library's size is known, and the % only rises.
+     */
+    @Test fun eachBookOnceAndTheProgressNeverGoesDown() {
+        val root = Files.createTempDirectory("orbit-cache").toFile()
+        val n = 250
+        // Every book in the all-books list and again in three author lists.
+        val http = CacheWorker.Http { url, _, sink, _ ->
+            val path = url.removePrefix(S + C)
+            val all = Regex("^/books\\?order=asc&page=(\\d+)&size=100&sort=title$").find(path)
+            val author = Regex("^/books\\?author=(\\d)&page=(\\d+)&size=100$").find(path)
+            when {
+                path.endsWith("/thumbnail") -> { sink!!.writeBytes(byteArrayOf(1)); CacheWorker.Reply(200, etag = "\"e\"", contentType = "image/jpeg") }
+                all != null -> { val p = all.groupValues[1].toInt(); CacheWorker.Reply(200, books(((p - 1) * 100 + 1..minOf(n, p * 100)).toList(), n).toByteArray()) }
+                author != null -> { val p = author.groupValues[2].toInt(); CacheWorker.Reply(200, books(((p - 1) * 100 + 1..minOf(n, p * 100)).toList(), n).toByteArray()) }
+                path.startsWith("/sections/authors") -> CacheWorker.Reply(200, JSONObject().put("total", 3).put("items", org.json.JSONArray(listOf(1, 2, 3).map { JSONObject().put("id", it.toString()) })).toString().toByteArray())
+                path.matches(Regex("^/books/\\d+$")) -> CacheWorker.Reply(200, JSONObject().put("id", path.substringAfterLast('/').toInt()).toString().toByteArray())
+                else -> CacheWorker.Reply(404)
+            }
+        }
+        val pcts = ArrayList<Long?>()
+        val asked = ArrayList<String>()
+        val counting = CacheWorker.Http { url, h, sink, max -> synchronized(asked) { asked.add(url) }; http.get(url, h, sink, max) }
+        val w2 = CacheWorker(root, counting, log = {}, sleep = {}, parallel = 3, openSql = { JdbcSql(it) }, onProgress = { synchronized(pcts) { pcts.add(it) } })
+        assertEquals("finished", w2.run(plan(root, "full", mapOf("all_books" to "$C/books?order=asc&sort=title", "seed_lists" to emptyList<String>(),
+            "seed_details" to emptyList<Long>())), creds))
+        val details = asked.filter { it.matches(Regex(".*/books/\\d+$")) }
+        val covers = asked.filter { it.endsWith("/thumbnail") }
+        assertEquals("each book's detail once", n, details.size); assertEquals(n, details.toSet().size)
+        assertEquals("each book's cover once", n, covers.size)
+        val st = LuaValue.parse(File(w2.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        // 3 all-books pages + 1 section page + 3 x 3 author pages + 250 details + 250 covers.
+        assertEquals(513L, st["total"]); assertEquals(100L, st["pct"]); assertEquals(250L, st["cover_total"])
+        val shown = pcts.dropLast(1).filterNotNull()
+        assertTrue("rises: $shown", shown.zipWithNext().all { (a, b) -> b >= a })
+        assertTrue("never 100 before the end: $shown", shown.dropLast(1).all { it < 100 })
+        assertNull("the end clears it", pcts.last())
+        assertEquals("Saving BookOrbit for offline · 37%", MirrorLogic.progressLine(37))
+        assertNull(MirrorLogic.progressLine(null))
+    }
+
     /** M8C: the series index never answered in pages of 100; authors never at all. */
     @Test fun retriedInSmallerPagesThenSkipped() {
         val root = Files.createTempDirectory("orbit-cache").toFile()

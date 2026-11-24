@@ -210,6 +210,15 @@ object StatusPanel {
         WhatsNew.line(Attention.whatsNew(a).isNotEmpty(), BuildConfig.VERSION_NAME)?.let { t ->
             root.addView(Ui.row(a, t, onClick = { a.startActivity(Intent(a, AttentionActivity::class.java)) }).apply { tag = "status:whats_new" })
         }
+        // A Full refresh saving for offline: its % (the same number the plugin's badge shows), redrawn
+        // when it changes.
+        Worker.progressLine()?.let { line ->
+            root.addView(Ui.text(a, line, 17f).apply { tag = "status:offline" })
+            fun watch() {
+                root.postDelayed({ if (!a.isFinishing) { if (Worker.progressLine() != line) redraw() else watch() } }, 3_000)
+            }
+            watch()
+        }
         // A background update is ready: "Install" any time here (the notification waits while reading).
         Updater.readyToInstall()?.let { ready ->
             root.addView(Ui.row(a, "App version", "Update ready: v${ready.first}", Ui.button(a, "Install", heightDp = 56, sp = 18f) {

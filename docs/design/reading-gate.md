@@ -9,6 +9,12 @@ Exceptions, only where the reader acts inside the book: menus they open (and wha
 show), the end-of-book sheet (they reached the end), and Sync and sleep (they asked; it runs as
 the screen goes off).
 
+One exception the user asked for outside that rule: the Full refresh's % badge
+(`ko/badge.lua`, [sqlite-cache.md "Progress display"](sqlite-cache.md#progress-display-the-users-design)).
+In a book it is a few characters in the bottom-left corner, a toast that every tap goes through,
+never taking focus and redrawn only in its own rectangle at most every 3 s. Its start popup and
+its full message still go through the gate.
+
 ## The gate
 
 **Plugin.** `reading()` (`ko/home.lua`) is true when a document is open, KOReader is in front
@@ -56,7 +62,8 @@ Every `UIManager:show`, BookOrbit toast, `Jni.startActivity` and restart in `ko/
 | `ko/start.lua` `showWakeBanner` | "Can't reach BookOrbit" | `Gate.show`, dropped after 1 min |
 | `ko/endofbook.lua` next-sync downloads | "Downloaded: title" | `Gate.show` |
 | `ko/endofbook.lua` sheet and its notes | end-of-book sheet | exception: the reader reached the end |
-| `ko/cache.lua` `OC.note`, Full refresh note | BookOrbit toasts | `Gate.installToast` wraps `bookorbit_toast.show`/`error` |
+| `ko/badge.lua` Full refresh % badge | "37%", "Done" | exception: passive toast, the user's design |
+| `ko/cache.lua` `OC.note` | BookOrbit toasts | `Gate.installToast` wraps `bookorbit_toast.show`/`error` |
 | `ko/cache.lua` offline miss | "This page isn't saved" ConfirmBox | user action (paging a list) |
 | `ko/localfirst.lua` Remove | "This book is open" | user action |
 | `ko/recommended.lua`, `ko/menu.lua`, `ko/companion_ui.lua`, `ko/test_sync_path.lua` | menus and their results | user action (menus) |

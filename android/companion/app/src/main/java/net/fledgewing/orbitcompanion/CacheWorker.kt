@@ -33,6 +33,8 @@ class CacheWorker(
     private val parallel: Int = PARALLEL,
     private val openSql: (File) -> Sql = { AndroidSql(it) },
     private val clockMs: () -> Long = { System.currentTimeMillis() },
+    /** The run's % (never down; 100 at the end), each time the status is written; null when it ends. */
+    private val onProgress: (Long?) -> Unit = {},
 ) {
     /** A GET. sink: write the body there (a cover) instead of returning it. */
     fun interface Http {
@@ -547,7 +549,10 @@ class CacheWorker(
             "bytes" to store.fileBytes(), "started_at" to metaLong("run_started"), "why" to why)
     }
 
-    private fun writeStatus(r: Run, running: Boolean) = write(File(mirrorDir, "status.lua"), LuaValue.encode(status(r, running)))
+    private fun writeStatus(r: Run, running: Boolean): Boolean {
+        onProgress(if (running && store.meta("run_op") == "full") r.pct else null)
+        return write(File(mirrorDir, "status.lua"), LuaValue.encode(status(r, running)))
+    }
 
     /** The run's counts, from the jobs table; the % never goes down and is 100 only at the end. */
     private fun recount(r: Run, finished: Boolean) {

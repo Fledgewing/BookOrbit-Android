@@ -20,7 +20,7 @@
 -- with the plugin: no run without it (Companion.workerProblem), and no fallback.
 ---------------------------------------------------------------------------------------------
 
-Mirror = { POLL_S = 3, NOTE_S = 8, DEAD_S = 90, SENTINEL = "987654321" }
+Mirror = { POLL_S = 3, DEAD_S = 90, SENTINEL = "987654321" }
 local real_remove = os.remove
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
@@ -177,41 +177,13 @@ function Mirror.fullRunning()
     return Mirror.active == true and Mirror.busy == true and not s.revalidating and s.op ~= "revalidate"
 end
 
--- "Saving 512 of 8,551 for offline · covers 12/40": the run's own counts, from the companion.
-function Mirror.progressText()
-    local s = Mirror.status()
-    local done, total = s.done or 0, math.max(s.total or 0, s.done or 0)
-    local t
-    if total == 0 then t = _("Full refresh · getting ready to save for offline")
-    else t = string.format(_("Full refresh · saving %s of %s for offline"), Cache.count(done), Cache.count(total)) end
-    if (s.cover_total or 0) > 0 then
-        local c = s.covers or {}
-        t = t .. string.format(_(" · covers %s/%s"), Cache.count((c.ok or 0) + (c.not_modified or 0) + (c.failed or 0)), Cache.count(s.cover_total))
-    end
-    return t
-end
-
--- The indicator: up for the whole run a Full refresh was pressed for, with the run's progress;
--- shown again at every poll for longer than the poll, so it never drops between two of them (a
--- tap closes it until the next poll). Down when the run finishes, pauses or fails.
-function Mirror.indicate()
-    if not (Mirror.manual and Mirror.active) then return end
-    Mirror.indicator_at = nowT()
-    OC.note(Mirror.progressText(), Mirror.NOTE_S)
-end
-
-function Mirror.indicatorDown()
-    if not Mirror.indicator_at then return end
-    Mirror.indicator_at = nil
-    pcall(function() require("bookorbit_toast").dismiss() end) -- gate: bookorbit_toast is gated (Gate.installToast)
-end
-
 -- A Full refresh pressed while one is saving: keep that run and show where it is.
 function Mirror.showProgress(why)
     local s = Mirror.status()
     Mirror.manual = true
     log("mirror: Full refresh already running (" .. tostring(why) .. "); kept,", s.done or 0, "of", s.total or 0, "saved")
-    Mirror.indicate()
+    if not Badge.running then Badge.start(false, s) end
+    Badge.expand()
 end
 
 -- While a run is on: its status, the indicator, a network that went, a companion that went.
@@ -239,7 +211,7 @@ function Mirror.poll()
             Mirror.polling = nil
             return Mirror.ran(nil)
         end
-        Mirror.indicate()
+        Badge.update(Mirror._status)
         UIManager:scheduleIn(Mirror.POLL_S, tick)
     end
     UIManager:scheduleIn(Mirror.POLL_S, tick)
@@ -260,13 +232,6 @@ function Mirror.launch(op, reason)
         return false
     end
     Mirror.blocked = nil
-    -- The companion reads the lists to save from the index file: a save on its way lands first.
-    if (OC._save_pending or OC._saving) and (Mirror.index_waits or 0) < 15 then
-        Mirror.index_waits = (Mirror.index_waits or 0) + 1
-        UIManager:scheduleIn(1, function() if not Mirror.busy then Mirror.launch(op, reason) end end)
-        return true
-    end
-    Mirror.index_waits = nil
     local cat = Mirror.catalog()
     local client = cat and cat.client
     if not client then Mirror.stop("no BookOrbit catalog"); return false end
@@ -278,8 +243,7 @@ function Mirror.launch(op, reason)
         log("mirror: running;", op == "resume" and ((s.left or 0) .. " to go") or op, "; Wi-Fi held until it ends")
     end
     if op == "full" then
-        Mirror._status = { v = 3, op = "full", at = s.at, lib_version = s.lib_version, done = 0, total = 0, left = 1,
-            bytes = s.bytes, cover_keep_n = s.cover_keep_n }
+        Mirror._status = { v = 4, op = "full", at = s.at, lib_version = s.lib_version, done = 0, total = 0, left = 1, pct = 0 }
     end
     local plan = Mirror.plan(cat, op, reason)
     real_remove(Mirror.stopFile())
@@ -291,7 +255,9 @@ function Mirror.launch(op, reason)
     -- The login goes in the broadcast only (to the companion's package): never in a file or the log.
     Companion.send(Companion.ACTION.MIRROR, { reason = op .. ": " .. tostring(reason), server = client.server_url,
         user = client.username, userkey = client.userkey })
-    Mirror.indicate()
+    -- The progress: a Full refresh (or its run resumed) shows the badge; a Refresh's recheck doesn't.
+    if op == "full" then Badge.start(Mirror.manual, Mirror._status)
+    elseif op == "resume" and Mirror.status().op == "full" and not Badge.running then Badge.start(false, Mirror.status()) end
     Mirror.poll()
     return true
 end
@@ -324,9 +290,9 @@ function Mirror.ran(r)
     local nxt = Mirror.next
     Mirror.next = nil
     if nxt then return Mirror.launch(nxt.op, nxt.reason) end
-    if s.limit_note and Mirror.manual and s.limit_note.at and nowT() - s.limit_note.at < 60 then
-        Mirror.indicatorDown()
-        OC.note(s.limit_note.text, 5)
+    if s.limit_note and s.limit_note.at and nowT() - s.limit_note.at < 60 then
+        -- The storage limit stopped it: the badge says so (no other note).
+        Badge.finish(s.limit_note.text, s)
         Mirror.manual = nil
     end
     if r.why == "finished" or r.why == "busy" then return Mirror.finish(r) end
@@ -344,7 +310,7 @@ function Mirror.running() return Mirror.active == true end
 
 function Mirror.stop(why)
     if Mirror.busy then OC.writeFile(Mirror.stopFile(), "stop") end
-    Mirror.indicatorDown()
+    Badge.finish(_("Paused · it goes on when BookOrbit answers"))
     if not Mirror.active then return end
     Mirror.active = nil
     log("mirror: paused (" .. why .. "),", Mirror.status().left or 0, "left; it resumes at the next network up, wake or Home")
@@ -354,9 +320,9 @@ end
 function Mirror.finish(r)
     local was = Mirror.active
     Mirror.active = nil
-    Mirror.indicatorDown()
+    if r and r.why == "finished" then Badge.finish(nil, r.status)
+    elseif Badge.running then Badge.running = nil; Badge.close() end
     if not was then return end
-    if r and r.saved and Mirror.manual and not Mirror.status().limit_note then OC.note(Mirror.savedText(), 3) end
     Mirror.manual = nil
     Wifi.release("mirror")
     -- The saved details now carry every book's file hash: copies that changed are replaced next.

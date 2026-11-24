@@ -82,11 +82,13 @@ local NEEDS = {
     { "datastorage.lua", { "getSettingsDir", "getDocSettingsHashDir" } },
     { "frontend/ui/event.lua", { "new" } },
     { "frontend/ui/time.lua", { "now", "to_s" } },
-    { "frontend/ui/font.lua", { "getFace" } },
+    { "frontend/ui/font.lua", { "getFace", { "xx_smallinfofont", F } } },
+    -- The Full refresh badge (ko/badge.lua): a toast (taps go on through it) that redraws only its rectangle.
+    { "frontend/ui/uimanager.lua", { { "widget.toast", T } } },
     { "frontend/ui/size.lua", { { "padding", F }, { "radius", F }, { "line", F }, { "border", F } } },
     -- The end-of-book sheet's footer: one ButtonTable row without separators.
     { "frontend/ui/widget/buttontable.lua", { { "zero_sep", F }, { "sep_width", F } } },
-    { "frontend/ui/geometry.lua", { "new" } },
+    { "frontend/ui/geometry.lua", { "new", "contains" } },
     { "frontend/ui/gesturerange.lua", { { "GestureRange", T } } },
     { "frontend/socketutil.lua", { "set_timeout", "reset_timeout" } },
     { "frontend/logger.lua", { { "info", T }, { "warn", T } } },
