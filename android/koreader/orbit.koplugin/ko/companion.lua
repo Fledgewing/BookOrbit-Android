@@ -19,6 +19,8 @@ Companion.ACTION = {
     STORAGE = Companion.PACKAGE .. ".action.STORAGE",
     -- Keep copies current: the companion finds the changed copies (Copies.ask).
     COPIES = Companion.PACKAGE .. ".action.COPIES",
+    -- The sleep screen's pool: the companion lists, checks and fetches the covers (Sleep.refresh).
+    SLEEP_REFRESH = Companion.PACKAGE .. ".action.SLEEP_REFRESH",
     -- Updates: the companion checks, installs itself and then the plugin of its release.
     UPDATE = Companion.PACKAGE .. ".action.UPDATE",
     NET_UP = Companion.PACKAGE .. ".action.NET_UP",

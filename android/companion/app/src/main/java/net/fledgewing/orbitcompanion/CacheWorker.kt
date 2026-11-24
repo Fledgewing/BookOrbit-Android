@@ -236,7 +236,8 @@ class CacheWorker(
 
     private var eventSeq = 0
 
-    private fun event(ev: Map<String, Any?>) {
+    /** An answer for the plugin in events/ (it drains them while it waits for one). */
+    fun event(ev: Map<String, Any?>) {
         eventSeq++
         write(File(eventsDir, "${now()}-0-c$eventSeq.lua"), LuaValue.encode(ev))
     }

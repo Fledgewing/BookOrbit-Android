@@ -245,6 +245,8 @@ function OC.drainEvents()
                 if type(e) == "table" and e.key == ev.key then OC.adopt(ev.key, e, #raw) end
             elseif ev.kind == "storage" then
                 OC.storageCounted(ev)
+            elseif ev.kind == "sleep_pool" and Sleep then
+                Sleep.landed(ev)
             elseif ev.kind == "copies" and Copies then
                 Copies.found(ev)
             elseif ev.kind == "checked" and ev.key then
@@ -428,7 +430,8 @@ function OC.watchChecks()
             log("copies: the companion didn't answer the check")
             Copies.asked = nil
         end
-        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) then OC.watching = nil; return end
+        local sleep_waits = Sleep and Sleep.waited(t)
+        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) and not sleep_waits then OC.watching = nil; return end
         UIManager:scheduleIn(1, tick)
     end
     UIManager:scheduleIn(1, tick)

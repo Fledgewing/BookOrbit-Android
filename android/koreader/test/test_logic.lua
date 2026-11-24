@@ -1369,35 +1369,11 @@ test("sleep screen: text and battery never share a corner (L3b2)", function()
     eq(SP.batteryCorner("top_left", "bottom"), "top_left")
 end)
 
-test("sleep screen: the dashboard section reply (recorded) and which books count (R2)", function()
-    local f = io.open(here .. "/../../../shared/fixtures/bookorbit/catalog-dashboard-section.want-to-read.json", "rb")
-    local body = JSON.decode(f:read("*a")); f:close()
-    local books = SP.sectionBooks(body)
-    ok(#books >= 1, "books")
-    for _, b in ipairs(books) do ok(tonumber(b.id), "id"); eq(type(b.hasCover), "boolean") end
-    eq(#SP.sectionBooks({}), 0); eq(#SP.sectionBooks(nil), 0)
-    ok(SP.eligible(books[1]))
-    eq(SP.eligible({ id = 3, hasCover = false }), false)
-    eq(SP.eligible({ id = 3, hasCover = true, readStatus = "read" }), false)
-    eq(SP.eligible({ id = 3, hasCover = true }, 3), false, "the book open now")
-    eq(SP.eligible({ id = 3, hasCover = true, readStatus = "want_to_read" }), true)
+-- Which books count (R2), Leave out (X1-X7), the shuffle bag (R1b) and Every sleep's batch (R4b):
+-- Orbit Companion's (SleepPoolTest.kt).
+test("sleep screen: the pickers' section entries", function()
     local e = SP.entries({ items = { { id = "12", title = "Romance", count = 40 }, { id = "x", title = "bad" } } })
     eq(#e, 1); eq(e[1].id, 12); eq(e[1].count, 40)
-end)
-
-test("sleep screen: Leave out is OR-ed, tags ignore case, unchecked fails closed (X1-X7)", function()
-    local rules = { "tag:age:18", "scope:3" }
-    local members = { ["scope:3"] = { [10] = true } }
-    eq(SP.check(10, rules, members, {}), "out", "in the scope")
-    eq(SP.check(11, rules, members, { " AGE:18 " }), "out", "tag, any case")
-    eq(SP.check(11, rules, members, { "fantasy" }), "keep")
-    eq(SP.check(11, rules, members, nil), "unknown", "no detail yet")
-    eq(SP.check(11, rules, {}, { "fantasy" }), "unknown", "scope not listed yet")
-    eq(SP.check(10, rules, members, nil), "out", "a known match wins over an unchecked rule")
-    eq(SP.check(11, {}, {}, nil), "keep", "no rules")
-    eq(SP.needsTags(rules), true); eq(SP.needsTags({ "collection:2" }), false)
-    eq(#SP.memberRules(rules), 1)
-    eq(SP.due(nil, 100), true); eq(SP.due(100, 100 + 86399), false); eq(SP.due(100, 100 + 86400), true); eq(SP.due(200, 100), true)
 end)
 
 test("sleep screen: the tag picker counts tags in cached details", function()
@@ -1405,50 +1381,12 @@ test("sleep screen: the tag picker counts tags in cached details", function()
     eq(#t, 2); eq(t[1].tag, "age:18"); eq(t[1].count, 2); eq(t[1].label, "Age:18"); eq(t[2].tag, "cosy")
 end)
 
-test("sleep screen: the shuffle bag never repeats until used up (R1b)", function()
-    local rand = seq({ 1, 3, 2, 1, 2 })
-    local bag = { order = {}, pos = 0 }
-    SP.bagSync(bag, { 1, 2, 3, 4 }, rand)
-    eq(#bag.order, 4)
-    local seen = {}
-    for _, id in ipairs(bag.order) do ok(not seen[id], "unique"); seen[id] = true end
-    local first = bag.order[1]
-    local next1 = SP.bagNext(bag, rand)
-    eq(#next1, 4, "nothing shown yet")
-    ok(SP.bagSeek(bag, bag.order[2]), "moves forward to the shown book")
-    eq(bag.pos, 2)
-    eq(SP.bagSeek(bag, first), false, "never back")
-    eq(SP.bagSeek(bag, bag.prev), false, "the same book again")
-    -- A member leaves before the cursor, a new one joins after it.
-    local gone = bag.order[1]
-    local keep = {}
-    for _, id in ipairs(bag.order) do if id ~= gone then table.insert(keep, id) end end
-    table.insert(keep, 9)
-    SP.bagSync(bag, keep, rand)
-    eq(#bag.order, 4); eq(bag.pos, 1, "cursor follows the removal")
-    local rest = SP.bagNext(bag, rand)
-    eq(#rest, 3)
-    local has9 = false
-    for _, id in ipairs(rest) do if id == 9 then has9 = true end end
-    ok(has9, "the new member is still to come")
-    -- Used up: shuffled again, never starting with the book just shown.
-    for i = 1, 20 do
-        local b = { order = { 1, 2, 3 }, pos = 3, prev = 3 }
-        local again, shuffled = SP.bagNext(b, function(n) return ((i + n) % n) + 1 end)
-        eq(shuffled, true); eq(#again, 3); ok(again[1] ~= 3, "not the book just shown first")
-    end
-end)
-
-test("sleep screen: pool.json is valid JSON the companion reads", function()
-    local doc = SP.poolDoc("scope:3", { { id = 5, title = 'Quote " and \\ slash', file = "covers/5.jpg" } }, 1700000000000)
+test("sleep screen: the JSON the companion reads (scopes.json, current.json) is valid", function()
+    local doc = { v = 1, at = 1700000000000, items = { { id = 5, title = 'Quote " and \\ slash', file = "covers/5.jpg" } } }
     local back = JSON.decode(SP.json(doc))
-    eq(back.v, 1); eq(back.source, "scope:3"); eq(back.at, 1700000000000)
+    eq(back.v, 1); eq(back.at, 1700000000000)
     eq(back.items[1].id, 5); eq(back.items[1].title, 'Quote " and \\ slash'); eq(back.items[1].file, "covers/5.jpg")
     eq(SP.json({ items = {} }), '{"items":[]}')
-    eq(back.server, nil); eq(back.user, nil)
-    -- The account the companion's sharp covers use (lock-screen.md L7): server and username, never the key.
-    local acct = JSON.decode(SP.json(SP.poolDoc("up_next", {}, 1, { server = "https://b.example/api/v1", user = "kid", userkey = "md5", storage_limit_mb = 100 })))
-    eq(acct.server, "https://b.example/api/v1"); eq(acct.user, "kid"); eq(acct.storage_limit_mb, 100); eq(acct.userkey, nil)
 end)
 
 -- Nothing interrupts reading (docs/design/reading-gate.md): every place in the plugin that shows
@@ -1508,25 +1446,11 @@ test("cache worker fixture: the plugin's keys, hashes, pages, cover names and en
     eq(Cache.encode({ key = e.key, body = body, fetched_at = e.fetched_at, validated_at = e.validated_at, path = e.path }), e.lua, "entry")
 end)
 
-test("sleep screen, Every sleep: a batch of 24, the used-up retired, the bag's order continued", function()
-    eq(SP.BATCH, 24); eq(SP.SHOWS_MAX, 3)
+test("sleep screen, Every sleep: a setting value", function()
     eq(SP.normalize({ sleep_hours = 0 }).sleep_hours, 0, "Every sleep is a value")
     eq(SP.normalize({ sleep_hours = "0" }).sleep_hours, 0)
     eq(SP.extras({ sleep_hours = 0 }).sleep_hours, "0")
     eq(SP.hoursLabel(0), "Every sleep"); eq(SP.hoursLabel(12), "12 h")
-    -- shows from state.json have string keys.
-    local carry, retired = SP.carry({ 5, 6, 7, 6, "8" }, { ["5"] = 3, ["6"] = 2, [8] = 4 }, 3)
-    eq(table.concat(carry, ","), "6,7", "kept in order, once")
-    ok(retired[5] and retired[8] and not retired[6], "used up")
-    carry = SP.carry({ 1, 2 }, nil, 3)
-    eq(#carry, 2, "no counts yet: all stay")
-    -- The bag: taking 4 and 6 into the batch moves past them; the next top-up starts after.
-    local bag = { order = { 3, 4, 5, 6, 7 }, pos = 1, prev = 3 }
-    SP.bagTake(bag, { [4] = true, [6] = true })
-    eq(bag.pos, 4); eq(bag.prev, nil)
-    eq(table.concat((SP.bagNext(bag, function() return 1 end)), ","), "7")
-    SP.bagTake(bag, {})
-    eq(bag.pos, 4, "nothing taken: unchanged")
 end)
 
 print(string.format("%d passed, %d failed", passed, failed))

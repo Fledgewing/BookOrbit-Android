@@ -1,0 +1,174 @@
+package net.fledgewing.orbitcompanion
+
+/**
+ * The sleep screen's pool rules (docs/design/lock-screen.md R1-R4b, X1-X7), moved from the
+ * plugin's logic/sleep_pool.lua with the pool refresh (docs/design/companion-worker.md): the
+ * sources (Pick from), the Leave out rules, the shuffle bag. Pure. [rand] is Lua's: n -> 1..n.
+ */
+object SleepPoolLogic {
+    const val BATCH = 24
+    const val BAG_MAX = 2000
+    const val LEAVE_OUT_MAX = 4000
+    const val PAGE_SIZE = 100
+    const val DAY_S = 86_400L
+    const val PROBE_MAX = 48
+    const val SHOWS_MAX = 3
+
+    /** Pick from's dashboard lists, in the order an empty one falls back (B koreader.ts:443-449). */
+    val LISTS = listOf("up_next" to "up-next-in-series", "want_to_read" to "want-to-read", "discover" to "random")
+
+    /** kind: list (with [type]), scope or collection (with [id]). */
+    data class From(val kind: String, val id: Long = 0, val type: String = "")
+
+    data class Rule(val kind: String, val id: Long = 0, val tag: String = "") {
+        val key get() = if (kind == "tag") "tag:$tag" else "$kind:$id"
+    }
+
+    private val REF = Regex("^([A-Za-z]+):(\\d+)$")
+
+    /** Lua's lower(): ASCII only, so UTF-8 bytes are never touched. */
+    fun lower(s: String): String = buildString { s.forEach { append(if (it in 'A'..'Z') it + 32 else it) } }
+
+    fun parseFrom(v: String?): From? {
+        if (v == null) return null
+        LISTS.firstOrNull { it.first == v }?.let { return From("list", type = it.second) }
+        val m = REF.find(v) ?: return null
+        val id = m.groupValues[2].toLongOrNull() ?: return null
+        return if ((m.groupValues[1] == "scope" || m.groupValues[1] == "collection") && id > 0) From(m.groupValues[1], id) else null
+    }
+
+    fun parseRule(v: String?): Rule? {
+        if (v == null) return null
+        if (v.startsWith("tag:")) {
+            val tag = lower(v.removePrefix("tag:").trim())
+            return if (tag.isEmpty()) null else Rule("tag", tag = tag)
+        }
+        val m = REF.find(v) ?: return null
+        val id = m.groupValues[2].toLongOrNull() ?: return null
+        return if ((m.groupValues[1] == "scope" || m.groupValues[1] == "collection") && id > 0) Rule(m.groupValues[1], id) else null
+    }
+
+    fun rules(lines: String?): List<String> = (lines ?: "").split('\n').mapNotNull { parseRule(it)?.key }.distinct()
+
+    fun needsTags(rules: List<String>) = rules.any { parseRule(it)?.kind == "tag" }
+
+    fun memberRules(rules: List<String>) = rules.mapNotNull { parseRule(it) }.filter { it.kind != "tag" }
+
+    /** R2: a cover, not read, not the book open now. */
+    fun eligible(b: Map<String, Any?>?, openId: Long?): Boolean {
+        val id = (b?.get("id") as? Number)?.toLong() ?: return false
+        if (b["hasCover"] == false) return false
+        if (b["readStatus"] == "read") return false
+        return openId == null || id != openId
+    }
+
+    /** One book against the rules, OR-ed: "keep", "out" or "unknown" (failed closed by the caller, X7). */
+    fun check(id: Long, rules: List<String>, members: Map<String, Set<Long>>, tags: List<String>?): String {
+        var unknown = false
+        for (r in rules) {
+            val p = parseRule(r) ?: continue
+            if (p.kind == "tag") {
+                if (tags == null) unknown = true
+                else if (tags.any { lower(it.trim()) == p.tag }) return "out"
+            } else {
+                val set = members[p.key]
+                if (set == null) unknown = true else if (id in set) return "out"
+            }
+        }
+        return if (unknown) "unknown" else "keep"
+    }
+
+    /** A member list is due: never listed, a day old, or the clock went back. */
+    fun due(at: Long?, now: Long): Boolean = at == null || now < at || now - at >= DAY_S
+
+    // ---------------------------------------------------------------- the shuffle bag (R1b)
+
+    /** order, pos (the last shown, 0 none), prev (the id shown last). */
+    class Bag(var source: String = "", var order: MutableList<Long> = ArrayList(), var pos: Int = 0, var prev: Long? = null, var at: Long? = null) {
+        fun toModel(): Map<String, Any?> {
+            val m = sortedMapOf<String, Any?>("source" to source, "order" to order.toList(), "pos" to pos.toLong())
+            prev?.let { m["prev"] = it }
+            at?.let { m["at"] = it }
+            return m
+        }
+
+        companion object {
+            fun of(m: Map<*, *>?): Bag = Bag(
+                (m?.get("source") as? String) ?: "",
+                ((m?.get("order") as? List<*>)?.mapNotNull { (it as? Number)?.toLong() } ?: emptyList()).toMutableList(),
+                (m?.get("pos") as? Number)?.toInt() ?: 0, (m?.get("prev") as? Number)?.toLong(), (m?.get("at") as? Number)?.toLong(),
+            )
+        }
+    }
+
+    /** Fisher-Yates; the book just shown never comes first. */
+    fun shuffle(ids: List<Long>, rand: (Int) -> Int, avoidFirst: Long?): MutableList<Long> {
+        val out = ids.toMutableList()
+        for (i in out.size downTo 2) {
+            val j = rand(i)
+            val t = out[i - 1]; out[i - 1] = out[j - 1]; out[j - 1] = t
+        }
+        if (avoidFirst != null && out.size > 1 && out[0] == avoidFirst) {
+            val j = 1 + rand(out.size - 1)
+            val t = out[0]; out[0] = out[j - 1]; out[j - 1] = t
+        }
+        return out
+    }
+
+    /** The companion showed [shown]: the bag moves to it, never back. */
+    fun bagSeek(bag: Bag, shown: Long?): Boolean {
+        if (shown == null || shown == bag.prev) return false
+        for (i in bag.pos + 1..bag.order.size) {
+            if (bag.order[i - 1] == shown) { bag.pos = i; bag.prev = shown; return true }
+        }
+        return false
+    }
+
+    /** Listed again: those that left come out, new ones go in at random places among the books not shown yet. */
+    fun bagSync(bag: Bag, members: List<Long>, rand: (Int) -> Int) {
+        val want = members.toHashSet()
+        val kept = HashSet<Long>()
+        val out = ArrayList<Long>()
+        var pos = bag.pos
+        bag.order.forEachIndexed { i, id ->
+            if (id in want && kept.add(id)) out.add(id) else if (i + 1 <= pos) pos--
+        }
+        for (id in members) {
+            if (kept.add(id)) {
+                val at = pos + rand(out.size - pos + 1)
+                out.add(at - 1, id)
+            }
+        }
+        bag.order = out
+        bag.pos = maxOf(0, pos)
+    }
+
+    /** The ids not shown yet; a used-up bag is shuffled again first. */
+    fun bagNext(bag: Bag, rand: (Int) -> Int): List<Long> {
+        if (bag.order.isEmpty()) return emptyList()
+        if (bag.pos >= bag.order.size) {
+            bag.order = shuffle(bag.order, rand, bag.prev)
+            bag.pos = 0
+        }
+        return bag.order.subList(bag.pos, bag.order.size).toList()
+    }
+
+    /** Every sleep (R4b): the ready covers carried on, in order, and the retired (shown [max] times). */
+    fun carry(prevIds: List<Long>, shows: Map<Long, Int>, max: Int = SHOWS_MAX): Pair<List<Long>, Set<Long>> {
+        val carry = ArrayList<Long>()
+        val retired = LinkedHashSet<Long>()
+        val seen = HashSet<Long>()
+        for (id in prevIds) {
+            if (!seen.add(id)) continue
+            if ((shows[id] ?: 0) >= max) retired.add(id) else carry.add(id)
+        }
+        return carry to retired
+    }
+
+    /** Every sleep with a bag: the books taken into the batch count as shown. */
+    fun bagTake(bag: Bag, taken: Set<Long>) {
+        var pos = bag.pos
+        for (i in bag.pos + 1..bag.order.size) if (bag.order[i - 1] in taken) pos = i
+        if (pos != bag.pos) { bag.pos = pos; bag.prev = null }
+    }
+}

@@ -4658,6 +4658,25 @@ test("sleep screen: back from a real sleep the plugin tells the companion (no se
     W.screen_on = false
 end)
 
+-- Orbit Companion refreshes the sleep screen's pool (fake_companion.lua plays SleepPoolBuilder).
+local function sleepCompanion()
+    local fc = dofile(here .. "/fake_companion.lua")
+    fc.install(RE, W, function() return nil, 404 end, UIManager)
+    local saved = { dir = RE.OC._dir, index = RE.OC._index, problem = RE.Companion.workerProblem, companion = W.companion }
+    local d = os.tmpname(); os.remove(d); sh("mkdir -p", d .. "/events")
+    RE.OC._dir, RE.OC._index, RE.OC.watching = d, nil, nil
+    RE.Companion.workerProblem = function() return fc.problem end
+    RE.Sleep.asked, RE.Sleep.scopes_asked, RE.Sleep.problem = nil, nil, nil
+    W.on_broadcast, W.companion = fc.receive, true
+    function fc.done()
+        W.on_broadcast, W.companion = nil, saved.companion
+        RE.OC._dir, RE.OC._index, RE.Companion.workerProblem = saved.dir, saved.index, saved.problem
+        RE.Sleep.asked, RE.Sleep.scopes_asked = nil, nil
+        sh("rm -rf", d)
+    end
+    return fc
+end
+
 test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next through Leave out, the current cover", function()
     local JSON = dofile(here .. "/json_mini.lua")
     capsReset()
@@ -4713,8 +4732,10 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
         for _, k in ipairs(keys) do table.insert(parts, k .. "=" .. tostring(q[k])) end
         return path .. "?" .. table.concat(parts, "&")
     end
+    local ui_calls = 0
     function client:requestBlocking(method, path)
         table.insert(calls, path)
+        if not W.in_companion then ui_calls = ui_calls + 1 end
         if path:find("sections/up%-next%-in%-series") then return { section = { books = {} } } end
         if path:find("sections/want%-to%-read") then
             return { section = { books = {
@@ -4729,9 +4750,10 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
         if id == 3 then return { id = 3, title = "Kept", hasCover = true, tags = { "cosy" } } end
         return nil, 404
     end
-    local oc_client, download = RE.OC.client, Sleep.download
+    local oc_client = RE.OC.client
     RE.OC.client = function() return client end
-    Sleep.download = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
+    local fc = sleepCompanion()
+    fc.sleepDownload = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
     io.open(dir .. "/covers/99.jpg", "wb"):close() -- a cover from an earlier pool
     W.broadcasts = {}
     Sleep.refreshed_at = nil
@@ -4743,7 +4765,15 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
     ok(#pool.items == 1 and pool.items[1].id == 3 and pool.items[1].file == "covers/3.jpg", "only the kept book: " .. tostring(#pool.items))
     ok(io.open(dir .. "/covers/3.jpg", "rb"), "its cover")
     ok(not io.open(dir .. "/covers/99.jpg", "rb"), "the old cover went")
-    ok(lastBroadcast(".SLEEP_POOL"), "the companion is told")
+    local ask = lastBroadcast(".SLEEP_REFRESH")
+    ok(ask and ask.extras.from == "up_next" and ask.extras.rules == "tag:age:18" and ask.extras.every == "0", "the companion is asked")
+    ok(ui_calls == 0 and fc.sleep_asks == 1, "the companion lists, checks and fetches; KOReader asks nothing: " .. ui_calls)
+    -- Without the right companion nothing is asked.
+    local at = Sleep.refreshed_at
+    fc.problem = "Update Orbit Companion"
+    Sleep.refreshed_at = nil
+    ok(Sleep.refresh("old companion") == false and fc.sleep_asks == 1, "an older companion: not asked")
+    fc.problem, Sleep.refreshed_at = nil, at
     local log = table.concat(W.logs, "\n")
     ok(log:find("sleep screen: pool 1 cover(s)", 1, true) and log:find("from want-to-read (the chosen list was empty)", 1, true), "logged")
     -- Not again within REFRESH_EVERY_S; never in a book.
@@ -4766,7 +4796,8 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
     S.sleep_current_file = nil
     ok(Sleep.writeCurrent(book, "off") == false, "off writes nothing")
     package.loaded["apps/filemanager/filemanagerbookinfo"] = nil
-    RE.OC.client, Sleep.download = oc_client, download
+    RE.OC.client = oc_client
+    fc.done()
     lfs.attributes, lfs.dir = saved.attributes, saved.dir
     Sleep.base_dir = nil
     S.sleep_leave_out = {}
@@ -4841,6 +4872,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     end
     local oc_client = RE.OC.client
     RE.OC.client = function() return client end
+    local fc = sleepCompanion()
     W.wifi = true
     local item
     for _, it in ipairs(m:menuItems()) do if it.text == "Sleep screen" then item = it end end
@@ -4877,10 +4909,8 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     ok(#lo == 15 and lo[3] == "Space Opera · 8", "Leave out lists them offline: " .. #lo)
     add.sub_item_table_func()[4].callback()
     ok(S.sleep_leave_out[1] == "scope:103" and Sleep.ruleLabel("scope:103") == "Short Reads (smart scope)", "rule added: " .. tostring(S.sleep_leave_out[1]))
-    -- The companion's state.json is read the same way (the shuffle bag moves past what it showed).
-    local st = io.open(dir .. "/state.json", "wb"); st:write('{"v":1,"shown":103,"changed_at":5000}'); st:close()
-    ok(Sleep.state().shown == 103, "state.json read")
     RE.OC.client, jm.decode = oc_client, stub_decode
+    fc.done()
     Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil, nil
     S.sleep_mode, S.sleep_from, S.sleep_leave_out = "off", "up_next", {}
     sh("rm -rf", dir)
@@ -4927,9 +4957,10 @@ test("sleep screen: 24 covers ready whatever the source; Every sleep retires the
         if path:find("sections/up%-next%-in%-series") then return { section = { books = books } } end
         return nil, 404
     end
-    local oc_client, download = RE.OC.client, Sleep.download
+    local oc_client = RE.OC.client
     RE.OC.client = function() return client end
-    Sleep.download = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
+    local fc = sleepCompanion()
+    fc.sleepDownload = function(_, id, path) local f = io.open(path, "wb"); f:write("jpg" .. id); f:close(); return true end
     W.wifi = true
     local function build()
         Sleep.refreshed_at = nil
@@ -4961,7 +4992,8 @@ test("sleep screen: 24 covers ready whatever the source; Every sleep retires the
     state('{"v":1,"shown":40,"changed_at":1,"shows":{"40":3}}')
     ids = build()
     ok(#ids == 1 and ids[1] == 40, "kept cycling: " .. table.concat(ids, ","))
-    RE.OC.client, Sleep.download, jm.decode = oc_client, download, stub_decode
+    RE.OC.client, jm.decode = oc_client, stub_decode
+    fc.done()
     lfs.attributes, lfs.dir = saved.attributes, saved.dir
     Sleep.base_dir = nil
     S.sleep_mode, S.sleep_from, S.sleep_hours, S.sleep_leave_out = "off", "up_next", 6, {}

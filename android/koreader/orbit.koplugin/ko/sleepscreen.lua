@@ -7,17 +7,17 @@
 -- Companion does (its screen saver, or a picture the vendor's setting shows). This file supplies
 -- what it draws, in koreader/settings/orbit-sleep/ (android/docs/INTERFACE.md "Sleep screen"):
 --
---   pool.json, covers/<id>.jpg   Recommended: up to 12 covers in the order they are shown, each
---                                already checked against Leave out. Refreshed in the background
---                                when the network is up anyway (network up, wake, Home), never at
---                                sleep and never in a book.
+--   pool.json, covers/<id>.jpg   Recommended: up to 24 covers in the order they are shown, each
+--                                already checked against Leave out. Orbit Companion refreshes them
+--                                when asked (SLEEP_REFRESH) while the network is up anyway (network
+--                                up, wake, Home), never at sleep and never in a book.
 --   current.png, current.json    Current book: the open book's cover, written once per book at
 --                                ReaderReady. It stays after the book closes: "the last book read".
 --   state.json                   Written by the companion: the cover it showed and when.
---   scopes.json                  Ours: every smart scope and collection, with counts, for the
---                                pickers (Pick from, Leave out); refreshed when one opens.
---   bag.lua, leave_out.lua       Ours: the shuffle bag of a smart scope or collection, and the
---                                member lists of Leave out's scope and collection rules.
+--   scopes.json                  The companion's: every smart scope and collection, with counts,
+--                                for the pickers (Pick from, Leave out); refreshed when one opens.
+--   bag.lua, leave_out.lua       The companion's: the shuffle bag of a smart scope or collection, and
+--                                the member lists of Leave out's scope and collection rules.
 -- Rules: logic/sleep_pool.lua. Settings: S.sleep_*, shared with the companion through SETTINGS.
 ---------------------------------------------------------------------------------------------
 
@@ -109,11 +109,6 @@ function Sleep.load(name)
     return type(v) == "table" and v or nil
 end
 
-function Sleep.save(name, v)
-    local d = Sleep.dir()
-    return d ~= nil and writeFile(d .. "/" .. name, Cache.encode(v))
-end
-
 -- A JSON file of ours or the companion's, decoded, or nil.
 -- (Not `okj and pcall(...)`: `and` keeps only pcall's first result, so the value was always lost.)
 local function readJson(path)
@@ -123,24 +118,6 @@ local function readJson(path)
     if not okj then return nil end
     local okd, v = pcall(json.decode, body)
     return (okd and type(v) == "table") and v or nil
-end
-
--- The companion's state.json: { shown = id, changed_at = ms }, or {}.
-function Sleep.state()
-    local d = Sleep.dir()
-    return readJson(d and (d .. "/state.json")) or {}
-end
-
--- pool.json's ids, in order (the batch ready now).
-function Sleep.poolIds()
-    local d = Sleep.dir()
-    local v = readJson(d and (d .. "/pool.json"))
-    local out = {}
-    for _, it in ipairs(type(v) == "table" and type(v.items) == "table" and v.items or {}) do
-        local id = type(it) == "table" and tonumber(it.id)
-        if id then table.insert(out, id) end
-    end
-    return out
 end
 
 -- The BookOrbit id of a book file on this reader (the plugin's on-device map), or nil.
@@ -195,198 +172,10 @@ end
 
 ---------------------------------------------------------------- the pool (R1-R3, X1-X7)
 
--- Every page of a smart scope's or collection's books, up to max ids (R1b, X5).
--- -> ids, books (id -> list item), or nil, err.
-function Sleep.listMembers(client, rule, max)
-    local ids, books = {}, {}
-    local q = { size = SleepPool.PAGE_SIZE, sort = "recently_added", order = "desc" }
-    if rule.kind == "scope" then q.smartScopeId = rule.id else q.collectionId = rule.id end
-    for page = 1, math.ceil(max / SleepPool.PAGE_SIZE) do
-        q.page = page
-        local body, err = client:requestBlocking("GET", client:query("/koreader/plugin/catalog/books", q))
-        if type(body) ~= "table" then return nil, tostring(err or "no answer") end
-        local items, more = SleepPool.pageItems(body)
-        for _, b in ipairs(items) do
-            local id = tonumber(b.id)
-            if id and not books[id] and #ids < max then table.insert(ids, id); books[id] = b end
-        end
-        if not more or #ids >= max then break end
-    end
-    return ids, books
-end
-
-function Sleep.detail(client, id)
-    local body = client:requestBlocking("GET", "/koreader/plugin/catalog/books/" .. tostring(id))
-    return type(body) == "table" and body or nil
-end
-
--- The cover, by its ETag (OC.coverDownload); tests replace it.
-function Sleep.download(client, id, path)
-    local api = package.loaded["bookorbit_api"]
-    local stock = api and (api.__orbit_stock and api.__orbit_stock["cache:downloadCatalogThumbnail"] or api.downloadCatalogThumbnail)
-    if not stock then stock = function() return nil, "no plugin download" end end
-    local okd, ok = pcall(OC.coverDownload, client, stock, id, path, { temp_path = path .. ".part", max_bytes = 4 * 1024 * 1024 })
-    return okd and ok and true or false
-end
-
--- In the background process: lists what is due, picks and checks the books, fetches their covers
--- and writes the files. Returns a short summary for the log.
-function Sleep.build(client, plan, rand)
-    local d = plan.dir
-    local now = plan.now
-    local sum = { kept = 0, probed = 0, left_out = 0, unknown = 0, skipped = 0, listed = {} }
-    -- Leave out's member lists, once a day (X5).
-    local lo = plan.leave_out
-    for _, p in ipairs(SleepPool.memberRules(plan.rules)) do
-        local e = lo[p.key]
-        if not e or SleepPool.due(e.at, now) then
-            local ids, err = Sleep.listMembers(client, p, SleepPool.LEAVE_OUT_MAX)
-            if ids then
-                lo[p.key] = { at = now, ids = ids }
-                table.insert(sum.listed, p.key .. "=" .. #ids)
-            else
-                table.insert(sum.listed, p.key .. " failed (" .. err .. ")")
-            end
-        end
-    end
-    -- Keep only the rules still set.
-    local members = {}
-    for _, p in ipairs(SleepPool.memberRules(plan.rules)) do
-        if lo[p.key] then
-            local set = {}
-            for _, id in ipairs(lo[p.key].ids or {}) do set[id] = true end
-            members[p.key] = set
-        end
-    end
-    local keep_lo = {}
-    for _, p in ipairs(SleepPool.memberRules(plan.rules)) do keep_lo[p.key] = lo[p.key] end
-    Sleep.save("leave_out.lua", keep_lo)
-
-    -- The candidates, in the order they would be shown.
-    local candidates, known, source = {}, {}, plan.from_key
-    local from = SleepPool.parseFrom(plan.from_key)
-    local bag
-    if from.kind == "list" then
-        local order = { from.type }
-        for _, l in ipairs(SleepPool.LISTS) do if l.type ~= from.type then table.insert(order, l.type) end end
-        for _, t in ipairs(order) do
-            local body = client:requestBlocking("GET", "/koreader/plugin/catalog/dashboard/sections/" .. t)
-            local books = SleepPool.sectionBooks(body)
-            if #books > 0 then
-                for _, b in ipairs(books) do
-                    local id = tonumber(b.id)
-                    if id then table.insert(candidates, id); known[id] = b end
-                end
-                if t ~= from.type then sum.fallback = t end
-                break
-            end
-        end
-    else
-        bag = plan.bag
-        if bag.source ~= plan.from_key then bag = { source = plan.from_key, order = {}, pos = 0 } end
-        if not bag.at or SleepPool.due(bag.at, now) then
-            local ids, err = Sleep.listMembers(client, from, SleepPool.BAG_MAX)
-            if ids then
-                SleepPool.bagSync(bag, ids, rand)
-                bag.at = now
-                table.insert(sum.listed, plan.from_key .. "=" .. #ids)
-            else
-                table.insert(sum.listed, plan.from_key .. " failed (" .. err .. ")")
-            end
-        end
-        if not plan.every then SleepPool.bagSeek(bag, plan.shown) end
-        candidates = SleepPool.bagNext(bag, rand)
-    end
-
-    -- Checked one by one, covers fetched for the ones kept: BATCH of them (R3).
-    local keep = SleepPool.BATCH
-    local items = {}
-    local wanted = {}
-    local taken = {}
-    -- Every sleep: the ready covers not yet shown SHOWS_MAX times stay; retired ones make room.
-    local carry, retired = {}, {}
-    if plan.every then carry, retired = SleepPool.carry(plan.prev_ids, plan.shows, SleepPool.SHOWS_MAX) end
-    local function try(id)
-        if taken[id] then return end
-        taken[id] = true
-        sum.probed = sum.probed + 1
-        local b = known[id]
-        local detail
-        if not b or SleepPool.needsTags(plan.rules) then
-            detail = Sleep.detail(client, id)
-            b = b or detail
-        end
-        local okb = SleepPool.eligible(b, plan.open_id)
-        if not okb then sum.skipped = sum.skipped + 1; return end
-        local verdict = SleepPool.check(id, plan.rules, members, detail and detail.tags or nil)
-        if verdict == "out" then sum.left_out = sum.left_out + 1; return end
-        if verdict == "unknown" then sum.unknown = sum.unknown + 1; return end -- fail closed (X7)
-        local rel = "covers/" .. id .. ".jpg"
-        if Sleep.download(client, id, d .. "/" .. rel) and exists(d .. "/" .. rel) then
-            table.insert(items, { id = id, title = tostring(b.title or ""), file = rel })
-            wanted[rel] = true
-        else
-            sum.skipped = sum.skipped + 1
-        end
-    end
-    -- The bag's last shown book stays first, so the companion's "next" is the bag's next.
-    if bag and not plan.every and bag.prev and exists(d .. "/covers/" .. bag.prev .. ".jpg") then
-        if SleepPool.check(bag.prev, plan.rules, members, nil) == "keep" then
-            table.insert(items, { id = bag.prev, title = "", file = "covers/" .. bag.prev .. ".jpg" })
-            wanted["covers/" .. bag.prev .. ".jpg"] = true
-        end
-    end
-    local first = #items
-    for _, id in ipairs(carry) do
-        if #items - first >= keep or sum.probed >= SleepPool.PROBE_MAX then break end
-        try(id)
-    end
-    sum.carried = #items - first
-    local fresh = {}
-    for _, id in ipairs(candidates) do
-        if #items - first >= keep or sum.probed >= SleepPool.PROBE_MAX then break end
-        if not retired[id] and not taken[id] then
-            local before = #items
-            try(id)
-            if #items > before then fresh[id] = true end
-        end
-    end
-    -- A bag whose rest is all left out or read: shuffled again, once.
-    if bag and #items - first == 0 and #bag.order > 0 and sum.probed < SleepPool.PROBE_MAX then
-        bag.pos = #bag.order
-        for _, id in ipairs((SleepPool.bagNext(bag, rand))) do
-            if #items - first >= keep or sum.probed >= SleepPool.PROBE_MAX then break end
-            try(id)
-        end
-    end
-    -- Every retired one and nothing new (a one-book list, offline): they stay, and the companion
-    -- keeps cycling them rather than showing nothing.
-    if #items - first == 0 and next(retired) then
-        for _, id in ipairs(plan.prev_ids or {}) do
-            if retired[tonumber(id)] then taken[tonumber(id)] = nil; try(tonumber(id)) end
-            if #items - first >= keep then break end
-        end
-    end
-    if bag and plan.every then SleepPool.bagTake(bag, fresh) end
-    if bag then Sleep.save("bag.lua", bag) end
-    sum.kept = #items - first
-    sum.retired = 0
-    for _ in pairs(retired) do sum.retired = sum.retired + 1 end
-    -- Covers no longer in the pool go.
-    if lfs_ok and lfs.attributes(d .. "/covers", "mode") == "directory" then
-        for name in lfs.dir(d .. "/covers") do
-            local rel = "covers/" .. name
-            if name:match("^%d+%.jpg$") and not wanted[rel] then
-                os.remove(d .. "/" .. rel)
-                os.remove(d .. "/" .. rel .. ".etag")
-            end
-        end
-    end
-    writeFile(d .. "/pool.json", SleepPool.json(SleepPool.poolDoc(source, items, now * 1000,
-        { server = client.server_url, user = client.username, storage_limit_mb = plan.storage_limit_mb })))
-    sum.items = #items
-    return sum
-end
+-- Orbit Companion refreshes the pool on its worker thread (SleepPoolBuilder.kt; docs/design/
+-- companion-worker.md): lists what is due, picks and checks the books, fetches their covers and
+-- writes pool.json, covers/, bag.lua, leave_out.lua and scopes.json, then redraws its picture.
+-- KOReader asks (SLEEP_REFRESH) and hears a sleep_pool event when it is done.
 
 -- Due: Recommended is on, the network is up, nobody is reading, and the last refresh is older
 -- than REFRESH_EVERY_S (or the settings changed since).
@@ -397,52 +186,75 @@ function Sleep.kick(why)
     end)
 end
 
+-- The login travels only in the package-targeted broadcast (Companion.send), never in a file.
+local function ask(client, extras)
+    extras.server, extras.user, extras.userkey = client.server_url, client.username, client.userkey
+    Companion.send(Companion.ACTION.SLEEP_REFRESH, extras)
+    OC.watchChecks()
+end
+
 function Sleep.refresh(why)
     local s = Sleep.settings()
-    if Sleep.busy or s.sleep_mode ~= "recommended" or not Sleep.available() then return false end
+    if Sleep.asked or s.sleep_mode ~= "recommended" or not Sleep.available() then return false end
     local t = os.time()
     if Sleep.refreshed_at and t >= Sleep.refreshed_at and t - Sleep.refreshed_at < Sleep.REFRESH_EVERY_S then return false end
     if not NetworkMgr:isConnected() or reading() then return false end
+    local problem = Companion.workerProblem(_("for the sleep screen's covers"))
+    if problem then
+        if Sleep.problem ~= problem then Sleep.problem = problem; log("sleep screen: pool not refreshed:", problem) end
+        return false
+    end
+    Sleep.problem = nil
     local client = OC.client()
-    local d = Sleep.dir()
-    if not (client and d) then
+    if not (client and Sleep.dir()) then
         log("sleep screen: no BookOrbit client yet; the pool waits (" .. tostring(why) .. ")")
         return false
     end
-    local plan = {
-        dir = d, now = t, from_key = s.sleep_from, rules = s.sleep_leave_out,
-        leave_out = Sleep.load("leave_out.lua") or {}, bag = Sleep.load("bag.lua") or { order = {}, pos = 0 },
-        shown = tonumber(Sleep.state().shown), open_id = Sleep.bookId(S.sleep_current_file),
-        storage_limit_mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB,
-        every = s.sleep_hours == SleepPool.EVERY_SLEEP, prev_ids = Sleep.poolIds(), shows = Sleep.state().shows,
-    }
-    Sleep.busy = true
-    Sleep.refreshed_at = t
+    Sleep.asked, Sleep.refreshed_at = OC.now(), t
     Wifi.acquire("sleep screen")
-    log("sleep screen: refreshing the pool from", s.sleep_from, "(" .. tostring(why) .. ")")
-    Background.run("sleep screen", function()
-        local seed = os.time() + math.floor((os.clock() * 1e6) % 1e6)
-        math.randomseed(seed)
-        local sum = Sleep.build(client, plan, function(n) return math.random(n) end)
-        sum.choices = Sleep.fetchScopes(client)
-        return Cache.encode(sum)
-    end, Sleep.TIMEOUT_S, function(out, berr)
-        Sleep.busy = nil
-        Wifi.release("sleep screen")
-        local sum = Cache.decode(out or "")
-        if type(sum) ~= "table" then
-            log("sleep screen: pool not refreshed:", tostring(berr or out))
-            return
-        end
-        log(string.format("sleep screen: pool %d cover(s): %d new, %d checked, %d left out, %d unchecked (left out), %d skipped%s%s%s",
-            sum.items or 0, sum.kept or 0, sum.probed or 0, sum.left_out or 0, sum.unknown or 0, sum.skipped or 0,
-            plan.every and string.format(", every sleep: %d kept, %d retired", sum.carried or 0, sum.retired or 0) or "",
-            sum.fallback and (", from " .. sum.fallback .. " (the chosen list was empty)") or "",
-            #(sum.listed or {}) > 0 and (", listed " .. table.concat(sum.listed, " ")) or ""))
-        if sum.choices then Sleep.saveScopes(sum.choices) end
-        Sleep.notify("pool")
-    end)
+    log("sleep screen: the companion refreshes the pool from", s.sleep_from, "(" .. tostring(why) .. ")")
+    ask(client, { reason = tostring(why), from = s.sleep_from, rules = SleepPool.encodeRules(s.sleep_leave_out),
+        open_id = tostring(Sleep.bookId(S.sleep_current_file) or ""), every = s.sleep_hours == SleepPool.EVERY_SLEEP and "1" or "0",
+        storage_limit_mb = tostring(tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB) })
     return true
+end
+
+-- The companion's answer (a sleep_pool event): the pool, or the pickers' lists only.
+function Sleep.landed(ev)
+    if ev.scopes_only then
+        Sleep.scopes_asked = nil
+        Sleep.scopes_cache = nil
+        local v = Sleep.scopes()
+        if v then log(string.format("sleep screen: %d smart scope(s), %d collection(s) listed", #v.scopes, #v.collections))
+        else Sleep.scopes_at = nil; log("sleep screen: scopes and collections not listed:", tostring(ev.err or "no answer")) end
+        local done = Sleep.scopes_done
+        Sleep.scopes_done = nil
+        if done then done(v) end
+        return
+    end
+    if Sleep.asked then Sleep.asked = nil; Wifi.release("sleep screen") end
+    if ev.err then return log("sleep screen: pool not refreshed:", tostring(ev.err)) end
+    log(string.format("sleep screen: pool %d cover(s): %d new, %d checked, %d left out, %d unchecked (left out), %d skipped%s%s%s",
+        tonumber(ev.items) or 0, tonumber(ev.kept) or 0, tonumber(ev.probed) or 0, tonumber(ev.left_out) or 0, tonumber(ev.unknown) or 0,
+        tonumber(ev.skipped) or 0,
+        ev.every and string.format(", every sleep: %d kept, %d retired", tonumber(ev.carried) or 0, tonumber(ev.retired) or 0) or "",
+        ev.fallback and (", from " .. tostring(ev.fallback) .. " (the chosen list was empty)") or "",
+        type(ev.listed) == "table" and #ev.listed > 0 and (", listed " .. table.concat(ev.listed, " ")) or ""))
+    if ev.scopes then Sleep.scopes_cache = nil; Sleep.scopes() end
+end
+
+-- No answer in time: the Wi-Fi hold goes and the next trigger asks again.
+function Sleep.waited(t)
+    if Sleep.asked and t - Sleep.asked >= Sleep.TIMEOUT_S then
+        log("sleep screen: the companion didn't answer the pool refresh")
+        Sleep.asked = nil
+        Wifi.release("sleep screen")
+    end
+    if Sleep.scopes_asked and t - Sleep.scopes_asked >= Sleep.SCOPES_WAIT_S then
+        Sleep.scopes_asked = nil
+        Sleep.landed({ scopes_only = true, err = "the companion didn't answer" })
+    end
+    return Sleep.asked ~= nil or Sleep.scopes_asked ~= nil
 end
 
 ---------------------------------------------------------------- the pickers
@@ -452,36 +264,8 @@ end
 -- entries { id, title, count }) so a picker opens at once, offline too; refreshed in the
 -- background each time a picker opens and at each pool refresh.
 Sleep.SCOPES_FILE = "scopes.json"
-Sleep.SCOPE_PAGES = 20
 Sleep.SCOPES_EVERY_S = 60
-
--- Every page of one section list (child-safe: no UI). -> entries, or nil, err.
-function Sleep.listSection(client, section)
-    local out, seen = {}, {}
-    for page = 1, Sleep.SCOPE_PAGES do
-        local body, err = client:requestBlocking("GET",
-            client:query("/koreader/plugin/catalog/sections/" .. section, { page = page, size = SleepPool.PAGE_SIZE }))
-        if type(body) ~= "table" then
-            if page == 1 then return nil, tostring(err or "no answer") end
-            break
-        end
-        local new = 0
-        for _i, e in ipairs(SleepPool.entries(body)) do
-            if not seen[e.id] then seen[e.id] = true; table.insert(out, e); new = new + 1 end
-        end
-        -- Collections and smart scopes come whole today (no hasNext); a paged reply is followed.
-        if body.hasNext ~= true or new == 0 then break end
-    end
-    return out
-end
-
--- Both lists (child-safe). -> { scopes, collections, at }, or nil, err.
-function Sleep.fetchScopes(client)
-    local scopes, e1 = Sleep.listSection(client, "smart-scopes")
-    local collections, e2 = Sleep.listSection(client, "collections")
-    if not (scopes and collections) then return nil, e1 or e2 end
-    return { v = 1, at = os.time(), scopes = scopes, collections = collections }
-end
+Sleep.SCOPES_WAIT_S = 60
 
 local function remember(v)
     Sleep.scope_names = Sleep.scope_names or {}
@@ -509,32 +293,17 @@ function Sleep.scopes()
     return clean
 end
 
--- Fetch both lists in the background when online; done(v or nil) after.
+-- The companion lists both again when online; done(v or nil) after.
 function Sleep.refreshScopes(why, done)
     local client = OC.client()
     local t = os.time()
-    if Sleep.scopes_busy or not client or not NetworkMgr:isConnected()
+    if Sleep.scopes_asked or not client or not NetworkMgr:isConnected() or Companion.workerProblem()
         or (Sleep.scopes_at and t >= Sleep.scopes_at and t - Sleep.scopes_at < Sleep.SCOPES_EVERY_S) then
         if done then done(nil) end
         return false
     end
-    Sleep.scopes_busy, Sleep.scopes_at = true, t
-    Background.run("sleep screen scopes", function()
-        local v, err = Sleep.fetchScopes(client)
-        return Cache.encode(v or { err = tostring(err) })
-    end, 30, function(out, berr)
-        Sleep.scopes_busy = nil
-        local v = Cache.decode(out or "")
-        if type(v) == "table" and v.scopes then
-            Sleep.saveScopes(v)
-            log(string.format("sleep screen: %d smart scope(s), %d collection(s) listed (%s)", #v.scopes, #v.collections, tostring(why)))
-        else
-            Sleep.scopes_at = nil
-            log("sleep screen: scopes and collections not listed:", tostring((type(v) == "table" and v.err) or berr or out), "(" .. tostring(why) .. ")")
-            v = nil
-        end
-        if done then done(v) end
-    end)
+    Sleep.scopes_asked, Sleep.scopes_at, Sleep.scopes_done = OC.now(), t, done
+    ask(client, { reason = tostring(why), scopes_only = "1" })
     return true
 end
 

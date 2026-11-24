@@ -313,6 +313,7 @@
                 <action android:name="net.fledgewing.orbitcompanion.action.CHECK" />
                 <action android:name="net.fledgewing.orbitcompanion.action.STORAGE" />
                 <action android:name="net.fledgewing.orbitcompanion.action.COPIES" />
+                <action android:name="net.fledgewing.orbitcompanion.action.SLEEP_REFRESH" />
                 <action android:name="net.fledgewing.orbitcompanion.action.UPDATE" />
             </intent-filter>
             <intent-filter>

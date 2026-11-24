@@ -3,16 +3,15 @@
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
--- The sleep screen's pool (docs/design/lock-screen.md). Pure: the settings and their checks,
--- the sources (Pick from), the Leave out rules, the shuffle bag and the files the companion reads.
--- The KOReader side (ko/sleepscreen.lua) fetches and writes; the companion (SleepScreenLogic.kt)
--- decides at sleep which cover of the pool is shown.
+-- The sleep screen's settings (docs/design/lock-screen.md). Pure: the settings and their checks,
+-- the sources (Pick from), the Leave out rules, the pickers' lists and the JSON the companion reads.
+-- The pool itself (which books, the shuffle bag, the covers) is Orbit Companion's:
+-- SleepPoolLogic.kt and SleepPoolBuilder.kt; it decides at sleep which cover is shown
+-- (SleepScreenLogic.kt).
 ---------------------------------------------------------------------------------------------
 
--- BATCH: the recommended covers kept ready on the reader, whatever Pick from is (R3).
--- SHOWS_MAX: with Every sleep, a cover is shown this many times, then retired (R4b).
-SleepPool = { TEXT_MAX = 60, BATCH = 24, BAG_MAX = 2000, LEAVE_OUT_MAX = 4000,
-    PAGE_SIZE = 100, DAY_S = 86400, PROBE_MAX = 48, EVERY_SLEEP = 0, SHOWS_MAX = 3 }
+-- EVERY_SLEEP: Change cover every's "Every sleep" (the batch and its retiring: SleepPoolLogic.kt).
+SleepPool = { TEXT_MAX = 60, EVERY_SLEEP = 0 }
 
 SleepPool.MODES = {
     { id = "off", label = "The reader's own" },
@@ -166,19 +165,6 @@ end
 
 ---------------------------------------------------------------- replies
 
--- The books of a dashboard section reply ({ section = { books } }, B koreader.ts:466-470).
-function SleepPool.sectionBooks(body)
-    local s = type(body) == "table" and body.section
-    local books = type(s) == "table" and s.books
-    return type(books) == "table" and books or {}
-end
-
--- A books page: items and whether more follow.
-function SleepPool.pageItems(body)
-    if type(body) ~= "table" then return {}, false end
-    return type(body.items) == "table" and body.items or {}, body.hasNext == true
-end
-
 -- The entries of a section index (smart scopes, collections): { id, title, count }.
 function SleepPool.entries(body)
     local out = {}
@@ -189,63 +175,7 @@ function SleepPool.entries(body)
     return out
 end
 
--- R2: a book can be shown when it has a cover, isn't read and isn't the book open now.
-function SleepPool.eligible(b, open_id)
-    if type(b) ~= "table" or not tonumber(b.id) then return false, "no id" end
-    if b.hasCover == false then return false, "no cover" end
-    if b.readStatus == "read" then return false, "read" end
-    if open_id and tonumber(b.id) == open_id then return false, "open now" end
-    return true
-end
-
 ---------------------------------------------------------------- Leave out (X1-X7)
-
-function SleepPool.needsTags(rules)
-    for _, r in ipairs(rules or {}) do
-        local p = SleepPool.parseRule(r)
-        if p and p.kind == "tag" then return true end
-    end
-    return false
-end
-
--- The rules that need member lists (scope, collection), parsed.
-function SleepPool.memberRules(rules)
-    local out = {}
-    for _, r in ipairs(rules or {}) do
-        local p = SleepPool.parseRule(r)
-        if p and p.kind ~= "tag" then table.insert(out, p) end
-    end
-    return out
-end
-
--- One book against the rules, OR-ed. members[key] = { [id] = true } once listed (nil: not yet);
--- tags = the book's tags from its detail (nil: not fetched). -> "keep" | "out" | "unknown", why.
--- Unknown is failed closed by the caller (X7).
-function SleepPool.check(id, rules, members, tags)
-    id = tonumber(id)
-    local unknown
-    for _, r in ipairs(rules or {}) do
-        local p = SleepPool.parseRule(r)
-        if p and p.kind == "tag" then
-            if type(tags) ~= "table" then
-                unknown = unknown or ("no detail for " .. p.key)
-            else
-                for _, t in ipairs(tags) do
-                    if trim(t):lower() == p.tag then return "out", p.key end
-                end
-            end
-        elseif p then
-            local set = members and members[p.key]
-            if type(set) ~= "table" then
-                unknown = unknown or (p.key .. " not listed yet")
-            elseif set[id] then
-                return "out", p.key
-            end
-        end
-    end
-    if unknown then return "unknown", unknown end
-    return "keep"
-end
 
 -- Tags seen in cached book details, with counts, most used first (X3's picker).
 function SleepPool.tagCounts(details)
@@ -267,122 +197,7 @@ function SleepPool.tagCounts(details)
     return out
 end
 
--- A member list is due: never listed, a day old, or the clock went back.
-function SleepPool.due(at, now)
-    return not at or now < at or now - at >= SleepPool.DAY_S
-end
-
----------------------------------------------------------------- the shuffle bag (R1b)
-
--- Fisher-Yates with rand(n) -> 1..n. The book just shown never comes first.
-function SleepPool.shuffle(ids, rand, avoid_first)
-    local out = {}
-    for i, v in ipairs(ids or {}) do out[i] = v end
-    for i = #out, 2, -1 do
-        local j = rand(i)
-        out[i], out[j] = out[j], out[i]
-    end
-    if avoid_first and #out > 1 and out[1] == avoid_first then
-        local j = 1 + rand(#out - 1)
-        out[1], out[j] = out[j], out[1]
-    end
-    return out
-end
-
--- bag = { order = { ids }, pos = index of the last shown (0 none), prev = the id shown last }.
--- The companion reports what it showed (state.json); the bag moves to it, never back.
-function SleepPool.bagSeek(bag, shown)
-    shown = tonumber(shown)
-    if not shown or shown == bag.prev then return false end
-    for i = (bag.pos or 0) + 1, #bag.order do
-        if bag.order[i] == shown then
-            bag.pos, bag.prev = i, shown
-            return true
-        end
-    end
-    return false
-end
-
--- The members listed again: those that left come out, new ones go in at random places among the
--- books not shown yet, so "no repeat until every book was shown" holds.
-function SleepPool.bagSync(bag, members, rand)
-    local want, kept, out = {}, {}, {}
-    for _, id in ipairs(members) do want[id] = true end
-    local pos = bag.pos or 0
-    for i, id in ipairs(bag.order or {}) do
-        if want[id] and not kept[id] then
-            kept[id] = true
-            table.insert(out, id)
-        elseif i <= pos then
-            pos = pos - 1
-        end
-    end
-    for _, id in ipairs(members) do
-        if not kept[id] then
-            kept[id] = true
-            local at = pos + rand(#out - pos + 1)
-            table.insert(out, at, id)
-        end
-    end
-    bag.order, bag.pos = out, math.max(0, pos)
-    return bag
-end
-
--- The ids not shown yet, in order. A used-up bag is shuffled again first (the last shown never
--- first); returns the ids and whether it was shuffled.
-function SleepPool.bagNext(bag, rand)
-    local out, shuffled = {}, false
-    if #bag.order == 0 then return out, false end
-    if (bag.pos or 0) >= #bag.order then
-        bag.order = SleepPool.shuffle(bag.order, rand, bag.prev)
-        bag.pos, shuffled = 0, true
-    end
-    for i = bag.pos + 1, #bag.order do table.insert(out, bag.order[i]) end
-    return out, shuffled
-end
-
--- Every sleep (R4b): the ready covers carried into the next batch, in order, and the retired ones
--- (shown SHOWS_MAX times, by the companion's state.json "shows"). prev_ids: pool.json's ids.
-function SleepPool.carry(prev_ids, shows, max_shows)
-    local carry, retired, seen = {}, {}, {}
-    for _, id in ipairs(prev_ids or {}) do
-        id = tonumber(id)
-        if id and not seen[id] then
-            seen[id] = true
-            local n = tonumber(type(shows) == "table" and (shows[id] or shows[tostring(id)]) or 0) or 0
-            if n >= (max_shows or SleepPool.SHOWS_MAX) then retired[id] = true else table.insert(carry, id) end
-        end
-    end
-    return carry, retired
-end
-
--- Every sleep with a bag: the books taken into the batch count as shown, so the next top-up
--- continues the no-repeat order. taken: a set of ids.
-function SleepPool.bagTake(bag, taken)
-    local pos = bag.pos or 0
-    for i = pos + 1, #(bag.order or {}) do
-        if taken[bag.order[i]] then pos = i end
-    end
-    if pos ~= (bag.pos or 0) then bag.pos, bag.prev = pos, nil end
-    return bag
-end
-
 ---------------------------------------------------------------- the files
-
--- pool.json: the covers in the order the companion shows them (android/docs/INTERFACE.md).
--- items: { { id, title, file } } (file relative to the orbit-sleep folder).
--- account: { server, user, storage_limit_mb } or nil. The companion fetches the sharp covers
--- (docs/design/lock-screen.md L7) from this server, signed in with an OPDS login it asks for;
--- never the KOReader key.
-function SleepPool.poolDoc(source, items, at_ms, account)
-    local doc = { v = 1, at = at_ms, source = source, items = items }
-    if type(account) == "table" then
-        doc.server = account.server and tostring(account.server) or nil
-        doc.user = account.user and tostring(account.user) or nil
-        doc.storage_limit_mb = tonumber(account.storage_limit_mb)
-    end
-    return doc
-end
 
 local function jsonString(s)
     return '"' .. tostring(s):gsub('[%c"\\]', function(c)
