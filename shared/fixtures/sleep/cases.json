@@ -296,5 +296,287 @@
     "changed_at": 0
    }
   }
- ]
+ ],
+ "sources": {
+  "_comment": "Not a recording: Pick from and Leave out as sets (docs/design/lock-screen.md R1, R1c, X1, X8). from/leave_out: the wire value (one item per line, as SETTINGS carries it) -> the stored value, one item per line. candidates: the order a pool refresh tries books in, from the books each picked source gives (lists: a dashboard list's books in the server's order; bag: the shuffle bag's next ids, one bag over the members of every picked library, smart scope and collection). check: one book against the Leave out rules (keep, out, or unknown: failed closed, X7).",
+  "from": [
+   {
+    "name": "one list, as before",
+    "wire": "want_to_read",
+    "expect": "want_to_read"
+   },
+   {
+    "name": "several, in the order picked",
+    "wire": "discover\nscope:12\nup_next",
+    "expect": "discover\nscope:12\nup_next"
+   },
+   {
+    "name": "duplicates and bad items dropped, spaces trimmed",
+    "wire": " up_next \nbogus\nscope:0\nup_next\ncollection:7",
+    "expect": "up_next\ncollection:7"
+   },
+   {
+    "name": "Library is every book: the others are part of it",
+    "wire": "up_next\nlibrary\nscope:3",
+    "expect": "library"
+   },
+   {
+    "name": "Library alone",
+    "wire": "library",
+    "expect": "library"
+   },
+   {
+    "name": "nothing valid: the default",
+    "wire": "bogus\n",
+    "expect": "up_next"
+   },
+   {
+    "name": "empty: the default",
+    "wire": "",
+    "expect": "up_next"
+   }
+  ],
+  "leave_out": [
+   {
+    "name": "rules, as before",
+    "wire": "tag: Age:18 \nscope:12\nbogus\nscope:12",
+    "expect": "tag:age:18\nscope:12"
+   },
+   {
+    "name": "Library leaves out every book: the other rules are part of it",
+    "wire": "tag:horror\nlibrary\ncollection:4",
+    "expect": "library"
+   },
+   {
+    "name": "dashboard lists are not Leave out rules",
+    "wire": "up_next\ncollection:4",
+    "expect": "collection:4"
+   },
+   {
+    "name": "none",
+    "wire": "",
+    "expect": ""
+   }
+  ],
+  "candidates": [
+   {
+    "name": "one list: its books in the server's order",
+    "from": "up_next",
+    "lists": {
+     "up_next": [
+      5,
+      7,
+      9
+     ]
+    },
+    "bag": [],
+    "expect": [
+     5,
+     7,
+     9
+    ],
+    "fallback": null
+   },
+   {
+    "name": "two lists: taken in turn, so neither crowds out the other",
+    "from": "want_to_read\nup_next",
+    "lists": {
+     "up_next": [
+      5,
+      7,
+      9
+     ],
+     "want_to_read": [
+      20,
+      21
+     ]
+    },
+    "bag": [],
+    "expect": [
+     20,
+     5,
+     21,
+     7,
+     9
+    ],
+    "fallback": null
+   },
+   {
+    "name": "a book in two lists counts once, where it first comes",
+    "from": "up_next\nwant_to_read",
+    "lists": {
+     "up_next": [
+      5,
+      7
+     ],
+     "want_to_read": [
+      7,
+      30
+     ]
+    },
+    "bag": [],
+    "expect": [
+     5,
+     7,
+     30
+    ],
+    "fallback": null
+   },
+   {
+    "name": "a list and scopes: the bag is one more turn, where its first source was picked",
+    "from": "scope:3\nup_next\ncollection:4",
+    "lists": {
+     "up_next": [
+      5,
+      7,
+      9
+     ]
+    },
+    "bag": [
+     41,
+     42,
+     43,
+     44
+    ],
+    "expect": [
+     41,
+     5,
+     42,
+     7,
+     43,
+     9,
+     44
+    ],
+    "fallback": null
+   },
+   {
+    "name": "Library: the bag over every book",
+    "from": "library",
+    "lists": {},
+    "bag": [
+     101,
+     102,
+     103
+    ],
+    "expect": [
+     101,
+     102,
+     103
+    ],
+    "fallback": null
+   },
+   {
+    "name": "one picked source empty: the others give what they have, no fallback",
+    "from": "want_to_read\nscope:3",
+    "lists": {
+     "want_to_read": []
+    },
+    "bag": [
+     41,
+     42
+    ],
+    "expect": [
+     41,
+     42
+    ],
+    "fallback": null
+   },
+   {
+    "name": "every picked source empty: Up next, Want to read, Discover in that order, skipping the picked",
+    "from": "up_next\nscope:3",
+    "lists": {
+     "up_next": [],
+     "want_to_read": [
+      20,
+      21
+     ],
+     "discover": [
+      60
+     ]
+    },
+    "bag": [],
+    "expect": [
+     20,
+     21
+    ],
+    "fallback": "want_to_read"
+   },
+   {
+    "name": "every source empty, the fallbacks too: nothing",
+    "from": "discover",
+    "lists": {
+     "discover": [],
+     "up_next": [],
+     "want_to_read": []
+    },
+    "bag": [],
+    "expect": [],
+    "fallback": null
+   }
+  ],
+  "check": [
+   {
+    "name": "no rules: kept",
+    "id": 5,
+    "rules": "",
+    "members": {},
+    "tags": [],
+    "expect": "keep"
+   },
+   {
+    "name": "Library: every book is out, nothing needs fetching",
+    "id": 5,
+    "rules": "library",
+    "members": {},
+    "tags": null,
+    "expect": "out"
+   },
+   {
+    "name": "a tag rule matches, ignoring case",
+    "id": 5,
+    "rules": "tag:age:18",
+    "members": {},
+    "tags": [
+     "Age:18"
+    ],
+    "expect": "out"
+   },
+   {
+    "name": "a member of a left-out collection",
+    "id": 5,
+    "rules": "collection:4",
+    "members": {
+     "collection:4": [
+      5,
+      6
+     ]
+    },
+    "tags": [],
+    "expect": "out"
+   },
+   {
+    "name": "members not listed yet: unknown (failed closed)",
+    "id": 5,
+    "rules": "scope:3",
+    "members": {},
+    "tags": [],
+    "expect": "unknown"
+   },
+   {
+    "name": "not in any rule: kept",
+    "id": 9,
+    "rules": "tag:horror\ncollection:4",
+    "members": {
+     "collection:4": [
+      5,
+      6
+     ]
+    },
+    "tags": [
+     "fantasy"
+    ],
+    "expect": "keep"
+   }
+  ]
+ }
 }

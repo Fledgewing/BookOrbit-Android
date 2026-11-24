@@ -73,9 +73,13 @@ function SleepPool.cleanText(s)
     return table.concat(out)
 end
 
--- Pick from: a list id, or "scope:<id>" / "collection:<id>". nil when not valid.
+-- Pick from's and Leave out's item for every book the account can see (lock-screen.md R1c, X8).
+SleepPool.LIBRARY = "library"
+
+-- One Pick from item: a list id, "library", or "scope:<id>" / "collection:<id>". nil when not valid.
 function SleepPool.parseFrom(v)
     if type(v) ~= "string" then return nil end
+    if v == SleepPool.LIBRARY then return { kind = "library" } end
     for _, l in ipairs(SleepPool.LISTS) do
         if l.id == v then return { kind = "list", id = l.id, type = l.type } end
     end
@@ -86,9 +90,29 @@ function SleepPool.parseFrom(v)
     return nil
 end
 
--- A Leave out rule: "tag:<text>", "scope:<id>" or "collection:<id>". nil when not valid.
+-- Pick from as stored (R1c): one item per line, valid, unique, in the order picked. Library is
+-- every book, so it stands alone; nothing valid is the default (Up next). -> list of items.
+function SleepPool.sources(v)
+    local out, seen = {}, {}
+    for line in (tostring(v or "") .. "\n"):gmatch("([^\n]*)\n") do
+        local item = trim(line)
+        if SleepPool.parseFrom(item) and not seen[item] then seen[item] = true; table.insert(out, item) end
+    end
+    if seen[SleepPool.LIBRARY] then return { SleepPool.LIBRARY } end
+    if #out == 0 then return { SleepPool.LISTS[1].id } end
+    return out
+end
+
+-- Pick from's stored and wire value: the items, one per line.
+function SleepPool.normalizeFrom(v)
+    if type(v) == "table" then v = table.concat(v, "\n") end
+    return table.concat(SleepPool.sources(v), "\n")
+end
+
+-- A Leave out rule: "tag:<text>", "scope:<id>", "collection:<id>" or "library". nil when not valid.
 function SleepPool.parseRule(v)
     if type(v) ~= "string" then return nil end
+    if trim(v) == SleepPool.LIBRARY then return { kind = "library", key = SleepPool.LIBRARY } end
     local tag = v:match("^tag:(.*)$")
     if tag then
         tag = trim(tag):lower()
@@ -112,7 +136,8 @@ function SleepPool.encodeRules(list)
     return table.concat(out, "\n")
 end
 
--- A list of rule strings (unique, valid) from a table or a newline-separated string.
+-- A list of rule strings (unique, valid) from a table or a newline-separated string. Library
+-- leaves out every book, so it stands for all (X8).
 function SleepPool.decodeRules(v)
     local raw = {}
     if type(v) == "table" then raw = v
@@ -122,6 +147,7 @@ function SleepPool.decodeRules(v)
         local p = SleepPool.parseRule(r)
         if p and not seen[p.key] then seen[p.key] = true; table.insert(out, p.key) end
     end
+    if seen[SleepPool.LIBRARY] then return { SleepPool.LIBRARY } end
     return out
 end
 
@@ -131,7 +157,7 @@ function SleepPool.normalize(s)
     local d = SleepPool.DEFAULTS
     local out = {}
     out.sleep_mode = has(SleepPool.MODES, s.sleep_mode) and s.sleep_mode or d.sleep_mode
-    out.sleep_from = SleepPool.parseFrom(s.sleep_from) and s.sleep_from or d.sleep_from
+    out.sleep_from = SleepPool.normalizeFrom(s.sleep_from)
     out.sleep_leave_out = SleepPool.decodeRules(s.sleep_leave_out)
     local h = tonumber(s.sleep_hours)
     out.sleep_hours = (h and has(SleepPool.HOURS, h)) and h or d.sleep_hours
