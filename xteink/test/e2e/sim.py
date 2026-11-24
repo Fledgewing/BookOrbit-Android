@@ -141,7 +141,9 @@ class Simulator:
         Scenario hooks of upstream's sync activity: CROSSINK_SIM_BOOKORBIT_CHOICE answers its
         choice screens, ..._QUIT_AFTER_SYNC ends the process once the sync settles."""
         e = os.environ.copy()
-        e.update(SDL_VIDEODRIVER="dummy", CROSSPOINT_SIM_INPUT_SCRIPT=script, CROSSINK_SIM_BOOKORBIT_CHOICE=choice)
+        # The software renderer: SDL's dummy video driver has no accelerated one on Linux (CI), where the
+        # simulator then had no renderer and silently saved no screenshots.
+        e.update(SDL_VIDEODRIVER="dummy", SDL_RENDER_DRIVER="software", CROSSPOINT_SIM_INPUT_SCRIPT=script, CROSSINK_SIM_BOOKORBIT_CHOICE=choice)
         if quit_after_sync:
             e["CROSSINK_SIM_BOOKORBIT_QUIT_AFTER_SYNC"] = "1"
         if after_reboot is not None:
