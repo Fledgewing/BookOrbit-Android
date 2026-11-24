@@ -42,8 +42,19 @@ struct SeriesCard {
   // own place in its series, for the page's "<series> · Book 2 of 4" line.
   char seriesName[48] = {};  // "" when the server names no series
   char seriesIndex[12] = {};  // this book's seriesIndex as sent ("2", "1.5"); "" = none
-  uint16_t seriesCount = 0;   // books the server lists in the series (seriesMembers), 0 = unknown
+  // How many of the series' books the library holds (seriesMembers, this one included); not the
+  // series' length, which the server does not send. 0 = unknown.
+  uint16_t seriesCount = 0;
 };
+
+// The series the End-of-Book page names ("Book 2 of Harbour Lights"). With a card, the server's,
+// even when it names none: a book the library keeps in no series shows no line. The EPUB's own
+// series only without a card. name "" = no line; index "" = the name alone.
+struct PageSeries {
+  const char* name;
+  const char* index;
+};
+PageSeries pageSeries(bool hasCard, const SeriesCard& card, const char* epubName, const char* epubIndex);
 
 // The fields pickCard reads, as an ArduinoJson filter for a streamed detail reply.
 void cardFilter(JsonDocument& filter);
