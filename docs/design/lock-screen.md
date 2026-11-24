@@ -254,11 +254,11 @@ hides the system Screen saver page (to check in the probe).
 |---|---|
 | P1 | **An optional permission, granted once over USB:** `tools/install-usb.sh --grant-screen-saver` runs `pm grant … WRITE_SECURE_SETTINGS`, and the manifest declares it. With it, the companion switches its screen saver on and off itself. It keeps the vendor's previous three values to restore them, and writes nothing else: a guard test fails on any other `Settings.Secure` key. |
 | P2 | **Without the permission:** the one-time command `tools/install-usb.sh --sleep-screen on\|off` writes or restores the three values. The companion's "Set up ›" opens the system Screen saver page where it exists, and otherwise shows that command. |
-| P3 | **In the checklist:** an optional row, in the Add-on design's style ([addon-mode](addon-mode.md), the "Optional" table). It is shown only while Sleep screen is on and the reader uses the dream sink. |
+| P3 | **In the checklist:** an optional row, in the Add-on design's style ([addon-mode](addon-mode.md), the "Optional" table). It is shown only when it helps now (companion-checklist §3.12, the user's ruling 2026-11-24): a dream-sink reader without the permission and without a Screen saver page, whose chosen screen saver doesn't match Sleep screen (on with the reader's own chosen, or off with Orbit's). The M8C, with Orbit's chosen and Sleep screen on, doesn't show it. |
 
 | Optional | Without it | Allow does |
 |---|---|---|
-| **Switch the screen saver from Orbit** (`WRITE_SECURE_SETTINGS`, granted over USB) | Turning Sleep screen on or off needs a one-time USB command, `tools/install-usb.sh --sleep-screen on` (or `off`). | shows the one-line USB command that grants it |
+| **Screen saver** (`WRITE_SECURE_SETTINGS`, granted over USB): Orbit chooses its screen saver when Sleep screen goes on and puts the reader's own back when it goes off | What the reader shows while it sleeps doesn't follow your Sleep screen setting until you run one USB command, `tools/install-usb.sh --sleep-screen on` (or `off`). | **Show how**: that command for now, and `--grant-screen-saver` to make it automatic |
 
 ## Before building
 

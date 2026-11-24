@@ -196,7 +196,16 @@ class StatusActivity : EinkActivity() {
  * main page in Add-on. What can be chosen lives in Settings; this only shows and installs.
  */
 object StatusPanel {
-    fun draw(a: EinkActivity, root: LinearLayout, wifiRow: Boolean, redraw: () -> Unit) {
+    /** The Setup summary card (companion-checklist §3.8): "Setup: all set ✓" or "Setup: 1 thing needs you ›". */
+    fun setupCard(a: EinkActivity, root: LinearLayout) {
+        val items = Setup.items(a)
+        root.addView(ChecklistUi.statusCard(a, Setup.summary(a, items), items) {
+            a.startActivity(Intent(a, SetupActivity::class.java))
+        }.apply { tag = "status:setup" })
+    }
+
+    /** [setup]: false where the page draws [setupCard] itself, higher up (the launcher page). */
+    fun draw(a: EinkActivity, root: LinearLayout, wifiRow: Boolean, setup: Boolean = true, redraw: () -> Unit) {
         // After an update: a line to tap, never a notification of its own.
         WhatsNew.line(Attention.whatsNew(a).isNotEmpty(), BuildConfig.VERSION_NAME)?.let { t ->
             root.addView(Ui.row(a, t, onClick = { a.startActivity(Intent(a, AttentionActivity::class.java)) }).apply { tag = "status:whats_new" })
@@ -214,36 +223,35 @@ object StatusPanel {
                 Net.wifiConnected(a) -> "On · connected"
                 else -> "On · not connected"
             }
-            root.addView(Ui.row(a, "Wi-Fi", right = Ui.value(a, wifi)))
+            root.addView(Ui.row(a, "Wi-Fi", right = Ui.value(a, wifi, sp = 18f), compact = true))
         }
         val ts = when (Net.appState(a, Net.TAILSCALE_PKG)) {
             AppState.MISSING -> "Not installed"
             AppState.FROZEN -> AppStates.disabledShort(Vendor.disablerLabel(a))
             else -> if (Net.vpnUp(a)) "Connected" else "Not connected"
         }
-        root.addView(Ui.row(a, "Tailscale", right = Ui.value(a, ts)).apply { tag = "status:tailscale" })
+        root.addView(Ui.row(a, "Tailscale", right = Ui.value(a, ts, sp = 18f), compact = true).apply { tag = "status:tailscale" })
         root.addView(Ui.row(a, "Service", right = Ui.value(a, when {
             OrbitService.running -> "Running"
             !Mode.needsService(a) -> "Off (Add-on, no helper)"
             else -> "Starting"
-        })).apply { tag = "status:service" })
-        root.addView(Ui.row(a, "Screen-off permission", right = Ui.value(a, if (Net.adminActive(a)) "Granted" else "Not granted")))
+        }, sp = 18f), compact = true).apply { tag = "status:service" })
+        root.addView(Ui.row(a, "Screen-off permission", right = Ui.value(a, if (Net.adminActive(a)) "Granted" else "Not granted", sp = 18f), compact = true))
         root.addView(Ui.row(a, "Battery", "hours left, % per hour, by setting, history", Ui.value(a, "›"), onClick = {
             a.startActivity(Intent(a, BatteryActivity::class.java))
-        }))
-        root.addView(Ui.gap(a, 12))
+        }, compact = true))
+        root.addView(Ui.gap(a, 8))
         val card = Ui.card(a)
-        card.addView(Ui.row(a, "Network", right = Ui.value(a, Status.networkLine(a))))
-        card.addView(Ui.row(a, "Last sleep sync", "reported by the Orbit plugin", Ui.value(a, Status.lastSleepSync(a))))
-        card.addView(Ui.row(a, "Last wake network ready in", right = Ui.value(a, Status.lastNetReady(a))))
-        card.addView(Ui.row(a, "Wi-Fi turns off", right = Ui.value(a, Status.wifiTimer(a))))
+        card.addView(Ui.row(a, "Network", right = Ui.value(a, Status.networkLine(a), sp = 18f), compact = true))
+        card.addView(Ui.row(a, "Last sleep sync", null, Ui.value(a, Status.lastSleepSync(a), sp = 18f), compact = true))
+        card.addView(Ui.row(a, "Last wake network ready in", right = Ui.value(a, Status.lastNetReady(a), sp = 18f), compact = true))
+        card.addView(Ui.row(a, "Wi-Fi turns off", right = Ui.value(a, Status.wifiTimer(a), sp = 18f), compact = true))
         root.addView(card)
-        root.addView(Ui.gap(a, 12))
         // The same summary as the Setup page (docs/design/companion-checklist.md §3.8).
-        val items = Setup.items(a)
-        root.addView(ChecklistUi.statusCard(a, Setup.summary(a, items), items) {
-            a.startActivity(Intent(a, SetupActivity::class.java))
-        })
+        if (setup) {
+            root.addView(Ui.gap(a, 12))
+            setupCard(a, root)
+        }
         Vendor.disabledApps(a).takeIf { it.isNotEmpty() }?.let { frozen ->
             root.addView(Ui.text(a, frozen.joinToString(" ") { Vendor.disabledMessage(a, it) }, 18f, bold = true).apply {
                 setPadding(0, Ui.dp(a, 10), 0, 0)

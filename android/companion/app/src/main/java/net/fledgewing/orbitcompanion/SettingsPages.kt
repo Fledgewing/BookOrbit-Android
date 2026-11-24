@@ -68,21 +68,22 @@ abstract class SettingsPage : EinkActivity() {
         render()
     }
 
-    /** The row's line: what it does, then Waiting for KOReader or Changed in KOReader at …. */
-    protected fun lineFor(d: SettingDef): String = buildString {
-        append(d.line)
-        if (d.applies == "restart") append(" Applies when KOReader restarts.")
-        if (SettingsStore.pending(this@SettingsPage, d.key)) {
-            append(" … Waiting for KOReader")
-        } else {
-            SettingsStore.fromPluginAt(this@SettingsPage, d.key)?.takeIf { System.currentTimeMillis() - it < 86_400_000L }?.let {
-                append(" · Changed in KOReader at ${Ui.clock(this@SettingsPage, it)}")
-            }
+    /**
+     * The row's line: what it does; then, on a line of its own, Waiting for KOReader or Changed in
+     * KOReader at … (M8C feedback: never squeezed in beside the text).
+     */
+    protected fun lineFor(d: SettingDef): String = SettingsUi.line(d, statusFor(d))
+
+    private fun statusFor(d: SettingDef): String? = when {
+        SettingsStore.pending(this, d.key) -> SettingsUi.WAITING
+        else -> SettingsStore.fromPluginAt(this, d.key)?.takeIf { System.currentTimeMillis() - it < 86_400_000L }?.let {
+            "Changed in KOReader at ${Ui.clock(this, it)}"
         }
     }
 
-    protected fun <T> segmented(root: LinearLayout, title: String, sub: String?, options: List<Pair<T, String>>, current: T, pick: (T) -> Unit) {
-        root.addView(Ui.text(this, title, 21f).apply { setPadding(0, Ui.dp(this@SettingsPage, 10), 0, Ui.dp(this@SettingsPage, 6)) })
+    /** [title]: null when the page's own title already names it (no doubled titles). */
+    protected fun <T> segmented(root: LinearLayout, title: String?, sub: String?, options: List<Pair<T, String>>, current: T, pick: (T) -> Unit) {
+        if (title != null) root.addView(Ui.text(this, title, 21f).apply { setPadding(0, Ui.dp(this@SettingsPage, 10), 0, Ui.dp(this@SettingsPage, 6)) })
         val rows = if (options.size == 4) options.chunked(2) else listOf(options)
         rows.forEach { row ->
             val seg = LinearLayout(this).apply {
@@ -124,6 +125,19 @@ abstract class SettingsPage : EinkActivity() {
         fun section(ctx: android.content.Context, id: String, focus: String? = null): Intent =
             Intent(ctx, if (id == "sleep") SleepScreenActivity::class.java else SettingsSectionActivity::class.java)
                 .putExtra(EXTRA_SECTION, id).apply { focus?.let { putExtra(EXTRA_FOCUS, it) } }
+
+        /**
+         * What the top page opens for a section: the section page, or, when that page would hold
+         * one row that only opens another page, that page itself (no in-between screens).
+         */
+        fun open(ctx: android.content.Context, id: String): Intent {
+            val p = Prefs(ctx)
+            return when (SettingsUi.direct(id, p.mode == OrbitMode.ADDON, Pin.isSet(ctx))) {
+                SettingsUi.Direct.CLICKERS -> Intent(ctx, ClickersActivity::class.java)
+                SettingsUi.Direct.PIN_SET -> PinActivity.intent(ctx, PinActivity.Mode.SET)
+                null -> section(ctx, id)
+            }
+        }
     }
 }
 
@@ -143,6 +157,15 @@ class SettingsActivity : SettingsPage() {
         val root = page(scroll = true)
         root.addView(Ui.header(this, "Settings", "‹ Back") { finish() })
         lockedBar(root)
+        // The search box: the input, and ✕ at its right end to clear it in one tap.
+        val clear = Ui.text(this, "✕", 22f, bold = true).apply {
+            gravity = Gravity.CENTER
+            minWidth = Ui.dp(this@SettingsActivity, 56)
+            minHeight = Ui.dp(this@SettingsActivity, 56)
+            contentDescription = "Clear search"
+            tag = "search:clear"
+            visibility = if (query.isEmpty()) View.GONE else View.VISIBLE
+        }
         val box = EditText(this).apply {
             hint = "Search settings"
             setText(query)
@@ -150,22 +173,35 @@ class SettingsActivity : SettingsPage() {
             textSize = 20f
             imeOptions = EditorInfo.IME_ACTION_SEARCH
             minHeight = Ui.dp(this@SettingsActivity, 64)
-            background = Ui.box(this@SettingsActivity, Ui.PAPER)
+            background = null
             val p = Ui.dp(this@SettingsActivity, 12)
-            setPadding(p, 0, p, 0)
+            setPadding(p, 0, 0, 0)
             tag = "search"
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
                 override fun afterTextChanged(s: Editable?) {
                     query = s?.toString().orEmpty()
+                    clear.visibility = if (query.isEmpty()) View.GONE else View.VISIBLE
                     // One redraw per pause in typing, none per key (§5.4).
                     main.removeCallbacks(searchNow)
                     main.postDelayed(searchNow, SEARCH_PAUSE_MS)
                 }
             })
         }
-        root.addView(box)
+        Ui.clickable(clear, {
+            box.setText("")
+            // Cleared: the sections at once, no pause.
+            main.removeCallbacks(searchNow)
+            drawResults()
+        })
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = Ui.box(this@SettingsActivity, Ui.PAPER)
+            addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(clear, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        })
         root.addView(Ui.gap(this, 8))
         results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(results)
@@ -179,7 +215,7 @@ class SettingsActivity : SettingsPage() {
         val q = query.trim()
         if (q.isEmpty()) {
             schema.sections.forEach { s ->
-                out.addView(Ui.row(this, s.title, summary(s.id), Ui.value(this, "›"), onClick = { startActivity(SettingsPage.section(this, s.id)) }).apply { tag = "section:${s.id}" })
+                out.addView(Ui.row(this, s.title, summary(s.id), Ui.value(this, "›"), onClick = { startActivity(SettingsPage.open(this, s.id)) }).apply { tag = "section:${s.id}" })
             }
             out.addView(note("Orbit ${BuildConfig.VERSION_NAME}" + prefs.patchVersionSeen.takeIf { it.isNotEmpty() }?.let { " · plugin $it" }.orEmpty()))
             return
@@ -205,7 +241,9 @@ class SettingsActivity : SettingsPage() {
             }
             // A hidden row opens its section at the parent that shows it.
             val focus = if (shown) h.id else d?.parentKey
-            out.addView(Ui.row(this, h.label, sub, Ui.value(this, "›"), onClick = { startActivity(SettingsPage.section(this, h.section, focus)) }).apply { tag = "hit:${h.id}" })
+            // A section that is one row leading on (Buttons, a PIN not set yet) opens where that row goes.
+            val go = { startActivity(if (h.section in DIRECT_IDS) SettingsPage.open(this, h.section) else SettingsPage.section(this, h.section, focus)) }
+            out.addView(Ui.row(this, h.label, sub, Ui.value(this, "›"), onClick = go).apply { tag = "hit:${h.id}" })
         }
     }
 
@@ -234,6 +272,7 @@ class SettingsActivity : SettingsPage() {
 
     companion object {
         const val SEARCH_PAUSE_MS = 500L
+        private val DIRECT_IDS = setOf("buttons", "kids")
     }
 }
 
@@ -306,6 +345,8 @@ open class SettingsSectionActivity : SettingsPage() {
         if (!SettingsSync.visible(schema, d.key, get)) return
         val v = get(d.key)
         val line = lineFor(d)
+        // The page's title already names it (Sleep screen's own choice): shown once.
+        val label = d.label.takeIf { it != schema.section(sectionId)?.title }
         when {
             d.type == "bool" -> toggleRow(root, d.label, line, v == "1") { on ->
                 // Merged rows (§5.2): one switch sets the companion's half too.
@@ -319,7 +360,7 @@ open class SettingsSectionActivity : SettingsPage() {
             }.tag = "key:${d.key}"
             d.type == "choice" && d.values.size <= 4 -> {
                 val before = root.childCount
-                segmented(root, d.label, line, d.values, v) { setShared(d.key, it) }
+                segmented(root, label, line, d.values, v) { setShared(d.key, it) }
                 root.getChildAt(before)?.tag = "key:${d.key}"
             }
             d.type == "choice" || d.type == "source" -> linkRow(root, d.label, line, SettingsUi.valueLabel(d, v, choices()) + "  ›") {
