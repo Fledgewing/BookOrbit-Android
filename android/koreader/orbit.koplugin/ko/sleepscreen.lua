@@ -326,7 +326,8 @@ function Sleep.build(client, plan, rand)
             end
         end
     end
-    writeFile(d .. "/pool.json", SleepPool.json(SleepPool.poolDoc(source, items, now * 1000)))
+    writeFile(d .. "/pool.json", SleepPool.json(SleepPool.poolDoc(source, items, now * 1000,
+        { server = client.server_url, user = client.username, storage_limit_mb = plan.storage_limit_mb })))
     sum.items = #items
     return sum
 end
@@ -356,6 +357,7 @@ function Sleep.refresh(why)
         dir = d, now = t, from_key = s.sleep_from, rules = s.sleep_leave_out,
         leave_out = Sleep.load("leave_out.lua") or {}, bag = Sleep.load("bag.lua") or { order = {}, pos = 0 },
         shown = tonumber(Sleep.state().shown), open_id = Sleep.bookId(S.sleep_current_file),
+        storage_limit_mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB,
     }
     Sleep.busy = true
     Sleep.refreshed_at = t
