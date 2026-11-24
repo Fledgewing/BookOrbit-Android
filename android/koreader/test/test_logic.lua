@@ -1508,5 +1508,26 @@ test("cache worker fixture: the plugin's keys, hashes, pages, cover names and en
     eq(Cache.encode({ key = e.key, body = body, fetched_at = e.fetched_at, validated_at = e.validated_at, path = e.path }), e.lua, "entry")
 end)
 
+test("sleep screen, Every sleep: a batch of 24, the used-up retired, the bag's order continued", function()
+    eq(SP.BATCH, 24); eq(SP.SHOWS_MAX, 3)
+    eq(SP.normalize({ sleep_hours = 0 }).sleep_hours, 0, "Every sleep is a value")
+    eq(SP.normalize({ sleep_hours = "0" }).sleep_hours, 0)
+    eq(SP.extras({ sleep_hours = 0 }).sleep_hours, "0")
+    eq(SP.hoursLabel(0), "Every sleep"); eq(SP.hoursLabel(12), "12 h")
+    -- shows from state.json have string keys.
+    local carry, retired = SP.carry({ 5, 6, 7, 6, "8" }, { ["5"] = 3, ["6"] = 2, [8] = 4 }, 3)
+    eq(table.concat(carry, ","), "6,7", "kept in order, once")
+    ok(retired[5] and retired[8] and not retired[6], "used up")
+    carry = SP.carry({ 1, 2 }, nil, 3)
+    eq(#carry, 2, "no counts yet: all stay")
+    -- The bag: taking 4 and 6 into the batch moves past them; the next top-up starts after.
+    local bag = { order = { 3, 4, 5, 6, 7 }, pos = 1, prev = 3 }
+    SP.bagTake(bag, { [4] = true, [6] = true })
+    eq(bag.pos, 4); eq(bag.prev, nil)
+    eq(table.concat((SP.bagNext(bag, function() return 1 end)), ","), "7")
+    SP.bagTake(bag, {})
+    eq(bag.pos, 4, "nothing taken: unchanged")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

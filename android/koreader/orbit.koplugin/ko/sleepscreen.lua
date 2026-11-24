@@ -14,6 +14,8 @@
 --   current.png, current.json    Current book: the open book's cover, written once per book at
 --                                ReaderReady. It stays after the book closes: "the last book read".
 --   state.json                   Written by the companion: the cover it showed and when.
+--   scopes.json                  Ours: every smart scope and collection, with counts, for the
+--                                pickers (Pick from, Leave out); refreshed when one opens.
 --   bag.lua, leave_out.lua       Ours: the shuffle bag of a smart scope or collection, and the
 --                                member lists of Leave out's scope and collection rules.
 -- Rules: logic/sleep_pool.lua. Settings: S.sleep_*, shared with the companion through SETTINGS.
@@ -91,6 +93,14 @@ function Sleep.notify(why)
     Companion.send(Companion.ACTION.SLEEP_POOL, { reason = why })
 end
 
+-- Back from a real sleep: the companion moves the picture on for the next one (Every sleep on
+-- a reader that shows a picture). Its service hears the screen come on too; without the service
+-- (Add-on mode) this is the wake it hears. It counts one wake once (SleepWake).
+function Sleep.woke()
+    if not Sleep.on() then return end
+    Companion.send(Companion.ACTION.SLEEP_POOL, { reason = "wake", wake = "1" })
+end
+
 ---------------------------------------------------------------- files
 
 function Sleep.load(name)
@@ -104,14 +114,33 @@ function Sleep.save(name, v)
     return d ~= nil and writeFile(d .. "/" .. name, Cache.encode(v))
 end
 
+-- A JSON file of ours or the companion's, decoded, or nil.
+-- (Not `okj and pcall(...)`: `and` keeps only pcall's first result, so the value was always lost.)
+local function readJson(path)
+    local body = path and readFile(path)
+    if not body then return nil end
+    local okj, json = pcall(require, "json")
+    if not okj then return nil end
+    local okd, v = pcall(json.decode, body)
+    return (okd and type(v) == "table") and v or nil
+end
+
 -- The companion's state.json: { shown = id, changed_at = ms }, or {}.
 function Sleep.state()
     local d = Sleep.dir()
-    local body = d and readFile(d .. "/state.json")
-    if not body then return {} end
-    local okj, json = pcall(require, "json")
-    local okd, v = okj and pcall(json.decode, body)
-    return (okd and type(v) == "table") and v or {}
+    return readJson(d and (d .. "/state.json")) or {}
+end
+
+-- pool.json's ids, in order (the batch ready now).
+function Sleep.poolIds()
+    local d = Sleep.dir()
+    local v = readJson(d and (d .. "/pool.json"))
+    local out = {}
+    for _, it in ipairs(type(v) == "table" and type(v.items) == "table" and v.items or {}) do
+        local id = type(it) == "table" and tonumber(it.id)
+        if id then table.insert(out, id) end
+    end
+    return out
 end
 
 -- The BookOrbit id of a book file on this reader (the plugin's on-device map), or nil.
@@ -265,15 +294,21 @@ function Sleep.build(client, plan, rand)
                 table.insert(sum.listed, plan.from_key .. " failed (" .. err .. ")")
             end
         end
-        SleepPool.bagSeek(bag, plan.shown)
+        if not plan.every then SleepPool.bagSeek(bag, plan.shown) end
         candidates = SleepPool.bagNext(bag, rand)
     end
 
-    -- Checked one by one, covers fetched for the ones kept.
-    local keep = from.kind == "list" and SleepPool.LIST_KEEP or SleepPool.BAG_KEEP
+    -- Checked one by one, covers fetched for the ones kept: BATCH of them (R3).
+    local keep = SleepPool.BATCH
     local items = {}
     local wanted = {}
+    local taken = {}
+    -- Every sleep: the ready covers not yet shown SHOWS_MAX times stay; retired ones make room.
+    local carry, retired = {}, {}
+    if plan.every then carry, retired = SleepPool.carry(plan.prev_ids, plan.shows, SleepPool.SHOWS_MAX) end
     local function try(id)
+        if taken[id] then return end
+        taken[id] = true
         sum.probed = sum.probed + 1
         local b = known[id]
         local detail
@@ -295,16 +330,26 @@ function Sleep.build(client, plan, rand)
         end
     end
     -- The bag's last shown book stays first, so the companion's "next" is the bag's next.
-    if bag and bag.prev and exists(d .. "/covers/" .. bag.prev .. ".jpg") then
+    if bag and not plan.every and bag.prev and exists(d .. "/covers/" .. bag.prev .. ".jpg") then
         if SleepPool.check(bag.prev, plan.rules, members, nil) == "keep" then
             table.insert(items, { id = bag.prev, title = "", file = "covers/" .. bag.prev .. ".jpg" })
             wanted["covers/" .. bag.prev .. ".jpg"] = true
         end
     end
     local first = #items
-    for _, id in ipairs(candidates) do
+    for _, id in ipairs(carry) do
         if #items - first >= keep or sum.probed >= SleepPool.PROBE_MAX then break end
         try(id)
+    end
+    sum.carried = #items - first
+    local fresh = {}
+    for _, id in ipairs(candidates) do
+        if #items - first >= keep or sum.probed >= SleepPool.PROBE_MAX then break end
+        if not retired[id] and not taken[id] then
+            local before = #items
+            try(id)
+            if #items > before then fresh[id] = true end
+        end
     end
     -- A bag whose rest is all left out or read: shuffled again, once.
     if bag and #items - first == 0 and #bag.order > 0 and sum.probed < SleepPool.PROBE_MAX then
@@ -314,8 +359,19 @@ function Sleep.build(client, plan, rand)
             try(id)
         end
     end
+    -- Every retired one and nothing new (a one-book list, offline): they stay, and the companion
+    -- keeps cycling them rather than showing nothing.
+    if #items - first == 0 and next(retired) then
+        for _, id in ipairs(plan.prev_ids or {}) do
+            if retired[tonumber(id)] then taken[tonumber(id)] = nil; try(tonumber(id)) end
+            if #items - first >= keep then break end
+        end
+    end
+    if bag and plan.every then SleepPool.bagTake(bag, fresh) end
     if bag then Sleep.save("bag.lua", bag) end
     sum.kept = #items - first
+    sum.retired = 0
+    for _ in pairs(retired) do sum.retired = sum.retired + 1 end
     -- Covers no longer in the pool go.
     if lfs_ok and lfs.attributes(d .. "/covers", "mode") == "directory" then
         for name in lfs.dir(d .. "/covers") do
@@ -358,6 +414,7 @@ function Sleep.refresh(why)
         leave_out = Sleep.load("leave_out.lua") or {}, bag = Sleep.load("bag.lua") or { order = {}, pos = 0 },
         shown = tonumber(Sleep.state().shown), open_id = Sleep.bookId(S.sleep_current_file),
         storage_limit_mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB,
+        every = s.sleep_hours == SleepPool.EVERY_SLEEP, prev_ids = Sleep.poolIds(), shows = Sleep.state().shows,
     }
     Sleep.busy = true
     Sleep.refreshed_at = t
@@ -367,6 +424,7 @@ function Sleep.refresh(why)
         local seed = os.time() + math.floor((os.clock() * 1e6) % 1e6)
         math.randomseed(seed)
         local sum = Sleep.build(client, plan, function(n) return math.random(n) end)
+        sum.choices = Sleep.fetchScopes(client)
         return Cache.encode(sum)
     end, Sleep.TIMEOUT_S, function(out, berr)
         Sleep.busy = nil
@@ -376,10 +434,12 @@ function Sleep.refresh(why)
             log("sleep screen: pool not refreshed:", tostring(berr or out))
             return
         end
-        log(string.format("sleep screen: pool %d cover(s): %d new, %d checked, %d left out, %d unchecked (left out), %d skipped%s%s",
+        log(string.format("sleep screen: pool %d cover(s): %d new, %d checked, %d left out, %d unchecked (left out), %d skipped%s%s%s",
             sum.items or 0, sum.kept or 0, sum.probed or 0, sum.left_out or 0, sum.unknown or 0, sum.skipped or 0,
+            plan.every and string.format(", every sleep: %d kept, %d retired", sum.carried or 0, sum.retired or 0) or "",
             sum.fallback and (", from " .. sum.fallback .. " (the chosen list was empty)") or "",
             #(sum.listed or {}) > 0 and (", listed " .. table.concat(sum.listed, " ")) or ""))
+        if sum.choices then Sleep.saveScopes(sum.choices) end
         Sleep.notify("pool")
     end)
     return true
@@ -387,38 +447,95 @@ end
 
 ---------------------------------------------------------------- the pickers
 
--- The account's smart scopes and collections (picked from the two section lists): from the
--- server when online, else from the cache. cb({ scopes = {…}, collections = {…} } or nil).
-function Sleep.scopes(cb)
+-- The account's smart scopes and collections, for Pick from and Leave out: every entry of the two
+-- section lists, with counts. Saved in scopes.json ({ v, at, scopes = {…}, collections = {…} },
+-- entries { id, title, count }) so a picker opens at once, offline too; refreshed in the
+-- background each time a picker opens and at each pool refresh.
+Sleep.SCOPES_FILE = "scopes.json"
+Sleep.SCOPE_PAGES = 20
+Sleep.SCOPES_EVERY_S = 60
+
+-- Every page of one section list (child-safe: no UI). -> entries, or nil, err.
+function Sleep.listSection(client, section)
+    local out, seen = {}, {}
+    for page = 1, Sleep.SCOPE_PAGES do
+        local body, err = client:requestBlocking("GET",
+            client:query("/koreader/plugin/catalog/sections/" .. section, { page = page, size = SleepPool.PAGE_SIZE }))
+        if type(body) ~= "table" then
+            if page == 1 then return nil, tostring(err or "no answer") end
+            break
+        end
+        local new = 0
+        for _i, e in ipairs(SleepPool.entries(body)) do
+            if not seen[e.id] then seen[e.id] = true; table.insert(out, e); new = new + 1 end
+        end
+        -- Collections and smart scopes come whole today (no hasNext); a paged reply is followed.
+        if body.hasNext ~= true or new == 0 then break end
+    end
+    return out
+end
+
+-- Both lists (child-safe). -> { scopes, collections, at }, or nil, err.
+function Sleep.fetchScopes(client)
+    local scopes, e1 = Sleep.listSection(client, "smart-scopes")
+    local collections, e2 = Sleep.listSection(client, "collections")
+    if not (scopes and collections) then return nil, e1 or e2 end
+    return { v = 1, at = os.time(), scopes = scopes, collections = collections }
+end
+
+local function remember(v)
+    Sleep.scope_names = Sleep.scope_names or {}
+    for _i, e in ipairs(v.scopes or {}) do Sleep.scope_names["scope:" .. e.id] = e.title end
+    for _i, e in ipairs(v.collections or {}) do Sleep.scope_names["collection:" .. e.id] = e.title end
+end
+
+function Sleep.saveScopes(v)
+    if type(v) ~= "table" or type(v.scopes) ~= "table" or type(v.collections) ~= "table" then return false end
+    remember(v)
+    Sleep.scopes_cache = v
+    local d = Sleep.dir()
+    return d ~= nil and writeFile(d .. "/" .. Sleep.SCOPES_FILE, SleepPool.json(v))
+end
+
+-- The saved lists, or nil before the first fetch.
+function Sleep.scopes()
+    if Sleep.scopes_cache then return Sleep.scopes_cache end
+    local d = Sleep.dir()
+    local v = readJson(d and (d .. "/" .. Sleep.SCOPES_FILE))
+    if not (v and type(v.scopes) == "table" and type(v.collections) == "table") then return nil end
+    local clean = { v = 1, at = tonumber(v.at), scopes = SleepPool.entries({ items = v.scopes }), collections = SleepPool.entries({ items = v.collections }) }
+    remember(clean)
+    Sleep.scopes_cache = clean
+    return clean
+end
+
+-- Fetch both lists in the background when online; done(v or nil) after.
+function Sleep.refreshScopes(why, done)
     local client = OC.client()
-    local function cached(section)
-        local out = {}
-        for key, meta in pairs(OC.index().entries) do
-            if meta.path and meta.path:find("^/koreader/plugin/catalog/sections/" .. section) then
-                local e = OC.get(key)
-                if e then out = SleepPool.entries(e.body) end
-                if #out > 0 then break end
-            end
-        end
-        return out
+    local t = os.time()
+    if Sleep.scopes_busy or not client or not NetworkMgr:isConnected()
+        or (Sleep.scopes_at and t >= Sleep.scopes_at and t - Sleep.scopes_at < Sleep.SCOPES_EVERY_S) then
+        if done then done(nil) end
+        return false
     end
-    if not client or not NetworkMgr:isConnected() then
-        return cb({ scopes = cached("smart%-scopes"), collections = cached("collections"), cached = true })
-    end
+    Sleep.scopes_busy, Sleep.scopes_at = true, t
     Background.run("sleep screen scopes", function()
-        local a = client:requestBlocking("GET", "/koreader/plugin/catalog/sections/smart-scopes")
-        local b = client:requestBlocking("GET", "/koreader/plugin/catalog/sections/collections")
-        return Cache.encode({ scopes = SleepPool.entries(a), collections = SleepPool.entries(b) })
-    end, 30, function(out)
+        local v, err = Sleep.fetchScopes(client)
+        return Cache.encode(v or { err = tostring(err) })
+    end, 30, function(out, berr)
+        Sleep.scopes_busy = nil
         local v = Cache.decode(out or "")
-        if type(v) ~= "table" then
-            return cb({ scopes = cached("smart%-scopes"), collections = cached("collections"), cached = true })
+        if type(v) == "table" and v.scopes then
+            Sleep.saveScopes(v)
+            log(string.format("sleep screen: %d smart scope(s), %d collection(s) listed (%s)", #v.scopes, #v.collections, tostring(why)))
+        else
+            Sleep.scopes_at = nil
+            log("sleep screen: scopes and collections not listed:", tostring((type(v) == "table" and v.err) or berr or out), "(" .. tostring(why) .. ")")
+            v = nil
         end
-        Sleep.scope_names = Sleep.scope_names or {}
-        for _, e in ipairs(v.scopes or {}) do Sleep.scope_names["scope:" .. e.id] = e.title end
-        for _, e in ipairs(v.collections or {}) do Sleep.scope_names["collection:" .. e.id] = e.title end
-        cb(v)
+        if done then done(v) end
     end)
+    return true
 end
 
 -- Tags from the book details in the cache (X3), with counts. At most max details are read.
@@ -439,6 +556,7 @@ function Sleep.ruleLabel(rule)
     local p = SleepPool.parseRule(rule)
     if not p then return tostring(rule) end
     if p.kind == "tag" then return _("Tag: ") .. p.tag end
+    if not Sleep.scope_names then Sleep.scopes() end
     local name = Sleep.scope_names and Sleep.scope_names[p.key]
     local kind = p.kind == "scope" and _("smart scope") or _("collection")
     if name then return string.format("%s (%s)", name, kind) end
@@ -452,6 +570,7 @@ function Sleep.fromLabel(v)
     local p = SleepPool.parseFrom(v)
     if not p then return "?" end
     if p.kind == "list" then return _(SleepPool.label(SleepPool.LISTS, p.id)) end
+    if not Sleep.scope_names then Sleep.scopes() end
     local name = Sleep.scope_names and Sleep.scope_names[v]
     return name or string.format("%s %d", p.kind == "scope" and _("Smart scope") or _("Collection"), p.id)
 end
@@ -480,7 +599,7 @@ local function radios(list, key, after)
     for _i, o in ipairs(list) do
         local id = type(o) == "table" and o.id or o
         table.insert(out, {
-            text = type(o) == "table" and _(o.label) or (string.format(_("%d h"), o)),
+            text = type(o) == "table" and _(o.label) or _(SleepPool.hoursLabel(o)),
             radio = true,
             checked_func = function() return Sleep.settings()[key] == id end,
             callback = function() Sleep.set(key, id); if after then after(id) end end,
@@ -497,11 +616,14 @@ end
 local function scopeRows(pick)
     return function()
         local rows = {}
-        local got
-        Sleep.scopes(function(v) got = v end)
+        -- The saved lists at once; a fresh copy is fetched behind them for the next open.
+        local got = Sleep.scopes()
+        local fetching = Sleep.refreshScopes("picker")
         if not got then
-            -- Fetched in the background: the list fills in when the menu is opened again.
-            return { info(function() return _("Loading the smart scopes and collections… open this again in a moment.") end) }
+            return { info(function()
+                return fetching and _("Loading the smart scopes and collections… open this again in a moment.")
+                    or _("No saved list of smart scopes and collections yet: connect, then open this again.")
+            end) }
         end
         local function add(title, list, kind)
             table.insert(rows, info(function() return title end))
@@ -514,7 +636,7 @@ local function scopeRows(pick)
                 })
             end
         end
-        add(_("Smart scopes") .. (got.cached and _(" (saved list, offline)") or ""), got.scopes or {}, "scope")
+        add(_("Smart scopes"), got.scopes or {}, "scope")
         add(_("Collections"), got.collections or {}, "collection")
         return rows
     end
@@ -632,7 +754,7 @@ function Sleep.menuItem(_plugin, later)
                     sub_item_table_func = leaveOutItems,
                 },
                 {
-                    text_func = function() return string.format(_("Change cover every: %d h"), Sleep.settings().sleep_hours) end,
+                    text_func = function() return _("Change cover every: ") .. _(SleepPool.hoursLabel(Sleep.settings().sleep_hours)) end,
                     enabled_func = rec,
                     sub_item_table = radios(SleepPool.HOURS, "sleep_hours"),
                     separator = true,

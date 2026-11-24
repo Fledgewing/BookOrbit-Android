@@ -41,7 +41,11 @@ class CommandReceiver : BroadcastReceiver() {
         // A record action: kept here, no service needed (docs/design/addon-mode.md §7.1).
         if (intent.action == Contract.REPORT) return StatusFile.onReport(ctx, intent)
         // The sleep screen's files changed: a record action too (no service needed).
-        if (intent.action == SleepScreen.ACTION_POOL) return SleepScreen.onPool(ctx, intent.getStringExtra("reason") ?: "plugin")
+        if (intent.action == SleepScreen.ACTION_POOL) {
+            // The plugin back from a real sleep: the wake, also without the service (Add-on mode).
+            if (intent.getStringExtra("wake") == "1") return SleepScreen.onWake(ctx, "plugin resumed")
+            return SleepScreen.onPool(ctx, intent.getStringExtra("reason") ?: "plugin")
+        }
         // The cache worker's jobs (docs/design/companion-worker.md): every mode, no service needed.
         if (intent.action == Worker.ACTION_MIRROR || intent.action == Worker.ACTION_CHECK || intent.action == Worker.ACTION_STORAGE || intent.action == Worker.ACTION_COPIES) return Worker.onIntent(ctx, intent)
         // The plugin's "Check for updates": every mode (the plugin downloads nothing itself).
@@ -215,6 +219,7 @@ class OrbitService : Service() {
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     stats.record("screen_on")
+                    SleepScreen.onWake(this@OrbitService, "screen on")
                     updateNotification(force = true)
                 }
             }

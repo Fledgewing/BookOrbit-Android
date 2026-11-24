@@ -9,8 +9,10 @@
 -- decides at sleep which cover of the pool is shown.
 ---------------------------------------------------------------------------------------------
 
-SleepPool = { TEXT_MAX = 60, LIST_KEEP = 12, BAG_KEEP = 6, BAG_MAX = 2000, LEAVE_OUT_MAX = 4000,
-    PAGE_SIZE = 100, DAY_S = 86400, PROBE_MAX = 36 }
+-- BATCH: the recommended covers kept ready on the reader, whatever Pick from is (R3).
+-- SHOWS_MAX: with Every sleep, a cover is shown this many times, then retired (R4b).
+SleepPool = { TEXT_MAX = 60, BATCH = 24, BAG_MAX = 2000, LEAVE_OUT_MAX = 4000,
+    PAGE_SIZE = 100, DAY_S = 86400, PROBE_MAX = 48, EVERY_SLEEP = 0, SHOWS_MAX = 3 }
 
 SleepPool.MODES = {
     { id = "off", label = "The reader's own" },
@@ -23,7 +25,13 @@ SleepPool.LISTS = {
     { id = "want_to_read", type = "want-to-read", label = "Want to read" },
     { id = "discover", type = "random", label = "Discover" },
 }
-SleepPool.HOURS = { 1, 3, 6, 12, 24 }
+-- Change cover every: 0 is "Every sleep" (a random ready cover at each sleep), else hours.
+SleepPool.HOURS = { 0, 1, 3, 6, 12, 24 }
+
+function SleepPool.hoursLabel(h)
+    if tonumber(h) == SleepPool.EVERY_SLEEP then return "Every sleep" end
+    return string.format("%d h", tonumber(h) or 0)
+end
 SleepPool.STYLES = { { id = "bar", label = "Bar" }, { id = "overlay", label = "Overlay" } }
 SleepPool.TEXT_POSITIONS = {
     { id = "right", label = "Right" }, { id = "left", label = "Left" },
@@ -331,6 +339,32 @@ function SleepPool.bagNext(bag, rand)
     end
     for i = bag.pos + 1, #bag.order do table.insert(out, bag.order[i]) end
     return out, shuffled
+end
+
+-- Every sleep (R4b): the ready covers carried into the next batch, in order, and the retired ones
+-- (shown SHOWS_MAX times, by the companion's state.json "shows"). prev_ids: pool.json's ids.
+function SleepPool.carry(prev_ids, shows, max_shows)
+    local carry, retired, seen = {}, {}, {}
+    for _, id in ipairs(prev_ids or {}) do
+        id = tonumber(id)
+        if id and not seen[id] then
+            seen[id] = true
+            local n = tonumber(type(shows) == "table" and (shows[id] or shows[tostring(id)]) or 0) or 0
+            if n >= (max_shows or SleepPool.SHOWS_MAX) then retired[id] = true else table.insert(carry, id) end
+        end
+    end
+    return carry, retired
+end
+
+-- Every sleep with a bag: the books taken into the batch count as shown, so the next top-up
+-- continues the no-repeat order. taken: a set of ids.
+function SleepPool.bagTake(bag, taken)
+    local pos = bag.pos or 0
+    for i = pos + 1, #(bag.order or {}) do
+        if taken[bag.order[i]] then pos = i end
+    end
+    if pos ~= (bag.pos or 0) then bag.pos, bag.prev = pos, nil end
+    return bag
 end
 
 ---------------------------------------------------------------- the files

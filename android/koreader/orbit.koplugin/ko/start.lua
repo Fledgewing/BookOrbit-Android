@@ -14,6 +14,10 @@ function OrbitAndroid:onResume()
     state.paused_for = state.suspended_at and (now_s() - state.suspended_at) or nil
     state.suspended_at = nil
     Wifi.state().foreground = true
+    if state.slept then
+        state.slept = nil
+        pcall(Sleep.woke)
+    end
     log("resume", state.paused_for and ("after " .. fmt(state.paused_for) .. " in the background") or "")
     Clicks.install("resume")
     -- Back in front and not in a book (file browser, BookOrbit Home): what waited shows now.
