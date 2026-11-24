@@ -397,8 +397,13 @@ end
 -- may have turned it (its start, a book close). Through the file browser's own handler
 -- (FileManager:onSetRotationMode, filemanager.lua:71-79, as KOReader's rotation menu does by
 -- event, screen_rotation_menu_table.lua:18), which also lays it out again.
-function keepHeldRotation(action, held, in_reader)
+function keepHeldRotation(action, held, in_reader, source)
     if held == nil then return end
+    -- KOReader's start already kept the held rotation (patches/1-orbit-start-rotation.lua).
+    if source == "start" and rawget(_G, "ORBIT_START_ROTATION") ~= nil then
+        log("home: rotation kept from the start (" .. tostring(rawget(_G, "ORBIT_START_ROTATION")) .. ")")
+        return
+    end
     local okc, current = pcall(function() return Device.screen:getRotationMode() end)
     local okl, locked = pcall(function() return G_reader_settings:isTrue("lock_rotation") end)
     local mode = HomePlan.rotation{
@@ -433,6 +438,39 @@ function keepRotationOnFileBrowser(why)
         log("file browser: rotation stays", tostring(select(2, pcall(function() return Device.screen:getRotationMode() end))))
     end
     log("file browser: keeps the current rotation (" .. why .. ")")
+end
+
+-- The early user patch that keeps the held rotation through KOReader's start
+-- (patches/1-orbit-start-rotation.lua): copied into koreader/patches/ when missing or different.
+-- KOReader runs it at its next start (userpatch.lua, reader.lua:26-27); builds that skip user
+-- patches fall back to keepHeldRotation, which turns once more after the start.
+START_PATCH = "1-orbit-start-rotation.lua"
+
+function installStartPatch(why)
+    local function slurp(path)
+        local h = io.open(path, "rb")
+        if not h then return nil end
+        local text = h:read("*a")
+        h:close()
+        return text
+    end
+    local want = slurp(PLUGIN_DIR .. "/patches/" .. START_PATCH)
+    local okd, DataStorage = pcall(require, "datastorage")
+    if not want or not okd then return false end
+    local dir = DataStorage:getDataDir() .. "/patches"
+    local dest = dir .. "/" .. START_PATCH
+    if slurp(dest) == want then return false end
+    local okl, lfs = pcall(require, "libs/libkoreader-lfs")
+    if okl and lfs.attributes(dir, "mode") ~= "directory" then lfs.mkdir(dir) end
+    local tmp = dest .. ".tmp"
+    local h = io.open(tmp, "wb")
+    if not h then log("start patch: can't write", dest); return false end
+    h:write(want)
+    h:close()
+    local okr, err = os.rename(tmp, dest)
+    if not okr then os.remove(tmp); log("start patch: install failed:", tostring(err)); return false end
+    log("start patch: installed", dest, "(" .. why .. ")")
+    return true
 end
 
 -- Home (android/docs/INTERFACE.md "go home"): HomePlan decides. mode: "smart" (home_smart) or
@@ -477,7 +515,7 @@ function OrbitAndroid:smartHome(source, from_extra, mode, held)
         "from other app", tostring(from_other),
         "(paused", paused and fmt(paused) or "-", ")", "reopen current book", reopen and tostring(last) or "no")
     log("home: screen:", screen_desc)
-    keepHeldRotation(action, held, in_reader)
+    keepHeldRotation(action, held, in_reader, source)
     if action == "first_page" then
         log("home: BookOrbit " .. page_what .. " page " .. page .. " -> page 1")
         local okg, err = pcall(first_page)

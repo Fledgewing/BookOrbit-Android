@@ -530,12 +530,14 @@ object HomeCommands {
  * rotation (fm_rotation_mode, else upright), which on Android turns the whole display; the
  * plugin turns BookOrbit Home back to this one. [rotation] is Display.getRotation() (0-3, the
  * Surface.ROTATION_* quarter turns); [naturalPortrait]: the panel's natural (rotation 0)
- * orientation is portrait. Names are the SCREEN_ORIENTATION_* the plugin maps to KOReader's modes.
+ * orientation is portrait. Named as KOReader's rotation modes, the way KOReader's launcher reads
+ * the display (android-luajit-launcher extensions/ActivityExtensions.kt:295-302,
+ * getOrientationCompat: on a portrait panel ROTATION_90 is its reverse landscape).
  */
 object HeldRotation {
     fun name(rotation: Int, naturalPortrait: Boolean): String? {
-        val portrait = listOf("portrait", "landscape", "reverse_portrait", "reverse_landscape")
-        val landscape = listOf("landscape", "reverse_portrait", "reverse_landscape", "portrait")
+        val portrait = listOf("portrait", "reverse_landscape", "reverse_portrait", "landscape")
+        val landscape = listOf("landscape", "portrait", "reverse_landscape", "reverse_portrait")
         return (if (naturalPortrait) portrait else landscape).getOrNull(rotation)
     }
 
