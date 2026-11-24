@@ -21,5 +21,7 @@ item moves to building. Android-only designs are in [`android/docs/`](../../andr
   one schema for both, per-key sync, eight sections with search (ROADMAP 14, building).
 - [`write-through-cache.md`](write-through-cache.md): one cache in front of BookOrbit on both
   platforms: reads from the cache and revalidated, writes through. ROADMAP 4 and 4a.
+- [`sqlite-cache.md`](sqlite-cache.md): the offline cache in one SQLite database (companion
+  writes, KOReader reads), the Full refresh's counting, speed and progress badge. ROADMAP 13a.
 - Mockups for end-of-book and local-first: `mockups.html` in each folder, also at
   https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk.
