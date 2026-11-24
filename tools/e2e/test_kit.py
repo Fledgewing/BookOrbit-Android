@@ -64,7 +64,7 @@ class ProxyTest(unittest.TestCase):
     def setUp(self):
         self.upstream = ThreadingHTTPServer(("127.0.0.1", free_port()), Stub)
         threading.Thread(target=self.upstream.serve_forever, daemon=True).start()
-        self.log = Path(tempfile.mkdtemp()) / "bofault.jsonl"
+        self.log = Path(tempfile.mkdtemp()) / "not-yet" / "bofault.jsonl"  # the proxy makes the folder
         self.proxy = bofault.serve(free_port(), f"http://127.0.0.1:{self.upstream.server_port}", log=self.log)
         self.base = f"http://127.0.0.1:{self.proxy.server_port}"
 

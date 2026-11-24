@@ -82,6 +82,8 @@ class State:
         self.rules: list[Rule] = []
         self.entries: list[dict] = []
         self.log_path = log_path
+        if log_path:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def set_rules(self, specs: list[dict]) -> None:
         rules = [Rule(s, i) for i, s in enumerate(specs)]

@@ -104,8 +104,8 @@ One repo releases both platforms; the tag prefix says which.
 ## Emulated release tests
 
 What a release must pass with no device (`docs/design/emulated-release-tests.md`;
-CI: `.github/workflows/release-tests.yml`, called by both release workflows, or run by hand from
-the Actions tab). Locally, with Docker:
+CI: `.github/workflows/release-tests.yml`, called by both release workflows, run on pull requests
+that change the tests, or by hand from the Actions tab). Locally, with Docker:
 
 - Stage 0, the server kit: `python3 tools/e2e/kit.py up` starts BookOrbit (pinned by digest in
   `tools/e2e/compose.yml`) and seeds the synthetic library (`shared/fixtures/e2e/library.json`);
