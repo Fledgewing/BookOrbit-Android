@@ -448,6 +448,86 @@ test("home: where Home came from", function()
     eq(HomePlan.cameFromOtherApp("koreader", 40), false)
 end)
 
+test("home: BookOrbit Home keeps the rotation the device is held in", function()
+    local R = HomePlan.rotation
+    -- The reported case: held upside down (left-handed) in another app; KOReader's file browser
+    -- had forced upright; Home opens BookOrbit Home -> turn back to the held rotation.
+    eq(R{ action = "dashboard", held = "reverse_portrait", current = 0 }, 2)
+    eq(R{ action = "bookorbit_main", held = "landscape", current = 0 }, 1)
+    eq(R{ action = "first_page", held = "reverse_landscape", current = 2 }, 3)
+    eq(R{ action = "dashboard", held = "portrait", current = 2 }, 0, "held upright, KOReader upside down")
+    eq(R{ action = "dashboard", held = "reverse_portrait", current = 2 }, nil, "already right")
+    eq(R{ action = "book", held = "reverse_portrait", current = 0 }, nil, "a book applies its own rotation")
+    eq(R{ action = "dashboard", held = "reverse_portrait", current = 0, in_reader = true }, nil,
+        "over an open book: the book's rotation, never saved into it")
+    eq(R{ action = "companion", held = "reverse_portrait", current = 0 }, nil, "the companion follows the system")
+    eq(R{ action = "dashboard", held = "reverse_portrait", current = 0, locked = true }, nil, "Lock auto rotation")
+    eq(R{ action = "dashboard", held = nil, current = 0 }, nil, "older companion: no extra")
+    eq(R{ action = "dashboard", held = "sideways", current = 0 }, nil, "unknown value")
+end)
+
+-- The early user patch (patches/1-orbit-start-rotation.lua) with KOReader's start stubbed:
+-- reader.lua runs it (:26-27), opens the settings (:39), inits the Device (:157), runs the late
+-- patches (:190), then shows the file browser (:291).
+local function startWithPatch(o)
+    local names = { "android", "luasettings", "userpatch", "apps/filemanager/filemanager" }
+    local saved = {}
+    for _, n in ipairs(names) do saved[n] = package.loaded[n] end
+    local r = { fm_turns = 0, applied = {} }
+    package.loaded.android = { orientation = { get = function() return o.display end },
+        hasNativeRotation = function() return o.native ~= false end }
+    local LuaSettings = {}
+    function LuaSettings:open(path)
+        local data = { lock_rotation = o.locked, closed_rotation_mode = o.closed }
+        return { path = path, data = data,
+            isTrue = function(_, k) return data[k] == true end,
+            saveSetting = function(_, k, v) data[k] = v end }
+    end
+    local userpatch = { early = "1", late = "2" }
+    function userpatch.applyPatches(p) table.insert(r.applied, p) end
+    local FM = {}
+    function FM.setRotationMode() r.fm_turns = r.fm_turns + 1 end
+    package.loaded.luasettings, package.loaded.userpatch = LuaSettings, userpatch
+    package.loaded["apps/filemanager/filemanager"] = FM
+    ORBIT_START_ROTATION = nil
+    local okp, err = pcall(dofile, here .. "/../orbit.koplugin/patches/1-orbit-start-rotation.lua")
+    if okp then
+        r.settings = LuaSettings:open("/sdcard/koreader/settings.reader.lua")
+        r.other = LuaSettings:open("/sdcard/koreader/settings/x.lua")
+        userpatch.applyPatches(userpatch.late)
+        FM:setRotationMode() -- the first showFiles
+        FM:setRotationMode() -- a later file browser
+    end
+    r.start_rotation = ORBIT_START_ROTATION
+    ORBIT_START_ROTATION = nil
+    for _, n in ipairs(names) do package.loaded[n] = saved[n] end
+    if not okp then error(err) end
+    return r
+end
+
+test("start patch: KOReader starts in the held rotation, no turn", function()
+    -- Held upside down; KOReader closed upright last time; the file browser's default is upright.
+    local r = startWithPatch{ display = 2, closed = 0 }
+    eq(r.settings.data.closed_rotation_mode, 2, "Device init keeps the held rotation")
+    eq(r.other.data.closed_rotation_mode, 0, "only settings.reader.lua")
+    eq(r.fm_turns, 1, "the first file browser skips its rotation; later ones are KOReader's again")
+    eq(r.applied[1], "2", "the late patches still run")
+    eq(r.start_rotation, 2, "the plugin is told")
+end)
+
+test("start patch: Lock auto rotation, or no native rotation: KOReader as it is", function()
+    local r = startWithPatch{ display = 2, closed = 0, locked = true }
+    eq(r.settings.data.closed_rotation_mode, 0)
+    eq(r.fm_turns, 2)
+    eq(r.start_rotation, nil)
+    r = startWithPatch{ display = 2, closed = 0, native = false }
+    eq(r.settings.data.closed_rotation_mode, 0, "the patch did nothing")
+    eq(r.fm_turns, 2)
+    eq(r.start_rotation, nil)
+    r = startWithPatch{ display = 7, closed = 0 }
+    eq(r.start_rotation, nil, "an unknown rotation")
+end)
+
 test("disabled text names the disabler at run time, or stays neutral", function()
     eq(M.disabledText("Orbit Companion", "Meebook Launcher", "Freeze management"),
         "Orbit Companion is disabled by Meebook Launcher: re-enable it in Meebook Launcher › Freeze management.")

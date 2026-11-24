@@ -592,6 +592,7 @@ object Setup {
                 fix?.invoke(a)
             }
         }
+        byId[ReadingFonts.ID]?.let { out += it }
         return out
     }
 
@@ -666,6 +667,38 @@ object Setup {
         out += "Skipped steps" to p.setupIgnored.sorted().joinToString().ifEmpty { "none" }
         out += "Reader" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, Android ${android.os.Build.VERSION.RELEASE}"
         return out
+    }
+
+    /**
+     * Reading fonts (docs/design/reading-fonts.md): Optional in both modes, off until the user
+     * turns it on. Turn on/off goes behind the Settings PIN; Restart KOReader is follow-through.
+     */
+    internal fun readingFonts(ctx: Context): Check {
+        val p = Prefs(ctx)
+        val wanted = p.fontsWanted
+        val busy = FontInstaller.busy
+        val installed = FontInstaller.installed()
+        val restart = p.fontsRestartPending
+        val done = wanted && installed
+        val verb = ReadingFonts.verb(wanted, busy, installed, restart)
+        return Check(
+            ReadingFonts.LABEL, done, if (done) "On: ${Checklist.ON.getValue(ReadingFonts.ID)}" else "",
+            action = verb, optional = true, id = "reading_fonts", short = "Reading fonts",
+            pinFree = verb == "Restart KOReader",
+            extra = ReadingFonts.extra(wanted, busy, installed, restart, p.fontsStatus),
+        ) { a ->
+            when (verb) {
+                "Restart KOReader" -> FontInstaller.follow(a, "setup", manual = true)
+                "Turn off" -> FontInstaller.set(a, false) { a.refresh() }
+                null -> Unit
+                else -> if (!PatchInstaller.hasPermission(a)) {
+                    p.fontsWanted = true
+                    a.requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE), FontInstaller.REQUEST_CODE)
+                } else FontInstaller.set(a, true) { a.refresh() }
+            }
+            OLog.i("setup: reading fonts: ${verb ?: "busy"}")
+            a.refresh()
+        }
     }
 
     private fun allChecks(ctx: Context): List<Check> {
@@ -958,6 +991,8 @@ object Setup {
                 id = "keyboard",
             ) { a -> a.tryStart(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS), "keyboard settings") })
         }
+
+        list.add(readingFonts(ctx))
 
         list.add(
             Check(

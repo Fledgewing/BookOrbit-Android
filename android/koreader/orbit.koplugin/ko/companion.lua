@@ -43,6 +43,9 @@ Companion.ACTION = {
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
 -- With "home_smart": "other_app" when the companion knows Home came from outside KOReader.
 Companion.EXTRA_FROM = Companion.PACKAGE .. ".extra.FROM"
+-- The display orientation when Home was pressed (companions after 0.11.2): portrait, landscape,
+-- reverse_portrait, reverse_landscape (HomePlan.ROTATIONS).
+Companion.EXTRA_ROTATION = Companion.PACKAGE .. ".extra.ROTATION"
 
 TAILSCALE = {
     action = "com.tailscale.ipn.CONNECT_VPN",

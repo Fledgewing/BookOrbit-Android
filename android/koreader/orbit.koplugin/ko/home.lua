@@ -10,9 +10,11 @@ function OrbitAndroid:checkCommand(source)
     local cmd = Jni.takeIntentExtra(Companion.EXTRA_COMMAND)
     if not cmd or cmd == "" then return false end
     local from = Jni.takeIntentExtra(Companion.EXTRA_FROM)
-    log("command from companion:", cmd, "(" .. source .. ")", from and ("from " .. tostring(from)) or "")
+    local held = Jni.takeIntentExtra(Companion.EXTRA_ROTATION)
+    log("command from companion:", cmd, "(" .. source .. ")", from and ("from " .. tostring(from)) or "",
+        held and ("held " .. tostring(held)) or "")
     if cmd == "home" or cmd == "home_smart" then
-        self:smartHome(source, from or nil, cmd == "home" and "bookorbit" or "smart")
+        self:smartHome(source, from or nil, cmd == "home" and "bookorbit" or "smart", held or nil)
         return true
     end
     if cmd == "restart" then
@@ -391,9 +393,89 @@ function onDashboard(p)
     return okd and dash == true
 end
 
+-- Home keeps the rotation the device is held in (HomePlan.rotation): KOReader's own file browser
+-- may have turned it (its start, a book close). Through the file browser's own handler
+-- (FileManager:onSetRotationMode, filemanager.lua:71-79, as KOReader's rotation menu does by
+-- event, screen_rotation_menu_table.lua:18), which also lays it out again.
+function keepHeldRotation(action, held, in_reader, source)
+    if held == nil then return end
+    -- KOReader's start already kept the held rotation (patches/1-orbit-start-rotation.lua).
+    if source == "start" and rawget(_G, "ORBIT_START_ROTATION") ~= nil then
+        log("home: rotation kept from the start (" .. tostring(rawget(_G, "ORBIT_START_ROTATION")) .. ")")
+        return
+    end
+    local okc, current = pcall(function() return Device.screen:getRotationMode() end)
+    local okl, locked = pcall(function() return G_reader_settings:isTrue("lock_rotation") end)
+    local mode = HomePlan.rotation{
+        action = action, held = held, in_reader = in_reader,
+        current = okc and current or nil, locked = okl and locked or false,
+    }
+    if mode == nil then
+        log("home: rotation stays", okc and tostring(current) or "?", "(held " .. tostring(held) .. ")")
+        return
+    end
+    local okf, FM = pcall(require, "apps/filemanager/filemanager")
+    local oks, err = pcall(function()
+        if okf and type(FM) == "table" and FM.instance then FM.instance:onSetRotationMode(mode)
+        else Device.screen:setRotationMode(mode) end
+    end)
+    log("home: rotation", tostring(current), "->", mode, "(held " .. held .. ")", oks and "" or tostring(err))
+end
+
+-- A book closing opens a new file browser, which turns the device to the file browser's rotation
+-- (filemanager.lua:63-69 via :1321; readerui.lua:594), and BookOrbit Home then shows in it. Keep
+-- the book's rotation instead: the file browser here is only ever under BookOrbit Home. KOReader's
+-- start sets it before plugins load (reader.lua:291); the companion's ROTATION corrects that one.
+function keepRotationOnFileBrowser(why)
+    local okf, FM = pcall(require, "apps/filemanager/filemanager")
+    if not okf or type(FM) ~= "table" or rawget(FM, "_orbit_keep_rotation") then return end
+    if not Compat.callable(FM.setRotationMode) then
+        log("compat: FileManager.setRotationMode missing; the file browser keeps its own rotation")
+        return
+    end
+    FM._orbit_keep_rotation = true
+    FM.setRotationMode = function()
+        log("file browser: rotation stays", tostring(select(2, pcall(function() return Device.screen:getRotationMode() end))))
+    end
+    log("file browser: keeps the current rotation (" .. why .. ")")
+end
+
+-- The early user patch that keeps the held rotation through KOReader's start
+-- (patches/1-orbit-start-rotation.lua): copied into koreader/patches/ when missing or different.
+-- KOReader runs it at its next start (userpatch.lua, reader.lua:26-27); builds that skip user
+-- patches fall back to keepHeldRotation, which turns once more after the start.
+START_PATCH = "1-orbit-start-rotation.lua"
+
+function installStartPatch(why)
+    local function slurp(path)
+        local h = io.open(path, "rb")
+        if not h then return nil end
+        local text = h:read("*a")
+        h:close()
+        return text
+    end
+    local want = slurp(PLUGIN_DIR .. "/patches/" .. START_PATCH)
+    local okd, DataStorage = pcall(require, "datastorage")
+    if not want or not okd then return false end
+    local dir = DataStorage:getDataDir() .. "/patches"
+    local dest = dir .. "/" .. START_PATCH
+    if slurp(dest) == want then return false end
+    local okl, lfs = pcall(require, "libs/libkoreader-lfs")
+    if okl and lfs.attributes(dir, "mode") ~= "directory" then lfs.mkdir(dir) end
+    local tmp = dest .. ".tmp"
+    local h = io.open(tmp, "wb")
+    if not h then log("start patch: can't write", dest); return false end
+    h:write(want)
+    h:close()
+    local okr, err = os.rename(tmp, dest)
+    if not okr then os.remove(tmp); log("start patch: install failed:", tostring(err)); return false end
+    log("start patch: installed", dest, "(" .. why .. ")")
+    return true
+end
+
 -- Home (android/docs/INTERFACE.md "go home"): HomePlan decides. mode: "smart" (home_smart) or
 -- "bookorbit" (home).
-function OrbitAndroid:smartHome(source, from_extra, mode)
+function OrbitAndroid:smartHome(source, from_extra, mode, held)
     mode = mode or "smart"
     -- Orbit's own sheets close first: they are not BookOrbit, and they'd cover whatever Home opens.
     if EOB and EOB.leaveForHome(liveUI()) then log("home: closed the end-of-book sheet") end
@@ -433,6 +515,7 @@ function OrbitAndroid:smartHome(source, from_extra, mode)
         "from other app", tostring(from_other),
         "(paused", paused and fmt(paused) or "-", ")", "reopen current book", reopen and tostring(last) or "no")
     log("home: screen:", screen_desc)
+    keepHeldRotation(action, held, in_reader, source)
     if action == "first_page" then
         log("home: BookOrbit " .. page_what .. " page " .. page .. " -> page 1")
         local okg, err = pcall(first_page)

@@ -101,7 +101,33 @@ action:    android.intent.action.MAIN
 flags:     FLAG_ACTIVITY_NEW_TASK
 extra:     net.fledgewing.orbitcompanion.extra.COMMAND = "home" | "home_smart"   (String)
 extra:     net.fledgewing.orbitcompanion.extra.FROM = "other_app"   (optional, home_smart only)
+extra:     net.fledgewing.orbitcompanion.extra.ROTATION = "portrait" | "landscape" | "reverse_portrait" | "reverse_landscape"   (companions after 0.11.2)
 ```
+
+`ROTATION` is how the display is held when Home is pressed (`Display.getRotation()` of the
+default display), named as KOReader's rotation modes the way KOReader's launcher reads the display
+(android-luajit-launcher `extensions/ActivityExtensions.kt:295-302`: on a portrait panel
+`ROTATION_90` is `reverse_landscape`). On Android, KOReader's rotation is the activity's requested
+orientation, which turns the whole display (koreader-base `ffi/framebuffer_android.lua:78-91`), and
+every new file browser sets its own rotation, `fm_rotation_mode` or upright
+(`filemanager.lua:63-69`, from `showFiles` `:1321`: KOReader's start, `reader.lua:291`, and every
+book close, `readerui.lua:594`). BookOrbit Home sits over the file browser, so it came up in that
+rotation, not the held one. The plugin (`HomePlan.rotation`) turns KOReader to `ROTATION` before
+BookOrbit Home shows, through `FileManager:onSetRotationMode`; never with a book open (a book keeps
+its own rotation), nor with KOReader's "Lock auto rotation" on. Within KOReader, the plugin keeps
+the current rotation when a book close opens a new file browser (it replaces
+`FileManager.setRotationMode`). Older plugins ignore the extra.
+
+KOReader's start turns nothing either. Its activity starts `nosensor` (android-luajit-launcher
+`AndroidManifest.xml:42`), so the display stays as held, but before any plugin loads KOReader turns
+it to `closed_rotation_mode` (Device init, `device.lua:350-355`) and then to the file browser's
+rotation. The plugin installs an early user patch, `koreader/patches/1-orbit-start-rotation.lua`
+(source `orbit.koplugin/patches/`), copied when missing or different. KOReader runs it first
+(`reader.lua:26-27`); it reads the display's rotation (`android.orientation.get`), puts it in
+`closed_rotation_mode` for this start (KOReader rewrites that at exit), and has the first file
+browser skip its rotation once. With it, a Home cold start turns nothing, and the plugin skips
+`ROTATION` at the start. Without user patches (the F-Droid build, or patches turned off), the plugin
+turns to `ROTATION` after the start: one more turn.
 
 Both commands go through the patch's `HomePlan`. `home_smart` is sent when the shared "Home
 button" setting is "Back to my book, then BookOrbit home" (the default), `home` when it is

@@ -50,12 +50,20 @@ local NEEDS = {
     { "*", { "isConnected", "isWifiOn", "turnOnWifi", "turnOffWifi", "beforeWifiAction",
         "turnOnWifiAndWaitForConnection", "scheduleConnectivityCheck" } },
     { "frontend/ui/network/manager.lua", { { "NetworkMgr", T } } },
-    { "frontend/device/generic/device.lua", { "canRestart", "exit", "isAndroid", { "screen", F }, { "input", F } } },
+    { "frontend/device/generic/device.lua", { "canRestart", "exit", "isAndroid", { "screen", F }, { "input", F },
+        { "closed_rotation_mode", T } } },
+    -- The start patch (orbit.koplugin/patches/1-orbit-start-rotation.lua): early patches, then the
+    -- settings, the Device, the late patches, the first file browser.
+    { "frontend/userpatch.lua", { "applyPatches", { "early", F }, { "late", F } } },
+    { "reader.lua", { { "userpatch.applyPatches(userpatch.early)", T }, { "userpatch.applyPatches(userpatch.late)", T },
+        { "settings.reader.lua", T } } },
     { "frontend/device/input.lua", { "handleKeyBoardEv" } },
     { "frontend/apps/reader/readerui.lua", { "init", "showReader", "registerModule", "onHome",
         { "instance", F }, { "registerModule(\"status\"", T }, { "registerModule(\"toc\"", T },
         { "registerModule(\"menu\"", T } } },
-    { "frontend/apps/filemanager/filemanager.lua", { { "instance", F } } },
+    -- Home keeps the held rotation (ko/home.lua keepHeldRotation, keepRotationOnFileBrowser).
+    { "frontend/apps/filemanager/filemanager.lua", { { "instance", F }, "setRotationMode", "onSetRotationMode",
+        { "lock_rotation", T } } },
     { "frontend/ui/widget/eventlistener.lua", { "handleEvent" } },
     { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu",
         { "menu_container", F } } },
@@ -70,7 +78,7 @@ local NEEDS = {
     { "plugins/gestures.koplugin/main.lua", { "onFlushSettings", { "data", F }, { "updated", F }, { "default_settings", F } } },
     { "plugins/gestures.koplugin/defaults.lua", { { "gesture_reader", F } } },
     { "frontend/docsettings.lua", { "open", { "LuaSettings:extend", T } } }, -- readSetting: LuaSettings'
-    { "frontend/luasettings.lua", { "open", "readSetting", "saveSetting", "flush" } },
+    { "frontend/luasettings.lua", { "open", "readSetting", "saveSetting", "flush", "isTrue" } },
     { "datastorage.lua", { "getSettingsDir", "getDocSettingsHashDir" } },
     { "frontend/ui/event.lua", { "new" } },
     { "frontend/ui/time.lua", { "now", "to_s" } },
@@ -105,6 +113,7 @@ local BASE = {
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
     { "ffi/sha2.lua", { "sha256" } },
     { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, "writeToFile", "free" } },
+    { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
 }
 
 local missing = {}

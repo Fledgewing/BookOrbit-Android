@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
@@ -15,6 +16,7 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.view.Display
 
 /** android/docs/INTERFACE.md, protocol 1. */
 object Contract {
@@ -36,6 +38,8 @@ object Contract {
     const val REPORT = "$PACKAGE.action.REPORT"
     const val EXTRA_FROM = "$PACKAGE.extra.FROM"
     const val EXTRA_COMMAND = "$PACKAGE.extra.COMMAND"
+    /** How the display is held when Home is pressed (HeldRotation); with home/home_smart. */
+    const val EXTRA_ROTATION = "$PACKAGE.extra.ROTATION"
     const val PATCH_SENDER = "org.koreader.launcher"
     const val STATUS_PORT = 47913
 
@@ -132,6 +136,16 @@ class Prefs(ctx: Context) {
     var helperPin: Boolean
         get() = bool("helper_pin", false)
         set(v) = setBool("helper_pin", v)
+    /** Reading fonts (ReadingFonts): the user turned the row on; a restart is owed; the last install's result. */
+    var fontsWanted: Boolean
+        get() = bool("fonts_wanted", false)
+        set(v) = setBool("fonts_wanted", v)
+    var fontsRestartPending: Boolean
+        get() = bool("fonts_restart_pending", false)
+        set(v) = setBool("fonts_restart_pending", v)
+    var fontsStatus: String
+        get() = str("fonts_status")
+        set(v) = setStr("fonts_status", v)
     /** Add-on's optional rows the user tapped Allow on (AddonLogic.optState). */
     var addonAsked: Set<String>
         get() = sp.getStringSet("addon_asked", emptySet())?.toSet() ?: emptySet()
@@ -599,6 +613,15 @@ object Koreader {
         return launch(ctx, why, cmd, if (held == command) from else null)
     }
 
+    /** The default display's orientation now (HeldRotation), or null when it can't be read. */
+    private fun heldRotation(ctx: Context): String? = try {
+        val d = ctx.getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY)
+        d?.let { HeldRotation.name(it.rotation, it.mode.physicalWidth <= it.mode.physicalHeight) }
+    } catch (e: Exception) {
+        OLog.w("display rotation unreadable", e)
+        null
+    }
+
     private fun launch(ctx: Context, why: String, command: String?, from: String?): Boolean {
         val t0 = SystemClock.elapsedRealtime()
         val i = Intent(Intent.ACTION_MAIN)
@@ -606,9 +629,11 @@ object Koreader {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
         if (command != null) i.putExtra(Contract.EXTRA_COMMAND, command)
         if (command != null && from != null) i.putExtra(Contract.EXTRA_FROM, from)
+        val held = if (HeldRotation.sendsWith(command)) heldRotation(ctx) else null
+        if (held != null) i.putExtra(Contract.EXTRA_ROTATION, held)
         return try {
             ctx.startActivity(i)
-            OLog.i("koreader started command=${command ?: "-"}${if (from != null) " from=$from" else ""} ($why) in ${OLog.since(t0)} ms")
+            OLog.i("koreader started command=${command ?: "-"}${if (from != null) " from=$from" else ""}${if (held != null) " held=$held" else ""} ($why) in ${OLog.since(t0)} ms")
             true
         } catch (e: Exception) {
             OLog.w("koreader start FAILED ($why)", e)
