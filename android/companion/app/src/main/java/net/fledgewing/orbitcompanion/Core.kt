@@ -630,6 +630,9 @@ object Koreader {
 
     private fun launch(ctx: Context, why: String, command: String?, from: String?): Boolean {
         val t0 = SystemClock.elapsedRealtime()
+        // A command goes only to the trusted KOReader (docs/design/security.md); another copy starts plain.
+        @Suppress("NAME_SHADOWING")
+        val command = command?.takeIf { KoreaderTrust.koreaderTrusted(ctx) }
         val i = Intent(Intent.ACTION_MAIN)
             .setComponent(ComponentName(PKG, ACTIVITY))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)

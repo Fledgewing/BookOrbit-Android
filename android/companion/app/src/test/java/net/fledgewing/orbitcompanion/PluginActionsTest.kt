@@ -5,8 +5,8 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The broadcasts the plugin hands its work over with (docs/design/companion-worker.md) reach the
- * companion: each is in the plugin's Companion.ACTION table and on CommandReceiver in the manifest.
+ * The commands the plugin hands its work over with (docs/design/companion-worker.md) reach the
+ * companion: each is in the plugin's Companion.ACTION table and accepted by CommandProvider.
  */
 class PluginActionsTest {
     private fun file(vararg rels: String): String =
@@ -15,12 +15,11 @@ class PluginActionsTest {
 
     @Test
     fun workerActionsAreDeclaredOnBothSides() {
-        val manifest = file("src/main/AndroidManifest.xml")
         val plugin = file("koreader/orbit.koplugin/ko/companion.lua", "android/koreader/orbit.koplugin/ko/companion.lua")
-        for (action in listOf(Worker.ACTION_MIRROR, Worker.ACTION_CHECK, Worker.ACTION_STORAGE, Worker.ACTION_COPIES, Worker.ACTION_SLEEP_REFRESH, Worker.ACTION_RECHECK, Worker.ACTION_SQLITE_STRESS, Worker.ACTION_PATCH, Updater.ACTION_UPDATE)) {
-            assertTrue("$action on CommandReceiver", manifest.contains("<action android:name=\"$action\" />"))
+        for (action in CommandProvider.COMMANDS) {
             val short = action.substringAfterLast('.')
-            assertTrue("$short in Companion.ACTION", plugin.contains("$short = Companion.PACKAGE .. \".action.$short\""))
+            assertTrue("$short in Companion.ACTION", plugin.contains("$short = Companion.PACKAGE .. \".action.$short\"") ||
+                plugin.contains("Companion.ACTION.$short = Companion.PACKAGE .. \".action.$short\""))
         }
     }
 }

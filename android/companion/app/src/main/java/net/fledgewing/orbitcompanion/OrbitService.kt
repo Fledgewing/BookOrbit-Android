@@ -32,11 +32,16 @@ import java.net.Socket
 import kotlin.concurrent.thread
 
 /**
- * The INTERFACE broadcasts land here (manifest receiver, so KOReader can reach a companion that
- * isn't running) and are handed to the foreground service.
+ * The system's broadcasts (boot, this app replaced) and the companion's own alarms. Not exported:
+ * KOReader's commands come through [CommandProvider], which checks the caller first.
  */
 class CommandReceiver : BroadcastReceiver() {
-    override fun onReceive(ctx: Context, intent: Intent) {
+    override fun onReceive(ctx: Context, intent: Intent) = Commands.dispatch(ctx, intent)
+}
+
+/** Runs one command (android/docs/INTERFACE.md), from [CommandProvider] or [CommandReceiver]. */
+object Commands {
+    fun dispatch(ctx: Context, intent: Intent) {
         OLog.d("received ${Contract.shortName(intent.action)} extras=${intent.extras?.keySet()}")
         // A record action: kept here, no service needed (docs/design/addon-mode.md §7.1).
         if (intent.action == Contract.REPORT) return StatusFile.onReport(ctx, intent)
@@ -106,6 +111,11 @@ class OrbitService : Service() {
 
         @Volatile
         var running = false
+            private set
+
+        /** The running service, for the status call (CommandProvider); null when it isn't running. */
+        @Volatile
+        var current: OrbitService? = null
             private set
 
         /** Add-on: a helper went off or the mode changed; stop what is no longer needed. */
@@ -233,6 +243,7 @@ class OrbitService : Service() {
         val t0 = SystemClock.elapsedRealtime()
         running = true
         prefs = Prefs(this)
+        current = this
         OLog.debug = prefs.debugLog
         cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         createChannels()
@@ -281,6 +292,7 @@ class OrbitService : Service() {
             OLog.w("service teardown", e)
         }
         statusServer?.close()
+        current = null
         releaseWakeLock("service stopped")
         OLog.i("service stopped")
         super.onDestroy()
@@ -681,6 +693,26 @@ class OrbitService : Service() {
         return org.json.JSONObject().put("key", key).put("rows", rows).toString()
     }
 
+    /**
+     * The plugin's status call (CommandProvider, caller already checked): the status JSON.
+     * [patchVersion]: the running plugin's version; [book]: "1" while a book is open.
+     */
+    fun answerStatus(patchVersion: String?, book: String?): String {
+        val t0 = SystemClock.elapsedRealtime()
+        val body = statusJson()
+        prefs.patchSeenAt = System.currentTimeMillis()
+        prefs.patchSeenVia = "status"
+        patchVersion?.takeIf { Regex("^[0-9A-Za-z.+-]+$").matches(it) }?.let { v ->
+            prefs.patchVersionSeen = v
+            PatchInstaller.onPatchSeen(this, v)
+        }
+        if (book == "0" || book == "1") main.post { PatchInstaller.onBook(this, book == "1", "KOReader status") }
+        // An older plugin running than the file on disk, however it got there (v0.5.4).
+        main.post { PatchInstaller.follow(this, "KOReader status") }
+        OLog.i("status call -> ${body.length} bytes in ${OLog.since(t0)} ms")
+        return body
+    }
+
     private fun startStatusServer() {
         thread(name = "orbit-status", isDaemon = true) {
             try {
@@ -721,32 +753,10 @@ class OrbitService : Service() {
                 return ClickChannel.add(c, Regex("[?&]patch_version=([0-9A-Za-z.+-]+)").find(parts[1])?.groupValues?.get(1))
             }
             c.use { s ->
-                val ok = parts.size >= 2 && (parts[0] == "GET" || parts[0] == "HEAD") && parts[1].substringBefore('?') == "/status"
-                val body = if (ok) statusJson() else "{\"error\":\"not found\"}"
-                val bytes = body.toByteArray(Charsets.UTF_8)
-                val head = "HTTP/1.1 ${if (ok) "200 OK" else "404 Not Found"}\r\n" +
-                    "Content-Type: application/json\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
-                val out = s.getOutputStream()
-                out.write(head.toByteArray(Charsets.ISO_8859_1))
-                if (parts[0] != "HEAD") out.write(bytes)
-                out.flush()
-                if (ok) {
-                    prefs.patchSeenAt = System.currentTimeMillis()
-                    prefs.patchSeenVia = "status"
-                    // /status?patch_version=X (patch 0.3.1+): the running patch's version.
-                    Regex("[?&]patch_version=([0-9A-Za-z.+-]+)").find(parts[1])?.let { m ->
-                        prefs.patchVersionSeen = m.groupValues[1]
-                        PatchInstaller.onPatchSeen(this@OrbitService, m.groupValues[1])
-                    }
-                    // /status?book=1|0 (patch 0.5.2+): a book is open in KOReader.
-                    Regex("[?&]book=([01])").find(parts[1])?.let { m ->
-                        val book = m.groupValues[1] == "1"
-                        main.post { PatchInstaller.onBook(this@OrbitService, book, "KOReader status") }
-                    }
-                    // An older patch running than the file on disk, however it got there (v0.5.4).
-                    main.post { PatchInstaller.follow(this@OrbitService, "KOReader status") }
-                }
-                OLog.i("status request ${parts.getOrNull(1)} -> ${if (ok) 200 else 404} in ${OLog.since(t0)} ms")
+                val bytes = "{\"error\":\"not found\"}".toByteArray(Charsets.UTF_8)
+                val head = "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
+                s.getOutputStream().apply { write(head.toByteArray(Charsets.ISO_8859_1)); write(bytes); flush() }
+                OLog.i("loopback request ${parts.getOrNull(1)?.substringBefore('?')} -> 404 in ${OLog.since(t0)} ms")
             }
         } catch (e: Exception) {
             OLog.w("status request failed", e)
