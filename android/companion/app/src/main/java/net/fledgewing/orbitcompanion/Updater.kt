@@ -139,6 +139,8 @@ object Updater {
         // Started by hand while unlocked (Pin.run): the install window opens now, so the guard
         // lets the installer and Play Protect through (Guard.installSurface).
         if (interactive) Pin.installStarted(INSTALL_KEY)
+        // From one of our pages: the update finishes back on it (UpdateReturn).
+        if (interactive && ctx is android.app.Activity) UpdateReturn.mark(ctx, ctx)
         val app = ctx.applicationContext
         thread(name = "orbit-update", isDaemon = true) {
             // By hand with Wi-Fi off: turn it on for the check (Wi-Fi only, GitHub needs no
@@ -437,6 +439,8 @@ object Updater {
         // A fresh process: the window's last 60 s cover Play Protect's follow-up.
         Pin.installEnded(INSTALL_KEY)
         status(ctx, "updated to v${BuildConfig.VERSION_NAME}")
+        // Started from one of our pages: back on it (the old process took it down), not KOReader.
+        UpdateReturn.onReplaced(ctx)
         // One update covers everything: the release's patch, then KOReader's restart.
         Attention.onStart(ctx)
         PatchInstaller.afterAppUpdate(ctx) { Attention.evaluate(ctx, "after update") }
