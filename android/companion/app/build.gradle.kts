@@ -87,6 +87,8 @@ dependencies {
     // Android ships org.json; plain JVM unit tests need the real one (StatsExport).
     testImplementation("org.json:json:20240303")
     testImplementation("org.robolectric:robolectric:4.14.1")
+    // SQLite on the plain JVM: the offline cache's database code against a real SQLite (JdbcSql).
+    testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
     // Android 14 for @Config(sdk = [34]); Robolectric 4.14.1 also reads the app's resources with
     // its newest SDK, 15.
     robolectricAndroid14("org.robolectric:android-all-instrumented:14-robolectric-10818077-i7")
