@@ -39,3 +39,4 @@ CrossInk 2.x only; 1.6 is retired).
 |---|---|---|---|
 | Submit the companion for Google Play Protect review. | Android | idea | |
 | X3 parity review for each feature above. | X3 | idea | |
+| **Shared Orbify release name**: one name (e.g. "Orbify 0.12") shown in the companion, the plugin and the Xteink About screens and in release titles, each with its own technical version underneath; marks which shared feature set (e.g. battery stats) a build has. Update logic and tags unchanged. | Android, Xteink | idea | |
