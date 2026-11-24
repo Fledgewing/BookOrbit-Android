@@ -142,7 +142,7 @@ In the admin console, **Access controls**, add (adapt the address and port):
 },
 "grants": [
   // E-readers reach only the BookOrbit server (add "tcp:80" for plain HTTP).
-  {"src": ["tag:ereader"], "dst": ["100.69.222.123"], "ip": ["tcp:443"]},
+  {"src": ["tag:ereader"], "dst": ["100.x.y.z"], "ip": ["tcp:443"]},
 ],
 ```
 
