@@ -1,0 +1,27 @@
+{
+  "keys": [
+    {"account": "alice|https://books.example/api/v1", "server": "https://Books.Example/api/v1/", "path": "/koreader/plugin/catalog/books?sort=title&page=1&size=100&buckets=1&order=asc", "key_hex": "616c6963657c68747470733a2f2f626f6f6b732e6578616d706c652f6170692f76317c68747470733a2f2f626f6f6b732e6578616d706c652f6170692f76317c4745547c2f6b6f7265616465722f706c7567696e2f636174616c6f672f626f6f6b737c6275636b6574733d31266f726465723d61736326706167653d312673697a653d31303026736f72743d7469746c65", "hash": "320b1fec"},
+    {"account": "alice|https://books.example/api/v1", "server": "https://books.example/api/v1", "path": "/koreader/plugin/catalog/books?author=Ursula%20K.%20Le%20Guin&sort=title&order=asc&page=2&size=100", "key_hex": "616c6963657c68747470733a2f2f626f6f6b732e6578616d706c652f6170692f76317c68747470733a2f2f626f6f6b732e6578616d706c652f6170692f76317c4745547c2f6b6f7265616465722f706c7567696e2f636174616c6f672f626f6f6b737c617574686f723d557273756c61204b2e204c65204775696e266f726465723d61736326706167653d322673697a653d31303026736f72743d7469746c65", "hash": "a421388c"},
+    {"account": "bob|https://x/api/v1", "server": "https://x/api/v1", "path": "/koreader/plugin/catalog/books?author=Ana+Mar%C3%ADa+Matute&page=1&size=50", "key_hex": "626f627c68747470733a2f2f782f6170692f76317c68747470733a2f2f782f6170692f76317c4745547c2f6b6f7265616465722f706c7567696e2f636174616c6f672f626f6f6b737c617574686f723d416e61204d6172c3ad61204d617475746526706167653d312673697a653d3530", "hash": "af17a384"},
+    {"account": "bob|https://x/api/v1", "server": "https://x/api/v1", "path": "/koreader/plugin/catalog/books/5607?deviceId=abc-123&variant=delivery", "key_hex": "626f627c68747470733a2f2f782f6170692f76317c68747470733a2f2f782f6170692f76317c4745547c2f6b6f7265616465722f706c7567696e2f636174616c6f672f626f6f6b732f353630377c64657669636549643d6162632d3132332676617269616e743d64656c6976657279", "hash": "280ba708"},
+    {"account": "bob|https://x/api/v1", "server": "https://x/api/v1", "path": "/koreader/plugin/catalog/sections/series?page=1&size=100", "key_hex": "626f627c68747470733a2f2f782f6170692f76317c68747470733a2f2f782f6170692f76317c4745547c2f6b6f7265616465722f706c7567696e2f636174616c6f672f73656374696f6e732f7365726965737c706167653d312673697a653d313030", "hash": "ca90e7b8"},
+    {"account": "", "server": "", "path": "/koreader/plugin/catalog/dashboard", "key_hex": "7c7c4745547c2f6b6f7265616465722f706c7567696e2f636174616c6f672f64617368626f6172647c", "hash": "9c79e870"}
+  ],
+  "windows": [
+    {"path": "/koreader/plugin/catalog/books?sort=title&page=3&size=12&buckets=1&order=asc", "identity": "/koreader/plugin/catalog/books?buckets=1&order=asc&sort=title", "kind": "books", "section": null, "page2": "/koreader/plugin/catalog/books?buckets=1&order=asc&page=2&size=100&sort=title", "page1_50": "/koreader/plugin/catalog/books?buckets=1&order=asc&page=1&size=50&sort=title"},
+    {"path": "/koreader/plugin/catalog/books?author=Ana+Mar%C3%ADa&offset=40&size=20", "identity": "/koreader/plugin/catalog/books?author=Ana%20Mar%C3%ADa", "kind": "books", "section": null, "page2": "/koreader/plugin/catalog/books?author=Ana%20Mar%C3%ADa&page=2&size=100", "page1_50": "/koreader/plugin/catalog/books?author=Ana%20Mar%C3%ADa&page=1&size=50"},
+    {"path": "/koreader/plugin/catalog/sections/smart-scopes?offset=0&size=11", "identity": "/koreader/plugin/catalog/sections/smart-scopes", "kind": "section", "section": "smart-scopes", "page2": "/koreader/plugin/catalog/sections/smart-scopes?page=2&size=100", "page1_50": "/koreader/plugin/catalog/sections/smart-scopes?page=1&size=50"},
+    {"path": "/koreader/plugin/catalog/books?q=dune&page=1&size=12", "identity": null, "kind": null, "section": null, "page2": null, "page1_50": null},
+    {"path": "/koreader/plugin/catalog/books/12", "identity": null, "kind": null, "section": null, "page2": null, "page1_50": null}
+  ],
+  "entry": {"body_json": "{\"items\":[{\"id\":7,\"title\":\"Café \\\"Noir\\\"\",\"note\":\"a\\nb\\t1c\\r2\\\\\",\"hasCover\":true,\"progress\":0.5,\"ratio\":0.1,\"tiny\":1.5e-7,\"huge\":2.5e20,\"neg\":-12.34,\"tags\":[]},{\"id\":8,\"title\":\"B\",\"hasCover\":false}],\"total\":2,\"empty\":{},\"generatedAt\":\"x\"}", "key": "k|s|GET|/p|a=1", "path": "/p?a=1", "fetched_at": 100, "validated_at": 200, "lua": "{[\"body\"]={[\"empty\"]={},[\"generatedAt\"]=\"x\",[\"items\"]={{[\"hasCover\"]=true,[\"huge\"]=2.5e+20,[\"id\"]=7,[\"neg\"]=-12.34,[\"note\"]=\"a\\\u000ab\\0091c\\0132\\\\\",[\"progress\"]=0.5,[\"ratio\"]=0.10000000000000001,[\"tags\"]={},[\"tiny\"]=1.4999999999999999e-07,[\"title\"]=\"Café \\\"Noir\\\"\"},{[\"hasCover\"]=false,[\"id\"]=8,[\"title\"]=\"B\"}},[\"total\"]=2},[\"fetched_at\"]=100,[\"key\"]=\"k|s|GET|/p|a=1\",[\"path\"]=\"/p?a=1\",[\"validated_at\"]=200}"}
+  ,"covers": [
+    {"id": 7, "updatedAt": "2026-01-02T10:11:12.123Z", "author_photo": false, "name": "7_20260102101112123.jpg"},
+    {"id": 8, "updatedAt": null, "author_photo": false, "name": "8_0.jpg"},
+    {"id": 9, "updatedAt": "x", "author_photo": false, "name": "9_0.jpg"},
+    {"id": 10, "updatedAt": "1234567890123456789012345678901234567890", "author_photo": false, "name": "10_12345678901234565678901234567890.jpg"},
+    {"id": 11, "updatedAt": "2026", "author_photo": true, "name": "a11_2026.jpg"},
+    {"id": 0, "updatedAt": null, "author_photo": false, "name": null},
+    {"id": 3000000000, "updatedAt": null, "author_photo": false, "name": null}
+  ]
+}

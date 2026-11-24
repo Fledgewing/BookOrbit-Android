@@ -141,7 +141,9 @@ class Simulator:
         Scenario hooks of upstream's sync activity: CROSSINK_SIM_BOOKORBIT_CHOICE answers its
         choice screens, ..._QUIT_AFTER_SYNC ends the process once the sync settles."""
         e = os.environ.copy()
-        e.update(SDL_VIDEODRIVER="dummy", CROSSPOINT_SIM_INPUT_SCRIPT=script, CROSSINK_SIM_BOOKORBIT_CHOICE=choice)
+        # The software renderer: SDL's dummy video driver has no accelerated one on Linux (CI), where the
+        # simulator then had no renderer and silently saved no screenshots.
+        e.update(SDL_VIDEODRIVER="dummy", SDL_RENDER_DRIVER="software", CROSSPOINT_SIM_INPUT_SCRIPT=script, CROSSINK_SIM_BOOKORBIT_CHOICE=choice)
         if quit_after_sync:
             e["CROSSINK_SIM_BOOKORBIT_QUIT_AFTER_SYNC"] = "1"
         if after_reboot is not None:
@@ -180,6 +182,22 @@ class Simulator:
             if pattern in output:
                 raise AssertionError(f"crash in the simulator output: {pattern}")
         return Run(output, returncode)
+
+
+def dark_pixels(data: bytes, x: int, y: int, w: int, h: int) -> int:
+    """Pixels darker than mid-grey in a rectangle of a simulator BMP screenshot (logical pixels)."""
+    offset, = struct.unpack_from("<I", data, 10)
+    width, height, _, bpp = struct.unpack_from("<iiHH", data, 18)
+    stride = (width * bpp // 8 + 3) & ~3
+    step = bpp // 8
+    count = 0
+    for row in range(max(0, y), min(abs(height), y + h)):
+        src = height - 1 - row if height > 0 else row
+        for col in range(max(0, x), min(width, x + w)):
+            i = offset + src * stride + col * step
+            if data[i] + data[i + 1] + data[i + 2] < 3 * 128:
+                count += 1
+    return count
 
 
 def bmp_to_png(data: bytes) -> bytes:

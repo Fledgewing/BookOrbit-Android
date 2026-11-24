@@ -7,33 +7,10 @@
 -- metadata into the library file (tags, series), so its partial MD5 moves and every copy on a
 -- reader stops matching it: the server marks those copies position-incompatible and progress,
 -- highlights and bookmarks stop syncing. These are the pure rules: which copies changed, which
--- file replaces them, where KOReader keeps a hash-keyed sidecar.
+-- file replaces them, where KOReader keeps a hash-keyed sidecar. Which copies changed is
+-- Orbit Companion's lookup (CopiesLogic).
 
 CopiesPlan = {}
-
--- books: BookOrbit's state books (md5 -> { file, bookId, fileId, positionIncompatible });
--- details: book id (string) -> a detail we saved ({ files = { { id, fileHash } } }).
--- Returns { { md5, path, book_id, file_id, why = "incompatible" | "hash" } }, by path.
-function CopiesPlan.candidates(books, details)
-    local out = {}
-    for md5, b in pairs(books or {}) do
-        if type(b) == "table" and type(b.file) == "string" and b.bookId ~= nil then
-            local why
-            if b.positionIncompatible == true then why = "incompatible" end
-            local d = details and details[tostring(b.bookId)]
-            if not why and type(d) == "table" and type(d.files) == "table" then
-                for _, f in ipairs(d.files) do
-                    if f.id == b.fileId and type(f.fileHash) == "string" and f.fileHash ~= md5 then why = "hash" end
-                end
-            end
-            if why then
-                table.insert(out, { md5 = md5, path = b.file, book_id = b.bookId, file_id = b.fileId, why = why })
-            end
-        end
-    end
-    table.sort(out, function(a, b) return a.path < b.path end)
-    return out
-end
 
 -- The file that replaces the copy: the same library file when the delivery detail lists it,
 -- else the primary one, else the first.

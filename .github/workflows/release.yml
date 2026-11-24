@@ -79,7 +79,7 @@ jobs:
           if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::tag $TAG is not vMAJOR.MINOR.PATCH[-pre]"; exit 1
           fi
-          # A test version is never released: the updaters skip it (TestBuild, Update.isTest).
+          # A test version is never released: the updaters skip it (TestBuild).
           if [[ "$VER" == *-0.test.* ]]; then
             echo "::error::$TAG is a test-build version; run with publish off instead"; exit 1
           fi

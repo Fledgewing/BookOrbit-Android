@@ -107,6 +107,79 @@ class SleepScreenLogicTest {
         assertEquals(emptyList<String>(), SleepLayout.wrap("", 100, 2, m))
     }
 
+    private val every = SleepSettings.EVERY_SLEEP
+
+    private fun sleep(pool: List<Long>, st: SleepRotation.State, r: java.util.Random, now: Long = 1L) =
+        SleepRotation.decide(SleepMode.RECOMMENDED, every, now, pool, false, st, advance = true) { r.nextInt(it) }
+
+    @Test
+    fun everySleepIsRandomNeverTwiceInARowAndCapsAtThreeShows() {
+        val pool = (1L..24L).toList()
+        val r = java.util.Random(7)
+        var st = SleepRotation.State()
+        val seen = mutableListOf<Long>()
+        // 72 sleeps: every cover exactly 3 times, never the same twice in a row.
+        repeat(72) {
+            val d = sleep(pool, st, r)
+            assertTrue(d.poolId != st.shown)
+            st = d.next
+            seen += d.poolId!!
+        }
+        assertEquals(pool.toSet(), seen.toSet())
+        assertTrue(seen.groupingBy { it }.eachCount().values.all { it == 3 })
+        assertTrue("random, not the pool's order", seen.take(24) != pool)
+        // Offline, nothing new: it keeps cycling the used-up ones, still never twice in a row.
+        repeat(10) {
+            val d = sleep(pool, st, r)
+            assertTrue(d.poolId in pool && d.poolId != st.shown)
+            st = d.next
+        }
+    }
+
+    @Test
+    fun everySleepRetiredCoversLeaveAndFreshOnesComeFirst() {
+        val r = java.util.Random(3)
+        // 1 and 2 used up; the plugin's top-up replaced 1 with 30 (2 still here: nothing else came).
+        val st = SleepRotation.State(shown = 5, changedAt = 1, shows = mapOf(1L to 3, 2L to 3, 5L to 1))
+        val pool = listOf(2L, 5L, 30L)
+        repeat(20) {
+            val d = sleep(pool, st, r)
+            assertEquals(30L, d.poolId) // 2 is used up, 5 was just shown
+            assertEquals(mapOf(2L to 3, 5L to 1, 30L to 1), d.next.shows) // 1 left the pool: its count goes
+        }
+        // One cover only: it is shown again rather than nothing.
+        assertEquals(9L, sleep(listOf(9L), SleepRotation.State(9, 1, mapOf(9L to 3)), r).poolId)
+        // A preview or a battery redraw keeps the current one and counts nothing.
+        val keep = SleepRotation.decide(SleepMode.RECOMMENDED, every, 2, pool, false, st, advance = false)
+        assertEquals(5L, keep.poolId)
+        assertEquals(st, keep.next)
+    }
+
+    @Test
+    fun everySleepCountsSurviveARebootAndReachThePlugin() {
+        val st = SleepRotation.State(12, 99, mapOf(12L to 2, 40L to 1))
+        assertEquals(st.shows, SleepRotation.decodeShows(SleepRotation.encodeShows(st.shows)))
+        assertEquals(emptyMap<Long, Int>(), SleepRotation.decodeShows(null))
+        assertEquals(mapOf(3L to 1), SleepRotation.decodeShows("3:1,x:2,4:0,:5"))
+        val j = JSONObject(SleepRotation.stateJson(st))
+        assertEquals(12L, j.getLong("shown"))
+        assertEquals(2, j.getJSONObject("shows").getInt("12"))
+        assertEquals("Every sleep", SleepSettings.hoursLabel(0))
+        assertEquals("6 h", SleepSettings.hoursLabel(6))
+        assertEquals(0, SleepSettings.merge(SleepSettings.DEFAULT) { if (it == "sleep_hours") "0" else null }.hours)
+    }
+
+    @Test
+    fun sharpCoversKeepAsManyOfTheBatchAsFit() {
+        // 24 covers of 1.5 MB under the 24 MB cap: the 16 used most recently stay.
+        val cap = SharpCoversLogic.maxBytes(0)
+        val stored = (1L..24L).map { SharpCoversLogic.Stored(it, 1_572_864L, usedAt = it) }
+        val gone = SharpCoversLogic.prune(stored, stored.map { it.id }.toSet(), cap)
+        assertEquals((1L..8L).toList(), gone.sorted())
+        // Small covers: all 24 stay.
+        assertTrue(SharpCoversLogic.prune(stored.map { it.copy(bytes = 400_000) }, (1L..24L).toSet(), cap).isEmpty())
+    }
+
     @Test
     fun sinkAndHowItIsShown() {
         assertEquals(SleepSink.DREAM, SleepSystem.sink("haoqing"))
@@ -122,5 +195,13 @@ class SleepScreenLogicTest {
         assertTrue(SleepSetup.shown(SleepMode.RECOMMENDED, SleepSink.DREAM))
         assertFalse(SleepSetup.shown(SleepMode.OFF, SleepSink.DREAM))
         assertFalse(SleepSetup.shown(SleepMode.CURRENT, SleepSink.PICTURE))
+    }
+
+    @Test
+    fun oneWakeHeardTwiceCountsOnce() {
+        assertTrue(SleepWake.due(0L, 5_000L))
+        assertTrue(!SleepWake.due(5_000L, 5_000L + SleepWake.SAME_WAKE_MS - 1))
+        assertTrue(SleepWake.due(5_000L, 5_000L + SleepWake.SAME_WAKE_MS))
+        assertTrue("after a reboot", SleepWake.due(900_000L, 1_000L))
     }
 }

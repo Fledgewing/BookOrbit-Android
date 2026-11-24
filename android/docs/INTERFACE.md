@@ -31,8 +31,14 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `STATS` | `seq`, `period_s`, `pages`, `full`, `partial`, `content` (`text`/`comic`/`webtoon`/`pdf`/`none`), `open` (`1`/`0`), `reading_min`, `wifi_mode`, `reading_schedule`, `reason`; plugin 0.11.1+: `reading` (`1` = a book open in front, not BookOrbit Home or a list over it; `0` on `close`/`suspend`) | Battery stats batch: store the counts with the current state; a book is "in front" while `open=1` (at most 6 min). `reading` drives the companion's reading gate (docs/design/reading-gate.md); without it, `open` and `resume`/`suspend` do. Sent every 5 min with a book open, on open/Resume/Suspend/close, never per page (docs/design/STATS-DESIGN.md). |
 | `SETUP_LATER` | none | The setup box's "Later" in KOReader: the companion's own Later (quiet until an update or a step stops working). Companion 0.4.1+. |
 | `RELAUNCH` | `reason` (`restart`) | The patch is quitting for a restart (COMMAND `restart`, or from 0.5.0 by itself for a newer patch file on disk, DESIGN "One update"): start KOReader again after 2.5 s. Patch 0.3.1+. |
-| `REPORT` | `signed_in` (`"1"`/`"0"`), `recommended` (`none`/`partial`/`reviewed`/`applied`), `conflicts` (a count), `reason` | Companion 0.11.0+: one yes/no about the BookOrbit login and the recommended settings' state, for its Setup rows "Signed in to BookOrbit" and "Recommended settings". Never the server, the account or the key; other extras are ignored. Sent at start, after a recommended pass and when either value changes. Needs no service. |
-| `SLEEP_POOL` | `reason` (`choices`: `choices.json` was written) | Companion cap `sleep_screen`: the files in `koreader/settings/orbit-sleep/` changed (below). The picture sink redraws `Pictures/Orbit/sleep.png`; the screen saver reads them at the next sleep. Needs no service. |
+| `REPORT` | `signed_in` (`"1"`/`"0"`), `recommended` (`none`/`partial`/`reviewed`/`applied`), `conflicts` (a count), `reason` | Companion 0.11.0+: one yes/no about the BookOrbit login and the recommended settings' state, for its Setup rows "Signed in to BookOrbit" and "Recommended settings". Never the server, the account or the key (those go only with `MIRROR` and `CHECK`); other extras are ignored. Sent at start, after a recommended pass and when either value changes. Needs no service. |
+| `SLEEP_REFRESH` | `reason`, `from`, `rules`, `open_id`, `every`, `storage_limit_mb`, `server`, `user`, `userkey`; or `reason`, `scopes_only=1` and the login | Cap `cache_worker`: refresh the sleep screen's pool on the worker thread (`SleepPoolBuilder`): Leave out's member lists once a day, the shuffle bag, the books checked and their covers fetched by ETag, then `pool.json`, `covers/`, `bag.lua`, `leave_out.lua` and `scopes.json` written and the picture redrawn. With `scopes_only` it lists the smart scopes and collections only (the pickers). Answers with a `sleep_pool` event. Needs no service. The login is never written or logged. |
+| `SLEEP_POOL` | `reason`, `wake` | Companion cap `sleep_screen`: the files in `koreader/settings/orbit-sleep/` changed (below). The picture sink redraws `Pictures/Orbit/sleep.png`; the screen saver reads them at the next sleep. With `wake` = `"1"` (reason `wake`): KOReader resumed after a real sleep (the screen went off, not an app switch); with Every sleep the picture moves on for the next sleep, once per wake (the service's screen-on counts as the same wake). Needs no service. |
+| `MIRROR` | `reason`, `server`, `user`, `userkey` | Cap `cache_worker` (docs/design/companion-worker.md): run the offline mirror from `koreader/settings/orbit-cache/mirror/plan.lua` on the cache worker thread (below). The login is used only as `x-auth-user`/`x-auth-key` on requests to `server`, held in memory, never written or logged. A new `MIRROR` replaces a waiting one. Needs no service. |
+| `CHECK` | `reason`, `cache_key`, `path`, `mode` (`open`/`refresh`/`full`), `owner`, `server`, `user`, `userkey` | Cap `cache_worker`: ask `server` for `path`, compare with what the plugin would serve under `cache_key` (its entry, else the mirror's pages), save a changed reply and answer with an event (below). Checks go before mirror jobs. Needs no service. |
+| `STORAGE` | `reason`, `limit` (bytes, empty: none), `cover_dir`, `mirror_covers` (`"1"`/`"0"`) | Cap `cache_worker`: count everything Orbit stores (the cache's index entries, the index, the mirror, the cover folder) and, over `limit`, remove what StorageLogic says: least recently used browsing entries and plain covers first, then covers saved for offline, never lists and books saved for offline. The companion deletes the covers; the entries go to the plugin in a `storage` event (it owns its index; one used since the count stays). No login. Needs no service. |
+| `COPIES` | `reason` | Cap `cache_worker`: which copies on the reader changed in the library (docs/design/keep-copies-current.md), from `koreader/settings/orbit-cache/copies/ask.lua` (below): the newer of the end-of-book cache's, the cache's and the mirror's saved details per book, compared with each copy's hash, and only copies whose file is on the reader. Answers with a `copies` event; the plugin queues and downloads them. No login. Needs no service. |
+| `UPDATE` | `reason` | The plugin's "Check for updates" (it downloads nothing itself: the plugin and the companion ship together). A check by hand, as from the companion's Update page: a newer release installs the companion and then the plugin of that release; an up-to-date companion installs the plugin of its own release when the one on disk is older (PatchInstaller). Every mode; needs no service. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
 
 `reason` values: `start` (KOReader just started; on firmwares that stop KOReader after sleep,
@@ -64,11 +70,12 @@ only reads, except `state.json`.
 
 | File | Written by | Holds |
 |---|---|---|
-| `pool.json` | plugin, at a sync (never at sleep) | `{v, at, source, items: [{id, title, file}], server, user, storage_limit_mb}` in show order; `file` is `covers/<id>.jpg`; `server` is the plugin's `server_url` (`…/api/v1`), `user` its KOReader username (the OPDS sign-in's default), `storage_limit_mb` Orbit's storage limit (the sharp covers take at most a tenth of it, 24 MB cap) |
-| `covers/<id>.jpg` | plugin | the pool's covers (400 × 600 thumbnails), fetched by ETag; others pruned. The companion's sharp covers (its own storage, `files/sharp-covers/`) replace them on screen when signed in |
+| `pool.json` | companion, at a `SLEEP_REFRESH` (never at sleep) | `{v, at, source, items: [{id, title, file}], server, user, storage_limit_mb}`: the batch of up to 24 ready covers, in show order; `file` is `covers/<id>.jpg`; `server` is the plugin's `server_url` (`…/api/v1`), `user` its KOReader username (the OPDS sign-in's default), `storage_limit_mb` Orbit's storage limit (the sharp covers take at most a tenth of it, 24 MB cap) |
+| `covers/<id>.jpg` | companion, at a `SLEEP_REFRESH` | the pool's covers (400 × 600 thumbnails), fetched by ETag; others pruned. The companion's sharp covers (its own storage, `files/sharp-covers/`) replace them on screen when signed in |
 | `current.png`, `current.json` | plugin, when a book opens | the current book's cover and `{v, title, authors, path, id, file, at}` |
-| `state.json` | companion | `{v, shown, changed_at}`: the cover shown and when it changed; the plugin's shuffle bag moves past it |
-| `bag.lua`, `leave_out.lua` | plugin | private: the shuffle bag and the daily Leave-out members |
+| `state.json` | companion | `{v, shown, changed_at, shows: {"<id>": n}}`: the cover shown, when it changed, and with Every sleep how often each ready cover was shown; the shuffle bag moves past `shown` (hours) and the refresh retires covers shown 3 times (Every sleep) |
+| `scopes.json` | companion, at a `SLEEP_REFRESH` | `{v, at, scopes: [{id, title, count}], collections: [...]}`: every smart scope and collection, for the pickers |
+| `bag.lua`, `leave_out.lua` | companion, at a `SLEEP_REFRESH` | private (the plugin reads `leave_out.lua` for a rule's book count): the shuffle bag and the daily Leave-out members |
 | `choices.json` | plugin, at start, on a Home refresh (at most every 6 h) and when `/status` `want_choices` is newer than the last it answered | `{v, at, cached, scopes: [{id, title, count}], collections: [...], tags: [{tag, label, count}]}` for the companion's picker and tag list (docs/design/companion-settings.md §6.2) |
 | `vendor-screensaver.txt` | `tools/install-usb.sh --sleep-screen on` | the three screen-saver values it replaced, for `off` |
 
@@ -79,6 +86,31 @@ only reads, except `state.json`.
 state, yours, orbit, was, reason}]}`, the Recommended settings review list for the companion. Its
 choices come back as the shared setting `recommended_choice` (`id=ours;id2=mine;all=undo`), which the
 plugin applies and then clears.
+
+## The cache worker's files (cap `cache_worker`)
+
+In `koreader/settings/orbit-cache/` (docs/design/companion-worker.md). Every file is a Lua literal
+in the cache's format (`Cache.encode`; `LuaValue.kt` reads and writes the same), written to a
+temp file and renamed. None holds the login. Keys, file names, list pages and cover names follow
+`shared/fixtures/cache/worker.json`, which both sides' tests check.
+
+| File | Written by | Holds |
+|---|---|---|
+| `index.lua`, `<hash>.lua` | plugin (and the companion for a changed `CHECK`) | the plugin's own cache: the index and its entries `{key, body, fetched_at, validated_at, path}`; the companion reads the index for the lists to save |
+| `events/<n>.lua` | companion | a check's answer: `{kind = "checked", key, changed, bytes, ids, at}`, `{…, unchanged, saved}` or `{…, err}`; a sleep pool refresh: `{kind = "sleep_pool", why, items, kept, probed, left_out, unknown, skipped, carried, retired, every, fallback, listed, scopes}` (or `scopes_only`, or `err`); a copies lookup: `{kind = "copies", why, checked, found = {{md5, path, book_id, file_id, why}}, gone}`; a storage count: `{kind = "storage", why, drop = {{key, used_at}}, totals, removed, used, after, limit}` |
+| `copies/ask.lua` | plugin, before each `COPIES` | `books` (`md5`, `path`, `book_id`, `file_id`, `incompatible`), `eob` (book id -> `files`, `saved_at`), `owner`, `server`, `detail_template`, `sentinel` |
+| `storage.lua` | companion, after each `STORAGE` | the last count's `totals` (`used`, `kept`, `cache`, `cover`, `mirror_cover` bytes) and `at`; the plugin reads it at start |
+| `mirror/plan.lua` | plugin, before each `MIRROR` | `run`, `op` (`full`/`resume`/`revalidate`/`covers`), `reason`, `owner`, `lib_version`, `sentinel`, `templates` (per section: `path`, `series_name_path`), `detail_template`, `sections`, `seed_lists`, `seed_details`, `legacy`, `legacy_lists`, `cover_dir`, `covers_on`, `limit` (the worker counts what else is stored at the run's start) |
+| `mirror/<hash>.lua` | companion | the mirror's pages and details, in the entry format |
+| `mirror/status.lua` | companion, every 5 s and at the end | `{v = 3, runner, run, running, beat, op, at, lib_version, done, total, left, skipped, covers, cover_total, limit_note, revalidating, bytes, cover_keep_n, started_at}` |
+| `mirror/summary.lua` | companion, at the end of a run | `{run, why (finished/stopped/no answer/busy), jobs, status, changed, written, written_more, saved, revalidated, bytes_delta, cover_bytes_delta}` |
+| `mirror/cover_keep.lua` | companion | the cover names "Save every cover for offline" keeps, for the plugin's pruner |
+| `mirror/worker-state.lua` | companion | private: its queue, lists, sizes |
+| `mirror/stop` | plugin | stop the run after the job in hand |
+| covers, in the plugin's thumbnail folder | companion | `<memoKey>.jpg` and `.etag`, as the plugin names them |
+
+The plugin needs the companion of its own version for any of this (`Companion.workerProblem`):
+otherwise it shows "Orbit Companion needed" or "Update Orbit Companion" and sends nothing.
 
 ## Patch → companion: activities
 
@@ -285,7 +317,7 @@ atomically whenever its mode, caps or setup state change (only if a `koreader/` 
     {"proto":"1","version":"0.11.0","mode":"addon","caps":["install","setup","stats","relaunch"],
      "setup_prompt":{"key":"…","rows":["…"]},"setup_needed":1,"written_at":…}
 
-`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always), `sleep_screen` (always, from the sleep screen's release; an older companion never offers it, so the plugin hides the menu); `home`,
+`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always), `sleep_screen` (always, from the sleep screen's release; an older companion never offers it, so the plugin hides the menu), `cache_worker` (always, from the cache worker's release); `home`,
 `apps` (Full); `wifi`, `sleep_sync`, `screen_off`, `clicker`, `pin` (Full, or Add-on with that
 helper on; `screen_off` also needs the lock-screen permission). The plugin reads `/status` first,
 then the file; a companion that answers `/status` without `caps` is older and offers everything.
@@ -332,7 +364,10 @@ answers come back through the launch intent or the loopback status, never as bro
 ## Security
 
 The broadcasts are not authenticated: any app on the device could ask the companion to turn
-Wi-Fi on, hold a wake lock (25 s cap) or lock the screen. That is acceptable on a
+Wi-Fi on, hold a wake lock (25 s cap), lock the screen, or save a server of its choosing into
+`koreader/settings/orbit-cache/` (`MIRROR`, `CHECK`; any app with storage access can write there
+anyway). The BookOrbit login travels only from KOReader to the companion's package in an explicit
+broadcast, which no other app receives. That is acceptable on a
 single-user e-reader. Android 14 only reveals the sender when the sender opts in, so the
 companion should simply bound what each action can do (the wake-lock cap, at most one
 `SLEEP_NOW` per few seconds).

@@ -82,6 +82,7 @@ function Shared.refresh(why)
         S.choices_asked_at = want
         saveSettings()
         pcall(Sleep.writeChoices, "asked by the companion")
+        if Sleep.refreshScopes then pcall(Sleep.refreshScopes, "companion picker") end
     end
     -- The lists for the companion's sleep-screen picker, once per start (and on Home refreshes).
     if why == "start" and Sleep and Sleep.writeChoices then

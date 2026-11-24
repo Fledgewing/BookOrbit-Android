@@ -96,10 +96,10 @@ delete the patch (and a stray `.new`) whenever they install the plugin. Test:
   after an app update over a 0.7.x patch, `UpdateFlow.patchAfterUpdate` installs the plugin
   like any patch update. The companion's restart command and stale-version restart then
   restart KOReader as before, from 0.3.1 and from 0.5.0 respectively.
-- **Self-update** (`ko/updater.lua`) checks the zip and `SHA256SUMS` the same way. It unpacks
-  with KOReader's `ffi/archiver` into `orbit.koplugin.new`, checks the version, and swaps the
-  folder through `orbit.koplugin.old`. `RestartPlan` reads the on-disk version from the
-  plugin's `main.lua`.
+- **Updates from the plugin's menu** (`ko/updater.lua`) ask the companion (`UPDATE`,
+  android/docs/INTERFACE.md): the plugin and the companion ship together, so the plugin downloads
+  nothing itself (docs/design/companion-worker.md). `RestartPlan` reads the on-disk version from
+  the plugin's `main.lua` and restarts KOReader for it when reading allows.
 - **USB** (`tools/install-usb.sh`) checks the zip against `SHA256SUMS` and the attestation,
   unpacks it on the computer with the same member and version checks (`unpack_orbit`), pushes
   it beside the live folder, swaps it in, and deletes the old patch.

@@ -1,0 +1,14 @@
+{
+  "section": "collections",
+  "items": [
+    {
+      "id": "7",
+      "title": "ToRead",
+      "section": "collections",
+      "count": 23,
+      "booksHref": "/api/v1/koreader/plugin/catalog/books?collectionId=7&sort=title",
+      "readingCount": 1,
+      "previewBooks": []
+    }
+  ]
+}

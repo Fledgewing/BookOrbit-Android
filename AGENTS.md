@@ -46,6 +46,13 @@ CrossInk 2.x release becomes the stable one (`xteink/README.md` "Releases and th
   tests that fail on a new show or notify path that bypasses it
   ([design](docs/design/reading-gate.md)). Xteink firmware follows the same rule.
 
+- **KOReader's UI thread stays free; the companion does the work.** Network, parsing, comparing,
+  file writes and folder scans for Orbit's own background work run in the Orbit Companion, never on
+  KOReader's single thread ([design](docs/design/companion-worker.md)). The companion is required
+  and ships with the plugin: no fallback path in the plugin for a job the companion owns, and no
+  version-skew handling. One check (`Companion.workerProblem`): missing or another version shows
+  "Orbit Companion needed" or "Update Orbit Companion" and nothing heavy runs.
+
 ## Read the source, not memory
 
 `tools/upstreams` checks out BookOrbit (server, web app, `koreader-plugin/`), CrossInk-Bookorbit

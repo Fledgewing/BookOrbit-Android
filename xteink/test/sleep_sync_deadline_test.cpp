@@ -27,6 +27,20 @@ static void wakePress() {
   CHECK(check(d, 1000 + 300000, 1000 + 290001) == Exit::Wake);
 }
 
+static void pressInTheSameTick() {
+  // The watcher stores a press as now | 1 and checks the deadlines in the same 10 ms tick. On an
+  // even millisecond the stored time is now + 1: the sync must still get its 2 s (.167 restarted
+  // at once on every such press).
+  const Deadlines d = device(1000);
+  for (unsigned long now : {1574UL, 1575UL, 30000UL, 30001UL}) {
+    const unsigned long stored = now | 1UL;
+    CHECK(check(d, now, stored) == Exit::None);
+    CHECK(check(d, now + 10, stored) == Exit::None);
+    CHECK(check(d, pressTime(stored) + 1999, stored) == Exit::None);
+    CHECK(check(d, pressTime(stored) + 2000, stored) == Exit::Wake);
+  }
+}
+
 static void budget() {
   const Deadlines d = device(1000);
   CHECK(!outOfTime(d, 1000 + 239999));
@@ -54,6 +68,7 @@ static void counterWrap() {
 
 int main() {
   wakePress();
+  pressInTheSameTick();
   budget();
   counterWrap();
   return report("sleep-sync-deadline");

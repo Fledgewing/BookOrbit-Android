@@ -398,7 +398,7 @@ input `platform: android | xteink | both`, and `ref`):
 | D5 | Image pin: `:3.9.0` by digest vs `latest` | two-way | **Digest**, re-pinned with `tools/upstreams pin bookorbit` |
 | D6 | Android: desktop vs AVD | two-way | **Both**: desktop first (stage 3), AVD for the Android-only rows (stage 4) |
 | D7 | UI driver: in-KOReader plugin vs coordinate taps | two-way | **`orbit-e2e.koplugin`**, never packaged (`package.sh` zips only `orbit.koplugin/`) |
-| D8 | Assertions: JSONL events vs screenshot diffs | two-way | **JSONL**; screenshots are review artifacts, never compared |
+| D8 | Assertions: JSONL events vs screenshot diffs | two-way | **JSONL**; screenshots are review artifacts, never compared. One exception (0038): `catalog_refresh_stamp` checks that the rectangle the log names for the catalog's final stamp has ink, since the defect was a draw the log said happened. The simulator presents and saves screenshots only from its main loop, which the refresh holds, so "Refreshing…" is judged from the log (drawn before the first request) and the screenshots are taken well after the refresh and before the QUIT. The harness asks SDL for its software renderer (`SDL_RENDER_DRIVER=software`): with the dummy video driver on Linux there is no accelerated one, and the simulator then saved no screenshots, silently |
 | D9 | Test-only code in shipped firmware | two-way | Only under `#ifdef SIMULATOR` (compiled out of reader builds, as upstream's scenario hooks are) |
 | D10 | Scripted heap under `SIMULATOR` | two-way | **Yes**: tests the decisions; the numbers stay a device check. Built at the HAL (the simulator's `heap_caps_*`), not in `HeapFloor` (§8) |
 | D11 | Robolectric in the companion's unit tests | two-way | **Yes** (test-only dependency) |
@@ -451,3 +451,9 @@ series-card cover fetch and no lent connection, so it runs the three that apply 
 | `sleep_sync_budget` | X2 (~255 s) | X4 Pro |
 | `home_tile_refresh` | X8, 0037 S12 | X4 Classic |
 | `offline_sleep_sync` | offline | X4s |
+| `sleep_sync_device_heap` | X3, X6, 0038 H1/H2 | X4s |
+| `sleep_sync_quick_wake` | X1, 0038 W1 | X4s |
+| `home_tile_touch` | X8, 0038 T1 | X4 Pro |
+| `catalog_refresh_stamp` | 0038 C1 (screenshot) | X4 Pro |
+| `catalog_cache_first` | 0038 C2 | X4 Pro |
+| `menu_home_swipe` | 0038 M1 | X4 Pro |
