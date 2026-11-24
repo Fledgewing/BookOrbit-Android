@@ -14,7 +14,7 @@
 -- (the runInSubprocess wrapper) and on a timer, so the index is only ever written by the parent.
 ---------------------------------------------------------------------------------------------
 
-OC = { memo = {}, memo_order = {}, inflight = {}, queue = {}, done = {}, MEMO = 12, MODE_S = 30 }
+OC = { memo = {}, memo_order = {}, inflight = {}, done = {}, MEMO = 12, MODE_S = 30 }
 
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
@@ -57,16 +57,8 @@ end
 
 OC.readFile, OC.writeFile = readFile, writeFile
 
--- FNV-1a, 32 bits, as hex: the entry's file name (the key is stored inside and checked).
-function OC.hash(s)
-    local bit = require("bit")
-    local h = 2166136261
-    for i = 1, #s do
-        h = bit.bxor(h, s:byte(i))
-        h = bit.tobit(h * 16777619 % 4294967296)
-    end
-    return string.format("%08x", h % 4294967296)
-end
+-- The entry's file name (Cache.hash; the key is stored inside and checked).
+function OC.hash(s) return Cache.hash(s) end
 
 -- In a forked child (the plugin's runInSubprocess, catalog.lua:881): never JNI (NetworkMgr on
 -- Android is JNI, device/android/device.lua:333; a child that calls it dies and the plugin gets
@@ -128,6 +120,7 @@ function OC.wipe(why)
     OC.memo, OC.memo_order = {}, {}
     OC.storage = nil
     OC.saveIndex()
+    UIManager:scheduleIn(5, function() pcall(OC.storageCount, "cleared") end)
 end
 
 -- The account and server this cache belongs to; a different one drops it.
@@ -250,6 +243,16 @@ function OC.drainEvents()
                 local raw = readFile(file)
                 local e = Cache.decode(raw or "")
                 if type(e) == "table" and e.key == ev.key then OC.adopt(ev.key, e, #raw) end
+            elseif ev.kind == "storage" then
+                OC.storageCounted(ev)
+            elseif ev.kind == "sleep_pool" and Sleep then
+                Sleep.landed(ev)
+            elseif ev.kind == "copies" and Copies then
+                Copies.found(ev)
+            elseif ev.kind == "checked" and ev.key then
+                local job = OC.inflight[ev.key]
+                OC.inflight[ev.key] = nil
+                if job then OC.landed(nil, job, ev) end
             elseif ev.kind == "check" and ev.key then
                 OC.check(nil, ev.key, ev.method, ev.path, ev.headers)
             elseif ev.kind == "write" then
@@ -383,12 +386,55 @@ end
 
 ---------------------------------------------------------------- background checks
 
--- Queues a check of key against the server; one request at a time, one per key.
+-- Asks the companion to check key against the server (docs/design/companion-worker.md): it
+-- asks, compares with what the plugin would serve (its entry, else the mirror's pages), saves a
+-- changed reply under the key and answers with a "checked" event (OC.drainEvents). KOReader only
+-- sends the job and reads the small answer: it never handles the reply's body (decoding and
+-- encoding it froze the UI on the M8C). One per key; none without the companion.
 function OC.check(_, key, method, path, headers, client)
-    if OC.inflight[key] then return end
-    OC.inflight[key] = true
-    table.insert(OC.queue, { key = key, method = method, path = path, headers = headers, client = client, mode = OC.mode() })
-    OC.pump()
+    if OC.inflight[key] or method ~= "GET" then return end
+    client = client or OC.client()
+    if not client or not NetworkMgr:isConnected() then return end
+    local problem = Companion.workerProblem()
+    if problem then
+        if OC.check_blocked ~= problem then log("cache: background checks off:", problem) end
+        OC.check_blocked = problem
+        return
+    end
+    OC.check_blocked = nil
+    OC.inflight[key] = { key = key, path = path, at = nowT() }
+    Companion.send(Companion.ACTION.CHECK, { reason = "check", cache_key = key, path = path, mode = OC.mode(),
+        owner = OC.owner(client), server = client.server_url, user = client.username, userkey = client.userkey })
+    OC.watchChecks()
+end
+
+-- While checks are out: their answers are read every second; one with no answer in CHECK_S fails.
+OC.CHECK_S = 60
+function OC.watchChecks()
+    if OC.watching then return end
+    OC.watching = true
+    local function tick()
+        pcall(OC.drainEvents)
+        local t = nowT()
+        for key, job in pairs(OC.inflight) do
+            if t - job.at >= OC.CHECK_S then
+                OC.inflight[key] = nil
+                OC.landed(nil, job, { err = "the companion didn't answer" })
+            end
+        end
+        if OC.storage_asked and t - OC.storage_asked >= OC.STORAGE_WAIT_S then
+            log("storage: the companion didn't answer the count")
+            OC.storage_asked = nil
+        end
+        if Copies and Copies.asked and t - Copies.asked >= Copies.WAIT_S then
+            log("copies: the companion didn't answer the check")
+            Copies.asked = nil
+        end
+        local sleep_waits = Sleep and Sleep.waited(t)
+        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) and not sleep_waits then OC.watching = nil; return end
+        UIManager:scheduleIn(1, tick)
+    end
+    UIManager:scheduleIn(1, tick)
 end
 
 function OC.client()
@@ -400,51 +446,6 @@ function OC.client()
         if okc then return c end
     end
     return nil
-end
-
-function OC.pump()
-    if OC.running then return end
-    local job = table.remove(OC.queue, 1)
-    if not job then return end
-    local client = job.client or OC.client()
-    if not client or not NetworkMgr:isConnected() then
-        OC.inflight[job.key] = nil
-        return OC.pump()
-    end
-    OC.running = true
-    -- The child asks, compares with what is saved and saves a changed reply itself; the UI thread
-    -- gets a few fields back (never the body: decoding and re-encoding it froze the UI on the M8C).
-    Background.run("cache check", function()
-        OC.child = true
-        local okc, res = pcall(OC.checkInChild, client, job)
-        OC.child = nil
-        if not okc then return Cache.encode({ err = "check failed: " .. tostring(res) }) end
-        return Cache.encode(res)
-    end, 60, function(out)
-        OC.running = nil
-        OC.inflight[job.key] = nil
-        local r = Cache.decode(out or "")
-        OC.landed(client, job, r)
-        OC.pump()
-    end)
-end
-
--- In the check's child: { err } | { unchanged, saved (an index entry of its own) } |
--- { changed, bytes, ids, at } (the new body is saved under job.key).
-function OC.checkInChild(client, job)
-    local b, e = client:requestBlocking(job.method, job.path, nil, job.headers)
-    if type(b) ~= "table" then return { err = e and tostring(e) or "no answer" } end
-    local entry = OC.lookup(client, job.key, job.path)
-    if not Cache.revalidate(entry and entry.body, b, 200) then
-        return { unchanged = true, saved = (entry and not entry.from_mirror) or nil }
-    end
-    local t = nowT()
-    local body = Cache.settle(entry and entry.body, b, job.mode)
-    local s = Cache.encode({ key = job.key, body = body, fetched_at = t, validated_at = t, path = job.path })
-    if not writeFile(OC.dir() .. "/" .. OC.hash(job.key) .. ".lua", s) then return { err = "not saved" } end
-    local ids = {}
-    for id in pairs(Cache.ids(body)) do table.insert(ids, id) end
-    return { changed = true, bytes = #s, ids = ids, at = t }
 end
 
 function OC.landed(client, job, r)
@@ -482,7 +483,7 @@ function OC.redraw_soon(key)
     if OC.redraw_scheduled then return end
     OC.redraw_scheduled = true
     local function flush()
-        if OC.running or #OC.queue > 0 then return UIManager:scheduleIn(0.5, flush) end
+        if next(OC.inflight) ~= nil then return UIManager:scheduleIn(0.5, flush) end
         OC.redraw_scheduled = nil
         local k = OC.redraw_key
         OC.redraw_key = nil
@@ -493,7 +494,7 @@ end
 
 -- What keeps Wi-Fi on (Wifi.busy): checks in flight or the offline mirror saving.
 function OC.busy()
-    if OC.running or #OC.queue > 0 then return "the Orbit cache checking BookOrbit" end
+    if next(OC.inflight) ~= nil then return "the Orbit cache checking BookOrbit" end
     if Mirror and Mirror.active then return "saving BookOrbit for offline" end
     return nil
 end
@@ -684,10 +685,13 @@ end
 
 -- Everything Orbit stores counts (Orbit menu › Storage limit, S.storage_limit_mb): the cache
 -- directory (browsing entries, the mirror's lists and details, the index) and the covers in the
--- plugin's cover directory, mirrored or not. Book files and KOReader's own data don't. The size is
--- counted on start and kept up to date on each write; over the limit, Cache.storagePlan says
--- what goes. The 64 MB / 20000-entry cap (Cache.evict in OC.adopt) is the browsing cache's share.
+-- plugin's cover directory, mirrored or not. Book files and KOReader's own data don't. Orbit
+-- Companion counts (STORAGE, docs/design/companion-worker.md): it walks the index and the cover
+-- folder, removes covers over the limit itself and names the browsing entries to drop, which the
+-- UI thread takes out of its index. Between counts each write adds its size here. The 64 MB /
+-- 20000-entry cap (Cache.evict in OC.adopt) is the browsing cache's share.
 local MB = 1048576
+OC.STORAGE_WAIT_S = 60
 
 function OC.limitBytes()
     local mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB
@@ -697,89 +701,72 @@ end
 function OC.coverDir()
     if OC.cover_dir then return OC.cover_dir end
     local okd, DataStorage = pcall(require, "datastorage")
-    return okd and DataStorage:getDataDir() .. "/cache/bookorbit" or nil
+    local okp, d = pcall(function() return DataStorage:getDataDir() end)
+    return okd and okp and d and (d .. "/cache/bookorbit") or nil
 end
 
-local function fileSize(path) return lfs_ok and tonumber(lfs.attributes(path, "size")) or 0 end
-
--- Every stored thing with its size, last use and kind (Cache.storagePlan's items).
-function OC.storageItems()
-    local items = {}
-    for k, e in pairs(OC.index().entries) do
-        table.insert(items, { k = "e:" .. k, bytes = e.bytes or 0, at = e.used_at or 0, kind = e.keep and "kept" or "cache" })
+-- Asks the companion to count (and, over the limit, remove). One ask at a time; one asked
+-- meanwhile follows it.
+function OC.storageCount(why)
+    if OC.child then return end
+    if OC.storage_asked and nowT() - OC.storage_asked < OC.STORAGE_WAIT_S then OC.storage_again = why; return end
+    local problem = Companion.workerProblem()
+    if problem then
+        if OC.storage_problem ~= problem then OC.storage_problem = problem; log("storage: not counted:", problem) end
+        return
     end
-    table.insert(items, { k = "index", bytes = fileSize(OC.dir() .. "/index.lua"), at = 0, kind = "kept" })
-    -- The offline mirror's lists and details (the worker counts them).
-    if Mirror then table.insert(items, { k = "mirror", bytes = tonumber(Mirror.status().bytes) or 0, at = 0, kind = "kept" }) end
-    local dir = OC.coverDir()
-    if lfs_ok and dir and lfs.attributes(dir, "mode") == "directory" then
-        local keep = S.mirror_covers and Mirror and Mirror.coverKeep() or {}
-        for name in lfs.dir(dir) do
-            if name:match("%.jpg$") then
-                local a = lfs.attributes(dir .. "/" .. name)
-                if type(a) == "table" and a.mode == "file" then
-                    table.insert(items, { k = "c:" .. name, bytes = (a.size or 0) + fileSize(dir .. "/" .. name .. ".etag"),
-                        at = a.modification or 0, kind = keep[name] and "mirror_cover" or "cover" })
-                end
-            end
-        end
-    end
-    return items
-end
-
-local function totalsOf(items, drop)
-    local gone = {}
-    for _, k in ipairs(drop or {}) do gone[k] = true end
-    local t = { used = 0, kept = 0, cache = 0, cover = 0, mirror_cover = 0 }
-    for _, e in ipairs(items) do
-        if not gone[e.k] then t.used = t.used + e.bytes; t[e.kind] = (t[e.kind] or 0) + e.bytes end
-    end
-    return t
-end
-
--- Counts everything and, over the limit, removes what Cache.storagePlan says, in its order.
-function OC.storageEnforce(why)
-    if OC.child then return OC.storage end
+    OC.storage_problem = nil
+    OC.storage_asked, OC.storage_again = nowT(), nil
     local limit = OC.limitBytes()
-    local items = OC.storageItems()
-    local plan = Cache.storagePlan(items, limit)
-    if #plan.drop > 0 then
-        local idx, dir = OC.index(), OC.coverDir()
-        local kinds, n = {}, { cache = 0, cover = 0, mirror_cover = 0 }
-        for _, e in ipairs(items) do kinds[e.k] = e.kind end
-        for _, k in ipairs(plan.drop) do
-            local key, name = k:match("^e:(.*)$"), k:match("^c:(.*)$")
-            if key then
-                idx.entries[key] = nil
-                OC.memo[key] = nil
-                os.remove(OC.dir() .. "/" .. OC.hash(key) .. ".lua")
-            elseif name and dir then
-                os.remove(dir .. "/" .. name)
-                os.remove(dir .. "/" .. name .. ".etag")
-            end
-            n[kinds[k]] = (n[kinds[k]] or 0) + 1
+    Companion.send(Companion.ACTION.STORAGE, { reason = tostring(why), limit = limit and tostring(limit) or "",
+        cover_dir = OC.coverDir() or "", mirror_covers = S.mirror_covers and "1" or "0" })
+    OC.watchChecks()
+end
+
+-- The companion's count: dropped browsing entries leave the index (unless used since), totals kept.
+function OC.storageCounted(ev)
+    OC.storage_asked = nil
+    local idx, dropped = OC.index(), 0
+    for _, d in ipairs(type(ev.drop) == "table" and ev.drop or {}) do
+        local meta = d.key and idx.entries[d.key]
+        if meta and (meta.used_at or 0) == (d.used_at or 0) then
+            idx.entries[d.key] = nil
+            OC.memo[d.key] = nil
+            os.remove(OC.dir() .. "/" .. OC.hash(d.key) .. ".lua")
+            dropped = dropped + 1
         end
-        OC.saveIndex()
-        log(string.format("storage: %.1f MB of %d MB (%s); removed %d browsing entries, %d covers, %d saved-for-offline covers -> %.1f MB",
-            plan.used / MB, math.floor(limit / MB), tostring(why), n.cache, n.cover, n.mirror_cover, plan.after / MB))
     end
-    OC.storage = totalsOf(items, plan.drop)
+    if dropped > 0 then OC.saveIndex() end
+    if type(ev.totals) == "table" then OC.storage = ev.totals end
+    local st, limit, rm = OC.storage or {}, OC.limitBytes(), type(ev.removed) == "table" and ev.removed or {}
+    if (ev.used or 0) ~= (ev.after or 0) then
+        log(string.format("storage: %.1f MB of %d MB (%s); removed %d browsing entries, %d covers, %d saved-for-offline covers -> %.1f MB",
+            (ev.used or 0) / MB, math.floor((limit or 0) / MB), tostring(ev.why), dropped, rm.cover or 0, rm.mirror_cover or 0, (ev.after or 0) / MB))
+    elseif ev.why == "start" then
+        log(string.format("storage: using %.1f MB of %s (lists and books saved for offline %.1f MB, covers %.1f MB, of them saved for offline %.1f MB)",
+            (st.used or 0) / MB, limit and (math.floor(limit / MB) .. " MB") or "no limit", (st.kept or 0) / MB,
+            ((st.cover or 0) + (st.mirror_cover or 0)) / MB, (st.mirror_cover or 0) / MB))
+    end
+    if OC.storage_again then OC.storageCount(OC.storage_again) end
+end
+
+-- What Orbit stores now ({ used, kept, cache, cover, mirror_cover } bytes): the last count (the
+-- companion's storage.lua at start), or nil before the first.
+function OC.storageTotals()
+    if OC.storage then return OC.storage end
+    local v = Cache.decode(readFile(OC.dir() .. "/storage.lua") or "")
+    if type(v) == "table" and type(v.totals) == "table" then OC.storage = v.totals end
     return OC.storage
 end
 
--- What Orbit stores now ({ used, kept, cache, cover, mirror_cover } bytes), counted once.
-function OC.storageTotals()
-    return OC.storage or OC.storageEnforce("count")
-end
-
--- A write of delta bytes of a kind: over the limit, the storage plan runs.
+-- A write of delta bytes of a kind: over the limit, the companion counts and removes.
 function OC.storageAdd(delta, kind)
     local st = OC.storage
     if OC.child or not st or delta == 0 then return end
-    st.used = st.used + delta
+    st.used = (st.used or 0) + delta
     st[kind] = (st[kind] or 0) + delta
     local limit = OC.limitBytes()
-    if limit and st.used > limit then OC.storageEnforce("over the limit") end
+    if limit and st.used > limit then OC.storageCount("over the limit") end
 end
 
 -- "Using 58 MB" (the setting's line).
@@ -1110,12 +1097,9 @@ function OC.install(why)
     log("cache: installed (" .. tostring(why) .. ")")
     -- The storage limit, counted on start.
     UIManager:scheduleIn(8, function()
-        local okc, st = pcall(OC.storageEnforce, "start")
-        if okc and st then
-            local limit = OC.limitBytes()
-            log(string.format("storage: using %.1f MB of %s (lists and books saved for offline %.1f MB, covers %.1f MB, of them saved for offline %.1f MB)",
-                st.used / MB, limit and (math.floor(limit / MB) .. " MB") or "no limit", st.kept / MB, (st.cover + st.mirror_cover) / MB, st.mirror_cover / MB))
-        elseif not okc then log("storage: count failed:", tostring(st)) end
+        pcall(OC.storageTotals)
+        local okc, err = pcall(OC.storageCount, "start")
+        if not okc then log("storage: count failed:", tostring(err)) end
     end)
     UIManager:scheduleIn(5, function()
         pcall(function() OC.cleanEtags(require("datastorage"):getDataDir() .. "/cache/bookorbit") end)

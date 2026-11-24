@@ -131,6 +131,37 @@ local function normServer(s)
 end
 
 -- r: { account, server, method, path, query }. path may carry its own "?query".
+-- FNV-1a, 32 bits, as hex: an entry's file name (the companion's MirrorLogic.hash is the same,
+-- shared/fixtures/cache/worker.json).
+function Cache.hash(s)
+    local bit = require("bit")
+    local h = 2166136261
+    for i = 1, #s do
+        h = bit.bxor(h, s:byte(i))
+        h = bit.tobit(h * 16777619 % 4294967296)
+    end
+    return string.format("%08x", h % 4294967296)
+end
+
+-- A book's cover file name in the plugin's thumbnail folder (bookorbit_catalog_thumbnails.lua:61-85
+-- coverToken, normalizedBookId, memoKey), or nil. The companion saves covers under the same name
+-- (CacheWorker.coverPath; shared/fixtures/cache/worker.json "covers").
+function Cache.coverName(book)
+    local id = type(book) == "table" and book.id
+    if type(id) ~= "number" or id ~= math.floor(id) or id < 1 or id > 2147483647 then return nil end
+    local token = book.updatedAt and tostring(book.updatedAt):gsub("%D", "") or "0"
+    if #token > 32 then token = token:sub(1, 16) .. token:sub(-16) end
+    if token == "" then token = "0" end
+    return (book.author_photo and "a" or "") .. string.format("%.0f", id) .. "_" .. token .. ".jpg"
+end
+
+-- 8551 -> "8,551" (the Full refresh indicator).
+function Cache.count(n)
+    local s = tostring(math.floor(tonumber(n) or 0))
+    local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+    return (out:gsub("^,", ""))
+end
+
 function Cache.key(r)
     local path, q = splitPath(r.path)
     local query = Cache.parseQuery(q)
@@ -386,29 +417,6 @@ end
 -- own data don't count). The 64 MB / 20000-entry cap above stays the browsing cache's share.
 Cache.STORAGE_LIMITS_MB = { 100, 250, 500, 1024, 0 } -- 0: no limit
 Cache.STORAGE_DEFAULT_MB = 250
-
--- items: { { k, bytes, at, kind } }, kind: "cache" (a browsing-cache entry), "cover" (a cover the
--- mirror didn't save), "mirror_cover" (saved by "Save every cover for offline") or "kept" (the
--- mirror's lists and book details, Home: never removed). limit: bytes (nil or 0: none).
--- -> { drop = keys in the order they go, used, after }: browsing entries and plain covers first,
--- least recently used first; then the mirror's covers, least recently seen first; never "kept".
-function Cache.storagePlan(items, limit)
-    local used = 0
-    for _, e in ipairs(items or {}) do used = used + (e.bytes or 0) end
-    local out = { drop = {}, used = used, after = used }
-    if not limit or limit <= 0 or used <= limit then return out end
-    for _, tier in ipairs({ { cache = true, cover = true }, { mirror_cover = true } }) do
-        local list = {}
-        for _, e in ipairs(items) do if tier[e.kind] then table.insert(list, e) end end
-        table.sort(list, function(a, b) if (a.at or 0) ~= (b.at or 0) then return (a.at or 0) < (b.at or 0) end return a.k < b.k end)
-        for _, e in ipairs(list) do
-            if out.after <= limit then return out end
-            table.insert(out.drop, e.k)
-            out.after = out.after - (e.bytes or 0)
-        end
-    end
-    return out
-end
 
 -- Whether the offline mirror may save more under the limit. totals: { kept, mirror_cover } bytes.
 -- what: "covers" (the every-cover pass: room only while the mirror's own share is under the

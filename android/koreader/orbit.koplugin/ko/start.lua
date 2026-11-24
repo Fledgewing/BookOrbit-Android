@@ -14,6 +14,10 @@ function OrbitAndroid:onResume()
     state.paused_for = state.suspended_at and (now_s() - state.suspended_at) or nil
     state.suspended_at = nil
     Wifi.state().foreground = true
+    if state.slept then
+        state.slept = nil
+        pcall(Sleep.woke)
+    end
     log("resume", state.paused_for and ("after " .. fmt(state.paused_for) .. " in the background") or "")
     Clicks.install("resume")
     -- Back in front and not in a book (file browser, BookOrbit Home): what waited shows now.
@@ -33,13 +37,11 @@ end
 function OrbitAndroid:wakeFlow(reason)
     if not S.sync_on_wake then
         log(reason .. ": sync on wake is off")
-        if NetworkMgr:isConnected() then Updater.maybeAuto(reason) end
         return
     end
     local p = bookorbit(self.ui)
     if not p or not p:isLoggedIn() then
         log(reason .. ": BookOrbit plugin missing or signed out; nothing to do")
-        if NetworkMgr:isConnected() then Updater.maybeAuto(reason) end
         return
     end
     local t0 = now_s()
@@ -52,7 +54,6 @@ function OrbitAndroid:wakeFlow(reason)
             return
         end
         if can(p, "outbox") then p:requestLifecycleOutboxDrain("orbit_" .. reason) end
-        Updater.maybeAuto(reason)
         -- Hold Wi-Fi until the plugin's drain and pull are done, then restore.
         UIManager:scheduleIn(1, function()
             Sync.waitOutbox(p, 20, function() Wifi.release(lease) end)

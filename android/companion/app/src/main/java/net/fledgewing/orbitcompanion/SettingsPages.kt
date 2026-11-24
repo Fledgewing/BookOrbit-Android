@@ -39,6 +39,8 @@ abstract class SettingsPage : EinkActivity() {
 
     abstract fun render()
 
+    override fun refresh() = render()
+
     /** Locked: one line and Unlock; the page redraws with its controls once the PIN is right. */
     protected fun lockedBar(root: LinearLayout) {
         if (!locked) return
@@ -335,7 +337,7 @@ open class SettingsSectionActivity : SettingsPage() {
         }
     }
 
-    private fun choices(): SleepChoices? = SleepChoices.parse(runCatching { File(SleepScreen.dir(), SleepChoices.FILE).readText() }.getOrNull())
+    private fun choices(): SleepChoices? = SleepChoices.read(SleepScreen.dir())
 
     /** A one-line text, "12 of 60" under it. */
     private fun editText(d: SettingDef, v: String) {
@@ -542,7 +544,7 @@ object SettingsSlots {
 
     private data class Entry(val section: String, val before: String?, val slot: Slot)
 
-    private val slots = mutableListOf(Entry("sleep", "sleep_text", SharpCoversRow))
+    private val slots = mutableListOf(Entry("sleep", "sleep_from", ScreenModeRow), Entry("sleep", "sleep_text", SharpCoversRow))
 
     /** [before]: drawn just before that shared key's place (whether or not it shows); null: after the section's rows. */
     @Synchronized
@@ -582,7 +584,7 @@ class SettingChoiceActivity : SettingsPage() {
         @Suppress("DEPRECATION")
         watch = object : FileObserver(SleepScreen.dir().path, CLOSE_WRITE or MOVED_TO) {
             override fun onEvent(event: Int, path: String?) {
-                if (path == SleepChoices.FILE) runOnUiThread { if (!isFinishing) render() }
+                if (path == SleepChoices.FILE || path == SleepChoices.SCOPES_FILE) runOnUiThread { if (!isFinishing) render() }
             }
         }.also { it.startWatching() }
     }
@@ -604,7 +606,7 @@ class SettingChoiceActivity : SettingsPage() {
         }
         subhead(root, "Lists")
         d.values.forEach { (id, label) -> option(id, label) }
-        val c = SleepChoices.parse(runCatching { File(SleepScreen.dir(), SleepChoices.FILE).readText() }.getOrNull())
+        val c = SleepChoices.read(SleepScreen.dir())
         if (c == null) {
             root.addView(note("Open KOReader once to load your smart scopes and collections."))
         } else {
@@ -628,7 +630,7 @@ class LeaveOutActivity : SettingsPage() {
 
     override fun render() {
         val d = schema.byKey["sleep_leave_out"] ?: return finish()
-        val c = SleepChoices.parse(runCatching { File(SleepScreen.dir(), SleepChoices.FILE).readText() }.getOrNull())
+        val c = SleepChoices.read(SleepScreen.dir())
         val rules = SettingsStore.get(this, d.key).split('\n').filter { it.isNotBlank() }
         val root = page(scroll = true)
         fun add(rule: String) {

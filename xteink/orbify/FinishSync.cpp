@@ -1,4 +1,5 @@
 #include "FinishSync.h"
+#include "HeapFloor.h"
 
 #include <CrossInkTailnetCuts.h>
 
@@ -18,7 +19,6 @@
 #include <vector>
 
 #include "CacheStore.h"
-#include "HeapFloor.h"
 #include "core/EndPageLayout.h"
 #include "core/NextCover.h"
 #include "network/BookOrbitCatalogClient.h"
@@ -260,9 +260,13 @@ bool writeCard(const orbify::SeriesCard& card) {
 
 namespace cover = orbify::cover;
 // The Home store's limits for a cover transfer and for the JPEG decoder (BookOrbitHomeStore.cpp).
+#if CROSSINK_TAILNET_TLS_PSRAM
+constexpr uint32_t MIN_FREE_HEAP_FOR_COVER = 20 * 1024;  // wolfSSL in PSRAM (patch 0038, HeapFloor.h)
+#else
 constexpr uint32_t MIN_FREE_HEAP_FOR_COVER = 42 * 1024;
-#if defined(BOARD_HAS_PSRAM)
-constexpr uint32_t MIN_MAX_ALLOC_FOR_COVER = 8 * 1024;  // TLS buffers in PSRAM (patch 0037)
+#endif
+#if CROSSINK_TAILNET_TLS_PSRAM
+constexpr uint32_t MIN_MAX_ALLOC_FOR_COVER = 4 * 1024;  // all of wolfSSL in PSRAM (patch 0038)
 #else
 constexpr uint32_t MIN_MAX_ALLOC_FOR_COVER = 20 * 1024;
 #endif
@@ -554,10 +558,17 @@ void storeCardFrom(JsonObjectConst detail, const bool coverFields) {
 #endif
   if (!writeCard(*card)) return;
   s_cardGeneration++;
-  LOG_INF(TAG, "Series card %lld: next %d (book %lld), %u suggestions; series '%s' #%s of %u",
-          static_cast<long long>(card->bookId), static_cast<int>(card->next),
-          static_cast<long long>(card->nextBook.id), static_cast<unsigned>(card->suggestionCount), card->seriesName,
-          card->seriesIndex[0] ? card->seriesIndex : "-", static_cast<unsigned>(card->seriesCount));
+  // seriesCount is how many of the series' books the library holds, not the series' length.
+  if (card->seriesName[0]) {
+    LOG_INF(TAG, "Series card %lld: next %d (book %lld), %u suggestions; series '%s' #%s (%u of its books in the library)",
+            static_cast<long long>(card->bookId), static_cast<int>(card->next),
+            static_cast<long long>(card->nextBook.id), static_cast<unsigned>(card->suggestionCount), card->seriesName,
+            card->seriesIndex[0] ? card->seriesIndex : "-", static_cast<unsigned>(card->seriesCount));
+  } else {
+    LOG_INF(TAG, "Series card %lld: next %d (book %lld), %u suggestions; no series", static_cast<long long>(card->bookId),
+            static_cast<int>(card->next), static_cast<long long>(card->nextBook.id),
+            static_cast<unsigned>(card->suggestionCount));
+  }
 }
 }  // namespace
 
@@ -582,7 +593,9 @@ void refreshCard(const std::string& bookPath, const float percentage) {
 #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
       cover::addToFilter(filter);
 #endif
-      JsonDocument doc;
+      // Patch 0038: its nodes in PSRAM on the X4s, beside a fragmented internal heap (.167 parsed
+      // it at 21 KB free, 7 KB largest).
+      JsonDocument doc(OrbifyHeap::jsonAllocator());
       size_t replyBytes = 0;
       parsed = parseReply(filter, doc, &replyBytes);
       LOG_INF(TAG, "Series card parsed (%s): %u-byte reply, heap free %u, largest %u", parsed ? "ok" : "failed",

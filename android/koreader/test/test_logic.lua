@@ -178,81 +178,16 @@ end)
 test("version: unparsable compares as nil", function() eq(cmp("x", "0.1.0"), nil) end)
 test("version: the repo copy is a dev version", function() eq(cmp(M.PATCH_VERSION, "0.0.1"), -1) end)
 
--- Update: release choice
-local rels = {
-    { tag_name = "v0.3.0-rc.1", prerelease = true },
-    { tag_name = "v0.4.0", draft = true },
-    { tag_name = "v0.2.0", assets = { { name = "2-orbit-android.lua", browser_download_url = "https://x/lua" } } },
-    { tag_name = "nightly" },
-    { tag_name = "v0.1.0" },
-}
-test("pick: newest stable by default", function() eq(Update.pick(rels, false).tag_name, "v0.2.0") end)
-test("pick: pre-releases when asked", function() eq(Update.pick(rels, true).tag_name, "v0.3.0-rc.1") end)
-test("version: a test build yields to the next release and is never picked", function()
+test("version: a test build sorts before the next release", function()
     local t = "0.11.3-0.test.42"
-    eq(Update.isTest(t), true)
-    eq(Update.isTest("0.11.3-rc.1"), false)
-    eq(Update.isTest("0.11.3"), false)
-    eq(Update.isTest("0.0.0-dev"), false)
     eq(cmp("0.11.2", t), -1)
     eq(cmp("0.11.3", t), 1)
     eq(cmp("0.11.3-rc.1", t), 1)
     eq(cmp("0.11.3-alpha", t), 1)
-    local list = { { tag_name = "v0.11.3-0.test.42" }, { tag_name = "v0.11.2" },
-        { tag_name = "v0.11.4-0.test.1", prerelease = true } }
-    eq(Update.pick(list, false).tag_name, "v0.11.2")
-    eq(Update.pick(list, true).tag_name, "v0.11.2")
-end)
-test("pick: nothing usable", function() eq(Update.pick({ { tag_name = "v1.0.0-rc.1", prerelease = true } }, false), nil) end)
--- shared/fixtures/github/orbify-releases.json: Android and firmware releases in one list.
-local JSON = dofile(here .. "/json_mini.lua")
-local orbify = JSON.fixture(here, "github/orbify-releases.json")
-test("pick: only Android tags from the shared release list", function()
-    eq(Update.pick(orbify, false).tag_name, "android-v0.7.1")
-    eq(Update.pick(orbify, true).tag_name, "android-v0.7.2-rc.1")
     eq(Update.parseVersion("xteink-v1.6.1.101+bookorbit.8"), nil)
-    eq(Update.compare("android-v0.7.0", "v0.7.0"), 0)
-    eq(Update.assetUrl(Update.pick(orbify, false), "2-orbit-android.lua"),
-        "https://github.com/Fledgewing/Orbify/releases/download/android-v0.7.1/2-orbit-android.lua")
+    eq(cmp("android-v0.7.0", "v0.7.0"), 0)
 end)
-test("pick: asset url", function()
-    eq(Update.assetUrl(Update.pick(rels, false), "2-orbit-android.lua"), "https://x/lua")
-    eq(Update.assetUrl(Update.pick(rels, false), "SHA256SUMS"), nil)
-end)
-
--- Update: checksum lines
-local A, B = string.rep("a", 64), string.rep("0123456789ABCDEF", 4)
-test("sums: sha256sum text and binary lines", function()
-    -- The plugin zip: members only inside orbit.koplugin/ (ko/updater.lua unpacks nothing else).
-    eq(Update.zipMember("orbit.koplugin/main.lua"), "main.lua")
-    eq(Update.zipMember("orbit.koplugin/ko/home.lua"), "ko/home.lua")
-    for _, bad in ipairs({ "main.lua", "orbit.koplugin/", "other.koplugin/main.lua", "orbit.koplugin/../x.lua",
-        "orbit.koplugin/ko/../../x", "orbit.koplugin//x", "orbit.koplugin/./x", "orbit.koplugin/a\\b", "/orbit.koplugin/x" }) do
-        eq(Update.zipMember(bad), nil)
-    end
-    local s = Update.parseSums(A .. "  2-orbit-android.lua\n" .. B .. " *orbit-companion-0.1.0.apk\r\n")
-    eq(s["2-orbit-android.lua"], A)
-    eq(s["orbit-companion-0.1.0.apk"], B:lower())
-end)
-test("sums: bad lines are skipped", function()
-    local s = Update.parseSums("# c\n\nabc  short.lua\n" .. A .. "x  long.lua\n" .. A .. "  ok.lua\n")
-    local n = 0
-    for _ in pairs(s) do n = n + 1 end
-    eq(n, 1, "count"); eq(s["ok.lua"], A)
-end)
-test("sums: empty or nil text", function() eq(next(Update.parseSums(nil)), nil); eq(next(Update.parseSums("")), nil) end)
-
-test("stamp: reads the declared version", function()
-    eq(Update.stampedVersion('-- x\nlocal PATCH_VERSION = "0.1.0"\n'), "0.1.0")
-    eq(Update.stampedVersion("-- nothing here"), nil)
-end)
-
-test("due: at most once a day", function()
-    eq(Update.isDue(nil, 1000), true)
-    eq(Update.isDue(1000, 1000 + 86399), false)
-    eq(Update.isDue(1000, 1000 + 86400), true)
-    eq(Update.isDue(5000, 1000), true, "clock went back")
-end)
+local JSON = dofile(here .. "/json_mini.lua")
 
 -- WifiPlan: restore previous state, idle timer, never off while busy
 local function ctx(now, t) t = t or {}; t.now = now; if t.wifi_on == nil then t.wifi_on = true end; return t end
@@ -406,40 +341,6 @@ test("wifi_on setting -> radio state", function()
     eq(Plan.wifiOnSetting(0), false); eq(Plan.wifiOnSetting(3), false)
     eq(Plan.wifiOnSetting(-1), nil)
 end)
-test("update errors: VPN lockdown blamed only when the companion reads it on", function()
-    local E = Update.errorText
-    local up = { wifi_on = true, connected = true }
-    eq(E("network: permission denied", { wifi_on = true, connected = true, lockdown = true }), Update.BLOCKED)
-    eq(E("network: connect failed: EACCES", up), "no internet: Android refused the connection (connect failed: EACCES)")
-    eq(E("network: timeout", { wifi_on = true, connected = true, lockdown = true }), Update.BLOCKED)
-    eq(E("network: timeout", up), Update.NO_ANSWER)
-    eq(E("network: timeout", { wifi_on = true, connected = true, lockdown = nil }), Update.NO_ANSWER, "unknown is not true")
-    eq(E("network: timeout", { wifi_on = true, connected = true, lockdown = false }), Update.NO_ANSWER, "lockdown 0")
-    eq(E("network: timeout", { wifi_on = false, connected = false }), "no internet: Wi-Fi is off")
-    -- 11-21 Boox: a timeout right after just-in-time Wi-Fi off, no lockdown.
-    eq(E("network: timeout", { wifi_on = true, connected = true, lockdown = false, went_down = true }), Update.WENT_DOWN)
-    eq(E("HTTP 500", up), "check failed: HTTP 500")
-end)
-test("update: automatic check gate (backoff, book, Wi-Fi going off, network)", function()
-    local G = function(t)
-        local c = { enabled = true, now = 100000, checked_at = 0, failed_at = nil, connected = true, in_book = false, off_decided = false }
-        for k, v in pairs(t) do c[k] = v end
-        return (Update.autoGate(c))
-    end
-    eq(G{}, true)
-    eq(G{ enabled = false }, false)
-    eq(G{ checked_at = 100000 - 3600 }, false, "checked today")
-    eq(G{ failed_at = 100000 - 3599 }, false, "backoff after a failure")
-    eq(G{ failed_at = 100000 - 3600 }, true, "an hour later")
-    eq(G{ in_book = true }, false, "never in a book")
-    eq(G{ off_decided = true }, false, "never after a Wi-Fi off decision")
-    eq(G{ connected = false }, false, "only with the network up")
-    local ok2, k, t = Update.decode(Update.encode(false, nil, "network: timeout"))
-    eq(ok2, false); eq(k, "net"); eq(t, "network: timeout")
-    ok2, k, t = Update.decode(Update.encode(true, "up to date (0.4.3)"))
-    eq(ok2, true); eq(k, "msg"); eq(t, "up to date (0.4.3)")
-    eq((Update.decode("")), false, "a dead child")
-end)
 test("home: where Home came from", function()
     eq(HomePlan.cameFromOtherApp("other_app", 0.1), true)
     eq(HomePlan.cameFromOtherApp(nil, 0.8), false, "quick pause: pressed in KOReader")
@@ -569,32 +470,6 @@ test("compat: missing or mistyped plugin symbols turn off only their feature", f
     local lines = C.lines(m, "2.4.0")
     eq(#lines, 2)
     eq(lines[1], "BookOrbit 2.4.0 changed: Sync while reading is off")
-end)
-test("update: a connect timeout or reset is retried twice, after 3 s and 10 s", function()
-    local tries, slept = 0, {}
-    local function sleep(s) table.insert(slept, s) end
-    -- Fails twice, then answers: the check succeeds.
-    local body = Update.withRetry(function()
-        tries = tries + 1
-        if tries < 3 then return nil, "network: timeout" end
-        return "ok"
-    end, sleep)
-    eq(body, "ok"); eq(tries, 3); eq(table.concat(slept, ","), "3,10")
-    -- Always times out: 3 tries, then the error.
-    tries, slept = 0, {}
-    local b2, e2 = Update.withRetry(function() tries = tries + 1; return nil, "network: connection reset by peer" end, sleep)
-    eq(b2, nil); eq(e2, "network: connection reset by peer"); eq(tries, 3); eq(table.concat(slept, ","), "3,10")
-    -- Not transient (EACCES, HTTP 404): no retry.
-    for _, e in ipairs({ "network: Permission denied", "HTTP 404", "network: host or service not provided, or not known" }) do
-        tries, slept = 0, {}
-        Update.withRetry(function() tries = tries + 1; return nil, e end, sleep)
-        eq(tries, 1, e); eq(#slept, 0, e)
-    end
-    ok(Update.TRY_TIMEOUT_S <= 8, "shorter per-try timeout")
-end)
-
-test("update: a check failure maps GitHub's EACCES too", function()
-    eq(Update.errorText("network: Permission denied", { wifi_on = true, connected = true, lockdown = true }), Update.BLOCKED)
 end)
 
 local Stats = M.Stats
@@ -1169,12 +1044,7 @@ test("cache: kept entries (Home, the mirror's lists and details) are outside the
     end
 end)
 
-test("cache: the storage limit's eviction order, the mirror's room and its stop note (shared cases)", function()
-    for _, c in ipairs(CC.storage.plans) do
-        local r = C.storagePlan(c.items, c.limit)
-        eq(table.concat(r.drop, ","), table.concat(c.drop, ","), c.name)
-        eq(r.after, c.after, c.name .. " after")
-    end
+test("cache: the mirror's room and its stop note (shared cases; the eviction order is StorageLogic's)", function()
     for _, c in ipairs(CC.storage.room) do eq(C.storageRoom(c.totals, c.limit, c.what), c.room, c.name) end
     for _, c in ipairs(CC.storage.notes) do eq(C.limitText(c.what, c.done, c.total), c.text, c.text) end
     eq(C.STORAGE_DEFAULT_MB, 250, "250 MB by default")
@@ -1445,19 +1315,9 @@ test("caps: diff names what was lost and gained", function()
     eq(table.concat(lost, ","), "home,wifi"); eq(table.concat(gained, ","), "pin")
 end)
 
-test("copies: changed copies are found by the server's flag or a saved detail's hash", function()
+test("copies: the replacement file, the decision, the sidecar folder, the queue (the lookup is CopiesLogic's)", function()
     local P = M.CopiesPlan
-    local books = {
-        aaa = { file = "/b/a.epub", bookId = 1, fileId = 10, positionIncompatible = true },
-        bbb = { file = "/b/b.epub", bookId = 2, fileId = 20 },
-        ccc = { file = "/b/c.epub", bookId = 3, fileId = 30 },
-        ddd = { bookId = 4, fileId = 40, positionIncompatible = true }, -- no copy on this reader
-    }
-    local details = { ["2"] = { files = { { id = 20, fileHash = "new" } } }, ["3"] = { files = { { id = 30, fileHash = "ccc" } } } }
-    local c = P.candidates(books, details)
-    eq(#c, 2, "a (flag) and b (hash); c is current; d has no copy")
-    eq(c[1].path .. ":" .. c[1].why, "/b/a.epub:incompatible")
-    eq(c[2].path .. ":" .. c[2].why .. ":" .. c[2].md5, "/b/b.epub:hash:bbb")
+    local c = { { path = "/b/a.epub" }, { path = "/b/b.epub" } }
     local files = { { id = 9, role = "alternate" }, { id = 10, fileHash = "x" }, { id = 11, role = "primary" } }
     eq(P.pick(files, 10).id, 10, "the same library file")
     eq(P.pick(files, 99).id, 11, "else the primary")
@@ -1509,35 +1369,11 @@ test("sleep screen: text and battery never share a corner (L3b2)", function()
     eq(SP.batteryCorner("top_left", "bottom"), "top_left")
 end)
 
-test("sleep screen: the dashboard section reply (recorded) and which books count (R2)", function()
-    local f = io.open(here .. "/../../../shared/fixtures/bookorbit/catalog-dashboard-section.want-to-read.json", "rb")
-    local body = JSON.decode(f:read("*a")); f:close()
-    local books = SP.sectionBooks(body)
-    ok(#books >= 1, "books")
-    for _, b in ipairs(books) do ok(tonumber(b.id), "id"); eq(type(b.hasCover), "boolean") end
-    eq(#SP.sectionBooks({}), 0); eq(#SP.sectionBooks(nil), 0)
-    ok(SP.eligible(books[1]))
-    eq(SP.eligible({ id = 3, hasCover = false }), false)
-    eq(SP.eligible({ id = 3, hasCover = true, readStatus = "read" }), false)
-    eq(SP.eligible({ id = 3, hasCover = true }, 3), false, "the book open now")
-    eq(SP.eligible({ id = 3, hasCover = true, readStatus = "want_to_read" }), true)
+-- Which books count (R2), Leave out (X1-X7), the shuffle bag (R1b) and Every sleep's batch (R4b):
+-- Orbit Companion's (SleepPoolTest.kt).
+test("sleep screen: the pickers' section entries", function()
     local e = SP.entries({ items = { { id = "12", title = "Romance", count = 40 }, { id = "x", title = "bad" } } })
     eq(#e, 1); eq(e[1].id, 12); eq(e[1].count, 40)
-end)
-
-test("sleep screen: Leave out is OR-ed, tags ignore case, unchecked fails closed (X1-X7)", function()
-    local rules = { "tag:age:18", "scope:3" }
-    local members = { ["scope:3"] = { [10] = true } }
-    eq(SP.check(10, rules, members, {}), "out", "in the scope")
-    eq(SP.check(11, rules, members, { " AGE:18 " }), "out", "tag, any case")
-    eq(SP.check(11, rules, members, { "fantasy" }), "keep")
-    eq(SP.check(11, rules, members, nil), "unknown", "no detail yet")
-    eq(SP.check(11, rules, {}, { "fantasy" }), "unknown", "scope not listed yet")
-    eq(SP.check(10, rules, members, nil), "out", "a known match wins over an unchecked rule")
-    eq(SP.check(11, {}, {}, nil), "keep", "no rules")
-    eq(SP.needsTags(rules), true); eq(SP.needsTags({ "collection:2" }), false)
-    eq(#SP.memberRules(rules), 1)
-    eq(SP.due(nil, 100), true); eq(SP.due(100, 100 + 86399), false); eq(SP.due(100, 100 + 86400), true); eq(SP.due(200, 100), true)
 end)
 
 test("sleep screen: the tag picker counts tags in cached details", function()
@@ -1545,50 +1381,12 @@ test("sleep screen: the tag picker counts tags in cached details", function()
     eq(#t, 2); eq(t[1].tag, "age:18"); eq(t[1].count, 2); eq(t[1].label, "Age:18"); eq(t[2].tag, "cosy")
 end)
 
-test("sleep screen: the shuffle bag never repeats until used up (R1b)", function()
-    local rand = seq({ 1, 3, 2, 1, 2 })
-    local bag = { order = {}, pos = 0 }
-    SP.bagSync(bag, { 1, 2, 3, 4 }, rand)
-    eq(#bag.order, 4)
-    local seen = {}
-    for _, id in ipairs(bag.order) do ok(not seen[id], "unique"); seen[id] = true end
-    local first = bag.order[1]
-    local next1 = SP.bagNext(bag, rand)
-    eq(#next1, 4, "nothing shown yet")
-    ok(SP.bagSeek(bag, bag.order[2]), "moves forward to the shown book")
-    eq(bag.pos, 2)
-    eq(SP.bagSeek(bag, first), false, "never back")
-    eq(SP.bagSeek(bag, bag.prev), false, "the same book again")
-    -- A member leaves before the cursor, a new one joins after it.
-    local gone = bag.order[1]
-    local keep = {}
-    for _, id in ipairs(bag.order) do if id ~= gone then table.insert(keep, id) end end
-    table.insert(keep, 9)
-    SP.bagSync(bag, keep, rand)
-    eq(#bag.order, 4); eq(bag.pos, 1, "cursor follows the removal")
-    local rest = SP.bagNext(bag, rand)
-    eq(#rest, 3)
-    local has9 = false
-    for _, id in ipairs(rest) do if id == 9 then has9 = true end end
-    ok(has9, "the new member is still to come")
-    -- Used up: shuffled again, never starting with the book just shown.
-    for i = 1, 20 do
-        local b = { order = { 1, 2, 3 }, pos = 3, prev = 3 }
-        local again, shuffled = SP.bagNext(b, function(n) return ((i + n) % n) + 1 end)
-        eq(shuffled, true); eq(#again, 3); ok(again[1] ~= 3, "not the book just shown first")
-    end
-end)
-
-test("sleep screen: pool.json is valid JSON the companion reads", function()
-    local doc = SP.poolDoc("scope:3", { { id = 5, title = 'Quote " and \\ slash', file = "covers/5.jpg" } }, 1700000000000)
+test("sleep screen: the JSON the companion reads (scopes.json, current.json) is valid", function()
+    local doc = { v = 1, at = 1700000000000, items = { { id = 5, title = 'Quote " and \\ slash', file = "covers/5.jpg" } } }
     local back = JSON.decode(SP.json(doc))
-    eq(back.v, 1); eq(back.source, "scope:3"); eq(back.at, 1700000000000)
+    eq(back.v, 1); eq(back.at, 1700000000000)
     eq(back.items[1].id, 5); eq(back.items[1].title, 'Quote " and \\ slash'); eq(back.items[1].file, "covers/5.jpg")
     eq(SP.json({ items = {} }), '{"items":[]}')
-    eq(back.server, nil); eq(back.user, nil)
-    -- The account the companion's sharp covers use (lock-screen.md L7): server and username, never the key.
-    local acct = JSON.decode(SP.json(SP.poolDoc("up_next", {}, 1, { server = "https://b.example/api/v1", user = "kid", userkey = "md5", storage_limit_mb = 100 })))
-    eq(acct.server, "https://b.example/api/v1"); eq(acct.user, "kid"); eq(acct.storage_limit_mb, 100); eq(acct.userkey, nil)
 end)
 
 -- Nothing interrupts reading (docs/design/reading-gate.md): every place in the plugin that shows
@@ -1619,6 +1417,40 @@ test("reading gate: every show, toast, activity start and restart names its gate
     end
     p:close()
     eq(table.concat(missing, " "), "", "ungated show paths")
+end)
+
+-- shared/fixtures/cache/worker.json: the cache's keys, file names, list pages, cover names and
+-- entry format, which the companion's cache worker must match byte for byte (CacheWorkerTest
+-- reads the same file). Regenerate only when the plugin's rules change, then fix the companion.
+test("cache worker fixture: the plugin's keys, hashes, pages, cover names and entry format", function()
+    local Cache = M.Cache
+    local fx = JSON.fixture(here, "cache/worker.json")
+    for _, k in ipairs(fx.keys) do
+        local key = Cache.key({ account = k.account, server = k.server, method = "GET", path = k.path })
+        eq((key:gsub(".", function(c) return string.format("%02x", c:byte()) end)), k.key_hex, "key of " .. k.path)
+        eq(Cache.hash(key), k.hash, "hash of " .. k.path)
+    end
+    for _, w in ipairs(fx.windows) do
+        local got = Cache.listWindow(w.path)
+        eq(got and got.identity, w.identity, "identity of " .. w.path)
+        if got then
+            eq(got.kind, w.kind, "kind"); eq(got.section, w.section, "section")
+            eq(Cache.mirrorPage(got.identity, 2, nil), w.page2, "page 2"); eq(Cache.mirrorPage(got.identity, 1, 50), w.page1_50, "page 1 of 50")
+        end
+    end
+    for _, c in ipairs(fx.covers) do
+        eq(Cache.coverName({ id = c.id, updatedAt = c.updatedAt, author_photo = c.author_photo or nil }), c.name, "cover of " .. c.id)
+    end
+    local e = fx.entry
+    local body = JSON.decode(e.body_json)
+    eq(Cache.encode({ key = e.key, body = body, fetched_at = e.fetched_at, validated_at = e.validated_at, path = e.path }), e.lua, "entry")
+end)
+
+test("sleep screen, Every sleep: a setting value", function()
+    eq(SP.normalize({ sleep_hours = 0 }).sleep_hours, 0, "Every sleep is a value")
+    eq(SP.normalize({ sleep_hours = "0" }).sleep_hours, 0)
+    eq(SP.extras({ sleep_hours = 0 }).sleep_hours, "0")
+    eq(SP.hoursLabel(0), "Every sleep"); eq(SP.hoursLabel(12), "12 h")
 end)
 
 

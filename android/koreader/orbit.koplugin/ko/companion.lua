@@ -12,6 +12,17 @@ Companion = {
     STATUS_URL = "http://127.0.0.1:47913/status",
 }
 Companion.ACTION = {
+    -- The cache worker (docs/design/companion-worker.md): a mirror run, a cache check.
+    MIRROR = Companion.PACKAGE .. ".action.MIRROR",
+    CHECK = Companion.PACKAGE .. ".action.CHECK",
+    -- The storage limit: the companion counts and removes (OC.storageCount).
+    STORAGE = Companion.PACKAGE .. ".action.STORAGE",
+    -- Keep copies current: the companion finds the changed copies (Copies.ask).
+    COPIES = Companion.PACKAGE .. ".action.COPIES",
+    -- The sleep screen's pool: the companion lists, checks and fetches the covers (Sleep.refresh).
+    SLEEP_REFRESH = Companion.PACKAGE .. ".action.SLEEP_REFRESH",
+    -- Updates: the companion checks, installs itself and then the plugin of its release.
+    UPDATE = Companion.PACKAGE .. ".action.UPDATE",
     NET_UP = Companion.PACKAGE .. ".action.NET_UP",
     NET_DONE = Companion.PACKAGE .. ".action.NET_DONE",
     WIFI_OFF = Companion.PACKAGE .. ".action.WIFI_OFF",
@@ -168,6 +179,29 @@ function Companion.has(cap)
     if not Companion.installed() then return false end
     if not Companion.cap_set or Companion.caps_state ~= "ok" then Companion.updateCaps(nil, "first use") end
     return Companion.cap_set[cap] == true
+end
+
+-- The cache worker's one check (docs/design/companion-worker.md "Required companion"): the plugin
+-- and the companion ship together, so the companion must be installed and be this plugin's
+-- version. nil when it is, else the line to show. No skew handling and no fallback: without it,
+-- nothing heavy runs in KOReader either (no mirror, no background checks).
+-- The plugin and the companion ship together (docs/design/companion-worker.md "Required
+-- companion"): nil when the companion of this plugin's own version is there, else what to do.
+-- purpose: what it is needed for (default "to save BookOrbit for offline").
+function Companion.workerProblem(purpose)
+    purpose = purpose or _("to save BookOrbit for offline")
+    local st = Companion.state()
+    if st ~= "ok" then return _("Orbit Companion needed") .. " " .. purpose end
+    local t = now_s()
+    if not Companion.version_at or t - Companion.version_at > 30 then
+        local f = Companion.readFile()
+        Companion.version, Companion.version_at = f and f.version, t
+    end
+    local v = Companion.version
+    if v ~= PATCH_VERSION then
+        return string.format(_("Update Orbit Companion to %s %s (it is %s)"), PATCH_VERSION, purpose, tostring(v or "older"))
+    end
+    return nil
 end
 
 -- For menus and the test: what's wrong with the companion, or nil.

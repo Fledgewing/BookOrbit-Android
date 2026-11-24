@@ -20,16 +20,13 @@ DEFAULTS = {
     wifi_idle_min = 2,            -- just in time: minutes of no network activity before Wi-Fi goes off
     home_button = "smart",        -- "smart" | "bookorbit"
     shared_settings_at = 0,       -- ms, when the shared settings last changed (either side)
-    auto_update_patch = true,
-    patch_update_prerelease = false,
-    patch_update_checked_at = 0,  -- os.time() of the last successful check
     patch_update_status = nil,    -- { at, text }
     open_book_at_exit = nil,      -- path of the open book; set on ReaderReady, cleared on a close
     restart_screen = nil,         -- "bookorbit" when BookOrbit Home was on top at a restart
     mirror_ttl_days = 7,          -- the offline mirror's automatic Full refresh after this many days
     mirror_auto = true,
     mirror_covers = false,        -- Full refresh also saves every book's cover (off on every device, v0.11.2)
-    storage_limit_mb = 250,       -- one limit on everything Orbit stores; 0 = no limit (v0.11.2, Cache.storagePlan)
+    storage_limit_mb = 250,       -- one limit on everything Orbit stores; 0 = no limit (v0.11.2; Orbit Companion counts, StorageLogic)
     keep_copies_current = true,   -- copies whose library file changed are downloaded again in the background           -- the automatic Full refresh (TTL, library changes) is on
     restart_book = nil,           -- the book open when a restart quit; reopened by the next start
     home_book = nil,              -- the book Home closed (fallback path); cleared by a user close or another book
@@ -44,7 +41,7 @@ DEFAULTS = {
     sleep_mode = "off",           -- "off" | "recommended" | "current"
     sleep_from = "up_next",       -- "up_next" | "want_to_read" | "discover" | "scope:<id>" | "collection:<id>"
     sleep_leave_out = {},         -- rules: "tag:<text>", "scope:<id>", "collection:<id>" (replaced, never changed in place)
-    sleep_hours = 6,              -- Recommended changes after this many hours (0 = every sleep, 1, 3, 6, 12, 24)
+    sleep_hours = 6,              -- Recommended changes after this many hours (1, 3, 6, 12, 24); 0: every sleep
     sleep_text = "",              -- up to 60 characters
     sleep_battery = false,        -- the battery level at sleep
     sleep_style = "bar",          -- "bar" | "overlay"

@@ -15,9 +15,17 @@ struct Deadlines {
   unsigned long budgetGraceMs = 0;  // past the budget, the sync's own stop at its next step
 };
 
+// When the press was recognised, from the value stored for it: callers store now | 1, so 0 means
+// none yet, and an even now reads back one ms later than it was.
+inline unsigned long pressTime(const unsigned long pressedAt) { return pressedAt & ~1UL; }
+
 // pressedAt: when the wake press was recognised, 0 = none yet (callers store it with bit 0 set).
+// Measured from pressTime(): the stored value can be one ms past the now it was stored at, and the
+// watcher checks in the same tick it records the press. now - (now + 1) wrapped to ~49 days, so
+// every press on an even millisecond ended the sync at once with a restart, before the sync could
+// answer it (X4 Pro, .167: "Wake press not answered ... within 2000 ms" 0.6 s after the sync began).
 inline Exit check(const Deadlines& d, const unsigned long now, const unsigned long pressedAt) {
-  if (pressedAt != 0 && now - pressedAt >= d.wakeGraceMs) return Exit::Wake;
+  if (pressedAt != 0 && now - pressTime(pressedAt) >= d.wakeGraceMs) return Exit::Wake;
   if (d.budgetMs != 0 && now - d.armedAt >= d.budgetMs + d.budgetGraceMs) return Exit::Sleep;
   return Exit::None;
 }

@@ -315,7 +315,7 @@ object Setup {
         val keep = SetupTips.visible(all.map { it.id }, Prefs(ctx).hiddenTips).toSet()
         val shown = all.filter { it.id in keep }
         // The sleep screen's one optional row (docs/design/lock-screen.md P3), in either mode.
-        return (if (Mode.isAddon(ctx)) addonChecks(ctx, shown) else shown) + listOfNotNull(SleepSetup.check(ctx), SharpCovers.check(ctx))
+        return (if (Mode.isAddon(ctx)) addonChecks(ctx, shown) else shown) + listOfNotNull(SleepSetup.check(ctx), ScreenModeSetup.check(ctx), SharpCovers.check(ctx))
     }
 
     /**

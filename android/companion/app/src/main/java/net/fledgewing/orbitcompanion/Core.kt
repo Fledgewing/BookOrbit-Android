@@ -284,6 +284,10 @@ class Prefs(ctx: Context) {
     var setupWelcome: Boolean
         get() = bool("setup_welcome", false)
         set(v) = setBool("setup_welcome", v)
+    /** Setup's "Screen mode for Orbit": the user said they set it (it can't be detected). */
+    var screenModeDone: Boolean
+        get() = bool("screen_mode_done", false)
+        set(v) = setBool("screen_mode_done", v)
 
     var settingsPinSeeded: Boolean
         get() = bool("settings_pin_seeded", false)

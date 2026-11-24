@@ -1,6 +1,7 @@
 # Background work off KOReader's UI thread (Android)
 
-Status: building (step 1 merged with this doc). Platforms: KOReader-Android.
+Status: building (step 1 merged; step 2, the companion as the worker, in this change).
+Platforms: KOReader-Android.
 
 ## Why
 
@@ -43,11 +44,29 @@ parsing of replies, comparing, file writes and directory scans. Even where the r
 in KOReader, only the apply step stays on the UI thread, and it handles a few fields, never a
 whole reply.
 
-The worker is a forked child of KOReader (`Background.run`, koreader-base `ffi/util`
-`runInSubProcess`) or the Orbit Companion (a separate process with real threads). Both write the
-same files.
+The worker is the Orbit Companion (a separate process with real threads). A forked child of
+KOReader (`Background.run`, koreader-base `ffi/util` `runInSubProcess`) is only for work the
+companion can't do, because it needs KOReader's own code (the BookOrbit plugin's reads).
 
-## Step 1 (this change): the mirror and the cache's own work in children
+## Required companion (maintainer, 11-23)
+
+The companion is required, and the plugin and the companion always ship together (one release,
+one version).
+
+- **No fallback in the plugin.** Once the companion owns a job, the plugin's network, parse and
+  disk path for that job is deleted, including step 1's child-process mirror and check. There is
+  no "no companion" or "old companion" path.
+- **No version-skew handling.** One check (`Companion.workerProblem`, `ko/companion.lua`): the
+  companion must be installed and report the plugin's own version in its status file. Otherwise
+  the plugin shows "Orbit Companion needed to save BookOrbit for offline" or "Update Orbit
+  Companion to <version> …" (the offline line in the menu, and a note when Full refresh is pressed)
+  and does nothing heavy: no mirror run, no background check. Reads keep coming from what is saved.
+- Test: "companion: the cache worker needs the companion of the plugin's own version".
+
+## Step 1 (#32, merged): the mirror and the cache's own work in children
+
+Step 2 replaced its mirror worker and its checks with the companion's, and deleted them from the
+plugin. Its index saves and child stores stay.
 
 - **Mirror worker.** A Full refresh, Refresh's recheck, the cover pass and a resumed run all run in
   a child. One run handles at most `RUN_JOBS` (400) jobs or `RUN_S` (120 s), then the next run
@@ -83,30 +102,76 @@ Guards (`test_flows.lua`, "v0.11.3: the mirror off the UI thread"):
 - Index saves encode nothing on the UI thread.
 - The v0.11.2 migration keeps its place.
 
+## Step 2 (this change): the companion runs the mirror and the checks
+
+- **The run.** `CacheWorker.kt` (plain JVM, unit-tested) on one worker thread (`Worker.kt`). The
+  plugin writes `mirror/plan.lua` (what to save, no login) and sends `MIRROR` with the login in
+  the broadcast's extras. The companion saves the pages, details and covers into `mirror/` (same
+  entry format and file names, temp file then rename), its queue in `mirror/worker-state.lua`,
+  and writes `status.lua` every 5 s and `summary.lua` at the end. The plugin polls `status.lua`
+  every 3 s and applies the summary. Nothing of the run (request, reply, compare, write, queue)
+  is in KOReader. Runs have no job budget: one run goes until it is done, stopped or offline.
+- **Checks.** `cache: … checking (open)` sends `CHECK` (key, path, mode, login). The companion asks,
+  compares with what the plugin would serve (its entry, else the mirror's pages, as `OC.lookup`),
+  saves a changed reply under the key and writes a `checked` event. The plugin drains events every
+  second while checks are out and applies `{ changed, bytes, ids }` or `{ unchanged }`.
+- **The same rules on both sides.** Keys, file names (LuaJIT's FNV-1a, double multiply and all),
+  list identities and pages, cover names and the entry format are checked against
+  `shared/fixtures/cache/worker.json` by both `test_logic.lua` and `CacheWorkerTest`. The plan
+  carries the plugin's own request templates (`paramsForEntry`, `effectiveOrder`,
+  `listDecorateBookQuery` with a sentinel id), so BookOrbit's query rules stay in the plugin.
+- **Credentials.** Server URL, username and key go only in explicit broadcasts to the
+  companion's package (`Jni.sendBroadcast` with `package`). They are held in memory, used only as
+  `x-auth-user`/`x-auth-key` on requests to that server (a redirect is followed only to the same
+  scheme, host and port), and never written to a file, `/status` or a log (`Companion.send` logs
+  only the reason; tests: the key is in no file under `orbit-cache/` and not in the plugin's log).
+  The receiver is exported like every other action, so another app could also send `MIRROR` with
+  a login of its own. The worst it can do is make the companion save a server's replies into
+  `koreader/settings/orbit-cache/`, which any app with storage access can write to anyway.
+- **The indicator (rc.1 report).** The Full refresh indicator now follows the run, not a step:
+  it is shown at every poll with an 8 s timeout (longer than the 3 s poll), reads "Full refresh ·
+  saving 512 of 8,551 for offline", and goes when the run finishes, pauses or fails. Before, it
+  was a 2 s note every 10 s, and each 400-job child run ended it. Test: "the Full refresh
+  indicator stays up for the whole companion run".
+- **Speed (rc.1: about 5 jobs a second, 10,325 queued, 35 min or more).** The companion sends 4
+  requests at a time over kept-alive connections (`PARALLEL`, fetched 16 ahead and landed in
+  queue order) and has no per-run budget. Each run logs `mirror: run <id> (<why>): N jobs, D books'
+  details, R requests in T s (X requests/s, 4 at a time)`. Unit test: 500 books at 20 ms a
+  request take about 3 s, against 10 s one at a time. Options weighed:
+  - Batched details: the server has no batch for details. `/books?ids=` (at most 200,
+    `koreader-catalog-query.dto.ts:114`) returns list items, not the detail body a book's page
+    shows offline. `/manifest` (at most 200 a page, `:175`) returns the file data copies need, not
+    the detail body either.
+  - Covers: still only the books on the reader and their neighbours, unless "Save every cover"
+    is on.
+  - Writes: one file per entry, because the plugin reads entries by key. The queue state is
+    written every 30 s, not per item.
+
 ## Audit: background work in KOReader's process
 
-"UI" means it runs on KOReader's UI thread today. "Child" means a forked child already does the
-network part. "Move" means the fetch, parse and write side goes to the worker; the apply step stays.
+"UI" means KOReader's UI thread. "Child" means a forked child of KOReader. "Companion" means the
+Orbit Companion's worker thread. Rule: an item stays in KOReader only if it needs KOReader's state
+at that moment, and even then its fetch side moves.
 
-| Work | Today (after step 1) | Decision | Why |
+| Work | Now | Decision | Why |
 |---|---|---|---|
-| Offline mirror: lists, details, covers, Refresh recheck | child (step 1) | **moved**; to the companion in step 2 | the ANR |
-| Cache index save | child (step 1) | **moved** | grew with the library |
-| Background cache checks, `cache: ... checking (open)` | child requests, compares and saves (step 1); the UI thread updates the index entry and redraws | **moved**; apply stays | the redraw needs the view |
-| Child stores (`stored` events) | metadata only on the UI thread (step 1) | **moved** | |
-| Storage limit: count and LRU (`OC.storageEnforce`) | UI: index walk and cover-folder `lfs` scan, at start and when over the limit | **move** (step 3): a child counts and deletes; the UI thread drops index entries | about 600 files today, thousands with "Save every cover" |
-| Copies' detail lookup (`Copies.details`) | UI: walks the index and decodes the wanted books' details | **move** (step 3) with the copy replacement itself | per on-device book, at Home and network up |
-| Sleep screen pool: Up next, Leave out member lists and tag details, cover prefetch | child (`Sleep.build`) | stays in a child; to the companion in step 2 | already off the UI thread (log 22:07:38.98 to :39.82, 0.8 s, UI free) |
+| Offline mirror: lists, details, covers, Refresh recheck, the every-cover pass | companion (step 2) | **moved** | the ANR |
+| Background cache checks, `cache: ... checking (open)` | companion asks, compares and saves (step 2); the UI thread applies a few fields and redraws | **moved**; apply stays | the redraw needs the view |
+| Cache index save | child (step 1) | **stays** (step 3 looked): the index is the plugin's own state in memory, so handing it to the companion means encoding it first, on the UI thread or in this same child. A journal of changes would touch every place the index changes to save one fork per 3 s at most. The UI thread encodes nothing (guard in `test_flows.lua`) | small since step 1 (under 8 KB) |
+| Child stores (`stored` events) | metadata only on the UI thread (step 1) | stays | the store is the plugin's own read, inside its child |
+| Storage limit: count and LRU (`OC.storageEnforce`) | companion (step 3): `STORAGE`; it walks the index and the cover folder, deletes covers and names the entries to drop; a mirror run counts its own base | **moved**; the UI thread drops the named index entries | about 600 files today, thousands with "Save every cover" |
+| Copies' detail lookup and replacement (`Copies.details`, `Copies.tick`) | companion (step 3): `COPIES`; it reads the saved details, compares hashes and checks the files | **moved**; the replacement stays the plugin's own Download path (BookOrbit's delivery, forked) and its sidecar, statistics and state carry | per on-device book, at Home and network up |
+| Sleep screen pool: Up next, Leave out member lists and tag details, cover prefetch | companion (step 3): `SLEEP_REFRESH`, `SleepPoolBuilder` on the worker thread; the pickers' lists too (`scopes_only`) | **moved**; the companion redraws its picture itself | already off the UI thread (log 22:07:38.98 to :39.82, 0.8 s, UI free) |
 | Sleep screen current cover (`Sleep.writeCurrent`) | UI, once per book open | **stays** | needs the open document (`getCoverImage`) |
-| Sleep screen scope and collection picker | child; falls back to a cached read | stays | user action, small |
+| Sleep screen scope and collection picker | child; falls back to a cached read | stays | user action, small; the plugin's own read |
 | Reading fonts install | companion (`FontInstaller.kt`); the plugin has no trigger | stays | already outside KOReader |
 | Rotation patch (`1-orbit-start-rotation.lua`) | UI, at start | stays | needs the display; a few calls, no I/O |
-| Plugin self-update check and download (`Updater.check`) | child | stays in a child | apply (install, restart) needs KOReader |
+| Plugin self-update check and download (`Updater.check`) | companion (step 3): the menu's check sends `UPDATE`; the companion installs itself, then the plugin of its release | **moved**; the plugin's download, unpack and swap are deleted | the restart for a newer file on disk stays in KOReader (`maybeRestart`) |
 | Companion status (`Companion.status`, loopback GET, 1 s timeout) | UI at start, resume and menu | stays | loopback answers in ms; the result drives the UI |
-| Outbox drain, progress, annotations, stats sync | BookOrbit plugin; forked when Trapper-wrapped (`bookorbit_api.lua:325-372`), otherwise blocking | **not redirected now** (see below) | upstream code; no measured stall |
-| Home dashboard, discover, search, series reads | BookOrbit plugin, forked (`runInSubprocess`); Orbit's cache answers inside the child | stays; the decode of the plugin's result is the plugin's | upstream code |
+| Outbox drain, progress, annotations, stats sync | BookOrbit plugin; forked when Trapper-wrapped (`bookorbit_api.lua:325-372`), otherwise blocking | not redirected now (see below) | upstream code; no measured stall |
+| Home dashboard, discover, search, series reads | BookOrbit plugin, forked (`runInSubprocess`); Orbit's cache answers inside the child | stays | upstream code; its result feeds the plugin's own view |
 | Cover and thumbnail downloads | BookOrbit plugin, forked (`bookorbit_catalog_thumbnails.lua:388, :571`) with Orbit's ETag download inside | stays | already off the UI thread; resizing is the plugin's, on draw |
-| Index load at start (`OC.index`) | UI, once per start | stays | small since step 1; the one start after the upgrade still reads the old index once |
+| Index load at start (`OC.index`) | UI, once per start | stays | small since step 1 |
 
 **BookOrbit's own sync** runs inside KOReader and Orbify doesn't patch upstream. Orbify already
 wraps `BookOrbitApi.request` (`ko/cache.lua` `OC.install`). That wrapper could send a non-catalog
@@ -114,27 +179,6 @@ write through a child even when the plugin calls it outside a Trapper coroutine.
 doing until a stall is measured there: the 11-23 log shows none, and a write's result feeds the
 plugin's own state (the sync coordinator's queue), which would then have to be applied
 asynchronously.
-
-## Step 2: the companion as the worker (next)
-
-The companion runs the mirror (and the sleep pool) on a worker thread, writing the same
-`mirror/` files atomically (temp file, then rename). The plugin keeps step 1's child only as the
-fallback when the companion is missing or too old (`caps` without `mirror`).
-
-- **Requests.** The plugin hands the companion a plan, not code. The plan has the seed paths, the
-  section index paths, and each section's entry template (built from the plugin's own
-  `paramsForEntry`, `effectiveOrder`, `listDecorateBookQuery` with a sentinel id). It also has the
-  detail path template and the page size. So BookOrbit's query rules stay where they are.
-- **Credentials.** The server URL, username and key go in an explicit broadcast to the companion's
-  package (`setPackage`, as every other action, docs `android/docs/INTERFACE.md`). Other apps
-  can't read an explicit broadcast. The key is held in memory and in the companion's private
-  storage, never in `koreader/settings`, never in a log or `/status`.
-- **Notices.** The companion writes `status.lua` and a `changed` list. The plugin polls them while
-  a run is on, as in step 1. A launcher intent would bring KOReader to the front, so it isn't
-  used.
-- **Rules kept.** Same triggers: network up, wake, Home, Refresh, Full refresh, TTL. Same storage
-  limit, same Wi-Fi hold: the companion refuses an automatic Wi-Fi off while it runs. Same
-  reading gate: nothing shows.
 
 ## Self-grill
 
@@ -146,6 +190,15 @@ fallback when the companion is missing or too old (`caps` without `mirror`).
    `io.open` calls on a list miss.
 4. Memo for mirror entries? None. The worker rewrites them behind the UI thread's back, and a stale
    memo hid a Refresh's change in testing.
-5. One long child or many short ones? Short runs, at most 400 jobs or 120 s each. A killed or timed-out
+5. (Step 1, superseded by step 2: the companion runs one run to the end.) One long child or many short ones? Short runs, at most 400 jobs or 120 s each. A killed or timed-out
    run loses at most 30 s of progress (`STATE_EVERY_S`), and a new Full refresh or a lost network
    stops it within one job.
+6. Plan in a file or in the broadcast? A file: the templates and sections are a few KB, and a
+   broadcast extra has a size limit. The login goes in the broadcast only.
+7. The lists the plugin has read (up to `Cache.MAX_ENTRIES`): in the plan or from the index? The
+   companion reads `index.lua` itself, so nothing on the UI thread grows with them. A pending index
+   save is waited for (at most 15 s) before a run.
+8. v0.11.2's mirror in the index? A Full refresh that also re-saves its lists; its files move into
+   `mirror/`. Its old queue isn't carried over (two-way door: the Full refresh saves the same).
+9. How many requests at once? Four: enough for roughly four times the rate on a home server over
+   Tailscale, few enough to stay polite. A constant (`PARALLEL`), one line to change.

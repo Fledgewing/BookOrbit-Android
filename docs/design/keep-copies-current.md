@@ -13,7 +13,8 @@ progress, highlights and bookmarks stop syncing for that book.
 
 - **Find.** A copy is changed when BookOrbit's state marks it `positionIncompatible`, or when a
   saved book detail lists its library file with a `fileHash` other than the copy's
-  (`CopiesPlan.candidates`, `logic/copies.lua`). Copies not on this reader are skipped. BookOrbit's
+  Orbit Companion looks this up (`COPIES`, `CopiesLogic`; docs/design/companion-worker.md), so
+  KOReader's UI thread reads no saved detail and checks no file. Copies not on this reader are skipped. BookOrbit's
   plugin has no path for updating a copy (its bulk download skips books already on the device,
   `bookorbit_catalog_bulk_download.lua:965`), so Orbit adds one.
 - **When.** Online only, never while reading (the [reading gate](reading-gate.md)), one book at a

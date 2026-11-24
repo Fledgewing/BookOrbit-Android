@@ -261,6 +261,9 @@ class PinActivity : EinkActivity() {
     companion object {
         const val SHOW_PIN = "${Contract.PACKAGE}.action.SHOW_PIN"
 
+        /** The page an update install was started from (UpdateReturn); none from the notification. */
+        const val EXTRA_FROM = "update_from"
+
         fun intent(ctx: Context, mode: Mode, guarded: String? = null, cls: String? = null): Intent =
             Intent(ctx, PinActivity::class.java).putExtra("mode", mode.name).putExtra("guarded", guarded).putExtra("guarded_cls", cls)
 
@@ -281,7 +284,9 @@ class PinActivity : EinkActivity() {
          * itself stays in memory (Updater.pendingConfirm), never taken from an extra. */
         fun thenInstall(ctx: Context, confirm: Intent): Intent {
             Updater.pendingConfirm = confirm
-            return intent(ctx, Mode.UNLOCK).putExtra("install", true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // Status's Install button names its page; the notification (over KOReader) names none (UpdateReturn).
+            val from = (ctx as? Activity)?.javaClass?.name
+            return intent(ctx, Mode.UNLOCK).putExtra("install", true).putExtra(EXTRA_FROM, from).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
         @Volatile
@@ -318,6 +323,7 @@ class PinActivity : EinkActivity() {
         Updater.pendingConfirm = null
         if (confirm != null) {
             Prefs(this).userUpdateAt = System.currentTimeMillis()
+            UpdateReturn.mark(this, intent.getStringExtra(EXTRA_FROM))
             Pin.installStarted(Updater.INSTALL_KEY)
             tryStart(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "the install prompt")
         } else {
@@ -334,6 +340,7 @@ class PinActivity : EinkActivity() {
             Updater.pendingConfirm = null
             if (confirm != null) {
                 Prefs(this).userUpdateAt = System.currentTimeMillis()
+                UpdateReturn.mark(this, intent.getStringExtra(EXTRA_FROM))
                 Pin.installStarted(Updater.INSTALL_KEY)
                 tryStart(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "the install prompt")
             } else {
