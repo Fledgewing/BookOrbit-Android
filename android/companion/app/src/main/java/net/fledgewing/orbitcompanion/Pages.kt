@@ -150,10 +150,13 @@ class NetTest(private val ctx: Context, private val offFirst: Boolean, private v
     }
 }
 
-/** Mockup 3. Also opened by the patch (SHOW_STATUS) and from the launcher. */
+/**
+ * The app's icon, SHOW_STATUS and the notification's target. Full mode: the launcher page is the
+ * status page (docs/design/companion-settings.md §5.9), so this runs the first-run choice and the
+ * "Setup needs you" prompt, then shows the launcher page. Add-on mode: this is the main page, the
+ * same status and info (StatusPanel) under a Settings button.
+ */
 class StatusActivity : EinkActivity() {
-    private var testResult: String? = null
-    private var test: NetTest? = null
     private var prompted = false
 
     override fun onResume() {
@@ -169,321 +172,83 @@ class StatusActivity : EinkActivity() {
             return
         }
         // "Setup needs you": once per visit, only when a step needs the user or after an update.
-        if (!prompted) {
-            prompted = true
-            val e = Attention.evaluate(this, "status page")
-            if (Attention.shouldPrompt(e, this)) {
-                startActivity(Intent(this, AttentionActivity::class.java))
-            }
+        val prompt = !prompted && Attention.shouldPrompt(Attention.evaluate(this, "status page"), this)
+        prompted = true
+        if (Prefs(this).mode != OrbitMode.ADDON) {
+            startActivity(Intent(this, LauncherActivity::class.java).putExtra("why_status", true))
+            if (prompt) startActivity(Intent(this, AttentionActivity::class.java))
+            finish()
+            return
         }
+        if (prompt) startActivity(Intent(this, AttentionActivity::class.java))
         render()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        test?.cancel()
     }
 
     private fun render() {
         val root = page()
         root.addView(Ui.header(this, "Orbit Companion", "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) })
-        // After an update: a line to tap, never a notification of its own.
-        WhatsNew.line(Attention.whatsNew(this).isNotEmpty(), BuildConfig.VERSION_NAME)?.let { t ->
-            root.addView(Ui.row(this, t, onClick = { startActivity(Intent(this, AttentionActivity::class.java)) }))
-        }
-        val wifi = when {
-            !Net.wifiEnabled(this) -> "Off"
-            Net.wifiConnected(this) -> "On · connected"
-            else -> "On · not connected"
-        }
-        val ts = when (Net.appState(this, Net.TAILSCALE_PKG)) {
-            AppState.MISSING -> "Not installed"
-            AppState.FROZEN -> AppStates.disabledShort(Vendor.disablerLabel(this))
-            else -> if (Net.vpnUp(this)) "Connected" else "Not connected"
-        }
-        root.addView(Ui.row(this, "Wi-Fi", right = Ui.value(this, wifi)))
-        root.addView(Ui.row(this, "Tailscale", right = Ui.value(this, ts)))
-        root.addView(Ui.row(this, "Service", right = Ui.value(this, when {
-            OrbitService.running -> "Running"
-            !Mode.needsService(this) -> "Off (Add-on, no helper)"
-            else -> "Starting"
-        })))
-        root.addView(Ui.row(this, "Screen-off permission", right = Ui.value(this, if (Net.adminActive(this)) "Granted" else "Not granted")))
-        root.addView(Ui.row(this, "Battery", "hours left, % per hour, by setting, history", Ui.value(this, "›"), onClick = {
-            startActivity(Intent(this, BatteryActivity::class.java))
-        }))
-        root.addView(Ui.gap(this, 16))
-        val card = Ui.card(this)
-        card.addView(Ui.row(this, "Last sleep sync", "reported by the Orbit plugin", Ui.value(this, Status.lastSleepSync(this))))
-        card.addView(Ui.row(this, "Last wake network ready in", right = Ui.value(this, Status.lastNetReady(this))))
-        card.addView(Ui.row(this, "Wi-Fi turns off", right = Ui.value(this, Status.wifiTimer(this))))
-        root.addView(card)
-        root.addView(Ui.gap(this, 16))
-        // The same summary as the Setup page (docs/design/companion-checklist.md §3.8).
-        val items = Setup.items(this)
-        root.addView(ChecklistUi.statusCard(this, Setup.summary(this, items), items) {
-            startActivity(Intent(this, SetupActivity::class.java))
-        })
-        root.addView(Ui.gap(this, 12))
-        root.addView(Ui.button(this, if (test?.running == true) "Testing…" else "Test network") { runTest() })
-        testResult?.let { root.addView(Ui.text(this, it, 18f).apply { setPadding(0, Ui.dp(this@StatusActivity, 10), 0, 0) }) }
-        Vendor.disabledApps(this).takeIf { it.isNotEmpty() }?.let { frozen ->
-            root.addView(Ui.text(this, frozen.joinToString(" ") { Vendor.disabledMessage(this, it) }, 18f, bold = true).apply {
-                setPadding(0, Ui.dp(this@StatusActivity, 10), 0, 0)
-            })
-        }
-        root.addView(Ui.gap(this, 12))
-        // A background update is ready: "Install" any time here (the notification waits while reading).
-        val ready = Updater.readyToInstall()
-        if (ready != null) {
-            root.addView(Ui.row(this, "App version", "Update ready: v${ready.first}", Ui.button(this, "Install", heightDp = 56, sp = 18f) {
-                // Through the PIN keypad like the notification's tap (no PIN or unlocked: Android's prompt).
-                startActivity(PinActivity.thenInstall(this, ready.second))
-            }))
-            return
-        }
-        root.addView(Ui.row(this, "App version", Updater.statusLine(this), Ui.button(this, if (Updater.busy) "Checking…" else "Check for updates", heightDp = 56, sp = 18f) {
-            Pin.run(this) {
-                Updater.check(this, interactive = true, why = "status page") { if (!isFinishing) render() }
-                render()
-            }
-        }))
-    }
-
-    private fun runTest() {
-        if (test?.running == true) return
-        testResult = "Testing: Wi-Fi on, Tailscale wake…"
-        test = NetTest(this, offFirst = false) { ok, summary ->
-            testResult = (if (ok) "Network test passed: " else "Network test failed: ") + summary
-            render()
-        }.also { it.start() }
-        render()
+        StatusPanel.draw(this, root, wifiRow = true) { if (!isFinishing) render() }
     }
 }
 
-/** Mockup 4. */
-class SettingsActivity : EinkActivity() {
-    override val pinGuarded = true
-
-    private lateinit var prefs: Prefs
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        prefs = Prefs(this)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        render()
-    }
-
-    private fun changed() {
-        OLog.debug = prefs.debugLog
-        OLog.i(
-            "settings: wifi_after_sleep=${prefs.wifiAfterSleep.key} wake_ts_with_wifi=${prefs.wakeTailscaleWithWifi} " +
-                "wake_lock=${prefs.wakeLockEnabled} home_opens=${HomeApp.kind(prefs.homeApp)} " +
-                "notify_tailscale=${prefs.notifyTailscale} debug=${prefs.debugLog} " +
-                "auto_update=${prefs.autoUpdate} include_prereleases=${prefs.includePreReleases} " +
-                "wifi_mode=${prefs.wifiMode.key} wifi_idle_min=${prefs.wifiIdleMin} home_button=${prefs.homeButton.key}",
-        )
-        OrbitService.start(this, Intent(OrbitService.ACTION_REFRESH))
-        render()
-    }
-
-    private fun render() {
-        val root = page(scroll = true)
-        root.addView(Ui.header(this, "Settings", "‹ Back") { finish() })
-        // Mode and Add-on's helpers (docs/design/addon-mode.md §3, §8); in Add-on, a feature's
-        // rows show only while its helper is on.
-        val addon = prefs.mode == OrbitMode.ADDON
-        root.addView(Ui.row(this, "Mode", when (prefs.mode) {
-            OrbitMode.ADDON -> "Add-on: your launcher stays · Switch"
-            OrbitMode.FULL -> "Full: Orbit runs the reader · Switch"
-            null -> "not chosen yet"
-        }, Ui.value(this, "›"), onClick = { startActivity(Intent(this, ModeActivity::class.java)) }))
-        if (addon) {
-            root.addView(Ui.text(this, "Helpers", 21f).apply { setPadding(0, Ui.dp(this@SettingsActivity, 8), 0, Ui.dp(this@SettingsActivity, 4)) })
-            helper(root, "Wi-Fi switching", "Orbit turns Wi-Fi on for a sync and off again", prefs.helperWifi) { prefs.helperWifi = it }
-            helper(root, "Sleep sync", "keeps the reader awake while it syncs on sleep", prefs.helperSleepSync) { prefs.helperSleepSync = it }
-            if (prefs.helperSleepSync) {
-                helper(root, "Screen off after Sync and sleep", if (Net.adminActive(this)) "uses the lock-screen permission" else "asks for the lock-screen permission", prefs.helperScreenOff) {
-                    prefs.helperScreenOff = it
-                    if (it && !Net.adminActive(this)) {
-                        tryStart(
-                            Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-                                .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminReceiver.component(this))
-                                .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Lets \"Sync and sleep\" turn the screen off after syncing. It uses only the lock-screen permission."),
-                            "device admin",
-                        )
-                    }
-                }
+/**
+ * Status and info (docs/design/companion-settings.md §5.9): the launcher page in Full mode, the
+ * main page in Add-on. What can be chosen lives in Settings; this only shows and installs.
+ */
+object StatusPanel {
+    fun draw(a: EinkActivity, root: LinearLayout, wifiRow: Boolean, redraw: () -> Unit) {
+        // After an update: a line to tap, never a notification of its own.
+        WhatsNew.line(Attention.whatsNew(a).isNotEmpty(), BuildConfig.VERSION_NAME)?.let { t ->
+            root.addView(Ui.row(a, t, onClick = { a.startActivity(Intent(a, AttentionActivity::class.java)) }).apply { tag = "status:whats_new" })
+        }
+        // A background update is ready: "Install" any time here (the notification waits while reading).
+        Updater.readyToInstall()?.let { ready ->
+            root.addView(Ui.row(a, "App version", "Update ready: v${ready.first}", Ui.button(a, "Install", heightDp = 56, sp = 18f) {
+                // Through the PIN keypad like the notification's tap (no PIN or unlocked: Android's prompt).
+                a.startActivity(PinActivity.thenInstall(a, ready.second))
+            }).apply { tag = "status:install" })
+        }
+        if (wifiRow) {
+            val wifi = when {
+                !Net.wifiEnabled(a) -> "Off"
+                Net.wifiConnected(a) -> "On · connected"
+                else -> "On · not connected"
             }
-            helper(root, "Clicker buttons", "Bluetooth page clicker buttons", prefs.helperClicker) { prefs.helperClicker = it }
-            helper(root, "Settings PIN", "locks Orbit's settings (not your launcher's)", prefs.helperPin) { prefs.helperPin = it }
-            root.addView(Ui.gap(this, 8))
+            root.addView(Ui.row(a, "Wi-Fi", right = Ui.value(a, wifi)))
         }
-        if (!addon || prefs.helperSleepSync) {
-        root.addView(Ui.text(this, "Wi-Fi after sleep sync", 21f).apply { setPadding(0, 0, 0, Ui.dp(this@SettingsActivity, 8)) })
-        val seg = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            background = Ui.box(this@SettingsActivity, Ui.PAPER)
-            val pad = Ui.dp(this@SettingsActivity, 2)
-            setPadding(pad, pad, pad, pad)
+        val ts = when (Net.appState(a, Net.TAILSCALE_PKG)) {
+            AppState.MISSING -> "Not installed"
+            AppState.FROZEN -> AppStates.disabledShort(Vendor.disablerLabel(a))
+            else -> if (Net.vpnUp(a)) "Connected" else "Not connected"
         }
-        listOf(
-            WifiAfterSleep.KEEP_ON to "Keep on",
-            WifiAfterSleep.OFF_AFTER_30 to "Off after 30 min",
-            WifiAfterSleep.OFF_NOW to "Off now",
-        ).forEach { (mode, label) ->
-            val sel = prefs.wifiAfterSleep == mode
-            val t = Ui.text(this, label, 18f, bold = sel, color = if (sel) Ui.PAPER else Ui.INK).apply {
-                gravity = Gravity.CENTER
-                minHeight = Ui.dp(this@SettingsActivity, 72)
-                setBackgroundColor(if (sel) Ui.INK else Ui.PAPER)
-            }
-            Ui.clickable(t, {
-                prefs.wifiAfterSleep = mode
-                changed()
-            })
-            seg.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        }
-        root.addView(seg)
-        root.addView(
-            Ui.text(this, "Short naps keep Wi-Fi up, so waking syncs in about 1 s. The timer only turns Wi-Fi off if the screen is still off.", 16f, color = Ui.MID)
-                .apply { setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 12)) },
-        )
-        }
-        if (!addon || prefs.helperWifi) {
-        segmented(root, "Wi-Fi", WifiMode.entries.map { it to it.label }, prefs.wifiMode) {
-            prefs.wifiMode = it
-            prefs.sharedSettingsAt = System.currentTimeMillis()
-        }
-        root.addView(
-            Ui.text(this, when (prefs.wifiMode) {
-                WifiMode.ALWAYS_ON -> "Wi-Fi stays as you set it. Syncs that have to turn it on turn it back off."
-                WifiMode.OFF_READING -> "Off when a book opens (after its sync), back as it was when the book closes."
-                WifiMode.JIT -> "Off unless something needs it. Wi-Fi you turn on by hand stays on until you turn it off."
-            }, 16f, color = Ui.MID).apply { setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 8)) },
-        )
-        if (prefs.wifiMode == WifiMode.JIT) {
-            segmented(root, "Just in time: off after idle", SharedSettings.IDLE_MINUTES.map { it to "$it min" }, prefs.wifiIdleMin) {
-                prefs.wifiIdleMin = it
-                prefs.sharedSettingsAt = System.currentTimeMillis()
-            }
-        }
-        }
-        val schedule = ReadingSchedule.shown(prefs.readingSchedule, prefs.readingScheduleRequest)
-        root.addView(Ui.row(this, "Sync while reading", ReadingSchedule.label(schedule) +
-            if (prefs.readingScheduleRequest.isNotEmpty()) " · applies when KOReader opens" else "",
-            Ui.value(this, "›"), onClick = { startActivity(Intent(this, ReadingScheduleActivity::class.java)) }))
-        val homeChoice = prefs.homeApp
-        if (!addon) {
-        root.addView(Ui.row(this, "Home opens", HomeApp.summary(homeChoice, if (HomeApp.isApp(homeChoice)) HomeTarget.label(this, homeChoice) else null),
-            Ui.value(this, "›"), onClick = { startActivity(Intent(this, HomeAppActivity::class.java)) }))
-        if (HomeApp.showsHomeButton(homeChoice)) {
-            segmented(root, HomeApp.HOME_BUTTON_TITLE, HomeButton.entries.map { it to it.label }, prefs.homeButton) {
-                prefs.homeButton = it
-                prefs.sharedSettingsAt = System.currentTimeMillis()
-            }
-        } else {
-            root.addView(Ui.text(this, "Sync on sleep, Just in time Wi-Fi and BookOrbit home work only inside KOReader.", 16f, color = Ui.MID).apply {
-                setPadding(0, Ui.dp(this@SettingsActivity, 6), 0, Ui.dp(this@SettingsActivity, 8))
+        root.addView(Ui.row(a, "Tailscale", right = Ui.value(a, ts)).apply { tag = "status:tailscale" })
+        root.addView(Ui.row(a, "Service", right = Ui.value(a, when {
+            OrbitService.running -> "Running"
+            !Mode.needsService(a) -> "Off (Add-on, no helper)"
+            else -> "Starting"
+        })).apply { tag = "status:service" })
+        root.addView(Ui.row(a, "Screen-off permission", right = Ui.value(a, if (Net.adminActive(a)) "Granted" else "Not granted")))
+        root.addView(Ui.row(a, "Battery", "hours left, % per hour, by setting, history", Ui.value(a, "›"), onClick = {
+            a.startActivity(Intent(a, BatteryActivity::class.java))
+        }))
+        root.addView(Ui.gap(a, 12))
+        val card = Ui.card(a)
+        card.addView(Ui.row(a, "Network", right = Ui.value(a, Status.networkLine(a))))
+        card.addView(Ui.row(a, "Last sleep sync", "reported by the Orbit plugin", Ui.value(a, Status.lastSleepSync(a))))
+        card.addView(Ui.row(a, "Last wake network ready in", right = Ui.value(a, Status.lastNetReady(a))))
+        card.addView(Ui.row(a, "Wi-Fi turns off", right = Ui.value(a, Status.wifiTimer(a))))
+        root.addView(card)
+        root.addView(Ui.gap(a, 12))
+        // The same summary as the Setup page (docs/design/companion-checklist.md §3.8).
+        val items = Setup.items(a)
+        root.addView(ChecklistUi.statusCard(a, Setup.summary(a, items), items) {
+            a.startActivity(Intent(a, SetupActivity::class.java))
+        })
+        Vendor.disabledApps(a).takeIf { it.isNotEmpty() }?.let { frozen ->
+            root.addView(Ui.text(a, frozen.joinToString(" ") { Vendor.disabledMessage(a, it) }, 18f, bold = true).apply {
+                setPadding(0, Ui.dp(a, 10), 0, 0)
             })
         }
-        }
-        // The sleep screen (docs/design/lock-screen.md): off until switched on, in either mode (A1).
-        val sleep = SleepScreen.settings(this)
-        root.addView(Ui.row(this, "Sleep screen", if (sleep.mode == SleepMode.OFF) "off · the reader's own" else "${sleep.mode.label} · ${SleepScreen.shownBy(this)}",
-            Ui.value(this, "›"), onClick = { startActivity(Intent(this, SleepScreenActivity::class.java)) }))
-        if (!addon || prefs.helperClicker) {
-            root.addView(Ui.row(this, "Clicker buttons", "Bluetooth page clicker: page turns, Home, Back, Sleep", Ui.value(this, "›"), onClick = {
-                startActivity(Intent(this, ClickersActivity::class.java))
-            }))
-        }
-        root.addView(Ui.gap(this, 8))
-        toggle(root, "Wake Tailscale with Wi-Fi", null, prefs.wakeTailscaleWithWifi) { prefs.wakeTailscaleWithWifi = it }
-        if (!addon || prefs.helperSleepSync) {
-            toggle(root, "Wake lock while syncing", "released at the patch's 20 s cap · 25 s max", prefs.wakeLockEnabled) { prefs.wakeLockEnabled = it }
-        }
-        toggle(root, "Notify if Tailscale won't connect", null, prefs.notifyTailscale) { prefs.notifyTailscale = it }
-        toggle(root, "Debug log", "more detail in logcat, tag OrbitCompanion", prefs.debugLog) { prefs.debugLog = it }
-        toggle(root, "Auto-update app", "daily check of the GitHub releases", prefs.autoUpdate) { prefs.autoUpdate = it }
-        toggle(root, "Include pre-releases", null, prefs.includePreReleases) { prefs.includePreReleases = it }
-        root.addView(Ui.row(this, "Check for updates", Updater.statusLine(this), Ui.value(this, if (Updater.busy) "…" else "›"), onClick = {
-            Updater.check(this, interactive = true, why = "settings") { if (!isFinishing) render() }
-            render()
-        }))
-        val skipped = prefs.setupIgnored
-        if (skipped.isNotEmpty()) {
-            root.addView(Ui.row(this, "Skipped setup steps: ${skipped.size}", "tap to be asked again", Ui.value(this, "›"), onClick = {
-                Attention.unignoreAll(this)
-                Attention.evaluate(this, "settings")
-                render()
-            }))
-        }
-        if (addon && !prefs.helperPin) {
-            // The PIN is a helper in Add-on: its rows show once it is on.
-        } else if (Pin.isSet(this)) {
-            root.addView(Ui.row(this, "Settings PIN", "on · tap to change", Ui.value(this, "›"), onClick = {
-                startActivity(PinActivity.intent(this, PinActivity.Mode.SET))
-            }))
-            root.addView(Ui.row(this, "Guarded apps", "${Pin.guarded(this).size} · open only after the PIN", Ui.value(this, "›"), onClick = {
-                startActivity(Intent(this, GuardedAppsActivity::class.java))
-            }))
-            root.addView(Ui.row(this, "Turn the PIN off", null, Ui.value(this, "›"), onClick = {
-                Pin.run(this) {
-                    Pin.clear(this, "turned off in Settings")
-                    render()
-                }
-            }))
-        } else {
-            root.addView(Ui.row(this, "Settings PIN", "off · keeps kids out of settings", Ui.value(this, "›"), onClick = {
-                startActivity(PinActivity.intent(this, PinActivity.Mode.SET))
-            }))
-        }
-        root.addView(Ui.row(this, "Open-source licenses", null, Ui.value(this, "›"), onClick = {
-            startActivity(Intent(this, LicensesActivity::class.java))
-        }))
-    }
-
-    private fun <T> segmented(root: LinearLayout, title: String, options: List<Pair<T, String>>, current: T, set: (T) -> Unit) {
-        root.addView(Ui.text(this, title, 21f).apply { setPadding(0, Ui.dp(this@SettingsActivity, 8), 0, Ui.dp(this@SettingsActivity, 8)) })
-        val seg = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            background = Ui.box(this@SettingsActivity, Ui.PAPER)
-            val pad = Ui.dp(this@SettingsActivity, 2)
-            setPadding(pad, pad, pad, pad)
-        }
-        options.forEach { (value, label) ->
-            val sel = value == current
-            val t = Ui.text(this, label, 17f, bold = sel, color = if (sel) Ui.PAPER else Ui.INK).apply {
-                gravity = Gravity.CENTER
-                minHeight = Ui.dp(this@SettingsActivity, 64)
-                setBackgroundColor(if (sel) Ui.INK else Ui.PAPER)
-            }
-            Ui.clickable(t, {
-                set(value)
-                changed()
-            })
-            seg.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        }
-        root.addView(seg)
-    }
-
-    /** An Add-on helper: starts or stops the service and tells the plugin. */
-    private fun helper(root: LinearLayout, label: String, sub: String, on: Boolean, set: (Boolean) -> Unit) {
-        root.addView(Ui.row(this, label, sub, Ui.toggle(this, on), onClick = {
-            set(!on)
-            Mode.helpersChanged(this, "helper $label ${if (on) "off" else "on"}")
-            render()
-        }))
-    }
-
-    private fun toggle(root: LinearLayout, label: String, sub: String?, on: Boolean, set: (Boolean) -> Unit) {
-        root.addView(Ui.row(this, label, sub, Ui.toggle(this, on), onClick = {
-            set(!on)
-            changed()
-        }))
     }
 }
 
@@ -581,7 +346,7 @@ object Setup {
             }
             val fix: ((EinkActivity) -> Unit)? = when (id) {
                 "battery" -> batteryApps.firstOrNull { !it.done }?.open
-                "wifi_switching", "sleep_sync" -> { a -> a.startActivity(Intent(a, SettingsActivity::class.java)) }
+                "wifi_switching", "sleep_sync" -> { a -> a.startActivity(SettingsPage.section(a, "sync")) }
                 else -> byId[id]?.open
             }
             val verb = if (id == "wifi_switching" || id == "sleep_sync") "Turn on" else "Allow"
@@ -1224,37 +989,6 @@ class SetupActivity : EinkActivity(), ChecklistUi.Actions {
  * Settings › Home opens: KOReader + BookOrbit (default), then reader apps (KnownApps and the
  * vendor's), then every other launchable app A–Z. Paged, no scrolling.
  */
-/** Settings › Sync while reading: the patch's options; the patch applies and keeps the choice. */
-class ReadingScheduleActivity : EinkActivity() {
-    override val pinGuarded = true
-
-    override fun onResume() {
-        super.onResume()
-        render()
-    }
-
-    private fun render() {
-        val prefs = Prefs(this)
-        val root = page(scroll = true)
-        root.addView(Ui.header(this, "Sync while reading", "‹ Back") { finish() })
-        root.addView(Ui.text(this, "Syncs your place while a book is open. KOReader keeps this setting; a change here applies when KOReader next opens or comes back.", 16f, color = Ui.MID))
-        val now = ReadingSchedule.shown(prefs.readingSchedule, prefs.readingScheduleRequest)
-        ReadingSchedule.OPTIONS.forEach { (id, label) ->
-            root.addView(Ui.row(this, label, null, Ui.value(this, if (id == now) "●" else " "), onClick = {
-                if (id == prefs.readingSchedule) {
-                    prefs.readingScheduleRequest = ""
-                    prefs.readingScheduleRequestAt = 0
-                } else {
-                    prefs.readingScheduleRequest = id
-                    prefs.readingScheduleRequestAt = System.currentTimeMillis()
-                }
-                OLog.i("sync while reading: chose $id here (the patch has ${prefs.readingSchedule.ifEmpty { "?" }})")
-                render()
-            }))
-        }
-    }
-}
-
 class HomeAppActivity : EinkActivity() {
     override val pinGuarded = true
 
