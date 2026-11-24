@@ -143,8 +143,16 @@ nor on the §3.3 list.
 
 **Both sides keep a copy of every shared value, with the time it last changed, per key.** The plugin
 keeps its copy in `orbit_android` (what its code already reads, unchanged); the companion keeps its
-copy in one generic store keyed by the schema. Neither is a "master": the newest change to a key wins.
-Both run on the same device clock, so the times compare.
+copy in one generic store keyed by the schema (`SettingsStore`, SharedPreferences `orbit_settings`).
+Neither is a "master": the newest change to a key wins. Both run on the same device clock, so the
+times compare. A key never set reads as the schema's default on both sides, so the schema is the
+one place defaults live.
+
+Before 2026-11 the companion kept `wifi_mode`, `wifi_idle_min` and `home_button` in `Prefs` and the
+sleep screen's keys in `orbit_sleep`. `SettingsStore.migrate` moves them into `orbit_settings` once,
+before the first read: a value the schema accepts is kept, the old key is removed. A companion
+downgraded past this change finds those keys at their defaults. `reading_schedule` stays apart: its
+value is the plugin's, and the companion's change is a request until the plugin echoes it.
 
 ### 4.3 The wire (extends what exists; nothing new to carry it)
 
