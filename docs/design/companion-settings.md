@@ -154,7 +154,7 @@ Both run on the same device clock, so the times compare.
 | companion → plugin | `/status` `settings` (`C/OrbitService.kt:644-650`), and the status file in Add-on (`C/StatusFile.kt:26-27`) | 13 keys + `settings_at` | `settings.values`, the same JSON |
 | companion → plugin, "look now" | the `/clicks` channel (`android/docs/INTERFACE.md:240-252`) | `SERVICE`, `CLICK` lines | a `SETTINGS <at>` line; the plugin runs `Shared.refresh("channel")` |
 | companion → plugin, actions | `COMMAND` on the launch intent (`C/Core.kt:587-630`) | `restart`, `recommended`, … | `full_refresh`, `sync_sleep`, `test_sync_path` (A2, A4, A5), gated by `PluginCommands` |
-| plugin → companion, lists | files in `koreader/settings/orbit-sleep/` + `SLEEP_POOL` (`INTERFACE.md:32`, `:57-69`) | pool, covers, current | `choices.json` (§6.2), `SLEEP_POOL reason=choices` |
+| plugin → companion, lists | files in `koreader/settings/orbit-sleep/` + `SLEEP_POOL` (`INTERFACE.md:32`, `:57-69`) | pool, covers, current | `want_choices` → `SLEEP_REFRESH scopes_only=1` (§6.2) |
 | plugin → companion, review | a file beside the status file | `REPORT` counts only | `koreader/settings/orbit-recommended.json` (A1, §5.8) |
 
 The flat extras and `settings_at` stay one release for older peers; a v2 reader ignores them when
@@ -395,13 +395,14 @@ condition in BookOrbit, then pick it here."
 
 ### 6.2 Where the lists come from
 
-The plugin writes `koreader/settings/orbit-sleep/choices.json`:
-`{v, at, cached, scopes: [{id, title, count}], collections: [...], tags: [{tag, count}]}`, from
-`Sleep.scopes` (server when online, else its cache, `P/ko/sleepscreen.lua:390-421`) and
-`Sleep.cachedTags` (`:423-434`). It writes it at every Home refresh, at start, and when the companion
-asks: `/status` carries `"want_choices": <ms>` while the picker is open, and the plugin answers at its
-next refresh with the file and `SLEEP_POOL reason=choices`. The companion redraws the picker once
-when the file changes.
+The companion's worker writes the lists into `koreader/settings/orbit-sleep/`: `scopes.json`
+(`{v, at, scopes: [{id, title, count}], collections: [...]}`, from the server) and `tags.json`
+(`{v, at, details, tags: [{tag, label, count}]}`, from the saved book details), both at a
+`SLEEP_REFRESH` (`SleepPoolBuilder.scopes`, `.tags`). The worker needs the login, which only the
+plugin sends, so the picker asks: `/status` carries `"want_choices": <ms>` while the picker is open,
+and the plugin answers at its next refresh with `SLEEP_REFRESH scopes_only=1`. The companion redraws
+the picker once when either file changes. (The plugin's `choices.json` is gone: it stopped being
+written when `Sleep.cachedTags` went, `docs/design/sqlite-cache.md`.)
 
 - **KOReader not running, file present:** the lists show with "From KOReader, Monday 14:02".
 - **No file yet:** "Open KOReader once to load your smart scopes and collections." The three lists
@@ -414,7 +415,7 @@ pool's titles (`pool.json` already holds book titles there).
 ### 6.3 Leave out
 
 The rule list: each rule a row, "Tag: age:18" or "Romance (smart scope)", with **Remove**. Then
-**Add a rule**: **Tag…** opens the tag list from `choices.json` (tag and count, most first) with
+**Add a rule**: **Tag…** opens the tag list from `tags.json` (tag and count, most first) with
 **Type a tag…** at the top; **Library, smart scopes and collections…** opens Library and the
 picker's two groups. Each item there has a tick box: a tap adds or removes its rule and the page
 stays, so several go in at once (X8). Library leaves out every book (the sleep screen then shows the
@@ -466,7 +467,7 @@ is reset, and turning the redesign back means drawing the old pages from the sam
 | Sleep page | `SleepScreenActivity`, the Sleep screen section page (`SHOW_SLEEP` still opens it); the picker is `SettingChoiceActivity`, the rules page `LeaveOutActivity` | `SleepScreen.save` through `SettingsStore` |
 | Other features' rows | `SettingsSlots.register(section, slot)`: for example, Sharp covers' "sign in once" row in Sleep screen | — |
 | Status and info | `StatusPanel` (`C/Pages.kt`): the launcher page, and Add-on's main page | the old `StatusActivity` rows |
-| Choices and review files | plugin `ko/sleepscreen.lua` (`choices.json`), `ko/recommended.lua` (`orbit-recommended.json`) | `Sleep.scopes`, `Sleep.cachedTags`, `Rec.reportFields` |
+| Review file | plugin `ko/recommended.lua` (`orbit-recommended.json`) | `Rec.reportFields` |
 | Channel nudge, COMMANDs | `C/ClickChannel.kt`, `P/ko/clicks_channel.lua`, `PluginCommands` | existing |
 | Plugin menu | `P/ko/menu.lua` regrouped by schema section | `toggle`, `radios` |
 
@@ -479,4 +480,4 @@ is reset, and turning the redesign back means drawing the old pages from the sam
 - Robolectric: the top page fits 1264 × 1680 without scrolling; a locked PIN shows no controls; a
   hidden child appears after its parent turns on with one render; search finds "screensaver".
 - Plugin `test_flows.lua`: a value changed in `/status` while KOReader was off applies at start before
-  the start sync; `choices.json` is written from a recorded section reply.
+  the start sync.

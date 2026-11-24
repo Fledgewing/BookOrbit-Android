@@ -159,7 +159,8 @@ object SleepScreen {
             val o = items.optJSONObject(n) ?: return@mapNotNull null
             val f = File(dir, o.optString("file"))
             val id = o.optLong("id")
-            if (id > 0 && f.isFile && f.canonicalPath.startsWith(dir.canonicalPath)) PoolItem(id, o.optString("title"), f) else null
+            val real = Places.inside(f, listOf(dir))
+            if (id > 0 && real != null && real.isFile) PoolItem(id, o.optString("title"), real) else null
         }
     } catch (e: Exception) {
         emptyList()
@@ -167,7 +168,7 @@ object SleepScreen {
 
     fun current(dir: File = dir()): Current? = try {
         val o = JSONObject(File(dir, "current.json").readText())
-        val f = o.optString("file").takeIf { it.isNotEmpty() }?.let { File(dir, it) }?.takeIf { it.isFile }
+        val f = o.optString("file").takeIf { it.isNotEmpty() }?.let { Places.inside(File(dir, it), listOf(dir)) }?.takeIf { it.isFile }
         Current(o.optString("title"), o.optString("authors"), f)
     } catch (e: Exception) {
         null

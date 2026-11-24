@@ -30,6 +30,19 @@ class SettingsStoreTest {
     private fun echo(vararg kv: Pair<String, Pair<String, Long>>): String =
         SettingsSync.valuesJson(kv.associate { (k, e) -> k to SettingEntry(e.first, e.second) })
 
+    /**
+     * Settings defaults have one source, shared/settings/schema.json: a reader who never changed a
+     * setting gets the schema's default here, as in the plugin (test_flows.lua "settings defaults").
+     */
+    @Test
+    fun everySettingStartsAtTheSchemasDefault() {
+        val schema = SettingsStore.schema(ctx)
+        assertTrue(schema.settings.size >= 30)
+        val wrong = schema.settings.filter { SettingsStore.get(ctx, it.key) != it.default }
+            .map { "${it.key}: ${SettingsStore.get(ctx, it.key)}, schema ${it.default}" }
+        assertEquals("", wrong.joinToString("\n"))
+    }
+
     @Test
     fun queuedChangeWaitsForKoreaderThenClears() {
         assertTrue(SettingsStore.set(ctx, "sync_on_sleep", "0", "test"))
