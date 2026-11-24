@@ -407,24 +407,32 @@ def catalog_refresh_stamp(ctx: Context, tmp: Path) -> None:
     rx, ry = int(stamp.group(7)), int(stamp.group(8))
     # Each catalog request waits 2 s at the proxy: the refresh is on screen long enough to see.
     ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 2000}])
-    shots = {ms: f"x4-pro-catalog-{ms}" for ms in range(15000, 30001, 500)}
-    run = ctx.sim.run(card, "refresh", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};14000:TAP:{rx},{ry};32000:QUIT",
-                      timeout_s=40,
+    # The simulator presents (and screenshots) only from its main loop, which the refresh holds:
+    # a screenshot cannot catch "Refreshing…" mid-fetch, and shots due during the fetch are all
+    # saved at once when it ends. So "Refreshing…" is judged from the log (drawn before the first
+    # request, on screen while they run) and the screenshots, taken well after the refresh and
+    # well before the QUIT, check the final stamp's ink.
+    shots = {ms: f"x4-pro-catalog-{ms}" for ms in range(26000, 30001, 1000)}
+    run = ctx.sim.run(card, "refresh", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};14000:TAP:{rx},{ry};40000:QUIT",
+                      timeout_s=75,
                       screenshots=shots)
-    after(run.output, "Catalog: Refresh of view")
-    after(run.output, "Catalog: Refresh done")
-    seen = {}
-    for m in STAMP.finditer(run.output):
-        seen.setdefault(m.group(2), (int(m.group(1)), *map(int, m.groups()[2:6])))
-    for text in ("Refreshing…", "updated just now"):
-        match = next((k for k in seen if k.lower().startswith(text.lower().rstrip("…"))), None)
-        assert match, f"the stamp never read {text!r}: {sorted(seen)}"
-        at, x, y, w, h = seen[match]
-        later = [ms for ms in shots if ms >= at + 300]
-        assert later, f"no screenshot after the stamp {match!r} was drawn"
-        shot = card.root / "shots" / f"x4-pro-catalog-{later[0]}.bmp"
-        dark = dark_pixels(shot.read_bytes(), x, y, w, h)
-        assert dark > w // 4, f"the stamp {match!r} is not on screen at {x},{y} ({dark} dark pixels)"
+    refresh = after(run.output, "Catalog: Refresh of view")
+    stamps = [(int(m.group(1)), m.group(2), *map(int, m.groups()[2:6])) for m in STAMP.finditer(refresh)]
+    busy = next((s for s in stamps if s[1].lower().startswith("refreshing")), None)
+    assert busy, f"the stamp never read 'Refreshing…' after the tap: {[s[1] for s in stamps]}"
+    first_get = re.search(r"\[(\d+)\] \[DBG\] \[HTTP\] \S+ GET: \S+/plugin/catalog/", refresh)
+    assert first_get and busy[0] <= int(first_get.group(1)), "'Refreshing…' was not drawn before the first request"
+    done = after(refresh, "Catalog: Refresh done")
+    final = [s for s in STAMP.finditer(done)]
+    assert final and final[-1].group(2).lower().startswith("updated just now"), \
+        f"the stamp after the refresh: {[m.group(2) for m in final]}"
+    at, _, x, y, w, h = int(final[-1].group(1)), final[-1].group(2), *map(int, final[-1].groups()[2:6])
+    later = [ms for ms in sorted(shots) if ms >= at + 300]
+    assert later, f"no screenshot after the final stamp was drawn at {at} ms"
+    shot = card.root / "shots" / f"x4-pro-catalog-{later[-1]}.bmp"
+    assert shot.exists(), f"the simulator saved no screenshot at {later[-1]} ms"
+    dark = dark_pixels(shot.read_bytes(), x, y, w, h)
+    assert dark > w // 4, f"'updated just now' is not on screen at {x},{y} ({dark} dark pixels)"
 
 
 @scenario("x4-pro")
