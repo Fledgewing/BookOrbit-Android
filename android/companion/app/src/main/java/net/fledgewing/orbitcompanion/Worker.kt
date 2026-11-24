@@ -52,7 +52,15 @@ object Worker {
 
     private var worker: CacheWorker? = null
 
-    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp).also { worker = it }
+    /** A Full refresh's % while it runs (the status page shows it), else null. */
+    @Volatile
+    var progress: Long? = null
+        private set
+
+    /** "Saving BookOrbit for offline · 37%" while a Full refresh runs, else null. */
+    fun progressLine(): String? = if (mirrorRunning) MirrorLogic.progressLine(progress) else null
+
+    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, onProgress = { progress = it }).also { worker = it }
 
     private fun creds(i: Intent): CacheWorker.Creds? {
         val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
@@ -206,6 +214,7 @@ object Worker {
                 OLog.w("worker: mirror run failed", e)
             } finally {
                 mirrorRunning = false
+                progress = null
             }
         }
     }

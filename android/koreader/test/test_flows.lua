@@ -451,6 +451,8 @@ local function test(name, fn)
     local t0 = W.wall()
     local ok, err = withLimit(name, fn)
     if os.getenv("ORBIT_TEST_TIMES") then print(string.format("%6.2f  %s", W.wall() - t0, name)) end
+    -- A failed test still undoes its setup (a cache test left open would hang the next one).
+    if W.after_fail then local undo = W.after_fail; W.after_fail = nil; if not ok then pcall(undo) end end
     if ok then passed = passed + 1 else
         failed = failed + 1; print("FAIL " .. name .. ": " .. tostring(err))
         if os.getenv("ORBIT_TEST_LOGS") then
@@ -3233,6 +3235,7 @@ local function detailEntry(client, id)
     local body, at = FC.detail(id)
     if type(body) == "table" then return { body = body, validated_at = at } end
 end
+local cacheTeardown
 local function cacheSetup(prep)
     local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/events"); sh("mkdir -p", dir .. "/covers")
     local lfs = require("libs/libkoreader-lfs")
@@ -3320,6 +3323,7 @@ local function cacheSetup(prep)
     -- The companion's cache worker, played by the tests (fake_companion.lua), on the same files.
     E.Mirror.run_id, E.Mirror.indicator_at, E.Mirror.blocked, E.Mirror.sent_at, E.Mirror.seen_beat = nil, nil, nil, nil, nil
     E.OC.watching, E.OC.check_blocked = nil, nil
+    E.Badge.history, E.Badge.running, E.Badge.widget, E.Badge.pct, E.Badge.expanded = {}, nil, nil, nil, nil
     W.companion = true
     cache.worker_problem = nil
     cache.real_workerProblem = cache.real_workerProblem or E.Companion.workerProblem
@@ -3338,10 +3342,11 @@ local function cacheSetup(prep)
     end, UIManager)
     W.on_broadcast = FC.receive
     ok(E.OC.install("test"), "installed")
+    W.after_fail = cacheTeardown
     local client = setmetatable({ username = "reader", userkey = "k", server_url = "https://books.example" }, Api)
     return client, Cat, Api
 end
-local function cacheTeardown()
+function cacheTeardown()
     local lfs = require("libs/libkoreader-lfs")
     for k, v in pairs(cache.lfs_saved) do lfs[k] = v end
     sh("rm -rf", cache.dir)
@@ -3575,7 +3580,7 @@ test("cache: offline, a cached page opens without connecting; an uncached one as
     cacheTeardown()
 end)
 
-test("cache: tap ⟳ says Refreshing (a tip to hold, once); hold says Full refresh, then done with the covers checked", function()
+test("cache: tap ⟳ says Refreshing (a tip to hold, once); hold starts a Full refresh with no other note (the badge says it)", function()
     local client, Cat = cacheSetup()
     W.wifi = true
     local notes = {}
@@ -3588,12 +3593,11 @@ test("cache: tap ⟳ says Refreshing (a tip to hold, once); hold says Full refre
     E.OC.refresh(cat); E.OC.refresh(cat)
     ok(notes[1]:find("Tip: hold ⟳ for a full refresh", 1, true) and notes[2] == "Refreshing…", "tip once: " .. table.concat(notes, " | "))
     notes = {}
+    W.logs = {}
     E.OC.fullRefresh(cat)
     run(5)
-    ok(notes[1] == "Full refresh: reloading everything from BookOrbit…", "hold: " .. tostring(notes[1]))
-    local saw
-    for _, n in ipairs(notes) do if n:find("^This page is refreshed · 1 covers checked") then saw = true end end
-    ok(saw, "done: " .. table.concat(notes, " | "))
+    ok(#notes == 0, "no note during a Full refresh: " .. table.concat(notes, " | "))
+    ok(table.concat(W.logs, "\n"):find("this page is refreshed, 1 covers checked", 1, true), "logged")
     cacheTeardown()
 end)
 
@@ -4204,7 +4208,8 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
         E.OC.fullRefresh(cat)
         m = E.Mirror.status()
         ok(m.done >= done and m.total >= total and m.left > 0, "the run is kept, not restarted")
-        ok(notes[1] and notes[1]:find("^Full refresh · saving [%d,]+ of [%d,]+ for offline"), "its progress shown: " .. tostring(notes[1]))
+        local h = E.Badge.history or {}
+        ok(#notes == 0 and E.Badge.expanded and (h[#h] or ""):find("^Saving for offline · %d+%% · [%d,]+ of [%d,]+"), "the badge opens on its full message: " .. tostring(h[#h]))
         ok(table.concat(W.logs, "\n"):find("Full refresh already running (pressed again); kept", 1, true), "logged")
         -- The network goes mid-run: paused; it comes back: resumed, no read needed.
         W.wifi = false
@@ -4253,9 +4258,10 @@ test("mirror: Full refresh saves every book's details, outside the cap; covers o
         E.OC.fullRefresh(cat); run(900)
         local m = E.Mirror.status()
         ok((m.cover_total or 0) >= 4, "every book's cover queued: " .. tostring(m.cover_total))
-        local said
-        for _, n in ipairs(notes) do if n:find(" · covers %d+/%d+") then said = true end end
-        ok(said, "covers in the Full refresh note: " .. table.concat(notes, " | "))
+        -- One number on screen: the badge's %, never a count per kind; no other note.
+        local odd
+        for _, t in ipairs(E.Badge.history or {}) do if not (t:match("^%d+%%$") or t == "Done") then odd = t end end
+        ok(not odd and #notes <= 1, "only the %: " .. tostring(odd) .. " | " .. table.concat(notes, " | "))
         local a, other = cache.dir .. "/covers/1_1.jpg", cache.dir .. "/covers/999_x.jpg"
         io.open(a, "w"):close(); io.open(other, "w"):close()
         cache.prune = { a, other }
@@ -4452,8 +4458,8 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
         local note = m.limit_note and m.limit_note.text or ""
         ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. Raise the limit in Orbit settings%.$"), "the stop: " .. note)
         local shown
-        for _, n in ipairs(notes) do if n == note then shown = true end end
-        ok(shown, "in the Full refresh note: " .. table.concat(notes, " | "))
+        for _, t in ipairs(E.Badge.history or {}) do if t == note then shown = true end end
+        ok(shown, "the badge says it: " .. table.concat(E.Badge.history or {}, " | "))
         local c = m.covers
         ok((c.ok or 0) + (c.not_modified or 0) + (c.failed or 0) == 2, "two covers, then the pass stopped")
         ok(m.left == 0 and m.at, "the lists and details went on to the end")
@@ -4465,7 +4471,8 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
         m = E.Mirror.status()
         note = m.limit_note and m.limit_note.text or ""
         ok(note:find("^Storage limit reached: 0 of %d+ lists and books saved"), "the run stops: " .. note)
-        ok(m.left == 0 and notes[#notes] == note, "shown: " .. table.concat(notes, " | "))
+        local h = E.Badge.history or {}
+        ok(m.left == 0 and h[#h] == note, "shown: " .. table.concat(h, " | "))
     end)
     FC.storageItems, FC.COVER_BATCH = items, batch
     E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
@@ -4585,47 +4592,63 @@ test("cache: a background check of a big page compares and saves it in the child
     cacheTeardown()
 end)
 
-test("mirror: the Full refresh indicator stays up for the whole companion run, with its progress, and goes when it ends (rc.1)", function()
+test("mirror: the Full refresh badge: a popup at the start, then one % that only rises, redrawn at most every 3 s, Done at the end; no other note (rc.6)", function()
     local client, Cat = cacheSetup()
     W.wifi = true
     cache.server_fn = libraryServer({ n_books = 450, series4 = 30 })
     local cat = pluginCatalog(Cat, client)
-    local shows, dismissed = {}, {}
-    E.OC.note = function(t, timeout) table.insert(shows, { at = W.clock, text = t, timeout = timeout or 2 }) end
-    package.loaded["bookorbit_toast"] = { show = function() end, dismiss = function() table.insert(dismissed, W.clock) end }
+    local notes = {}
+    E.OC.note = function(t) table.insert(notes, t) end
+    local popups = {}
+    local orbitNote = E.orbitNote
+    E.orbitNote = function(t, timeout) table.insert(popups, { text = t, timeout = timeout }) end
+    local dirties, shown, closed = {}, 0, 0
+    local setDirty, show, close = UIManager.setDirty, UIManager.show, UIManager.close
+    UIManager.setDirty = function(self, w, how, ...)
+        if w == E.Badge.widget then table.insert(dirties, { at = W.clock, region = type(how) == "function" and select(2, how()) or nil }) end
+        return setDirty(self, w, how, ...)
+    end
+    UIManager.show = function(self, w, ...) if type(w) == "table" and w.name == "orbit_refresh_badge" then shown = shown + 1 end return show(self, w, ...) end
+    UIManager.close = function(self, w, ...) if type(w) == "table" and w.name == "orbit_refresh_badge" then closed = closed + 1 end return close(self, w, ...) end
     FC.rate = 7 -- a run of about a minute and a half: many polls
+    E.Badge.history = {}
     withHost(cat, function()
         client:request("GET", DASH)
         client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
         E.OC.fullRefresh(cat)
-        shows = {}
-        local t0 = W.clock
         run(1200)
         local m = E.Mirror.status()
         ok(m.at and m.left == 0 and m.total > 450, "finished: " .. tostring(m.done) .. "/" .. tostring(m.total))
-        local progress = {}
-        for _, s in ipairs(shows) do if s.text:find("^Full refresh · ") then table.insert(progress, s) end end
-        ok(#progress > 10, "shown at every poll: " .. #progress)
-        -- Never down between two polls: each show lasts past the next one.
-        local gap
-        for i = 2, #progress do
-            if progress[i - 1].at + progress[i - 1].timeout < progress[i].at then gap = progress[i - 1].at end
+        ok(#popups == 1 and popups[1].text:find("^Full refresh in progress · about %d+%% done · you can keep reading and browsing while it loads$"), "one popup: " .. tostring(popups[1] and popups[1].text))
+        ok(#notes == 0, "no other note: " .. table.concat(notes, " | "))
+        local h, last = E.Badge.history, -1
+        ok(#h > 5, "the % moved along: " .. table.concat(h, " "))
+        for i, t in ipairs(h) do
+            local p = tonumber(t:match("^(%d+)%%$"))
+            if i < #h then
+                ok(p and p >= last and p < 100, "one number, only rising, 100 only at the end: " .. table.concat(h, " "))
+                last = p or last
+            end
         end
-        ok(not gap, "never hidden mid-run (gap after " .. tostring(gap) .. ")")
-        ok(progress[1].at - t0 <= E.Mirror.POLL_S + 4, "up from the start")
-        local last = progress[#progress].text
-        ok(last:find("^Full refresh · saving [%d,]+ of [%d,]+ for offline$"), "the run's own counts: " .. last)
-        local grew = false
-        for i = 2, #progress do
-            local d1 = tonumber((progress[i - 1].text:match("saving ([%d,]+)") or "0"):gsub(",", "") .. "")
-            local d2 = tonumber((progress[i].text:match("saving ([%d,]+)") or "0"):gsub(",", "") .. "")
-            if d1 and d2 and d2 < d1 then grew = true end
-        end
-        ok(not grew, "the done count only goes up")
-        ok(#dismissed >= 1 and dismissed[#dismissed] >= progress[#progress].at, "down when the run ends")
+        ok(h[#h] == "Done", "Done at the end: " .. tostring(h[#h]))
+        ok(shown == 1, "one badge, changed in place: " .. shown)
+        for i = 2, #dirties do ok(dirties[i].at - dirties[i - 1].at >= E.Badge.EVERY_S or i == #dirties, "at most every 3 s") end
+        ok(dirties[1] and dirties[1].region and dirties[1].region.w and dirties[1].region.w < 600, "only its rectangle redrawn")
+        run(E.Badge.DONE_S + 1)
+        ok(closed == 1 and E.Badge.widget == nil, "then it goes")
         ok(E.Cache.count(8551) == "8,551" and E.Cache.count(512) == "512" and E.Cache.count(1234567) == "1,234,567", "thousands")
     end)
-    package.loaded["bookorbit_toast"] = nil
+    -- A tap outside a book unfolds it to the full message; in a book it stays passive.
+    E.Badge.running = true; E.Badge.pct = 40; E.Badge.status = { done = 400, total = 1000, eta_s = 600, errors = 2 }
+    E.Badge.draw()
+    E.Badge.toggle()
+    local h = E.Badge.history
+    ok(h[#h] == "Saving for offline · 40% · 400 of 1,000 · about 10 min left · 2 errors", "unfolded: " .. h[#h])
+    E.Badge.toggle()
+    ok(h[#h] == "40%", "folded")
+    E.Badge.running = nil; E.Badge.close()
+    UIManager.setDirty, UIManager.show, UIManager.close = setDirty, show, close
+    E.orbitNote = orbitNote
     cacheTeardown()
 end)
 

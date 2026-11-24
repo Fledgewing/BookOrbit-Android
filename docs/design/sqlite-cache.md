@@ -263,7 +263,7 @@ requests in 4 min 12 s (59 items/s), 0 errors`.
   by the companion; the plugin also keeps the max).
 - **No other notes** during a refresh: the old "Full refresh: reloading everything…", "This page
   is refreshed · N covers checked", the 8-second progress toasts and the "Saved for offline" note go.
-  A storage-limit stop shows in the expanded badge.
+  A storage-limit stop shows in the badge in place of "Done", for 10 s.
 - **E-ink**: only the badge's own rectangle is redrawn (`UIManager:setDirty(badge, "fast",
   region)`), at most every 3 s (the status poll) and only when the % changed.
 - **Where**: BookOrbit Home, the catalog and the reader. In the reader it sits in the bottom-left

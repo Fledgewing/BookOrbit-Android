@@ -669,10 +669,9 @@ function OC.fullStep(what, n)
     if what == "painted" then f.painted = true end
     if what == "covers" then f.covers_done, f.replaced = true, n or 0 end
     if f.painted and f.covers_done then
+        -- Logged only: during a Full refresh the badge is the one thing on screen.
         OC.full = nil
-        OC.note(string.format(_("This page is refreshed · %d covers checked"), f.covers)
-            .. ((f.replaced or 0) > 0 and string.format(_(", %d replaced"), f.replaced) or "")
-            .. (Mirror and _(" · saving the rest for offline…") or ""), 3)
+        log(string.format("cache: Full refresh: this page is refreshed, %d covers checked, %d replaced", f.covers or 0, f.replaced or 0))
     end
 end
 
@@ -718,7 +717,6 @@ function OC.fullRefresh(cat)
     log("cache: Full refresh")
     -- Copies whose library file changed are looked for now (and again once the details are saved).
     if Copies and Copies.tick then UIManager:scheduleIn(2, function() pcall(Copies.tick, "full refresh") end) end
-    OC.note(_("Full refresh: reloading everything from BookOrbit…"), 3)
     OC.begin("full")
     if type(cat.thumbnail_failures) == "table" then cat.thumbnail_failures = {} end
     local books, bad, recheck = OC.visibleBooks(cat), 0, {}

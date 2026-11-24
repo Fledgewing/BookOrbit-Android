@@ -41,7 +41,7 @@ local KO = {
     "ko/module.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/reading_sync.lua",
     "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/recommended.lua", "ko/menu.lua",
     "ko/wifi_backend.lua", "ko/grouping.lua", "ko/endsheet.lua", "ko/endofbook.lua",
-    "ko/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/cache.lua", "ko/mirror.lua", "ko/copies.lua", "ko/sleepscreen.lua",
+    "ko/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/badge.lua", "ko/cache.lua", "ko/mirror.lua", "ko/copies.lua", "ko/sleepscreen.lua",
     "ko/sqlite_stress.lua",
 }
 
