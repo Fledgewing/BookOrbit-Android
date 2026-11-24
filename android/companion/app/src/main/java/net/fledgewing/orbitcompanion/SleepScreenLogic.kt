@@ -143,6 +143,18 @@ data class SleepSettings(
     }
 }
 
+/**
+ * One wake, two reporters: the service's SCREEN_ON (Full mode, or Add-on with the service) and the
+ * plugin's resume after a real sleep (every mode: a manifest receiver can't hear SCREEN_ON). The
+ * first moves the picture on; the other, within [SAME_WAKE_MS], is the same wake.
+ */
+object SleepWake {
+    const val SAME_WAKE_MS = 20_000L
+
+    /** [lastMs], [nowMs]: elapsedRealtime of the last wake handled and now (a reboot resets it). */
+    fun due(lastMs: Long, nowMs: Long): Boolean = lastMs <= 0L || nowMs < lastMs || nowMs - lastMs >= SAME_WAKE_MS
+}
+
 /** The rotation rule at sleep (R4) and the fallbacks (F1, F4). */
 object SleepRotation {
     /** With Every sleep a cover is shown this many times, then the plugin retires it (R4b). */

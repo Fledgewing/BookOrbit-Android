@@ -282,10 +282,22 @@ object SleepScreen {
      * Every sleep on the picture sink: the reader shows the picture it already has, so the next
      * one is written when it wakes (R4b), ready for the next sleep.
      */
-    fun onWake(ctx: Context) {
+    @Synchronized
+    fun onWake(ctx: Context, from: String) {
         val s = settings(ctx)
-        if (s.mode == SleepMode.RECOMMENDED && s.hours == SleepSettings.EVERY_SLEEP) redrawPicture(ctx, "woke", wake = true)
+        if (s.mode != SleepMode.RECOMMENDED || s.hours != SleepSettings.EVERY_SLEEP) return
+        // Two reporters, one wake: the service's SCREEN_ON and the plugin's resume (SleepWake).
+        val now = android.os.SystemClock.elapsedRealtime()
+        val p = sp(ctx)
+        if (!SleepWake.due(p.getLong(KEY_WOKE_AT, 0L), now)) {
+            OLog.d("sleep screen: wake ($from) already handled")
+            return
+        }
+        p.edit().putLong(KEY_WOKE_AT, now).apply()
+        redrawPicture(ctx, "woke ($from)", wake = true)
     }
+
+    private const val KEY_WOKE_AT = "sleep_woke_at"
 
     /** [wake]: after a sleep; with Every sleep only that moves to a new cover, other redraws keep it. */
     fun redrawPicture(ctx: Context, why: String, wake: Boolean = false) {

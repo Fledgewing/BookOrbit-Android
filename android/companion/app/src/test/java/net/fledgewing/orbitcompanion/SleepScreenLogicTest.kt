@@ -196,4 +196,12 @@ class SleepScreenLogicTest {
         assertFalse(SleepSetup.shown(SleepMode.OFF, SleepSink.DREAM))
         assertFalse(SleepSetup.shown(SleepMode.CURRENT, SleepSink.PICTURE))
     }
+
+    @Test
+    fun oneWakeHeardTwiceCountsOnce() {
+        assertTrue(SleepWake.due(0L, 5_000L))
+        assertTrue(!SleepWake.due(5_000L, 5_000L + SleepWake.SAME_WAKE_MS - 1))
+        assertTrue(SleepWake.due(5_000L, 5_000L + SleepWake.SAME_WAKE_MS))
+        assertTrue("after a reboot", SleepWake.due(900_000L, 1_000L))
+    }
 }
