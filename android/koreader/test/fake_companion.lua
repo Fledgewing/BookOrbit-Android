@@ -1013,11 +1013,45 @@ end
 -- Seam: the tests replace the cover download (FS.download fetches by ETag through the plugin's).
 F.sleepDownload = nil
 
+-- Leave out's tag picker (CacheWorker.detailTags, SleepPoolLogic.tagCounts): the saved details'
+-- tags, counted, in tags.json.
+function FS.tags()
+    local details = {}
+    local function add(path, body)
+        path = tostring(path or "")
+        if not (path:match("/catalog/books/%d+$") or path:match("/catalog/books/%d+%?")) then return end
+        if type(body) == "table" and type(body.tags) == "table" then table.insert(details, body.tags) end
+    end
+    local idx = load(dir() .. "/index.lua") or { entries = {} }
+    for key, meta in pairs(idx.entries or {}) do
+        local e = load(dir() .. "/" .. E.OC.hash(key) .. ".lua")
+        if e and e.key == key then add(meta.path, e.body) end
+    end
+    for name in lfs.dir(mdir()) do
+        if name:match("^%x+%.lua$") and #name == 12 then local e = load(mdir() .. "/" .. name); if e then add(e.path, e.body) end end
+    end
+    local counts, shown = {}, {}
+    for _, tags in ipairs(details) do
+        local seen = {}
+        for _, t in ipairs(tags) do
+            local k = trim(t):lower()
+            if k ~= "" and not seen[k] then seen[k] = true; counts[k] = (counts[k] or 0) + 1; shown[k] = shown[k] or trim(t) end
+        end
+    end
+    local out = {}
+    for k, n in pairs(counts) do table.insert(out, { tag = k, label = shown[k], count = n }) end
+    table.sort(out, function(a, b) if a.count == b.count then return a.tag < b.tag end return a.count > b.count end)
+    swrite(sdir() .. "/tags.json", SP.json({ v = 1, at = os.time(), details = #details, tags = out }))
+    return #out
+end
+
 function F.sleepNow(extras)
     F.sleep_asks = (F.sleep_asks or 0) + 1
     F.sleep_last = extras
     local client = E.OC.client()
     local ev = { kind = "sleep_pool", why = extras.reason }
+    lfs.mkdir(mdir())
+    ev.tags = FS.tags()
     if extras.scopes_only == "1" then
         ev.scopes_only = true
         local v, err = FS.fetchScopes(client)
@@ -1051,13 +1085,44 @@ function F.sleep(extras)
     end)
 end
 
+---------------------------------------------------------------- cover recheck (CacheWorker.recheckCovers)
+
+function F.recheckNow(extras)
+    local ids, paths, changed, checked = {}, {}, {}, 0
+    for v in ((extras.ids or "") .. "\n"):gmatch("([^\n]*)\n") do table.insert(ids, tonumber(v)) end
+    for v in ((extras.paths or "") .. "\n"):gmatch("([^\n]*)\n") do table.insert(paths, v) end
+    for i, id in ipairs(ids) do
+        local p = paths[i]
+        local etag = p and readFile(p .. ".etag")
+        if p and readFile(p) and etag then
+            checked = checked + 1
+            table.insert(F.calls, "RECHECK " .. id)
+            local r = F.cover and F.cover({ id = id, path = p }, etag) or 304
+            if r == 200 then writeFile(p, "\255\216\255\224fakejpeg2"); writeFile(p .. ".etag", '"e2"'); table.insert(changed, id) end
+        end
+    end
+    lfs.mkdir(dir() .. "/events")
+    F.seq = (F.seq or 0) + 1
+    writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode({ kind = "covers_rechecked", why = extras.reason, checked = checked, changed = changed }))
+end
+
+function F.recheck(extras)
+    UIManager:scheduleIn(0.2, function()
+        W.in_companion = true
+        local okc, err = pcall(F.recheckNow, extras)
+        W.in_companion = nil
+        if not okc then error(err, 0) end
+    end)
+end
+
 function F.receive(intent)
     if not (W.companion and intent.package == "net.fledgewing.orbitcompanion") then return end
     if intent.action:match("%.MIRROR$") then F.mirror(intent.extras)
     elseif intent.action:match("%.CHECK$") then F.check(intent.extras)
     elseif intent.action:match("%.STORAGE$") then F.storage(intent.extras)
     elseif intent.action:match("%.COPIES$") then F.copies(intent.extras)
-    elseif intent.action:match("%.SLEEP_REFRESH$") then F.sleep(intent.extras) end
+    elseif intent.action:match("%.SLEEP_REFRESH$") then F.sleep(intent.extras)
+    elseif intent.action:match("%.RECHECK$") then F.recheck(intent.extras) end
 end
 
 -- The companion was stopped mid-run (its status stops moving).

@@ -14,8 +14,9 @@
 --   current.png, current.json    Current book: the open book's cover, written once per book at
 --                                ReaderReady. It stays after the book closes: "the last book read".
 --   state.json                   Written by the companion: the cover it showed and when.
---   scopes.json                  The companion's: every smart scope and collection, with counts,
---                                for the pickers (Pick from, Leave out); refreshed when one opens.
+--   scopes.json, tags.json       The companion's: every smart scope and collection, and the tags in
+--                                the saved book details, with counts, for the pickers (Pick from,
+--                                Leave out); refreshed when one opens and with the pool.
 --   bag.lua, leave_out.lua       The companion's: the shuffle bag of a smart scope or collection, and
 --                                the member lists of Leave out's scope and collection rules.
 -- Rules: logic/sleep_pool.lua. Settings: S.sleep_*, shared with the companion through SETTINGS.
@@ -221,6 +222,7 @@ end
 
 -- The companion's answer (a sleep_pool event): the pool, or the pickers' lists only.
 function Sleep.landed(ev)
+    Sleep.tags_cache = nil
     if ev.scopes_only then
         Sleep.scopes_asked = nil
         Sleep.scopes_cache = nil
@@ -307,17 +309,22 @@ function Sleep.refreshScopes(why, done)
     return true
 end
 
--- Tags from the book details in the cache (X3), with counts. At most max details are read.
-function Sleep.cachedTags(max)
-    local details = {}
-    for key, meta in pairs(OC.index().entries) do
-        if #details >= (max or 400) then break end
-        if meta.path and meta.path:match("^/koreader/plugin/catalog/books/%d+") and not meta.path:find("/thumbnail", 1, true) then
-            local e = OC.get(key)
-            if e and type(e.body) == "table" and type(e.body.tags) == "table" then table.insert(details, e.body) end
+-- Leave out's tag picker (X3): the tags in the saved book details, with counts, as the companion
+-- counted them (tags.json, refreshed with the pickers' lists). Nothing is read here but that file.
+Sleep.TAGS_FILE = "tags.json"
+function Sleep.tags()
+    if Sleep.tags_cache then return Sleep.tags_cache end
+    local d = Sleep.dir()
+    local v = readJson(d and (d .. "/" .. Sleep.TAGS_FILE))
+    if not (v and type(v.tags) == "table") then return nil end
+    local out = {}
+    for _i, t in ipairs(v.tags) do
+        if type(t) == "table" and type(t.tag) == "string" and t.tag ~= "" then
+            table.insert(out, { tag = t.tag, label = tostring(t.label or t.tag), count = tonumber(t.count) or 0 })
         end
     end
-    return SleepPool.tagCounts(details)
+    Sleep.tags_cache = out
+    return out
 end
 
 -- "Romance (smart scope)", "Scope 12 (not listed)" …
@@ -481,9 +488,18 @@ function Sleep.menuItem(_plugin, later)
             text = _("Add a rule: Tag…"),
             sub_item_table_func = function()
                 local out = {}
-                for _i, t in ipairs(Sleep.cachedTags(400)) do
+                -- The saved list at once; the companion counts again behind it for the next open.
+                local tags = Sleep.tags()
+                local fetching = Sleep.refreshScopes("tag picker")
+                for _i, t in ipairs(tags or {}) do
                     table.insert(out, { text = string.format("%s · %d", t.label, t.count), callback = function() addRule("tag:" .. t.tag) end })
                     if #out >= 60 then break end
+                end
+                if not tags then
+                    table.insert(out, info(function()
+                        return fetching and _("Counting the tags in the saved books… open this again in a moment.")
+                            or _("No tags counted yet: connect, then open this again.")
+                    end))
                 end
                 table.insert(out, 1, { text = _("Type a tag…"), separator = true, callback = later(function()
                     askText(_("Leave out books with the tag"), "", _("e.g. age:18"), function(v)

@@ -245,6 +245,8 @@ function OC.drainEvents()
                 if type(e) == "table" and e.key == ev.key then OC.adopt(ev.key, e, #raw) end
             elseif ev.kind == "storage" then
                 OC.storageCounted(ev)
+            elseif ev.kind == "covers_rechecked" then
+                OC.rechecked(ev)
             elseif ev.kind == "sleep_pool" and Sleep then
                 Sleep.landed(ev)
             elseif ev.kind == "copies" and Copies then
@@ -431,7 +433,11 @@ function OC.watchChecks()
             Copies.asked = nil
         end
         local sleep_waits = Sleep and Sleep.waited(t)
-        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) and not sleep_waits then OC.watching = nil; return end
+        if OC.recheck and t - OC.recheck.at >= OC.RECHECK_WAIT_S then
+            log("cache: the companion didn't answer the cover recheck")
+            OC.rechecked({ err = "no answer" })
+        end
+        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) and not sleep_waits and not OC.recheck then OC.watching = nil; return end
         UIManager:scheduleIn(1, tick)
     end
     UIManager:scheduleIn(1, tick)
@@ -638,9 +644,7 @@ function OC.coverDownload(client, stock, book_id, local_path, opts)
         return done(ok and "200 (plugin)" or "error (plugin)", ok, err)
     end
     local old = OC.olderCover(dir, name, tostring(book_id))
-    -- Full refresh re-asks a good file with its own ETag.
-    local same = (opts.orbit_recheck and readFile(local_path .. ".etag", 200)) and local_path or nil
-    local have = same or old
+    local have = old
     local etag = have and readFile(have .. ".etag", 200)
     local temp = opts.temp_path or (local_path .. ".part")
     local code, got = OC.httpCover(client, "/koreader/plugin/catalog/books/" .. tostring(book_id) .. "/thumbnail",
@@ -886,27 +890,33 @@ function OC.fullRefresh(cat)
     return r
 end
 
+-- Orbit Companion asks them again If-None-Match (CacheWorker.recheckCovers) and answers with a
+-- covers_rechecked event; the view redraws if one changed. Ids and paths travel in the broadcast.
+OC.RECHECK_WAIT_S = 120
 function OC.recheckCovers(cat, jobs)
     local client = cat.client
-    if not client or not NetworkMgr:isConnected() then return OC.fullStep("covers", 0) end
-    Background.run("cover recheck", function()
-        local changed = {}
-        for _, j in ipairs(jobs) do
-            local api = package.loaded["bookorbit_api"]
-            local ok, how = OC.coverDownload(client, api.__orbit_stock and api.__orbit_stock["cache:downloadCatalogThumbnail"] or api.downloadCatalogThumbnail,
-                j.book.id, j.path, { temp_path = j.path .. ".part", orbit_recheck = true })
-            if ok and how ~= "not_modified" then table.insert(changed, j.book.id) end
-        end
-        return Cache.encode(changed)
-    end, 120, function(out)
-        local changed = Cache.decode(out or "") or {}
-        log("cache: covers re-asked:", #jobs, "checked,", #changed, "replaced")
-        OC.fullStep("covers", #changed)
-        if #changed > 0 and not cat.catalog_closed then
-            if Compat.callable(cat.resetThumbnailMemo) then cat:resetThumbnailMemo() end
-            if Compat.callable(cat.updateItems) then cat:updateItems(nil, true) end
-        end
-    end)
+    if not client or not NetworkMgr:isConnected() or Companion.workerProblem() then return OC.fullStep("covers", 0) end
+    local ids, paths = {}, {}
+    for _, j in ipairs(jobs) do table.insert(ids, tostring(j.book.id)); table.insert(paths, j.path) end
+    OC.recheck = { at = nowT(), cat = cat, n = #jobs }
+    Companion.send(Companion.ACTION.RECHECK, { reason = "full refresh", ids = table.concat(ids, "\n"), paths = table.concat(paths, "\n"),
+        server = client.server_url, user = client.username, userkey = client.userkey })
+    OC.watchChecks()
+end
+
+function OC.rechecked(ev)
+    local r = OC.recheck
+    OC.recheck = nil
+    if not r then return end
+    if ev.err then log("cache: covers not re-asked:", tostring(ev.err)) end
+    local changed = type(ev.changed) == "table" and ev.changed or {}
+    log("cache: covers re-asked:", tonumber(ev.checked) or 0, "checked,", #changed, "replaced")
+    OC.fullStep("covers", #changed)
+    local cat = r.cat
+    if #changed > 0 and cat and not cat.catalog_closed then
+        if Compat.callable(cat.resetThumbnailMemo) then cat:resetThumbnailMemo() end
+        if Compat.callable(cat.updateItems) then cat:updateItems(nil, true) end
+    end
 end
 
 -- Refresh or Full refresh from the menu: the open catalog's view, else Home next time it opens.

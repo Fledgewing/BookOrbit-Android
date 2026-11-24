@@ -175,28 +175,6 @@ function SleepPool.entries(body)
     return out
 end
 
----------------------------------------------------------------- Leave out (X1-X7)
-
--- Tags seen in cached book details, with counts, most used first (X3's picker).
-function SleepPool.tagCounts(details)
-    local counts, shown = {}, {}
-    for _, d in ipairs(details or {}) do
-        local seen = {}
-        for _, t in ipairs(type(d) == "table" and type(d.tags) == "table" and d.tags or {}) do
-            local k = trim(t):lower()
-            if k ~= "" and not seen[k] then
-                seen[k] = true
-                counts[k] = (counts[k] or 0) + 1
-                shown[k] = shown[k] or trim(t)
-            end
-        end
-    end
-    local out = {}
-    for k, n in pairs(counts) do table.insert(out, { tag = k, label = shown[k], count = n }) end
-    table.sort(out, function(a, b) if a.count == b.count then return a.tag < b.tag end return a.count > b.count end)
-    return out
-end
-
 ---------------------------------------------------------------- the files
 
 local function jsonString(s)

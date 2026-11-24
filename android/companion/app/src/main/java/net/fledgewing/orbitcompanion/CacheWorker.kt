@@ -189,6 +189,63 @@ class CacheWorker(
      * end-of-book cache, the cache's entries and the mirror's (CopiesLogic). Answers with
      * { kind = "copies", why, checked, found = { { md5, path, book_id, file_id, why } }, gone }.
      */
+    /**
+     * Tags in the saved book details (the cache's, then the mirror's), at most [max] details, for the
+     * Leave out tag picker. Model byte strings, as saved.
+     */
+    fun detailTags(max: Int): List<List<String>> {
+        val out = ArrayList<List<String>>()
+        fun add(path: Any?, body: Any?) {
+            if (CopiesLogic.detailId(path as? String) == null) return
+            val tags = (body as? Map<*, *>)?.get("tags") as? List<*> ?: return
+            out.add(tags.mapNotNull { it as? String })
+        }
+        val entries = (read(File(root, "index.lua")) as? Map<*, *>)?.get("entries") as? Map<*, *> ?: emptyMap<Any?, Any?>()
+        for ((key, v) in entries) {
+            if (out.size >= max) return out
+            val meta = v as? Map<*, *> ?: continue
+            if (CopiesLogic.detailId(meta["path"] as? String) == null) continue
+            add(meta["path"], entryBody(File(root, MirrorLogic.hash(key.toString()) + ".lua"), key.toString()))
+        }
+        for (f in mirrorDir.listFiles() ?: emptyArray()) {
+            if (out.size >= max) break
+            if (!ENTRY_FILE.matches(f.name)) continue
+            val e = read(f) as? Map<*, *> ?: continue
+            add(e["path"], e["body"])
+        }
+        return out
+    }
+
+    /**
+     * A Full refresh's covers on screen, asked again If-None-Match (was the plugin's forked
+     * "cover recheck"). items: book id and the plugin's cover file, each with its .etag. Answers
+     * with a `covers_rechecked` event naming the replaced ones.
+     */
+    fun recheckCovers(why: String, creds: Creds, items: List<Pair<Long, String>>) {
+        val changed = ArrayList<Long>()
+        var failed = 0L
+        for ((id, path) in items) {
+            val f = File(path)
+            val etagFile = File("$path.etag")
+            if (!f.isFile || !etagFile.isFile) continue
+            val h = headers(creds, "image/jpeg,image/*").toMutableMap()
+            h["Accept-Encoding"] = "identity"
+            h["If-None-Match"] = etagFile.readText()
+            val part = File("$path.part")
+            val r = http.get(creds.server + "/koreader/plugin/catalog/books/$id/thumbnail", h, part, MAX_COVER)
+            when {
+                r.code == 304 -> { part.delete(); f.setLastModified(now() * 1000) }
+                r.code == 200 && r.contentType?.lowercase()?.trim()?.startsWith("image/") == true && part.isFile && part.length() > 0 && part.renameTo(f) -> {
+                    if (r.etag != null) write(etagFile, r.etag.toByteArray()) else etagFile.delete()
+                    changed.add(id)
+                }
+                else -> { part.delete(); failed++ }
+            }
+        }
+        log("worker: covers re-asked: ${items.size} checked, ${changed.size} replaced, $failed failed ($why)")
+        event(sortedMapOf("kind" to "covers_rechecked", "why" to why, "checked" to items.size.toLong(), "changed" to changed, "failed" to failed))
+    }
+
     fun copies(why: String) {
         val ask = read(File(root, "copies/ask.lua")) as? Map<*, *>
         if (ask == null) {
@@ -826,6 +883,7 @@ class CacheWorker(
 
     companion object {
         const val STATE = "worker-state.lua"
+        private val ENTRY_FILE = Regex("^[0-9a-f]{8}\\.lua$")
         const val COVER_BATCH = 20
         /** Requests in flight at once: polite to a home server, and ~4x one connection's rate over Tailscale. */
         const val PARALLEL = 4

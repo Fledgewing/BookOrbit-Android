@@ -1376,11 +1376,6 @@ test("sleep screen: the pickers' section entries", function()
     eq(#e, 1); eq(e[1].id, 12); eq(e[1].count, 40)
 end)
 
-test("sleep screen: the tag picker counts tags in cached details", function()
-    local t = SP.tagCounts({ { tags = { "Age:18", "cosy" } }, { tags = { "age:18", "Age:18" } }, { tags = {} }, {} })
-    eq(#t, 2); eq(t[1].tag, "age:18"); eq(t[1].count, 2); eq(t[1].label, "Age:18"); eq(t[2].tag, "cosy")
-end)
-
 test("sleep screen: the JSON the companion reads (scopes.json, current.json) is valid", function()
     local doc = { v = 1, at = 1700000000000, items = { { id = 5, title = 'Quote " and \\ slash', file = "covers/5.jpg" } } }
     local back = JSON.decode(SP.json(doc))
