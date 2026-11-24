@@ -14,7 +14,8 @@ import kotlin.concurrent.thread
 
 /**
  * One-tap install of the Orbit KOReader plugin: orbit.koplugin.zip from the release matching
- * this app (latest for a dev build), SHA-256 checked against SHA256SUMS, unpacked beside
+ * this app (latest for a dev build), SHA-256 checked against SHA256SUMS and its signature against
+ * the release's SIGNATURES (ReleaseSignature; refused only once enforced), unpacked beside
  * <shared storage>/koreader/plugins/orbit.koplugin and swapped in for it (as Installers swaps the
  * BookOrbit plugin). The old user patch koreader/patches/2-orbit-android.lua (0.7.x and older)
  * is deleted: with both present the plugin stays off (docs/design/orbit-plugin.md).
@@ -313,6 +314,22 @@ object PatchInstaller {
         if (sha != expected) {
             zip.delete()
             return "download failed its checksum; not installed"
+        }
+        // The offline-key signature (docs/design/release-signing.md): logged until enforced.
+        val signatures = rel.assets[ReleaseSignature.ASSET]?.let { url ->
+            try {
+                Updater.httpText(url)
+            } catch (e: java.io.IOException) {
+                log("can't fetch ${ReleaseSignature.ASSET}: ${e.message}")
+                null
+            }
+        }
+        val signed = ReleaseSignature.check(
+            BuildConfig.RELEASE_ROOT_KEY, BuildConfig.RELEASE_MIN_SERIAL, signatures, rel.tag, PatchFile.ZIP, sha,
+        )
+        ReleaseSignature.refusal(signed, BuildConfig.RELEASE_SIG_ENFORCE, ::log)?.let {
+            zip.delete()
+            return it
         }
         // Never *.koplugin while incomplete: KOReader must not load a half copy.
         val staging = File(parent, PatchFile.PLUGIN + ".orbit-new")
