@@ -93,6 +93,16 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false" />
 
+        <activity
+            android:name=".SetupBatteryActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false" />
+
+        <activity
+            android:name=".SetupDetailsActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false" />
+
         <!-- Clicker buttons in other apps (android/docs/BTKEYS-DESIGN.md). Switched on by the user in Settings › Accessibility. -->
         <service
             android:name=".ClickerService"
