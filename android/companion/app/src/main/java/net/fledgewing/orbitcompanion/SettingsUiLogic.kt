@@ -140,6 +140,25 @@ data class SleepChoices(
             else -> wire
         }
 
+        /** The companion's own scopes.json (its worker fetches the lists), written at a pool refresh. */
+        const val SCOPES_FILE = "scopes.json"
+
+        /**
+         * The picker's lists: the newer of scopes.json (the companion's) and choices.json (the
+         * plugin's, which also carries the tags); tags always from choices.json.
+         */
+        fun read(dir: java.io.File): SleepChoices? = combine(
+            runCatching { java.io.File(dir, FILE).readText() }.getOrNull(),
+            runCatching { java.io.File(dir, SCOPES_FILE).readText() }.getOrNull(),
+        )
+
+        fun combine(choicesText: String?, scopesText: String?): SleepChoices? {
+            val c = parse(choicesText)
+            val s = parse(scopesText) ?: return c
+            if (c == null) return s
+            return if (s.at >= c.at) c.copy(at = s.at, cached = false, scopes = s.scopes, collections = s.collections) else c
+        }
+
         fun parse(text: String?): SleepChoices? {
             if (text.isNullOrBlank()) return null
             val o = runCatching { JSONObject(text) }.getOrNull() ?: return null

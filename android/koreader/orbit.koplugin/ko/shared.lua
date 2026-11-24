@@ -82,6 +82,7 @@ function Shared.refresh(why)
         S.choices_asked_at = want
         saveSettings()
         pcall(Sleep.writeChoices, "asked by the companion")
+        if Sleep.refreshScopes then pcall(Sleep.refreshScopes, "companion picker") end
     end
     -- The lists for the companion's sleep-screen picker, once per start (and on Home refreshes).
     if why == "start" and Sleep and Sleep.writeChoices then
@@ -157,7 +158,7 @@ function Shared.onChange(key, why)
     elseif key == "sleep_mode" or key == "sleep_from" or key == "sleep_leave_out" then
         try(Sleep and Sleep.changed, "companion settings")
     elseif key == "storage_limit_mb" then
-        try(OC and OC.storageEnforce, "limit changed")
+        try(OC and OC.storageCount, "limit changed")
     elseif key == "mirror_covers" then
         if S.mirror_covers then try(Mirror and Mirror.coverPass, "turned on") end
     elseif key == "recommended_choice" then

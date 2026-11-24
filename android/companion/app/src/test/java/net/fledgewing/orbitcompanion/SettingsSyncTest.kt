@@ -144,6 +144,17 @@ class SettingsUiTest {
     }
 
     @Test
+    fun theCompanionsScopesFileWinsWhenNewer() {
+        val choices = """{"at":5,"scopes":[{"id":1,"title":"Old"}],"tags":[{"tag":"x","count":2}]}"""
+        val scopes = """{"v":1,"at":9,"scopes":[{"id":2,"title":"New","count":3}],"collections":[]}"""
+        val c = SleepChoices.combine(choices, scopes)!!
+        assertEquals("New", c.scopes.single().title)
+        assertEquals("x", c.tags.single().tag)
+        assertEquals("Old", SleepChoices.combine(choices.replace("\"at\":5", "\"at\":99"), scopes)!!.scopes.single().title)
+        assertEquals("New", SleepChoices.combine(null, scopes)!!.scopes.single().title)
+    }
+
+    @Test
     fun reviewFileParses() {
         val r = RecommendedReview.parse("""{"v":1,"at":1,"items":[{"id":"x","label":"X","state":"conflict","yours":"Off","orbit":"On"}]}""")!!
         assertEquals(listOf("ours", "mine"), r.items[0].offers)
@@ -160,17 +171,15 @@ class SettingsUiTest {
 class EverySleepTest {
     private val schema = SettingsSchema.parse(File("../../../shared/settings/schema.json").readText())
 
-    /** "Every sleep" (sleep_hours 0) is listed first, kept through the wire, and moves the cover at each sleep. */
+    /** "Every sleep" (sleep_hours 0) is listed first, kept through the wire, and is the companion's first choice. */
     @Test
     fun everySleepIsFirstAndRotatesEachTime() {
         val d = schema.byKey.getValue("sleep_hours")
         assertEquals("0" to "Every sleep", d.values.first())
         assertEquals("0", SettingsSync.fromWire(d, "0"))
         assertEquals(0, SleepSettings.merge(SleepSettings.DEFAULT) { if (it == "sleep_hours") "0" else null }.hours)
-        val pool = listOf(11L, 22L, 33L)
-        val first = SleepRotation.decide(SleepMode.RECOMMENDED, 0, 1_000L, pool, false, SleepRotation.State(11L, 900L))
-        assertEquals("pool:22", first.show)
-        val second = SleepRotation.decide(SleepMode.RECOMMENDED, 0, 1_001L, pool, false, first.next)
-        assertEquals("pool:33", second.show)
+        // The rotation itself (a random ready cover at each sleep, R4b) is SleepScreenLogicTest's.
+        assertEquals("Every sleep", SleepSettings.hoursLabel(SleepSettings.EVERY_SLEEP))
+        assertEquals(0, SleepSettings.HOURS.first())
     }
 }

@@ -50,7 +50,7 @@ object SleepScreen {
         s.toMap().forEach { (k, v) -> e.putString(k, v) }
         e.apply()
         if (shared) Prefs(ctx).sharedSettingsAt = System.currentTimeMillis()
-        OLog.i("sleep screen: settings ${s.mode.key} from=${s.from} rules=${s.leaveOut.size} every=${s.hours}h text=${s.text.length} chars battery=${s.battery} style=${s.style.key} text_at=${s.textPosition.key} battery_at=${s.batteryCorner.key} ($why)")
+        OLog.i("sleep screen: settings ${s.mode.key} from=${s.from} rules=${s.leaveOut.size} every=${s.hours}h text=${s.text.length} chars battery=${s.battery} style=${s.style.key} text_at=${s.textPosition.key} battery_at=${s.batteryCorner.key} flash=${s.flash} ($why)")
         if (before.mode != s.mode) modeChanged(ctx, before.mode, s.mode, why)
         StatusFile.write(ctx, "sleep screen settings")
         redrawPicture(ctx, "settings")
@@ -83,7 +83,10 @@ object SleepScreen {
 
     // ---------------------------------------------------------------- the sinks
 
-    fun sink(ctx: Context): SleepSink = SleepSystem.sink(Vendor.profile(ctx).id)
+    /** Tests only: the sink without a vendor profile. */
+    @Volatile var sinkForTest: SleepSink? = null
+
+    fun sink(ctx: Context): SleepSink = sinkForTest ?: SleepSystem.sink(Vendor.profile(ctx).id)
 
     fun dreamComponent(ctx: Context): String = ComponentName(ctx, SleepDream::class.java).flattenToString()
 
@@ -172,17 +175,19 @@ object SleepScreen {
 
     fun state(ctx: Context): SleepRotation.State {
         val p = sp(ctx)
-        return SleepRotation.State(p.getLong("shown", 0L), p.getLong("changed_at", 0L))
+        return SleepRotation.State(p.getLong("shown", 0L), p.getLong("changed_at", 0L), SleepRotation.decodeShows(p.getString("shows", null)))
     }
 
     /** Kept here, and in state.json for the plugin (its shuffle bag moves to what was shown). */
     private fun saveState(ctx: Context, st: SleepRotation.State) {
-        sp(ctx).edit().putLong("shown", st.shown).putLong("changed_at", st.changedAt).apply()
+        // commit, not apply: the counts must survive a power-off right after the sleep.
+        sp(ctx).edit().putLong("shown", st.shown).putLong("changed_at", st.changedAt)
+            .putString("shows", SleepRotation.encodeShows(st.shows)).commit()
         runCatching {
             val d = dir()
             if (!d.isDirectory) return
             val tmp = File(d, "state.json.orbit-new")
-            tmp.writeText("{\"v\":1,\"shown\":${st.shown},\"changed_at\":${st.changedAt}}")
+            tmp.writeText(SleepRotation.stateJson(st))
             if (!tmp.renameTo(File(d, "state.json"))) tmp.delete()
         }
     }
@@ -225,7 +230,7 @@ object SleepScreen {
         val cur = current(dir)
         var tries = 0
         while (true) {
-            val d = SleepRotation.decide(s.mode, s.hours, now, pool.map { it.id }, cur != null, state(ctx))
+            val d = SleepRotation.decide(s.mode, s.hours, now, pool.map { it.id }, cur != null, state(ctx), advance)
             val item = d.poolId?.let { id -> pool.firstOrNull { it.id == id } }
             val cover = when {
                 // L7: BookOrbit's full-size cover, fitted to this panel, when it is here; else the thumbnail.
@@ -275,13 +280,37 @@ object SleepScreen {
         if (!first && settings(ctx).battery) redrawPicture(ctx, "battery $level%")
     }
 
-    fun redrawPicture(ctx: Context, why: String) {
+    /**
+     * Every sleep on the picture sink: the reader shows the picture it already has, so the next
+     * one is written when it wakes (R4b), ready for the next sleep.
+     */
+    @Synchronized
+    fun onWake(ctx: Context, from: String) {
+        val s = settings(ctx)
+        if (s.mode != SleepMode.RECOMMENDED || s.hours != SleepSettings.EVERY_SLEEP) return
+        // Two reporters, one wake: the service's SCREEN_ON and the plugin's resume (SleepWake).
+        val now = android.os.SystemClock.elapsedRealtime()
+        val p = sp(ctx)
+        if (!SleepWake.due(p.getLong(KEY_WOKE_AT, 0L), now)) {
+            OLog.d("sleep screen: wake ($from) already handled")
+            return
+        }
+        p.edit().putLong(KEY_WOKE_AT, now).apply()
+        redrawPicture(ctx, "woke ($from)", wake = true)
+    }
+
+    private const val KEY_WOKE_AT = "sleep_woke_at"
+
+    /** [wake]: after a sleep; with Every sleep only that moves to a new cover, other redraws keep it. */
+    fun redrawPicture(ctx: Context, why: String, wake: Boolean = false) {
         val s = settings(ctx)
         if (s.mode == SleepMode.OFF || sink(ctx) != SleepSink.PICTURE) return
         val out = picture()
         runCatching {
             val (w, h, dpi) = panel(ctx)
-            val bmp = render(ctx, w, h, dpi, advance = true, why = "picture: $why")
+            // Every sleep: a wake moves on; so does a picture whose cover left the batch (or none yet).
+            val advance = s.hours != SleepSettings.EVERY_SLEEP || wake || state(ctx).shown !in pool().map { it.id }
+            val bmp = render(ctx, w, h, dpi, advance = advance, why = "picture: $why")
             out.parentFile?.mkdirs()
             val tmp = File(out.parentFile, "sleep.png.orbit-new")
             tmp.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -302,9 +331,7 @@ object SleepScreen {
             ctx, 7, Intent(ctx, SleepReceiver::class.java).setAction(ACTION_REDRAW),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        if (s.mode != SleepMode.RECOMMENDED && s.mode != SleepMode.CURRENT) return am.cancel(pi)
-        // Every sleep: nothing to wait for; the cover moves on at each sleep's draw.
-        if (s.hours == 0) return am.cancel(pi)
+        if ((s.mode != SleepMode.RECOMMENDED && s.mode != SleepMode.CURRENT) || s.hours == SleepSettings.EVERY_SLEEP) return am.cancel(pi)
         val at = state(ctx).changedAt + s.hours * 3_600_000L
         am.set(AlarmManager.RTC, maxOf(at, System.currentTimeMillis() + 60_000L), pi)
     }

@@ -121,6 +121,10 @@ class SettingsPagesTest {
             assertNotNull(k, row)
         }
         assertNotNull("Sharp covers' slot sits in the section", tagged(a, "slot:sharp_covers"))
+        assertNotNull("the clearing flash", tagged(a, "key:sleep_flash"))
+        val hours = open<SettingChoiceActivity>(Intent(a, SettingChoiceActivity::class.java).putExtra(SettingsPage.EXTRA_KEY, "sleep_hours"))
+        val options = all(hours.window.decorView).mapNotNull { (it.tag as? String)?.takeIf { t -> t.startsWith("option:") } }
+        assertEquals("Every sleep is listed first", "option:0", options.first())
         assertTrue("Pick from opens the picker", tagged(a, "key:sleep_from")!!.hasOnClickListeners())
         tagged(a, "key:sleep_from")!!.performClick()
         assertEquals(SettingChoiceActivity::class.java.name, shadowOf(a).nextStartedActivity.component?.className)

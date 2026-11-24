@@ -29,7 +29,6 @@ function OrbitAndroid:init()
         else UIManager:nextTick(function() self:hookPluginPagePush() end) end
     end
     -- A Sync while reading change from the companion (Shared.refresh) restarts this counter.
-    Updater.onInstalled = function(event) self:maybeRestart(event or "check") end
     Shared.onSchedule = function(id)
         self.schedule = Schedule.new(id, now_s())
         if self.ui and self.ui.document then self:hookPluginPagePush() end
@@ -57,9 +56,6 @@ function OrbitAndroid:init()
         UIManager:scheduleIn(Stats.INTERVAL, statsTick)
     elseif state.pending_home and not in_reader then
         UIManager:scheduleIn(1, function() self:finishHome() end)
-    end
-    if state.started and not in_reader and Updater.deferred then
-        UIManager:scheduleIn(2, function() Updater.maybeAuto("deferred from the book") end)
     end
 end
 

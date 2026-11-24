@@ -416,15 +416,14 @@ eob::Page OrbifyEndPage::page(const bool touch) const {
   p.title = tr(STR_ORBIFY_THE_END);
   p.subtitle = book.title;
   if (!authorName.empty()) p.subtitle += (p.subtitle.empty() ? "" : DOT) + authorName;
-  // "Book 2 of Harbour Lights": the server's series (the card), else the one the EPUB names.
-  const char* seriesName = hasCard && card.seriesName[0] ? card.seriesName : book.series.c_str();
-  const char* seriesIndex = hasCard && card.seriesName[0] ? card.seriesIndex : book.seriesIndex.c_str();
-  if (seriesName[0] && seriesIndex[0]) {
+  // "Book 2 of Harbour Lights": the server's series (the card, which may name none), else the EPUB's.
+  const orbify::PageSeries series = orbify::pageSeries(hasCard, card, book.series.c_str(), book.seriesIndex.c_str());
+  if (series.name[0] && series.index[0]) {
     char line[192];
-    snprintf(line, sizeof(line), tr(STR_ORBIFY_BOOK_N_OF), seriesIndex, seriesName);
+    snprintf(line, sizeof(line), tr(STR_ORBIFY_BOOK_N_OF), series.index, series.name);
     p.seriesLine = line;
   } else {
-    p.seriesLine = seriesName;
+    p.seriesLine = series.name;
   }
   p.touch = touch;
   p.rating = shownRating;
