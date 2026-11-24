@@ -107,11 +107,9 @@ for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "conta
 end
 -- koreader-base (the base/ submodule): ffi modules the plugin requires.
 local BASE = {
-    { "ffi/archiver.lua", { { "Reader", F }, "iterate", "extractToMemory", "open" } },
     { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
-        "terminateSubProcess", "purgeDir" } },
+        "terminateSubProcess" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
-    { "ffi/sha2.lua", { "sha256" } },
     { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, "writeToFile", "free" } },
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
 }

@@ -33,13 +33,11 @@ end
 function OrbitAndroid:wakeFlow(reason)
     if not S.sync_on_wake then
         log(reason .. ": sync on wake is off")
-        if NetworkMgr:isConnected() then Updater.maybeAuto(reason) end
         return
     end
     local p = bookorbit(self.ui)
     if not p or not p:isLoggedIn() then
         log(reason .. ": BookOrbit plugin missing or signed out; nothing to do")
-        if NetworkMgr:isConnected() then Updater.maybeAuto(reason) end
         return
     end
     local t0 = now_s()
@@ -52,7 +50,6 @@ function OrbitAndroid:wakeFlow(reason)
             return
         end
         if can(p, "outbox") then p:requestLifecycleOutboxDrain("orbit_" .. reason) end
-        Updater.maybeAuto(reason)
         -- Hold Wi-Fi until the plugin's drain and pull are done, then restore.
         UIManager:scheduleIn(1, function()
             Sync.waitOutbox(p, 20, function() Wifi.release(lease) end)

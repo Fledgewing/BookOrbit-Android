@@ -7,7 +7,7 @@
 # A numeric "0" sorts before every alphanumeric pre-release part (semver 11.4.3), so the test
 # build installs over the release it was built after, yet every release and pre-release of the
 # next patch (0.11.3-alpha, -rc.1, 0.11.3 itself) is newer: the device's updater takes the next
-# real release. The companion and the plugin never pick a test version (TestBuild, Update.isTest).
+# real release. The companion and the plugin never pick a test version (TestBuild).
 set -euo pipefail
 
 run=${1:?usage: android-test-version.sh <run number>  (tags on stdin)}

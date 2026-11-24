@@ -48,37 +48,9 @@ function OrbitAndroid:updateStatusText()
     return string.format("%s · %s (%s)", head, st.text, os.date("%m-%d %H:%M", st.at))
 end
 
--- By hand: bring Wi-Fi up if needed (through the companion), check, then put Wi-Fi back.
+-- By hand: Orbit Companion checks (it brings Wi-Fi up for a check by hand) and installs the update.
 function OrbitAndroid:checkPatchUpdate()
-    local msg = InfoMessage:new{ text = _("Checking for a patch update…") }
-    UIManager:show(msg) -- gate: user action (menu Update)
-    UIManager:forceRePaint()
-    local function report(text)
-        UIManager:close(msg)
-        UIManager:show(InfoMessage:new{ text = _("Patch update: ") .. text, timeout = 6 }) -- gate: user action (menu Update)
-    end
-    local function run(held)
-        UIManager:scheduleIn(0.2, function()
-            Updater.check("menu", function(_ok, text)
-                if held then Wifi.release("update") end
-                report(text)
-            end)
-        end)
-    end
-    if NetworkMgr:isConnected() then return run(false) end
-    if not Companion.installed() then
-        setUpdateStatus("no internet: Wi-Fi is off")
-        return report((Companion.problem() and (Companion.problem() .. " ") or "") .. _("No internet: Wi-Fi is off."))
-    end
-    Wifi.acquire("update")
-    Net.up(nil, { reason = "update", cap = 20, need_server = false }, function(ok, res)
-        if not ok then
-            Wifi.release("update")
-            setUpdateStatus("no internet: " .. tostring(res.detail))
-            return report(_("No internet: ") .. tostring(res.detail))
-        end
-        run(true)
-    end)
+    UIManager:show(InfoMessage:new{ text = Updater.check("menu"), timeout = 6 }) -- gate: user action (menu Update)
 end
 
 function OrbitAndroid:menuItems()
@@ -281,9 +253,7 @@ function OrbitAndroid:menuItems()
         { text = _("Test sync path"), callback = later(function() self:testSyncPath() end), separator = true },
         { text = _("Open Orbit Companion"), callback = later(function() self:onOrbitOpenCompanion() end) },
         Companion.has("apps") and { text = _("Open another app…"), callback = later(function() self:onOrbitOpenApps() end), separator = true } or false,
-        toggle("auto_update_patch", _("Auto-update patch")),
-        toggle("patch_update_prerelease", _("Include pre-releases")),
-        { text = _("Check for patch update"), callback = later(function() self:checkPatchUpdate() end) },
+        { text = _("Check for updates (Orbit Companion)"), callback = later(function() self:checkPatchUpdate() end) },
         { text_func = function() return self:updateStatusText() end, keep_menu_open = true, callback = function() end, separator = true },
         { text_func = function() return self:statusText() end, keep_menu_open = true, callback = function() end },
     }

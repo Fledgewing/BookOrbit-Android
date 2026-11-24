@@ -2163,199 +2163,54 @@ test("apps gesture: registered and in the recommended set", function()
     ok(R.item("g.apps").ours.orbit_open_apps and R.item("g.apps").key == "two_finger_swipe_north", "two-finger swipe up")
 end)
 
----------------------------------------------------------------- self-update
-local API = "https://api.github.com/repos/Fledgewing/Orbify/releases/latest"
-local ZIP_URL, SUMS_URL = "https://dl.test/orbit.koplugin.zip", "https://dl.test/SHA256SUMS"
-local NEW = '-- new\nlocal PATCH_VERSION = "0.2.0"\nreturn\n'
-local ZIP = "PK fake orbit.koplugin 0.2.0"
-W.zips = W.zips or {}
-W.zips[ZIP] = { ["orbit.koplugin/main.lua"] = NEW, ["orbit.koplugin/ko/x.lua"] = "-- x\n" }
-local function serveRelease(sha)
-    W.web = { [API] = "LATEST", [ZIP_URL] = ZIP, [SUMS_URL] = (sha or W.fake_sha(ZIP)) .. "  orbit.koplugin.zip\n" }
-    W.json = { LATEST = { tag_name = "v0.2.0", assets = {
-        { name = "orbit.koplugin.zip", browser_download_url = ZIP_URL },
-        { name = "SHA256SUMS", browser_download_url = SUMS_URL },
-    } } }
-end
-local function selfText()
-    local f = io.open(SELF_PATH, "rb")
-    if not f then return nil end
-    local t = f:read("*a"); f:close(); return t
-end
-local function resetSelf()
-    sh("rm -rf", ORBIT_ANDROID_PLUGIN_DIR); sh("mkdir -p", ORBIT_ANDROID_PLUGIN_DIR)
-    local f = io.open(SELF_PATH, "wb"); f:write("-- old\n"); f:close()
-end
+---------------------------------------------------------------- updates (Orbit Companion)
+-- The plugin and the companion ship together: the menu's check asks the companion (UPDATE), and
+-- the plugin downloads, unpacks and installs nothing itself (docs/design/companion-worker.md).
+local function updateBroadcasts() return count(W.broadcasts, function(b) return b.action:sub(-7) == ".UPDATE" end) end
 
-test("update: menu check installs a verified newer plugin over its own folder", function()
-    resetSelf(); serveRelease()
+test("update: the menu's check asks Orbit Companion; the plugin fetches nothing and forks nothing", function()
+    local UE = getfenv(Orbit.onSuspend)
+    local real = UE.Companion.workerProblem
+    UE.Companion.workerProblem = function() return nil end
+    W.broadcasts, W.fetched, W.shown = {}, {}, {}
+    local children = #W.children
     local _ui, orbit = newUI(false)
     orbit:checkPatchUpdate()
     run(5)
-    ok(selfText() == NEW, "folder replaced")
-    ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. "/ko/x.lua") ~= nil, "every file unpacked")
-    for _, rest in ipairs({ ".new/main.lua", ".old/main.lua", ".zip.new" }) do
-        ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. rest) == nil, "temp " .. rest .. " gone")
-    end
-    ok(store.orbit_android.patch_update_status.text:find("updated to 0.2.0", 1, true), "status")
+    UE.Companion.workerProblem = real
+    ok(updateBroadcasts() == 1, "one UPDATE: " .. updateBroadcasts())
+    local b = W.broadcasts[#W.broadcasts]
+    ok(b.package == "net.fledgewing.orbitcompanion" and b.extras.reason == "menu", "to the companion, with the reason")
+    ok(b.extras.userkey == nil and b.extras.server == nil, "no login with it")
+    ok(count(W.fetched, function(u) return u:find("github", 1, true) ~= nil end) == 0, "no GitHub request")
+    ok(#W.children == children, "no background process")
+    ok(tostring(W.shown[#W.shown].text):find("Orbit Companion is checking", 1, true), "says the companion checks")
 end)
 
-test("update: checksum mismatch leaves the file alone", function()
-    resetSelf(); serveRelease(string.rep("b", 64))
+test("update: without the companion of this version the menu says what to do and asks nothing", function()
+    local UE = getfenv(Orbit.onSuspend)
+    local real = UE.Companion.workerProblem
+    local asked
+    UE.Companion.workerProblem = function(purpose) asked = purpose; return "Orbit Companion needed " .. tostring(purpose) end
+    W.broadcasts, W.shown = {}, {}
     local _ui, orbit = newUI(false)
     orbit:checkPatchUpdate()
-    run(5)
-    ok(selfText() == "-- old\n", "unchanged")
-    ok(store.orbit_android.patch_update_status.text:find("checksum", 1, true), "status says checksum")
-end)
-
-test("update: a zip with a file outside orbit.koplugin/ is refused, the plugin left alone", function()
-    resetSelf(); serveRelease()
-    local evil = "PK fake evil"
-    W.zips[evil] = { ["orbit.koplugin/main.lua"] = NEW, ["orbit.koplugin/../x.lua"] = "-- x\n" }
-    W.web[ZIP_URL] = evil
-    W.web[SUMS_URL] = W.fake_sha(evil) .. "  orbit.koplugin.zip\n"
-    local _ui, orbit = newUI(false)
-    orbit:checkPatchUpdate()
-    run(5)
-    ok(selfText() == "-- old\n", "unchanged")
-    ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. ".new/main.lua") == nil, "nothing staged")
-    ok(store.orbit_android.patch_update_status.text:find("unexpected file", 1, true), "status says why")
-end)
-
-test("update: a zip whose main.lua declares another version is refused", function()
-    resetSelf(); serveRelease()
-    local other = "PK fake other"
-    W.zips[other] = { ["orbit.koplugin/main.lua"] = '-- x\nlocal PATCH_VERSION = "0.1.9"\n' }
-    W.web[ZIP_URL] = other
-    W.web[SUMS_URL] = W.fake_sha(other) .. "  orbit.koplugin.zip\n"
-    local _ui, orbit = newUI(false)
-    orbit:checkPatchUpdate()
-    run(5)
-    ok(selfText() == "-- old\n", "unchanged")
-    ok(io.open(ORBIT_ANDROID_PLUGIN_DIR .. ".new/main.lua") == nil, "staging removed")
-    ok(store.orbit_android.patch_update_status.text:find("declares 0.1.9", 1, true), "status says why")
-end)
-
-test("update: automatic check at most once a day, and only when connected", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev" -- nothing newer: just count checks
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil -- the checksum test above failed a check
-    local _ui, orbit = newUI(false)
-    W.fetched = {}
-    W.wifi = false
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(not has(W.fetched, API), "no check without network")
-    W.wifi = true
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "one check")
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "still one check the same day")
-    store.orbit_android.auto_update_patch = false
-    store.orbit_android.patch_update_checked_at = 0
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "off means off")
-    store.orbit_android.auto_update_patch = true
-end)
-test("update: a failed automatic check backs off 1 h, then is tried again", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev"
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil
-    W.wifi = true
-    local _ui, orbit = newUI(false)
-    local saved = W.web[API]
-    W.web[API] = nil -- GitHub unreachable (404 here; EACCES on the device)
-    W.fetched = {}
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "first check ran")
-    ok(store.orbit_android.patch_update_checked_at == 0, "a failure doesn't start the 24 h wait")
-    ok((store.orbit_android.patch_update_failed_at or 0) > 0, "the failure is recorded")
-    W.web[API] = saved
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "no retry within the hour")
-    store.orbit_android.patch_update_failed_at = os.time() - 3601
-    orbit:wakeFlow("wake")
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 2, "retried after the hour")
-    ok(store.orbit_android.patch_update_checked_at > 0, "success starts the wait")
-end)
-
-test("update: a timeout right after Wi-Fi comes up is retried, and the check then succeeds", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev"
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil
-    W.wifi = true
-    local http = require("socket.http")
-    local fast = http.request
-    local fails = 2
-    http.request = function(t)
-        if t.url == API and fails > 0 then fails = fails - 1; return nil, "timeout" end
-        return fast(t)
-    end
-    W.slept = {}
-    local _ui, orbit = newUI(false)
-    orbit:wakeFlow("wake")
-    run(40)
-    http.request = fast
-    ok(table.concat(W.slept, ",") == "3,10", "waited 3 s then 10 s: " .. table.concat(W.slept, ","))
-    ok(store.orbit_android.patch_update_checked_at > 0, "succeeded on the third try")
-    ok(not store.orbit_android.patch_update_failed_at, "no failure recorded")
-end)
-
-test("update: the check never blocks KOReader's UI thread, and holds Wi-Fi while it runs", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev"
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil
-    W.wifi = true
-    -- A slow network: each GitHub request takes 30 s of the caller's time.
-    local http = require("socket.http")
-    local fast = http.request
-    http.request = function(t)
-        if t.url:find("github", 1, true) then W.clock = W.clock + 30 end
-        return fast(t)
-    end
-    W.hold_child, W.fetched, W.logs = true, {}, {}
-    local _ui, orbit = newUI(false)
-    orbit:wakeFlow("wake")
-    local before = W.clock
-    run(20)
-    ok(#W.children > 0, "the check went to a background process")
-    ok(not has(W.fetched, API), "no GitHub request on the UI thread")
-    ok(W.clock - before <= 20.5, "the scheduler kept time: " .. (W.clock - before))
-    local logs = table.concat(W.logs, "\n")
-    ok(logs:find("wifi: hold for update", 1, true), "Wi-Fi held for the check")
-    ok(not logs:find("wifi: release update", 1, true), "still held while it runs")
-    W.children[#W.children].run()
     run(2)
-    ok(has(W.fetched, API), "the background process did the request")
-    ok(table.concat(W.logs, "\n"):find("wifi: release update", 1, true), "released when it ended")
-    ok(store.orbit_android.patch_update_checked_at > 0, "result reached the UI side")
-    http.request, W.hold_child = fast, nil
+    UE.Companion.workerProblem = real
+    ok(updateBroadcasts() == 0, "nothing sent")
+    ok(asked == "to check for updates", "the update's own wording: " .. tostring(asked))
+    ok(tostring(W.shown[#W.shown].text):find("Orbit Companion needed", 1, true), "says so")
+    ok(store.orbit_android.patch_update_status.text:find("Orbit Companion needed", 1, true), "status line too")
 end)
 
-test("update: never with a book open; deferred to the file browser", function()
-    resetSelf(); serveRelease()
-    W.json.LATEST.tag_name = "v0.0.0-dev"
-    store.orbit_android.patch_update_checked_at = 0
-    store.orbit_android.patch_update_failed_at = nil
-    W.wifi, W.fetched = true, {}
-    local _ui, orbit = newUI(true)
+test("update: start and wake never check for updates themselves", function()
+    W.broadcasts, W.fetched = {}, {}
+    W.wifi = true
+    local _ui, orbit = newUI(false)
     orbit:wakeFlow("wake")
     run(40)
-    ok(not has(W.fetched, API), "no check in a book")
-    newUI(false)
-    run(40)
-    ok(count(W.fetched, function(u) return u == API end) == 1, "ran on reaching the file browser")
+    ok(updateBroadcasts() == 0, "no UPDATE")
+    ok(count(W.fetched, function(u) return u:find("github", 1, true) ~= nil end) == 0, "no GitHub request")
 end)
 ---------------------------------------------------------------- one update covers everything
 local function stampSelf(v)
@@ -2365,17 +2220,6 @@ local function stampSelf(v)
 end
 local function relaunches() return count(W.broadcasts, function(b) return b.action:sub(-9) == ".RELAUNCH" end) end
 local function restartReset() run(10); W.clock = W.clock + 10; store.orbit_android.restart_tried = nil; W.broadcasts = {} end
-
-test("one update: Update in the menu (the reader asked) restarts KOReader at once", function()
-    restartReset(); resetSelf(); serveRelease()
-    local _ui, orbit = newUI(false)
-    orbit:checkPatchUpdate()
-    run(5)
-    ok(selfText() == NEW, "file replaced")
-    ok(relaunches() == 1, "restarted once: " .. relaunches())
-    ok(store.orbit_android.restart_tried == "0.2.0", "one try recorded for 0.2.0")
-    restartReset()
-end)
 
 test("one update: an automatic update waits in front (no book, Home or a list); the screen going off restarts it", function()
     restartReset(); stampSelf("0.3.0")

@@ -166,7 +166,7 @@ at that moment, and even then its fetch side moves.
 | Sleep screen scope and collection picker | child; falls back to a cached read | stays | user action, small; the plugin's own read |
 | Reading fonts install | companion (`FontInstaller.kt`); the plugin has no trigger | stays | already outside KOReader |
 | Rotation patch (`1-orbit-start-rotation.lua`) | UI, at start | stays | needs the display; a few calls, no I/O |
-| Plugin self-update check and download (`Updater.check`) | child | **move** (step 3): the companion's `Updater` already downloads its own APK; the plugin zip can come with it | apply (install, restart) stays in KOReader |
+| Plugin self-update check and download (`Updater.check`) | companion (step 3): the menu's check sends `UPDATE`; the companion installs itself, then the plugin of its release | **moved**; the plugin's download, unpack and swap are deleted | the restart for a newer file on disk stays in KOReader (`maybeRestart`) |
 | Companion status (`Companion.status`, loopback GET, 1 s timeout) | UI at start, resume and menu | stays | loopback answers in ms; the result drives the UI |
 | Outbox drain, progress, annotations, stats sync | BookOrbit plugin; forked when Trapper-wrapped (`bookorbit_api.lua:325-372`), otherwise blocking | not redirected now (see below) | upstream code; no measured stall |
 | Home dashboard, discover, search, series reads | BookOrbit plugin, forked (`runInSubprocess`); Orbit's cache answers inside the child | stays | upstream code; its result feeds the plugin's own view |

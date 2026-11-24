@@ -178,81 +178,16 @@ end)
 test("version: unparsable compares as nil", function() eq(cmp("x", "0.1.0"), nil) end)
 test("version: the repo copy is a dev version", function() eq(cmp(M.PATCH_VERSION, "0.0.1"), -1) end)
 
--- Update: release choice
-local rels = {
-    { tag_name = "v0.3.0-rc.1", prerelease = true },
-    { tag_name = "v0.4.0", draft = true },
-    { tag_name = "v0.2.0", assets = { { name = "2-orbit-android.lua", browser_download_url = "https://x/lua" } } },
-    { tag_name = "nightly" },
-    { tag_name = "v0.1.0" },
-}
-test("pick: newest stable by default", function() eq(Update.pick(rels, false).tag_name, "v0.2.0") end)
-test("pick: pre-releases when asked", function() eq(Update.pick(rels, true).tag_name, "v0.3.0-rc.1") end)
-test("version: a test build yields to the next release and is never picked", function()
+test("version: a test build sorts before the next release", function()
     local t = "0.11.3-0.test.42"
-    eq(Update.isTest(t), true)
-    eq(Update.isTest("0.11.3-rc.1"), false)
-    eq(Update.isTest("0.11.3"), false)
-    eq(Update.isTest("0.0.0-dev"), false)
     eq(cmp("0.11.2", t), -1)
     eq(cmp("0.11.3", t), 1)
     eq(cmp("0.11.3-rc.1", t), 1)
     eq(cmp("0.11.3-alpha", t), 1)
-    local list = { { tag_name = "v0.11.3-0.test.42" }, { tag_name = "v0.11.2" },
-        { tag_name = "v0.11.4-0.test.1", prerelease = true } }
-    eq(Update.pick(list, false).tag_name, "v0.11.2")
-    eq(Update.pick(list, true).tag_name, "v0.11.2")
-end)
-test("pick: nothing usable", function() eq(Update.pick({ { tag_name = "v1.0.0-rc.1", prerelease = true } }, false), nil) end)
--- shared/fixtures/github/orbify-releases.json: Android and firmware releases in one list.
-local JSON = dofile(here .. "/json_mini.lua")
-local orbify = JSON.fixture(here, "github/orbify-releases.json")
-test("pick: only Android tags from the shared release list", function()
-    eq(Update.pick(orbify, false).tag_name, "android-v0.7.1")
-    eq(Update.pick(orbify, true).tag_name, "android-v0.7.2-rc.1")
     eq(Update.parseVersion("xteink-v1.6.1.101+bookorbit.8"), nil)
-    eq(Update.compare("android-v0.7.0", "v0.7.0"), 0)
-    eq(Update.assetUrl(Update.pick(orbify, false), "2-orbit-android.lua"),
-        "https://github.com/Fledgewing/Orbify/releases/download/android-v0.7.1/2-orbit-android.lua")
+    eq(cmp("android-v0.7.0", "v0.7.0"), 0)
 end)
-test("pick: asset url", function()
-    eq(Update.assetUrl(Update.pick(rels, false), "2-orbit-android.lua"), "https://x/lua")
-    eq(Update.assetUrl(Update.pick(rels, false), "SHA256SUMS"), nil)
-end)
-
--- Update: checksum lines
-local A, B = string.rep("a", 64), string.rep("0123456789ABCDEF", 4)
-test("sums: sha256sum text and binary lines", function()
-    -- The plugin zip: members only inside orbit.koplugin/ (ko/updater.lua unpacks nothing else).
-    eq(Update.zipMember("orbit.koplugin/main.lua"), "main.lua")
-    eq(Update.zipMember("orbit.koplugin/ko/home.lua"), "ko/home.lua")
-    for _, bad in ipairs({ "main.lua", "orbit.koplugin/", "other.koplugin/main.lua", "orbit.koplugin/../x.lua",
-        "orbit.koplugin/ko/../../x", "orbit.koplugin//x", "orbit.koplugin/./x", "orbit.koplugin/a\\b", "/orbit.koplugin/x" }) do
-        eq(Update.zipMember(bad), nil)
-    end
-    local s = Update.parseSums(A .. "  2-orbit-android.lua\n" .. B .. " *orbit-companion-0.1.0.apk\r\n")
-    eq(s["2-orbit-android.lua"], A)
-    eq(s["orbit-companion-0.1.0.apk"], B:lower())
-end)
-test("sums: bad lines are skipped", function()
-    local s = Update.parseSums("# c\n\nabc  short.lua\n" .. A .. "x  long.lua\n" .. A .. "  ok.lua\n")
-    local n = 0
-    for _ in pairs(s) do n = n + 1 end
-    eq(n, 1, "count"); eq(s["ok.lua"], A)
-end)
-test("sums: empty or nil text", function() eq(next(Update.parseSums(nil)), nil); eq(next(Update.parseSums("")), nil) end)
-
-test("stamp: reads the declared version", function()
-    eq(Update.stampedVersion('-- x\nlocal PATCH_VERSION = "0.1.0"\n'), "0.1.0")
-    eq(Update.stampedVersion("-- nothing here"), nil)
-end)
-
-test("due: at most once a day", function()
-    eq(Update.isDue(nil, 1000), true)
-    eq(Update.isDue(1000, 1000 + 86399), false)
-    eq(Update.isDue(1000, 1000 + 86400), true)
-    eq(Update.isDue(5000, 1000), true, "clock went back")
-end)
+local JSON = dofile(here .. "/json_mini.lua")
 
 -- WifiPlan: restore previous state, idle timer, never off while busy
 local function ctx(now, t) t = t or {}; t.now = now; if t.wifi_on == nil then t.wifi_on = true end; return t end
@@ -406,40 +341,6 @@ test("wifi_on setting -> radio state", function()
     eq(Plan.wifiOnSetting(0), false); eq(Plan.wifiOnSetting(3), false)
     eq(Plan.wifiOnSetting(-1), nil)
 end)
-test("update errors: VPN lockdown blamed only when the companion reads it on", function()
-    local E = Update.errorText
-    local up = { wifi_on = true, connected = true }
-    eq(E("network: permission denied", { wifi_on = true, connected = true, lockdown = true }), Update.BLOCKED)
-    eq(E("network: connect failed: EACCES", up), "no internet: Android refused the connection (connect failed: EACCES)")
-    eq(E("network: timeout", { wifi_on = true, connected = true, lockdown = true }), Update.BLOCKED)
-    eq(E("network: timeout", up), Update.NO_ANSWER)
-    eq(E("network: timeout", { wifi_on = true, connected = true, lockdown = nil }), Update.NO_ANSWER, "unknown is not true")
-    eq(E("network: timeout", { wifi_on = true, connected = true, lockdown = false }), Update.NO_ANSWER, "lockdown 0")
-    eq(E("network: timeout", { wifi_on = false, connected = false }), "no internet: Wi-Fi is off")
-    -- 11-21 Boox: a timeout right after just-in-time Wi-Fi off, no lockdown.
-    eq(E("network: timeout", { wifi_on = true, connected = true, lockdown = false, went_down = true }), Update.WENT_DOWN)
-    eq(E("HTTP 500", up), "check failed: HTTP 500")
-end)
-test("update: automatic check gate (backoff, book, Wi-Fi going off, network)", function()
-    local G = function(t)
-        local c = { enabled = true, now = 100000, checked_at = 0, failed_at = nil, connected = true, in_book = false, off_decided = false }
-        for k, v in pairs(t) do c[k] = v end
-        return (Update.autoGate(c))
-    end
-    eq(G{}, true)
-    eq(G{ enabled = false }, false)
-    eq(G{ checked_at = 100000 - 3600 }, false, "checked today")
-    eq(G{ failed_at = 100000 - 3599 }, false, "backoff after a failure")
-    eq(G{ failed_at = 100000 - 3600 }, true, "an hour later")
-    eq(G{ in_book = true }, false, "never in a book")
-    eq(G{ off_decided = true }, false, "never after a Wi-Fi off decision")
-    eq(G{ connected = false }, false, "only with the network up")
-    local ok2, k, t = Update.decode(Update.encode(false, nil, "network: timeout"))
-    eq(ok2, false); eq(k, "net"); eq(t, "network: timeout")
-    ok2, k, t = Update.decode(Update.encode(true, "up to date (0.4.3)"))
-    eq(ok2, true); eq(k, "msg"); eq(t, "up to date (0.4.3)")
-    eq((Update.decode("")), false, "a dead child")
-end)
 test("home: where Home came from", function()
     eq(HomePlan.cameFromOtherApp("other_app", 0.1), true)
     eq(HomePlan.cameFromOtherApp(nil, 0.8), false, "quick pause: pressed in KOReader")
@@ -569,32 +470,6 @@ test("compat: missing or mistyped plugin symbols turn off only their feature", f
     local lines = C.lines(m, "2.4.0")
     eq(#lines, 2)
     eq(lines[1], "BookOrbit 2.4.0 changed: Sync while reading is off")
-end)
-test("update: a connect timeout or reset is retried twice, after 3 s and 10 s", function()
-    local tries, slept = 0, {}
-    local function sleep(s) table.insert(slept, s) end
-    -- Fails twice, then answers: the check succeeds.
-    local body = Update.withRetry(function()
-        tries = tries + 1
-        if tries < 3 then return nil, "network: timeout" end
-        return "ok"
-    end, sleep)
-    eq(body, "ok"); eq(tries, 3); eq(table.concat(slept, ","), "3,10")
-    -- Always times out: 3 tries, then the error.
-    tries, slept = 0, {}
-    local b2, e2 = Update.withRetry(function() tries = tries + 1; return nil, "network: connection reset by peer" end, sleep)
-    eq(b2, nil); eq(e2, "network: connection reset by peer"); eq(tries, 3); eq(table.concat(slept, ","), "3,10")
-    -- Not transient (EACCES, HTTP 404): no retry.
-    for _, e in ipairs({ "network: Permission denied", "HTTP 404", "network: host or service not provided, or not known" }) do
-        tries, slept = 0, {}
-        Update.withRetry(function() tries = tries + 1; return nil, e end, sleep)
-        eq(tries, 1, e); eq(#slept, 0, e)
-    end
-    ok(Update.TRY_TIMEOUT_S <= 8, "shorter per-try timeout")
-end)
-
-test("update: a check failure maps GitHub's EACCES too", function()
-    eq(Update.errorText("network: Permission denied", { wifi_on = true, connected = true, lockdown = true }), Update.BLOCKED)
 end)
 
 local Stats = M.Stats
