@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: prompt keeps network
+Subject: [PATCH] BookSync: prompt keeps network
 
 Keep the network session alive while its prompt is open.
 

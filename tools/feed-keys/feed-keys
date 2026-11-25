@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Release signing keys for Orbify's update artifacts (firmware images, the firmware feed and the
+# Release signing keys for BookSync's update artifacts (firmware images, the firmware feed and the
 # KOReader plugin zip). Design: docs/design/release-signing.md. Needs openssl 3 and perl.
 #
 # Two levels of Ed25519 key:

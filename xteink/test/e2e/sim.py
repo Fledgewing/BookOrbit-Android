@@ -1,4 +1,4 @@
-"""Driving upstream's SDL simulator with the Orbify overlay built in (xteink/test/e2e/run.py).
+"""Driving upstream's SDL simulator with the BookSync overlay built in (xteink/test/e2e/run.py).
 
 One scenario = one SD card (a temp dir the simulator uses as fs_/), one or more simulator
 processes, the fault proxy's log, and screenshots. The simulator re-execs itself on every restart

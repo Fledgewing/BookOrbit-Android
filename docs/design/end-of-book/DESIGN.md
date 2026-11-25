@@ -20,7 +20,7 @@ Upstream citations are `file:line` at the pins in `tools/upstreams.lock`:
 
 ## 1. Outcome
 
-- When a reader reaches the end of a book, on any Orbify device, the book leaves "Also reading"
+- When a reader reaches the end of a book, on any BookSync device, the book leaves "Also reading"
   and BookOrbit records it as finished on the day it was finished. Offline, this is queued and sent
   later, in order, with no help from the reader.
 - The end of a book offers:
@@ -375,7 +375,7 @@ Shared fixtures in `shared/fixtures/bookorbit/`, recorded and then scrubbed:
 None open. All three were approved by the user on 2026-11-22 PT:
 
 - **D1, approved.** Reaching the end marks the book finished on the server without asking. On
-  every Orbify reader, turning past the last page marks the book finished, and BookOrbit gets
+  every BookSync reader, turning past the last page marks the book finished, and BookOrbit gets
   "read" with the finish day when the reader leaves the book. Until then, **Undo** cancels it.
   A per-device BookSync setting turns auto-marking off; it is on by default.
 - **D2, approved.** Ratings given at the end of a book are written to the reader's BookOrbit

@@ -1,4 +1,4 @@
-Orbify: the BookOrbit server's HTTPS connections verify the server (CROSSINK_TAILNET_ORBIFY_SERVER_TLS,
+BookSync: the BookOrbit server's HTTPS connections verify the server (CROSSINK_TAILNET_ORBIFY_SERVER_TLS,
 docs/design/server-tls.md). Requests to the configured server set a CA list instead of setInsecure():
 the Let's Encrypt roots plus the certificate the user trusted (src/orbify/ServerTrustNet.cpp). A
 failed check ends the handshake before the request, so credentials never go over it. The BookOrbit
@@ -15,7 +15,7 @@ index cf2c217..2092cdc 100644
  
 +#if CROSSINK_TAILNET_ORBIFY_SERVER_TLS && !defined(SIMULATOR)
 +}  // namespace
-+// Orbify (src/orbify/ServerTrustNet.h): verifies the BookOrbit server, before begin().
++// BookSync (src/orbify/ServerTrustNet.h): verifies the BookOrbit server, before begin().
 +void orbifyServerTrust(freeink::SecureHttpClient& http, const std::string& url);
 +namespace {
 +#endif
@@ -67,7 +67,7 @@ index ed35393..37cf33a 100644
    const auto result = BookOrbitSyncClient::authenticate();
  
 +#if CROSSINK_TAILNET_ORBIFY_SERVER_TLS && !defined(SIMULATOR)
-+  // Orbify: no answer at all may be a certificate this reader doesn't trust yet (or one that
++  // BookSync: no answer at all may be a certificate this reader doesn't trust yet (or one that
 +  // changed). Show what the server presents and let the user trust it.
 +  orbify::server_tls::Offer offer;
 +  if (result == BookOrbitSyncClient::NETWORK_ERROR && BookOrbitSyncClient::lastHttpCode <= 0 &&
@@ -139,7 +139,7 @@ index 0943e32..7fa7152 100644
  
   private:
 -  enum State { WIFI_SELECTION, CONNECTING, AUTHENTICATING, SUCCESS, FAILED };
-+  // TRUST_PROMPT (Orbify, src/orbify/ServerTrustNet.h): the server's certificate was not
++  // TRUST_PROMPT (BookSync, src/orbify/ServerTrustNet.h): the server's certificate was not
 +  // accepted; its fingerprint is shown and Confirm trusts it.
 +  enum State { WIFI_SELECTION, CONNECTING, AUTHENTICATING, SUCCESS, FAILED, TRUST_PROMPT };
  
@@ -159,7 +159,7 @@ index cd021ea..d85bd2e 100644
  #include "util/UrlUtils.h"
  #include "Tailnet.h"
  #include <CrossInkTailnetCuts.h>
-+#include "orbify/ServerTrustNet.h"  // Orbify: the BookOrbit server's TLS check
++#include "orbify/ServerTrustNet.h"  // BookSync: the BookOrbit server's TLS check
  
  struct HttpDownloader::Session::State {
  #if defined(FREEINK_NET_WOLFSSL) || defined(FREEINK_NET_EXTERNAL_TLS)
@@ -168,7 +168,7 @@ index cd021ea..d85bd2e 100644
      http.setReserveFullRecord(sink.options->reserveFullRecord);
  #endif
 +#if CROSSINK_TAILNET_ORBIFY_SERVER_TLS && !defined(SIMULATOR)
-+    // Orbify: the BookOrbit server is verified (built-in roots or the certificate the user
++    // BookSync: the BookOrbit server is verified (built-in roots or the certificate the user
 +    // trusted); a failed check ends the handshake before any credential is sent. Other hosts
 +    // keep their existing policy.
 +    orbifyServerTrust(http, currentUrl);

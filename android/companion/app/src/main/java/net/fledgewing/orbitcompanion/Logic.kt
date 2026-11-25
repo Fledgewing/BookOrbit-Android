@@ -209,7 +209,7 @@ data class ReleaseInfo(val tag: String, val prerelease: Boolean, val draft: Bool
 }
 
 /**
- * Orbify releases both platforms from one repo (AGENTS.md "Releases"): Android tags are
+ * BookSync releases both platforms from one repo (AGENTS.md "Releases"): Android tags are
  * `v<version>` (`android-v<version>` is read too), firmware tags `xteink-v<version>`, which the
  * Android pieces skip.
  */

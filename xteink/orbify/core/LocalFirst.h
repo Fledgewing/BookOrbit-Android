@@ -1,5 +1,5 @@
 #pragma once
-// Orbify local-first catalog (docs/design/local-first/DESIGN.md, ROADMAP item 4): the decisions the
+// BookSync local-first catalog (docs/design/local-first/DESIGN.md, ROADMAP item 4): the decisions the
 // Xteink catalog makes about saved lists, as pure functions. The firmware glue is overlay patch
 // 0029; xteink/test/localfirst_test.cpp checks these against shared/fixtures/localfirst/ (the
 // stamp and overlay tables Android reads too) and the design's own cases.

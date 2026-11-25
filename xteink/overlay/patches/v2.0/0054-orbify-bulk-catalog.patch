@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: raw bulk catalog transport for the SD worker
+Subject: [PATCH] BookSync: raw bulk catalog transport for the SD worker
 
 diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
 --- a/src/network/BookOrbitCatalogClient.h

@@ -1,0 +1,64 @@
+Subject: [PATCH] BookSync: tolerate repository rename during OTA checks
+
+Ignore redirect/error bodies before parsing the manifest. Until the rename, a
+404 from the new default feed retries the previous name once. Custom feeds
+never fall back to a public feed.
+
+diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
+--- a/src/network/OtaUpdater.cpp
++++ b/src/network/OtaUpdater.cpp
+@@ -29,6 +29,7 @@
+ #include "FirmwareVersion.h"
+ #include "OtaReleasePick.h"
+ #include "OtaUpdater.h"
++#include "orbify/OtaManifest.h"
+ #include "esp_http_client.h"
+ #include "esp_ota_ops.h"
+ #include "mbedtls/sha256.h"
+@@ -69,6 +70,11 @@
+ #endif
+ constexpr char otaTagPrefix[] = CROSSINK_OTA_TAG_PREFIX;
+ 
++#ifndef CROSSINK_OTA_FALLBACK_URL
++#define CROSSINK_OTA_FALLBACK_URL ""
++#endif
++constexpr char fallbackReleaseUrl[] = CROSSINK_OTA_FALLBACK_URL;
++
+ constexpr char latestReleaseUrl[] = CROSSINK_OTA_RELEASE_URL;
+ constexpr char releaseListUrl[] = CROSSINK_OTA_RELEASE_LIST_URL;
+ 
+@@ -180,7 +186,8 @@
+   }
+ 
+   totalBytesReceived += static_cast<size_t>(event->data_len);
+-  parser->feed(static_cast<const char*>(event->data), event->data_len);
++  orbify::ota_manifest::feed(*parser, esp_http_client_get_status_code(event->client),
++                             static_cast<const char*>(event->data), event->data_len);
+   return ESP_OK;
+ }
+ 
+@@ -275,7 +282,7 @@
+   esp_http_client_cleanup(client);
+   if (err == ESP_OK && (status < 200 || status >= 300)) {
+     LOG_ERR("OTA", "Update check answered HTTP %d", status);
+-    err = ESP_FAIL;
++    err = status == 404 ? ESP_ERR_NOT_FOUND : ESP_FAIL;
+   }
+   if (err == ESP_OK) LOG_DBG("OTA", "Response received: %zu bytes total", totalBytesReceived);
+   return err;
+@@ -362,6 +369,15 @@
+           includePrereleases ? "yes" : "no");
+   for (int attempt = 1;; attempt++) {
+     esp_err = checkOnce(client_config);
++    // Before the repository rename, the new default feed does not exist yet.
++    // Retry its old name once; custom/test feeds never get this fallback.
++    if (esp_err == ESP_ERR_NOT_FOUND && readList && fallbackReleaseUrl[0] != '\0' &&
++        client_config.url != fallbackReleaseUrl) {
++      releaseParser.reset();
++      if (newestListed) *newestListed = ReleaseJsonParser::Release{};
++      client_config.url = fallbackReleaseUrl;
++      esp_err = checkOnce(client_config);
++    }
+     if (esp_err == ESP_OK || esp_err == ESP_ERR_INVALID_STATE || attempt == 2) break;
+     LOG_ERR("OTA", "Update check attempt %d failed (%s); trying again", attempt, esp_err_to_name(esp_err));
+     releaseParser.reset();

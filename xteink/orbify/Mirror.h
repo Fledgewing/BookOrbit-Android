@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-// Orbify offline mirror, X4 Pro and X4 (CROSSINK_TAILNET_ORBIFY_MIRROR;
+// BookSync offline mirror, X4 Pro and X4 (CROSSINK_TAILNET_ORBIFY_MIRROR;
 // docs/design/ write-through-cache.md "Offline mirror", Xteink section;
 // XTEINK-BUILD-NOTES "Offline mirror"). Full refresh lives in RefreshRunner's
 // global task and SD journals. Walk is an activity's progress attachment, or

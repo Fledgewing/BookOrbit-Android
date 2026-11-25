@@ -1,6 +1,6 @@
-Subject: [PATCH] Orbify: ota tag prefix
+Subject: [PATCH] BookSync: ota tag prefix
 
-Select firmware releases from Orbify-prefixed tags.
+Select firmware releases from BookSync-prefixed tags.
 
 diff --git a/lib/JsonParser/ReleaseJsonParser.cpp b/lib/JsonParser/ReleaseJsonParser.cpp
 index ed157998..904d2773 100644
@@ -110,8 +110,8 @@ index 00000000..0880b2c8
 +
 +#include <ReleaseJsonParser.h>
 +
-+// Orbify (overlay patch "ota-tag-prefix"): picks the firmware release to offer from a GET
-+// /releases list. Orbify releases Android and firmware from one repo, so the firmware's
++// BookSync (overlay patch "ota-tag-prefix"): picks the firmware release to offer from a GET
++// /releases list. BookSync releases Android and firmware from one repo, so the firmware's
 +// releases carry a tag prefix (xteink-v1.6.1.101+bookorbit.8) and never take "latest"; the
 +// updater reads the list and keeps the newest release with this firmware's prefix. Pure
 +// logic, kept out of OtaUpdater.cpp (device-only) so a host test covers it.
@@ -148,7 +148,7 @@ index b4739224..62a4ddfe 100644
  #define CROSSINK_OTA_RELEASE_LIST_URL "https://api.github.com/repos/uxjulia/CrossInk/releases?per_page=5"
  #endif
  
-+// Orbify: the tag prefix of this firmware's releases. Set, every check reads the release list
++// BookSync: the tag prefix of this firmware's releases. Set, every check reads the release list
 +// (the repo's "latest" is an Android release) and keeps the newest tag with the prefix.
 +#ifndef CROSSINK_OTA_TAG_PREFIX
 +#define CROSSINK_OTA_TAG_PREFIX ""

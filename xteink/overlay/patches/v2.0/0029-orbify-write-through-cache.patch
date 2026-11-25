@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: write through cache
+Subject: [PATCH] BookSync: write through cache
 
 Read saved catalog replies and patch them after successful writes.
 
@@ -10,7 +10,7 @@ index 98548aac..637436d3 100644
  #ifndef CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW
  #define CROSSINK_TAILNET_ORBIFY_AUTHOR_ROW 1
  #endif
-+// Patch 0029, Orbify's write-through cache in front of BookOrbit (src/orbify/CacheStore.h): X4s.
++// Patch 0029, BookSync's write-through cache in front of BookOrbit (src/orbify/CacheStore.h): X4s.
 +#ifndef CROSSINK_TAILNET_ORBIFY_CACHE
 +#define CROSSINK_TAILNET_ORBIFY_CACHE 0
 +#endif
@@ -24,7 +24,7 @@ index c747f475..7be018c2 100644
  
 +#if CROSSINK_TAILNET_ORBIFY_CACHE
 +}  // namespace
-+// Orbify's write-through cache (src/orbify/CacheStore.cpp) learns of every write that went through.
++// BookSync's write-through cache (src/orbify/CacheStore.cpp) learns of every write that went through.
 +void orbifyCacheAfterWrite(const char* method, const std::string& url, const char* body, size_t bodyLength,
 +                           int status) __attribute__((weak));
 +namespace {
@@ -63,7 +63,7 @@ index b177e6d9..2fbe13bd 100644
      }
      fetched++;
 +#if CROSSINK_TAILNET_ORBIFY_CACHE
-+    // Orbify's cache: a cover kept at an older version with its ETag is asked If-None-Match, so a
++    // BookSync's cache: a cover kept at an older version with its ETag is asked If-None-Match, so a
 +    // metadata-only edit (a new updatedAt, the same cover file) costs a 304 and a rename.
 +    orbify::cache::CoverRecord kept;
 +    const bool hasKept = OrbifyCache::coverRecord(book.id, kept);
@@ -121,7 +121,7 @@ index fb6647e8..65192e77 100644
    BookOrbitCatalogClient::lastFetchBadResponse = false;
 +  const char* parsePath = TMP_PATH;
 +#if CROSSINK_TAILNET_ORBIFY_CACHE
-+  // Orbify's write-through cache (src/orbify/CacheStore.h): the saved reply when it was checked
++  // BookSync's write-through cache (src/orbify/CacheStore.h): the saved reply when it was checked
 +  // in the last minute or there is no network; else the request below, whose reply is kept, and
 +  // the saved reply again if the request fails.
 +  const OrbifyCache::Lookup cached = OrbifyCache::lookup(url);
@@ -219,7 +219,7 @@ index a8e9d68e..1555db50 100644
    /** Download one book's catalog thumbnail (always a JPEG) to the SD card. */
 -  static HttpDownloader::DownloadError downloadThumbnail(int64_t bookId, const char* destPath, bool (*shouldStop)());
 +  // ifNoneMatch: a kept cover's ETag; a 304 then fails with lastHttpStatus 304 and writes nothing.
-+  // etagOut receives the new cover's ETag (Orbify's cache, CROSSINK_TAILNET_ORBIFY_CACHE).
++  // etagOut receives the new cover's ETag (BookSync's cache, CROSSINK_TAILNET_ORBIFY_CACHE).
 +  static HttpDownloader::DownloadError downloadThumbnail(int64_t bookId, const char* destPath, bool (*shouldStop)(),
 +                                                         const std::string& ifNoneMatch = std::string(),
 +                                                         std::string* etagOut = nullptr);
@@ -246,7 +246,7 @@ index ebe8ca5e..7f1386c2 100644
  
      Session* session = nullptr;       // Borrowed; default preserves one-request lifetime.
      std::string* finalUrl = nullptr;  // Receives only a successful final response URL.
-+    // WOLFSSL: receives a successful response's ETag (empty when it sent none). Orbify's cache
++    // WOLFSSL: receives a successful response's ETag (empty when it sent none). BookSync's cache
 +    // keeps it to ask If-None-Match later (CROSSINK_TAILNET_ORBIFY_CACHE).
 +    std::string* etag = nullptr;
      uint8_t maxAttempts = 20;         // File reconnect budget, clamped to [1, 20].

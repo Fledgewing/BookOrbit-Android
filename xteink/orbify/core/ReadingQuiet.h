@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: nothing interrupts reading (the user's standing rule, both platforms). While a book is
+// BookSync: nothing interrupts reading (the user's standing rule, both platforms). While a book is
 // open in the reader, nothing the reader did not ask for may draw over it, repaint it, restart the
 // device or take the screen: a message, an "update available" prompt, a sync or WiFi status, a
 // background repaint. Those are held: the caller drops them or shows them at the next screen that

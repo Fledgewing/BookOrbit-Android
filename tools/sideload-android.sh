@@ -23,7 +23,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=SCRIPTDIR/install-usb.sh
 source "$here/install-usb.sh" # helpers: sha256, unpack_orbit, push_plugin, dsh, pick_device, q
 
-REPO="Fledgewing/Orbify" # artifacts come from this repo only
+REPO="Fledgewing/BookSync" # artifacts come from this repo only
 ARTIFACT_PREFIX="android-test-"
 COMPANION_PKG="net.fledgewing.orbitcompanion"
 KO_PKG="org.koreader.launcher"

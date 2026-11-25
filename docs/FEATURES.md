@@ -2,11 +2,11 @@
 
 The product is **BookSync**, with **BookSync Companion** on Android; display names match across Android, X4 Pro, X4 and X3. Update identifiers and saved settings retain their existing names.
 
-What Orbify ships, per platform. Only what we add: KOReader's, BookOrbit's and CrossInk's own
+What BookSync ships, per platform. Only what we add: KOReader's, BookOrbit's and CrossInk's own
 features are not listed. Planned work is in [`ROADMAP.md`](../ROADMAP.md); an item moves here when
 it ships (AGENTS.md "Features and roadmap").
 
-**Principle: nothing interrupts reading.** While a book is open in front, nothing Orbify adds
+**Principle: nothing interrupts reading.** While a book is open in front, nothing BookSync adds
 shows, restarts or takes focus; it waits for the next non-reading moment
 ([design](design/reading-gate.md)). Exceptions: menus you open, the end-of-book sheet, and the approved BookSync position sync Yes / No popup.
 
@@ -19,7 +19,7 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 
 | Feature | KOReader-Android | X4 Pro | X4 | X3 |
 |---|---|---|---|---|
-| Public About credit: Orbify independence, thanks to BookOrbit, and separate project licences ([design](design/bookorbit-credit.md)); same text in README | yes (plugin and companion) | 2.x rc | 2.x rc | no: flash |
+| Public About credit: BookSync independence, thanks to BookOrbit, and separate project licences ([design](design/bookorbit-credit.md)); same text in README | yes (plugin and companion) | 2.x rc | 2.x rc | no: flash |
 
 ## Network and sync
 
@@ -67,7 +67,7 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 | Clicker buttons (page turns in KOReader and other apps, Send key) | yes | n/a | n/a | n/a |
 | Frontlight re-applied after the first paint of every boot | n/a | yes | yes | yes |
 | Setup installs KOReader and the BookOrbit plugin; USB installer (`tools/install-usb.sh`) | yes | n/a | n/a | n/a |
-| Add-on mode: keep the reader's own launcher and Wi-Fi; Orbify installs, updates and sets up KOReader and the plugins; Wi-Fi switching, sleep sync, clicker buttons and the PIN are optional helpers; switch modes in Settings › Mode ([design](design/addon-mode.md)) | yes (0.11.0) | n/a | n/a | n/a |
+| Add-on mode: keep the reader's own launcher and Wi-Fi; BookSync installs, updates and sets up KOReader and the plugins; Wi-Fi switching, sleep sync, clicker buttons and the PIN are optional helpers; switch modes in Settings › Mode ([design](design/addon-mode.md)) | yes (0.11.0) | n/a | n/a | n/a |
 | Recommended settings applied at setup and on update: only values still at KOReader's or BookOrbit's default change, values you changed are listed for review, Undo from a backup (Tools › BookSync › Recommended settings) | yes (0.11.0) | n/a | n/a | n/a |
 | Companion Setup shows "Signed in to BookOrbit" (a yes/no from the plugin, never the server or account) and the recommended-settings state | yes (0.11.0) | n/a | n/a | n/a |
 | BookSync is a KOReader plugin (`orbit.koplugin`, in the Plugin manager; replaces the 0.7.x user patch on update, [design](design/orbit-plugin.md)) | yes (0.8.0) | n/a | n/a | n/a |

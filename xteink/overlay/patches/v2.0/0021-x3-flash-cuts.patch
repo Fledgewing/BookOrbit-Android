@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: x3 flash cuts
+Subject: [PATCH] BookSync: x3 flash cuts
 
 Keep the ESP32-C3 firmware below its OTA-slot flash limit.
 

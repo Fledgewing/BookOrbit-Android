@@ -169,7 +169,7 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false" />
 
-        <!-- Orbify's mode (docs/design/addon-mode.md): the first-run choice and Settings › Mode. -->
+        <!-- BookSync's mode (docs/design/addon-mode.md): the first-run choice and Settings › Mode. -->
         <activity
             android:name=".ModeActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"

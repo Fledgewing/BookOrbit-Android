@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Copyright (c) 2026 Fledgewing. Part of Orbify (see android/koreader/LICENSE).
+-- Copyright (c) 2026 Fledgewing. Part of BookSync (see android/koreader/LICENSE).
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 

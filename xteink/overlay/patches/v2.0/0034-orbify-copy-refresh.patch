@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: copy refresh
+Subject: [PATCH] BookSync: copy refresh
 
 Replace queued outdated book copies during network work.
 
@@ -49,10 +49,10 @@ index edee8363..4516bac3 100644
 +++ b/lib/BookOrbitSync/BookOrbitCredentialStore.h
 @@ -44,6 +44,9 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
  #if CROSSINK_TAILNET_ORBIFY_FINISH
-   bool orbifyMarkAtEnd = true;  // Orbify: the End-of-Book page marks the book finished (D1)
+   bool orbifyMarkAtEnd = true;  // BookSync: the End-of-Book page marks the book finished (D1)
  #endif
 +#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
-+  bool orbifyKeepCopiesCurrent = true;  // Orbify (patch 0034): replace copies the server rewrote
++  bool orbifyKeepCopiesCurrent = true;  // BookSync (patch 0034): replace copies the server rewrote
 +#endif
  #if CROSSINK_TAILNET_BACKGROUND_SYNC
    uint8_t backgroundSync = 0;  // a BookOrbitBackgroundSync::Interval; 0 = off
@@ -62,7 +62,7 @@ index edee8363..4516bac3 100644
    }
  #endif
 +#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
-+  // Orbify (patch 0034): "Keep book copies current", on by default.
++  // BookSync (patch 0034): "Keep book copies current", on by default.
 +  void setOrbifyKeepCopiesCurrent(const bool enabled) {
 +    ensureLoaded();
 +    orbifyKeepCopiesCurrent = enabled;
@@ -121,7 +121,7 @@ index 5106bba8..b124f635 100644
                            void (*visit)(const char* hash, int64_t bookId, int64_t bookFileId, void* context),
 -                          void* context, char* outLibraryVersion);
 +                          void* context, char* outLibraryVersion,
-+                          // Orbify (patch 0034): also called, after visit(), for each match the
++                          // BookSync (patch 0034): also called, after visit(), for each match the
 +                          // server marks positionCompatible:false (an older hash of the file).
 +                          void (*visitOlderCopy)(const char* hash, int64_t bookId, int64_t bookFileId,
 +                                                 void* context) = nullptr);
@@ -161,7 +161,7 @@ index ca9a8831..11a7622d 100644
      const BookOrbitDeviceScan::Progress progress{this, &BookOrbitHomeRefreshActivity::onScanProgress};
      setScanSummary(BookOrbitDeviceScan::run(nullptr, &progress));
 +#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
-+    // Orbify (patch 0034): find copies the server rewrote; the next sleep sync replaces them
++    // BookSync (patch 0034): find copies the server rewrote; the next sleep sync replaces them
 +    // (a download here would hold this screen for minutes).
 +    OrbifyCopyRefresh::detect(nullptr);
 +#endif
@@ -187,7 +187,7 @@ index 9be03e28..ad3743b5 100644
  
  void BookOrbitSyncActivity::startBookUpdate() {
 +#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
-+  // Orbify (patch 0034, decision (a)): nothing restarts while the book is open. The copy is
++  // BookSync (patch 0034, decision (a)): nothing restarts while the book is open. The copy is
 +  // queued; the next sleep sync replaces it in place, position and highlights carried over.
 +  if (OrbifyCopyRefresh::enqueue(updateBookId, epubPath, documentHash)) {
 +    {
@@ -211,7 +211,7 @@ index 9be03e28..ad3743b5 100644
    if (refreshHome && !sleepSyncWakeRequested()) BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
    if (refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
 +#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
-+  // Orbify (patch 0034): the device is asleep, Wi-Fi is up: find copies the server rewrote,
++  // BookSync (patch 0034): the device is asleep, Wi-Fi is up: find copies the server rewrote,
 +  // then replace queued ones, one book at a time, for up to three minutes per sleep.
 +  if (wifiConnectedForSleepSync && state != SYNC_FAILED && !sleepSyncWakeRequested()) {
 +    OrbifyCopyRefresh::detect(&sleepSyncWakeRequested);
@@ -228,9 +228,9 @@ index 5947ca37..455d20b9 100644
 @@ -35,7 +35,9 @@ namespace fui = freeink::ui;
  namespace {
  // CrossInk-Tailnet: "Sync While Reading" is the last row, listed only under Smart sync.
- // Orbify (patch 0027): "Mark Finished at End" sits before Home.
+ // BookSync (patch 0027): "Mark Finished at End" sits before Home.
 -constexpr int ORBIFY_ROWS = CROSSINK_TAILNET_ORBIFY_FINISH ? 1 : 0;
-+// Orbify (patch 0034): "Keep book copies current" follows it.
++// BookSync (patch 0034): "Keep book copies current" follows it.
 +constexpr int ORBIFY_MARK_ROWS = CROSSINK_TAILNET_ORBIFY_FINISH ? 1 : 0;
 +constexpr int ORBIFY_ROWS = ORBIFY_MARK_ROWS + (CROSSINK_TAILNET_ORBIFY_COPY_REFRESH ? 1 : 0);
  constexpr int MENU_ITEMS = 9 + ORBIFY_ROWS + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 Fledgewing. Part of Orbify's Xteink firmware code (xteink/README.md "License"):
+// Copyright (c) 2026 Fledgewing. Part of BookSync's Xteink firmware code (xteink/README.md "License"):
 // it builds into CrossInk-Bookorbit, so it is GPL-3.0-or-later, unlike the MIT overlay around it.
 #pragma once
 
 // Battery stats, hardware-free part (host-tested: xteink/test/battery_stats_test.cpp): the on-SD record
 // format and the analysis behind the `orbit-battery-stats/1` export
-// (Orbify docs/design/STATS.md). The device side (orbify/BatteryStats.cpp)
+// (BookSync docs/design/STATS.md). The device side (orbify/BatteryStats.cpp)
 // appends one record per transition and feeds the file back through Analyzer.
 
 #include <cstddef>

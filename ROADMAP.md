@@ -1,6 +1,6 @@
 # Roadmap
 
-Outcomes Orbify plans, in order. A design doc and mockups need the user's approval before an item
+Outcomes BookSync plans, in order. A design doc and mockups need the user's approval before an item
 moves to building; when it ships it moves into [`docs/FEATURES.md`](docs/FEATURES.md)
 (AGENTS.md "Features and roadmap"). Items are outcomes only: designs live in
 [`docs/design/`](docs/design/).
@@ -53,7 +53,7 @@ and any UI mockups still need approval before implementation.
 | 4 | **Local-first Xteink catalog**: the write-through cache on Xteink: catalog screens open from the cache without Wi-Fi and refresh in the background. | X4 Pro, X4, X3 | building: X4s have the cache, the ⟳ on every catalog view and the offline mirror (2.x rc); background revalidation and the X3 to come | [write-through-cache](docs/design/write-through-cache.md), [local-first](docs/design/local-first/DESIGN.md) |
 | 5 | **Tap to download**: a book tile downloads the book, or opens it when it is already on the device. | Android, X4 Pro, X4, X3 | idea | |
 | 6 | **Series view**: shows which books are on the device and which are only on the server. | Android, X4 Pro, X4, X3 | idea | |
-| 10 | **Add-on mode**: Orbify installs, updates and configures KOReader and both plugins without becoming the Home app or managing Wi-Fi and sleep; recommended settings are applied during setup in both modes (only values still at their default; the user's own are listed for review, with Undo). | Android | shipped (0.11.0); §16 lists what waits | [addon-mode](docs/design/addon-mode.md), [mockups](docs/design/addon-mode-mockups.html) |
+| 10 | **Add-on mode**: BookSync installs, updates and configures KOReader and both plugins without becoming the Home app or managing Wi-Fi and sleep; recommended settings are applied during setup in both modes (only values still at their default; the user's own are listed for review, with Undo). | Android | shipped (0.11.0); §16 lists what waits | [addon-mode](docs/design/addon-mode.md), [mockups](docs/design/addon-mode-mockups.html) |
 | 10a | **Setup checklist that reads at a glance**: a summary first ("All set" or "2 things need you"), finished rows folded into one line per group, plain words with one verb per row, and "what you lose without it" on every optional, skipped or unfinished row in both modes. | Android | building (companion built; not released yet) | [companion-checklist](docs/design/companion-checklist.md), [mockups](docs/design/companion-checklist-mockups.html) |
 | 6a | **Group catalog lists by series or author on Xteink**, matching Android 0.6.0. | X4 Pro, X4; not X3 | approved | [local-first](docs/design/local-first/DESIGN.md), [mockups](https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk) |
 | 11 | **Sleep screen**: a recommended BookOrbit cover that changes every X hours, or the current book's cover, with optional text and the battery level at sleep; choose separate BookOrbit libraries, scopes and collections for Pick from and Leave out. | Android, X4 Pro, X4; not X3 | building: Android; X4 Pro and X4 (patch 0039) | [lock-screen](docs/design/lock-screen.md), [build notes](docs/design/XTEINK-BUILD-NOTES.md#the-sleep-screen-patch-0039-2026-11-24) |
@@ -71,7 +71,7 @@ and any UI mockups still need approval before implementation.
 
 | # | Outcome | Platforms | Status | Design |
 |---|---|---|---|---|
-| 7 | **Smarter cache**: BookOrbit's UI stays current with local state and syncs in the background, covering USB-added files, books finished while auto-sync is off, and linking Orbify downloads. | Android | idea | |
+| 7 | **Smarter cache**: BookOrbit's UI stays current with local state and syncs in the background, covering USB-added files, books finished while auto-sync is off, and linking BookSync downloads. | Android | idea | |
 | 8b | **BookSync plugin hooks the BookOrbit board** (widget registry, `loadBookDetail`, `Activity`, `StateManager`) and replaces KOReader's menus with cleaner ones. 8a (the plugin replaces the user patch) shipped in 0.8.0. | Android | idea | [orbit-plugin](docs/design/orbit-plugin.md) |
 | 9 | **No visible app switches**: KOReader stays in front and the companion runs as a background service. | Android | idea | |
 
@@ -81,4 +81,4 @@ and any UI mockups still need approval before implementation.
 |---|---|---|---|
 | Submit the companion for Google Play Protect review. | Android | idea | |
 | X3 parity review for each feature above. | X3 | idea | |
-| **Shared Orbify release name**: one name (e.g. "Orbify 0.12") shown in the companion, the plugin and the Xteink About screens and in release titles, each with its own technical version underneath; marks which shared feature set (e.g. battery stats) a build has. Update logic and tags unchanged. | Android, Xteink | idea | |
+| **Shared BookSync release name**: one name (e.g. "BookSync 0.12") shown in the companion, the plugin and the Xteink About screens and in release titles, each with its own technical version underneath; marks which shared feature set (e.g. battery stats) a build has. Update logic and tags unchanged. | Android, Xteink | idea | |

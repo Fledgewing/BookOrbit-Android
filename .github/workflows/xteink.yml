@@ -238,7 +238,7 @@ jobs:
           - environment: default
             firmware: firmware-x3-x4
     steps:
-      - name: Check out Orbify
+      - name: Check out BookSync
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.sha }}
@@ -295,7 +295,7 @@ jobs:
           pio run -j1 -e "${{ matrix.environment }}" </dev/null 2>&1 | tee ../build.log
 
       # The app slot is fixed (the partition table changes only over USB), and the X3 build was
-      # at 98.5% before the Orbify features: a build above 99.5% fails here, and the features drop
+      # at 98.5% before the BookSync features: a build above 99.5% fails here, and the features drop
       # in the order docs/design/end-of-book/DESIGN.md §5 gives (suggestions first, then the author row).
       - name: Flash budget (99.5% of the app slot)
         run: |
@@ -308,7 +308,7 @@ jobs:
             | tee -a "$GITHUB_STEP_SUMMARY"
           [ "$((used * 1000))" -le "$((slot * 995))" ] || { echo "::error::${{ matrix.environment }} uses $pct% of the app slot (gate 99.5%)"; exit 1; }
 
-      # After the build: Orbify's tests compile against the ArduinoJson the build fetched.
+      # After the build: BookSync's tests compile against the ArduinoJson the build fetched.
       - name: Host tests
         env:
           ORBIFY_REQUIRE_RENDER: "1"
@@ -407,8 +407,8 @@ jobs:
           name: source-archive
           path: firmware
 
-      # Orbify's own files at the built commit: the license list, texts and the notes section.
-      - name: Check out Orbify
+      # BookSync's own files at the built commit: the license list, texts and the notes section.
+      - name: Check out BookSync
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.sha }}
@@ -469,10 +469,10 @@ jobs:
           (cd orbify/xteink && zip -qr ../../firmware/licenses.zip licenses LICENSE THIRD_PARTY_LICENSES.md)
           (cd firmware && sha256sum -- *.bin *.elf.gz *.tar.gz THIRD_PARTY_LICENSES.md licenses.zip > SHA256SUMS)
           {
-            echo "CrossInk-Bookorbit $TAG with Tailscale (MicroLink): Orbify's Xteink firmware."
+            echo "CrossInk-Bookorbit $TAG with Tailscale (MicroLink): BookSync's Xteink firmware."
             echo
             echo "Install over the air from the reader (Settings > Check for updates) once it runs a"
-            echo "CrossInk-Tailnet or Orbify build, or flash the .bin for your reader from an SD card or USB."
+            echo "CrossInk-Tailnet or BookSync build, or flash the .bin for your reader from an SD card or USB."
             echo "Verify: \`sha256sum -c SHA256SUMS\`, \`gh attestation verify <file> -R $OVERLAY_REPO\`."
             echo 'The X3 build leaves out Nearby transfer, mDNS, Plugins and language/hyphenation downloads (see "X3 (v2.0) differences" in the README for workarounds). The X4 Pro and X4 Classic keep everything.'
             echo
@@ -523,7 +523,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      # Orbify's signing tool only (no upstream code).
+      # BookSync's signing tool only (no upstream code).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

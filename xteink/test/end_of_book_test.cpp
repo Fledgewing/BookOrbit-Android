@@ -1,4 +1,4 @@
-// Host test for Orbify's end-of-book card (xteink/orbify/core/SeriesCard, EndPagePlan): the next,
+// Host test for BookSync's end-of-book card (xteink/orbify/core/SeriesCard, EndPagePlan): the next,
 // gap, done, suggestion and author rules in shared/fixtures/bookorbit/finish-cases.json "picker"
 // (Android's picker reads the same table) over the catalog-book.*.json details, read through the
 // device's detail filter; the cache record; and the page's rows on both panels.

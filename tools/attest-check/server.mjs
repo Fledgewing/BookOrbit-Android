@@ -221,7 +221,7 @@ function segs(p) {
 const isParam = (s) => s.startsWith(':') || s === '*' || s.includes('(') || s.includes('*');
 const isRest = (s) => s.includes('*') || s.includes('(');
 
-/** Can a call to Orbify route `a` (':p' = any segment) reach server route `b`? */
+/** Can a call to BookSync route `a` (':p' = any segment) reach server route `b`? */
 export function pathsMatch(a, b) {
   const x = segs(a);
   const y = segs(b);
@@ -249,8 +249,8 @@ function methodsMatch(a, b) {
 export function check(orbify, server) {
   const errors = [];
   for (const g of server.globals) {
-    errors.push(`${g.file}:${g.line}: ${g.what}, so every route Orbify calls requires app attestation. ` +
-      'Only BookOrbit\'s official apps can pass attestation; Orbify cannot.');
+    errors.push(`${g.file}:${g.line}: ${g.what}, so every route BookSync calls requires app attestation. ` +
+      'Only BookOrbit\'s official apps can pass attestation; BookSync cannot.');
   }
   const unmatched = [];
   for (const r of orbify) {
@@ -263,7 +263,7 @@ export function check(orbify, server) {
       const prod = s.attest.unsigned ? ' (unsignedOutsideProduction only lets unsigned requests through outside production; real servers still demand attestation)' : '';
       errors.push(`${r.method === '*' ? 'ANY' : r.method} ${r.path} requires app attestation: ${s.attest.text} on the ${s.attest.where} at ` +
         `${s.file}:${s.attest.line} (route ${where}, ${s.file}:${s.line})${prod}. ` +
-        `Only BookOrbit's official apps can pass attestation, so Orbify cannot call this route. Orbify calls it from ${r.sources.join(', ')}.`);
+        `Only BookOrbit's official apps can pass attestation, so BookSync cannot call this route. BookSync calls it from ${r.sources.join(', ')}.`);
     }
   }
   return { errors, unmatched };

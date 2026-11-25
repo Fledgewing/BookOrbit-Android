@@ -37,7 +37,8 @@ import kotlin.concurrent.thread
  *    confirm: right away when the check was started by hand, otherwise via a notification.
  */
 object Updater {
-    const val REPO = "Fledgewing/Orbify"
+    const val REPO = "Fledgewing/BookSync"
+    internal const val LEGACY_REPO = "Fledgewing/Orbify"
     internal const val API = "https://api.github.com/repos/$REPO"
     private const val OLD_CHANNEL = "updates"
     private const val CHANNEL = "updates_quiet"
@@ -265,9 +266,14 @@ object Updater {
         note = { i, e, wait -> log("try $i to ${URL(url).host} failed (${e.javaClass.simpleName}: ${e.message}); retrying in ${wait / 1000} s") },
     ) { openOnce(url) }
 
+    internal fun legacyApiUrl(url: String, status: Int): String? =
+        if (status == 404 && url.startsWith("$API/"))
+            url.replaceFirst("/repos/$REPO/", "/repos/$LEGACY_REPO/") else null
+
     private fun openOnce(url: String): HttpURLConnection {
         // HttpURLConnection follows the https -> https redirect to GitHub's asset host.
         val c = URL(url).openConnection() as HttpURLConnection
+        c.instanceFollowRedirects = true
         c.connectTimeout = NetErrors.CONNECT_TIMEOUT_MS
         c.readTimeout = 30_000
         c.setRequestProperty("User-Agent", "OrbitCompanion/${BuildConfig.VERSION_NAME}")
@@ -278,6 +284,7 @@ object Updater {
         val code = c.responseCode
         if (code != 200) {
             c.disconnect()
+            legacyApiUrl(url, code)?.let { return openOnce(it) }
             throw java.io.IOException("HTTP $code from ${URL(url).host}")
         }
         return c

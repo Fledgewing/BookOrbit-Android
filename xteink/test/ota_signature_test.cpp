@@ -9,6 +9,7 @@
 #include <string>
 
 #include "ReleaseJsonParser.h"
+#include "../orbify/OtaManifest.h"
 #include "TestSupport.h"
 #include "UpdateSignature.h"
 
@@ -46,7 +47,14 @@ static sig::Result update(const std::string& feed, const char* root, const char*
   stem = device;
   ReleaseJsonParser::Release picked{};
   ReleaseJsonParser parser(matchesDevice, keepFirst, &picked);
-  for (size_t i = 0; i < feed.size(); i += 61) parser.feed(feed.data() + i, std::min<size_t>(61, feed.size() - i));
+  // A repository/asset redirect can contain JSON or HTML. Neither may reach the
+  // release parser, even when a redirect body arrives over multiple callbacks.
+  for (int status : {301, 302, 307, 404}) {
+    const std::string body = "<html>Moved</html>";
+    orbify::ota_manifest::feed(parser, status, body.data(), static_cast<int>(body.size()));
+  }
+  for (size_t i = 0; i < feed.size(); i += 61)
+    orbify::ota_manifest::feed(parser, 200, feed.data() + i, static_cast<int>(std::min<size_t>(61, feed.size() - i)));
   CHECK(parser.isReleaseList() && picked.tagFound && picked.firmwareFound);
   return sig::checkDownload(root, 1, picked.tagName, picked.firmwareUrl, picked.firmwareSha256,
                             picked.firmwareSigned ? picked.firmwareSignature : nullptr, stem);
@@ -66,9 +74,23 @@ int main(int argc, char** argv) {
   const std::string feed = readText(dir + "/xteink-feed.json");
   CHECK(!feed.empty());
 
+  // Certain non-JSON redirect bodies poison the old unfiltered parser. The
+  // transport still follows the redirect; the status filter protects parsing.
+  ReleaseJsonParser unfiltered(matchesDevice);
+  const std::string redirectBody = "301: Moved Permanently";
+  unfiltered.feed(redirectBody.data(), redirectBody.size());
+  unfiltered.feed(feed.data(), feed.size());
+  CHECK(!unfiltered.foundFirmware());
+
   // The release as published: signed, installs either way.
   CHECK(update(feed, root.c_str()) == sig::Result::Ok);
   CHECK(sig::accepted(update(feed, root.c_str()), true));
+
+  // Repository renames and old download URLs have identical signing inputs.
+  std::string oldRepo = feed;
+  replaceAll(oldRepo, "Fledgewing/BookSync", "Fledgewing/Orbify");
+  CHECK(oldRepo != feed);
+  CHECK(update(oldRepo, root.c_str()) == sig::Result::Ok);
 
   // A valid signature for another reader must not be selected through a changed display name.
   JsonDocument relabeledDoc;

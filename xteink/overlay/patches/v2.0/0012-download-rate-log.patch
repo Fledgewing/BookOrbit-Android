@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: download rate log
+Subject: [PATCH] BookSync: download rate log
 
 Record download throughput for diagnosis.
 

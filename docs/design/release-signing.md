@@ -64,7 +64,7 @@ root key keep accepting unsigned updates until they take the first signed one.
    `tools/feed-keys/feed-keys new-release-key --root ~/orbify-release-keys/root.pem --serial 1`
    creates the first release key.
 2. Store `~/orbify-release-keys/root.pem` in the password manager, plus a backup copy offline.
-3. `gh secret set RELEASE_SIGNING_KEY -R Fledgewing/Orbify < ~/orbify-release-keys/release-key-1.bundle`,
+3. `gh secret set RELEASE_SIGNING_KEY -R Fledgewing/BookSync < ~/orbify-release-keys/release-key-1.bundle`,
    then delete the bundle. The root key never goes to CI.
 4. `tools/feed-keys/feed-keys set-root ~/orbify-release-keys/root.pem`, then commit
    `shared/release-signing.json` in a pull request.

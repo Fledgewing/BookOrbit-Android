@@ -152,7 +152,7 @@
 -  requestUpdate();
 -  LOG_INF("BookOrbit", "Catalog: %s %s", full ? "Full refresh" : "Refresh", ok ? "done" : "failed");
 -}
-+// Implementation kept in the Orbify overlay, rather than in the integration patch.
++// Implementation kept in the BookSync overlay, rather than in the integration patch.
 +#include "orbify/CatalogRefresh.inc"
  
  bool BookOrbitCatalogBrowserActivity::connectForMiss() {
@@ -294,7 +294,7 @@
  void BookOrbitHomeRefreshActivity::runRefresh() {
    sdFontSystem.releaseForNetwork(renderer);
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  // Orbify (patch 0035): a Full refresh asked for from settings or the sync tile's hold (or the
++  // BookSync (patch 0035): a Full refresh asked for from settings or the sync tile's hold (or the
 +  // catalog's ⟳ hold that a reset cut short) saves the catalog for offline here. Patch 0041: one
 +  // start popup, then the walk runs from loop() with its % in the corner; a press goes back to Home.
 +  // Automatic ones (7 days, a new library version) wait for the sleep sync instead.
@@ -320,7 +320,7 @@
  #endif
    }
 -#if CROSSINK_TAILNET_ORBIFY_MIRROR
--  // Orbify (patch 0035): a Full refresh asked for from settings or the sync tile's hold (or the
+-  // BookSync (patch 0035): a Full refresh asked for from settings or the sync tile's hold (or the
 -  // catalog's ⟳ hold that a reset cut short) saves the catalog for offline here. Patch 0041: one
 -  // start popup, then the walk runs from loop() with its % in the corner; a press goes back to Home.
 -  // Automatic ones (7 days, a new library version) wait for the sleep sync instead.
@@ -412,7 +412,7 @@
 @@ -407,7 +409,7 @@
  #endif
  #if CROSSINK_TAILNET_ORBIFY_SLEEP
-     // Orbify (patch 0039): BookOrbit Pick's batch, a few covers per sleep (decoded below).
+     // BookSync (patch 0039): BookOrbit Pick's batch, a few covers per sleep (decoded below).
 -    if (extras && !sleepSyncWakeRequested()) OrbifySleep::topUp(epubPath, &sleepSyncWakeRequested);
 +    if (wifiConnectedForSleepSync && !sleepSyncWakeRequested()) OrbifySleep::topUp(epubPath, &sleepSyncWakeRequested);
  #endif

@@ -1,5 +1,5 @@
 #pragma once
-// Orbify sleep screen extras on the X4 Pro and X4 (docs/design/lock-screen.md L1-L5): the text the
+// BookSync sleep screen extras on the X4 Pro and X4 (docs/design/lock-screen.md L1-L5): the text the
 // user typed and the battery level at sleep, in a band below the cover (Bar) or on plates over it
 // (Overlay). Geometry only, in panel pixels; the firmware (../SleepScreen.cpp) measures the text and
 // draws. The same rules as Android's SleepLayout (SleepScreenLogic.kt); host test sleep_pick_test.cpp.

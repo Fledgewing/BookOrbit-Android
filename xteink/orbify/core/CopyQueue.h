@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: keeping book copies current (patch 0034). When the server rewrites a library file
+// BookSync: keeping book copies current (patch 0034). When the server rewrites a library file
 // (a tag or cover written into the EPUB moves its hash), every card copy of it stops syncing
 // annotations and bookmarks (positionIncompatible). The background refresh finds those copies
 // through the server's match check and replaces them, one book at a time, from a queue kept on

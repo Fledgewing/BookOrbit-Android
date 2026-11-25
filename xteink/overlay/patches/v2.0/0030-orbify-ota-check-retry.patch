@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: ota check retry
+Subject: [PATCH] BookSync: ota check retry
 
 Retry a failed firmware update check on a fresh connection.
 
@@ -11,7 +11,7 @@ index 62a4ddfe..cd94dd10 100644
  #else
  #include <Arduino.h>
 +#include <CrossInkTailnetCuts.h>
-+#ifndef CROSSINK_TAILNET_OTA_CHECK_RETRY  // Orbify patch 0030; on in tailnet_build.py
++#ifndef CROSSINK_TAILNET_OTA_CHECK_RETRY  // BookSync patch 0030; on in tailnet_build.py
 +#define CROSSINK_TAILNET_OTA_CHECK_RETRY 0
 +#endif
  #include <HalStorage.h>
@@ -59,7 +59,7 @@ index 62a4ddfe..cd94dd10 100644
        .keep_alive_enable = true,
    };
 +#if CROSSINK_TAILNET_OTA_CHECK_RETRY
-+  // Orbify (patch 0030): an X3 reading the list with the heap at its lowest timed out mid-body
++  // BookSync (patch 0030): an X3 reading the list with the heap at its lowest timed out mid-body
 +  // (esp_tls_conn_read EAGAIN, ESP_ERR_HTTP_INCOMPLETE_DATA) and the user saw "update failed";
 +  // the same check after a restart got through. A slow read gets more time, and a failed check
 +  // is asked once more on a fresh connection, as the catalog's fetchJson does.

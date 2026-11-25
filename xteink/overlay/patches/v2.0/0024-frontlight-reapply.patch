@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: frontlight reapply
+Subject: [PATCH] BookSync: frontlight reapply
 
 Restore the frontlight after the first paint on wake.
 

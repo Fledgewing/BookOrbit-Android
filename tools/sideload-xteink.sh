@@ -21,7 +21,7 @@
 # Needs: esptool (v4 or v5), gh (for a run id), lsof, od, shasum or sha256sum.
 set -euo pipefail
 
-REPO="Fledgewing/Orbify" # artifacts come from this repo only
+REPO="Fledgewing/BookSync" # artifacts come from this repo only
 PT_OFFSET=0x8000         # where the bootloader reads the partition table (ESP-IDF's default)
 PT_SIZE=0xC00            # the table's sector: 96 entries of 32 bytes
 

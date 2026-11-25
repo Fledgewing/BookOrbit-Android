@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: Ed25519 signature verification (RFC 8032, pure Ed25519), for signed updates
+// BookSync: Ed25519 signature verification (RFC 8032, pure Ed25519), for signed updates
 // (docs/design/release-signing.md). Verify only, no signing and no secrets, so constant time is
 // not needed; small over fast: the X3's flash is nearly full. The field and group arithmetic is
 // TweetNaCl's (public domain); SHA-512 is mbedTLS's on the device and the built-in one elsewhere.
@@ -8,7 +8,7 @@
 
 namespace orbify::ed25519 {
 
-// Longest message verify() takes (Orbify signs short records, never whole files).
+// Longest message verify() takes (BookSync signs short records, never whole files).
 constexpr size_t kMaxMessage = 256;
 
 // True when `signature` (R || S, 64 bytes) is `publicKey`'s signature over `message`. False for a

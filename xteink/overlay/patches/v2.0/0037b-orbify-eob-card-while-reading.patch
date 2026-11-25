@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: eob card while reading
+Subject: [PATCH] BookSync: eob card while reading
 
 Refresh the End-of-Book card while reading and support its Home swipe.
 
@@ -10,7 +10,7 @@ index de997a7..85169e4 100644
    if (orbify) {
      // Patch 0032: every tap and button on this page ends here (Consumed when it does nothing),
      // so none reaches the reader's page turns, short-Back-to-Home or gestures behind it.
-+    // Orbify (patch 0037): the bottom-edge swipe up is Home here, as on every screen outside a
++    // BookSync (patch 0037): the bottom-edge swipe up is Home here, as on every screen outside a
 +    // book (ActivityManager::handleGlobalHomeGesture). The reader keeps vertical swipes for its
 +    // drawers, and this page has none, so the swipe did nothing and the page could not be left.
 +    if (input.wasBottomEdgeUpSwipe()) {
@@ -52,7 +52,7 @@ index 32693e5..e226a33 100644
    void reportProgress(size_t done, size_t total) override;
    void endPhase() override;
    bool wakeRequested() const override;
-+  // Orbify (patch 0037): this sync fetches the open book's series card.
++  // BookSync (patch 0037): this sync fetches the open book's series card.
 +  bool cardWanted() const;
  
    // The title band, whose height differs on touch devices: content below it

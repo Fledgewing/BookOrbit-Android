@@ -30,7 +30,7 @@ onwards, switches in `xteink/tailnet/tailnet_build.py`.
 
 | # | Question | Decision | Why |
 |---|---|---|---|
-| B1 | Which CrossInk line gets the Orbify features? | **2.x only** (the `v2.0` series) | The other recent features (settings PIN, battery stats, sync while reading) are 2.x only and LOCAL-FIRST already says v1.6 retires after 1.6.1. The overlay's own files compile to stubs on 1.6. |
+| B1 | Which CrossInk line gets the BookSync features? | **2.x only** (the `v2.0` series) | The other recent features (settings PIN, battery stats, sync while reading) are 2.x only and LOCAL-FIRST already says v1.6 retires after 1.6.1. The overlay's own files compile to stubs on 1.6. |
 | B2 | Where to hook "every manual mark" (G1)? | **`BookSyncFile::onFinishedChanged`**, one line | All three finish paths (reader, stats page, Library) already call it, so one hook covers them and their un-marks. |
 | B3 | Queue file crash safety: temp + rename (§5) or two slots? | **Two slots with a CRC** (`orbify_finish.bin` / `.bak`, newer one wins) | The policy CrossInk uses for `progress.bin` and reading stats (`TwoSlotFile.h`); FAT has no atomic rename-over. Host-tested by tearing a write at every byte. |
 | B4 | Step 1 (final position) for a job of another book | **Not resent**: the drain runs steps 2-6; the open book's own push is step 1 | The Xteink firmware syncs one book (the open one); its push precedes the drain. For other books, book-states and read-status set the status anyway; resending an xpointer needs the EPUB loaded. |
@@ -142,7 +142,7 @@ Field report from an X3 on the CrossInk-Tailnet bridge `v2.0.0.51+bookorbit.1-rc
 
 | # | Change | Where |
 |---|--------|-------|
-| O1 | The check already reads the raw feed (`OTA_FEED`, two releases, a few KB) on every Orbify build; nothing to change. It streams through `ReleaseJsonParser` in whatever chunks arrive. Host test: 1-, 7-, 97- and 4096-byte chunks and the live feed (`shared/fixtures/github/xteink-feed.json`) pick the same release, with a 64-hex digest (so the download uses wolfSSL). | `tailnet_build.py` (OTA defines), `test/ota_release_pick_test.cpp` |
+| O1 | The check already reads the raw feed (`OTA_FEED`, two releases, a few KB) on every BookSync build; nothing to change. It streams through `ReleaseJsonParser` in whatever chunks arrive. Host test: 1-, 7-, 97- and 4096-byte chunks and the live feed (`shared/fixtures/github/xteink-feed.json`) pick the same release, with a 64-hex digest (so the download uses wolfSSL). | `tailnet_build.py` (OTA defines), `test/ota_release_pick_test.cpp` |
 | O2 | The check gets `timeout_ms` 15 s and one retry on a fresh connection, with the parser and the pick reset; a non-2xx answer is retried too. Host test: a list cut off at two thirds, then reset and read again, picks the same release. | patch 0030 (`OtaUpdater.cpp`), switch `CROSSINK_TAILNET_OTA_CHECK_RETRY` |
 | O3 | The OTA boot (target 2) takes the parked WiFi tier (X3: static RX 3, dynamic RX 8, dynamic TX 8, RX mgmt 5; RX BA window 6). It has the parked boots' heap (115 KB free before the download). Costs ~8 KB of WiFi buffers at worst. | `ui/TailnetNetPhase.cpp` `tailnet_wifi_parked_boot` |
 

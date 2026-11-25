@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: the BookOrbit server's HTTPS connections verify the server (core/ServerTrust.h,
+// BookSync: the BookOrbit server's HTTPS connections verify the server (core/ServerTrust.h,
 // docs/design/server-tls.md). Device side: the certificate check on each request, the
 // trust-on-first-use prompt's data and the saved certificate. Switch CROSSINK_TAILNET_ORBIFY_SERVER_TLS
 // (tailnet_build.py); off, every request stays unverified as before.

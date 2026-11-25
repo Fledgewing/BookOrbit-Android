@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: who the BookOrbit server's HTTPS connections trust (docs/design/server-tls.md).
+// BookSync: who the BookOrbit server's HTTPS connections trust (docs/design/server-tls.md).
 //
 // A request to the configured BookOrbit server over https is verified: its certificate chain must
 // lead to one of a few public roots (the Let's Encrypt roots, which also issue Tailscale's

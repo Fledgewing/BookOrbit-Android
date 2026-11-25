@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Copyright (c) 2026 Fledgewing. Part of Orbify (see android/koreader/LICENSE).
+-- Copyright (c) 2026 Fledgewing. Part of BookSync (see android/koreader/LICENSE).
 -- KOReader user patch (early, priority 1): KOReader starts in the rotation the device is held in.
 -- orbit.koplugin installs and updates it in koreader/patches/ (ko/home.lua installStartPatch).
 --

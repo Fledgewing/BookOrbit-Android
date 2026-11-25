@@ -3,7 +3,7 @@
 Status: approved in chat, 2026-11-24 19:47 PST ("Yes do it."), including the
 Xteink spaced page format; implemented by W17.
 Platform: Android. Xteink already has configurable status slots; the shared format
-fixture and host test will keep the Orbify preset consistent on both platforms.
+fixture and host test will keep the BookSync preset consistent on both platforms.
 
 ![Proposed reading layouts](reading-status-layout.svg)
 
@@ -40,8 +40,8 @@ CrossInk v2.0.0+bookorbit.1-rc3, commit `87e2e1984481e8a3d996f12b34b50a383f9013b
   device scaling rather than copying unscaled panel pixels.
 - `src/util/ReaderStatusBarConfig.h:46` includes the middle dot among supported
   separators. The upstream page item is `N/M` (`BaseTheme.cpp:958`), not the
-  example's spaced slash. Orbify's shared preset will use `12 / 340 · 4%`, as
-  requested, on both platforms; this is a small Orbify formatting change on Xteink.
+  example's spaced slash. BookSync's shared preset will use `12 / 340 · 4%`, as
+  requested, on both platforms; this is a small BookSync formatting change on Xteink.
 
 These references are relative to each pinned upstream repository, not overlay-
 modified checkout lines. Implementation must add every newly used KOReader hook
@@ -152,7 +152,7 @@ native page/percent formatting and excludes the new formatter header. The existi
   UI/lifecycle integration in its ko directory. No network, scans or background work.
 - Add `shared/fixtures/status/format.json` and its registry entry; have Lua tests
   and an Xteink host test read it. Apply any Xteink preset format adjustment through
-  Orbify's overlay, with no upstream contribution.
+  BookSync's overlay, with no upstream contribution.
 - Cover Unicode, empty chapter, narrow widths, unequal sides, percent boundaries,
   12/24-hour midnight/noon and unknown totals with Lua unit tests.
 - Flow tests cover native state snapshot/restore, repeated toggles, book close,

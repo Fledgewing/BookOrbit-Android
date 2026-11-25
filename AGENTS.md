@@ -1,6 +1,6 @@
-# Orbify
+# BookSync
 
-Orbify is one ecosystem for e-readers syncing with a BookOrbit server over Tailscale: Android
+BookSync is one ecosystem for e-readers syncing with a BookOrbit server over Tailscale: Android
 readers (KOReader + the BookSync plugin + BookSync Companion) and Xteink readers (CrossInk-Bookorbit
 firmware + the Tailnet overlay). Reason about both platforms together: a new feature ships on
 every platform whose hardware allows it.
@@ -13,15 +13,15 @@ every platform whose hardware allows it.
 | `android/companion/` | BookSync Companion app, package `net.fledgewing.orbitcompanion` | MIT |
 | `android/docs/` | Android designs, the plugin–companion interface, setup guide | MIT |
 | `xteink/` | CrossInk-Tailnet overlay: MicroLink submodule, shim, UI, patch series per CrossInk line | MIT; firmware code moved out of the patches (`SPDX-License-Identifier: GPL-3.0-or-later`) and the binaries GPL-3.0, see `xteink/README.md` |
-| `docs/FEATURES.md` | What Orbify ships, per platform | MIT |
-| `ROADMAP.md` | What Orbify plans: outcomes and status | MIT |
+| `docs/FEATURES.md` | What BookSync ships, per platform | MIT |
+| `ROADMAP.md` | What BookSync plans: outcomes and status | MIT |
 | `docs/server-contract.md` | The BookOrbit endpoints we use and how the server really behaves | MIT |
 | `docs/design/` | Cross-platform feature designs | MIT |
 | `shared/fixtures/` | Recorded responses that both platforms' tests read | MIT |
 | `tools/install-usb.sh` | One-shot Android install over USB | MIT |
 | `tools/sideload-android.sh`, `tools/sideload-xteink.sh` | Put a test build on a test device over USB ("Test builds" below) | MIT |
 | `tools/upstreams` | Clones pinned upstream source into `upstream/` (gitignored) | MIT |
-| `tools/attest-check/` | Fails when the pinned BookOrbit server requires app attestation on a route Orbify calls | MIT |
+| `tools/attest-check/` | Fails when the pinned BookOrbit server requires app attestation on a route BookSync calls | MIT |
 | `tools/feed-keys/`, `shared/release-signing.json` | Release signing keys for firmware, the feed and the plugin zip ([design](docs/design/release-signing.md)) | MIT |
 
 ## Platforms
@@ -39,7 +39,7 @@ CrossInk 2.x release becomes the stable one (`xteink/README.md` "Releases and th
 
 ## Product principles
 
-- **Nothing interrupts reading.** While a book is open in the foreground, nothing from Orbify,
+- **Nothing interrupts reading.** While a book is open in the foreground, nothing from BookSync,
   the companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader
   or takes focus. It waits for the next moment nobody is reading, or is dropped when stale. The
   only exceptions are what the reader does in the book: menus they open, the end-of-book sheet;
@@ -137,7 +137,7 @@ ask before changing it (`--yes` skips the question). Agents never run them again
   in a job that runs a build tool. Steps shared by several workflows live in `.github/actions/`.
 - BookOrbit app attestation: `tools/upstreams check` (CI: the app-attest job in
   `.github/workflows/plugin-compat.yml`): fails when the pinned server requires app attestation on
-  a route Orbify calls (`docs/server-contract.md` "App attestation"). Tests:
+  a route BookSync calls (`docs/server-contract.md` "App attestation"). Tests:
   `node --test tools/attest-check/test/check.test.mjs` after `npm ci --prefix tools/attest-check`.
 - BookOrbit plugin hooks: `luajit android/koreader/test/plugin_compat.lua <plugin dir>`
   (weekly in `.github/workflows/plugin-compat.yml`).
@@ -167,9 +167,9 @@ that change the tests, or by hand from the Actions tab). Locally, with Docker:
 
 ## Upstream projects
 
-Orbify only. Never open pull requests or issues, or send patches, to the projects we build on
+BookSync only. Never open pull requests or issues, or send patches, to the projects we build on
 (CrossInk-Bookorbit, BookOrbit, KOReader, MicroLink, the CrossInk simulator). Work around
-anything upstream inside Orbify: an overlay patch, a build-time edit of a fetched package
+anything upstream inside BookSync: an overlay patch, a build-time edit of a fetched package
 (`xteink/tailnet/sim/sim_package.py`), or a test-side shim.
 
 ## Repo rules

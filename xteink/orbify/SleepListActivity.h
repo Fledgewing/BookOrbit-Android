@@ -1,5 +1,5 @@
 #pragma once
-// Orbify sleep screen (patch 0039): Pick From and Leave Out Scopes, each one list of toggles (R1c,
+// BookSync sleep screen (patch 0039): Pick From and Leave Out Scopes, each one list of toggles (R1c,
 // X8: Library, the lists for Pick From, every smart scope and collection the last sleep sync saved),
 // opened straight from Settings > Display > Sleep (no screen in between). X4 Pro and X4 only.
 #include <CrossInkTailnetCuts.h>

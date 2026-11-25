@@ -189,7 +189,7 @@ jobs:
           echo "sha256=$GOT" >> "$GITHUB_OUTPUT"
 
       # The release key signs the plugin zip (docs/design/release-signing.md); the companion checks
-      # it before installing. The key is in this step's environment only; Orbify's signing tool is
+      # it before installing. The key is in this step's environment only; BookSync's signing tool is
       # the only code checked out here.
       - name: Check out the signing tool
         if: env.PUBLISH == 'true'

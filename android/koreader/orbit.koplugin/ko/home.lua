@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Copyright (c) 2026 Fledgewing. Part of Orbify (see android/koreader/LICENSE).
+-- Copyright (c) 2026 Fledgewing. Part of BookSync (see android/koreader/LICENSE).
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
@@ -188,7 +188,7 @@ function topWidget()
 end
 
 -- Nothing interrupts reading (docs/design/reading-gate.md): while a book is open in front,
--- nothing from Orbify shows, restarts or takes focus. reading() is the one gate; every note and
+-- nothing from BookSync shows, restarts or takes focus. reading() is the one gate; every note and
 -- message goes through Gate.show, which holds it until the next moment nobody is reading
 -- (BookOrbit Home or a list over the book, the book closed, KOReader back after another app)
 -- and drops it when it has gone stale. Exceptions are only what the reader does in the book:

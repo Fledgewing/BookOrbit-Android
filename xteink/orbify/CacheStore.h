@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-// Orbify write-through cache, the firmware side
+// BookSync write-through cache, the firmware side
 // (docs/design/write-through-cache.md, "Xteink"): the entries on the SD card
 // and the hooks CrossInk calls (overlay patch 0029). The rules are
 // core/CatalogCache's. X4 Pro and X4 only: built with

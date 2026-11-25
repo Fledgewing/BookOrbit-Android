@@ -106,7 +106,7 @@ class Prefs(ctx: Context) {
             return str("home_app")
         }
         set(v) = setStr("home_app", v)
-    /** Orbify's mode (docs/design/addon-mode.md): "" until chosen; behaves as Full until then. */
+    /** BookSync's mode (docs/design/addon-mode.md): "" until chosen; behaves as Full until then. */
     var mode: OrbitMode?
         get() = OrbitMode.of(str("orbit_mode"))
         set(v) = setStr("orbit_mode", v?.key ?: "")

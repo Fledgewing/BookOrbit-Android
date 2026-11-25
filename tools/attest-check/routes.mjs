@@ -1,16 +1,16 @@
-// The BookOrbit routes Orbify calls, read from the code (never a hand-kept list): every string
+// The BookOrbit routes BookSync calls, read from the code (never a hand-kept list): every string
 // literal, or concatenation of literals and expressions, that starts with a server route prefix in
-// the KOReader plugin's Lua and the companion's Kotlin, plus the stock BookOrbit plugin Orbify runs
+// the KOReader plugin's Lua and the companion's Kotlin, plus the stock BookOrbit plugin BookSync runs
 // on. An expression becomes a `:p` segment; a constant that holds a literal is inlined.
 // A line with the comment `orbify:not-a-route` is skipped (a local path that looks like a route).
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Where Orbify's server calls live, relative to the repo root. */
+/** Where BookSync's server calls live, relative to the repo root. */
 export const SOURCES = [
   { dir: 'android/koreader/orbit.koplugin', ext: '.lua', lang: 'lua' },
   { dir: 'android/companion', ext: '.kt', lang: 'kotlin', under: '/src/main/' },
-  // The stock plugin makes the server calls the Orbify plugin hooks (docs/server-contract.md).
+  // The stock plugin makes the server calls the BookSync plugin hooks (docs/server-contract.md).
   { dir: 'upstream/bookorbit/koreader-plugin/bookorbit.koplugin', ext: '.lua', lang: 'lua', upstream: true },
 ];
 
@@ -335,7 +335,7 @@ function walk(dir, ext, under) {
   return out;
 }
 
-/** Orbify's routes, read from the repo. Missing source dirs are reported in `missing`. */
+/** BookSync's routes, read from the repo. Missing source dirs are reported in `missing`. */
 export function extractRepo(root, sources = SOURCES) {
   const inputs = [];
   const missing = [];

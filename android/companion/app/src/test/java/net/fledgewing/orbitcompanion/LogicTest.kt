@@ -204,10 +204,10 @@ class UpdatePolicyTest {
         assertNull(UpdatePolicy.pick(listOf(r("v1.0.0-rc.1", pre = true)), includePre = false))
     }
 
-    /** shared/fixtures/github/orbify-releases.json: Android and firmware releases in one list. */
+    /** shared/fixtures/github/booksync-releases.json: Android and firmware releases in one list. */
     private fun fixture(): List<ReleaseInfo> {
-        // @fixture github/orbify-releases.json
-        val arr = org.json.JSONArray(java.io.File("../../../shared/fixtures/github/orbify-releases.json").readText())
+        // @fixture github/booksync-releases.json
+        val arr = org.json.JSONArray(java.io.File("../../../shared/fixtures/github/booksync-releases.json").readText())
         return (0 until arr.length()).map { ReleaseInfo.from(arr.getJSONObject(it)) }
     }
 

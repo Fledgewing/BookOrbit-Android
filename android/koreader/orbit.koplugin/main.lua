@@ -1,8 +1,8 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Copyright (c) 2026 Fledgewing. Part of Orbify (see android/koreader/LICENSE).
+-- Copyright (c) 2026 Fledgewing. Part of BookSync (see android/koreader/LICENSE).
 --[[--
 Orbit: a KOReader plugin for Android e-readers (generic Android; vendor quirks live in VENDORS,
-ko/jni.lua). It was the user patch 2-orbit-android.lua up to Orbify 0.7.x and behaves the same.
+ko/jni.lua). It was the user patch 2-orbit-android.lua up to BookSync 0.7.x and behaves the same.
 
 The official BookOrbit plugin (bookorbit.koplugin) does ALL syncing and holds the login.
 Orbit never talks to BookOrbit's API. It only:

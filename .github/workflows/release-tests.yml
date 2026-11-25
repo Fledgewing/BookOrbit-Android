@@ -4,7 +4,7 @@
 #
 #   stage 0  server kit: the fault proxy's tests, then the real BookOrbit (pinned by digest,
 #            tools/e2e/compose.yml) seeded with the synthetic library, checked through the proxy
-#   stage 1  Xteink: Orbify's overlay in upstream's SDL simulator, one job per reader, the
+#   stage 1  Xteink: BookSync's overlay in upstream's SDL simulator, one job per reader, the
 #            scenarios in xteink/test/e2e/run.py against the stage-0 server
 #   stage 2  Android: the companion's JVM tests, Robolectric included (install-session states)
 #
@@ -30,7 +30,7 @@ on:
         type: string
         default: all
       ref:
-        description: "Orbify commit to test (default: the caller's)"
+        description: "BookSync commit to test (default: the caller's)"
         type: string
         default: ""
       upstream_ref:
@@ -45,7 +45,7 @@ on:
         options: [all, xteink, android]
         default: all
       ref:
-        description: "Orbify commit to test (default: this run's)"
+        description: "BookSync commit to test (default: this run's)"
         type: string
         default: ""
       upstream_ref:
@@ -104,7 +104,7 @@ jobs:
           - profile: x3
             env: simulator-X3
     steps:
-      - name: Check out Orbify
+      - name: Check out BookSync
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}

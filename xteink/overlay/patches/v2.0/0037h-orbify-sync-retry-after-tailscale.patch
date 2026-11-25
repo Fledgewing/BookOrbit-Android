@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: sync retry after tailscale
+Subject: [PATCH] BookSync: sync retry after tailscale
 
 Retry sync after Tailscale has reconnected.
 

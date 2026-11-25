@@ -28,7 +28,7 @@ runs on the companion's main thread. There is no broadcast path: the companion's
 not exported and takes only the system's boot and package-replaced broadcasts.
 
 Before any call the plugin checks the companion itself: installed under its package name and
-signed only by Orbify's release certificate (`Companion.state()` `"ok"`, read with
+signed only by BookSync's release certificate (`Companion.state()` `"ok"`, read with
 `PackageManager` over JNI). An app with the companion's name and another signer is
 `"untrusted"`: nothing is sent to it, the login least of all, and the menus say so.
 
@@ -414,7 +414,7 @@ answers come back through the call's answer, the launch intent and the companion
 
 The threat model, the caller check and what remains are in docs/design/security.md. In short:
 only the pinned KOReader reaches the companion's commands (`CommandProvider`); the plugin sends
-nothing, the login least of all, to a companion not signed by Orbify's release certificate; a
+nothing, the login least of all, to a companion not signed by BookSync's release certificate; a
 command that names a file acts only inside the companion's own folders (`Places`); a command on
 KOReader's start goes only to the pinned KOReader.
 
@@ -445,4 +445,4 @@ when called outside Trapper. Partial MD5 sampling matches KOReader
 `9192014d8bd82a91dc1012473be0f238dedfdb54`, `frontend/util.lua:1111`.
 
 Statistics migration preserves KOReader Android's WAL journal mode (`frontend/device/generic/device.lua:131` and
-`plugins/statistics.koplugin/main.lua:455` at the KOReader pin above); the Orbify cache stays in TRUNCATE mode.
+`plugins/statistics.koplugin/main.lua:455` at the KOReader pin above); the BookSync cache stays in TRUNCATE mode.

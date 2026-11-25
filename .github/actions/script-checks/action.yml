@@ -12,6 +12,7 @@ runs:
         shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh android/koreader/package.sh tools/upstreams \
           tools/android-test-version.sh tools/sideload-android.sh tools/sideload-xteink.sh tools/test/test-sideload.sh \
           tools/feed-keys/feed-keys tools/test/test-feed-keys.sh
+        python3 tools/test/test-repo-name.py </dev/null
         bash tools/test/test-install-usb.sh </dev/null
         bash tools/test/test-sideload.sh </dev/null
         bash tools/test/test-feed-keys.sh </dev/null

@@ -128,7 +128,7 @@ Guards (`test_flows.lua`, "v0.11.3: the mirror off the UI thread"):
   carries the plugin's own request templates (`paramsForEntry`, `effectiveOrder`,
   `listDecorateBookQuery` with a sentinel id), so BookOrbit's query rules stay in the plugin.
 - **Credentials.** Server URL, username and key go only in the caller-checked call to the
-  companion (`Companion.send`, `Jni.call`), and only when the companion is signed by Orbify's
+  companion (`Companion.send`, `Jni.call`), and only when the companion is signed by BookSync's
   release certificate. They are held in memory, used only as `x-auth-user`/`x-auth-key` on
   requests to that server (a redirect is followed only to the same scheme, host and port), and
   never written to a file, the status or a log (`Companion.send` logs only the reason; tests: the
@@ -180,7 +180,7 @@ at that moment, and even then its fetch side moves.
 | Full refresh cover recheck (`OC.recheckCovers`) | companion: `RECHECK` with the covers on screen; it asks If-None-Match and answers `covers_rechecked`; the view redraws | **moved**; its forked child is gone | a child per Full refresh |
 | Index load at start (`OC.index`) | UI, once per start | stays | small since step 1 |
 
-**BookOrbit's own sync** runs inside KOReader and Orbify doesn't patch upstream. Orbify already
+**BookOrbit's own sync** runs inside KOReader and BookSync doesn't patch upstream. BookSync already
 wraps `BookOrbitApi.request` (`ko/cache.lua` `OC.install`). That wrapper could send a non-catalog
 write through a child even when the plugin calls it outside a Trapper coroutine. It is not worth
 doing until a stall is measured there: the 11-23 log shows none, and a write's result feeds the

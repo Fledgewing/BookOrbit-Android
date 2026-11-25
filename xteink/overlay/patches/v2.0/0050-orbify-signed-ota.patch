@@ -1,4 +1,4 @@
-Orbify: signed firmware updates (docs/design/release-signing.md). The release parser reads each
+BookSync: signed firmware updates (docs/design/release-signing.md). The release parser reads each
 firmware asset's "orbify_signature" from the feed; once the staged image matches its SHA-256, the
 updater checks that a release key the root certified signed (tag, asset, SHA-256)
 (orbify/core/UpdateSignature). Until shared/release-signing.json enforces it, a missing or bad
@@ -13,7 +13,7 @@ index 904d2773..c3e7c0cc 100644
    safeCopy(dst, dstSize, value + kSha256PrefixLen, valueLen - kSha256PrefixLen);
  }
  
-+// Orbify: "orbify_signature" is exactly 2 * n hex digits; anything else leaves the asset unsigned.
++// BookSync: "orbify_signature" is exactly 2 * n hex digits; anything else leaves the asset unsigned.
 +bool decodeSignatureHex(uint8_t* out, size_t n, const char* value, size_t valueLen) {
 +  if (valueLen != 2 * n) return false;
 +  for (size_t i = 0; i < valueLen; ++i) {
@@ -88,7 +88,7 @@ index f9d869f3..5d621433 100644
      bool tagFound;
      bool firmwareFound;
      bool prerelease;
-+    // Orbify: the firmware asset's "orbify_signature" (release-key certificate, then the
++    // BookSync: the firmware asset's "orbify_signature" (release-key certificate, then the
 +    // signature), decoded; firmwareSigned is false when the asset carries none.
 +    static constexpr size_t kSignatureBytes = 164;
 +    uint8_t firmwareSignature[kSignatureBytes];
@@ -116,10 +116,10 @@ index cd94dd10..f0d30173 100644
 --- a/src/network/OtaUpdater.cpp
 +++ b/src/network/OtaUpdater.cpp
 @@ -11,6 +11,9 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback, void*, s
- #ifndef CROSSINK_TAILNET_OTA_CHECK_RETRY  // Orbify patch 0030; on in tailnet_build.py
+ #ifndef CROSSINK_TAILNET_OTA_CHECK_RETRY  // BookSync patch 0030; on in tailnet_build.py
  #define CROSSINK_TAILNET_OTA_CHECK_RETRY 0
  #endif
-+#ifndef ORBIFY_OTA_SIGNATURE  // Orbify patch 0050; on in tailnet_build.py
++#ifndef ORBIFY_OTA_SIGNATURE  // BookSync patch 0050; on in tailnet_build.py
 +#define ORBIFY_OTA_SIGNATURE 0
 +#endif
  #include <HalStorage.h>
@@ -151,7 +151,7 @@ index cd94dd10..f0d30173 100644
  #endif
  
 +#if ORBIFY_OTA_SIGNATURE
-+// Orbify (patch 0050, docs/design/release-signing.md): the staged image matched sha256Hex; is that
++// BookSync (patch 0050, docs/design/release-signing.md): the staged image matched sha256Hex; is that
 +// image signed by a release key the root certified? Unsigned or badly signed updates are only
 +// logged until the build enforces signatures.
 +bool signatureAccepted(const std::string& tag, const std::string& url, const char* sha256Hex,
@@ -161,7 +161,7 @@ index cd94dd10..f0d30173 100644
 +      ORBIFY_RELEASE_ROOT_KEY, ORBIFY_RELEASE_MIN_SERIAL, tag.c_str(), url.c_str(), sha256Hex,
 +      signature.size() == sig::kSignatureBytes ? reinterpret_cast<const uint8_t*>(signature.data()) : nullptr, firmwareAssetStem);
 +  if (result == sig::Result::Ok) {
-+    LOG_INF("OTA", "Firmware signed by Orbify's release key");
++    LOG_INF("OTA", "Firmware signed by BookSync's release key");
 +    return true;
 +  }
 +  if (sig::accepted(result, ORBIFY_RELEASE_SIG_ENFORCE)) {
@@ -204,7 +204,7 @@ index cd94dd10..f0d30173 100644
      LOG_INF("OTA", "Firmware sha256 verified");
    }
 +#if ORBIFY_OTA_SIGNATURE
-+  // Orbify (patch 0050): before anything is erased; an image without a manifest SHA-256 can't be checked.
++  // BookSync (patch 0050): before anything is erased; an image without a manifest SHA-256 can't be checked.
 +  if (!signatureAccepted(otaTag, otaUrl, hasManifestSha256 ? otaSha256.c_str() : nullptr, otaSignature)) {
 +    stagedFile.close();
 +    Storage.remove(OTA_STAGE_PATH);
@@ -222,7 +222,7 @@ index 1179e05e..6735c63c 100644
    std::string latestVersion;
    std::string otaUrl;
    std::string otaSha256;
-+  // Orbify (patch 0050): the release's tag and its firmware asset's signature (empty: unsigned).
++  // BookSync (patch 0050): the release's tag and its firmware asset's signature (empty: unsigned).
 +  std::string otaTag;
 +  std::string otaSignature;
    size_t otaSize = 0;
