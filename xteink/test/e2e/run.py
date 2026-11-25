@@ -122,7 +122,7 @@ def sync_through_proxy(ctx: Context, tmp: Path) -> None:
 def mirror_urls(ctx: Context, tmp: Path) -> None:
     """X5: the offline mirror's list requests reach the server as the server reads them. A query
     whose separator turned into a space ("sort=recently_read readStatus=reading") was answered 400
-    and those lists were never saved (the mirror URL separator fix). Three sleep syncs: the mirror runs the mirror in
+    and those lists were never saved (the mirror URL separator fix). Three sleep syncs: the mirror runs in
     slices of 10 requests per sleep."""
     card = ctx.card(tmp)
     (card.crosspoint / "orbify").mkdir(exist_ok=True)
@@ -211,6 +211,8 @@ def heap_floor_waits(ctx: Context, tmp: Path) -> None:
     mirror's first request is held by the proxy; the mirror then waits for the next sync instead of
     opening another request."""
     card = ctx.card(tmp)
+    (card.crosspoint / "orbify").mkdir(exist_ok=True)
+    (card.crosspoint / "orbify" / "mirror.request").write_text("1\n")  # resume a user-started walk
     ctx.faults([{"match": {"path": "/plugin/catalog/root$"}, "action": "delay", "ms": 4000, "times": 1}])
     run = sleep_sync(ctx, card, "sleep", env={"ORBIFY_SIM_HEAP": "w2000:10000/6000"})
     tail = after(run.output, "ORBIFY_SIM_HEAP t=w2000")
