@@ -13,6 +13,7 @@ OLD_NAME = re.compile(r'\bOrbify\b')
 # Exact historic text, never broad source-directory exclusions.
 HISTORY_FILES = {'xteink/test/fixtures/release-body-rc3.txt'}
 ALLOWED_LINES = {
+    'tools/repo-urls.sh': {'BOOKSYNC_LEGACY_REPO="Fledgewing/Orbify"'},
     'xteink/tailnet/tailnet_build.py': {'LEGACY_OVERLAY_REPO = "Fledgewing/Orbify"'},
     'android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt': {
         'internal const val LEGACY_REPO = "Fledgewing/Orbify"',

@@ -15,10 +15,13 @@
 # folders it replaces and the old BookSync user patch (koreader/patches/2-orbit-android.lua).
 set -euo pipefail
 
+# shellcheck source=SCRIPTDIR/repo-urls.sh
+source "$(dirname "${BASH_SOURCE[0]}")/repo-urls.sh"
+
 KOREADER_API="https://api.github.com/repos/koreader/koreader/releases/latest"
 BOOKORBIT_API="https://api.github.com/repos/bookorbit/bookorbit"
 BOOKORBIT_RAW="https://raw.githubusercontent.com/bookorbit/bookorbit"
-ORBIT_API="https://api.github.com/repos/Fledgewing/BookSync/releases/latest"
+ORBIT_API="https://api.github.com/repos/$BOOKSYNC_REPO/releases/latest"
 PLUGIN_NAME="bookorbit.koplugin"
 PLUGIN_MIN="2.3.0" # the plugin BookSync's hooks are checked against (companion PluginRelease.MIN_VERSION)
 ORBIT_ZIP="orbit.koplugin.zip"
@@ -267,7 +270,7 @@ orbit_version() {
 
 download_orbit() {
     local json name url ver
-    json=$(fetch "$ORBIT_API")
+    json=$(booksync_release_metadata "$ORBIT_API")
     ORBIT_TAG=$(jq -r .tag_name <<<"$json")
     ver=$(orbit_version "$ORBIT_TAG")
     for name in SHA256SUMS "$ORBIT_ZIP" "orbit-companion-$ver.apk"; do
@@ -284,8 +287,7 @@ download_orbit() {
     done <"$WORK/SHA256SUMS"
     [[ $checked == 2 ]] || die "SHA256SUMS doesn't list the companion and the plugin"
     COMPANION_APK="$WORK/orbit-companion-$ver.apk"
-    if command -v gh >/dev/null 2>&1 && gh attestation verify "$COMPANION_APK" -R Fledgewing/BookSync >/dev/null 2>&1 &&
-        gh attestation verify "$WORK/$ORBIT_ZIP" -R Fledgewing/BookSync >/dev/null 2>&1; then
+    if command -v gh >/dev/null 2>&1 && booksync_attested "$COMPANION_APK" "$WORK/$ORBIT_ZIP"; then
         say "BookSync $ORBIT_TAG: companion and plugin match SHA256SUMS and their build attestations"
     else
         say "BookSync $ORBIT_TAG: companion and plugin match SHA256SUMS (install the gh CLI to also check build attestations)"

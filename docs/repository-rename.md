@@ -81,7 +81,10 @@ Read-only probes on 2026-11-25 against the existing earliest Android alias found
 API 301, and raw feed 200 with zero redirects and two release records. These are observations
 of the existing alias, not a test of the future rename. No device validation was performed.
 
-Older GitHub build attestations retain the repository identity at build time. When verifying
-a pre-rename artifact, use that historical `gh attestation verify --repo` identity; redirects
+The installer and run-ID sideload helpers also try the previous repository name, so the
+bridge can be tested before the rename. No device operation is part of those URL lookups.
+
+Older GitHub build attestations retain the repository identity at build time. The installer tries both exact repository identities for all artifacts together. For a manual
+check of a pre-rename artifact, use its historical `gh attestation verify --repo` identity; redirects
 can locate its bundle but cannot rewrite its certificate. Android and firmware updaters do
 not depend on GitHub attestation identity for installation.
