@@ -71,6 +71,14 @@ for f in files:
         if "github.token" in body or "GITHUB_TOKEN" in body:
             errors.append(f"{rel}: job {job} runs a build tool and puts the token in its environment")
 
+# Every signing step must check its output before publishing, and missing secrets must fail
+# when enforcement is on (including feed_only runs, which bypass the image publish job).
+for workflow, step in [("release.yml", "Sign the plugin zip"), ("xteink.yml", "Sign the images"),
+                       ("xteink.yml", "Sign the feed")]:
+    workflow_text = (root / ".github/workflows" / workflow).read_text()
+    block = workflow_text.split(f"      - name: {step}\n", 1)[1].split("\n      - ", 1)[0]
+    if "feed-keys verify --tag" not in block or "jq -e '.enforce'" not in block:
+        errors.append(f"{workflow}: {step} must verify signatures and require a key when enforced")
 # Checksum verification covers metadata as well as binaries; updates require explicit review.
 metadata = root / "android/companion/gradle/verification-metadata.xml"
 ns = {"v": "https://schema.gradle.org/dependency-verification"}

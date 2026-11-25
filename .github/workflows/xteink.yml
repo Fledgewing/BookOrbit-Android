@@ -434,6 +434,28 @@ jobs:
           extra="$(find . -maxdepth 1 -type f ! -name 'firmware-*' ! -name 'source-*.tar.gz' | sort)"
           [ -z "$extra" ] || { echo "::error::unexpected files: $extra"; exit 1; }
 
+      # The release key signs each image (docs/design/release-signing.md); readers check it after
+      # the SHA-256. The key is in this step's environment only. Without it the release goes out
+      # unsigned, unless shared/release-signing.json enforces signatures.
+      - name: Sign the images
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          TAG: xteink-v${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            if jq -e '.enforce' orbify/shared/release-signing.json >/dev/null; then
+              echo "::error::signatures are enforced but the secret RELEASE_SIGNING_KEY is not set"; exit 1
+            fi
+            echo "::warning::RELEASE_SIGNING_KEY is not set: this release is unsigned"
+            exit 0
+          fi
+          orbify/tools/feed-keys/feed-keys sign --tag "$TAG" firmware/*.bin > firmware/SIGNATURES
+          # The same check the readers make, against the committed root, before anything is published.
+          if [ -n "$(jq -r .root_public_key orbify/shared/release-signing.json)" ]; then
+            orbify/tools/feed-keys/feed-keys verify --tag "$TAG" firmware/SIGNATURES firmware/*.bin
+          fi
+
       - name: Write the release notes and license files
         env:
           GH_TOKEN: ${{ github.token }}
@@ -486,9 +508,11 @@ jobs:
           set -euo pipefail
           flags=(--latest=false)
           [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+          files=(firmware/*.bin firmware/*.elf.gz firmware/THIRD_PARTY_LICENSES.md firmware/licenses.zip
+            firmware/source-*.tar.gz firmware/SHA256SUMS)
+          [ -f firmware/SIGNATURES ] && files+=(firmware/SIGNATURES)
           gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$SHA" --title "$TAG" --notes-file notes.md "${flags[@]}" \
-            firmware/*.bin firmware/*.elf.gz firmware/THIRD_PARTY_LICENSES.md firmware/licenses.zip \
-            firmware/source-*.tar.gz firmware/SHA256SUMS
+            "${files[@]}"
 
   # The readers' update feed: the newest stable and the newest pre-release xteink-v release,
   # reduced to what the updater reads (tag, pre-release flag, assets with size and digest).
@@ -499,7 +523,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Write the feed to the feed branch
+      # Orbify's signing tool only (no upstream code).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/feed-keys
+            shared
+
+      - name: Write the feed
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -512,15 +544,61 @@ jobs:
             | map(select(. != null) | {
                 tag_name, name, draft, prerelease, created_at,
                 assets: [.assets[] | {name, size, digest, browser_download_url}]
-              })' > releases.json
+              })' > "$RUNNER_TEMP/unsigned.json"
+          # Each image's signature from its release's SIGNATURES, as "orbify_signature" (what the
+          # readers check; docs/design/release-signing.md). Releases from before signing have none.
+          echo '{}' > "$RUNNER_TEMP/signatures.json"
+          while IFS= read -r tag; do
+            rm -f "$RUNNER_TEMP/SIGNATURES"
+            gh release download "$tag" -R "$GITHUB_REPOSITORY" -p SIGNATURES -O "$RUNNER_TEMP/SIGNATURES" 2>/dev/null || continue
+            while IFS= read -r name; do
+              field="$(tools/feed-keys/feed-keys feed-field "$RUNNER_TEMP/SIGNATURES" "$name")" || continue
+              jq --arg t "$tag" --arg n "$name" --arg f "$field" '.[$t][$n] = $f' "$RUNNER_TEMP/signatures.json" > "$RUNNER_TEMP/s.json"
+              mv "$RUNNER_TEMP/s.json" "$RUNNER_TEMP/signatures.json"
+            done < <(jq -r --arg t "$tag" '.[] | select(.tag_name == $t) | .assets[].name' "$RUNNER_TEMP/unsigned.json")
+            echo "$tag: $(jq --arg t "$tag" '.[$t] // {} | length' "$RUNNER_TEMP/signatures.json") signed assets"
+          done < <(jq -r '.[].tag_name' "$RUNNER_TEMP/unsigned.json")
+          jq --slurpfile m "$RUNNER_TEMP/signatures.json" '
+            map(.tag_name as $t | .assets |= map(
+              ($m[0][$t][.name] // null) as $s | if $s then . + {orbify_signature: $s} else . end))' \
+            "$RUNNER_TEMP/unsigned.json" > releases.json
           jq -r '.[] | "\(.tag_name) (pre-release: \(.prerelease))"' releases.json
           test "$(jq length releases.json)" -ge 1
+
+      # The feed file itself, signed like a release asset (tag xteink-feed).
+      - name: Sign the feed
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            if jq -e '.enforce' shared/release-signing.json >/dev/null; then
+              echo "::error::signatures are enforced but the secret RELEASE_SIGNING_KEY is not set"; exit 1
+            fi
+            echo "::warning::RELEASE_SIGNING_KEY is not set: the feed is unsigned"
+            exit 0
+          fi
+          tools/feed-keys/feed-keys sign --tag xteink-feed releases.json > releases.json.sig
+          if [ -n "$(jq -r .root_public_key shared/release-signing.json)" ]; then
+            tools/feed-keys/feed-keys verify --tag xteink-feed releases.json.sig releases.json
+          fi
+
+      - name: Write the feed to the feed branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           if ! gh api "repos/$GITHUB_REPOSITORY/branches/$FEED_BRANCH" >/dev/null 2>&1; then
             gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/heads/$FEED_BRANCH" -f sha="$GITHUB_SHA" >/dev/null
           fi
-          old_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$FEED_PATH?ref=$FEED_BRANCH" -q .sha 2>/dev/null || true)"
-          args=(-X PUT "repos/$GITHUB_REPOSITORY/contents/$FEED_PATH"
-            -f message="xteink feed: $(jq -r 'map(.tag_name) | join(", ")' releases.json)"
-            -f branch="$FEED_BRANCH" -f content="$(base64 -w0 releases.json)")
-          [ -n "$old_sha" ] && args+=(-f sha="$old_sha")
-          gh api "${args[@]}" -q .content.path
+          put() { # local file, path on the feed branch
+            local old_sha args
+            old_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$2?ref=$FEED_BRANCH" -q .sha 2>/dev/null || true)"
+            args=(-X PUT "repos/$GITHUB_REPOSITORY/contents/$2"
+              -f message="xteink feed: $(jq -r 'map(.tag_name) | join(", ")' releases.json)"
+              -f branch="$FEED_BRANCH" -f content="$(base64 -w0 "$1")")
+            [ -n "$old_sha" ] && args+=(-f sha="$old_sha")
+            gh api "${args[@]}" -q .content.path
+          }
+          put releases.json "$FEED_PATH"
+          if [ -f releases.json.sig ]; then put releases.json.sig "$FEED_PATH.sig"; fi

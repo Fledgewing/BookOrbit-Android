@@ -445,6 +445,8 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
+        "cpp",
+        "kt",
         "py"
       ]
     },
@@ -453,6 +455,8 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
+        "cpp",
+        "kt",
         "py"
       ]
     },
@@ -461,6 +465,8 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
+        "cpp",
+        "kt",
         "py"
       ]
     },
@@ -469,6 +475,8 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
+        "cpp",
+        "kt",
         "py"
       ]
     },
@@ -477,7 +485,17 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
+        "cpp",
+        "kt",
         "py"
+      ]
+    },
+    {
+      "file": "release-signing/xteink-feed.json",
+      "rule": "Signed firmware feed parsed by the OTA updater",
+      "owner": "release verifiers",
+      "readers": [
+        "cpp"
       ]
     },
     {
