@@ -15,6 +15,8 @@ else
   trap 'rm -rf "$out"' EXIT
 fi
 
+python3 "$repo/tools/test/test-product-names.py"
+
 # The streaming JSON parser moved into the FreeInk SDK in CrossInk 2.x.
 "$here/upstream_line_test.sh"
 

@@ -55,22 +55,22 @@ object Checklist {
     val LOSS: Map<String, String> = mapOf(
         "disabled" to "it can't start, sync or update.",
         "koreader" to "nothing to read with.",
-        "koreader_trust" to "Orbit ignores KOReader: no sync help, no covers saved, no updates through Orbit.",
+        "koreader_trust" to "BookSync ignores KOReader: no sync help, no covers saved, no updates through BookSync.",
         "plugin" to "no library, no sync.",
         "patch" to "new fixes don't reach KOReader.",
         "signed_in" to "nothing syncs.",
         "sharp_covers" to "sleep-screen covers come from the small thumbnail and look soft.",
         "recommended" to "KOReader keeps settings that work against syncing. Nothing changes until you choose.",
         "home" to "Home doesn't open your book.",
-        "install_updates" to "Orbit can't install KOReader or update itself; updates are a download link.",
-        "notifications" to "you see updates and steps only in KOReader and when you open Orbit.",
+        "install_updates" to "BookSync can't install KOReader or update itself; updates are a download link.",
+        "notifications" to "you see updates and steps only in KOReader and when you open BookSync.",
         "battery" to "sleep syncs and Wi-Fi switching can be late: Android may pause the app while the screen is off.",
         "admin" to "Sync and sleep asks you to press the power button.",
-        "clicker" to "clicker buttons work only inside KOReader, and the Settings PIN locks only Orbit's settings.",
+        "clicker" to "clicker buttons work only inside KOReader, and the Settings PIN locks only BookSync's settings.",
         "keyboard" to "Send-key clicker actions work only inside KOReader.",
         "tailscale" to "no sync with your server away from home Wi-Fi.",
         "wifi_test" to "nothing breaks; the test only times how fast the reader reconnects.",
-        "wifi_switching" to "Orbit leaves Wi-Fi as it is, so a sync waits until you turn Wi-Fi on.",
+        "wifi_switching" to "BookSync leaves Wi-Fi as it is, so a sync waits until you turn Wi-Fi on.",
         "sleep_sync" to "the reader can fall asleep before a sync finishes; it finishes when you next wake it.",
         "screen_saver" to "what the reader shows while it sleeps doesn't follow your Sleep screen setting until you run one USB command.",
         "reading_fonts" to "KOReader offers only its own fonts and the reader's; Bitter and Literata aren't among them.",
@@ -79,16 +79,16 @@ object Checklist {
 
     /** "On: …" on an optional row that is on. */
     val ON: Map<String, String> = mapOf(
-        "install_updates" to "Orbit installs KOReader and its own updates.",
-        "notifications" to "Orbit tells you about updates and setup steps.",
+        "install_updates" to "BookSync installs KOReader and its own updates.",
+        "notifications" to "BookSync tells you about updates and setup steps.",
         "clicker" to "clicker buttons work in every app.",
         "keyboard" to "Send-key actions work in every app.",
         "admin" to "Sync and sleep turns the screen off.",
         "battery" to "sleep syncs and Wi-Fi switching run on time.",
-        "wifi_switching" to "Orbit turns Wi-Fi on for a sync and off again.",
+        "wifi_switching" to "BookSync turns Wi-Fi on for a sync and off again.",
         "sleep_sync" to "syncs finish as the reader sleeps.",
         "reading_fonts" to "Bitter and Literata are in KOReader's font menu.",
-        "screen_mode" to "Orbit draws in the reader's clearest screen mode.",
+        "screen_mode" to "BookSync draws in the reader's clearest screen mode.",
     )
 
     /**
@@ -346,7 +346,8 @@ object BatteryMerge {
      * admin), so nobody can change it there.
      */
     data class App(val name: String, val row: BatteryRow.Row, val locked: Boolean = false) {
-        val id get() = "battery:$name"
+        // Keep persisted skip/snooze keys from before the display-name change.
+        val id get() = "battery:${if (name == "BookSync") "Orbit" else name}"
     }
 
     /** Set by the reader (§3.4): already right, and the reader doesn't let anyone change it. */
@@ -431,5 +432,5 @@ object NewIn {
 /** The Details page (§3.6): everything a support conversation needs, and Copy for support. */
 object SetupDetails {
     fun copyText(version: String, lines: List<Pair<String, String>>): String =
-        (listOf("Orbit Companion $version setup details") + lines.map { (k, v) -> "$k: $v" }).joinToString("\n")
+        (listOf("BookSync Companion $version setup details") + lines.map { (k, v) -> "$k: $v" }).joinToString("\n")
 }

@@ -8,7 +8,7 @@
 
 function openCompanion(action, what)
     if not Companion.installed() then
-        UIManager:show(InfoMessage:new{ text = _("Orbit Companion isn't installed."), timeout = 3 }) -- gate: user action (menu)
+        UIManager:show(InfoMessage:new{ text = _("BookSync Companion isn't installed."), timeout = 3 }) -- gate: user action (menu)
         log("open", what, ": companion not installed")
         return
     end

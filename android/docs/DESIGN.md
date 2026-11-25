@@ -66,8 +66,8 @@ Code read:
 | # | Component | Does | Never does |
 |---|---|---|---|
 | 1 | **BookOrbit plugin** (official, unchanged) | Login, every pull and push, outbox, conflict policy, home and views, its own toasts | (unchanged) |
-| 2 | **Orbit plugin** (`koreader/plugins/orbit.koplugin`; the user patch `2-orbit-android.lua` up to 0.7.x) | Routes Wi-Fi on/off to the companion; on Resume: network ready, debounce reset; on Suspend with the screen off: network + wake lock, triggers the plugin's sync, waits ≤ 20 s, reports done/failed to the companion; "Sync and sleep" action; menu; recommended settings (only values still at their default, `docs/design/addon-mode.md` §5) | Hold credentials; call BookOrbit APIs (it only checks that the server answers at its base URL, with no login) |
-| 3 | **Orbit Companion** (one APK, targetSdk 28) | Wi-Fi on/off (`setWifiEnabled`); Tailscale CONNECT; time-limited wake lock (25 s hard cap); `lockNow()` (device admin, `force-lock` policy); Wi-Fi-off timer; status, settings, setup checklist; launcher HOME activity + apps page | Know the server, the login or the sync state |
+| 2 | **BookSync plugin** (`koreader/plugins/orbit.koplugin`; the user patch `2-orbit-android.lua` up to 0.7.x) | Routes Wi-Fi on/off to the companion; on Resume: network ready, debounce reset; on Suspend with the screen off: network + wake lock, triggers the plugin's sync, waits ≤ 20 s, reports done/failed to the companion; "Sync and sleep" action; menu; recommended settings (only values still at their default, `docs/design/addon-mode.md` §5) | Hold credentials; call BookOrbit APIs (it only checks that the server answers at its base URL, with no login) |
+| 3 | **BookSync Companion** (one APK, targetSdk 28) | Wi-Fi on/off (`setWifiEnabled`); Tailscale CONNECT; time-limited wake lock (25 s hard cap); `lockNow()` (device admin, `force-lock` policy); Wi-Fi-off timer; status, settings, setup checklist; launcher HOME activity + apps page | Know the server, the login or the sync state |
 | 4 | **Gesture profile** | Readest-style thirds; hold top-right = Sync and sleep; hold top-left = plugin Sync now; swipe up = plugin This book | — |
 
 **How the patch talks to the companion.** An explicit broadcast (`setPackage`) built through
@@ -173,7 +173,7 @@ The "Home opens" setting is companion-only; the patch only sees its kind (`/stat
 `settings.home_opens`) to label its Home button entry. Its choices:
 - KOReader + BookOrbit, the default (`""`): Smart Home as above. Only then does Settings show
   the Home button choice, titled "In KOReader, Home goes to".
-- Orbit launcher page (`orbit:launcher`, v0.4.8): Home shows the companion's launcher page.
+- BookSync launcher page (`orbit:launcher`, v0.4.8): Home shows the companion's launcher page.
   It replaces the toggle "Home always opens …" (`home_opens_koreader`), whose off position
   did this; `Prefs.homeApp` migrates `false` to it once (`HomeApp.migrate`).
 - Any launchable app: the picker lists known reader apps first (`KnownApps.READERS` plus the
@@ -211,9 +211,9 @@ for press, and optionally for hold (0.6 s) and double press (0.35 s).
   override the action itself ("+ Override for another app": app → action → tap zone for page
   actions). KOReader's override decides the patch's `keymap`.
 - **Send key (v0.4.1):** Send Volume up/down and Send key… (Page up/down, arrows, Space) go
-  through the Orbit keyboard (`OrbitKeysIme`), switched in just for the press by the
-  accessibility service and switched back; skipped while a text field is focused; "Keep Orbit
-  keyboard active" when switching fails. Setup row "Orbit keyboard enabled" only while one is
+  through the BookSync keyboard (`OrbitKeysIme`), switched in just for the press by the
+  accessibility service and switched back; skipped while a text field is focused; "Keep BookSync
+  keyboard active" when switching fails. Setup row "BookSync keyboard enabled" only while one is
   mapped. Details and the volume-key findings: [BTKEYS-DESIGN.md](BTKEYS-DESIGN.md#send-key-v041).
 
 ## Setup needs you (v0.2.4)
@@ -233,12 +233,12 @@ rows when the service starts, after an update, and when the status or launcher p
 - **Showing up when it matters (v0.4.1).** The companion's own pages are rarely seen (Home goes
   straight to KOReader), so:
   - *At the moment of cause:* a change in the companion that makes a new row needed (the first
-    mapped clicker button needs the accessibility service; a Send-key action needs the Orbit
+    mapped clicker button needs the accessibility service; a Send-key action needs the BookSync
     keyboard) opens the prompt at once, with that row first (`SetupAttention.caused`).
   - *Home press:* a new unsnoozed row shows the prompt once before KOReader; closing it goes on
     to KOReader (`SetupAttention.homePrompt`).
   - *In KOReader:* `/status` carries `setup_prompt` (the unsnoozed rows) and the patch shows a
-    one-time box, "Orbit Companion needs 1 setup step: … Fix now / Later", only off a book (file
+    one-time box, "BookSync Companion needs 1 setup step: … Fix now / Later", only off a book (file
     browser, BookOrbit home, its menu): at start, resume, Home and on reaching BookOrbit home.
     Fix opens the prompt (`SHOW_SETUP`); Later is the companion's Later (`SETUP_LATER`).
   - *Notification:* channel "Setup steps" at default importance (the old low-importance
@@ -568,7 +568,7 @@ uninstalled until the approval is revoked.
 | Gesture for it | Hold top-right = Sync and sleep; hold top-left = Sync now; swipe up = This book | Both stay one gesture away; KOReader tap defaults kept |
 | Wi-Fi after sleep | "Off after 30 min" default (keep on / 30 min / off now), only while the screen is still off | Fresh sync beats battery |
 | Plugin options | Further ahead → Silent; further behind → Don't sync; Auto-sync on; BookOrbit home | Already decided |
-| Tailscale keep-alive | Battery Unrestricted (Tailscale, companion, KOReader), checked as: background not restricted, on the deviceidle allowlist, Orbit not in a RARE/RESTRICTED bucket (companion `BatteryRow`); where Settings shows "not available" (a device admin), Android's Allow prompt or `tools/install-usb.sh` adds it; Always-on VPN with block-non-VPN off; TailSocks last | Device admin exempts App Standby only, not Doze (AOSP android11 `AppStandbyController`:1108, `DeviceIdleController`:2449) |
+| Tailscale keep-alive | Battery Unrestricted (Tailscale, companion, KOReader), checked as: background not restricted, on the deviceidle allowlist, BookSync not in a RARE/RESTRICTED bucket (companion `BatteryRow`); where Settings shows "not available" (a device admin), Android's Allow prompt or `tools/install-usb.sh` adds it; Always-on VPN with block-non-VPN off; TailSocks last | Device admin exempts App Standby only, not Doze (AOSP android11 `AppStandbyController`:1108, `DeviceIdleController`:2449) |
 | Home button | Shows the launcher page; KOReader auto-opens only at boot | Other apps stay reachable |
 | Failure UI | Patch banner on wake; "Syncing…"/failed message for Sync and sleep; companion notifications only for network faults | Sync state belongs to the plugin and shows in its Sync status page |
 
@@ -613,7 +613,7 @@ uninstalled until the approval is revoked.
      reset, banner;
    - "Test sync path";
    - the spike on how to wait for the plugin's result.
-4. **Orbit Companion v1:** Wi-Fi on/off, Tailscale wake, wake lock, `lockNow()` + device admin,
+4. **BookSync Companion v1:** Wi-Fi on/off, Tailscale wake, wake lock, `lockNow()` + device admin,
    Wi-Fi timer, status, settings and setup checklist.
 5. **Patch v1:**
    - route Wi-Fi on/off to the companion;

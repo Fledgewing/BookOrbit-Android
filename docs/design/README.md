@@ -10,14 +10,14 @@ item moves to building. Android-only designs are in [`android/docs/`](../../andr
   screen (rating, next in series, author, suggestions). ROADMAP 1 and 2.
 - [`local-first/`](local-first/DESIGN.md): local-first Android home, local-first Xteink catalog,
   and Xteink lists by series and author. ROADMAP 3, 4 and 6a.
-- [`orbit-plugin.md`](orbit-plugin.md): Orbit as a KOReader plugin (ROADMAP 8a).
+- [`orbit-plugin.md`](orbit-plugin.md): BookSync as a KOReader plugin (ROADMAP 8a).
 - [`emulated-release-tests.md`](emulated-release-tests.md): the release-gate stage that runs the
   hand-tested device scenarios on emulators and simulators against a real BookOrbit (designing).
 - [`lock-screen.md`](lock-screen.md): the sleep screen: a recommended cover or the current book,
   with optional text and battery level (ROADMAP 11, designing).
 - [`companion-checklist.md`](companion-checklist.md): the companion's Setup page as a summary,
   grouped rows and plain words, with what you lose without each item (ROADMAP 10a, designing).
-- [`companion-settings.md`](companion-settings.md): every Orbit plugin setting in the companion,
+- [`companion-settings.md`](companion-settings.md): every BookSync plugin setting in the companion,
   one schema for both, per-key sync, eight sections with search (ROADMAP 14, building).
 - [`write-through-cache.md`](write-through-cache.md): one cache in front of BookOrbit on both
   platforms: reads from the cache and revalidated, writes through. ROADMAP 4 and 4a.

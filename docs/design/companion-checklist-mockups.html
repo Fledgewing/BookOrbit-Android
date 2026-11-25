@@ -37,16 +37,16 @@
 
 <span class="tag">What drove the design</span>
 <ul class="facts">
-  <li>On a set-up Boox Page, 12 "done" rows pushed the one open row (Orbit's battery setting) halfway down. <span>Finished rows now take one line per group.</span></li>
+  <li>On a set-up Boox Page, 12 "done" rows pushed the one open row (BookSync's battery setting) halfway down. <span>Finished rows now take one line per group.</span></li>
   <li>Battery was three rows with one fix. <span>It's now one row, with a detail page for each app.</span></li>
   <li>"(NET_UP)", "(device admin)" and "Always-on on" are internals. <span>They move to Details, which has a Copy for support button.</span></li>
-  <li>The label said what to do ("Set Orbit as Home app") and "done" sat on the right. <span>Labels are now nouns, with the state on the line below and one verb on the button.</span></li>
-  <li>On the Boox, Orbit's battery setting is already the way Orbit needs it, and the reader doesn't let anyone change it. <span>That's a new state, "Set by the reader", and it counts as done.</span></li>
+  <li>The label said what to do ("Set BookSync as Home app") and "done" sat on the right. <span>Labels are now nouns, with the state on the line below and one verb on the button.</span></li>
+  <li>On the Boox, BookSync's battery setting is already the way BookSync needs it, and the reader doesn't let anyone change it. <span>That's a new state, "Set by the reader", and it counts as done.</span></li>
   <li>E-ink: no animation, no spinner and no timed redraws. <span>Expanding a group takes one redraw, and state is shown by glyph and words, never by grey alone.</span></li>
 </ul>
 
 <h2>Before and after</h2>
-<p class="sub">Both are the same Boox Page in the same state: only Orbit's battery setting is open. Drawn at 3:4, which is the shape of all three readers (M8C 1404 × 1872, Boox Page and Go Color 7 1264 × 1680), at about 0.28 scale.</p>
+<p class="sub">Both are the same Boox Page in the same state: only BookSync's battery setting is open. Drawn at 3:4, which is the shape of all three readers (M8C 1404 × 1872, Boox Page and Go Color 7 1264 × 1680), at about 0.28 scale.</p>
 <div class="gallery"><div id="g1"></div></div>
 
 <h2>The five states</h2>
@@ -125,7 +125,7 @@
   <figure><div class="legend">
     <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Done</div><div class="s">Folded into its group's one line</div></div></div>
     <div class="row"><span class="box need"></span><div class="x"><div class="n">Needs you</div><div class="s">Under Needs you, expanded, with "Until then: …" and one verb</div></div><span class="vb">Allow</span></div>
-    <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Set by the reader <i class="i">i</i></div><div class="s">This reader doesn't let anyone change it, and it's already as Orbit needs. Counts as done.</div></div></div>
+    <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Set by the reader <i class="i">i</i></div><div class="s">This reader doesn't let anyone change it, and it's already as BookSync needs. Counts as done.</div></div></div>
     <div class="row"><span class="box off">–</span><div class="x"><div class="n">Off or skipped</div><div class="s">Optional, or a step you skipped. "Without it: …" and Allow. Never counted, never prompts.</div></div><span class="vb">Allow</span></div>
     <div class="row" style="border:none"><span class="box chk">…</span><div class="x"><div class="n">Checking</div><div class="s">Waiting for KOReader to report. Static text, no spinner. Not counted.</div></div></div>
   </div><figcaption>1. The five states. Each has its own glyph and words, so they read on any e-ink panel without colour or grey.</figcaption></figure>
@@ -133,44 +133,44 @@
 
 <template id="t-g1"><div class="grid">
   <figure><div class="scr old"><div class="sb"><span>17:19</span><span>58%</span></div><div class="body">
-    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Orbit plugin installed (v0.11.2)</div><div class="s">up to date · installed v0.11.2</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">BookSync plugin installed (v0.11.2)</div><div class="s">up to date · installed v0.11.2</div></div><span class="v">done</span></div>
     <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Signed in to BookOrbit</div></div><span class="v">done</span></div>
     <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Recommended settings</div><div class="s">applied · tap to review</div></div><span class="v">done</span></div>
-    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Set Orbit as Home app</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Set BookSync as Home app</div></div><span class="v">done</span></div>
     <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Allow notifications</div></div><span class="v">done</span></div>
-    <div class="row"><span class="ck e"></span><div class="x"><div class="n">Battery: Unrestricted (Orbit)</div><div class="s">set App battery usage › Unrestricted</div></div><span class="v" style="font-weight:800">open ›</span></div>
+    <div class="row"><span class="ck e"></span><div class="x"><div class="n">Battery: Unrestricted (BookSync)</div><div class="s">set App battery usage › Unrestricted</div></div><span class="v" style="font-weight:800">open ›</span></div>
     <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Battery: Unrestricted (Tailscale)</div></div><span class="v">done</span></div>
     <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Battery: Unrestricted (KOReader)</div></div><span class="v">done</span></div>
     <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Tailscale signed in and connected</div><div class="s">connected · Always-on on</div></div><span class="v">done</span></div>
     <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Allow "lock screen" (device admin)</div></div><span class="v">done</span></div>
-    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">Orbit plugin answered</div><div class="s">last 17:19 (NET_UP)</div></div><span class="v">done</span></div>
+    <div class="row"><span class="ck">✓</span><div class="x"><div class="n">BookSync plugin answered</div><div class="s">last 17:19 (NET_UP)</div></div><span class="v">done</span></div>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
   <figcaption>2. Today, v0.11.2 on a Boox Page, scrolled. Every row has the same weight. The one open row is sixth of about 20, Battery takes three rows, and internals like "NET_UP" and "device admin" are on the page.</figcaption></figure>
 
   <figure><div class="scr"><div class="sb"><span>17:19</span><span>58%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
     <div class="sum"><div class="t"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
-    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, BookSync plugin 0.11.2</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended settings on</div></div><span class="chev">›</span></div>
-    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 5 · battery set by the reader for Orbit</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 5 · battery set by the reader for BookSync</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Connection</div><div class="s">Tailscale connected · Wi-Fi test passed 17:02</div></div><span class="chev">›</span></div>
-    <div class="grp"><span class="box off">–</span><div class="x"><div class="n">Optional</div><div class="s">Screen saver from Orbit: off</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box off">–</span><div class="x"><div class="n">Optional</div><div class="s">Screen saver from BookSync: off</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box chk" style="border-color:transparent">i</span><div class="x"><div class="n">Tips</div><div class="s">2 tips</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box chk" style="border-color:transparent">≡</span><div class="x"><div class="n">Details</div><div class="s">Last heard from KOReader 17:19</div></div><span class="chev">›</span></div>
     <div class="foot">Full mode · change in Settings</div>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
-  <figcaption>3. The redesign, in the same state. The Boox's own battery settings for Orbit are already right and can't be changed, so that row now counts as done ("set by the reader"). The page shows "All set" and fits on one screen with no scrolling.</figcaption></figure>
+  <figcaption>3. The redesign, in the same state. The Boox's own battery settings for BookSync are already right and can't be changed, so that row now counts as done ("set by the reader"). The page shows "All set" and fits on one screen with no scrolling.</figcaption></figure>
 </div></template>
 
 <template id="t-g2"><div class="grid">
   <figure><div class="scr"><div class="sb"><span>09:41</span><span>81%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
     <div class="sum"><div class="t"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
-    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, BookSync plugin 0.11.2</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended settings on</div></div><span class="chev">›</span></div>
-    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 6 · Orbit keyboard skipped</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 6 · BookSync keyboard skipped</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Connection</div><div class="s">Tailscale connected · Wi-Fi test passed</div></div><span class="chev">›</span></div>
-    <div class="grp"><span class="box off">–</span><div class="x"><div class="n">Optional</div><div class="s">Screen saver from Orbit: off</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box off">–</span><div class="x"><div class="n">Optional</div><div class="s">Screen saver from BookSync: off</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box chk" style="border-color:transparent">i</span><div class="x"><div class="n">Tips</div><div class="s">2 tips</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box chk" style="border-color:transparent">≡</span><div class="x"><div class="n">Details</div><div class="s">Last heard from KOReader 09:40</div></div><span class="chev">›</span></div>
     <div class="foot">Full mode · change in Settings</div>
@@ -183,7 +183,7 @@
     <div class="sec">Needs you</div>
     <div class="row"><span class="box need"></span><div class="x"><div class="n">BookOrbit account</div><div class="s">Not signed in</div><div class="w"><b>Until then:</b> nothing syncs.</div></div><span class="vb">Sign in</span></div>
     <div class="row"><span class="box need"></span><div class="x"><div class="n">Battery</div><div class="s"><b>Stopped working:</b> KOReader is restricted again</div><div class="w"><b>Until then:</b> sleep syncs can be late.</div></div><span class="vb">Fix</span></div>
-    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, BookSync plugin 0.11.2</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box need" style="border-width:1.5px"></span><div class="x"><div class="n">BookOrbit</div><div class="s">1 needs you · recommended settings on</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box need" style="border-width:1.5px"></span><div class="x"><div class="n">Permissions</div><div class="s">1 needs you · 4 of 5</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Connection</div><div class="s">Tailscale connected</div></div><span class="chev">›</span></div>
@@ -194,14 +194,14 @@
   <figure><div class="scr"><div class="sb"><span>09:44</span><span>81%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
     <div class="sum" style="padding:6px 10px"><div class="t" style="font-size:13px"><span class="box done">✓</span>All set</div></div>
-    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, BookSync plugin 0.11.2</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended settings on</div></div><span class="chev">›</span></div>
     <div class="grp open"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div></div><span class="chev">⌄</span></div>
     <div class="in">
-      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Home app</div><div class="s">Orbit is the Home app</div></div></div>
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Home app</div><div class="s">BookSync is the Home app</div></div></div>
       <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Install apps</div><div class="s">Allowed: KOReader and updates</div></div></div>
       <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Notifications</div><div class="s">Allowed</div></div></div>
-      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Battery</div><div class="s">Unrestricted for Orbit, Tailscale, KOReader</div></div><span class="chev">›</span></div>
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Battery</div><div class="s">Unrestricted for BookSync, Tailscale, KOReader</div></div><span class="chev">›</span></div>
       <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Screen lock</div><div class="s">Sync and sleep turns the screen off</div></div></div>
       <div class="row" style="border:none"><span class="box done">✓</span><div class="x"><div class="n">Clicker buttons</div><div class="s">On in every app</div></div></div>
     </div>
@@ -212,7 +212,7 @@
   <figure><div class="scr"><div class="sb"><span>09:45</span><span>81%</span></div><div class="body">
     <div class="hd"><b>Battery</b><span>‹ Setup</span></div>
     <p style="font-size:11px;margin:0 0 8px">Android pauses restricted apps while the screen is off. These three need to keep running, so sleep syncs and Wi-Fi switching happen on time.</p>
-    <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Orbit</div><div class="s">Set by the reader <i class="i">i</i></div></div></div>
+    <div class="row"><span class="box done">✓</span><div class="x"><div class="n">BookSync</div><div class="s">Set by the reader <i class="i">i</i></div></div></div>
     <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Tailscale</div><div class="s">Unrestricted</div></div></div>
     <div class="row"><span class="box need"></span><div class="x"><div class="n">KOReader</div><div class="s">Restricted</div><div class="w"><b>Until then:</b> a sleep sync can be cut short; it finishes when you next wake the reader.</div></div><span class="vb">Set</span></div>
     <div class="note" style="margin-top:12px"><b>Set</b> opens KOReader's battery page. Choose <b>Unrestricted</b>, then press Back to return here.</div>
@@ -220,25 +220,25 @@
   <figcaption>7. Battery detail, Boox Page. One row per installed app, each with its own state and verb. The system page's path ("App battery usage › Unrestricted") is written once here, on the row that needs it.</figcaption></figure>
 
   <figure><div class="scr"><div class="sb"><span>09:45</span><span>81%</span></div><div class="body">
-    <div class="hd"><b>Battery: Orbit</b><span>‹ Battery</span></div>
+    <div class="hd"><b>Battery: BookSync</b><span>‹ Battery</span></div>
     <div class="sum"><div class="t"><span class="box done">✓</span>Set by the reader</div><div class="l">Nothing to do.</div></div>
-    <p style="font-size:11.5px;margin:4px 0 8px">This reader's own battery settings already keep Orbit running, and they can't be changed here. There's nothing to do.</p>
-    <p style="font-size:11.5px;margin:0 0 8px">If this reader ever does start pausing Orbit, this row will say so and show what to do.</p>
+    <p style="font-size:11.5px;margin:4px 0 8px">This reader's own battery settings already keep BookSync running, and they can't be changed here. There's nothing to do.</p>
+    <p style="font-size:11.5px;margin:0 0 8px">If this reader ever does start pausing BookSync, this row will say so and show what to do.</p>
     <span class="btn">OK</span>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
-  <figcaption>8. "Can't be changed on this reader." The ⓘ opens this note. When the setting is already the way Orbit needs it, it counts as done. If the reader locked it the wrong way, the row would stay under Needs you with Help instead of a verb.</figcaption></figure>
+  <figcaption>8. "Can't be changed on this reader." The ⓘ opens this note. When the setting is already the way BookSync needs it, it counts as done. If the reader locked it the wrong way, the row would stay under Needs you with Help instead of a verb.</figcaption></figure>
 </div></template>
 
 <template id="t-g3"><div class="grid">
   <figure><div class="scr"><div class="sb"><span>20:10</span><span>66%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
     <div class="sum" style="padding:6px 10px"><div class="t" style="font-size:13px"><span class="box done">✓</span>All set</div><div class="l">Everything this reader needs is done. Optional items below.</div></div>
-    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, Orbit plugin 0.11.2</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader, BookOrbit plugin, BookSync plugin 0.11.2</div></div><span class="chev">›</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended: applied 7</div></div><span class="chev">›</span></div>
     <div class="grp open"><span class="box off">–</span><div class="x"><div class="n">Optional</div><div class="s">What you get with each</div></div><span class="chev">⌄</span></div>
     <div class="in">
-      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Install apps</div><div class="w"><b>On:</b> Orbit installs KOReader and its own updates.</div></div></div>
-      <div class="row"><span class="box off">–</span><div class="x"><div class="n">Notifications</div><div class="w"><b>Without it:</b> you see updates and steps only in KOReader and when you open Orbit.</div></div><span class="vb">Allow</span></div>
+      <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Install apps</div><div class="w"><b>On:</b> BookSync installs KOReader and its own updates.</div></div></div>
+      <div class="row"><span class="box off">–</span><div class="x"><div class="n">Notifications</div><div class="w"><b>Without it:</b> you see updates and steps only in KOReader and when you open BookSync.</div></div><span class="vb">Allow</span></div>
       <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Sleep sync</div><div class="w"><b>On:</b> syncs finish as the reader sleeps.</div></div></div>
       <div class="row"><span class="box off">–</span><div class="x"><div class="n">Screen lock</div><div class="w"><b>Without it:</b> Sync and sleep asks you to press the power button.</div></div><span class="vb">Allow</span></div>
       <div class="row" style="border:none"><span class="box off">–</span><div class="x"><div class="n">Battery</div><div class="w"><b>Without it:</b> sleep syncs can be late.</div></div><span class="vb">Allow</span></div>
@@ -254,11 +254,11 @@
     <div class="grp open"><span class="box done">✓</span><div class="x"><div class="n">Permissions</div><div class="s">5 of 6</div></div><span class="chev">⌄</span></div>
     <div class="in">
       <div class="row"><span class="box done">✓</span><div class="x"><div class="n">Home app, Install apps, Notifications, Battery, Screen lock</div><div class="s">all allowed</div></div></div>
-      <div class="row" style="border:none"><span class="box off">–</span><div class="x"><div class="n">Orbit keyboard</div><div class="s">Skipped</div><div class="w"><b>Without it:</b> Send-key clicker actions work only inside KOReader.</div></div><span class="vb">Allow</span></div>
+      <div class="row" style="border:none"><span class="box off">–</span><div class="x"><div class="n">BookSync keyboard</div><div class="s">Skipped</div><div class="w"><b>Without it:</b> Send-key clicker actions work only inside KOReader.</div></div><span class="vb">Allow</span></div>
     </div>
     <div class="grp open"><span class="box off">–</span><div class="x"><div class="n">Optional</div></div><span class="chev">⌄</span></div>
     <div class="in">
-      <div class="row" style="border:none"><span class="box off">–</span><div class="x"><div class="n">Screen saver from Orbit</div><div class="w"><b>Without it:</b> turning Sleep screen on or off needs a one-time USB command.</div></div><span class="vb">Show how</span></div>
+      <div class="row" style="border:none"><span class="box off">–</span><div class="x"><div class="n">Screen saver from BookSync</div><div class="w"><b>Without it:</b> turning Sleep screen on or off needs a one-time USB command.</div></div><span class="vb">Show how</span></div>
     </div>
     <div class="foot">Full mode · change in Settings</div>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
@@ -269,9 +269,9 @@
     <div class="sum"><div class="t"><span class="box need"></span>2 things need a grown-up</div><span class="btn solid">Unlock to fix</span><div class="l" style="margin-top:4px">Asks for the Settings PIN.</div></div>
     <div class="sec">Needs a grown-up</div>
     <div class="row"><span class="box need"></span><div class="x"><div class="n">Tailscale</div><div class="s">Not connected</div><div class="w"><b>Until then:</b> no sync away from home Wi-Fi.</div></div></div>
-    <div class="row"><span class="box need"></span><div class="x"><div class="n">Notifications</div><div class="s">Off</div><div class="w"><b>Until then:</b> updates show only when Orbit is opened.</div></div></div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">Notifications</div><div class="s">Off</div><div class="w"><b>Until then:</b> updates show only when BookSync is opened.</div></div></div>
     <div class="sec">Ready now</div>
-    <div class="row"><span class="box need"></span><div class="x"><div class="n">Orbit plugin</div><div class="s">Updated; KOReader still runs 0.11.1</div><div class="w">It restarts when the screen next goes off.</div></div><span class="vb">Restart KOReader</span></div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">BookSync plugin</div><div class="s">Updated; KOReader still runs 0.11.1</div><div class="w">It restarts when the screen next goes off.</div></div><span class="vb">Restart KOReader</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps, BookOrbit, Permissions</div><div class="s">all done</div></div><span class="chev">›</span></div>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
   <figcaption>11. A kid's reader with the Settings PIN set and locked. A kid can read what's wrong and tell a parent, but there are no verb buttons except PIN-free update follow-through, like Restart KOReader. Allow, "Don't ask about this" and Copy for support are hidden.</figcaption></figure>
@@ -291,9 +291,9 @@
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
     <div class="sum"><div class="t">Let's set up this reader</div><div class="l">8 steps, about 5 minutes. Each opens a page, and Back returns here.</div><span class="btn solid">Start</span></div>
     <div class="sec">Steps</div>
-    <div class="row"><span class="box need" style="font-size:10px">1</span><div class="x"><div class="n">Install apps</div><div class="w"><b>Until then:</b> Orbit can't install KOReader.</div></div></div>
+    <div class="row"><span class="box need" style="font-size:10px">1</span><div class="x"><div class="n">Install apps</div><div class="w"><b>Until then:</b> BookSync can't install KOReader.</div></div></div>
     <div class="row"><span class="box need" style="font-size:10px">2</span><div class="x"><div class="n">KOReader</div><div class="w"><b>Until then:</b> nothing to read with.</div></div></div>
-    <div class="row"><span class="box need" style="font-size:10px">3</span><div class="x"><div class="n">BookOrbit plugin, Orbit plugin</div><div class="w"><b>Until then:</b> no library, no sync.</div></div></div>
+    <div class="row"><span class="box need" style="font-size:10px">3</span><div class="x"><div class="n">BookOrbit plugin, BookSync plugin</div><div class="w"><b>Until then:</b> no library, no sync.</div></div></div>
     <div class="row"><span class="box need" style="font-size:10px">4</span><div class="x"><div class="n">BookOrbit account</div><div class="w"><b>Until then:</b> nothing syncs.</div></div></div>
     <div class="row"><span class="box need" style="font-size:10px">5</span><div class="x"><div class="n">Home app</div></div></div>
     <div class="row" style="border:none"><span class="box need" style="font-size:10px">6</span><div class="x"><div class="n">Notifications, Battery, Screen lock, Tailscale</div></div></div>
@@ -303,8 +303,8 @@
 
   <figure><div class="scr"><div class="sb"><span>11:03</span><span>100%</span></div><div class="body">
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
-    <div class="sum"><div class="t">Step 5 of 8: Home app</div><div class="l">Choose Orbit on the next page, then press Back.</div><span class="btn solid">Continue</span><span class="btn">Stop</span></div>
-    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2</div></div></div>
+    <div class="sum"><div class="t">Step 5 of 8: Home app</div><div class="l">Choose BookSync on the next page, then press Back.</div><span class="btn solid">Continue</span><span class="btn">Stop</span></div>
+    <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps</div><div class="s">KOReader 2025.10, BookOrbit plugin, BookSync plugin 0.11.2</div></div></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">BookOrbit</div><div class="s">Signed in · recommended: applied 7</div></div></div>
     <div class="grp"><span class="box need" style="border-width:1.5px"></span><div class="x"><div class="n">Permissions</div><div class="s">1 of 5</div></div></div>
     <div class="grp"><span class="box need" style="border-width:1.5px"></span><div class="x"><div class="n">Connection</div><div class="s">Tailscale not connected</div></div></div>
@@ -315,19 +315,19 @@
     <div class="hd"><b>Setup</b><span>‹ Back</span></div>
     <div class="sum"><div class="t"><span class="box need"></span>1 thing needs you</div><span class="btn solid">Fix next</span></div>
     <div class="sec">Needs you</div>
-    <div class="row"><span class="box need"></span><div class="x"><div class="n">Orbit keyboard <span class="newt">New in 0.12</span></div><div class="s">Off. Your clicker now has a Send key action.</div><div class="w"><b>Until then:</b> Send key works only inside KOReader.</div></div><span class="vb">Turn on</span></div>
+    <div class="row"><span class="box need"></span><div class="x"><div class="n">BookSync keyboard <span class="newt">New in 0.12</span></div><div class="s">Off. Your clicker now has a Send key action.</div><div class="w"><b>Until then:</b> Send key works only inside KOReader.</div></div><span class="vb">Turn on</span></div>
     <div class="grp"><span class="box done">✓</span><div class="x"><div class="n">Apps, BookOrbit, Connection</div><div class="s">all done</div></div><span class="chev">›</span></div>
-    <div class="grp"><span class="box off">–</span><div class="x"><div class="n">Optional <span class="newt">New</span></div><div class="s">Screen saver from Orbit: off</div></div><span class="chev">›</span></div>
+    <div class="grp"><span class="box off">–</span><div class="x"><div class="n">Optional <span class="newt">New</span></div><div class="s">Screen saver from BookSync: off</div></div><span class="chev">›</span></div>
     <div class="note" style="margin-top:8px">Updated to 0.12: what's new ›</div>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
   <figcaption>15. A new item after an update. A required one joins Needs you with a "New in" tag and the usual after-update prompt. An optional one only gets the tag, in Optional, and never prompts. The tag goes away once the row is done or at the next update.</figcaption></figure>
 
   <figure><div class="scr"><div class="sb"><span>08:16</span><span>72%</span></div><div class="body">
-    <div class="hd"><b>Orbit Companion</b><span>Settings</span></div>
+    <div class="hd"><b>BookSync Companion</b><span>Settings</span></div>
     <div class="row"><div class="x"><div class="n">Wi-Fi</div></div><span class="v">On · connected</span></div>
     <div class="row"><div class="x"><div class="n">Tailscale</div></div><span class="v">Connected</span></div>
     <div class="row"><div class="x"><div class="n">Battery</div><div class="s">hours left, % per hour, history</div></div><span class="v">›</span></div>
-    <div class="sum" style="margin-top:10px"><div class="t"><span class="box need"></span>Setup: 1 thing needs you</div><div class="l">Orbit keyboard · tap to fix ›</div></div>
+    <div class="sum" style="margin-top:10px"><div class="t"><span class="box need"></span>Setup: 1 thing needs you</div><div class="l">BookSync keyboard · tap to fix ›</div></div>
     <span class="btn">Test network</span>
     <div class="row" style="margin-top:6px"><div class="x"><div class="n">App version</div><div class="s">0.12.0 · up to date</div></div><span class="vb">Check</span></div>
   </div><div class="nav"><span>◁</span><span>○</span><span>▢</span></div></div>
@@ -335,11 +335,11 @@
 
   <figure><div class="scr"><div class="sb"><span>17:20</span><span>58%</span></div><div class="body">
     <div class="hd"><b>Details</b><span>‹ Setup</span></div>
-    <div class="kv"><b>Orbit plugin last answered</b><span>17:19, after Wi-Fi came up (NET_UP)</span></div>
+    <div class="kv"><b>BookSync plugin last answered</b><span>17:19, after Wi-Fi came up (NET_UP)</span></div>
     <div class="kv"><b>Plugin version KOReader runs</b><span>0.11.2</span></div>
     <div class="kv"><b>Signed in (from the plugin)</b><span>yes</span></div>
     <div class="kv"><b>Recommended settings</b><span>applied · 0 conflicts</span></div>
-    <div class="kv"><b>Battery: Orbit</b><span>already right · can't be changed</span></div>
+    <div class="kv"><b>Battery: BookSync</b><span>already right · can't be changed</span></div>
     <div class="kv"><b>Battery: Tailscale, KOReader</b><span>unrestricted</span></div>
     <div class="kv"><b>Tailscale</b><span>connected · Always-on · no lockdown</span></div>
     <div class="kv"><b>Frozen apps</b><span>none</span></div>

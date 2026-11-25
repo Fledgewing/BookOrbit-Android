@@ -121,15 +121,15 @@ The design (approved by the maintainer):
 
 Some readers turn pages on keys, not taps (Volume, Page up/down, arrows, Space). An
 accessibility service can't inject keys into another app, so these go through a minimal
-keyboard, **Orbit clicker keys** (`OrbitKeysIme`, an `InputMethodService`), chosen by the
+keyboard, **BookSync clicker keys** (`OrbitKeysIme`, an `InputMethodService`), chosen by the
 maintainer as option A, "switch keyboards just in time":
 
-1. The user enables the Orbit keyboard (Setup row "Orbit keyboard enabled", shown only while a
+1. The user enables the BookSync keyboard (Setup row "BookSync keyboard enabled", shown only while a
    Send-key action is mapped; Fix opens `Settings.ACTION_INPUT_METHOD_SETTINGS`). It is never
    their default keyboard.
 2. A mapped press: the accessibility service calls
    [`SoftKeyboardController.switchToInputMethod`](https://developer.android.com/reference/android/accessibilityservice/AccessibilityService.SoftKeyboardController#switchToInputMethod(java.lang.String))
-   (API 30) with the Orbit keyboard's id.
+   (API 30) with the BookSync keyboard's id.
 3. Once bound (`onStartInput`, or `onBindInput` when no editor is focused: the fallback
    InputConnection still reaches the focused window), the keyboard sends key down/up
    (`sendDownUpKeyEvents`) for every queued press.
@@ -140,7 +140,7 @@ maintainer as option A, "switch keyboards just in time":
   `TYPE_VIEW_FOCUSED` events' class name (never their text); if it missed one, the keyboard
   sees a text `EditorInfo.inputType` on bind, sends nothing and restores.
 - **Timeout:** no bind within 700 ms drops the queue, restores, and counts a failure. Settings
-  › Clicker buttons then suggests **Keep Orbit keyboard active**: the Orbit keyboard stays
+  › Clicker buttons then suggests **Keep BookSync keyboard active**: the BookSync keyboard stays
   current, presses are sent at once, and an ongoing notification's "Switch keyboard" takes the
   user to their normal keyboard to type. Android 8–10 (no `switchToInputMethod`) need it.
 - `ImeSwitch` (pure, tested) is the state machine: queue, timeout, restore, skip on a text
@@ -187,13 +187,13 @@ page's before/after check (README "Battery stats") verifies it.
   A freeze, a force-stop or Android turning it off is a regression: "Setup needs you" fires.
   Fix opens Settings › Accessibility (`ACTION_ACCESSIBILITY_SETTINGS`).
 - Info row when another key filter is on: "Key Mapper also remaps keys: turn it off once
-  Orbit's buttons work." Two filters both see every key and can fight. The user can then
+  BookSync's buttons work." Two filters both see every key and can fight. The user can then
   uninstall Key Mapper; we never do.
 
 ## Failure modes
 
 - Accessibility grant off or unbound → other apps get raw keys; KOReader still works (patch).
-- Android 12+ may later show "Orbit can view and control your screen" and offer to turn it off
+- Android 12+ may later show "BookSync can view and control your screen" and offer to turn it off
   (non-tool services); the Setup row catches the result.
 - A reader that ignores taps at the zone (pop-up open) → the tap lands on the pop-up.
 - Clicker as pointer device (ring remotes) → capture says "This clicker sends taps, not
@@ -205,7 +205,7 @@ page's before/after check (README "Battery stats") verifies it.
 ## Settings (companion › Clicker buttons)
 
 Clickers list (each: buttons → default action and per-app actions, Forget); Add a clicker /
-Add a button (capture); Keep Orbit keyboard active (only with a Send-key action);
+Add a button (capture); Keep BookSync keyboard active (only with a Send-key action);
 per-app page actions (zone L/R thirds, top/bottom halves, swipe, nothing); long-press and
 double-press on/off per button (off by default: no delay); Show taps (a brief dot, for
 checking zones). Shared to the patch: the map only, through `/status`.
@@ -240,7 +240,7 @@ Door 2 stays closed: no system settings are changed. Built in v0.4.0:
 
 ## One-way doors (as proposed)
 
-1. **Add an Accessibility service to Orbit Companion.** It is Android's most powerful app
+1. **Add an Accessibility service to BookSync Companion.** It is Android's most powerful app
    permission class. We'd use it only to (a) see key presses and act on the mapped ones,
    (b) learn which app is in front (package name), (c) send taps, Home and Back. We'd declare
    it **unable to read window content** and promise in the app and README never to read,
@@ -248,6 +248,6 @@ Door 2 stays closed: no system settings are changed. Built in v0.4.0:
    Accessibility; it is undone by switching it off. Approve, or keep KOReader-only (the patch
    part alone, no grant, works only in KOReader).
 2. Nothing in this design changes system settings (no `WRITE_SECURE_SETTINGS`, no
-   `WRITE_SETTINGS`, no Key Mapper changes). If you later want Orbit to re-enable its own
+   `WRITE_SETTINGS`, no Key Mapper changes). If you later want BookSync to re-enable its own
    service after a freeze without you, that needs a one-time adb grant of
    `WRITE_SECURE_SETTINGS`; not proposed.

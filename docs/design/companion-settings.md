@@ -1,6 +1,6 @@
 # Companion settings: every setting in the companion, one definition, grouped and searchable
 
-ROADMAP 14. Android (Orbit Companion and the Orbit KOReader plugin). Status: **building** (approved).
+ROADMAP 14. Android (BookSync Companion and the BookSync KOReader plugin). Status: **building** (approved).
 Part 1: the schema and per-key sync. Part 2: the companion's sections. Part 3: the KOReader menu.
 Mockups: `settings.html` (the design page that goes with the design PR).
 
@@ -9,11 +9,11 @@ Line numbers are at `4a57fc2` (main).
 
 ## 1. Outcome
 
-The user changes Orbit from the **companion** and never needs KOReader's menus. Every setting the
-Orbit plugin has is in the companion, a change in either place reaches the other, and a change made
+The user changes BookSync from the **companion** and never needs KOReader's menus. Every setting the
+BookSync plugin has is in the companion, a change in either place reaches the other, and a change made
 while KOReader isn't running waits and applies at its next start. The companion's Settings page is
 short: eight sections with a one-line summary each, a search, and rows that appear only when they
-apply. KOReader's Orbit menu keeps its settings, grouped the same way.
+apply. KOReader's BookSync menu keeps its settings, grouped the same way.
 
 The user's words: "I expect them all to be available in the companion too and apply the same
 settings"; "the companion should have all the settings (KOReader plugin should have its settings
@@ -22,7 +22,7 @@ too, but I primarily interact via the companion)"; "it's getting a bit crowded a
 ## 2. What is there today (verified)
 
 - **The plugin** keeps its settings in `G_reader_settings["orbit_android"]` (`P/ko/settings.lua:9-63`)
-  and shows them in one flat menu, Tools › Android sync, of about 30 rows (`P/ko/menu.lua:214-289`).
+  and shows them in one flat menu, Tools › BookSync, of about 30 rows (`P/ko/menu.lua:214-289`).
   A toggle logs `setting <key> = <value>` (`P/ko/menu.lua:17`); that is the "setting sync_on_sleep =
   true" line in the logs.
 - **Shared settings** exist for 13 keys: Wi-Fi mode, idle minutes, the Home button and the nine
@@ -58,7 +58,7 @@ too, but I primarily interact via the companion)"; "it's getting a bit crowded a
 
 ### 3.1 Settings
 
-| # | Key | Default | Meaning | Plugin UI today (Tools › Android sync) | Read by | Companion today | |
+| # | Key | Default | Meaning | Plugin UI today (Tools › BookSync) | Read by | Companion today | |
 |---|---|---|---|---|---|---|---|
 | 1 | `wifi_mode` | Just in time with a companion that switches Wi-Fi, else Always on | When Wi-Fi is on | Wi-Fi: … › radio | companion (switching), plugin (`Shared.mode`) | Settings › Wi-Fi (segmented) | ok |
 | 2 | `wifi_idle_min` | 2 | Just in time: minutes idle before Wi-Fi goes off | Wi-Fi › Just in time › radio | companion | Settings › Just in time (segmented) | ok |
@@ -73,18 +73,18 @@ too, but I primarily interact via the companion)"; "it's getting a bit crowded a
 | 11 | `sleep_style` | `bar` | Bar or Overlay | Sleep screen › Style | companion | Sleep screen page | ok |
 | 12 | `sleep_text_position` | `right` | Overlay: text on the right, left, top or bottom | Sleep screen › Text position | companion | Sleep screen page | ok |
 | 13 | `sleep_battery_corner` | `bottom_left` | Overlay: battery corner | Sleep screen › Battery corner | companion | Sleep screen page | ok |
-| 14 | `wifi_via_companion` | on | Ask the companion to turn Wi-Fi on for a sync | Wi-Fi via Orbit Companion | plugin (`P/ko/companion.lua:200`, `P/ko/net.lua:49`) | none | **gap** |
+| 14 | `wifi_via_companion` | on | Ask the companion to turn Wi-Fi on for a sync | Wi-Fi via BookSync Companion | plugin (`P/ko/companion.lua:200`, `P/ko/net.lua:49`) | none | **gap** |
 | 15 | `wake_tailscale` | on | Wake Tailscale before syncing | Wake Tailscale before syncing | plugin (`P/ko/net.lua:61`), sent as `NET_UP tailscale` | none (the companion's own "Wake Tailscale with Wi-Fi" is the other half) | **gap** |
 | 16 | `sync_on_wake` | on | Sync every time the reader wakes | Always sync on wake | plugin (`P/ko/start.lua:34`) | none | **gap** |
 | 17 | `sync_on_sleep` | on | Sync when the screen goes off | Sync when the screen goes off | plugin (`P/ko/sleep.lua:37`) | none | **gap** |
 | 18 | `sleep_cap` | 20 s | Longest a sleep sync may take (10/15/20 s) | Sleep sync limit | plugin (`P/ko/sleep.lua:91`) | named in a subtitle only | **gap** |
-| 19 | `eob_sheet` | on | Orbit's end-of-book sheet for BookOrbit books | End of book: Orbit's sheet… | plugin (`P/ko/endofbook.lua:221`) | none | **gap** |
+| 19 | `eob_sheet` | on | BookSync's end-of-book sheet for BookOrbit books | End of book: BookSync's sheet… | plugin (`P/ko/endofbook.lua:221`) | none | **gap** |
 | 20 | `eob_auto` | on | Reaching the end marks the book finished | End of book: mark it finished | plugin (`P/ko/endofbook.lua:224`) | none | **gap** |
 | 21 | `local_first` | on | Home shows this reader's reading first (restart) | Home shows this device's reading first | plugin (`P/ko/localfirst.lua:660`) | none | **gap** |
-| 22 | `offline_cache` | on | BookOrbit opens from Orbit's cache (restart) | BookOrbit opens from Orbit's cache | plugin (`P/ko/cache.lua:24`) | none | **gap** |
+| 22 | `offline_cache` | on | BookOrbit opens from BookSync's cache (restart) | BookOrbit opens from BookSync's cache | plugin (`P/ko/cache.lua:24`) | none | **gap** |
 | 23 | `mirror_auto` + `mirror_ttl_days` | on, 7 | Automatic Full refresh every 1/3/7/14/30 days, or only by hand | Automatic Full refresh › radio | plugin (`P/ko/mirror.lua:562-566`) | none | **gap** |
 | 24 | `mirror_covers` | off | Save every cover for offline | Save every cover for offline | plugin (`P/ko/mirror.lua:335`) | none | **gap** |
-| 25 | `storage_limit_mb` | 250 | One limit on everything Orbit stores | Storage limit › radio | plugin (`P/ko/cache.lua:645`) | none | **gap** |
+| 25 | `storage_limit_mb` | 250 | One limit on everything BookSync stores | Storage limit › radio | plugin (`P/ko/cache.lua:645`) | none | **gap** |
 | 26 | `keep_copies_current` | on | Re-download a book whose library file changed | Keep book copies current | plugin (`P/ko/copies.lua:77`) | none | **gap** |
 | 27 | `key_log` | on | Log every key (clicker diagnosis) | Log every key | plugin (`P/ko/keys.lua:29`) | none | **gap** |
 | 28 | `auto_update_patch` | on | Plugin updates itself | Auto-update patch | plugin (`P/ko/background.lua:98`) | none (the app's own "Auto-update app" is separate) | **gap** |
@@ -101,7 +101,7 @@ too, but I primarily interact via the companion)"; "it's getting a bit crowded a
 | A5 | Test sync path | none (Setup's Wi-Fi off/on test is a different test) | **gap** |
 | A6 | Check for patch update, its status | covered: the app's update carries the plugin (`C/Updater.kt:440`) | ok |
 | A7 | Shown by, Preview | Sleep screen page | ok |
-| A8 | Open Orbit Companion, Open another app… | n/a: navigation into the companion | plugin-only |
+| A8 | Open BookSync Companion, Open another app… | n/a: navigation into the companion | plugin-only |
 | A9 | Status line (companion, Wi-Fi, last sleep sync, setup count) | status page, partly | ok (Details gets the rest) |
 
 **Gaps: 24** — 16 settings with no companion row (14-29), 3 shown read-only (6, 7, 9), and 5 actions
@@ -122,7 +122,7 @@ Mode and the Add-on helpers, Wi-Fi after sleep sync, Wake Tailscale with Wi-Fi, 
 syncing, Notify if Tailscale won't connect, Debug log, Auto-update app, Include pre-releases, Home
 opens, Clicker buttons, Settings PIN and Guarded apps, Reading fonts (Setup's optional row) and
 Skipped setup steps (`C/Core.kt:82-297`, `C/Pages.kt:293-447`). They act on Android, not on KOReader,
-so the plugin doesn't need them; its menu says "Buttons, PIN and setup: in Orbit Companion ›".
+so the plugin doesn't need them; its menu says "Buttons, PIN and setup: in BookSync Companion ›".
 
 ## 4. One source of truth and the sync protocol
 
@@ -218,7 +218,7 @@ The plugin's menu does the same: while locked it shows the whole menu with every
 
 ### 4.8 Plugin-only
 
-Only two menu entries stay plugin-only, and neither is a setting: **Open Orbit Companion** and **Open
+Only two menu entries stay plugin-only, and neither is a setting: **Open BookSync Companion** and **Open
 another app…**, which open the companion from KOReader. Everything else in §3 is in the companion,
 including the Recommended settings review (A1, §5.8).
 
@@ -227,18 +227,18 @@ including the Recommended settings review (A1, §5.8).
 ### 5.1 The top page
 
 Header "Settings", a **Search** box, then eight section rows, each a noun with its current state in
-one line, and **›**. Then a footer: "Orbit 0.12.0 · plugin 0.12.0".
+one line, and **›**. Then a footer: "BookSync 0.12.0 · plugin 0.12.0".
 
 | Section | Summary line (examples) | Holds |
 |---|---|---|
-| **Reading and Home** | Home: back to my book · end-of-book sheet on | Home opens, Home button in KOReader, Home shows this reader's reading first, End of book: Orbit's sheet, mark finished, Reading fonts |
+| **Reading and Home** | Home: back to my book · end-of-book sheet on | Home opens, Home button in KOReader, Home shows this reader's reading first, End of book: BookSync's sheet, mark finished, Reading fonts |
 | **Sleep screen** | Recommended cover · Up next · every 6 h | §6 |
 | **Sync and Wi-Fi** | Just in time · sync on sleep and wake | Wi-Fi switching (Add-on helper), Wi-Fi, Off after idle, Sync when the screen goes off, Sync on wake, Sync while reading, Wi-Fi after sleep sync, Sleep sync limit, Keep the reader awake while syncing, Wake Tailscale for syncs, Tailscale alert; Sync and sleep now, Test the sync path |
-| **Library and storage** | 120 of 250 MB · saved for offline 2 days ago | BookOrbit opens from Orbit's cache, Automatic Full refresh, Save every cover for offline, Storage limit, Keep book copies current; Full refresh now |
-| **Buttons** | Clicker: 2 buttons | Clicker buttons (Add-on helper), the clicker page, Orbit keyboard |
+| **Library and storage** | 120 of 250 MB · saved for offline 2 days ago | BookOrbit opens from BookSync's cache, Automatic Full refresh, Save every cover for offline, Storage limit, Keep book copies current; Full refresh now |
+| **Buttons** | Clicker: 2 buttons | Clicker buttons (Add-on helper), the clicker page, BookSync keyboard |
 | **Kids and PIN** | PIN on · 3 guarded apps | Settings PIN (Add-on helper), Change PIN, Guarded apps, Turn the PIN off |
 | **Setup and mode** | All set · Full mode | the Setup summary (opens Setup), Mode, Recommended settings, Skipped setup steps |
-| **Updates and details** | Up to date · automatic | Automatic updates, Include pre-releases, Check for updates, Debug log, Log every key, Let Orbit switch Wi-Fi for syncs, Details, Licenses |
+| **Updates and details** | Up to date · automatic | Automatic updates, Include pre-releases, Check for updates, Debug log, Log every key, Let BookSync switch Wi-Fi for syncs, Details, Licenses |
 
 ### 5.2 Row wording: one noun, one line
 
@@ -252,13 +252,13 @@ holds them all):
 | Sync on wake | Every wake checks BookOrbit for reading done elsewhere. |
 | Sleep sync limit | Gives up after 20 s so the reader can sleep. |
 | Wake Tailscale for syncs | Starts Tailscale before each sync, so a server on your tailnet answers. |
-| Let Orbit switch Wi-Fi for syncs | Off: syncs fail when Wi-Fi is off instead of turning it on. |
+| Let BookSync switch Wi-Fi for syncs | Off: syncs fail when Wi-Fi is off instead of turning it on. |
 | Home shows this reader's reading first | Your latest page shows at once; BookOrbit fills in after. Applies when KOReader restarts. |
-| BookOrbit opens from Orbit's cache | Pages open at once and offline, then are checked. Applies when KOReader restarts. |
+| BookOrbit opens from BookSync's cache | Pages open at once and offline, then are checked. Applies when KOReader restarts. |
 | Save every cover for offline | About 100 KB per book. Off: covers are kept as you see them. |
 | Storage limit | Pages, offline lists and covers. Book files don't count. Using 120 MB. |
 | Keep book copies current | A book whose library file changed is downloaded again, never while you read. |
-| End of book: Orbit's sheet | Stars, next in series and a suggestion when you finish a BookOrbit book. |
+| End of book: BookSync's sheet | Stars, next in series and a suggestion when you finish a BookOrbit book. |
 | End of book: mark it finished | Reaching the end marks the book read in BookOrbit. |
 | Log every key | For clicker problems. Keys go to KOReader's log. |
 
@@ -327,17 +327,17 @@ outlined buttons at the bottom of their section, under a "Do now" heading.
 ### 5.7 The KOReader menu, grouped the same way
 
 Cheap, because it is a regrouping of `P/ko/menu.lua:214-289` with the schema's sections: Tools ›
-Android sync gets five submenus, **Reading and Home**, **Sleep screen**, **Sync and Wi-Fi**, **Library
+BookSync gets five submenus, **Reading and Home**, **Sleep screen**, **Sync and Wi-Fi**, **Library
 and storage**, **Updates and details**, each with the same labels as the companion; then **Sync and
-sleep now**, **Full refresh of BookOrbit**, **Recommended settings**, **Open Orbit Companion**; then
-the status line. Buttons, Kids and PIN and Setup are one line: "Buttons, PIN and setup: in Orbit
+sleep now**, **Full refresh of BookOrbit**, **Recommended settings**, **Open BookSync Companion**; then
+the status line. Buttons, Kids and PIN and Setup are one line: "Buttons, PIN and setup: in BookSync
 Companion ›". KOReader's own `help_text` carries the one-line explanation.
 
 ### 5.8 Recommended settings in the companion (A1)
 
 Setup and mode › **Recommended settings** shows the review list the plugin has today, from
-`orbit-recommended.json` the plugin writes at each pass (item, Orbit's value, yours, state). Each row
-offers **Use Orbit's** / **Keep mine**; the choice is a shared key (`recommended_choice`, a map of
+`orbit-recommended.json` the plugin writes at each pass (item, BookSync's value, yours, state). Each row
+offers **Use BookSync's** / **Keep mine**; the choice is a shared key (`recommended_choice`, a map of
 item id to choice) and the plugin applies it at its next start or resume, because it changes
 KOReader's and BookOrbit's own settings, which only KOReader can write. Until then the row shows
 Waiting for KOReader.
@@ -386,7 +386,7 @@ All of [lock-screen](lock-screen.md) S2, on one page in this order. Off: only th
 8. **Text position** (Overlay): Right / Left / Top / Bottom.
 9. **Battery corner** (Overlay): the four corners, as a 2 × 2 grid drawn like the screen; "Moves to
    top left beside the text" when L3b2 applies.
-10. **Shown by**: "Orbit screen saver ✓" or "Set up ›" (unchanged, `C/SleepPages.kt:57`).
+10. **Shown by**: "BookSync screen saver ✓" or "Set up ›" (unchanged, `C/SleepPages.kt:57`).
 11. **Preview** (unchanged: 5 s or a tap).
 
 A small live thumbnail of the current screen sits beside the Style row, redrawn once per change
@@ -441,7 +441,7 @@ choices. Locked settings show the same rows read-only.
 | # | Question | Decision | Why |
 |---|---|---|---|
 | D1 | Which plugin settings come to the companion? | All 29 and actions A1-A5 | The user's words: "ALL"; they don't use KOReader's menus. |
-| D2 | Plugin-only? | Only Open Orbit Companion and Open another app… | They are navigation into the companion, not settings. |
+| D2 | Plugin-only? | Only Open BookSync Companion and Open another app… | They are navigation into the companion, not settings. |
 | D3 | Where definitions live | One schema file in `shared/settings/`, copied into both builds, guard-tested | One place to add a setting; the two UIs can't drift. Mirrors `shared/fixtures/sleep/cases.json`. |
 | D4 | Where values live | Both sides, per-key `{v, at}`, newest wins | Each side must work while the other is off; it extends today's two copies. |
 | D5 | Per-key or whole-set time | Per key | Whole-set loses one of two changes to different keys. |

@@ -25,7 +25,7 @@ KOReader v2026.07.1, commit `9192014d8bd82a91dc1012473be0f238dedfdb54`:
   reserves footer height in paged documents; `:1060` recalculates on visibility
   changes. Merely painting over the document would cover text.
 
-Native settings do not meet the complete request. Use a custom Orbit renderer
+Native settings do not meet the complete request. Use a custom BookSync renderer
 integrated into the reader view, retaining native footer gesture handling.
 
 CrossInk v2.0.0+bookorbit.1-rc3, commit `87e2e1984481e8a3d996f12b34b50a383f9013b8`:
@@ -68,15 +68,15 @@ transforms, zoom/recalculate and scroll page states together. Never just crop or
 paint across an existing page. Verify PDF/CBZ page and scroll modes plus rotation.
 
 Keep KOReader's footer controller and tap regions; replace its visible rendering
-while enabled. A footer-toggle gesture hides/shows the Orbit bottom strip through
+while enabled. A footer-toggle gesture hides/shows the BookSync bottom strip through
 the same native visibility state. It must continue to reach the native controller,
 and the top/menu gesture regions must remain available. Menus cover the reader
 normally; the status renderer is a reader child, never a floating window.
 
-The setting is Orbit › Reading › “Status bar: Orbit layout (matches Xteink)”, on by
+The setting is BookSync › Reading › “Status bar: BookSync layout (matches Xteink)”, on by
 default, with an Android-only shared schema entry. Off restores native footer/top
 bar and margin/viewport state, including values that were absent originally.
-Do not write Orbit's temporary geometry into book or global native settings.
+Do not write BookSync's temporary geometry into book or global native settings.
 Cancel hooks and timers on close/disable; keep enable/disable idempotent. Shared
 setting changes apply at a safe reader layout update, preserving the reading anchor.
 
@@ -84,7 +84,7 @@ Repaint on page changes, minute boundaries and battery events. Time/battery-only
 updates dirty only the changed strip using partial refresh, and are suspended when
 the reader is covered or asleep. Ordinary page turns retain KOReader's page refresh
 policy; enabling or changing geometry may require its normal document relayout.
-No additional full refresh is requested by Orbit's status timer or battery handler.
+No additional full refresh is requested by BookSync's status timer or battery handler.
 
 ## Implementation notes
 

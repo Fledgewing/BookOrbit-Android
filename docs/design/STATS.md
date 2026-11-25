@@ -1,6 +1,6 @@
 # Battery summary format: `orbit-battery-stats/1`
 
-This file lets e-readers compare battery use. Orbit Companion (Android) writes it from
+This file lets e-readers compare battery use. BookSync Companion (Android) writes it from
 Battery › Export and reads it on Battery › Compare. Reader firmware, such as Xteink's, can
 write the same format. It is a single UTF-8 JSON object. Producers write it only when the user
 asks, and it holds nothing personal: no book titles or file names, no Wi-Fi names, no

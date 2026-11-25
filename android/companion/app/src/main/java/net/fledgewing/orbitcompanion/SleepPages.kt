@@ -151,17 +151,17 @@ object SleepSetup {
 
     /** The state line: what is wrong now, in plain words. */
     fun stateLine(mode: SleepMode): String = if (mode != SleepMode.OFF) {
-        "Sleep screen is on, but the reader still uses its own screen saver, so Orbit's cover doesn't show while it sleeps."
+        "Sleep screen is on, but the reader still uses its own screen saver, so BookSync's cover doesn't show while it sleeps."
     } else {
-        "Sleep screen is off, but Orbit's screen saver is still the reader's, so the reader's own sleep screen doesn't show."
+        "Sleep screen is off, but BookSync's screen saver is still the reader's, so the reader's own sleep screen doesn't show."
     }
 
     /** "Show how": the one-time USB command for now, and the grant that makes it automatic. */
     fun how(mode: SleepMode): String {
         val now = "tools/install-usb.sh --sleep-screen ${if (mode != SleepMode.OFF) "on" else "off"}"
-        return "This reader hides its Screen saver settings, so Orbit can't change what it shows while it sleeps. " +
+        return "This reader hides its Screen saver settings, so BookSync can't change what it shows while it sleeps. " +
             "Connect it to a computer and run, once:\n\n$now\n\n" +
-            "Or run $GRANT once instead: then Orbit switches the screen saver itself whenever you turn Sleep screen on or off."
+            "Or run $GRANT once instead: then BookSync switches the screen saver itself whenever you turn Sleep screen on or off."
     }
 
     fun hasSystemPage(ctx: android.content.Context): Boolean =
@@ -187,12 +187,12 @@ object SleepSetup {
  */
 object ScreenModeSetup {
     const val ID = "screen_mode"
-    const val TITLE = "Screen mode for Orbit"
-    const val HINT = "Set Orbit Companion to the reader's clearest screen mode (often called HD, Clear or Quality) " +
+    const val TITLE = "Screen mode for BookSync"
+    const val HINT = "Set BookSync Companion to the reader's clearest screen mode (often called HD, Clear or Quality) " +
         "in its per-app display settings, so the sleep screen draws without ghosting."
     const val HOW = "Most e-ink readers let you pick a screen mode per app: a fast one for scrolling, a clear one for pictures.\n\n" +
         "Open the reader's per-app display or refresh settings (often from a floating button, the top menu, or Settings › Display), " +
-        "choose Orbit Companion, and set it to the clearest mode (often called HD, Clear or Quality). Orbit can't see this " +
+        "choose BookSync Companion, and set it to the clearest mode (often called HD, Clear or Quality). BookSync can't see this " +
         "setting, so tap I've set it once it's done.\n\n" + SleepFlash.ABOUT
     const val SET = "I've set it"
     const val USE_FLASH = "Use a clearing flash instead"

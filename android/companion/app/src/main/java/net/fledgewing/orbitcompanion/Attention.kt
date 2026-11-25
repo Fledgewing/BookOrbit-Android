@@ -181,7 +181,7 @@ object Attention {
             setSound(null, null)
         })
         val n = r.needed.size
-        val text = "Orbit Companion: $n setup step${if (n == 1) "" else "s"} need${if (n == 1) "s" else ""} you"
+        val text = "BookSync Companion: $n setup step${if (n == 1) "" else "s"} need${if (n == 1) "s" else ""} you"
         val open = Intent(ctx, AttentionActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         nm.notify(ID, Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat)

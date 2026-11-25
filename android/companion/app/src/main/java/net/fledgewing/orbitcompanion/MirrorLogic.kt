@@ -156,7 +156,7 @@ object MirrorLogic {
 
     /** The note when the mirror stops at the storage limit (cases.json "storage.notes"). */
     fun limitText(covers: Boolean, done: Int, total: Int): String =
-        "Storage limit reached: $done of $total ${if (covers) "covers" else "lists and books"} saved. No room for new data; protected covers are kept. Raise the limit in Orbit settings."
+        "Storage limit reached: $done of $total ${if (covers) "covers" else "lists and books"} saved. No room for new data; protected covers are kept. Raise the limit in BookSync settings."
 
     // ------------------------------------------------------------------ the plan's paths
 

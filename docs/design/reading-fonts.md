@@ -1,6 +1,6 @@
 # Reading fonts: Bitter and Literata
 
-ROADMAP 12. Android (Orbit Companion); Xteink needs nothing (§5). Status: **building**.
+ROADMAP 12. Android (BookSync Companion); Xteink needs nothing (§5). Status: **building**.
 
 ## 1. Outcome
 
@@ -54,7 +54,7 @@ its `OFL.txt`.
 - **Where.** `<shared storage>/koreader/fonts`. KOReader on Android searches
   `home/fonts;home/koreader/fonts` with home = external storage
   (`frontend/ui/elements/font_settings.lua:19-21` at the pinned koreader), next to
-  `koreader/plugins`, where the companion installs the Orbit plugin (`PatchInstaller`). Same
+  `koreader/plugins`, where the companion installs the BookSync plugin (`PatchInstaller`). Same
   storage permission (target SDK 28, `WRITE_EXTERNAL_STORAGE`).
 - **Install** (`C/FontInstaller.kt`, plan in `ReadingFonts.plan`). On: download every file
   missing or not matching its hash, each to `<name>.orbit-part` and renamed only after the check
@@ -65,7 +65,7 @@ its `OFL.txt`.
   `getFontList`). After an install that wrote files, the row says "Installed; KOReader shows
   them after it restarts, when the screen next goes off" and offers **Restart KOReader**
   (PIN-free follow-through). Otherwise the companion restarts KOReader at the next screen-off,
-  from the same screen-off hook as the Orbit plugin's restart and never on top of it
+  from the same screen-off hook as the BookSync plugin's restart and never on top of it
   (`ReadingFonts.restart`); an open book reopens where it was. Nothing interrupts reading.
 - **Row.** Label "Reading fonts: Bitter, Literata"; off: "Without it: KOReader offers only its own
   fonts and the reader's; Bitter and Literata aren't among them." and **Turn on**; on: "On:

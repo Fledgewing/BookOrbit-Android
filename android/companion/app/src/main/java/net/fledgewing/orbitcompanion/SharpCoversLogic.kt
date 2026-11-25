@@ -110,14 +110,14 @@ object SharpCoversLogic {
 
     /** The Sleep screen page's row: (sub line, right-hand value). */
     fun row(state: State, haveServer: Boolean, sharp: Int, pool: Int, why: String?): Pair<String, String> = when {
-        !haveServer -> "Waiting for KOReader's next cover refresh, which tells Orbit the server" to ""
+        !haveServer -> "Waiting for KOReader's next cover refresh, which tells BookSync the server" to ""
         state == State.ON -> "Full-size covers from BookOrbit · $sharp of $pool ready" to "On ›"
         state == State.LOST -> "${why ?: "BookOrbit stopped accepting the sign-in"} · $FALLBACK" to "Sign in again ›"
         else -> "Sign in once with your BookOrbit OPDS login · $FALLBACK" to "Sign in once ›"
     }
 
     const val PROMPT = "Your BookOrbit OPDS login (often the same as your KOReader sync login). " +
-        "Orbit uses it once to get a cover link and keeps only that link, never the password."
+        "BookSync uses it once to get a cover link and keeps only that link, never the password."
     const val WRONG = "OPDS username or password not accepted."
     const val OPDS_OFF = "OPDS is off on this server or for this account. Covers come from the small thumbnail until it is on."
     const val NO_TOKEN = "BookOrbit sent no cover link: none of its recent books has a cover yet. Try again later."

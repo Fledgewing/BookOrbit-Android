@@ -41,7 +41,7 @@ function Channel.onLine(line)
             return false
         end
         if proof or line:match("^SETTINGS") or line:match("^SERVICE") or line:match("^CLICK") then
-            Channel.close("it is not Orbit Companion")
+            Channel.close("it is not BookSync Companion")
         end
         return false
     end

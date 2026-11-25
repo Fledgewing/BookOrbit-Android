@@ -75,7 +75,7 @@ class BatteryRowLogicTest {
         listOf(BatteryRow.BUCKET_RARE, BatteryRow.BUCKET_RESTRICTED).forEach {
             val r = row(bucket = it)
             assertFalse("bucket $it", r.done)
-            assertTrue(r.detail, r.detail.startsWith("Android is holding Orbit back"))
+            assertTrue(r.detail, r.detail.startsWith("Android is holding BookSync back"))
         }
     }
 

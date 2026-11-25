@@ -109,7 +109,7 @@ end
 
 function Companion.disabledText()
     local v = vendorDisabler()
-    return disabledText("Orbit Companion", v.label, v.hint)
+    return disabledText("BookSync Companion", v.label, v.hint)
 end
 
 installed_cache = { at = -1000, value = "missing", logged = nil }
@@ -226,7 +226,7 @@ end
 function Companion.workerProblem(purpose)
     purpose = purpose or _("to save BookOrbit for offline")
     local st = Companion.state()
-    if st ~= "ok" then return _("Orbit Companion needed") .. " " .. purpose end
+    if st ~= "ok" then return _("BookSync Companion needed") .. " " .. purpose end
     local t = now_s()
     if not Companion.version_at or t - Companion.version_at > 30 then
         local f = Companion.readFile()
@@ -234,7 +234,7 @@ function Companion.workerProblem(purpose)
     end
     local v = Companion.version
     if v ~= PATCH_VERSION then
-        return string.format(_("Update Orbit Companion to %s %s (it is %s)"), PATCH_VERSION, purpose, tostring(v or "older"))
+        return string.format(_("Update BookSync Companion to %s %s (it is %s)"), PATCH_VERSION, purpose, tostring(v or "older"))
     end
     return nil
 end
@@ -243,8 +243,8 @@ end
 function Companion.problem()
     local st = Companion.state()
     if st == "frozen" then return Companion.disabledText() end
-    if st == "untrusted" then return _("This Orbit Companion is not an Orbify release; Orbit doesn't use it.") end
-    if st == "missing" then return _("Orbit Companion is not installed.") end
+    if st == "untrusted" then return _("This BookSync Companion is not an Orbify release; BookSync doesn't use it.") end
+    if st == "missing" then return _("BookSync Companion is not installed.") end
     return nil
 end
 

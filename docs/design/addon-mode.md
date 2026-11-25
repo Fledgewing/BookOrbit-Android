@@ -21,7 +21,7 @@ Citation prefixes:
 |---|---|
 | `C/` | companion, `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/` |
 | `M/` | companion manifest, `android/companion/app/src/main/AndroidManifest.xml` |
-| `O/` | Orbit plugin, `android/koreader/orbit.koplugin/` |
+| `O/` | BookSync plugin, `android/koreader/orbit.koplugin/` |
 | `B/` | BookOrbit plugin 2.3.0 at v3.9.0 `c1dd6b4`, `upstream/bookorbit/koreader-plugin/bookorbit.koplugin/` |
 | `K/` | KOReader v2026.07.1 `9192014`, `upstream/koreader/` |
 | `I/` | `android/docs/INTERFACE.md`; `D/` `android/docs/DESIGN.md`; `S/` `android/docs/SETUP.md` |
@@ -38,19 +38,19 @@ Related designs, still drafts outside this repo: menus (ROADMAP 8b) and cache / 
      lock for sleep sync, turns the screen off, and runs the clicker and PIN services.
    - **Add-on** does not take over the launcher or manage Wi-Fi and sleep. Everything else is the
      same: it still downloads, installs, updates and configures KOReader, the BookOrbit plugin
-     and the Orbit plugin. Wi-Fi switching, sleep sync, the clicker service and the Settings PIN
+     and the BookSync plugin. Wi-Fi switching, sleep sync, the clicker service and the Settings PIN
      are optional **helpers**, each off until switched on.
 2. **Recommended settings are applied during setup, in both modes.** On a fresh or untouched
-   KOReader, Orbit applies them by itself, keeps a backup, and shows one line: "Applied 7
-   recommended settings · Review". On a KOReader where the user changed something, Orbit applies
+   KOReader, BookSync applies them by itself, keeps a backup, and shows one line: "Applied 7
+   recommended settings · Review". On a KOReader where the user changed something, BookSync applies
    only the items still at their default, and lists the ones that conflict for the user to pick
-   "Use Orbit's" or "Keep mine". Nothing the user changed is ever overwritten silently. Undo
+   "Use BookSync's" or "Keep mine". Nothing the user changed is ever overwritten silently. Undo
    restores the backup.
 3. **The plugin adapts to what the companion offers.** The companion publishes its mode and
    capabilities. The plugin hides or explains what's missing, with no errors. With no companion
    at all, the reading features still work.
 4. **Each mode has its own Setup checklist with "Fix next".** In Add-on, only four items are
-   required: KOReader, the BookOrbit plugin and the Orbit plugin installed, and signed in to
+   required: KOReader, the BookOrbit plugin and the BookSync plugin installed, and signed in to
    BookOrbit. Every permission is optional. Each one says what is lost without it, a declined one
    shows a calm "Off: …", and nothing nags. Reminders reach Add-on users without the
    Home-press prompt, and only for the required items.
@@ -71,7 +71,7 @@ Not in scope: Xteink (it has no launcher to take over); changing what Full mode 
 | `/status` lives in the service (loopback server) and has no mode or capability field. | `C/OrbitService.kt:555-640` |
 | Companion update checks run only from the service (start, Wi-Fi up). | `C/OrbitService.kt:209`, `:380`; `C/Updater.kt:75` |
 | The Home-press setup prompt and the KOReader setup box both exist. The box reads `setup_prompt` from `/status`. | `C/Attention.kt:85-103`; `O/ko/home.lua:500-526`; `D/` "Setup needs you" |
-| The Setup rows: tips, Not disabled, Install updates, KOReader, BookOrbit plugin, Orbit plugin, Home app, notifications, battery ×3, Tailscale, device admin, clicker, keyboard, Orbit plugin answered, Wi-Fi test. | `C/Pages.kt:473-747` |
+| The Setup rows: tips, Not disabled, Install updates, KOReader, BookOrbit plugin, BookSync plugin, Home app, notifications, battery ×3, Tailscale, device admin, clicker, keyboard, BookSync plugin answered, Wi-Fi test. | `C/Pages.kt:473-747` |
 | BookOrbit's stock defaults: `auto_sync=false`, `sync_forward=PROMPT`, `sync_backward=DISABLE`, `catalog_auto_open="off"`. They are readable at run time as `p.default_settings`. | `B/main.lua:102-125`, `:179-189` |
 | On Android, `hasSeamlessWifiToggle = no`, so BookOrbit's auto-sync guard does not need `wifi_enable_action = turn_on`. | `K/frontend/device/android/device.lua:80`; `B/main.lua:196`, `:1418-1427` |
 | "Make BookOrbit home" (`catalog_auto_open="home"`) opens BookOrbit at startup and whenever a book closes. | `B/bookorbit_settings_page.lua:208`; `B/main.lua:1410`, `:1473` |
@@ -89,7 +89,7 @@ Not in scope: Xteink (it has no launcher to take over); changing what Full mode 
 |---|---|---|---|
 | Install and update KOReader (official build, checked) | yes | yes | no (by hand or USB) |
 | Install the BookOrbit plugin | yes | yes | no |
-| Install and update the Orbit plugin; plugin self-update | yes | yes | self-update only |
+| Install and update the BookSync plugin; plugin self-update | yes | yes | self-update only |
 | Recommended settings applied during setup, with backup and undo (§5) | yes | yes (same rules) | yes (same rules) |
 | BookOrbit sync, local-first home, write-through cache, end-of-book sheet | yes | yes | yes |
 | KOReader opens into BookOrbit home (`catalog_auto_open`) | yes | yes | yes |
@@ -101,10 +101,10 @@ Not in scope: Xteink (it has no launcher to take over); changing what Full mode 
 | Sleep sync with a wake lock; Wi-Fi after sleep sync | yes | helper: **Sleep sync** | best effort, no wake lock |
 | Sync and sleep turns the screen off (device admin) | yes | sub-option of Sleep sync | no (asks for the power button) |
 | Clicker buttons in KOReader (keymap) and other apps (accessibility) | yes | helper: **Clicker buttons** | no |
-| Settings PIN (Orbit settings lock, guarded apps) | yes | helper: **Settings PIN** (cannot guard the vendor launcher's own settings) | no |
+| Settings PIN (BookSync settings lock, guarded apps) | yes | helper: **Settings PIN** (cannot guard the vendor launcher's own settings) | no |
 | Battery stats | yes | yes | no |
 | Restart KOReader after an update | yes | yes, while KOReader is in front (§7.4) | "close and reopen KOReader" |
-| Setup reminders | Home prompt, KOReader box, notification, for every step | KOReader box, notification, **only for the four required items and recommended-settings conflicts** | the plugin's own line in Orbit settings |
+| Setup reminders | Home prompt, KOReader box, notification, for every step | KOReader box, notification, **only for the four required items and recommended-settings conflicts** | the plugin's own line in BookSync settings |
 | Companion foreground service and its notification | always | only while a helper that needs it is on | n/a |
 
 ### 3.1 Without each permission (Add-on): the fallback
@@ -115,14 +115,14 @@ are steps, as today.
 
 | Permission or feature | What it enables | Fallback without it | Where the note shows |
 |---|---|---|---|
-| Install unknown apps | Orbit installs KOReader and updates itself | KOReader: "Install it yourself" link on the row. Companion updates: the update-ready notification (or Orbit's status page) offers "Download" to the browser instead of installing. | the KOReader row; Orbit's status page |
-| Storage access (asked at plugin install) | Orbit copies the plugins into `koreader/plugins/` and writes the status file | The plugin rows show copy-by-hand steps, and the Orbit plugin keeps updating itself (`O/ko/updater.lua`). Without the status file the plugin acts as plugin-only, plus `/status` when a service runs. | the plugin rows |
-| Notifications | update-ready and required-step alerts | the same text on Orbit's pages and on Orbit settings' status line in KOReader | nowhere extra (no nag) |
-| Accessibility (Orbit clicker) | clicker buttons and Send-keys in other apps; the app guard | clicker buttons still work inside KOReader (the keymap through `/status`, `I/` "keymap"); the PIN still locks Orbit's settings in KOReader | the Clicker page: "Only inside KOReader" |
-| Orbit keyboard | Send-key actions in other apps | Send-key actions work as page turns inside KOReader only | the Clicker page |
-| Device admin (force-lock) | Sync and sleep turns the screen off | Sync and sleep syncs, then "Synced. Press the power button to sleep." | that message, once with "Orbit can do this for you ›" |
+| Install unknown apps | BookSync installs KOReader and updates itself | KOReader: "Install it yourself" link on the row. Companion updates: the update-ready notification (or BookSync's status page) offers "Download" to the browser instead of installing. | the KOReader row; BookSync's status page |
+| Storage access (asked at plugin install) | BookSync copies the plugins into `koreader/plugins/` and writes the status file | The plugin rows show copy-by-hand steps, and the BookSync plugin keeps updating itself (`O/ko/updater.lua`). Without the status file the plugin acts as plugin-only, plus `/status` when a service runs. | the plugin rows |
+| Notifications | update-ready and required-step alerts | the same text on BookSync's pages and on BookSync settings' status line in KOReader | nowhere extra (no nag) |
+| Accessibility (BookSync clicker) | clicker buttons and Send-keys in other apps; the app guard | clicker buttons still work inside KOReader (the keymap through `/status`, `I/` "keymap"); the PIN still locks BookSync's settings in KOReader | the Clicker page: "Only inside KOReader" |
+| BookSync keyboard | Send-key actions in other apps | Send-key actions work as page turns inside KOReader only | the Clicker page |
+| Device admin (force-lock) | Sync and sleep turns the screen off | Sync and sleep syncs, then "Synced. Press the power button to sleep." | that message, once with "BookSync can do this for you ›" |
 | Battery: Unrestricted | sleep syncs and Wi-Fi-off timers on time | a sleep sync may be cut short; the BookOrbit outbox sends it on wake (`D/` "Risk") | nowhere extra |
-| Wi-Fi switching (feature) | Wi-Fi modes | Always on, as without the companion (`I/` "Without the companion") | Orbit settings: one line "Wi-Fi switching: in Orbit Companion ›" |
+| Wi-Fi switching (feature) | Wi-Fi modes | Always on, as without the companion (`I/` "Without the companion") | BookSync settings: one line "Wi-Fi switching: in BookSync Companion ›" |
 | Sleep sync (feature) | wake lock while syncing on sleep | the plugin still tries a sleep sync when Wi-Fi is on; the outbox covers the rest | same line |
 | Home role | not offered in Add-on | n/a | n/a |
 
@@ -133,7 +133,7 @@ are steps, as today.
 ### 4.1 First run: the mode choice (mockup 1)
 
 - The companion's first Setup page, shown while `Prefs.mode` is unset.
-- Two cards, no preselection: **Full: Orbit runs the reader** and **Add-on: keep your launcher**.
+- Two cards, no preselection: **Full: BookSync runs the reader** and **Add-on: keep your launcher**.
   Each lists in plain words what it does and does not do. "You can switch later in Settings."
 - **Existing installs never see it.** On the first start of the release that ships this, `mode`
   is set to Full when the companion is the Home app or any Full-only step is done (device admin
@@ -153,16 +153,16 @@ Today's rows, in today's order (`C/Pages.kt:473-747`), plus two:
 | Install updates | | install permission | system page |
 | KOReader app installed | | official build | install |
 | BookOrbit plugin installed | | ≥ `MIN_VERSION` | install |
-| Orbit plugin installed | | current | install / restart |
+| BookSync plugin installed | | current | install / restart |
 | **Signed in to BookOrbit** | new | the plugin reports `signed_in=1` (§7.3) | opens KOReader with `COMMAND=signin`: the plugin calls BookOrbit's `promptLogin()` (`B/main.lua:967`) |
 | **Recommended settings** | new | the plugin reports `recommended` = `applied` or `reviewed` | opens KOReader with `COMMAND=recommended`: the review page (§5.5) |
-| Set Orbit as Home app | | | Home settings |
+| Set BookSync as Home app | | | Home settings |
 | Allow notifications | | | |
 | Battery: Unrestricted ×3 | | | |
 | Tailscale signed in and connected | | | |
 | Allow "lock screen" | | | |
-| Clicker buttons / Orbit keyboard (shown only when mapped) | | | |
-| Orbit plugin answered (info) | | | |
+| Clicker buttons / BookSync keyboard (shown only when mapped) | | | |
+| BookSync plugin answered (info) | | | |
 | Wi-Fi off/on test (info) | | | |
 
 Header: "Full setup (12/14)". A one-line row at the top: "Mode: Full · Settings › Mode to change".
@@ -184,13 +184,13 @@ only ones "Fix next" walks, and the only ones that can raise the setup box or th
 |---|---|---|
 | KOReader installed | any KOReader that loads `koreader/plugins/` (the official build; §11 for others) | **Install** (needs "Install apps", asked then, see below) or "Install it yourself" (link to KOReader's releases) |
 | BookOrbit plugin installed | ≥ `MIN_VERSION` | **Install** (asks for storage access then) or the copy-by-hand steps (`S/` §6) |
-| Orbit plugin installed | current | same as above |
+| BookSync plugin installed | current | same as above |
 | Signed in to BookOrbit | the plugin reports `signed_in=1` (§7.3) | opens KOReader at BookOrbit's sign-in |
 
 Not required, and not counted:
 - **Recommended settings** is a status line under Required ("Applied 7 · Review", or "2 to
   review"). It is never a step (§5).
-- **Orbit plugin answered** and **Tailscale connected** (only if Tailscale is installed) are info
+- **BookSync plugin answered** and **Tailscale connected** (only if Tailscale is installed) are info
   lines.
 - **"Not disabled by the system"** is shown only while an app *is* frozen, as a warning on the
   row of the app it breaks. A frozen KOReader makes "KOReader installed" not done. Otherwise it
@@ -207,14 +207,14 @@ shows Off.
 
 | Optional | Without it | Allow does |
 |---|---|---|
-| **Install apps** ("Install unknown apps" for Orbit) | Orbit can't install KOReader or update itself; you install updates yourself from the releases page. | opens the system page |
-| **Notifications** | Orbit can't tell you about an update or a setup step; you see them in KOReader's Orbit settings and when you open Orbit. | system page |
-| **Clicker buttons in other apps** (accessibility) | Clicker buttons work only inside KOReader, and the Settings PIN locks only Orbit's settings, not other apps. | accessibility page; shown only once a clicker button is mapped or a PIN is set |
-| **Orbit keyboard** (input method) | Send-key clicker actions don't work in other apps. | input-method page; shown only while a Send-key action is mapped |
-| **Wi-Fi switching** (a feature, no Android prompt) | Wi-Fi stays as you leave it; a sync waits for Wi-Fi you turn on. | a switch; starts Orbit's background service |
+| **Install apps** ("Install unknown apps" for BookSync) | BookSync can't install KOReader or update itself; you install updates yourself from the releases page. | opens the system page |
+| **Notifications** | BookSync can't tell you about an update or a setup step; you see them in KOReader's BookSync settings and when you open BookSync. | system page |
+| **Clicker buttons in other apps** (accessibility) | Clicker buttons work only inside KOReader, and the Settings PIN locks only BookSync's settings, not other apps. | accessibility page; shown only once a clicker button is mapped or a PIN is set |
+| **BookSync keyboard** (input method) | Send-key clicker actions don't work in other apps. | input-method page; shown only while a Send-key action is mapped |
+| **Wi-Fi switching** (a feature, no Android prompt) | Wi-Fi stays as you leave it; a sync waits for Wi-Fi you turn on. | a switch; starts BookSync's background service |
 | **Sleep sync** (a feature) | Syncs on sleep happen only when Wi-Fi is already on and may be cut short; they finish when you next wake the reader. | a switch; starts the service |
 | **Screen off after Sync and sleep** (device admin, only with Sleep sync) | Sync and sleep syncs, then asks you to press the power button. | the device-admin page |
-| **Battery: Unrestricted** (Orbit, KOReader; only with Sleep sync or Wi-Fi switching on) | Android may pause Orbit or KOReader while the screen is off, so sleep syncs and Wi-Fi switching off can be late. | the app's battery page |
+| **Battery: Unrestricted** (BookSync, KOReader; only with Sleep sync or Wi-Fi switching on) | Android may pause BookSync or KOReader while the screen is off, so sleep syncs and Wi-Fi switching off can be late. | the app's battery page |
 
 **Storage access** isn't a row of its own. Android asks for it when the user taps Install on a
 plugin row. Declined, the plugin rows show "Copy the plugin by hand" with the steps. The status
@@ -222,7 +222,7 @@ file (§6.2) also needs storage access. Without it, the plugin sees no mode, fal
 or plugin-only behaviour, and says nothing.
 
 The Settings PIN and clicker mapping are not checklist rows. They are features the user turns on
-in Orbit's Settings, as today. The accessibility row above appears once they exist.
+in BookSync's Settings, as today. The accessibility row above appears once they exist.
 
 ### 4.4 Where reminders show in Add-on mode
 
@@ -238,7 +238,7 @@ three channels already exist and stay:
    the status file (§6.2) instead of `/status`. Mockup 8.
 2. **The companion's notification** ("Setup steps" channel), posted from the receiver or the
    daily job (§7.2) rather than the service. It is sent only when notifications are allowed.
-3. **Orbit settings' status line** in KOReader: "Orbit Companion: 1 setup step ›".
+3. **BookSync settings' status line** in KOReader: "BookSync Companion: 1 setup step ›".
 
 Rows that come from the plugin (Signed in, Recommended settings) are also shown by the plugin
 itself, so plugin-only users get them: a "Sign in to BookOrbit" line on its status, and the
@@ -257,7 +257,7 @@ When the plugin runs a pass, each item is in one of these states:
 |---|---|---|
 | **already** | current = ours | nothing; counted as applied |
 | **at default** | current = stock default (or unset) | **applied automatically**, prior value backed up |
-| **conflict** | current ≠ default and ≠ ours: the user changed it | **never overwritten**; listed for review: "Use Orbit's" / "Keep mine" |
+| **conflict** | current ≠ default and ≠ ours: the user changed it | **never overwritten**; listed for review: "Use BookSync's" / "Keep mine" |
 | **unavailable** | needs a capability or plugin that's missing | not applied, shown greyed with the reason |
 | **skipped / kept** | the user chose Keep mine (or Skip) before | left alone for good, until they change it on the review page |
 
@@ -285,12 +285,12 @@ That gives the two cases the user described, in both modes:
 | `bo.sync_forward` | BookOrbit › When BookOrbit is further ahead | Silent | Ask | BookOrbit plugin |
 | `bo.home` | BookOrbit › Make BookOrbit home (`catalog_auto_open`) | `home`: KOReader opens into BookOrbit at start and after a book closes | `off` | BookOrbit plugin; `Compat.settable` (`O/ko/recommended.lua:23`) |
 | `ko.wifi_on` | KOReader › Action when Wi-Fi is off | Turn on | unset (ask) | **Wi-Fi switching** (Full, or the Add-on helper). Without it the stock prompt stays. |
-| `g.sync_sleep` | Gesture in books: hold top-right corner | Orbit: Sync and sleep | none | Orbit plugin. Without the screen-off capability the label says "Sync, then press power". |
+| `g.sync_sleep` | Gesture in books: hold top-right corner | BookSync: Sync and sleep | none | BookSync plugin. Without the screen-off capability the label says "Sync, then press power". |
 | `g.sync_all` | Hold top-left corner | BookOrbit: sync all books | none | BookOrbit plugin, Gestures plugin |
 | `g.this_book` | Swipe right along the bottom edge | BookOrbit: this book | none | same |
-| `g.apps` | Two-finger swipe up | Orbit: other apps | brighter frontlight (devices with a light) | **`apps` capability (Full only)** |
+| `g.apps` | Two-finger swipe up | BookSync: other apps | brighter frontlight (devices with a light) | **`apps` capability (Full only)** |
 | `g.no_flip` | Tap top-left corner | nothing | toggle page-flipping (`defaults.lua:73`) | ships with 8b menus (its §5); listed here so one engine owns it |
-| `o.clean_menus` | Orbit › Clean menus | on | (Orbit's own; see below) | ships with 8b menus |
+| `o.clean_menus` | BookSync › Clean menus | on | (BookSync's own; see below) | ships with 8b menus |
 
 Notes:
 - Today's ConfirmBox also lists "further behind: Don't sync". That is BookOrbit's default
@@ -298,15 +298,15 @@ Notes:
   conflicts are never overwritten.
 - **`o.clean_menus`** has no KOReader default to compare with. It counts as at-default when the
   pass finds **no conflicts at all** (KOReader looks untouched), and as a conflict otherwise. A
-  user who has customised KOReader is therefore asked before Orbit replaces its menus. This
+  user who has customised KOReader is therefore asked before BookSync replaces its menus. This
   replaces the 8b design's "default on for new installs" with the same rule as every other item
   (§9).
 - `ko.wifi_on` stops being silent. `silentWifiOn` (`O/ko/wifi_backend.lua:106-113`) goes through
   this engine with a backup. When Wi-Fi switching is on it is **required**, not optional: in a
-  conflict the review explains that Wi-Fi switching needs it, and offers "Use Orbit's" or "Turn
+  conflict the review explains that Wi-Fi switching needs it, and offers "Use BookSync's" or "Turn
   Wi-Fi switching off".
-- Orbit's own feature defaults (local-first, offline cache, end-of-book sheet) are not on the
-  list. They are Orbit's settings with Orbit's defaults, unchanged.
+- BookSync's own feature defaults (local-first, offline cache, end-of-book sheet) are not on the
+  list. They are BookSync's settings with BookSync's defaults, unchanged.
 
 ### 5.3 When a pass runs
 
@@ -317,7 +317,7 @@ Notes:
   - a capability appeared that unblocks an unavailable item (the user switched a helper on).
 - Only the new or unblocked items are considered on later passes. An item once applied, kept or
   skipped is never evaluated again by a pass. So a user who later sets a gesture by hand never
-  sees Orbit change it back.
+  sees BookSync change it back.
 - **Writes happen at any time; messages only off a book** (file browser, BookOrbit home), like
   the setup box.
 - **Missing pieces wait, they don't fail.** With the BookOrbit plugin not loaded, its items are
@@ -331,7 +331,7 @@ Notes:
 ### 5.4 What the user sees
 
 - **After a pass that changed something**: one line, off-book, for 4 s, and the same text stays
-  on Orbit settings until tapped: "Applied 7 recommended settings · Review" (mockup 5), or
+  on BookSync settings until tapped: "Applied 7 recommended settings · Review" (mockup 5), or
   "Applied 4 · 2 to review" with conflicts. Tapping opens the review page.
 - **A pass with only conflicts**: no toast; the companion's "Recommended settings" row and the
   setup box carry it ("Review 2 recommended settings").
@@ -340,27 +340,27 @@ Notes:
 ### 5.5 The review page (mockup 4)
 
 A KOReader page (BookOrbit's kit, or a plain `Menu` when that kit is missing, like the 8b
-fallback). It is opened from the line above, from Orbit settings › Recommended settings, and from
+fallback). It is opened from the line above, from BookSync settings › Recommended settings, and from
 the companion's row (`COMMAND=recommended`).
 
-- **To review** (conflicts first): each row shows the setting, **yours** and **Orbit's**, and two
-  buttons, *Use Orbit's* / *Keep mine*. "Use all of Orbit's" and "Keep all mine" at the top
+- **To review** (conflicts first): each row shows the setting, **yours** and **BookSync's**, and two
+  buttons, *Use BookSync's* / *Keep mine*. "Use all of BookSync's" and "Keep all mine" at the top
   handle every conflict at once.
 - **Applied**: each applied item, with its earlier value ("was: Ask"), and a per-row *Undo*.
-- **Unavailable**: greyed, with the reason ("needs Wi-Fi switching in Orbit Companion",
+- **Unavailable**: greyed, with the reason ("needs Wi-Fi switching in BookSync Companion",
   "needs Full mode").
 - Footer: **Undo all** (restores every backed-up value), **Done**.
-- "Keep mine" is stored, and the row moves under "Kept yours", where *Use Orbit's* stays
+- "Keep mine" is stored, and the row moves under "Kept yours", where *Use BookSync's* stays
   available.
 
 ### 5.6 Backup and undo
 
 - `S.recommended = { rev, at, items = { [id] = "applied" | "already" | "kept" | "unavailable" } }`.
 - `S.recommended_backup = { [id] = { had = bool, prior = value, ours = value, at } }`, stored
-  with the plugin's settings (`orbit_android` in `G_reader_settings`), so an Orbit update keeps it
-  and uninstalling Orbit leaves KOReader's settings as they are.
+  with the plugin's settings (`orbit_android` in `G_reader_settings`), so an BookSync update keeps it
+  and uninstalling BookSync leaves KOReader's settings as they are.
 - **Undo restores the prior value only while the current value still equals ours.** A setting
-  the user changed after Orbit applied it is left as it is, and the row says "changed since;
+  the user changed after BookSync applied it is left as it is, and the row says "changed since;
   left as is".
 - `bo.auto_sync` undoes through BookOrbit's own toggle event, as it was applied. Gestures are
   restored by writing the prior table back (or removing the key when `had=false`) and flushing,
@@ -424,19 +424,19 @@ The plugin's order, in `Shared.refresh` (`O/ko/shared.lua`):
 ### 6.3 One check in the plugin
 
 `Companion.has(cap)` replaces `Companion.installed()` at the ~25 call sites that mean a feature,
-not the package (§2). `installed()` stays for "Open Orbit Companion" and the status line. Each
+not the package (§2). `installed()` stays for "Open BookSync Companion" and the status line. Each
 site keeps its existing no-companion branch (`I/` "Without the companion"), now taken whenever
 the cap is missing.
 
 ### 6.4 What the plugin shows for a missing feature (mockup 6)
 
 - **Settings rows that need a missing cap are hidden**, never greyed, except a single line at the
-  bottom of each affected section: "Wi-Fi switching and sleep sync: in Orbit Companion ›" (Add-on),
-  or "Needs Orbit Companion" (plugin only). Opening it starts the companion's Settings at that
+  bottom of each affected section: "Wi-Fi switching and sleep sync: in BookSync Companion ›" (Add-on),
+  or "Needs BookSync Companion" (plugin only). Opening it starts the companion's Settings at that
   helper.
 - **Actions that are still reachable** (a gesture, a Dispatcher action, a clicker) degrade:
   - *Sync and sleep* without `screen_off`: syncs, then "Synced. Press the power button to
-    sleep." plus, once per device, "Orbit Companion can do this for you ›".
+    sleep." plus, once per device, "BookSync Companion can do this for you ›".
   - *Other apps* without `apps`: "Use your reader's Home button for other apps."
   - Home at BookOrbit home without `home` (`O/logic/home_plan.lua:27` returns `"companion"`):
     becomes `"stay"`. BookOrbit home is the top; Android's Home key goes to the vendor launcher.
@@ -494,7 +494,7 @@ Add-on has no such window. Instead:
 ### 7.5 What Add-on never does
 
 It never asks for the Home role: `HomeActivity` is **disabled as a component** in Add-on
-(`setComponentEnabledSetting`), so Orbit isn't even a Home choice. It never asks for device admin
+(`setComponentEnabledSetting`), so BookSync isn't even a Home choice. It never asks for device admin
 or accessibility unless the user switches on the helper that needs it. It never sends `home`
 commands, never shows the launcher page, never starts KOReader at boot, and never changes Wi-Fi
 or holds a wake lock unless a helper is on.
@@ -506,7 +506,7 @@ or holds a wake lock unless a helper is on.
 Settings › **Mode** opens a page that says what will change, then does it in one go.
 
 **Full → Add-on**
-1. **Lists the changes:** Home goes back to your reader's launcher; Orbit stops switching Wi-Fi
+1. **Lists the changes:** Home goes back to your reader's launcher; BookSync stops switching Wi-Fi
    and keeping the reader awake for sleep sync; the lock-screen permission is released; the
    clicker service and PIN stop, unless you keep them below.
 2. **Keep helpers:** one checkbox per helper, each preset to **off**. A parent who wants the PIN
@@ -520,22 +520,22 @@ Settings › **Mode** opens a page that says what will change, then does it in o
    - stops the accessibility service with `AccessibilityService.disableSelf()` unless Clicker or
      PIN is kept; if the service isn't connected, it opens Accessibility settings with one line
      of instructions;
-   - leaves the Orbit keyboard enabled if it was (Android allows no app to disable an input
+   - leaves the BookSync keyboard enabled if it was (Android allows no app to disable an input
      method); it is inert without a Send-key mapping, and the page says how to turn it off;
    - cancels the Wi-Fi timer, releases any wake lock, leaves Wi-Fi as it is, and stops the
      service when no kept helper needs it;
    - rewrites the status file, so the plugin sees the new caps on its next refresh (start,
      resume, menu open).
 4. **In KOReader**, the plugin handles the caps it lost:
-   - `ko.wifi_on`, when Orbit set it, is undone through the backup (§5.6), because nothing
+   - `ko.wifi_on`, when BookSync set it, is undone through the backup (§5.6), because nothing
      switches Wi-Fi any more.
-   - `g.apps` (other apps) is undone if Orbit set it and the user hasn't changed it.
+   - `g.apps` (other apps) is undone if BookSync set it and the user hasn't changed it.
    - Every other recommended setting stays: they are about reading, not the mode.
 5. A summary: "Now in Add-on mode. Home opens <launcher>." with any step that needs the user
    (accessibility, keyboard).
 
 **Add-on → Full**
-1. Lists the changes: Orbit becomes the Home app and asks for the permissions Full needs.
+1. Lists the changes: BookSync becomes the Home app and asks for the permissions Full needs.
 2. Re-enables `HomeActivity`, sets `mode=full`, starts the service, writes the status file.
 3. Opens Setup on the Full checklist; "Fix next" walks the new rows (Home app, battery, lock
    screen, …).
@@ -549,7 +549,7 @@ Both directions are idempotent: running a half-finished switch again completes i
 ## 9. How Add-on changes the related designs
 
 **8b menus** (draft):
-- §4.4 *Orbit settings*: "Sync & Wi-Fi" shows Wi-Fi mode, idle minutes and Sleep sync limit only
+- §4.4 *BookSync settings*: "Sync & Wi-Fi" shows Wi-Fi mode, idle minutes and Sleep sync limit only
   with `wifi` / `sleep_sync`. "Sync and sleep now" stays (it degrades, §6.4). "Buttons › Clicker
   buttons" needs `clicker`. "Home button goes to" stays: it is KOReader's own Home behaviour. "Apply
   recommended settings / gestures" become one row, **Recommended settings ›** (§5.5).
@@ -568,10 +568,10 @@ Both directions are idempotent: running a half-finished switch again completes i
 - A3 *The Device page*: shown in both modes, with mode-dependent rows:
   - Full: as designed.
   - Add-on: **Mode** (Add-on · Switch ›), the four helper switches, the update row, the Setup row,
-    and "More in Orbit Companion ›". *Home opens*, *Wi-Fi after sleep* and the Wi-Fi rows appear
+    and "More in BookSync Companion ›". *Home opens*, *Wi-Fi after sleep* and the Wi-Fi rows appear
     only with their caps. Helper switches that need an Android permission go through A3a's
     `FixActivity`.
-  - Plugin only: hidden, replaced by "Get Orbit Companion for installs, updates and device
+  - Plugin only: hidden, replaced by "Get BookSync Companion for installs, updates and device
     helpers".
 - A4 *PIN keypad in KOReader*: needs `pin`.
 - A5 *Curtain and restarts*: in Add-on, the plugin starts the curtain itself (§7.4). "Restart at
@@ -585,9 +585,9 @@ Both directions are idempotent: running a half-finished switch again completes i
 
 | Device | Mode | Why |
 |---|---|---|
-| Readers where Orbit is already Home (Full set up) | Full | the companion is already Home; the PIN and the launcher matter |
+| Readers where BookSync is already Home (Full set up) | Full | the companion is already Home; the PIN and the launcher matter |
 | A new reader whose owner keeps the vendor launcher | Add-on (their choice on first run) | keep their launcher; Orbify installs and configures KOReader and the plugins |
-| KOReader with the Orbit plugin only | plugin only | reading features; no installs or device helpers |
+| KOReader with the BookSync plugin only | plugin only | reading features; no installs or device helpers |
 
 No device changes mode at the update (§4.1).
 
@@ -597,8 +597,8 @@ No device changes mode at the update (§4.1).
 
 | Case | Behaviour |
 |---|---|
-| No other Home app when switching to Add-on | refused: "Your reader has no other Home app, so Orbit has to stay Home." |
-| `disableSelf()` not possible (service not connected) | opens Accessibility settings with "Turn off Orbit clicker" |
+| No other Home app when switching to Add-on | refused: "Your reader has no other Home app, so BookSync has to stay Home." |
+| `disableSelf()` not possible (service not connected) | opens Accessibility settings with "Turn off BookSync clicker" |
 | Device admin removal fails | the row stays, with "Settings › Security › Device admin apps" |
 | Status file missing, unreadable or half-written | the plugin ignores it and falls back to the status call, then the caps seen last time (§6.2); written by rename, so a half file doesn't happen in practice |
 | Status file left by an uninstalled companion | ignored: `Companion.state()` says missing |
@@ -606,7 +606,7 @@ No device changes mode at the update (§4.1).
 | BookOrbit plugin not loaded during a pass | its items are unavailable; re-evaluated on the next start where it loads |
 | Gestures plugin off | gesture items unavailable, with today's message |
 | `Compat.settable` refuses `catalog_auto_open` | unavailable, logged (`O/ko/recommended.lua:23-27`) |
-| The user changes a setting after Orbit applied it, then taps Undo | that row is left as is: "changed since; left as is" |
+| The user changes a setting after BookSync applied it, then taps Undo | that row is left as is: "changed since; left as is" |
 | KOReader from F-Droid or the Play Store | the KOReader row explains, as today (`D/` one-way door 1, `S/` "Which KOReader?"). Whether the F-Droid flavour loads `koreader/plugins/` is **unverified**: `adb shell pm list packages | grep -i koreader`, then check whether `orbit.koplugin` appears in that build's Plugin manager. |
 | A crash in Add-on | KOReader is not restarted (no Home role); the user opens it from their launcher, and `open_book_at_exit` reopens the book (unchanged) |
 
@@ -694,10 +694,10 @@ Order: 1 first (independent), 2 before 3–6, 4 before 5 and 6.
 | 6 | Where do the settings get written? | companion edits files / plugin applies | **Plugin, in KOReader** | KOReader rewrites `settings.reader.lua` from memory (§5.7). |
 | 7 | Keep "further behind: Don't sync" in the list? | keep / drop | **Drop** | It is BookOrbit's default; it can only be a conflict, and conflicts aren't overwritten. |
 | 8 | Is `wifi_enable_action` a recommendation? | always / only with Wi-Fi switching | **Only with Wi-Fi switching, then required** | On Android, BookOrbit's auto-sync doesn't need it (`hasSeamlessWifiToggle = no`); without a switcher "turn on" just opens Settings. |
-| 9 | Clean menus in the list? | Orbit default on / offered | **In the list; at default only when KOReader has no conflicts** | A customised KOReader is exactly where replacing menus surprises people; an untouched one gets the simpler menus. |
+| 9 | Clean menus in the list? | BookSync default on / offered | **In the list; at default only when KOReader has no conflicts** | A customised KOReader is exactly where replacing menus surprises people; an untouched one gets the simpler menus. |
 | 10 | How does the plugin learn the caps when no service runs? | always run the service / a status file / a content provider over JNI | **A status file in `koreader/settings/`, plus `/status` for live fields** | No permanent notification in Add-on; the companion already writes into `koreader/`; a provider would need new JNI code. |
 | 11 | What does a missing `caps` field mean? | nothing works / everything works | **Superseded:** the caps seen last time, else none | Both sides ship together under `shared/contract/companion.json`; the legacy fallback is deleted. |
-| 12 | How does Add-on give up Home? | ask the user to change Home / clear preferred activities / disable `HomeActivity` | **Disable the component** | Works on every Android version, can't leave a dangling default, and keeps Orbit out of the Home chooser; reversible. |
+| 12 | How does Add-on give up Home? | ask the user to change Home / clear preferred activities / disable `HomeActivity` | **Disable the component** | Works on every Android version, can't leave a dangling default, and keeps BookSync out of the Home chooser; reversible. |
 | 13 | Service in Add-on? | always / only with helpers | **Only with helpers** | "Wouldn't manage Wi-Fi or sleep or anything"; fewer setup steps (no battery rows); update checks move to a daily job. |
 | 14 | Helper granularity | one "device helpers" switch / one per feature | **Four switches and a screen-off sub-option** | Each needs a different Android permission; an owner may want only the clicker. |
 | 15 | Helpers kept when switching Full → Add-on? | keep all / drop all / ask with all unticked | **Ask, all unticked** | Matches "off by default"; a parent can keep the PIN in one tap. |
@@ -708,7 +708,7 @@ Order: 1 first (independent), 2 before 3–6, 4 before 5 and 6.
 | 20 | The default mode on the first-run page | preselect Full / preselect Add-on / none | **None** | One tap either way, and it makes people read both. |
 | 21 | Existing installs | show the choice / infer | **Infer Full** from the Home role or Full-only steps | No reader already set up changes; the user rules out prompts that aren't needed. |
 | 22 | A mode flag in `tools/install-usb.sh` | now / later | **Later** | The on-device choice covers it; a flag is easy to add. |
-| 23 | Which Add-on items are required? | everything Full needs / installs only / installs + sign-in | **KOReader, BookOrbit plugin, Orbit plugin installed, and signed in** | User ruling: required stays minimal. Without sign-in, nothing syncs, so it is the one non-install item. Recommended settings apply by themselves, so they're a status, not a step. |
+| 23 | Which Add-on items are required? | everything Full needs / installs only / installs + sign-in | **KOReader, BookOrbit plugin, BookSync plugin installed, and signed in** | User ruling: required stays minimal. Without sign-in, nothing syncs, so it is the one non-install item. Recommended settings apply by themselves, so they're a status, not a step. |
 | 24 | Is "Install unknown apps" required in Add-on? | required / optional | **Optional** | The owner may already have KOReader, or prefer to install it themselves; updates then fall back to a download link. |
 | 25 | Storage access: its own row? | a row / asked at plugin install | **Asked at install, no row** | It is only needed by the install itself; the copy-by-hand fallback is on the plugin rows. |
 | 26 | A permission the user granted and Android later revoked (e.g. a vendor kills accessibility) | prompt as a regression / calm Off | **Calm Off** in Add-on | User ruling: nothing nags. Full keeps today's regression prompts. |
@@ -723,7 +723,7 @@ Each is written so that "yes" accepts my recommendation.
 
 1. **Existing readers get recommended settings applied once, at the update, and new items in
    later releases the same way.** This covers every reader already set up.
-   On each, Orbit applies only the items still at KOReader's or BookOrbit's default (for example
+   On each, BookSync applies only the items still at KOReader's or BookOrbit's default (for example
    auto-sync on, Silent when BookOrbit is ahead, KOReader opening into BookOrbit, the corner
    gestures). It never changes a value someone set, lists those to review instead, shows "Applied
    N recommended settings · Review", and keeps a backup for Undo. Behaviour on those readers
@@ -733,7 +733,7 @@ Each is written so that "yes" accepts my recommendation.
    says the companion never holds or knows the login. It still would never see the server, the
    user or the key; the plugin sends only `signed_in=1/0`, so Setup can tick "Signed in to
    BookOrbit" and remind someone who never signed in. **Recommended: yes.** If no, the row
-   moves into the plugin only, and the companion's checklist ends at "Orbit plugin answered".
+   moves into the plugin only, and the companion's checklist ends at "BookSync plugin answered".
 
 ---
 
@@ -752,9 +752,9 @@ Each is written so that "yes" accepts my recommendation.
 Waits for a later release (each is a fallback the design lists, not a lost feature):
 - §3.1 "Install apps" declined: the KOReader row's "Install it yourself" link and a browser
   "Download" for companion updates. Today the KOReader row asks for the permission, as in Full.
-- §3.1 Notifications declined: the required-step text on Orbit settings' status line in KOReader
+- §3.1 Notifications declined: the required-step text on BookSync settings' status line in KOReader
   is there (setup_needed), but the update-ready text is not mirrored into KOReader.
-- §6.4: the one-line "Wi-Fi switching and sleep sync: in Orbit Companion ›" opens the companion's
+- §6.4: the one-line "Wi-Fi switching and sleep sync: in BookSync Companion ›" opens the companion's
   main page, not its Settings at that helper.
 - §8 step 2 in Add-on: Settings › Mode's "Keep helpers" keeps Sleep sync and Screen off together
   (one checkbox).

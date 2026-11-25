@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Set up an Android e-reader over USB (adb): KOReader, the BookOrbit plugin, Orbit Companion
-# and the Orbit KOReader plugin, each downloaded from its official GitHub release and verified before
+# Set up an Android e-reader over USB (adb): KOReader, the BookOrbit plugin, BookSync Companion
+# and the BookSync KOReader plugin, each downloaded from its official GitHub release and verified before
 # anything touches the device. macOS and Linux. See android/docs/SETUP.md "Set up over USB".
 #
 #   tools/install-usb.sh                  install or update everything
 #   tools/install-usb.sh --fresh          first clear an old /sdcard/koreader (lists it, asks y/N)
 #   tools/install-usb.sh --books out.csv  also write the device's book list (before any change)
 #   tools/install-usb.sh --books out.csv --no-install   only the book list
-#   tools/install-usb.sh --grant-screen-saver   let Orbit Companion switch the screen saver itself
-#   tools/install-usb.sh --sleep-screen on|off  Orbit's sleep screen as the screen saver, or the old one back
+#   tools/install-usb.sh --grant-screen-saver   let BookSync Companion switch the screen saver itself
+#   tools/install-usb.sh --sleep-screen on|off  BookSync's sleep screen as the screen saver, or the old one back
 #
 # Needs: adb, curl, jq, unzip, and shasum (macOS) or sha256sum/sha1sum (Linux).
 # It never deletes anything but an old /sdcard/koreader you confirmed (--fresh), the plugin
-# folders it replaces and the old Orbit user patch (koreader/patches/2-orbit-android.lua).
+# folders it replaces and the old BookSync user patch (koreader/patches/2-orbit-android.lua).
 set -euo pipefail
 
 KOREADER_API="https://api.github.com/repos/koreader/koreader/releases/latest"
@@ -20,7 +20,7 @@ BOOKORBIT_API="https://api.github.com/repos/bookorbit/bookorbit"
 BOOKORBIT_RAW="https://raw.githubusercontent.com/bookorbit/bookorbit"
 ORBIT_API="https://api.github.com/repos/Fledgewing/Orbify/releases/latest"
 PLUGIN_NAME="bookorbit.koplugin"
-PLUGIN_MIN="2.3.0" # the plugin Orbit's hooks are checked against (companion PluginRelease.MIN_VERSION)
+PLUGIN_MIN="2.3.0" # the plugin BookSync's hooks are checked against (companion PluginRelease.MIN_VERSION)
 ORBIT_ZIP="orbit.koplugin.zip"
 ORBIT_PLUGIN="orbit.koplugin"
 OLD_PATCH="2-orbit-android.lua" # the user patch the plugin replaced (Orbify 0.7.x and older)
@@ -28,7 +28,7 @@ KO_DIR="/sdcard/koreader"
 NEO_URI="content://com.onyx.content.database.ContentProvider/Metadata"
 
 COMPANION_PKG="net.fledgewing.orbitcompanion"
-# The sleep screen (docs/design/lock-screen.md P1, P2): Orbit's screen saver, the only three secure
+# The sleep screen (docs/design/lock-screen.md P1, P2): BookSync's screen saver, the only three secure
 # settings it touches, and where --sleep-screen on keeps the values it replaced.
 SLEEP_DREAM="$COMPANION_PKG/$COMPANION_PKG.SleepDream"
 SLEEP_KEYS=(screensaver_components screensaver_enabled screensaver_activate_on_sleep)
@@ -286,9 +286,9 @@ download_orbit() {
     COMPANION_APK="$WORK/orbit-companion-$ver.apk"
     if command -v gh >/dev/null 2>&1 && gh attestation verify "$COMPANION_APK" -R Fledgewing/Orbify >/dev/null 2>&1 &&
         gh attestation verify "$WORK/$ORBIT_ZIP" -R Fledgewing/Orbify >/dev/null 2>&1; then
-        say "Orbit $ORBIT_TAG: companion and plugin match SHA256SUMS and their build attestations"
+        say "BookSync $ORBIT_TAG: companion and plugin match SHA256SUMS and their build attestations"
     else
-        say "Orbit $ORBIT_TAG: companion and plugin match SHA256SUMS (install the gh CLI to also check build attestations)"
+        say "BookSync $ORBIT_TAG: companion and plugin match SHA256SUMS (install the gh CLI to also check build attestations)"
     fi
     ORBIT_DIR=$(unpack_orbit "$WORK/$ORBIT_ZIP" "$WORK/orbit" "$ver")
 }
@@ -323,7 +323,7 @@ push_plugin() { # local dir, plugin folder name
 }
 
 install_orbit_plugin() {
-    say "Pushing the Orbit KOReader plugin $ORBIT_TAG"
+    say "Pushing the BookSync KOReader plugin $ORBIT_TAG"
     push_plugin "$ORBIT_DIR" "$ORBIT_PLUGIN"
     # The plugin replaces the user patch; with both present the plugin stays off.
     dsh rm -f "$KO_DIR/patches/$OLD_PATCH" "$KO_DIR/patches/$OLD_PATCH.new"
@@ -331,8 +331,8 @@ install_orbit_plugin() {
 
 # ---------------------------------------------------------------- installs
 
-# Puts Orbit, KOReader and Tailscale (each if installed) on Android's Doze allowlist: what the
-# setup row "Battery: Unrestricted" checks. Some readers (the Boox Page) show Orbit, a device
+# Puts BookSync, KOReader and Tailscale (each if installed) on Android's Doze allowlist: what the
+# setup row "Battery: Unrestricted" checks. Some readers (the Boox Page) show BookSync, a device
 # admin, as "Battery optimization not available" with no switch, yet Doze still applies. Android
 # keeps the list across reboots (deviceidle.xml). Undo: dumpsys deviceidle whitelist -<package>.
 BATTERY_PKGS=(net.fledgewing.orbitcompanion org.koreader.launcher com.tailscale.ipn)
@@ -352,8 +352,8 @@ install_all() {
     say "Installing KOReader $KO_TAG"
     "${ADB[@]}" install -r "$KO_APK" ||
         die "KOReader didn't install. An unofficial KOReader (another signature) must be uninstalled first; your books and $KO_DIR stay."
-    say "Installing Orbit Companion $ORBIT_TAG"
-    "${ADB[@]}" install -r "$COMPANION_APK" || die "Orbit Companion didn't install"
+    say "Installing BookSync Companion $ORBIT_TAG"
+    "${ADB[@]}" install -r "$COMPANION_APK" || die "BookSync Companion didn't install"
 
     local have
     have=$(dsh cat "$KO_DIR/plugins/$PLUGIN_NAME/main.lua" 2>/dev/null | sed -n 's/^local PLUGIN_VERSION = "\([^"]*\)".*/\1/p' || true)
@@ -366,7 +366,7 @@ install_all() {
 
     install_orbit_plugin
     allowlist_battery
-    say "Done. Open Orbit Companion on the device and follow Setup (Fix next)."
+    say "Done. Open BookSync Companion on the device and follow Setup (Fix next)."
 }
 
 # ---------------------------------------------------------------- sleep screen
@@ -379,8 +379,8 @@ sleep_saved_lines() {
 
 grant_screen_saver() {
     "${ADB[@]}" shell pm grant "$COMPANION_PKG" android.permission.WRITE_SECURE_SETTINGS ||
-        die "the grant failed: is Orbit Companion installed?"
-    say "Orbit Companion may now switch the screen saver itself (Settings › Sleep screen)."
+        die "the grant failed: is BookSync Companion installed?"
+    say "BookSync Companion may now switch the screen saver itself (Settings › Sleep screen)."
 }
 
 sleep_screen() { # on | off
@@ -394,7 +394,7 @@ sleep_screen() { # on | off
             dsh settings put secure screensaver_components "$SLEEP_DREAM" >/dev/null
             dsh settings put secure screensaver_enabled 1 >/dev/null
             dsh settings put secure screensaver_activate_on_sleep 1 >/dev/null
-            say "Orbit's sleep screen is the screen saver now; tools/install-usb.sh --sleep-screen off puts the old one back."
+            say "BookSync's sleep screen is the screen saver now; tools/install-usb.sh --sleep-screen off puts the old one back."
             ;;
         off)
             local saved line k v

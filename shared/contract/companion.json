@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "The Orbit KOReader plugin <-> Orbit Companion contract (android/docs/INTERFACE.md is the human view). Both sides test against this file: ContractTest.kt and test_flows.lua 'contract'. Change it with both sides in the same change.",
+  "about": "The BookSync KOReader plugin <-> BookSync Companion contract (android/docs/INTERFACE.md is the human view). Both sides test against this file: ContractTest.kt and test_flows.lua 'contract'. Change it with both sides in the same change.",
   "package": "net.fledgewing.orbitcompanion",
   "authority": "net.fledgewing.orbitcompanion.commands",
   "common_extras": [
@@ -159,7 +159,7 @@
         "cover_dir",
         "mirror_covers"
       ],
-      "does": "count what Orbit stores and remove the oldest over the limit"
+      "does": "count what BookSync stores and remove the oldest over the limit"
     },
     {
       "name": "COPIES",

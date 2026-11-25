@@ -42,7 +42,7 @@ class ClickersActivity : EinkActivity() {
         val connected = ClickerStore.connectedNames()
         val state = ClickerStore.state(this)
         if (state == ClickerRowState.OFF || state == ClickerRowState.NOT_CONNECTED) {
-            root.addView(Ui.text(this, "Works in KOReader now. For other apps, switch on Settings › Accessibility › Orbit clicker buttons.", 17f, bold = true))
+            root.addView(Ui.text(this, "Works in KOReader now. For other apps, switch on Settings › Accessibility › BookSync clicker buttons.", 17f, bold = true))
             root.addView(Ui.button(this, "Open Accessibility settings", heightDp = 64, sp = 18f) {
                 tryStart(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), "accessibility settings")
             })
@@ -99,7 +99,7 @@ class ClickersActivity : EinkActivity() {
                 p.imeSwitchFailures > 0 -> "Switching keyboards failed ${p.imeSwitchFailures}× on this reader: turn this on."
                 else -> "Only if Send-key actions don't arrive."
             }
-            root.addView(Ui.row(this, "Keep Orbit keyboard active", note, Ui.toggle(this, p.keepOrbitKeyboard), onClick = {
+            root.addView(Ui.row(this, "Keep BookSync keyboard active", note, Ui.toggle(this, p.keepOrbitKeyboard), onClick = {
                 p.keepOrbitKeyboard = !p.keepOrbitKeyboard
                 OLog.i("keys: keep Orbit keyboard active ${if (p.keepOrbitKeyboard) "on" else "off"}")
                 if (p.keepOrbitKeyboard) {
@@ -110,11 +110,11 @@ class ClickersActivity : EinkActivity() {
                 }
                 render()
             }))
-            root.addView(Ui.text(this, "Sent keys (Volume, Page up/down, arrows, Space) go through the Orbit keyboard, which has no keys. Normally it switches in just for the press and your keyboard comes back at once, and a press while you type in a text field does nothing. With \"Keep Orbit keyboard active\" it stays your keyboard instead: to type, use the notification's \"Switch keyboard\", then pick Orbit clicker keys again afterwards.", 15f, color = Ui.MID).apply {
+            root.addView(Ui.text(this, "Sent keys (Volume, Page up/down, arrows, Space) go through the BookSync keyboard, which has no keys. Normally it switches in just for the press and your keyboard comes back at once, and a press while you type in a text field does nothing. With \"Keep BookSync keyboard active\" it stays your keyboard instead: to type, use the notification's \"Switch keyboard\", then pick BookSync clicker keys again afterwards.", 15f, color = Ui.MID).apply {
                 setPadding(0, Ui.dp(this@ClickersActivity, 8), 0, 0)
             })
         }
-        root.addView(Ui.text(this, "In KOReader the patch turns pages exactly, no permission needed. Other apps get page taps (right/left third by default; change them on a page action). Orbit never stores or sends your key presses.", 15f, color = Ui.MID).apply {
+        root.addView(Ui.text(this, "In KOReader the patch turns pages exactly, no permission needed. Other apps get page taps (right/left third by default; change them on a page action). BookSync never stores or sends your key presses.", 15f, color = Ui.MID).apply {
             setPadding(0, Ui.dp(this@ClickersActivity, 8), 0, 0)
         })
     }
@@ -172,7 +172,7 @@ class CaptureActivity : EinkActivity() {
         card.addView(Ui.row(this, "From", String.format("%04x:%04x", h.vendor, h.product), Ui.value(this, h.name)))
         val koreaderKnows = h.keycode in setOf(21, 22, 24, 25, 92, 93)
         card.addView(Ui.row(this, "KOReader alone", if (h.builtinToo) "also a built-in button: KOReader keeps its own meaning" else null,
-            Ui.value(this, if (koreaderKnows) "turns pages" else "ignores it · Orbit adds it")))
+            Ui.value(this, if (koreaderKnows) "turns pages" else "ignores it · BookSync adds it")))
         root.addView(card)
         root.addView(Ui.gap(this, 8))
         root.addView(Ui.text(this, "This button, when", 17f, color = Ui.MID))
@@ -259,7 +259,7 @@ class ClickActionActivity : EinkActivity() {
         root.addView(Ui.row(this, "+ Override for another app", "e.g. Volume down in one reader", Ui.value(this, "›"), onClick = { pickingApp = true; render() }))
         val used = (listOf(default) + overrides.mapNotNull { b.appActions[it]?.get(kind) }).toSet()
         if (used.any { it.sendsKey }) {
-            root.addView(Ui.text(this, "Sent keys go through the Orbit keyboard: it switches in for the press, then your keyboard comes back. In KOReader they turn the page. Settings › Clicker buttons has \"Keep Orbit keyboard active\" if switching fails.", 15f, color = Ui.MID))
+            root.addView(Ui.text(this, "Sent keys go through the BookSync keyboard: it switches in for the press, then your keyboard comes back. In KOReader they turn the page. Settings › Clicker buttons has \"Keep BookSync keyboard active\" if switching fails.", 15f, color = Ui.MID))
         }
         listOf(ClickAction.NEXT, ClickAction.PREV).filter { it in used }.forEach { action ->
             section(root, "${action.label.uppercase()} TAPS IN")

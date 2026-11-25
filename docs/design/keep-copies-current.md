@@ -9,14 +9,14 @@ changes ([server contract](../server-contract.md#a-metadata-write-changes-the-fi
 downloaded before then no longer matches: the server marks it `positionCompatible: false`, and
 progress, highlights and bookmarks stop syncing for that book.
 
-## What Orbit does
+## What BookSync does
 
 - **Find.** A copy is changed when BookOrbit's state marks it `positionIncompatible`, or when a
   saved book detail lists its library file with a `fileHash` other than the copy's
-  Orbit Companion looks this up (`COPIES`, `CopiesLogic`; docs/design/companion-worker.md), so
+  BookSync Companion looks this up (`COPIES`, `CopiesLogic`; docs/design/companion-worker.md), so
   KOReader's UI thread reads no saved detail and checks no file. Copies not on this reader are skipped. BookOrbit's
   plugin has no path for updating a copy (its bulk download skips books already on the device,
-  `bookorbit_catalog_bulk_download.lua:965`), so Orbit adds one.
+  `bookorbit_catalog_bulk_download.lua:965`), so BookSync adds one.
 - **When.** Online only, never while reading (the [reading gate](reading-gate.md)), one book at a
   time, from a queue kept on disk that resumes. It looks when a Full refresh starts and again when
   it ends, when BookOrbit Home opens (over a book too), at a wake or the network coming up, and
@@ -33,7 +33,7 @@ progress, highlights and bookmarks stop syncing for that book.
   no hash to check, is left alone.
 - **Carry over.** The KOReader sidecar is kept by path (`book.sdr` next to the book, or the
   `docsettings` folder), and the text is unchanged, so positions, highlights and bookmarks still
-  fit. Orbit then moves what is keyed by the file hash:
+  fit. BookSync then moves what is keyed by the file hash:
   - the sidecar's `partial_md5_checksum`, which KOReader never updates by itself
     (`readerui.lua:496-500`);
   - KOReader's hash-keyed sidecar folder, when that location is used: copied to the new hash;
@@ -43,7 +43,7 @@ progress, highlights and bookmarks stop syncing for that book.
     `getDocumentDigest` makes, `bookorbit_progress_sync.lua:80-108`).
 - **Log.** `copies: N changed; replacing`, then one line per book: replaced (old -> new hash),
   already current, or failed (the old copy stays).
-- **Setting.** Orbit menu › "Keep book copies current", on by default.
+- **Setting.** BookSync menu › "Keep book copies current", on by default.
 
 ## Xteink
 

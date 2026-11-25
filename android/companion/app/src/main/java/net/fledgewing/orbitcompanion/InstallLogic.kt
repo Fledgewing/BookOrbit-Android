@@ -65,7 +65,7 @@ object KoreaderRelease {
     fun explain(s: State): String = when (s) {
         State.MISSING -> "not installed · tap to install the official KOReader from GitHub"
         State.OFFICIAL -> "official build"
-        State.FDROID_ONLY -> "F-Droid's KOReader is a separate app that skips user patches, so the patch and Orbit can't work with it. Tap to install the official KOReader next to it; your books stay where they are."
+        State.FDROID_ONLY -> "F-Droid's KOReader is a separate app that skips user patches, so the patch and BookSync can't work with it. Tap to install the official KOReader next to it; your books stay where they are."
         State.OTHER_SIGNER -> "this KOReader is signed by someone else, so Android can't update it with the official one. Uninstall it first (your books and koreader/ folder stay), then tap here."
     }
 }
@@ -134,7 +134,7 @@ object DeviceChecks {
     }
 
     fun playProtect(): String =
-        "Play Protect checks apps installed outside the Play Store and may warn about Orbit, KOReader or their updates. Tap \"More details\", then \"Install anyway\". The Settings PIN never covers it during an install."
+        "Play Protect checks apps installed outside the Play Store and may warn about BookSync, KOReader or their updates. Tap \"More details\", then \"Install anyway\". The Settings PIN never covers it during an install."
 }
 
 /**
