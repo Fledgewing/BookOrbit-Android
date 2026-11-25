@@ -40,6 +40,7 @@ class SettingsSyncTest {
 
     @Test
     fun mergeCases() {
+        // @fixture settings/merge.json
         val cases = JSONObject(File("../../../shared/fixtures/settings/merge.json").readText()).getJSONArray("cases")
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
@@ -134,8 +135,8 @@ class SettingsUiTest {
     }
 
     @Test
-    fun choicesFileParses() {
-        val c = SleepChoices.parse("""{"v":1,"at":5,"cached":true,"scopes":[{"id":3,"title":"Short reads","count":48},{"id":0}],"collections":[{"id":9,"title":"Book club"}],"tags":[{"tag":"a","label":"A","count":1},{"tag":"Age:18","count":14}]}""")!!
+    fun pickerListsParse() {
+        val c = SleepChoices.parse("""{"v":1,"at":5,"scopes":[{"id":3,"title":"Short reads","count":48},{"id":0}],"collections":[{"id":9,"title":"Book club"}],"tags":[{"tag":"a","label":"A","count":1},{"tag":"Age:18","count":14}]}""")!!
         assertEquals(1, c.scopes.size)
         assertEquals("Short reads (smart scope)", c.title("scope:3"))
         assertEquals("age:18", c.tags.first().tag)
@@ -144,14 +145,16 @@ class SettingsUiTest {
     }
 
     @Test
-    fun theCompanionsScopesFileWinsWhenNewer() {
-        val choices = """{"at":5,"scopes":[{"id":1,"title":"Old"}],"tags":[{"tag":"x","count":2}]}"""
+    fun thePickerReadsTheWorkersScopesAndTags() {
         val scopes = """{"v":1,"at":9,"scopes":[{"id":2,"title":"New","count":3}],"collections":[]}"""
-        val c = SleepChoices.combine(choices, scopes)!!
+        val tags = """{"v":1,"at":7,"details":40,"tags":[{"tag":"x","label":"X","count":2}]}"""
+        val c = SleepChoices.combine(scopes, tags)!!
         assertEquals("New", c.scopes.single().title)
         assertEquals("x", c.tags.single().tag)
-        assertEquals("Old", SleepChoices.combine(choices.replace("\"at\":5", "\"at\":99"), scopes)!!.scopes.single().title)
-        assertEquals("New", SleepChoices.combine(null, scopes)!!.scopes.single().title)
+        assertEquals(9L, c.at)
+        assertEquals("New", SleepChoices.combine(scopes, null)!!.scopes.single().title)
+        assertEquals("x", SleepChoices.combine(null, tags)!!.tags.single().tag)
+        assertNull(SleepChoices.combine(null, null))
     }
 
     @Test

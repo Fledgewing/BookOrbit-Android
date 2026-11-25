@@ -308,6 +308,7 @@ int main(int argc, char** argv) {
   const std::string dir = argv[1];
   JsonDocument doc;
   if (!loadJsonFile((dir + "/finish-cases.json").c_str(), doc)) return 1;
+  // @fixture bookorbit/finish-cases.json#picker @fixture bookorbit/catalog-book.no-author.json @fixture bookorbit/catalog-book.no-series.json @fixture bookorbit/catalog-book.series-fractional.json @fixture bookorbit/catalog-book.series-gap.json @fixture bookorbit/catalog-book.series-last-all-read.json @fixture bookorbit/catalog-book.series-last-unread-earlier.json @fixture bookorbit/catalog-book.series-middle.json
   for (JsonObjectConst c : doc["picker"].as<JsonArrayConst>()) {
     checkCase(dir, c, 1);
     checkCase(dir, c, 2);

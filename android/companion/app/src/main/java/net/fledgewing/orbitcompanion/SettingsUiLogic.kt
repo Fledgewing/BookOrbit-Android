@@ -133,7 +133,7 @@ object SettingsUi {
         current.split(';').map { it.trim() }.lastOrNull { it.substringBefore('=') == id || it.substringBefore('=') == "all" }?.substringAfter('=')
 }
 
-/** The plugin's choices.json (android/docs/INTERFACE.md "Sleep screen"): lists for the picker and the tag list. */
+/** The sleep screen picker's lists and tag list, from the companion's scopes.json and tags.json (SleepPoolBuilder). */
 data class SleepChoices(
     val at: Long,
     val cached: Boolean,
@@ -162,7 +162,6 @@ data class SleepChoices(
     }
 
     companion object {
-        const val FILE = "choices.json"
         const val LIBRARY_RULE = "Library: every book (the sleep screen shows the current book)"
 
         /** "Scope not found" (X7) when an id is not in the lists. */
@@ -173,23 +172,22 @@ data class SleepChoices(
             else -> wire
         }
 
-        /** The companion's own scopes.json (its worker fetches the lists), written at a pool refresh. */
+        /** The worker's lists (SleepPoolBuilder.scopes), fetched when the picker opens. */
         const val SCOPES_FILE = "scopes.json"
 
-        /**
-         * The picker's lists: the newer of scopes.json (the companion's) and choices.json (the
-         * plugin's, which also carries the tags); tags always from choices.json.
-         */
+        /** The tags in the saved book details, with counts (SleepPoolBuilder.tags). */
+        const val TAGS_FILE = "tags.json"
+
+        /** The picker's lists from scopes.json, its tag list from tags.json. */
         fun read(dir: java.io.File): SleepChoices? = combine(
-            runCatching { java.io.File(dir, FILE).readText() }.getOrNull(),
             runCatching { java.io.File(dir, SCOPES_FILE).readText() }.getOrNull(),
+            runCatching { java.io.File(dir, TAGS_FILE).readText() }.getOrNull(),
         )
 
-        fun combine(choicesText: String?, scopesText: String?): SleepChoices? {
-            val c = parse(choicesText)
-            val s = parse(scopesText) ?: return c
-            if (c == null) return s
-            return if (s.at >= c.at) c.copy(at = s.at, cached = false, scopes = s.scopes, collections = s.collections) else c
+        fun combine(scopesText: String?, tagsText: String?): SleepChoices? {
+            val s = parse(scopesText)
+            val t = parse(tagsText) ?: return s
+            return s?.copy(tags = t.tags) ?: t
         }
 
         fun parse(text: String?): SleepChoices? {

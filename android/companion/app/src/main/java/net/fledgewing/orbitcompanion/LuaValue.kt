@@ -240,7 +240,7 @@ object LuaValue {
     /** `Cache.revalidate`: does the reply differ from what is saved? */
     fun changed(saved: Any?, reply: Any?): Boolean = !encode(normalize(saved)).contentEquals(encode(normalize(reply)))
 
-    /** `Cache.settle`: the reply, with the saved random pick kept (a Full refresh takes the new). */
+    /** The reply, with the saved random pick kept (a Full refresh takes the new). */
     fun settle(saved: Any?, reply: Any?, mode: String?): Any? {
         if (saved !is Map<*, *> || reply !is Map<*, *> || mode == "full") return reply
         val out = java.util.TreeMap<String, Any?>()
