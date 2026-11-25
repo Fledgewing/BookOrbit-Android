@@ -258,10 +258,13 @@ class PinActivity : EinkActivity() {
 
     override val pinPage = PinPage.NEUTRAL
 
+    /** The keypad is never a page to come back to after an update. */
+    override val returnable = false
+
     companion object {
         const val SHOW_PIN = "${Contract.PACKAGE}.action.SHOW_PIN"
 
-        /** The page an update install was started from (UpdateReturn); none from the notification. */
+        /** The pages an update install was started from (UpdateReturn.encode); none from the notification. */
         const val EXTRA_FROM = "update_from"
 
         fun intent(ctx: Context, mode: Mode, guarded: String? = null, cls: String? = null): Intent =
@@ -284,8 +287,8 @@ class PinActivity : EinkActivity() {
          * itself stays in memory (Updater.pendingConfirm), never taken from an extra. */
         fun thenInstall(ctx: Context, confirm: Intent): Intent {
             Updater.pendingConfirm = confirm
-            // Status's Install button names its page; the notification (over KOReader) names none (UpdateReturn).
-            val from = (ctx as? Activity)?.javaClass?.name
+            // Status's Install button names its page and the pages under it; the notification (over KOReader) names none (UpdateReturn).
+            val from = (ctx as? Activity)?.let { UpdateReturn.encode(it) }
             return intent(ctx, Mode.UNLOCK).putExtra("install", true).putExtra(EXTRA_FROM, from).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 

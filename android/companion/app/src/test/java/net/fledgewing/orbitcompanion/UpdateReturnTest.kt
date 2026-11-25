@@ -41,7 +41,8 @@ class UpdateReturnTest {
         Updater.pendingConfirm = null
     }
 
-    private fun drain(): List<Intent> = generateSequence { shadowOf(app).nextStartedActivity }.toList()
+    /** Started activities in start order (Robolectric hands back the newest first). */
+    private fun drain(): List<Intent> = generateSequence { shadowOf(app).nextStartedActivity }.toList().reversed()
 
     private fun confirm() = Intent("android.content.pm.action.CONFIRM_INSTALL").setPackage("com.android.packageinstaller")
 
@@ -77,7 +78,7 @@ class UpdateReturnTest {
         install(app) // the update-ready notification's tap: no page
         Updater.onReplaced(app)
         val started = drain()
-        assertTrue("no companion page reopens", started.none { it.component?.className == StatusActivity::class.java.name })
+        assertTrue("no companion page reopens", started.none { it.component?.packageName == app.packageName })
         assertFalse(UpdateReturn.fromPage())
         assertTrue("KOReader restarts at once, as before", UpdateReturn.restartNow(userConfirmed = true, fromPage = UpdateReturn.fromPage()))
         assertNull("Home goes to KOReader as usual", UpdateReturn.forHome())
@@ -105,14 +106,104 @@ class UpdateReturnTest {
         assertNull(UpdateReturn.forHome())
     }
 
+    /** M8C 11-24 15:55: Settings › Updates came back as a bare SettingsSectionActivity (the default section, no stack under it). */
+    @Test
+    fun updateFromASettingsSectionReturnsToThatSectionWithItsBackStack() {
+        Robolectric.buildActivity(LauncherActivity::class.java).create()
+        Robolectric.buildActivity(SettingsActivity::class.java).create()
+        val section = Robolectric.buildActivity(SettingsSectionActivity::class.java, SettingsPage.section(app, "updates")).create().get()
+        drain()
+        install(section)
+
+        Updater.onReplaced(app)
+        val started = drain().filter { it.component?.packageName == app.packageName }
+        assertEquals(
+            "the stack the user had, oldest first",
+            listOf(LauncherActivity::class.java.name, SettingsActivity::class.java.name, SettingsSectionActivity::class.java.name),
+            started.map { page(it) },
+        )
+        val top = started.last()
+        assertEquals("the same section", "updates", top.getStringExtra(SettingsPage.EXTRA_SECTION))
+        assertEquals("at the App version row", SettingsPage.UPDATE_ROW, top.getStringExtra(SettingsPage.EXTRA_FOCUS))
+        assertTrue("one task: only the first page starts it", started.first().flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+        assertTrue("the page shows the result", Prefs(app).updateStatus.startsWith("updated to v"))
+    }
+
+    /** M8C 11-24 15:56:01: a Home press 10 s after the page showed reopened it a second time. */
+    @Test
+    fun theReturnLandsOnceAndALaterHomePressIsAnOrdinaryHomePress() {
+        val section = Robolectric.buildActivity(SettingsSectionActivity::class.java, SettingsPage.section(app, "updates")).create().get()
+        install(section)
+        Updater.onReplaced(app)
+        val reopened = drain().filter { it.component?.packageName == app.packageName }
+        assertEquals(1, reopened.size)
+
+        // The reopened page shows.
+        Robolectric.buildActivity(SettingsSectionActivity::class.java, reopened.single()).setup().pause()
+        drain()
+
+        Updater.onReplaced(app) // a repeat MY_PACKAGE_REPLACED
+        val home = Robolectric.buildActivity(HomeActivity::class.java).setup().get()
+        val after = drain() + generateSequence { shadowOf(home).nextStartedActivity }.toList()
+        assertTrue("no second reopen: $after", after.none { page(it) == SettingsSectionActivity::class.java.name })
+        assertNull(UpdateReturn.forHome())
+    }
+
+    @Test
+    fun updateFromTheLauncherReturnsToTheLauncher() {
+        val launcher = Robolectric.buildActivity(LauncherActivity::class.java).create().get()
+        install(launcher)
+        Updater.onReplaced(app)
+        val started = drain()
+        assertEquals(listOf(LauncherActivity::class.java.name), started.mapNotNull { page(it) }.filter { it.startsWith(app.packageName) })
+        assertTrue("KOReader is not brought to the front", started.none { it.component?.packageName == Koreader.PKG })
+    }
+
+    /** M8C 11-24 15:56: the patch installed after the update while the user was on a companion page. */
+    @Test
+    fun aPatchInstallWhileAPageIsInFrontNeverBringsKoreaderForward() {
+        val p = Prefs(app)
+        try {
+            p.patchVersionSeen = "0.11.3-rc.6"
+            p.patchAwaitVersion = "0.11.3-rc.8"
+            p.patchRestartNow = "0.11.3-rc.8" // even a restart the user asked for
+            p.patchRestartSentFor = ""
+            val page = Robolectric.buildActivity(SettingsSectionActivity::class.java, SettingsPage.section(app, "updates")).setup()
+            drain()
+
+            assertTrue("a page is resumed", EinkActivity.pageResumed())
+            assertFalse("no restart over the page", PatchInstaller.follow(app, "patch installed"))
+            assertTrue("KOReader is not started", drain().none { it.component?.packageName == Koreader.PKG })
+            assertEquals("the restart is still owed", "", p.patchRestartSentFor)
+
+            // The user leaves the page (a Home press): now the owed restart may go.
+            page.pause()
+            assertFalse("no page is resumed", EinkActivity.pageResumed())
+            assertTrue("the owed restart goes", PatchInstaller.follow(app, "home press"))
+        } finally {
+            p.patchVersionSeen = ""
+            p.patchAwaitVersion = ""
+            p.patchRestartNow = ""
+            p.patchRestartSentFor = ""
+        }
+    }
+
     @Test
     fun oldOrForeignMarksAreIgnored() {
-        val pkg = "net.fledgewing.orbitcompanion"
+        val pkg = app.packageName
         val now = 10 * UpdateFlow.USER_UPDATE_MS
-        assertEquals("$pkg.StatusActivity", UpdateReturn.page("$pkg.StatusActivity", now - 1_000, now, pkg))
-        assertNull(UpdateReturn.page("$pkg.StatusActivity", now - UpdateFlow.USER_UPDATE_MS - 1, now, pkg))
-        assertNull(UpdateReturn.page(UpdateReturn.ELSEWHERE, now - 1_000, now, pkg))
-        assertNull(UpdateReturn.page("org.koreader.launcher.MainActivity", now - 1_000, now, pkg))
-        assertNull(UpdateReturn.page(null, now, now, pkg))
+        fun pages(from: String?, at: Long) = UpdateReturn.pages(from, at, now, pkg).map { it.component?.className }
+        val section = SettingsPage.section(app, "updates")
+        val mark = UpdateReturn.encode(listOf(Intent().setClassName(pkg, "$pkg.LauncherActivity"), section))
+        assertEquals(listOf("$pkg.LauncherActivity", "$pkg.SettingsSectionActivity"), pages(mark, now - 1_000))
+        assertEquals("updates", UpdateReturn.pages(mark, now - 1_000, now, pkg).last().getStringExtra(SettingsPage.EXTRA_SECTION))
+        // A mark written by v0.11.3-rc.8 and older: the class name alone.
+        assertEquals(listOf("$pkg.StatusActivity"), pages("$pkg.StatusActivity", now - 1_000))
+        assertTrue(pages("$pkg.StatusActivity", now - UpdateFlow.USER_UPDATE_MS - 1).isEmpty())
+        assertTrue(pages(UpdateReturn.ELSEWHERE, now - 1_000).isEmpty())
+        assertTrue(pages("org.koreader.launcher.MainActivity", now - 1_000).isEmpty())
+        assertTrue(pages(Intent().setClassName("org.koreader.launcher", "org.koreader.launcher.MainActivity").toUri(0), now - 1_000).isEmpty())
+        assertTrue("never the keypad or a non-page", pages("$pkg.PinActivity\n$pkg.HomeActivity", now - 1_000).isEmpty())
+        assertTrue(pages(null, now).isEmpty())
     }
 }

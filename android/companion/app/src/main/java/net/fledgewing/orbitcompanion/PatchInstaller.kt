@@ -69,8 +69,11 @@ object PatchInstaller {
         install(a, userStarted = true, done = done)
     }
 
-    /** [userStarted]: the user asked for it (Setup, an update by hand): KOReader restarts at once, book or not. */
-    fun install(ctx: Context, userStarted: Boolean = false, done: (String) -> Unit) {
+    /**
+     * [userStarted]: the user asked for it (Setup, an update by hand): KOReader restarts at once, book or not.
+     * [tapped]: the user tapped this install on a companion page (Setup), so KOReader may come forward over it.
+     */
+    fun install(ctx: Context, userStarted: Boolean = false, tapped: Boolean = userStarted, done: (String) -> Unit) {
         if (busy) return
         busy = true
         val app = ctx.applicationContext
@@ -97,7 +100,7 @@ object PatchInstaller {
             busy = false
             if (result.startsWith("installed")) main.post {
                 onPatchSeen(app, p.patchVersionSeen.ifEmpty { null })
-                follow(app, "patch installed")
+                follow(app, "patch installed", tapped = tapped)
             }
             main.post { done(result) }
         }
@@ -118,7 +121,7 @@ object PatchInstaller {
             if (file != null && running != null && UpdateFlow.staleRestart(running, file, manual = true, screenOff = false, sent = emptySet()) == UpdateFlow.Restart.NOW) {
                 // Started from one of our pages: the user is back on it; KOReader waits for the screen-off.
                 val now = UpdateReturn.restartNow(userConfirmed = true, fromPage = UpdateReturn.fromPage())
-                log("after the update: patch v$file on disk, KOReader runs v$running: restarting ${if (now) "now" else "at the next screen-off (started from our page)"}")
+                log("after the update: patch v$file on disk, KOReader runs v$running: ${if (now) "restarting now" else "started from our page: KOReader stays in the background; it loads v$file at its next start or the next screen-off"}")
                 p.patchAwaitVersion = file
                 p.patchRestartNow = if (now) file else ""
                 follow(ctx, "app updated")
@@ -134,15 +137,15 @@ object PatchInstaller {
         }
         val p = Prefs(ctx)
         // An app replace is always user-confirmed (UpdateFlow.restartNowAfter): restart at once.
-        // From one of our pages (UpdateReturn): the user stays there; KOReader restarts at the next screen-off.
+        // From one of our pages (UpdateReturn): the user stays there; KOReader is never brought forward.
         val user = UpdateReturn.restartNow(
             UpdateFlow.restartNowAfter(appReplaced = true, nowMs = System.currentTimeMillis(), markAtMs = p.userUpdateAt),
             fromPage = UpdateReturn.fromPage(),
         )
         p.userUpdateAt = 0
-        log("after the update: patch v$file is older than v$app; installing it (${if (user) "you confirmed the app update: KOReader restarts now, the book reopens" else "started from our page: KOReader restarts at the next screen-off"})")
+        log("after the update: patch v$file is older than v$app; installing it (${if (user) "you confirmed the app update: KOReader restarts now, the book reopens" else "started from our page: KOReader stays in the background; it loads the new patch at its next start or the next screen-off"})")
         afterUpdateBusy = true
-        install(ctx, userStarted = user) { result ->
+        install(ctx, userStarted = user, tapped = false) { result ->
             afterUpdateBusy = false
             val now = installedVersion()
             if (now == null || PatchFile.needsInstall(now, app)) Updater.status(ctx, UpdateFlow.manualLine(app, result))
@@ -171,7 +174,7 @@ object PatchInstaller {
      * only when the screen goes off ([screenOff]), never while KOReader may be in front.
      * The patch (0.5.0+) also restarts itself for a newer file; the two are one restart.
      */
-    fun follow(ctx: Context, why: String, screenOff: Boolean = false): Boolean {
+    fun follow(ctx: Context, why: String, screenOff: Boolean = false, tapped: Boolean = false): Boolean {
         val p = Prefs(ctx)
         val want = p.patchAwaitVersion
         val book = when (p.koreaderBook) { "1" -> true; "0" -> false; else -> null }
@@ -182,11 +185,21 @@ object PatchInstaller {
                 // Once per version, not on every event that checks.
                 if (waitLogged != want) {
                     waitLogged = want
-                    log("v$want installed automatically; KOReader restarts at the next screen-off ($why)")
+                    log("v$want installed; KOReader loads it at its next start (the plugin quits it in the background) or restarts at the next screen-off ($why)")
                 }
                 false
             }
             UpdateFlow.Restart.NOW -> {
+                // A companion page is in front (M8C 11-24 15:56): KOReader never comes forward over
+                // it unless the user tapped this install there. It loads the patch at its next
+                // start, or this restart goes at the next screen-off or Home press.
+                if (!screenOff && !tapped && EinkActivity.pageResumed()) {
+                    if (waitLogged != "page:$want") {
+                        waitLogged = "page:$want"
+                        log("v$want installed; a companion page is in front, so KOReader isn't brought forward: it loads v$want at its next start or the next screen-off ($why)")
+                    }
+                    return false
+                }
                 p.patchRestartSentFor = want
                 p.restartReopen = if (book == true) "1" else ""
                 log("v$want installed; restarting KOReader ($why)${if (manual) "; you started the update" else ""}${if (book == true) "; the book reopens where you were" else ""}")

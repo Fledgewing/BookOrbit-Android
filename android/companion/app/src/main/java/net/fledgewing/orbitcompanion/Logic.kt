@@ -773,7 +773,7 @@ object UpdateFlow {
      */
     fun installedLine(app: String, now: Boolean = false) =
         if (now) "Updated to v$app; KOReader restarts now to load it (an open book reopens)"
-        else "Updated to v$app; KOReader restarts to load it when the screen next goes off"
+        else "Updated to v$app; KOReader loads it the next time it starts, or when the screen next goes off"
 
     enum class Restart { NOW, WAIT, NONE }
 
@@ -869,7 +869,7 @@ class StaleRestart {
             sent += key
             log(UpdateFlow.staleLine(running, file))
         } else if (waited.add(key)) {
-            log(UpdateFlow.staleLine(running, file) + "; restarting at the next screen-off")
+            log(UpdateFlow.staleLine(running, file) + "; KOReader loads it at its next start (the plugin quits it in the background) or restarts at the next screen-off")
         }
         return d
     }

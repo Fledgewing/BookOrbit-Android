@@ -122,6 +122,9 @@ abstract class SettingsPage : EinkActivity() {
         const val EXTRA_FOCUS = "focus"
         const val EXTRA_KEY = "key"
 
+        /** The Updates section's App version row (Check for updates, Install, "Updated to v…"). */
+        const val UPDATE_ROW = "app_version"
+
         fun section(ctx: android.content.Context, id: String, focus: String? = null): Intent =
             Intent(ctx, if (id == "sleep") SleepScreenActivity::class.java else SettingsSectionActivity::class.java)
                 .putExtra(EXTRA_SECTION, id).apply { focus?.let { putExtra(EXTRA_FOCUS, it) } }
@@ -288,6 +291,11 @@ open class SettingsSectionActivity : SettingsPage() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         focus = intent.getStringExtra(EXTRA_FOCUS)
+    }
+
+    /** After an update from this section: the same section, at the App version row ("Updated to v…"). */
+    override fun returnIntent(): Intent = super.returnIntent().apply {
+        if (getStringExtra(EXTRA_FOCUS) == null && SettingsUi.extras(sectionId).any { it.id == UPDATE_ROW }) putExtra(EXTRA_FOCUS, UPDATE_ROW)
     }
 
     override fun onPause() {

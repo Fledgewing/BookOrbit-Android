@@ -798,7 +798,7 @@ class UpdateFlowTest {
         assertTrue(UpdateFlow.autoRestart("0.6.1"))
         assertFalse(UpdateFlow.autoRestart("0.4.9"))
         assertFalse(UpdateFlow.autoRestart(null))
-        assertEquals("Updated to v0.5.2; KOReader restarts to load it when the screen next goes off", UpdateFlow.installedLine("0.5.2"))
+        assertEquals("Updated to v0.5.2; KOReader loads it the next time it starts, or when the screen next goes off", UpdateFlow.installedLine("0.5.2"))
         assertEquals("Updated to v0.5.2; KOReader restarts now to load it (an open book reopens)", UpdateFlow.installedLine("0.5.2", now = true))
     }
 
@@ -892,7 +892,7 @@ class UpdateFlowTest {
         assertEquals("status request, screen on", UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", manual = false, screenOff = false) { lines += it })
         assertEquals("a Home press", UpdateFlow.Restart.WAIT, s.decide("0.4.6", "0.5.3", manual = false, screenOff = false) { lines += it })
         assertEquals("the wait is logged once", 1, lines.size)
-        assertTrue(lines[0].endsWith("restarting at the next screen-off"))
+        assertTrue(lines[0].endsWith("or restarts at the next screen-off"))
         assertEquals("after the user's app update", UpdateFlow.Restart.NOW, s.decide("0.4.6", "0.5.3", manual = true, screenOff = false))
         assertEquals(UpdateFlow.Restart.NONE, s.decide("0.4.6", "0.5.3", manual = false, screenOff = true))
     }
