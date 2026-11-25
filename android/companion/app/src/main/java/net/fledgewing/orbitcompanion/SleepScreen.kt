@@ -38,17 +38,13 @@ object SleepScreen {
 
     private fun sp(ctx: Context) = ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun settings(ctx: Context): SleepSettings {
-        val p = sp(ctx)
-        return SleepSettings.merge(SleepSettings.DEFAULT) { k -> if (p.contains(k)) p.getString(k, null) else null }
-    }
+    /** From SettingsStore: the stored values, the schema's defaults for the rest. */
+    fun settings(ctx: Context): SleepSettings = SleepSettings.merge(SleepSettings.DEFAULT) { k -> SettingsStore.get(ctx, k) }
 
     /** Stores [s]; [shared]: a change made here, so settings_at moves and the plugin takes it. */
     fun save(ctx: Context, s: SleepSettings, why: String, shared: Boolean) {
         val before = settings(ctx)
-        val e = sp(ctx).edit()
-        s.toMap().forEach { (k, v) -> e.putString(k, v) }
-        e.apply()
+        s.toMap().forEach { (k, v) -> if (SettingsStore.stored(ctx, k) != v) SettingsStore.store(ctx, k, v) }
         if (shared) Prefs(ctx).sharedSettingsAt = System.currentTimeMillis()
         OLog.i("sleep screen: settings ${s.mode.key} from=${s.from} rules=${s.leaveOut.size} every=${s.hours}h text=${s.text.length} chars battery=${s.battery} style=${s.style.key} text_at=${s.textPosition.key} battery_at=${s.batteryCorner.key} flash=${s.flash} ($why)")
         if (before.mode != s.mode) modeChanged(ctx, before.mode, s.mode, why)
@@ -159,7 +155,8 @@ object SleepScreen {
             val o = items.optJSONObject(n) ?: return@mapNotNull null
             val f = File(dir, o.optString("file"))
             val id = o.optLong("id")
-            if (id > 0 && f.isFile && f.canonicalPath.startsWith(dir.canonicalPath)) PoolItem(id, o.optString("title"), f) else null
+            val real = Places.inside(f, listOf(dir))
+            if (id > 0 && real != null && real.isFile) PoolItem(id, o.optString("title"), real) else null
         }
     } catch (e: Exception) {
         emptyList()
@@ -167,7 +164,7 @@ object SleepScreen {
 
     fun current(dir: File = dir()): Current? = try {
         val o = JSONObject(File(dir, "current.json").readText())
-        val f = o.optString("file").takeIf { it.isNotEmpty() }?.let { File(dir, it) }?.takeIf { it.isFile }
+        val f = o.optString("file").takeIf { it.isNotEmpty() }?.let { Places.inside(File(dir, it), listOf(dir)) }?.takeIf { it.isFile }
         Current(o.optString("title"), o.optString("authors"), f)
     } catch (e: Exception) {
         null
