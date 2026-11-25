@@ -42,6 +42,9 @@ copy_tracked "$overlay" "$stage/overlay"
 # Build-time About strings come from the repository-level shared source.
 mkdir -p "$stage/shared/about"
 cp "$overlay/../shared/about/credits.json" "$overlay/../shared/about/generate.py" "$stage/shared/about/"
+mkdir -p "$stage/tools"
+cp "$overlay/../shared/version.json" "$stage/shared/"
+cp "$overlay/../tools/booksync-version.py" "$overlay/../tools/upstreams.lock" "$stage/tools/"
 # Tabler's SVG sources are a large submodule; only icons converted into src/ are compiled.
 copy_tracked "$upstream" "$stage/crossink" assets/tabler-icons/
 

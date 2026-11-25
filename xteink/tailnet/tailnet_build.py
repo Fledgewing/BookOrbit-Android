@@ -17,6 +17,7 @@ the shim: Tailscale does not run on a host, so the test server is reached direct
 
 import json
 import os
+import re
 import runpy
 
 Import("env")  # noqa: F821  (SCons builtin)
@@ -37,6 +38,12 @@ OTA_FEED = os.environ.get(
 # resolve through the link to find the overlay root and the MicroLink submodule.
 here = os.path.realpath(os.path.join(env.subst("$PROJECT_DIR"), "tailnet"))  # noqa: F821
 overlay_root = os.path.dirname(here)
+# One BookSync identity on all readers; legacy tags remain until the 0.12 transition.
+version_api = runpy.run_path(os.path.join(os.path.dirname(overlay_root), "tools", "booksync-version.py"))
+booksync_version = version_api["version"]()
+with open(os.path.join(os.path.dirname(overlay_root), "tools", "upstreams.lock"), encoding="utf-8") as lock_file:
+    crossink_base = next(line.split()[2].removeprefix("v") for line in lock_file
+                         if line.startswith("crossink-v2.0 "))
 # Shared Android/X4 choices: generate directly from the schema, including 64-bit sizes.
 settings_schema = os.path.join(os.path.dirname(overlay_root), "shared", "settings", "schema.json")
 with open(settings_schema, encoding="utf-8") as settings_file:
@@ -551,6 +558,8 @@ env.Append(CPPPATH=[shim_dir])  # noqa: F821  lets optional UI code #include "Ta
 # --- 3. OTA from this overlay's releases -----------------------------------------
 
 ota_defines = {
+    "BOOKSYNC_VERSION": booksync_version,
+    "BOOKSYNC_CROSSINK_BASE": re.sub(r"\+bookorbit\.\d+", "", crossink_base),
     "CROSSINK_OTA_RELEASE_URL": f"https://api.github.com/repos/{OVERLAY_REPO}/releases/latest",
     "CROSSINK_OTA_RELEASE_LIST_URL": OTA_FEED,
     "CROSSINK_OTA_TAG_PREFIX": OTA_TAG_PREFIX,

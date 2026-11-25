@@ -43,3 +43,17 @@ Copyright (C) 2025-2026 neon. Additional copyright is held by the respective Boo
 BookOrbit is licensed under the GNU AGPLv3 with additional terms.
 
 Orbify licences: BookSync Companion is MIT. The Xteink overlay source is MIT, except firmware code marked GPL-3.0-or-later; Xteink firmware binaries are GPL-3.0-or-later. BookSync is AGPL-3.0-or-later as a KOReader plugin.
+
+
+### Shared release versions from 0.12
+
+[One BookSync version](docs/design/unified-version.md) covers the companion, KOReader
+plugin and all Xteink readers, from shared/version.json. The release order is
+preview.N → rc.N → stable. Android keeps v<version> tags; firmware uses
+xteink-v<version>+crossink.<base> and shows both BookSync and CrossInk in About.
+Publishing Android dispatches firmware from that same release commit.
+
+Before 0.12, install the firmware bridge released during 0.11 stabilization. It keeps
+the old 2.0.0.<run> tag so existing devices can install it, then understands BookSync
+versions. The feed retains legacy bridges for devices that have not migrated.
+The bridge must be validated on a real reader before the coordinator releases 0.12.

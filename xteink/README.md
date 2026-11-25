@@ -30,6 +30,21 @@ write token and no secret; a separate job, which never runs upstream code, check
 and publishes them. The only thing that can need hand work is the patch series for that upstream
 line, and CI says so if it stops applying.
 
+### Shared BookSync versions from 0.12
+
+shared/version.json supplies the same identity as the Android companion and plugin.
+Firmware tags become xteink-v<version>+crossink.<base>; About shows
+"BookSync 0.12.0 (CrossInk 2.0.0-rc3)". BookSync preview.N → rc.N → stable
+decides the channel, independently of the pinned CrossInk base. Android release
+publication dispatches firmware at the same tag. Daily builds keep that pinned base
+and do not publish a new product version.
+
+The 0.11 bridge retains the legacy numeric tag and adds booksync_version to the
+feed. It must reach readers before 0.12. The feed retains legacy channel heads
+indefinitely so old devices can still install the bridge. Stable-only devices need
+a stable bridge. See [rollout, version rules and tests](../docs/design/unified-version.md).
+The following upstream-driven release policy applies through the bridge line.
+
 ### Releases and the update feed
 
 Readers' updaters read `xteink/releases.json` on the `xteink-feed` branch: the newest stable and
@@ -106,8 +121,7 @@ an SD card or USB. After that, **Settings > Check for updates** installs new rel
 Orbify's `xteink-v…` firmware releases (a reader on a CrossInk-Tailnet build gets there through
 that repo's last release, which already points at Orbify). To go back to stock CrossInk-Bookorbit, flash its `.bin` the same way.
 
-The check reads Orbify's own small feed (`xteink/releases.json` on the `xteink-feed` branch, two
-releases), not GitHub's release API, and a failed check is tried once more. The download then runs
+The check reads Orbify's own small feed (`xteink/releases.json` on the `xteink-feed` branch, current channel heads plus retained legacy bridges), not GitHub's release API, and a failed check is tried once more. The download then runs
 with the larger WiFi buffers of the boots that park the screen (the X3's `parked` tier). The last
 CrossInk-Tailnet bridge (`v2.0.0.51+bookorbit.1-rc2`) still reads the GitHub API and the small
 buffers: on an X3 its first check can fail out of memory (try again) and its download can take

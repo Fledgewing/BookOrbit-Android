@@ -77,7 +77,12 @@ commit when a design or `docs/server-contract.md` relies on upstream behaviour; 
 
 ## Releases
 
-One repo releases both platforms; the tag prefix says which.
+One repo releases both platforms; the tag prefix says which. From 0.12, the product
+version comes from shared/version.json on the release commit, shared by the companion,
+packaged plugin and every firmware build. Preview.N precedes rc.N, then stable (lowercase
+suffixes: -preview.N, -rc.N). release.yml dispatches firmware at the same immutable tag.
+See [the rollout and bridge](docs/design/unified-version.md). Main stays on 0.11 until its
+bridge has reached devices; 0.12 is prepared on feature/0.12.
 
 - Android: `v<version>` (`.github/workflows/release.yml`): signed APK, stamped plugin zip,
   `SHA256SUMS`, attestations. Always marked "latest". Keep the package id and the signing
@@ -90,15 +95,18 @@ One repo releases both platforms; the tag prefix says which.
   See [version encoding](docs/design/release-versions.md) for Android package codes.
 - Xteink: `xteink-v<version>` (`.github/workflows/xteink.yml`, daily or by hand): firmware per
   reader, source archive, licenses, `SHA256SUMS`, attestations. Always `make_latest=false`.
-  An upstream rc or beta builds a pre-release, a final upstream release a stable one
-  (`xteink/scripts/upstream-line.sh`). Firmware tags keep CrossInk's upstream rc/beta labels;
-  they describe the upstream base, not a judgment that our overlay is a release candidate.
+  Through 0.11, an upstream rc/beta makes a prerelease and a final upstream makes stable;
+  the suffix describes the upstream base, not the overlay's readiness.
+  From 0.12, tags are xteink-v<booksync version>+crossink.<upstream tag>, with upstream
+  "+" replaced by "."; the BookSync preview/rc/stable channel decides publication.
+  Daily upstream pinning/publication is limited to the legacy bridge line; unified builds
+  retain the release commit's pin and publish only at the matching Android tag.
 - "latest" must stay an Android release: every companion and plugin (and the old patch) reads `releases/latest`
   (0.6.x through the old BookOrbit-Android URL, and it parses only `v<version>` tags).
 - GitHub orders the release list by version-like tag name: `v…` tags first, prefixed tags
   after all of them. So Android keeps plain `v…` tags (its pre-release check reads the list),
   and readers find firmware through the feed `xteink/releases.json` on the `xteink-feed`
-  branch (newest stable and pre-release, written by the xteink workflow), never the list. The
+  branch (current stable/prerelease plus retained legacy bridges, written by the xteink workflow), never the list. The
   Android pieces also read `android-v` tags and skip `xteink-v` ones.
 - A tag is never moved: fix forward with the next version.
 - Both release workflows first run the emulated release tests (`release-tests.yml`, below) on the

@@ -5,9 +5,10 @@
 #
 #   android/koreader/package.sh <version> <out.zip>
 set -euo pipefail
-ver=${1:?usage: package.sh <version> <out.zip>}
+ver=${1:?usage: package.sh <version|shared> <out.zip>}
 out=${2:?usage: package.sh <version> <out.zip>}
 here=$(cd "$(dirname "$0")" && pwd)
+if [ "$ver" = shared ]; then ver="$(python3 "$here/../../tools/booksync-version.py" version)"; fi
 case "$out" in /*) ;; *) out="$PWD/$out" ;; esac
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
