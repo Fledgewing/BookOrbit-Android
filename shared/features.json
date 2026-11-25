@@ -1441,7 +1441,7 @@
         },
         "x4_pro": {
           "status": "partial",
-          "note": "Spaced progress format; no Orbify-controlled full Android layout",
+          "note": "Native configurable clock/battery/chapter/progress slots plus Orbify spacing; no single BookSync preset",
           "reason": "gap — no reason",
           "evidence": [
             {
@@ -1451,13 +1451,19 @@
             {
               "path": "xteink/orbify/core/StatusFormat.h",
               "line": 6
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/util/ReaderStatusBarConfig.h",
+              "line": 15
             }
           ],
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         },
         "x4": {
           "status": "partial",
-          "note": "Spaced progress format; no Orbify-controlled full Android layout",
+          "note": "Native configurable clock/battery/chapter/progress slots plus Orbify spacing; no single BookSync preset",
           "reason": "gap — no reason",
           "evidence": [
             {
@@ -1467,18 +1473,30 @@
             {
               "path": "xteink/orbify/core/StatusFormat.h",
               "line": 6
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/util/ReaderStatusBarConfig.h",
+              "line": 15
             }
           ],
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         },
         "x3": {
           "status": "partial",
-          "note": "Original CrossInk format; Orbify format cut",
+          "note": "Native configurable status bars remain; Orbify spaced page format cut",
           "reason": "hardware: X3 status formatting excluded for flash",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
               "line": 284
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/util/ReaderStatusBarConfig.h",
+              "line": 15
             }
           ],
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
@@ -2956,40 +2974,58 @@
           "version": "v0.11.3-rc.17"
         },
         "x4_pro": {
-          "status": "missing",
-          "note": "No matching BookSync layout/size setting",
+          "status": "partial",
+          "note": "Native bar visibility and slot controls; no one-toggle BookSync preset",
           "reason": "gap — no reason",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
               "line": 284
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
             }
           ],
-          "version": null
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         },
         "x4": {
-          "status": "missing",
-          "note": "No matching BookSync layout/size setting",
+          "status": "partial",
+          "note": "Native bar visibility and slot controls; no one-toggle BookSync preset",
           "reason": "gap — no reason",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
               "line": 284
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
             }
           ],
-          "version": null
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         },
         "x3": {
-          "status": "missing",
-          "note": "Orbify status format/control excluded for flash",
-          "reason": "hardware: Orbify status format/control excluded for flash",
+          "status": "partial",
+          "note": "Native bar visibility and slot controls; no one-toggle BookSync preset",
+          "reason": "gap — no reason",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
               "line": 284
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
             }
           ],
-          "version": null
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         }
       },
       "settings_keys": [
@@ -3018,40 +3054,64 @@
           "version": "v0.11.3-rc.17"
         },
         "x4_pro": {
-          "status": "missing",
-          "note": "No matching BookSync layout/size setting",
-          "reason": "gap — no reason",
+          "status": "supported",
+          "note": "Native Small / Medium / Large text size selector; different wire key",
+          "reason": null,
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
           "evidence": [
             {
-              "path": "xteink/tailnet/tailnet_build.py",
-              "line": 284
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/CrossPointSettings.h",
+              "line": 498
             }
-          ],
-          "version": null
+          ]
         },
         "x4": {
-          "status": "missing",
-          "note": "No matching BookSync layout/size setting",
-          "reason": "gap — no reason",
+          "status": "supported",
+          "note": "Native Small / Medium / Large text size selector; different wire key",
+          "reason": null,
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
           "evidence": [
             {
-              "path": "xteink/tailnet/tailnet_build.py",
-              "line": 284
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/CrossPointSettings.h",
+              "line": 498
             }
-          ],
-          "version": null
+          ]
         },
         "x3": {
-          "status": "missing",
-          "note": "Orbify status format/control excluded for flash",
-          "reason": "hardware: Orbify status format/control excluded for flash",
+          "status": "supported",
+          "note": "Native Small / Medium / Large text size selector; different wire key",
+          "reason": null,
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
           "evidence": [
             {
-              "path": "xteink/tailnet/tailnet_build.py",
-              "line": 284
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/CrossPointSettings.h",
+              "line": 498
             }
-          ],
-          "version": null
+          ]
         }
       },
       "settings_keys": [
@@ -5335,16 +5395,15 @@
       "id": "reading-layout",
       "features": [
         "layout",
-        "setting-status_orbit_layout",
-        "setting-status_orbit_size"
+        "setting-status_orbit_layout"
       ],
       "platforms": [
         "x4_pro",
         "x4"
       ],
-      "size": "M",
-      "x3_fit": "Possibly simple formatting only; full layout unknown. Existing gate intentionally preserves X3 image.",
-      "outcome": "Match Android clock/battery/chapter/progress layout and size choice within hardware input/screen constraints."
+      "size": "S–M",
+      "x3_fit": "Native slot and Small/Medium/Large controls already exist, including on X3. A preset may fit; Orbify spaced formatting still needs a measured delta.",
+      "outcome": "Add a single BookSync preset over existing native status-bar controls; do not rebuild controls that CrossInk already supplies."
     },
     {
       "priority": 4,
