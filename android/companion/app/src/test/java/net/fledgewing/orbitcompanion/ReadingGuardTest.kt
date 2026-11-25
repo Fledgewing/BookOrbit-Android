@@ -31,7 +31,7 @@ class ReadingGuardTest {
         Site("Pin.kt", "PinActivity.Mode.UNLOCK", 1, "Pin.run: the user tapped a PIN-guarded action"),
         Site("Pin.kt", "CATEGORY_HOME", 1, "the user cancelled the guard keypad: back Home"),
         Site("OrbitKeys.kt", "ACTION_INPUT_METHOD_SETTINGS", 1, "the user tapped the keyboard notification's Switch keyboard"),
-        Site("UpdateReturn.kt", "ctx.startActivity(Intent().setClassName", 1, "back to the page where the user tapped Update, once the update replaced the app"),
+        Site("UpdateReturn.kt", "ctx.startActivities(list", 1, "back to the pages where the user tapped Update, once the update replaced the app"),
         Site("Mode.kt", "SetupActivity::class.java", 1,"the user switched mode on the Mode page"),
         Site("Ui.kt", "PinActivity.Mode.UNLOCK", 1, "a PIN-guarded page the user opened"),
         Site("Ui.kt", "override fun startActivity(", 1, "EinkActivity's own override (no animation)"),
@@ -49,7 +49,7 @@ class ReadingGuardTest {
         Site("SharpCovers.kt", "a.startActivity(Intent(a, SleepScreenActivity", 1, "Setup: the user tapped Sign in again on the sharp covers row"),
     )
 
-    private val call = Regex("""(^|[^A-Za-z0-9_])(notify|startActivity)\(""")
+    private val call = Regex("""(^|[^A-Za-z0-9_])(notify|startActivity|startActivities)\(""")
 
     private fun sources(): File {
         val rel = "src/main/java/net/fledgewing/orbitcompanion"
