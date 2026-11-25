@@ -66,7 +66,9 @@ void BookOrbitCatalogBrowserActivity::tickMirror() {
       // Open mode serves the new saved reply. Keep network work in the walk, never in the tap.
       OrbifyCache::ScopedMode saved(orbify::cache::Mode::Open);
       const int wantedSelector = selectorIndex, wantedTop = topIndex;
-      if (navLevel == NavLevel::Root) loadRoot(false);
+      // The session list was cleared above: rebuild it from the walk's saved reply, as
+      // the facet/book loaders do. loadRoot(false) returns before reading that reply.
+      if (navLevel == NavLevel::Root) loadRoot();
       else if (navLevel == NavLevel::FacetList) { const auto id = facetSectionId; const auto title = facetTitle; loadFacetEntries(id, title, facetPage); }
       else if (!listIsLocal) { const auto q = listQuery; const auto title = listTitle; loadBooks(q, title, topIndex / std::max(1, listPageSize) + 1, booksFromFacet); }
       if (!entries.empty()) {

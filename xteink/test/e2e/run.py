@@ -428,6 +428,8 @@ def catalog_refresh_stamp(ctx: Context, tmp: Path) -> None:
     assert first_get and busy[0] <= int(first_get.group(1)), "'Refreshing…' was not drawn before the first request"
     queued = after(refresh, "foreground returned")
     after(queued, "Refresh phase: kind=")
+    roots = [r for r in ctx.requests()[before:] if r["path"].endswith("/plugin/catalog/root")]
+    assert len(roots) == 1, f"reloading the refreshed root repeated its network request: {roots}"
     done = after(refresh, "Catalog: Refresh done")
     final = [s for s in STAMP.finditer(done)]
     assert final and final[-1].group(2).lower().startswith("updated just now"), \
