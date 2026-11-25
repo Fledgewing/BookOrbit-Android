@@ -250,9 +250,13 @@ object UpdatePolicy {
     fun due(lastCheckMs: Long, nowMs: Long): Boolean = lastCheckMs <= 0 || nowMs < lastCheckMs || nowMs - lastCheckMs >= INTERVAL_MS
 
     /** The newest usable release: never a draft, a pre-release only when asked for. */
-    fun pick(releases: List<ReleaseInfo>, includePre: Boolean): ReleaseInfo? =
-        releases.filter { !it.draft && (includePre || !it.prerelease) && it.version != null && !TestBuild.isTest(it.version) }
+    fun pick(releases: List<ReleaseInfo>, includePre: Boolean, withdrawn: Set<Version> = emptySet()): ReleaseInfo? =
+        releases.filter { !it.draft && (includePre || !it.prerelease) && it.version != null && !TestBuild.isTest(it.version) && it.version !in withdrawn }
             .maxWithOrNull(compareBy { it.version!! })
+
+    fun shouldInstall(candidate: Version?, current: Version?, withdrawn: Set<Version>): Boolean =
+        candidate != null && candidate !in withdrawn && candidate != current &&
+            (isNewer(candidate, current) || current in withdrawn)
 
     fun isNewer(candidate: Version?, current: Version?): Boolean =
         candidate != null && (current == null || candidate > current)

@@ -309,3 +309,12 @@ jobs:
           else
             gh release create "$TAG" dist/* --verify-tag --title "$TITLE" --notes-file notes.md "${FLAGS[@]}" -R "$GITHUB_REPOSITORY"
           fi
+
+  feed:
+    needs: sign
+    if: github.event_name != 'workflow_dispatch' || inputs.publish
+    uses: ./.github/workflows/android-feed.yml
+    permissions:
+      contents: write
+    secrets:
+      RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}

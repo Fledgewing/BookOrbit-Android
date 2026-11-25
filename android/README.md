@@ -40,8 +40,8 @@ After that, everything updates itself from this repo's releases.
 
 ## Updates
 
-Both pieces check `https://api.github.com/repos/Fledgewing/Orbify/releases/latest`
-at most once a day, and only when the network is already up (neither turns Wi-Fi on for an
+The plugin asks the companion to check the signed Android release feed on the
+`android-feed` branch (`android/releases.json`) at most once a day, and only when the network is already up (neither turns Wi-Fi on for an
 automatic check; a check started by hand turns Wi-Fi on, Wi-Fi only, and puts it back off
 afterwards). Without a network they say so ("No internet: Wi-Fi is off"; "network went down
 during the check" when Wi-Fi went off mid-check). They say "Internet blocked: is 'Block
@@ -51,13 +51,21 @@ Tailscale row warns about it. A connect timeout or reset (common for a few secon
 or Tailscale comes up) is retried twice, after 3 s and 10 s, each try connecting within 8 s;
 if GitHub still doesn't answer they say "GitHub didn't answer (the network may still be
 starting). Try again in a minute." A failed automatic check waits an hour before trying again.
-With **Include pre-releases** on, they look at the 30 newest releases instead and also take
-pre-releases. Firmware releases share the repo (`xteink-v…` tags, never "latest") and are
-skipped: only `v…` (and `android-v…`) tags count. Each downloads the release's `SHA256SUMS` and refuses a file whose SHA-256
-doesn't match.
+With **Include previews and release candidates** on, the companion also considers pre-releases. It verifies
+the feed signature before reading any candidate or withdrawal. Withdrawn versions are skipped;
+a withdrawn installed version can recover to the newest allowed version even when older.
+Android refuses a lower versionCode; legacy candidates through 0.11.3-rc.17 shared a code,
+while new preview/RC builds use increasing codes and need a forward recovery release. Older companions need this updater installed before
+they obey withdrawals. Firmware has a separate feed. Only `v…` (and `android-v…`) tags count,
+and APK downloads still require the release's `SHA256SUMS` and the installed signing certificate.
+
+Maintainers can withdraw a release without moving its tag or publishing another release:
+`gh workflow run android-feed.yml -f withdraw_tag=v0.11.3-rc.10`. Republication preserves all
+prior withdrawals and includes the checked-in rc.10/rc.11 seed. See the
+[release safety design](../docs/design/release-safety.md).
 
 - **KOReader patch** (Tools › BookSync): **Auto-update patch** (on by default),
-  **Include pre-releases** (off), **Check for patch update**, and a status line. The check
+  **Include previews and release candidates** (off), **Check for patch update**, and a status line. The check
   runs about 8 s after a start or wake once the network is up, never with a book open (it
   waits for the file browser or BookOrbit home), and holds Wi-Fi until it ends. It runs in a
   background process, so KOReader never waits on the network (v0.4.3). A newer `orbit.koplugin.zip`

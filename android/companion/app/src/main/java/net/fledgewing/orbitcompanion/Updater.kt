@@ -15,7 +15,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.ScrollView
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -27,8 +26,8 @@ import kotlin.concurrent.thread
 /**
  * Self-update from this repo's public GitHub releases (README "Updates").
  *
- * 1. Fetch releases/latest (or the releases list with "Include previews and release candidates"); only Android tags count.
- * 2. Newer than BuildConfig.VERSION_NAME? Download SHA256SUMS and orbit-companion-<ver>.apk.
+ * 1. Verify the signed Android feed, including withdrawn versions; only Android tags count.
+ * 2. Select the newest allowed release, recovering from a withdrawn version even to an older one.
  * 3. The APK's SHA-256 must match SHA256SUMS, and its signing certificate must match the
  *    installed app's.
  * 4. Install through a PackageInstaller session. On Android 12+ we ask for no user action, but
@@ -50,6 +49,8 @@ object Updater {
     var busy = false
         private set
 
+    @Volatile private var withdrawn: Set<Version> = emptySet()
+
     private val main = Handler(Looper.getMainLooper())
 
     private fun log(msg: String) = OLog.i("update: $msg")
@@ -65,7 +66,7 @@ object Updater {
     fun onPluginAsked(ctx: Context, why: String) {
         log("the plugin asked for a check ($why)")
         check(ctx, interactive = true, why = "plugin: $why") { result ->
-            if (!result.startsWith("installing")) PatchInstaller.afterAppUpdate(ctx)
+            if (!result.startsWith("installing") && Version.parse(BuildConfig.VERSION_NAME) !in withdrawn) PatchInstaller.afterAppUpdate(ctx)
         }
     }
 
@@ -203,20 +204,18 @@ object Updater {
         val pre = p.includePreReleases
         log("check started ($why, interactive=$interactive, pre-releases=$pre, installed v${BuildConfig.VERSION_NAME})")
 
-        val releases = if (pre) {
-            val arr = JSONArray(httpText("$API/releases?per_page=${ReleaseTags.LIST_PAGE}"))
-            (0 until arr.length()).map { release(arr.getJSONObject(it)) }
-        } else {
-            listOf(release(JSONObject(httpText("$API/releases/latest"))))
-        }
+        val feed = AndroidReleaseFeed.parse(httpText(AndroidReleaseFeed.URL),
+            BuildConfig.RELEASE_ROOT_KEY, BuildConfig.RELEASE_MIN_SERIAL)
+        val releases = feed.releases
+        withdrawn = feed.withdrawn
         // Only a check that reached GitHub counts for the daily timer: a failed one (no network,
         // VPN lockdown) is retried at the next Wi-Fi up instead of 24 h later.
         p.updateCheckedAt = System.currentTimeMillis()
         log("fetched ${releases.size} release(s): ${releases.joinToString { it.tag }}")
-        val rel = UpdatePolicy.pick(releases, pre) ?: return "no release found"
+        val rel = UpdatePolicy.pick(releases, pre, withdrawn) ?: return "no release found"
         val ver = rel.version!!
         val current = Version.parse(BuildConfig.VERSION_NAME)
-        if (!UpdatePolicy.isNewer(ver, current)) {
+        if (!UpdatePolicy.shouldInstall(ver, current, withdrawn)) {
             log("up to date: newest is ${rel.tag}")
             return "up to date"
         }
@@ -471,15 +470,15 @@ object Updater {
     @Volatile
     private var ready: Pair<String, Intent>? = null
 
-    /** The update ready to install, while it is still newer than this app (Status shows "Install"). */
-    fun readyToInstall(): Pair<String, Intent>? = ready?.takeIf { stillNewer(it.first) }
+    /** The update ready to install, while it is still allowed by the signed policy (Status shows "Install"). */
+    fun readyToInstall(): Pair<String, Intent>? = ready?.takeIf { stillAllowed(it.first) }
 
-    private fun stillNewer(version: String): Boolean =
-        UpdatePolicy.isNewer(Version.parse(version), Version.parse(BuildConfig.VERSION_NAME))
+    private fun stillAllowed(version: String): Boolean =
+        UpdatePolicy.shouldInstall(Version.parse(version), Version.parse(BuildConfig.VERSION_NAME), withdrawn)
 
     /** Quiet: no sound, no vibration, no heads-up (IMPORTANCE_DEFAULT never peeks); shown only through Reading. */
     private fun notifyReady(ctx: Context, version: String, confirm: Intent) {
-        if (!stillNewer(version)) return log("v$version ready, but this app is already v${BuildConfig.VERSION_NAME}: no notification")
+        if (!stillAllowed(version)) return log("v$version ready, no longer eligible for installation: no notification")
         val nm = notifications(ctx)
         // The old "updates" channel had a sound, which can't be changed once created: replaced.
         if (nm.getNotificationChannel(OLD_CHANNEL) != null) nm.deleteNotificationChannel(OLD_CHANNEL)
