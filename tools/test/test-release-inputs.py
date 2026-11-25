@@ -29,7 +29,7 @@ class Fingerprints(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.git('init', '-q')
-        for path in ('shared/version.json', 'shared/settings.json', 'android/companion/app/code.kt',
+        for path in ('shared/version.json', 'shared/withdrawn-android.json', 'shared/settings.json', 'android/companion/app/code.kt',
                      'android/koreader/main.lua', 'xteink/tailnet/code.cpp', 'tools/upstreams.lock',
                      'tools/releases/inputs.py', '.github/workflows/release-tests.yml', 'README.md'):
             self.write(path, 'initial')
@@ -52,6 +52,7 @@ class Fingerprints(unittest.TestCase):
     def test_version_and_docs_only(self):
         self.write('shared/version.json', '{"version":"0.12.0-rc.1"}')
         self.write('README.md', 'docs')
+        self.write('shared/withdrawn-android.json', '["v0.11.3-rc.17"]')
         self.assertEqual(self.changed(), set())
 
     def test_app_only(self):

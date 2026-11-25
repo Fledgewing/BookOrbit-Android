@@ -37,7 +37,9 @@ def fingerprints(root=ROOT):
         if stage != b"0":
             raise ValueError("Cannot fingerprint unresolved inputs")
         path = raw_path.decode()
-        if path == "shared/version.json":
+        # Stamps and publication eligibility are not compiled source inputs.
+        # Withdrawals are applied independently before selecting previous builds.
+        if path in ("shared/version.json", "shared/withdrawn-android.json"):
             continue
         consumers = [p for p in PLATFORMS if any(
             path.startswith(prefix) if prefix.endswith("/") else path == prefix

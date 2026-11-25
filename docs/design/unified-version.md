@@ -47,7 +47,10 @@ push/PR builds keep their existing full build/test coverage.
 submodule pins with SHA-256. The app and plugin have separate input sets; each
 firmware environment has an identity including the overlay, CrossInk lock,
 shared inputs, build actions and test tooling. The shared version stamp
-`shared/version.json` is excluded. Common firmware source changes conservatively
+`shared/version.json` is excluded, as is the publication catalog
+`shared/withdrawn-android.json`: withdrawals change eligibility, not binary inputs.
+The verified withdrawal set is still applied before selecting a current build.
+Common firmware source changes conservatively
 invalidate every reader; this avoids guessing which conditional code is compiled.
 Documentation outside build inputs does not invalidate them. New inputs must be
 added to the declared sets when introducing another build dependency.
