@@ -111,7 +111,7 @@ Search stays online; offline it says "Search needs a connection".
   64 MB / 20000-entry cap stays the browsing cache's share inside the limit
   (`shared/fixtures/cache/cases.json` `storage`).
 - **Refresh.** A normal Refresh rechecks **every saved page** of a list, never only the first one.
-  When a list's total changes, the list is paged again (`Cache.repage`): a series that gains a
+  When a list's total changes, the list is paged again (`MirrorLogic.repage`): a series that gains a
   21st book shows it after Refresh.
 - **When.** A Full refresh can be started by hand (hold ⟳, or the menu). It also starts by itself
   when the mirror is older than its TTL (default 7 days; Orbit menu › Automatic Full refresh, or

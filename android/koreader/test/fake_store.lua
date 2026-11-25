@@ -4,7 +4,11 @@
 -- shared fixture (shared/fixtures/cache/db.json) CacheStoreTest uses. Test code: nothing ships.
 --   local FS = dofile("fake_store.lua")(Cache, SQ3, schema_path)
 --   local st = FS.open(path); st:own(owner); st:save(key, path, reply, at, template); st:close()
+local here = (debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or ".")
+local makeRules = dofile(here .. "/companion_rules.lua")
+
 return function(Cache, SQ3, schema_path)
+    local Rules = makeRules(Cache)
     local FS = { SENTINEL = "987654321" }
     local PAGING = { items = true, page = true, size = true, offset = true, hasNext = true, hasPrevious = true,
         nextUrl = true, previousUrl = true }
@@ -119,7 +123,7 @@ return function(Cache, SQ3, schema_path)
             else
                 local s = Cache.encode(reply)
                 self:run("INSERT OR REPLACE INTO entries (key, path, body, fetched_at, validated_at, home, stale, bytes) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)",
-                    key, path, s, at, at, Cache.isHome(path) and 1 or nil, #s)
+                    key, path, s, at, at, Rules.isHome(path) and 1 or nil, #s)
             end
         end
         self:commit()
