@@ -15,6 +15,7 @@ namespace OrbifyRefreshBadge {
 // "Full refresh in progress · about 37% · you can keep reading and browsing", wrapped in a framed box
 // where the theme puts its popups. Draws into the frame; the caller pushes it.
 void drawStartPopup(const GfxRenderer& renderer, unsigned percent);
+void drawMessage(const GfxRenderer& renderer, const char* text);
 // Initial Home frame, before the scan and connection. No intermediate notices.
 void drawPreparing(const GfxRenderer& renderer, bool popup);
 

@@ -1,0 +1,292 @@
+{
+  "connect": [
+    {
+      "mode": "always_on",
+      "reason": "open",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "always_on",
+      "reason": "open",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "always_on",
+      "reason": "wake",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "always_on",
+      "reason": "wake",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "always_on",
+      "reason": "sleep",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "always_on",
+      "reason": "sleep",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "always_on",
+      "reason": "miss",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "always_on",
+      "reason": "miss",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "always_on",
+      "reason": "detail_miss",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "always_on",
+      "reason": "detail_miss",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "always_on",
+      "reason": "refresh",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "always_on",
+      "reason": "refresh",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "always_on",
+      "reason": "reading",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "always_on",
+      "reason": "reading",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "always_on",
+      "reason": "",
+      "saved": false,
+      "connect": false
+    },
+    {
+      "mode": "always_on",
+      "reason": "",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "off_reading",
+      "reason": "open",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "off_reading",
+      "reason": "open",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "off_reading",
+      "reason": "wake",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "off_reading",
+      "reason": "wake",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "off_reading",
+      "reason": "sleep",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "off_reading",
+      "reason": "sleep",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "off_reading",
+      "reason": "miss",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "off_reading",
+      "reason": "miss",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "off_reading",
+      "reason": "detail_miss",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "off_reading",
+      "reason": "detail_miss",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "off_reading",
+      "reason": "refresh",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "off_reading",
+      "reason": "refresh",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "off_reading",
+      "reason": "reading",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "off_reading",
+      "reason": "reading",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "off_reading",
+      "reason": "",
+      "saved": false,
+      "connect": false
+    },
+    {
+      "mode": "off_reading",
+      "reason": "",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "jit",
+      "reason": "open",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "jit",
+      "reason": "open",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "jit",
+      "reason": "wake",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "jit",
+      "reason": "wake",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "jit",
+      "reason": "sleep",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "jit",
+      "reason": "sleep",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "jit",
+      "reason": "miss",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "jit",
+      "reason": "miss",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "jit",
+      "reason": "detail_miss",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "jit",
+      "reason": "detail_miss",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "jit",
+      "reason": "refresh",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "jit",
+      "reason": "refresh",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "jit",
+      "reason": "reading",
+      "saved": false,
+      "connect": true
+    },
+    {
+      "mode": "jit",
+      "reason": "reading",
+      "saved": true,
+      "connect": false
+    },
+    {
+      "mode": "jit",
+      "reason": "",
+      "saved": false,
+      "connect": false
+    },
+    {
+      "mode": "jit",
+      "reason": "",
+      "saved": true,
+      "connect": false
+    }
+  ]
+}

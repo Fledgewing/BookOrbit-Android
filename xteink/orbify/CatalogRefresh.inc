@@ -5,7 +5,13 @@ void BookOrbitCatalogBrowserActivity::refreshView(const bool full) {
   const unsigned long began = millis();
   LOG_INF("BookOrbit", "Catalog: %s of view %d", full ? "Full refresh" : "Refresh", static_cast<int>(navLevel));
   if (mirrorWalk.active() && !mirrorWalk.finished()) return;
-  if (!catalogWifiHeld) { OrbifyWifi::acquire(OrbifyWifi::Owner::Catalog); catalogWifiHeld = true; }
+  if (full) {
+    mirrorWalk.begin(/*userStarted=*/true);
+    mirrorPopupUntil = millis() + orbify::mirror::START_POPUP_MS;
+    mirrorPopupArmed = false; mirrorPopupLogged = false;
+    syncMirrorShown(); requestUpdate();
+    return;
+  }
   // Joining belongs to the next idle turn too: the tap/hold always returns to its view first.
   refreshConnectPending = WiFi.status() != WL_CONNECTED;
   if (!refreshConnectPending) {

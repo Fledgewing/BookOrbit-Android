@@ -37,6 +37,30 @@ OTA_FEED = os.environ.get(
 # resolve through the link to find the overlay root and the MicroLink submodule.
 here = os.path.realpath(os.path.join(env.subst("$PROJECT_DIR"), "tailnet"))  # noqa: F821
 overlay_root = os.path.dirname(here)
+# Shared Android/X4 choices: generate directly from the schema, including 64-bit sizes.
+settings_schema = os.path.join(os.path.dirname(overlay_root), "shared", "settings", "schema.json")
+with open(settings_schema, encoding="utf-8") as settings_file:
+    shared_settings = json.load(settings_file)["settings"]
+settings_dir = env.subst("$BUILD_DIR") + "/orbify-settings"  # noqa: F821
+os.makedirs(settings_dir, exist_ok=True)
+settings_lines = ["#pragma once", "namespace OrbifySettings {", "struct Choice { const char* key; const char* title; const char* initial; const char* const* values; const char* const* labels; unsigned count; };"]
+settings_keys = ("storage_limit_mb", "wifi_mode", "wifi_idle_min")
+for setting in shared_settings:
+    if setting["key"] not in settings_keys:
+        continue
+    key = setting["key"]
+    for field, source in (("values", "id"), ("labels", "label")):
+        settings_lines.append("inline constexpr const char* " + key + "_" + field + "[] = {" + ",".join(json.dumps(v[source]) for v in setting["values"]) + "};")
+settings_lines.append("inline constexpr Choice choices[] = {")
+for setting in shared_settings:
+    if setting["key"] in settings_keys:
+        key = setting["key"]
+        settings_lines.append("{" + json.dumps(key) + "," + json.dumps(setting["label"]) + "," + json.dumps(str(setting["default"])) + "," + key + "_values," + key + "_labels," + str(len(setting["values"])) + "},")
+settings_lines.extend(["};", "}"])
+with open(os.path.join(settings_dir, "OrbifySettingsChoices.h"), "w", encoding="utf-8") as settings_file:
+    settings_file.write("\n".join(settings_lines) + "\n")
+env.Append(CPPPATH=[settings_dir])  # noqa: F821
+
 ml_dir = os.path.join(overlay_root, "third_party", "microlink", "components", "microlink")
 wg_dir = os.path.join(ml_dir, "components", "wireguard_lwip", "src")
 shim_dir = os.path.join(here, "shim")
