@@ -12,6 +12,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -26,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bofault  # noqa: E402
 import kit  # noqa: E402
 
+# @fixture e2e/faults/offline.json
 FAULTS = kit.ROOT / "shared" / "fixtures" / "e2e" / "faults"
 
 
@@ -58,6 +60,51 @@ def get(url: str, timeout: float = 5, method: str = "GET", data: bytes | None = 
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
+
+
+class ReleaseSigningFixtureTest(unittest.TestCase):
+    """Check the shared vectors with OpenSSL, independently of either device verifier."""
+
+    def test_reference_signatures(self):
+        # @fixture release-signing/cases.json
+        # @fixture release-signing/SIGNATURES-firmware
+        # @fixture release-signing/SIGNATURES-plugin
+        # @fixture release-signing/SIGNATURES-plugin-other-root
+        # @fixture release-signing/SIGNATURES-plugin-rotated
+        root = kit.ROOT / "shared/fixtures/release-signing"
+        vectors = json.loads((root / "cases.json").read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+
+            def verify(key, message, signature):
+                (tmp / "key.der").write_bytes(bytes.fromhex("302a300506032b6570032100") + key)
+                (tmp / "message").write_bytes(message)
+                (tmp / "signature").write_bytes(signature)
+                return subprocess.run([
+                    "openssl", "pkeyutl", "-verify", "-pubin", "-keyform", "DER",
+                    "-inkey", str(tmp / "key.der"), "-rawin", "-in", str(tmp / "message"),
+                    "-sigfile", str(tmp / "signature"),
+                ], capture_output=True).returncode == 0
+
+            self.assertTrue(vectors["cases"])
+            for case in vectors["cases"]:
+                with self.subTest(case=case["name"]):
+                    lines = (root / case["signatures"]).read_text().splitlines()
+                    cert = bytes.fromhex(lines[0].split()[1])
+                    self.assertEqual(len(cert), 100)
+                    signatures = dict((name, bytes.fromhex(sig)) for sig, name in
+                                      (line.split() for line in lines[1:]))
+                    signature = signatures.get(case["asset"])
+                    accepted = (
+                        int.from_bytes(cert[:4], "big") >= case["min_serial"]
+                        and verify(bytes.fromhex(vectors["root_public_key"]),
+                                   b"orbify-release-key-v1\n" + cert[:36], cert[36:])
+                        and signature is not None
+                        and verify(cert[4:36], ("orbify-artifact-v1\n" + case["tag"] + "\n"
+                                              + case["asset"] + "\n" + case["sha256"] + "\n").encode(),
+                                   signature)
+                    )
+                    self.assertEqual(accepted, case["ok"])
 
 
 class ProxyTest(unittest.TestCase):
@@ -152,6 +199,22 @@ class LibraryTest(unittest.TestCase):
         compose = (kit.HERE / "compose.yml").read_text()
         self.assertIn(f"ghcr.io/bookorbit/bookorbit:{pin}@sha256:", compose)
         self.assertEqual(len(re.findall(r"image: \S+@sha256:[0-9a-f]{64}", compose)), 2, "every image by digest")
+
+
+class RegistryTest(unittest.TestCase):
+    """shared/fixtures/REGISTRY.json: the e2e kit's tests read every table that names "py" (a
+    '@fixture <file>' mark here, in kit.py or in xteink/test/e2e), and mark nothing else."""
+
+    def test_reads_every_table_it_is_named_for(self):
+        reg = json.loads((kit.ROOT / "shared" / "fixtures" / "REGISTRY.json").read_text())
+        given = {r["file"] + ("#" + r["section"] if "section" in r else "") for r in reg["tables"] if "py" in r["readers"]}
+        marks = {}
+        for path in [*Path(__file__).resolve().parent.glob("*.py"), *(kit.ROOT / "xteink" / "test" / "e2e").glob("*.py")]:
+            for m in re.findall(r"@fixture ([\w./-]+(?:#[\w.]+)?)", path.read_text()):
+                marks[m] = path.name
+        self.assertTrue(given)
+        self.assertEqual(sorted(given - marks.keys()), [], "no e2e test reads these")
+        self.assertEqual(sorted(marks.keys() - given), [], "marked, but REGISTRY.json does not give them to py")
 
 
 @unittest.skipUnless(os.environ.get("ORBIFY_E2E_LIVE") == "1", "ORBIFY_E2E_LIVE=1 runs against the seeded server")

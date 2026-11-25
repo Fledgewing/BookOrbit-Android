@@ -11,6 +11,7 @@ import java.io.File
 import java.nio.file.Files
 
 class CacheWorkerTest {
+    // @fixture cache/worker.json
     private val fx = JSONObject(File("../../../shared/fixtures/cache/worker.json").readText())
 
     private fun hexBytes(h: String) = String(ByteArray(h.length / 2) { h.substring(it * 2, it * 2 + 2).toInt(16).toByte() }, Charsets.ISO_8859_1)

@@ -12,6 +12,7 @@ class SleepScreenLogicTest {
     /** shared/fixtures/sleep/cases.json: the rotation rule (R4) and the fallbacks (F1, F4). */
     @Test
     fun rotationFollowsTheSharedCases() {
+        // @fixture sleep/cases.json#cases
         val doc = JSONObject(File("../../../shared/fixtures/sleep/cases.json").readText())
         val cases = doc.getJSONArray("cases")
         assertTrue(cases.length() >= 10)
@@ -38,6 +39,7 @@ class SleepScreenLogicTest {
     /** shared/fixtures/sleep/cases.json "batch": Every sleep's carry at a refresh (R4b), the X4's too. */
     @Test
     fun everySleepCarryFollowsTheSharedCases() {
+        // @fixture sleep/cases.json#batch
         val batch = JSONObject(File("../../../shared/fixtures/sleep/cases.json").readText()).getJSONArray("batch")
         assertTrue(batch.length() >= 3)
         for (n in 0 until batch.length()) {

@@ -60,7 +60,7 @@ object Worker {
     /** "Saving BookOrbit for offline · 37%" while a Full refresh runs, else null. */
     fun progressLine(): String? = if (mirrorRunning) MirrorLogic.progressLine(progress) else null
 
-    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, onProgress = { progress = it }).also { worker = it }
+    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, onProgress = { progress = it }, places = Places.roots()).also { worker = it }
 
     private fun creds(i: Intent): CacheWorker.Creds? {
         val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
