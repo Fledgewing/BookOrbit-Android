@@ -150,7 +150,7 @@ def collect(repo):
                 history["builds"].setdefault(p, build)
             history["evidence"].extend(data["evidence"])
     artifacts = json.loads(gh("api", f"repos/{repo}/actions/artifacts?per_page=100"))["artifacts"]
-    runs = {}
+    runs, prs = {}, {}
     for artifact in artifacts:
         if artifact["expired"] or not artifact["name"].startswith("passed-inputs-"):
             continue
@@ -158,15 +158,27 @@ def collect(repo):
         if run_id not in runs:
             runs[run_id] = json.loads(gh("api", f"repos/{repo}/actions/runs/{run_id}"))
         run = runs[run_id]
-        # PR/fork artifacts are recorded but cannot authorize a release's test bypass.
+        # Only repo-controlled workflows can authorize reuse. A PR becomes trusted
+        # after its exact tested head is merged; unmerged/fork receipts stay advisory.
         trusted_paths = {f".github/workflows/{name}.yml" for name in
                          ("android", "xteink", "release", "release-tests")}
         if run.get("path", "").split("@")[0] not in trusted_paths:
             continue
-        if run["conclusion"] != "success" or run["event"] in ("pull_request", "pull_request_target"):
+        if run["conclusion"] != "success" or run["event"] == "pull_request_target":
             continue
         if run["head_repository"]["full_name"] != repo:
             continue
+        if run["event"] == "pull_request":
+            merged = False
+            for link in run.get("pull_requests", []):
+                number = link["number"]
+                if number not in prs:
+                    prs[number] = json.loads(gh("api", f"repos/{repo}/pulls/{number}"))
+                pr = prs[number]
+                if pr["merged"] and pr["head"]["sha"] == run["head_sha"] and pr["head"]["repo"]["full_name"] == repo:
+                    merged = True
+            if not merged:
+                continue
         data = gh("api", f"repos/{repo}/actions/artifacts/{artifact['id']}/zip", binary=True)
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             for name in archive.namelist():

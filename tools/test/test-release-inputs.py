@@ -180,19 +180,24 @@ class Selection(unittest.TestCase):
         self.assertEqual(I.refresh_notes(after, plan), after)
 
 class Collection(unittest.TestCase):
-    def test_only_successful_trusted_non_pr_runs_authorize_reuse(self):
+    def test_only_successful_trusted_runs_and_exact_merged_pr_heads_authorize_reuse(self):
         evidence = [dict(platform='app', fingerprint='hash', scope='release', result='passed', tag='v0.12.0-preview.1')]
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as archive:
             archive.writestr('passed-inputs.json', json.dumps(evidence))
-        artifacts = [dict(id=i, expired=False, name='passed-inputs-test', workflow_run=dict(id=i)) for i in range(1, 7)]
+        artifacts = [dict(id=i, expired=False, name='passed-inputs-test', workflow_run=dict(id=i)) for i in range(1, 10)]
         runs = {i: dict(conclusion='success', event='push', path='.github/workflows/android.yml',
-                       head_repository=dict(full_name='org/repo')) for i in range(1, 7)}
+                       head_repository=dict(full_name='org/repo')) for i in range(1, 10)}
         runs[2]['conclusion'] = 'failure'
         runs[3]['event'] = 'pull_request'
         runs[4]['head_repository']['full_name'] = 'fork/repo'
         runs[5]['path'] = '.github/workflows/unrelated.yml'
         artifacts[5]['expired'] = True
+        for i in (7, 8, 9):
+            runs[i].update(event='pull_request', head_sha='tested', pull_requests=[dict(number=i)])
+        prs = {i: dict(merged=True, head=dict(sha='tested', repo=dict(full_name='org/repo'))) for i in (7, 8, 9)}
+        prs[8]['merged'] = False
+        prs[9]['head']['sha'] = 'later-untested-head'
         downloads = []
         def gh(*args, binary=False):
             endpoint = args[1]
@@ -200,14 +205,16 @@ class Collection(unittest.TestCase):
                 return '[]'
             if '/artifacts?' in endpoint:
                 return json.dumps(dict(artifacts=artifacts))
+            if '/pulls/' in endpoint:
+                return json.dumps(prs[int(endpoint.rsplit('/', 1)[1])])
             if '/runs/' in endpoint:
                 return json.dumps(runs[int(endpoint.rsplit('/', 1)[1])])
             downloads.append(endpoint)
             return buffer.getvalue()
         with patch.object(I, 'gh', gh):
             history = I.collect('org/repo')
-        self.assertEqual(history['evidence'], evidence)
-        self.assertEqual(downloads, ['repos/org/repo/actions/artifacts/1/zip'])
+        self.assertEqual(history['evidence'], evidence + evidence)
+        self.assertEqual(downloads, ['repos/org/repo/actions/artifacts/1/zip', 'repos/org/repo/actions/artifacts/7/zip'])
 
 
 class Feed(unittest.TestCase):

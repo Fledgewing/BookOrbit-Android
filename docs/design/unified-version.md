@@ -83,8 +83,9 @@ requires KOReader startup. Diagnostic simulator runs against an upstream overrid
 cannot prove the pinned firmware's inputs.
 
 The read-only planner collects published receipts and receipts from successful
-same-repository non-PR Actions runs. PR receipts are recorded but never authorize
-a release's test bypass. It scans the latest 100 releases and 100 artifacts;
+same-repository Actions runs. PR receipts authorize reuse only after the exact
+tested head has merged in this repository. Unmerged, superseded or fork PR heads
+cannot authorize a release's test bypass. It scans the latest 100 releases and 100 artifacts;
 missing, expired or unmatched evidence runs the full tests. API/download failure
 fails planning, never silently authorizes reuse. Evidence is an optimization,
 not an alternative release channel. No credentials or write permissions reach
