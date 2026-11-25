@@ -5,12 +5,13 @@ import java.io.File
 import java.util.UUID
 
 /** Durable, bounded handoff. Only the companion worker lists or parses the spool. */
-class EventMailbox(private val root: File) {
+class EventMailbox(private val root: File, private val checkpoint: () -> Unit = {}) {
     private val spool get() = File(root, "events")
     private val batch get() = File(root, "events-batch.lua")
     private val names get() = File(root, "events-batch-names.lua")
 
     fun publish(ack: String?) {
+        checkpoint()
         val prior = runCatching { LuaValue.parse(batch.readBytes()) as? Map<*, *> }.getOrNull()
         if (prior != null) {
             if (ack != prior["id"]) return
@@ -25,6 +26,7 @@ class EventMailbox(private val root: File) {
         val selected = ArrayList<String>()
         var bytes = 0L
         for (f in (spool.listFiles() ?: emptyArray()).sortedBy { it.name }) {
+            checkpoint()
             if (!f.name.endsWith(".lua") || !f.isFile || f.canonicalFile.parentFile != spool.canonicalFile) continue
             val n = f.length()
             if (n > 48000) {

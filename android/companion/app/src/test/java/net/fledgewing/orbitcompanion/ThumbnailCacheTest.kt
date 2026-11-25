@@ -27,9 +27,17 @@ class ThumbnailCacheTest {
         assertTrue(image.width <= 300 && image.height <= 400)
         assertTrue(file.length() < before)
         assertEquals(100_000L, file.lastModified())
+        assertTrue(File(file.parentFile, ".nomedia").isFile)
+        val hidden = File(file.parentFile, ".thumbnails")
+        assertTrue(File(hidden, ".nomedia").isFile)
+        assertFalse(hidden.listFiles()!!.any { it.extension == "jpg" })
+        val marker = File(hidden, "cover.jpg.done")
+        assertTrue(marker.isFile)
+        marker.setLastModified(42_000)
         val resized = file.readBytes()
         ThumbnailCache.shrink(file, 300, 400)
         assertArrayEquals("no repeated lossy recompression", resized, file.readBytes())
+        assertEquals("completed migration skips bitmap decode and stamp writes", 42_000L, marker.lastModified())
         image.recycle()
     }
 

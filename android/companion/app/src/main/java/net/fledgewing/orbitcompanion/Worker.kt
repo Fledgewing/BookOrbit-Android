@@ -41,7 +41,7 @@ object Worker {
     private var pickers: Pair<String, CacheWorker.Creds>? = null
     private var recheck: Triple<String, CacheWorker.Creds, List<Pair<Long, String>>>? = null
     @Volatile private var app: Context? = null
-    private var thread: Thread? = null
+    private var running = false
 
     @Volatile
     var mirrorRunning = false
@@ -60,12 +60,15 @@ object Worker {
     /** "Full refresh · 37%" while a Full refresh runs, else null. */
     @Volatile private var manualRefresh = false
 
-    fun progressLine(): String? = if (mirrorRunning && manualRefresh) MirrorLogic.progressLine(progress) else null
+    fun progressLine(): String? {
+        if (!mirrorRunning || !manualRefresh) return null
+        return MirrorLogic.progressLine(progress) + if (BulkWork.paused) " · paused while reading" else ""
+    }
 
-    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, onProgress = { progress = it }, places = Places.roots(), resizeThumbnail = { f, w, h ->
+    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, cpuMs = { android.os.SystemClock.currentThreadTimeMillis() }, checkpoint = { BulkWork.checkpoint() }, threadFactory = { name, task -> BulkWork.thread(name, task) }, onProgress = { progress = it }, places = Places.roots(), resizeThumbnail = { f, w, h ->
         val dm = app?.resources?.displayMetrics
-        ThumbnailCache.shrink(f, if (w > 0) w else (dm?.widthPixels ?: 1080) / 3,
-            if (h > 0) h else (dm?.heightPixels ?: 1440) / 3)
+        BulkWork.phase("cover") { ThumbnailCache.shrink(f, if (w > 0) w else (dm?.widthPixels ?: 1080) / 3,
+            if (h > 0) h else (dm?.heightPixels ?: 1440) / 3) }
     }).also { worker = it }
 
     private fun creds(i: Intent): CacheWorker.Creds? {
@@ -76,6 +79,8 @@ object Worker {
     }
 
     fun onIntent(ctx: Context, i: Intent) {
+        app = ctx.applicationContext
+        BulkWork.attach(ctx)
         if (i.action == ACTION_SQLITE_STRESS) {
             val secs = i.getStringExtra("seconds")?.toIntOrNull()?.coerceIn(5, 600) ?: SqliteStress.SECONDS
             return SqliteStress.start(root(), secs)
@@ -98,6 +103,7 @@ object Worker {
             val at = i.getStringExtra("board_now")?.toLongOrNull() ?: return
             synchronized(lock) {
                 patches.addLast {
+                    BulkWork.checkpoint()
                     val year = LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? Map<*, *>
                     val stats = File(root().parentFile, "statistics.sqlite3")
                     val daily = if (stats.isFile) runCatching {
@@ -116,7 +122,7 @@ object Worker {
         if (i.action == ACTION_PATCH && i.hasExtra("old_hash")) {
             val old = i.getStringExtra("old_hash") ?: return
             val new = i.getStringExtra("new_hash") ?: return
-            synchronized(lock) { patches.addLast { HashSidecar.carry(File(root().parentFile?.parentFile, "hashdocsettings"), old, new) }; lock.notifyAll() }
+            synchronized(lock) { patches.addLast { HashSidecar.carry(File(root().parentFile?.parentFile, "hashdocsettings"), old, new, BulkWork::checkpoint) }; lock.notifyAll() }
             return start()
         }
         if (i.action == ACTION_PATCH && i.getStringExtra("drain_events") == "1") {
@@ -170,9 +176,11 @@ object Worker {
                 val encoded = i.getStringExtra("plan") ?: return
                 synchronized(lock) {
                     patches.addLast {
+                        BulkWork.checkpoint()
                         val bytes = LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)
                         val m = LuaValue.parse(bytes) as? Map<*, *> ?: return@addLast
                         val plan = CacheWorker.Plan(m)
+                        OLog.i("worker: mirror ${plan.op} (${plan.reason}) run ${plan.run}")
                         val f = File(root(), "mirror/plan.lua")
                         f.parentFile?.mkdirs()
                         File(root(), "mirror/stop").delete()
@@ -188,14 +196,20 @@ object Worker {
         start()
     }
 
-    private fun start() = synchronized(lock) {
-        if (thread?.isAlive == true) return@synchronized
-        thread = Thread({ loop() }, "orbit-cache-worker").also { it.isDaemon = true; it.start() }
+    private fun start(): Unit = synchronized(lock) {
+        if (running) return@synchronized
+        running = true
+        BulkWork.executor.execute {
+            var completed = false
+            try { NoMedia.roots(Places.roots()); loop(); completed = true }
+            catch (e: Exception) { OLog.w("worker: bulk job deferred", e) }
+            finally { synchronized(lock) { running = false; if (completed && busy()) start() } }
+        }
     }
 
     private fun drainChecks() {
         val a = synchronized(lock) { storage.also { storage = null } }
-        if (a != null) try { worker().storage(a) } catch (e: Exception) { OLog.w("worker: storage count failed", e) }
+        if (a != null) try { BulkWork.phase("storage") { worker().storage(a) } } catch (e: Exception) { OLog.w("worker: storage count failed", e) }
         val cp = synchronized(lock) { copies.also { copies = null } }
         if (cp != null) try { worker().copies(cp) } catch (e: Exception) { OLog.w("worker: copies lookup failed", e) }
         val rc = synchronized(lock) { recheck.also { recheck = null } }
@@ -219,10 +233,11 @@ object Worker {
 
     /** The sleep screen's pool, then its picture redrawn; the plugin hears a sleep_pool event. */
     private fun sleepPool(why: String, a: SleepPoolBuilder.Ask) {
+        BulkWork.checkpoint()
         val ev = sortedMapOf<String, Any?>("kind" to "sleep_pool", "why" to why)
         try {
-            val b = SleepPoolBuilder(SleepScreen.dir(), UrlHttp)
-            ev.putAll(b.build(a))
+            val b = SleepPoolBuilder(SleepScreen.dir(), UrlHttp, checkpoint = { BulkWork.checkpoint() })
+            ev.putAll(BulkWork.phase("sleep pool") { b.build(a) })
             ev["tags"] = b.tags(worker().detailTags(SleepPoolBuilder.TAG_DETAILS_MAX)).toLong()
             OLog.i("worker: sleep screen pool: ${ev["items"]} cover(s), ${ev["kept"]} new, ${ev["probed"]} checked ($why)")
             app?.let { SleepScreen.onPool(it, "pool") }
@@ -235,9 +250,10 @@ object Worker {
 
     /** The pickers' lists: scopes.json from the server, tags.json from the saved details. */
     private fun pickers(why: String, c: CacheWorker.Creds) {
+        BulkWork.checkpoint()
         val ev = sortedMapOf<String, Any?>("kind" to "sleep_pool", "why" to why, "scopes_only" to true)
         try {
-            val b = SleepPoolBuilder(SleepScreen.dir(), UrlHttp)
+            val b = SleepPoolBuilder(SleepScreen.dir(), UrlHttp, checkpoint = { BulkWork.checkpoint() })
             ev["tags"] = b.tags(worker().detailTags(SleepPoolBuilder.TAG_DETAILS_MAX)).toLong()
             if (b.scopes(c)) ev["scopes"] = true else ev["err"] = "not listed"
         } catch (e: Exception) {
@@ -251,14 +267,13 @@ object Worker {
         while (true) {
             drainChecks()
             val p = synchronized(lock) {
-                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) lock.wait(60_000)
-                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) { thread = null; return }
+                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) { return }
                 pending.also { pending = null }
             } ?: continue
             manualRefresh = p.first.m["manual"] == true
             mirrorRunning = true
             try {
-                val why = worker().run(p.first, p.second) { drainChecks() }
+                val why = BulkWork.phase("mirror") { worker().run(p.first, p.second) { drainChecks() } }
                 OLog.i("worker: mirror run ${p.first.run} ended: $why")
             } catch (e: Exception) {
                 OLog.w("worker: mirror run failed", e)
@@ -277,6 +292,7 @@ object Worker {
      */
     object UrlHttp : CacheWorker.Http {
         private const val REDIRECTS = 5
+        private val buffers = ThreadLocal.withInitial { ByteArray(16 * 1024) }
 
         override fun get(url: String, headers: Map<String, String>, sink: File?, maxBytes: Long): CacheWorker.Reply {
             var at = URL(url)
@@ -303,10 +319,10 @@ object Worker {
                     if (code != 200) { drain(c); return CacheWorker.Reply(code, etag = etag, contentType = type) }
                     c.inputStream.use { input ->
                         if (sink != null) {
-                            sink.parentFile?.mkdirs()
+                            sink.parentFile?.let(NoMedia::directory)
                             var n = 0L
                             sink.outputStream().use { out ->
-                                val buf = ByteArray(16 * 1024)
+                                val buf = buffers.get()!!
                                 while (true) {
                                     val r = input.read(buf)
                                     if (r < 0) break
@@ -317,8 +333,17 @@ object Worker {
                             }
                             return CacheWorker.Reply(code, etag = etag, contentType = type)
                         }
-                        val bytes = input.readBytes()
-                        return if (bytes.size > maxBytes) CacheWorker.Reply(0, err = "response_too_large") else CacheWorker.Reply(code, bytes, etag, type)
+                        val out = java.io.ByteArrayOutputStream(16 * 1024)
+                        val buf = buffers.get()!!
+                        var n = 0L
+                        while (true) {
+                            val r = input.read(buf)
+                            if (r < 0) break
+                            n += r
+                            if (n > maxBytes) { c.disconnect(); return CacheWorker.Reply(0, err = "response_too_large") }
+                            out.write(buf, 0, r)
+                        }
+                        return CacheWorker.Reply(code, out.toByteArray(), etag, type)
                     }
                 } catch (e: Exception) {
                     c.disconnect()
@@ -330,7 +355,18 @@ object Worker {
 
         /** Reads an answer we don't keep to its end, so its connection is reused. */
         private fun drain(c: HttpURLConnection) {
-            try { (c.errorStream ?: c.inputStream)?.use { it.readBytes() } } catch (e: Exception) { c.disconnect() }
+            try {
+                (c.errorStream ?: c.inputStream)?.use { input ->
+                    val buf = buffers.get()!!
+                    var n = 0L
+                    while (true) {
+                        val r = input.read(buf)
+                        if (r < 0) break
+                        n += r
+                        if (n > CacheWorker.MAX_BODY) { c.disconnect(); break }
+                    }
+                }
+            } catch (e: Exception) { c.disconnect() }
         }
     }
 }

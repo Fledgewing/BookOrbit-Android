@@ -18,8 +18,7 @@ import java.util.concurrent.TimeUnit
  *
  * A Full refresh counts each book once: its detail is one job and its cover one job, whichever
  * lists name it, and the work is fixed once the library's size and the section indexes are in
- * (the all-books list and the sections' first pages). Requests run [parallel] at a time and
- * covers on their own pool; one thread writes the landed replies, up to [BATCH] per transaction.
+ * (the all-books list and the sections' first pages). Requests and covers share one fetcher; one thread writes the landed replies, up to [BATCH] per transaction.
  *
  * Plain JVM ([Sql] and an [Http] port), so the unit tests run it against a fake server and JDBC.
  */
@@ -29,8 +28,8 @@ class CacheWorker(
     private val now: () -> Long = { System.currentTimeMillis() / 1000 },
     private val log: (String) -> Unit = { OLog.i(it) },
     private val sleep: (Int) -> Unit = { Thread.sleep(it * 1000L) },
-    /** Requests in flight at once (1: strictly one after another). */
-    private val parallel: Int = PARALLEL,
+    /** Queue capacity, capped at [PARALLEL] even for callers requesting the former high fan-out. */
+    parallel: Int = PARALLEL,
     private val openSql: (File) -> Sql = { AndroidSql(it) },
     private val clockMs: () -> Long = { System.currentTimeMillis() },
     /** The run's % (never down; 100 at the end), each time the status is written; null when it ends. */
@@ -38,7 +37,13 @@ class CacheWorker(
     /** The folders a command may touch files in ([Places]); a path outside them is refused. */
     private val places: List<File> = listOf(root),
     private val resizeThumbnail: (File, Int, Int) -> Unit = { _, _, _ -> },
+    private val checkpoint: () -> Unit = {},
+    private val decodeJson: (String) -> Any? = LuaValue::fromJson,
+    private val cpuMs: () -> Long = { 0L },
+    private val threadFactory: (String, Runnable) -> Thread = { name, task -> Thread(task, name).apply { isDaemon = true; priority = Thread.MIN_PRIORITY } },
 ) {
+    private val parallel = parallel.coerceIn(1, PARALLEL)
+
     /** A GET. sink: write the body there (a cover) instead of returning it. */
     fun interface Http {
         fun get(url: String, headers: Map<String, String>, sink: File?, maxBytes: Long): Reply
@@ -63,13 +68,13 @@ class CacheWorker(
     private var thumbnailHeight = 0
     private var runProtected = emptySet<Long>()
     private fun thumbnail(f: File) {
-        if (!f.path.contains("/orbit-sleep/")) resizeThumbnail(f, thumbnailWidth, thumbnailHeight)
+        if (!f.path.contains("/orbit-sleep/")) { checkpoint(); resizeThumbnail(f, thumbnailWidth, thumbnailHeight) }
     }
 
     // ------------------------------------------------------------------ files
 
     private fun write(f: File, bytes: ByteArray): Boolean {
-        f.parentFile?.mkdirs()
+        f.parentFile?.let(NoMedia::directory)
         val tmp = File(f.parentFile, f.name + ".tmp" + (Math.random() * 1e9).toLong())
         return try {
             tmp.writeBytes(bytes)
@@ -93,6 +98,7 @@ class CacheWorker(
         var n = 0
         val entry = Regex("^[0-9a-f]{8}\\.lua$")
         for (dir in listOf(root, mirrorDir)) for (f in dir.listFiles() ?: emptyArray()) {
+            checkpoint()
             if (f.isFile && (entry.matches(f.name) || f.name in OLD_FILES || f.name.contains(".lua.tmp"))) { f.delete(); n++ }
         }
         if (n > 0) log("store: removed $n files of the cache before the database")
@@ -121,7 +127,7 @@ class CacheWorker(
             ev["err"] = r.err ?: r.code.toString()
             return event(ev)
         }
-        val reply = try { LuaValue.fromJson(String(r.body, Charsets.UTF_8)) } catch (e: Exception) { null }
+        val reply = try { decodeJson(String(r.body, Charsets.UTF_8)) } catch (e: Exception) { null }
         if (reply !is Map<*, *> && reply !is List<*>) {
             ev["err"] = "not json"
             return event(ev)
@@ -171,6 +177,7 @@ class CacheWorker(
 
     /** Everything Orbit stores: the database (browsing entries apart, as they can go) and the cover folder's files. */
     fun storageItems(coverDir: String?, mirrorCovers: Boolean): List<StorageLogic.Item> {
+        checkpoint()
         val st = store
         SqliteStress.cleanup(root)
         val entries = st.entrySizes()
@@ -182,6 +189,7 @@ class CacheWorker(
             val protected = protectedIds()
             val keep = if (mirrorCovers) st.coversKept() else emptySet()
             for (f in dir.listFiles() ?: emptyArray()) {
+                checkpoint()
                 if (f.name.endsWith(".etag") && !File(f.path.removeSuffix(".etag")).isFile) { f.delete(); continue }
                 if (!f.name.endsWith(".jpg") || !f.isFile || allowed(f.path) == null) continue
                 val etag = File(dir, f.name + ".etag")
@@ -203,7 +211,7 @@ class CacheWorker(
             (home?.get("continueReading") as? List<*>)?.forEach { ((it as? Map<*, *>)?.get("id") as? Long)?.let(ids::add) }
         }
         val pool = File(root.parentFile, "orbit-sleep/pool.json")
-        val model = runCatching { LuaValue.fromJson(pool.readText()) as? Map<*, *> }.getOrNull()
+        val model = runCatching { decodeJson(pool.readText()) as? Map<*, *> }.getOrNull()
         (model?.get("items") as? List<*>)?.forEach { ((it as? Map<*, *>)?.get("id") as? Long)?.let(ids::add) }
         return ids
     }
@@ -219,6 +227,7 @@ class CacheWorker(
         val plan = StorageLogic.plan(items, a.limit)
         val byK = items.associateBy { it.k }
         val removed = sortedMapOf("cache" to 0L, "cover" to 0L, "mirror_cover" to 0L)
+        checkpoint()
         store.transaction {
             for (k in plan.drop) {
                 val it = byK[k] ?: continue
@@ -226,6 +235,7 @@ class CacheWorker(
                 else if (k.startsWith("c:") && coverDir != null) {
                     allowed(File(coverDir, k.removePrefix("c:")).path)?.delete()
                     allowed(File(coverDir, k.removePrefix("c:") + ".etag").path)?.delete()
+                    allowed(File(coverDir, ".thumbnails/" + k.removePrefix("c:") + ".done").path)?.delete()
                     val f = File(coverDir, k.removePrefix("c:"))
                     val etag = File(f.path + ".etag")
                     coverUsage?.replace(k, f.length() + etag.length())
@@ -252,7 +262,6 @@ class CacheWorker(
         for (path in paths.take(100)) {
             val f = allowed(path) ?: continue
             if (!f.name.endsWith(".jpg") || !f.isFile) continue
-            thumbnail(f)
             f.setLastModified(now() * 1000)
             coverUsage?.replace("c:${f.name}", f.length() + File(f.path + ".etag").length())
         }
@@ -276,6 +285,7 @@ class CacheWorker(
         val changed = ArrayList<Long>()
         var failed = 0L
         for ((id, asked) in items) {
+            checkpoint()
             val f = allowed(asked)
             if (f == null) { failed++; continue }
             val path = f.path
@@ -310,6 +320,7 @@ class CacheWorker(
      * Answers with { kind = "copies", why, checked, found = { { md5, path, book_id, file_id, why } }, gone }.
      */
     fun copies(why: String) {
+        checkpoint()
         val ask = read(File(root, "copies/ask.lua")) as? Map<*, *>
         if (ask == null) {
             event(sortedMapOf("kind" to "copies", "why" to why, "err" to "no ask"))
@@ -323,6 +334,7 @@ class CacheWorker(
             details[k.toString()] = CopiesLogic.Detail(d["files"] as? List<*>, (d["saved_at"] as? Number)?.toLong() ?: 0L)
         }
         for (id in want) {
+            checkpoint()
             val (body, at) = store.detail(id.toLong()) ?: continue
             val files = (body as? Map<*, *>)?.get("files") as? List<*> ?: continue
             if (CopiesLogic.newer(details[id], at)) details[id] = CopiesLogic.Detail(files, at)
@@ -334,7 +346,7 @@ class CacheWorker(
     }
 
     /** Acknowledged mailbox; listing/parsing event files belongs to this worker only. */
-    private val mailbox by lazy { EventMailbox(root) }
+    private val mailbox by lazy { EventMailbox(root, checkpoint) }
     fun drainEvents(ack: String?) = mailbox.publish(ack)
 
     private var eventSeq = 0
@@ -417,6 +429,8 @@ class CacheWorker(
         val written = ArrayList<Map<String, Any?>>()
         var writtenMore = false
         var details = 0L
+        val fetchCpu = java.util.concurrent.atomic.AtomicLong()
+        var parseCpu = 0L; var writeCpu = 0L
     }
 
 
@@ -550,7 +564,7 @@ class CacheWorker(
             val path = MirrorLogic.mirrorPage(base, page, 100)
             val reply = http.get(url(creds, path), headers(creds), null, MAX_BODY)
             check(reply.code == 200) { "incremental scan unavailable" }
-            val body = reply.body?.let { LuaValue.fromJson(String(it, Charsets.UTF_8)) } as? Map<*, *> ?: error("incremental scan invalid")
+            val body = reply.body?.let { decodeJson(String(it, Charsets.UTF_8)) } as? Map<*, *> ?: error("incremental scan invalid")
             val items = body["items"] as? List<*> ?: error("incremental items missing")
             var older = false
             for (v in items) {
@@ -612,6 +626,12 @@ class CacheWorker(
 
     /** Fetches a job on a pool thread: a page or detail reply, or a cover written to its file. */
     private fun fetch(r: Run, creds: Creds, job: Job): Landed {
+        checkpoint()
+        val start = cpuMs()
+        try { return fetchJob(r, creds, job) } finally { r.fetchCpu.addAndGet(cpuMs() - start) }
+    }
+
+    private fun fetchJob(r: Run, creds: Creds, job: Job): Landed {
         val plan = r.plan
         return when (job.kind) {
             "entry" -> Landed(job, http.get(url(creds, job.ref), headers(creds), null, MAX_BODY), job.ref)
@@ -642,7 +662,7 @@ class CacheWorker(
         h["Accept-Encoding"] = "identity"
         if (exists) h["If-None-Match"] = etagFile.readText()
         val part = allowed("$path.part${Thread.currentThread().id}") ?: return Landed(job, null, null, "none")
-        part.parentFile?.mkdirs()
+        part.parentFile?.let(NoMedia::directory)
         part.delete()
         val rep = http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail", h, part, MAX_COVER)
         if (Thread.currentThread().isInterrupted) { part.delete(); return Landed(job, rep, null, "transport") }
@@ -803,7 +823,8 @@ class CacheWorker(
      * or nothing answers.
      */
     fun run(plan: Plan, creds: Creds, yieldTo: () -> Unit = {}): String {
-        mirrorDir.mkdirs()
+        checkpoint()
+        NoMedia.directory(mirrorDir)
         thumbnailWidth = (plan.m["cover_width"] as? Number)?.toInt() ?: 0
         thumbnailHeight = (plan.m["cover_height"] as? Number)?.toInt() ?: 0
         runProtected = plan.ids("seed_details").toSet()
@@ -915,11 +936,11 @@ class CacheWorker(
         return why
     }
 
-    /** The pipeline: requests in flight up to [parallel] (covers on their own pool), landed replies written in batches. */
+    /** The pipeline: one fetcher shared by pages and covers, at most two queued replies, one writer. */
     private fun pump(r: Run, creds: Creds, yieldTo: () -> Unit): String {
         val st = store
-        val pool = Executors.newFixedThreadPool(maxOf(1, parallel)) { x -> Thread(x, "orbit-cache-fetch").also { it.isDaemon = true } }
-        val coverPool = Executors.newFixedThreadPool(COVER_PARALLEL) { x -> Thread(x, "orbit-cache-cover").also { it.isDaemon = true } }
+        val pool = Executors.newSingleThreadExecutor { x -> threadFactory("orbit-cache-fetch", x) }
+        val coverPool = pool
         val landed = LinkedBlockingQueue<Landed>()
         val inFlight = HashSet<Job>()
         val notBefore = HashMap<Job, Long>()
@@ -931,6 +952,7 @@ class CacheWorker(
             while (true) {
                 if (File(mirrorDir, "stop").isFile) { why = "stopped"; break }
                 yieldTo()
+                checkpoint()
                 // Refill: the next jobs by kind (lists first), those not in flight and not waiting to retry.
                 // AHEAD times the pool's size queued, so the pools never wait while the writer writes.
                 val reqSlots = parallel * AHEAD - inFlight.count { it.kind != "cover" }
@@ -986,7 +1008,12 @@ class CacheWorker(
                     if (wait <= 0) break
                     landed.poll(wait, TimeUnit.MILLISECONDS)?.let { batch.add(it) } ?: break
                 }
+                checkpoint()
                 val t0 = clockMs()
+                val cpuStart = cpuMs()
+                // Migrate existing images before opening a database transaction. A reading pause
+                // must never hold a writer transaction across an entire reading session.
+                for (l in batch) if (l.job.kind == "cover" && l.part == null && l.target?.isFile == true) thumbnail(l.target)
                 var allTransport = true
                 val databaseBytes = st.file.length()
                 var batchGrowth = 0L
@@ -999,7 +1026,6 @@ class CacheWorker(
                         if (j.kind == "cover") {
                             // Existing images are mutated only by the writer, alongside eviction.
                             if (l.part == null && l.target != null && l.target.isFile) {
-                                thumbnail(l.target)
                                 coverUsage?.replace("c:${l.target.name}", l.target.length() + File(l.target.path + ".etag").length())
                             }
                             if (l.part != null && l.target != null) {
@@ -1030,13 +1056,15 @@ class CacheWorker(
                             continue
                         }
                         val rep = l.reply
-                        val body = if (rep != null && rep.code == 200 && rep.body != null) try { LuaValue.fromJson(String(rep.body, Charsets.UTF_8)) } catch (e: Exception) { null } else null
+                        val parseStart = cpuMs()
+                        val body = if (rep != null && rep.code == 200 && rep.body != null) try { decodeJson(String(rep.body, Charsets.UTF_8)) } catch (e: Exception) { null } else null
+                        r.parseCpu += cpuMs() - parseStart
                         if (body is Map<*, *> && l.path != null) {
                             allTransport = false
                             notBefore.remove(j)
                             val before = if (r.plan.limit != null) footprint(j, body) else 0L
                             val requests = r.requests; val details = r.details
-                            val changed = r.changed.toList()
+                            val changedSize = r.changed.size
                             st.db().exec("SAVEPOINT storage_write")
                             try {
                                 landPage(r, j, l.path, body)
@@ -1044,7 +1072,7 @@ class CacheWorker(
                                 if (!room(r, growth, false, databaseBytes + batchGrowth)) {
                                     st.db().exec("ROLLBACK TO storage_write")
                                     r.requests = requests; r.details = details
-                                    r.changed.clear(); r.changed.addAll(changed)
+                                    while (r.changed.size > changedSize) r.changed.removeAt(r.changed.lastIndex)
                                 } else {
                                     batchGrowth += growth
                                     st.db().exec("UPDATE jobs SET state = 1 WHERE kind = ? AND ref = ?", j.kind, ref)
@@ -1080,6 +1108,7 @@ class CacheWorker(
                     }
                 }
                 val ms = clockMs() - t0
+                r.writeCpu += cpuMs() - cpuStart
                 r.batches++; r.writeMs += ms; r.writeMax = maxOf(r.writeMax, ms)
                 recount(r, false)
                 transport = if (allTransport) transport + batch.size else 0
@@ -1104,6 +1133,7 @@ class CacheWorker(
             abandoned.forEach { it.part?.delete() }
             coverItems.clear()
         }
+        log("mirror: phase CPU fetch ${r.fetchCpu.get()} ms; parse ${r.parseCpu} ms; land/write ${r.writeCpu} ms (includes parse)")
         // Replies still in flight when it stopped: their jobs stay pending for the next run.
         return if (why == "finished" && r.limitNote != null) "storage limit" else why
     }
@@ -1118,14 +1148,14 @@ class CacheWorker(
     companion object {
         /** The cache's files before the database (0.11.x), removed at the first open. */
         val OLD_FILES = setOf("index.lua", "storage.lua", "worker-state.lua", "cover_keep.lua")
-        /** Requests in flight at once: tuned with the stage 0 kit (docs/design/sqlite-cache.md "Speed"). */
-        const val PARALLEL = 8
-        const val COVER_PARALLEL = 6
+        /** A bulk refresh must leave CPU and RAM for reading and Android system services. */
+        const val PARALLEL = 1
+        const val COVER_PARALLEL = 1
         /** Landed replies written in one transaction, at most (or what landed within BATCH_MS). */
         const val BATCH = 8
         const val BATCH_MS = 20L
         /** Jobs queued per pool thread (a batch's write must not starve the pools). */
-        const val AHEAD = 4
+        const val AHEAD = 1
         const val CHANGED_MAX = 50
         const val WRITTEN_MAX = 100
         const val STATUS_EVERY_MS = 2000L

@@ -362,6 +362,8 @@ class Prefs(ctx: Context) {
 
 /** Wi-Fi, Tailscale, screen and package checks. */
 object Net {
+    private val vpnConnect = VpnConnectGate()
+    fun wifiDisconnected() = vpnConnect.disconnected()
     const val TAILSCALE_PKG = "com.tailscale.ipn"
     private const val TAILSCALE_RECEIVER = "com.tailscale.ipn.IPNReceiver"
     private const val TAILSCALE_CONNECT = "com.tailscale.ipn.CONNECT_VPN"
@@ -383,6 +385,9 @@ object Net {
             OLog.i("wifi: not switched ($why): Add-on without Wi-Fi switching")
             return false
         }
+        val state = wifi(ctx).wifiState
+        if (on && state in setOf(WifiManager.WIFI_STATE_ENABLED, WifiManager.WIFI_STATE_ENABLING)) return true
+        if (!on && state in setOf(WifiManager.WIFI_STATE_DISABLED, WifiManager.WIFI_STATE_DISABLING)) return true
         val prefs = Prefs(ctx)
         if (on) {
             prefs.wifiPendingOwner = owner
@@ -410,6 +415,7 @@ object Net {
     fun vpnUp(ctx: Context) = hasTransport(ctx, NetworkCapabilities.TRANSPORT_VPN)
 
     fun connectTailscale(ctx: Context, why: String): Boolean {
+        if (!vpnConnect.request(wifiConnected(ctx), vpnUp(ctx))) return false
         val i = Intent(TAILSCALE_CONNECT)
             .setClassName(TAILSCALE_PKG, TAILSCALE_RECEIVER)
             .addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES or Intent.FLAG_RECEIVER_FOREGROUND)
