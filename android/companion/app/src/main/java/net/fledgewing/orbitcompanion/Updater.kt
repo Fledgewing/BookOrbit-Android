@@ -67,7 +67,7 @@ object Updater {
     fun onPluginAsked(ctx: Context, why: String) {
         log("the plugin asked for a check ($why)")
         check(ctx, interactive = true, why = "plugin: $why") { result ->
-            if (!result.startsWith("installing")) PatchInstaller.afterAppUpdate(ctx)
+            if (!result.startsWith("installing") && Version.parse(BuildConfig.VERSION_NAME) !in withdrawn) PatchInstaller.afterAppUpdate(ctx)
         }
     }
 
