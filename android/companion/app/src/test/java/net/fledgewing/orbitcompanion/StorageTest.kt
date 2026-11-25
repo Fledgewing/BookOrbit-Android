@@ -82,7 +82,7 @@ class StorageTest {
         assertEquals(0, resized)
         for (id in 1..3) assertEquals("kept", items.single { it.k == "c:${id}_0.jpg" }.kind)
         w.coversShown(listOf(File(covers, "4_0.jpg").path))
-        assertEquals(1, resized)
+        assertEquals("display reports only touch recency; migration waits for idle", 0, resized)
         w.storage(CacheWorker.StorageAsk("test", items.sumOf { it.bytes } - 1, covers.path, true))
         assertFalse("oldest eligible shown cover goes", File(covers, "5_0.jpg").exists())
         for (id in 1..4) assertTrue(File(covers, "${id}_0.jpg").exists())
@@ -131,7 +131,7 @@ class StorageTest {
         assertTrue(File(covers, "m2.jpg").exists())
         assertTrue("browsing data wins over offline covers too", st.read("old", "/koreader/plugin/catalog/collections", null) != null)
         assertTrue(st.read("home", "/koreader/plugin/catalog/dashboard", null) != null && st.read("new", "/koreader/plugin/catalog/shelves", null) != null)
-        val ev = File(root, "events").listFiles()!!.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
+        val ev = File(root, "events").listFiles()!!.filter { it.extension == "lua" }.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
         assertEquals("storage", ev["kind"])
         assertEquals(sortedMapOf("cache" to 0L, "cover" to 1L, "mirror_cover" to 1L), ev["removed"])
         val totals = ev["totals"] as Map<*, *>

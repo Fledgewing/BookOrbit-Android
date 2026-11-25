@@ -160,6 +160,7 @@ class OrbitService : Service() {
     private val wifiCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = onWifiUp()
         override fun onLost(network: Network) {
+            if (!Net.wifiConnected(this@OrbitService)) Net.wifiDisconnected()
             OLog.d("wifi network lost")
             updateNotification()
         }
@@ -195,6 +196,7 @@ class OrbitService : Service() {
                     stats.record("wifi_on")
                 }
                 WifiManager.WIFI_STATE_DISABLED -> {
+                    Net.wifiDisconnected()
                     if (prefs.wifiOwner != WifiOwner.NONE) OLog.i("wifi: is OFF (was ${prefs.wifiOwner.key}) | mode ${prefs.wifiMode.key}")
                     prefs.wifiOwner = WifiOwner.NONE
                     stats.record("wifi_off")
@@ -240,6 +242,8 @@ class OrbitService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        BulkWork.attach(this)
+        BulkWork.executor.execute { runCatching { NoMedia.roots(Places.roots()) }.onFailure { OLog.w("cache: no-media setup deferred", it) } }
         val t0 = SystemClock.elapsedRealtime()
         running = true
         prefs = Prefs(this)
@@ -468,11 +472,11 @@ class OrbitService : Service() {
     }
 
     private fun onWifiUp() {
+        if (netUpWantsTailscale && prefs.wakeTailscaleWithWifi) Net.connectTailscale(this, "Wi-Fi came up")
         val pending = netUpAt
         if (pending > 0) {
             recordNetReady(SystemClock.elapsedRealtime() - pending, netUpReason)
             netUpAt = 0
-            if (netUpWantsTailscale && prefs.wakeTailscaleWithWifi) Net.connectTailscale(this, "Wi-Fi came up")
         } else {
             OLog.d("wifi network available")
         }

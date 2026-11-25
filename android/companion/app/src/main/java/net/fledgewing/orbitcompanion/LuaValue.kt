@@ -25,7 +25,7 @@ object LuaValue {
     }
 
     /** A Kotlin String as a model byte string. */
-    fun str(s: String): String = String(s.toByteArray(Charsets.UTF_8), L1)
+    fun str(s: String): String = if (s.all { it.code < 128 }) s else String(s.toByteArray(Charsets.UTF_8), L1)
 
     /** A model byte string as a Kotlin String. */
     fun utf8(s: String): String = String(s.toByteArray(L1), Charsets.UTF_8)
@@ -33,7 +33,55 @@ object LuaValue {
     // ------------------------------------------------------------------ JSON
 
     /** A server reply as the model (rapidjson's nulls dropped from objects, as `Cache.encode` drops them). */
-    fun fromJson(text: String): Any? = fromJsonValue(JSONTokener(text).nextValue())
+    fun fromJson(text: String): Any? {
+        val tokens = JSONTokener(text)
+        val value = jsonValue(tokens, 0)
+        require(tokens.nextClean() == 0.toChar()) { "trailing JSON" }
+        return value
+    }
+
+    /** Consume tokens straight into the cache model; never build a second JSONObject tree. */
+    private fun jsonValue(t: JSONTokener, depth: Int): Any? {
+        require(depth <= 40) { "JSON nesting" }
+        return when (val c = t.nextClean()) {
+            '{' -> {
+                val m = java.util.TreeMap<String, Any?>()
+                if (t.nextClean() != '}') {
+                    t.back()
+                    while (true) {
+                        require(t.nextClean() == '"') { "JSON key" }
+                        val key = str(t.nextString('"'))
+                        require(t.nextClean() == ':') { "JSON colon" }
+                        val value = jsonValue(t, depth + 1)
+                        if (value != null) m[key] = value else m.remove(key)
+                        val end = t.nextClean()
+                        if (end == '}') break
+                        require(end == ',') { "JSON object" }
+                    }
+                }
+                m
+            }
+            '[' -> {
+                val a = ArrayList<Any?>()
+                if (t.nextClean() != ']') {
+                    t.back()
+                    while (true) {
+                        a.add(jsonValue(t, depth + 1))
+                        val end = t.nextClean()
+                        if (end == ']') break
+                        require(end == ',') { "JSON array" }
+                    }
+                }
+                a
+            }
+            '"' -> str(t.nextString('"'))
+            else -> {
+                require(c != 0.toChar()) { "JSON value" }
+                t.back()
+                fromJsonValue(t.nextValue())
+            }
+        }
+    }
 
     fun fromJsonValue(v: Any?): Any? = when (v) {
         null, JSONObject.NULL -> null
@@ -61,7 +109,9 @@ object LuaValue {
     /** `Cache.encode`: arrays positionally, then keys sorted (numbers before strings). */
     fun encode(v: Any?): ByteArray = ByteArrayOutputStream().also { write(it, v, 0) }.toByteArray()
 
-    private fun raw(o: ByteArrayOutputStream, s: String) = o.write(s.toByteArray(L1))
+    private fun raw(o: ByteArrayOutputStream, s: String) {
+        if (s.length <= 3) for (c in s) o.write(c.code) else o.write(s.toByteArray(L1))
+    }
 
     /** LuaJIT's string.format("%q") (lj_strfmt.c): a newline as backslash-newline, other control bytes in decimal (3 digits before a digit). */
     private fun quoted(o: ByteArrayOutputStream, s: String) {

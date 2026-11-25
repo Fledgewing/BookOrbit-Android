@@ -11,7 +11,7 @@ import java.util.concurrent.Executors
 
 /** Serial disk work for the sleep pickers. Drawing and taps only use the in-memory snapshot. */
 internal object SleepPickerWork {
-    private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "orbit-sleep-picker").apply { isDaemon = true } }
+    private val worker = BulkWork.executor
     internal var executor: Executor = worker
     @Volatile var choices: SleepChoices? = null
 

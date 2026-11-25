@@ -8,19 +8,27 @@ import java.io.File
 object ThumbnailCache {
     fun shrink(file: File, width: Int, height: Int) {
         if (width <= 0 || height <= 0) return
+        NoMedia.directory(file.parentFile!!)
+        val stateDir = NoMedia.directory(File(file.parentFile, ".thumbnails"))
+        val marker = File(stateDir, file.name.replace(Regex("\\.part[0-9]*$"), "") + ".done")
+        val signature = "$width:$height:${file.length()}"
+        val incoming = Regex("\\.part[0-9]*$").containsMatchIn(file.name)
+        if (!incoming && marker.isFile && marker.readText() == signature) return
+        BulkWork.checkpoint()
+        Thread.sleep(75) // Idle migration is deliberately paced, including existing cached images.
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return
         val scale = minOf(1.0, width.toDouble() / bounds.outWidth, height.toDouble() / bounds.outHeight)
         val jpeg = file.inputStream().use { it.read() == 0xff && it.read() == 0xd8 }
-        if (scale >= 1.0 && jpeg) return
+        if (scale >= 1.0 && jpeg) { marker.writeText(signature); return }
         val w = maxOf(1, (bounds.outWidth * scale).toInt())
         val h = maxOf(1, (bounds.outHeight * scale).toInt())
         val sampled = BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply {
             inSampleSize = SharpCoversLogic.sample(bounds.outWidth, bounds.outHeight, w, h)
         }) ?: return
         val image = Bitmap.createScaledBitmap(sampled, w, h, true)
-        val tmp = File(file.path + ".resize")
+        val tmp = File.createTempFile("cover-", ".jpg", stateDir)
         val before = file.length()
         val shown = file.lastModified()
         try {
@@ -28,6 +36,7 @@ object ThumbnailCache {
             val after = tmp.length()
             if (ok && after > 0 && tmp.renameTo(file)) {
                 file.setLastModified(shown)
+                marker.writeText("$width:$height:${file.length()}")
                 OLog.i("covers: thumbnail ${bounds.outWidth}x${bounds.outHeight} -> ${w}x$h: $before -> $after bytes; saved ${before - after} bytes; estimated same-size cache saving ${100 - after * 100 / before}%")
             }
         } finally {

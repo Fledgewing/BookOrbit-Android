@@ -57,7 +57,7 @@ object SharpCovers {
     /** Image bytes -> the cover fitted to the panel (JPEG), or null when it isn't an image. */
     @Volatile var scaler: (ByteArray, Int, Int) -> ByteArray? = ::fitJpeg
 
-    private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "orbit-sharp-covers").apply { isDaemon = true } }
+    private val worker = BulkWork.executor
     private val busy = AtomicBoolean(false)
 
     private fun sp(ctx: Context) = ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -129,7 +129,7 @@ object SharpCovers {
 
     fun signOut(ctx: Context, why: String) {
         sp(ctx).edit().remove("token").putString("state", State.NONE.key).remove("lost_why").apply()
-        dir(ctx).listFiles()?.forEach { it.delete() }
+        dir(ctx).listFiles()?.filter { it.name != ".nomedia" }?.forEach { it.delete() }
         OLog.i("sharp covers: signed out ($why)")
         SleepScreen.redrawPicture(ctx, "sharp covers off")
     }
@@ -155,10 +155,17 @@ object SharpCovers {
     // ---------------------------------------------------------------- the fetch
 
     /** Queues a fetch of the pool's covers (no-op unless signed in and Recommended is on). */
+    private val queued = java.util.concurrent.atomic.AtomicBoolean()
+
     fun sync(ctx: Context, why: String) {
         val app = ctx.applicationContext
         if (state(app) != State.ON || SleepScreen.settings(app).mode != SleepMode.RECOMMENDED) return
-        worker.execute { runCatching { syncNow(app, why) }.onFailure { OLog.w("sharp covers: fetch failed ($why)", it) } }
+        if (!queued.compareAndSet(false, true)) return
+        BulkWork.attach(app)
+        worker.execute {
+            try { runCatching { BulkWork.checkpoint(); syncNow(app, why) }.onFailure { OLog.w("sharp covers: fetch failed ($why)", it) } }
+            finally { queued.set(false) }
+        }
     }
 
     /** The fetch itself, on the caller's thread. -> how many covers changed. */
@@ -171,11 +178,12 @@ object SharpCovers {
             val base = SharpCoversLogic.apiBase(acct.server) ?: return 0
             val (pw, ph, _) = SleepScreen.panel(ctx)
             val ids = SleepScreen.pool().map { it.id }
-            val d = dir(ctx).apply { mkdirs() }
+            val d = NoMedia.directory(dir(ctx))
             var fetched = 0
             var same = 0
             var stop: String? = null
             for (id in ids) {
+                BulkWork.checkpoint()
                 val f = File(d, "$id.jpg")
                 val tag = File(d, "$id.etag")
                 val etag = if (f.isFile && tag.isFile) tag.readText().trim().ifEmpty { null } else null

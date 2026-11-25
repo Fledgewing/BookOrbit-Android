@@ -44,7 +44,7 @@ class TagsAndRecheckTest {
         assertEquals("new", File(covers, "2.jpg").readText()); assertEquals("\"n\"", File(covers, "2.jpg.etag").readText())
         assertEquals("old", File(covers, "1.jpg").readText())
         assertFalse(File(covers, "2.jpg.part").exists())
-        val ev = File(root, "events").listFiles()!!.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
+        val ev = File(root, "events").listFiles()!!.filter { it.extension == "lua" }.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
         assertEquals("covers_rechecked", ev["kind"]); assertEquals(listOf(2L), ev["changed"]); assertEquals(3L, ev["checked"])
         root.deleteRecursively()
     }

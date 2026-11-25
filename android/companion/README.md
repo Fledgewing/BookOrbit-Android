@@ -72,3 +72,47 @@ Tailscale and KOReader, Tailscale, device admin), then run the Wi-Fi off/on test
 ```
 adb logcat -v time -s OrbitCompanion
 ```
+
+### Bulk work and the M8C load regression (W28)
+
+The cache worker, storage jobs, sleep pool/picture and sharp-cover fetches share
+`BulkWork.executor`: one Linux background-priority writer, plus one background-priority
+mirror fetcher. At most two replies are queued. W27's storage/cleanup commands belong
+on this same worker. Checkpoints pause bulk work while the reading gate reports a
+foreground book with the screen on; screen sleep or leaving reading resumes it. A
+Full refresh retains its real completed percentage while paused and completes only
+after its pending jobs land. A request or small transaction already running may finish
+before the next checkpoint. Charging does not override foreground reading.
+
+Display reports update cover recency only. Existing thumbnails migrate when idle,
+paced at 75 ms per image, with a persistent size/dimensions stamp to skip repeated
+decodes. New and existing images use sampled bitmap decoding. Temporary encodes live
+in `.thumbnails/`; the companion creates `.nomedia` before writes in its shared-storage
+roots and newly written subdirectories, including `koreader/cache/bookorbit`. Eviction
+removes the thumbnail's migration stamp too. Sleep pictures coalesce on the same bulk
+executor. VPN connect requests coalesce across NET_UP and Wi-Fi callbacks until Wi-Fi
+disconnects, and an existing VPN requires no connect broadcast.
+
+JSON tokens now go straight into the Lua cache model, avoiding a second object tree;
+ASCII model strings and HTTP transfer buffers are reused. HTTP bodies are bounded
+while reading, including discarded error/redirect bodies. Logs report mirror fetch,
+parse and land/write CPU milliseconds, plus cover, storage and sleep phase CPU time.
+These are thread CPU times, excluding time waiting for network or the reading gate;
+land/write includes parsing, and fetch includes new-cover encoding.
+
+Run the opt-in, device-free benchmark from this directory:
+
+```sh
+ORBIFY_BENCHMARK=1 ./gradlew testDebugUnitTest --tests '*CompanionLoadBenchmark'
+```
+
+The benchmark seeds 40 synthetic books and real bitmap thumbnails, then measures two
+cached Full refreshes (80 cover checks), using fake HTTP, SQLite/JDBC and Robolectric.
+It compares the former JSON-tree/thumbnail algorithms with the new paths; the old
+thumbnail code is frozen in the test only. After warming both, median of three runs
+on JVM 17: CPU **123 → 79 ms** (36% lower), allocated bytes **68,102,624 → 11,784,752**
+(83% lower), counting the writer and fetcher. Results are printed in the test XML.
+Robolectric bitmap costs differ from Android; this measures the cached-refresh hot
+path, not first-download throughput or device ANR frequency. The original log alone
+cannot attribute every minor fault to a particular allocation. Real-device validation
+must still confirm system responsiveness before any release.

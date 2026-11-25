@@ -19,7 +19,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
     /** The open database: created on first use; a file of another schema version is replaced. */
     fun db(): Sql {
         sql?.let { return it }
-        root.mkdirs()
+        NoMedia.directory(root)
         runCatching { File(root, ".nomedia").let { if (!it.exists()) it.createNewFile() } }
         var s = open(file)
         val v = s.pragma("user_version")?.toIntOrNull() ?: 0

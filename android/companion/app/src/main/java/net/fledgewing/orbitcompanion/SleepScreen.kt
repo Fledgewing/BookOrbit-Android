@@ -299,7 +299,36 @@ object SleepScreen {
     private const val KEY_WOKE_AT = "sleep_woke_at"
 
     /** [wake]: after a sleep; with Every sleep only that moves to a new cover, other redraws keep it. */
+    private val pictureLock = Any()
+    private var picturePending: Triple<Context, String, Boolean>? = null
+    private var pictureQueued = false
+
     fun redrawPicture(ctx: Context, why: String, wake: Boolean = false) {
+        if (settings(ctx).mode == SleepMode.OFF || sink(ctx) != SleepSink.PICTURE) return
+        val app = ctx.applicationContext
+        BulkWork.attach(app)
+        synchronized(pictureLock) {
+            picturePending = Triple(app, why, wake || picturePending?.third == true)
+            if (pictureQueued) return
+            pictureQueued = true
+        }
+        BulkWork.executor.execute {
+            try {
+                while (true) {
+                    BulkWork.checkpoint()
+                    val next = synchronized(pictureLock) {
+                        picturePending.also { picturePending = null; if (it == null) pictureQueued = false }
+                    } ?: break
+                    BulkWork.phase("sleep picture") { redrawPictureNow(next.first, next.second, next.third) }
+                }
+            } catch (e: Exception) {
+                synchronized(pictureLock) { pictureQueued = false }
+                OLog.w("sleep screen: picture deferred", e)
+            }
+        }
+    }
+
+    private fun redrawPictureNow(ctx: Context, why: String, wake: Boolean) {
         val s = settings(ctx)
         if (s.mode == SleepMode.OFF || sink(ctx) != SleepSink.PICTURE) return
         val out = picture()
@@ -308,7 +337,7 @@ object SleepScreen {
             // Every sleep: a wake moves on; so does a picture whose cover left the batch (or none yet).
             val advance = s.hours != SleepSettings.EVERY_SLEEP || wake || state(ctx).shown !in pool().map { it.id }
             val bmp = render(ctx, w, h, dpi, advance = advance, why = "picture: $why")
-            out.parentFile?.mkdirs()
+            out.parentFile?.let(NoMedia::directory)
             val tmp = File(out.parentFile, "sleep.png.orbit-new")
             tmp.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
             bmp.recycle()
