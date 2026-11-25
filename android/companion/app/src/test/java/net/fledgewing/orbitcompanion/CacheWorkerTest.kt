@@ -390,6 +390,14 @@ class CacheWorkerTest {
         assertNull(MirrorLogic.progressLine(null))
     }
 
+    @Test fun manualRefreshHasAProgressLineBeforeTheFirstReply() {
+        assertEquals("Full refresh · 0%", MirrorLogic.runningProgressLine(null, false))
+        assertEquals("Full refresh · 0% · paused while reading", MirrorLogic.runningProgressLine(null, true))
+        assertEquals("Full refresh · 37%", MirrorLogic.runningProgressLine(37, false))
+        assertEquals("Full refresh · 100%", MirrorLogic.runningProgressLine(101, false))
+        assertNull("no active run still has no progress", MirrorLogic.progressLine(null))
+    }
+
     /** M8C: the series index never answered in pages of 100; authors never at all. */
     @Test fun retriedInSmallerPagesThenSkipped() {
         val root = Files.createTempDirectory("orbit-cache").toFile()

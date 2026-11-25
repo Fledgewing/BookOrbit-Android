@@ -62,7 +62,7 @@ object Worker {
 
     fun progressLine(): String? {
         if (!mirrorRunning || !manualRefresh) return null
-        return MirrorLogic.progressLine(progress) + if (BulkWork.paused) " · paused while reading" else ""
+        return MirrorLogic.runningProgressLine(progress, BulkWork.paused)
     }
 
     private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, cpuMs = { android.os.SystemClock.currentThreadTimeMillis() }, checkpoint = { BulkWork.checkpoint() }, threadFactory = { name, task -> BulkWork.thread(name, task) }, onProgress = { progress = it }, places = Places.roots(), resizeThumbnail = { f, w, h ->
