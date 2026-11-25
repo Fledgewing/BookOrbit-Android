@@ -60,7 +60,7 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 
 | Feature | KOReader-Android | X4 Pro | X4 | X3 |
 |---|---|---|---|---|
-| BookSync reading layout: clock above; battery, centred chapter and `N / M · P%` below, reading space reserved, native footer restored when off ([design](design/reading-status-layout.md)) | yes (default off; Small/Medium/Large; proportional battery; next release) | spaced page format (next build) | spaced page format (next build) | original format retained (flash gate) |
+| BookSync reading layout: clock above; battery, centred chapter and `N / M · P%` below, inside existing margins with optional minimum added space, native footer restored when off ([design](design/reading-status-layout.md)) | yes (default off; Small/Medium/Large maxima; shared sleep battery glyph; next release) | spaced page format (next build) | spaced page format (next build) | original format retained (flash gate) |
 | Settings PIN (kid lock) | yes | 2.x rc | 2.x rc | 2.x rc |
 | Battery stats in the `orbit-battery-stats/1` format, Compare across readers | yes | 2.x rc | 2.x rc | 2.x rc (file only, no numbers on screen) |
 | Clicker buttons (page turns in KOReader and other apps, Send key) | yes | n/a | n/a | n/a |

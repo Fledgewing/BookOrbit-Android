@@ -39,12 +39,23 @@ end
 StatusLayout.SIZES = { small = 14, medium = 18, large = 22 }
 function StatusLayout.fontSize(choice) return StatusLayout.SIZES[choice] or 14 end
 function StatusLayout.stripHeight(text_height, padding) return math.ceil(text_height) + 2 * padding end
-function StatusLayout.battery(capacity, cap_height)
-    local h = math.max(6, math.floor(cap_height))
-    local w = math.floor(h * 1.7)
-    local border = math.max(1, math.floor(h / 9))
-    local inner = w - 2 * border
-    local pct = math.max(0, math.min(100, tonumber(capacity) or 0))
-    return { h = h, w = w, border = border, terminal = border * 2,
-        fill = math.floor(inner * pct / 100 + 0.5), inner = inner }
+-- Fit actual font metrics to each margin independently; the configured size is a maximum.
+function StatusLayout.fit(margin, maximum, padding, measureHeight, add)
+    margin = math.max(0, math.floor(margin or 0))
+    local wanted = StatusLayout.stripHeight(measureHeight(maximum), padding)
+    local extra = add and math.max(0, wanted - margin) or 0
+    local available = margin + extra
+    for size = maximum, 1, -1 do
+        local height = StatusLayout.stripHeight(measureHeight(size), padding)
+        if height <= available then return { size=size, height=height, extra=extra, wanted=wanted } end
+    end
+    return { size=0, height=0, extra=extra, wanted=wanted }
+end
+-- Both Android renderers interpret shared/ui/battery.json; no status-specific geometry.
+BatteryGlyph = {}
+function BatteryGlyph.draw(program, size, capacity, rectangle)
+    for _, r in ipairs(program.rectangles) do
+        local fraction = r[6] and math.max(0, math.min(100, capacity))/100 or 1
+        rectangle(r[1]*size, r[2]*size, r[3]*size*fraction, r[4]*size, r[5])
+    end
 end

@@ -9,15 +9,52 @@ local function hook(s, obj, key, fn)
     obj[key] = fn(obj[key])
 end
 
+-- Called before layout and painting, so book margin changes and rotation take effect.
+function RS.geometry(s, top, bottom)
+    local Screen = Device.screen
+    local maximum = StatusLayout.fontSize(S.status_orbit_size)
+    local key = table.concat({top, bottom, maximum, tostring(S.status_orbit_add_space == true), Screen:scaleBySize(1)}, ":")
+    if s.geometry_key == key then return end
+    s.geometry_key = key
+    local function fit(margin)
+        local lane = StatusLayout.fit(margin, maximum, math.max(1, Screen:scaleBySize(1)), function(size)
+            local w = s.Text:new{ text="Ag", face=s.Font:getFace("ffont", size) }
+            local h = w:getSize().h; w:free(); return h
+        end, S.status_orbit_add_space == true)
+        lane.face = s.Font:getFace("ffont", math.max(1, lane.size))
+        return lane
+    end
+    s.top, s.bottom = fit(top), fit(bottom)
+end
+function RS.margins(s)
+    if s.ui.paging then
+        local v = s.view
+        -- Only unused screen surround is safe; page-internal whitespace is content.
+        local offset = v.state and v.state.offset
+        local area = v.visible_area
+        if not v.page_scroll and offset and area then
+            return math.max(0, offset.y),
+                math.max(0, v.dimen.h - offset.y - area.h - (v.footer_visible and s.footer:getHeight() or 0))
+        end
+        return 0, 0
+    end
+    if s.view.view_mode == "scroll" then return 0, 0 end
+    local m = s.ui.typeset.unscaled_margins
+    return Device.screen:scaleBySize(m[2]), Device.screen:scaleBySize(m[4])
+end
+function RS.refreshGeometry(s) RS.geometry(s, RS.margins(s)) end
+
 function RS.visible(s)
     return not s.asleep and UIManager:getTopmostVisibleWidget() == s.ui
 end
 function RS.dirty(s, top)
     if not RS.visible(s) or (not top and not s.view.footer_visible) then return end
     local Screen = Device.screen
+    local h = (top and s.top or s.bottom).height
+    if h == 0 then return end
     UIManager:setDirty(s.ui, "partial", s.Geom:new{
-        x = 0, y = top and 0 or Screen:getHeight() - s.height,
-        w = Screen:getWidth(), h = s.height,
+        x = 0, y = top and 0 or Screen:getHeight() - h,
+        w = Screen:getWidth(), h = h,
     })
 end
 function RS.arm(s)
@@ -28,20 +65,26 @@ end
 function RS.paint(s, bb, x, y, bottom_only)
     local Screen = Device.screen
     local width, height = Screen:getWidth(), Screen:getHeight()
+    local lane = s.top
+    local function measure(value)
+        local w = s.Text:new{ text=value, face=lane.face }
+        local width = w:getSize().w; w:free(); return width
+    end
     local function text(value, px, py)
         if value == "" then return end
-        local w = s.Text:new{ text = value, face = s.face }
-        w:paintTo(bb, x + math.floor(px), y + math.floor(py + (s.height-w:getSize().h)/2))
+        local w = s.Text:new{ text = value, face = lane.face }
+        w:paintTo(bb, x + math.floor(px), y + math.floor(py + (lane.height-w:getSize().h)/2))
         w:free()
     end
-    if not bottom_only then
+    if not bottom_only and lane.height > 0 then
         local t = os.date("*t")
         local clock = StatusLayout.clock(t.hour, t.min, G_reader_settings:isTrue("twelve_hour_clock"))
         s.clock = clock
-        bb:paintRect(x, y, width, s.height, s.BB.COLOR_WHITE)
-        text(clock, (width - s.measure(clock))/2, 0)
+        bb:paintRect(x, y, width, lane.height, s.BB.COLOR_WHITE)
+        text(clock, (width - measure(clock))/2, 0)
     end
-    if not s.view.footer_visible then return end
+    lane = s.bottom
+    if not s.view.footer_visible or lane.height == 0 then return end
     local footer = s.footer
     local page = footer.pageno or (s.ui.paging and s.ui.paging.current_page) or s.ui.document:getCurrentPage()
     local total = footer.pages or s.ui.document:getPageCount()
@@ -50,36 +93,27 @@ function RS.paint(s, bb, x, y, bottom_only)
     local battery = Device:getPowerDevice():getCapacity()
     s.battery = battery
     local icon = "▱"
-    -- Reserve an outlined battery independently of font glyph support.
-    local glyph = StatusLayout.battery(battery, s.cap_height)
-    local icon_w = glyph.w + glyph.terminal
+    local glyph = s.battery_program
+    local icon_size = math.max(1, lane.height - 2 * Device.screen:scaleBySize(1))
+    local icon_w = glyph.width * icon_size
     local battery_text = string.format("%d%%", battery)
-    local function measure(v) return v == icon and icon_w or s.measure(v) end
+    local function itemWidth(v) return v == icon and icon_w or measure(v) end
     local layout = StatusLayout.layout(width, s.inset, s.gap,
         icon .. " " .. battery_text, icon, chapter, progress,
         function(v)
-            if v:sub(1,#icon) == icon then return icon_w + s.measure(v:sub(#icon+1)) end
-            return measure(v)
+            if v:sub(1,#icon) == icon then return icon_w + measure(v:sub(#icon+1)) end
+            return itemWidth(v)
         end)
-    local by = height - s.height
-    bb:paintRect(x, y + by, width, s.height, s.BB.COLOR_WHITE)
+    local by = height - lane.height
+    bb:paintRect(x, y + by, width, lane.height, s.BB.COLOR_WHITE)
     if layout.left ~= "" then
-        local ix, iy = x+s.inset, y+by+math.floor((s.height-glyph.h)/2)
-        local edge = glyph.border
-        bb:paintRect(ix, iy, glyph.w, glyph.h, s.BB.COLOR_BLACK)
-        bb:paintRect(ix+edge, iy+edge, glyph.inner, glyph.h-2*edge, s.BB.COLOR_WHITE)
-        if glyph.fill > 0 then bb:paintRect(ix+edge, iy+edge, glyph.fill, glyph.h-2*edge, s.BB.COLOR_BLACK) end
-        bb:paintRect(ix+glyph.w, iy+math.floor(glyph.h/3), glyph.terminal, math.ceil(glyph.h/3), s.BB.COLOR_BLACK)
-        local power = Device:getPowerDevice()
-        if power.isCharging and power:isCharging() then
-            -- Pixel lightning mark, legible at footer size and independent of font coverage.
-            local mx = ix + math.floor(glyph.w/2)
-            for row=0,glyph.h-3 do
-                local dx = row < glyph.h/2 and 1 or -1
-                local color = mx+dx-ix-edge < glyph.fill and s.BB.COLOR_WHITE or s.BB.COLOR_BLACK
-                bb:paintRect(mx+dx, iy+1+row, edge+1, 1, color)
-            end
-        end
+        local ix, iy = x+s.inset, y+by+(lane.height-glyph.height*icon_size)/2
+        BatteryGlyph.draw(glyph, icon_size, battery, function(dx,dy,w,h,color)
+            -- Round edges, not widths, so neighbouring rectangles share pixels.
+            local l,t = math.floor(ix+dx+0.5), math.floor(iy+dy+0.5)
+            local r,b = math.floor(ix+dx+w+0.5), math.floor(iy+dy+h+0.5)
+            if r>l and b>t then bb:paintRect(l,t,r-l,b-t,color==1 and s.BB.COLOR_BLACK or s.BB.COLOR_WHITE) end
+        end)
         if layout.left ~= icon then text(" " .. battery_text, s.inset+icon_w, by) end
     end
     text(layout.chapter, layout.cx, by)
@@ -88,6 +122,7 @@ end
 
 -- Layout updates use the engine's own anchor-preserving relayout, not a repaint/crop.
 function RS.relayout(s)
+    if RS.session == s then RS.refreshGeometry(s) end
     if s.ui.paging then
         local v, paging = s.view, s.ui.paging
         local x, y, zoom
@@ -97,6 +132,19 @@ function RS.relayout(s)
             x, y, zoom = v.visible_area.x, v.visible_area.y, v.state.zoom
         end
         s.ui:handleEvent(Event:new("SetDimensions", Device.screen:getSize()))
+        if RS.session == s and S.status_orbit_add_space == true and not v.page_scroll
+                and v.state and v.state.offset and v.visible_area then
+            -- Rezoom can consume existing surround. Add only any remaining deficit,
+            -- then let the engine settle again before translating hits/highlights.
+            for _ = 1, s.top.height + s.bottom.height do
+                local top, bottom = RS.margins(s)
+                local dt = math.max(0, math.ceil(s.top.height - top - s.top.extra))
+                local db = v.footer_visible and math.max(0, math.ceil(s.bottom.height - bottom - s.bottom.extra)) or 0
+                if dt == 0 and db == 0 then break end
+                s.top.extra, s.bottom.extra = s.top.extra + dt, s.bottom.extra + db
+                s.ui:handleEvent(Event:new("SetDimensions", Device.screen:getSize()))
+            end
+        end
         if x and zoom and zoom > 0 then
             v.visible_area.x = x * v.state.zoom / zoom
             v.visible_area.y = y * v.state.zoom / zoom
@@ -115,18 +163,15 @@ function RS.enable(ui)
     local Text = require("ui/widget/textwidget")
     local Font = require("ui/font")
     local s = { ui = ui, view = ui.view, footer = ui.view.footer, undo = {},
-        Geom = Geom, Text = Text, BB = require("ffi/blitbuffer"),
-        face = Font:getFace("ffont", StatusLayout.fontSize(S.status_orbit_size)),
+        Geom = Geom, Text = Text, Font = Font, BB = require("ffi/blitbuffer"),
         inset = Device.screen:scaleBySize(2), gap = Device.screen:scaleBySize(4) }
     RS.session = s
-    s.measure = function(value)
-        local w = Text:new{ text = value, face = s.face }
-        local width = w:getSize().w; w:free(); return width
+    for _, path in ipairs({ SOURCE_DIR .. "/battery.json", SOURCE_DIR .. "/../../../shared/ui/battery.json" }) do
+        local file = io.open(path, "rb")
+        if file then s.battery_program = SettingsSync.decodeJson(file:read("*a")); file:close(); break end
     end
-    local sample = Text:new{ text = "Ag", face = s.face }
-    s.height = StatusLayout.stripHeight(sample:getSize().h, math.max(1, Device.screen:scaleBySize(1)))
-    s.cap_height = math.max(6, math.floor(sample:getSize().h * 0.7))
-    sample:free()
+    assert(s.battery_program, "BookSync battery drawing program missing")
+    RS.refreshGeometry(s)
     local f, v = s.footer, s.view
     s.native_visible, s.native_mode = rawget(v, "footer_visible"), rawget(f, "mode")
     s.native_generator = rawget(f, "genFooterText")
@@ -137,13 +182,14 @@ function RS.enable(ui)
     settings.reclaim_height = false
     hook(s, f, "settings", function() return settings end)
     hook(s, f, "reclaim_height", function() return false end)
-    hook(s, f, "getHeight", function() return function() return v.footer_visible and s.height or 0 end end)
+    hook(s, f, "getHeight", function() return function() return v.footer_visible and s.bottom.extra or 0 end end)
     f:unscheduleFooterAutoRefresh()
     hook(s, f, "rescheduleFooterAutoRefreshIfNeeded", function() return function() end end)
     hook(s, f, "updateFooterText", function() return function() end end)
     hook(s, f, "paintTo", function() return function() end end)
     hook(s, v, "paintTo", function(stock) return function(self, bb, x, y)
         stock(self, bb, x, y)
+        if S.status_orbit_add_space ~= true then RS.refreshGeometry(s) end
         RS.paint(s, bb, x, y)
     end end)
     -- Native toggle/tap handlers still own visibility and their gesture return values.
@@ -171,19 +217,19 @@ function RS.enable(ui)
         for _, obj in ipairs({v, ui.zooming}) do
             for _, name in ipairs({"onSetDimensions", "onRestoreDimensions"}) do
                 hook(s, obj, name, function(stock) return function(self, dimensions, ...)
-                    local d = dimensions:copy(); d.h = d.h - s.height
+                    local d = dimensions:copy(); d.h = d.h - s.top.extra
                     return stock(self, d, ...)
                 end end)
             end
         end
         for _, name in ipairs({"drawSinglePage", "drawScrollPages", "drawPageBackground", "drawPageSurround"}) do
             hook(s, v, name, function(stock) return function(self, bb, x, y, ...)
-                return stock(self, bb, x, y+s.height, ...)
+                return stock(self, bb, x, y+s.top.extra, ...)
             end end)
         end
         for _, name in ipairs({"getSinglePagePosition", "getScrollPagePosition"}) do
             hook(s, v, name, function(stock) return function(self, pos, ...)
-                local p = pos:copy(); p.y = p.y-s.height
+                local p = pos:copy(); p.y = p.y-s.top.extra
                 if p.y < 0 or p.y >= self.dimen.h - f:getHeight() then return nil end
                 return stock(self, p, ...)
             end end)
@@ -191,19 +237,21 @@ function RS.enable(ui)
         for _, name in ipairs({"getSinglePageRect", "getScrollPageRect", "getScreenPageArea"}) do
             hook(s, v, name, function(stock) return function(self, ...)
                 local rect = stock(self, ...)
-                if rect then rect = rect:copy(); rect.y = rect.y+s.height end
+                if rect then rect = rect:copy(); rect.y = rect.y+s.top.extra end
                 return rect
             end end)
         end
     else
         -- Wrap the document setter, leaving unscaled book/global margin settings intact.
         hook(s, ui.document, "setPageMargins", function(stock) return function(self, l,t,r,b)
-            return stock(self, l,t+s.height,r,b)
+            local bottom = b - (v.footer_visible and s.bottom.extra or 0)
+            if v.view_mode == "scroll" then RS.geometry(s, 0, 0) else RS.geometry(s, t, bottom) end
+            return stock(self, l,t+s.top.extra,r,bottom + (v.footer_visible and s.bottom.extra or 0))
         end end)
         -- CRE scroll mode ignores top margins. Reserve an engine viewport there,
         -- translate document coordinates, and use the same height for scroll steps.
         local function scroll() return v.view_mode == "scroll" end
-        local function reserve() return s.height + (v.footer_visible and s.height or 0) end
+        local function reserve() return s.top.extra + (v.footer_visible and s.bottom.extra or 0) end
         hook(s, ui.document, "setViewDimen", function(stock) return function(self, dimen)
             local d = dimen:copy()
             if scroll() then d.h = d.h - reserve() end
@@ -215,33 +263,33 @@ function RS.enable(ui)
             return result
         end end)
         hook(s, v, "drawScrollView", function(stock) return function(self, bb, x, y, ...)
-            return stock(self, bb, x, y+s.height, ...)
+            return stock(self, bb, x, y+s.top.extra, ...)
         end end)
         hook(s, v, "screenToPageTransform", function(stock) return function(self, pos)
-            if scroll() then pos=pos:copy(); pos.y=pos.y-s.height end
+            if scroll() then pos=pos:copy(); pos.y=pos.y-s.top.extra end
             return stock(self, pos)
         end end)
         hook(s, v, "pageToScreenTransform", function(stock) return function(self, ...)
             local rect = stock(self, ...)
-            if scroll() and rect then rect=rect:copy(); rect.y=rect.y+s.height end
+            if scroll() and rect then rect=rect:copy(); rect.y=rect.y+s.top.extra end
             return rect
         end end)
         hook(s, ui.document, "getLinkFromPosition", function(stock) return function(self, pos)
             if scroll() then
-                pos = pos:copy(); pos.y = pos.y-s.height
+                pos = pos:copy(); pos.y = pos.y-s.top.extra
                 if pos.y < 0 or pos.y >= v.dimen.h-reserve() then return "" end
             end
             return stock(self, pos)
         end end)
         hook(s, ui.document, "getScreenPositionFromXPointer", function(stock) return function(self, ...)
             local y,x = stock(self, ...)
-            return y+(scroll() and s.height or 0),x
+            return y+(scroll() and s.top.extra or 0),x
         end end)
         for _, name in ipairs({"onGotoViewRel", "_gotoPos"}) do
             hook(s, ui.rolling, name, function(stock) return function(self, ...)
                 if not scroll() or s.scroll_dimensions then return stock(self, ...) end
                 local full = ui.dimen
-                ui.dimen = full:copy(); ui.dimen.h = ui.dimen.h - s.height
+                ui.dimen = full:copy(); ui.dimen.h = ui.dimen.h - s.top.extra
                 s.scroll_dimensions = true
                 local result = { pcall(stock, self, ...) }
                 ui.dimen, s.scroll_dimensions = full, nil

@@ -18,6 +18,8 @@ return function(here, test, ok, eq)
         E.Event={new=function(_,name,...) return {name=name,args={...}} end}
         E.G_reader_settings={isTrue=function() return false end, readSetting=function() return nil end, saveSetting=function() end}
         E.S={status_orbit_layout=true}; E.OrbitAndroid={}
+        E.SOURCE_DIR=here.."/../orbit.koplugin"
+        E.SettingsSync={decodeJson=dofile(here.."/json_mini.lua").decode}
         E.os={time=function() return 120 end,date=function() return {hour=12,min=2} end}
         local Text={new=function(_,t) return {getSize=function() return {w=#t.text,h=(t.face.size or 14)-2} end,paintTo=noop,free=noop} end}
         E.require=function(name)
@@ -105,16 +107,16 @@ return function(here, test, ok, eq)
             R.disable()
         end
     end)
-    test("status: CRE reserve, restore absent/inherited native state and repeat toggles", function()
+    test("status: CRE uses existing margins, restores absent/inherited native state and repeat toggles", function()
         local w,R,native=world(false)
         R.enable(w.ui); local s=R.session
-        eq(w.margins[2],34); eq(w.margins[4],44); eq(w.header,1)
+        eq(w.margins[2],20); eq(w.margins[4],30); eq(w.header,1)
         ok(w.header_cancelled and w.footer_cancelled and w.anchor_preserved)
         eq(native.reclaim_height,true); eq(w.ui.document.configurable.status_line,nil)
         eq(rawget(w.v.footer,"settings").reclaim_height,false)
         R.enable(w.ui); eq(R.session,s)
         eq(w.v.footer:onToggleFooterMode(),true); eq(w.margins[4],30)
-        w.v.footer:applyFooterMode(1); eq(w.margins[4],44)
+        w.v.footer:applyFooterMode(1); eq(w.margins[4],30)
         R.disable(); eq(w.margins[2],20); eq(w.margins[4],30)
         eq(rawget(w.v.footer,"settings"),nil); eq(rawget(w.v.footer,"paintTo"),nil)
         eq(w.v.footer_visible,false); eq(w.v.footer.mode,0)
@@ -122,8 +124,8 @@ return function(here, test, ok, eq)
         ok(w.footer_resumed and w.header_resumed); eq(next(w.queue),nil)
         R.disable(); R.enable(w.ui); R.disable(); eq(w.margins[2],20)
     end)
-    test("status: PDF/CBZ viewport, zoom, scroll states, transforms, footer gesture and rotation", function()
-        local w,R=world(true)
+    test("status: PDF/CBZ opt-in viewport, zoom, scroll states, transforms, footer gesture and rotation", function()
+        local w,R=world(true); w.E.S.status_orbit_add_space=true
         R.enable(w.ui)
         eq(w.v.dimen.h,786); eq(w.ui.zooming.dimen.h,786); eq(w.scroll_height,772)
         for _,name in ipairs({"drawSinglePage","drawScrollPages"}) do w.v[name](w.v,{},0,0); eq(w.draw_y,14) end
@@ -156,7 +158,7 @@ return function(here, test, ok, eq)
         R.disable(); eq(w.v.footer_visible,false); eq(w.v.footer.settings.disabled,true)
     end)
     test("status: CRE scroll reserves engine viewport and translates hits without skipping text", function()
-        local w,R=world(false); R.enable(w.ui)
+        local w,R=world(false); w.E.S.status_orbit_add_space=true; R.enable(w.ui)
         w.v.view_mode="scroll"; w.ui.document:setViewMode("scroll")
         eq(w.engine_height,772); eq(w.v.visible_area.h,772)
         w.v:drawScrollView({},0,0); eq(w.draw_y,14)
@@ -173,7 +175,7 @@ return function(here, test, ok, eq)
         R.disable(); eq(w.engine_height,800); eq(w.v.visible_area.h,800)
     end)
     test("status: minute and battery partial dirty regions, covered/asleep, close cleanup", function()
-        local w,R=world(true); R.enable(w.ui); local s=R.session
+        local w,R=world(true); w.E.S.status_orbit_add_space=true; R.enable(w.ui); local s=R.session
         s.clock="12:01"; s.battery=77
         s.tick(); eq(#w.dirty,1); eq(w.dirty[1].rect.y,0); eq(w.dirty[1].rect.h,14)
         eq(w.dirty[1].mode,"partial"); eq(w.queue[s.tick],60)
@@ -185,23 +187,81 @@ return function(here, test, ok, eq)
         w.E.OrbitAndroid.onCloseDocument({ui=w.ui}); eq(R.session,nil); eq(next(w.queue),nil)
         w.E.OrbitAndroid.onCloseWidget({ui=w.ui}); eq(next(w.queue),nil)
     end)
-    test("status: all sizes reserve only text plus two pixels and repaint a filled charging battery", function()
-        local previous=0
+    test("status: all sizes fit margins by default and share the sleep battery program", function()
         for _, size in ipairs({"small","medium","large"}) do
-            local w,R=world(true); w.E.S.status_orbit_size=size
+            local w,R=world(false); w.E.S.status_orbit_size=size
+            w.ui.typeset.unscaled_margins={10,9,10,11}
             R.enable(w.ui); local s=R.session
-            eq(s.height,s.face.size); ok(s.height>previous); previous=s.height
+            eq(w.margins[2],9); eq(w.margins[4],11)
+            eq(s.top.extra,0); eq(s.bottom.extra,0)
+            ok(s.top.height<=9 and s.bottom.height<=11)
+            ok(s.top.size<=w.E.StatusLayout.fontSize(size))
+            local calls=0
+            local draw=w.E.BatteryGlyph.draw
+            w.E.BatteryGlyph.draw=function(program,px,capacity,rect)
+                eq(program,s.battery_program); eq(capacity,98); calls=calls+1
+                return draw(program,px,capacity,rect)
+            end
             local rectangles={}
-            local bb={paintRect=function(_,x,y,width,height,color) rectangles[#rectangles+1]={x=x,y=y,w=width,h=height,color=color} end}
-            w.capacity=98; R.paint(s,bb,0,0,true)
-            local glyph=w.E.StatusLayout.battery(98,s.cap_height)
-            eq(rectangles[4].w,glyph.fill); eq(rectangles[4].color,1)
-            ok(rectangles[4].h>0 and glyph.h <= s.height)
-            local plain=#rectangles
-            w.charging=true; rectangles={}; R.paint(s,bb,0,0,true)
-            ok(#rectangles>plain,"charging mark drawn")
+            local bb={paintRect=function(_,x,y,width,height,color)
+                rectangles[#rectangles+1]={y=y,h=height}
+                ok(y>=789 or y+height<=9,"paint stays inside book margins")
+            end}
+            w.capacity=98; R.paint(s,bb,0,0); eq(calls,1); ok(#rectangles>2)
             R.disable()
         end
+    end)
+    test("status: opt-in adds only missing margin space and responds to margin edits", function()
+        local w,R=world(false); w.E.S.status_orbit_add_space=true
+        w.ui.typeset.unscaled_margins={10,9,10,30}
+        R.enable(w.ui); local s=R.session
+        eq(s.top.extra,5); eq(s.bottom.extra,0)
+        eq(w.margins[2],14); eq(w.margins[4],30)
+        w.ui.typeset:onSetPageMargins({10,3,10,4})
+        eq(s.top.extra,11); eq(s.bottom.extra,10)
+        eq(w.margins[2],14); eq(w.margins[4],14)
+        R.disable()
+    end)
+    test("status: PDF and CRE scroll add nothing by default with no safe margin", function()
+        for _, paged in ipairs({false,true}) do
+            local w,R=world(paged)
+            if not paged then w.v.view_mode="scroll" end
+            R.enable(w.ui); local s=R.session
+            eq(s.top.extra,0); eq(s.bottom.extra,0)
+            eq(s.top.height,0); eq(s.bottom.height,0)
+            if paged then eq(w.v.dimen.h,800); eq(w.scroll_height,800)
+            else eq(w.engine_height,800); eq(w.v.visible_area.h,800) end
+            R.paint(s,{paintRect=function() error("no space to paint") end},0,0)
+            R.disable()
+        end
+    end)
+    test("status: PDF uses existing screen surround without reserving space", function()
+        local w,R=world(true)
+        w.v.state={offset={y=12},zoom=1}
+        w.v.visible_area=w.Geom:new{x=0,y=0,w=600,h=772,offsetWithin=function() end}
+        R.enable(w.ui)
+        eq(R.session.top.extra,0); eq(R.session.bottom.extra,0)
+        ok(R.session.top.height<=12); ok(R.session.bottom.height<=16)
+        eq(w.scroll_height,800)
+        R.disable()
+    end)
+    test("status: opt-in PDF rezoom accounts for consumed surround before painting", function()
+        local w,R=world(true)
+        w.E.S.status_orbit_size="large"; w.E.S.status_orbit_add_space=true
+        w.v.state={offset={y=14},zoom=1}
+        w.v.visible_area=w.Geom:new{x=0,y=0,w=600,h=772,offsetWithin=function() end}
+        local event=w.ui.handleEvent
+        w.ui.handleEvent=function(ui,e)
+            event(ui,e)
+            w.v.visible_area.h=math.min(772,w.v.visible_height)
+            w.v.state.offset.y=(w.v.visible_height-w.v.visible_area.h)/2
+        end
+        R.enable(w.ui); local s=R.session
+        local top,bottom=R.margins(s)
+        ok(top+s.top.extra>=s.top.height); ok(bottom+s.bottom.extra>=s.bottom.height)
+        eq(s.top.extra,22); eq(s.bottom.extra,22)
+        R.relayout(s); eq(s.top.extra,22); eq(s.bottom.extra,22)
+        R.disable()
     end)
     test("status: default-off setting, off leaves native footer and safe next-tick changes", function()
         local w,R=world(true)
