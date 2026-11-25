@@ -517,7 +517,8 @@ and radio behavior; the new ownership implementation is gated with the X4 mirror
 - `OrbifyWifi` counts nested holds for the catalog, refresh, sleep sync, offline misses and reading
   sync. `SavedWifiConnect::disconnect` defers an off request until the last hold leaves. The X4
   catalog's direct disconnect now uses that gate. Logs name holds and every requested off. A lost
-  link retains the walk and displays **Paused — no Wi-Fi**, then resumes when it returns.
+  link retains the walk and displays **Paused — no Wi-Fi**, then resumes when it returns. Leaving the refresh boot for Home intentionally pauses the
+  saved plan; Home now says “Paused N% - open catalog”, instead of presenting a frozen % as running.
 - The supplied device log ends before the reported sleep tests and contains no wake sequence.
   No timing defect was established from it. Existing watcher deadlines and press-to-screen timing
   remain; new route/token and first-screen boot-time logs run once per boot. Capture those along
@@ -526,3 +527,13 @@ and radio behavior; the new ownership implementation is gated with the X4 mirror
 Tests: shared library-source cases on C++/Kotlin/Lua, ready-pool current-book exclusion and cycling,
 reference-counted radio holds; simulator sleep cycling, regular refresh return-before-request,
 Full refresh progress, a forced idle-off during uncached browsing, and the existing quick wake.
+
+W8 validation: host suite, Lua logic/flows, companion JVM suite and nine X4 Pro simulator
+scenarios passed (including Home's earlier pause/resume hint). No device was used. The local
+PlatformIO flash-gate measurements at the pinned rc3 are:
+
+| Environment | Used / 6,553,600 bytes | Percent | Below the 99.5% gate |
+|---|---:|---:|---:|
+| `x4-pro` | 6,375,685 | 97.29% | 145,247 bytes |
+| `x4-classic` | 6,218,742 | 94.89% | 302,190 bytes |
+| `default` | 6,514,417 | 99.40% | 6,515 bytes |

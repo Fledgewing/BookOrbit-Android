@@ -509,7 +509,7 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     card.theme(UI_THEME_BOOKORBIT)
     sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
     ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 500}])
-    run = ctx.sim.run(card, "hold", script=f"3000:TAP:{sx},{sy},1300", after_reboot="16000:TAP:240,700",
+    run = ctx.sim.run(card, "hold", script=f"3000:TAP:{sx},{sy},1300", after_reboot="8000:TAP:240,700",
                       timeout_s=60)
     after(run.output, "Full refresh: reboot notice suppressed")
     walk = after(run.output, "Home refresh: Full refresh popup: about")
@@ -521,6 +521,7 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     pcts = [int(p) for p in re.findall(r"Full refresh badge '(\d+)%'", walk)]
     assert pcts == sorted(pcts) and pcts[-1] <= int(paused.group(1)), f"the % went down: {pcts} / {paused.group(1)}"
     home = ctx.sim.run(card, "home-after", script="4000:QUIT", timeout_s=10, screenshots={3000: "x4-pro-home-pending"})
+    after(home.output, "Full refresh paused: open catalog to resume")
     shown = re.search(r"BookOrbit Home: Full refresh (\d+)% in the header", home.output)
     assert shown and int(shown.group(1)) >= int(paused.group(1)), f"Home's header: {shown and shown.group(0)}"
     shot = (card.root / "shots" / "x4-pro-home-pending.bmp").read_bytes()
