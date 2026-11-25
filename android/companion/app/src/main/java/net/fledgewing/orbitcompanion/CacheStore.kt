@@ -33,6 +33,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
             s.exec("PRAGMA user_version = $VERSION")
         }
         sql = s
+        BulkCatalog.initialize(s)
         return s
     }
 
@@ -54,7 +55,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
 
     /** Another account or server: everything goes (the cache, the run's jobs and the pickers' tables). */
     fun wipe(why: String) {
-        transaction { TABLES.forEach { db().exec("DELETE FROM $it") } }
+        transaction { (TABLES + BulkCatalog.tables).forEach { db().exec("DELETE FROM $it") } }
         log("store: cleared ($why)")
     }
 
@@ -143,6 +144,15 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
         var n = 0
         transaction {
             if (id != null) {
+                meta("bulk_active")?.toLongOrNull()?.let { g ->
+                    val bytes = db().query("SELECT item FROM bulk_books WHERE g=? AND id=?", g, id) { it.bytes(0) }.firstOrNull()
+                    val body = bytes?.let(LuaValue::parse) as? Map<*, *>
+                    if (body != null) {
+                        val updated = patched(body, id, fields) as Map<*, *>
+                        db().exec("UPDATE bulk_books SET item=?,status=? WHERE g=? AND id=?", LuaValue.encode(updated), BulkCatalog.status(updated["readStatus"]), g, id)
+                        n++
+                    }
+                }
                 val row = db().query("SELECT item, detail FROM books WHERE id = ?", id) { it.bytes(0) to it.bytes(1) }.firstOrNull()
                 if (row != null) {
                     val item = row.first?.let { LuaValue.parse(it) }
@@ -173,6 +183,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
      * page, size, offset: the read's own (size null: the list's default).
      */
     fun window(identity: String, page: Int?, size: Int?, offset: Int?): Map<String, Any?>? {
+        BulkCatalog.window(this, identity, page, size, offset)?.let { return it }
         val l = db().query("SELECT kind, total, head FROM lists WHERE identity = ?", u(identity)) {
             Triple(it.text(0) ?: "books", it.long(1)?.toInt() ?: 0, it.bytes(2))
         }.firstOrNull() ?: return null
@@ -195,7 +206,11 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
         return out
     }
 
-    fun bookItem(id: Long): Any? = db().query("SELECT item FROM books WHERE id = ?", id) { it.bytes(0) }.firstOrNull()?.let { LuaValue.parse(it) }
+    fun bookItem(id: Long): Any? {
+        val bytes = meta("bulk_active")?.toLongOrNull()?.let { g -> db().query("SELECT item FROM bulk_books WHERE g=? AND id=?", g, id) { it.bytes(0) }.firstOrNull() }
+            ?: db().query("SELECT item FROM books WHERE id=?", id) { it.bytes(0) }.firstOrNull()
+        return bytes?.let(LuaValue::parse)
+    }
 
     /** A book's saved detail and when it was last checked. */
     fun detail(id: Long): Pair<Any?, Long>? =
@@ -212,12 +227,14 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
         if (w != null) {
             val q = MirrorLogic.parseQuery(MirrorLogic.splitPath(path).second)
             val body = window(w.identity, q["page"]?.toIntOrNull(), q["size"]?.toIntOrNull(), q["offset"]?.toIntOrNull()) ?: return null
-            val at = db().query("SELECT validated_at FROM lists WHERE identity = ?", u(w.identity)) { it.long(0) ?: 0L }.first()
+            val at = if (meta("bulk_active") != null) meta("bulk_at")?.toLongOrNull() ?: 0L else db().query("SELECT validated_at FROM lists WHERE identity = ?", u(w.identity)) { it.long(0) ?: 0L }.firstOrNull() ?: 0L
             return Read(body, at, false, "lists", w.identity)
         }
         detailId(path, detailTemplate, sentinel)?.let { id ->
-            val (body, at) = detail(id) ?: return null
-            return Read(body, at, false, "books", id.toString())
+            val saved = detail(id)
+            if (saved != null) return Read(saved.first, saved.second, false, "books", id.toString())
+            val stub = if (meta("bulk_active") != null) bookItem(id) else null
+            return stub?.let { Read(it, 0L, true, "books", id.toString()) }
         }
         return db().query("SELECT body, validated_at, stale FROM entries WHERE key = ?", u(key)) {
             Read(it.bytes(0)?.let { b -> LuaValue.parse(b) }, it.long(1) ?: 0L, it.long(2) == 1L, "entries", key)
@@ -231,6 +248,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
     fun save(key: String, path: String, reply: Any?, at: Long, detailTemplate: String?, sentinel: String = MirrorLogic.SENTINEL): Boolean {
         val w = MirrorLogic.listWindow(path)
         if (w != null && reply is Map<*, *>) {
+            if (w.kind == "books" && BulkCatalog.saveObservedWindow(this, w.identity, reply, at)) return true
             val q = MirrorLogic.parseQuery(MirrorLogic.splitPath(path).second)
             val size = q["size"]?.toIntOrNull() ?: (if (w.kind == "books") 20 else (reply["items"] as? List<*>)?.size ?: 0)
             val offset = q["offset"]?.toIntOrNull() ?: (((q["page"]?.toIntOrNull() ?: 1) - 1) * maxOf(1, size))

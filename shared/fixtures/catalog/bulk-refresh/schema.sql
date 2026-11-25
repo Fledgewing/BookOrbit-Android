@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS bulk_books (g INTEGER, id INTEGER, item BLOB, manifest BLOB, title TEXT, series TEXT, ix1 INTEGER, ix2 INTEGER, ix TEXT, status TEXT, added TEXT, updated TEXT, PRIMARY KEY(g,id)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS bulk_members (g INTEGER, kind TEXT, value TEXT, id INTEGER, context BLOB, ix1 INTEGER, ix2 INTEGER, ix TEXT, PRIMARY KEY(g,kind,value,id)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS bulk_members_id ON bulk_members(g,id);
+CREATE TABLE IF NOT EXISTS bulk_ranks (g INTEGER, kind TEXT, direction TEXT, id INTEGER, pos INTEGER, letter TEXT, PRIMARY KEY(g,kind,direction,id)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS bulk_rank_window ON bulk_ranks(g,kind,direction,pos);
+CREATE TABLE IF NOT EXISTS bulk_sections (g INTEGER, section TEXT, pos INTEGER, item BLOB, name TEXT, n INTEGER, reading INTEGER, finished INTEGER, id TEXT, letter TEXT, PRIMARY KEY(g,section,pos)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS bulk_section_ranks (g INTEGER, section TEXT, direction TEXT, id TEXT, pos INTEGER, PRIMARY KEY(g,section,direction,id)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS bulk_replies (g INTEGER, path TEXT, body BLOB, PRIMARY KEY(g,path)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS bulk_heads (g INTEGER, identity TEXT, head BLOB, PRIMARY KEY(g,identity)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS bulk_pages (g INTEGER, path TEXT, PRIMARY KEY(g,path)) WITHOUT ROWID;

@@ -1,0 +1,597 @@
+{
+  "schema": 1,
+  "manifest": [
+    {
+      "id": 1,
+      "title": "Book 01",
+      "authors": [
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "1",
+      "formats": [
+        "epub",
+        "pdf"
+      ],
+      "files": [
+        {
+          "id": 10,
+          "format": "epub",
+          "contentVersion": "v1",
+          "downloadUrl": "/files/10/download",
+          "devicePath": "Book-1.epub"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Book 02",
+      "authors": [
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "2",
+      "formats": [
+        "pdf"
+      ],
+      "files": [
+        {
+          "id": 20,
+          "format": "pdf",
+          "contentVersion": "v1",
+          "downloadUrl": "/files/20/download",
+          "devicePath": "Book-2.epub"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Book 03",
+      "authors": [
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "2.5",
+      "formats": [
+        "epub",
+        "pdf"
+      ],
+      "files": [
+        {
+          "id": 30,
+          "format": "epub",
+          "contentVersion": "v1",
+          "downloadUrl": "/files/30/download",
+          "devicePath": "Book-3.epub"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Book 04",
+      "authors": [
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "4",
+      "formats": [
+        "pdf"
+      ],
+      "files": [
+        {
+          "id": 40,
+          "format": "pdf",
+          "contentVersion": "v1",
+          "downloadUrl": "/files/40/download",
+          "devicePath": "Book-4.epub"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Book 05",
+      "authors": [
+        "Author B",
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "5",
+      "formats": [
+        "epub",
+        "pdf"
+      ],
+      "files": [
+        {
+          "id": 50,
+          "format": "epub",
+          "contentVersion": "v1",
+          "downloadUrl": "/files/50/download",
+          "devicePath": "Book-5.epub"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Book 06",
+      "authors": [
+        "Author B",
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "6",
+      "formats": [
+        "pdf"
+      ],
+      "files": [
+        {
+          "id": 60,
+          "format": "pdf",
+          "contentVersion": "v1",
+          "downloadUrl": "/files/60/download",
+          "devicePath": "Book-6.epub"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Book 07",
+      "authors": [
+        "Author B",
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "7",
+      "formats": [
+        "epub",
+        "pdf"
+      ],
+      "files": [
+        {
+          "id": 70,
+          "format": "epub",
+          "contentVersion": "v1",
+          "downloadUrl": "/files/70/download",
+          "devicePath": "Book-7.epub"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Book 08",
+      "authors": [
+        "Author B",
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "8",
+      "formats": [
+        "pdf"
+      ],
+      "files": [
+        {
+          "id": 80,
+          "format": "pdf",
+          "contentVersion": "v1",
+          "downloadUrl": "/files/80/download",
+          "devicePath": "Book-8.epub"
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "id": 1,
+      "title": "Book 01",
+      "authors": [
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "1",
+      "formats": [
+        "epub",
+        "pdf"
+      ],
+      "seriesId": 101,
+      "readStatus": "reading",
+      "hasCover": true,
+      "progressPercentage": 20,
+      "lastReadAt": null,
+      "addedAt": "2026-01-01",
+      "updatedAt": "2026-01-02",
+      "thumbnailUrl": "/books/1/thumbnail",
+      "detailUrl": "/books/1"
+    },
+    {
+      "id": 2,
+      "title": "Book 02",
+      "authors": [
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "2",
+      "formats": [
+        "pdf"
+      ],
+      "seriesId": 101,
+      "readStatus": "read",
+      "hasCover": true,
+      "progressPercentage": 20,
+      "lastReadAt": null,
+      "addedAt": "2026-01-01",
+      "updatedAt": "2026-01-02",
+      "thumbnailUrl": "/books/2/thumbnail",
+      "detailUrl": "/books/2"
+    },
+    {
+      "id": 3,
+      "title": "Book 03",
+      "authors": [
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "2.5",
+      "formats": [
+        "epub",
+        "pdf"
+      ],
+      "seriesId": 101,
+      "readStatus": "on_hold",
+      "hasCover": true,
+      "progressPercentage": 20,
+      "lastReadAt": null,
+      "addedAt": "2026-01-01",
+      "updatedAt": "2026-01-02",
+      "thumbnailUrl": "/books/3/thumbnail",
+      "detailUrl": "/books/3"
+    },
+    {
+      "id": 4,
+      "title": "Book 04",
+      "authors": [
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "4",
+      "formats": [
+        "pdf"
+      ],
+      "seriesId": 101,
+      "readStatus": "unread",
+      "hasCover": true,
+      "progressPercentage": 20,
+      "lastReadAt": null,
+      "addedAt": "2026-01-01",
+      "updatedAt": "2026-01-02",
+      "thumbnailUrl": "/books/4/thumbnail",
+      "detailUrl": "/books/4"
+    },
+    {
+      "id": 5,
+      "title": "Book 05",
+      "authors": [
+        "Author B",
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "5",
+      "formats": [
+        "epub",
+        "pdf"
+      ],
+      "seriesId": 202,
+      "readStatus": "reading",
+      "hasCover": true,
+      "progressPercentage": 20,
+      "lastReadAt": null,
+      "addedAt": "2026-01-01",
+      "updatedAt": "2026-01-02",
+      "thumbnailUrl": "/books/5/thumbnail",
+      "detailUrl": "/books/5"
+    },
+    {
+      "id": 6,
+      "title": "Book 06",
+      "authors": [
+        "Author B",
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "6",
+      "formats": [
+        "pdf"
+      ],
+      "seriesId": 202,
+      "readStatus": "read",
+      "hasCover": true,
+      "progressPercentage": 20,
+      "lastReadAt": null,
+      "addedAt": "2026-01-01",
+      "updatedAt": "2026-01-02",
+      "thumbnailUrl": "/books/6/thumbnail",
+      "detailUrl": "/books/6"
+    },
+    {
+      "id": 7,
+      "title": "Book 07",
+      "authors": [
+        "Author B",
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "7",
+      "formats": [
+        "epub",
+        "pdf"
+      ],
+      "seriesId": 202,
+      "readStatus": "on_hold",
+      "hasCover": true,
+      "progressPercentage": 20,
+      "lastReadAt": null,
+      "addedAt": "2026-01-01",
+      "updatedAt": "2026-01-02",
+      "thumbnailUrl": "/books/7/thumbnail",
+      "detailUrl": "/books/7"
+    },
+    {
+      "id": 8,
+      "title": "Book 08",
+      "authors": [
+        "Author B",
+        "Author A"
+      ],
+      "seriesName": "Shared name",
+      "seriesIndex": "8",
+      "formats": [
+        "pdf"
+      ],
+      "seriesId": 202,
+      "readStatus": "unread",
+      "hasCover": true,
+      "progressPercentage": 20,
+      "lastReadAt": null,
+      "addedAt": "2026-01-01",
+      "updatedAt": "2026-01-02",
+      "thumbnailUrl": "/books/8/thumbnail",
+      "detailUrl": "/books/8"
+    }
+  ],
+  "sections": {
+    "libraries": [
+      {
+        "id": 1,
+        "title": "Library",
+        "count": 8
+      }
+    ],
+    "collections": [
+      {
+        "id": 7,
+        "title": "Collection",
+        "count": 3
+      }
+    ],
+    "smart-scopes": [
+      {
+        "id": 9,
+        "title": "Scope",
+        "count": 3
+      }
+    ],
+    "authors": [
+      {
+        "id": "Author A",
+        "title": "Author A",
+        "count": 8,
+        "readingCount": 4,
+        "finishedCount": 2
+      },
+      {
+        "id": "Author B",
+        "title": "Author B",
+        "count": 4,
+        "readingCount": 2,
+        "finishedCount": 1
+      }
+    ],
+    "series": [
+      {
+        "id": "series:101",
+        "title": "Shared name",
+        "seriesId": 101,
+        "count": 4,
+        "readingCount": 2,
+        "finishedCount": 1
+      },
+      {
+        "id": "series:202",
+        "title": "Shared name",
+        "seriesId": 202,
+        "count": 5,
+        "readingCount": 2,
+        "finishedCount": 1
+      }
+    ]
+  },
+  "memberships": {
+    "libraryId:1": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "collectionId:7": [
+      1,
+      3,
+      5
+    ],
+    "smartScopeId:9": [
+      2,
+      3,
+      4
+    ],
+    "seriesId:101": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "seriesId:202": [
+      5,
+      6,
+      7,
+      8,
+      2
+    ]
+  },
+  "ranks": {
+    "author:asc": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "author:desc": [
+      5,
+      6,
+      7,
+      8,
+      1,
+      2,
+      3,
+      4
+    ],
+    "published:asc": [
+      3,
+      2,
+      1,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "published:desc": [
+      8,
+      7,
+      6,
+      5,
+      4,
+      1,
+      2,
+      3
+    ],
+    "recently_read:asc": [
+      4,
+      1,
+      3,
+      2,
+      8,
+      6,
+      7,
+      5
+    ],
+    "recently_read:desc": [
+      8,
+      2,
+      3,
+      1,
+      4,
+      5,
+      7,
+      6
+    ]
+  },
+  "dashboard": {
+    "want-to-read": [
+      4,
+      1
+    ],
+    "up-next-in-series": [
+      7,
+      3
+    ]
+  },
+  "windows": [
+    {
+      "query": "sort=title&order=asc",
+      "ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "query": "seriesId=202&sort=series&order=asc",
+      "ids": [
+        5,
+        6,
+        7,
+        8,
+        2
+      ]
+    },
+    {
+      "query": "author=Author%20B&format=epub&sort=title&order=asc",
+      "ids": [
+        5,
+        7
+      ]
+    },
+    {
+      "query": "smartScopeId=9&format=epub&readStatus=finished&sort=title&order=asc",
+      "ids": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "query": "collectionId=7&sort=published&order=asc",
+      "ids": [
+        3,
+        1,
+        5
+      ]
+    },
+    {
+      "query": "ids=2,6,8&sort=recently_read&order=desc",
+      "ids": [
+        8,
+        2,
+        6
+      ]
+    }
+  ],
+  "benchmark": {
+    "books": 10300,
+    "title_pattern": "Book %05d",
+    "authors": 50,
+    "primary_series": 100,
+    "secondary_series": 5,
+    "secondary_members_per_series": 10,
+    "libraries": 2,
+    "collections": 3,
+    "smart_scopes": 2
+  },
+  "secondary_context": {
+    "seriesId:202:2": {
+      "seriesId": 202,
+      "seriesName": "Shared name",
+      "seriesIndex": "99"
+    }
+  }
+}

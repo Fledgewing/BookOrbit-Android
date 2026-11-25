@@ -543,6 +543,24 @@
         "lua",
         "cpp"
       ]
+    },
+    {
+      "file": "catalog/bulk-refresh/catalog.json",
+      "rule": "Bulk manifest, contextual secondary membership, server ranks and offline windows; shared benchmark shape",
+      "owner": "companion, plugin",
+      "readers": [
+        "kt",
+        "lua"
+      ]
+    },
+    {
+      "file": "catalog/bulk-refresh/schema.sql",
+      "rule": "Optional SQLite generation tables shared by companion and KOReader readers",
+      "owner": "companion, plugin",
+      "readers": [
+        "kt",
+        "lua"
+      ]
     }
   ]
 }

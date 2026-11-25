@@ -237,3 +237,23 @@ stored cover is served by OPDS (docs/design/lock-screen.md L7):
   `shared/fixtures/opds/recent-feed.xml`.
 - Visibility: the cover route checks the book against the account's libraries and content filters
   (`validateBookAccess`), as the catalog does.
+
+## Bulk catalog and secondary series
+
+At pinned BookOrbit `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`, manifest pages
+accept size 200 and carry transfer files, primary series name/index and author
+names; list rows accept size 100 and add primary series ID and reading state
+(`server/src/modules/koreader/dto/koreader-catalog-query.dto.ts:159-235`;
+`server/src/modules/koreader/koreader-catalog.service.ts:661-669,1187-1205`).
+Series-scoped queries use the membership table and return contextual series
+fields, so a secondary-series list must not replace the book's primary series
+(`server/src/modules/opds/opds-book.service.ts:1561-1575,1598-1646`).
+KOReader series sections provide counts, three previews and bounded member-state
+buckets, not full membership IDs (`server/src/modules/opds/opds-book.service.ts:120-122,956-1018`).
+OPDS series navigation also links to individually scoped feeds
+(`server/src/modules/opds/opds.service.ts:102-114`). Neither is a bulk
+secondary-membership projection. Membership replacements advance the book's
+`updatedAt` (`server/src/common/services/series-membership.service.ts:35-56,149-166`).
+The [bulk refresh design](design/bulk-catalog-refresh.md#w30-decision-bounded-secondary-series-phase)
+uses this evidence to reconcile affected secondary series after the base catalog
+is usable offline.

@@ -5652,6 +5652,66 @@ local function withStore(dir, fn)
     if not okf then error(err, 0) end
 end
 
+-- @fixture catalog/bulk-refresh/catalog.json @fixture catalog/bulk-refresh/schema.sql
+test("bulk catalog: plugin SQL serves offline windows, filters and secondary context", function()
+    local fx = JSONF.decode(io.open(here .. "/../../../shared/fixtures/catalog/bulk-refresh/catalog.json", "rb"):read("*a"))
+    local dir, st = fixtureStore()
+    for sql in io.lines(here .. "/../../../shared/fixtures/catalog/bulk-refresh/schema.sql") do st.conn:exec(sql) end
+    st:run("INSERT OR REPLACE INTO meta VALUES ('bulk_active','1')")
+    st:run("INSERT OR REPLACE INTO meta VALUES ('full_at','1000')")
+    local function member(kind, value, id, c)
+        local ix = c and tonumber(c.seriesIndex)
+        st:run("INSERT OR REPLACE INTO bulk_members VALUES (1,?,?,?,?,?,?,?)", kind, tostring(value), id,
+            c and RE.Cache.encode(c) or nil, ix and math.floor(ix), ix and (ix % 1 == 0 and -1 or tonumber(tostring(ix):match("%.(.*)$"))), c and c.seriesIndex)
+    end
+    for i, b in ipairs(fx.manifest) do
+        local row = {}
+        for k,v in pairs(b) do row[k]=v end
+        for k,v in pairs(fx.rows[i]) do row[k]=v end
+        local status = ({reading="reading",on_hold="reading",read="finished"})[row.readStatus] or "unread"
+        local ix=tonumber(b.seriesIndex)
+        st:run("INSERT INTO bulk_books VALUES (1,?,?,?,?,?,?,?,?,?,?,?)", b.id, RE.Cache.encode(row), RE.Cache.encode(b), b.title,b.seriesName,
+            ix and math.floor(ix),ix and (ix % 1 == 0 and -1 or tonumber(tostring(ix):match("%.(.*)$"))),b.seriesIndex,status,row.addedAt,row.updatedAt)
+        for _,a in ipairs(b.authors) do member("author",a,b.id) end
+        for _,f in ipairs(b.formats) do member("format",f,b.id) end
+        for _,d in ipairs({"asc","desc"}) do st:run("INSERT INTO bulk_ranks VALUES (1,'title',?,?,?,'B')",d,b.id,d=="asc" and i-1 or #fx.manifest-i) end
+    end
+    for key, ids in pairs(fx.memberships) do
+        local kind,value=key:match("^([^:]+):(.*)$")
+        for _,id in ipairs(ids) do
+            local c
+            if kind=="seriesId" then
+                c=fx.secondary_context[key .. ":" .. id] or {seriesId=tonumber(value),seriesName="Shared name",seriesIndex=fx.manifest[id].seriesIndex}
+            end
+            member(kind,value,id,c)
+        end
+    end
+    for key, ids in pairs(fx.ranks) do
+        local kind,d=key:match("^([^:]+):(.*)$")
+        for i,id in ipairs(ids) do st:run("INSERT INTO bulk_ranks VALUES (1,?,?,?,?, 'A')",kind,d,id,i-1) end
+    end
+    withStore(dir,function()
+        for _,w in ipairs(fx.windows) do
+            for offset=0,#w.ids+1 do
+                for _,size in ipairs({1,3,100}) do
+                    local path="/koreader/plugin/catalog/books?" .. w.query .. "&offset=" .. offset .. "&size=" .. size
+                    local e=RE.Store.read(DBFX.owner,path,path,nil)
+                    ok(e~=nil,"missing " .. path)
+                    local expected={}
+                    for i=offset+1,math.min(#w.ids,offset+size) do table.insert(expected,w.ids[i]) end
+                    local got={};for _,b in ipairs(e.body.items) do table.insert(got,b.id) end
+                    eq(table.concat(got,","),table.concat(expected,","),path)
+                end
+            end
+        end
+        local p="/koreader/plugin/catalog/books?sort=title&order=asc&buckets=1"
+        local e=RE.Store.read(DBFX.owner,p,p,nil)
+        eq(e.body.buckets[1].key,"B","letter rail retained")
+        eq(e.body.buckets[1].count,8,"letter count")
+    end)
+    st:close();os.execute("rm -rf '" .. dir .. "'")
+end)
+
 test("sqlite cache: the plugin's reads answer the shared fixture (db.json) from the rows", function()
     local dir, st = fixtureStore()
     withStore(dir, function()

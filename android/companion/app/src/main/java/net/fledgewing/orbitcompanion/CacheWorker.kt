@@ -335,7 +335,8 @@ class CacheWorker(
         }
         for (id in want) {
             checkpoint()
-            val (body, at) = store.detail(id.toLong()) ?: continue
+            val saved = store.detail(id.toLong()) ?: store.bookItem(id.toLong())?.let { it to (store.db().query("SELECT item_at FROM books WHERE id=?", id.toLong()) { row -> row.long(0) ?: 0L }.firstOrNull() ?: 0L) } ?: continue
+            val (body, at) = saved
             val files = (body as? Map<*, *>)?.get("files") as? List<*> ?: continue
             if (CopiesLogic.newer(details[id], at)) details[id] = CopiesLogic.Detail(files, at)
         }
@@ -600,7 +601,7 @@ class CacheWorker(
 
     /** "Save every cover for offline" turned on: the cover of every saved book. */
     private fun seedCovers() {
-        store.db().query("SELECT id FROM books WHERE item IS NOT NULL") { it.long(0)!! }.forEach { addJob(Job("cover", it.toString())) }
+        store.db().query(if (store.meta("bulk_active") != null) "SELECT id FROM bulk_books WHERE g=" + store.meta("bulk_active")!!.toLong() else "SELECT id FROM books WHERE item IS NOT NULL") { it.long(0)!! }.forEach { addJob(Job("cover", it.toString())) }
     }
 
     /**
@@ -833,6 +834,25 @@ class CacheWorker(
         plan.detailTemplate?.let { st.setMeta("detail_template", it) }
         val r = Run(plan)
         r.startedMs = clockMs()
+        if (plan.m["catalog"] is Map<*, *> && plan.op in setOf("full", "incremental", "revalidate", "resume")) {
+            st.setMeta("run_op", if (plan.op == "resume") st.meta("run_op") ?: "full" else plan.op)
+            st.setMeta("run_started", now())
+            r.total = 100
+            val fast = FastCatalogRefresh(st, plan, { path ->
+                val reply = http.get(url(creds, path), headers(creds), null, MAX_BODY)
+                if(reply.code != 200 || reply.body == null) throw FastCatalogRefresh.FetchFailure(reply.body?.size?.toLong() ?: 0L)
+                val body = try { decodeJson(String(reply.body, Charsets.UTF_8)) as? Map<*, *> } catch(_:Exception) { null }
+                    ?: throw FastCatalogRefresh.FetchFailure(reply.body.size.toLong())
+                body.entries.associate { it.key.toString() to it.value } + ("_bulkBytes" to reply.body.size.toLong())
+            }, { yieldTo(); checkpoint() }, { File(mirrorDir, "stop").isFile }, now, { pct ->
+                r.pct = pct.toLong(); r.done = pct.toLong(); writeStatus(r, true)
+            }, log)
+            val why = fast.run()
+            if (why != "finished") r.errors++
+            writeStatus(r, false)
+            summary(plan, why, r, r.done, why == "finished" && st.meta("run_op") == "full", why == "finished" && st.meta("run_op") == "revalidate")
+            return why
+        }
         val pendingBefore = count("SELECT count(*) FROM jobs WHERE state = 0")
         when (plan.op) {
             "full" -> st.transaction {
