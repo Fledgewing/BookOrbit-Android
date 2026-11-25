@@ -30,8 +30,21 @@ with Home on screen). Its status pills alone over the book don't. Just in time W
 book" off uses the same test (`ko/wifi.lua`). `Gate.show(what, fn, max_age_s)` runs `fn` at once when
 not reading, else queues it (one entry per kind, the newest wins). `Gate.drain` shows what is
 queued when BookOrbit Home comes on top, a book closes, and KOReader resumes; entries older than
-their `max_age_s` (default 10 min; the wake banner 1 min, BookOrbit toasts 2 min) are dropped and
+their `max_age_s` (default 10 min, BookOrbit toasts 2 min) are dropped and
 logged.
+
+**Background notices on Home and browse.** `ko/notices.lua` marks automatic start, resume,
+book-open and periodic sync, copies, mailbox replies, storage and cache repaints as background
+work. That scope follows scheduled callbacks, native queued sync jobs and Trapper coroutines;
+it is local to each coroutine so a suspended job cannot silence a concurrent user action.
+Background notices are dropped rather than held for later. Native BookOrbit `show`, `error`
+and `loading` pills, our own notes, direct InfoMessages/Notifications and Trapper progress text
+all use the same suppression boundary as Full refresh. Thumbnail downloads and automatic clock
+repaints are silent too. Every shown or suppressed message logs its text. Invisible Trapper
+input traps still operate, and suppressed loading pills still return a closeable handle.
+Explicit user actions retain their notices; Full refresh retains its tagged progress popup and
+badge, and position-sync choices retain their dialog. Start/wake/copies, delayed and yielding
+callbacks, cancellation, and foreground actions are covered in `test_flows.lua`.
 
 **Companion.** A `Reading` gate mirrors the plugin from `STATS`: the plugin adds `reading=1|0`
 to every `STATS` (0 on `close` and `suspend`); older plugins are read from `open` and
@@ -44,7 +57,7 @@ them. Posted quietly: no heads-up, no sound.
 
 | Update | When KOReader restarts |
 |---|---|
-| The reader asked (Update in the menu, Install in the companion) | at once, book or not: saved through KOReader's own close, the book reopens at its place, BookOrbit Home comes back if it was on top, then a short "Updated to vX" |
+| The reader asked (Update in the menu, Install in the companion) | at once, book or not: saved through KOReader's own close, the book reopens at its place, BookOrbit Home comes back if it was on top, the version remains in update status |
 | Automatic (background check, the companion's daily job) | only when KOReader is out of the way: the screen goes off (restart), or another app is in front (KOReader saves and quits; the new plugin loads at its next start). Never on a closed book, BookOrbit Home or a list: the reader is still using KOReader |
 
 `RestartPlan.decide` (`logic/prompts.lua`) and `UpdateFlow.restart` (companion `Logic.kt`) hold
@@ -62,7 +75,7 @@ Every `UIManager:show`, BookOrbit toast, `Jni.startActivity` and restart in `ko/
 | `ko/home.lua` `restartForCompanion` | relaunch window, restart, quit | `RestartPlan` (manual, screen off, background) or the companion's own restart, which follows the same rule |
 | `ko/home.lua` setup box | ConfirmBox | `SetupPrompt.decide` never shows it in a book; its buttons are user actions |
 | `ko/home.lua` sign-in notes | "Signed in", "plugin isn't loaded" | user action (Setup's sign-in) |
-| `ko/start.lua` `showWakeBanner` | "Can't reach BookOrbit" | `Gate.show`, dropped after 1 min |
+| `ko/start.lua` `showWakeBanner` | "Can't reach BookOrbit" | background notice: suppressed and logged |
 | `ko/endofbook.lua` next-sync downloads | "Downloaded: title" | `Gate.show` |
 | `ko/endofbook.lua` sheet and its notes | end-of-book sheet | exception: the reader reached the end |
 | `ko/badge.lua` Full refresh % badge | "37%", "Done" | exception: passive toast, the user's design |

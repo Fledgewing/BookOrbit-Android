@@ -206,26 +206,31 @@ end
 Gate = { queue = {}, MAX_AGE_S = 600 }
 
 function Gate.refreshNotice(what)
-    log("Full refresh: suppressed notice: " .. tostring(what))
-    if Badge and Badge.notice then Badge.notice(what) end
+    local full = Mirror and (Mirror.notices or Mirror.fullRunning())
+    log((full and "Full refresh" or "background") .. ": suppressed notice: " .. tostring(what))
+    if full and Badge and Badge.notice then Badge.notice(what) end
 end
 
 -- what: for the log; fn: shows it; max_age_s: dropped after this long held.
 function Gate.show(what, fn, max_age_s)
-    if Mirror and (Mirror.notices or Mirror.fullRunning()) then
+    if Gate.silent() then
         Gate.refreshNotice(what)
         return
     end
-    if not reading() then return fn() end
+    if not reading() then
+        log("notice: shown: " .. tostring(what))
+        return fn()
+    end
+    log("notice: suppressed (held while reading): " .. tostring(what))
     for _, q in ipairs(Gate.queue) do
         if q.what == what then q.fn, q.at = fn, now_s(); return end -- the newest of the same kind
     end
     table.insert(Gate.queue, { what = what, fn = fn, at = now_s(), max_age = max_age_s or Gate.MAX_AGE_S })
-    log("gate: held while reading:", what)
 end
 
 function Gate.drain(why)
-    if Mirror and (Mirror.notices or Mirror.fullRunning()) then
+    if Gate.inBackground() and not (Mirror and (Mirror.notices or Mirror.fullRunning())) then return end
+    if Gate.silent() then
         for _, q in ipairs(Gate.queue) do Gate.refreshNotice(q.what) end
         Gate.queue = {}
         return
@@ -238,40 +243,59 @@ function Gate.drain(why)
             log("gate: shown now (" .. tostring(why) .. "):", q.what)
             pcall(q.fn)
         else
-            log("gate: dropped (stale):", q.what)
+            log("notice: suppressed (stale): " .. tostring(q.what))
         end
     end
 end
 
 -- BookOrbit's own toasts (sync results and the like) wait too: bookorbit_toast.show/error.
 function Gate.installToast()
-    -- Direct InfoMessages and Notifications do not pass through BookOrbit's Toast API.
+    -- The final boundary also catches direct KOReader and Trapper messages.
+    -- Dialogs (including position-sync choices) are unaffected.
     wrap(UIManager, "show", function(stock) return function(self, w, ...)
-        if w and not w.orbit_refresh_popup and Mirror and (Mirror.notices or Mirror.fullRunning()) then
-            local m = getmetatable(w)
-            while m do
-                if m == InfoMessage or m == package.loaded["ui/widget/notification"] then
-                    Gate.refreshNotice("notice: " .. tostring(w.text))
-                    return
+        local notice = w and (w.name == "bookorbit_toast" or w.is_infomessage or w.orbit_note)
+        local m = w and getmetatable(w)
+        while m and not notice do
+            notice = m == InfoMessage or m == package.loaded["ui/widget/notification"]
+                or m == package.loaded["ui/widget/trapwidget"]
+            m = getmetatable(m)
+        end
+        if notice then
+            local text = w.text
+            if not text and w.variants then
+                local parts = {}
+                for _, part in ipairs(w.variants[1] or {}) do parts[#parts + 1] = tostring(part.t or "") end
+                text = table.concat(parts)
+            end
+            -- Invisible Trapper input traps have no message and must keep working.
+            if text ~= nil then
+                if not w.orbit_refresh_popup and Gate.silent() then
+                    Gate.refreshNotice("notice: " .. tostring(text)); return
                 end
-                m = getmetatable(m)
+                log("notice: shown: " .. tostring(text))
             end
         end
         return stock(self, w, ...)
     end end, "refresh_notices")
+    Gate.installCatalog()
+    Gate.installTrapper()
+    Gate.installPlugin(bookorbit(liveUI()))
     local okt, Toast = pcall(require, "bookorbit_toast")
     if not okt or type(Toast) ~= "table" then return end
     for _, name in ipairs({ "show", "error", "loading" }) do
         if type(Toast[name]) == "function" then
             wrap(Toast, name, function(stock) return function(...)
                 local args = { n = select("#", ...), ... }
-                if Mirror and (Mirror.notices or Mirror.fullRunning()) then
+                if Gate.silent() then
                     Gate.refreshNotice("BookOrbit " .. name .. ": " .. tostring(args[1]))
                     -- Loading callers close the returned handle, including withLoading.
                     if name == "loading" then return { close = function() end, closed = false } end
                     return
                 end
-                if name == "loading" then return stock(unpack(args, 1, args.n)) end
+                if name == "loading" then
+                    log("notice: shown: BookOrbit loading: " .. tostring(args[1]))
+                    return stock(unpack(args, 1, args.n))
+                end
                 return Gate.show("BookOrbit " .. name .. ": " .. tostring(args[1]), function() return stock(unpack(args, 1, args.n)) end, 120)
             end end, "gate")
         end

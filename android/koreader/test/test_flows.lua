@@ -8,7 +8,7 @@ dofile(here .. "/sqlite_shim.lua")
 
 ---------------------------------------------------------------- fake world
 local W = {
-    clock = 1000, queue = {}, seq = 0, shown = {}, logs = {},
+    clock = 1000, queue = {}, seq = 0, shown = {}, presented = {}, logs = {},
     wifi = true, vpn = true, screen_on = false, companion = true, server_code = 200,
     broadcasts = {}, activities = {}, intent_extras = {},
     fetched = {}, web = {}, json = {}, files = {}, children = {}, ino = {},
@@ -38,7 +38,7 @@ local UIManager = {
     unschedule = function(_, fn)
         for i = #W.queue, 1, -1 do if W.queue[i].fn == fn then table.remove(W.queue, i) end end
     end,
-    show = function(_, w) table.insert(W.shown, w) end,
+    show = function(_, w) table.insert(W.shown, w); table.insert(W.presented, w) end,
     getElapsedTimeSinceBoot = function() return W.clock * 1e6 end,
     getTopmostVisibleWidget = function() return W.shown[#W.shown] end,
     close = function(_, w)
@@ -2545,7 +2545,7 @@ test("reading gate: nothing shows while a book is open in front; it all shows on
     if okt and Toast.show then Toast.show("Synced") end
     run(3)
     ok(#W.shown == 0, "nothing on screen while reading: " .. #W.shown)
-    ok(#RE.Gate.queue >= 3, "held: " .. #RE.Gate.queue)
+    ok(#RE.Gate.queue >= 2, "held user notices (wake banner suppressed): " .. #RE.Gate.queue)
     m:onCloseWidget()
     newUI(false)
     run(3)
@@ -2636,7 +2636,7 @@ test("one update: an app switch (screen on) in a book doesn't restart", function
     restartReset()
 end)
 
-test("one update: after its restart the new patch shows one status line", function()
+test("one update: after restart status is saved without a background pill", function()
     restartReset(); stampSelf("0.0.0-dev")
     store.orbit_android.restart_tried = "0.0.0-dev"
     W.shown = {}
@@ -2645,7 +2645,7 @@ test("one update: after its restart the new patch shows one status line", functi
     run(3)
     local found = false
     for _, w in ipairs(W.shown) do if tostring(w.text) == "Updated to v0.0.0-dev" and w.orbit_note then found = true end end
-    ok(found, "a short note, never in Home's way")
+    ok(not found, "background completion stays in status, without a pill")
     ok(store.orbit_android.restart_tried == nil, "try cleared")
     ok(store.orbit_android.patch_update_status.text == "Updated to v0.0.0-dev", "update status")
     restartReset()
@@ -3181,6 +3181,126 @@ local function copyBooks()
     }
 end
 
+-- Emit through every notice API used by native background work. These stand-ins
+-- retain the real Toast loading-handle and Trapper coroutine contracts.
+local function noticeFixture()
+    local savedToast, savedTrapper = package.loaded["bookorbit_toast"], package.loaded["ui/trapper"]
+    local Info = require("ui/widget/infomessage")
+    local function show(text) local w = Info:new{ text = text }; UIManager:show(w); return w end
+    local Toast = { show = show, error = show, loading = function(text)
+        local w = show(text); w.close = function() UIManager:close(w) end; return w
+    end }
+    local Trapper = { wrap = function(_, fn)
+        local okc, err = coroutine.resume(coroutine.create(fn)); assert(okc, err)
+    end, info = function(_, text) show(text); return true end }
+    package.loaded["bookorbit_toast"], package.loaded["ui/trapper"] = Toast, Trapper
+    E.Gate.installToast()
+    local function burst(label)
+        Toast.loading(label .. ": Loading book..."):close()
+        Toast.loading(label .. ": Loading EPUB delivery preference..."):close()
+        Toast.show(label .. ": saved")
+        Toast.error(label .. ": error")
+        E.orbitNote(label .. ": own note")
+        UIManager:show(Info:new{ text = label .. ": direct InfoMessage" })
+        UIManager:show(require("ui/widget/notification"):new{ text = label .. ": Notification" })
+        Trapper:info(label .. ": Trapper")
+    end
+    return burst, function()
+        package.loaded["bookorbit_toast"], package.loaded["ui/trapper"] = savedToast, savedTrapper
+    end, Trapper
+end
+local function noticeLog(text)
+    return count(W.logs, function(line) return line:find(text, 1, true) ~= nil end) > 0
+end
+
+test("background notices: start and wake pulls are silent, including delayed callbacks and offline errors", function()
+    local burst, restore, Trapper = noticeFixture()
+    local ui, m = newUI(false)
+    local p = ui.bookorbit
+    local pulls = 0
+    function p:requestLifecycleOutboxDrain()
+        pulls = pulls + 1
+        burst("pull")
+        UIManager:nextTick(function() burst("delayed pull") end)
+        Trapper:wrap(function()
+            burst("coroutine pull")
+            local co = coroutine.running()
+            UIManager:scheduleIn(0.1, function() assert(coroutine.resume(co)) end)
+            coroutine.yield()
+            burst("resumed pull")
+        end)
+    end
+    local started = E.state.started
+    E.state.started = false
+    m:init()
+    W.shown, W.presented = {}, {}
+    run(10)
+    m:onResume()
+    run(10)
+    m:showWakeBanner({ detail = "offline wake" })
+    ok(pulls >= 2, "both start and wake performed pulls")
+    eq(#W.presented, 0, "start, wake and deferred work show zero notices")
+    eq(#E.Gate.queue, 0, "background notices are dropped, never deferred")
+    for _, label in ipairs({ "pull", "delayed pull", "coroutine pull", "resumed pull" }) do
+        for _, text in ipairs({ "Loading book...", "Loading EPUB delivery preference...", "saved", "error", "own note", "direct InfoMessage", "Notification", "Trapper" }) do
+            ok(noticeLog("suppressed notice: ") and noticeLog(label .. ": " .. text), "suppression text logged: " .. label .. ": " .. text)
+        end
+    end
+    ok(noticeLog("offline wake"), "wake banner text logged")
+    burst("explicit action")
+    ok(#W.shown > 0 and noticeLog("notice: shown: explicit action: direct InfoMessage"), "user notices show and log text after background finishes")
+    E.state.started = started
+    restore()
+end)
+
+test("background notices: copy replacements and their completion callbacks are silent", function()
+    copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2", ["/books/c.epub"] = "cur3" })
+    local burst, restore = noticeFixture()
+    copiesUI(false)
+    local Cat = package.loaded["bookorbit_catalog"]
+    local download = Cat.downloadFile
+    function Cat:downloadFile(path, detail, file, rep)
+        burst("copy download")
+        UIManager:nextTick(function() burst("copy completion"); download(self, path, detail, file, rep) end)
+    end
+    W.shown, W.presented = {}, {}
+    E.Copies.tick("background")
+    run(10)
+    eq(#W.presented, 0, "background copies show zero notices")
+    eq(#E.Copies.state().queue, 0, "copy replacements still finish")
+    eq(#copies.repaired, 2, "both copies carried their identity")
+    ok(noticeLog("copy download: Loading book...") and noticeLog("copy completion: Trapper"), "copy notice texts logged")
+    restore()
+    copiesTeardown()
+end)
+
+test("background notices: yielding scope is isolated, error safe, and timers still cancel", function()
+    local burst, restore, Trapper = noticeFixture()
+    newUI(false)
+    W.shown, W.presented = {}, {}
+    local co
+    E.Gate.background(function()
+        Trapper:wrap(function()
+            co = coroutine.running()
+            coroutine.yield()
+            burst("resumed background")
+        end)
+        local cancel = function() error("cancelled callback ran") end
+        UIManager:scheduleIn(0.1, cancel)
+        UIManager:nextTick(cancel)
+        UIManager:unschedule(cancel)
+    end)
+    burst("while background yields")
+    ok(#W.shown > 0, "concurrent user action is visible")
+    W.shown, W.presented = {}, {}
+    assert(coroutine.resume(co))
+    run(1)
+    eq(#W.presented, 0, "resumed coroutine remains silent")
+    ok(not pcall(E.Gate.background, function() error("test error") end), "error propagated")
+    ok(not E.Gate.inBackground(), "error restored scope")
+    restore()
+end)
+
 test("copies: changed copies are replaced in place, one at a time, and their hashes move on", function()
     copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2", ["/books/c.epub"] = "cur3" })
     copiesUI(false)
@@ -3406,7 +3526,7 @@ test("local-first: a plugin without a hook -> Home stays the plugin's", function
     local Cat, BD = lfModules("listRun")
     local build = BD.build
     newUI(false)
-    ok(not E.LF.installed and BD.build == build and rawget(Cat, "__orbit_stock") == nil, "nothing wrapped")
+    ok(not E.LF.installed and BD.build == build and not (rawget(Cat, "__orbit_stock") or {})["lf:boardRun"], "no local-first hooks installed")
 end)
 
 test("local-first: Home paints this device's state; ⟳ refreshes; a refresh repaints changed tiles only", function()
@@ -4561,6 +4681,52 @@ test("mirror: background full runs and resumes never display a badge", function(
         ok(not E.Badge.running, "background completion is silent")
     end)
     FC.rate = rate
+    cacheTeardown()
+end)
+
+test("background notices: queued native jobs retain their own interactive flag", function()
+    local burst, restore = noticeFixture()
+    local ui = newUI(false)
+    local submitted = {}
+    function ui.bookorbit:submitSyncJob(job) submitted[#submitted + 1] = job end
+    E.Gate.installPlugin(ui.bookorbit)
+    ui.bookorbit:submitSyncJob{ run = function() burst("queued automatic sync") end }
+    ui.bookorbit:submitSyncJob{ interactive = true, run = function() burst("queued manual sync") end }
+    W.shown, W.presented = {}, {}
+    submitted[1].run()
+    eq(#W.presented, 0, "queued background job is silent outside its submitting callback")
+    E.Gate.background(submitted[2].run)
+    ok(#W.shown > 0, "manual job is visible even if the previous background job starts it")
+    restore()
+end)
+
+test("background notices: storage replies and post-refresh repaint are silent after Full refresh ends", function()
+    local client, Cat = cacheSetup()
+    local burst, restore = noticeFixture()
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        local refresh = E.LF.refreshKeepingCovers
+        E.LF.refreshKeepingCovers = function() burst("post refresh repaint") end
+        E.Mirror.active, E.Mirror.notices = true, true
+        W.shown, W.presented = {}, {}
+        E.Mirror.finish({ saved = 1 })
+        ok(not E.Mirror.notices, "Full refresh suppression has ended")
+        run(0.5)
+        eq(#W.presented, 0, "completion repaint remains silent")
+        ok(noticeLog("post refresh repaint: Loading book..."), "completion notice text logged")
+        E.LF.refreshKeepingCovers = refresh
+        local send = E.Companion.send
+        E.Companion.send = function(action, ...)
+            if action == E.Companion.ACTION.STORAGE then burst("storage cleanup") end
+            return send(action, ...)
+        end
+        E.OC.storage_asked, E.OC.storage_last = nil, nil
+        E.OC.storageCount("over the limit")
+        eq(#W.presented, 0, "storage request remains silent outside full refresh")
+        ok(noticeLog("storage cleanup: Trapper"), "storage notice text logged")
+        E.Companion.send = send
+    end)
+    restore()
     cacheTeardown()
 end)
 
