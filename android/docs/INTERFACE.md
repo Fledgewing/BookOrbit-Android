@@ -446,3 +446,8 @@ when called outside Trapper. Partial MD5 sampling matches KOReader
 
 Statistics migration preserves KOReader Android's WAL journal mode (`frontend/device/generic/device.lua:131` and
 `plugins/statistics.koplugin/main.lua:455` at the KOReader pin above); the Orbify cache stays in TRUNCATE mode.
+
+`native_footer_repair` mailbox events carry string scalar literals `before`, `after`,
+and a stable `token` for the backup-based global `reader_footer_mode` repair. The
+plugin changes only a matching native global setting in memory, never the loaded
+footer or document, and persists the token to ignore replay after later user changes.
