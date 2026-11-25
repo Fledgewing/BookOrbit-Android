@@ -1,11 +1,12 @@
 # BookSync Home, tap to download and series
 
 Status: **designing — awaiting maintainer approval**, W36, 25 November 2026.
-Design and [self-contained mockups](mockups.html) only; no implementation or
-release is authorized. This is the UI portion of
+Design, [static mockups](mockups.html) and the requested clickable prototype only;
+no native client implementation or release is authorized. This is the UI portion of
 [backend independence step 1](../backend-independence.md#1-owned-android-client-and-ledger),
 not approval of that document's ledger, export or server proposals.
-Revision 3 retains every reader-preset content type and makes X3 a full 0.12
+Revision 4 records the decided widget host, free-form editors and shared layout;
+[prototype.html](prototype.html) is the clickable synthetic preview. Revision 3 retains every reader-preset content type and makes X3 a full 0.12
 target by replacing all other Home paths. Revision 2 incorporated the maintainer's cross-platform ruling: owned X4 Home in
 0.12 alongside Android, eventual plain-firmware base, and unified product versions.
 
@@ -43,8 +44,9 @@ the Xteink statements above were checked against the current pinned 2.x source.
 
 ## 2. Outcome and boundaries
 
-BookSync owns Home, catalog lists, series and book detail on Android and X4 in
-0.12, including X3 with a text layout and replacement Home budget. Android uses independently authored KOReader widgets;
+BookSync owns Home through the shared widget/editor foundation on Android, X4
+and X3 from 0.12. Catalog/series/detail and the full widget library are staged
+by §8.5, not a promise to land every widget in the first editor release. Android uses independently authored KOReader widgets;
 Xteink uses our own firmware activities and SD database (§8). No BookOrbit board registry, layout engine, detail screen,
 Activity or catalog UI is called on this route. KOReader still supplies its normal
 widget and document APIs. The required, same-version companion owns networking,
@@ -118,9 +120,9 @@ ornament and collapsed Pick back up; this revision supersedes those choices.
 
 BookSync navigation becomes **Home / Insights / Library / More**, with paged
 content within each tab. Browse indexes remain in Library; More includes Decor,
-controls and Settings. Existing content is visible by default, including a named
-empty/unavailable card where its source has no data. Users may deliberately hide
-or reorder cards later; migration never silently hides a content type. Duplicate
+controls and Settings. The complete default preserves this content set; starter releases expose only
+installed widgets, as staged in §3.5/§8.5. Installed widgets show named empty or
+unavailable cards when their data is missing. Users can edit placement freely. Duplicate
 clock drawings or repeated links may share one presentation, but their distinct
 information and actions remain accessible. Android and Xteink use the same content
 IDs and source/completeness rules; X3 uses text instead of elaborate art.
@@ -223,6 +225,180 @@ invented to make it appear supported. Chapter timing, page counters, records and
 monthly/hourly aggregates similarly use bounded reader captures and worker-owned
 SD projections. X3's text cards share these meanings without an animation engine,
 vector artwork library or full series/catalog in RAM.
+
+### 3.5 Widget-first architecture and editor (decided, revision 4)
+
+The maintainer has settled the following; these replace “no layout editor” and
+are not new approval questions. The full reader-preset inventory in §3.1 is the
+widget-library/default-layout destination. **Ship the editor and three widgets
+first**, then add one independently accepted widget at a time; an early release
+must not claim the whole inventory is already implemented. The
+[clickable prototype](prototype.html) previews both the starter and future library,
+with every future widget explicitly labeled. Static [mockups](mockups.html) remain
+content/layout examples, supplemented by editor screens.
+
+**One contract per widget:** `{id, version, dataNeeds, sizes, states, renderers}`.
+`dataNeeds` is a bounded read-model query with typed parameters, not an endpoint
+or executable callback from the layout. `sizes` declares allowed integer grid
+spans per class; `states` covers loading, offline-with-data, offline-without-data,
+empty, error and ready. Android and firmware provide independent render functions
+for the same semantic widget. Only the host queries the companion/firmware read
+model, manages jobs and gives a widget its immutable small snapshot + dispatch
+handle. Widgets never query/call one another, share mutable widget state or own
+refresh timers. A renderer/query failure produces that widget's small Error/Retry
+or empty card. Catch failures at the widget boundary; siblings and navigation
+keep working. Central job/read-model events independently invalidate subscribers.
+
+**Layout is data:** one versioned BookSync JSON document, shared semantic pages
+and placements plus overrides keyed by `android-tablet`, `x4`, `x3`. Each placement
+has a stable instance ID, widget ID/version, integer x/y/w/h and settings. Multiple
+instances of Shelf may select different sources. A device-class override changes
+coordinates/spans/settings or hides one instance; no forked independent layout
+files. Page add/remove/reorder updates the shared page list. Resolve base page →
+class grid → instance override → capability/version check → validate → render.
+Do not mutate the base when calculating automatic class reflow.
+
+Example shape (illustrative internal v1, not a frozen public sync/export format):
+
+```json
+{
+  "schemaVersion": 1,
+  "revision": 3,
+  "grids": {"android-tablet":{"cols":4,"rows":12},"x4":{"cols":2,"rows":12},"x3":{"cols":2,"rows":12}},
+  "pages": [{"id":"home-1","tab":"Home","placements":[
+    {"instance":"resume-1","widget":"continue-reading","version":1,"x":0,"y":0,"w":4,"h":2,"settings":{}}
+  ]}],
+  "overrides": {"x4":{"resume-1":{"x":0,"y":0,"w":2,"h":2}},"x3":{}}
+}
+```
+
+The draft [JSON Schema](layout.schema.json) makes the data shape reviewable;
+the native implementation must validate required types/versions, unique
+page/instance IDs, known tab names, bounded strings/arrays/settings and positive
+spans; a semantic pass checks per-class bounds, overlap and each installed widget's
+supported spans. Proposed bounds: 16 pages, 128 placements, 128 KiB layout, 12 rows
+per page. These are initial resource budgets to measure, not arbitrary screen
+pixel limits. Unknown widget IDs/versions **skip rendering and queries but remain
+in the file**, including their settings and unknown fields. Preserve unsupported
+class overrides. No dynamic code/plugins loaded from layout JSON. Save atomically
+with previous valid revision/backup; invalid input keeps the last valid layout.
+If none exists, fall back to the owned default and explain that in Settings.
+X3 streams bounded records and copies unknown slices without materializing all
+128 placements; measure parsing and peak heap. “Renders any layout” means any
+valid class projection using installed widgets, not executing arbitrary widgets.
+
+**Editors, decided:** Android/KOReader supports add/remove/move/resize, page
+add/remove/reorder and reset to default on-device. X4 Pro and Classic have the
+same operations via a focused tile, touch or buttons, snapped grid movement and
+resize, and an add/remove list. Classic Select grabs/releases the tile; Prev/Next
+step the active move/size axis; More cycles horizontal/vertical/width/height or
+opens the operation list; Back returns from grab to selection, then exits. Both
+editors show collision/out-of-bounds feedback without corrupting the layout.
+X3 renders the same layout but may omit the full spatial editor: its own Settings
+list supports **enable/disable/reorder**, measured separately, with Reset/default
+fallback. It does not require an Android editor to configure basic choices.
+Optional later: edit on Android and send a versioned layout through the existing
+sync channel to X4. Transfer/auth/conflict handling is a separate later step;
+0.12 editing never silently uploads a layout or needs a new service.
+
+**Default and import:** independently write an outline-style default reproducing
+all §3.1 reader-preset content through widget instances. Starter builds know only
+Continue reading, Shelf and Browse links; future default placements are preserved
+but skipped, and empty derived pages do not strand navigation. Newly installed
+widgets become available without wiping a custom layout. Offer explicit “Add new
+default widgets” rather than surprising a user with changed placement. Default
+reset asks first; reset never deletes books/reading state. One-time optional
+**Import my BookOrbit layout** reads only existing `catalog_board` DATA (preset,
+custom pages/placements and simple settings), backs up before conversion and
+previews mappings/unsupported entries. Translate known data tokens into owned
+widget IDs; keep unsupported import records for later review. Never evaluate Lua
+or load BookOrbit board/layout/editor code. Android parses the settings data in
+the companion with a non-executing parser. No device data is included in this PR.
+Importer and layout/editor/widgets are independently authored under the existing
+license boundaries; provenance question 1 remains binding.
+
+**E-ink:** normal events repaint only tiles whose visible content key changed;
+header freshness and focus borders have their own small dirty regions. In edit
+mode show a coarse grid and snapped jumps, with no drag animation. Redraw the
+union of old/new tile rectangles and affected grid/focus regions. A page switch
+or reset may redraw that page. Central scheduling coalesces progress updates;
+no widget paints over a foreground book. Saving, import, validation and large
+queries remain in the companion/firmware worker, not KOReader's UI thread.
+
+### 3.6 What it takes (estimates, not measurements)
+
+No native engine/editor/widget binary exists yet. All effort and KiB figures below
+are **engineering estimates**, excluding backend ownership/base migration, data
+collection work not yet available, maintainer review and device acceptance. They
+are not delivery dates. Work can overlap; do not sum them into a promised deadline.
+The only measured flash evidence remains [the public ELF audit](flash-audit.md).
+
+| Foundation | Estimated developer days | Estimated firmware flash increment |
+|---|---:|---|
+| Schema, bounded parsing, projection, version migration and persistence | 2–4 | Shared C++ core included in engine below |
+| Grid/layout engine, widget host, isolated states and changed-tile renderer | 4–7 | X4 6–12 KiB; X3 text/streamed 5–10 KiB |
+| Android full editor, KOReader gestures/dialogs | 5–8 | No ESP32 flash cost; Lua/API integration still needs timing/compatibility tests |
+| X4 Pro touch editor and common operation list | 4–6 | 10–20 KiB (including Classic editor controls), above the engine |
+| Classic button interaction and focus/recovery verification | 2–4 | Included in X4 editor range; avoid counting common logic twice |
+| X3 enable/disable/reorder Settings list | 1–2 | 2–4 KiB above engine; omit full spatial editor if tight |
+| Optional full X3 spatial editor | Not in starter commitment | Roughly 8–16 KiB additional, unmeasured; no fit assumed |
+| Data-only importer and preview/backup | 2–4 | Firmware importer not required in starter; Android-only conversion first |
+| Shared fixture harness, fault isolation and layout/edit recovery | 3–5 | Measurement work, not a prediction of final binary size |
+
+X4 engine + editor is therefore an **estimated 16–32 KiB**, X3 engine + Settings
+list **7–14 KiB** before widget renderers/read projections. No new savings are
+credited for removing old code beyond §8.4. These replace the prior monolithic
+49,152-byte allocation with separately measured terms; that old figure cannot
+also be added as headroom. X3's estimated 68,501-byte replacement envelope would
+leave **54,165–61,333 B** after a 7–14 KiB engine/list, before all widget/SD costs.
+X4 Pro's newer public run had only 29,799 B to the gate (CI run linked in the flash
+audit); a 32 KiB editor alone would exceed it before widgets. Therefore measure
+Home elimination on **each** device, share code and stage widgets; never assume
+S3 PSRAM provides flash room. Gate every increment with ELF/map and physical-image
+sizes, peak heap and real dirty-region behavior.
+
+Each widget below has its own acceptance test (shared semantic fixture + relevant
+Lua/JVM/C++ renderer/job test), not a single all-page integration pass. Spans are
+examples of supported size families, refined by per-class fit tests. Effort is
+estimated days **per widget across Android and firmware**, assuming its bounded
+read-model data exists; each additional data source can add 1–3 days or more.
+All widgets inherit ready/loading/offline/empty/error and no-sibling-failure tests.
+
+| Widget / initial data need | Example spans (tablet / X4-X3) | Own acceptance case | Estimated port days |
+|---|---|---|---:|
+| Continue reading / resume window | 4×2 / 2×2 | Local position wins offline; correct file opens; missing locator stays unknown. | 2–3 |
+| Shelf / ranked IDs + settings.source | 2×3 / 1×3 or 2×3 | All seven sources preserve rank, distinct year/unopened/pick-back semantics; tap/cancel affects only that job. | 3–5 |
+| Browse links / index summaries | 4×2 / 2×2 | Every root destination remains reachable with saved data and missing counts. | 1–2 |
+| Series / contextual members | 2×3 / 2×3 | Secondary/fractional members and exact next-N list; no unknown-membership bulk claim. | 2–4 |
+| Achievements / summary snapshot | 2×2 / 2×2 | Earned/total/latest/next/progress and off vs missing preserved. | 1–2 |
+| Reading goal / goal + pace | 2×2 / 2×2 | Year/count/target/pace retained without double-counting pending local reads. | 1–2 |
+| Streak / day buckets | 2×2 / 1×2 or 2×2 | Timezone/day boundary, current/longest/last-seven and unknown days. | 1–2 |
+| Year calendar / day buckets | 4×3 / 2×3 | Leap day/year rollover, heatmap unknown-day state and text projection. | 2–3 |
+| Highlight / saved passage | 2×2 / 2×2 | Safe bounded text/source, missing passage and book action. | 1–2 |
+| Word of day / lookup snapshot | 2×2 / 2×2 | Empty pool, daily selection/context and source-unavailable on each reader. | 1–2 |
+| Buddy / reading summary | 2×2 / 1×2 or 2×2 | Deterministic static/text state; no animation/timer or copied art. | 1–2 |
+| Browse counts / totals + labels | 2×2 / 2×2 | Incomplete cache never turns authoritative totals into visible-row counts. | 1–2 |
+| Also reading / reading window | 2×2 / 2×2 | Separate visible in-progress selection and local finish/undo. | 1–2 |
+| Today / daily minutes | 1×2 / 1×2 | Unknown is distinct from zero and pending minutes count once. | 0.5–1 |
+| Week / daily minutes | 2×2 / 2×2 | Seven day totals/source watermark and week boundary. | 0.5–1 |
+| Finish forecast / locator + pace | 2×2 / 2×2 | Insufficient pace stays unknown; changing book changes forecast only. | 1–2 |
+| Reading hours / histogram | 2×2 / 2×2 | Hour buckets/time changes, no fabricated account coverage. | 1–2 |
+| Records / aggregate snapshot | 2×2 / 2×2 | Record names/values retained, empty and partial history explicit. | 1–2 |
+| A year ago / history snapshot | 2×2 / 2×2 | Missing date/book, retained minutes/days/stop position. | 1–2 |
+| Clock / local time | 1×2 / 1×2 | Unknown/approximate clock and 12/24-hour setting; duplicate analog shares data. | 0.5–1 |
+| Sync and controls / local controls | 2×2 / 2×2 | Wi-Fi/Night/Rotate/Sync actions and no-frontlight state; Refresh stays distinct. | 1–2 |
+| Moon / local date | 1×2 / 1×2 | Known date → stable phase; unknown clock → unavailable. | 0.5–1 |
+| Pages turned / counters | 2×2 / 2×2 | Today/lifetime, provenance and reset/import boundary. | 0.5–1 |
+| Glyph / installed font sample | 1×2 / 1×2 | Code point/name and absent glyph, with no remote font fetch. | 0.5–1 |
+| Tree rings / month buckets | 2×2 / 2×2 | All twelve months/source coverage retained in text and graphic forms. | 1–2 |
+| Next stop / TOC + pace | 2×2 / 2×2 | Next chapter/end, unknown TOC, no reader engine calls on paint. | 1–2 |
+| Gathering dust / local unopened pool | 2×2 / 2×2 | Never-opened differs from server unread; daily pick and Next pick survive restart. | 1–2 |
+
+Shelf source IDs: `up-next`, `want-to-read`, `recently-added`, `unopened`, `random`,
+`finished-this-year`, `pick-back-up`. Named scopes are settings on Browse links
+and Shelf, not new executable widget types. Platform-specific rendering may use
+fewer glyphs/art, never a different semantic data contract.
+
 
 ## 4. Tap to download and file ownership
 
@@ -410,14 +586,14 @@ The escape setting must be reachable without successfully opening either Home.
 
 ## 8. Xteink is a 0.12 client, not a later port
 
-**0.12 scope:** BookSync Home replaces the BookOrbit Home on **Android, X4 Pro
-X4 Classic and X3 together**. X3 fit is a release gate for this scope, not
+**0.12 foundation:** BookSync Home and its first three widgets replace the
+BookOrbit Home on **Android, X4 Pro, X4 Classic and X3 together**. X3 fit is a release gate for this scope, not
 permission to defer its owned Home.
-The [X4 mockups](mockups.html#x4-home) are acceptance screens for the release,
-not illustrations of a later roadmap phase. Home/Insights/Library/More, all inventory
-entries in §3, series (including secondary memberships), detail, tap-to-download,
-next-N, cancellation and offline errors have the same behavior and shared fixture
-expectations as Android. Local Files, Recent books, Settings and OTA remain
+The [X4 mockups](mockups.html#x4-home) and [prototype](prototype.html) show
+the staged target; they do not imply every preview widget ships at once. Each
+installed widget and catalog/series/detail action uses the same semantics and
+shared fixtures as Android, delivered in the increments in §8.5. The full inventory
+remains planned across all readers, not an Android-first feature set. Local Files, Recent books, Settings and OTA remain
 reachable without a working backend or Home database. Replacing Home must not
 replace the reader engine or remove these recovery routes.
 
@@ -592,8 +768,9 @@ not a measured net saving; do not count generic theme code used by the reader.
 A further **23,608 B** in HomeActivity includes shared routing and gets zero
 savings credit. The [flash audit](flash-audit.md) records source/hash/method and
 an estimated replacement envelope: 54,065 + 22,628 − 8,192 integration reserve
-= **68,501 B**, with a **49,152 B design target** for the new text Home/SD projections
-leaving **19,349 B** under the gate if the assumptions hold. No after-build/map
+= **68,501 B**. Revision 3 illustrated a 49,152 B monolithic replacement,
+leaving 19,349 B under the gate; revision 4 **supersedes that allocation** with
+the separate host/editor/widget estimates in §3.6. No after-build/map
 was fabricated; actual compile-time elimination, image size, heap and recovery
 are mandatory release evidence. Other Home paths may save more, but get no
 unmeasured credit. This targets X3 by replacing redundant implementations,
@@ -637,25 +814,28 @@ configuration and environments; port that validation, CI and source packaging to
 
 ### 8.5 Staged delivery and rollback
 
-1. **0.12, all reader platforms:** owned Home/Insights/Library/More, Series and Detail; BookOrbit
-   adapter facade and SD read model on the current pinned firmware base. All new
-   UI, refresh, end-of-book and sleep consumers call our adapter/read model, never
-   BookOrbit UI or network classes directly. During transition only a private
-   `LegacyBookOrbitTransport` behind the adapter may call fork sync/download/login
-   primitives. Label this as compatibility, not backend independence completed.
-   One active sync writer; do not run facade and legacy outboxes in parallel.
-2. **Complete firmware ownership:** independently implement BookOrbit catalog +
-   manifest/detail, safe transfer/download index, credentials/login, progress/status,
-   sessions/annotations/bookmarks used today. Replace each legacy transport call
-   behind the unchanged adapter. Audit source/build references and exercise
-   offline/cancel/retry/revocation/power-cut and no-interruption cases. Exit gate:
-   no required BookOrbit-fork symbol/assets/schema except an explicit read-only
-   migration importer; the reader and Tailscale remain base/platform services.
-3. **Base cutover, separate maintainer approval:** build plain CrossInk + our layer
-   at an exact pin, migrate settings/account/file mappings with backups and no
-   destructive position conversion, run all device profiles and release emulation,
-   then maintainer device tests. Preserve native OTA partitions and signed recovery.
-   The cutover can follow 0.12; owned X4 Home in 0.12 does not wait for it.
+1. **Editor/host first (0.12 foundation, all reader platforms):** shared schema,
+   class projections, independently authored layout engine/editor, failure cards,
+   safe save/reset and source-neutral adapter/read model. Launch Continue reading,
+   Shelf (seven source settings) and Browse links. Android gets full on-device
+   editing, X4 touch/buttons, X3 its measured Settings list. Test each of these
+   three widgets and layout operations independently using §3.6 cases. Do not
+   wait for all Insights/Decor to work together before validating this slice.
+2. **One widget per accepted increment:** Series, Achievements, Goal, Streak,
+   Year calendar, Highlight, Word, Buddy, Browse counts, then the remaining
+   Today/Week/Also reading/history/forecast and individual Decor widgets from
+   §3.6. This is a delivery order, not a demand to batch them in one release.
+   Each release declares its installed widget catalog; no unimplemented tile is
+   labeled shipped. The complete default retains every reader-preset placement,
+   and the prototype's full-library preview demonstrates that destination.
+3. **Complete firmware ownership and later base switch:** all consumers call our
+   adapter; only its private LegacyBookOrbitTransport may temporarily call fork
+   sync/download/login primitives. Independently own every currently used sync
+   feature and pass the ownership exit gates before plain CrossInk cutover.
+   Keep one sync writer and the separate base-switch approval (§8.2/§8.3).
+   Neither waiting for base replacement nor optional Android→X4 layout delivery
+   blocks initial on-device editing. The latter is a later authenticated,
+   conflict-aware transfer step, with no automatic layout upload in the starter.
 
 Before base cutover, Android/X4 can route to old Home if it is retained. X3 has
 no alternate Home code in its 0.12 image: its rollback is a signed prior firmware
@@ -725,15 +905,16 @@ review before release; this design does not change workflows or publish a bridge
 
 ### 8.8 Approval and acceptance gates
 
-Design review includes both device mockups, §3's full inventory and the staged
+Design review includes Android/X4/X3 mockups and prototype, §3's full inventory and the staged
 adapter/base/version ownership—not Android first with Xteink deferred. Implementation
 can use parallel platform slices on `feature/0.12` only after approval; no code is
 authorized by this draft. Acceptance adds: owned X4 first paint with network off;
 no old Home/catalog UI invocations; consumer imports confined to our adapter;
 sole sync writer; login and credential migration/rollback; positions/bookmarks/
 annotations/session preservation; SD power cuts during publication and transfer;
-full X4 touch/button and X3 button/text fixture parity; complete preset-content
-inventory (including empty/unsupported states); X3 alternative-Home symbol absence
+full X4 touch/button and X3 button/text fixture parity for each installed widget;
+complete preset-content inventory tracked widget by widget (including each
+installed widget's empty/unsupported states and uninstalled-widget preservation); X3 alternative-Home symbol absence
 and A/B map/fit report; version bridge/feed tests;
 and signed OTA/SD rollback across the proposed base switch. CrossPoint/CrossInk
 comparison builds are future evidence, not performed in this design change.
@@ -768,7 +949,7 @@ are gates; mockup dimensions alone are not device validation.
 
 | Decision | Rationale |
 |---|---|
-| Home / Insights / Library / More with paged cards, no layout editor | Preserve all reader-preset content by default; deliberate hide/reorder stays reversible. X3 rollback uses firmware. |
+| Free-form grid editor and independent widgets (maintainer decision) | One shared versioned layout with class overrides; starter three widgets first, then the complete reader-preset library one widget at a time. X3 has its own Settings list and default fallback. |
 | Finished in YEAR shelf plus separate All finished | Retain dashboard year selection; never invent a year filter for the old general list. |
 | Tap opens/downloads; details on long press/More | The maintainer's requested fast path; discoverable hint and explicit Details on every menu. |
 | Next N defaults to 3, one transfer at a time | Predictable storage/connection use; count and concurrency can change later. |
@@ -795,8 +976,8 @@ from the reversible UI choices. Recommended answers are proposals.
    bulk replay of history? Any future
    writer takeover needs a checkpoint/backup review; rollback cannot unsend writes.
 4. **Support commitment (maintainer ruling captured):** complete cached
-   Home/Series/Detail on **Android, X4 Pro, X4 and X3 in 0.12 together**, with
-   BookSync the sole compiled X3 Home.
+   editor/host foundation on **Android, X4 Pro, X4 and X3 from 0.12 together**,
+   with BookSync the sole compiled X3 Home and later widgets accepted individually.
    The maintainer directed this scope; measured fit/recovery remain release gates,
    not automatic platform deferral. Grimmory capabilities still require validation.
 5. **Firmware base switch:** approve the staged destination **plain CrossInk +
@@ -816,3 +997,23 @@ Maintainer also reviews the full inventory (every retained reader-preset content
 organization), offline prompt, series ordering, detail/actions and Android/X4/X3
 mockups before changing status from designing. Draft PR acceptance alone does
 not authorize implementation or a default flip.
+
+## 12. Prototype verification (revision 4 artifact only)
+
+`prototype.html` is a standalone inline CSS/JS simulation using synthetic books,
+not native client code. Its layout schema is embedded, so no schema/resource
+fetch or backend is required. A starter/full-library toggle distinguishes the
+three initial widgets from the 24 later widget previews. Reset demo resets only
+in-memory synthetic state; the layout JSON inspector shows class overrides.
+
+[Playwright flow checks](../../../tools/test/test-booksync-home-prototype.cjs)
+open the local file and exercise book open/download/cancel, offline consent,
+long press/menu/details/mark/remove-confirm, exact series next-three downloads,
+all tabs/pages, add/remove/move/resize/page operations/reset, starter availability,
+widget failure isolation, unknown layout retention and both X4 interaction modes.
+The Classic editor add/remove/move path is also tested using only its virtual
+buttons. Assert native dimensions and tile bounds, unchanged sibling DOM during
+progress and zero console/page errors. Install Playwright/Chromium in a temporary
+directory, then run with that directory's `node_modules` on NODE_PATH; the script
+writes no screenshots/build artifacts. Native widget/flash estimates remain
+unmeasured and require the separate implementation acceptance in §3.6/§8.

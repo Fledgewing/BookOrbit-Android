@@ -1,0 +1,2113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>BookSync · Widget Home prototype</title>
+    <style>
+      [hidden] {
+        display: none !important;
+      }
+      a {
+        color: #171717;
+      }
+      input {
+        accent-color: #222;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #ddd;
+        color: #171717;
+        font:
+          16px/1.4 system-ui,
+          sans-serif;
+      }
+      h1 {
+        font:
+          700 29px Georgia,
+          serif;
+        margin: 0 0 8px;
+      }
+      button,
+      select,
+      input {
+        font: inherit;
+        color: inherit;
+      }
+      button,
+      select {
+        background: #fafafa;
+        border: 1px solid #333;
+        padding: 7px 11px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #e3e3e3;
+      }
+      button:focus-visible,
+      select:focus-visible {
+        outline: 3px solid #111;
+        outline-offset: 2px;
+      }
+      button[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .topbar {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin: 18px 0;
+      }
+      .workspace {
+        display: flex;
+        align-items: flex-start;
+        gap: 28px;
+        flex-wrap: wrap;
+      }
+      .device {
+        background: #777;
+        border: 7px solid #555;
+        border-radius: 9px;
+        padding: 8px;
+        box-shadow: 0 4px 12px #0002;
+      }
+      .viewport {
+        width: 468px;
+        height: 624px;
+        position: relative;
+        overflow: hidden;
+        background: #fafafa;
+      }
+      .screen {
+        width: 1404px;
+        height: 1872px;
+        transform: scale(0.3333333333);
+        transform-origin: top left;
+        background: #fafafa;
+        padding: 36px;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        font:
+          36px/1.35 Georgia,
+          serif;
+        overflow: hidden;
+      }
+      .screen button,
+      .screen select {
+        font: 30px/1.25 system-ui;
+        border: 3px solid #555;
+        padding: 13px 16px;
+        background: #fafafa;
+      }
+      .screen button.primary {
+        background: #222;
+        color: white;
+      }
+      .screen h2 {
+        font-size: 1.2em;
+        margin: 0 0 0.5em;
+      }
+      .screen h3 {
+        font-size: 1em;
+        margin: 0 0 0.25em;
+      }
+      .screen p {
+        margin: 0.4em 0;
+      }
+      .device.x4 .viewport {
+        width: 384px;
+        height: 640px;
+      }
+      .device.x4 .screen {
+        width: 480px;
+        height: 800px;
+        transform: scale(0.8);
+        padding: 18px;
+        font-size: 18px;
+      }
+      .device.x4 .screen button,
+      .device.x4 .screen select {
+        font-size: 15px;
+        border-width: 2px;
+        padding: 7px 8px;
+      }
+      .head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 3px solid #333;
+        padding-bottom: 14px;
+      }
+      .brand {
+        font-weight: bold;
+        font-size: 1.35em;
+      }
+      .small {
+        font: 0.77em/1.4 system-ui;
+      }
+      .fresh {
+        font: 0.75em system-ui;
+        margin: 12px 0;
+      }
+      .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .tabs button {
+        flex: 1;
+      }
+      .tabs button.on {
+        background: #222;
+        color: white;
+      }
+      .pagebar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 14px;
+        font: 0.82em system-ui;
+      }
+      .grid {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+        grid-template-rows: repeat(12, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .grid.editing {
+        background-image:
+          linear-gradient(#aaa 1px, transparent 1px),
+          linear-gradient(90deg, #aaa 1px, transparent 1px);
+        background-size: calc(100% / var(--cols)) calc(100% / 12);
+      }
+      .tile {
+        border: 3px solid #888;
+        padding: 16px;
+        overflow: hidden;
+        min-height: 0;
+        min-width: 0;
+        background: #fafafa;
+      }
+      .tile.selected,
+      .screen [data-focus].focused {
+        outline: 5px solid #111;
+        outline-offset: -5px;
+      }
+      .tile .preview {
+        font: 0.57em system-ui;
+        display: block;
+        border-bottom: 1px dashed #777;
+        margin-bottom: 8px;
+      }
+      .tile h3 {
+        font: 700 0.92em system-ui;
+      }
+      .widgetbody {
+        font: 0.82em/1.4 system-ui;
+      }
+      .book {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        text-align: left;
+        margin-top: 10px;
+        gap: 10px;
+      }
+      .screen .book {
+        font-size: 0.8em;
+        padding: 9px 12px;
+      }
+      .book strong {
+        display: block;
+      }
+      .book .status {
+        font-size: 0.8em;
+        display: block;
+        font-weight: normal;
+      }
+      .screen .tiny {
+        font-size: 0.72em;
+        padding: 5px 9px;
+      }
+      .transfer {
+        font: 0.8em system-ui;
+        margin: 8px 0;
+      }
+      .transfer progress {
+        width: 100%;
+        accent-color: #222;
+      }
+      .footer {
+        font: 0.68em system-ui;
+        border-top: 2px solid #555;
+        padding-top: 10px;
+        margin-top: 14px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .virtual {
+        display: flex;
+        gap: 7px;
+        margin-top: 10px;
+      }
+      .virtual button {
+        flex: 1;
+        font-size: 12px;
+        padding: 9px 5px;
+      }
+      .editbar {
+        font: 0.75em system-ui;
+        border: 2px solid #444;
+        padding: 10px;
+        margin-bottom: 14px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .editbar .hint {
+        width: 100%;
+      }
+      .screen .editbar button {
+        font-size: 0.82em;
+        padding: 6px 10px;
+      }
+      .view {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 14px 0;
+      }
+      .row {
+        border-bottom: 2px solid #888;
+        padding: 17px 0;
+      }
+      .row .book {
+        margin: 0;
+      }
+      .cover {
+        width: 24%;
+        aspect-ratio: 2/3;
+        border: 3px double #444;
+        background: repeating-linear-gradient(
+          45deg,
+          #fff 0 10px,
+          #ddd 10px 12px
+        );
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      .detailtop {
+        display: flex;
+        gap: 24px;
+        margin: 20px 0;
+      }
+      .detailtext {
+        flex: 1;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 18px 0;
+      }
+      .reader {
+        text-align: left;
+        max-width: 90%;
+        margin: auto;
+        line-height: 1.9;
+        font-size: 1.12em;
+      }
+      .modalshade {
+        position: absolute;
+        inset: 0;
+        background: #fffd;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 36px;
+      }
+      .dialog {
+        background: #fff;
+        border: 4px solid #222;
+        padding: 30px;
+        max-height: 94%;
+        overflow: auto;
+        width: 100%;
+        box-shadow: 12px 12px #bbb;
+      }
+      .dialog h2 {
+        font-size: 1.2em;
+      }
+      .dialog button {
+        display: block;
+        text-align: left;
+        width: 100%;
+        margin-top: 12px;
+      }
+      .dialog .picker {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .dialog .picker button {
+        font-size: 0.72em;
+        padding: 12px;
+      }
+      .dialog label {
+        display: block;
+        font: 0.8em system-ui;
+      }
+      .dialog select {
+        width: 100%;
+      }
+      .side {
+        max-width: 440px;
+        flex: 1;
+        min-width: 280px;
+        background: #fafafa;
+        border: 1px solid #888;
+        padding: 20px;
+      }
+      .side h2 {
+        font:
+          700 23px Georgia,
+          serif;
+        margin: 0 0 12px;
+      }
+      .side p {
+        margin: 12px 0;
+      }
+      .note {
+        border-left: 4px solid #555;
+        padding-left: 12px;
+      }
+      .side pre {
+        font: 12px/1.4 monospace;
+        background: #eee;
+        padding: 10px;
+        max-height: 440px;
+        overflow: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .side details {
+        margin-top: 20px;
+      }
+      .side label {
+        display: block;
+        margin: 12px 0;
+      }
+      .device.x4 .head {
+        padding-bottom: 8px;
+        border-width: 2px;
+      }
+      .device.x4 .fresh {
+        margin: 9px 0;
+      }
+      .device.x4 .tabs {
+        gap: 4px;
+        margin-bottom: 8px;
+      }
+      .device.x4 .tabs button {
+        font-size: 13px;
+        padding: 6px 3px;
+      }
+      .device.x4 .pagebar {
+        margin-bottom: 8px;
+      }
+      .device.x4 .grid {
+        gap: 7px;
+      }
+      .device.x4 .tile {
+        padding: 9px;
+        border-width: 2px;
+      }
+      .device.x4 .tile h3 {
+        font-size: 0.87em;
+      }
+      .device.x4 .widgetbody {
+        font-size: 0.79em;
+      }
+      .device.x4 .book {
+        font-size: 0.72em;
+        padding: 6px;
+        margin-top: 6px;
+      }
+      .device.x4 .tile .preview {
+        font-size: 0.56em;
+        margin-bottom: 5px;
+      }
+      .device.x4 .tile.selected,
+      .device.x4 [data-focus].focused {
+        outline-width: 3px;
+        outline-offset: -3px;
+      }
+      .device.x4 .footer {
+        font-size: 0.62em;
+        margin-top: 8px;
+        padding-top: 7px;
+      }
+      .device.x4 .editbar {
+        margin-bottom: 8px;
+        padding: 7px;
+        gap: 5px;
+        font-size: 0.74em;
+      }
+      .device.x4 .editbar button {
+        font-size: 0.85em;
+        padding: 4px;
+      }
+      .device.x4 .dialog {
+        padding: 16px;
+        border-width: 3px;
+        box-shadow: 6px 6px #aaa;
+      }
+      .device.x4 .modalshade {
+        padding: 16px;
+      }
+      .device.x4 .dialog .picker {
+        gap: 5px;
+      }
+      .device.x4 .dialog .picker button {
+        padding: 7px;
+        font-size: 0.72em;
+        margin-top: 4px;
+      }
+      .device.x4 .screen .book {
+        font-size: 12px;
+        padding: 4px;
+        border-width: 1px;
+      }
+      .device.x4 .row {
+        padding: 12px 0;
+      }
+      .device.x4 .detailtop {
+        gap: 14px;
+        margin: 12px 0;
+      }
+      .device.x4 .actions {
+        margin: 10px 0;
+      }
+      .grid .placeholder {
+        font: 0.8em system-ui;
+        padding: 15px;
+      }
+      .notice {
+        font: 0.75em system-ui;
+        margin: 6px 0;
+        min-height: 1.4em;
+      }
+      .miniheat {
+        display: grid;
+        grid-template-columns: repeat(14, 1fr);
+        gap: 4px;
+        margin-top: 12px;
+      }
+      .miniheat i {
+        height: 18px;
+        background: #ddd;
+        border: 1px solid #888;
+      }
+      .miniheat i:nth-child(3n) {
+        background: #777;
+      }
+      .device.x4 .miniheat {
+        gap: 2px;
+      }
+      .device.x4 .miniheat i {
+        height: 9px;
+      }
+      @media (max-width: 600px) {
+        body {
+          padding: 12px;
+        }
+        .workspace {
+          display: block;
+        }
+        .device {
+          display: inline-block;
+          max-width: 100%;
+        }
+        .side {
+          margin-top: 20px;
+        }
+        .topbar {
+          font-size: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>BookSync Home · try the widgets</h1>
+    <div>
+      Revision 4 · clickable design prototype · synthetic data · no network,
+      files, or real downloads
+    </div>
+    <div class="topbar">
+      <label
+        >Device
+        <select id="device">
+          <option value="android-tablet">Android · M8C 1404 × 1872</option>
+          <option value="x4">X4 · 480 × 800</option>
+        </select></label
+      ><label id="mode-label" hidden
+        >X4 controls
+        <select id="mode">
+          <option value="pro">Pro · touch</option>
+          <option value="classic">Classic · buttons</option>
+        </select></label
+      ><label><input id="offline" type="checkbox" /> Offline</label
+      ><label
+        ><input id="preview" type="checkbox" checked /> Preview later
+        widgets</label
+      ><button id="demo-reset">Restart demo</button>
+    </div>
+    <div class="workspace">
+      <div>
+        <div id="device-frame" class="device">
+          <div class="viewport">
+            <div id="screen" class="screen" aria-label="Device screen"></div>
+          </div>
+          <div id="virtual" class="virtual" hidden>
+            <button data-key="back">Back</button
+            ><button data-key="prev">Prev</button
+            ><button data-key="next">Next</button
+            ><button data-key="select">Select</button
+            ><button data-key="more">More</button>
+          </div>
+        </div>
+      </div>
+      <aside class="side">
+        <h2 id="explain-title">Your Home, built one widget at a time</h2>
+        <p id="explain"></p>
+        <p class="note">
+          The first release has Continue reading, Shelf and Browse links. Later
+          widgets are visible as <b>preview</b> examples here; the picker labels
+          their release status. Turn off “Preview later widgets” to try the
+          starter set.
+        </p>
+        <p>
+          Tap a book to open or download it. Hold a book for its actions. On X4
+          Classic, Prev/Next moves focus, Select activates it, and More opens
+          actions.
+        </p>
+        <p>
+          Choose More → Edit layout to add, remove, move and resize widgets.
+          Moves jump to grid cells, with no animation. X4 Select grabs a tile;
+          More cycles the movement/size axis; Prev/Next steps it.
+        </p>
+        <label
+          ><input id="show-json" type="checkbox" /> Show the layout JSON</label
+        >
+        <pre id="layout-json" hidden></pre>
+        <details>
+          <summary>Widget isolation and sample states</summary>
+          <p>Only this widget changes. Siblings keep working.</p>
+          <label
+            >Widget state
+            <select id="state-demo">
+              <option value="ready">Ready</option>
+              <option value="loading">Loading</option>
+              <option value="offline">Offline without saved data</option>
+              <option value="empty">Empty</option>
+              <option value="error">Error</option>
+            </select></label
+          >
+        </details>
+        <p>
+          <a href="DESIGN.md">Design and decisions</a> ·
+          <a href="mockups.html">Static mockups</a>
+        </p>
+        <p class="small">
+          No persistence between browser reloads. JSON edits shown here are in
+          memory. This is independently authored HTML, not a KOReader or
+          firmware implementation.
+        </p>
+      </aside>
+    </div>
+    <script>
+      "use strict";
+      const $ = (s) => document.querySelector(s),
+        esc = (s) =>
+          String(s).replace(
+            /[&<>"']/g,
+            (c) =>
+              ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+              })[c],
+          );
+      const catalog = [
+        ["continue-reading", "Continue reading", true, "resume"],
+        ["shelf", "Shelf", true, "shelf"],
+        ["browse-links", "Browse links", true, "indexes"],
+        ["series", "Series", false, "members"],
+        ["achievements", "Achievements", false, "awards"],
+        ["goal", "Reading goal", false, "goal"],
+        ["streak", "Reading streak", false, "days"],
+        ["year-calendar", "Year in reading", false, "days"],
+        ["highlight", "Highlight of the day", false, "highlight"],
+        ["word", "Word of the day", false, "vocabulary"],
+        ["buddy", "Reading buddy", false, "summary"],
+        ["browse-counts", "Browse counts", false, "counts"],
+        ["also-reading", "Also reading", false, "reading"],
+        ["today", "Today", false, "days"],
+        ["week", "This week", false, "days"],
+        ["forecast", "Finish forecast", false, "pace"],
+        ["hours", "Reading hours", false, "hours"],
+        ["records", "Personal records", false, "records"],
+        ["year-ago", "A year ago", false, "history"],
+        ["clock", "Clock and date", false, "clock"],
+        ["controls", "Sync and controls", false, "controls"],
+        ["moon", "Moon phase", false, "clock"],
+        ["pages", "Pages turned", false, "counters"],
+        ["glyph", "Glyph of the day", false, "fonts"],
+        ["rings", "Tree rings / Monthly reading", false, "months"],
+        ["chapters", "Next stop", false, "toc"],
+        ["dust", "Gathering dust", false, "unopened"],
+      ].map(([id, title, available, query]) => ({
+        id,
+        title,
+        available,
+        version: 1,
+        dataNeeds: { query, limit: 12 },
+        sizes: {
+          "android-tablet": [
+            [2, 2],
+            [2, 3],
+            [4, 2],
+            [4, 3],
+          ],
+          x4: [
+            [1, 2],
+            [1, 3],
+            [2, 2],
+            [2, 3],
+          ],
+          x3: [
+            [1, 2],
+            [1, 3],
+            [2, 2],
+            [2, 3],
+          ],
+        },
+        states: ["ready", "loading", "offline", "empty", "error"],
+        renderers: {
+          "android-tablet": (q) => widgetBody(q),
+          x4: (q) => widgetBody(q),
+          x3: (q) => widgetBody(q),
+        },
+      }));
+      const registry = Object.fromEntries(catalog.map((w) => [w.id, w]));
+      const sourceNames = {
+        "up-next": "Up next in series",
+        "want-to-read": "Want to read",
+        "recently-added": "Recently added",
+        unopened: "Unopened",
+        random: "Discover",
+        "finished-this-year": "Finished in 2026",
+        "pick-back-up": "Pick back up",
+      };
+      const initialBooks = [
+        {
+          id: "b1",
+          title: "The Lantern",
+          series: 1,
+          local: true,
+          status: "reading",
+          pct: 42,
+        },
+        {
+          id: "b2",
+          title: "Glass Harbor",
+          series: 2,
+          local: false,
+          status: "unread",
+        },
+        {
+          id: "b3",
+          title: "The Small Tide",
+          series: 3,
+          local: false,
+          status: "unread",
+        },
+        {
+          id: "b4",
+          title: "The Last Light",
+          series: 4,
+          local: false,
+          status: "unread",
+        },
+        {
+          id: "b5",
+          title: "Between Lights",
+          series: 1.5,
+          local: true,
+          status: "read",
+        },
+      ];
+      let books,
+        layout,
+        device = "android-tablet",
+        mode = "pro",
+        tab = "Home",
+        pageIndex = 0,
+        view = "home",
+        bookId = "b1",
+        history = [],
+        modal = null,
+        editing = false,
+        selected = 0,
+        editTool = "focus",
+        focus = 0,
+        focusKey = "",
+        notice = "",
+        idCounter = 200,
+        jobs = {},
+        queue = [],
+        queueTotal = [],
+        autoOpen = null,
+        interval = null,
+        lastState = "ready";
+      const clone = (x) => JSON.parse(JSON.stringify(x));
+      function defaults() {
+        let n = 0;
+        const pages = [];
+        function page(id, tab, items) {
+          const placements = items.map((item, i) => {
+            const [widget, settings = {}] = Array.isArray(item)
+              ? item
+              : [item, {}];
+            return {
+              instance: "tile-" + ++n,
+              widget,
+              version: 1,
+              x: items.length <= 3 && i === 0 ? 0 : (i % 2) * 2,
+              y: items.length <= 3 ? (i === 0 ? 0 : 3) : Math.floor(i / 2) * 3,
+              w: items.length <= 3 && i === 0 ? 4 : 2,
+              h: 3,
+              settings,
+            };
+          });
+          pages.push({ id, tab, placements });
+        }
+        page("home-1", "Home", [
+          "continue-reading",
+          ["shelf", { source: "up-next" }],
+          ["shelf", { source: "want-to-read" }],
+          "browse-links",
+        ]);
+        page("home-2", "Home", ["also-reading", "buddy", "goal", "week"]);
+        page("insights-1", "Insights", [
+          "year-calendar",
+          "streak",
+          "today",
+          ["shelf", { source: "finished-this-year" }],
+        ]);
+        page("insights-2", "Insights", [
+          "forecast",
+          "hours",
+          "records",
+          "year-ago",
+        ]);
+        page("insights-3", "Insights", ["highlight", "word"]);
+        page("library-1", "Library", [
+          ["shelf", { source: "recently-added" }],
+          ["shelf", { source: "unopened" }],
+          ["shelf", { source: "pick-back-up" }],
+          ["shelf", { source: "random" }],
+        ]);
+        page("library-2", "Library", [
+          "browse-links",
+          "browse-counts",
+          "series",
+        ]);
+        page("more-1", "More", ["achievements", "pages", "rings", "chapters"]);
+        page("more-2", "More", ["dust", "moon", "glyph", "controls"]);
+        page("more-3", "More", ["clock"]);
+        const yearPage = pages.find((p) => p.id === "insights-1");
+        Object.assign(yearPage.placements[0], { x: 0, y: 0, w: 4 });
+        Object.assign(yearPage.placements[1], { x: 0, y: 3 });
+        Object.assign(yearPage.placements[2], { x: 2, y: 3 });
+        Object.assign(yearPage.placements[3], { x: 0, y: 6, w: 4 });
+        for (const p of pages)
+          if (
+            p.placements.some((q) =>
+              [
+                "year-calendar",
+                "browse-counts",
+                "achievements",
+                "highlight",
+                "word",
+                "rings",
+                "chapters",
+                "dust",
+                "controls",
+              ].includes(q.widget),
+            )
+          )
+            p.placements.forEach((q, i) =>
+              Object.assign(q, { x: 0, y: i * 3, w: 4, h: 3 }),
+            );
+        const doc = {
+          schemaVersion: 1,
+          revision: 1,
+          grids: {
+            "android-tablet": { cols: 4, rows: 12 },
+            x4: { cols: 2, rows: 12 },
+            x3: { cols: 2, rows: 12 },
+          },
+          pages,
+          overrides: { "android-tablet": {}, x4: {}, x3: {} },
+        };
+        for (const p of pages)
+          for (const q of p.placements) {
+            for (const c of ["x4", "x3"])
+              doc.overrides[c][q.instance] = {
+                x: q.x / 2,
+                y: q.y,
+                w: q.w / 2,
+                h: q.h,
+              };
+          }
+        return doc;
+      }
+      // Structural schema plus semantic validation: unknown widgets and fields remain data.
+      const layoutSchema = {
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        title: "BookSync layout draft v1 (internal design)",
+        type: "object",
+        required: ["schemaVersion", "revision", "grids", "pages", "overrides"],
+        properties: {
+          schemaVersion: { const: 1 },
+          revision: { type: "integer", minimum: 1 },
+          grids: {
+            type: "object",
+            required: ["android-tablet", "x4", "x3"],
+            additionalProperties: { $ref: "#/$defs/grid" },
+          },
+          pages: {
+            type: "array",
+            minItems: 1,
+            maxItems: 16,
+            items: { $ref: "#/$defs/page" },
+          },
+          overrides: {
+            type: "object",
+            additionalProperties: {
+              type: "object",
+              additionalProperties: { $ref: "#/$defs/override" },
+            },
+          },
+        },
+        additionalProperties: true,
+        $defs: {
+          grid: {
+            type: "object",
+            required: ["cols", "rows"],
+            properties: {
+              cols: { type: "integer", minimum: 1, maximum: 12 },
+              rows: { type: "integer", minimum: 1, maximum: 24 },
+            },
+          },
+          page: {
+            type: "object",
+            required: ["id", "tab", "placements"],
+            properties: {
+              id: { type: "string", minLength: 1, maxLength: 80 },
+              tab: { enum: ["Home", "Insights", "Library", "More"] },
+              placements: {
+                type: "array",
+                maxItems: 128,
+                items: { $ref: "#/$defs/placement" },
+              },
+            },
+          },
+          placement: {
+            type: "object",
+            required: [
+              "instance",
+              "widget",
+              "version",
+              "x",
+              "y",
+              "w",
+              "h",
+              "settings",
+            ],
+            properties: {
+              instance: { type: "string", minLength: 1, maxLength: 80 },
+              widget: { type: "string", minLength: 1, maxLength: 80 },
+              version: { type: "integer", minimum: 1 },
+              x: { type: "integer", minimum: 0 },
+              y: { type: "integer", minimum: 0 },
+              w: { type: "integer", minimum: 1 },
+              h: { type: "integer", minimum: 1 },
+              settings: { type: "object" },
+            },
+            additionalProperties: true,
+          },
+          override: {
+            type: "object",
+            properties: {
+              x: { type: "integer", minimum: 0 },
+              y: { type: "integer", minimum: 0 },
+              w: { type: "integer", minimum: 1 },
+              h: { type: "integer", minimum: 1 },
+              hidden: { type: "boolean" },
+              settings: { type: "object" },
+            },
+            additionalProperties: true,
+          },
+        },
+      };
+      function checkSchema(value, schema = layoutSchema, path = "layout") {
+        if (schema.$ref) {
+          schema = layoutSchema.$defs[schema.$ref.split("/").pop()];
+        }
+        if (schema.const !== undefined && value !== schema.const)
+          throw Error(path + ": unsupported version");
+        if (schema.enum && !schema.enum.includes(value))
+          throw Error(path + ": invalid value");
+        const type = Array.isArray(value)
+          ? "array"
+          : value === null
+            ? "null"
+            : typeof value;
+        if (
+          schema.type &&
+          !(schema.type === "integer"
+            ? Number.isInteger(value)
+            : type === schema.type)
+        )
+          throw Error(path + ": wrong type");
+        if (
+          (schema.minimum !== undefined && value < schema.minimum) ||
+          (schema.maximum !== undefined && value > schema.maximum)
+        )
+          throw Error(path + ": outside bounds");
+        if (
+          type === "string" &&
+          (value.length < (schema.minLength || 0) ||
+            value.length > (schema.maxLength || Infinity))
+        )
+          throw Error(path + ": string bounds");
+        if (type === "array") {
+          if (
+            value.length < (schema.minItems || 0) ||
+            value.length > (schema.maxItems || Infinity)
+          )
+            throw Error(path + ": item bounds");
+          value.forEach((v, i) =>
+            checkSchema(v, schema.items || {}, path + "[" + i + "]"),
+          );
+        }
+        if (type === "object") {
+          for (const k of schema.required || [])
+            if (!(k in value)) throw Error(path + ": missing " + k);
+          for (const [k, v] of Object.entries(value)) {
+            const rule =
+              schema.properties?.[k] ||
+              (typeof schema.additionalProperties === "object"
+                ? schema.additionalProperties
+                : null);
+            if (rule) checkSchema(v, rule, path + "." + k);
+          }
+        }
+      }
+      function validate(doc) {
+        checkSchema(doc);
+        if (
+          doc.schemaVersion !== 1 ||
+          !Array.isArray(doc.pages) ||
+          doc.pages.length > 16
+        )
+          throw Error("Unsupported layout schema");
+        const ids = new Set();
+        let count = 0;
+        for (const p of doc.pages) {
+          if (
+            !["Home", "Insights", "Library", "More"].includes(p.tab) ||
+            typeof p.id !== "string" ||
+            ids.has(p.id)
+          )
+            throw Error("Invalid page");
+          ids.add(p.id);
+          for (const q of p.placements) {
+            count++;
+            if (
+              ids.has(q.instance) ||
+              !q.widget ||
+              !Number.isInteger(q.version)
+            )
+              throw Error("Invalid placement");
+            ids.add(q.instance);
+            for (const c of Object.keys(doc.grids)) {
+              const z = { ...q, ...(doc.overrides[c]?.[q.instance] || {}) },
+                g = doc.grids[c];
+              if (
+                ![z.x, z.y, z.w, z.h].every(Number.isInteger) ||
+                z.x < 0 ||
+                z.y < 0 ||
+                z.w < 1 ||
+                z.h < 1 ||
+                z.x + z.w > g.cols ||
+                z.y + z.h > g.rows
+              )
+                throw Error("Placement out of bounds");
+              const rules = registry[z.widget]?.sizes[c];
+              if (
+                rules &&
+                z.version === registry[z.widget].version &&
+                !rules.some(([w, h]) => w === z.w && h === z.h)
+              )
+                throw Error("This widget does not support that span");
+              const prior = p.placements
+                .slice(0, p.placements.indexOf(q))
+                .map((o) => ({
+                  ...o,
+                  ...(doc.overrides[c]?.[o.instance] || {}),
+                }));
+              if (
+                !z.hidden &&
+                prior.some(
+                  (o) =>
+                    !o.hidden &&
+                    z.x < o.x + o.w &&
+                    z.x + z.w > o.x &&
+                    z.y < o.y + o.h &&
+                    z.y + z.h > o.y,
+                )
+              )
+                throw Error("Tile collides with another tile");
+            }
+          }
+        }
+        if (count > 128 || JSON.stringify(doc).length > 131072)
+          throw Error("Layout limit reached");
+        return true;
+      }
+      function projection(p) {
+        return p.placements
+          .map((q) => ({
+            ...q,
+            ...(layout.overrides[device]?.[q.instance] || {}),
+          }))
+          .filter(
+            (q) =>
+              !q.hidden &&
+              registry[q.widget] &&
+              q.version === registry[q.widget].version &&
+              ($("#preview").checked || registry[q.widget].available),
+          );
+      }
+      function pagesNow() {
+        const ps = layout.pages.filter((p) => p.tab === tab);
+        const useful = ps.filter((p) => editing || projection(p).length);
+        return useful.length ? useful : ps.slice(0, 1);
+      }
+      function currentPage() {
+        const ps = pagesNow();
+        pageIndex = Math.max(0, Math.min(pageIndex, ps.length - 1));
+        return ps[pageIndex];
+      }
+      function tiles() {
+        return projection(currentPage());
+      }
+      function b(id) {
+        return books.find((b) => b.id === id);
+      }
+      function action(label, act, attrs = "", cls = "") {
+        return `<button data-act="${act}" ${attrs} data-focus class="${cls}">${esc(label)}</button>`;
+      }
+      function bookButton(id) {
+        const x = b(id);
+        return `<button class="book" data-act="book" data-book="${id}" data-focus><span><strong>${esc(x.title)}</strong><span class="status">${x.local ? "On device" : "Server only"} · ${esc(x.status)}${x.pct ? " " + x.pct + "%" : ""}</span></span><span>${x.local ? "Open" : "↓"}</span></button>${transfer(id)}`;
+      }
+      function transfer(id) {
+        const j = jobs[id];
+        if (!j || j.state !== "running") return "";
+        return `<div class="transfer" data-transfer="${id}"><progress value="${j.pct}" max="100"></progress><span>${j.pct}%</span> ${action("Cancel", "cancel", `data-book="${id}"`, "tiny")}</div>`;
+      }
+      function shelfIds(source) {
+        return (
+          {
+            "up-next": ["b2", "b3"],
+            "want-to-read": ["b4"],
+            "recently-added": ["b4", "b2"],
+            unopened: ["b5"],
+            random: ["b3", "b4"],
+            "finished-this-year": ["b5"],
+            "pick-back-up": ["b1"],
+          }[source] || []
+        );
+      }
+      const samples = {
+        achievements:
+          "6 / 20 earned<br>Latest: Example award<br>Next: Example goal · 3 / 5 (60%)",
+        goal: "2026 · 8 / 24 books<br>16 remaining · 2 books/month",
+        streak: "4 days current · 9 longest<br>Last seven: ● ● ○ ● ● ● ●",
+        "year-calendar": "2026 · 28 hours · Saved day buckets",
+        highlight:
+          "“A synthetic passage for this preview.”<br>Source: The Lantern",
+        word: "harbor · saved lookup context<br>Word/source from local vocabulary",
+        buddy: "[•ᴗ•] A little reading today.<br>24 minutes · 4-day streak",
+        "browse-counts":
+          "120 books · 32 authors · 3 libraries<br>8 collections · 20 series · 5 Smart scopes<br>2 in progress · 2 on device",
+        today: "24 minutes · On this reader",
+        week: "125 min this week<br>15 · 20 · 0 · 24 · 30 · 12 · 24",
+        forecast: "Current book · 3 h left<br>8 days at recent pace",
+        hours: "Peak reading: 20:00–21:00<br>Saved hour-of-day histogram",
+        records: "Longest session: 54 min<br>Most-read day: 90 min",
+        "year-ago":
+          "3 reading days · 52 minutes<br>Stopped at 38% · Saved book",
+        clock:
+          "10:24 · Local date/time<br>Digital and analog share this content",
+        controls:
+          "Sync now · Wi-Fi · Night · Rotate<br>Light where supported · Settings",
+        moon: "Waxing crescent<br>24% illuminated · Saved phase",
+        pages: "1,240 pages total · 42 today<br>On this reader",
+        glyph: "A · U+0041<br>Latin capital letter A · Local font",
+        rings:
+          "12 monthly totals · Jan 2h · Feb 3h<br>Mar 4h · Other months saved",
+        chapters: "Chapter 3 → Chapter 4<br>12 min to next · 7 chapters to end",
+        dust: "1 unopened · 2 MB · 30 days<br>Daily saved pick · Next pick",
+      };
+      function widgetBody(q) {
+        if (q.widget === "continue-reading") return bookButton("b1");
+        if (q.widget === "shelf")
+          return shelfIds(q.settings.source || "up-next")
+            .map(bookButton)
+            .join("");
+        if (q.widget === "browse-links")
+          return (
+            action("All books · Authors · Series", "browse") +
+            `<div class="small">Libraries · Collections · Smart scopes<br>Collection A · Scope A</div>`
+          );
+        if (q.widget === "series") return action("Lantern Cycle →", "series");
+        if (q.widget === "also-reading") return bookButton("b1");
+        let body = samples[q.widget] || "No saved data";
+        if (q.widget === "year-calendar")
+          body +=
+            '<div class="miniheat">' +
+            Array.from({ length: 42 }, () => "<i></i>").join("") +
+            "</div>";
+        return body;
+      }
+      function renderWidget(q, i) {
+        const w = registry[q.widget],
+          title =
+            q.widget === "shelf"
+              ? sourceNames[q.settings.source || "up-next"]
+              : w.title;
+        let content;
+        try {
+          const state = i === 0 ? lastState : "ready";
+          content = editing
+            ? '<span class="small">' + q.w + " × " + q.h + " grid cells</span>"
+            : state === "ready"
+              ? w.renderers[device](q)
+              : state === "loading"
+                ? "Loading saved data…"
+                : state === "empty"
+                  ? "Nothing here yet."
+                  : state === "offline"
+                    ? "Offline · no saved data for this widget."
+                    : "This widget could not load. " + action("Retry", "retry");
+        } catch (e) {
+          content = "This widget could not load. " + action("Retry", "retry");
+        }
+        return `<section class="tile ${editing && selected === i ? "selected" : ""}" data-instance="${q.instance}" style="grid-column:${q.x + 1}/span ${q.w};grid-row:${q.y + 1}/span ${q.h}" ${editing ? `data-act="tile" data-index="${i}" tabindex="0"` : ""}><h3>${esc(title)}</h3>${!w.available ? '<span class="preview">Later widget · preview</span>' : ""}<div class="widgetbody">${content}</div></section>`;
+      }
+      function refreshFocus() {
+        const nodes = [
+          ...$("#screen").querySelectorAll(
+            modal ? ".dialog [data-focus]" : "[data-focus]",
+          ),
+        ];
+        if (focusKey) {
+          const n = nodes.findIndex((n) => n.dataset.book === focusKey);
+          if (n >= 0) focus = n;
+          focusKey = "";
+        }
+        focus = Math.max(0, Math.min(focus, nodes.length - 1));
+        nodes.forEach((n, i) =>
+          n.classList.toggle(
+            "focused",
+            device === "x4" && i === focus && (modal || !editing),
+          ),
+        );
+      }
+      function explain() {
+        let text = editing
+          ? `Editing ${currentPage().id}. Selected tile ${selected + 1}. ${editTool === "focus" ? "Select grabs the focused tile." : `Active step: ${editTool}. Prev/Next changes it; More cycles the axis.`} Invalid moves leave the layout unchanged.`
+          : view === "reader"
+            ? "This is a fake reader. Back returns to the initiating screen. No file was opened."
+            : view === "series"
+              ? "Every series member has independent reading and download state. Download next 3 previews exact eligible titles; bulk downloads never open a book."
+              : view === "detail"
+                ? "BookSync owns the details. The same download state appears here and on the tile through the central job model."
+                : `${tab}, page ${pageIndex + 1}. ${$("#offline").checked ? "Saved data works offline; an unsaved book asks before connecting." : "Tap a server-only book to simulate a download, then open."}`;
+        $("#explain").textContent = text;
+        $("#explain-title").textContent = editing
+          ? "Build this page one widget at a time"
+          : "Your Home, built from widgets";
+        $("#layout-json").textContent = JSON.stringify(layout, null, 2);
+      }
+      function homeHTML() {
+        const p = currentPage(),
+          ts = tiles();
+        selected = Math.max(0, Math.min(selected, ts.length - 1));
+        return `<nav class="tabs">${["Home", "Insights", "Library", "More"].map((t) => action(t, "tab", `data-tab="${t}"`, tab === t ? "on" : "")).join("")}</nav><div class="pagebar">${action("‹", "page", `data-dir="-1"`)}<span>${esc(tab)} · ${pageIndex + 1} / ${pagesNow().length}</span>${tab === "More" || editing ? action(editing ? "Done" : "Edit layout", editing ? "done" : "edit") : ""}${action("›", "page", 'data-dir="1"')}</div>${editing ? editorHTML() : ""}<div class="grid ${editing ? "editing" : ""}" style="--cols:${layout.grids[device].cols}">${ts.map(renderWidget).join("") || '<div class="placeholder">No installed widgets on this page. More → Edit layout to add one.</div>'}</div>`;
+      }
+      function editorHTML() {
+        return `<div class="editbar">${action("Add widget", "picker")}${action("Remove tile", "remove-tile")}${action("←", "step", 'data-field="x" data-step="-1"')}${action("→", "step", 'data-field="x" data-step="1"')}${action("↑", "step", 'data-field="y" data-step="-1"')}${action("↓", "step", 'data-field="y" data-step="1"')}${action("W−", "step", 'data-field="w" data-step="-1"')}${action("W+", "step", 'data-field="w" data-step="1"')}${action("H−", "step", 'data-field="h" data-step="-1"')}${action("H+", "step", 'data-field="h" data-step="1"')}${action("Tile settings", "settings")}${action("Add page", "add-page")}${action("Remove page", "remove-page")}${action("Page earlier", "reorder", 'data-dir="-1"')}${action("Page later", "reorder", 'data-dir="1"')}${action("Reset default", "reset")}<span class="hint">${esc(editTool === "focus" ? "Select a tile. Move/resize in grid steps." : "Button step: " + editTool + " · More changes axis")} · ${esc(notice)}</span></div>`;
+      }
+      function seriesHTML() {
+        return `<div class="view"><h2>Lantern Cycle</h2><div class="small">All saved primary/secondary memberships · Reading order</div>${[
+          ...books,
+        ]
+          .sort((a, b) => a.series - b.series)
+          .map(
+            (x) =>
+              `<div class="row"><span class="small">${x.series} · ${x.status === "read" ? "Read" : x.status === "reading" ? "Reading" : "Unread"}</span>${bookButton(x.id)}${action("Details", "detail", `data-book="${x.id}"`, "tiny")}</div>`,
+          )
+          .join(
+            "",
+          )}<div class="actions">${action("Download next 3…", "bulk-preview", "", "primary")}${action("Cancel remaining", "cancel-queue")}</div><p class="small" id="queue-summary">${queueTotal.length ? "Requested " + queueTotal.length + " · On device " + queueTotal.filter((id) => b(id).local).length : "Skip read, on-device and active books. No automatic open."}</p></div>`;
+      }
+      function detailHTML() {
+        const x = b(bookId);
+        return `<div class="view"><div class="detailtop"><div class="cover">${esc(x.title)}</div><div class="detailtext"><h2>${esc(x.title)}</h2><div class="small">Lantern Cycle · ${x.series}<br>${x.local ? "On device" : "Server only"} · ${x.status}<br>EPUB · 20 MB<br>Rating: not set</div></div></div>${bookButton(x.id)}<div class="actions">${action("View series", "series")}${action("More", "book-menu", `data-book="${x.id}"`)}</div><h3>Description</h3><p>A keeper follows a trail of lanterns beyond a quiet harbor. Synthetic description for this prototype.</p><h3>Series memberships</h3>${action("Lantern Cycle →", "series")}<p class="small">Also in Harbor Stories (secondary).<br>Destination: saved download folder / Lantern Cycle.<br>Book files are never cache-evicted.</p></div>`;
+      }
+      function browseHTML() {
+        return `<div class="view"><h2>Saved library</h2><p class="small">All books · Libraries · Authors · Series · Collections · Smart scopes · Collection A · Scope A</p>${books.map((x) => `<div class="row">${bookButton(x.id)}</div>`).join("")}${action("View series", "series")}</div>`;
+      }
+      function readerHTML() {
+        return `<div class="view reader"><h2>${esc(b(bookId).title)}</h2><p>The lantern stood beside the window. Outside, the sea was calm, and the first light of morning reached the harbor.</p><p>This synthetic reader demonstrates the result of opening a book. Nothing here reads or writes a real file.</p><div class="small">Page 42 / 340 · 12%</div>${action("Back to library", "back")}</div>`;
+      }
+      // Reconcile only changed DOM regions; progress ticks update their own tile in place.
+      function patchChildren(parent, next) {
+        const desired = [...next.childNodes];
+        desired.forEach((fresh, i) => {
+          let old = parent.childNodes[i];
+          if (!old) {
+            parent.append(fresh.cloneNode(true));
+            return;
+          }
+          if (old.isEqualNode(fresh)) return;
+          if (
+            old.nodeType !== fresh.nodeType ||
+            old.nodeName !== fresh.nodeName
+          ) {
+            parent.replaceChild(fresh.cloneNode(true), old);
+            return;
+          }
+          if (old.nodeType === 3) {
+            old.textContent = fresh.textContent;
+            return;
+          }
+          if (old.nodeType === 1) {
+            for (const attr of [...old.attributes])
+              if (!fresh.hasAttribute(attr.name))
+                old.removeAttribute(attr.name);
+            for (const attr of [...fresh.attributes])
+              if (old.getAttribute(attr.name) !== attr.value)
+                old.setAttribute(attr.name, attr.value);
+            patchChildren(old, fresh);
+          }
+        });
+        while (parent.childNodes.length > desired.length)
+          parent.lastChild.remove();
+      }
+      function render() {
+        const screen = $("#screen");
+        $("#device-frame").classList.toggle("x4", device === "x4");
+        $("#virtual").hidden = device !== "x4";
+        $("#mode-label").hidden = device !== "x4";
+        const top = `<header class="head"><span class="brand">${view === "reader" ? "BookSync reader" : "BookSync"}</span><span class="small">10:24 · 78%</span></header><div class="fresh">${$("#offline").checked ? "Offline · saved yesterday" : "Saved library · updated 12 min ago"}</div>`;
+        const body =
+          view === "home"
+            ? homeHTML()
+            : `${action("‹ Back", "back")}` +
+              (view === "series"
+                ? seriesHTML()
+                : view === "detail"
+                  ? detailHTML()
+                  : view === "browse"
+                    ? browseHTML()
+                    : readerHTML());
+        const markup =
+          top +
+          body +
+          `<footer class="footer"><span>BookSync 0.12 · ${device === "x4" ? "X4 " + mode : "M8C"}</span><span>${editing ? "Edit layout" : "Synthetic preview"}</span></footer>` +
+          (modal ? modalHTML() : "");
+        const draft = document.createElement("template");
+        draft.innerHTML = markup;
+        patchChildren(screen, draft.content);
+        refreshFocus();
+        explain();
+      }
+      function push(next, id) {
+        autoOpen = null;
+        history.push({ view, bookId, tab, pageIndex });
+        view = next;
+        if (id) bookId = id;
+        editing = false;
+        focus = 0;
+        modal = null;
+        render();
+      }
+      function back() {
+        if (modal) {
+          modal = null;
+          render();
+          return;
+        }
+        if (editing) {
+          if (editTool !== "focus") editTool = "focus";
+          else editing = false;
+          render();
+          return;
+        }
+        autoOpen = null;
+        const h = history.pop();
+        if (h) ({ view, bookId, tab, pageIndex } = h);
+        else view = "home";
+        focus = 0;
+        render();
+      }
+      function openBook(id) {
+        const x = b(id);
+        if (x.local) {
+          push("reader", id);
+          return;
+        }
+        if (jobs[id]?.state === "running") {
+          modal = { type: "transfer", id };
+          render();
+          return;
+        }
+        if ($("#offline").checked) {
+          modal = { type: "connect", id };
+          render();
+          return;
+        }
+        startJob(id, true);
+      }
+      function startJob(id, open) {
+        modal = null;
+        const token = { view, bookId, tab, pageIndex, id };
+        jobs[id] = { state: "running", pct: 0 };
+        if (open) autoOpen = token;
+        render();
+        if (!interval) interval = setInterval(tick, 240);
+      }
+      function tick() {
+        let any = false,
+          completed = [];
+        for (const [id, j] of Object.entries(jobs)) {
+          if (j.state !== "running") continue;
+          any = true;
+          j.pct = Math.min(100, j.pct + 10);
+          document.querySelectorAll(`[data-transfer="${id}"]`).forEach((n) => {
+            n.querySelector("progress").value = j.pct;
+            n.querySelector("span").textContent = j.pct + "%";
+          });
+          if (j.pct === 100) {
+            j.state = "done";
+            b(id).local = true;
+            completed.push(id);
+          }
+        }
+        for (const id of completed) {
+          const t = autoOpen;
+          if (
+            t?.id === id &&
+            view === t.view &&
+            tab === t.tab &&
+            pageIndex === t.pageIndex &&
+            !modal &&
+            !editing
+          ) {
+            autoOpen = null;
+            push("reader", id);
+          } else render();
+          if (
+            queue.length &&
+            !Object.values(jobs).some((j) => j.state === "running")
+          )
+            startJob(queue.shift(), false);
+        }
+        if (!any) {
+          clearInterval(interval);
+          interval = null;
+        }
+      }
+      function cancel(id) {
+        if (jobs[id]) jobs[id].state = "canceled";
+        if (autoOpen?.id === id) autoOpen = null;
+        notice = "Download canceled. A saved copy would stay.";
+        modal = null;
+        render();
+        if (
+          queue.length &&
+          !Object.values(jobs).some((j) => j.state === "running")
+        )
+          startJob(queue.shift(), false);
+      }
+      function nextIds() {
+        const lead = books.find((x) => x.status === "reading");
+        return [...books]
+          .sort((a, b) => a.series - b.series)
+          .filter(
+            (x) =>
+              x.series > (lead?.series || 0) &&
+              !x.local &&
+              x.status === "unread" &&
+              jobs[x.id]?.state !== "running",
+          )
+          .slice(0, 3)
+          .map((x) => x.id);
+      }
+      function beginBulk(ids) {
+        if ($("#offline").checked) {
+          modal = { type: "bulk-connect", ids };
+          render();
+          return;
+        }
+        queueTotal = [...ids];
+        queue = [...ids];
+        modal = null;
+        if (queue.length) startJob(queue.shift(), false);
+        else render();
+      }
+      function mutate(fn) {
+        const old = clone(layout);
+        try {
+          fn();
+          layout.revision++;
+          validate(layout);
+          notice = "Layout saved in memory.";
+        } catch (e) {
+          layout = old;
+          notice = e.message;
+        }
+        render();
+      }
+      function step(field, n) {
+        const q = tiles()[selected];
+        if (!q) return;
+        mutate(() => {
+          const target =
+            layout.overrides[device][q.instance] ||
+            (layout.overrides[device][q.instance] = {});
+          target[field] = q[field] + n;
+        });
+      }
+      function vacant(p, w = 1, h = 2) {
+        const ps = projection(p),
+          g = layout.grids[device];
+        for (let y = 0; y + h <= g.rows; y++)
+          for (let x = 0; x + w <= g.cols; x++)
+            if (
+              !ps.some(
+                (o) =>
+                  x < o.x + o.w && x + w > o.x && y < o.y + o.h && y + h > o.y,
+              )
+            )
+              return { x, y, w, h };
+        return null;
+      }
+      function addWidget(id) {
+        const p = currentPage(),
+          slot = vacant(p, device === "android-tablet" ? 2 : 1, 2);
+        if (!slot) {
+          notice = "No space. Add a page or remove a tile.";
+          modal = null;
+          render();
+          return;
+        }
+        mutate(() => {
+          const instance = "custom-" + ++idCounter;
+          const q = {
+            instance,
+            widget: id,
+            version: 1,
+            x: 0,
+            y: 0,
+            w: 2,
+            h: 2,
+            settings:
+              id === "shelf" ? { source: modal?.source || "up-next" } : {},
+          };
+          p.placements.push(q);
+          for (const c of ["android-tablet", "x4", "x3"]) {
+            if (c === device) layout.overrides[c][instance] = slot;
+            else
+              layout.overrides[c][instance] = {
+                x: 0,
+                y: 0,
+                w: c === "android-tablet" ? 2 : 1,
+                h: 2,
+                hidden: true,
+              };
+          }
+          modal = null;
+        });
+        selected = tiles().length - 1;
+        render();
+      }
+      function modalHTML() {
+        let title = "",
+          body = "";
+        const id = modal.id;
+        if (modal.type === "book-menu") {
+          const x = b(id);
+          title = x.title;
+          body =
+            action(
+              x.local ? "Open" : "Download & open",
+              "menu-open",
+              `data-book="${id}"`,
+            ) +
+            action("Details", "detail", `data-book="${id}"`) +
+            action("View series", "series") +
+            action(
+              x.status === "read" ? "Mark unread" : "Mark read",
+              "mark",
+              `data-book="${id}"`,
+            ) +
+            (x.local
+              ? action(
+                  "Remove download…",
+                  "remove-confirm",
+                  `data-book="${id}"`,
+                )
+              : "");
+        }
+        if (modal.type === "connect") {
+          title = "Not downloaded — connect to get it";
+          body =
+            '<p class="small">Connect and download? Nothing queues until you choose.</p>' +
+            action(
+              "Connect and download",
+              "connect",
+              `data-book="${id}"`,
+              "primary",
+            );
+        }
+        if (modal.type === "transfer") {
+          title = "Download in progress";
+          body = transfer(id);
+        }
+        if (modal.type === "remove") {
+          title = "Remove this download?";
+          body =
+            '<p class="small">Only the local book file is removed. Reading state, annotations and the server book stay.</p>' +
+            action("Remove download", "remove", `data-book="${id}"`);
+        }
+        if (modal.type === "bulk" || modal.type === "bulk-connect") {
+          title =
+            modal.type === "bulk-connect"
+              ? "Connect and download these books?"
+              : "Download next 3";
+          body =
+            '<p class="small">Exact eligible books, in reading order. Read and saved books skipped. No auto-open.</p><ol>' +
+            modal.ids
+              .map((id) => "<li>" + esc(b(id).title) + "</li>")
+              .join("") +
+            "</ol>" +
+            action(
+              modal.type === "bulk-connect"
+                ? "Connect and download books"
+                : "Download these books",
+              "bulk-start",
+              "",
+              "primary",
+            );
+        }
+        if (modal.type === "picker") {
+          title = "Add a widget";
+          body =
+            '<label>Shelf source<select id="shelf-source">' +
+            Object.entries(sourceNames)
+              .map(
+                ([id, n]) =>
+                  `<option value="${id}" ${modal.source === id ? "selected" : ""}>${n}</option>`,
+              )
+              .join("") +
+            '</select></label><p class="small">Available = starter release. Later entries can be added as prototype previews only.</p><div class="picker">' +
+            catalog
+              .map((w) =>
+                action(
+                  w.title +
+                    " · " +
+                    (w.available ? "available" : "coming in a later release"),
+                  "add-widget",
+                  `data-widget="${w.id}" ${!w.available && !$("#preview").checked ? "disabled" : ""}`,
+                ),
+              )
+              .join("") +
+            "</div>";
+        }
+        if (modal.type === "settings") {
+          const q = tiles()[selected];
+          title = "Tile settings";
+          body =
+            q?.widget === "shelf"
+              ? '<label>Shelf source<select id="tile-source">' +
+                Object.entries(sourceNames)
+                  .map(
+                    ([id, n]) =>
+                      `<option value="${id}" ${q.settings.source === id ? "selected" : ""}>${n}</option>`,
+                  )
+                  .join("") +
+                "</select></label>" +
+                action("Apply shelf source", "apply-source")
+              : "<p>This widget has no extra settings in the prototype.</p>";
+        }
+        if (modal.type === "editor-actions") {
+          title = "Layout actions";
+          body =
+            action("Move focused tile", "grab") +
+            action("Add widget", "picker") +
+            action("Remove tile", "remove-tile") +
+            action("Tile settings", "settings") +
+            action("Add page", "add-page") +
+            action("Remove page", "remove-page") +
+            action("Page earlier", "reorder", 'data-dir="-1"') +
+            action("Page later", "reorder", 'data-dir="1"') +
+            action("Reset default", "reset") +
+            action("Done editing", "done");
+        }
+        if (modal.type === "reset") {
+          title = "Reset to the owned default?";
+          body =
+            "<p>Custom placement changes are replaced. Books and reading state stay.</p>" +
+            action("Reset layout", "confirm-reset");
+        }
+        return `<div class="modalshade"><section class="dialog" role="dialog" aria-modal="true" aria-label="${esc(title)}"><h2>${esc(title)}</h2>${body}${action("Cancel", "close")}</section></div>`;
+      }
+      let activating = false,
+        longTimer = null,
+        longFired = false;
+      $("#screen").addEventListener("pointerdown", (e) => {
+        const n = e.target.closest('[data-act="book"]');
+        if (!n || editing || (mode === "classic" && device === "x4")) return;
+        longFired = false;
+        longTimer = setTimeout(() => {
+          longFired = true;
+          modal = { type: "book-menu", id: n.dataset.book };
+          focus = 0;
+          render();
+        }, 550);
+      });
+      for (const ev of ["pointerup", "pointercancel", "pointerleave"])
+        $("#screen").addEventListener(ev, () => clearTimeout(longTimer));
+      $("#screen").addEventListener("contextmenu", (e) => {
+        const n = e.target.closest("[data-book]");
+        if (n) {
+          e.preventDefault();
+          modal = { type: "book-menu", id: n.dataset.book };
+          render();
+        }
+      });
+      $("#screen").addEventListener("change", (e) => {
+        if (e.target.id === "shelf-source" && modal)
+          modal.source = e.target.value;
+      });
+      $("#screen").addEventListener("click", (e) => {
+        if (longFired) {
+          longFired = false;
+          if (e.target.closest('[data-act="book"]')) return;
+        }
+        const n = e.target.closest("[data-act]");
+        if (!n) return;
+        const a = n.dataset.act,
+          id = n.dataset.book;
+        if (editing && !modal && n.closest(".tile") && a !== "tile") {
+          selected = tiles().findIndex(
+            (q) => q.instance === n.closest(".tile").dataset.instance,
+          );
+          render();
+          return;
+        }
+        if (
+          device === "x4" &&
+          mode === "classic" &&
+          !activating &&
+          !editing &&
+          !modal &&
+          a === "book"
+        ) {
+          focusKey = id;
+          refreshFocus();
+          notice = "Focused. Select opens; More shows actions.";
+          explain();
+          return;
+        }
+        switch (a) {
+          case "tab":
+            autoOpen = null;
+            modal = null;
+            tab = n.dataset.tab;
+            pageIndex = 0;
+            focus = 0;
+            selected = 0;
+            render();
+            break;
+          case "page":
+            autoOpen = null;
+            pageIndex =
+              (pageIndex + Number(n.dataset.dir) + pagesNow().length) %
+              pagesNow().length;
+            selected = 0;
+            focus = 0;
+            render();
+            break;
+          case "book":
+          case "menu-open":
+            openBook(id);
+            break;
+          case "book-menu":
+            modal = { type: "book-menu", id };
+            focus = 0;
+            render();
+            break;
+          case "detail":
+            push("detail", id);
+            break;
+          case "series":
+            push("series");
+            break;
+          case "browse":
+            push("browse");
+            break;
+          case "back":
+            back();
+            break;
+          case "close":
+            modal = null;
+            render();
+            break;
+          case "cancel":
+            cancel(id);
+            break;
+          case "connect":
+            $("#offline").checked = false;
+            startJob(id, true);
+            break;
+          case "mark":
+            b(id).status = b(id).status === "read" ? "unread" : "read";
+            modal = null;
+            render();
+            break;
+          case "remove-confirm":
+            modal = { type: "remove", id };
+            render();
+            break;
+          case "remove":
+            b(id).local = false;
+            modal = null;
+            render();
+            break;
+          case "bulk-preview":
+            modal = { type: "bulk", ids: nextIds() };
+            render();
+            break;
+          case "bulk-start": {
+            const ids = [...modal.ids];
+            if (modal.type === "bulk-connect") $("#offline").checked = false;
+            beginBulk(ids);
+            break;
+          }
+          case "cancel-queue":
+            queue = [];
+            for (const [id, j] of Object.entries(jobs))
+              if (j.state === "running") cancel(id);
+            render();
+            break;
+          case "edit":
+            editing = true;
+            autoOpen = null;
+            notice = "";
+            selected = 0;
+            editTool = "focus";
+            render();
+            break;
+          case "done":
+            modal = null;
+            editing = false;
+            render();
+            break;
+          case "grab":
+            modal = null;
+            editTool = "x";
+            render();
+            break;
+          case "tile":
+            selected = Number(n.dataset.index);
+            render();
+            break;
+          case "step":
+            step(n.dataset.field, Number(n.dataset.step));
+            break;
+          case "picker":
+            modal = { type: "picker", source: "up-next" };
+            focus = 0;
+            render();
+            break;
+          case "add-widget":
+            addWidget(n.dataset.widget);
+            break;
+          case "remove-tile": {
+            modal = null;
+            const q = tiles()[selected];
+            if (q)
+              mutate(() => {
+                layout.overrides[device][q.instance] = {
+                  ...layout.overrides[device][q.instance],
+                  hidden: true,
+                };
+              });
+            break;
+          }
+          case "settings":
+            modal = { type: "settings" };
+            render();
+            break;
+          case "apply-source": {
+            const source = $("#tile-source").value,
+              q = tiles()[selected];
+            mutate(() => {
+              layout.overrides[device][q.instance] = {
+                ...layout.overrides[device][q.instance],
+                settings: { source },
+              };
+              modal = null;
+            });
+            break;
+          }
+          case "add-page":
+            modal = null;
+            mutate(() => {
+              const p = { id: "page-" + ++idCounter, tab, placements: [] };
+              layout.pages.push(p);
+              pageIndex = pagesNow().length - 1;
+              selected = 0;
+            });
+            break;
+          case "remove-page":
+            modal = null;
+            if (layout.pages.filter((p) => p.tab === tab).length < 2) {
+              notice = "Keep at least one page per tab.";
+              render();
+            } else
+              mutate(() => {
+                layout.pages = layout.pages.filter(
+                  (p) => p.id !== currentPage().id,
+                );
+                pageIndex = 0;
+              });
+            break;
+          case "reorder":
+            modal = null;
+            mutate(() => {
+              const p = currentPage(),
+                all = layout.pages.filter((p) => p.tab === tab),
+                to = all.indexOf(p) + Number(n.dataset.dir);
+              if (to < 0 || to >= all.length) throw Error("Already at the end");
+              const a = layout.pages.indexOf(p),
+                b = layout.pages.indexOf(all[to]);
+              [layout.pages[a], layout.pages[b]] = [
+                layout.pages[b],
+                layout.pages[a],
+              ];
+              pageIndex = to;
+            });
+            break;
+          case "reset":
+            modal = { type: "reset" };
+            render();
+            break;
+          case "confirm-reset":
+            layout = defaults();
+            modal = null;
+            pageIndex = 0;
+            selected = 0;
+            notice = "Default layout restored.";
+            render();
+            break;
+          case "retry":
+            lastState = "ready";
+            $("#state-demo").value = "ready";
+            render();
+            break;
+        }
+      });
+      function key(k) {
+        if (modal) {
+          if (k === "back") {
+            modal = null;
+            render();
+            return;
+          }
+          const nodes = [
+            ...$("#screen").querySelectorAll(".dialog [data-focus]"),
+          ];
+          if (k === "prev" || k === "next")
+            focus =
+              (focus + (k === "prev" ? -1 : 1) + nodes.length) % nodes.length;
+          if (k === "select") {
+            activating = true;
+            nodes[focus]?.click();
+            activating = false;
+          }
+          refreshFocus();
+          return;
+        }
+        if (k === "back") {
+          back();
+          return;
+        }
+        if (editing) {
+          const modes = ["focus", "x", "y", "w", "h"];
+          if (k === "more") {
+            if (editTool === "focus") {
+              modal = { type: "editor-actions" };
+              focus = 0;
+            } else
+              editTool = modes[(modes.indexOf(editTool) + 1) % modes.length];
+          } else if (k === "select")
+            editTool = editTool === "focus" ? "x" : "focus";
+          else if (k === "prev" || k === "next") {
+            const d = k === "prev" ? -1 : 1;
+            if (editTool === "focus") {
+              selected =
+                (selected + d + tiles().length) % Math.max(1, tiles().length);
+            } else {
+              step(editTool, d);
+              return;
+            }
+          }
+          render();
+          return;
+        }
+        const nodes = [...$("#screen").querySelectorAll("[data-focus]")];
+        if (k === "prev" || k === "next") {
+          focus =
+            (focus + (k === "prev" ? -1 : 1) + nodes.length) % nodes.length;
+          refreshFocus();
+          return;
+        }
+        const n = nodes[focus];
+        if (k === "select") {
+          activating = true;
+          n?.click();
+          activating = false;
+        }
+        if (k === "more") {
+          const id = n?.dataset.book;
+          if (id) {
+            modal = { type: "book-menu", id };
+            focus = 0;
+            render();
+          } else {
+            tab = "More";
+            view = "home";
+            pageIndex = 0;
+            focus = 0;
+            render();
+          }
+        }
+      }
+      $("#virtual").addEventListener("click", (e) => {
+        const n = e.target.closest("[data-key]");
+        if (n) key(n.dataset.key);
+      });
+      $("#device").addEventListener("change", (e) => {
+        device = e.target.value;
+        autoOpen = null;
+        modal = null;
+        focus = 0;
+        selected = 0;
+        render();
+      });
+      $("#mode").addEventListener("change", (e) => {
+        mode = e.target.value;
+        focus = 0;
+        render();
+      });
+      $("#offline").addEventListener("change", () => {
+        if ($("#offline").checked) {
+          queue = [];
+          for (const [id, j] of Object.entries(jobs))
+            if (j.state === "running") cancel(id);
+        }
+        render();
+      });
+      $("#preview").addEventListener("change", () => {
+        pageIndex = 0;
+        selected = 0;
+        render();
+      });
+      $("#show-json").addEventListener("change", (e) => {
+        $("#layout-json").hidden = !e.target.checked;
+        explain();
+      });
+      $("#state-demo").addEventListener("change", (e) => {
+        lastState = e.target.value;
+        render();
+      });
+      function restart() {
+        if (interval) clearInterval(interval);
+        interval = null;
+        books = clone(initialBooks);
+        layout = defaults();
+        validate(layout);
+        tab = "Home";
+        pageIndex = 0;
+        view = "home";
+        bookId = "b1";
+        history = [];
+        modal = null;
+        editing = false;
+        selected = 0;
+        editTool = "focus";
+        focus = 0;
+        jobs = {};
+        queue = [];
+        queueTotal = [];
+        autoOpen = null;
+        lastState = "ready";
+        notice = "";
+        $("#state-demo").value = "ready";
+        render();
+      }
+      $("#demo-reset").addEventListener("click", restart);
+      restart();
+    </script>
+  </body>
+</html>

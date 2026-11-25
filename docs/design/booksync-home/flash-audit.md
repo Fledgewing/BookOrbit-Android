@@ -102,3 +102,17 @@ physical slot fit, bounded C3 heap/parser/SD windows, network-boot return/cancel
 power-cut recovery and signed previous-image rollback. Repeat full X4 builds to
 catch shared-theme regressions. Retain measured artifacts as CI evidence; no
 source implementation or synthetic “after” map exists in this design PR.
+
+## Revision 4: widget host/editor split (estimated)
+
+The 49,152-byte monolithic replacement target above is superseded by the
+[widget/editor breakdown](DESIGN.md#36-what-it-takes-estimates-not-measurements).
+Do not count both budgets. X3 host/engine plus its Settings list is estimated
+7–14 KiB, leaving 54,165–61,333 B of the estimated 68,501 B envelope for installed
+widgets and SD projections. A full spatial X3 editor is not required if tight.
+X4 host/editor is estimated 16–32 KiB: the same public run reports X4 Pro
+6,491,033 B / 29,799 B below the gate, so the top end exceeds current headroom
+before any widget cost. No X4 Home-removal saving has been measured. Measure
+engine-only, each editor and each widget increment independently on every reader;
+one removed native Home is not evidence that all future widgets/editors fit.
+Starter builds retain future layout records without compiling future renderers.

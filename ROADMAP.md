@@ -24,7 +24,8 @@ phase does not defer owned X4 Home; plain-base cutover follows adapter completen
 
 | Outcome | Platforms | Status |
 |---|---|---|
-| **BookSync Home** replaces the BookOrbit Home on Android and Xteink: every reader-preset content type retained and rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android, X4 Pro, X4, X3 | designing (W36; 0.12 together) |
+| **BookSync Home** replaces the BookOrbit Home on Android and Xteink: complete reader-preset widget library retained as the staged target and rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android, X4 Pro, X4, X3 | designing (W36; 0.12 together) |
+| **Widget-first Home editor**: independent widgets in one versioned shared layout with per-device grids; full Android/X4 editor, X3 Settings list; editor plus Continue reading, Shelf and Browse links first, then one widget per accepted increment. | Android, X4 Pro, X4, X3 | designing (maintainer architecture decided; implementation pending) |
 | **Tap to download** (Next 5) on Home, lists, series and detail. | Android, X4 Pro, X4, X3 | designing (W36; 0.12 together) |
 | **Series view** (Next 6): every book in order, on device or server only, read state, download next. | Android, X4 Pro, X4, X3 | designing (W36; 0.12 together) |
 | **Owned Xteink adapter and firmware path**: Home reads our SD database through our adapter in 0.12, replacing other X3 Home implementations to fit; replace fork sync/download/login, then cut over to plain CrossInk + our layer after separate base-switch approval. | X4 Pro, X4, X3 | designing ([audit and stages](docs/design/booksync-home/DESIGN.md#82-what-currently-depends-on-crossink-bookorbit)) |
