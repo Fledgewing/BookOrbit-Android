@@ -9,6 +9,8 @@ import android.os.Binder
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
+import android.os.SystemClock
 
 /**
  * KOReader's way in (android/docs/INTERFACE.md, docs/design/security.md): the plugin calls
@@ -25,6 +27,15 @@ class CommandProvider : ContentProvider() {
 
         /** The status call's method (what `GET /status` was). */
         const val STATUS = "${Contract.PACKAGE}.call.STATUS"
+
+        /** The plugin asks whether the companion sent the command on KOReader's start (extra `command`). */
+        const val TAKE_COMMAND = "${Contract.PACKAGE}.call.TAKE_COMMAND"
+
+        /** The plugin's key and the companion's proof for one `GET /clicks` (ClickChannel). */
+        const val CLICKS = "${Contract.PACKAGE}.call.CLICKS"
+
+        /** USB only: the shell (adb, tools/sideload-android.sh) asks for KOReader's restart. */
+        const val RESTART_KOREADER = "${Contract.PACKAGE}.call.RESTART_KOREADER"
 
         /** Every command KOReader may send; anything else is refused. */
         val COMMANDS = setOf(
@@ -49,7 +60,23 @@ class CommandProvider : ContentProvider() {
         val uid = Binder.getCallingUid()
         val token = Binder.clearCallingIdentity()
         try {
+            // The shell already controls the device over USB; it gets this one method and no other.
+            if (method == RESTART_KOREADER) {
+                if (uid != Process.SHELL_UID) return answer(false, "caller")
+                main.post { Koreader.restart(ctx, "adb: restart KOReader") }
+                return answer(true)
+            }
             if (!KoreaderTrust.check(ctx, uid)) return answer(false, "caller")
+            if (method == TAKE_COMMAND) {
+                val c = extras?.getString("command")
+                val ok = SentCommands.shared.take(c, SystemClock.elapsedRealtime())
+                if (!ok) OLog.w("command ${c ?: "-"} on KOReader's start was not sent by the companion")
+                return answer(ok)
+            }
+            if (method == CLICKS) {
+                val (key, proof) = ClickChannel.newKey()
+                return answer(true).apply { putString("key", key); putString("proof", proof) }
+            }
             if (method == STATUS) {
                 val svc = OrbitService.current ?: return answer(false, "no service")
                 return answer(true).apply { putString("status", svc.answerStatus(extras?.getString("patch_version"), extras?.getString("book"))) }

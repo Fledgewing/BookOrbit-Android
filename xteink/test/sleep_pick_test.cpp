@@ -505,6 +505,7 @@ int main(int argc, char** argv) {
   dir = dir.substr(0, dir.rfind('/')) + "/sleep";
   JsonDocument doc;
   if (!loadJsonFile((dir + "/cases.json").c_str(), doc)) return 1;
+  // @fixture sleep/cases.json#cases @fixture sleep/cases.json#batch @fixture sleep/cases.json#sources
   rotationCases(doc["cases"].as<JsonArrayConst>());
   batchCases(doc["batch"].as<JsonArrayConst>());
   sourceCases(doc["sources"].as<JsonObjectConst>());

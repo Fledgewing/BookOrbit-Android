@@ -11,6 +11,10 @@ function OrbitAndroid:checkCommand(source)
     if not cmd or cmd == "" then return false end
     local from = Jni.takeIntentExtra(Companion.EXTRA_FROM)
     local held = Jni.takeIntentExtra(Companion.EXTRA_ROTATION)
+    if not Companion.confirmCommand(cmd) then
+        log("command ignored:", cmd, "(" .. source .. "): not sent by Orbit Companion")
+        return false
+    end
     log("command from companion:", cmd, "(" .. source .. ")", from and ("from " .. tostring(from)) or "",
         held and ("held " .. tostring(held)) or "")
     if cmd == "home" or cmd == "home_smart" then

@@ -203,6 +203,12 @@ function W.companionCall(method, extras)
         if body == nil then return answer({ ok = "0", why = "no service" }) end
         return answer({ ok = "1", status = body })
     end
+    -- A command on KOReader's start: the companion sent it, unless a test says another app did.
+    if method:match("%.call%.TAKE_COMMAND$") then
+        W.confirm_asked = extras.command
+        return answer({ ok = W.command_not_sent and "0" or "1" })
+    end
+    if method:match("%.call%.CLICKS$") then return answer({ ok = "1", key = "k1", proof = "p1" }) end
     W.deliver({ kind = "call", action = method, package = "net.fledgewing.orbitcompanion", extras = extras })
     return answer({ ok = "1" })
 end
@@ -1035,6 +1041,23 @@ test("stats: page turns and refreshes go to the companion in batches, and on sus
     run(5)
 end)
 
+test("a command on KOReader's start that Orbit Companion didn't send is ignored", function()
+    W.broadcasts = {}
+    local ui, m = newUI(true)
+    run(5)
+    local quit
+    UIManager.quit = function(_, code) quit = code or 0 end
+    W.command_not_sent = true
+    W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = "restart"
+    ok(m:checkCommand("resume") == false, "not handled")
+    ok(W.confirm_asked == "restart", "the companion was asked")
+    ok(W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] == nil, "the extra is used up")
+    run(3)
+    ok(quit == nil and not lastBroadcast(".RELAUNCH"), "no restart")
+    ok(table.concat(W.logs, "\n"):find("command ignored: restart", 1, true), "logged")
+    W.command_not_sent = nil
+end)
+
 test("restart command: save, ask the companion to relaunch, then quit (Android can't restart itself)", function()
     W.broadcasts = {}
     local ui, m = newUI(true)
@@ -1122,6 +1145,13 @@ test("companion: an app with its name and another signer gets nothing, the login
     ok(RE.Companion.state() == "ok", "the release-signed one is used")
     ok(RE.Companion.send(RE.Companion.ACTION.SETUP_LATER, {}), "sent")
     ok(W.broadcasts[#W.broadcasts].kind == "call", "through the caller-checked call, not a broadcast")
+    -- Replacing the app must not inherit a recent menu/status check's cached trust.
+    W.companion_cert = "1234abcd"
+    W.broadcasts = {}
+    ok(not RE.Companion.send(RE.Companion.ACTION.CHECK, { userkey = "k" }), "cached trust cannot send a credential")
+    eq(#W.broadcasts, 0, "the replacement receives nothing")
+    W.companion_cert = RELEASE_CERT
+    RE.installed_cache.at = -1000
 end)
 
 test("companion: certificate fingerprints read as release.yml prints them", function()
@@ -1644,12 +1674,12 @@ test("clicker: one path; the service's clicks arrive over /clicks, no double pag
     m:onResume()
     run(2)
     ok(W.connected == "127.0.0.1:47913", "channel connected")
-    ok(sent[1] and sent[1]:find("^GET /clicks%?patch_version="), "asked for /clicks: " .. tostring(sent[1]))
+    ok(sent[1] and sent[1]:find("^GET /clicks%?patch_version=.*&key=k1 "), "asked for /clicks with the key: " .. tostring(sent[1]))
     ok(W.looper_fd and W.looper_fd.fd == 42, "socket watched in KOReader's looper")
     local events = {}
     ui.handleEvent = function(_, ev) table.insert(events, ev.name .. ":" .. tostring(ev.args[1])) end
     local wait = require("ffi/input_android").waitForEvent
-    table.insert(inbox, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nSERVICE on\n")
+    table.insert(inbox, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nORBIT p1\nSERVICE on\n")
     local okw = wait()
     ok(okw == false, "no click yet: the stock result")
     -- The service is on: a key that still reaches KOReader is not turned into a second page turn.
@@ -1679,6 +1709,38 @@ test("clicker: one path; the service's clicks arrive over /clicks, no double pag
     ok(#events == 3, "one turn per press")
     socket.tcp = nil
     W.web[url], W.json.STATUS = nil, nil
+end)
+
+test("clicker: a listener on the port that can't prove it is Orbit Companion is dropped", function()
+    W.web[STATUS_KEY] = "STATUS"
+    W.json.STATUS = { version = "0.4.2", clicker_service = true, keymap = { ["38"] = { press = "prev" } } }
+    local socket = require("socket")
+    local inbox = {}
+    socket.tcp = function()
+        return {
+            settimeout = function() end, connect = function() return 1 end, getfd = function() return 43 end,
+            send = function(_, d) return #d end, close = function() end,
+            receive = function()
+                if #inbox > 0 then return nil, "timeout", table.remove(inbox, 1) end
+                return nil, "timeout", ""
+            end,
+        }
+    end
+    RE.Channel.close("test")
+    local ui, m = newUI(true)
+    m:onResume()
+    run(2)
+    ok(RE.Channel.up, "channel opened")
+    local events = {}
+    ui.handleEvent = function(_, ev) table.insert(events, ev.name) end
+    table.insert(inbox, "HTTP/1.1 200 OK\r\n\r\nORBIT wrong\nCLICK prev 1\n")
+    require("ffi/input_android").waitForEvent()
+    run(1)
+    ok(#events == 0, "no click done")
+    ok(not RE.Channel.up, "closed")
+    ok(table.concat(W.logs, "\n"):find("it is not Orbit Companion", 1, true), "logged")
+    socket.tcp = nil
+    W.web[STATUS_KEY], W.json.STATUS = nil, nil
 end)
 
 test("broadcasts carry the patch version (for the companion's setup row)", function()
@@ -2911,6 +2973,7 @@ end)
 test("end of book: Download and open uses the reader's delivery variant and a supported file (hash_mismatch on M8C)", function()
     eobModules()
     local JSON = dofile(here .. "/json_mini.lua")
+    -- @fixture bookorbit/catalog-book.delivery-variants.json
     local fx = JSON.fixture(here, "bookorbit/catalog-book.delivery-variants.json")
     local DCat = {}
     DCat.__index = DCat
@@ -4362,7 +4425,7 @@ test("mirror: Full refresh saves every book's details, outside the cap; covers o
     W.wifi = true
     cache.server_fn = libraryServer({ n_books = 4, series4 = 2, covers = true })
     local cat = pluginCatalog(Cat, client)
-    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. E.Cache.coverName(b) end
+    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. dofile(here .. "/companion_rules.lua")(E.Cache).coverName(b) end
     withHost(cat, function()
         client:request("GET", DASH)
         client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
@@ -4560,7 +4623,7 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
     W.wifi = true
     cache.server_fn = libraryServer({ n_books = 4, series4 = 2, covers = true })
     local cat = pluginCatalog(Cat, client)
-    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. E.Cache.coverName(b) end
+    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. dofile(here .. "/companion_rules.lua")(E.Cache).coverName(b) end
     local MB = 1048576
     local notes = {}
     E.OC.note = function(t) table.insert(notes, t) end
@@ -5036,6 +5099,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
         local f = assert(io.open(here .. "/../../../shared/fixtures/bookorbit/" .. name, "rb"))
         local v = JSON.decode(f:read("*a")); f:close(); return v
     end
+    -- @fixture bookorbit/catalog-sections.smart-scopes.json @fixture bookorbit/catalog-sections.collections.json
     local scopes, collections = fixture("catalog-sections.smart-scopes.json"), fixture("catalog-sections.collections.json")
     -- scopes.json is read back with KOReader's json module: the real decoder here.
     local jm = require("json")
@@ -5322,7 +5386,9 @@ test("settings v2: the companion's look-now line refreshes at once", function()
     local refreshed
     local base = RE.Shared.refresh
     RE.Shared.refresh = function(why) refreshed = why end
+    RE.Channel.proven = true
     ok(RE.Channel.onLine("SETTINGS 12345") == true, "taken")
+    RE.Channel.proven = false
     run(1)
     RE.Shared.refresh = base
     eq(refreshed, "channel")
@@ -5395,6 +5461,7 @@ end)
 
 -- The offline cache's database, as CacheStoreTest reads it: the same fixture, the plugin's reads.
 local JSONF = dofile(here .. "/json_mini.lua")
+-- @fixture cache/db.json @fixture cache/schema.sql
 local DBFX = JSONF.decode(io.open(here .. "/../../../shared/fixtures/cache/db.json", "rb"):read("*a"))
 local FakeStore = dofile(here .. "/fake_store.lua")(RE.Cache, SQ3, here .. "/../../../shared/fixtures/cache/schema.sql")
 

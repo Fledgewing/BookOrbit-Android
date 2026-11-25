@@ -1,11 +1,12 @@
 package net.fledgewing.orbitcompanion
 
 /**
- * The offline mirror's rules, as the Orbit plugin has them (docs/design/companion-worker.md
- * "Step 2"): the cache's keys and file names (orbit.koplugin logic/cache.lua `Cache.key`,
- * ko/cache.lua `OC.hash`), list identities and pages (`Cache.listWindow`, `Cache.mirrorPage`),
- * the retry plan (`Cache.mirrorRetry`) and the cache's entry format (a Lua literal that
- * `Cache.decode` loads). Pure, and checked against shared/fixtures/cache/worker.json (CacheWorkerTest; test_logic.lua reads the same file).
+ * The offline mirror's rules (docs/design/companion-worker.md "Step 2"): the cache's keys and
+ * file names, which must match the plugin's (orbit.koplugin logic/cache.lua `Cache.key`,
+ * `Cache.hash`, `Cache.listWindow`), mirror pages, the retry plan, re-paging and the limit note,
+ * which only the companion runs, and the cache's entry format (a Lua literal that `Cache.decode`
+ * loads). Pure, and checked against shared/fixtures/cache/worker.json (CacheWorkerTest;
+ * test_logic.lua reads the same file) and cases.json (CacheRulesTest).
  *
  * Keys and paths are byte strings, as in Lua: held here as ISO-8859-1 strings (one char per
  * byte), so a percent-decoded UTF-8 name keeps its bytes and its hash.
@@ -15,7 +16,7 @@ object MirrorLogic {
     /** The id a plan's templates carry in place of each entry's (Mirror.SENTINEL). */
     const val SENTINEL = "987654321"
 
-    /** Cache.isHome: Home's replies (kept, marked stale by a write). */
+    /** Home's replies (kept, marked stale by a write). */
     fun isHome(path: String): Boolean = splitPath(path).first.contains("/catalog/dashboard")
     const val SMALL_PAGE = 25
     const val TRIES = 3
@@ -122,7 +123,7 @@ object MirrorLogic {
         return Window(p + if (rest.isNotEmpty()) "?$rest" else "", if (books) "books" else "section", section)
     }
 
-    /** `Cache.mirrorPage`. size: null for PAGE. */
+    /** A list identity's mirror page. size: null for PAGE (shared/fixtures/cache/worker.json "windows"). */
     fun mirrorPage(identity: String, page: Int, size: Int?): String {
         val (p, q) = splitPath(identity)
         val query = parseQuery(q)
@@ -133,7 +134,7 @@ object MirrorLogic {
 
     fun pageCount(total: Int, size: Int?): Int = if (total <= 0) 1 else (total + (size ?: PAGE) - 1) / (size ?: PAGE)
 
-    /** `Cache.repage`: pages to fetch (2..new) and to drop (past the new end). */
+    /** Pages to fetch (2..new) and to drop (past the new end). */
     fun repage(oldTotal: Int, newTotal: Int, size: Int?): Pair<List<Int>, List<Int>> {
         val o = pageCount(oldTotal, size)
         val n = pageCount(newTotal, size)
@@ -142,7 +143,7 @@ object MirrorLogic {
 
     data class Retry(val skip: Boolean, val waitS: Int = 0, val size: Int? = null)
 
-    /** `Cache.mirrorRetry`. size: the list page's size (null: not a list page). */
+    /** A mirror request with no answer: wait, a smaller page, or skip (cases.json "mirror.retry"). size: the list page's size (null: not a list page). */
     fun retry(tries: Int, size: Int?, page: Int?): Retry {
         if (tries >= TRIES) return Retry(true)
         var s = size
@@ -153,7 +154,7 @@ object MirrorLogic {
     /** The companion's status line while a Full refresh saves (docs/design/sqlite-cache.md "Progress display"). */
     fun progressLine(pct: Long?): String? = pct?.let { "Full refresh · ${it.coerceIn(0, 100)}%" }
 
-    /** `Cache.limitText`. */
+    /** The note when the mirror stops at the storage limit (cases.json "storage.notes"). */
     fun limitText(covers: Boolean, done: Int, total: Int): String =
         "Storage limit reached: $done of $total ${if (covers) "covers" else "lists and books"} saved. Raise the limit in Orbit settings."
 

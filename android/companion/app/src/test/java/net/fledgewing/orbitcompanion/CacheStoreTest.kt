@@ -16,6 +16,7 @@ import java.nio.file.Files
  * answer every read as the plugin's Store.read must.
  */
 class CacheStoreTest {
+    // @fixture cache/db.json @fixture cache/schema.sql
     private val shared = File("../../../shared/fixtures/cache")
     private val fx = JSONObject(File(shared, "db.json").readText())
     private val owner = fx.getString("owner")
@@ -111,6 +112,37 @@ class CacheStoreTest {
         st.close()
     }
 
+    /**
+     * shared/fixtures/cache/cases.json "writes": the effect the plugin sends (Cache.writeEffect,
+     * checked by test_logic.lua) patched into every cached reply as the shared table expects. A
+     * null field is cleared: on the wire it is an empty table (Cache.NULL).
+     */
+    @Test
+    fun writesPatchWhatTheSharedCasesExpect() {
+        // @fixture cache/cases.json#writes
+        val writes = JSONObject(File(shared, "cases.json").readText()).getJSONArray("writes")
+        assertTrue(writes.length() >= 3)
+        for (i in 0 until writes.length()) {
+            val c = writes.getJSONObject(i)
+            val name = c.getString("name")
+            val entries = c.getJSONObject("entries")
+            val effect = c.optJSONObject("effect")
+            val stale = mutableListOf<String>()
+            val got = entries.keys().asSequence().associateWith { k ->
+                val body = LuaValue.fromJsonValue(entries.get(k))
+                if (effect == null) body else {
+                    val f = effect.getJSONObject("fields")
+                    val fields = f.keys().asSequence().associate { k2 -> s(k2) to (if (f.isNull(k2)) emptyMap<String, Any?>() else LuaValue.fromJsonValue(f.get(k2))) }
+                    CacheStore.patched(body, effect.getLong("id"), fields)
+                }
+            }
+            if (effect?.optBoolean("stale_home") == true) stale += "dashboard"
+            val expect = c.getJSONObject("expect")
+            for (k in expect.keys()) assertEquals("$name $k", lua(LuaValue.fromJsonValue(expect.get(k))), lua(got[k]))
+            assertEquals("$name stale", c.getJSONArray("stale").strings().sorted(), stale.sorted())
+        }
+    }
+
     @Test
     fun aRecheckedWindowSaysWhetherItChanged() {
         val st = store()
@@ -123,6 +155,7 @@ class CacheStoreTest {
         st.close()
     }
 
-    @Suppress("unused")
+    private fun lua(v: Any?) = LuaValue.encode(v).toString(Charsets.ISO_8859_1)
+
     private fun JSONArray.strings() = (0 until length()).map { getString(it) }
 }

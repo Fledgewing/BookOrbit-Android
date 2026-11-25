@@ -14,6 +14,7 @@
 using namespace orbify::mirror;
 
 static void dueCases(JsonObjectConst all) {
+  // @fixture cache/cases.json#mirror.due
   for (JsonObjectConst c : all["mirror"]["due"].as<JsonArrayConst>()) {
     const bool saved = !c["mirror"].isNull();
     const uint32_t at = saved ? c["mirror"]["at"].as<uint32_t>() : 0;

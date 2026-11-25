@@ -12,6 +12,12 @@ local F = { rate = 1000, step_s = 1, PAGE = 100 }
 local E, W, fetch, UIManager
 local here = (debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or ".")
 local function C() return E.Cache end
+-- The companion's own rules (the plugin no longer has them).
+local makeRules, rules, rulesFor = dofile(here .. "/companion_rules.lua"), nil, nil
+local function R()
+    if rulesFor ~= C() then rules, rulesFor = makeRules(C()), C() end
+    return rules
+end
 local function dir() return E.OC.dir() end
 local function mdir() return dir() .. "/mirror" end
 local function readFile(p) local f = io.open(p, "rb"); if not f then return nil end local s = f:read("*a"); f:close(); return s end
@@ -177,7 +183,7 @@ end
 
 local function coverPath(plan, book)
     if not plan.cover_dir or type(book) ~= "table" or book.hasCover ~= true then return nil end
-    local name = C().coverName(book)
+    local name = R().coverName(book)
     return name and (plan.cover_dir .. "/" .. name), name
 end
 
@@ -265,10 +271,10 @@ local function limited(run, plan, j)
     local text
     if covers then
         for _, x in ipairs(run.jobs) do if x.kind == "cover" and x.state == 0 then x.state = 2; run.skipped = run.skipped + 1 end end
-        text = C().limitText("covers", run.covers.ok + run.covers.not_modified, run.cover_total)
+        text = R().limitText("covers", run.covers.ok + run.covers.not_modified, run.cover_total)
     else
         for _, x in ipairs(run.jobs) do if x.state == 0 then x.state = 2 end end
-        text = C().limitText("lists", run.done, run.total)
+        text = R().limitText("lists", run.done, run.total)
     end
     run.limit_note = { text = text, at = now(), limit = limit }
     return true
@@ -283,7 +289,7 @@ local function doJob(run, plan, j, out)
         return false
     end
     while true do
-        local path = (j.kind == "detail") and fill(plan.detail_template, plan.sentinel, j.id) or C().mirrorPage(j.identity, j.page, j.size ~= F.PAGE and j.size or nil)
+        local path = (j.kind == "detail") and fill(plan.detail_template, plan.sentinel, j.id) or R().mirrorPage(j.identity, j.page, j.size ~= F.PAGE and j.size or nil)
         table.insert(F.calls, "GET " .. path)
         local b, e = fetch(path)
         if type(b) == "table" then
@@ -293,7 +299,7 @@ local function doJob(run, plan, j, out)
         end
         j.tries = j.tries + 1
         local status = tonumber(e)
-        local r = (status and status < 500) and { skip = true } or C().mirrorRetry(j.tries, j.kind ~= "detail" and j.size or nil, j.page)
+        local r = (status and status < 500) and { skip = true } or R().mirrorRetry(j.tries, j.kind ~= "detail" and j.size or nil, j.page)
         if r.skip then
             run.skipped = run.skipped + 1; j.state = 2
             return not status
@@ -464,7 +470,7 @@ function F.checkNow(extras)
         else rows("UPDATE entries SET validated_at = ?, stale = NULL WHERE key = ?", t, k) end
         return event(ev)
     end
-    st:save(k, path, C().settle(saved and saved.body, b, extras.mode), now(), template)
+    st:save(k, path, R().settle(saved and saved.body, b, extras.mode), now(), template)
     ev.changed, ev.at = true, now()
     event(ev)
 end
@@ -493,20 +499,20 @@ function F.patchNow(extras)
         if r then
             for i, col in ipairs({ "item", "detail" }) do
                 local body = decodeRow(r[i])
-                if type(body) == "table" and C().patch(body, id, fields) > 0 then
+                if type(body) == "table" and R().patch(body, id, fields) > 0 then
                     rows("UPDATE books SET " .. col .. " = ? WHERE id = ?", C().encode(body), id); n = n + 1
                 end
             end
         end
         for _, row in ipairs(rows("SELECT key, body FROM entries")) do
             local body = decodeRow(row[2])
-            if type(body) == "table" and C().patch(body, id, fields) > 0 then
+            if type(body) == "table" and R().patch(body, id, fields) > 0 then
                 rows("UPDATE entries SET body = ? WHERE key = ?", C().encode(body), val(row[1])); n = n + 1
             end
         end
         for _, row in ipairs(rows("SELECT identity, pos, item FROM list_items WHERE item IS NOT NULL")) do
             local body = decodeRow(row[3])
-            if type(body) == "table" and C().patch(body, id, fields) > 0 then
+            if type(body) == "table" and R().patch(body, id, fields) > 0 then
                 rows("UPDATE list_items SET item = ? WHERE identity = ? AND pos = ?", C().encode(body), val(row[1]), val(row[2])); n = n + 1
             end
         end

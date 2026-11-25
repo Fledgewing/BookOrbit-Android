@@ -129,3 +129,33 @@ object KoreaderTrust {
         OLog.i("trust: the user trusted KOReader ${c.pkg} (${c.signers.joinToString()})")
     }
 }
+
+/**
+ * The commands the companion put on KOReader's start, until the plugin asks whether it did
+ * (docs/design/security.md "The companion → KOReader direction"). Any app can start KOReader
+ * with a command extra; the plugin obeys only one the companion confirms here, once.
+ */
+class SentCommands(private val keepMs: Long = KEEP_MS, private val max: Int = 8) {
+    private val sent = ArrayDeque<Pair<String, Long>>()
+
+    @Synchronized
+    fun record(command: String, nowMs: Long) {
+        sent.addLast(command to nowMs)
+        while (sent.size > max) sent.removeFirst()
+    }
+
+    /** True once for a command sent within [keepMs]; it is then used up. */
+    @Synchronized
+    fun take(command: String?, nowMs: Long): Boolean {
+        sent.removeAll { nowMs - it.second > keepMs || it.second > nowMs }
+        val i = sent.indexOfFirst { it.first == command }
+        if (i < 0) return false
+        sent.removeAt(i)
+        return true
+    }
+
+    companion object {
+        const val KEEP_MS = 10 * 60_000L
+        val shared = SentCommands()
+    }
+}
