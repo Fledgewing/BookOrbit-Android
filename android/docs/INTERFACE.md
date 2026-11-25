@@ -50,7 +50,7 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `RECHECK` | `reason`, `ids`, `paths` (one per line, the same order), `server`, `user`, `userkey` | Cap `cache_worker`: a Full refresh's covers on screen, each with its `.etag`, asked again If-None-Match; a changed one replaces the file. Answers with a `covers_rechecked` event `{why, checked, changed = {ids}, failed}`. Needs no service. |
 | `SQLITE_STRESS` | `seconds` (default 120) | Debug (docs/design/sqlite-cache.md "Stress test"): writes `orbit-cache/stress.db` nonstop for that long, one 100-row page per transaction, then logs `sqlite-stress writer: …` and writes `orbit-cache/stress-writer.lua` `{writes, errors, max_wait_ms, integrity, first_error, at}`. No login, no service. |
 | `SLEEP_POOL` | `reason`, `wake` | Companion cap `sleep_screen`: the files in `koreader/settings/orbit-sleep/` changed (below). The picture sink redraws `Pictures/Orbit/sleep.png`; the screen saver reads them at the next sleep. With `wake` = `"1"` (reason `wake`): KOReader resumed after a real sleep (the screen went off, not an app switch); with Every sleep the picture moves on for the next sleep, once per wake (the service's screen-on counts as the same wake). Needs no service. |
-| `MIRROR` | `reason`, `server`, `user`, `userkey` | Cap `cache_worker` (docs/design/companion-worker.md): run the offline mirror from `koreader/settings/orbit-cache/mirror/plan.lua` on the cache worker thread (below). The login is used only as `x-auth-user`/`x-auth-key` on requests to `server`, held in memory, never written or logged. A new `MIRROR` replaces a waiting one. Needs no service. |
+| `MIRROR` | `reason`, `server`, `user`, `userkey`, `plan` (Lua literal) | Cap `cache_worker` (docs/design/companion-worker.md): parse and atomically save `plan` as `koreader/settings/orbit-cache/mirror/plan.lua`, remove the old stop marker, then run the offline mirror on the cache worker thread (below). The login is used only as `x-auth-user`/`x-auth-key` on requests to `server`, held in memory, never written or logged. A new `MIRROR` replaces a waiting one. Needs no service. |
 | `CHECK` | `reason`, `cache_key`, `path`, `mode` (`open`/`refresh`/`full`, or `store`: the plugin read it from the server), `owner`, `template` (the plugin's detail request with the sentinel id), `server`, `user`, `userkey` | Cap `cache_worker`: ask `server` for `path`, compare with what the plugin would serve from `orbit.db`, save a changed reply there and answer with an event (below). Checks go before Full refresh jobs. Needs no service. |
 | `PATCH` | `reason`, `id` (a book id, or empty), `fields` (a Lua literal of the changed fields, or empty), `stale_home` (`"1"`/`"0"`); or `wipe` = `"1"` | Cap `cache_worker`: a write the plugin made (`Cache.writeEffect`), patched into the saved book, the lists that name it and other saved replies; Home marked stale. `wipe` empties the database. In order with the checks. No login. Needs no service. |
 | `STORAGE` | `reason`, `limit` (bytes, empty: none), `cover_dir`, `mirror_covers` (`"1"`/`"0"`) | Cap `cache_worker`: count everything BookSync stores (`orbit.db` and the cover folder) and, over `limit`, remove what StorageLogic says: the oldest browsing replies and plain covers first, then covers saved for offline, never lists and books saved for offline nor Home. The companion removes them itself and answers with a `storage` event. No login. Needs no service. |
@@ -116,13 +116,28 @@ read-only. The small files beside it are Lua literals in the cache's format (`Ca
 |---|---|---|
 | `orbit.db`, `.nomedia` | companion | lists by position naming books by id, each book once (its list item, detail and search text), other replies by key, the covers kept, the Full refresh's jobs, `meta` (owner, detail template, storage totals, the run's %) |
 | `plugin-state.lua` | plugin | the detail variant it reads and the copies queue |
-| `events/<n>.lua` | companion | a check's answer: `{kind = "checked", key, changed, at}`, `{…, unchanged, saved}` or `{…, err}`; a sleep pool refresh: `{kind = "sleep_pool", why, items, kept, probed, left_out, unknown, skipped, carried, retired, every, fallback, listed, scopes}` (or `scopes_only`, or `err`); a copies lookup: `{kind = "copies", why, checked, found = {{md5, path, book_id, file_id, why}}, gone}`; a storage count: `{kind = "storage", why, totals, removed = {cache, cover, mirror_cover}, used, after, limit}` |
+| `events/<n>.lua` | companion (private spool; never enumerated by the plugin) | a check's answer: `{kind = "checked", key, changed, at}`, `{…, unchanged, saved}` or `{…, err}`; a sleep pool refresh: `{kind = "sleep_pool", why, items, kept, probed, left_out, unknown, skipped, carried, retired, every, fallback, listed, scopes}` (or `scopes_only`, or `err`); a copies lookup: `{kind = "copies", why, checked, found = {{md5, path, book_id, file_id, why}}, gone}`; a storage count: `{kind = "storage", why, totals, removed = {cache, cover, mirror_cover}, used, after, limit}` |
 | `copies/ask.lua` | plugin, before each `COPIES` | `books` (`md5`, `path`, `book_id`, `file_id`, `incompatible`), `eob` (book id -> `files`, `saved_at`), `owner`, `server`, `detail_template`, `sentinel` |
-| `mirror/plan.lua` | plugin, before each `MIRROR` | `run`, `op` (`full`/`resume`/`revalidate`/`covers`), `reason`, `owner`, `lib_version`, `sentinel`, `templates` (per section: `path`, `series_name_path`), `detail_template`, `all_books`, `sections`, `seed_lists`, `seed_details`, `cover_dir`, `covers_on`, `limit` |
+| `mirror/plan.lua` | companion, from the `MIRROR.plan` extra | `run`, `op` (`full`/`resume`/`revalidate`/`covers`), `reason`, `owner`, `lib_version`, `sentinel`, `templates` (per section: `path`, `series_name_path`), `detail_template`, `all_books`, `sections`, `seed_lists`, `seed_details`, `cover_dir`, `covers_on`, `limit` |
 | `mirror/status.lua` | companion, every 2 s and at the end | `{v = 4, runner, run, running, beat, op, at, lib_version, done, total, left, pct, rate, eta_s, skipped, errors, covers, cover_total, limit_note, revalidating, bytes, started_at}`; `pct` never goes down within a run |
 | `mirror/summary.lua` | companion, at the end of a run | `{run, why (finished/stopped/no answer/busy), jobs, status, changed, written, written_more, saved, revalidated}` |
 | `mirror/stop` | plugin | stop the run after the batch in hand |
 | covers, in the plugin's thumbnail folder | companion | `<memoKey>.jpg` and `.etag`, as the plugin names them |
+
+W27 startup maintenance uses `PATCH` variants on the same required worker:
+
+- `drain_events="1"`, `events_ack=<id>` acknowledges `events-batch.lua`. The worker removes
+  only that batch's spool files and atomically publishes the next batch (at most eight events,
+  under 64 KiB). The plugin reads one fixed filename; duplicate ids are ignored. Child-process
+  metadata travels with the subprocess result, with no directory spool or UI scan.
+- `old_hash`, `new_hash` copies a hash sidecar on the worker. Only two 32-character lowercase
+  hex hashes are accepted; paths derive from KOReader's fixed `hashdocsettings` folder.
+- `board_year` (Lua literal), `board_key`, `board_now` computes the dashboard calendar and reads
+  local daily statistics on the worker; a `board_year` event returns `{key, data={values,start,today}}`.
+  The UI uses the last snapshot while the next one is pending.
+
+`STORAGE` owns orphan ETag cleanup and cover eviction. Startup and upstream thumbnail
+maintenance only request it. Storage labels use the last worker answer, without opening SQLite.
 
 The plugin needs the companion of its own version for any of this (`Companion.workerProblem`):
 otherwise it shows "BookSync Companion needed" or "Update BookSync Companion" and sends nothing.

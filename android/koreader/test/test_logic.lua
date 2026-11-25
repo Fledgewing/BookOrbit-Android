@@ -1632,6 +1632,38 @@ test("orbismart: the popup's question", function()
     eq(OrbiSmart.question("X4 Pro", 12, "follow"), "Continue from X4 Pro, p. 12 (moved back there)?")
 end)
 
+test("main loop: directory iterators are confined to the guarded thumbnail child", function()
+    local main = readFile(here .. "/../orbit.koplugin/main.lua")
+    for module in main:gmatch('"(ko/[^"%s]+%.lua)"') do
+        local source = readFile(here .. "/../orbit.koplugin/" .. module)
+        if module == "ko/cover_child.lua" then
+            ok(source:find("Db.pid() ~= Store.ui_pid",1,true), "child PID guard")
+            ok(source:find("if not lfs_ok or not (OC.child",1,true), "guard precedes iterator")
+        else
+            ok(not source:find("lfs.dir",1,true), module .. " must not enumerate a directory")
+            ok(not source:find("lfs%.attributes[^\n]*for "), module .. " file scans belong to companion")
+        end
+    end
+end)
+
+test("status layout: default off, sizes, compact strips and proportional battery", function()
+    local schema = M.SettingsSync.decodeJson(readFile(here .. "/../../../shared/settings/schema.json"))
+    local indexed = M.SettingsSync.index(schema)
+    eq(indexed.byKey.status_orbit_layout.default, false)
+    eq(indexed.byKey.status_orbit_size.default, "small")
+    local L = M.StatusLayout
+    eq(L.fontSize("small"), 14); eq(L.fontSize("medium"), 18); eq(L.fontSize("large"), 22)
+    eq(L.fontSize("unknown"), 14)
+    for _, h in ipairs({12, 16, 24, 40}) do eq(L.stripHeight(h, 1), h+2) end
+    for _, charge in ipairs({0, 1, 25, 50, 98, 100}) do
+        local g = L.battery(charge, 12)
+        eq(g.fill, math.floor(g.inner*charge/100+0.5))
+        ok(g.h <= 12 and g.fill <= g.inner)
+    end
+    eq(L.battery(0, 12).fill, 0)
+    eq(L.battery(100, 12).fill, L.battery(100, 12).inner)
+end)
+
 -- @fixture status/format.json
 test("status layout: shared progress and clock formats", function()
     local f = M.SettingsSync.decodeJson(readFile(here .. "/../../../shared/fixtures/status/format.json"))

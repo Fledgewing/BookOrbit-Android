@@ -34,3 +34,17 @@ function StatusLayout.layout(width, inset, gap, battery, icon, chapter, progress
     return { left = left, chapter = title, right = progress, lx = inset,
         cx = (width - measure(title))/2, rx = right }
 end
+
+-- Sizes are unscaled font points, like KOReader's footer default (14).
+StatusLayout.SIZES = { small = 14, medium = 18, large = 22 }
+function StatusLayout.fontSize(choice) return StatusLayout.SIZES[choice] or 14 end
+function StatusLayout.stripHeight(text_height, padding) return math.ceil(text_height) + 2 * padding end
+function StatusLayout.battery(capacity, cap_height)
+    local h = math.max(6, math.floor(cap_height))
+    local w = math.floor(h * 1.7)
+    local border = math.max(1, math.floor(h / 9))
+    local inner = w - 2 * border
+    local pct = math.max(0, math.min(100, tonumber(capacity) or 0))
+    return { h = h, w = w, border = border, terminal = border * 2,
+        fill = math.floor(inner * pct / 100 + 0.5), inner = inner }
+end

@@ -228,8 +228,18 @@ function OrbitAndroid:menuItems()
             separator = true,
         },
         { text = _("Status bar: BookSync layout (matches Xteink)"),
-            checked_func = function() return S.status_orbit_layout ~= false end,
+            checked_func = function() return S.status_orbit_layout == true end,
             callback = function() Shared.set("status_orbit_layout", not S.status_orbit_layout); ReadingStatus.changed() end },
+        { text = _("Status bar size"), sub_item_table = (function()
+            local items = {}
+            for _i, choice in ipairs(SCHEMA.byKey.status_orbit_size.values) do
+                local id = choice.id
+                items[#items+1] = { text = _(choice.label),
+                    checked_func = function() return (S.status_orbit_size or "small") == id end,
+                    callback = function() Shared.set("status_orbit_size", id); ReadingStatus.changed() end }
+            end
+            return items
+        end)() },
         stoggle("local_first"),
         stoggle("eob_sheet"),
         stoggle("eob_auto"),

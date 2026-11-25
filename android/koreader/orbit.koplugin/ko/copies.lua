@@ -133,23 +133,8 @@ end
 -- KOReader's hash-keyed sidecar ("hash" location) follows the new hash: the files are copied, the
 -- old folder stays (KOReader may still have the old hash cached for this path).
 local function carryHashSidecar(old, new)
-    local okd, DataStorage = pcall(require, "datastorage")
-    local okl, lfs = pcall(require, "libs/libkoreader-lfs")
-    if not (okd and okl and DataStorage.getDocSettingsHashDir) then return end
-    local root = DataStorage:getDocSettingsHashDir()
-    local from, to = CopiesPlan.hashSidecar(root, old), CopiesPlan.hashSidecar(root, new)
-    if lfs.attributes(from, "mode") ~= "directory" or lfs.attributes(to, "mode") then return end
-    lfs.mkdir(root .. "/" .. new:sub(1, 2))
-    lfs.mkdir(to)
-    for name in lfs.dir(from) do
-        if name ~= "." and name ~= ".." and lfs.attributes(from .. "/" .. name, "mode") == "file" then
-            local fi = io.open(from .. "/" .. name, "rb")
-            local data = fi and fi:read("*a")
-            if fi then fi:close() end
-            local fo = data and io.open(to .. "/" .. name, "wb")
-            if fo then fo:write(data); fo:close() end
-        end
-    end
+    if Companion.workerProblem() then return end
+    Companion.send(Companion.ACTION.PATCH, { reason = "hash sidecar", old_hash = old, new_hash = new })
 end
 
 -- KOReader's reading statistics key a book by (title, authors, md5): move its rows to the new hash.

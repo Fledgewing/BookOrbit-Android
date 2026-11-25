@@ -78,7 +78,7 @@ local function run(limit)
         local t = table.remove(W.queue, 1)
         if t.at > stop then table.insert(W.queue, t) break end
         W.clock = math.max(W.clock, t.at)
-        t.fn(unpack(t.args))
+        if W.main_loop_guard then W.main_loop_guard(t.fn, t.args) else t.fn(unpack(t.args)) end
     end
 end
 
@@ -1252,9 +1252,12 @@ test("contract: every command, call, page, launch command, status key, file and 
     ok(src:find("connect%(\"127%.0%.0%.1\", " .. C.loopback.port .. "%)"), "the click channel's port")
     for _, l in ipairs(C.loopback.lines) do ok(src:find('"%^' .. l), "the channel line " .. l) end
     for _, k in ipairs(C.status) do ok(src:find("%." .. k .. "%f[^%w_]"), "status key " .. k .. " is read") end
+    local mailbox_file = assert(io.open(here .. "/../../companion/app/src/main/java/net/fledgewing/orbitcompanion/EventMailbox.kt", "rb"))
+    local mailbox_source = mailbox_file:read("*a"); mailbox_file:close()
     for _, f in ipairs(C.files) do
         local name = f.path:gsub("/$", ""):match("[^/]+$")
-        ok(src:find(esc(name), 1), "file " .. name)
+        local source = f.reader == "companion" and (src .. mailbox_source) or src
+        ok(source:find(esc(name), 1), "file " .. name)
     end
     eq(RE.Store.VERSION, C.db.user_version, "orbit.db user_version")
     eq(RE.Store.FILE, C.db.file:match("[^/]+$"))
@@ -3426,6 +3429,7 @@ test("local-first: Home paints this device's state; ⟳ refreshes; a refresh rep
     local items, ctx = cat:dashboardRootFetch({})
     cat:switchTo("Home", items, ctx, false)
     ok(lf.stock_switch == 0 and lf.header == 1, "no full repaint; header stamped")
+    W.shown = { cat }; run(0.1)
     ok(#lf.repainted == 1 and lf.repainted[1] == "hero", "only the hero tile: " .. table.concat(lf.repainted, ","))
     ok(cat.current_context == ctx, "the new body adopted")
     -- A different board (shelf set changed) -> the plugin's full repaint.
@@ -3467,6 +3471,7 @@ test("local-first: ⟳ keeps covers; a quiet refresh keeps cover jobs; a late co
     lf.covers[9] = "ready"
     cat._orbit_skip_repaint = true
     cat:updateItems(nil, true)
+    W.shown = { cat }; run(0.1)
     ok(lf.full_paint == 0, "no full repaint")
     ok(#lf.repainted == 1 and lf.repainted[1] == "hero", "the cover's tile redrew: " .. table.concat(lf.repainted, ","))
     for _, k in ipairs({ "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui" }) do
@@ -3744,6 +3749,7 @@ test("cache: covers keep their ETag; a moved version asks If-None-Match and a 30
     local stock_file = ltn.sink.file
     ltn.sink.file = function(f) return function(chunk) if chunk then f:write(chunk) end return 1 end end
     local dir = cache.dir .. "/covers"
+    E.OC.child = true -- production downloads run in the thumbnail subprocess
     local v1 = dir .. "/7_20261101.jpg"
     ok(client:downloadCatalogThumbnail(7, v1, { temp_path = v1 .. ".part", max_bytes = 4e6 }), "first download")
     local f = io.open(v1 .. ".etag"); ok(f and f:read("*a") == server_etag, "ETag kept"); if f then f:close() end
@@ -3762,7 +3768,11 @@ test("cache: covers keep their ETag; a moved version asks If-None-Match and a 30
     ok(cache.stock_cover == nil, "never the plugin's download")
     -- Orphaned ETags are cleaned.
     io.open(dir .. "/9_1.jpg.etag", "w"):close()
-    ok(E.OC.cleanEtags(dir) == 1, "orphan ETag removed")
+    E.OC.child = nil
+    E.OC.cover_dir = dir
+    E.OC.cleanEtags()
+    run(3)
+    ok(not io.open(dir .. "/9_1.jpg.etag"), "orphan ETag removed by companion")
     http.request, ltn.sink.file = stock_http, stock_file
     cacheTeardown()
 end)
@@ -4596,12 +4606,12 @@ test("mirror: Full refresh saves every book's details, outside the cap; covers o
         io.open(a, "w"):close(); io.open(other, "w"):close()
         cache.prune = { a, other }
         cat:pruneThumbnailCache()
-        ok(io.open(a, "rb") and not io.open(other, "rb"), "a mirrored cover stays, another goes")
+        ok(io.open(a, "rb") and io.open(other, "rb"), "upstream pruning is replaced by companion storage policy")
         -- Off again: nothing deleted now; the plugin's pruner treats them like any cover.
         E.S.mirror_covers = false
         ok(io.open(a, "rb"), "turning it off deletes nothing")
         cat:pruneThumbnailCache()
-        ok(not io.open(a, "rb"), "back under the plugin's cap")
+        ok(io.open(a, "rb"), "storage worker owns eviction; plugin never walks or prunes")
         cache.prune = nil
     end)
     E.S.mirror_covers = nil
@@ -4737,7 +4747,9 @@ test("storage limit: BookSync Companion counts and removes; eligible covers go b
     -- The totals are there at the next start (the database's meta).
     E.OC.storage = nil
     E.OC.client = function() return client end
-    ok(E.OC.storageTotals() and E.OC.storageTotals().used == 30 * MB, "read back from the database")
+    ok(E.OC.storageTotals() == nil, "UI never opens the database for a storage count")
+    E.OC.storageCount("last count"); run(3)
+    ok(E.OC.storageTotals() and E.OC.storageTotals().used == 30 * MB, "companion supplies the count")
     -- 10 GB crosses the signed 32-bit byte boundary: preserve the limit over IPC and enforce it.
     run(10)
     E.S.storage_limit_mb = 10240
@@ -5386,7 +5398,7 @@ test("sleep screen: the tag picker opens from the companion's tags.json; KOReade
     local reads, open = 0, io.open
     io.open = function(path, ...)
         -- The companion's small answers (events/) are read; no saved detail or index is.
-        if not W.in_companion and tostring(path):find(cdir, 1, true) and not tostring(path):find("/events/", 1, true) then reads = reads + 1 end
+        if not W.in_companion and tostring(path):find(cdir, 1, true) and not tostring(path):find("/events/", 1, true) and not tostring(path):find("/events-batch.lua", 1, true) then reads = reads + 1 end
         return open(path, ...)
     end
     W.wifi = true
@@ -6359,6 +6371,101 @@ test("About: the locked menu shows every shared credit paragraph and the project
 end)
 
 store.orbit_android.sync_mode = "custom"
+
+test("main loop: yielding work is attributed to each resume rather than a combined stall", function()
+    local M=E.MainLoop
+    local logs=W.logs; W.logs={}
+    local co=coroutine.create(function()
+        M.wrap(function()
+            for i=1,3 do
+                W.clock=W.clock+0.03
+                if i<3 then
+                    coroutine.yield()
+                    local current=coroutine.running()
+                    M.turns[current]=(M.turns[current] or 0)+1
+                end
+            end
+        end,"cooperative test")()
+    end)
+    for i=1,3 do local resumed,err=coroutine.resume(co); ok(resumed,err) end
+    eq(coroutine.status(co),"dead")
+    ok(not table.concat(W.logs,"\n"):find("cooperative test",1,true),"90 ms spread over three turns is not one stall")
+    W.logs=logs
+end)
+
+test("Home calendar: worker snapshots replace a correctly dated empty calendar", function()
+    local LF, C, OC = E.LF, E.Companion, E.OC
+    local saved={year=LF.year,key=LF.year_key,waiting=LF.year_waiting,send=C.send,problem=C.workerProblem,watch=OC.watchChecks,catalog=E.Mirror.catalog}
+    local asks={}
+    C.send=function(action, extras) asks[#asks+1]=extras; return true end
+    C.workerProblem=function() return nil end
+    OC.watchChecks=function() end
+    E.Mirror.catalog=function() return nil end
+    LF.year={values={},start=0,today=0}; LF.year_key=nil
+    local now=os.time(); local body={}
+    local values,start,today=LF.yearMinutes(now,body)
+    ok(start>now-365*86400 and today<=now and now-today<86400,"current calendar dates before first answer")
+    ok(#values>=358 and #values<=364); eq(#asks,1)
+    LF.yearMinutes(now,body); eq(#asks,1,"pending ask coalesced")
+    LF.yearLanded({key=asks[1].board_key,data={values={10,20},start=start,today=today}})
+    eq(select(1,LF.yearMinutes(now,body))[2],20,"worker answer used")
+    LF.year,LF.year_key,LF.year_waiting=saved.year,saved.key,saved.waiting
+    C.send,C.workerProblem,OC.watchChecks,E.Mirror.catalog=saved.send,saved.problem,saved.watch,saved.catalog
+end)
+
+test("startup: 7000 cover files never cause a UI walk, bulk read or 50 ms callback", function()
+    local client = cacheSetup()
+    local lfs = require("libs/libkoreader-lfs")
+    local cdir = cache.dir .. "/covers"
+    for i=1,7000 do local f=assert(io.open(cdir .. "/" .. i .. ".jpg.etag", "wb")); f:write("etag"); f:close() end
+    E.OC.cover_dir = cdir
+    local dir, open = lfs.dir, io.open
+    local walks, reads, max_reads, max_ms, checked = 0, 0, 0, 0, 0
+    local items = FC.storageItems
+    -- The fake worker walks the real directory; companion tests cover its actual cleanup/count.
+    FC.storageItems = function(folder)
+        ok(W.in_companion, "storage runs in companion")
+        local count=0; for name in lfs.dir(folder) do if name:match("%.etag$") then count=count+1 end end
+        eq(count,7000)
+        return {}
+    end
+    lfs.dir = function(folder)
+        if not W.in_companion and not W.in_child then walks=walks+1; error("UI directory walk") end
+        return dir(folder)
+    end
+    io.open = function(path, mode)
+        if not W.in_companion and not W.in_child and (not mode or mode:find("r",1,true)) then reads=reads+1 end
+        return open(path, mode)
+    end
+    W.main_loop_guard = function(fn,args)
+        reads=0
+        local before=W.wall()
+        fn(unpack(args))
+        if getfenv(fn)==E then
+            checked=checked+1
+            local ms=(W.wall()-before)*1000
+            max_ms=math.max(max_ms,ms); max_reads=math.max(max_reads,reads)
+            ok(ms < 50, "main-loop callback exceeded 50 ms")
+            ok(reads <= 8, "main-loop callback read more than 8 files")
+        end
+    end
+    local passed_guard, err=pcall(function()
+        E.OC.cleanEtags(cdir)
+        eq(E.OC.olderCover(cdir,"no.jpg","1"),nil,"UI never scans older covers")
+        run(12)
+        local reader={document={file="/books/reading.epub"}}
+        ReaderUI.instance=reader; W.shown={reader}
+        E.OC.cleanEtags(cdir); run(12)
+        ReaderUI.instance=nil; W.shown={}
+        eq(walks,0)
+        ok(checked > 0, "guard measured production callbacks")
+        ok(max_ms < 50 and max_reads <= 8)
+    end)
+    W.main_loop_guard=nil; lfs.dir=dir; io.open=open; FC.storageItems=items
+    ReaderUI.instance=nil; W.shown={}
+    cacheTeardown()
+    ok(passed_guard,err)
+end)
 
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
 

@@ -242,8 +242,58 @@ function LF.quiet(cat)
     local changed = LocalFirst.changedTiles(tiles, tiles, old_d, new_d) or {}
     LF.logChanged(tiles, changed, old_d, new_d)
     cat._board_ctx.d = new_d
-    for _, i in ipairs(changed) do pcall(cat.boardRefreshTile, cat, cat._board_tiles[i]) end
+    LF.paintTiles(cat, changed)
     return #changed
+end
+
+-- Each tile gets its own turn; abandon stale repaints when the view changes.
+function LF.paintTiles(cat, changed)
+    cat._orbit_paint_pending = cat._orbit_paint_pending or {}
+    for _i, index in ipairs(changed) do cat._orbit_paint_pending[index] = cat.current_context end
+    if cat._orbit_painting then return end
+    cat._orbit_painting = true
+    local function paint()
+        local index, context = next(cat._orbit_paint_pending)
+        if not index then cat._orbit_painting = nil; return end
+        cat._orbit_paint_pending[index] = nil
+        if not reading() and not cat.catalog_closed and cat.current_context == context then
+            local tile = cat._board_tiles and cat._board_tiles[index]
+            if tile then pcall(cat.boardRefreshTile, cat, tile) end
+        end
+        UIManager:scheduleIn(0.01, paint)
+    end
+    UIManager:scheduleIn(0.01, paint)
+end
+
+-- One small answer replaces a 364-day date/SQLite pass on every board rebuild.
+LF.year = { values = {}, start = 0, today = 0 }
+function LF.yearMinutes(now, year)
+    if LF.year.today == 0 then
+        -- A correctly dated empty calendar while the first worker snapshot is in flight.
+        local day = os.date("*t", now); day.hour, day.min, day.sec = 0, 0, 0
+        local today = os.time(day)
+        local dow = tonumber(os.date("%w", now))
+        local values = {}; for i=1,364-(6-dow) do values[i]=0 end
+        LF.year = { values = values, start = today + (6-dow-363)*86400 + 43200, today = today }
+    end
+    local key = tostring(year) .. ":" .. os.date("%Y-%m-%d", now) .. ":" .. tostring(math.floor(now / 120))
+    if LF.year_key ~= key and not Companion.workerProblem() then
+        LF.year_key = key
+        Companion.send(Companion.ACTION.PATCH, { reason = "Home calendar", board_year = Cache.encode(year or {}),
+            board_key = key, board_now = tostring(now) })
+        LF.year_waiting = os.time()
+        OC.watchChecks()
+    end
+    return LF.year.values, LF.year.start, LF.year.today
+end
+function LF.yearLanded(ev)
+    if ev.key ~= LF.year_key or type(ev.data) ~= "table" then return end
+    LF.year_waiting = nil
+    LF.year = ev.data
+    local cat = Mirror.catalog()
+    if cat then
+        if not reading() then LF.quiet(cat) end
+    end
 end
 
 -- One line per changed tile: which one and what in it changed (why a quiet repaint happened).
@@ -330,6 +380,7 @@ function LF.install(why)
         end
         return false
     end
+    if type(BoardData.yearMinutes) == "function" then BoardData.yearMinutes = LF.yearMinutes end
     LF.installed = true
     LF.failed = {}
     log("local-first: installed (" .. tostring(why) .. ")")
@@ -646,7 +697,7 @@ function LF.quietSwitch(cat, old, item_table, context)
     LF.logChanged(tiles, changed, old_d, new_d)
     cat._board_ctx.d = new_d
     cat:boardRefreshClock() -- the header: "updated just now"
-    for _, i in ipairs(changed) do cat:boardRefreshTile(cat._board_tiles[i]) end
+    LF.paintTiles(cat, changed)
     log("local-first: refresh landed;", #changed, "tile(s) changed")
     LocalState.scanSidecars(cat, boardBookIds(nb))
     return true

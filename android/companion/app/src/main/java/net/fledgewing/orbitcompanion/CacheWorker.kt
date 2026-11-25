@@ -157,7 +157,7 @@ class CacheWorker(
 
     /** A write the plugin made (PATCH): { id, fields (a Lua literal), stale_home }, or a wipe. */
     fun patch(id: Long?, fields: Map<*, *>, staleHome: Boolean, wipe: Boolean) {
-        if (wipe) { store.wipe("the plugin asked"); return }
+        if (wipe) { store.wipe("the plugin asked"); eventsDir.listFiles()?.forEach { it.delete() }; File(root, "events-batch.lua").delete(); return }
         val n = store.patch(id, fields, staleHome)
         if (n > 0) log("store: a write patched $n saved replies")
     }
@@ -345,12 +345,17 @@ class CacheWorker(
             "gone" to (found.size - present.size).toLong()))
     }
 
+    /** Acknowledged mailbox; listing/parsing event files belongs to this worker only. */
+    private val mailbox by lazy { EventMailbox(root, checkpoint) }
+    fun drainEvents(ack: String?) = mailbox.publish(ack)
+
     private var eventSeq = 0
 
     /** An answer for the plugin in events/ (it drains them while it waits for one). */
     fun event(ev: Map<String, Any?>) {
         eventSeq++
         write(File(eventsDir, "${now()}-0-c$eventSeq.lua"), LuaValue.encode(ev))
+        drainEvents(null)
     }
 
     // ------------------------------------------------------------------ the plan
