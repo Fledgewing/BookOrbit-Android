@@ -215,6 +215,7 @@ void tornWriteTests() {
 
 // finish-cases.json "drain": a known book, no finish day, the server's status at the guard.
 void sharedDrainCases(JsonDocument& doc) {
+  // @fixture bookorbit/finish-cases.json#drain
   for (JsonObjectConst c : doc["drain"].as<JsonArrayConst>()) {
     const char* name = c["name"];
     FinishJob job;
@@ -245,6 +246,7 @@ void sharedDrainCases(JsonDocument& doc) {
 
 // finish-cases.json "errors": the answer to the first request after attempts_before failures.
 void sharedErrorCases(JsonDocument& doc) {
+  // @fixture bookorbit/finish-cases.json#errors
   for (JsonObjectConst c : doc["errors"].as<JsonArrayConst>()) {
     const std::string name = "error " + (c["code"].isNull() ? std::string("network") : std::to_string(c["code"].as<int>()));
     FinishJob job;
@@ -275,6 +277,7 @@ void sharedErrorCases(JsonDocument& doc) {
 // finish-cases.json "hold": final and push in percent, forward pages since the finish, released
 // = the finish was undone here.
 void sharedHoldCases(JsonDocument& doc) {
+  // @fixture bookorbit/finish-cases.json#hold
   for (JsonObjectConst c : doc["hold"].as<JsonArrayConst>()) {
     FinishJob job;
     job.finalPermille = static_cast<uint16_t>(c["final"].as<int>() * 10);
@@ -307,6 +310,7 @@ int main(int argc, char** argv) {
   sharedErrorCases(shared);
   sharedHoldCases(shared);
   JsonDocument doc;
+  // @fixture bookorbit/finish-steps.json
   if (!loadJsonFile((dir + "/finish-steps.json").c_str(), doc)) return 2;
   drainCases(doc);
   holdCases(doc);
