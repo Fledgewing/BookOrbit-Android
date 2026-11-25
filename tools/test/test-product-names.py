@@ -73,6 +73,10 @@ class ProductNames(unittest.TestCase):
                 if '"Orbify"' in line:
                     self.fail(f'{path.relative_to(ROOT)}:{number}: old firmware label')
 
+    def test_release_copy(self):
+        text = (ROOT / ".github/workflows/release.yml").read_text()
+        self.assertIsNone(obsolete(text))
+
     def test_guard_examples(self):
         for text in ('Orbit', 'Orbit Companion', "Orbit's settings", 'Android sync'):
             self.assertIsNotNone(obsolete(text))
