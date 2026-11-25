@@ -64,7 +64,7 @@ class SdCard:
         self.crosspoint = self.fs / ".crosspoint"
         self.crosspoint.mkdir(parents=True)
         (self.fs / "books").mkdir()
-        self.bookorbit = {"username": kosync["username"], "password_obf": obfuscate(kosync["password"]),
+        self.bookorbit = {"sync_mode": "custom", "username": kosync["username"], "password_obf": obfuscate(kosync["password"]),
                           "serverUrl": proxy, "syncBehavior": SYNC_BEHAVIOR_SMART, "downloadFolder": ""}
         self.settings = {"shortPwrBtn": SHORT_PWRBTN_BOOKORBIT_SYNC, "bookOrbitShortcutIds": BOOKORBIT_SHORTCUT_IDS}
         self.save()

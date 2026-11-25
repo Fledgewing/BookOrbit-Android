@@ -1,0 +1,658 @@
+diff --git a/lib/BookOrbitSync/BookOrbitCredentialStore.cpp b/lib/BookOrbitSync/BookOrbitCredentialStore.cpp
+index 697f23e..9af1dab 100644
+--- a/lib/BookOrbitSync/BookOrbitCredentialStore.cpp
++++ b/lib/BookOrbitSync/BookOrbitCredentialStore.cpp
+@@ -59,6 +59,7 @@ void BookOrbitCredentialStore::toJson(JsonDocument& doc) const {
+   doc["downloadFolder"] = downloadFolder;
+   doc["syncBehavior"] = static_cast<uint8_t>(syncBehavior);
+   doc["syncOnSleep"] = syncOnSleep;
++  doc["sync_mode"] = orbiSmart ? "orbismart" : "custom";
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+   doc["orbifyMarkAtEnd"] = orbifyMarkAtEnd;
+ #endif
+@@ -99,6 +100,9 @@ bool BookOrbitCredentialStore::fromJson(JsonVariantConst doc) {
+   syncBehavior = behavior == static_cast<uint8_t>(BookOrbitSyncBehavior::SMART) ? BookOrbitSyncBehavior::SMART
+                                                                                 : BookOrbitSyncBehavior::ASK_EVERY_TIME;
+   syncOnSleep = doc["syncOnSleep"] | false;
++  // Preserve explicitly customized installs; new/default settings adopt OrbiSmart.
++  orbiSmart = doc["sync_mode"].is<const char*>() ? doc["sync_mode"] == "orbismart" :
++      ((behavior == 0 && !syncOnSleep) || (behavior == 1 && syncOnSleep)) && (doc["backgroundSync"] | 0) == 0;
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+   orbifyMarkAtEnd = doc["orbifyMarkAtEnd"] | true;
+ #endif
+diff --git a/lib/BookOrbitSync/BookOrbitCredentialStore.h b/lib/BookOrbitSync/BookOrbitCredentialStore.h
+index 4516bac..ca711be 100644
+--- a/lib/BookOrbitSync/BookOrbitCredentialStore.h
++++ b/lib/BookOrbitSync/BookOrbitCredentialStore.h
+@@ -41,6 +41,7 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
+   std::string cfClientSecret;  // Cloudflare Access service token, Client Secret half
+   BookOrbitSyncBehavior syncBehavior = BookOrbitSyncBehavior::ASK_EVERY_TIME;
+   bool syncOnSleep = false;
++  bool orbiSmart = true;  // shared setting sync_mode=orbismart|custom
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+   bool orbifyMarkAtEnd = true;  // Orbify: the End-of-Book page marks the book finished (D1)
+ #endif
+@@ -87,9 +88,12 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
+   }
+   BookOrbitSyncBehavior getSyncBehavior() const {
+     ensureLoaded();
+-    return syncBehavior;
++    return orbiSmart ? BookOrbitSyncBehavior::SMART : syncBehavior;
+   }
+ 
++  bool getOrbiSmart() const { ensureLoaded(); return orbiSmart; }
++  void setOrbiSmart(bool value) { ensureLoaded(); orbiSmart = value; }
++
+   // Sync the last opened book behind the sleep screen each time the device sleeps.
+   void setSyncOnSleep(const bool enabled) {
+     ensureLoaded();
+@@ -97,7 +101,7 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
+   }
+   bool getSyncOnSleep() const {
+     ensureLoaded();
+-    return syncOnSleep;
++    return orbiSmart || syncOnSleep;
+   }
+ 
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+diff --git a/src/activities/reader/EpubReaderActivity.cpp b/src/activities/reader/EpubReaderActivity.cpp
+index aa7e4b6..a788134 100644
+--- a/src/activities/reader/EpubReaderActivity.cpp
++++ b/src/activities/reader/EpubReaderActivity.cpp
+@@ -47,6 +47,7 @@
+ #include "BookOrbitCredentialStore.h"
+ #include "BookOrbitStatsQueue.h"
+ #include "orbify/BookOrbitBackgroundSync.h"
++#include "orbify/OrbiSmartSync.h"
+ #include "BookStatsActivity.h"
+ #include "BookStatsTracking.h"
+ #include "ChapterXPathResolver.h"
+@@ -97,6 +98,7 @@
+ #include "activities/util/ConfirmationActivity.h"
+ #include "activities/util/IntervalSelectionActivity.h"
+ #include "bookorbit/BookOrbitSyncActivity.h"
++#include "bookorbit/BookOrbitRemotePosition.h"
+ #include "clippings/ClippingHighlightGeometry.h"
+ #include "clippings/ClippingMatchTracker.h"
+ #include "clippings/ClippingTextMatcher.h"
+@@ -2765,6 +2767,7 @@ void EpubReaderActivity::onEnter() {
+   const bool resumePageBuildAfterRestart = consumeSilentRestartReaderPageBuild(
+       epub->getPath(), restartPageBuildSpine, restartPageBuildTarget, resumeAutoPageTurnAfterRestart);
+ 
++  OrbiSmartSync::prerender(epub, renderer);
+   bool progressLoaded = false;
+   if (APP_STATE.pendingBookmarkSpine != UINT16_MAX && APP_STATE.pendingBookmarkProgress >= 0.0f) {
+     // Resume from a bookmark selected on the Home screen
+@@ -3434,6 +3437,102 @@ bool EpubReaderActivity::checkHyphenationPack() {
+   return true;
+ }
+ 
++bool EpubReaderActivity::tickOrbiSmart() {
++  if (!OrbiSmartSync::enabled() || !epub || pageShownAtMs == 0 || RenderLock::peek()) return false;
++  int page = 0;
++  {
++    RenderLock lock(*this, RenderLock::Mode::Try);
++    if (!lock.ownsLock() || !section) return false;
++    page = section->currentPage;
++  }
++#ifdef SIMULATOR
++  static bool overrideTested = false;
++  if (!overrideTested && std::getenv("ORBIFY_SIM_OVERRIDE_AT_OPEN")) {
++    overrideTested = true;
++    onReaderMenuConfirm(EpubReaderMenuAction::ORBISMART_OVERRIDE, false);
++  }
++#endif
++  if (orbiSpine != currentSpineIndex || orbiPage != page) {
++    if (orbiSpine >= 0) OrbiSmartSync::noteTurn(epub->getPath());
++    orbiSpine = currentSpineIndex; orbiPage = page;
++  }
++  if (millis() - orbiPollMs < 1000) return false;
++  orbiPollMs = millis();
++  const uint32_t changed = OrbiSmartSync::generation();
++  if (orbiGeneration == changed) return false;
++  orbiGeneration = changed;
++  KOReaderProgress remote{}; bool wake = false;
++  if (!OrbiSmartSync::pending(epub->getPath(), remote, wake) || remote.timestamp == orbiAskedAt) return false;
++  CrossPointPosition mapped;
++  {
++    RenderLock lock(*this, RenderLock::Mode::Try);
++    if (!lock.ownsLock() || !section) { orbiGeneration = UINT32_MAX; return false; }
++    if (section->isBuilding()) section->releaseBuildFile();
++    const int count = std::max(1, static_cast<int>(section->estimatedTotalPages()));
++    mapped = BookOrbitRemotePosition::toLocal(epub, renderer, remote, currentSpineIndex, count);
++    if (!mapped.valid) return false;
++    const auto decision = OrbiSmartSync::evaluate(epub, {currentSpineIndex, page, count}, &remote, mapped,
++                                                 orbify::orbismart::Moment::Wake);
++    if (orbify::orbismart::apply(decision.decision, orbify::orbismart::Moment::Wake) != orbify::orbismart::Applied::Ask) {
++      orbiAskedAt = remote.timestamp;
++      return false;
++    }
++  }
++  char text[160];
++  snprintf(text, sizeof(text), "Continue from %s, p. %d?", remote.device.empty() ? "another reader" : remote.device.c_str(),
++           mapped.pageNumber + 1);
++  auto popup = makeUniqueNoThrow<ConfirmationActivity>(renderer, mappedInput, "OrbiSmart", text, false, true);
++  if (!popup) { orbiGeneration = UINT32_MAX; return false; }
++  LOG_INF("ORB", "%s", text);
++  popup->setOptionLabels("No", "Yes");
++  struct Offer { KOReaderProgress remote; CrossPointPosition mapped; unsigned long poll; };
++  auto offer = std::make_shared<Offer>(Offer{remote, mapped, millis()});
++  popup->setPromptRefresh([this, offer]() -> std::optional<std::string> {
++    if (!epub || millis() - offer->poll < 1000) return {};
++    offer->poll = millis();
++    KOReaderProgress newer{}; bool wake = false;
++    if (!OrbiSmartSync::pending(epub->getPath(), newer, wake) || newer.timestamp == offer->remote.timestamp) return {};
++    RenderLock lock(*this, RenderLock::Mode::Try);
++    if (!lock.ownsLock() || !section) return {};
++    const int count = std::max(1, static_cast<int>(section->estimatedTotalPages()));
++    const auto mapped = BookOrbitRemotePosition::toLocal(epub, renderer, newer, currentSpineIndex, count);
++    if (!mapped.valid) return {};
++    const auto r = OrbiSmartSync::evaluate(epub, {currentSpineIndex, section->currentPage, count}, &newer, mapped,
++                                          orbify::orbismart::Moment::Wake);
++    if (orbify::orbismart::apply(r.decision, orbify::orbismart::Moment::Wake) != orbify::orbismart::Applied::Ask) return std::string();
++    offer->remote = newer; offer->mapped = mapped; orbiAskedAt = newer.timestamp;
++    char text[192];
++    snprintf(text, sizeof(text), "OrbiSmart Continue from %s, p. %d?", newer.device.c_str(), mapped.pageNumber + 1);
++    return text;
++  });
++  orbiAskedAt = remote.timestamp;
++  const unsigned long asked = millis();
++  startActivityForResult(std::move(popup), [this, offer, asked](const ActivityResult& result) {
++    const auto& remote = offer->remote;
++    const auto& mapped = offer->mapped;
++    const bool yes = !result.isCancelled;
++    if (!epub) return;
++    OrbiSmartSync::resolve(epub->getPath(), remote, mapped, yes);
++    LOG_INF("ORB", "orbismart: popup ->%d %s after %lu s", mapped.pageNumber + 1, yes ? "yes" : "no", (millis() - asked) / 1000);
++    RenderLock lock(*this);
++    if (yes) {
++      const int count = std::max(mapped.totalPages, mapped.pageNumber + 1);
++      const auto offset = mapped.hasVisibleTextOffset ? std::optional<uint32_t>(mapped.visibleTextOffset) : std::nullopt;
++      EpubReaderUtils::saveProgress(*epub, mapped.spineIndex, mapped.pageNumber, count, offset);
++      section.reset(); clearFootnotePreviewState(); pendingPercentJump = false; pendingPageJump.reset();
++      pendingParagraphIndex = UINT16_MAX; pendingClippingIndex = UINT16_MAX; pendingAnchor.clear();
++      currentSpineIndex = cachedSpineIndex = mapped.spineIndex;
++      nextPageNumber = cachedChapterPageNumber = mapped.pageNumber; cachedChapterTotalPageCount = count;
++      cachedVisibleTextOffset = offset; pendingRelayoutReposition = offset.has_value();
++      cachedPageParagraphIndex = UINT16_MAX; cachedPageParagraphOffset = cachedPageParagraphSpan = 0;
++      orbiSpine = mapped.spineIndex; orbiPage = mapped.pageNumber;
++      LOG_INF("ORB", "orbismart: applied spine=%d page=%d", mapped.spineIndex, mapped.pageNumber);
++    }
++    requestUpdate();
++  });
++  return true;
++}
++
+ bool EpubReaderActivity::offerKeptPosition() {
+   static constexpr float SAME_PROGRESS_EPSILON = 0.001f;  // as Sync Book: 0.1 percentage points
+   float local = 0.0f;
+@@ -3581,6 +3680,7 @@ void EpubReaderActivity::loop() {
+   tickBackgroundSync();
+ #endif
+   flushPendingSyncMark();
++  if (tickOrbiSmart()) return;
+   if (keptOffer && !keptOfferShown && offerKeptPosition()) return;
+   if (!hyphenationPackChecked && checkHyphenationPack()) return;
+   syncStatsTrackingState();
+@@ -4975,6 +5075,28 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuAction action, const
+       break;
+ #endif
+     }
++    case EpubReaderMenuAction::ORBISMART_OVERRIDE: {
++      if (!epub || !section) break;
++      RenderLock lock(*this);
++      CrossPointPosition here{currentSpineIndex, section->currentPage, std::max(1, static_cast<int>(section->estimatedTotalPages()))};
++      std::optional<uint16_t> paragraph, item;
++      getSyncPageAnchors(*section, here.pageNumber, paragraph, item);
++      if (paragraph) { here.hasParagraphIndex = true; here.paragraphIndex = *paragraph; }
++      if (item) { here.hasLiIndex = true; here.liIndex = *item; }
++      const bool queued = OrbiSmartSync::queueOverride(epub->getPath(), ProgressMapper::toKOReader(epub, here), here);
++#if CROSSINK_TAILNET_BACKGROUND_SYNC
++      if (queued && BookOrbitBackgroundSync::enabled()) {
++        BookOrbitBackgroundSync::Position position;
++        position.spineIndex = here.spineIndex; position.page = here.pageNumber; position.pageCount = here.totalPages;
++        position.hasParagraph = here.hasParagraphIndex; position.paragraphIndex = here.paragraphIndex;
++        position.hasListItem = here.hasLiIndex; position.listItemIndex = here.liIndex;
++        BookOrbitBackgroundSync::start(epub->getPath().c_str(), position, "override");
++      }
++#endif
++      drawToast(renderer, queued ? "Read from here everywhere: queued" : "Could not save override");
++      requestUpdate();
++      break;
++    }
+     case EpubReaderMenuAction::BOOKORBIT_SYNC: {
+       if (activeFootnotePreview) {
+         requestUpdate();
+diff --git a/src/activities/reader/EpubReaderActivity.h b/src/activities/reader/EpubReaderActivity.h
+index 8178ee0..a1cb360 100644
+--- a/src/activities/reader/EpubReaderActivity.h
++++ b/src/activities/reader/EpubReaderActivity.h
+@@ -410,6 +410,11 @@ class EpubReaderActivity final : public Activity {
+   SyncPending::SessionMarker pendingSync;
+   std::atomic<bool> pendingSyncDue{false};
+   void flushPendingSyncMark();
++  bool tickOrbiSmart();
++  int orbiSpine = -1, orbiPage = -1;
++  int64_t orbiAskedAt = 0;
++  unsigned long orbiPollMs = 0;
++  uint32_t orbiGeneration = UINT32_MAX;
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   // CrossInk-Tailnet: starts BookOrbitBackgroundSync when it is due, between page turns.
+   void tickBackgroundSync();
+diff --git a/src/activities/reader/EpubReaderDrawerActivity.cpp b/src/activities/reader/EpubReaderDrawerActivity.cpp
+index ea757c2..320b8b7 100644
+--- a/src/activities/reader/EpubReaderDrawerActivity.cpp
++++ b/src/activities/reader/EpubReaderDrawerActivity.cpp
+@@ -1949,6 +1949,9 @@ void EpubReaderDrawerActivity::activateRow(const RowId row) {
+     case RowId::SyncProgress:
+       action = EpubReaderMenuAction::SYNC;
+       break;
++    case RowId::OrbiSmartOverride:
++      action = EpubReaderMenuAction::ORBISMART_OVERRIDE;
++      break;
+     case RowId::BookOrbitSync:
+       action = EpubReaderMenuAction::BOOKORBIT_SYNC;
+       break;
+@@ -3284,6 +3287,8 @@ const char* EpubReaderDrawerActivity::rowLabel(const RowId row) const {
+       return tr(STR_READING_STATS);
+     case RowId::SyncProgress:
+       return tr(STR_SYNC_BOOK);
++    case RowId::OrbiSmartOverride:
++      return "Read from here everywhere";
+     case RowId::BookOrbitSync:
+       return tr(STR_BOOKORBIT_SYNC);
+     case RowId::NearbyPositionSync:
+@@ -3473,6 +3478,7 @@ bool EpubReaderDrawerActivity::rowShowsNavigationCaret(const RowId row) const {
+     case RowId::DeleteCache:
+     case RowId::DeleteStats:
+     case RowId::SyncProgress:
++    case RowId::OrbiSmartOverride:
+     case RowId::BookOrbitSync:
+     case RowId::NearbyPositionSync:
+     case RowId::SendNearbyBook:
+diff --git a/src/activities/reader/EpubReaderMenuModel.h b/src/activities/reader/EpubReaderMenuModel.h
+index e3b355d..623038a 100644
+--- a/src/activities/reader/EpubReaderMenuModel.h
++++ b/src/activities/reader/EpubReaderMenuModel.h
+@@ -15,6 +15,7 @@ enum class EpubReaderMenuAction : uint8_t {
+   DISPLAY_QR,
+   GO_HOME,
+   SYNC,
++  ORBISMART_OVERRIDE,
+   BOOKORBIT_SYNC,  // this fork's provider, alongside upstream's KOReader SYNC
+   NEARBY_POSITION_SYNC,
+   SEND_NEARBY_BOOK,
+@@ -157,6 +158,7 @@ enum class ReaderDrawerCatalogItem : uint8_t {
+   SyncProgress,
+   NearbyPositionSync,
+   SendNearbyBook,
++  OrbiSmartOverride,
+   BookOrbitSync,  // this fork's provider, alongside upstream's KOReader SyncProgress
+ };
+ 
+@@ -236,7 +238,10 @@ constexpr ReaderDrawerCatalog makeReaderDrawerCatalog(const ReaderDrawerAvailabi
+   location.add(ReaderDrawerCatalogItem::SaveClipping);
+   if (available.hasClippings) location.add(ReaderDrawerCatalogItem::ViewClippings);
+   if (available.buttonDevice) {
+-    if (available.hasBookOrbitSync) location.add(ReaderDrawerCatalogItem::BookOrbitSync);
++    if (available.hasBookOrbitSync) {
++      location.add(ReaderDrawerCatalogItem::BookOrbitSync);
++      location.add(ReaderDrawerCatalogItem::OrbiSmartOverride);
++    }
+     if (available.hasKOReaderSync) location.add(ReaderDrawerCatalogItem::SyncProgress);
+ #if !CROSSINK_TAILNET_NO_NEARBY
+     location.add(ReaderDrawerCatalogItem::NearbyPositionSync);
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index 98b492d..59dbba2 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -1,4 +1,5 @@
+ #include "BookOrbitSyncActivity.h"
++#include "orbify/OrbiSmartSync.h"
+ #include "orbify/Wifi.h"
+ 
+ #include <GfxRenderer.h>
+@@ -383,7 +384,7 @@ void BookOrbitSyncActivity::runSleepSync() {
+   // retried by the next sync, so a wake press can end it anywhere. Its tile dates the
+   // snapshot as the last sync: a sync that failed for the book leaves it as it was, or
+   // the tile would report as done a sync whose progress never reached the server.
+-  const bool homeShown = wifiConnectedForSleepSync && bookOrbitHome;
++  const bool homeShown = wifiConnectedForSleepSync && (bookOrbitHome || OrbiSmartSync::enabled());
+   const bool refreshHome = homeShown && state != SYNC_FAILED;
+   if (homeShown && !refreshHome) LOG_INF("BookOrbit", "Sleep sync failed: the Home snapshot stays as it was");
+   const auto homeCoverSizes = BookOrbitHomeLayout::coverSizes(renderer);
+@@ -433,11 +434,16 @@ void BookOrbitSyncActivity::runSleepSync() {
+     }
+ #endif
+   }
++  if (SLEEP_SYNC_LENDS && extras && !sleepSyncWakeRequested()) OrbiSmartSync::prefetch(epubPath, &sleepSyncWakeRequested);
+   syncSession.reset();
+   if (!SLEEP_SYNC_LENDS && refreshHome && !sleepSyncWakeRequested()) {
+     BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
+   }
+-  if (refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
++  if (!SLEEP_SYNC_LENDS && extras && !sleepSyncWakeRequested()) {
++    // X3: Home's session has closed; its three progress GETs share a fresh sync session.
++    OrbiSmartSync::prefetch(epubPath, &sleepSyncWakeRequested);
++  }
++  if (bookOrbitHome && refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
+   sleepRadio.reset();
+   SavedWifiConnect::disconnect();
+   if (refreshHome && !sleepSyncWakeRequested()) {
+@@ -555,6 +561,14 @@ void BookOrbitSyncActivity::performSync() {
+   // session fails cleanly (NETWORK_ERROR, retry next sync) where a fresh one was refused
+   // outright before it could try.
+   syncSession = makeUniqueNoThrow<BookOrbitSyncClient::Session>();
++  {
++#if CROSSINK_TAILNET_BACKGROUND_SYNC
++    OrbiSmartSync::drainOverrides(backgroundSync ? backgroundStop : sleepSync ? &sleepSyncWakeRequested : nullptr);
++#else
++    OrbiSmartSync::drainOverrides(sleepSync ? &sleepSyncWakeRequested : nullptr);
++#endif
++  }
++  if (stopIfWoken()) return;
+   BookOrbitSyncClient::Error result = BookOrbitSyncClient::getProgress(documentHash, remoteProgress);
+   LOG_INF("BookOrbit", "Progress fetch result=%d (http=%d)", static_cast<int>(result),
+           BookOrbitSyncClient::lastHttpCode);
+@@ -601,6 +615,13 @@ void BookOrbitSyncActivity::performSync() {
+ 
+   if (result == BookOrbitSyncClient::NOT_FOUND) {
+     if (smartSyncEnabled() || sleepSync) {
++      if (OrbiSmartSync::enabled()) {
++        ensureEpubLoaded();
++        if (!epub) { fail(""); return; }
++        const auto decision = OrbiSmartSync::evaluate(epub, {currentSpineIndex, currentPage, totalPagesInSpine}, nullptr, {},
++                                         sleepSync ? orbify::orbismart::Moment::Sleep : orbify::orbismart::Moment::Manual);
++        if (decision.decision == orbify::orbismart::Decision::Hold) { completeAlreadySynced(); return; }
++      }
+       LOG_DBG("BookOrbit", "Smart sync: no remote progress, uploading local %.6f", localProgress.percentage);
+       performUpload();
+       return;
+@@ -804,6 +825,35 @@ void BookOrbitSyncActivity::resolveRemoteProgress() {
+ 
+ bool BookOrbitSyncActivity::decideAutomatically(const BookOrbitSmartSync::Position& local,
+                                                 const BookOrbitSmartSync::Position& remote) {
++  if (OrbiSmartSync::enabled()) {
++    using namespace orbify::orbismart;
++    if (!remotePosition.valid) { completeAlreadySynced(); return true; }
++    const CrossPointPosition here{currentSpineIndex, currentPage, totalPagesInSpine};
++    const auto moment = sleepSync ? Moment::Sleep : backgroundSync ? Moment::Reading : Moment::Manual;
++    const auto result = OrbiSmartSync::evaluate(epub, here, &remoteProgress, remotePosition, moment);
++    switch (result.decision) {
++      case Decision::Same:
++        BookOrbitSyncMarkerFile::write(BookContentId::bookStateDir(epubPath), remoteProgress.timestamp, local);
++        completeAlreadySynced();
++        return true;
++      case Decision::Push:
++      case Decision::Override:
++        orbiPushExempt = result.rule == Rule::Rule7 || result.decision == Decision::Override;
++        if (OrbiSmartSync::pushAllowed(epub, here, &remoteProgress, remotePosition,
++                                      result.rule == Rule::Rule7 || result.decision == Decision::Override)) performUpload();
++        else completeAlreadySynced();
++        return true;
++      case Decision::Take:
++      case Decision::Follow:
++        OrbiSmartSync::remember(epubPath, remoteProgress, true);
++        // The reader owns the one-draw Yes/No popup. Sleep leaves the shown page unchanged.
++        completeAlreadySynced();
++        return true;
++      default:
++        completeAlreadySynced();
++        return true;
++    }
++  }
+   const std::string stateDir = BookContentId::bookStateDir(epubPath);
+   const BookOrbitSmartSync::Marker lastSync = BookOrbitSyncMarkerFile::read(stateDir);
+   LOG_DBG("BookOrbit",
+@@ -844,6 +894,13 @@ bool BookOrbitSyncActivity::decideAutomatically(const BookOrbitSmartSync::Positi
+ }
+ 
+ void BookOrbitSyncActivity::performUpload() {
++  if (OrbiSmartSync::enabled()) {
++    ensureEpubLoaded();
++    if (!epub || !OrbiSmartSync::pushAllowed(epub, {currentSpineIndex, currentPage, totalPagesInSpine},
++                                            hasRemoteProgress ? &remoteProgress : nullptr, remotePosition, orbiPushExempt)) {
++      completeAlreadySynced(); return;
++    }
++  }
+   // Since CrossInk v2.0.0 an unresolvable position comes back invalid instead of as a
+   // guessed /body/p[N] path, which could send other readers to the start of the book.
+   if (!localProgress.valid || localProgress.xpath.empty()) {
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+index e226a33..330132b 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+@@ -172,6 +172,7 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport
+ 
+   // Remote progress data
+   bool hasRemoteProgress = false;
++  bool orbiPushExempt = false;
+   KOReaderProgress remoteProgress;
+   CrossPointPosition remotePosition;
+   // The remote position's percentage recomputed in the local model (see
+diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
+index f3ca177..006e7a3 100644
+--- a/src/activities/settings/BookOrbitSettingsActivity.cpp
++++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
+@@ -41,7 +41,14 @@ namespace {
+ // Orbify (patch 0034): "Keep book copies current" follows it.
+ constexpr int ORBIFY_MARK_ROWS = CROSSINK_TAILNET_ORBIFY_FINISH ? 1 : 0;
+ constexpr int ORBIFY_ROWS = ORBIFY_MARK_ROWS + (CROSSINK_TAILNET_ORBIFY_COPY_REFRESH ? 1 : 0);
+-constexpr int MENU_ITEMS = 9 + ORBIFY_ROWS + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);
++constexpr int MENU_ITEMS = 10 + ORBIFY_ROWS + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);
++constexpr int SYNC_MODE_ROW = MENU_ITEMS - 1;
++int settingRow(int visible) {
++  if (visible == 0) return SYNC_MODE_ROW;
++  int row = visible - 1;
++  if (BOOKORBIT_STORE.getOrbiSmart() && row >= 6) row += 2;
++  return row;
++}
+ // The folder row reuses the OPDS strings: "Download Folder" and "SD Root" are
+ // generic and already translated in every language file.
+ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+@@ -62,6 +69,7 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+                                      StrId::STR_BOOKORBIT_SYNC_WHILE_READING,
+ #endif
++                                     StrId::STR_SYNC_BEHAVIOR,
+ };
+ constexpr int ORBIFY_MARK_ROW = 8;  // with ORBIFY_ROWS
+ constexpr int ORBIFY_KEEP_ROW = 8 + ORBIFY_MARK_ROWS;
+@@ -103,6 +111,7 @@ BookOrbitSettingsActivity::BookOrbitSettingsActivity(GfxRenderer& renderer, Mapp
+ 
+ int BookOrbitSettingsActivity::rowCount() const {
+   if (page == Page::Home) return HOME_ITEMS;
++  if (BOOKORBIT_STORE.getOrbiSmart()) return MENU_ITEMS - 2 - (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   if (BOOKORBIT_STORE.getSyncBehavior() != BookOrbitSyncBehavior::SMART) return MENU_ITEMS - 1;
+ #endif
+@@ -219,9 +228,15 @@ void BookOrbitSettingsActivity::loop() {
+ }
+ 
+ void BookOrbitSettingsActivity::handleSelection() {
++  const int row = page == Page::Home ? selectedIndex : settingRow(selectedIndex);
++  if (page != Page::Home && row == SYNC_MODE_ROW) {
++    BOOKORBIT_STORE.setOrbiSmart(!BOOKORBIT_STORE.getOrbiSmart());
++    BOOKORBIT_STORE.saveToFile();
++    selectedIndex = topIndex = 0; requestUpdate(); return;
++  }
+   if (page == Page::Home) {
+     handleHomeSelection();
+-  } else if (selectedIndex == 0) {
++  } else if (row == 0) {
+     // Username
+     startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_BOOKORBIT_USERNAME),
+                                                                    BOOKORBIT_STORE.getUsername(), 64, InputType::Text),
+@@ -232,7 +247,7 @@ void BookOrbitSettingsActivity::handleSelection() {
+                                BOOKORBIT_STORE.saveToFile();
+                              }
+                            });
+-  } else if (selectedIndex == 1) {
++  } else if (row == 1) {
+     // Password
+     startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_BOOKORBIT_PASSWORD),
+                                                                    BOOKORBIT_STORE.getPassword(), 64, InputType::Text),
+@@ -243,7 +258,7 @@ void BookOrbitSettingsActivity::handleSelection() {
+                                BOOKORBIT_STORE.saveToFile();
+                              }
+                            });
+-  } else if (selectedIndex == 2) {
++  } else if (row == 2) {
+     // Server URL - prefill with https:// if empty to save typing
+     const std::string currentUrl = BOOKORBIT_STORE.getServerUrl();
+     const std::string prefillUrl = currentUrl.empty() ? "https://" : currentUrl;
+@@ -258,7 +273,7 @@ void BookOrbitSettingsActivity::handleSelection() {
+                                BOOKORBIT_STORE.saveToFile();
+                              }
+                            });
+-  } else if (selectedIndex == 3) {
++  } else if (row == 3) {
+     // Authenticate
+     if (!BOOKORBIT_STORE.hasCredentials()) {
+       // Can't authenticate without credentials - just show message briefly
+@@ -267,13 +282,13 @@ void BookOrbitSettingsActivity::handleSelection() {
+     // Replaces this screen rather than stacking on top of it, so the TLS handshake gets
+     // the memory the settings stack was holding (see ActivityManager::goToBookOrbitAuth).
+     activityManager.goToBookOrbitAuth();
+-  } else if (selectedIndex == 4) {
++  } else if (row == 4) {
+     // Browse Catalog
+     if (!BOOKORBIT_STORE.hasCredentials()) {
+       return;
+     }
+     activityManager.goToBookOrbitCatalog();
+-  } else if (selectedIndex == 5) {
++  } else if (row == 5) {
+     // Catalog download folder ("" = SD root); created on first download.
+     startActivityForResult(
+         std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_OPDS_DOWNLOAD_FOLDER),
+@@ -285,35 +300,35 @@ void BookOrbitSettingsActivity::handleSelection() {
+             BOOKORBIT_STORE.saveToFile();
+           }
+         });
+-  } else if (selectedIndex == 6) {
++  } else if (row == 6) {
+     const auto current = BOOKORBIT_STORE.getSyncBehavior();
+     BOOKORBIT_STORE.setSyncBehavior(current == BookOrbitSyncBehavior::ASK_EVERY_TIME
+                                         ? BookOrbitSyncBehavior::SMART
+                                         : BookOrbitSyncBehavior::ASK_EVERY_TIME);
+     BOOKORBIT_STORE.saveToFile();
+     requestUpdate();
+-  } else if (selectedIndex == 7) {
++  } else if (row == 7) {
+     BOOKORBIT_STORE.setSyncOnSleep(!BOOKORBIT_STORE.getSyncOnSleep());
+     BOOKORBIT_STORE.saveToFile();
+     requestUpdate();
+ #if CROSSINK_TAILNET_ORBIFY_FINISH
+-  } else if (selectedIndex == ORBIFY_MARK_ROW) {
++  } else if (row == ORBIFY_MARK_ROW) {
+     BOOKORBIT_STORE.setOrbifyMarkAtEnd(!BOOKORBIT_STORE.getOrbifyMarkAtEnd());
+     BOOKORBIT_STORE.saveToFile();
+     requestUpdate();
+ #endif
+ #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
+-  } else if (selectedIndex == ORBIFY_KEEP_ROW) {
++  } else if (row == ORBIFY_KEEP_ROW) {
+     BOOKORBIT_STORE.setOrbifyKeepCopiesCurrent(!BOOKORBIT_STORE.getOrbifyKeepCopiesCurrent());
+     BOOKORBIT_STORE.saveToFile();
+     requestUpdate();
+ #endif
+-  } else if (selectedIndex == HOME_ROW) {
++  } else if (row == HOME_ROW) {
+     startActivityForResult(std::make_unique<BookOrbitSettingsActivity>(renderer, mappedInput, Page::Home),
+                            [](const ActivityResult&) {});
+   }
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+-  else if (selectedIndex == BACKGROUND_SYNC_ROW) {
++  else if (row == BACKGROUND_SYNC_ROW) {
+     if (!optionPopup) optionPopup = makeUniqueNoThrow<OptionPopup>();
+     if (!optionPopup) return;
+     std::vector<std::string> options(BookOrbitBackgroundSync::INTERVAL_COUNT);
+@@ -440,9 +455,9 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+ 
+   // Per-render owned value strings; items point into them for the draw only.
+   const int count = rowCount();
+-  std::vector<std::string> values(count);
++  std::vector<std::string> values(page == Page::Home ? count : MENU_ITEMS);
+   const bool hasCredentials = BOOKORBIT_STORE.hasCredentials();
+-  for (int i = 0; i < count; i++) {
++  for (int i = 0; i < (page == Page::Home ? count : MENU_ITEMS); i++) {
+     if (page == Page::Home) {
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+       if (i == FULL_REFRESH_ROW) {
+@@ -467,6 +482,8 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+                  static_cast<unsigned>(shelfOptions.size()) - collections);
+         values[i] = counts;
+       }
++    } else if (i == SYNC_MODE_ROW) {
++      values[i] = BOOKORBIT_STORE.getOrbiSmart() ? "OrbiSmart (recommended)" : "Custom";
+     } else if (i == 0) {
+       const auto username = BOOKORBIT_STORE.getUsername();
+       values[i] = username.empty() ? tr(STR_NOT_SET) : username;
+@@ -507,11 +524,12 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+ 
+   std::vector<fui::ListItem> items;
+   items.reserve(count);
+-  for (int i = 0; i < count; i++) {
++  for (int visible = 0; visible < count; visible++) {
++    const int i = page == Page::Home ? visible : settingRow(visible);
+     fui::ListItem item;
+-    item.label = I18N.get(page == Page::Home ? homeNames[i] : menuNames[i]);
++    item.label = page != Page::Home && i == SYNC_MODE_ROW ? "Sync" : I18N.get(page == Page::Home ? homeNames[i] : menuNames[i]);
+     if (!values[i].empty()) item.value = values[i].c_str();
+-    item.actionValue = static_cast<int16_t>(i);
++    item.actionValue = static_cast<int16_t>(visible);
+     items.push_back(item);
+   }
+ 
+diff --git a/src/activities/util/ConfirmationActivity.cpp b/src/activities/util/ConfirmationActivity.cpp
+index 5502dda..2b17170 100644
+--- a/src/activities/util/ConfirmationActivity.cpp
++++ b/src/activities/util/ConfirmationActivity.cpp
+@@ -50,6 +50,16 @@ void ConfirmationActivity::render(RenderLock&&) {
+ }
+ 
+ void ConfirmationActivity::loop() {
++  if (promptRefresh) {
++    const auto replacement = promptRefresh();
++    if (replacement && replacement->empty()) {
++      ActivityResult result; result.isCancelled = true; setResult(std::move(result)); finish(); return;
++    }
++    if (replacement && *replacement != popupTitle) {
++      popupTitle = *replacement;
++      onEnter();  // replaces the existing popup; no timer, animation or intermediate screen
++    }
++  }
+   if (ignoreConfirmRelease) {
+     const bool confirmReleased = mappedInput.wasReleased(MappedInputManager::Button::Confirm);
+     if (confirmReleased || !mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
+diff --git a/src/activities/util/ConfirmationActivity.h b/src/activities/util/ConfirmationActivity.h
+index 011fd1e..5801631 100644
+--- a/src/activities/util/ConfirmationActivity.h
++++ b/src/activities/util/ConfirmationActivity.h
+@@ -2,6 +2,7 @@
+ #include <I18n.h>
+ 
+ #include <functional>
++#include <optional>
+ #include <string>
+ 
+ #include "activities/Activity.h"
+@@ -10,6 +11,7 @@
+ class ConfirmationActivity : public Activity {
+  private:
+   std::string popupTitle;
++  std::function<std::optional<std::string>()> promptRefresh;
+   OptionPopup confirmPopup;
+   std::string customCancelLabel, customConfirmLabel;
+   bool ignoreConfirmRelease = false;
+@@ -33,6 +35,9 @@ class ConfirmationActivity : public Activity {
+     customConfirmLabel = confirm;
+   }
+ 
++  // An asynchronous OrbiSmart discovery may replace an open question, in one draw.
++  void setPromptRefresh(std::function<std::optional<std::string>()> refresh) { promptRefresh = std::move(refresh); }
++
+   void onEnter() override;
+   void onExit() override;
+   void loop() override;

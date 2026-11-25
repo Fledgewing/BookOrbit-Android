@@ -28,7 +28,7 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 | Tailnet names (`bookorbit`, `*.ts.net`) for every client on the device | n/a (Tailscale app) | yes | yes | yes |
 | Network brought up before the plugin syncs, and back off after | yes | n/a (firmware does it) | n/a | n/a |
 | Sync on sleep, wake pull, Sync and sleep | yes | n/a (firmware does it) | n/a | n/a |
-| OrbiSmart: furthest-place sync, behind-hold, pause sync, a Yes / No popup for another reader's place (silent only before render), and "Read from here everywhere" queued offline ([design](design/orbismart.md); upstream: [send-time stale-push guard](server-contract.md#the-stale-push-guard-compares-send-times)) | yes | planned | planned | planned: sleep sync only |
+| OrbiSmart: furthest-place sync, behind-hold, pause sync, a Yes / No popup for another reader's place (silent only before render), and "Read from here everywhere" queued offline ([design](design/orbismart.md); upstream: [send-time stale-push guard](server-contract.md#the-stale-push-guard-compares-send-times)) | yes | 2.x rc (sleep, wake and pause) | 2.x rc | 2.x rc (sleep only) |
 | Sync while reading (time, pages or chapters) | yes | 2.x rc | 2.x rc | no: no memory beside an open book |
 | Wi-Fi modes: Always on, Off while reading, Just in time | yes | n/a | n/a | n/a |
 | Faster Wi-Fi join and catalog boot session | n/a | yes | yes | yes |

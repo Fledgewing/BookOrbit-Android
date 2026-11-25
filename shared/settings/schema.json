@@ -449,6 +449,7 @@
   },
   {
    "key": "sync_mode",
+   "platforms": ["KOReader-Android", "X4 Pro", "X4", "X3"],
    "type": "choice",
    "default": "orbismart",
    "values": [
