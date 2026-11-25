@@ -154,6 +154,10 @@ object MirrorLogic {
     /** The companion's status line while a Full refresh saves (docs/design/sqlite-cache.md "Progress display"). */
     fun progressLine(pct: Long?): String? = pct?.let { "Full refresh · ${it.coerceIn(0, 100)}%" }
 
+    /** An active manual run is visible before its first page reports progress. */
+    fun runningProgressLine(pct: Long?, paused: Boolean): String =
+        progressLine(pct ?: 0L)!! + if (paused) " · paused while reading" else ""
+
     /** The note when the mirror stops at the storage limit (cases.json "storage.notes"). */
     fun limitText(covers: Boolean, done: Int, total: Int): String =
         "Storage limit reached: $done of $total ${if (covers) "covers" else "lists and books"} saved. No room for new data; protected covers are kept. Raise the limit in BookSync settings."
