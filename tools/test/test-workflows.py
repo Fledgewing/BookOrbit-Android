@@ -97,6 +97,8 @@ if not all(piece in gate for piece in ["needs: reader-startup", "always()", 'tes
     errors.append("release-tests: required reader gate must reject skipped/failed startup flows")
 if '"android/koreader/**"' not in release_tests.split("  workflow_call:")[0]:
     errors.append("release-tests: plugin PRs must run reader flows")
+if "grep -q ORBIT_REQUIRE_READER_FLOWS" not in reader_jobs.get("reader-startup", ""):
+    errors.append("release-tests: old tags must not silently ignore the required-scenario flag")
 release_jobs = jobs_of((root / ".github/workflows/release.yml").read_text())
 if "needs: tests" not in release_jobs["build"] or "platform: android" not in release_jobs["tests"]:
     errors.append("release: Android build must depend on the reusable reader gate")

@@ -204,6 +204,8 @@ jobs:
           ORBIT_REQUIRE_READER_FLOWS: "1"
         run: |
           sudo apt-get install -y -qq luajit libsqlite3-0 >/dev/null
+          # Older tags must not ignore the required-scenario flag during a manual rebuild.
+          grep -q ORBIT_REQUIRE_READER_FLOWS android/koreader/test/test_flows.lua
           luajit android/koreader/test/test_flows.lua </dev/null
 
   android:
