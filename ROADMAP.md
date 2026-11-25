@@ -21,9 +21,16 @@ The release after 0.11.4 graduates from previews and release candidates. Built i
 of [backend independence](#planned-backend-independence): BookSync owns the screens and BookOrbit
 becomes a data source.
 
+All four remaining parity gaps below ship in 0.12 (maintainer ruling 2026-11-25);
+design and mockup approval still apply.
+
 | Outcome | Platforms | Status |
 |---|---|---|
 | **BookSync Home** replaces the BookOrbit plugin's Home: every section rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android; X4 Pro, X4 after | designing |
+| **Equivalent settings controls**: expose the [parity gap 1](docs/FEATURES.md#prioritised-parity-bugs) controls, including a sleep sync budget aligned with Android's 10/15/20 s choices. | X4 Pro, X4 | planned (0.12) |
+| **BookSync status-bar preset**: add one preset over the existing native controls ([parity gap 2](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |
+| **Discoverable settings**: make equivalent settings easy to find while retaining button navigation ([parity gap 3](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |
+| **Persistent crash summary**: retain a deduplicated crash summary across restarts, never uploaded automatically ([parity gap 4](docs/FEATURES.md#prioritised-parity-bugs)). | Android | planned (0.12) |
 | **Tap to download** (Next 5) on Home, lists, series and detail. | Android; Xteink after | designing |
 | **Series view** (Next 6): every book in order, on device or server only, read state, download next. | Android; Xteink after | designing |
 | **Add-on mode and setup checklist** (Next 10, 10a). | Android | approved items carried over |
