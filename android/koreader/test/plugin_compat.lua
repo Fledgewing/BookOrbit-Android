@@ -129,7 +129,7 @@ end
 table.sort(missing)
 print("BookOrbit plugin " .. version)
 -- The companion's cache worker (docs/design/companion-worker.md) asks with the client's login and
--- saves covers under the plugin's own cover names (Cache.coverName, CacheWorker.coverName).
+-- saves covers under the plugin's own cover names (CacheWorker.coverName).
 local api = src[dir .. "/bookorbit_api.lua"] or ""
 has(api, '["x-auth-user"] = self.username', "client.username as x-auth-user")
 has(api, '["x-auth-key"] = self.userkey', "client.userkey as x-auth-key")

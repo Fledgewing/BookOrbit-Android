@@ -50,17 +50,18 @@
         "kt",
         "lua",
         "cpp"
-      ]
+      ],
+      "note": "lua also checks the fake companion's copy of the patch (android/koreader/test/companion_rules.lua)"
     },
     {
       "file": "cache/cases.json",
       "section": "covers",
       "rule": "Which covers a check fetches, keeps or removes",
-      "owner": "plugin, xteink",
+      "owner": "xteink",
       "readers": [
-        "lua",
         "cpp"
-      ]
+      ],
+      "note": "The companion's cover jobs (CacheWorker.fetchCover) always ask again with the saved ETag; the plugin no longer decides covers"
     },
     {
       "file": "cache/cases.json",
@@ -76,10 +77,12 @@
       "file": "cache/cases.json",
       "section": "settle",
       "rule": "A check keeps the saved random pick; a Full refresh takes the new one",
-      "owner": "plugin",
+      "owner": "companion",
       "readers": [
+        "kt",
         "lua"
-      ]
+      ],
+      "note": "lua: the fake companion's copy (android/koreader/test/companion_rules.lua)"
     },
     {
       "file": "cache/cases.json",
@@ -103,9 +106,9 @@
       "file": "cache/cases.json",
       "section": "mirror.repage",
       "rule": "Pages to fetch and drop when a list's total changes",
-      "owner": "plugin",
+      "owner": "companion",
       "readers": [
-        "lua"
+        "kt"
       ]
     },
     {
@@ -120,21 +123,14 @@
     },
     {
       "file": "cache/cases.json",
-      "section": "mirror.evict",
-      "rule": "Kept entries are outside the caps",
-      "owner": "plugin",
-      "readers": [
-        "lua"
-      ]
-    },
-    {
-      "file": "cache/cases.json",
       "section": "mirror.retry",
       "rule": "A mirror request with no answer is retried with smaller pages, then skipped",
-      "owner": "plugin",
+      "owner": "companion",
       "readers": [
+        "kt",
         "lua"
-      ]
+      ],
+      "note": "lua: the fake companion's copy (android/koreader/test/companion_rules.lua)"
     },
     {
       "file": "cache/cases.json",
@@ -156,21 +152,14 @@
     },
     {
       "file": "cache/cases.json",
-      "section": "storage.room",
-      "rule": "Whether the offline mirror may go on under the limit",
-      "owner": "plugin",
-      "readers": [
-        "lua"
-      ]
-    },
-    {
-      "file": "cache/cases.json",
       "section": "storage.notes",
       "rule": "The note when the mirror stops at the limit",
-      "owner": "plugin",
+      "owner": "companion",
       "readers": [
+        "kt",
         "lua"
-      ]
+      ],
+      "note": "lua: the fake companion's copy (android/koreader/test/companion_rules.lua)"
     },
     {
       "file": "cache/worker.json",
@@ -447,6 +436,46 @@
       "file": "e2e/faults/offline.json",
       "rule": "Fault-proxy rules: offline",
       "owner": "tools",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "release-signing/cases.json",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-firmware",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-plugin",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-plugin-other-root",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-plugin-rotated",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
       "readers": [
         "py"
       ]
