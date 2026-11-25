@@ -14,6 +14,9 @@
 #include <cstring>
 
 #include "MappedInputManager.h"
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+#include "activities/settings/AboutActivity.h"
+#endif
 #include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
 #include "components/icons/keyboardIcons.h"
@@ -72,6 +75,9 @@ Rect chooseRowRect(const GfxRenderer& renderer, const MappedInputManager& mapped
   return Rect{x - 12, y - 6, width + 24, lineHeight + 12};
 }
 
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+constexpr StrId GATE_ROWS[2] = {StrId::STR_ENTER_SETTINGS_PIN, StrId::STR_ABOUT};
+#endif
 constexpr StrId CHOOSE_ROWS[2] = {StrId::STR_CHANGE_PIN, StrId::STR_REMOVE_PIN};
 }  // namespace
 
@@ -80,7 +86,12 @@ void SettingsPinActivity::onEnter() {
   keypadTouchRouter.overrideValue = KEYPAD_DELETE;
   keypadTouchRouter.reset();
   keypadReady.store(false, std::memory_order_release);
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+  startStage(mode == Mode::Manage ? (SettingsPin::isSet() ? Stage::Choose : Stage::New)
+                                 : mode == Mode::Unlock ? Stage::Gate : Stage::Enter);
+#else
   startStage(mode == Mode::Manage ? (SettingsPin::isSet() ? Stage::Choose : Stage::New) : Stage::Enter);
+#endif
 }
 
 void SettingsPinActivity::startStage(const Stage next) {
@@ -124,7 +135,11 @@ void SettingsPinActivity::backspace() {
 }
 
 void SettingsPinActivity::handleKeypadValue(const int16_t value) {
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+  if (stage == Stage::Choose || stage == Stage::Gate) return;
+#else
   if (stage == Stage::Choose) return;
+#endif
   if (value >= 0 && value <= 9) {
     typeDigit(static_cast<uint8_t>(value));
   } else if (value == KEYPAD_DELETE) {
@@ -137,6 +152,13 @@ void SettingsPinActivity::handleKeypadValue(const int16_t value) {
 void SettingsPinActivity::submit() {
   hasMessage = false;
   switch (stage) {
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+    case Stage::Gate:
+      if (choice == 0) startStage(Stage::Enter);
+      else startActivityForResult(std::make_unique<AboutActivity>(renderer, mappedInput),
+                                  [this](const ActivityResult&) { requestUpdate(); });
+      return;
+#endif
     case Stage::Enter:
       if (!SettingsPin::verify(digits)) {
         LOG_INF("PIN", "Wrong settings PIN");
@@ -182,10 +204,18 @@ bool SettingsPinActivity::handleTouch() {
   int tapX = 0;
   int tapY = 0;
   const bool tapped = mappedInput.wasScreenTapped(tapX, tapY);
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+  if (stage == Stage::Choose || stage == Stage::Gate) {
+#else
   if (stage == Stage::Choose) {
+#endif
     if (!tapped) return false;
     for (int i = 0; i < 2; i++) {
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+      if (contains(chooseRowRect(renderer, mappedInput, i, I18N.get(stage == Stage::Gate ? GATE_ROWS[i] : CHOOSE_ROWS[i])), tapX, tapY)) {
+#else
       if (contains(chooseRowRect(renderer, mappedInput, i, I18N.get(CHOOSE_ROWS[i])), tapX, tapY)) {
+#endif
         choice = static_cast<uint8_t>(i);
         submit();
         return true;
@@ -220,7 +250,11 @@ void SettingsPinActivity::loop() {
     return;
   }
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+    if (stage != Stage::Choose && stage != Stage::Gate && cursor + 1 < SettingsPin::DIGITS) {
+#else
     if (stage != Stage::Choose && cursor + 1 < SettingsPin::DIGITS) {
+#endif
       moveCursor(+1);
     } else {
       submit();
@@ -228,7 +262,11 @@ void SettingsPinActivity::loop() {
     return;
   }
   if (handleTouch()) return;
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+  if (stage == Stage::Choose || stage == Stage::Gate) {
+#else
   if (stage == Stage::Choose) {
+#endif
     buttonNavigator.onNextRelease([this] {
       choice ^= 1;
       requestUpdate();
@@ -265,7 +303,11 @@ void SettingsPinActivity::loop() {
 // gpio.hasTouch()), so a touch reader (the X4 Pro: two side buttons, no Back/Confirm) gets
 // the same information as one line of text above the number pad.
 void SettingsPinActivity::drawHints() {
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+  const bool choosing = stage == Stage::Choose || stage == Stage::Gate;
+#else
   const bool choosing = stage == Stage::Choose;
+#endif
   if (!mappedInput.hasTouchHardware()) {
     const char* confirm = choosing || cursor + 1 >= SettingsPin::DIGITS ? tr(STR_OK) : tr(STR_PIN_NEXT_DIGIT);
     const auto labels = choosing ? mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), confirm,
@@ -305,9 +347,17 @@ void SettingsPinActivity::render(RenderLock&&) {
   const bool touch = mappedInput.hasTouch();
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
   const int centerY = contentCenterY(renderer, mappedInput);
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+  if (stage == Stage::Choose || stage == Stage::Gate) {
+#else
   if (stage == Stage::Choose) {
+#endif
     for (int i = 0; i < 2; i++) {
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+      const char* text = I18N.get(stage == Stage::Gate ? GATE_ROWS[i] : CHOOSE_ROWS[i]);
+#else
       const char* text = I18N.get(CHOOSE_ROWS[i]);
+#endif
       const Rect row = chooseRowRect(renderer, mappedInput, i, text);
       if (i == choice) renderer.drawRect(row.x, row.y, row.width, row.height, true);
       renderer.drawText(UI_12_FONT_ID, row.x + 12, row.y + 6, text, true, EpdFontFamily::BOLD);

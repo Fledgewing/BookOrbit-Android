@@ -33,7 +33,11 @@ class SettingsPinActivity final : public Activity {
   void render(RenderLock&&) override;
 
  private:
+#if CROSSINK_TAILNET_ABOUT_CREDIT
+  enum class Stage : uint8_t { Enter, Choose, New, Repeat, Gate };
+#else
   enum class Stage : uint8_t { Enter, Choose, New, Repeat };
+#endif
 
   const Mode mode;
   Stage stage = Stage::Enter;

@@ -219,6 +219,9 @@ class SettingsActivity : SleepPickerPage() {
             schema.sections.forEach { s ->
                 out.addView(Ui.row(this, s.title, summary(s.id), Ui.value(this, "›"), onClick = { startActivity(SettingsPage.open(this, s.id)) }).apply { tag = "section:${s.id}" })
             }
+            out.addView(Ui.row(this, "About", "Credits and legal notices", Ui.value(this, "›"), onClick = {
+                startActivity(Intent(this, AboutActivity::class.java))
+            }).apply { tag = "about" })
             out.addView(note("Orbit ${BuildConfig.VERSION_NAME}" + prefs.patchVersionSeen.takeIf { it.isNotEmpty() }?.let { " · plugin $it" }.orEmpty()))
             return
         }

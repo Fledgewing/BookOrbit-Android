@@ -56,6 +56,26 @@ class SettingsPagesTest {
         open(SettingsPage.section(RuntimeEnvironment.getApplication(), id, focus).setClass(RuntimeEnvironment.getApplication(), SettingsSectionActivity::class.java))
 
     @Test
+    fun aboutIsReachableWhileLockedAndShowsSharedCreditWithBrowserLink() {
+        SettingsPage.forceLocked = true
+        val settings = open<SettingsActivity>()
+        val row = tagged(settings, "about")!!
+        assertTrue(row.isEnabled)
+        row.performClick()
+        assertEquals(AboutActivity::class.java.name, shadowOf(settings).nextStartedActivity.component!!.className)
+        val about = open<AboutActivity>()
+        assertEquals(PinPage.NEUTRAL, about.pinPage)
+        val credits = org.json.JSONObject(File("../../../shared/about/credits.json").readText())
+        val paragraphs = credits.getJSONArray("paragraphs")
+        for (i in 0 until paragraphs.length()) assertTrue(texts(about).contains(paragraphs.getString(i)))
+        assertFalse(texts(about).any { it.contains("powered by", ignoreCase = true) })
+        tagged(about, "bookorbit-credit")!!.performClick()
+        val link = shadowOf(about).nextStartedActivity
+        assertEquals(Intent.ACTION_VIEW, link.action)
+        assertEquals(credits.getString("url"), link.dataString)
+    }
+
+    @Test
     fun topPageListsTheEightSections() {
         val a = open<SettingsActivity>()
         schema.sections.forEach { s -> assertNotNull(s.id, tagged(a, "section:${s.id}")) }

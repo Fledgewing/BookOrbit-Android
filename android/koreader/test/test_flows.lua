@@ -2668,7 +2668,7 @@ test("settings PIN: a locked companion makes the Orbit menu read-only, with the 
     ok(#all > 20, "the whole menu, read-only " .. #all)
     local enabled = 0
     for i, it in ipairs(all) do
-        if i > 1 and it.callback and not it.sub_item_table and not it.keep_menu_open and not (it.enabled_func and it.enabled_func() == false) then
+        if i > 1 and it.callback and not it.sub_item_table and not it.keep_menu_open and not it.read_only and not (it.enabled_func and it.enabled_func() == false) then
             enabled = enabled + 1
         end
     end
@@ -6158,6 +6158,26 @@ test("orbismart: menu: Sync first in its section; the rows it sets hidden; the o
     all = table.concat(texts, "|")
     ok(all:find("Sync on wake", 1, true), "shown under Custom")
     ok(not all:find("Read from here everywhere", 1, true), "no override under Custom")
+end)
+
+test("About: the locked menu shows every shared credit paragraph and the project URL", function()
+    local _, m = newUI(false)
+    local items = m.readOnly(m:menuItems())
+    local about
+    for _, it in ipairs(items) do if it.text == "About" then about = it end end
+    ok(about and about.callback, "About remains available without unlocking")
+    ok(not about.enabled_func or about.enabled_func(), "About is enabled")
+    W.shown = {}
+    about.callback()
+    run(1)
+    local widget = W.shown[#W.shown]
+    ok(widget and widget.text, "About opens a text viewer")
+    local f = assert(io.open(here .. "/../../../shared/about/credits.json", "rb"))
+    local credits = dofile(here .. "/json_mini.lua").decode(f:read("*a"))
+    f:close()
+    for _, text in ipairs(credits.paragraphs) do ok(widget.text:find(text, 1, true), text) end
+    ok(widget.text:find(credits.url, 1, true), "visible project URL")
+    ok(not widget.text:lower():find("powered by", 1, true), "no misleading credit")
 end)
 
 store.orbit_android.sync_mode = "custom"

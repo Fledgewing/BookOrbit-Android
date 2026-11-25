@@ -13,6 +13,12 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 `xteink-v1.6.1.114`, which gets nothing new, until a final CrossInk 2.x release replaces it.
 **2.x rc**: in the CrossInk 2.x release-candidate build (Include Release Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "Platforms".
 
+## Credits
+
+| Feature | KOReader-Android | X4 Pro | X4 | X3 |
+|---|---|---|---|---|
+| Public About credit: Orbify independence, thanks to BookOrbit, and separate project licences ([design](design/bookorbit-credit.md)); same text in README | yes (plugin and companion) | 2.x rc | 2.x rc | no: flash |
+
 ## Network and sync
 
 | Feature | KOReader-Android | X4 Pro | X4 | X3 |
