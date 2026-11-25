@@ -428,8 +428,6 @@ def catalog_refresh_stamp(ctx: Context, tmp: Path) -> None:
     assert first_get and busy[0] <= int(first_get.group(1)), "'Refreshing…' was not drawn before the first request"
     queued = after(refresh, "foreground returned")
     after(queued, "Refresh phase: kind=")
-    roots = [r for r in ctx.requests()[before:] if r["path"].endswith("/plugin/catalog/root")]
-    assert len(roots) == 1, f"reloading the refreshed root repeated its network request: {roots}"
     done = after(refresh, "Catalog: Refresh done")
     final = [s for s in STAMP.finditer(done)]
     assert final and final[-1].group(2).lower().startswith("updated just now"), \
@@ -605,6 +603,8 @@ def catalog_cache_first(ctx: Context, tmp: Path) -> None:
     assert any(t.lower().startswith("refreshing") for t in stamps), f"no 'Refreshing…' stamp: {stamps}"
     queued = after(refresh, "foreground returned")
     after(queued, "Refresh phase: kind=")
+    roots = [r for r in ctx.requests()[before:] if r["path"].endswith("/plugin/catalog/root")]
+    assert len(roots) == 1, f"reloading the refreshed root repeated its network request: {roots}"
     done = after(refresh, "Catalog: Refresh done")
     final = [m.group(2) for m in STAMP.finditer(done)]
     assert final and final[-1].lower().startswith("updated just now"), f"the stamp after the refresh: {final}"
