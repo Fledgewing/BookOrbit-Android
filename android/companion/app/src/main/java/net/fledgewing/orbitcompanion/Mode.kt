@@ -121,7 +121,7 @@ object Mode {
         OLog.i("mode: switch to ${target.key}: ${steps.joinToString()} (keep $keep)")
         for (s in steps) {
             when (s) {
-                AddonLogic.Step.REFUSE_NO_HOME -> return "Your reader has no other Home app, so Orbit has to stay Home."
+                AddonLogic.Step.REFUSE_NO_HOME -> return "Your reader has no other Home app, so BookSync has to stay Home."
                 AddonLogic.Step.SET_MODE -> {
                     p.mode = target
                     if (target == OrbitMode.ADDON) {
@@ -139,7 +139,7 @@ object Mode {
                     OLog.i("mode: lock-screen permission released")
                 }.onFailure {
                     OLog.w("mode: device admin removal failed", it)
-                    note = "Turn off Orbit in Settings › Security › Device admin apps."
+                    note = "Turn off BookSync in Settings › Security › Device admin apps."
                 }
                 AddonLogic.Step.STOP_ACCESSIBILITY -> {
                     val svc = ClickerService.instance
@@ -148,7 +148,7 @@ object Mode {
                         OLog.i("mode: clicker accessibility service turned off")
                     } else {
                         OLog.i("mode: clicker service not connected; asking the user to turn it off")
-                        note = "Turn off Orbit clicker in Accessibility."
+                        note = "Turn off BookSync clicker in Accessibility."
                         a.tryStart(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), "accessibility settings")
                     }
                 }
@@ -222,13 +222,13 @@ class ModeActivity : EinkActivity() {
         val root = page(scroll = true)
         val current = p.mode
         if (current == null) {
-            root.addView(Ui.header(this, "How should Orbit run?", "Later") { finish() })
+            root.addView(Ui.header(this, "How should BookSync run?", "Later") { finish() })
             root.addView(Ui.text(this, "You can switch later in Settings.", 17f, color = Ui.MID))
-            card(root, "Full: Orbit runs the reader",
-                "Orbit is the Home app: Home opens your book or BookOrbit. It switches Wi-Fi, keeps the reader awake for sleep syncs, and runs clicker buttons and the Settings PIN.",
+            card(root, "Full: BookSync runs the reader",
+                "BookSync is the Home app: Home opens your book or BookOrbit. It switches Wi-Fi, keeps the reader awake for sleep syncs, and runs clicker buttons and the Settings PIN.",
                 "Use Full") { choose(OrbitMode.FULL) }
             card(root, "Add-on: keep your launcher",
-                "Your reader keeps its own Home screen and Wi-Fi. Orbit installs, updates and sets up KOReader, BookOrbit and the Orbit plugin. Wi-Fi switching, sleep sync, clicker buttons and the PIN are optional helpers, off until you turn them on.",
+                "Your reader keeps its own Home screen and Wi-Fi. BookSync installs, updates and sets up KOReader, BookOrbit and the BookSync plugin. Wi-Fi switching, sleep sync, clicker buttons and the PIN are optional helpers, off until you turn them on.",
                 "Use Add-on") { choose(OrbitMode.ADDON) }
             return
         }

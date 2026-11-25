@@ -1114,7 +1114,7 @@
     ]
   },
   "storage": {
-    "_comment": "The storage limit (v0.11.2, docs/design/write-through-cache.md \"Storage limit\"): what goes, in order, when Orbit's storage is over the limit (StorageLogic.plan), and the note when the mirror stops (MirrorLogic.limitText). Sizes in bytes.",
+    "_comment": "The storage limit (v0.11.2, docs/design/write-through-cache.md \"Storage limit\"): what goes, in order, when BookSync's storage is over the limit (StorageLogic.plan), and the note when the mirror stops (MirrorLogic.limitText). Sizes in bytes.",
     "plans": [
       {
         "name": "under the limit: nothing goes",
@@ -1261,13 +1261,13 @@
         "what": "covers",
         "done": 412,
         "total": 855,
-        "text": "Storage limit reached: 412 of 855 covers saved. No room for new data; protected covers are kept. Raise the limit in Orbit settings."
+        "text": "Storage limit reached: 412 of 855 covers saved. No room for new data; protected covers are kept. Raise the limit in BookSync settings."
       },
       {
         "what": "lists",
         "done": 120,
         "total": 300,
-        "text": "Storage limit reached: 120 of 300 lists and books saved. No room for new data; protected covers are kept. Raise the limit in Orbit settings."
+        "text": "Storage limit reached: 120 of 300 lists and books saved. No room for new data; protected covers are kept. Raise the limit in BookSync settings."
       }
     ]
   }

@@ -6,8 +6,8 @@ Keeps Android e-readers in sync with a BookOrbit server over Tailscale, the way 
 
 The official BookOrbit KOReader plugin does all syncing and keeps the login. This repo adds:
 
-- `android/koreader/`: the Orbit KOReader plugin (`orbit.koplugin`; up to 0.7.x the user patch `2-orbit-android.lua`) that brings the network up (Wi-Fi + Tailscale) before the plugin syncs, syncs on sleep and on a schedule, and sends Home to BookOrbit home.
-- `android/companion/`: "Orbit Companion", an Android app that switches Wi-Fi, wakes Tailscale, holds a short wake lock, turns the screen off for "Sync and sleep", and acts as the Home launcher.
+- `android/koreader/`: the BookSync KOReader plugin (`orbit.koplugin`; up to 0.7.x the user patch `2-orbit-android.lua`) that brings the network up (Wi-Fi + Tailscale) before the plugin syncs, syncs on sleep and on a schedule, and sends Home to BookOrbit home.
+- `android/companion/`: "BookSync Companion", an Android app that switches Wi-Fi, wakes Tailscale, holds a short wake lock, turns the screen off for "Sync and sleep", and acts as the Home launcher.
 
 Design and approved mockups: `android/docs/DESIGN.md`, `android/docs/mockups.html`.
 
@@ -29,7 +29,7 @@ open step in order and installs the rest with one tap each, every download check
   asset), each file checked against its git blob id, swapped into `koreader/plugins/`
   atomically, then KOReader restarts. Only when it's missing or older than the patch needs;
   after that the plugin updates itself from your server.
-- **Orbit KOReader plugin**: `orbit.koplugin.zip` from this release, checked against `SHA256SUMS`, unpacked and swapped into `koreader/plugins/orbit.koplugin` the same way; it deletes the old `koreader/patches/2-orbit-android.lua`.
+- **BookSync KOReader plugin**: `orbit.koplugin.zip` from this release, checked against `SHA256SUMS`, unpacked and swapped into `koreader/plugins/orbit.koplugin` the same way; it deletes the old `koreader/patches/2-orbit-android.lua`.
 
 Up front, Setup explains in plain words what may get in the way: Play Protect's warnings,
 a launcher that freezes apps (Boox, Meebook), and Family Link or a managed profile ("approve it
@@ -56,7 +56,7 @@ pre-releases. Firmware releases share the repo (`xteink-v…` tags, never "lates
 skipped: only `v…` (and `android-v…`) tags count. Each downloads the release's `SHA256SUMS` and refuses a file whose SHA-256
 doesn't match.
 
-- **KOReader patch** (Tools › Android sync): **Auto-update patch** (on by default),
+- **KOReader patch** (Tools › BookSync): **Auto-update patch** (on by default),
   **Include pre-releases** (off), **Check for patch update**, and a status line. The check
   runs about 8 s after a start or wake once the network is up, never with a book open (it
   waits for the file browser or BookOrbit home), and holds Wi-Fi until it ends. It runs in a
@@ -67,7 +67,7 @@ doesn't match.
   KOReader then restarts by itself to load it (v0.5.0): at once with no book open, otherwise
   right after the book is closed or when the device next sleeps; it never interrupts reading,
   and shows "Updated to vX (KOReader restarted)".
-- **Orbit Companion** (Settings): **Auto-update app** (on by default), **Include
+- **BookSync Companion** (Settings): **Auto-update app** (on by default), **Include
   pre-releases** (off), **Check for updates** (also on the status page), and the version and
   last result. The automatic check runs when the service starts or Wi-Fi comes up (for
   example for a wake pull), with the screen on; an automatic Wi-Fi off waits for its download. The APK must match `SHA256SUMS` *and* be signed with the same certificate as the
@@ -80,7 +80,7 @@ doesn't match.
     ([`PackageInstaller.SessionParams.setRequireUserAction`](https://developer.android.com/reference/android/content/pm/PackageInstaller.SessionParams#setRequireUserAction(int))).
     The companion still asks for it, so it would take effect if that ever changes. A check
     you start by hand opens Android's install prompt straight away; an automatic one posts
-    a notification, "Orbit Companion <version> is ready. Tap to install."
+    a notification, "BookSync Companion <version> is ready. Tap to install."
   - **One update covers everything (v0.5.0):** after the app updates, it installs the
     matching KOReader patch from the same release by itself (checksum-checked), and KOReader
     restarts to load it as above. If a step can't run (no storage access, no network), the
@@ -88,12 +88,12 @@ doesn't match.
   - With a Settings PIN, the keypad never covers the installer, permission screens or Play
     Protect's scan while an update runs and for a minute after, even with the Play Store
     guarded.
-  - Setup row **Install updates** opens Android's "Install unknown apps" page for Orbit;
+  - Setup row **Install updates** opens Android's "Install unknown apps" page for BookSync;
     allow it once.
 
 ## Wi-Fi and the Home button
 
-Two settings are shared by the patch (Tools › Android sync) and the companion
+Two settings are shared by the patch (Tools › BookSync) and the companion
 (Settings); changing either changes both.
 
 - **Wi-Fi**: *Always on* (Wi-Fi stays as you set it), *Off while reading* (off once a book's
@@ -113,7 +113,7 @@ Two settings are shared by the patch (Tools › Android sync) and the companion
 Sort › "By series" or "By author" shows that list grouped, in BookOrbit's own Series and Authors
 views (android/docs/DESIGN.md "Lists by series and by author", with its known limits).
 
-The patch also adds the gesture action **Orbit Companion: apps**; the recommended settings
+The patch also adds the gesture action **BookSync Companion: apps**; the recommended settings
 put it on a two-finger swipe up when that gesture is still at its default.
 
 ## Verify
@@ -144,9 +144,9 @@ it: "signed with a different key"). Once:
 
 1. In the companion, note your settings (Wi-Fi after sleep sync, toggles). They don't survive.
 2. If "Allow lock screen" (device admin) is on, turn it off first: Settings › Security ›
-   Device admin apps › Orbit Companion › Deactivate. Android won't uninstall an active
+   Device admin apps › BookSync Companion › Deactivate. Android won't uninstall an active
    device admin.
-3. Uninstall Orbit Companion (`adb uninstall net.fledgewing.orbitcompanion`, or from app info).
+3. Uninstall BookSync Companion (`adb uninstall net.fledgewing.orbitcompanion`, or from app info).
 4. Install `orbit-companion-<version>.apk` from Releases, open it, and redo Setup (Home app,
    battery Unrestricted, device admin, Install updates).
 
@@ -164,7 +164,7 @@ with the next patch version.
 
 ## Battery stats
 
-Orbit Companion › Battery shows:
+BookSync Companion › Battery shows:
 - hours left, % per hour in standby and while reading (by content, Wi-Fi mode and frontlight);
 - % per 100 pages and per 100 full refreshes, and a daily history;
 - a Compare page for other readers' exported summaries ([format](../docs/design/STATS.md),
@@ -182,7 +182,7 @@ Expected: no change in wakeups or alarms, and under a second of CPU a day.
 
 ## Clicker buttons
 
-Orbit Companion › Settings › Clicker buttons maps a Bluetooth clicker's buttons (press, hold,
+BookSync Companion › Settings › Clicker buttons maps a Bluetooth clicker's buttons (press, hold,
 double press) to a small set of actions: next or previous page, Home, Back, frontlight, and
 Sync and sleep.
 - **In KOReader** the patch turns pages exactly. With the accessibility service on, the service
@@ -193,15 +193,15 @@ Sync and sleep.
   your clicker and never stores or sends key presses.
 - **Per app:** each button has a default action; any app can have its own (e.g. Volume down in
   Readest).
-- **Send Volume up/down, Send key…** (Page up/down, arrows, Space) go through the **Orbit
-  keyboard** ("Orbit clicker keys"), which has no keys, shows nothing, and never reads what you
+- **Send Volume up/down, Send key…** (Page up/down, arrows, Space) go through the **BookSync
+  keyboard** ("BookSync clicker keys"), which has no keys, shows nothing, and never reads what you
   type. It switches in for the key press and your keyboard comes back; a press while a text
-  field is focused does nothing. If switching fails on a reader, "Keep Orbit keyboard active"
+  field is focused does nothing. If switching fails on a reader, "Keep BookSync keyboard active"
   keeps it current instead.
 - **Volume keys:** a sent key reaches the app's own key handling first, so a reader that turns
   pages on volume keys gets it; an app that doesn't handle it lets Android change the volume.
   Not yet checked on a device (android/docs/BTKEYS-DESIGN.md, "Send key").
-- **Key Mapper:** if you used it for this, turn it off once Orbit's buttons work; you can then
+- **Key Mapper:** if you used it for this, turn it off once BookSync's buttons work; you can then
   uninstall it. Design: [android/docs/BTKEYS-DESIGN.md](docs/BTKEYS-DESIGN.md).
 
 **Battery cost check.** The service is event-driven: no polling, alarms, wake locks or
@@ -245,6 +245,6 @@ installed. Meebook (Haoqing) is measured; Boox (Onyx) is an unverified stub.
 
 ## License
 
-- `koreader/` is **AGPL-3.0-or-later** (`koreader/LICENSE`). The Orbit plugin runs inside KOReader and works with the BookOrbit KOReader plugin, both AGPL-3.0.
+- `koreader/` is **AGPL-3.0-or-later** (`koreader/LICENSE`). The BookSync plugin runs inside KOReader and works with the BookOrbit KOReader plugin, both AGPL-3.0.
 - `companion/` is **MIT** (`companion/LICENSE`). The companion app bundles the Kotlin standard library (Apache-2.0); its notices ship inside the app (Settings › Open-source licenses) and with each release (`THIRD-PARTY-NOTICES.txt`).
 - `docs/` is MIT, like the rest of the repo outside `android/koreader/` and `xteink/` (see the root `LICENSE`).

@@ -70,7 +70,7 @@ class ImeSwitch(private val timeoutMs: Long = TIMEOUT_MS) {
      */
     fun press(now: Long, keycode: Int, current: String?, orbitCurrent: Boolean, keepActive: Boolean, editorFocused: Boolean): Out {
         if (orbitCurrent && phase == Phase.IDLE) {
-            return Out(send = listOf(keycode), log = "key $keycode sent (Orbit keyboard already active${if (keepActive) ", kept active" else ""})")
+            return Out(send = listOf(keycode), log = "key $keycode sent (BookSync keyboard already active${if (keepActive) ", kept active" else ""})")
         }
         if (editorFocused) return Out(log = "key $keycode skipped: a text field is focused")
         return when (phase) {
@@ -80,7 +80,7 @@ class ImeSwitch(private val timeoutMs: Long = TIMEOUT_MS) {
                 queue += keycode
                 startedAt = now
                 phase = Phase.SWITCHING
-                Out(switchToOrbit = true, log = "key $keycode: switching to the Orbit keyboard")
+                Out(switchToOrbit = true, log = "key $keycode: switching to the BookSync keyboard")
             }
             Phase.SWITCHING, Phase.RESTORING -> {
                 queue += keycode

@@ -161,7 +161,7 @@ object KeySender {
             p.imeSwitchFailures = p.imeSwitchFailures + 1
             OLog.w("keys: switching keyboards failed on this reader (${p.imeSwitchFailures}x); Settings › Clicker buttons › Keep Orbit keyboard active is the fallback")
         }
-        if (o.switchToOrbit) switchTo(ctx, orbitId(ctx), "to Orbit")
+        if (o.switchToOrbit) switchTo(ctx, orbitId(ctx), "to BookSync")
         o.restore?.let { prev -> main.postDelayed({ restore(ctx, prev) }, RESTORE_DELAY_MS) }
         schedule(ctx)
     }
@@ -216,14 +216,14 @@ object KeySender {
     }
 
     private fun postKeyboard(ctx: Context, nm: NotificationManager, typing: Boolean) {
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Orbit keyboard", NotificationManager.IMPORTANCE_DEFAULT).apply {
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "BookSync keyboard", NotificationManager.IMPORTANCE_DEFAULT).apply {
             setShowBadge(false)
             enableVibration(false)
             setSound(null, null)
         })
         val sw = PendingIntent.getBroadcast(ctx, 5, Intent(ctx, KeyboardReceiver::class.java).setAction(ACTION_SWITCH),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val text = if (typing) "To type, switch to your keyboard" else "Orbit keyboard is active (it has no keys). To type, switch keyboards."
+        val text = if (typing) "To type, switch to your keyboard" else "BookSync keyboard is active (it has no keys). To type, switch keyboards."
         nm.notify(NOTE_ID, Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentText(text)

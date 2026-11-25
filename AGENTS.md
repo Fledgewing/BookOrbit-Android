@@ -1,7 +1,7 @@
 # Orbify
 
 Orbify is one ecosystem for e-readers syncing with a BookOrbit server over Tailscale: Android
-readers (KOReader + the Orbit plugin + Orbit Companion) and Xteink readers (CrossInk-Bookorbit
+readers (KOReader + the BookSync plugin + BookSync Companion) and Xteink readers (CrossInk-Bookorbit
 firmware + the Tailnet overlay). Reason about both platforms together: a new feature ships on
 every platform whose hardware allows it.
 
@@ -9,8 +9,8 @@ every platform whose hardware allows it.
 
 | Path | What | License |
 |---|---|---|
-| `android/koreader/` | The Orbit KOReader plugin `orbit.koplugin` (the user patch `2-orbit-android.lua` up to 0.7.x), its tests and `package.sh` (the release zip) | AGPL-3.0-or-later |
-| `android/companion/` | Orbit Companion app, package `net.fledgewing.orbitcompanion` | MIT |
+| `android/koreader/` | The BookSync KOReader plugin `orbit.koplugin` (the user patch `2-orbit-android.lua` up to 0.7.x), its tests and `package.sh` (the release zip) | AGPL-3.0-or-later |
+| `android/companion/` | BookSync Companion app, package `net.fledgewing.orbitcompanion` | MIT |
 | `android/docs/` | Android designs, the plugin–companion interface, setup guide | MIT |
 | `xteink/` | CrossInk-Tailnet overlay: MicroLink submodule, shim, UI, patch series per CrossInk line | MIT; firmware code moved out of the patches (`SPDX-License-Identifier: GPL-3.0-or-later`) and the binaries GPL-3.0, see `xteink/README.md` |
 | `docs/FEATURES.md` | What Orbify ships, per platform | MIT |
@@ -50,11 +50,11 @@ CrossInk 2.x release becomes the stable one (`xteink/README.md` "Releases and th
   ([design](docs/design/reading-gate.md)). Xteink firmware follows the same rule.
 
 - **KOReader's UI thread stays free; the companion does the work.** Network, parsing, comparing,
-  file writes and folder scans for Orbit's own background work run in the Orbit Companion, never on
+  file writes and folder scans for BookSync's own background work run in the BookSync Companion, never on
   KOReader's single thread ([design](docs/design/companion-worker.md)). The companion is required
   and ships with the plugin: no fallback path in the plugin for a job the companion owns, and no
   version-skew handling. One check (`Companion.workerProblem`): missing or another version shows
-  "Orbit Companion needed" or "Update Orbit Companion" and nothing heavy runs.
+  "BookSync Companion needed" or "Update BookSync Companion" and nothing heavy runs.
 
 ## Read the source, not memory
 

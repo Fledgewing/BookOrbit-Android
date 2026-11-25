@@ -1,6 +1,6 @@
 # Nothing interrupts reading
 
-**Principle (v0.11.1).** While a book is open in the foreground, nothing from Orbify, Orbit
+**Principle (v0.11.1).** While a book is open in the foreground, nothing from Orbify, BookSync
 Companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader or
 takes focus. Whatever would have shown waits for the next moment nobody is reading, or is dropped
 once it has gone stale.

@@ -49,7 +49,7 @@ function Rec.observe(it, ctx, raw)
         return { available = true, current = p.settings[it.key], default = defaults[it.key] }
     elseif it.kind == "ko" then
         if it.required_by == "wifi" and not S.wifi_via_companion and not raw then
-            return { available = false, reason = _("needs Wi-Fi via Orbit Companion") }
+            return { available = false, reason = _("needs Wi-Fi via BookSync Companion") }
         end
         return { available = true, current = G_reader_settings:readSetting(it.key), default = nil }
     elseif it.kind == "gesture" then
@@ -65,10 +65,10 @@ function Rec.observe(it, ctx, raw)
 end
 
 function Rec.capReason(cap)
-    if not Companion.installed() then return _("needs Orbit Companion") end
-    if cap == "wifi" then return _("needs Wi-Fi switching in Orbit Companion") end
-    if cap == "apps" then return _("needs Full mode in Orbit Companion") end
-    return _("needs Orbit Companion")
+    if not Companion.installed() then return _("needs BookSync Companion") end
+    if cap == "wifi" then return _("needs Wi-Fi switching in BookSync Companion") end
+    if cap == "apps" then return _("needs Full mode in BookSync Companion") end
+    return _("needs BookSync Companion")
 end
 
 -- Write one item. value nil: back to unset. Returns true when the value took.
@@ -165,7 +165,7 @@ function OrbitAndroid:maybeRecommendedLine(where)
     Rec.line_pending = false
     if not text then return end
     log("recommended: line shown in " .. where .. ": " .. text)
-    orbitNote(_(text) .. " · " .. _("Tools › Android sync › Recommended settings"), 4)
+    orbitNote(_(text) .. " · " .. _("Tools › BookSync › Recommended settings"), 4)
 end
 
 -- Start: a pass once the BookOrbit plugin instance can be found (module.lua's next-tick fallback).
@@ -275,7 +275,7 @@ function OrbitAndroid:showRecommended(why)
     local function header(text) table.insert(items, { text = text, bold = true, dim = false, callback = function() end }) end
     if #groups.conflict > 0 then
         header(_("To review"))
-        table.insert(items, { text = _("Use all of Orbit's"), callback = function()
+        table.insert(items, { text = _("Use all of BookSync's"), callback = function()
             for _i, it in ipairs(groups.conflict) do Rec.useOrbits(it, ctx) end
             Rec.report("review"); reopen()
         end })
@@ -289,7 +289,7 @@ function OrbitAndroid:showRecommended(why)
         for _i, it in ipairs(groups.conflict) do
             local yours = cur(it) or "?"
             local orbit = Recommended.valueLabel(it, it.ours)
-            table.insert(items, { text = _(it.label), mandatory = string.format(_("yours: %s · Orbit's: %s"), yours, orbit),
+            table.insert(items, { text = _(it.label), mandatory = string.format(_("yours: %s · BookSync's: %s"), yours, orbit),
                 callback = function()
                     local keep = { _("Keep mine"), function() Rec.keepMine(it); Rec.report("review"); reopen() end }
                     if wifiNeeded(it) then
@@ -300,7 +300,7 @@ function OrbitAndroid:showRecommended(why)
                         end }
                     end
                     dialog(_(it.label) .. "\n" .. (wifiNeeded(it) and _("Wi-Fi switching needs this.") .. "\n" or ""), {
-                        { _("Use Orbit's"), function()
+                        { _("Use BookSync's"), function()
                             local okd, why2 = Rec.useOrbits(it, ctx)
                             if not okd then note(tostring(why2)) end
                             Rec.report("review"); reopen()
@@ -325,7 +325,7 @@ function OrbitAndroid:showRecommended(why)
                         end
                         if wifiNeeded(it) then
                             UIManager:show(ConfirmBox:new{ -- gate: user action (Recommended settings menu)
-                                text = _("Wi-Fi switching needs this. Turn off Wi-Fi via Orbit Companion and undo?"),
+                                text = _("Wi-Fi switching needs this. Turn off Wi-Fi via BookSync Companion and undo?"),
                                 ok_text = _("Turn off and undo"),
                                 ok_callback = function() S.wifi_via_companion = false; saveSettings(); go() end,
                             })
@@ -342,7 +342,7 @@ function OrbitAndroid:showRecommended(why)
         for _i, it in ipairs(groups.kept) do
             table.insert(items, { text = _(it.label), mandatory = cur(it) or "",
                 callback = function()
-                    dialog(_(it.label), { { _("Use Orbit's"), function()
+                    dialog(_(it.label), { { _("Use BookSync's"), function()
                         local okd, why2 = Rec.useOrbits(it, ctx)
                         if not okd then note(tostring(why2)) end
                         Rec.report("review"); reopen()

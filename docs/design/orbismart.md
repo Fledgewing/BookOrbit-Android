@@ -1,7 +1,7 @@
 # OrbiSmart sync: one setting for seamless, low-battery reading across Orbify
 
 Status: approved with the user's rulings of 2026-11-24 (below). The shared decision table, Android and Xteink firmware wiring are implemented;
-device validation remains before release. Platforms: Android (KOReader + BookOrbit plugin + Orbit plugin + Orbit
+device validation remains before release. Platforms: Android (KOReader + BookOrbit plugin + BookSync plugin + BookSync
 Companion), X4 Pro, X4, X3. Pins read: BookOrbit `c1dd6b4` (server + `koreader-plugin/`),
 CrossInk-Bookorbit `87e2e19` (rc3), Orbify working tree 2026-11-24.
 
@@ -13,7 +13,7 @@ CrossInk-Bookorbit `87e2e19` (rc3), Orbify working tree 2026-11-24.
    decline that one remote place (never asked again for it); it is not an override. The popup
    replaces the 4-second "Stay here" line; it is e-ink friendly: one draw, no animation.
 2. **A backward override on a finished book starts a reread** in BookOrbit's history: accepted.
-3. **"Read from here everywhere"** is the explicit override in the Orbit menu and This book sheet;
+3. **"Read from here everywhere"** is the explicit override in the BookSync menu and This book sheet;
    queued offline with the chosen place, and sent before ordinary snapshots.
 4. **Furthest wins**; ordinary pushes never go behind the last known server place. Replace the
    old silent jump to any newer-dated place.
@@ -35,13 +35,13 @@ sleep sync it already runs.
 
 ### When positions move today
 
-| Moment | Android (plugin + Orbit, recommended settings) | Xteink X4 Pro / X4 | Xteink X3 |
+| Moment | Android (plugin + BookSync, recommended settings) | Xteink X4 Pro / X4 | Xteink X3 |
 |---|---|---|---|
-| Open a book | Plugin pull on open (`main.lua:991-1000`); Orbit brings the network up for it, cap 20 s (`ko/reading_sync.lua:81-101`) | **Nothing** | Nothing |
+| Open a book | Plugin pull on open (`main.lua:991-1000`); BookSync brings the network up for it, cap 20 s (`ko/reading_sync.lua:81-101`) | **Nothing** | Nothing |
 | Page turns | Plugin periodic push every 3 pages, only if already online (`main.lua:110`, `:1314-1327`); Just-in-time Wi-Fi is off by then, so in practice none | Sync While Reading, off by default (README "Sync while reading", patch 0022); push-only, never applies a newer server place | Not possible (no memory beside an open book) |
 | Pause / idle | Nothing | Nothing | Nothing |
-| Sleep | Plugin snapshots to its outbox (`main.lua:1340-1351`); Orbit's sleep sync brings the network up and drains it, 20 s cap, 25 s wake lock (`ko/sleep.lua:9-56`, `:93-133`; android/docs/DESIGN.md "Sleep sequence") | **Sleep sync** behind the sleep screen, if Sync on Sleep is on (default **off**, `BookOrbitCredentialStore.h:42`), an EPUB is open and battery ≥10% (`main.cpp:1540-1552`). Restart into a network boot (`:1582-1593`), push or pull for the **open book only** (build notes B4), then the lent session: Home, covers, next cover, copy refresh, mirror slice (S2, S4); 240 s budget, wake press answered in ≤2 s (S5) | Same, but the Home refreshes on its own connection after the session (S2) |
-| Wake | Orbit wake flow: network up (≤20 s), outbox drain, then pull (`ko/start.lua:36-68`) | **Nothing.** The book shows the place the last sleep sync left | Nothing |
+| Sleep | Plugin snapshots to its outbox (`main.lua:1340-1351`); BookSync's sleep sync brings the network up and drains it, 20 s cap, 25 s wake lock (`ko/sleep.lua:9-56`, `:93-133`; android/docs/DESIGN.md "Sleep sequence") | **Sleep sync** behind the sleep screen, if Sync on Sleep is on (default **off**, `BookOrbitCredentialStore.h:42`), an EPUB is open and battery ≥10% (`main.cpp:1540-1552`). Restart into a network boot (`:1582-1593`), push or pull for the **open book only** (build notes B4), then the lent session: Home, covers, next cover, copy refresh, mirror slice (S2, S4); 240 s budget, wake press answered in ≤2 s (S5) | Same, but the Home refreshes on its own connection after the session (S2) |
+| Wake | BookSync wake flow: network up (≤20 s), outbox drain, then pull (`ko/start.lua:36-68`) | **Nothing.** The book shows the place the last sleep sync left | Nothing |
 | Close | Plugin outbox push (`main.lua:1292-1311`) | Nothing (no Wi-Fi at close, S8) | Nothing |
 | Manual | "This book" sheet, gestures | Chord or menu: restart into a network boot, sync, maybe a choice screen (`main.cpp:612-700`, `BookOrbitSyncActivity.cpp:565-596`) | Same |
 
@@ -90,7 +90,7 @@ labelled and should be replaced from it (§6).
    ~10-25 s, then often the choice screen). Or they read the stale part again.
 2. **Android jumps back** to another device's stale place (newest-wins + stale pushes).
 3. **Xteink "left for the next manual sync"** whenever both sides moved: silent, nothing resolves it.
-4. **Mid-book jumps on Android** when a pull lands after reading started (Orbit's reading sync and
+4. **Mid-book jumps on Android** when a pull lands after reading started (BookSync's reading sync and
    the plugin's `NetworkConnected` pull both apply "Silent"; `ko/reading_sync.lua:162-164`).
 5. Switching books: the Xteink syncs only the open book, so a book read on Android opens stale.
 
@@ -123,12 +123,12 @@ labelled and should be replaced from it (§6).
 A pure function, host-tested on both sides from one fixture file
 (`shared/fixtures/orbismart/cases.json`, like `reading-quiet`). It replaces
 `BookOrbitSmartSync::decide` (Xteink, in `xteink/orbify/core/`) and the plugin's
-forward/backward strategies (Android, in Orbit `logic/`).
+forward/backward strategies (Android, in BookSync `logic/`).
 
 Inputs: **L** local place; **R** server place mapped to local pages (Xteink
 `BookOrbitRemotePosition::toLocal`; Android `document:compareXPointers`, percent only as fallback);
 **M** this device's marker of its last sync (server timestamp + place; Xteink has it,
-`BookOrbitSyncMarkerFile`; Android adds one per book in Orbit's settings); **readHere** = L moved
+`BookOrbitSyncMarkerFile`; Android adds one per book in BookSync's settings); **readHere** = L moved
 more than one page from M; **serverMoved** = R's timestamp ≠ M's and not merely re-dated
 (`onlyRedated`, `BookOrbitSmartSync.h:119`); **T_turn** = this device's last page turn.
 
@@ -155,7 +155,7 @@ Checked in the order listed (7 before 3). Two more inputs:
 
 **Behind-hold (all pushes).** A device never pushes a place behind the last server place it knows,
 except an override or a released reread (rule 7). Every connection pulls before it pushes (the
-Xteink already does; Android's outbox drain waits for Orbit's pull, extending
+Xteink already does; Android's outbox drain waits for BookSync's pull, extending
 `hookPluginPagePush`, `ko/module.lua:78`). This is what makes rule 5 safe: inside Orbify, a
 backward move on the server is always deliberate.
 
@@ -193,11 +193,11 @@ open one. No choice screen anywhere.
 | Closing | CloseDocument | Outbox push under the behind-hold | plugin's own |
 | Any connect | NetworkConnected | Outbox drain under the behind-hold; the plugin's own pulls never move the reader | — |
 
-Per book, Orbit keeps a **sync marker** M (server timestamp and place of the last sync, the
+Per book, BookSync keeps a **sync marker** M (server timestamp and place of the last sync, the
 declined remote place, a queued override) in its settings (`S.orbismart[digest]`).
 
 Under OrbiSmart the plugin's "further ahead" and "further behind" are both **Don't sync** and its
-page push is off: Orbit reads with `fetchRemoteProgress`, decides, and calls `syncToProgress` or
+page push is off: BookSync reads with `fetchRemoteProgress`, decides, and calls `syncToProgress` or
 `requestProgressPush` (all already hooked, `logic/compat.lua:13-29`). The Wi-Fi mode stays the
 user's (Just in time is the right partner).
 
@@ -229,7 +229,7 @@ any button within 2 s and replays the press. Budget 25 s. Cost of a fast reader:
 
 | Question | Design |
 |---|---|
-| Where | Reader menu: **"Read from here everywhere"** (Android: Orbit menu and the "This book" sheet; optional gesture. Xteink: reader menu › Sync). The popup's **No** is not an override (ruling 1). |
+| Where | Reader menu: **"Read from here everywhere"** (Android: BookSync menu and the "This book" sheet; optional gesture. Xteink: reader menu › Sync). The popup's **No** is not an override (ruling 1). |
 | What it does | Pushes the current place now, stamped now, skipping the behind-hold once; sets M to it. |
 | How long | One shot. From then on furthest wins again, counted from this place. Rereading from chapter 1 needs it once, not every session. |
 | Offline / X3 mid-book | Queued (one per book, newest wins, two-slot file like `orbify_finish.bin`), sent **first** at the next sync. If the server shows reading elsewhere after the override was made, it is dropped and logged; furthest wins. Until it is sent, this device does not move or ask for that book. |
@@ -289,12 +289,12 @@ Net: about +0.2 points of battery per Xteink per day and +0.05 on Android, for z
 ## 6. Rollout
 
 **Setting.** "Sync" with two values: **OrbiSmart (recommended)** and **Custom**. Android: first row
-of Companion Settings › Sync, mirrored in KOReader's Orbit menu (one schema, companion-settings.md).
+of Companion Settings › Sync, mirrored in KOReader's BookSync menu (one schema, companion-settings.md).
 Xteink: first row of Settings › BookOrbit Sync. OrbiSmart presets and hides:
 
 | Platform | Settings it sets (Custom shows them again, last values kept) |
 |---|---|
-| Android | Plugin: auto-sync on; further ahead and further behind: Don't sync (Orbit decides); push every N pages off. Orbit: sync on wake on, sync on sleep on, Sync while reading → "When you pause". Wi-Fi mode untouched. |
+| Android | Plugin: auto-sync on; further ahead and further behind: Don't sync (BookSync decides); push every N pages off. BookSync: sync on wake on, sync on sleep on, Sync while reading → "When you pause". Wi-Fi mode untouched. |
 | Xteink | Sync behaviour Smart (OrbiSmart rules), Sync on Sleep on, Sync While Reading → "When you pause" (X4s), Wake check on. Mark Finished at End untouched. |
 
 New installs get OrbiSmart. On update it follows the recommended-settings rule (addon-mode §5): applied

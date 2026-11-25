@@ -215,7 +215,7 @@ class SleepScreenLogicTest {
         assertTrue(SleepSystem.oursChosen(ours, ours))
         assertFalse(SleepSystem.oursChosen(null, ours))
         assertFalse(SleepSystem.oursChosen("com.haoqing.wallpaper/.view.service.HaoqingDreamService", ours))
-        assertEquals("Orbit screen saver ✓", SleepSystem.shownBy(SleepSink.DREAM, true, false))
+        assertEquals("BookSync screen saver ✓", SleepSystem.shownBy(SleepSink.DREAM, true, false))
         assertEquals("Set up ›", SleepSystem.shownBy(SleepSink.DREAM, false, true))
         assertEquals(listOf(ours, "1", "1"), SleepSystem.ourValues(ours))
     }
@@ -230,16 +230,16 @@ class SleepScreenLogicTest {
         fun shown(mode: SleepMode = SleepMode.RECOMMENDED, sink: SleepSink = SleepSink.DREAM, granted: Boolean = false, ours: Boolean = false, page: Boolean = false) =
             SleepSetup.shown(mode, sink, granted, ours, page)
         assertTrue("on, the reader's own still chosen, no page", shown())
-        assertTrue("off, Orbit's still chosen, no page", shown(mode = SleepMode.OFF, ours = true))
-        assertFalse("the M8C: on and Orbit's chosen: works without it", shown(ours = true))
+        assertTrue("off, BookSync's still chosen, no page", shown(mode = SleepMode.OFF, ours = true))
+        assertFalse("the M8C: on and BookSync's chosen: works without it", shown(ours = true))
         assertFalse("off and the reader's own: nothing to change", shown(mode = SleepMode.OFF))
-        assertFalse("granted: Orbit switches it itself", shown(granted = true))
+        assertFalse("granted: BookSync switches it itself", shown(granted = true))
         assertFalse("the reader's Screen saver page does it by hand", shown(page = true))
         assertFalse("a picture reader (Boox) has no screen saver to switch", shown(sink = SleepSink.PICTURE))
-        assertTrue(SleepSetup.stateLine(SleepMode.CURRENT).contains("Orbit's cover doesn't show"))
+        assertTrue(SleepSetup.stateLine(SleepMode.CURRENT).contains("BookSync's cover doesn't show"))
         assertTrue(SleepSetup.how(SleepMode.CURRENT).contains("--sleep-screen on"))
         assertTrue(SleepSetup.how(SleepMode.OFF).contains("--sleep-screen off"))
-        assertTrue("says why you'd grant it", SleepSetup.how(SleepMode.OFF).contains("Orbit switches the screen saver itself"))
+        assertTrue("says why you'd grant it", SleepSetup.how(SleepMode.OFF).contains("BookSync switches the screen saver itself"))
         assertFalse("the loss line names what is lost, not a command", Checklist.LOSS.getValue(SleepSetup.ID).startsWith("turning"))
     }
 

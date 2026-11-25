@@ -411,7 +411,7 @@ object BatteryRow {
         !idleAllowlisted && settingsLocked -> if (own) Row(false, LOCKED, Open.PROMPT) else Row(false, LOCKED_OTHER)
         !idleAllowlisted -> Row(false, FIX, if (own) Open.PROMPT else Open.BATTERY_PAGE)
         standbyBucket == BUCKET_RARE || standbyBucket == BUCKET_RESTRICTED ->
-            Row(false, "Android is holding Orbit back (rarely used): open Orbit, then $FIX")
+            Row(false, "Android is holding BookSync back (rarely used): open BookSync, then $FIX")
         else -> Row(true, "done")
     }
 }
@@ -855,7 +855,7 @@ object UpdateFlow {
 
     /** The manual fallback, with the reason. */
     fun manualLine(app: String, reason: String) =
-        "Updated to v$app, but the KOReader patch wasn't updated: $reason. Setup > Orbit plugin"
+        "Updated to v$app, but the KOReader patch wasn't updated: $reason. Setup > BookSync plugin"
 }
 
 /** The pairs a stale-patch restart was sent (or a wait logged) for, in this process. */
@@ -946,7 +946,7 @@ object SetupAttention {
     val INFO_ONLY = setOf("patch_seen", "wifi_test", "keymapper", "play_protect", "managed", "freeze_tip")
 
     fun idOf(label: String): String = when {
-        label.startsWith("Set Orbit as Home") -> "home"
+        label.startsWith("Set BookSync as Home") -> "home"
         label.startsWith("Allow notifications") -> "notifications"
         label.startsWith("Not disabled") -> "disabled"
         label.startsWith("Install updates") -> "install_updates"
@@ -954,18 +954,18 @@ object SetupAttention {
         label.startsWith("Tailscale") -> "tailscale"
         label.startsWith("Allow \"lock screen\"") -> "admin"
         // "KOReader patch …" up to 0.7.x: kept so earlier snoozes and ignores still apply.
-        label.startsWith("Orbit plugin installed") || label.startsWith("KOReader patch installed") -> "patch"
+        label.startsWith("BookSync plugin installed") || label.startsWith("KOReader patch installed") -> "patch"
         label.startsWith("KOReader app") -> "koreader"
         label.startsWith("BookOrbit plugin") -> "plugin"
         label.startsWith("Play Protect") -> "play_protect"
         label.startsWith("Launcher can freeze apps") -> "freeze_tip"
         label.startsWith("Family Link") || label.startsWith("Managed device") -> "managed"
-        label.startsWith("Orbit plugin answered") || label.startsWith("KOReader patch answered") -> "patch_seen"
+        label.startsWith("BookSync plugin answered") || label.startsWith("KOReader patch answered") -> "patch_seen"
         label.startsWith("Wi-Fi off/on test") -> "wifi_test"
         label.startsWith("Clicker buttons") -> "clicker"
         label.startsWith("Signed in to BookOrbit") -> "signed_in"
         label.startsWith("Recommended settings") -> "recommended"
-        label.startsWith("Orbit keyboard") -> "keyboard"
+        label.startsWith("BookSync keyboard") -> "keyboard"
         label.startsWith("Key Mapper") || label.startsWith("Another key mapper") -> "keymapper"
         else -> label.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
     }
@@ -1032,11 +1032,11 @@ object WhatsNew {
         ),
         "0.2.3" to listOf("No more \"Connecting to Wi-Fi\" message when the reader wakes."),
         "0.2.4" to listOf(
-            "Setup now tells you when a step needs you (here, in a quiet notification, and in KOReader's Android sync status).",
+            "Setup now tells you when a step needs you (here, in a quiet notification, and in KOReader's BookSync status).",
             "This list: what changed after each update.",
         ),
         "0.3.0" to listOf(
-            "Battery: hours left, % per hour in standby and reading, by setting and content, and a daily history (Orbit Companion › Battery).",
+            "Battery: hours left, % per hour in standby and reading, by setting and content, and a daily history (BookSync Companion › Battery).",
             "Export a battery summary and compare readers side by side.",
         ),
         "0.3.1" to listOf(
@@ -1047,23 +1047,23 @@ object WhatsNew {
         ),
         "0.4.0" to listOf(
             "Settings › Clicker buttons: map a Bluetooth clicker's buttons (press, hold, double press) to next/previous page, Home, Back, frontlight or Sync and sleep.",
-            "In KOReader pages turn exactly; in other apps it taps the page once you switch on Settings › Accessibility › Orbit clicker buttons.",
-            "Using Key Mapper for this? Turn it off once Orbit's buttons work; you can then uninstall it.",
+            "In KOReader pages turn exactly; in other apps it taps the page once you switch on Settings › Accessibility › BookSync clicker buttons.",
+            "Using Key Mapper for this? Turn it off once BookSync's buttons work; you can then uninstall it.",
         ),
         "0.4.1" to listOf(
             "Clicker buttons: a default action per button, and any app can use its own (e.g. Next page, but Volume down in Readest).",
-            "New actions: Send Volume up/down and Send key (Page up/down, arrows, Space), through the Orbit keyboard. It switches in only for the key press, then your keyboard comes back.",
+            "New actions: Send Volume up/down and Send key (Page up/down, arrows, Space), through the BookSync keyboard. It switches in only for the key press, then your keyboard comes back.",
             "Setup steps show up when they appear: right after you map a clicker, on the next Home press, and once in KOReader outside a book.",
         ),
         "0.4.2" to listOf(
             "Clicker buttons work in KOReader again, including keyboard-mode and gamepad clickers.",
-            "With Settings › Accessibility › Orbit clicker buttons on, one path handles every app: in KOReader it tells the patch, which turns the page exactly. Media keys now work in KOReader this way too.",
+            "With Settings › Accessibility › BookSync clicker buttons on, one path handles every app: in KOReader it tells the patch, which turns the page exactly. Media keys now work in KOReader this way too.",
         ),
         "0.4.3" to listOf(
             "KOReader no longer freezes (\"not responding\") while the patch checks for an update: the check runs in the background, never with a book open, and waits an hour after a failure.",
         ),
         "0.4.4" to listOf(
-            "Settings PIN (optional): Settings › Settings PIN locks the settings, Setup fixes, updates, Android Settings and any app you add, and KOReader's Android sync menu. Forgot it? See the setup guide.",
+            "Settings PIN (optional): Settings › Settings PIN locks the settings, Setup fixes, updates, Android Settings and any app you add, and KOReader's BookSync menu. Forgot it? See the setup guide.",
             "Clicker buttons now sits right under the Home button in Settings.",
         ),
         "0.4.5" to listOf(
@@ -1078,7 +1078,7 @@ object WhatsNew {
         "0.4.8" to listOf(
             "Settings PIN: after you leave the settings or a guarded app it stays unlocked for 2 minutes, so coming straight back needs no PIN. The screen turning off still locks it.",
             "Sync while reading is now in Settings too (KOReader keeps it; a change applies when KOReader opens).",
-            "Home settings are simpler: \"Home opens\" now offers the Orbit launcher page (it replaces the \"Home always opens…\" switch), and \"In KOReader, Home goes to\" shows only with KOReader.",
+            "Home settings are simpler: \"Home opens\" now offers the BookSync launcher page (it replaces the \"Home always opens…\" switch), and \"In KOReader, Home goes to\" shows only with KOReader.",
         ),
         "0.4.9" to listOf(
             "Home on any BookOrbit screen other than its main page (a book, a list, search, a sheet) goes back to BookOrbit's main page; Home on the main page opens the launcher page.",
@@ -1169,7 +1169,7 @@ object HomeApp {
      */
     fun migrate(choice: String, toggle: Boolean?): String = if (toggle == false) LAUNCHER else choice
 
-    const val LAUNCHER_LABEL = "Orbit launcher page"
+    const val LAUNCHER_LABEL = "BookSync launcher page"
     const val TWICE = "press Home twice for the launcher page"
     const val HOME_BUTTON_TITLE = "In KOReader, Home goes to"
 

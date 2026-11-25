@@ -1,9 +1,9 @@
-# Orbify
+# Orbify — BookSync for e-readers
 
 Keeps e-readers in sync with a [BookOrbit](https://github.com/bookorbit/bookorbit) server over
 Tailscale, on Android and on Xteink readers.
 
-- **Android** ([`android/`](android/README.md)): a KOReader patch and the Orbit Companion app.
+- **Android** ([`android/`](android/README.md)): a KOReader patch and the BookSync Companion app.
   They bring Wi-Fi and Tailscale up for the BookOrbit plugin, sync on sleep and while reading,
   and add a Home button, lists by series and author, battery stats, clicker buttons and a
   settings PIN. New here? The [setup guide](android/docs/SETUP.md).
@@ -17,7 +17,7 @@ How the server behaves: [`docs/server-contract.md`](docs/server-contract.md).
 
 One [releases page](https://github.com/Fledgewing/Orbify/releases) for both platforms:
 
-- `v…`: Orbit Companion APK and the KOReader plugin. They ship together: the companion updates itself and then installs the plugin of its release.
+- `v…`: BookSync Companion APK and the KOReader plugin. They ship together: the companion updates itself and then installs the plugin of its release.
 - `xteink-v…`: firmware for each reader, installed over the air from **Settings > Check for
   updates**, or flashed from an SD card or USB.
 
@@ -42,4 +42,4 @@ Copyright (C) 2025-2026 neon. Additional copyright is held by the respective Boo
 
 BookOrbit is licensed under the GNU AGPLv3 with additional terms.
 
-Orbify licences: Orbit Companion is MIT. The Xteink overlay source is MIT, except firmware code marked GPL-3.0-or-later; Xteink firmware binaries are GPL-3.0-or-later. Orbit is AGPL-3.0-or-later as a KOReader plugin.
+Orbify licences: BookSync Companion is MIT. The Xteink overlay source is MIT, except firmware code marked GPL-3.0-or-later; Xteink firmware binaries are GPL-3.0-or-later. BookSync is AGPL-3.0-or-later as a KOReader plugin.

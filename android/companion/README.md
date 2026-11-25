@@ -1,7 +1,7 @@
-# Orbit Companion
+# BookSync Companion
 
 One APK (`net.fledgewing.orbitcompanion`, Kotlin, plain Views, targetSdk 28 so
-`WifiManager.setWifiEnabled` works) for the Orbit KOReader plugin in `../koreader/`. It never
+`WifiManager.setWifiEnabled` works) for the BookSync KOReader plugin in `../koreader/`. It never
 talks to BookOrbit and holds no login. Contract: [`../docs/INTERFACE.md`](../docs/INTERFACE.md).
 
 - **Service** (foreground, ongoing notification): `NET_UP` (Wi-Fi on, Tailscale
@@ -26,7 +26,7 @@ talks to BookOrbit and holds no login. Contract: [`../docs/INTERFACE.md`](../doc
   system broadcasts only; raw rows 90 days, daily rollups forever.
 - **Setup needs you**: when a Setup step isn't done (new, or it stopped working), a page lists
   just those steps with "Fix", "Don't ask about this" and "Later"; also a quiet notification,
-  a launcher banner and a line in KOReader's Android sync status. After an update it shows
+  a launcher banner and a line in KOReader's BookSync status. After an update it shows
   "What's new" once.
 - **Self-update** from GitHub releases (`Updater.kt`; README "Updates"): daily, SHA-256 and
   signing-certificate checked, installed with `PackageInstaller`. At targetSdk 28 Android
@@ -64,7 +64,7 @@ adb shell am start -n net.fledgewing.orbitcompanion/.StatusActivity
 ```
 
 Then Setup on the status page: each row opens the system page it needs (Home app,
-notifications, not disabled by the system, install updates, battery Unrestricted for Orbit,
+notifications, not disabled by the system, install updates, battery Unrestricted for BookSync,
 Tailscale and KOReader, Tailscale, device admin), then run the Wi-Fi off/on test.
 
 ## Logs

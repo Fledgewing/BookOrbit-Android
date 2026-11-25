@@ -536,7 +536,7 @@ class SetupAttentionTest {
         val after = SetupAttention.evaluate(rows("tailscale" to false, "clicker" to false), before.next, v1)
         assertEquals(listOf("clicker"), SetupAttention.caused(before.needed, after))
         assertTrue(SetupAttention.caused(after.needed, after).isEmpty())
-        assertEquals("keyboard", SetupAttention.idOf("Orbit keyboard enabled"))
+        assertEquals("keyboard", SetupAttention.idOf("BookSync keyboard enabled"))
     }
 
     @Test
@@ -554,11 +554,11 @@ class SetupAttentionTest {
 
     @Test
     fun idsAreStable() {
-        assertEquals("home", SetupAttention.idOf("Set Orbit as Home app"))
+        assertEquals("home", SetupAttention.idOf("Set BookSync as Home app"))
         assertEquals("battery:KOReader", SetupAttention.idOf("Battery: Unrestricted (KOReader)"))
         assertEquals("patch", SetupAttention.idOf("KOReader patch installed (v0.2.3)"))
-        assertEquals("patch", SetupAttention.idOf("Orbit plugin installed (v0.8.0)"))
-        assertEquals("patch_seen", SetupAttention.idOf("Orbit plugin answered"))
+        assertEquals("patch", SetupAttention.idOf("BookSync plugin installed (v0.8.0)"))
+        assertEquals("patch_seen", SetupAttention.idOf("BookSync plugin answered"))
         assertEquals("admin", SetupAttention.idOf("Allow \"lock screen\" (device admin)"))
     }
 
@@ -766,7 +766,7 @@ class HomeOpensTest {
         assertFalse(HomeApp.showsHomeButton(c))
         assertFalse(HomeApp.isKoreader(c))
         assertFalse(HomeApp.isApp(c))
-        assertEquals("Orbit launcher page", HomeApp.summary(c, null))
+        assertEquals("BookSync launcher page", HomeApp.summary(c, null))
         val d = HomeDecider()
         assertEquals(HomeAction.SHOW_LAUNCHER, d.onHomePress(0, true, opensApp = !HomeApp.isLauncher(c)))
         assertEquals(HomeAction.SHOW_LAUNCHER, d.onUncovered(10_000, true, opensApp = !HomeApp.isLauncher(c)))
@@ -1010,7 +1010,7 @@ class UpdateFlowTest {
         assertTrue(UpdateFlow.loaded("0.5.1", "0.5.1"))
         assertTrue(UpdateFlow.loaded("0.5.1", "0.5.2"))
         assertEquals("Updated to v0.5.1 (KOReader loaded it)", UpdateFlow.doneLine("0.5.1"))
-        assertTrue(UpdateFlow.manualLine("0.5.1", "storage access isn't allowed").endsWith("storage access isn't allowed. Setup > Orbit plugin"))
+        assertTrue(UpdateFlow.manualLine("0.5.1", "storage access isn't allowed").endsWith("storage access isn't allowed. Setup > BookSync plugin"))
     }
 }
 

@@ -1,4 +1,4 @@
-# Orbit as a KOReader plugin (roadmap 8a)
+# BookSync as a KOReader plugin (roadmap 8a)
 
 Status: shipped in Android 0.8.0. 8b (hooking the BookOrbit board and replacing KOReader's
 menus) builds on this and is still to do.
@@ -24,7 +24,7 @@ and splits it by section:
   companion, shared, bookorbit, net, sync, wifi, updater, background, runtime,
   clicks_channel, keys, module, start, home, sleep, reading_sync, test_sync_path,
   companion_ui, recommended, menu, wifi_backend, grouping.
-- `_meta.lua`: the name and description in KOReader's Plugin manager ("Orbit").
+- `_meta.lua`: the name and description in KOReader's Plugin manager ("BookSync").
 
 **One shared environment.** `main.lua` `loadfile`s each file in order and `setfenv`s it to one
 table whose `__index` is `_G`. The patch's top-level `local x` became a plain `x` in that table,
@@ -51,15 +51,15 @@ per process, from FileManager's or ReaderUI's init (`readerui.lua:464`). Every p
 | `NetworkMgr` overrides, `wrapRequests("socket.http"/"ssl.https")` | `ko/wifi.lua`, `ko/wifi_backend.lua` at load. The wrapper replaces the `request` field of the module table, so BookOrbit's `local http = require("socket.http")` (`bookorbit_api.lua:9`, which calls `http.request` at :236 and :248) still goes through it. |
 | `Clicks.install("load")`, `silentWifiOn()` | At load. This is slightly later than `late`, but still before the first FileManager or ReaderUI finishes init. |
 | Cold-start "reopen the killed book" (`open_book_at_exit`) | Unchanged: it runs from the module's init. |
-| Append the module to `loadPlugins`, hide it from the Plugin manager | Dropped: KOReader loads it as a plugin and lists it as "Orbit", so it can be turned off there. |
+| Append the module to `loadPlugins`, hide it from the Plugin manager | Dropped: KOReader loads it as a plugin and lists it as "BookSync", so it can be turned off there. |
 
 **After BookOrbit.** `enabled_plugins` is sorted by path (`pluginloader.lua:289`). The user
 plugins folder is `<data dir>/plugins/` (`:193-198`; `/sdcard/koreader/plugins/` on Android),
-and both plugins sit in it, so `bookorbit.koplugin` sorts before `orbit.koplugin`. Orbit therefore
+and both plugins sit in it, so `bookorbit.koplugin` sorts before `orbit.koplugin`. BookSync therefore
 gets each event (Resume, Suspend, PageUpdate, ReaderReady) after BookOrbit, as the appended
-patch module did. Built-in plugins (`plugins/…`) now sort after Orbit rather than before it.
-Orbit uses one of them, `ui.gestures`, and only from menu actions at run time, never in init.
-In case some other setup orders BookOrbit after Orbit, the page-push hook falls back to the
+patch module did. Built-in plugins (`plugins/…`) now sort after BookSync rather than before it.
+BookSync uses one of them, `ui.gestures`, and only from menu actions at run time, never in init.
+In case some other setup orders BookOrbit after BookSync, the page-push hook falls back to the
 next tick when `ui.bookorbit` is still missing at init (`ko/module.lua`).
 
 ## Settings and finding BookOrbit
@@ -111,7 +111,7 @@ delete the patch (and a stray `.new`) whenever they install the plugin. Test:
 2. The running 0.7.0 patch no longer finds its file, so it makes no restart of its own
    (`RestartPlan.decide` → "none"). The companion's restart command, which the patch has obeyed
    since 0.3.1, restarts KOReader once no book is open, or when the screen next goes off.
-3. KOReader starts with only the plugin. It reports 0.8.0, and Setup shows "Orbit plugin
+3. KOReader starts with only the plugin. It reports 0.8.0, and Setup shows "BookSync plugin
    installed (v0.8.0)".
 
 A 0.7.0 patch whose companion doesn't update finds no `2-orbit-android.lua` in 0.8.0, reports
@@ -125,5 +125,5 @@ All two-way doors, settled here:
 - The shared environment instead of `require`d modules. It can be reshaped any time.
 - The 0.8.0 release drops the `2-orbit-android.lua` asset. Patch-only setups stay on 0.7.0
   until the companion updates, and a later release could add the asset back.
-- The Setup rows were renamed to "Orbit plugin installed" and "Orbit plugin answered". The row
+- The Setup rows were renamed to "BookSync plugin installed" and "BookSync plugin answered". The row
   ids are unchanged, so snoozes and ignores carry over.

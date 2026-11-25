@@ -19,7 +19,7 @@ X4, X3). Status: designing. Mockups: `mockups.html` beside this file. Nothing he
 | D4 | A book finished on Android leaves Continue reading at once and counts toward the goal. It ships in the **same release as item 1** (mark done at end of book), so the server agrees and the book does not come back. | approved |
 | D5 | On Xteink readers without touch, Up on a catalog view's top row selects the header refresh button (Up again wraps to the last row; Confirm refreshes). | approved |
 
-Android items 1-3 are built in the new **Orbit KOReader plugin** (ROADMAP 8a, being built now),
+Android items 1-3 are built in the new **BookSync KOReader plugin** (ROADMAP 8a, being built now),
 not in the user patch. The Android hooks below are written for that plugin.
 
 Draft 2 also takes in the user's review comments:
@@ -138,10 +138,10 @@ see Tests) that the Lua and the C++ tests both read.
 
 ### Where the code lives
 
-`LocalFirst` is a module of the **Orbit KOReader plugin** (ROADMAP 8a). Upstream doesn't accept
-contributions, so the Orbit plugin hooks the official BookOrbit plugin at run time.
+`LocalFirst` is a module of the **BookSync KOReader plugin** (ROADMAP 8a). Upstream doesn't accept
+contributions, so the BookSync plugin hooks the official BookOrbit plugin at run time.
 
-- **Installing.** When the Orbit plugin starts, it waits until BookOrbit's modules are in
+- **Installing.** When the BookSync plugin starts, it waits until BookOrbit's modules are in
   `package.loaded` (`bookorbit_catalog`, `bookorbit_catalog_dashboard`, `bookorbit_board_data`,
   `bookorbit_board_ui`, `bookorbit_list_view`, the `BookOrbit` plugin instance for
   `enqueueLifecycleSnapshot`). It then wraps methods on those tables with the same
@@ -152,10 +152,10 @@ contributions, so the Orbit plugin hooks the official BookOrbit plugin at run ti
     for the board and dashboard methods (`CatalogDashboard.install`,
     `P/bookorbit_catalog_dashboard.lua:299`).
 - **Compat.** Before wrapping, the plugin checks that every hooked name exists, as the patch's
-  `Compat.missingOn` does (`:4529-4545`). The list is kept in the Orbit plugin's compat table and
+  `Compat.missingOn` does (`:4529-4545`). The list is kept in the BookSync plugin's compat table and
   in its `plugin_compat` test, which runs weekly against the pinned BookOrbit plugin. If any name
   is missing, local-first does not install, the board behaves as stock, and one line is logged.
-- **Sharing hooks.** The Orbit plugin also hosts the series and author grouping moved from the
+- **Sharing hooks.** The BookSync plugin also hosts the series and author grouping moved from the
   patch, which wraps some of the same methods (`switchTo`, `listRun`, `listHeader`). Each feature
   registers its handler with one wrapper per method, which calls them in a fixed order:
   grouping's tag first, then local-first's overlay. No method is wrapped twice.
@@ -588,7 +588,7 @@ ids replaced (`O/shared/fixtures/README.md`).
 | `localfirst/overlay-cases.json` | rows of {server book, device state, pending/blocked, expected % and status shown, list membership, goal delta, `not synced` shown} | `test_logic.lua` and `xteink/test/localfirst_overlay_test.cpp` |
 | `localfirst/stamp-cases.json` | {online, fetched this session, fetchedAt, now, refresh result} → expected stamp text | both |
 
-**Android** (the Orbit plugin's Lua tests, run with `luajit` like the patch's `test_logic.lua` / `test_flows.lua`; the path is set by 8a):
+**Android** (the BookSync plugin's Lua tests, run with `luajit` like the patch's `test_logic.lua` / `test_flows.lua`; the path is set by 8a):
 
 - **Overlay cases** from the shared fixture:
   - a newer device position wins;
@@ -700,7 +700,7 @@ changed say so. Entries 31-42 are new.
     overlay is one function, while cached-first lists need their own row diff. Two-way.
 13. **USB-added books, linking downloads?** (a) here; (b) in ROADMAP #7 and #5. → **(b)**: both
     need server matching or a download path. The hook points are noted. Two-way.
-14. **Patch or plugin?** *Settled by the user:* the Orbit KOReader plugin (8a). Its wrappers follow
+14. **Patch or plugin?** *Settled by the user:* the BookSync KOReader plugin (8a). Its wrappers follow
     the patch's once-only `wrap` pattern, and grouping and local-first share one wrapper per
     method.
 15. **Compat failure?** (a) partial behaviour; (b) everything off, stock board. → **(b)**: never a

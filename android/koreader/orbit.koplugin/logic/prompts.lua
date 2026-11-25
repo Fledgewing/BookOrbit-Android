@@ -21,11 +21,11 @@ end
 function SetupPrompt.text(prompt)
     local rows = type(prompt.rows) == "table" and prompt.rows or {}
     local n = #rows
-    if n == 0 then return "Orbit Companion needs a setup step." end
-    if n == 1 then return "Orbit Companion needs 1 setup step: " .. tostring(rows[1]) .. "." end
+    if n == 0 then return "BookSync Companion needs a setup step." end
+    if n == 1 then return "BookSync Companion needs 1 setup step: " .. tostring(rows[1]) .. "." end
     local list = {}
     for i, r in ipairs(rows) do list[i] = "• " .. tostring(r) end
-    return "Orbit Companion needs " .. n .. " setup steps:\n" .. table.concat(list, "\n")
+    return "BookSync Companion needs " .. n .. " setup steps:\n" .. table.concat(list, "\n")
 end
 
 ---------------------------------------------------------------------------------------------

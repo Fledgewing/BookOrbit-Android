@@ -144,7 +144,7 @@
     {
       "file": "cache/cases.json",
       "section": "storage.plans",
-      "rule": "What goes, in order, when Orbit's storage is over the limit",
+      "rule": "What goes, in order, when BookSync's storage is over the limit",
       "owner": "companion",
       "readers": [
         "kt"

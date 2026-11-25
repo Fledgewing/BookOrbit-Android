@@ -181,7 +181,7 @@ class SettingsUiTest {
     fun reviewFileParses() {
         val r = RecommendedReview.parse("""{"v":1,"at":1,"items":[{"id":"x","label":"X","state":"conflict","yours":"Off","orbit":"On"}]}""")!!
         assertEquals(listOf("ours", "mine"), r.items[0].offers)
-        assertEquals("Yours: Off · Orbit's: On", r.items[0].stateLine)
+        assertEquals("Yours: Off · BookSync's: On", r.items[0].stateLine)
     }
 
     @Test
