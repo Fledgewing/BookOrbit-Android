@@ -51,7 +51,8 @@ function RS.paint(s, bb, x, y, bottom_only)
     s.battery = battery
     local icon = "▱"
     -- Reserve an outlined battery independently of font glyph support.
-    local icon_w = Screen:scaleBySize(18)
+    local glyph = StatusLayout.battery(battery, s.cap_height)
+    local icon_w = glyph.w + glyph.terminal
     local battery_text = string.format("%d%%", battery)
     local function measure(v) return v == icon and icon_w or s.measure(v) end
     local layout = StatusLayout.layout(width, s.inset, s.gap,
@@ -63,10 +64,22 @@ function RS.paint(s, bb, x, y, bottom_only)
     local by = height - s.height
     bb:paintRect(x, y + by, width, s.height, s.BB.COLOR_WHITE)
     if layout.left ~= "" then
-        local ix, iy = x+s.inset, y+by+math.floor(s.height/2)-4
-        bb:paintRect(ix, iy, icon_w-3, 9, s.BB.COLOR_BLACK)
-        bb:paintRect(ix+1, iy+1, icon_w-5, 7, s.BB.COLOR_WHITE)
-        bb:paintRect(ix+icon_w-3, iy+3, 2, 3, s.BB.COLOR_BLACK)
+        local ix, iy = x+s.inset, y+by+math.floor((s.height-glyph.h)/2)
+        local edge = glyph.border
+        bb:paintRect(ix, iy, glyph.w, glyph.h, s.BB.COLOR_BLACK)
+        bb:paintRect(ix+edge, iy+edge, glyph.inner, glyph.h-2*edge, s.BB.COLOR_WHITE)
+        if glyph.fill > 0 then bb:paintRect(ix+edge, iy+edge, glyph.fill, glyph.h-2*edge, s.BB.COLOR_BLACK) end
+        bb:paintRect(ix+glyph.w, iy+math.floor(glyph.h/3), glyph.terminal, math.ceil(glyph.h/3), s.BB.COLOR_BLACK)
+        local power = Device:getPowerDevice()
+        if power.isCharging and power:isCharging() then
+            -- Pixel lightning mark, legible at footer size and independent of font coverage.
+            local mx = ix + math.floor(glyph.w/2)
+            for row=0,glyph.h-3 do
+                local dx = row < glyph.h/2 and 1 or -1
+                local color = mx+dx-ix-edge < glyph.fill and s.BB.COLOR_WHITE or s.BB.COLOR_BLACK
+                bb:paintRect(mx+dx, iy+1+row, edge+1, 1, color)
+            end
+        end
         if layout.left ~= icon then text(" " .. battery_text, s.inset+icon_w, by) end
     end
     text(layout.chapter, layout.cx, by)
@@ -103,15 +116,16 @@ function RS.enable(ui)
     local Font = require("ui/font")
     local s = { ui = ui, view = ui.view, footer = ui.view.footer, undo = {},
         Geom = Geom, Text = Text, BB = require("ffi/blitbuffer"),
-        face = Font:getFace("smallinfofont"), height = Device.screen:scaleBySize(24),
-        inset = Device.screen:scaleBySize(8), gap = Device.screen:scaleBySize(8) }
+        face = Font:getFace("ffont", StatusLayout.fontSize(S.status_orbit_size)),
+        inset = Device.screen:scaleBySize(2), gap = Device.screen:scaleBySize(4) }
     RS.session = s
     s.measure = function(value)
         local w = Text:new{ text = value, face = s.face }
         local width = w:getSize().w; w:free(); return width
     end
     local sample = Text:new{ text = "Ag", face = s.face }
-    s.height = math.max(s.height, sample:getSize().h + Device.screen:scaleBySize(4))
+    s.height = StatusLayout.stripHeight(sample:getSize().h, math.max(1, Device.screen:scaleBySize(1)))
+    s.cap_height = math.max(6, math.floor(sample:getSize().h * 0.7))
     sample:free()
     local f, v = s.footer, s.view
     s.native_visible, s.native_mode = rawget(v, "footer_visible"), rawget(f, "mode")
@@ -294,7 +308,8 @@ end
 function RS.changed()
     UIManager:nextTick(function()
         local ui = liveUI()
-        if S.status_orbit_layout ~= false then RS.enable(ui) else RS.disable() end
+        RS.disable()
+        if S.status_orbit_layout == true then RS.enable(ui) end
     end)
 end
 
@@ -307,7 +322,7 @@ local function after(name, fn)
         return result
     end
 end
-after("onReaderReady", function(self) if S.status_orbit_layout ~= false then RS.enable(self.ui) end end)
+after("onReaderReady", function(self) if S.status_orbit_layout == true then RS.enable(self.ui) end end)
 after("onPageUpdate", function() local s=RS.session; if s then RS.dirty(s, false) end end)
 after("onPosUpdate", function() local s=RS.session; if s then RS.dirty(s, false) end end)
 after("onSuspend", function() local s=RS.session; if s then s.asleep=true; UIManager:unschedule(s.tick) end end)

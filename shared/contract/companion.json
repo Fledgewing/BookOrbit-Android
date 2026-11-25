@@ -128,9 +128,10 @@
         "reason",
         "server",
         "user",
-        "userkey"
+        "userkey",
+        "plan"
       ],
-      "does": "run the Full refresh from mirror/plan.lua",
+      "does": "run the offline mirror; the worker parses and atomically persists the plan extra",
       "login": true
     },
     {
@@ -217,7 +218,14 @@
         "id",
         "fields",
         "stale_home",
-        "wipe"
+        "wipe",
+        "drain_events",
+        "events_ack",
+        "old_hash",
+        "new_hash",
+        "board_year",
+        "board_key",
+        "board_now"
       ],
       "does": "a write the plugin made, patched into orbit.db (or a wipe)"
     },
@@ -379,7 +387,7 @@
     },
     {
       "path": "koreader/settings/orbit-cache/mirror/plan.lua",
-      "writer": "plugin",
+      "writer": "companion",
       "reader": "companion",
       "format": "lua",
       "what": "what a Full refresh saves; no login"
@@ -505,6 +513,20 @@
       "reader": "companion",
       "format": "jpeg, etag",
       "what": "Recommended sleep covers named by pool.json"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/events-batch.lua",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "lua",
+      "what": "bounded event mailbox: id and at most eight events; PATCH acknowledges id"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/events-batch-names.lua",
+      "writer": "companion",
+      "reader": "companion",
+      "format": "lua",
+      "what": "spool filenames belonging to the outstanding mailbox, for durable acknowledgement"
     }
   ],
   "db": {

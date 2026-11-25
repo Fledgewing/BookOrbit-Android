@@ -442,10 +442,36 @@ function F.check(extras)
     end)
 end
 
+function F.drainEvents(ack)
+    local lfs = require("libs/libkoreader-lfs")
+    local batch_path = dir() .. "/events-batch.lua"
+    local batch = C().decode(readFile(batch_path) or "")
+    if type(batch) == "table" then
+        if batch.id ~= ack then return end
+        for _, name in ipairs(F.batch_names or {}) do os.remove(dir() .. "/events/" .. name) end
+        os.remove(batch_path)
+    end
+    local names, events, bytes = {}, {}, 0
+    local okd, it = pcall(lfs.dir, dir() .. "/events")
+    local all = {}
+    for name in okd and it or function() end do if name:match("%.lua$") then all[#all+1] = name end end
+    table.sort(all)
+    for _, name in ipairs(all) do
+        local data = readFile(dir() .. "/events/" .. name) or ""
+        if #events >= 8 or bytes + #data > 48000 then break end
+        local ev = C().decode(data)
+        if type(ev) == "table" then events[#events+1] = ev; names[#names+1] = name; bytes = bytes + #data end
+    end
+    if #events == 0 then return end
+    F.batch_names = names; F.batch_seq = (F.batch_seq or 0) + 1
+    writeFile(batch_path, C().encode({ id = dir() .. tostring(F.batch_seq), events = events }))
+end
+
 local function event(ev)
     require("libs/libkoreader-lfs").mkdir(dir() .. "/events")
     F.seq = (F.seq or 0) + 1
     writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode(ev))
+    F.drainEvents(nil)
 end
 F.event = event
 
@@ -487,6 +513,8 @@ function F.patch(extras)
 end
 
 function F.patchNow(extras)
+    if extras.old_hash then return end
+    if extras.drain_events == "1" then return F.drainEvents(extras.events_ack) end
     F.patches = (F.patches or 0) + 1
     if extras.wipe == "1" then return F.wipe() end
     local st = F.db()
@@ -561,6 +589,9 @@ function F.storageItems(cover_dir, mirror_covers)
         local lfs = require("libs/libkoreader-lfs")
         local okd, it = pcall(lfs.dir, cover_dir)
         for name in (okd and it or function() end) do
+            if name:match("%.jpg%.etag$") and not lfs.attributes(cover_dir .. "/" .. name:gsub("%.etag$", ""), "mode") then
+                os.remove(cover_dir .. "/" .. name)
+            end
             if name:match("%.jpg$") and readFile(cover_dir .. "/" .. name) then
                 local a = lfs.attributes(cover_dir .. "/" .. name)
                 local size = tonumber(lfs.attributes(cover_dir .. "/" .. name, "size")) or fsize(cover_dir .. "/" .. name)
@@ -1150,6 +1181,7 @@ function F.sleepNow(extras)
     lfs.mkdir(dir() .. "/events")
     F.seq = (F.seq or 0) + 1
     writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode(ev))
+    F.drainEvents(nil)
 end
 
 function F.sleep(extras)
@@ -1193,7 +1225,13 @@ end
 
 function F.receive(intent)
     if not (W.companion and intent.package == "net.fledgewing.orbitcompanion") then return end
-    if intent.action:match("%.MIRROR$") then F.mirror(intent.extras)
+    if intent.action:match("%.MIRROR$") then
+        if intent.extras.plan then
+            require("libs/libkoreader-lfs").mkdir(dir() .. "/mirror")
+            os.remove(dir() .. "/mirror/stop")
+            writeFile(dir() .. "/mirror/plan.lua", intent.extras.plan)
+        end
+        F.mirror(intent.extras)
     elseif intent.action:match("%.CHECK$") then F.check(intent.extras)
     elseif intent.action:match("%.STORAGE$") then F.storage(intent.extras)
     elseif intent.action:match("%.COPIES$") then F.copies(intent.extras)

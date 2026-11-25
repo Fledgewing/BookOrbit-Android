@@ -3,15 +3,17 @@
 
 -- Keep diagnostics in release builds: only timed BookSync work is attributed here,
 -- never the input wait or another plugin's scheduled callback. No document data is logged.
-MainLoop = { wrapped = setmetatable({}, { __mode = "kv" }), pid = Db.pid() }
+MainLoop = { wrapped = setmetatable({}, { __mode = "kv" }), pid = Db.pid(), paused = setmetatable({}, { __mode = "k" }) }
 local plugin_env = getfenv(1)
 function MainLoop.wrap(fn, where)
     if MainLoop.wrapped[fn] then return MainLoop.wrapped[fn] end
     local function timed(...)
-        local start = now_s()
+        local co = coroutine.running()
+        local function clock() return now_s() - (co and MainLoop.paused[co] or 0) end
+        local start = clock()
         local result = pack(pcall(fn, ...))
-        local ms = (now_s() - start) * 1000
-        if ms > 100 and Db.pid() == MainLoop.pid then
+        local ms = (clock() - start) * 1000
+        if ms > 50 and Db.pid() == MainLoop.pid then
             log(string.format("booksync: main-loop stall %d ms in %s", math.floor(ms + 0.5), where))
         end
         if not result[1] then error(result[2], 0) end

@@ -21,7 +21,6 @@
 ---------------------------------------------------------------------------------------------
 
 Mirror = { POLL_S = 3, DEAD_S = 90, SENTINEL = "987654321" }
-local real_remove = os.remove
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
 -- Section indexes Full refresh saves, in order; each entry's book list follows its index.
@@ -143,7 +142,8 @@ end
 -- sentinel id stands for each entry's id), so the companion builds the same paths and keys the
 -- plugin reads. Small: the lists the plugin has browsed are in the database, which the companion
 -- reads itself. all_books: the library's every book, whose total fixes the Full refresh's work.
-function Mirror.plan(cat, op, reason)
+function Mirror.plan(cat, op, reason, step)
+    step = step or function() end
     local client = cat.client
     local SENT = Mirror.SENTINEL
     local templates = {}
@@ -156,15 +156,18 @@ function Mirror.plan(cat, op, reason)
             if okn and pn then t.series_name_path = pn end
         end
         templates[section] = t
+        step()
     end
     local sections = {}
     for _, s in ipairs(Mirror.SECTIONS) do
         local okp, p = pcall(Mirror.sectionPath, cat, s)
         if okp and p then table.insert(sections, p) end
+        step()
     end
     local seed_details = {}
     for id in pairs(type(cat.on_device) == "table" and cat.on_device or {}) do
         if tonumber(id) then table.insert(seed_details, tonumber(id)) end
+        if #seed_details % 50 == 0 then step() end
     end
     table.sort(seed_details)
     local cover_dir
@@ -209,6 +212,7 @@ function Mirror.plan(cat, op, reason)
             end
         end
     end
+    step()
     plan.entries = {}
     for _, path in ipairs(Mirror.INVENTORY.entries) do
         table.insert(plan.entries, "/koreader/plugin/catalog/" .. path)
@@ -299,20 +303,37 @@ function Mirror.launch(op, reason)
         Mirror.ticked_at = nowT()
         Mirror._status = { v = 4, op = "full", at = s.at, lib_version = s.lib_version, done = 0, total = 0, left = 1, pct = 0 }
     end
-    local plan = Mirror.plan(cat, op, reason)
-    real_remove(Mirror.stopFile())
-    if not OC.writeFile(Mirror.dir() .. "/plan.lua", Cache.encode(plan)) then
-        Mirror.stop("the plan could not be written")
-        return false
+    Mirror.busy = true
+    local prepare = {}
+    Mirror.preparing = prepare
+    local co = coroutine.create(function()
+        return Mirror.plan(cat, op, reason, function()
+            local before = now_s()
+            coroutine.yield()
+            if MainLoop then
+                local co = coroutine.running()
+                MainLoop.paused[co] = (MainLoop.paused[co] or 0) + now_s() - before
+            end
+        end)
+    end)
+    local function advance()
+        if Mirror.preparing ~= prepare then return end
+        local okp, plan = coroutine.resume(co)
+        if not okp then
+            Mirror.preparing, Mirror.busy = nil, nil
+            log("mirror: plan failed:", tostring(plan)); Mirror.stop("plan failed"); return
+        end
+        if coroutine.status(co) ~= "dead" then return UIManager:scheduleIn(0.01, advance) end
+        Mirror.preparing = nil
+        Mirror.run_id, Mirror.sent_at, Mirror.seen_beat = plan.run, nowT(), nil
+        Companion.send(Companion.ACTION.MIRROR, { reason = op .. ": " .. tostring(reason), server = client.server_url,
+            user = client.username, userkey = client.userkey, plan = Cache.encode(plan) })
+        Mirror.poll()
     end
-    Mirror.busy, Mirror.run_id, Mirror.sent_at, Mirror.seen_beat = true, plan.run, nowT(), nil
-    -- The login goes in the caller-checked call only (to the verified companion): never in a file or the log.
-    Companion.send(Companion.ACTION.MIRROR, { reason = op .. ": " .. tostring(reason), server = client.server_url,
-        user = client.username, userkey = client.userkey })
+    UIManager:nextTick(advance)
     -- The progress: a Full refresh (or its run resumed) shows the badge; a Refresh's recheck doesn't.
     if Mirror.manual and op == "full" then Badge.start(true, Mirror._status)
     elseif Mirror.manual and op == "resume" and Mirror.status().op == "full" and not Badge.running then Badge.start(false, Mirror.status()) end
-    Mirror.poll()
     return true
 end
 
@@ -363,6 +384,7 @@ end
 function Mirror.running() return Mirror.active == true end
 
 function Mirror.stop(why)
+    if Mirror.preparing then Mirror.preparing, Mirror.busy = nil, nil end
     Mirror.notices = nil
     if Mirror.busy then OC.writeFile(Mirror.stopFile(), "stop") end
     Badge.finish(_("Paused · it goes on when BookOrbit answers"))
@@ -484,23 +506,15 @@ function Mirror.coverPass(why)
     return 1
 end
 
--- The plugin keeps its newest 600 cover files (bookorbit_catalog_thumbnails.lua:480-555
--- pruneThumbnailCache). With "Save every cover for offline" on, the mirror's covers are outside
--- that cap: its pruner's removals of them are skipped (it counts them removed and goes on). Off,
--- nothing is skipped, so they go back under the cap; nothing is deleted when it is turned off.
+-- Upstream cover pruning/legacy cleanup must not enumerate files on KOReader's UI loop.
+-- The companion enforces BookSync's storage limit and cover priorities instead.
 function Mirror.guardPrune(Catalog)
-    if not Compat.callable(Catalog.pruneThumbnailCache) then return end
-    wrap(Catalog, "pruneThumbnailCache", function(stock) return function(self, ...)
-        local client = S.mirror_covers and OC.client()
-        if not client then return stock(self, ...) end
-        local owner = OC.owner(client)
-        os.remove = function(path)
-            local name = tostring(path):match("([^/]+)$")
-            if name and Store.coverKept(owner, name) then return true end
-            return real_remove(path)
+    for _, method in ipairs({ "pruneThumbnailCache", "cleanLegacyThumbnails" }) do
+        if Compat.callable(Catalog[method]) then
+            wrap(Catalog, method, function() return function()
+                -- One storage policy and one worker own cover deletion, including ETags.
+                OC.storageCount("cover maintenance")
+            end end, "cache")
         end
-        local okp, err = pcall(stock, self, ...)
-        os.remove = real_remove
-        if not okp then error(err, 0) end
-    end end, "cache")
+    end
 end

@@ -11,9 +11,9 @@
 -- and sends the companion what to save (a reply it fetched: CHECK mode "store") or patch (PATCH).
 --
 -- The catalog runs many requests inside a forked child (plugin Catalog:fetch, catalog.lua:881).
--- A child may serve from the database (its own connection, ko/db.lua) and writes what it learns
--- as event files (check / write / read); the parent applies them when the child returns (the
--- runInSubprocess wrapper) and on a timer.
+-- A child may serve from the database (its own connection, ko/db.lua) and returns what it learns
+-- as metadata (check / write / read); the parent applies it in the runInSubprocess wrapper.
+-- Companion replies arrive through a bounded mailbox at a fixed path.
 ---------------------------------------------------------------------------------------------
 
 OC = { inflight = {}, done = {}, MODE_S = 30 }
@@ -93,12 +93,6 @@ end
 -- companion clears the database itself when it next saves for another owner).
 function OC.wipe(why)
     log("cache: cleared (" .. tostring(why) .. ")")
-    local dir = OC.dir()
-    if lfs_ok then
-        for name in lfs.dir(dir .. "/events") do
-            if name ~= "." and name ~= ".." then os.remove(dir .. "/events/" .. name) end
-        end
-    end
     OC._state = {}
     OC.saveState()
     OC.storage = nil
@@ -119,25 +113,35 @@ end
 
 ---------------------------------------------------------------- child events
 
-local event_n = 0
+-- Child metadata travels in the subprocess result, never through a scanned directory.
 function OC.event(kind, data)
-    event_n = event_n + 1
     data.kind = kind
-    writeFile(string.format("%s/events/%d-%d-%d.lua", OC.dir(), nowT(), math.random(1, 1e6), event_n), Cache.encode(data))
+    OC.child_events = OC.child_events or {}
+    table.insert(OC.child_events, data)
 end
 
 function OC.drainEvents()
-    if not lfs_ok then return end
-    local dir = OC.dir() .. "/events"
-    local names = {}
-    for name in lfs.dir(dir) do if name:match("%.lua$") then table.insert(names, name) end end
-    table.sort(names)
-    for _, name in ipairs(names) do
-        local ev = Cache.decode(readFile(dir .. "/" .. name) or "")
-        os.remove(dir .. "/" .. name)
+    if OC.child or Companion.workerProblem() then return end
+    -- A fixed mailbox: one bounded read, never a directory walk on the UI loop.
+    local batch = Cache.decode(readFile(OC.dir() .. "/events-batch.lua", 65536) or "")
+    local fresh = type(batch) == "table" and batch.id ~= OC.events_ack
+    if type(batch) ~= "table" or not batch.id then return end
+    if fresh then
+        OC.applyEvents(batch.events or {})
+        OC.events_ack = batch.id
+    end
+    -- Repeat the acknowledgement if a call was lost; never apply an id twice in this process.
+    Companion.send(Companion.ACTION.PATCH, { reason = "events", drain_events = "1", events_ack = batch.id })
+    UIManager:scheduleIn(0.5, OC.drainEvents)
+end
+
+function OC.applyEvents(events)
+    for _, ev in ipairs(events) do
         if type(ev) == "table" then
             if ev.kind == "stored" then
                 -- (0.11.x) nothing: the companion saves now.
+            elseif ev.kind == "board_year" and LF then
+                LF.yearLanded(ev)
             elseif ev.kind == "storage" then
                 OC.storageCounted(ev)
             elseif ev.kind == "covers_rechecked" then
@@ -323,12 +327,13 @@ function OC.watchChecks()
             log("copies: the companion didn't answer the check")
             Copies.asked = nil
         end
+        if LF and LF.year_waiting and os.time() - LF.year_waiting > 60 then LF.year_waiting = nil end
         local sleep_waits = Sleep and Sleep.waited(t)
         if OC.recheck and t - OC.recheck.at >= OC.RECHECK_WAIT_S then
             log("cache: the companion didn't answer the cover recheck")
             OC.rechecked({ err = "no answer" })
         end
-        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) and not sleep_waits and not OC.recheck then OC.watching = nil; return end
+        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) and not sleep_waits and not OC.recheck and not (LF and LF.year_waiting) then OC.watching = nil; return end
         UIManager:scheduleIn(1, tick)
     end
     UIManager:scheduleIn(1, tick)
@@ -422,22 +427,7 @@ end
 
 ---------------------------------------------------------------- covers (ETag)
 
--- The book's other cover files in dir: "<id>_<version>.jpg" with an ETag next to it.
-function OC.olderCover(dir, name, id)
-    if not lfs_ok then return nil end
-    local best, best_t
-    local prefix = "^" .. id .. "_%d+%.jpg$"
-    for n in lfs.dir(dir) do
-        if n ~= name and n:match(prefix) then
-            local p = dir .. "/" .. n
-            if readFile(p .. ".etag", 200) then
-                local t = lfs.attributes(p, "modification") or 0
-                if not best_t or t > best_t then best, best_t = p, t end
-            end
-        end
-    end
-    return best
-end
+OC.olderCover = CoverChild.olderCover
 
 -- One conditional GET of a cover into temp, under the worker's size cap.
 -- -> code, etag (or nil, err). 3xx and proxies are the plugin's (code "fallback").
@@ -542,17 +532,9 @@ function OC.coverDownload(client, stock, book_id, local_path, opts)
     return done("200", true, nil, size)
 end
 
--- ETags whose cover is gone (the plugin's pruner removes only *.jpg).
-function OC.cleanEtags(dir)
-    if not lfs_ok or not dir or lfs.attributes(dir, "mode") ~= "directory" then return 0 end
-    local n = 0
-    for name in lfs.dir(dir) do
-        if name:match("%.jpg%.etag$") and not lfs.attributes(dir .. "/" .. name:gsub("%.etag$", ""), "mode") then
-            os.remove(dir .. "/" .. name)
-            n = n + 1
-        end
-    end
-    return n
+-- ETags whose cover is gone are removed by CacheWorker.storageItems, alongside its count.
+function OC.cleanEtags()
+    return OC.storageCount("orphan ETags")
 end
 
 ---------------------------------------------------------------- the storage limit (v0.11.2)
@@ -614,12 +596,8 @@ function OC.storageCounted(ev)
 end
 
 -- What Orbit stores now ({ used, kept, cache, cover, mirror_cover } bytes): the last count (the
--- database's meta "storage" at start), or nil before the first.
+-- worker's last answer), or nil before the first.
 function OC.storageTotals()
-    if OC.storage then return OC.storage end
-    local client = OC.child ~= true and OC.client() or nil
-    local v = client and Store.storage(OC.owner(client))
-    if type(v) == "table" and type(v.totals) == "table" then OC.storage = v.totals end
     return OC.storage
 end
 
@@ -845,11 +823,17 @@ function OC.install(why)
         OC.parent_online = not okn or on == true
         local a, b = stock(self, function(...)
             OC.child = true -- this copy of the process is the child
+            OC.child_events = {}
             local okf, r1, r2, r3 = pcall(fn, ...)
             OC.child = nil
             if not okf then error(r1, 0) end
-            return r1, r2, r3
+            return { orbit_result = { body = r1, err = r2, errbody = r3 }, orbit_events = OC.child_events }
         end, ...)
+        if a and type(b) == "table" and type(b.body) == "table" and b.body.orbit_result then
+            local envelope = b.body
+            b = envelope.orbit_result
+            OC.applyEvents(envelope.orbit_events or {})
+        end
         pcall(OC.drainEvents)
         return a, b
     end end, "cache")
@@ -968,12 +952,10 @@ function OC.install(why)
     log("cache: installed (" .. tostring(why) .. ")")
     -- The storage limit, counted on start.
     UIManager:scheduleIn(8, function()
-        pcall(OC.storageTotals)
         local okc, err = pcall(OC.storageCount, "start")
         if not okc then log("storage: count failed:", tostring(err)) end
     end)
     UIManager:scheduleIn(5, function()
-        pcall(function() OC.cleanEtags(require("datastorage"):getDataDir() .. "/cache/bookorbit") end)
         pcall(OC.drainEvents)
     end)
     return true

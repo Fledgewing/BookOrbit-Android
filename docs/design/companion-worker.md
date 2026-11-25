@@ -112,8 +112,8 @@ Guards (`test_flows.lua`, "v0.11.3: the mirror off the UI thread"):
 ## Step 2 (this change): the companion runs the mirror and the checks
 
 - **The run.** `CacheWorker.kt` (plain JVM, unit-tested) on one worker thread (`Worker.kt`). The
-  plugin writes `mirror/plan.lua` (what to save, no login) and sends `MIRROR` with the login in
-  the broadcast's extras. The companion saves the pages, details and covers into `mirror/` (same
+  plugin prepares request templates in short scheduled steps and sends `MIRROR` with the plan
+  and login in the caller-checked extras. The worker writes `mirror/plan.lua` (no login). The companion saves the pages, details and covers into `mirror/` (same
   entry format and file names, temp file then rename), its queue in `mirror/worker-state.lua`,
   and writes `status.lua` every 5 s and `summary.lua` at the end. The plugin polls `status.lua`
   every 3 s and applies the summary. Nothing of the run (request, reply, compare, write, queue)
@@ -209,3 +209,20 @@ asynchronously.
    `mirror/`. Its old queue isn't carried over (two-way door: the Full refresh saves the same).
 9. How many requests at once? Four: enough for roughly four times the rate on a home server over
    Tailscale, few enough to stay polite. A constant (`PARALLEL`), one line to change.
+
+## W27: bounded startup maintenance
+
+The rc.12 startup callback duplicated the worker's orphan ETag cleanup and walked thousands
+of cover files on KOReader's main loop. Startup now only asks `STORAGE`; totals come from its
+answer. Upstream cover maintenance is redirected to the same storage worker. The only Lua
+cover-directory iterator is in `ko/cover_child.lua`, guarded by child state/PID before entry.
+Hash sidecar copies also run on the companion worker.
+
+The companion's durable event spool is private: `EventMailbox` publishes a bounded batch at a
+fixed filename, with acknowledgement and replay after restart. The plugin reads at most 64 KiB,
+never lists the spool, and ignores duplicate ids. Subprocess metadata travels in its result.
+Home's 364-day calendar and daily statistics query run on the worker; changed tiles repaint one
+per scheduled callback. Mirror template preparation yields between sections; the companion parses
+and writes the plan. Stall diagnostics remain enabled at 50 ms and exclude deliberate coroutine
+waits. Host guards exercise startup and reading with 7,000 cover files and an eight-file read budget;
+real-device startup and Home rendering still need measurement before release.

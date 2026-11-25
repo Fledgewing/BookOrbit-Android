@@ -114,7 +114,7 @@ local NEEDS = {
     { "frontend/ui/geometry.lua", { "copy", "offsetWithin" } },
     { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free" } },
     { "frontend/device/generic/device.lua", { "getPowerDevice" } },
-    { "frontend/device/generic/powerd.lua", { "getCapacity" } },
+    { "frontend/device/generic/powerd.lua", { "getCapacity", "isCharging" } },
     -- OrbiSmart (ko/orbismart.lua): places in this layout's pages, and the Yes / No popup (its
     -- Back / tap outside runs cancel_callback).
     { "frontend/document/credocument.lua", { "getPageCount", "getPageFromXPointer", "getCurrentPage" } },

@@ -92,6 +92,38 @@ object Worker {
             synchronized(lock) { storage = a; lock.notifyAll() }
             return start()
         }
+        if (i.action == ACTION_PATCH && i.hasExtra("board_year")) {
+            val encoded = i.getStringExtra("board_year") ?: return
+            val key = i.getStringExtra("board_key") ?: return
+            val at = i.getStringExtra("board_now")?.toLongOrNull() ?: return
+            synchronized(lock) {
+                patches.addLast {
+                    val year = LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? Map<*, *>
+                    val stats = File(root().parentFile, "statistics.sqlite3")
+                    val daily = if (stats.isFile) runCatching {
+                        AndroidSql(stats, readOnly = true).use { db ->
+                            db.query("SELECT date(start_time, 'unixepoch', 'localtime'), SUM(MIN(duration, 86400)) FROM page_stat_data WHERE start_time >= ? GROUP BY 1", at - 371 * 86400) {
+                                (it.text(0) ?: "") to (it.long(1) ?: 0L)
+                            }.toMap()
+                        }
+                    }.getOrDefault(emptyMap()) else emptyMap()
+                    worker().event(sortedMapOf("kind" to "board_year", "key" to key, "data" to BoardYear.build(at, year, daily)))
+                }
+                lock.notifyAll()
+            }
+            return start()
+        }
+        if (i.action == ACTION_PATCH && i.hasExtra("old_hash")) {
+            val old = i.getStringExtra("old_hash") ?: return
+            val new = i.getStringExtra("new_hash") ?: return
+            synchronized(lock) { patches.addLast { HashSidecar.carry(File(root().parentFile?.parentFile, "hashdocsettings"), old, new) }; lock.notifyAll() }
+            return start()
+        }
+        if (i.action == ACTION_PATCH && i.getStringExtra("drain_events") == "1") {
+            val ack = i.getStringExtra("events_ack")
+            synchronized(lock) { patches.addLast { worker().drainEvents(ack) }; lock.notifyAll() }
+            return start()
+        }
         if (i.action == ACTION_PATCH) {
             // The database only, no login; in order with the checks.
             val wipe = i.getStringExtra("wipe") == "1"
@@ -135,15 +167,21 @@ object Worker {
                 synchronized(lock) { recheck = Triple(i.getStringExtra("reason") ?: "plugin", creds, items); lock.notifyAll() }
             }
             ACTION_MIRROR -> {
-                val f = File(root(), "mirror/plan.lua")
-                val m = if (f.isFile) LuaValue.parse(f.readBytes()) as? Map<*, *> else null
-                if (m == null) {
-                    OLog.w("worker: MIRROR without a readable plan; ignored")
-                    return
+                val encoded = i.getStringExtra("plan") ?: return
+                synchronized(lock) {
+                    patches.addLast {
+                        val bytes = LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)
+                        val m = LuaValue.parse(bytes) as? Map<*, *> ?: return@addLast
+                        val plan = CacheWorker.Plan(m)
+                        val f = File(root(), "mirror/plan.lua")
+                        f.parentFile?.mkdirs()
+                        File(root(), "mirror/stop").delete()
+                        val tmp = File(f.path + ".tmp")
+                        tmp.writeBytes(bytes); check(tmp.renameTo(f))
+                        synchronized(lock) { pending = plan to creds; lock.notifyAll() }
+                    }
+                    lock.notifyAll()
                 }
-                val plan = CacheWorker.Plan(m)
-                OLog.i("worker: mirror ${plan.op} (${plan.reason}) run ${plan.run}")
-                synchronized(lock) { pending = plan to creds; lock.notifyAll() }
             }
             else -> return
         }

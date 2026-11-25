@@ -88,7 +88,12 @@ No additional full refresh is requested by BookSync's status timer or battery ha
 
 ## Implementation notes
 
-The default-on Android setting is `status_orbit_layout`. Only instance methods and
+W27 updates the approved layout per the user's rc.12 feedback: `status_orbit_layout` defaults
+to false (saved choices remain), and `status_orbit_size` selects Small (14 pt), Medium (18 pt)
+or Large (22 pt), default Small. Both text and the battery scale together. Strip height is
+the measured text height plus one scaled pixel of padding on each side; horizontal inset is
+two scaled pixels. The battery has a proportional fill and a contrasting charging mark.
+Xteink and the shared format fixture are unchanged. Only instance methods and
 private copies of footer settings are changed; disabling restores inherited slots,
 footer visibility/mode, the native text generator, header state and timers. Native
 footer gesture handlers remain in charge, and their temporary mode is not persisted.
