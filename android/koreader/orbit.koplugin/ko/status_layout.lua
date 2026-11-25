@@ -139,6 +139,10 @@ function RS.enable(ui)
         Font=require("ui/font"), BB=require("ffi/blitbuffer"),
         inset=math.max(1, Device.screen:scaleBySize(4)), gap=math.max(1, Device.screen:scaleBySize(4)) }
     RS.session = s
+    local margins = ui.typeset and ui.typeset.unscaled_margins or {}
+    log("status layout: loaded margins top=" .. tostring(margins[2]) .. " bottom=" .. tostring(margins[4])
+        .. " footer_height=" .. tostring(s.footer:getHeight()) .. " footer_reclaim=" .. tostring(s.footer.reclaim_height)
+        .. " footer_mode=" .. tostring(s.footer.mode))
     for _, path in ipairs({ SOURCE_DIR .. "/battery.json", SOURCE_DIR .. "/../../../shared/ui/battery.json" }) do
         local file = io.open(path, "rb")
         if file then s.battery_program = SettingsSync.decodeJson(file:read("*a")); file:close(); break end

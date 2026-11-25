@@ -922,6 +922,8 @@ class CacheWorker(
             st.setMeta("run_op", if (plan.op == "resume") st.meta("run_op") ?: "full" else plan.op)
             st.setMeta("run_started", now())
             r.total = 100
+            r.pct = 0
+            writeStatus(r, true)
             if(plan.limit!=null)storage(StorageAsk("before refresh",plan.limit,plan.coverDir,plan.coversOn))
             coverUsage=if(plan.limit!=null)CoverUsage(storageItems(plan.coverDir,plan.coversOn)) else null
             val fast = FastCatalogRefresh(st, plan, { path ->
