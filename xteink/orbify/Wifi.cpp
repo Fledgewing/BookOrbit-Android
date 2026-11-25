@@ -31,11 +31,11 @@ void simulatorIdleOffProbe() {
 }
 #endif
 
-bool allowOff(const char* reason) {
+void turnOff(const char* reason, void (*stop)()) {
   std::lock_guard<std::recursive_mutex> lock(mutex);
   const bool off = holds.requestOff();
   LOG_INF("ORB", "Wi-Fi %s: %s (%u held)", off ? "off" : "off deferred", reason, holds.held());
-  return off;
+  if (off) stop();
 }
 }
 

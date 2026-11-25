@@ -777,6 +777,21 @@ def sleep_pick_library(ctx: Context, tmp: Path) -> None:
 
 
 @scenario("x4-pro")
+def sleep_sources_regular_sync(ctx: Context, tmp: Path) -> None:
+    """The first ordinary Home sync lists named libraries and prepares covers before any sleep."""
+    card = ctx.card(tmp)
+    library = ctx.manifest["library_id"]
+    sleep_pick(card, **{"from": f"library:{library}", "hours": 0})
+    open_catalog(ctx, card)
+    names = (card.crosspoint / "orbify_sleep" / "scopes.tsv").read_text()
+    assert f"l\t{library}\t" in names, "the user's separate library was missing before the first sleep"
+    assert ctx.requests("/sections/smart-scopes") and ctx.requests("/sections/collections")
+    filtered = [r for r in ctx.requests("/catalog/books") if str(r.get("query", {}).get("libraryId")) == str(library)]
+    assert filtered, "a named library did not apply its libraryId filter"
+    assert list((card.crosspoint / "orbify_sleep").glob("*.bmp")), "the ordinary sync prepared no ready covers"
+
+
+@scenario("x4-pro")
 def catalog_wifi_holds(ctx: Context, tmp: Path) -> None:
     """Full refresh, browsing and uncached requests share the radio, including an idle-off request."""
     card = ctx.card(tmp)

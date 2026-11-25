@@ -8,11 +8,11 @@ using Owner = orbify::wifi::Owner;
 #if CROSSINK_TAILNET_ORBIFY_MIRROR
 void acquire(Owner owner);
 void release(Owner owner);
-bool allowOff(const char* reason);
+void turnOff(const char* reason, void (*off)());
 #else
 inline void acquire(Owner) {}
 inline void release(Owner) {}
-inline bool allowOff(const char*) { return true; }
+inline void turnOff(const char*, void (*off)()) { off(); }
 #endif
 #ifdef SIMULATOR
 void simulatorIdleOffProbe();

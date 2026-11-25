@@ -487,7 +487,7 @@ restarting to sleep` mark the budget.
 ## X4 Pro feedback (W8, 2.0.0.224)
 
 The approved feedback extends the existing sleep and refresh designs. Integration is in patch
-0043; new implementation is in `orbify/` (GPL-3.0-or-later). X3 keeps its existing sleep screens
+0044; new implementation is in `orbify/` (GPL-3.0-or-later). X3 keeps its existing sleep screens
 and radio behavior; the new ownership implementation is gated with the X4 mirror.
 
 - Source names previously arrived only during a successful sleep sync, and Settings permanently

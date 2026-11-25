@@ -501,7 +501,14 @@
  }
  
  void SavedWifiConnect::disconnect() {
-+  if (!OrbifyWifi::allowOff("SavedWifiConnect disconnect")) return;
++  OrbifyWifi::turnOff("SavedWifiConnect disconnect", [] {
    // No SNTP stop here: syncSystemTimeFromNTP() releases the client before it returns.
    WiFi.disconnect(false);
    delay(100);
+@@ -264,4 +267,5 @@
+ #if CROSSINK_TAILNET_TLS_ARENA
+   tlsArenaRelease();
+ #endif
+-}
++  });
++}

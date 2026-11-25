@@ -523,17 +523,34 @@ struct Run {
   bool over() const { return (stop && stop()) || static_cast<long>(millis() - deadline) >= 0; }
 };
 
-// The account's smart scopes and collections (first 100 of each), for Pick From's and Leave Out
-// Scopes' lists in Settings, which never go online themselves.
-bool saveScopes() {
+// Account sources for both Settings pickers. These three server sections return all entries
+// in one reply. Preserve successful/saved sections if another one fails.
+bool saveScopes(Run& run) {
   std::string out;
+  Storage.readFileToString(TAG, SCOPES_PATH, 16384, out);
+  bool all = true, changed = false;
   for (const char* section : {"smart-scopes", "collections", "libraries"}) {
+    if (run.over()) { all = false; break; }
+    const unsigned long began = millis();
     JsonDocument filter;
     filter["items"][0]["id"] = true;
     filter["items"][0]["title"] = true;
     filter["items"][0]["count"] = true;
     JsonDocument doc(OrbifyHeap::jsonAllocator());
-    if (!getJson(std::string("/plugin/catalog/sections/") + section + "?page=1&size=100", filter, doc)) return false;
+    if (!getJson(std::string("/plugin/catalog/sections/") + section + "?page=1&size=100", filter, doc)) {
+      // A failing section must not hide the other successful sections or erase saved names.
+      all = false;
+      continue;
+    }
+    const char kind = section[0] == 'l' ? 'l' : (section[0] == 'c' ? 'c' : 's');
+    std::string merged;
+    for (size_t at = 0; at < out.size();) {
+      size_t end = out.find('\n', at);
+      if (end == std::string::npos) end = out.size();
+      if (out[at] != kind) merged.append(out, at, end - at).append("\n");
+      at = end + 1;
+    }
+    unsigned count = 0;
     for (JsonObjectConst item : doc["items"].as<JsonArrayConst>()) {
       const uint32_t id = jsonId(item["id"]);
       std::string title = item["title"] | "";
@@ -542,15 +559,19 @@ bool saveScopes() {
       }
       if (!id) continue;
       char head[40];
-      std::snprintf(head, sizeof(head), "%c\t%" PRIu32 "\t%d\t", section[0] == 'l' ? 'l' : (section[0] == 'c' ? 'c' : 's'), id,
-                    item["count"] | 0);
-      out += head;
-      out += title;
-      out += '\n';
+      std::snprintf(head, sizeof(head), "%c\t%" PRIu32 "\t%d\t", kind, id, item["count"] | 0);
+      merged += head;
+      merged += title;
+      merged += '\n';
+      ++count;
     }
+    out = std::move(merged);
+    changed = true;
+    LOG_INF(TAG, "Sleep: source names %s count=%u elapsed=%lums", section, count, millis() - began);
   }
+  if (!changed) return false;
   Storage.mkdir(DIR);
-  return Storage.writeFile(SCOPES_PATH, String(out.c_str()));
+  return Storage.writeFile(SCOPES_PATH, String(out.c_str())) && all;
 }
 
 // One more page of a books listing, its ids appended to `part` (kept on the card between sleeps).
@@ -866,7 +887,7 @@ void topUp(const std::string& openBookPath, bool (*stop)(), const unsigned long 
   const bool tagRules = hasTagRules(s.leaveTags.c_str());
   const int64_t open = openBookId(openBookPath);
 
-  if (budgetMs > 1500 && due(st.scopesAt, now) && !run.over() && saveScopes()) st.scopesAt = now;
+  if (budgetMs > 1500 && due(st.scopesAt, now) && !run.over() && saveScopes(run)) st.scopesAt = now;
   LOG_INF(TAG, "Sleep: phase sources elapsed=%lums", millis() - began);
   refreshMembers(s, now, run);
   LOG_INF(TAG, "Sleep: phase exclusions elapsed=%lums", millis() - began);
