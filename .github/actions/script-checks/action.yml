@@ -9,6 +9,10 @@ runs:
       shell: bash
       run: python3 tools/test/test-features.py </dev/null
 
+    - name: Release fingerprints and selection
+      shell: bash
+      run: python3 tools/test/test-release-inputs.py </dev/null
+
     - name: USB installer, sideload and signing tool checks
       shell: bash
       run: |

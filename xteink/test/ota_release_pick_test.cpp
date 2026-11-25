@@ -173,6 +173,25 @@ int main(int argc, char** argv) {
     releases += "]";
     CHECK(std::string(pick("xteink-v", false, device, 7, false, &releases).newest.booksyncVersion) == "0.12.0");
   }
+  // Selective previews: the latest tag can lack this reader entirely. It must
+  // retain its actual prior build and compare equal after installation.
+  {
+    const std::string partial = R"([
+      {"tag_name":"xteink-v0.12.0-preview.3","booksync_version":"0.12.0-preview.3","prerelease":true,
+       "assets":[{"name":"firmware-x4-pro-v0.12.0-preview.3.bin","browser_download_url":"https://example.invalid/pro3.bin"}]},
+      {"tag_name":"xteink-v0.12.0-preview.2","booksync_version":"0.12.0-preview.2","prerelease":true,
+       "assets":[{"name":"firmware-x4-pro-v0.12.0-preview.2.bin","browser_download_url":"https://example.invalid/pro2.bin"},
+                 {"name":"firmware-x4-classic-v0.12.0-preview.2.bin","browser_download_url":"https://example.invalid/classic2.bin"},
+                 {"name":"firmware-x3-x4-v0.12.0-preview.2.bin","browser_download_url":"https://example.invalid/c3-2.bin"}]}])";
+    for (const char* device : {"firmware-x4-pro", "firmware-x4-classic", "firmware-x3-x4"}) {
+      const Pick selected = pick("xteink-v", true, device, 1, true, &partial);
+      const char* expected = std::strcmp(device, "firmware-x4-pro") == 0 ? "0.12.0-preview.3" : "0.12.0-preview.2";
+      CHECK(selected.newest.firmwareFound);
+      CHECK(std::string(selected.newest.booksyncVersion) == expected);
+      CHECK(ota_release_pick::compare(selected.newest.booksyncVersion, expected,
+                                     selected.newest.tagName, selected.newest.tagName) == 0);
+    }
+  }
   {
     ReleaseJsonParser::Release newest{}, test{};
     std::strcpy(test.tagName, "xteink-v0.12.0-0.test.1");

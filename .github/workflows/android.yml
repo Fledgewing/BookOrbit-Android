@@ -44,6 +44,15 @@ jobs:
         working-directory: android/companion
         run: ./gradlew --no-daemon verifySharedVersion testDebugUnitTest assembleDebug lintDebug </dev/null
 
+      - name: Record passing component inputs
+        run: python3 tools/releases/inputs.py receipt --platforms app,plugin --scope component > passed-inputs.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: passed-inputs-android
+          path: passed-inputs.json
+          if-no-files-found: error
+          retention-days: 90
+
       # The pages as Robolectric draws them (PageLayoutTest), at the M8C's size and a phone's.
       - name: Page screenshots
         if: always()
