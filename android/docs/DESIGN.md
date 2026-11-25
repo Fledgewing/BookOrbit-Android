@@ -333,8 +333,9 @@ One update covers the companion, the patch and KOReader's restart, with one stat
 
 - **Companion update:** the new process (`MY_PACKAGE_REPLACED` → `Updater.onReplaced`)
   installs the patch from its own release (`PatchInstaller.afterAppUpdate`: the release's
-  `SHA256SUMS`, the stamped `PATCH_VERSION`, temp file then rename, as Setup's Install patch
-  does) when the installed patch is older; never over a newer patch-only update, and a
+  `SHA256SUMS`, the release-key signature in `SIGNATURES` ([release signing](../../docs/design/release-signing.md);
+  logged, refused only once enforced), the stamped `PATCH_VERSION`, temp file then rename, as
+  Setup's Install patch does) when the installed patch is older; never over a newer patch-only update, and a
   first install stays Setup's step. No prompt.
 - **Restart:** the patch (0.5.0+) compares the `PATCH_VERSION` its own file on disk declares
   with the one running (`RestartPlan`). Newer on disk (v0.11.1): an update the reader started
