@@ -1491,6 +1491,13 @@ test("settings schema: every plugin setting is in it, or listed as state", funct
     eq(table.concat(shared, " "), "", "shared settings with a default in ko/settings.lua, not the schema")
 end)
 
+-- @fixture wifi/policy.json#connect
+test("Wi-Fi network-up decisions shared with X4", function()
+    for _, c in ipairs(JSON.fixture(here, "wifi/policy.json").connect) do
+        eq(WifiPlan.shouldConnect(c.mode, c.reason, c.saved), c.connect, c.mode .. "/" .. c.reason)
+    end
+end)
+
 -- @fixture settings/merge.json
 local MERGE = JSON.fixture(here, "settings/merge.json")
 for _, c in ipairs(MERGE.cases) do

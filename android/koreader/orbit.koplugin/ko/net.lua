@@ -11,6 +11,9 @@ Net = { inflight = nil }
 -- opts: reason, cap (s), need_server, wake_lock_s. cb(ok, res) with
 -- res = { companion, wifi_s, vpn_s, server_s, elapsed, failed_at, detail }.
 function Net.up(p, opts, cb)
+    if not WifiPlan.shouldConnect(Shared.mode(), opts.reason, false) then
+        return cb(false, { detail = "No network flow requested" })
+    end
     if Net.inflight then
         log("network: joining running attempt (", Net.inflight.reason, ") for", opts.reason)
         table.insert(Net.inflight.waiters, cb)

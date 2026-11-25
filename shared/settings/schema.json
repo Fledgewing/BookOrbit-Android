@@ -523,7 +523,8 @@
    "line": "When BookSync turns Wi-Fi on and off.",
    "reader": [
     "companion",
-    "plugin"
+    "plugin",
+    "xteink"
    ],
    "cap": "wifi",
    "search": [
@@ -562,7 +563,8 @@
    "line": "Just in time: Wi-Fi goes off after this long with nothing to do.",
    "reader": [
     "companion",
-    "plugin"
+    "plugin",
+    "xteink"
    ],
    "cap": "wifi",
    "parent": {
@@ -822,7 +824,8 @@
    "label": "Storage limit",
    "line": "Pages, offline lists and covers. Book files don't count.",
    "reader": [
-    "plugin"
+    "plugin",
+    "xteink"
    ],
    "search": [
     "storage",

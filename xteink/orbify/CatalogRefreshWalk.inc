@@ -14,17 +14,24 @@ void BookOrbitCatalogBrowserActivity::tickMirror() {
     LOG_INF("BookOrbit", "Catalog: Full refresh popup closed (%s)", input ? "a press" : "timeout");
     requestUpdate();
   }
-  if (!mirrorWalk.active()) {
-    // A Full refresh left unfinished (the catalog left, a reset) carries on here, badge only.
-    if (!mirrorResumeChecked && state == BrowserState::BROWSING && !offlineSession && WiFi.status() == WL_CONNECTED) {
-      mirrorResumeChecked = true;
-      if (OrbifyMirror::requested()) {
-        mirrorWalk.begin();
-        syncMirrorShown();
-        requestUpdate();
-      }
+  if (!mirrorWalk.active() && OrbifyMirror::requested()) {
+    mirrorWalk.begin(); syncMirrorShown(); requestUpdate();
+  }
+  if (!mirrorWalk.active()) return;
+  // Full refresh is owned by the main-loop worker, wherever navigation goes.
+  if (mirrorWalk.full()) {
+    const auto status = OrbifyMirror::snapshot();
+    const unsigned old = mirrorShown.percent;
+    const bool wasFinished = mirrorShown.finished;
+    syncMirrorShown();
+    if (status.finished && !wasFinished) {
+      mirrorDoneUntil = now + orbify::mirror::DONE_MS;
+      mirrorPopupUntil = 0;
+      requestUpdate();
+      LOG_INF("ORB", "Full refresh final: %s", status.result.c_str());
+      LOG_INF("BookOrbit", "Catalog: Full refresh done (%u errors)", static_cast<unsigned>(status.failures));
     }
-    return;
+    if (!status.finished) { if (old != status.percent) paintMirrorBadge(); return; }
   }
   if (mirrorWalk.finished()) {
     if (now >= mirrorDoneUntil) {
@@ -51,6 +58,7 @@ void BookOrbitCatalogBrowserActivity::tickMirror() {
   mirrorWalk.step();
   syncMirrorShown();
   if (mirrorWalk.finished()) {
+    const bool wasRegular = regularRefresh;
     if (regularRefresh) {
       regularRefresh = false;
       refreshing = false;
@@ -76,6 +84,11 @@ void BookOrbitCatalogBrowserActivity::tickMirror() {
         selectorIndex = std::max(windowStart, std::min(wantedSelector, loadedEnd() - 1));
         topIndex = std::max(windowStart, std::min(wantedTop, loadedEnd() - visibleRows));
       }
+    }
+    if (wasRegular) {
+      mirrorWalk.end(); syncMirrorShown(); mirrorDoneUntil = 0; mirrorPopupUntil = 0;
+      requestUpdate();
+      return;
     }
     mirrorDoneUntil = millis() + orbify::mirror::DONE_MS;
     {

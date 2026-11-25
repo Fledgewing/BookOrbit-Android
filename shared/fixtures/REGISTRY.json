@@ -533,6 +533,16 @@
         "lua",
         "cpp"
       ]
+    },
+    {
+      "file": "wifi/policy.json",
+      "section": "connect",
+      "rule": "Network-up decisions by mode, reason and saved reply",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
     }
   ]
 }

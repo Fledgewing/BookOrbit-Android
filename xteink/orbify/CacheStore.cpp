@@ -7,13 +7,19 @@
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_heap_caps.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
+#include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <map>
 #include <memory>
 #include <mutex>
 
 #include "BookOrbitCredentialStore.h"
+#include "Settings.h"
 #include "core/LocalFirst.h"
 
 namespace OrbifyCache {
@@ -29,8 +35,9 @@ constexpr uint32_t MIN_PLAUSIBLE_EPOCH = 1700000000u;  // as BookOrbitHomeStore
 constexpr size_t MAX_INDEX_BYTES = 128 * 1024;
 constexpr size_t MAX_REPLY_BYTES = 512 * 1024;  // a reply larger than this is not parsed again here
 
-// Whole replies are parsed here (to hash or patch them), never only the view's fields: their
-// nodes go to PSRAM, so the TLS session and the UI keep the internal heap (X4s only).
+// Whole replies are parsed here (to hash or patch them), never only the view's
+// fields: their nodes go to PSRAM, so the TLS session and the UI keep the
+// internal heap (X4s only).
 class PsramAllocator final : public ArduinoJson::Allocator {
  public:
   void* allocate(size_t size) override { return heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); }
@@ -41,9 +48,20 @@ class PsramAllocator final : public ArduinoJson::Allocator {
 };
 PsramAllocator psram;
 
-// The sleep sync, the background sync (0022) and the catalog's revalidation run on their own tasks.
+// The sleep sync, the background sync (0022) and the catalog's revalidation run
+// on their own tasks.
 std::recursive_mutex s_lock;
-Mode s_mode = Mode::Open;
+std::map<TaskHandle_t, Mode> modes;
+Mode modeForTask() {
+  const auto it = modes.find(xTaskGetCurrentTaskHandle());
+  return it == modes.end() ? Mode::Open : it->second;
+}
+uint64_t sdBytes = 0, planBytes = 0;
+bool usageKnown = false;
+#ifdef SIMULATOR
+unsigned repliesSinceClear = 0;
+#endif
+orbify::mirror::Stop stopReason = orbify::mirror::Stop::None;
 bool s_loaded = false;
 Index s_index;
 
@@ -58,7 +76,8 @@ uint32_t currentOwner() {
 
 std::string entryPath(const uint32_t hash) {
   char path[64];
-  snprintf(path, sizeof(path), "%s/%08lx.json", DIR, static_cast<unsigned long>(hash));
+  snprintf(path, sizeof(path), "%s/%02lx/%08lx.json", DIR, static_cast<unsigned long>(hash >> 24),
+           static_cast<unsigned long>(hash));
   return path;
 }
 
@@ -72,6 +91,8 @@ std::string pathOf(const std::string& url) {
 
 bool readFile(const std::string& path, std::string& out, const size_t cap) {
   HalFile file;
+  if (!Storage.exists(path.c_str()) && Storage.exists((path + ".bak").c_str()))
+    Storage.rename((path + ".bak").c_str(), path.c_str());
   if (!Storage.exists(path.c_str()) || !Storage.openFileForRead(TAG, path, file)) return false;
   const size_t size = file.fileSize();
   if (size > cap) {
@@ -88,8 +109,51 @@ bool writeFile(const char* path, const std::string& data) {
   HalFile file;
   if (!Storage.openFileForWrite(TAG, path, file)) return false;
   const bool ok = file.write(data.data(), data.size()) == data.size();
+  const bool synced = file.sync();
   file.close();
-  return ok;
+  return ok && synced;
+}
+
+bool replaceFile(const std::string& tmp, const std::string& path) {
+  const auto backup = path + ".bak";
+  // A reset between the two renames leaves the last good file recoverable.
+  if (!Storage.exists(path.c_str()) && Storage.exists(backup.c_str()))
+    Storage.rename(backup.c_str(), path.c_str());
+  Storage.remove(backup.c_str());
+  if (Storage.exists(path.c_str()) && !Storage.rename(path.c_str(), backup.c_str())) return false;
+  if (!Storage.rename(tmp.c_str(), path.c_str())) {
+    Storage.rename(backup.c_str(), path.c_str());
+    return false;
+  }
+  Storage.remove(backup.c_str());
+  return true;
+}
+
+bool readDocument(const std::string& path, JsonDocument& doc) {
+  HalFile file = Storage.open(path.c_str());
+  if (!file) return false;
+  struct Reader {
+    HalFile& file;
+    int read() { return file.read(); }
+    size_t readBytes(char* out, size_t count) {
+      const int n = file.read(out, count);
+      return n > 0 ? n : 0;
+    }
+  } reader{file};
+  return !deserializeJson(doc, reader);
+}
+bool writeDocument(const std::string& path, JsonDocument& doc) {
+  const auto tmp = path + ".tmp";
+  HalFile file = Storage.open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC);
+  if (!file) return false;
+  const size_t expected = measureJson(doc);
+  const bool ok = serializeJson(doc, file) == expected && file.sync();
+  file.close();
+  if (!ok) {
+    Storage.remove(tmp.c_str());
+    return false;
+  }
+  return replaceFile(tmp, path);
 }
 
 void save() {
@@ -107,7 +171,112 @@ void wipe() {
   s_index.owner = currentOwner();
 }
 
-// The index, loaded once; another server or account drops everything first.
+// Each reply has one small CRC-protected sidecar on SD. A library-sized index
+// never sits in internal RAM. The legacy index is migrated once; its covers
+// remain bounded.
+std::string metaPath(uint32_t hash) { return entryPath(hash) + ".idx"; }
+bool loadEntry(uint32_t hash, IndexEntry& out) {
+  std::string bytes;
+  Index one;
+  if (!readFile(metaPath(hash), bytes, 2048) ||
+      !deserializeIndex(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size(), one) ||
+      one.entries.size() != 1)
+    return false;
+  out = std::move(one.entries[0]);
+  const auto path = entryPath(hash);
+  if (!Storage.exists(path.c_str()) && Storage.exists((path + ".bak").c_str()))
+    Storage.rename((path + ".bak").c_str(), path.c_str());
+  return out.hash == hash && Storage.exists(entryPath(hash).c_str());
+}
+uint64_t fileBytes(const std::string& path) {
+  HalFile file = Storage.open(path.c_str());
+  return file ? file.fileSize64() : 0;
+}
+bool saveEntry(const IndexEntry& entry) {
+  Index one;
+  one.entries.push_back(entry);
+  const auto bytes = serializeIndex(one);
+  const auto path = metaPath(entry.hash), tmp = path + ".tmp";
+  Storage.mkdir(path.substr(0, path.find_last_of('/')).c_str());
+  if (!writeFile(tmp.c_str(), bytes)) return false;
+  const uint64_t before = fileBytes(path);
+  const bool ok = replaceFile(tmp, path);
+  if (ok) sdBytes = sdBytes - std::min(sdBytes, before) + bytes.size();
+  return ok;
+}
+template <class Visit>
+void entriesIn(const char* directory, Visit& visit, bool root = false) {
+  HalFile dir = Storage.open(directory);
+  while (HalFile file = dir.openNextFile()) {
+    char name[80]{};
+    file.getName(name, sizeof(name));
+    const bool directoryEntry = file.isDirectory();
+    file.close();
+    if (root && directoryEntry && strlen(name) == 2) {
+      const auto path = std::string(directory) + "/" + name;
+      entriesIn(path.c_str(), visit);
+      continue;
+    }
+    unsigned long hash;
+    if (strlen(name) != 17 || std::string(name + 8) != ".json.idx" || sscanf(name, "%8lx", &hash) != 1)
+      continue;
+    IndexEntry entry;
+    if (loadEntry(static_cast<uint32_t>(hash), entry)) visit(entry);
+  }
+}
+template <class Visit>
+void eachEntry(Visit visit) {
+  entriesIn(DIR, visit, true);
+}
+uint64_t directoryBytes(const char* directory) {
+  uint64_t bytes = 0;
+  HalFile dir = Storage.open(directory);
+  while (HalFile file = dir.openNextFile())
+    if (!file.isDirectory()) bytes += file.fileSize64();
+  return bytes;
+}
+void saveUsage() {
+  constexpr const char* path = "/.crosspoint/bookorbit-cache/usage";
+  constexpr const char* tmp = "/.crosspoint/bookorbit-cache/usage.tmp";
+  usageKnown = writeFile(tmp, std::to_string(sdBytes) + "\n" + std::to_string(~sdBytes) + "\n") &&
+               replaceFile(tmp, path);
+  if (!usageKnown) stopReason = orbify::mirror::Stop::Io;
+}
+uint64_t treeBytes(const char* directory) {
+  uint64_t bytes = 0;
+  HalFile dir = Storage.open(directory);
+  while (HalFile file = dir.openNextFile()) {
+    if (!file.isDirectory())
+      bytes += file.fileSize64();
+    else {
+      char name[80]{};
+      file.getName(name, sizeof(name));
+      file.close();
+      const auto path = std::string(directory) + "/" + name;
+      bytes += treeBytes(path.c_str());
+    }
+  }
+  return bytes;
+}
+void measureUsage() {
+  if (usageKnown) return;
+  sdBytes = treeBytes(DIR);
+  saveUsage();
+}
+uint64_t extraBytes() {
+  return planBytes + directoryBytes("/.crosspoint/bookorbit_home") +
+         directoryBytes("/.crosspoint/orbify_sleep");
+}
+uint64_t freeBytes() {
+#ifdef SIMULATOR
+  if (const char* count = std::getenv("ORBIFY_SIM_SD_FULL_AFTER"))
+    if (repliesSinceClear >= strtoul(count, nullptr, 10)) return orbify::mirror::SD_MARGIN - 1;
+  if (const char* value = std::getenv("ORBIFY_SIM_SD_FREE_BYTES")) return strtoull(value, nullptr, 10);
+#endif
+  const auto total = Storage.totalBytes(), used = Storage.usedBytes();
+  return total > used ? total - used : 0;
+}
+uint32_t hashReply(const std::string& path, uint32_t hash);
 Index& index() {
   if (!s_loaded) {
     s_loaded = true;
@@ -115,43 +284,77 @@ Index& index() {
     std::string bytes;
     if (!readFile(INDEX_PATH, bytes, MAX_INDEX_BYTES) ||
         !deserializeIndex(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size(), s_index)) {
-      if (Storage.exists(INDEX_PATH)) LOG_INF(TAG, "Cache index unreadable: starting empty");
-      wipe();
+      s_index = Index{};
+      s_index.owner = currentOwner();
     }
+    for (const auto& entry : s_index.entries) {
+      const auto path = entryPath(entry.hash);
+      Storage.mkdir(path.substr(0, path.find_last_of('/')).c_str());
+      char legacy[96];
+      snprintf(legacy, sizeof(legacy), "%s/%08lx.json", DIR, static_cast<unsigned long>(entry.hash));
+      if (Storage.exists(legacy) && !Storage.exists(path.c_str())) Storage.rename(legacy, path.c_str());
+      saveEntry(entry);
+      hashReply(path, entry.hash);  // one-time reverse references for the legacy cache
+    }
+    s_index.entries.clear();
+    save();
+    std::string usage;
+    unsigned long long value = 0, inverse = 0;
+    usageKnown = readFile("/.crosspoint/bookorbit-cache/usage", usage, 64) &&
+                 sscanf(usage.c_str(), "%llu\n%llu", &value, &inverse) == 2 &&
+                 (value ^ inverse) == UINT64_MAX;
+    sdBytes = usageKnown ? value : 0;
   }
-  const uint32_t owner = currentOwner();
-  if (s_index.owner != owner) {
-    LOG_INF(TAG, "Another server or account: cache dropped");
+  if (s_index.owner != currentOwner()) {
     wipe();
+    sdBytes = 0;
+    saveUsage();
     save();
   }
   return s_index;
 }
-
 bool isHome(const std::string& url) { return pathOf(url).find("/catalog/dashboard") != std::string::npos; }
 
-void evict() {
-  Index& idx = index();
-  std::vector<EntryInfo> info;
-  info.reserve(idx.entries.size());
-  for (const auto& e : idx.entries) info.push_back({e.bytes, e.usedAt, isHome(e.url)});
-  std::vector<size_t> drop(info.size());
-  const size_t n = entriesToEvict(info.data(), info.size(), MAX_BYTES, MAX_ENTRIES, drop.data(), drop.size());
-  if (!n) return;
-  std::vector<bool> gone(idx.entries.size(), false);
-  for (size_t i = 0; i < n; i++) {
-    gone[drop[i]] = true;
-    Storage.remove(entryPath(idx.entries[drop[i]].hash).c_str());
+std::string refsPath(int64_t id) {
+  char path[112];
+  snprintf(path, sizeof(path), "%s/refs/%02x/%lld", DIR, static_cast<unsigned>(id & 255),
+           static_cast<long long>(id));
+  return path;
+}
+void rememberBooks(JsonVariantConst value, uint32_t hash) {
+  if (value.is<JsonObjectConst>()) {
+    const auto object = value.as<JsonObjectConst>();
+    const auto id = object["id"].as<int64_t>();
+    if (id > 0 && !object["authors"].isUnbound()) {
+      const auto path = refsPath(id);
+      Storage.mkdir(path.substr(0, path.find_last_of('/')).c_str());
+      char row[16];
+      snprintf(row, sizeof(row), "%08lx\n", static_cast<unsigned long>(hash));
+      bool present = false;
+      HalFile existing = Storage.open(path.c_str());
+      char line[10]{};
+      while (existing && existing.read(line, 9) == 9)
+        if (strncmp(line, row, 9) == 0) {
+          present = true;
+          break;
+        }
+      existing.close();
+      if (!present) {
+        HalFile refs = Storage.open(path.c_str(), O_WRONLY | O_CREAT | O_APPEND);
+        if (!refs || refs.write(row, 9) != 9 || !refs.sync())
+          stopReason = orbify::mirror::Stop::Io;
+        else
+          sdBytes += 9;
+      }
+    }
+    for (JsonPairConst field : object) rememberBooks(field.value(), hash);
+  } else if (value.is<JsonArrayConst>()) {
+    for (JsonVariantConst item : value.as<JsonArrayConst>()) rememberBooks(item, hash);
   }
-  std::vector<IndexEntry> kept;
-  for (size_t i = 0; i < idx.entries.size(); i++)
-    if (!gone[i]) kept.push_back(std::move(idx.entries[i]));
-  idx.entries.swap(kept);
-  LOG_INF(TAG, "Evicted %u least recently used entries", static_cast<unsigned>(n));
 }
 
 // canonicalHash of the reply in `path` (0 when it does not parse).
-uint32_t hashReply(const std::string& path) {
+uint32_t hashReply(const std::string& path, uint32_t hash) {
   HalFile file;
   if (!Storage.openFileForRead(TAG, path, file)) return 0;
   JsonDocument doc(&psram);
@@ -165,14 +368,28 @@ uint32_t hashReply(const std::string& path) {
   } reader{file};
   const DeserializationError error = deserializeJson(doc, reader);
   file.close();
+  if (!error) rememberBooks(doc.as<JsonVariantConst>(), hash);
   return error ? 0 : canonicalHash(doc.as<JsonVariantConst>());
 }
 
 }  // namespace
 
-ScopedMode::ScopedMode(const Mode mode) : previous(s_mode) { s_mode = mode; }
-ScopedMode::~ScopedMode() { s_mode = previous; }
-Mode currentMode() { return s_mode; }
+ScopedMode::ScopedMode(const Mode mode) {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  previous = modeForTask();
+  modes[xTaskGetCurrentTaskHandle()] = mode;
+}
+ScopedMode::~ScopedMode() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  if (previous == Mode::Open)
+    modes.erase(xTaskGetCurrentTaskHandle());
+  else
+    modes[xTaskGetCurrentTaskHandle()] = previous;
+}
+Mode currentMode() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  return modeForTask();
+}
 
 Lookup lookup(const std::string& url) {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
@@ -185,15 +402,18 @@ Lookup lookup(const std::string& url) {
   const std::string key = keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", url);
   l.hash = keyHash(key);
   l.path = entryPath(l.hash);
-  const IndexEntry* e = index().find(l.hash);
+  index();
+  IndexEntry entry;
+  const IndexEntry* e = loadEntry(l.hash, entry) ? &entry : nullptr;
   l.hasEntry = e != nullptr && Storage.exists(l.path.c_str());
   const bool offline = WiFi.status() != WL_CONNECTED;
   const uint32_t now = nowSeconds();
-  const ReadPlan plan = planRead(l.hasEntry, l.hasEntry ? e->validatedAt : 0, now, s_mode, offline);
+  const ReadPlan plan = planRead(l.hasEntry, l.hasEntry ? e->validatedAt : 0, now, modeForTask(), offline);
   l.serve = plan.serve;
   l.fetch = plan.fetch;
+  if (l.hasEntry && modeForTask() == Mode::Open) l.fetch = false;
   // Without a clock the 60 s window can't be measured: online, ask the server.
-  if (!offline && now == 0) l.fetch = true;
+  if (!l.hasEntry && !offline && now == 0) l.fetch = true;
   return l;
 }
 
@@ -207,18 +427,31 @@ bool storeReply(const Lookup& l, const std::string& url, const char* tmpPath) {
     bytes = static_cast<uint32_t>(probe.fileSize());
     probe.close();
   }
-  const uint32_t replyHash = bytes <= MAX_REPLY_BYTES ? hashReply(tmpPath) : 0;
-  IndexEntry* e = idx.find(l.hash);
+  IndexEntry entry;
+  const bool hadEntry = loadEntry(l.hash, entry);
+  IndexEntry* e = hadEntry ? &entry : nullptr;
+  measureUsage();
+  stopReason = orbify::mirror::budget(sdBytes + extraBytes(), e ? e->bytes : 0, bytes + 4096ULL,
+                                      OrbifySettings::storageBytes(), freeBytes());
+  if (stopReason != orbify::mirror::Stop::None) {
+    Storage.remove(tmpPath);
+    return false;
+  }
+  const uint32_t replyHash = bytes <= MAX_REPLY_BYTES ? hashReply(tmpPath, l.hash) : 0;
+  if (stopReason != orbify::mirror::Stop::None) {
+    Storage.remove(tmpPath);
+    return false;
+  }
+  const uint32_t oldBytes = e ? e->bytes : 0;
   const Revalidated r = revalidate(200, e != nullptr, e ? e->replyHash : 0, replyHash);
-  Storage.remove(l.path.c_str());
-  if (!Storage.rename(tmpPath, l.path.c_str())) {
+  Storage.mkdir(l.path.substr(0, l.path.find_last_of('/')).c_str());
+  if (!replaceFile(tmpPath, l.path)) {
     LOG_ERR(TAG, "Couldn't keep the reply for %s", url.c_str());
-    if (e) e->validatedAt = 0;
+    stopReason = orbify::mirror::Stop::Io;
     return false;
   }
   if (!e) {
-    idx.entries.emplace_back();
-    e = &idx.entries.back();
+    e = &entry;
     e->hash = l.hash;
   }
   const uint32_t now = nowSeconds();
@@ -229,72 +462,85 @@ bool storeReply(const Lookup& l, const std::string& url, const char* tmpPath) {
   e->replyHash = replyHash;
   e->flags = 0;
   e->url = url.size() <= 255 ? url : std::string();
-  evict();
-  save();
+  if (!saveEntry(*e)) {
+    stopReason = orbify::mirror::Stop::Io;
+    return false;
+  }
+  sdBytes = sdBytes - std::min<uint64_t>(sdBytes, oldBytes) + bytes;
+  saveUsage();
+#ifdef SIMULATOR
+  ++repliesSinceClear;
+#endif
   if (r.changed) LOG_INF(TAG, "Changed on the server: %s", pathOf(url).c_str());
   return r.changed;
 }
 
 void markNotUpdated(const Lookup& l) {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
-  if (IndexEntry* e = l.cacheable ? index().find(l.hash) : nullptr) {
-    e->flags |= FLAG_NOT_UPDATED;
-    e->usedAt = ++index().clock;
-    save();
+  IndexEntry e;
+  if (l.cacheable && loadEntry(l.hash, e)) {
+    e.flags |= FLAG_NOT_UPDATED;
+    saveEntry(e);
   }
 }
-
-void markUsed(const Lookup& l) {
-  const std::lock_guard<std::recursive_mutex> guard(s_lock);
-  if (IndexEntry* e = l.cacheable ? index().find(l.hash) : nullptr) {
-    e->usedAt = ++index().clock;
-    save();
-  }
-}
+void markUsed(const Lookup&) {}  // Opening a saved page makes no SD write and never revalidates it.
 
 void afterWrite(const char* method, const std::string& url, const char* body, const size_t bodyLength,
                 const int status) {
-  const std::lock_guard<std::recursive_mutex> guard(s_lock);
   if (!BOOKORBIT_STORE.hasCredentials()) return;
   JsonDocument payload;
   if (body && bodyLength) deserializeJson(payload, body, bodyLength);
   const WriteEffect effect = writeEffect(method, pathOf(url), status, payload.as<JsonVariantConst>());
   if (!effect.homeStale && effect.bookId <= 0) return;
-  Index& idx = index();
-  char needle[32];
-  snprintf(needle, sizeof(needle), "\"id\":%lld", static_cast<long long>(effect.bookId));
-  unsigned patched = 0;
-  for (auto& e : idx.entries) {
-    if (effect.homeStale && isHome(e.url)) e.validatedAt = 0;
-    if (effect.bookId <= 0) continue;
-    const std::string path = entryPath(e.hash);
-    std::string text;
-    if (!readFile(path, text, MAX_REPLY_BYTES)) continue;
-    // Only replies that list the book are parsed.
-    bool listed = false;
-    for (size_t at = text.find(needle); at != std::string::npos; at = text.find(needle, at + 1)) {
-      const char next = at + strlen(needle) < text.size() ? text[at + strlen(needle)] : '\0';
-      if (next < '0' || next > '9') {
-        listed = true;
-        break;
+  {
+    std::lock_guard<std::recursive_mutex> guard(s_lock);
+    index();
+    if (effect.homeStale) {
+      const auto homeUrl = BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/dashboard";
+      const auto homeHash = keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", homeUrl));
+      IndexEntry home;
+      if (loadEntry(homeHash, home)) {
+        home.validatedAt = 0;
+        saveEntry(home);
       }
     }
-    if (!listed) continue;
+  }
+  unsigned patched = 0;
+  const auto patch = [&](IndexEntry& e) {
+    // A write visits only replies which list this book. Hold the cache mutex for
+    // one reply, never for a library scan beside foreground cached navigation.
+    std::lock_guard<std::recursive_mutex> guard(s_lock);
+    const auto path = entryPath(e.hash);
     JsonDocument doc(&psram);
-    if (deserializeJson(doc, text)) continue;
-    if (!patchBook(doc.as<JsonVariant>(), effect.bookId, effect.fields.as<JsonObjectConst>())) continue;
-    text.clear();
-    serializeJson(doc, text);
-    if (writeFile(path.c_str(), text)) {
-      e.bytes = static_cast<uint32_t>(text.size());
+    if (!readDocument(path, doc) ||
+        !patchBook(doc.as<JsonVariant>(), effect.bookId, effect.fields.as<JsonObjectConst>()))
+      return;
+    if (writeDocument(path, doc)) {
+      const auto bytes = measureJson(doc);
+      sdBytes = sdBytes - std::min<uint64_t>(sdBytes, e.bytes) + bytes;
+      e.bytes = static_cast<uint32_t>(bytes);
       e.replyHash = canonicalHash(doc.as<JsonVariantConst>());
-      patched++;
-    } else {
-      Storage.remove(path.c_str());
-      e.validatedAt = 0;
+      saveEntry(e);
+      ++patched;
+    }
+  };
+  if (effect.bookId > 0) {
+    HalFile refs = Storage.open(refsPath(effect.bookId).c_str());
+    char row[10]{};
+    while (refs && refs.read(row, 9) == 9) {
+      IndexEntry entry;
+      {
+        std::lock_guard<std::recursive_mutex> guard(s_lock);
+        if (!loadEntry(static_cast<uint32_t>(strtoul(row, nullptr, 16)), entry)) continue;
+      }
+      patch(entry);
+      delay(1);
     }
   }
-  save();
+  {
+    std::lock_guard<std::recursive_mutex> guard(s_lock);
+    saveUsage();
+  }
   LOG_INF(TAG, "%s %s -> %d: %u saved replies patched%s", method, pathOf(url).c_str(), status, patched,
           effect.homeStale ? ", Home due" : "");
 }
@@ -303,7 +549,10 @@ Freshness freshness(const std::string& url) {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
   Freshness f;
   if (!BOOKORBIT_STORE.hasCredentials()) return f;
-  const IndexEntry* e = index().find(keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", url)));
+  index();
+  IndexEntry entry;
+  const IndexEntry* e =
+      loadEntry(keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", url)), entry) ? &entry : nullptr;
   if (!e) return f;
   f.saved = true;
   f.validatedAt = e->validatedAt ? e->validatedAt : e->fetchedAt;
@@ -333,59 +582,103 @@ void coverStored(const int32_t bookId, const uint32_t version, const std::string
   save();
 }
 
-void mergeRecent() {
+std::vector<int64_t> mergeRecent() {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
-  Index& idx = index();
+  index();
   JsonDocument recent(&psram);
-  for (const auto& e : idx.entries) {
-    if (e.url.find("sort=recently_updated") == std::string::npos) continue;
-    std::string text;
-    if (readFile(entryPath(e.hash), text, MAX_REPLY_BYTES)) {
-      const auto error = deserializeJson(recent, text);
-      if (error) LOG_ERR(TAG, "Catalog incremental: recent page parse failed (%s)", error.c_str());
-    }
-    break;
-  }
-  const JsonArrayConst items = recent["items"].as<JsonArrayConst>();
-  if (items.isNull()) {
-    LOG_INF(TAG, "Catalog incremental: no saved recent-items page (%u entries)", static_cast<unsigned>(idx.entries.size()));
-    return;
-  }
+  orbify::mirror::FacetQuery q;
+  q.sort = "recently_updated";
+  const auto url = BOOKORBIT_STORE.getBaseUrl() + orbify::mirror::booksPath(q, 1, 20, false);
+  const uint32_t hash = keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", url));
+  readDocument(entryPath(hash), recent);
+  const auto items = recent["items"].as<JsonArrayConst>();
+  std::vector<int64_t> details;
   unsigned changed = 0;
-  for (auto& e : idx.entries) {
-    if (e.url.find("sort=recently_updated") != std::string::npos) continue;
-    std::string text;
-    if (!readFile(entryPath(e.hash), text, MAX_REPLY_BYTES)) continue;
-    JsonDocument doc(&psram);
-    if (deserializeJson(doc, text) || !mergeRecentBooks(doc.as<JsonVariant>(), items)) continue;
-    text.clear();
-    serializeJson(doc, text);
-    // Keep the previous reply if a write is interrupted: use a side file first.
-    const std::string path = entryPath(e.hash);
-    const std::string tmp = path + ".tmp";
-    if (!writeFile(tmp.c_str(), text)) continue;
-    Storage.remove(path.c_str());
-    if (!Storage.rename(tmp.c_str(), path.c_str())) continue;
-    e.bytes = static_cast<uint32_t>(text.size());
-    e.replyHash = canonicalHash(doc.as<JsonVariantConst>());
-    ++changed;
+  // Reverse references are built as each reply lands. Only pages which contain
+  // a changed book are opened; the incremental pass never scans/parses the
+  // library.
+  for (JsonObjectConst book : items) {
+    const int64_t id = book["id"] | 0LL;
+    if (id <= 0) continue;
+    HalFile refs = Storage.open(refsPath(id).c_str());
+    char row[10]{};
+    while (refs && refs.read(row, 9) == 9) {
+      IndexEntry e;
+      if (!loadEntry(static_cast<uint32_t>(strtoul(row, nullptr, 16)), e) || e.hash == hash) continue;
+      const auto path = entryPath(e.hash);
+      JsonDocument doc(&psram);
+      if (!readDocument(path, doc)) continue;
+      if (doc["id"].as<int64_t>() == id && doc["files"].is<JsonArray>()) {
+        if (doc["updatedAt"] != book["updatedAt"] &&
+            std::find(details.begin(), details.end(), id) == details.end())
+          details.push_back(id);
+        continue;  // details are fetched only when their version changed
+      }
+      if (!mergeRecentBooks(doc.as<JsonVariant>(), items)) continue;
+      const auto bytes = measureJson(doc);
+      if (orbify::mirror::budget(sdBytes + extraBytes(), e.bytes, bytes + 4096ULL,
+                                 OrbifySettings::storageBytes(), freeBytes()) != orbify::mirror::Stop::None)
+        continue;
+      if (!writeDocument(path, doc)) continue;
+      sdBytes = sdBytes - std::min<uint64_t>(sdBytes, e.bytes) + bytes;
+      e.bytes = static_cast<uint32_t>(bytes);
+      e.replyHash = canonicalHash(doc.as<JsonVariantConst>());
+      saveEntry(e);
+      ++changed;
+    }
   }
-  if (changed) save();
-  LOG_INF(TAG, "Catalog incremental: %u saved replies changed (one recent-items page)", changed);
+  if (changed) saveUsage();
+  LOG_INF(TAG,
+          "Catalog incremental: %u saved replies changed (one recent-items "
+          "page), %u changed details",
+          changed, static_cast<unsigned>(details.size()));
+  return details;
+}
+
+void setPlanBytes(uint64_t bytes) {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  planBytes = bytes;
+}
+uint64_t bytesOnSd() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  index();
+  measureUsage();
+  return sdBytes + extraBytes();
+}
+orbify::mirror::Stop storageStop() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  return stopReason;
+}
+void clearStorageStop() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  stopReason = orbify::mirror::Stop::None;
+#ifdef SIMULATOR
+  repliesSinceClear = 0;
+#endif
+}
+bool roomForReply() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  index();
+  measureUsage();
+  stopReason =
+      orbify::mirror::budget(sdBytes + extraBytes(), 0, 0, OrbifySettings::storageBytes(), freeBytes());
+  return stopReason == orbify::mirror::Stop::None;
 }
 
 void dropAll() {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
   s_loaded = true;
   wipe();
+  sdBytes = 0;
+  saveUsage();
   save();
 }
 
 }  // namespace OrbifyCache
 
 // The hook sendBookOrbitRequest calls (lib/BookOrbitSync, declared weak there).
-void orbifyCacheAfterWrite(const char* method, const std::string& url, const char* body, const size_t bodyLength,
-                           const int status) {
+void orbifyCacheAfterWrite(const char* method, const std::string& url, const char* body,
+                           const size_t bodyLength, const int status) {
   OrbifyCache::afterWrite(method, url, body, bodyLength, status);
 }
 
