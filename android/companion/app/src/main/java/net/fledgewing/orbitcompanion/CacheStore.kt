@@ -226,7 +226,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
 
     /**
      * Saves a reply where [read] finds it again. mode "full" takes the reply as it is; otherwise
-     * the saved random pick is kept (Cache.settle). -> the stored body.
+     * the saved random pick is kept (LuaValue.settle). -> the stored body.
      */
     fun save(key: String, path: String, reply: Any?, at: Long, detailTemplate: String?, sentinel: String = MirrorLogic.SENTINEL): Boolean {
         val w = MirrorLogic.listWindow(path)
@@ -315,7 +315,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
             return listOf(s(b["title"]), authors, s(b["seriesName"])).joinToString("\n")
         }
 
-        /** Cache.patch on a copy: every table whose id is the book's gets the fields (an empty map clears one). */
+        /** On a copy: every table whose id is the book's gets the fields (an empty map clears one). */
         fun patched(v: Any?, id: Long, fields: Map<*, *>, depth: Int = 0): Any? {
             if (depth > 30) return v
             return when (v) {
