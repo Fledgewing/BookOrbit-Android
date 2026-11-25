@@ -70,6 +70,10 @@ object Worker {
             if (h > 0) h else (dm?.heightPixels ?: 1440) / 3) }
     }).also { worker = it }
 
+    internal fun nativeFooterRepair(before: String, after: String, token: String) {
+        worker().event(mapOf("kind" to "native_footer_repair", "before" to before, "after" to after, "token" to token))
+    }
+
     private fun creds(i: Intent): CacheWorker.Creds? {
         val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
         val user = i.getStringExtra("user") ?: return null

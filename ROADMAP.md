@@ -82,4 +82,4 @@ and any UI mockups still need approval before implementation.
 |---|---|---|---|
 | Submit the companion for Google Play Protect review. | Android | idea | |
 | X3 parity review for each feature above. | X3 | idea | |
-| **Shared Orbify release name**: one name (e.g. "Orbify 0.12") shown in the companion, the plugin and the Xteink About screens and in release titles, each with its own technical version underneath; marks which shared feature set (e.g. battery stats) a build has. Update logic and tags unchanged. | Android, Xteink | idea | |
+| **One BookSync version from 0.12**: companion, plugin and all Xteink readers share a product version, release channel and release commit; an old-scheme firmware bridge keeps OTA working across the transition. | Android, X4 Pro, X4, X3 | building (maintainer-approved W39; bridge release and device validation pending) | [unified version](docs/design/unified-version.md) |

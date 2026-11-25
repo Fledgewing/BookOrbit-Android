@@ -42,9 +42,9 @@ name: Xteink
 on:
   push:
     branches: [main]
-    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
+    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", "tools/booksync-version.py", "tools/xteink-feed.py", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
   pull_request:
-    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
+    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", "tools/booksync-version.py", "tools/xteink-feed.py", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
   schedule:
     - cron: "17 11 * * *"
   workflow_dispatch:
@@ -105,6 +105,7 @@ jobs:
           sparse-checkout: |
             xteink/scripts
             tools
+            shared
 
       - id: l
         env:
@@ -114,6 +115,11 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
+          # Unified releases build the exact Android release commit and its pinned base.
+          if [ "$(python3 tools/booksync-version.py unified)" = true ]; then
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Pushes, pull requests and test builds without upstream_ref build the lock as it is. A
           # test build of another upstream tag pins it on its own branch, never on main.
           if [ "$GITHUB_EVENT_NAME" = push ] || [ "$GITHUB_EVENT_NAME" = pull_request ] \
@@ -173,6 +179,7 @@ jobs:
           sparse-checkout: |
             xteink
             tools
+            shared
 
       - id: r
         env:
@@ -189,6 +196,12 @@ jobs:
           base="${tag#v}"
           numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"
           version="${numeric}.$((RUN_BASE + GITHUB_RUN_NUMBER))${base#"$numeric"}"
+          if [ "$(python3 tools/booksync-version.py unified)" = true ]; then
+            test_args=()
+            [ "${TEST_BUILD:-false}" = true ] && test_args+=(test)
+            version="$(python3 tools/booksync-version.py firmware "$tag" "$GITHUB_RUN_NUMBER" "${test_args[@]}")"
+            channel="$(python3 tools/booksync-version.py channel)"
+          fi
           asset_version="$(printf '%s' "$version" | sed 's/[^A-Za-z0-9._-]\{1,\}/-/g')"
           lines="$(jq -cn --arg tag "$tag" --arg commit "$commit" --arg version "$version" --arg asset "$asset_version" \
             '[{upstream_tag: $tag, upstream_commit: $commit, version: $version, asset_version: $asset}]')"
@@ -204,6 +217,16 @@ jobs:
           elif [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             publish="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" -q '.[].body' \
               | xteink/scripts/upstream-line.sh publish "$GITHUB_EVENT_NAME" "$tag" "$marker" "${FORCE:-false}")"
+          fi
+          if [ "$(python3 tools/booksync-version.py unified)" = true ]; then
+            # Only a run dispatched at the matching Android tag publishes unified firmware.
+            # The tag is immutable and all three products read its manifest.
+            book="$(python3 tools/booksync-version.py version)"
+            publish=false
+            if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "${TEST_BUILD:-false}" != true ] &&
+               { [ "$GITHUB_REF_NAME" = "v$book" ] || [ "$GITHUB_REF_NAME" = "android-v$book" ]; }; then
+              publish=true
+            fi
           fi
           {
             echo "upstream_tag=$tag"
@@ -287,6 +310,7 @@ jobs:
       - name: Build
         working-directory: upstream
         env:
+          BOOKSYNC_TEST_RUN: ${{ inputs.test_build && github.run_number || '' }}
           CROSSINK_RELEASE_VERSION: ${{ matrix.line.version }}
           TAILNET_OVERLAY_REPO: ${{ github.repository }}
           TAILNET_OTA_TAG_PREFIX: xteink-v
@@ -480,6 +504,10 @@ jobs:
             echo
             # Marker the resolve job looks for to skip already-released pairs.
             echo "$MARKER"
+            echo "booksync_version=$(python3 orbify/tools/booksync-version.py version)"
+            if [ "$(python3 orbify/tools/booksync-version.py unified)" = false ]; then
+              echo "OTA bridge: install this build before BookSync 0.12."
+            fi
           } > notes.md
           cat notes.md
 
@@ -536,15 +564,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -s '
-            add
-            | map(select((.draft | not) and (.tag_name | startswith("xteink-v"))))
-            | sort_by(.created_at) | reverse
-            | [ (map(select(.prerelease | not)) | first), (map(select(.prerelease)) | first) ]
-            | map(select(. != null) | {
-                tag_name, name, draft, prerelease, created_at,
-                assets: [.assets[] | {name, size, digest, browser_download_url}]
-              })' > "$RUNNER_TEMP/unsigned.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -s 'add' \
+            | python3 tools/xteink-feed.py > "$RUNNER_TEMP/unsigned.json"
           # Each image's signature from its release's SIGNATURES, as "orbify_signature" (what the
           # readers check; docs/design/release-signing.md). Releases from before signing have none.
           echo '{}' > "$RUNNER_TEMP/signatures.json"

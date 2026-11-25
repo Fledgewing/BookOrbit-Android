@@ -95,7 +95,9 @@ jobs:
     if: (inputs.platform || 'all') != 'android'
     needs: kit
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    # X4 Pro completes 40 passing scenarios near 40 minutes including its build.
+    # Leave room for artifact upload/cleanup; scenario deadlines remain in run.py.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

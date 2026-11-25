@@ -5,6 +5,10 @@ description: >
 runs:
   using: composite
   steps:
+    - name: Feature matrix and shared settings coverage
+      shell: bash
+      run: python3 tools/test/test-features.py </dev/null
+
     - name: USB installer, sideload and signing tool checks
       shell: bash
       run: |
