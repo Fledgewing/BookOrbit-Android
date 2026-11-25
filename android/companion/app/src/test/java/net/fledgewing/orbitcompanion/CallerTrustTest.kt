@@ -111,6 +111,45 @@ class CallerTrustTest {
         assertEquals("1", call(koUid, Contract.SETUP_LATER)?.getString("ok"))
     }
 
+    @Test fun aCommandOnKoreadersStartIsConfirmedOnceAndOnlyWhenSent() {
+        val sent = SentCommands(keepMs = 1000)
+        sent.record("restart", 100)
+        assertFalse("never sent", sent.take("full_refresh", 200))
+        assertTrue(sent.take("restart", 200))
+        assertFalse("used up", sent.take("restart", 300))
+        sent.record("home", 100)
+        assertFalse("too old", sent.take("home", 1200))
+        assertFalse(sent.take(null, 200))
+        // Through the provider: only the pinned KOReader may ask.
+        SentCommands.shared.record("signin", android.os.SystemClock.elapsedRealtime())
+        val ask = Bundle().apply { putString("command", "signin") }
+        assertEquals("another app can't take it", "0", call(otherUid, CommandProvider.TAKE_COMMAND, ask)?.getString("ok"))
+        assertEquals("1", call(koUid, CommandProvider.TAKE_COMMAND, ask)?.getString("ok"))
+        assertEquals("0", call(koUid, CommandProvider.TAKE_COMMAND, ask)?.getString("ok"))
+    }
+
+    @Test fun theClickChannelOpensOnlyWithAKeyFromTheCall() {
+        val keys = ClickKeys(keepMs = 1000)
+        val (key, proof) = keys.issue(0)
+        assertNull(keys.take("guess", 10))
+        assertEquals(proof, keys.take(key, 10))
+        assertNull("once", keys.take(key, 20))
+        val (late, _) = keys.issue(0)
+        assertNull("too late", keys.take(late, 2000))
+        assertNull(keys.take(null, 0))
+        assertEquals("0", call(otherUid, CommandProvider.CLICKS)?.getString("ok"))
+        val r = call(koUid, CommandProvider.CLICKS)!!
+        assertEquals(r.getString("proof"), ClickChannel.accept(r.getString("key")))
+        assertNull(ClickChannel.accept(r.getString("key")))
+    }
+
+    @Test fun onlyTheShellMayAskForKoreadersRestart() {
+        assertEquals("0", call(koUid, CommandProvider.RESTART_KOREADER)?.getString("ok"))
+        assertEquals("0", call(otherUid, CommandProvider.RESTART_KOREADER)?.getString("ok"))
+        assertEquals("1", call(android.os.Process.SHELL_UID, CommandProvider.RESTART_KOREADER)?.getString("ok"))
+        assertEquals("the shell gets nothing else", "0", call(android.os.Process.SHELL_UID, Contract.SETUP_LATER)?.getString("ok"))
+    }
+
     /** Every command KOReader sends is one the provider accepts, and the receiver no longer takes any. */
     @Test fun theReceiverIsNotExportedAndTakesNoCommands() {
         val manifest = listOf(File("src/main/AndroidManifest.xml"), File("app/src/main/AndroidManifest.xml")).first { it.isFile }.readText()

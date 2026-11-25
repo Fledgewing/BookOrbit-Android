@@ -12,6 +12,8 @@ Companion = {
     -- The companion's caller-checked entry (android/docs/INTERFACE.md, docs/design/security.md).
     AUTHORITY = "net.fledgewing.orbitcompanion.commands",
     STATUS = "net.fledgewing.orbitcompanion.call.STATUS",
+    TAKE_COMMAND = "net.fledgewing.orbitcompanion.call.TAKE_COMMAND",
+    CLICKS = "net.fledgewing.orbitcompanion.call.CLICKS",
     -- The certificate that signs every Orbit Companion release (SHA-256; release.yml checks it).
     -- Nothing goes to an app with the companion's name and another signer.
     SIGNERS = {
@@ -128,9 +130,9 @@ end
 
 -- "ok", "frozen" (installed but disabled, e.g. by a vendor launcher's app freeze), "untrusted"
 -- (an app with the companion's name and another signer: nothing is sent to it) or "missing".
-function Companion.state()
+function Companion.state(fresh)
     local t = now_s()
-    if t - installed_cache.at > 30 then
+    if fresh or t - installed_cache.at > 30 then
         local ok, v = pcall(android.isPackageEnabled, Companion.PACKAGE)
         local st
         if ok and v == true then
@@ -252,7 +254,7 @@ request_seq = 0
 function Companion.send(action, extras)
     extras = extras or {}
     local short = action:match("[^.]+$")
-    if Companion.state() ~= "ok" then
+    if Companion.state(true) ~= "ok" then
         log("companion", short, "NOT sent:", Companion.state(), extras.reason or "")
         return false
     end
@@ -303,6 +305,14 @@ end
 function Companion.bookOpen()
     local okr, ReaderUI = pcall(require, "apps/reader/readerui")
     return okr and type(ReaderUI) == "table" and ReaderUI.instance ~= nil and ReaderUI.instance.document ~= nil
+end
+
+-- A command on KOReader's start counts only when the companion says it sent it (once): any app
+-- can start KOReader with that extra (docs/design/security.md).
+function Companion.confirmCommand(cmd)
+    if Companion.state() ~= "ok" then return false end
+    local r = Jni.call(Companion.AUTHORITY, Companion.TAKE_COMMAND, { command = cmd })
+    return r ~= nil and r.ok == "1"
 end
 
 -- The companion's status (a binder call on this device: it answers at once). nil when the

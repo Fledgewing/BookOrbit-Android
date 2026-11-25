@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: ota check retry
+
+Retry a failed firmware update check on a fresh connection.
+
 diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
 index 62a4ddfe..cd94dd10 100644
 --- a/src/network/OtaUpdater.cpp

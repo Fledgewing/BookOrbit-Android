@@ -159,8 +159,11 @@ function bundleString(env, jni, b, key)
     return v
 end
 
+-- What a call's answer may carry (android/docs/INTERFACE.md).
+CALL_ANSWER = { "ok", "why", "status", "key", "proof" }
+
 -- ContentResolver.call(content://<authority>, method, null, extras) (android/docs/INTERFACE.md):
--- the companion checks who called before it acts. Returns the answer's { ok, why, status }
+-- the companion checks who called before it acts. Returns the answer's CALL_ANSWER fields
 -- (strings), or nil and the error (no such provider, a Java exception).
 function Jni.call(authority, method, extras)
     return withEnv("call " .. method, function(env, activity, jni)
@@ -180,7 +183,8 @@ function Jni.call(authority, method, extras)
             "(Landroid/net/Uri;Ljava/lang/String;Ljava/lang/String;Landroid/os/Bundle;)Landroid/os/Bundle;", uri, jm, nil, b)
         del(env, jm); del(env, b); del(env, uri); del(env, cr)
         if r == nil then return { ok = "0", why = "no answer" } end
-        local out = { ok = bundleString(env, jni, r, "ok"), why = bundleString(env, jni, r, "why"), status = bundleString(env, jni, r, "status") }
+        local out = {}
+        for _, k in ipairs(CALL_ANSWER) do out[k] = bundleString(env, jni, r, k) end
         del(env, r)
         return out
     end)

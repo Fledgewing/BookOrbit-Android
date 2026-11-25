@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: settings pin
+
+Guard settings and web settings with the reader PIN.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index a4193789..87113b20 100644
 --- a/include/CrossInkTailnetCuts.h

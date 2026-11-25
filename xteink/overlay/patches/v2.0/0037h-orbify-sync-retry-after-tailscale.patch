@@ -1,0 +1,34 @@
+Subject: [PATCH] Orbify: sync retry after tailscale
+
+Retry sync after Tailscale has reconnected.
+
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index aedf8f0..a18aaf7 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -539,9 +539,24 @@ void BookOrbitSyncActivity::performSync() {
+   // session fails cleanly (NETWORK_ERROR, retry next sync) where a fresh one was refused
+   // outright before it could try.
+   syncSession = makeUniqueNoThrow<BookOrbitSyncClient::Session>();
+-  const BookOrbitSyncClient::Error result = BookOrbitSyncClient::getProgress(documentHash, remoteProgress);
++  BookOrbitSyncClient::Error result = BookOrbitSyncClient::getProgress(documentHash, remoteProgress);
+   LOG_INF("BookOrbit", "Progress fetch result=%d (http=%d)", static_cast<int>(result),
+           BookOrbitSyncClient::lastHttpCode);
++  // Patch 0037: the server never answered (an X4 Pro's Tailscale map came late: "Host is
++  // unreachable"). Once Tailscale is up, the fetch is tried again, once, before the sync fails.
++  if (result == BookOrbitSyncClient::NETWORK_ERROR && BookOrbitSyncClient::lastHttpCode <= 0 && tailnet_enabled() &&
++      !wakeRequested()) {
++    LOG_INF("BookOrbit", "Progress fetch: no answer; retrying once Tailscale is ready");
++    if (tailnet_wait_connected_for("BookOrbit sync retry", 30000)) {
++      syncSession.reset();
++      syncSession = makeUniqueNoThrow<BookOrbitSyncClient::Session>();
++      result = BookOrbitSyncClient::getProgress(documentHash, remoteProgress);
++      LOG_INF("BookOrbit", "Progress fetch retry result=%d (http=%d)", static_cast<int>(result),
++              BookOrbitSyncClient::lastHttpCode);
++    } else {
++      LOG_INF("BookOrbit", "Progress fetch: Tailscale still not ready; no retry");
++    }
++  }
+ #if CROSSINK_TAILNET_BACKGROUND_SYNC
+   backgroundResult = result;
+ #endif

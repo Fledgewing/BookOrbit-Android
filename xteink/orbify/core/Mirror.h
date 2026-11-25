@@ -27,7 +27,7 @@ enum class Due : uint8_t { None, Never, Ttl, Library };
 // saved: a mirror finished before, at `at` (epoch s), with the library version then (may be "").
 // libNow: the server's library version now ("" = unknown). ttlDays 0: automatic runs off.
 Due due(bool saved, uint32_t at, const char* savedLib, const char* libNow, uint32_t now, uint32_t ttlDays);
-// Patch 0038, cache-first: the catalog opens a saved copy without Wi-Fi unless it is stale (the
+// Cache-first catalog: the catalog opens a saved copy without Wi-Fi unless it is stale (the
 // 7-day Full refresh due, or a new library version). Never saved: it connects.
 inline bool catalogFromCache(const bool saved, const Due due) { return saved && due == Due::None; }
 // "none" / "never" / "ttl" / "library": the shared table's words, and the log's.
@@ -50,7 +50,7 @@ FacetQuery facetQuery(const std::string& facetSectionId, const std::string& entr
 // spaces (the request is then the one the browser makes for that name, which has none).
 std::string encodeQuery(const FacetQuery& query);
 bool decodeQuery(const std::string& text, FacetQuery& out);
-// The request a book list makes, after the server's base URL (patch 0037): BookOrbitCatalogClient's
+// The request a book list makes, after the server's base URL: BookOrbitCatalogClient's
 // booksUrl() builds its URL with this on the X4s, so the host test checks the requests the mirror
 // and the browser really send.
 std::string booksPath(const FacetQuery& query, int page, int size, bool withLetters);

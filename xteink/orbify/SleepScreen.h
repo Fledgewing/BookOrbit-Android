@@ -5,7 +5,7 @@
 //   - BookOrbit Pick, a Sleep Screen choice (Settings > Display > Sleep Screen): a recommended
 //     cover from a batch of up to 24 kept ready in /.crosspoint/orbify_sleep/ (screen-size BMPs). The
 //     sleep draws only from the card: it never waits on the network (R3, F7).
-//   - The sleep sync tops the batch up by a few covers on the connection it lends (patch 0037), within
+//   - The sleep sync tops the batch up by a few covers on the connection it lends, within
 //     its own time budget, and decodes them with the radio off into PSRAM-backed buffers.
 //   - The extras, text and battery level at sleep, in a band (Bar) or on plates (Overlay), on every
 //     bitmap sleep screen and the default one (L3-L5).

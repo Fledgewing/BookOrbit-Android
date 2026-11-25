@@ -56,10 +56,19 @@ in a file or a log.
 
 ## The companion → KOReader direction
 
-- The companion starts KOReader with a command only when the installed KOReader is the pinned
-  copy (`KoreaderTrust.koreaderTrusted`); another copy is started with no command.
-- The status reaches the plugin as the answer to its own caller-checked call, not over a port
+- **Commands on KOReader's start.** The companion starts KOReader with a command only when the
+  installed KOReader is the pinned copy (`KoreaderTrust.koreaderTrusted`); another copy is
+  started with no command. Any app can start KOReader with the same extra, so the plugin obeys a
+  command only after the companion confirms, through the caller-checked call, that it sent it
+  (`TAKE_COMMAND`, once, within 10 minutes; `SentCommands`).
+- **The status** reaches the plugin as the answer to its own caller-checked call, not over a port
   another app could open.
+- **The click channel** stays a loopback socket (KOReader's event loop watches its fd). The plugin
+  gets a one-time key and proof through the caller-checked call (`CLICKS`, `ClickKeys`); the port
+  opens the channel only for that key, and the plugin trusts the channel only once its first line
+  carries the proof. Another app can neither read the clicks nor pose as the companion.
+- **Over USB**, the shell UID may call one method, `RESTART_KOREADER`
+  (`tools/sideload-android.sh`); adb already controls the device.
 
 ## Commands that touch files
 
@@ -98,5 +107,8 @@ Other limits, unchanged by this design:
   plan's cover folder outside them touch nothing.
 - `CallerTrustTest`: the rule; the pinned KOReader is accepted, another UID or signer refused;
   a changed KOReader is refused until trusted, with its Setup row; the receiver is not exported.
+- `CallerTrustTest`: a command on KOReader's start is confirmed once and only when sent, and
+  only to the pinned KOReader; the click key works once; only the shell may ask for a restart.
 - `test_flows.lua` "companion: an app with its name and another signer gets nothing": no call,
-  no login, the problem line.
+  no login, the problem line; "a command on KOReader's start that Orbit Companion didn't send is
+  ignored"; "a listener on the port that can't prove it is Orbit Companion is dropped".
