@@ -12,6 +12,7 @@ Plain text checks, no YAML library, so it runs anywhere: python3 tools/test/test
 import pathlib
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 root = pathlib.Path(__file__).resolve().parents[2]
 files = sorted((root / ".github/workflows").glob("*.yml")) + sorted((root / ".github/actions").glob("*/action.yml"))
@@ -78,6 +79,15 @@ for workflow, step in [("release.yml", "Sign the plugin zip"), ("xteink.yml", "S
     block = workflow_text.split(f"      - name: {step}\n", 1)[1].split("\n      - ", 1)[0]
     if "feed-keys verify --tag" not in block or "jq -e '.enforce'" not in block:
         errors.append(f"{workflow}: {step} must verify signatures and require a key when enforced")
+# Checksum verification covers metadata as well as binaries; updates require explicit review.
+metadata = root / "android/companion/gradle/verification-metadata.xml"
+ns = {"v": "https://schema.gradle.org/dependency-verification"}
+verification = ET.parse(metadata).getroot()
+if verification.findtext("v:configuration/v:verify-metadata", namespaces=ns) != "true":
+    errors.append("Gradle dependency metadata verification must be enabled")
+for artifact in verification.findall("v:components/v:component/v:artifact", ns):
+    if not artifact.findall("v:sha256", ns):
+        errors.append(f"Gradle artifact has no SHA-256: {artifact.get('name')}")
 
 if errors:
     print("\n".join(errors), file=sys.stderr)

@@ -174,3 +174,12 @@ anything upstream inside Orbify: an overlay patch, a build-time edit of a fetche
 
 - Commits use the repo's noreply identity; stage explicit paths.
 - No personal names, emails, hostnames or IPs in the repo; never print or commit secrets.
+
+## Dependency checksum updates
+
+The companion uses strict Gradle dependency verification, including POM and module metadata,
+in `android/companion/gradle/verification-metadata.xml`. For a dependency update, regenerate
+with `./gradlew --write-verification-metadata sha256 testDebugUnitTest assembleDebug assembleRelease lintDebug`,
+review the changed coordinates and checksums against their publishing repositories, and run
+again without the generation flag. Include Linux's aapt2 artifact as well as the local platform's.
+Never disable verification or add broad trust exceptions to make CI pass.
