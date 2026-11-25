@@ -256,6 +256,8 @@ SWITCHES = {
     "CROSSINK_TAILNET_ORBIFY_COPY_CHECK": (1,      1,      1),
     "CROSSINK_TAILNET_ORBIFY_COPY_REFRESH": (1,    1,      1),
     # Ratings on the end-of-book page (item 2): not on the X3 (G31).
+    # W17: keep the X3 image byte-for-byte unchanged at its 99.5% flash gate.
+    "CROSSINK_TAILNET_ORBIFY_STATUS":     (0,      1,      1),
     "CROSSINK_TAILNET_ORBIFY_RATING":     (0,      1,      1),
     # Patch 0028, the End-of-Book page (item 2). The X3's flash drop order (design §5): lower
     # SUGGESTIONS to 0 first, then AUTHOR_ROW to 0, if `default` crosses the 99.5% CI gate.

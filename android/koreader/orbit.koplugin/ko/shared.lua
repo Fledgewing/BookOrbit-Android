@@ -149,6 +149,8 @@ function Shared.onChange(key, why)
     local function try(fn, ...) if type(fn) == "function" then local okc, err = pcall(fn, ...); if not okc then log("setting", key, ": follow-up failed:", tostring(err)) end end end
     if key == "wifi_mode" or key == "wifi_idle_min" or key == "wifi_via_companion" then
         try(Wifi and Wifi.applySettings, "companion")
+    elseif key == "status_orbit_layout" then
+        try(ReadingStatus and ReadingStatus.changed)
     elseif key == "reading_schedule" then
         try(Shared.onSchedule, S.reading_schedule)
     elseif key == "sleep_mode" or key == "sleep_from" or key == "sleep_leave_out" then

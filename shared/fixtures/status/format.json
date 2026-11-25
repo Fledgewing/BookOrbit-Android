@@ -1,0 +1,66 @@
+{
+  "progress": [
+    {
+      "page": 12,
+      "total": 340,
+      "fraction": 0.03529411764705882,
+      "text": "12 / 340 \u00b7 4%"
+    },
+    {
+      "page": 1,
+      "total": 200,
+      "fraction": 0,
+      "text": "1 / 200 \u00b7 0%"
+    },
+    {
+      "page": 200,
+      "total": 200,
+      "fraction": 1,
+      "text": "200 / 200 \u00b7 100%"
+    },
+    {
+      "page": 1,
+      "total": 200,
+      "fraction": 0.005,
+      "text": "1 / 200 \u00b7 1%"
+    },
+    {
+      "page": 1,
+      "total": 200,
+      "fraction": -0.1,
+      "text": "1 / 200 \u00b7 0%"
+    },
+    {
+      "page": 200,
+      "total": 200,
+      "fraction": 1.2,
+      "text": "200 / 200 \u00b7 100%"
+    }
+  ],
+  "clock": [
+    {
+      "hour": 0,
+      "minute": 5,
+      "twelve": false,
+      "text": "00:05"
+    },
+    {
+      "hour": 0,
+      "minute": 5,
+      "twelve": true,
+      "text": "12:05 AM"
+    },
+    {
+      "hour": 12,
+      "minute": 0,
+      "twelve": true,
+      "text": "12:00 PM"
+    },
+    {
+      "hour": 23,
+      "minute": 59,
+      "twelve": true,
+      "text": "11:59 PM"
+    }
+  ]
+}
