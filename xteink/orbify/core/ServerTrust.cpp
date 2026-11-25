@@ -15,32 +15,6 @@ bool startsWithNoCase(std::string_view s, std::string_view prefix) {
   return true;
 }
 
-// a.b.c.d with each part 0-255; false for anything else.
-bool parseIpv4(std::string_view s, uint32_t& out) {
-  uint32_t ip = 0;
-  int parts = 0;
-  size_t i = 0;
-  while (parts < 4) {
-    if (i >= s.size() || s[i] < '0' || s[i] > '9') return false;
-    uint32_t part = 0;
-    size_t digits = 0;
-    while (i < s.size() && s[i] >= '0' && s[i] <= '9') {
-      part = part * 10 + static_cast<uint32_t>(s[i] - '0');
-      if (++digits > 3 || part > 255) return false;
-      ++i;
-    }
-    ip = (ip << 8) | part;
-    ++parts;
-    if (parts < 4) {
-      if (i >= s.size() || s[i] != '.') return false;
-      ++i;
-    }
-  }
-  if (i != s.size()) return false;
-  out = ip;
-  return true;
-}
-
 constexpr char HEX[] = "0123456789abcdef";
 
 int hexValue(char c) {
@@ -75,20 +49,10 @@ std::string hostOf(std::string_view url) {
 
 bool isHttps(std::string_view url) { return startsWithNoCase(url, "https://"); }
 
-bool isTailnetHost(std::string_view host, bool tailnetOn) {
-  if (!tailnetOn) return false;
-  uint32_t ip;
-  if (parseIpv4(host, ip)) return (ip & 0xFFC00000u) == 0x64400000u;
-  constexpr std::string_view suffix = ".ts.net";
-  if (host.size() > suffix.size() && host.substr(host.size() - suffix.size()) == suffix) return true;
-  return tailnetOn && !host.empty() && host.find('.') == std::string_view::npos && host.find(':') == std::string_view::npos;
-}
-
-Mode modeFor(bool enabled, std::string_view url, std::string_view serverUrl, bool tailnetOn) {
+Mode modeFor(bool enabled, std::string_view url, std::string_view serverUrl) {
   if (!enabled || !isHttps(url)) return Mode::Unverified;
   const std::string host = hostOf(url);
   if (host.empty() || host != hostOf(serverUrl)) return Mode::Unverified;
-  if (isTailnetHost(host, tailnetOn)) return Mode::Unverified;
   return Mode::Verify;
 }
 

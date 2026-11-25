@@ -8,12 +8,11 @@
 // server's host, so a self-signed or private-CA server works once the user accepts its
 // fingerprint, and a changed certificate asks again ("re-trust").
 //
-// Not verified, as before: tailnet hosts (100.64.0.0/10, *.ts.net, and single-label MagicDNS
-// names while Tailscale is on), whose traffic WireGuard already authenticates, and every host that
-// is not the BookOrbit server. A connection that fails verification never sends the request, so
-// the server's credentials never travel over it.
+// Every HTTPS request to the configured server is verified, including requests over Tailscale.
+// Other hosts keep their existing policy. A connection that fails verification never sends
+// the request, so the server's credentials never travel over it.
 //
-// Pure logic: the device side (src/orbify/ServerTrust.cpp) does the TLS, hashing and storage.
+// Pure logic: the device side (src/orbify/ServerTrustNet.cpp) does the TLS, hashing and storage.
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -25,15 +24,12 @@ namespace orbify::server_trust {
 std::string hostOf(std::string_view url);
 bool isHttps(std::string_view url);
 
-// 100.64.0.0/10 literals, *.ts.net names, and single-label names when Tailscale is on.
-bool isTailnetHost(std::string_view host, bool tailnetOn);
-
 enum class Mode {
-  Unverified,  // as before: no certificate check (switch off, not https, not the server, tailnet)
+  Unverified,  // as before: no certificate check (switch off, not https, not the server)
   Verify,      // the chain must reach a built-in root or the trusted certificate
 };
 // url: the request; serverUrl: the configured BookOrbit server (BookOrbitCredentialStore::getBaseUrl).
-Mode modeFor(bool enabled, std::string_view url, std::string_view serverUrl, bool tailnetOn);
+Mode modeFor(bool enabled, std::string_view url, std::string_view serverUrl);
 
 // The certificate trusted for one server: its host and the certificate (PEM) with its fingerprint.
 struct Anchor {

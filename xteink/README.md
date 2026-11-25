@@ -312,8 +312,8 @@ SHA-256 fingerprint: compare it with your server's (`openssl x509 -noout -finger
 catalog and sync stop connecting. Run Authenticate again: it shows **Server certificate changed**
 and the new fingerprint to trust. The certificate must name the host in the server URL.
 
-Servers reached over Tailscale (`100.x` addresses, `*.ts.net` and short tailnet names) are not
-checked this way: WireGuard already authenticates them.
+HTTPS servers reached over Tailscale are checked in the same way, including `100.x` addresses,
+`*.ts.net` and short tailnet names.
 
 Not on the X3 and C3 X4 (`default`): its flash has no room for the check. There, reach BookOrbit
 over Tailscale rather than a public HTTPS URL on shared Wi-Fi.

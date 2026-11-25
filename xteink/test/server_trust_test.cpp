@@ -17,36 +17,18 @@ int main(int, char**) {
   CHECK(hostOf("books.example.org") == "");
   CHECK(isHttps("HTTPS://x") && !isHttps("http://x"));
 
-  // Tailnet hosts stay unverified: WireGuard authenticates them.
-  CHECK(isTailnetHost("100.64.0.1", true));
-  CHECK(!isTailnetHost("100.64.0.1", false));
-  CHECK(isTailnetHost("100.127.255.254", true));
-  CHECK(!isTailnetHost("100.128.0.1", false));
-  CHECK(!isTailnetHost("100.63.255.255", false));
-  CHECK(isTailnetHost("bookorbit.tail1234.ts.net", true));
-  CHECK(!isTailnetHost("bookorbit.tail1234.ts.net", false));
-  CHECK(!isTailnetHost("ts.net", false));
-  CHECK(isTailnetHost("bookorbit", true));    // MagicDNS short name while Tailscale is on
-  CHECK(!isTailnetHost("bookorbit", false));  // a LAN name otherwise
-  CHECK(!isTailnetHost("192.168.1.10", true));
-  CHECK(!isTailnetHost("books.example.org", true));
-
+  // Every HTTPS request to the configured host is verified, independent of DNS or route.
   const char* server = "https://books.example.org";
-  CHECK(modeFor(true, "https://books.example.org/api/v1/books", server, false) == Mode::Verify);
-  CHECK(modeFor(true, "https://BOOKS.example.org:443/x", server, false) == Mode::Verify);
-  CHECK(modeFor(false, "https://books.example.org/x", server, false) == Mode::Unverified);  // switch off
-  CHECK(modeFor(true, "http://books.example.org/x", server, false) == Mode::Unverified);   // not TLS
-  CHECK(modeFor(true, "https://objects.example.net/cover.jpg", server, false) == Mode::Unverified);  // another host
-  CHECK(modeFor(true, "https://100.101.102.103/x", "https://100.101.102.103", true) == Mode::Unverified);
-  CHECK(modeFor(true, "https://bookorbit.tail1234.ts.net/x", "https://bookorbit.tail1234.ts.net", true) ==
-        Mode::Unverified);
-  CHECK(modeFor(true, "https://bookorbit/x", "https://bookorbit", true) == Mode::Unverified);
-  CHECK(modeFor(true, "https://bookorbit/x", "https://bookorbit", false) == Mode::Verify);
-  CHECK(modeFor(true, "https://192.168.1.10/x", "https://192.168.1.10", true) == Mode::Verify);
-  CHECK(modeFor(true, "https://books.example.org/x", "", false) == Mode::Unverified);
-
-  CHECK(modeFor(true, "https://100.64.0.1/x", "https://100.64.0.1", false) == Mode::Verify);
-  CHECK(modeFor(true, "https://bookorbit.tail1234.ts.net/x", "https://bookorbit.tail1234.ts.net", false) == Mode::Verify);
+  CHECK(modeFor(true, "https://books.example.org/api/v1/books", server) == Mode::Verify);
+  CHECK(modeFor(true, "https://BOOKS.example.org:443/x", server) == Mode::Verify);
+  CHECK(modeFor(false, "https://books.example.org/x", server) == Mode::Unverified);
+  CHECK(modeFor(true, "http://books.example.org/x", server) == Mode::Unverified);
+  CHECK(modeFor(true, "https://objects.example.net/cover.jpg", server) == Mode::Unverified);
+  CHECK(modeFor(true, "https://100.64.0.1/x", "https://100.64.0.1") == Mode::Verify);
+  CHECK(modeFor(true, "https://bookorbit.tail1234.ts.net/x", "https://bookorbit.tail1234.ts.net") == Mode::Verify);
+  CHECK(modeFor(true, "https://bookorbit/x", "https://bookorbit") == Mode::Verify);
+  CHECK(modeFor(true, "https://192.168.1.10/x", "https://192.168.1.10") == Mode::Verify);
+  CHECK(modeFor(true, "https://books.example.org/x", "") == Mode::Unverified);
 
   // The pin.
   uint8_t first[32], second[32];

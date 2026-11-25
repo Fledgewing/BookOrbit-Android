@@ -11,7 +11,6 @@
 #include <mbedtls/sha256.h>
 #include <wolfssl/ssl.h>
 
-#include "Tailnet.h"
 #include "core/ServerTrust.h"
 #include "network/HttpRedirectPolicy.h"
 
@@ -167,7 +166,7 @@ bool presentedCertificate(const std::string& host, uint16_t port, std::string& d
 
 void orbifyServerTrust(freeink::SecureHttpClient& http, const std::string& url) {
   const std::string server = BOOKORBIT_STORE.getBaseUrl();
-  if (modeFor(true, url, server, tailnet_enabled()) == Mode::Unverified) {
+  if (modeFor(true, url, server) == Mode::Unverified) {
     http.setInsecure();
     return;
   }
@@ -179,7 +178,7 @@ namespace orbify::server_tls {
 bool offer(Offer& out) {
   havePending = false;
   const std::string server = BOOKORBIT_STORE.getBaseUrl();
-  if (modeFor(true, server, server, tailnet_enabled()) == Mode::Unverified) return false;
+  if (modeFor(true, server, server) == Mode::Unverified) return false;
   HttpRedirectPolicy::Url url;
   if (!HttpRedirectPolicy::parseUrl(server, url)) return false;
   std::string der;
