@@ -18,7 +18,7 @@ diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
 @@ -69,6 +70,11 @@
  #endif
  constexpr char otaTagPrefix[] = CROSSINK_OTA_TAG_PREFIX;
- 
+
 +#ifndef CROSSINK_OTA_FALLBACK_URL
 +#define CROSSINK_OTA_FALLBACK_URL ""
 +#endif
@@ -26,17 +26,17 @@ diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
 +
  constexpr char latestReleaseUrl[] = CROSSINK_OTA_RELEASE_URL;
  constexpr char releaseListUrl[] = CROSSINK_OTA_RELEASE_LIST_URL;
- 
+
 @@ -180,7 +186,8 @@
    }
- 
+
    totalBytesReceived += static_cast<size_t>(event->data_len);
 -  parser->feed(static_cast<const char*>(event->data), event->data_len);
 +  orbify::ota_manifest::feed(*parser, esp_http_client_get_status_code(event->client),
 +                             static_cast<const char*>(event->data), event->data_len);
    return ESP_OK;
  }
- 
+
 @@ -275,7 +282,7 @@
    esp_http_client_cleanup(client);
    if (err == ESP_OK && (status < 200 || status >= 300)) {
