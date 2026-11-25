@@ -42,6 +42,10 @@ function Rec.observe(it, ctx, raw)
         if it.key == "auto_sync" and not hasHandler(p, "BookOrbitToggleAutoSync") then
             return { available = false, reason = _("BookOrbit changed: Auto-sync can't be turned on") }
         end
+        -- Under OrbiSmart the plugin's further ahead / behind are Orbit's (ko/orbismart.lua); the
+        -- reader's own value, kept for Custom, is the one recommended and reviewed.
+        local saved = OSM and OSM.savedPluginSetting and OSM.savedPluginSetting(it.key)
+        if saved ~= nil then return { available = true, current = saved.value, default = defaults[it.key] } end
         return { available = true, current = p.settings[it.key], default = defaults[it.key] }
     elseif it.kind == "ko" then
         if it.required_by == "wifi" and not S.wifi_via_companion and not raw then
@@ -72,14 +76,20 @@ function Rec.write(it, ctx, value)
     if it.kind == "bo" then
         local p = ctx.p
         if not p then return false end
-        if it.key == "auto_sync" then
+        if OSM and OSM.setSavedPluginSetting and OSM.setSavedPluginSetting(it.key, Recommended.copy(value)) then
+            G_reader_settings:flush()
+            return true
+        elseif it.key == "auto_sync" then
             -- The plugin's own toggle also registers its reader events (main.lua:1416-1448).
             if (p.settings.auto_sync == true) ~= (value == true) then
                 pluginEvent(liveUI(), p, "BookOrbitToggleAutoSync", value == true, true, true)
             end
         else
-            -- Saved the way the plugin's own settings page saves (bookorbit_settings_page.lua:822-825).
-            p.settings[it.key] = Recommended.copy(value)
+            -- Saved the way the plugin's own settings page saves (bookorbit_settings_page.lua:822-825);
+            -- under OrbiSmart into the value kept for Custom.
+            if not (OSM and OSM.setSavedPluginSetting and OSM.setSavedPluginSetting(it.key, Recommended.copy(value))) then
+                p.settings[it.key] = Recommended.copy(value)
+            end
         end
         G_reader_settings:flush()
         return Recommended.equal(p.settings[it.key], value)

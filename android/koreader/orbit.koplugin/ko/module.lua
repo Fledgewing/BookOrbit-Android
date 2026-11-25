@@ -79,7 +79,8 @@ function OrbitAndroid:hookPluginPagePush()
     local p = bookorbit(self.ui)
     if not p or type(p.settings) ~= "table" then return end
     local cur = p.settings.pages_before_update
-    if S.reading_schedule ~= "off" then
+    -- OrbiSmart pushes at a pause instead (docs/design/orbismart.md §3.3).
+    if S.reading_schedule ~= "off" or (OSM and OSM.on()) then
         if S.saved_pages_before_update == nil and (cur or 0) > 0 then
             S.saved_pages_before_update = cur
             p.settings.pages_before_update = 0

@@ -1513,7 +1513,7 @@ test("settings encode: only keys with a time, as wire strings", function()
 end)
 
 test("settings visible: rows show only while their parent has the value", function()
-    local v = { sleep_mode = "off", sleep_style = "overlay", sync_on_sleep = true, wifi_mode = "jit" }
+    local v = { sleep_mode = "off", sleep_style = "overlay", sync_on_sleep = true, wifi_mode = "jit", sync_mode = "custom" }
     eq(SettingsSync.visible(SIDX, "sleep_text", v), false)
     eq(SettingsSync.visible(SIDX, "sleep_text_position", v), false, "grandparent off")
     v.sleep_mode = "current"
@@ -1523,6 +1523,25 @@ test("settings visible: rows show only while their parent has the value", functi
     v.sync_on_sleep = false
     eq(SettingsSync.visible(SIDX, "sleep_cap", v), false)
     eq(SettingsSync.visible(SIDX, "wifi_idle_min", v), true)
+    -- OrbiSmart sets the sync rows and hides them (docs/design/orbismart.md §6); Custom shows them.
+    v.sync_on_sleep = true
+    for _, k in ipairs({ "sync_on_sleep", "sleep_cap", "sync_on_wake", "reading_schedule" }) do
+        eq(SettingsSync.visible(SIDX, k, v), true, k .. " under Custom")
+    end
+    v.sync_mode = "orbismart"
+    for _, k in ipairs({ "sync_on_sleep", "sleep_cap", "sync_on_wake", "reading_schedule" }) do
+        eq(SettingsSync.visible(SIDX, k, v), false, k .. " under OrbiSmart")
+    end
+    eq(SettingsSync.visible(SIDX, "wake_tailscale", v), true)
+    eq(SettingsSync.visible(SIDX, "wifi_mode", v), true, "Wi-Fi mode untouched")
+end)
+
+test("settings schema: Sync (OrbiSmart / Custom) is the sync section's first row", function()
+    local first
+    for _, d in ipairs(SIDX.settings) do if d.section == "sync" then first = d; break end end
+    eq(first.key, "sync_mode")
+    eq(first.default, "orbismart")
+    eq(first.values[1].label, "OrbiSmart (recommended)")
 end)
 
 test("settings schema: every key KOReader reads has a row in its menu", function()

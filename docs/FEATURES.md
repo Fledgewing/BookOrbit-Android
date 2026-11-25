@@ -6,7 +6,7 @@ it ships (AGENTS.md "Features and roadmap").
 
 **Principle: nothing interrupts reading.** While a book is open in front, nothing Orbify adds
 shows, restarts or takes focus; it waits for the next non-reading moment
-([design](design/reading-gate.md)). Exceptions: menus you open, the end-of-book sheet.
+([design](design/reading-gate.md)). Exceptions: menus you open, the end-of-book sheet, and the approved OrbiSmart Yes / No popup.
 
 **yes**: shipped. Firmware is built on CrossInk 2.x only, now the release candidate
 `2.0.0+bookorbit.1-rc3`; CrossInk 1.6 is retired, and readers still on it keep the stable
@@ -22,6 +22,7 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 | Tailnet names (`bookorbit`, `*.ts.net`) for every client on the device | n/a (Tailscale app) | yes | yes | yes |
 | Network brought up before the plugin syncs, and back off after | yes | n/a (firmware does it) | n/a | n/a |
 | Sync on sleep, wake pull, Sync and sleep | yes | n/a (firmware does it) | n/a | n/a |
+| OrbiSmart: furthest-place sync, behind-hold, pause sync, a Yes / No popup for another reader's place (silent only before render), and "Read from here everywhere" queued offline ([design](design/orbismart.md); upstream: [send-time stale-push guard](server-contract.md#the-stale-push-guard-compares-send-times)) | yes | planned | planned | planned: sleep sync only |
 | Sync while reading (time, pages or chapters) | yes | 2.x rc | 2.x rc | no: no memory beside an open book |
 | Wi-Fi modes: Always on, Off while reading, Just in time | yes | n/a | n/a | n/a |
 | Faster Wi-Fi join and catalog boot session | n/a | yes | yes | yes |

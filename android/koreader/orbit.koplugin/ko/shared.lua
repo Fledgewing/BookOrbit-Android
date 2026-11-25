@@ -157,6 +157,8 @@ function Shared.onChange(key, why)
         try(OC and OC.storageCount, "limit changed")
     elseif key == "mirror_covers" then
         if S.mirror_covers then try(Mirror and Mirror.coverPass, "turned on") end
+    elseif key == "sync_mode" then
+        try(OSM and OSM.modeChanged, "companion")
     elseif key == "recommended_choice" then
         try(Rec and Rec.applyChoices, why)
     end
