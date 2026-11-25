@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "audited_revision": "31ebaf257e46a6074e765b73ec12941f7411efc6",
+  "audited_revision": "71c294545a64133dcf8dbd80eae04b733997cbdd",
   "scope": "Source support in main shipping configurations; not a device validation or proof of first release. Inherited reader/server functions are included only to explain the Orbify integration or overlay cuts.",
   "platforms": {
     "android": {
@@ -4914,7 +4914,7 @@
     },
     {
       "id": "setting-patch_update_prerelease",
-      "feature": "Include pre-releases (`patch_update_prerelease`)",
+      "feature": "Include previews and release candidates (`patch_update_prerelease`)",
       "category": "Settings exposure",
       "platforms": {
         "android": {
@@ -5198,8 +5198,8 @@
     }
   ],
   "release_evidence": {
-    "android": "Production Android source and schema match v0.11.3-rc.17; test-only changes excluded. Version is a verified presence baseline, not first introduction.",
-    "xteink": "Entire xteink tree matches xteink-v2.0.0.373+bookorbit.1-rc3 at audit revision. CrossInk 2.x remains pre-release; do not infer stable-device rollout."
+    "android": "Verified presence baseline v0.11.3-rc.17; current main also includes later reader-opening/refresh fixes and the unpublished preview-version policy below. These later changes are not attributed to rc.17.",
+    "xteink": "Verified presence baseline xteink-v2.0.0.373+bookorbit.1-rc3. Current main additionally relabels the OTA opt-in as Include pre-releases; the CrossInk rc suffix describes the upstream base, not overlay readiness."
   },
   "constraints": {
     "run_id": 45688398918,
@@ -5550,6 +5550,42 @@
           "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
           "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
           "line": 1111
+        }
+      ]
+    }
+  ],
+  "post_baseline_changes": [
+    {
+      "note": "Android/plugin updates distinguish Preview, RC and stable, with increasing Android package codes and an opt-in for previews and release candidates. Main targets v0.11.4-preview.1 next; no such release existed at audit time. Xteink rc/beta tag labels describe its upstream CrossInk base, and overlay builds remain pre-releases until that base is stable. See docs/design/release-versions.md.",
+      "evidence": [
+        {
+          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AndroidVersionCode.java",
+          "line": 9
+        },
+        {
+          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Logic.kt",
+          "line": 154
+        },
+        {
+          "path": "xteink/overlay/patches/v2.0/0051-orbify-prerelease-label.patch",
+          "line": 13
+        }
+      ]
+    },
+    {
+      "note": "Current main preserves reader-opening control-flow widgets, retires obsolete crawl progress and stops an old refresh before starting its replacement. These are fixes to existing reading/refresh behaviour, not features first shipped in rc.17.",
+      "evidence": [
+        {
+          "path": "android/koreader/orbit.koplugin/ko/home.lua",
+          "line": 271
+        },
+        {
+          "path": "android/koreader/orbit.koplugin/ko/mirror.lua",
+          "line": 71
+        },
+        {
+          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
+          "line": 219
         }
       ]
     }

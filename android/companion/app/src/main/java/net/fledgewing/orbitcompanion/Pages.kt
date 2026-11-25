@@ -221,7 +221,7 @@ object StatusPanel {
         }
         // A background update is ready: "Install" any time here (the notification waits while reading).
         Updater.readyToInstall()?.let { ready ->
-            root.addView(Ui.row(a, "App version", "Update ready: v${ready.first}", Ui.button(a, "Install", heightDp = 56, sp = 18f) {
+            root.addView(Ui.row(a, "App version", "Update ready: v${Version.parse(ready.first)?.display() ?: ready.first}", Ui.button(a, "Install", heightDp = 56, sp = 18f) {
                 // Through the PIN keypad like the notification's tap (no PIN or unlocked: Android's prompt).
                 a.startActivity(PinActivity.thenInstall(a, ready.second))
             }).apply { tag = "status:install" })

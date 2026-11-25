@@ -193,7 +193,7 @@ jobs:
           git -C "$RUNNER_TEMP/koreader" fetch -q --depth 1 origin "$sha"
           git -C "$RUNNER_TEMP/koreader" checkout -q --detach FETCH_HEAD
 
-      - name: Start into last book without closing or exiting
+      - name: Open last book, Home, history and file browser without exiting
         env:
           ORBIT_KOREADER_SOURCE: ${{ runner.temp }}/koreader
           ORBIT_TEST_ONLY: startup

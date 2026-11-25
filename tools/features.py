@@ -29,6 +29,9 @@ def render(data):
            "a specific deferral or **gap — no reason**. A macro cut proves exclusion, not that enabling it is impossible.", ""]
     for name, text in data["release_evidence"].items():
         out.append(f"- **{name}:** {text}")
+    out += ["", "Current main changes after those release baselines:", ""]
+    for change in data.get("post_baseline_changes", []):
+        out.append(f"- {change['note']} {citations(change['evidence'])}")
     out += ["", "## Counts", "", "Counts include settings exposure as separate rows; they are not feature quality scores.", "",
             "| Platform | ✅ | 🟡 | ❌ | ➖ |", "|---|---:|---:|---:|---:|"]
     for p, meta in platforms.items():
