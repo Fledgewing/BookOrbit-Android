@@ -154,6 +154,16 @@ extra:     net.fledgewing.orbitcompanion.extra.FROM = "other_app"   (optional, h
 extra:     net.fledgewing.orbitcompanion.extra.ROTATION = "portrait" | "landscape" | "reverse_portrait" | "reverse_landscape"   (companions after 0.11.2)
 ```
 
+**Every command is confirmed.** Any app can start KOReader with this extra, so the plugin obeys a
+`COMMAND` only after the companion confirms it sent it: the caller-checked call with method
+`net.fledgewing.orbitcompanion.call.TAKE_COMMAND` and the extra `command`. The companion
+answers `ok = "1"` once for a command it put on KOReader's start in the last 10 minutes
+(`SentCommands`), else `"0"`, and the plugin then ignores the command. The companion puts a
+command only on the pinned KOReader's start (docs/design/security.md). Over USB,
+`tools/sideload-android.sh` asks for the restart with `adb shell content call --uri
+content://net.fledgewing.orbitcompanion.commands --method
+net.fledgewing.orbitcompanion.call.RESTART_KOREADER`, a method only the shell UID may call.
+
 `ROTATION` is how the display is held when Home is pressed (`Display.getRotation()` of the
 default display), named as KOReader's rotation modes the way KOReader's launcher reads the display
 (android-luajit-launcher `extensions/ActivityExtensions.kt:295-302`: on a portrait panel
@@ -294,9 +304,13 @@ patch never locks anyone out.
 
 ### `GET /clicks` (companion 0.4.2+): the click channel
 
-The patch opens `GET /clicks?patch_version=X` on the loopback port 47913 (the only request it
-still answers) and keeps it open. After an HTTP
-200 header, the companion writes one line per event:
+The plugin first asks for a key: the caller-checked call with method
+`net.fledgewing.orbitcompanion.call.CLICKS` answers `key` and `proof` (random, 128 bits each, good
+once within a minute). It then opens `GET /clicks?patch_version=X&key=K` on the loopback port
+47913 (the only request the port answers; without a valid key it answers 404) and keeps it open.
+After an HTTP 200 header, the companion's first line is `ORBIT <proof>`; the plugin ignores every
+line before it and closes a channel whose proof is wrong or missing, so another app listening on
+the port can't pose as the companion. Then one line per event:
 - `SERVICE on|off`: the accessibility service is running, or isn't.
 - `SETTINGS <ms>` (cap `settings2`): a setting changed in the companion; the plugin reads `/status`
   now. The plugin keeps the channel open for this even without a clicker.
