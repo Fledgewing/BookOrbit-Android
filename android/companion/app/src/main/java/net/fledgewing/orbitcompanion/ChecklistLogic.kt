@@ -19,6 +19,7 @@ object Checklist {
     val GROUP_OF: Map<String, Group> = mapOf(
         "disabled" to Group.APPS,
         "koreader" to Group.APPS,
+        "koreader_trust" to Group.APPS,
         "plugin" to Group.APPS,
         "patch" to Group.APPS,
         "signed_in" to Group.BOOKORBIT,
@@ -42,7 +43,7 @@ object Checklist {
 
     /** Needs you order (§3.1): what blocks the most first (a frozen app, installs, sign-in), then group order. */
     val NEED_ORDER = listOf(
-        "disabled", "install_updates", "koreader", "plugin", "patch", "signed_in", "recommended", "sharp_covers",
+        "disabled", "install_updates", "koreader", "koreader_trust", "plugin", "patch", "signed_in", "recommended", "sharp_covers",
         "home", "notifications", "battery", "admin", "clicker", "keyboard", "tailscale", "wifi_test",
     )
 
@@ -54,6 +55,7 @@ object Checklist {
     val LOSS: Map<String, String> = mapOf(
         "disabled" to "it can't start, sync or update.",
         "koreader" to "nothing to read with.",
+        "koreader_trust" to "Orbit ignores KOReader: no sync help, no covers saved, no updates through Orbit.",
         "plugin" to "no library, no sync.",
         "patch" to "new fixes don't reach KOReader.",
         "signed_in" to "nothing syncs.",

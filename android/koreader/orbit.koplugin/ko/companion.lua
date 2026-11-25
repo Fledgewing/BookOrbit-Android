@@ -9,7 +9,14 @@
 Companion = {
     PACKAGE = "net.fledgewing.orbitcompanion",
     PROTOCOL = "1",
-    STATUS_URL = "http://127.0.0.1:47913/status",
+    -- The companion's caller-checked entry (android/docs/INTERFACE.md, docs/design/security.md).
+    AUTHORITY = "net.fledgewing.orbitcompanion.commands",
+    STATUS = "net.fledgewing.orbitcompanion.call.STATUS",
+    -- The certificate that signs every Orbit Companion release (SHA-256; release.yml checks it).
+    -- Nothing goes to an app with the companion's name and another signer.
+    SIGNERS = {
+        ["F5:07:8C:85:F8:23:18:30:C1:F1:8D:93:FE:30:D7:1F:87:93:6C:1D:94:24:F2:D8:15:98:3D:1D:21:A9:0A:15"] = true,
+    },
 }
 Companion.ACTION = {
     -- The cache worker (docs/design/companion-worker.md): a mirror run, a cache check.
@@ -103,14 +110,31 @@ end
 
 installed_cache = { at = -1000, value = "missing", logged = nil }
 
--- "ok", "frozen" (installed but disabled, e.g. by a vendor launcher's app freeze) or "missing".
+-- A BigInteger's hex (leading zeros dropped) as "AB:CD:…", 32 bytes.
+function Companion.fingerprint(hex)
+    hex = string.upper(tostring(hex or ""))
+    if #hex < 64 then hex = string.rep("0", 64 - #hex) .. hex end
+    return (hex:gsub("(%x%x)", "%1:"):gsub(":$", ""))
+end
+
+-- The installed companion is signed by the release certificate (signers: Jni.packageSigners).
+function Companion.signedByUs(signers)
+    if type(signers) ~= "table" or #signers == 0 then return false end
+    for _, s in ipairs(signers) do
+        if not Companion.SIGNERS[s] then return false end
+    end
+    return true
+end
+
+-- "ok", "frozen" (installed but disabled, e.g. by a vendor launcher's app freeze), "untrusted"
+-- (an app with the companion's name and another signer: nothing is sent to it) or "missing".
 function Companion.state()
     local t = now_s()
     if t - installed_cache.at > 30 then
         local ok, v = pcall(android.isPackageEnabled, Companion.PACKAGE)
         local st
         if ok and v == true then
-            st = "ok"
+            st = Companion.signedByUs(Jni.packageSigners(Companion.PACKAGE)) and "ok" or "untrusted"
         else
             local setting = Jni.appEnabledSetting(Companion.PACKAGE)
             st = (setting == nil or setting == false) and "missing" or "frozen"
@@ -120,6 +144,8 @@ function Companion.state()
             installed_cache.logged = st
             if st == "frozen" then
                 log("companion disabled:", Companion.disabledText(), "Wi-Fi can't be switched")
+            elseif st == "untrusted" then
+                log("companion: not signed by Orbify's release key; nothing is sent to it")
             else
                 log("companion", st == "ok" and "available" or "not installed")
             end
@@ -213,19 +239,29 @@ end
 function Companion.problem()
     local st = Companion.state()
     if st == "frozen" then return Companion.disabledText() end
+    if st == "untrusted" then return _("This Orbit Companion is not an Orbify release; Orbit doesn't use it.") end
     if st == "missing" then return _("Orbit Companion is not installed.") end
     return nil
 end
 
 request_seq = 0
 
+-- One command, through the companion's caller-checked call (android/docs/INTERFACE.md). Only
+-- to the companion signed by Orbify's release key (Companion.state), so a look-alike app never
+-- gets a command or the BookOrbit login some carry.
 function Companion.send(action, extras)
     extras = extras or {}
+    local short = action:match("[^.]+$")
+    if Companion.state() ~= "ok" then
+        log("companion", short, "NOT sent:", Companion.state(), extras.reason or "")
+        return false
+    end
     extras.proto = Companion.PROTOCOL
     extras.sender = "org.koreader.launcher"
     extras.patch_version = PATCH_VERSION
-    local ok = Jni.sendBroadcast{ action = action, package = Companion.PACKAGE, extras = extras }
-    log("companion", action:match("[^.]+$"), ok and "sent" or "NOT sent", extras.reason or "")
+    local r = Jni.call(Companion.AUTHORITY, action, extras)
+    local ok = r ~= nil and r.ok == "1"
+    log("companion", short, ok and "sent" or ("NOT sent (" .. tostring(r and r.why or "no call") .. ")"), extras.reason or "")
     return ok
 end
 
@@ -269,25 +305,17 @@ function Companion.bookOpen()
     return okr and type(ReaderUI) == "table" and ReaderUI.instance ~= nil and ReaderUI.instance.document ~= nil
 end
 
-function Companion.status(timeout)
-    local okr, http = pcall(require, "socket.http")
-    if not okr then return nil end
-    local socket = require("socket")
-    local socketutil = require("socketutil")
-    local ltn12 = require("ltn12")
-    local body = {}
-    -- Loopback only (never Wi-Fi), so it answers at once or not at all: the UI thread waits at
-    -- most `timeout` (1 s), well under Android's 5 s input timeout.
-    socketutil:set_timeout(timeout or 1, timeout or 1)
-    -- patch_version tells the companion which patch is running (its "restart to finish" row).
-    -- book (0.5.2+): a book is open, so the companion waits with a restart until it closes.
-    local url = Companion.STATUS_URL .. "?patch_version=" .. PATCH_VERSION .. "&book=" .. (Companion.bookOpen() and "1" or "0")
-    local code = socket.skip(1, http.request{ url = url, sink = ltn12.sink.table(body) })
-    socketutil:reset_timeout()
-    if code ~= 200 then return nil end
+-- The companion's status (a binder call on this device: it answers at once). nil when the
+-- companion isn't there, isn't ours or its service isn't running.
+-- patch_version tells the companion which plugin is running (its "restart to finish" row).
+-- book: a book is open, so the companion waits with a restart until it closes.
+function Companion.status()
+    if Companion.state() ~= "ok" then return nil end
+    local r = Jni.call(Companion.AUTHORITY, Companion.STATUS, { patch_version = PATCH_VERSION, book = Companion.bookOpen() and "1" or "0" })
+    if not r or r.ok ~= "1" or not r.status then return nil end
     local okj, json = pcall(require, "json")
     if not okj then return {} end
-    local okd, data = pcall(json.decode, table.concat(body))
+    local okd, data = pcall(json.decode, r.status)
     return okd and type(data) == "table" and data or {}
 end
 
