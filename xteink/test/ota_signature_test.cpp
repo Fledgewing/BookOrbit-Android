@@ -1,3 +1,4 @@
+// @fixture release-signing/xteink-feed.json
 // The signed-update OTA scenario (overlay patch 0050, docs/design/release-signing.md), on the host:
 // the updater's own release parser reads the feed (shared/fixtures/release-signing/xteink-feed.json)
 // in network-sized chunks, then the updater's check (UpdateSignature::checkDownload) decides on the
