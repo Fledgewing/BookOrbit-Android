@@ -1962,9 +1962,9 @@
           "version": "v0.11.3-rc.17"
         },
         "x4_pro": {
-          "status": "partial",
+          "status": "supported",
           "note": "Public hosts verified or fingerprint trusted; tailnet exempt",
-          "reason": "deliberately deferred: tailnet exemption in docs/design/server-tls.md",
+          "reason": null,
           "evidence": [
             {
               "path": "xteink/orbify/ServerTrustNet.cpp",
@@ -1978,9 +1978,9 @@
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         },
         "x4": {
-          "status": "partial",
+          "status": "supported",
           "note": "Public hosts verified or fingerprint trusted; tailnet exempt",
-          "reason": "deliberately deferred: tailnet exemption in docs/design/server-tls.md",
+          "reason": null,
           "evidence": [
             {
               "path": "xteink/orbify/ServerTrustNet.cpp",
