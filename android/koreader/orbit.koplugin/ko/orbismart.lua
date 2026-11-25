@@ -304,6 +304,9 @@ function OSM.onPulled(digest, body)
     if type(body) ~= "table" or body.percentage == nil then return end
     local rec = OSM.rec(digest, true)
     rec.server = remoteOf(body)
+    -- A standing reset is re-dated on each GET (pinned koreader.service.ts:579-589), so No
+    -- covers that standing place until normal progress returns, not every future reset.
+    if body.device_id ~= RESET_DEVICE_ID or body.percentage ~= 0 then rec.declined_reset = nil end
     saveSettings()
     local ui = liveUI and liveUI() or nil
     local p = bookorbit(ui)

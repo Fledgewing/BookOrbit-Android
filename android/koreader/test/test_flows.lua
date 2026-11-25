@@ -5657,6 +5657,28 @@ test("orbismart: after render, No stays, pushes nothing and never asks again for
     osmAnswer(false)
 end)
 
+test("orbismart: No declines a standing reset until normal progress returns", function()
+    local ui, m, p = osmBook(120, {})
+    run(1)
+    OSM.installApi()
+    local function reset(at)
+        OSM.onPulled("d1", { percentage = 0, progress = "/p0", timestamp = at,
+            device = "web", device_id = "bookorbit-web" })
+        run(1)
+    end
+    reset(5000)
+    ok(OSM.popup, "reset asks")
+    osmAnswer(false)
+    reset(5001)
+    eq(OSM.popup, nil, "same standing reset was only re-dated")
+    OSM.onPulled("d1", { percentage = 0.4, progress = "/p120", timestamp = 6000, device_id = "other" })
+    run(1)
+    eq(osmRec().declined_reset, nil, "normal progress ends the declined reset")
+    reset(7000)
+    ok(OSM.popup, "a later reset asks again")
+    osmAnswer(false)
+end)
+
 test("orbismart: a further place found while reading (a pause) asks once, no silent jump", function()
     local ui, m, p = osmBook(100, nil)
     osmServer(100, 4000)
