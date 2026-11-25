@@ -17,14 +17,17 @@ CrossInk 2.x only; 1.6 is retired).
 The release after 0.11.3 graduates from release candidates. Built in parallel on the
 `feature/0.12` branch while 0.11.3 stabilises on `main`; design and mockups need approval first
 ([BookSync Home design](docs/design/booksync-home/DESIGN.md), in progress). This is the first step
-of [backend independence](#planned-backend-independence): BookSync owns the screens and BookOrbit
-becomes a data source.
+of [backend independence](#planned-backend-independence): BookSync owns the screens on Android and X4 together and BookOrbit
+becomes a data source. X3 is conditional on measured fit. The later server-package
+phase does not defer owned X4 Home; plain-base cutover follows adapter completeness.
 
 | Outcome | Platforms | Status |
 |---|---|---|
-| **BookSync Home** replaces the BookOrbit plugin's Home: every section rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android; X4 Pro, X4 after | designing |
-| **Tap to download** (Next 5) on Home, lists, series and detail. | Android; Xteink after | designing |
-| **Series view** (Next 6): every book in order, on device or server only, read state, download next. | Android; Xteink after | designing |
+| **BookSync Home** replaces the BookOrbit Home on Android and Xteink: every section rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android, X4 Pro, X4; X3 if fit passes | designing (W36; 0.12 together) |
+| **Tap to download** (Next 5) on Home, lists, series and detail. | Android, X4 Pro, X4; X3 if fit passes | designing (W36; 0.12 together) |
+| **Series view** (Next 6): every book in order, on device or server only, read state, download next. | Android, X4 Pro, X4; X3 if fit passes | designing (W36; 0.12 together) |
+| **Owned Xteink adapter and firmware path**: Home reads our SD database through our adapter in 0.12; replace fork sync/download/login, then cut over to plain CrossInk + our layer after separate base-switch approval. | X4 Pro, X4; X3 if fit passes | designing ([audit and stages](docs/design/booksync-home/DESIGN.md#82-what-currently-depends-on-crossink-bookorbit)) |
+| **One BookSync version** from 0.12 across companion, plugin and firmware; CrossInk version is base metadata, with an explicit legacy updater transition. | Android, X4 Pro, X4, X3 | designing ([version contract](docs/design/booksync-home/DESIGN.md#87-one-booksync-version-from-012)) |
 | **Add-on mode and setup checklist** (Next 10, 10a). | Android | approved items carried over |
 | **Cleaner menus** (Later 8b) and **no visible app switches** (Later 9) where the new Home makes them small. | Android | stretch |
 
@@ -82,4 +85,3 @@ and any UI mockups still need approval before implementation.
 |---|---|---|---|
 | Submit the companion for Google Play Protect review. | Android | idea | |
 | X3 parity review for each feature above. | X3 | idea | |
-| **Shared Orbify release name**: one name (e.g. "Orbify 0.12") shown in the companion, the plugin and the Xteink About screens and in release titles, each with its own technical version underneath; marks which shared feature set (e.g. battery stats) a build has. Update logic and tags unchanged. | Android, Xteink | idea | |
