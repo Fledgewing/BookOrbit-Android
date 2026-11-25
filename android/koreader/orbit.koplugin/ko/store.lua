@@ -11,7 +11,7 @@
 -- A busy or broken database is a miss, never an error on screen.
 ---------------------------------------------------------------------------------------------
 
-Store = { VERSION = 1, FILE = "orbit.db" }
+Store = { VERSION = 1, FILE = "orbit.db", memo = {}, memo_order = {} }
 
 function Store.path() return OC.dir() .. "/" .. Store.FILE end
 
@@ -39,37 +39,56 @@ end
 
 -- Runs fn(conn) in one read transaction. -> fn's result, or nil (logged once per kind of failure).
 local function within(owner, what, fn)
+    local memo_key = Store.path() .. "|" .. tostring(owner) .. "|" .. what
+    local function fallback(err)
+        if Db.code(err) == "busy" or Db.code(err) == "locked" then
+            local m = Store.memo[memo_key]
+            if m then return m[1], m[2] end
+        end
+    end
     local conn, err = Store.conn(owner)
     if not conn then
         if err ~= "missing" and Store.last_err ~= tostring(err) then log("store:", what, "not read:", tostring(err)) end
         Store.last_err = tostring(err)
-        return nil
+        return fallback(err)
     end
     local okb = pcall(conn.exec, conn, "BEGIN")
     local okf, r1, r2 = pcall(fn, conn)
     if okb then pcall(conn.exec, conn, "COMMIT") end
     if not okf then
         log("store:", what, "failed:", (tostring(r1):gsub("\n.*", "")))
-        return nil
+        return fallback(r1)
     end
     Store.last_err = nil
+    if r1 ~= nil then
+        if not Store.memo[memo_key] then
+            table.insert(Store.memo_order, memo_key)
+            if #Store.memo_order > 64 then Store.memo[table.remove(Store.memo_order, 1)] = nil end
+        end
+        Store.memo[memo_key] = { r1, r2 }
+    else Store.memo[memo_key] = nil end
     return r1, r2
 end
 
 -- Rows of a prepared query: { row, ... }, each { col1, col2, ... } as Lua values (blobs as strings).
 local function rows(conn, sql, ...)
     local st = conn:prepare(sql)
-    if select("#", ...) > 0 then st:bind(...) end
-    local out, ncol = {}, st:_ncol()
-    while true do
-        local r = st:step()
-        if not r then break end
-        local row = {}
-        for i = 1, ncol do row[i] = txt(r[i]) end
-        table.insert(out, row)
-    end
+    local args = { n = select("#", ...), ... }
+    local okr, result = pcall(function()
+        if args.n > 0 then st:bind(unpack(args, 1, args.n)) end
+        local out, ncol = {}, st:_ncol()
+        while true do
+            local r = st:step()
+            if not r then break end
+            local row = {}
+            for i = 1, ncol do row[i] = txt(r[i]) end
+            table.insert(out, row)
+        end
+        return out
+    end)
     st:close()
-    return out
+    if not okr then error(result, 0) end
+    return result
 end
 Store.rows = rows
 
@@ -100,7 +119,7 @@ end
 -- What the cache holds for a read (OC.lookup): { key, body, validated_at, stale, path } or nil.
 -- template: the plugin's detail request with Mirror.SENTINEL for the id (Mirror.detailPath).
 function Store.read(owner, key, path, template)
-    return within(owner, "read", function(conn)
+    return within(owner, "read:" .. key, function(conn)
         local w = Cache.listWindow(path)
         local e
         if w then
@@ -127,7 +146,7 @@ function Store.search(owner, path)
     local q = Cache.parseQuery((tostring(path):match("%?(.*)$")) or "")
     local words = Cache.searchWords(q.q)
     if #words == 0 then return nil end
-    return within(owner, "search", function(conn)
+    return within(owner, "search:" .. path, function(conn)
         local where = {}
         for _ in ipairs(words) do table.insert(where, "search LIKE ? ESCAPE '\\'") end
         local cond = "item IS NOT NULL AND " .. table.concat(where, " AND ")
@@ -156,7 +175,7 @@ end
 
 -- "Save every cover for offline" keeps this cover file (the plugin's pruner asks per file).
 function Store.coverKept(owner, name)
-    return within(owner, "cover", function(conn)
+    return within(owner, "cover:" .. name, function(conn)
         return rows(conn, "SELECT 1 FROM cover_keep WHERE name = ?", name)[1] ~= nil
     end) == true
 end

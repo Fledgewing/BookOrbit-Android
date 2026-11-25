@@ -57,8 +57,10 @@ object Worker {
     var progress: Long? = null
         private set
 
-    /** "Saving BookOrbit for offline · 37%" while a Full refresh runs, else null. */
-    fun progressLine(): String? = if (mirrorRunning) MirrorLogic.progressLine(progress) else null
+    /** "Full refresh · 37%" while a Full refresh runs, else null. */
+    @Volatile private var manualRefresh = false
+
+    fun progressLine(): String? = if (mirrorRunning && manualRefresh) MirrorLogic.progressLine(progress) else null
 
     private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, onProgress = { progress = it }, places = Places.roots()).also { worker = it }
 
@@ -206,6 +208,7 @@ object Worker {
                 if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) { thread = null; return }
                 pending.also { pending = null }
             } ?: continue
+            manualRefresh = p.first.m["manual"] == true
             mirrorRunning = true
             try {
                 val why = worker().run(p.first, p.second) { drainChecks() }

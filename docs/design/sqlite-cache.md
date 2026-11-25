@@ -122,10 +122,42 @@ Full refresh is the number of books, not the number of list memberships. `jobs` 
 read of page 3 in 20s and a saved page of 100 use the same rows; the page-size probing
 (`Mirror.pageSize`, three `io.open`s per list miss) and the per-size page files go away.
 
+## Cache lifetime and incremental refresh (rc.8 feedback, W6)
+
+The cache is kept indefinitely. There is no scheduled Full refresh and no library-version-triggered
+Full refresh; the old interval settings are removed from both settings surfaces. Only a manual
+Full refresh starts a new full run. A paused legacy run may resume silently; a run the reader
+started in this KOReader session may keep its badge when resumed.
+
+On network-up, wake or Home, at most once per 15 minutes and only when already connected and not
+reading, the companion checks `/koreader/plugin/catalog/books?sort=recently_updated&order=desc`
+in pages of 100. It never turns Wi-Fi on. The pinned server supports this sort
+(`c1dd6b4f`, `server/src/modules/koreader/dto/koreader-catalog-query.dto.ts:17-26`,
+`server/src/modules/koreader/koreader-catalog.service.ts:1568-1569`); it orders by book `updatedAt`
+then id (`server/src/modules/opds/opds-book.service.ts:91-92`). The DTO has no `since` or
+`updatedAt` filter (`koreader-catalog-query.dto.ts:64-157`), and catalog responses have no ETag
+([contract](../server-contract.md#catalog-replies-carry-no-version)).
+
+The worker stops below the last successful timestamp watermark, including the entire boundary
+timestamp tie, even across pages. It compares items before overwriting them and fetches details
+and optional covers only for changed or missing books. Failed details keep a dirty marker and
+failed scans do not advance the watermark. A complete Full refresh establishes the watermark;
+ordinary browsing cannot advance it. Unchanged libraries normally cost one list-page request,
+with no details or covers; a large timestamp tie can require more pages.
+
+Membership has no change cursor. When books change, or the progress sweep reports a different
+library version, saved list pages are rechecked, discovering new section lists and membership.
+These are necessary list requests, not a Full refresh: unchanged books do not fetch details or
+covers again. A membership-only edit that changes neither a book timestamp nor libraryVersion
+cannot be discovered by the cheap probe. Normal browse checks / explicit Refresh still recheck
+those replies; manual Full refresh remains the complete snapshot operation. No unsupported
+`since` or conditional-list request is sent. Xteink's separate cache is unchanged by this Android
+SQLite correction; it has no scheduled SQLite Full refresh to remove.
+
 ## How KOReader reads
 
-All reads are in `ko/db.lua`: one connection, opened `SQ3.open(path, "ro")`, busy timeout 2 s
-(`conn:set_busy_timeout`), prepared statements kept. Each read below runs inside `BEGIN` ...
+All reads are in `ko/db.lua`: one connection, opened `SQ3.open(path, "ro")`, busy timeout 20 ms
+(`conn:set_busy_timeout`). Each read below runs inside `BEGIN` ...
 `COMMIT` (a deferred read transaction), so its two queries see one snapshot.
 
 - **A list page** (`Cache.listWindow(path)` gives identity, offset and size):
@@ -142,6 +174,12 @@ All reads are in `ko/db.lua`: one connection, opened `SQ3.open(path, "ro")`, bus
   ANDed; the reply has the server's list shape. A scan of about 10,000 short rows: a few ms.
 - **Anything else** (Home, the dashboard): `SELECT body, validated_at, stale FROM entries WHERE key = ?`.
 
+A busy/locked read returns its last successful result from a bounded 64-result, per-owner and
+per-path memo, or a cache miss if there is none. Other failures never use that fallback. Each
+SQLite wait is capped at 20 ms, including schema and owner checks; the exclusive-lock flow test
+asserts a UI read returns in under 100 ms. The stress test child may use a longer timeout; its
+1,950 ms measured maximum must never become a UI-path timeout.
+
 No read decodes more than the rows it returns. Nothing in KOReader reads a whole file that grows
 with the library (guard in `test_flows.lua`, below).
 
@@ -157,7 +195,8 @@ COMMIT. So:
 
 - a read that starts during a write transaction reads the last committed state;
 - a read that starts while a commit is being written waits (busy timeout) and then reads the new
-  state; a commit is one page of results (at most 100 rows), a few ms to tens of ms;
+  state, or uses the bounded cached fallback after 20 ms. Landed replies are committed in
+  batches of at most eight jobs; a list job still contains up to 100 positions;
 - a reader never sees a half-written transaction: either the journal is still hot and SQLite
   refuses (`SQLITE_BUSY`), or the commit finished.
 - If the companion dies mid-commit, the journal is hot. A read-only connection cannot roll it back
@@ -226,11 +265,11 @@ it and never goes down (`max` with the last one shown; 100 only when the run fin
 so a book named by 6 lists is fetched once. A Refresh's recheck rechecks list pages and fetches
 details only for books that are new to `books`.
 
-**A pipeline, not batches.** A fixed number of requests in flight (`PARALLEL` = 6), refilled as
+**A pipeline, not batches.** A fixed number of requests in flight (`PARALLEL` = 8), refilled as
 each finishes, with 4 jobs queued per pool thread (`AHEAD`) so the pool never waits on a write;
-covers on their own pool (`COVER_PARALLEL` = 4), picked from their own end of the queue so they run
+covers on their own pool (`COVER_PARALLEL` = 6), picked from their own end of the queue so they run
 alongside the details, not after them. One writer thread takes landed replies and writes them in
-transactions of up to 100 replies or 250 ms (`BATCH`, `BATCH_MS`). Network, parse and disk overlap.
+transactions of up to 8 replies or 20 ms (`BATCH`, `BATCH_MS`). Network, parse and disk overlap.
 
 **Speed (measured).** `CacheWorkerBench` (`ORBIFY_BENCH=1`, JVM, a server answering in 60 ms, 2,000
 books, covers on: 4,040 requests), the same test on both versions:
@@ -247,6 +286,26 @@ storage; at rc.6's measured 10 items/s, the same projection gives about 20 min f
 then, and the pipeline's 4.7 times about 4-5 min. Covers are the bound with "Save every cover" on;
 without it a run is details and lists only.
 
+**W6 before/after (same host and running stage 0 kit).** Baseline: six requests / four covers,
+100 replies per write; after: eight requests / six covers, eight replies per write. With 59 kit
+books and 75 requests, baseline was 0.4 s / 195 items/s, after 0.7 s / 100 items/s. The small,
+low-latency kit regresses because it pays for more commits (4 batches versus 22); its maximum
+batch write falls from 6 ms to 4 ms. Do not treat this small library as a device speed claim.
+
+The identical 2,000-book, 60-ms-latency benchmark with all covers enabled sends 4,040 requests
+on both versions: 33.4 s before, 21.7 s after (35% less elapsed time). A linear 10,000-book
+projection is 2.8 versus 1.8 minutes **in that synthetic latency model**. Maximum batch write
+was 59 versus 25 ms. The M8C baseline remains 35–43 items/s and about 11 minutes for 10,300
+books / roughly 24,410 requests; after timing needs a user-run device test. Laptop and device
+commit costs differ, so neither projection promises a handheld completion time.
+
+Request audit: full details cannot be replaced by list bodies or the manifest (different
+fields; no batch detail endpoint), and list pages are capped at 100. A complete snapshot still
+needs every section/list page and one detail per book. Jobs already deduplicate shared books
+and covers. The avoidable requests fixed here are unchanged details and all the unchanged covers
+on a changed recheck page, and existing series-neighbour details during an incremental run.
+Covers remain opt-in for the whole library; there is no new blanket cover download.
+
 **Timing lines.** Every 10 s: `mirror: 2,140/10,512 (20%) · 41 items/s · write 18 ms/batch
 (max 64) · ETA 3 min`. At the end: `mirror: Full refresh done: 10,300 books, 4,210 lists, 14,903
 requests in 4 min 12 s (59 items/s), 0 errors`.
@@ -255,7 +314,7 @@ requests in 4 min 12 s (59 items/s), 0 errors`.
 
 - **On start**, one bottom popup: "Full refresh in progress · about 3% done · you can keep reading
   and browsing while it loads". It closes by itself after 6 s or on a tap. Only for a Full refresh
-  the reader started; an automatic one starts with the badge alone.
+  the reader started. Background work and restored legacy runs have neither popup nor badge.
 - **Then a small % badge** in the bottom-left corner: "37%". A tap expands it to the full message
   (done and total, estimated time left, errors so far); another tap collapses it. At the end it
   shows "Done" for 5 s, then goes.
@@ -270,7 +329,7 @@ requests in 4 min 12 s (59 items/s), 0 errors`.
   margin, below the text area, and is passive (no tap): a tap there stays KOReader's own corner
   gesture. Nothing else is shown in a book: the badge is the one exception the user asked for, and
   it never takes focus (`reading-gate.md`).
-- **The companion** shows the same % in its status area ("Saving BookOrbit for offline · 37%").
+- **The companion** shows the same % in its status area ("Full refresh · 37%").
 
 ## Xteink: the same rule
 

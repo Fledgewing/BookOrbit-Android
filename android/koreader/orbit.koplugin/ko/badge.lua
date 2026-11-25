@@ -19,10 +19,10 @@ local function nowT() return OC.now() end
 -- "37%".
 function Badge.short(pct) return string.format("%d%%", pct or 0) end
 
--- "Saving for offline · 37% · 2,140 of 10,512 · about 3 min left · 2 errors".
+-- "Full refresh · 37% · 2,140 of 10,512 · about 3 min left · 2 errors".
 function Badge.long(s, pct)
     s = s or {}
-    local parts = { string.format(_("Saving for offline · %d%%"), pct or 0) }
+    local parts = { string.format(_("Full refresh · %d%%"), pct or 0) }
     local total = math.max(tonumber(s.total) or 0, tonumber(s.done) or 0)
     if total > 0 then table.insert(parts, string.format(_("%s of %s"), Cache.count(s.done or 0), Cache.count(total))) end
     local eta = tonumber(s.eta_s)
@@ -138,7 +138,7 @@ end
 function Badge.start(manual, s)
     if Badge.closing then UIManager:unschedule(Badge.closing); Badge.closing = nil end
     Badge.pct, Badge.text_now, Badge.expanded, Badge.status, Badge.running = math.max(0, tonumber(s and s.pct) or 0), nil, nil, s, true
-    if manual then orbitNote(Badge.popupText(Badge.pct), Badge.POPUP_S) end
+    if manual then orbitNote(Badge.popupText(Badge.pct), Badge.POPUP_S, true) end
     Badge.draw()
 end
 
