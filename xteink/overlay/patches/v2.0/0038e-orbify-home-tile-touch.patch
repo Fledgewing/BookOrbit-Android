@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify home tile touch
+
+Align the Home tile touch target and consume the menu-closing swipe.
+
 diff --git a/src/SilentRestart.h b/src/SilentRestart.h
 index be42ab3..c224f48 100644
 --- a/src/SilentRestart.h

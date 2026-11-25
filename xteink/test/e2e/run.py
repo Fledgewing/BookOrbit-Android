@@ -9,7 +9,7 @@ The checkout has the overlay applied and the profile's simulator built
 (`pio run -e x4-pro-simulator`; profiles: x4-pro, x4-classic, x3). Each scenario gets its own SD
 card and fault rules; it asserts on the firmware's log, the card and the proxy's request log, and
 never compares screenshots (some scenarios check that a rectangle the log names has ink: the catalog's
-stamp, patch 0038; the Full refresh badge and the Tailscale rows, 0041). Screenshots, logs and the proxy log land in --out (CI uploads them). Exit 1 on any
+stamp; the Full refresh badge and the Tailscale rows, 0041). Screenshots, logs and the proxy log land in --out (CI uploads them). Exit 1 on any
 failure. Scenarios are named after the rows of the design's §1 table they cover (X1-X9).
 """
 
@@ -120,7 +120,7 @@ def sync_through_proxy(ctx: Context, tmp: Path) -> None:
 def mirror_urls(ctx: Context, tmp: Path) -> None:
     """X5: the offline mirror's list requests reach the server as the server reads them. A query
     whose separator turned into a space ("sort=recently_read readStatus=reading") was answered 400
-    and those lists were never saved (patch 0037 S6). Three sleep syncs: 0037 walks the mirror in
+    and those lists were never saved (the mirror URL separator fix). Three sleep syncs: the mirror runs the mirror in
     slices of 10 requests per sleep."""
     card = ctx.card(tmp)
     for n in range(1, 4):
@@ -161,7 +161,7 @@ def copy_refresh_sleep_sync(ctx: Context, tmp: Path) -> None:
 
 @scenario(*X4S)
 def copy_refresh_tight_heap(ctx: Context, tmp: Path) -> None:
-    """X6 on the heap an X4 Pro has beside Tailscale (patch 0037 S1, S7): 39 KB free with a 20 KB
+    """X6 on the heap an X4 Pro has beside Tailscale (the shared-session heap floor): 39 KB free with a 20 KB
     largest block. The sync's TLS needed a 24 KB block and refused the match check; the X4s now
     need 8 KB (their large buffers are in PSRAM), and the refresh rides the sync's connection."""
     card = ctx.card(tmp)
@@ -176,8 +176,7 @@ def copy_refresh_tight_heap(ctx: Context, tmp: Path) -> None:
 @scenario(*X4S)
 def sleep_sync_device_heap(ctx: Context, tmp: Path) -> None:
     """X3/X6 on the heap the X4 Pro's sleep sync had on .167: 21 KB of internal RAM free with a 7 KB
-    largest block once Tailscale is up. Before patch
-    0038 the match check's reply was refused (match check failed (8)), the copy stopped as heap
+    largest block once Tailscale is up. Before the TLS PSRAM hook the match check's reply was refused (match check failed (8)), the copy stopped as heap
     starved and covers were deferred. With wolfSSL in PSRAM the X4s' floors count only what a
     request still needs of internal RAM (12 KB beside a kept session, 8 KB while a transfer runs)
     and a reply of 4 KB or more is measured against PSRAM: the copy check, the copy's download
@@ -204,8 +203,7 @@ def sleep_sync_device_heap(ctx: Context, tmp: Path) -> None:
 
 @scenario(*X4S)
 def heap_floor_waits(ctx: Context, tmp: Path) -> None:
-    """X3: the sleep sync's extras start no request when the heap is under the floor (patch 0037
-    S1-S4, OrbifyHeap): the heap falls to 10 KB (under the X4s' 12 KB floor, patch 0038) while the
+    """X3: the sleep sync's extras start no request when the heap is under the floor (OrbifyHeap): the heap falls to 10 KB (under the X4s' 12 KB floor) while the
     mirror's first request is held by the proxy; the mirror then waits for the next sync instead of
     opening another request."""
     card = ctx.card(tmp)
@@ -223,9 +221,9 @@ def heap_floor_waits(ctx: Context, tmp: Path) -> None:
 @scenario(*X4S)
 def next_cover_heap_floor(ctx: Context, tmp: Path) -> None:
     """X9: the End-of-Book page's next cover. A sync on its own connection fetches it only with
-    42 KB free and a 20 KB block on the X3, 20 KB and 4 KB on the X4s (wolfSSL in PSRAM, patch 0038);
+    42 KB free and a 20 KB block on the X3, 20 KB and 4 KB on the X4s (wolfSSL in PSRAM);
     under that it is left for the next sync. The sleep sync then fetches it on the connection it lends and decodes it with the radio
-    off (patches 0036, 0037)."""
+    off."""
     card = ctx.card(tmp)
     path = card.add_book(ctx.source("eob_series_middle"))
     card.download_index([(ctx.book("eob_series_middle")["id"], path)])
@@ -275,7 +273,7 @@ def eob_page_finish(ctx: Context, tmp: Path) -> None:
 
 @scenario("x4-pro")
 def eob_series_home_swipe(ctx: Context, tmp: Path) -> None:
-    """X7 (patch 0037 S9): the page of a series' middle book carries the series line from the card
+    """X7 (the series card and Home swipe): the page of a series' middle book carries the series line from the card
     a sync stored, and the bottom-edge swipe up leaves it for Home."""
     card = ctx.card(tmp)
     path = open_at_end(ctx, card, "eob_series_middle")
@@ -294,7 +292,7 @@ def eob_series_home_swipe(ctx: Context, tmp: Path) -> None:
 @scenario(*X4S)
 def sleep_sync_power_wake(ctx: Context, tmp: Path) -> None:
     """X1: a Power press while one sleep-sync step is blocked (the proxy holds the progress request
-    for 50 s) wakes the device within the watcher's grace, not after the step (patch 0037 S5)."""
+    for 50 s) wakes the device within the watcher's grace, not after the step."""
     card = ctx.card(tmp)
     path = card.add_book(ctx.source("Standalone 05"))
     card.open_book(path)
@@ -333,7 +331,7 @@ def sleep_sync_quick_wake(ctx: Context, tmp: Path) -> None:
 @scenario("x4-pro")
 def sleep_sync_budget(ctx: Context, tmp: Path) -> None:
     """X2: a sleep sync on a slow server ends at its 240 s budget (+20 s grace) and the device
-    sleeps (patch 0037 S5). Every request is held 36 s: the sync's own seven take 250 s."""
+    sleeps. Every request is held 36 s: the sync's own seven take 250 s."""
     card = ctx.card(tmp)
     path = card.add_book(ctx.source("Standalone 06"))
     card.open_book(path)
@@ -349,7 +347,7 @@ def sleep_sync_budget(ctx: Context, tmp: Path) -> None:
 
 @scenario("x4-classic")
 def home_tile_refresh(ctx: Context, tmp: Path) -> None:
-    """X8 (patch 0037 S12): on the BookOrbit Home, Confirm on the sync tile refreshes Home
+    """X8 (the Home sync tile): on the BookOrbit Home, Confirm on the sync tile refreshes Home
     ("Refreshing…"); Confirm held 1 s asks for a Full refresh, which the refresh boot runs."""
     card = ctx.card(tmp)
     card.theme(UI_THEME_BOOKORBIT)

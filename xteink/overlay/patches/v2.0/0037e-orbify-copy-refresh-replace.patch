@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify copy refresh replace
+
+Replace changed copies during sync, carrying unfinished work to the next run.
+
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
 index 5e89b07..7a873b5 100644
 --- a/lib/I18n/translations/english.yaml

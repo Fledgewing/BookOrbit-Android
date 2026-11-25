@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify wake press timing
+
+Measure the wake press while the sleep sync watcher is running.
+
 diff --git a/lib/GfxRenderer/GfxRenderer.cpp b/lib/GfxRenderer/GfxRenderer.cpp
 index 9aeaf60..d40ddb6 100644
 --- a/lib/GfxRenderer/GfxRenderer.cpp

@@ -190,7 +190,7 @@ Outcome refreshOne(const orbify::refresh::Entry& entry, bool (*cancelled)()) {
     LOG_INF(TAG, "Copy refresh: %s is gone from the card; dropped", entry.path.c_str());
     return Outcome::GiveUp;
   }
-  // On a connection already open (the sleep sync lends its own, patch 0037) a request needs no
+  // On a connection already open (the sleep sync lends its own) a request needs no
   // TLS session of its own, only room beside the one there; a new connection needs the block.
   const bool kept = BookOrbitCatalogClient::keptConnection() != nullptr;
   if (kept && !OrbifyHeap::roomForRequest("Copy refresh")) return Outcome::Stop;

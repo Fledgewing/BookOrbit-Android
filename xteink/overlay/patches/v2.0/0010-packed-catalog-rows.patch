@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: packed catalog rows
+
+Pack catalog row strings to reduce heap fragmentation.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index 954d9541..f333c4d8 100644
 --- a/include/CrossInkTailnetCuts.h

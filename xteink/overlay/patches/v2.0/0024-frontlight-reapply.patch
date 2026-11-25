@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: frontlight reapply
+
+Restore the frontlight after the first paint on wake.
+
 diff --git a/include/CrossInkHalFrontlight.h b/include/CrossInkHalFrontlight.h
 index 6a474174..2cabf3a7 100644
 --- a/include/CrossInkHalFrontlight.h

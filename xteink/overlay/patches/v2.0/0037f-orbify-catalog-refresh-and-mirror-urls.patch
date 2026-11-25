@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify catalog refresh and mirror urls
+
+Build valid mirror list URLs and show catalog refresh feedback.
+
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
 index 7a873b5..8aa8d40 100644
 --- a/lib/I18n/translations/english.yaml

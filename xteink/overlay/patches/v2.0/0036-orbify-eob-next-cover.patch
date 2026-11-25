@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify eob next cover
+
+Fetch and display the next book cover on the End-of-Book page.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index 9ea55bd8..ea84f00a 100644
 --- a/include/CrossInkTailnetCuts.h

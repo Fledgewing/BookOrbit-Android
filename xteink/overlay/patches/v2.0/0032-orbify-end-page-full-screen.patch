@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify end page full screen
+
+Render the End-of-Book page with the approved full-screen layout.
+
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
 index 3a1b1265..5669bc1e 100644
 --- a/lib/I18n/translations/english.yaml

@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify sync retry after tailscale
+
+Retry sync after Tailscale has reconnected.
+
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 index aedf8f0..a18aaf7 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp

@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify boot trail
+
+Record boot milestones and identify stale crash records.
+
 diff --git a/lib/hal/HalPowerManager.cpp b/lib/hal/HalPowerManager.cpp
 index 07211d3..0322899 100644
 --- a/lib/hal/HalPowerManager.cpp

@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify catalog cache first
+
+Open a current saved catalog without first joining Wi-Fi.
+
 diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
 index 1fffb70..5b80dd9 100644
 --- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp

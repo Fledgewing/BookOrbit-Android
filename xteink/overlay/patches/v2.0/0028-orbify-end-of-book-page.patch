@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify end of book page
+
+Open the Orbify End-of-Book page from the reader.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index 7623f367..98548aac 100644
 --- a/include/CrossInkTailnetCuts.h

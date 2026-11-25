@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify home sync tile
+
+Use the Home sync tile for refresh and long-press Full refresh.
+
 diff --git a/src/activities/home/HomeActivity.cpp b/src/activities/home/HomeActivity.cpp
 index 2fed132..e3fefc1 100644
 --- a/src/activities/home/HomeActivity.cpp

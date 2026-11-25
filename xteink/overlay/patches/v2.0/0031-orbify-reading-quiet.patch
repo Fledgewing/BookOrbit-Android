@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify reading quiet
+
+Defer background UI work while a book is being read.
+
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
 index adb09426..32693e57 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h

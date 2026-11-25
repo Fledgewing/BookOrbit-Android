@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify settings swipe
+
+Page BookOrbit settings with up and down swipes.
+
 diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
 index 7253440..f3ca177 100644
 --- a/src/activities/settings/BookOrbitSettingsActivity.cpp

@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: orbify eob card while reading
+
+Refresh the End-of-Book card while reading and support its Home swipe.
+
 diff --git a/src/activities/reader/EndOfBookOptions.cpp b/src/activities/reader/EndOfBookOptions.cpp
 index de997a7..85169e4 100644
 --- a/src/activities/reader/EndOfBookOptions.cpp

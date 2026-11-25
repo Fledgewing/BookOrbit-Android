@@ -256,7 +256,7 @@ the walker in `orbify/Mirror`.
 | M8 | Not in this patch | Covers in the mirror (the Home sync keeps the Home covers); the automatic-Full-refresh setting (fixed at 7 days); opening the catalog offline without the network boot (decision 29's restart stays) | Smallest change that gives offline browsing; each is a follow-up if the device test asks for it. |
 | M9 | Flash | `x4-pro` +14.0 KB (96.0%); X3 unchanged | |
 
-## The rc3 device fixes: the sleep sync on a shared heap, copies, covers, refresh (patch 0037, 2026-11-23)
+## The sleep sync on a shared heap, copies, covers and refresh (2026-11-23)
 
 Shipped as one patch, now split by concern (same result): `0037a-orbify-sleep-sync-budget` (S5),
 `0037b-orbify-eob-card-while-reading` (S9), `0037c-orbify-sleep-sync-lends-session` (S2, S4, S7),
@@ -289,9 +289,9 @@ reader's Bitter font, and kept the Home swipe.
 | S16b | End page blank on an X4 Pro (photo, `.156`) | Every row's text was missing and the selected row was a plain black band: the rows use Lexend Deca, and an X4 builds a built-in family from outlines only when it is asked for: only the reader's own family (Bitter here) was loaded, so `GFX Font … not found` drew nothing and measured 0. The fonts now come from one table (`core/EndPageLayout` `fontSpec`); `EndPage.cpp` registers every family in it before drawing, and a font still missing is drawn with the UI font (`End page: font N not loaded; drawing with the UI font`). The host render loads its TTFs from the same table and checks, each row selected in turn on touch and buttons, that every row's text is non-empty and inks pixels against what is under it, and that no enabled row (Home included) falls off the page. | The language-partition line (`Unexpected language partition size: 81920`) does not touch these strings: English is built in. |
 | S17 | Flash | `default` (X3/X4) 6,510,769 of 6,553,600 bytes (99.35%, under the 99.5% gate by 10 KB; 99.27% before); `x4-pro` 96.20%; `x4-classic` 93.83% | |
 
-## The .167 X4 Pro test: wake, heap, Home tile, catalog stamp, cache-first, menu swipe (patch 0038, 2026-11-23)
+## Wake timing, TLS heap, Home touch and cache-first catalog (2026-11-23)
 
-Split by concern like 0037: `0038a-orbify-wake-press-timing` (W1), `0038b-orbify-tls-heap-in-psram`
+The second device-fix bundle is split by concern: `0038a-orbify-wake-press-timing` (W1), `0038b-orbify-tls-heap-in-psram`
 (H1, H2, T2), `0038c-orbify-boot-trail` (D1, D2; it also calls the heap and wake hooks from
 `setup()`), `0038d-orbify-catalog-cache-first` (C1, C2), `0038e-orbify-home-tile-touch` (T1, M1).
 
@@ -311,7 +311,7 @@ Split by concern like 0037: `0038a-orbify-wake-press-timing` (W1), `0038b-orbify
 | E1 | Series card log `#5 of 2`, and `#- of 0` for a book with no series | `seriesCount` is `seriesMembers`: how many of the series' books the library holds, not the series' length. The page line ("Book 5 of Starbreaker") uses the series name and was right; the log was misleading. With a card that named no series the page fell back to the EPUB's own series. | Log: `series 'X' #N (K of its books in the library)` or `no series`. The page takes the card's series when there is a card, so no series = no line (`orbify::pageSeries`, host test). |
 
 Simulator numbers (scripted internal heap `w0:21376/7156`, the .167 X4 Pro sleep sync), scenario
-`sleep_sync_device_heap`: before (0037 floors, the same scenario), the sync's first request is
+`sleep_sync_device_heap`: before (the original heap floors, the same scenario), the sync's first request is
 refused (`TLS floor: new session needs 35000 free and a 8192 block (largest now 7156)`, progress
 result 8) and nothing after it runs; after, the sync, the Home and its covers, the match check and the
 copy's download complete (`Copy refresh: replaced 1`). The 15 KB dip the .167 transfer starved at
@@ -418,7 +418,7 @@ Expect `ORB Mirror: Full refresh started, 0/<n> requests, 0% (free=…, maxAlloc
 sections, <d> details, <n> requests (<f> failed) in <t> s`. The cache's own `Couldn't keep the reply`
 or evictions in that run mean the 150-request plan is too big for 2 MB.
 
-The sleep sync (patch 0037), X4 Pro, serial log: sleep with Wi-Fi in reach. Expect `Catalog requests
+The sleep sync, X4 Pro, serial log: sleep with Wi-Fi in reach. Expect `Catalog requests
 ride the sync's connection`, then the copy refresh and `ORB Mirror: due (...); a slice of 10 requests
 in this sleep`, and no `esp-aes: Failed to allocate memory`. `waiting for heap (free=…)` and
 `Transfer stopped: heap starved` say the floors in `orbify/HeapFloor.h` are met or not. A wake press
