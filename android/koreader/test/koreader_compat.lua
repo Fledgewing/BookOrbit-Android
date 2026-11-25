@@ -43,6 +43,7 @@ end
 -- Symbols: name (a function), or { name, kind }.
 local F, T = "field", "text"
 local NEEDS = {
+    { "frontend/ui/trapper.lua", { "wrap", "info" } },
     { "frontend/ui/uimanager.lua", { "show", "close", "scheduleIn", "nextTick", "unschedule", "setDirty",
         "forceRePaint", "getElapsedTimeSinceBoot", "getTopmostVisibleWidget", "quit", "restartKOReader",
         "sendEvent", "broadcastEvent", "_repaint", { "_window_stack", F }, { "_refresh_stack", F },
