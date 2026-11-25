@@ -402,11 +402,12 @@ function OSM.preset(p)
     if not p or type(p.settings) ~= "table" then return end
     local st = p.settings
     if OSM.on() then
-        if st.sync_forward ~= DONT or st.sync_backward ~= DONT then
+        if st.sync_forward ~= DONT or st.sync_backward ~= DONT or st.auto_sync ~= true then
             if S.osm_saved_plugin == nil then
-                S.osm_saved_plugin = { sync_forward = st.sync_forward, sync_backward = st.sync_backward }
+                S.osm_saved_plugin = { sync_forward = st.sync_forward, sync_backward = st.sync_backward, auto_sync = st.auto_sync }
             end
             st.sync_forward, st.sync_backward = DONT, DONT
+            if st.auto_sync ~= true then pluginEvent(liveUI(), p, "BookOrbitToggleAutoSync", true, true, true) end
             saveSettings()
             log("orbismart: the plugin's further ahead / behind -> Don't sync (Orbit decides)")
         end
@@ -414,6 +415,9 @@ function OSM.preset(p)
         if st.sync_forward == DONT and st.sync_backward == DONT then
             st.sync_forward = S.osm_saved_plugin.sync_forward
             st.sync_backward = S.osm_saved_plugin.sync_backward
+            if st.auto_sync == true and S.osm_saved_plugin.auto_sync ~= true then
+                pluginEvent(liveUI(), p, "BookOrbitToggleAutoSync", false, true, true)
+            end
             log("orbismart: Custom; the plugin's further ahead / behind given back")
         end
         S.osm_saved_plugin = nil
@@ -425,7 +429,7 @@ end
 -- OrbiSmart holds none (Recommended settings read and write this one, ko/recommended.lua).
 function OSM.savedPluginSetting(key)
     if not OSM.on() or type(S.osm_saved_plugin) ~= "table" then return nil end
-    if key ~= "sync_forward" and key ~= "sync_backward" then return nil end
+    if key ~= "sync_forward" and key ~= "sync_backward" and key ~= "auto_sync" then return nil end
     return { value = S.osm_saved_plugin[key] }
 end
 

@@ -76,7 +76,10 @@ function Rec.write(it, ctx, value)
     if it.kind == "bo" then
         local p = ctx.p
         if not p then return false end
-        if it.key == "auto_sync" then
+        if OSM and OSM.setSavedPluginSetting and OSM.setSavedPluginSetting(it.key, Recommended.copy(value)) then
+            G_reader_settings:flush()
+            return true
+        elseif it.key == "auto_sync" then
             -- The plugin's own toggle also registers its reader events (main.lua:1416-1448).
             if (p.settings.auto_sync == true) ~= (value == true) then
                 pluginEvent(liveUI(), p, "BookOrbitToggleAutoSync", value == true, true, true)

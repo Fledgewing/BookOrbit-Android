@@ -5782,6 +5782,19 @@ test("orbismart: a move back elsewhere (an override there) is asked, labelled", 
     eq(W.page, 12)
 end)
 
+test("orbismart: OrbiSmart enables automatic lifecycle sync and Custom restores it", function()
+    local ui, m, p = osmBook(120, {})
+    run(1)
+    p.settings.auto_sync = false
+    OSM.preset(p)
+    eq(p.settings.auto_sync, true, "lifecycle snapshots and drains enabled")
+    eq(OSM.savedPluginSetting("auto_sync").value, false, "Custom value kept")
+    store.orbit_android.sync_mode = "custom"
+    OSM.modeChanged("test")
+    eq(p.settings.auto_sync, false, "Custom value restored")
+    store.orbit_android.sync_mode = "orbismart"
+end)
+
 test("orbismart: the plugin never moves the reader itself (today's newest-dated jump); Custom gives its settings back", function()
     local ui, m, p = osmBook(120, nil)
     p.settings.sync_forward, p.settings.sync_backward = 2, 3
