@@ -145,7 +145,7 @@ def withdrawn(repo):
     content = json.loads(gh("api", f"repos/{repo}/contents/android/releases.json?ref=android-feed"))
     envelope = json.loads(base64.b64decode(content["content"]))
     with tempfile.TemporaryDirectory() as directory:
-        payload = Path(directory) / "releases.json"
+        payload = Path(directory) / "android-releases.json"
         signatures = Path(directory) / "SIGNATURES"
         payload.write_text(envelope["payload"])
         signatures.write_text(envelope["signatures"])

@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import io
+import base64
 import zipfile
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
@@ -218,6 +219,26 @@ class Collection(unittest.TestCase):
         self.assertEqual(history['evidence'], evidence + evidence)
         self.assertEqual(downloads, ['repos/org/repo/actions/artifacts/1/zip', 'repos/org/repo/actions/artifacts/7/zip'])
 
+
+    def test_signed_withdrawals_verify_the_original_asset_name_and_fail_closed(self):
+        payload = json.dumps(dict(withdrawn=['v0.12.0-preview.2'], releases=[]))
+        envelope = json.dumps(dict(payload=payload, signatures='signed-record'))
+        def gh(*args, binary=False):
+            if '/branches?' in args[-1]:
+                return '[[{"name":"android-feed"}]]'
+            return json.dumps(dict(content=base64.b64encode(envelope.encode()).decode()))
+        def verify(args, **kwargs):
+            self.assertIn('verify', args)
+            self.assertEqual(args[-3], 'android-feed')
+            self.assertEqual(Path(args[-1]).name, 'android-releases.json')
+            self.assertEqual(Path(args[-1]).read_text(), payload)
+            self.assertEqual(Path(args[-2]).read_text(), 'signed-record')
+            self.assertTrue(kwargs['check'])
+        with patch.object(I, 'gh', gh), patch.object(I.subprocess, 'run', verify):
+            self.assertIn('v0.12.0-preview.2', I.withdrawn('org/repo'))
+        with patch.object(I, 'gh', gh), patch.object(I.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'verify')):
+            with self.assertRaises(subprocess.CalledProcessError):
+                I.withdrawn('org/repo')
 
     def test_withdrawn_build_cannot_select_an_unchanged_preview(self):
         bad = dict(tag_name='v0.12.0-preview.2', created_at='2', draft=False,
