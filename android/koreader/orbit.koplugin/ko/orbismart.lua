@@ -166,7 +166,8 @@ function OSM.input(p, ui, digest, R, rec)
     -- BookOrbit's web reader re-dates the place it opens at: the start of a page or a chapter in
     -- the chapter last synced, at or before it (BookOrbitSmartSync::onlyRedated, design §5).
     if R and R.device == "web" and not i.reset and i.marker and i.server then
-        i.redated = chapterOf(ui, i.server) == chapterOf(ui, i.marker.place) and i.server - i.marker.place <= 1
+        local chapter = chapterOf(ui, i.server)
+        i.redated = chapter ~= nil and chapter == chapterOf(ui, i.marker.place) and i.server - i.marker.place <= 1
     end
     return i
 end
@@ -307,7 +308,14 @@ function OSM.onPulled(digest, body)
     -- The This book sheet shows BookOrbit's place itself, with its own Jump / Stay.
     if p.book_sheet then return end
     local moment = OSM.currentMoment()
-    UIManager:nextTick(function() OSM.decide(moment, rec.server) end)
+    local remote = rec.server
+    UIManager:nextTick(function()
+        local current = liveUI and liveUI() or nil
+        local live = bookorbit(current)
+        if OSM.on() and current == ui and live == p and openDigest(live) == digest and rec.server == remote then
+            OSM.decide(moment, remote)
+        end
+    end)
 end
 
 -- The behind-hold: a push behind the last server place this reader knows waits, except an
@@ -315,7 +323,7 @@ end
 function OSM.holdPush(digest, pct, progress)
     local rec = OSM.rec(digest)
     if not rec or not rec.server or type(pct) ~= "number" then return false end
-    if rec.override or released(digest) then return false end
+    if rec.override or (released(digest) and (rec.server.pct or 0) >= 1) then return false end
     local ui = liveUI and liveUI() or nil
     local p = bookorbit(ui)
     local L, R, tol
@@ -367,7 +375,14 @@ function OSM.installApi()
     end end, "orbismart")
     wrap(Api, "updateProgress", function(stock) return function(self, digest, pct, progress, ts, ...)
         if OSM.on() then
+            -- An outbox snapshot may predate the override, or reading may have moved on while
+            -- offline. The explicit action sends the place chosen then, before any snapshot.
+            local rec = OSM.rec(digest)
+            if rec and rec.override and type(rec.override.pct) == "number" then
+                pct, progress, ts = rec.override.pct, rec.override.progress, os.time()
+            end
             local okh, held = pcall(OSM.holdPush, digest, pct, progress)
+            if not okh then return nil, "OrbiSmart could not check the server place" end
             -- Answered as sent: the outbox entry completes, the server keeps its further place.
             if okh and held then return { document = digest, timestamp = ts, orbit_held = true } end
         end
@@ -422,6 +437,7 @@ function OSM.setSavedPluginSetting(key, value)
 end
 
 function OSM.modeChanged(why)
+    if not OSM.on() then OSM.closePopup() end
     log("orbismart: Sync =", OSM.on() and "OrbiSmart" or "Custom", "(" .. tostring(why) .. ")")
     local ui = liveUI and liveUI() or nil
     local p = bookorbit(ui)
@@ -469,9 +485,12 @@ function OSM.pullThenDrain(p, moment, source, done)
     OSM.setMoment(moment)
     local digest = openDigest(p)
     p:fetchRemoteProgress(digest, function()
-        OSM.setMoment(moment)
-        if can(p, "outbox") then p:requestLifecycleOutboxDrain(source) end
-        done()
+        -- onPulled's queued decision runs first, including sending or dropping an override.
+        UIManager:nextTick(function()
+            OSM.setMoment(moment)
+            if can(p, "outbox") then p:requestLifecycleOutboxDrain(source) end
+            done()
+        end)
     end, true)
 end
 
@@ -520,9 +539,12 @@ function OSM.readFromHere(why)
     if not p or not ui or not ui.document then return end
     local digest = openDigest(p)
     local rec = OSM.rec(digest, true)
-    rec.override = { at = os.time() }
+    local okp, pct = pcall(p.getLastPercent, p)
+    local okx, progress = pcall(p.getLastProgress, p)
+    if not okp or type(pct) ~= "number" or not okx then return end
+    rec.override = { at = os.time(), pct = pct, progress = progress }
     rec.declined_at, rec.declined_reset, rec.pending = nil, nil, nil
-    if EOB and EOB.session and digest then
+    if finished(ui) and EOB and EOB.session and digest then
         EOB.session[digest] = EOB.session[digest] or { forward = 0 }
         EOB.session[digest].released = true
     end

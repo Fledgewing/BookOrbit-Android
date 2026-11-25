@@ -5676,6 +5676,48 @@ test("orbismart: Read from here everywhere offline: queued, then sent first at t
     eq(osmRec().override, nil)
 end)
 
+test("orbismart: a finished-book override is one shot and later stale pushes stay held", function()
+    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 1, progress = "/p300" } })
+    run(1)
+    W.osm_status = "complete"
+    OSM.installApi()
+    OSM.readFromHere("test")
+    run(30)
+    eq(W.osm_server.progress, "/p50", "backward override starts reread")
+    require("bookorbit_api"):updateProgress("d1", 0.1, "/p30", 4000)
+    eq(OSMApi.puts, 1, "reread release cannot exempt another backward push")
+    W.osm_status = nil
+end)
+
+test("orbismart: offline override sends the chosen place before an older outbox snapshot", function()
+    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 214 / 300, progress = "/p214" } })
+    run(1)
+    OSM.installApi()
+    W.server_code = nil
+    OSM.readFromHere("test")
+    run(40)
+    eq(osmRec().override.progress, "/p50", "chosen place persisted")
+    W.page = 80
+    W.server_code = 200
+    require("bookorbit_api"):updateProgress("d1", 0.1, "/p30", 4000)
+    eq(W.osm_server.progress, "/p50", "override precedes the stale snapshot and later reading")
+    eq(osmRec().override, nil, "acknowledged once")
+    require("bookorbit_api"):updateProgress("d1", 0.1, "/p30", 4000)
+    eq(OSMApi.puts, 1, "stale snapshot is now held")
+end)
+
+test("orbismart: a deferred pull cannot move or ask for a different open book", function()
+    local ui, m, p = osmBook(120, {})
+    run(1)
+    OSM.installApi()
+    osmServer(214, 5000)
+    OSM.onPulled("d1", W.osm_server)
+    p.getDocumentDigest = function() return "d2" end
+    run(1)
+    eq(osmPopup(), nil)
+    eq(W.page, 120)
+end)
+
 test("orbismart: a further place found at sleep is asked at wake, before any network", function()
     W.screen_on = false
     local ui, m, p = osmBook(120, nil)
