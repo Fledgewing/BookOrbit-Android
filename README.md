@@ -13,6 +13,17 @@ Tailscale, on Android and on Xteink readers.
 What ships where: [`docs/FEATURES.md`](docs/FEATURES.md). What's next: [`ROADMAP.md`](ROADMAP.md).
 How the server behaves: [`docs/server-contract.md`](docs/server-contract.md).
 
+<!-- feature-counts:start -->
+Generated support counts (settings included): ✅ supported, 🟡 partial, ❌ missing, ➖ not applicable.
+
+| Platform | ✅ | 🟡 | ❌ | ➖ |
+|---|---:|---:|---:|---:|
+| Android (M8C / Boox) | 75 | 1 | 1 | 3 |
+| X4 Pro | 55 | 12 | 1 | 12 |
+| X4 classic | 54 | 12 | 1 | 13 |
+| X3 | 20 | 16 | 31 | 13 |
+<!-- feature-counts:end -->
+
 ## Releases
 
 One [releases page](https://github.com/Fledgewing/Orbify/releases) for both platforms:
