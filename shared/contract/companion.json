@@ -481,6 +481,30 @@
       "reader": "companion",
       "format": "json",
       "what": "the open book's cover (its image file) and caption"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/current.png",
+      "writer": "plugin",
+      "reader": "companion",
+      "format": "png",
+      "via": "current.json",
+      "what": "The current book cover named by current.json"
+    },
+    {
+      "path": "koreader/cache/bookorbit/",
+      "pattern": "<id>_<version>.jpg and matching .etag",
+      "writer": "plugin, companion",
+      "reader": "plugin, companion",
+      "format": "jpeg, etag",
+      "what": "BookOrbit thumbnails and mirror covers"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/covers/",
+      "pattern": "<id>.jpg and matching .etag",
+      "writer": "companion",
+      "reader": "companion",
+      "format": "jpeg, etag",
+      "what": "Recommended sleep covers named by pool.json"
     }
   ],
   "db": {

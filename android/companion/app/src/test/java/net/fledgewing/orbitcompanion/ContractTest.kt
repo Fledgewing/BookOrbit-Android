@@ -82,7 +82,7 @@ class ContractTest {
 
     @Test fun everySharedFileAndTheDatabase() {
         c.getJSONArray("files").objects().forEach { f ->
-            val name = f.getString("path").trimEnd('/').substringAfterLast('/')
+            val name = f.optString("via").ifEmpty { f.getString("path") }.trimEnd('/').substringAfterLast('/')
             assertTrue("file $name", sources.contains("\"$name") || sources.contains("/$name\"") || sources.contains("$name\""))
         }
         val db = c.getJSONObject("db")
