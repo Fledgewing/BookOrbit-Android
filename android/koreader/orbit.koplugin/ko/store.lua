@@ -155,17 +155,15 @@ local function bulk_list(conn, w)
                 table.insert(cond, #marks == 0 and "0" or "b.id IN (" .. table.concat(marks, ",") .. ")")
             end
         end
-        if sort == "title" then
+        if sort == "title" or (sort == "series" and not context) then
             from = from .. " JOIN bulk_ranks r ON r.g=b.g AND r.id=b.id AND r.kind=? AND r.direction=?"
             local n = context and 3 or 1
             table.insert(args, n, sort); table.insert(args, n + 1, dir)
             if statusarg then statusarg = statusarg + 2 end
             order = "r.pos"
         elseif sort == "series" then
-            local p = context and "s" or "b"
-            order = (context and "" or "b.series IS NULL,b.series " .. d .. ",")
-                .. p .. ".ix1 IS NULL," .. p .. ".ix1 " .. d .. "," .. p .. ".ix2 " .. d .. "," .. p .. ".ix " .. d .. ","
-                .. (context and "b.title IS NULL,b.title," or "") .. "b.id"
+            from = from .. " JOIN bulk_ranks tr ON tr.g=b.g AND tr.id=b.id AND tr.kind='title' AND tr.direction='asc'"
+            order = "s.ix1 IS NULL,s.ix1 " .. d .. ",s.ix2 " .. d .. ",s.ix " .. d .. ",tr.pos,b.id"
         elseif sort == "recently_added" or sort == "recently_updated" then
             order = "b." .. (sort == "recently_added" and "added" or "updated") .. " " .. d .. ",b.id"
         elseif sort == "author" or sort == "published" or sort == "recently_read" then

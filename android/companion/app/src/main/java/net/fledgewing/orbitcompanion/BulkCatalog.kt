@@ -65,11 +65,13 @@ object BulkCatalog {
                 args.add(if (context) 2 else 0, sort); args.add(if (context) 3 else 1, dir)
                 "r.pos"
             }
-            "series" -> {
-                val prefix = if (context) "s" else "b"
-                (if (context) "" else "b.series IS NULL, b.series $sqlDir, ") +
-                    "$prefix.ix1 IS NULL, $prefix.ix1 $sqlDir, $prefix.ix2 $sqlDir, $prefix.ix $sqlDir, " +
-                    (if (context) "b.title IS NULL, b.title, " else "") + "b.id"
+            "series" -> if(context) {
+                from += " JOIN bulk_ranks tr ON tr.g=b.g AND tr.id=b.id AND tr.kind='title' AND tr.direction='asc'"
+                "s.ix1 IS NULL,s.ix1 $sqlDir,s.ix2 $sqlDir,s.ix $sqlDir,tr.pos,b.id"
+            } else {
+                from += " JOIN bulk_ranks r ON r.g=b.g AND r.id=b.id AND r.kind=? AND r.direction=?"
+                args.add(0,sort);args.add(1,dir)
+                "r.pos"
             }
             "recently_added", "recently_updated" -> "b.${if (sort == "recently_added") "added" else "updated"} $sqlDir, b.id"
             else -> {

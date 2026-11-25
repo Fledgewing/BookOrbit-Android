@@ -5674,7 +5674,9 @@ test("bulk catalog: plugin SQL serves offline windows, filters and secondary con
             ix and math.floor(ix),ix and (ix % 1 == 0 and -1 or tonumber(tostring(ix):match("%.(.*)$"))),b.seriesIndex,status,row.addedAt,row.updatedAt)
         for _,a in ipairs(b.authors) do member("author",a,b.id) end
         for _,f in ipairs(b.formats) do member("format",f,b.id) end
-        for _,d in ipairs({"asc","desc"}) do st:run("INSERT INTO bulk_ranks VALUES (1,'title',?,?,?,'B')",d,b.id,d=="asc" and i-1 or #fx.manifest-i) end
+        for _,kind in ipairs({"title","series"}) do
+            for _,d in ipairs({"asc","desc"}) do st:run("INSERT INTO bulk_ranks VALUES (1,?,?,?,?, 'B')",kind,d,b.id,d=="asc" and i-1 or #fx.manifest-i) end
+        end
     end
     for key, ids in pairs(fx.memberships) do
         local kind,value=key:match("^([^:]+):(.*)$")
