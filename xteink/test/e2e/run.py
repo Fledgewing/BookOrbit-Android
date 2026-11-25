@@ -330,16 +330,16 @@ def sleep_sync_device_heap(ctx: Context, tmp: Path) -> None:
 @scenario(*X4S)
 def heap_floor_waits(ctx: Context, tmp: Path) -> None:
     """X3: the sleep sync's extras start no request when the heap is under the floor (OrbifyHeap): the heap falls to 10 KB (under the X4s' 12 KB floor) while the
-    mirror's first request is held by the proxy; the mirror then waits for the next sync instead of
+    bulk worker's first request is held by the proxy; the mirror then waits for the next sync instead of
     opening another request."""
     card = ctx.card(tmp)
     (card.crosspoint / "orbify").mkdir(exist_ok=True)
     (card.crosspoint / "orbify" / "mirror.request").write_text("1\n")  # resume a user-started walk
-    ctx.faults([{"match": {"path": "/plugin/catalog/root$"}, "action": "delay", "ms": 4000, "times": 1}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/manifest$"}, "action": "delay", "ms": 4000, "times": 1}])
     run = ctx.sim.run(card, "home-low-heap", script="9000:QUIT", timeout_s=15, env={"ORBIFY_SIM_HEAP": "w2000:10000/6000"})
     tail = after(run.output, "ORBIFY_SIM_HEAP t=w2000")
     after(tail, "waiting for heap")
-    root = ctx.requests("/plugin/catalog/root")
+    root = ctx.requests("/plugin/catalog/manifest")
     assert root, "the mirror never started"
     later = [e for e in ctx.requests("/plugin/catalog/") if e["t"] > root[0]["t"]]
     assert not later, f"requests opened under the floor: {[e['path'] for e in later][:5]}"

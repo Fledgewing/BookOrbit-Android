@@ -114,6 +114,7 @@ void runTask() {
         LOG_INF("ORB","%s",result.c_str());
         std::lock_guard<std::mutex> lock(stateMutex);state.finished=true;state.result=result;state.failures=1;
       } else {
+        if(OrbifyHeap::starved()) LOG_INF("ORB","Full refresh: waiting for heap");
         std::lock_guard<std::mutex> lock(stateMutex);state.paused=true;retryAt.store(millis()+60000);
       }
     }

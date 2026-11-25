@@ -9,6 +9,7 @@
 #include <vector>
 
 namespace orbify::bulk {
+void project(JsonVariantConst value, JsonVariantConst filter, JsonVariant out);
 // The same engine runs on the reader and in the host/simulator tests. Only the
 // storage/transport adapter knows about FreeRTOS, credentials or HalStorage.
 struct Files {

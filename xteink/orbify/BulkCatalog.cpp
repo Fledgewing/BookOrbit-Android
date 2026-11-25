@@ -16,6 +16,7 @@
 #include "BookOrbitSyncClient.h"
 #include "CacheStore.h"
 #include "Settings.h"
+#include "HeapFloor.h"
 #include "core/BulkCatalog.h"
 #include "network/BookOrbitCatalogClient.h"
 namespace OrbifyBulk {
@@ -162,6 +163,7 @@ bool refresh(bool fresh,bool (*cancelled)(),const std::function<void(unsigned)>&
   diskBytes.store(treeBytes(DIR));diskKnown.store(true);Arena arena;orbify::bulk::Catalog catalog(files,&arena);
   const auto start=millis();
   const bool ok=catalog.refresh(owner(),[&](const std::string& path,JsonDocument& out){
+    if(!OrbifyHeap::roomForRequest("Full refresh"))return false;
     fetching.store(xTaskGetCurrentTaskHandle());
     const bool result=BookOrbitCatalogClient::fetchBulk(path+(path.find("/manifest?")!=std::string::npos?"&deviceId="+orbify::bulk::encode(BookOrbitSyncClient::deviceId()):""),out);
     fetching.store(nullptr);return result;
@@ -180,25 +182,10 @@ bool available(const std::string& url,bool detailSaved) {
   const bool detail=url.find("/plugin/catalog/books/")!=std::string::npos;
   return !detail || (!detailSaved && WiFi.status()!=WL_CONNECTED);
 }
-namespace {
-void project(JsonVariantConst value,JsonVariantConst filter,JsonVariant out) {
-  if(filter==true||value.isNull()){out.set(value);return;}
-  if(filter.is<JsonObjectConst>()) {
-    auto object=out.to<JsonObject>();
-    for(JsonPairConst field:filter.as<JsonObjectConst>()) {
-      if(field.value()==false||field.value().isNull())continue;
-      project(value[field.key()],field.value(),object[field.key()]);
-    }
-  } else if(filter.is<JsonArrayConst>()) {
-    auto array=out.to<JsonArray>();
-    for(JsonVariantConst item:value.as<JsonArrayConst>())project(item,filter[0],array.add<JsonVariant>());
-  }
-}
-}
 bool read(const std::string& url,JsonVariantConst filter,JsonDocument& out) {
   Arena arena;JsonDocument reply(&arena);orbify::bulk::Catalog catalog(files,&arena);
   if(!catalog.reply(url,reply))return false;
-  out.clear();project(reply.as<JsonVariantConst>(),filter,out.to<JsonVariant>());
+  out.clear();orbify::bulk::project(reply.as<JsonVariantConst>(),filter,out.to<JsonVariant>());
   return !out.overflowed();
 }
 bool detailCurrent(const std::string& url,const std::string& path) {

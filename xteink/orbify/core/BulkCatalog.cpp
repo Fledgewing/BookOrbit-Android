@@ -15,6 +15,20 @@
 #include <set>
 
 namespace orbify::bulk {
+void project(JsonVariantConst value,JsonVariantConst filter,JsonVariant out) {
+  if(filter==true||value.isNull()){out.set(value);return;}
+  if(filter.is<JsonObjectConst>()) {
+    auto object=out.to<JsonObject>();
+    for(JsonPairConst field:filter.as<JsonObjectConst>()) {
+      if(field.value()==false||field.value().isNull())continue;
+      project(value[field.key()],field.value(),object[field.key()].to<JsonVariant>());
+    }
+  } else if(filter.is<JsonArrayConst>()) {
+    auto array=out.to<JsonArray>();
+    for(JsonVariantConst item:value.as<JsonArrayConst>())project(item,filter[0],array.add<JsonVariant>());
+  }
+}
+
 namespace {
 struct DefaultArena final : ArduinoJson::Allocator {
   void* allocate(size_t n) override {return std::malloc(n);}

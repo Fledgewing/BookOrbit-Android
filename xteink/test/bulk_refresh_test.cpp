@@ -23,6 +23,13 @@ static std::map<std::string,std::string> params(const std::string& p) {
 }
 int main(int argc, char** argv) {
   if (argc < 2) return 2;
+  JsonDocument source, filter, projected;
+  deserializeJson(source,R"({"sections":[{"section":"series","title":"Series","unused":7}],"total":1})");
+  filter["sections"][0]["section"]=true; filter["sections"][0]["title"]=true; filter["total"]=true;
+  orbify::bulk::project(source.as<JsonVariantConst>(),filter.as<JsonVariantConst>(),projected.to<JsonVariant>());
+  CHECK(projected["sections"][0]["section"]=="series");
+  CHECK(projected["sections"][0]["title"]=="Series");
+  CHECK(projected["sections"][0]["unused"].isNull()); CHECK(projected["total"]==1);
   JsonDocument fx;
   CHECK(loadJsonFile((std::filesystem::path(argv[1]).parent_path() / "catalog/bulk-refresh/catalog.json").string().c_str(), fx));
   const auto books = fx["manifest"].as<JsonArrayConst>();
