@@ -1596,6 +1596,28 @@ test("recommended choices from the companion", function()
 end)
 
 -- shared/fixtures/REGISTRY.json: every rule table has a row, and this suite reads what it names (test_registry.lua).
+-- @fixture release-signing/cases.json @fixture release-signing/README.md
+-- @fixture release-signing/SIGNATURES-firmware @fixture release-signing/SIGNATURES-plugin
+-- @fixture release-signing/SIGNATURES-plugin-other-root @fixture release-signing/SIGNATURES-plugin-rotated
+test("release fixture inventory: every case names a complete signature envelope", function()
+    local cases = JSON.fixture(here, "release-signing/cases.json")
+    eq(#cases.root_public_key, 64)
+    eq(#cases.other_root_public_key, 64)
+    local root = here .. "/../../../shared/fixtures/release-signing/"
+    local doc = assert(io.open(root .. "README.md", "rb"))
+    ok(doc:read("*a"):find("cases.json", 1, true)); doc:close()
+    for _, case in ipairs(cases.cases) do
+        local f = assert(io.open(root .. case.signatures, "rb"))
+        local cert = f:read("*l"):match("^release%-key ([0-9a-f]+)$")
+        ok(cert and #cert == 200, "a complete certified release key")
+        local sig, asset = f:read("*l"):match("^([0-9a-f]+)  (.+)$")
+        ok(sig and #sig == 128 and asset ~= "", "an asset signature")
+        eq(#case.sha256, 64)
+        if case.ok then eq(asset, case.asset) end
+        f:close()
+    end
+end)
+
 test("fixture registry: the plugin reads every table it is named for, and every table has a row", function()
     local problems = dofile(here .. "/test_registry.lua")(here)
     eq(table.concat(problems, "\n"), "", "REGISTRY.json")
