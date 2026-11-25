@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "CatalogCache.h"
 
 #include <algorithm>
@@ -175,6 +176,32 @@ WriteEffect writeEffect(const std::string& method, const std::string& path, cons
     e.homeStale = true;
   }
   return e;
+}
+
+bool mergeRecentBooks(JsonVariant saved, JsonArrayConst recent) {
+  bool changed = false;
+  if (saved.is<JsonObject>()) {
+    JsonObject object = saved.as<JsonObject>();
+    // Facet entries also have ids and titles. Only book-shaped rows may be patched.
+    if (object["id"].is<int64_t>() && object["title"].is<const char*>() &&
+        !object["authors"].isUnbound()) {
+      for (JsonObjectConst item : recent) {
+        if (item["id"].as<int64_t>() != object["id"].as<int64_t>()) continue;
+        for (JsonPairConst field : item) {
+          if (!object[field.key()].isUnbound() && object[field.key()] != field.value()) {
+            object[field.key()] = field.value();
+            changed = true;
+          }
+        }
+        break;
+      }
+    } else {
+      for (JsonPair field : object) changed |= mergeRecentBooks(field.value(), recent);
+    }
+  } else if (saved.is<JsonArray>()) {
+    for (JsonVariant row : saved.as<JsonArray>()) changed |= mergeRecentBooks(row, recent);
+  }
+  return changed;
 }
 
 bool patchBook(JsonVariant doc, const int64_t bookId, JsonObjectConst fields) {

@@ -47,6 +47,7 @@ void save();
 // The smart scopes and collections the account sees, as the last sleep sync saved them (scopes.tsv).
 struct Scope {
   bool collection = false;
+  bool library = false;
   uint32_t id = 0;
   int count = 0;
   std::string title;
@@ -76,7 +77,8 @@ void drawExtras(const GfxRenderer& renderer, bool redraw);
 
 // On the lent connection, after the next cover: the scope names, Leave out's member lists, the source
 // list or bag, then up to FETCH_PER_SYNC covers. openBookPath: the book open at sleep (never picked).
-void topUp(const std::string& openBookPath, bool (*stop)());
+void topUp(const std::string& openBookPath, bool (*stop)(), unsigned long budgetMs = 40000);
+void drawPlaceholder(const GfxRenderer& renderer, bool redraw);
 // With the radio off: fetched covers become screen-size BMPs (renderer: the panel's tone profile).
 void decodeCovers(const GfxRenderer& renderer, bool (*stop)());
 

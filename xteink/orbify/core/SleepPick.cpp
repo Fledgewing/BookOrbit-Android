@@ -335,6 +335,7 @@ bool parseFrom(const char* text, From& out) {
   if (std::strcmp(text, "discover") == 0) return out = From{FromKind::Discover, 0}, true;
   if (std::strcmp(text, "library") == 0) return out = From{FromKind::Library, 0}, true;
   uint32_t id = 0;
+  if (parseRef(text, "library:", id)) return out = From{FromKind::LibrarySource, id}, true;
   if (parseRef(text, "scope:", id)) return out = From{FromKind::Scope, id}, true;
   if (parseRef(text, "collection:", id)) return out = From{FromKind::Collection, id}, true;
   return false;
@@ -357,6 +358,9 @@ bool formatFrom(const From& from, char* out, const size_t size) {
       break;
     case FromKind::Collection:
       n = std::snprintf(out, size, "collection:%u", static_cast<unsigned>(from.id));
+      break;
+    case FromKind::LibrarySource:
+      n = std::snprintf(out, size, "library:%u", static_cast<unsigned>(from.id));
       break;
     case FromKind::Library:
       n = std::snprintf(out, size, "library");
@@ -647,7 +651,7 @@ const char* nextScopeRule(const char* text, From& out) {
     std::memcpy(item, b, len);
     item[len] = '\0';
     From f;
-    if (parseFrom(item, f) && (f.kind == FromKind::Scope || f.kind == FromKind::Collection)) {
+    if (parseFrom(item, f) && (f.kind == FromKind::Scope || f.kind == FromKind::Collection || f.kind == FromKind::LibrarySource)) {
       out = f;
       return p;
     }

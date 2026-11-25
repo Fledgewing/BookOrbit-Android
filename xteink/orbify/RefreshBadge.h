@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 // Orbify: one progress number for a Full refresh on the X4 Pro and X4 (CROSSINK_TAILNET_ORBIFY_MIRROR;
 // docs/design/sqlite-cache.md "Xteink: the same rule", XTEINK-BUILD-NOTES "One progress number").
@@ -14,6 +15,8 @@ namespace OrbifyRefreshBadge {
 // "Full refresh in progress · about 37% · you can keep reading and browsing", wrapped in a framed box
 // where the theme puts its popups. Draws into the frame; the caller pushes it.
 void drawStartPopup(const GfxRenderer& renderer, unsigned percent);
+// Initial Home frame, before the scan and connection. No intermediate notices.
+void drawPreparing(const GfxRenderer& renderer, bool popup);
 
 // The badge's words right-aligned in its rectangle (x, y, w, h): "37%", "Done", "Done with 2 errors".
 void drawBadge(const GfxRenderer& renderer, int x, int y, int w, int h, const char* text);

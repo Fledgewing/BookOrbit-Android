@@ -28,7 +28,7 @@ static void dueCases(JsonObjectConst all) {
   CHECK(due(true, 5000, "a", "a", 4000, 7) == Due::None);
   // Cache-first catalog: only a saved, current copy opens the catalog without Wi-Fi.
   CHECK(catalogFromCache(true, Due::None));
-  CHECK(!catalogFromCache(true, Due::Ttl) && !catalogFromCache(true, Due::Library));
+  CHECK(catalogFromCache(true, Due::Ttl) && catalogFromCache(true, Due::Library));
   CHECK(!catalogFromCache(false, Due::None) && !catalogFromCache(false, Due::Never));
   CHECK(due(true, 5000, "a", "a", 0, 7) == Due::None);
   // A library version unknown on either side never makes it due.
@@ -238,38 +238,39 @@ static void progress() {
   p.add(Kind::Books, "a");
   CHECK(p.percent() == 0);
   p.advance();  // 1 of 2
-  CHECK(p.percent() == 50);
-  // The root landed: its sections add lists, so done / total falls to 1 / 10...
+  CHECK(p.percent() == 0);  // enumeration is excluded from data progress
   for (int i = 0; i < 8; i++) p.add(Kind::Section, std::to_string(i));
-  CHECK(p.total() == 10);
-  // ...but the % shown never goes down.
-  CHECK(p.percent() == 50);
-  unsigned last = p.percent();
-  bool rose = false;
-  while (!p.finished()) {
-    p.advance(p.doneCount() == 3);  // one request fails
-    if (p.doneCount() == 4) {  // a section adds 20 more mid-run
-      for (int i = 0; i < 20; i++) p.add(Kind::Books, "s" + std::to_string(i));
-    }
-    const unsigned now = p.percent();
-    CHECK(now >= last);
-    if (!p.finished()) CHECK(now < 100);
-    rose = rose || now > last;
-    last = now;
+  CHECK(p.total() == 10 && p.percent() == 0);
+  for (int i = 0; i < 8; i++) {
+    CHECK(p.next()->kind == Kind::Section);
+    p.add(Kind::Books, "s" + std::to_string(i));
+    p.add(Kind::Detail, "42");  // one book in every section: fetched once
+    CHECK(p.percent() == 0);
+    p.advance(i == 3);
   }
-  CHECK(rose && p.percent() == 100 && p.failures() == 1);
+  CHECK(p.count(Kind::Detail) == 1);
+  const auto fixed = p.total();
+  unsigned last = 0;
+  while (!p.finished()) {
+    p.advance();
+    CHECK(p.total() == fixed && p.percent() >= last);
+    last = p.percent();
+    Plan resume;
+    CHECK(resume.parse(p.serialize()) && resume.percent() == last && resume.total() == fixed);
+  }
+  CHECK(p.percent() == 100 && p.failures() == 1);
   // The fixed total: the plan's own (step count), whatever the walk added, read back from the card.
   Plan half;
   for (int i = 0; i < 40; i++) half.add(Kind::Detail, std::to_string(i));
   for (int i = 0; i < 10; i++) half.advance(i == 0);
   CHECK(half.percent() == 25 && half.total() == 40);
-  for (int i = 0; i < 40; i++) half.add(Kind::Books, "x" + std::to_string(i));  // 10 of 80 now
-  CHECK(half.percent() == 25);
+  for (int i = 0; i < 40; i++) CHECK(!half.add(Kind::Books, "x" + std::to_string(i)));
+  CHECK(half.percent() == 25 && half.total() == 40);
   Plan back;
   CHECK(back.parse(half.serialize()));
-  CHECK(back.percent() == 25 && back.failures() == 1 && back.doneCount() == 10 && back.total() == 80);
-  back.advance();  // 11 / 80 = 13%: still 25
-  CHECK(back.percent() == 25);
+  CHECK(back.percent() == 25 && back.failures() == 1 && back.doneCount() == 10 && back.total() == 40);
+  back.advance();
+  CHECK(back.percent() == 27);
   // A version 2 plan (before the % was kept) still resumes, from its own done / total.
   Plan old;
   CHECK(old.parse("orbify-mirror 2\n1\nR\t\nB\tsort=title\n"));
@@ -278,9 +279,28 @@ static void progress() {
   CHECK(!old.parse("orbify-mirror 3\n1\t101\t0\nR\t\n"));   // no % over 100
   CHECK(!old.parse("orbify-mirror 3\n1\t10\t2\nR\t\n"));    // more failures than requests
   CHECK(old.parse("orbify-mirror 3\n1\t70\t1\nR\t\nB\tsort=title\n") && old.percent() == 70);
+  // Resume a pre-v4 walk that already fetched data before discovering every section.
+  CHECK(old.parse("orbify-mirror 3\n2\t60\t0\nR\t\nB\told\nD\t42\nS\tauthors\n"));
+  CHECK(old.next()->kind == Kind::Section && old.percent() == 60);
+  CHECK(old.add(Kind::Books, "new-author"));
+  old.advance();
+  CHECK(old.percent() == 60 && !old.add(Kind::Books, "too-late"));
+  const size_t migratedTotal = old.total();
+  Plan migrated;
+  CHECK(migrated.parse(old.serialize()) && migrated.percent() == 60);
+  while (!migrated.finished()) {
+    migrated.advance();
+    CHECK(migrated.percent() >= 60 && migrated.total() == migratedTotal);
+  }
+  CHECK(migrated.percent() == 100);
 }
 
 static void badge() {
+  CHECK(!showProgress(false, false));
+  CHECK(!showProgress(false, true));  // sleep sync / Home / automatic catalog work
+  CHECK(!showProgress(true, false));
+  CHECK(showProgress(true, true));  // explicit request only
+
   // The first paint is always due; then only a changed %, and at most every 3 s.
   CHECK(badgeDue(-1, 0, 0, 0));
   CHECK(!badgeDue(37, 37, 0, 99999));

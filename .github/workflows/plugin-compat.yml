@@ -32,6 +32,9 @@ jobs:
       - name: Fetch the pinned BookOrbit source
         run: tools/upstreams sync bookorbit </dev/null
 
+      - name: Every browsable catalog list is in the shared refresh inventory
+        run: python3 tools/test/test-catalog-coverage.py </dev/null
+
       - name: Check tests
         run: |
           set -euo pipefail

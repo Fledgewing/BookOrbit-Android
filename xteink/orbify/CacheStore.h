@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 // Orbify write-through cache, the firmware side (docs/design/write-through-cache.md, "Xteink"):
 // the entries on the SD card and the hooks CrossInk calls (overlay patch 0029). The rules are
@@ -69,5 +70,7 @@ void coverStored(int32_t bookId, uint32_t version, const std::string& etag);
 
 // Signed out, or another server or account: the cache directory goes.
 void dropAll();
+// Merge changed fields from the last recently_updated head into already saved book rows.
+void mergeRecent();
 
 }  // namespace OrbifyCache

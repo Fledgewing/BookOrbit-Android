@@ -83,6 +83,7 @@ class SleepPickerTest {
         val leave = Robolectric.buildActivity(LeaveOutActivity::class.java).setup()
         row(leave.get(), "pick:library:9").performClick()
         assertEquals("library:9", SettingsStore.get(app, "sleep_leave_out"))
+        assertFalse(all(leave.get().findViewById(android.R.id.content)).any { it.tag == "pick:library" })
         checked(leave.get(), "pick:library:9", true)
         leave.pause().stop().destroy()
     }

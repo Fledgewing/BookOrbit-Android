@@ -142,15 +142,16 @@ The worker stops below the last successful timestamp watermark, including the en
 timestamp tie, even across pages. It compares items before overwriting them and fetches details
 and optional covers only for changed or missing books. Failed details keep a dirty marker and
 failed scans do not advance the watermark. A complete Full refresh establishes the watermark;
-ordinary browsing cannot advance it. Unchanged libraries normally cost one list-page request,
-with no details or covers; a large timestamp tie can require more pages.
+ordinary browsing cannot advance it. The timestamp probe normally costs one request; dynamic
+shelves and their pages are also rechecked on every run (W15 below). Unchanged books need no details or covers; a large
+timestamp tie can require more probe pages.
 
 Membership has no change cursor. When books change, or the progress sweep reports a different
 library version, saved list pages are rechecked, discovering new section lists and membership.
 These are necessary list requests, not a Full refresh: unchanged books do not fetch details or
-covers again. A membership-only edit that changes neither a book timestamp nor libraryVersion
-cannot be discovered by the cheap probe. Normal browse checks / explicit Refresh still recheck
-those replies; manual Full refresh remains the complete snapshot operation. No unsupported
+covers again. A static membership-only edit that changes neither a book timestamp nor
+libraryVersion cannot be discovered by the timestamp probe; dynamic identities are always
+rechecked (W15). Normal browse checks / explicit Refresh still recheck those replies; manual Full refresh remains the complete snapshot operation. No unsupported
 `since` or conditional-list request is sent. Xteink's separate cache is unchanged by this Android
 SQLite correction; it has no scheduled SQLite Full refresh to remove.
 
@@ -443,3 +444,54 @@ a torn page, `READONLY_ROLLBACK`). Each side logs one line; the plugin shows and
    delete, and a resumed run finds its jobs beside the rows they fill. KOReader never reads `jobs`.
 8. Covers' ETags into SQLite? No: P's thumbnail child writes covers and the database has one
    writer.
+
+## Complete browse coverage (W15)
+
+A Full refresh seeds lists before the reader opens them. The canonical inventory is
+`shared/fixtures/catalog/sections.json`, packaged as `catalog_sections.json` with the Android
+plugin. Xteink's pending W9 Full refresh must consume the same inventory; W15 changes no
+Xteink code. `tools/test/test-catalog-coverage.py` compares the inventory with the pinned
+server section index and plugin routing and controls. It fails closed when those source
+files change, including a route the extractor does not yet recognize. Regenerate with
+`--write` only after reviewing the newly browsable paths and updating the planner tests.
+
+The pinned BookOrbit commit is `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`. Its browser exposes:
+
+- Root rows: Continue reading, Recently added, All books and the five section indexes
+  (`server/src/modules/koreader/koreader-catalog.service.ts:163-214`,
+  `koreader-plugin/bookorbit.koplugin/bookorbit_catalog.lua:796-823`).
+- Shelves: each library, collection and SmartScope; each author and series, including
+  series selected by name (`bookorbit_catalog.lua:1111-1130`). The combined Shelves page
+  reads the three underlying indexes (`bookorbit_catalog_lists.lua:267-298`).
+- Home: Recently added, In progress, Pick back up, Finished, Discover, custom selector
+  shelves, Want to read and Up next in series. Home's composed replies are saved separately
+  from their linked book lists (`bookorbit_catalog_board.lua:994-1007`,
+  `bookorbit_catalog_dashboard.lua:155-192`). **Finished in YEAR** is a label: opening it sends
+  `readStatus=finished&sort=recently_read`, with no year predicate. W15 saves that actual list;
+  it does not invent a year parameter (`bookorbit_catalog_board.lua:997`).
+- On device (200 ids) and Not on device (up to 200 absent ids from the newest 500 books),
+  including the scan's Recently added pages (`bookorbit_catalog.lua:1187-1249`).
+- Sort/direction, reading-status, library, format and On device combinations in the book
+  sheet; series sort/direction/status combinations, and author/series index sort and status
+  facets (`bookorbit_catalog_lists.lua:518-538,584-639,658-727`). Legacy sort controls include
+  Recently updated (`bookorbit_catalog_util.lua:35-42`). Layout, letter jumps, screen sizes,
+  offsets and page numbers are windows of these identities, not extra lists. Typed searches
+  remain online; there is no finite inventory of search strings.
+
+The plugin passes the small inventory and its own entry-path templates to the companion.
+After fresh indexes land, the companion expands the finite sort/filter combinations using
+all library ids, device ids and section entries. Every list gets all pages, even when a
+recheck's membership changes without its total changing. This exhaustive expansion can add
+many identities and requests on a large library; book details and covers remain deduplicated.
+It runs entirely in the companion. Both decorated (`buckets=1`) and legacy identities are
+covered. The shared inventory also records the offered formats, sort keys and status facets
+for W9, rather than leaving Xteink to reconstruct them independently.
+
+Every regular/incremental refresh saves Home and composed shelves, seeds the indexes to find
+new lists, and refreshes every page of dynamic identities (including Recently added, reading,
+finished, Pick back up and their sort/filter variants), regardless of the book timestamp
+probe. Existing static variants are rechecked when the normal membership probe detects a
+change; missing identities are added. Rechecking page one always schedules the remaining
+pages, because an unchanged total says nothing about membership or ordering. Explicit Refresh
+also seeds newly browsable lists. A completed Full refresh logs `lists saved by kind: …`,
+counting distinct successfully fetched identities in that run, grouped independently of ids.

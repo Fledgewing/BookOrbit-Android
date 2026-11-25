@@ -514,6 +514,16 @@
       "readers": [
         "kt"
       ]
+    },
+    {
+      "file": "catalog/sections.json",
+      "rule": "Every non-search catalog route and sort/filter dimension from the pinned browser and server index",
+      "owner": "plugin, companion; Xteink Full refresh W9",
+      "readers": [
+        "lua",
+        "kt"
+      ],
+      "note": "Canonical inventory for W9; no Xteink implementation in W15. Source coverage: tools/test/test-catalog-coverage.py."
     }
   ]
 }

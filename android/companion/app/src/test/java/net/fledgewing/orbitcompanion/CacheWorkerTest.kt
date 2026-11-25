@@ -450,6 +450,49 @@ class CacheWorkerTest {
         w.store.close(); root.deleteRecursively()
     }
 
+    @Test fun fullRefreshSavesUnopenedHomeRepliesWithThePluginKeyAndAuditsKinds() {
+        val (root, fake, unused) = setup()
+        val logs = ArrayList<String>()
+        val w = CacheWorker(root, fake, log = { logs.add(it) }, openSql = { JdbcSql(it) })
+        val paths = listOf("$C/dashboard", "$C/root", "$C/dashboard/sections/want-to-read", "$C/dashboard/sections/up-next-in-series")
+        for (path in paths) fake.routes[S + path] = "{\"items\":[]}"
+        val recent = "$C/books?sort=recently_added&order=desc"
+        fake.routes[S + MirrorLogic.mirrorPage(recent, 1, null)] = books(emptyList())
+        val p = plan(root, "full", mapOf("entries" to paths, "dynamic_lists" to listOf(recent)))
+        assertEquals("finished", w.run(p, creds))
+        for (path in paths) {
+            assertNotNull(path, w.store.read(MirrorLogic.key(p.owner, S, path), path, null))
+        }
+        assertTrue(logs.joinToString("\n"), logs.any { it.contains("lists saved by kind:") && it.contains("recently-added=1") && it.contains("index:authors=1") })
+        w.store.close(); unused.store.close(); root.deleteRecursively()
+    }
+
+    @Test fun dynamicShelvesRefreshWithoutTimestampChangesIncludingUnopenedListsAndSameSizeReordering() {
+        val (root, fake, w) = setup()
+        val dynamic = listOf("$C/books?sort=recently_added", "$C/books?readStatus=reading&sort=recently_read", "$C/books?readStatus=finished&sort=recently_read")
+        val p = plan(root, "incremental", mapOf("covers_on" to false, "dynamic_lists" to dynamic))
+        w.store.own(p.owner)
+        w.store.setMeta("incremental_watermark", "2026-12-01")
+        fake.routes["$S$C/books?order=desc&page=1&size=100&sort=recently_updated"] = books(listOf(1))
+        for (path in dynamic) {
+            fake.routes[S + MirrorLogic.mirrorPage(path, 1, null)] = books((1..100).toList(), 101)
+            fake.routes[S + MirrorLogic.mirrorPage(path, 2, null)] = books(listOf(101), 101)
+        }
+        for (id in 1L..101L) w.store.putDetail(id, mapOf("id" to id), 100L)
+        assertEquals("finished", w.run(p, creds))
+        assertEquals(7, fake.asked.size)
+        fake.asked.clear()
+        for (path in dynamic) fake.routes[S + MirrorLogic.mirrorPage(path, 2, null)] = books(listOf(102), 101)
+        fake.routes["$S$C/books/102"] = "{\"id\":102}"
+        assertEquals("finished", w.run(p, creds))
+        for (path in dynamic) {
+            assertTrue(fake.asked.contains(S + MirrorLogic.mirrorPage(path, 2, null)))
+            assertEquals(102L, ((w.store.window(path, 2, 100, null)!!["items"] as List<*>).single() as Map<*, *>)["id"])
+        }
+        assertEquals("2026-12-01", w.store.meta("incremental_watermark"))
+        w.store.close(); root.deleteRecursively()
+    }
+
     @Test fun incrementalIncludesWholeTimestampTieAcrossPages() {
         val (root, fake, w) = setup()
         val p = plan(root, "incremental", mapOf("covers_on" to false))
