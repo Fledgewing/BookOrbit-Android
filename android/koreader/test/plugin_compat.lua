@@ -42,6 +42,7 @@ for _, f in ipairs(M.Compat.FEATURES) do
     for name, kind in pairs(f.needs) do need(name, kind) end
 end
 for name, kind in pairs(M.Compat.CATALOG) do need(name, kind) end
+need("effectiveGridDimensions", "function") -- Mirror thumbnail bounds
 -- Recommended settings (ko/recommended.lua): the plugin's own defaults, read at run time.
 need("default_settings", "field")
 for name, kind in pairs(M.Compat.PAGING) do need(name, kind) end

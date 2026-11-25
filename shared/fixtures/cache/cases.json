@@ -1261,13 +1261,13 @@
         "what": "covers",
         "done": 412,
         "total": 855,
-        "text": "Storage limit reached: 412 of 855 covers saved. Raise the limit in Orbit settings."
+        "text": "Storage limit reached: 412 of 855 covers saved. No room for new data; protected covers are kept. Raise the limit in Orbit settings."
       },
       {
         "what": "lists",
         "done": 120,
         "total": 300,
-        "text": "Storage limit reached: 120 of 300 lists and books saved. Raise the limit in Orbit settings."
+        "text": "Storage limit reached: 120 of 300 lists and books saved. No room for new data; protected covers are kept. Raise the limit in Orbit settings."
       }
     ]
   }

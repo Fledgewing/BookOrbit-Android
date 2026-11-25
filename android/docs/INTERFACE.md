@@ -407,3 +407,9 @@ KOReader's start goes only to the pinned KOReader.
 patch broadcast: it removes the Settings PIN and is for USB recovery only. Its receiver
 (`.PinResetReceiver`) requires `android.permission.DUMP`, which only the shell (adb) holds,
 and on Android 14+ refuses a sender uid other than shell or root when Android reports one.
+
+STORAGE may carry `shown` (newline-separated visible cover paths, bounded by the
+companion to 100). That form queues timestamp/thumbnail work only; it does not
+request a storage sweep. Mirror plans also carry `cover_width`, `cover_height`
+(the device's grid cell bounds in pixels) for browsing JPEGs. Sleep covers keep
+their separate full-screen dimensions.

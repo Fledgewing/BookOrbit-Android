@@ -79,12 +79,13 @@ class CacheWorkerTest {
         val asked = ArrayList<String>()
         val headersSeen = ArrayList<Map<String, String>>()
         var down = false
+        var forceCover = false
         @Synchronized
         override fun get(url: String, headers: Map<String, String>, sink: File?, maxBytes: Long): CacheWorker.Reply {
             asked.add(url); headersSeen.add(headers)
             if (down) return CacheWorker.Reply(0, err = "timeout")
             if (url.endsWith("/thumbnail")) {
-                if (headers["If-None-Match"] == "\"e1\"") return CacheWorker.Reply(304)
+                if (!forceCover && headers["If-None-Match"] == "\"e1\"") return CacheWorker.Reply(304)
                 sink!!.writeBytes(byteArrayOf(1, 2, 3))
                 return CacheWorker.Reply(200, etag = "\"e1\"", contentType = "image/jpeg")
             }
@@ -220,6 +221,37 @@ class CacheWorkerTest {
         assertNotNull(w.store.detail(1))
         val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
         assertNull(status["limit_note"])
+    }
+
+    @Test fun fullRefreshReplacesExistingRowsAtTheLimit() {
+        val (root, fake, w) = setup()
+        assertEquals("finished", w.run(plan(root, "full"), creds))
+        val used = w.storageItems(File(root, "thumbs").path, true).sumOf { it.bytes }
+        // Force 200 replacements too, so both rows and image bodies are exercised at capacity.
+        fake.forceCover = true
+        assertEquals("finished", w.run(plan(root, "full", mapOf("limit" to used)), creds))
+        val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        assertNull(status["limit_note"])
+        assertNotNull(w.store.detail(1))
+    }
+
+    @Test fun growingDataEvictsCoversButKeepsProtectedAndStopsOnlyAfterExhaustion() {
+        val (root, fake, w) = setup()
+        assertEquals("finished", w.run(plan(root, "full", mapOf("covers_on" to false)), creds))
+        val thumbs = File(root, "thumbs").apply { mkdirs() }
+        File(thumbs, "99_0.jpg").writeBytes(ByteArray(128 * 1024))
+        File(thumbs, "1_0.jpg").writeBytes(ByteArray(128 * 1024))
+        val used = w.storageItems(thumbs.path, false).sumOf { it.bytes }
+        fake.routes["$S$C/books/1"] = """{"id":1,"title":"${"x".repeat(64 * 1024)}"}"""
+        assertEquals("finished", w.run(plan(root, "full", mapOf("limit" to used, "covers_on" to false, "seed_details" to listOf(1L))), creds))
+        assertFalse(File(thumbs, "99_0.jpg").exists())
+        assertTrue(File(thumbs, "1_0.jpg").exists())
+        fake.routes["$S$C/books/1"] = """{"id":1,"title":"${"x".repeat(512 * 1024)}"}"""
+        assertEquals("storage limit", w.run(plan(root, "full", mapOf("limit" to used, "covers_on" to false, "seed_details" to listOf(1L))), creds))
+        assertTrue(File(thumbs, "1_0.jpg").exists())
+        val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        assertTrue(((status["limit_note"] as Map<*, *>)["text"] as String).contains("protected covers"))
+        assertEquals(64 * 1024, ((w.store.detail(1)!!.first as Map<*, *>)["title"] as String).length)
     }
 
     @Test fun storageLimitStopsSavingAndSaysWhy() {

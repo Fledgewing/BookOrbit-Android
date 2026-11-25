@@ -282,7 +282,7 @@ function OrbitAndroid:menuItems()
         stoggle("key_log"),
         wifi_rows[2] or false,
         -- Debug: SQLite on shared storage (docs/design/sqlite-cache.md "Stress test").
-        { text = _("SQLite stress test (2 min)"), callback = later(function() SqliteStress.start() end) },
+        S.key_log and { text = _("SQLite stress test (2 min)"), callback = later(function() SqliteStress.start() end) } or false,
     })
     local items = {
         { text = sectionTitle("reading", _("Reading and Home")), sub_item_table = reading },

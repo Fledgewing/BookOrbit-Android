@@ -488,6 +488,14 @@
         "lua",
         "cpp"
       ]
+    },
+    {
+      "file": "storage/cases.json",
+      "rule": "Net growth admission and list/book priority over last-shown covers; firmware W9 contract",
+      "owner": "companion, xteink (W9)",
+      "readers": [
+        "kt"
+      ]
     }
   ]
 }

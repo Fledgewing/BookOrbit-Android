@@ -28,6 +28,63 @@ class StorageTest {
         }
     }
 
+    @Test fun netGrowthAndDataPriorityMatchFirmwareContract() {
+        // @fixture storage/cases.json
+        val cases = JSONObject(File("../../../shared/fixtures/storage/cases.json").readText()).getJSONArray("cases")
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val items = c.getJSONArray("items").let { a -> (0 until a.length()).map { a.getJSONObject(it) }.map {
+                StorageLogic.Item(it.getString("k"), it.getLong("bytes"), it.getLong("at"), it.getString("kind"))
+            } }
+            val got = StorageLogic.admit(c.getLong("used"), c.getLong("old"), c.getLong("new"),
+                if (c.isNull("limit")) null else c.getLong("limit"), items, c.getBoolean("data"))
+            val drop = c.getJSONArray("drop").let { a -> (0 until a.length()).map { a.getString(it) } }
+            assertEquals(c.getString("name"), drop, got.drop)
+            assertEquals(c.getString("name"), c.getBoolean("allowed"), got.allowed)
+        }
+    }
+
+    @Test fun shownOrderAndAllProtectionSourcesAreAppliedWithoutAnImageSweep() {
+        val settings = Files.createTempDirectory("storage-protection").toFile()
+        val root = File(settings, "orbit-cache").apply { mkdirs() }
+        val covers = File(root, "covers").apply { mkdirs() }
+        var resized = 0
+        val w = CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, now = { 100L }, log = {},
+            openSql = { JdbcSql(it) }, resizeThumbnail = { _, _, _ -> resized++ })
+        w.store.putEntry("home", "/koreader/plugin/catalog/dashboard", mapOf("continueReading" to listOf(mapOf("id" to 1L))), 1L)
+        File(settings, "orbit-sleep").mkdirs()
+        File(settings, "orbit-sleep/pool.json").writeText("""{"items":[{"id":2}]}""")
+        File(root, "copies").mkdirs()
+        File(root, "copies/ask.lua").writeBytes(LuaValue.encode(mapOf("books" to listOf(mapOf("book_id" to 3L)))))
+        for (id in 1..5) File(covers, "${id}_0.jpg").apply { writeBytes(ByteArray(1000)); setLastModified(id * 1000L) }
+        w.store.keepCovers(listOf("4_0.jpg"))
+        val items = w.storageItems(covers.path, true)
+        assertEquals(0, resized)
+        for (id in 1..3) assertEquals("kept", items.single { it.k == "c:${id}_0.jpg" }.kind)
+        w.coversShown(listOf(File(covers, "4_0.jpg").path))
+        assertEquals(1, resized)
+        w.storage(CacheWorker.StorageAsk("test", items.sumOf { it.bytes } - 1, covers.path, true))
+        assertFalse("oldest eligible shown cover goes", File(covers, "5_0.jpg").exists())
+        for (id in 1..4) assertTrue(File(covers, "${id}_0.jpg").exists())
+        settings.deleteRecursively()
+    }
+
+    @Test fun orphanEtagsAndInactiveStressFilesGoOnCheck() {
+        val root = Files.createTempDirectory("cleanup").toFile()
+        val covers = File(root, "covers").apply { mkdirs() }
+        File(covers, "orphan.jpg.etag").writeText("orphan")
+        File(covers, "kept.jpg").writeText("image")
+        File(covers, "kept.jpg.etag").writeText("kept")
+        File(root, "stress.db").writeText("stress")
+        File(root, "stress-writer.lua").writeText("stress")
+        val w = CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, log = {}, openSql = { JdbcSql(it) })
+        w.storageItems(covers.path, false)
+        assertFalse(File(covers, "orphan.jpg.etag").exists())
+        assertTrue(File(covers, "kept.jpg.etag").exists())
+        assertFalse(File(root, "stress.db").exists())
+        assertFalse(File(root, "stress-writer.lua").exists())
+    }
+
     @Test fun countRemovesBrowsingEntriesAndCoversButNeverTheSavedOnes() {
         val root = Files.createTempDirectory("s").toFile()
         val covers = File(root, "covers").apply { mkdirs() }

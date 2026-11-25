@@ -4725,7 +4725,7 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
         E.OC.fullRefresh(cat); run(900)
         local m = E.Mirror.status()
         local note = m.limit_note and m.limit_note.text or ""
-        ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. Raise the limit in Orbit settings%.$"), "the stop: " .. note)
+        ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. No room for new data; protected covers are kept%. Raise the limit in Orbit settings%.$"), "the stop: " .. note)
         local shown
         for _, t in ipairs(E.Badge.history or {}) do if t == note then shown = true end end
         ok(shown, "the badge says it: " .. table.concat(E.Badge.history or {}, " | "))
@@ -4965,6 +4965,8 @@ test("companion: the cache worker needs the companion of the plugin's own versio
             and b.extras.server == client.server_url, "the login goes to the companion's package")
         local plan = io.open(cache.dir .. "/mirror/plan.lua", "rb"):read("*a")
         ok(not plan:find(client.userkey, 1, true) and not plan:find("userkey", 1, true), "never in the plan file")
+        local decoded = E.Cache.decode(plan)
+        ok(decoded.cover_width > 0 and decoded.cover_height > 0, "device thumbnail bounds travel in the plan")
         local log = table.concat(W.logs, "\n")
         ok(not log:find(client.userkey, 1, true), "never in the log")
     end)
