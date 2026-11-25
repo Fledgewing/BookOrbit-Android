@@ -20,6 +20,7 @@ class SleepPoolTest {
 
     /** shared/fixtures/sleep/cases.json "sources": Pick from and Leave out as sets, Library (R1c, X8). */
     @Test fun pickFromAndLeaveOutFollowTheSharedCases() {
+        // @fixture sleep/cases.json#sources
         val src = JSONObject(File("../../../shared/fixtures/sleep/cases.json").readText()).getJSONObject("sources")
         val from = src.getJSONArray("from")
         for (n in 0 until from.length()) from.getJSONObject(n).let { c ->
@@ -46,6 +47,7 @@ class SleepPoolTest {
     }
 
     @Test fun whichBooksCountAndLeaveOutIsOredAndFailsClosed() {
+        // @fixture bookorbit/catalog-dashboard-section.want-to-read.json
         val fx = JSONObject(File("../../../shared/fixtures/bookorbit/catalog-dashboard-section.want-to-read.json").readText())
         val first = fx.getJSONObject("section").getJSONArray("books").getJSONObject(0)
         assertTrue(SleepPoolLogic.eligible(mapOf("id" to first.getLong("id"), "hasCover" to first.getBoolean("hasCover")), null))

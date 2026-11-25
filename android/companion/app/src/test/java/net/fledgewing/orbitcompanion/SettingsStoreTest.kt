@@ -24,6 +24,7 @@ class SettingsStoreTest {
     @Before
     fun setUp() {
         ctx = RuntimeEnvironment.getApplication()
+        SettingsStore.resetForTest()
         SettingsStore.useSchema(SettingsSchema.parse(java.io.File("../../../shared/settings/schema.json").readText()))
     }
 
@@ -70,12 +71,57 @@ class SettingsStoreTest {
     }
 
     @Test
-    fun legacyKeysKeepTheirStorage() {
+    fun prefsAndTheSleepScreenReadTheSchemaStore() {
         SettingsStore.set(ctx, "wifi_mode", "always_on", "test")
         assertEquals(WifiMode.ALWAYS_ON, Prefs(ctx).wifiMode)
+        Prefs(ctx).wifiIdleMin = 5
+        assertEquals("5", SettingsStore.get(ctx, "wifi_idle_min"))
         SettingsStore.set(ctx, "sleep_text", "Bedtime\n8 pm", "test")
         assertEquals("Bedtime 8 pm", SleepScreen.settings(ctx).text)
         assertFalse("refused", SettingsStore.set(ctx, "sleep_style", "sideways", "test"))
+        assertFalse("nothing in the old places", ctx.getSharedPreferences("orbit", Context.MODE_PRIVATE).contains("wifi_mode"))
+        assertFalse(ctx.getSharedPreferences("orbit_sleep", Context.MODE_PRIVATE).contains("sleep_text"))
+    }
+
+    /**
+     * An older companion kept wifi_mode, wifi_idle_min and home_button in Prefs ("orbit") and the
+     * sleep screen's keys in "orbit_sleep". They move into the schema store once, so a reader's
+     * choices survive the update; a value the schema refuses is dropped (the default then).
+     */
+    @Test
+    fun anOlderCompanionsSettingsMoveIntoTheSchemaStore() {
+        ctx.getSharedPreferences("orbit", Context.MODE_PRIVATE).edit()
+            .putString("wifi_mode", "off_reading").putInt("wifi_idle_min", 5).putString("home_button", "bookorbit")
+            .putString("home_app", "kept.app").commit()
+        ctx.getSharedPreferences("orbit_sleep", Context.MODE_PRIVATE).edit()
+            .putString("sleep_mode", "recommended").putString("sleep_hours", "12").putString("sleep_leave_out", "tag:a\ntag:b")
+            .putString("sleep_battery", "1").putString("sleep_style", "sideways").putString("sleep_text", "old")
+            .putLong("shown", 7L).commit()
+        // A value already in the schema store (set by this version) wins over the old one.
+        ctx.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit().putString("sleep_text", "new").commit()
+        SettingsStore.resetForTest()
+
+        assertEquals(WifiMode.OFF_READING, Prefs(ctx).wifiMode)
+        assertEquals(5, Prefs(ctx).wifiIdleMin)
+        assertEquals(HomeButton.BOOKORBIT, Prefs(ctx).homeButton)
+        val s = SleepScreen.settings(ctx)
+        assertEquals(SleepMode.RECOMMENDED, s.mode)
+        assertEquals(12, s.hours)
+        assertEquals(listOf("tag:a", "tag:b"), s.leaveOut)
+        assertTrue(s.battery)
+        assertEquals("refused, so the default", "bar", SettingsStore.get(ctx, "sleep_style"))
+        assertEquals("new", s.text)
+        // The old keys are gone; what else those files hold stays.
+        val orbit = ctx.getSharedPreferences("orbit", Context.MODE_PRIVATE)
+        val sleep = ctx.getSharedPreferences("orbit_sleep", Context.MODE_PRIVATE)
+        assertFalse(orbit.contains("wifi_mode") || orbit.contains("wifi_idle_min") || orbit.contains("home_button"))
+        assertTrue(SleepSettings.KEYS.none { sleep.contains(it) })
+        assertEquals("kept.app", orbit.getString("home_app", null))
+        assertEquals(7L, sleep.getLong("shown", 0L))
+        // Once: an old key written again later (a downgrade and back) is not read.
+        orbit.edit().putString("wifi_mode", "always_on").commit()
+        SettingsStore.resetForTest()
+        assertEquals(WifiMode.OFF_READING, Prefs(ctx).wifiMode)
     }
 
     @Test
