@@ -572,10 +572,16 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            if jq -e '.enforce' shared/release-signing.json >/dev/null; then
+              echo "::error::signatures are enforced but the secret RELEASE_SIGNING_KEY is not set"; exit 1
+            fi
             echo "::warning::RELEASE_SIGNING_KEY is not set: the feed is unsigned"
             exit 0
           fi
           tools/feed-keys/feed-keys sign --tag xteink-feed releases.json > releases.json.sig
+          if [ -n "$(jq -r .root_public_key shared/release-signing.json)" ]; then
+            tools/feed-keys/feed-keys verify --tag xteink-feed releases.json.sig releases.json
+          fi
 
       - name: Write the feed to the feed branch
         env:
