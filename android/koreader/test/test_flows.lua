@@ -537,6 +537,7 @@ do
     function W.wall() ffi.C.gettimeofday(tv, nil); return tonumber(tv.tv_sec) + tonumber(tv.tv_usec) / 1e6 end
 end
 local passed, failed = 0, 0
+local executed = {}
 -- Each test gets TEST_LIMIT_S seconds (CPU or wall clock); past that it fails with a traceback
 -- instead of hanging the suite. The hook runs every 10000 VM instructions; LuaJIT skips hooks in
 -- compiled traces, so the JIT is off here (the suite is small; it runs in about a second).
@@ -557,6 +558,7 @@ local function withLimit(name, fn, limit)
 end
 local function test(name, fn)
     if os.getenv("ORBIT_TEST_ONLY") and not name:find(os.getenv("ORBIT_TEST_ONLY"), 1, true) then return end
+    executed[name] = true
     W.intent_window, W.intent_max = {}, 0
     local t0 = W.wall()
     local ok, err = withLimit(name, fn)
@@ -7011,13 +7013,15 @@ end
             ReaderUI.instance = nil
             E.Mirror.notices, E.Mirror.busy, E.Mirror.active = true, true, true
             -- No companion repair answer is delivered. Opening cannot wait for one.
-            local before = #W.broadcasts
+            local before, quits = #W.broadcasts, W.quits or 0
             local reader = { document={file="/books/synthetic.epub"}, name="reader" }
             Reader.doShowReader = function() ReaderUI.instance=reader; UIManager:show(reader) end
             Reader:showReader("/books/synthetic.epub", "epub")
             ok(#W.shown > 0, origin .. ": opening widget keeps UIManager alive before next tick")
             run(0)
             eq(UIManager:getTopmostVisibleWidget(), reader, origin .. ": ReaderUI shown")
+            eq(ReaderUI.instance, reader, origin .. ": reader instance survives")
+            eq(W.quits or 0, quits, origin .. ": KOReader did not exit")
             for n=before+1,#W.broadcasts do ok(not W.broadcasts[n].extras.repair_book, "open never sends repair") end
         end
         local Trap = class()
@@ -7036,6 +7040,14 @@ end)
 
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
 
+if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
+    for _, name in ipairs({
+        "startup smoke: last document remains the top reader through a yielding progress pull",
+        "startup smoke: Home, history and file browser open during Full refresh with repair pending",
+    }) do
+        assert(executed[name], "required reader flow did not run: " .. name)
+    end
+end
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

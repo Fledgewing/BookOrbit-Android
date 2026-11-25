@@ -25,11 +25,20 @@ class UpdaterUrlTest {
     @Test
     fun missingNewRepositoryFallsBackOnceWithoutChangingAssetUrls() {
         val oldApi = "https://api.github.com/repos/${Updater.LEGACY_REPO}"
-        assertEquals("$oldApi/releases/latest", Updater.legacyApiUrl("${Updater.API}/releases/latest", 404))
-        assertEquals("$oldApi/releases?per_page=5", Updater.legacyApiUrl("${Updater.API}/releases?per_page=5", 404))
-        assertNull(Updater.legacyApiUrl("$oldApi/releases/latest", 404))
-        assertNull(Updater.legacyApiUrl("${Updater.API}/releases/latest", 403))
-        assertNull(Updater.legacyApiUrl("https://github.com/${Updater.REPO}/releases/download/v1/file", 404))
+        assertEquals("$oldApi/releases/latest", Updater.legacyRepoUrl("${Updater.API}/releases/latest", 404))
+        assertEquals("$oldApi/releases?per_page=5", Updater.legacyRepoUrl("${Updater.API}/releases?per_page=5", 404))
+        assertNull(Updater.legacyRepoUrl("$oldApi/releases/latest", 404))
+        assertNull(Updater.legacyRepoUrl("${Updater.API}/releases/latest", 403))
+        assertNull(Updater.legacyRepoUrl("https://github.com/${Updater.REPO}/releases/download/v1/file", 404))
+    }
+
+    @Test
+    fun signedFeedUsesCanonicalLocationWithOneLegacyLocationFallback() {
+        assertEquals("https://raw.githubusercontent.com/Fledgewing/BookSync/android-feed/android/releases.json",
+            AndroidReleaseFeed.URL)
+        assertEquals(AndroidReleaseFeed.LEGACY_URL, Updater.legacyRepoUrl(AndroidReleaseFeed.URL, 404))
+        assertNull(Updater.legacyRepoUrl(AndroidReleaseFeed.LEGACY_URL, 404))
+        assertNull(Updater.legacyRepoUrl(AndroidReleaseFeed.URL, 403))
     }
 
     @Test

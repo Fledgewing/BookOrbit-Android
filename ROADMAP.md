@@ -10,6 +10,7 @@ CrossInk 2.x only; 1.6 is retired).
 
 | Outcome | Platforms | Status | Design |
 |---|---|---|---|
+| Withdraw broken releases through a signed Android feed and require reader opening flows before publication. | Android | building (W35 implementation requested) | [release safety](docs/design/release-safety.md) |
 | Caller-verified companion commands and one tested plugin–companion contract, with file operations confined to BookSync data. | Android | building (approved design; caller checks merged) | [security](docs/design/security.md), [contract](android/docs/INTERFACE.md) |
 
 ## Next release (0.12): BookSync Home

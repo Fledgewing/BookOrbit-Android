@@ -12,9 +12,13 @@
 name: release-tests
 
 on:
-  # A change to the tests themselves runs them; anything else waits for a release (§6.3).
+  push:
+    branches: [main]
+    paths: ["android/koreader/**", ".github/workflows/release-tests.yml", ".github/workflows/release.yml"]
   pull_request:
     paths:
+      - "android/koreader/**"
+      - ".github/workflows/release.yml"
       - "tools/e2e/**"
       - "shared/fixtures/e2e/**"
       - "xteink/test/e2e/**"
@@ -91,7 +95,9 @@ jobs:
     if: (inputs.platform || 'all') != 'android'
     needs: kit
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    # X4 Pro completes 40 passing scenarios near 40 minutes including its build.
+    # Leave room for artifact upload/cleanup; scenario deadlines remain in run.py.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -172,7 +178,7 @@ jobs:
           if-no-files-found: warn
 
   reader-startup:
-    name: KOReader start into last book
+    name: KOReader start into last book and open from Home/history
     if: (inputs.platform || 'all') != 'xteink'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -197,8 +203,11 @@ jobs:
         env:
           ORBIT_KOREADER_SOURCE: ${{ runner.temp }}/koreader
           ORBIT_TEST_ONLY: startup
+          ORBIT_REQUIRE_READER_FLOWS: "1"
         run: |
           sudo apt-get install -y -qq luajit libsqlite3-0 >/dev/null
+          # Older tags must not ignore the required-scenario flag during a manual rebuild.
+          grep -q ORBIT_REQUIRE_READER_FLOWS android/koreader/test/test_flows.lua
           luajit android/koreader/test/test_flows.lua </dev/null
 
   android:
@@ -219,3 +228,14 @@ jobs:
       - name: Companion unit and Robolectric tests
         working-directory: android/companion
         run: ./gradlew --no-daemon testDebugUnitTest </dev/null
+
+  reader-required:
+    name: Required KOReader release gate
+    needs: reader-startup
+    if: ${{ always() && (inputs.platform || 'all') != 'xteink' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Reader flows must have run successfully
+        env:
+          READER_RESULT: ${{ needs.reader-startup.result }}
+        run: test "$READER_RESULT" = success

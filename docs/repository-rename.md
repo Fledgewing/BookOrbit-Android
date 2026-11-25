@@ -25,7 +25,7 @@ at this change, not an assertion that every tag was installed on a device.
 
 | Client | 301 / 302 / 307, including another HTTPS host | Evidence |
 |---|---|---|
-| Android companion, earliest release onward | Yes. Automatic GET redirects; HTTP/HTTPS scheme changes are not followed. | `v0.1.0:companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:164`; current `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:275`. [Android response handling](https://developer.android.com/reference/java/net/HttpURLConnection#response-handling) documents cross-origin redirects. |
+| Android companion, earliest release onward | Yes. Automatic GET redirects; HTTP/HTTPS scheme changes are not followed. | `v0.1.0:companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:164`; current `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:278`. [Android response handling](https://developer.android.com/reference/java/net/HttpURLConnection#response-handling) documents cross-origin redirects. |
 | KOReader user patch, through 0.7.x | Yes. Manual loop accepts any 3xx with Location, up to five requests, without host pinning. | `v0.1.0:koreader-patch/2-orbit-android.lua:785`; `v0.6.2:koreader-patch/2-orbit-android.lua:2316`; `v0.7.0:android/koreader-patch/2-orbit-android.lua:2318`. |
 | KOReader plugin, from 0.8 | No HTTP update/feed reads of its own; delegates to companion. | `android/koreader/orbit.koplugin/ko/updater.lua:6`, `:24`. |
 | Xteink manifest/feed GET, 1.6 and 2.x | Transport yes; certain redirect bodies can spoil manifest parsing in shipped builds. | At all four pinned commits, `src/network/OtaUpdater.cpp:143` feeds all ON_DATA bodies; `:255` leaves `disable_auto_redirect` false and `max_redirection_count` zero; `:285` calls `esp_http_client_perform`. [ESP-IDF defaults](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32/api-reference/protocols/esp_http_client.html) enable automatic redirects and use the default limit when zero. |
@@ -47,11 +47,23 @@ response (`components/esp_http_client/esp_http_client.c:306`, `:331` at v5.5.3),
 
 ## Signatures and durable identifiers
 
-The feed carries per-asset signatures, not a signature over the feed JSON or its full URL.
+The Xteink feed carries per-asset signatures, not a signature over the feed JSON or its full URL.
 `tools/feed-keys/feed-keys:73` signs the domain, tag, asset filename and SHA-256.
 `xteink/orbify/core/UpdateSignature.cpp:60` reconstructs those inputs; `:75` takes only the
 last path segment from the download URL. Old and new repository URLs therefore verify with
 the identical signature. The OTA regression reads both URLs with the same signed fixture.
+
+Current main's Android updater reads the signed envelope at
+`android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AndroidReleaseFeed.kt:9`.
+Its **payload bytes, including asset URLs, are signed**; the envelope's fetch URL is not.
+Changing the fetch location preserves the original payload and signature. Old payload asset
+URLs continue through the normal download redirects. Regenerating payload URLs requires a new
+signature; the Android feed publisher already signs every generated payload. The regression
+verifies an old-URL payload, rejects a rewritten payload with its old signature, and accepts
+it after signing again. This is separate from the Xteink per-asset scheme above. The signed
+Android feed must be published before distributing that updater, as described in
+[release safety](design/release-safety.md).
+
 The plugin zip uses the same artifact signing scheme. APK verification pins its existing
 Android package and signing certificate, independently of repository spelling.
 
