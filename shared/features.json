@@ -1,0 +1,5593 @@
+{
+  "format_version": 1,
+  "audited_revision": "71c294545a64133dcf8dbd80eae04b733997cbdd",
+  "scope": "Source support in main shipping configurations; not a device validation or proof of first release. Inherited reader/server functions are included only to explain the Orbify integration or overlay cuts.",
+  "platforms": {
+    "android": {
+      "label": "Android (M8C / Boox)",
+      "version": "v0.11.3-rc.17",
+      "environment": "companion + orbit.koplugin; vendor permissions apply"
+    },
+    "x4_pro": {
+      "label": "X4 Pro",
+      "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
+      "environment": "x4-pro"
+    },
+    "x4": {
+      "label": "X4 classic",
+      "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
+      "environment": "x4-classic"
+    },
+    "x3": {
+      "label": "X3",
+      "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
+      "environment": "default (also ESP32-C3 X4)"
+    }
+  },
+  "features": [
+    {
+      "id": "catalog",
+      "feature": "Catalog lists, search and detail through the BookOrbit integration",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Cached catalog adapter",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/cache.lua",
+              "line": 24
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Catalog cache and facet queries",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CatalogRefresh.inc",
+              "line": 31
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Catalog cache and facet queries",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CatalogRefresh.inc",
+              "line": 31
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Online catalog; no Orbify offline cache",
+          "reason": "hardware: cache uses PSRAM; X3 flash cuts",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 292
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "grouping",
+      "feature": "Group every catalog list by series or author",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Series/author chips and grouped rows",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/grouping.lua",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Facet lists exist; no group-every-list control",
+          "reason": "deliberately deferred: ROADMAP Next 6a",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0054-orbify-bulk-catalog.patch",
+              "line": 6
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Facet lists exist; no group-every-list control",
+          "reason": "deliberately deferred: ROADMAP Next 6a",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0054-orbify-bulk-catalog.patch",
+              "line": 6
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "missing",
+          "note": "No grouping control",
+          "reason": "hardware: current cached implementation excluded on X3; ROADMAP Next 6a",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 292
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "offline",
+      "feature": "Offline catalog pages and retained book details",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "SQLite cache via companion",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CacheStore.kt",
+              "line": 15
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "SD cache; retained replies",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CacheStore.cpp",
+              "line": 396
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "SD cache; retained replies",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CacheStore.cpp",
+              "line": 396
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 292
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "refresh",
+      "feature": "Explicit resumable Full refresh; monotone percentage",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Manual refresh indicator and worker",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
+              "line": 60
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Persistent checkpoint and worker",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/RefreshRunner.cpp",
+              "line": 32
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Persistent checkpoint and worker",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/RefreshRunner.cpp",
+              "line": 32
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "bulk",
+      "feature": "Bulk manifest, derived lists and batched state reconciliation",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Bulk catalog plan",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/BulkWork.kt",
+              "line": 10
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Bulk catalog derived author/series lists",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/BulkCatalog.cpp",
+              "line": 22
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Bulk catalog derived author/series lists",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/BulkCatalog.cpp",
+              "line": 22
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "background-refresh",
+      "feature": "Refresh continues away from the catalog; foreground remains usable",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion worker",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
+              "line": 17
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Separate refresh task",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/RefreshRunner.cpp",
+              "line": 38
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Separate refresh task",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/RefreshRunner.cpp",
+              "line": 38
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "revalidation",
+      "feature": "Saved pages retained indefinitely; silent incremental refresh",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion reconciliation",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
+              "line": 60
+            },
+            {
+              "path": "android/koreader/orbit.koplugin/ko/cache.lua",
+              "line": 24
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Opening does not evict/revalidate; worker incremental requests",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CacheStore.cpp",
+              "line": 496
+            },
+            {
+              "path": "xteink/orbify/RefreshRunner.cpp",
+              "line": 36
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Opening does not evict/revalidate; worker incremental requests",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CacheStore.cpp",
+              "line": 496
+            },
+            {
+              "path": "xteink/orbify/RefreshRunner.cpp",
+              "line": 36
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 292
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "storage",
+      "feature": "One storage budget: 250 MB default, 100 MB through 10 GB or unlimited",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion eviction plan; protected entries can prevent fitting",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/StorageLogic.kt",
+              "line": 9
+            },
+            {
+              "path": "shared/settings/schema.json",
+              "line": 824
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Shared 64-bit budget on SD catalog",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 68
+            },
+            {
+              "path": "xteink/orbify/CacheStore.cpp",
+              "line": 26
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Shared 64-bit budget on SD catalog",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 68
+            },
+            {
+              "path": "xteink/orbify/CacheStore.cpp",
+              "line": 26
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "covers",
+      "feature": "Lazy covers and repair on Full refresh",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Thumbnail cache and ETag-aware fetch",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ThumbnailCache.kt",
+              "line": 8
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Cache plus mirror",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/Mirror.cpp",
+              "line": 26
+            },
+            {
+              "path": "xteink/orbify/CacheStore.cpp",
+              "line": 26
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Cache plus mirror",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/Mirror.cpp",
+              "line": 26
+            },
+            {
+              "path": "xteink/orbify/CacheStore.cpp",
+              "line": 26
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Live catalog covers; no retained Orbify cache/repair",
+          "reason": "hardware: cached cover path cut for flash/PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 292
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "downloads",
+      "feature": "Download progress and return to catalog",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "BookOrbit download integration; companion copy worker",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/copies.lua",
+              "line": 18
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Return-to-catalog patch; native progress on S3",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 239
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Return-to-catalog patch; native progress on S3",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 239
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Progress bar only if largest free block fits framebuffer plus 40,000-byte margin; otherwise static Downloading screen",
+          "reason": "hardware: conditional framebuffer restoration to preserve TLS heap",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 247
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 248
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0013-download-progress-ui.patch",
+              "line": 13
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "copies",
+      "feature": "Replace changed library copies; preserve reading state",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion copy refresh",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CopiesLogic.kt",
+              "line": 8
+            },
+            {
+              "path": "android/koreader/orbit.koplugin/ko/copies.lua",
+              "line": 18
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Copy check and refresh on sync",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CopyRefresh.cpp",
+              "line": 31
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Copy check and refresh on sync",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CopyRefresh.cpp",
+              "line": 31
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Copy check and refresh on sync",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CopyRefresh.cpp",
+              "line": 31
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "position",
+      "feature": "Furthest-place position sync, behind hold and explicit Yes/No",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "BookSync position sync pull/drain and prompt",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/orbismart.lua",
+              "line": 33
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "BookSync position sync state and reader prompt",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/OrbiSmartSync.cpp",
+              "line": 31
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0052-orbify-orbismart.patch",
+              "line": 5
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "BookSync position sync state and reader prompt",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/OrbiSmartSync.cpp",
+              "line": 31
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0052-orbify-orbismart.patch",
+              "line": 5
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Sleep/foreground sync; no in-reader pause/wake background transport",
+          "reason": "hardware: TLS cannot coexist with open book on X3",
+          "evidence": [
+            {
+              "path": "xteink/orbify/OrbiSmartSync.cpp",
+              "line": 31
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 268
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "override",
+      "feature": "Read from here everywhere; offline queued override",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "BookSync position sync override",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/orbismart.lua",
+              "line": 33
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Durable override drain",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/OrbiSmartSync.cpp",
+              "line": 333
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Durable override drain",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/OrbiSmartSync.cpp",
+              "line": 333
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Durable override drain",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/OrbiSmartSync.cpp",
+              "line": 333
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "sleep-sync",
+      "feature": "Sync at sleep, with bounded time and wake cancellation",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Sleep flow and configurable cap",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/sleep.lua",
+              "line": 9
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Deadline/watchdog overlay",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037a-orbify-sleep-sync-budget.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Deadline/watchdog overlay",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037a-orbify-sleep-sync-budget.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Deadline/watchdog overlay",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037a-orbify-sleep-sync-budget.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "reading-sync",
+      "feature": "Periodic/page/chapter sync or pause sync while book stays open",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Reading schedule and BookSync position sync pause",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/reading_sync.lua",
+              "line": 139
+            },
+            {
+              "path": "android/koreader/orbit.koplugin/ko/orbismart.lua",
+              "line": 33
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Background sync task",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/BookOrbitBackgroundSync.cpp",
+              "line": 42
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Background sync task",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/BookOrbitBackgroundSync.cpp",
+              "line": 42
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "TLS session does not fit beside an open book; no PSRAM",
+          "reason": "hardware: TLS session does not fit beside an open book; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 268
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "annotations",
+      "feature": "Highlight and bookmark sync carried through lifecycle sync",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Drains BookOrbit lifecycle outbox",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/sync.lua",
+              "line": 14
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Full sync; background reading defers annotation work",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0022-background-sync.patch",
+              "line": 392
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Full sync; background reading defers annotation work",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0022-background-sync.patch",
+              "line": 392
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Sleep/foreground full sync; background unavailable",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0022-background-sync.patch",
+              "line": 392
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 268
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "reading-stats",
+      "feature": "Reading sessions uploaded in full sync",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Lifecycle outbox integration",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/sync.lua",
+              "line": 14
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Sessions deferred to full sync while book open",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0022-background-sync.patch",
+              "line": 392
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Sessions deferred to full sync while book open",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0022-background-sync.patch",
+              "line": 392
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Sessions deferred to full sync while book open",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0022-background-sync.patch",
+              "line": 392
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "finish",
+      "feature": "Final progress before durable read-status; Undo",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Finish queue and sheet",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/endofbook.lua",
+              "line": 39
+            },
+            {
+              "path": "android/koreader/orbit.koplugin/ko/endsheet.lua",
+              "line": 15
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Durable finish queue",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/FinishSync.cpp",
+              "line": 37
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0027-orbify-finish-at-end.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Durable finish queue",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/FinishSync.cpp",
+              "line": 37
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0027-orbify-finish-at-end.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Durable finish queue",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/FinishSync.cpp",
+              "line": 37
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0027-orbify-finish-at-end.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "end-sheet",
+      "feature": "End-of-book sheet: next series book, suggestion, author books",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "End sheet",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/endsheet.lua",
+              "line": 15
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "End page; two suggestions configured",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 288
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "End page; two suggestions configured",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 288
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "End page; two suggestions configured",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 288
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "rating",
+      "feature": "End-of-book stars and rating upload",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Stars on end sheet",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/endsheet.lua",
+              "line": 15
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Rating enabled",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 285
+            },
+            {
+              "path": "xteink/orbify/FinishSync.cpp",
+              "line": 37
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Rating enabled",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 285
+            },
+            {
+              "path": "xteink/orbify/FinishSync.cpp",
+              "line": 37
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 rating code/strings excluded to preserve flash gate",
+          "reason": "hardware: X3 rating code/strings excluded to preserve flash gate",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 285
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "next-cover",
+      "feature": "Next-in-series cover on end sheet",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Cover on end sheet",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/endsheet.lua",
+              "line": 15
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Cached cover drawn offline",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 8
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Cached cover drawn offline",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 8
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 298
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "quiet",
+      "feature": "No unsolicited overlays or focus changes while reading",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Gate and companion Reading",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/notices.lua",
+              "line": 6
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ReadingLogic.kt",
+              "line": 11
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Reader activity gate",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/Quiet.cpp",
+              "line": 9
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0031-orbify-reading-quiet.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Reader activity gate",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/Quiet.cpp",
+              "line": 9
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0031-orbify-reading-quiet.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Reader activity gate",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/Quiet.cpp",
+              "line": 9
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0031-orbify-reading-quiet.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "home",
+      "feature": "Local reading first; return to book then library home",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Smart Home and local state hooks",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/home.lua",
+              "line": 9
+            },
+            {
+              "path": "android/koreader/orbit.koplugin/ko/localfirst.lua",
+              "line": 30
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Cached native Home and sync tile; no Android smart Home-button policy",
+          "reason": "deliberately deferred: ROADMAP Next release BookSync Home",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037g-orbify-home-sync-tile.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Cached native Home and sync tile; no Android smart Home-button policy",
+          "reason": "deliberately deferred: ROADMAP Next release BookSync Home",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037g-orbify-home-sync-tile.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Cached native Home and sync tile; no Android smart Home-button policy",
+          "reason": "deliberately deferred: ROADMAP Next release BookSync Home",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037g-orbify-home-sync-tile.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "layout",
+      "feature": "BookSync reading layout: top clock, bottom battery/chapter/progress",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Paint inside existing margins; optional size caps",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/status_layout.lua",
+              "line": 5
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Native configurable clock/battery/chapter/progress slots plus Orbify spacing; no single BookSync preset",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 284
+            },
+            {
+              "path": "xteink/orbify/core/StatusFormat.h",
+              "line": 6
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/util/ReaderStatusBarConfig.h",
+              "line": 15
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Native configurable clock/battery/chapter/progress slots plus Orbify spacing; no single BookSync preset",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 284
+            },
+            {
+              "path": "xteink/orbify/core/StatusFormat.h",
+              "line": 6
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/util/ReaderStatusBarConfig.h",
+              "line": 15
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Native configurable status bars remain; Orbify spaced page format cut",
+          "reason": "hardware: X3 status formatting excluded for flash",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 284
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/util/ReaderStatusBarConfig.h",
+              "line": 15
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "sleep-covers",
+      "feature": "Recommended/current sleep cover with offline pool",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion pool and sleep screen",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SleepPoolBuilder.kt",
+              "line": 16
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SleepScreen.kt",
+              "line": 30
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "SD cover pool; native current-cover mode",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepScreen.cpp",
+              "line": 34
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "SD cover pool; native current-cover mode",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepScreen.cpp",
+              "line": 34
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "No Orbify pool; native current-cover screen remains; flash/PSRAM cut",
+          "reason": "hardware: No Orbify pool; native current-cover screen remains; flash/PSRAM cut",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "sleep-extras",
+      "feature": "Sleep text, battery, bar/overlay and placement",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Sleep rendering",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SleepScreen.kt",
+              "line": 30
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Sleep row controls and renderer",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepScreen.cpp",
+              "line": 34
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Sleep row controls and renderer",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepScreen.cpp",
+              "line": 34
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "sleep-pickers",
+      "feature": "Named sleep sources/exclusions; saved selections visible",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Sleep picker and source merge",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SleepPicker.kt",
+              "line": 1
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Named library/scope/collection selectors",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 50
+            },
+            {
+              "path": "xteink/orbify/SleepListActivity.cpp",
+              "line": 18
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Named library/scope/collection selectors",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 50
+            },
+            {
+              "path": "xteink/orbify/SleepListActivity.cpp",
+              "line": 18
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate; no PSRAM",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "wifi",
+      "feature": "Always on / off while reading / just in time; idle timeout",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Wi-Fi policy; vendor permission dependent",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/wifi.lua",
+              "line": 14
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Vendor.kt",
+              "line": 19
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Shared schema choices and holds",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/Wifi.cpp",
+              "line": 17
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 47
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Shared schema choices and holds",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/Wifi.cpp",
+              "line": 17
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 47
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Native connect/disconnect; shared modes and idle setting cut",
+          "reason": "hardware: modes currently tied to MIRROR flash/PSRAM gate",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "tailnet",
+      "feature": "Reach tailnet server; resolve tailnet names",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Wakes external Tailscale app",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/VpnConnectGate.kt",
+              "line": 4
+            },
+            {
+              "path": "android/koreader/orbit.koplugin/ko/net.lua",
+              "line": 13
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "MicroLink shim DNS and routing",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 98
+            },
+            {
+              "path": "xteink/tailnet/shim/TailnetResolver.cpp",
+              "line": 36
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "MicroLink shim DNS and routing",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 98
+            },
+            {
+              "path": "xteink/tailnet/shim/TailnetResolver.cpp",
+              "line": 36
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "MicroLink shim DNS and routing",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 98
+            },
+            {
+              "path": "xteink/tailnet/shim/TailnetResolver.cpp",
+              "line": 36
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "tailnet-login",
+      "feature": "On-reader tailnet QR login/status",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "not_applicable",
+          "note": "Android Tailscale app owns login",
+          "reason": "not applicable: Android Tailscale app owns login",
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/VpnConnectGate.kt",
+              "line": 4
+            }
+          ],
+          "version": null
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Firmware login UI",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/ui/TailnetLoginActivity.cpp",
+              "line": 24
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Firmware login UI",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/ui/TailnetLoginActivity.cpp",
+              "line": 24
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Firmware login UI",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/ui/TailnetLoginActivity.cpp",
+              "line": 24
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "tailnet-direct",
+      "feature": "Direct peer connections during live catalog use",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Android Tailscale handles routing",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/VpnConnectGate.kt",
+              "line": 4
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Direct connections enabled",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 123
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Direct connections enabled",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 123
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "DERP-only with framebuffer retained; parked boots may go direct",
+          "reason": "hardware: reduced internal RAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 123
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "tls",
+      "feature": "Verify public BookOrbit TLS certificate before sending credentials",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Android platform TLS",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
+              "line": 17
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Public hosts verified or fingerprint trusted; tailnet exempt",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/ServerTrustNet.cpp",
+              "line": 17
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 310
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Public hosts verified or fingerprint trusted; tailnet exempt",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/ServerTrustNet.cpp",
+              "line": 17
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 310
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Server trust verifier disabled",
+          "reason": "hardware: historical ~9.6 KB cost; gate was tighter when disabled; remeasure with current headroom",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 310
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "updates",
+      "feature": "Self-update with artifact SHA-256 checks",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "APK/plugin updater",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/updater.lua",
+              "line": 17
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Installers.kt",
+              "line": 25
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Firmware OTA and hash/signature hook",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0050-orbify-signed-ota.patch",
+              "line": 12
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Firmware OTA and hash/signature hook",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0050-orbify-signed-ota.patch",
+              "line": 12
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Firmware OTA and hash/signature hook",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0050-orbify-signed-ota.patch",
+              "line": 12
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "signatures",
+      "feature": "Root-certified release signatures enforced",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Verifier exists; enforcement off",
+          "reason": "deliberately deferred: ROADMAP Next 16",
+          "evidence": [
+            {
+              "path": "shared/release-signing.json",
+              "line": 4
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ReleaseSignature.kt",
+              "line": 144
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Verifier exists; enforcement off",
+          "reason": "deliberately deferred: ROADMAP Next 16",
+          "evidence": [
+            {
+              "path": "shared/release-signing.json",
+              "line": 4
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 574
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Verifier exists; enforcement off",
+          "reason": "deliberately deferred: ROADMAP Next 16",
+          "evidence": [
+            {
+              "path": "shared/release-signing.json",
+              "line": 4
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 574
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Verifier exists; enforcement off",
+          "reason": "deliberately deferred: ROADMAP Next 16",
+          "evidence": [
+            {
+              "path": "shared/release-signing.json",
+              "line": 4
+            },
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 574
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "update-return",
+      "feature": "Return after update; restore prior reading context",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Reopen book/Home after KOReader restart",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/updater.lua",
+              "line": 17
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "OTA screen return marker",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/OtaReturn.cpp",
+              "line": 6
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0043-orbify-ota-return.patch",
+              "line": 8
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "OTA screen return marker",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/OtaReturn.cpp",
+              "line": 6
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0043-orbify-ota-return.patch",
+              "line": 8
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "OTA screen return marker",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/OtaReturn.cpp",
+              "line": 6
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0043-orbify-ota-return.patch",
+              "line": 8
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "settings-ui",
+      "feature": "Settings grouped by purpose; searchable shared settings UI",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Eight sections with search",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 219
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Native categories and web settings; no shared-schema search UI",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 16
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Native categories and web settings; no shared-schema search UI",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 16
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Native categories and web settings; no shared-schema search UI",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 16
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "pin",
+      "feature": "Settings PIN; public About remains available",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "PIN helper and public About",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/PinLogic.kt",
+              "line": 13
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AboutActivity.kt",
+              "line": 9
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "PIN and lock activity",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SettingsPin.cpp",
+              "line": 26
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "PIN and lock activity",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SettingsPin.cpp",
+              "line": 26
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "PIN and lock activity",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SettingsPin.cpp",
+              "line": 26
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "remote-clicker",
+      "feature": "Pair and use a wireless remote page-turn clicker",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Accessibility clicker service and key mappings",
+          "reason": null,
+          "version": "v0.11.3-rc.17",
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ClickerService.kt",
+              "line": 19
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path. Fit/coexistence not measured",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "platformio.ini",
+              "line": 186
+            },
+            {
+              "repository": "Free-Ink/freeink-sdk",
+              "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+              "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+              "line": 307
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path. Fit/coexistence not measured",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "platformio.ini",
+              "line": 186
+            },
+            {
+              "repository": "Free-Ink/freeink-sdk",
+              "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+              "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+              "line": 307
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path. Fit/coexistence not measured",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "platformio.ini",
+              "line": 186
+            },
+            {
+              "repository": "Free-Ink/freeink-sdk",
+              "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+              "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+              "line": 307
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "buttons",
+      "feature": "Cross-app page turns and Send key",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Accessibility clicker service",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ClickerService.kt",
+              "line": 26
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/OrbitKeys.kt",
+              "line": 28
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "Cross-app Android accessibility service does not apply to dedicated firmware",
+          "reason": "not applicable: Android accessibility/other-app Send key does not apply to dedicated firmware buttons",
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "Cross-app Android accessibility service does not apply to dedicated firmware",
+          "reason": "not applicable: Android accessibility/other-app Send key does not apply to dedicated firmware buttons",
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "Cross-app Android accessibility service does not apply to dedicated firmware",
+          "reason": "not applicable: Android accessibility/other-app Send key does not apply to dedicated firmware buttons",
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "button-navigation",
+      "feature": "Reach Orbify screens by reader input",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Touch UI and clicker keys",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Clicker.kt",
+              "line": 16
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Mapped hardware input on end page and lists",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            },
+            {
+              "path": "xteink/orbify/SleepListActivity.cpp",
+              "line": 18
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Mapped hardware input on end page and lists",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            },
+            {
+              "path": "xteink/orbify/SleepListActivity.cpp",
+              "line": 18
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Mapped hardware input on end page and lists",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            },
+            {
+              "path": "xteink/orbify/SleepListActivity.cpp",
+              "line": 18
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "battery-record",
+      "feature": "Record/export orbit-battery-stats/1",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Battery stats/export",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/StatsLogic.kt",
+              "line": 20
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Record and export on USB mode",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 276
+            },
+            {
+              "path": "xteink/orbify/BatteryStats.cpp",
+              "line": 29
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Record and export on USB mode",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 276
+            },
+            {
+              "path": "xteink/orbify/BatteryStats.cpp",
+              "line": 29
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Record; Settings writes JSON export",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 276
+            },
+            {
+              "path": "xteink/orbify/BatteryStats.cpp",
+              "line": 29
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "battery-ui",
+      "feature": "Battery rates and cross-reader comparison UI",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Compare stats",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/StatsLogic.kt",
+              "line": 20
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Rates page and export; no cross-reader Compare UI",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/BatteryStatsActivity.cpp",
+              "line": 18
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Rates page and export; no cross-reader Compare UI",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/BatteryStatsActivity.cpp",
+              "line": 18
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Export only; no numeric rates/Compare UI",
+          "reason": "hardware: level 2 cuts rate display for flash; comparison also missing",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 276
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      }
+    },
+    {
+      "id": "fonts",
+      "feature": "Optional Orbify installer for Bitter and Literata",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Off by default; worker install",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/FontInstaller.kt",
+              "line": 17
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "Fonts are CrossInk-owned, not an Orbify installer",
+          "reason": "not applicable: Fonts are CrossInk-owned, not an Orbify installer",
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 54
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "Fonts are CrossInk-owned, not an Orbify installer",
+          "reason": "not applicable: Fonts are CrossInk-owned, not an Orbify installer",
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 54
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "Built-in fonts/SD files are CrossInk-owned; no Orbify installer",
+          "reason": "not applicable: Built-in fonts/SD files are CrossInk-owned; no Orbify installer",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 261
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "setup",
+      "feature": "Install/update KOReader, plugins; full/add-on mode; recommended defaults with Undo",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Installers, mode and recommendations",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Installers.kt",
+              "line": 25
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Mode.kt",
+              "line": 25
+            },
+            {
+              "path": "android/koreader/orbit.koplugin/ko/recommended.lua",
+              "line": 14
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "Firmware image; no Android app/launcher setup",
+          "reason": "not applicable: Firmware image; no Android app/launcher setup",
+          "evidence": [
+            {
+              "path": "xteink/scripts/apply.sh",
+              "line": 1
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "Firmware image; no Android app/launcher setup",
+          "reason": "not applicable: Firmware image; no Android app/launcher setup",
+          "evidence": [
+            {
+              "path": "xteink/scripts/apply.sh",
+              "line": 1
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "Firmware image; no Android app/launcher setup",
+          "reason": "not applicable: Firmware image; no Android app/launcher setup",
+          "evidence": [
+            {
+              "path": "xteink/scripts/apply.sh",
+              "line": 1
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "frontlight",
+      "feature": "Reapply frontlight after first boot paint",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "not_applicable",
+          "note": "Android firmware controls frontlight",
+          "reason": "not applicable: Android firmware controls frontlight",
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Vendor.kt",
+              "line": 19
+            }
+          ],
+          "version": null
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Boot repaint patch enabled",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 251
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0024-frontlight-reapply.patch",
+              "line": 102
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "No frontlight on this hardware",
+          "reason": "not applicable: no frontlight",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "platformio.ini",
+              "line": 603
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "No frontlight on this hardware",
+          "reason": "not applicable: no frontlight",
+          "evidence": [
+            {
+              "repository": "Free-Ink/freeink-sdk",
+              "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+              "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+              "line": 1091
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "crash",
+      "feature": "Persist crash summary and deduplicate diagnostic report at boot",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "missing",
+          "note": "Logs exist; no Orbify persisted crash-record equivalent",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ReadingLogic.kt",
+              "line": 11
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Pages.kt",
+              "line": 18
+            }
+          ],
+          "version": null
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Core-dump summary logged; not automatic remote upload",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CrashRecord.cpp",
+              "line": 19
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Core-dump summary logged; not automatic remote upload",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/CrashRecord.cpp",
+              "line": 19
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Crash summary implementation is S3-only",
+          "reason": "hardware: firmware core-dump implementation gated to S3",
+          "evidence": [
+            {
+              "path": "xteink/orbify/CrashRecord.cpp",
+              "line": 6
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "notices",
+      "feature": "In-product project credit and licence notices",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Public About ships notice asset",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AboutActivity.kt",
+              "line": 9
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "About credit enabled",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 270
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "About credit enabled",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 270
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "In-product Orbify About credit omitted",
+          "reason": "hardware: About strings excluded for flash; distribution licences still shipped",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 270
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
+      "id": "setting-status_orbit_layout",
+      "feature": "Status bar: BookSync layout (matches Xteink) (`status_orbit_layout`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Native bar visibility and slot controls; no one-toggle BookSync preset",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 284
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Native bar visibility and slot controls; no one-toggle BookSync preset",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 284
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Native bar visibility and slot controls; no one-toggle BookSync preset",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 284
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "status_orbit_layout"
+      ]
+    },
+    {
+      "id": "setting-status_orbit_size",
+      "feature": "Status bar size (`status_orbit_size`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native Small / Medium / Large text size selector; different wire key",
+          "reason": null,
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/CrossPointSettings.h",
+              "line": 498
+            }
+          ]
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native Small / Medium / Large text size selector; different wire key",
+          "reason": null,
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/CrossPointSettings.h",
+              "line": 498
+            }
+          ]
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Native Small / Medium / Large text size selector; different wire key",
+          "reason": null,
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/activities/settings/StatusBarSettingsActivity.cpp",
+              "line": 281
+            },
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "src/CrossPointSettings.h",
+              "line": 498
+            }
+          ]
+        }
+      },
+      "settings_keys": [
+        "status_orbit_size"
+      ]
+    },
+    {
+      "id": "setting-home_button",
+      "feature": "Home button in KOReader (`home_button`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "home_button"
+      ]
+    },
+    {
+      "id": "setting-local_first",
+      "feature": "Home shows this reader's reading first (`local_first`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Native retained Home; no local-first toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037g-orbify-home-sync-tile.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Native retained Home; no local-first toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037g-orbify-home-sync-tile.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Native retained Home; no local-first toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037g-orbify-home-sync-tile.patch",
+              "line": 9
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "local_first"
+      ]
+    },
+    {
+      "id": "setting-eob_sheet",
+      "feature": "End of book: BookSync's sheet (`eob_sheet`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "End page built in; no matching enable/disable setting",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "End page built in; no matching enable/disable setting",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "End page built in; no matching enable/disable setting",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/EndPage.cpp",
+              "line": 27
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "eob_sheet"
+      ]
+    },
+    {
+      "id": "setting-eob_auto",
+      "feature": "End of book: mark it finished (`eob_auto`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native auto-mark finished control",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0027-orbify-finish-at-end.patch",
+              "line": 200
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native auto-mark finished control",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0027-orbify-finish-at-end.patch",
+              "line": 200
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Native auto-mark finished control",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0027-orbify-finish-at-end.patch",
+              "line": 200
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "eob_auto"
+      ]
+    },
+    {
+      "id": "setting-sleep_mode",
+      "feature": "Sleep screen (`sleep_mode`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_mode"
+      ]
+    },
+    {
+      "id": "setting-sleep_from",
+      "feature": "Pick from (`sleep_from`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_from"
+      ]
+    },
+    {
+      "id": "setting-sleep_leave_out",
+      "feature": "Leave out (`sleep_leave_out`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_leave_out"
+      ]
+    },
+    {
+      "id": "setting-sleep_hours",
+      "feature": "Change cover every (`sleep_hours`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_hours"
+      ]
+    },
+    {
+      "id": "setting-sleep_text",
+      "feature": "Text (`sleep_text`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_text"
+      ]
+    },
+    {
+      "id": "setting-sleep_battery",
+      "feature": "Show battery level (`sleep_battery`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_battery"
+      ]
+    },
+    {
+      "id": "setting-sleep_style",
+      "feature": "Style (`sleep_style`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_style"
+      ]
+    },
+    {
+      "id": "setting-sleep_text_position",
+      "feature": "Text position (`sleep_text_position`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_text_position"
+      ]
+    },
+    {
+      "id": "setting-sleep_battery_corner",
+      "feature": "Battery corner (`sleep_battery_corner`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native equivalent; different wire key",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            },
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 207
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_battery_corner"
+      ]
+    },
+    {
+      "id": "setting-sleep_flash",
+      "feature": "Clearing flash before the cover (`sleep_flash`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "No separate clearing-flash setting",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "missing",
+          "note": "No separate clearing-flash setting",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/SleepSettings.cpp",
+              "line": 312
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 302
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "sleep_flash"
+      ]
+    },
+    {
+      "id": "setting-sync_mode",
+      "feature": "Reading position (`sync_mode`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "BookSync position sync/custom control",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0052-orbify-orbismart.patch",
+              "line": 31
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "BookSync position sync/custom control",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0052-orbify-orbismart.patch",
+              "line": 31
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "BookSync position sync/custom control",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0052-orbify-orbismart.patch",
+              "line": 31
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "sync_mode"
+      ]
+    },
+    {
+      "id": "setting-wifi_mode",
+      "feature": "Wi-Fi (`wifi_mode`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Same schema choices exposed in native settings",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 47
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0053-orbify-sd-refresh-worker.patch",
+              "line": 523
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Same schema choices exposed in native settings",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 47
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0053-orbify-sd-refresh-worker.patch",
+              "line": 523
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "wifi_mode"
+      ]
+    },
+    {
+      "id": "setting-wifi_idle_min",
+      "feature": "Off after idle (`wifi_idle_min`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Same schema choices exposed in native settings",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 47
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0053-orbify-sd-refresh-worker.patch",
+              "line": 523
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Same schema choices exposed in native settings",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 47
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0053-orbify-sd-refresh-worker.patch",
+              "line": 523
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "wifi_idle_min"
+      ]
+    },
+    {
+      "id": "setting-sync_on_sleep",
+      "feature": "Sync when the screen goes off (`sync_on_sleep`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native syncOnSleep equivalent in custom mode",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0052-orbify-orbismart.patch",
+              "line": 54
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native syncOnSleep equivalent in custom mode",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0052-orbify-orbismart.patch",
+              "line": 54
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Native syncOnSleep equivalent in custom mode",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0052-orbify-orbismart.patch",
+              "line": 54
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "sync_on_sleep"
+      ]
+    },
+    {
+      "id": "setting-sleep_cap",
+      "feature": "Sleep sync limit (`sleep_cap`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Bounded sleep budget; no 10/15/20-second selector",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037a-orbify-sleep-sync-budget.patch",
+              "line": 162
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Bounded sleep budget; no 10/15/20-second selector",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037a-orbify-sleep-sync-budget.patch",
+              "line": 162
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Bounded sleep budget; no 10/15/20-second selector",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0037a-orbify-sleep-sync-budget.patch",
+              "line": 162
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "sleep_cap"
+      ]
+    },
+    {
+      "id": "setting-sync_on_wake",
+      "feature": "Sync on wake (`sync_on_wake`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "BookSync position sync wake logic; no independent shared wake toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/OrbiSmartSync.cpp",
+              "line": 142
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "BookSync position sync wake logic; no independent shared wake toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/OrbiSmartSync.cpp",
+              "line": 142
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Sleep-side state prefetch; no reader background wake transport/toggle",
+          "reason": "hardware: open-book TLS unavailable",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 268
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "sync_on_wake"
+      ]
+    },
+    {
+      "id": "setting-reading_schedule",
+      "feature": "Sync while reading (`reading_schedule`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native Sync While Reading intervals",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/BookOrbitBackgroundSync.cpp",
+              "line": 153
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native Sync While Reading intervals",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/orbify/BookOrbitBackgroundSync.cpp",
+              "line": 153
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "No reading-time TLS beside open book",
+          "reason": "hardware: No reading-time TLS beside open book",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 268
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "reading_schedule"
+      ]
+    },
+    {
+      "id": "setting-wake_tailscale",
+      "feature": "Wake Tailscale for syncs (`wake_tailscale`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "wake_tailscale"
+      ]
+    },
+    {
+      "id": "setting-offline_cache",
+      "feature": "BookOrbit opens from BookSync's cache (`offline_cache`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Cache built in; no matching on/off control",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 292
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Cache built in; no matching on/off control",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 292
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "offline_cache"
+      ]
+    },
+    {
+      "id": "setting-mirror_covers",
+      "feature": "Save every cover for offline (`mirror_covers`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Lazy covers; no matching save-every-cover toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/Mirror.cpp",
+              "line": 26
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Lazy covers; no matching save-every-cover toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/orbify/Mirror.cpp",
+              "line": 26
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "mirror_covers"
+      ]
+    },
+    {
+      "id": "setting-storage_limit_mb",
+      "feature": "Storage limit (`storage_limit_mb`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Same schema choices exposed in native settings",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 47
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0053-orbify-sd-refresh-worker.patch",
+              "line": 523
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Same schema choices exposed in native settings",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 47
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0053-orbify-sd-refresh-worker.patch",
+              "line": 523
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "reason": "hardware: Matching Orbify setting compiled out for X3 flash/PSRAM profile",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 295
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "storage_limit_mb"
+      ]
+    },
+    {
+      "id": "setting-keep_copies_current",
+      "feature": "Keep book copies current (`keep_copies_current`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "partial",
+          "note": "Copy refresh always enabled; no matching toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "partial",
+          "note": "Copy refresh always enabled; no matching toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "partial",
+          "note": "Copy refresh always enabled; no matching toggle",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "path": "xteink/tailnet/tailnet_build.py",
+              "line": 281
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "keep_copies_current"
+      ]
+    },
+    {
+      "id": "setting-auto_update_patch",
+      "feature": "Automatic updates (`auto_update_patch`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "Plugin automatic update key; firmware OTA is a separate workflow",
+          "reason": "not applicable: Plugin automatic update key; firmware OTA is a separate workflow",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0050-orbify-signed-ota.patch",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "Plugin automatic update key; firmware OTA is a separate workflow",
+          "reason": "not applicable: Plugin automatic update key; firmware OTA is a separate workflow",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0050-orbify-signed-ota.patch",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "Plugin automatic update key; firmware OTA is a separate workflow",
+          "reason": "not applicable: Plugin automatic update key; firmware OTA is a separate workflow",
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0050-orbify-signed-ota.patch",
+              "line": 12
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "auto_update_patch"
+      ]
+    },
+    {
+      "id": "setting-patch_update_prerelease",
+      "feature": "Include previews and release candidates (`patch_update_prerelease`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "supported",
+          "note": "Native include-prereleases filter; different wire setting",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0026-ota-tag-prefix.patch",
+              "line": 94
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x4": {
+          "status": "supported",
+          "note": "Native include-prereleases filter; different wire setting",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0026-ota-tag-prefix.patch",
+              "line": 94
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        },
+        "x3": {
+          "status": "supported",
+          "note": "Native include-prereleases filter; different wire setting",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "xteink/overlay/patches/v2.0/0026-ota-tag-prefix.patch",
+              "line": 94
+            }
+          ],
+          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+        }
+      },
+      "settings_keys": [
+        "patch_update_prerelease"
+      ]
+    },
+    {
+      "id": "setting-key_log",
+      "feature": "Log every key (`key_log`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "key_log"
+      ]
+    },
+    {
+      "id": "setting-wifi_via_companion",
+      "feature": "Let BookSync switch Wi-Fi for syncs (`wifi_via_companion`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Companion schema row; conditional on parent/capability",
+          "reason": null,
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsPages.kt",
+              "line": 336
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsStore.kt",
+              "line": 40
+            }
+          ],
+          "version": "v0.11.3-rc.17"
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "wifi_via_companion"
+      ]
+    },
+    {
+      "id": "setting-recommended_choice",
+      "feature": "Recommended settings choices (`recommended_choice`)",
+      "category": "Settings exposure",
+      "platforms": {
+        "android": {
+          "status": "not_applicable",
+          "note": "Internal merge key; not a user-facing setting",
+          "reason": "not applicable: Internal merge key; not a user-facing setting",
+          "evidence": [
+            {
+              "path": "shared/settings/schema.json",
+              "line": 962
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SettingsUiLogic.kt",
+              "line": 87
+            }
+          ],
+          "version": null
+        },
+        "x4_pro": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "not_applicable",
+          "note": "KOReader/Android helper or internal key; firmware has no such subsystem",
+          "reason": "not applicable: KOReader/Android helper or internal key; firmware has no such subsystem",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/settings.lua",
+              "line": 11
+            },
+            {
+              "path": "xteink/orbify/Settings.cpp",
+              "line": 12
+            }
+          ],
+          "version": null
+        }
+      },
+      "settings_keys": [
+        "recommended_choice"
+      ]
+    }
+  ],
+  "release_evidence": {
+    "android": "Verified presence baseline v0.11.3-rc.17; current main also includes later reader-opening/refresh fixes and the unpublished preview-version policy below. These later changes are not attributed to rc.17.",
+    "xteink": "Verified presence baseline xteink-v2.0.0.373+bookorbit.1-rc3. Current main additionally relabels the OTA opt-in as Include pre-releases; the CrossInk rc suffix describes the upstream base, not overlay readiness."
+  },
+  "constraints": {
+    "run_id": 45688398918,
+    "url": "https://github.com/Fledgewing/Orbify/actions/runs/45688398918",
+    "created_at": "2026-11-25T19:45:52Z",
+    "revision": "0ebe1858cfd9ca213715b44d8daeba5ed265429f",
+    "qualification": "Latest completed successful xteink.yml run observed at audit start; newer runs were still running. Compiler static RAM is not runtime free heap. No runtime low-water or PSRAM consumption measurement in these build summaries.",
+    "flash_slot_bytes": 6553600,
+    "gate_fraction": 0.995,
+    "devices": {
+      "x4_pro": {
+        "env": "x4-pro",
+        "mcu": "ESP32-S3",
+        "psram_bytes": 8388608,
+        "flash_used_bytes": 6491033,
+        "flash_percent": 99.05,
+        "under_gate_bytes": 29799,
+        "static_ram_used_bytes": 138640,
+        "static_ram_total_bytes": 327680
+      },
+      "x4": {
+        "env": "x4-classic",
+        "mcu": "ESP32-S3",
+        "psram_bytes": 8388608,
+        "flash_used_bytes": 6334906,
+        "flash_percent": 96.66,
+        "under_gate_bytes": 185926,
+        "static_ram_used_bytes": 134904,
+        "static_ram_total_bytes": 327680
+      },
+      "x3": {
+        "env": "default",
+        "mcu": "ESP32-C3",
+        "psram_bytes": 0,
+        "flash_used_bytes": 6466767,
+        "flash_percent": 98.68,
+        "under_gate_bytes": 54065,
+        "static_ram_used_bytes": 64452,
+        "static_ram_total_bytes": 327680
+      }
+    },
+    "costs": [
+      {
+        "feature": "Public server TLS validation",
+        "cost": "~9.6 KB flash historical estimate; current X3 delta unmeasured. The old 7.7 KB gate margin is obsolete; 54,065 bytes now merits a fresh fit check.",
+        "evidence": [
+          {
+            "path": "xteink/tailnet/tailnet_build.py",
+            "line": 310
+          }
+        ]
+      },
+      {
+        "feature": "Background sync",
+        "cost": "16 KiB task stack plus EPUB, Wi-Fi and TLS allocations. X3 cannot keep TLS beside open book.",
+        "evidence": [
+          {
+            "path": "xteink/orbify/BookOrbitBackgroundSync.cpp",
+            "line": 42
+          },
+          {
+            "path": "xteink/tailnet/tailnet_build.py",
+            "line": 268
+          }
+        ]
+      },
+      {
+        "feature": "Full refresh worker",
+        "cost": "16 KiB task stack in PSRAM on hardware; catalog JSON allocations in PSRAM; reply cap 512 KiB and index cap 128 KiB are bounds, not measured live usage.",
+        "evidence": [
+          {
+            "path": "xteink/orbify/RefreshRunner.cpp",
+            "line": 199
+          },
+          {
+            "path": "xteink/orbify/CacheStore.cpp",
+            "line": 36
+          },
+          {
+            "path": "xteink/orbify/CacheStore.cpp",
+            "line": 42
+          }
+        ]
+      },
+      {
+        "feature": "Sleep pool",
+        "cost": "500 candidate IDs, up to 4000 exclusion IDs; decode buffers/ID arrays use PSRAM. Flash delta unmeasured.",
+        "evidence": [
+          {
+            "path": "xteink/orbify/core/SleepPick.h",
+            "line": 23
+          },
+          {
+            "path": "xteink/orbify/core/SleepPick.h",
+            "line": 24
+          },
+          {
+            "path": "xteink/orbify/SleepScreen.cpp",
+            "line": 58
+          }
+        ]
+      },
+      {
+        "feature": "X3 TLS arena and minimum free heap",
+        "cost": "32 KiB TLS arena; TLS free floor 35,000 bytes, contiguous block 24,576 bytes. These are safety thresholds, not available RAM.",
+        "evidence": [
+          {
+            "path": "xteink/tailnet/tailnet_build.py",
+            "line": 232
+          },
+          {
+            "path": "xteink/tailnet/tailnet_build.py",
+            "line": 184
+          },
+          {
+            "path": "xteink/tailnet/tailnet_build.py",
+            "line": 189
+          }
+        ]
+      },
+      {
+        "feature": "Other cuts (ratings, end cover, status, cache, About)",
+        "cost": "No isolated before/after size measurement found; do not invent savings or infer fit from disabled macros.",
+        "evidence": [
+          {
+            "path": "xteink/tailnet/tailnet_build.py",
+            "line": 285
+          },
+          {
+            "path": "xteink/tailnet/tailnet_build.py",
+            "line": 298
+          },
+          {
+            "path": "xteink/tailnet/tailnet_build.py",
+            "line": 270
+          }
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "path": "xteink/overlay/platformio.local.ini",
+        "line": 22
+      },
+      {
+        "path": "xteink/tailnet/tailnet_build.py",
+        "line": 96
+      },
+      {
+        "path": "xteink/overlay/patches/v2.0/0004-memory-cuts.patch",
+        "line": 5
+      }
+    ]
+  },
+  "gaps": [
+    {
+      "priority": 1,
+      "id": "settings-controls",
+      "features": [
+        "setting-sleep_cap",
+        "setting-sync_on_wake",
+        "setting-keep_copies_current",
+        "setting-offline_cache",
+        "setting-mirror_covers",
+        "setting-eob_sheet",
+        "setting-local_first"
+      ],
+      "platforms": [
+        "x4_pro",
+        "x4"
+      ],
+      "size": "M (several controls, persistence and policy tests)",
+      "x3_fit": "Subset only: sleep budget/end-sheet/copy toggle are plausible small candidates; offline and cover controls require the excluded subsystem. Measure firmware deltas.",
+      "outcome": "Expose equivalent controls; Xteink sleep budget is currently 240 s rather than Android 10/15/20 s."
+    },
+    {
+      "priority": 2,
+      "id": "remote-clicker",
+      "features": [
+        "remote-clicker"
+      ],
+      "platforms": [
+        "x4_pro",
+        "x4",
+        "x3"
+      ],
+      "size": "M–L (BLE host, mapping UI and radio coexistence validation)",
+      "x3_fit": "Unknown; disabled Bluetooth stack must be measured against 54,065-byte gate margin and runtime TLS coexistence. Hardware supports BLE; flash/RAM fit is not established.",
+      "outcome": "Offer remote page-turn input on firmware; physical buttons remain usable. No documented product reason for excluding a remote."
+    },
+    {
+      "priority": 3,
+      "id": "reading-layout",
+      "features": [
+        "layout",
+        "setting-status_orbit_layout"
+      ],
+      "platforms": [
+        "x4_pro",
+        "x4"
+      ],
+      "size": "S–M",
+      "x3_fit": "Native slot and Small/Medium/Large controls already exist, including on X3. A preset may fit; Orbify spaced formatting still needs a measured delta.",
+      "outcome": "Add a single BookSync preset over existing native status-bar controls; do not rebuild controls that CrossInk already supplies."
+    },
+    {
+      "priority": 4,
+      "id": "battery-compare",
+      "features": [
+        "battery-ui"
+      ],
+      "platforms": [
+        "x4_pro",
+        "x4"
+      ],
+      "size": "M",
+      "x3_fit": "Export already works. Compare UI and numeric rate display need measured flash fit; no need for book-open TLS.",
+      "outcome": "Compare another reader export on device; X4 currently shows only local rates."
+    },
+    {
+      "priority": 5,
+      "id": "settings-search",
+      "features": [
+        "settings-ui"
+      ],
+      "platforms": [
+        "x4_pro",
+        "x4"
+      ],
+      "size": "M",
+      "x3_fit": "Unknown; buttons can navigate categories, but text entry and extra strings have a cost.",
+      "outcome": "Make equivalent settings discoverable; retain button navigation rather than require touch."
+    },
+    {
+      "priority": 6,
+      "id": "clearing-flash",
+      "features": [
+        "setting-sleep_flash"
+      ],
+      "platforms": [
+        "x4_pro",
+        "x4"
+      ],
+      "size": "S",
+      "x3_fit": "No Orbify sleep screen built on X3; would first require that subsystem.",
+      "outcome": "Expose optional clearing flash with the sleep-cover settings."
+    },
+    {
+      "priority": 7,
+      "id": "android-crash-record",
+      "features": [
+        "crash"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "size": "S–M",
+      "x3_fit": "Android only; X3 S3 core-dump code is excluded. A C3 alternative requires separate validation.",
+      "outcome": "Persist an Android crash summary that survives restart, with deduplication and no automatic remote upload."
+    }
+  ],
+  "deferred": [
+    {
+      "feature": "grouping",
+      "roadmap": "Next 6a",
+      "note": "Approved; X4s. X3 excluded from the current cached design; no isolated cost evidence."
+    },
+    {
+      "feature": "home",
+      "roadmap": "Next release: BookSync Home",
+      "note": "Designing; no new UI implementation authorised by this audit."
+    },
+    {
+      "feature": "signatures",
+      "roadmap": "Next 16",
+      "note": "Verifier shipped; enforced rollout still deferred."
+    }
+  ],
+  "limitations": [
+    "Source audit, no physical device testing; Android permissions/vendor behaviour can restrict helpers.",
+    "Absence claims are based on native settings inventories and build gates; a similarly named native reader feature is not counted as an Orbify addition.",
+    "No touch requirement for parity: buttons may expose the same outcome. Lack of touch alone does not justify missing controls.",
+    "Fonts, stock Home/catalog and annotations are native integrations; only Orbify adapters, lifecycle hooks and explicit cuts are scored, not all upstream reader capabilities.",
+    "X3 upstream cuts also remove Nearby, mDNS, plugin hub and asset downloads; English-only built-in UI in platformio.local.ini. These are constraints on inherited capabilities, not Orbify features.",
+    "Server quirks motivating overlays: final progress alone may not finish a book; send-time stale pushes can win; metadata writes change file hashes. See docs/server-contract.md sections linked in the matrix notes."
+  ],
+  "pinned_sources": [
+    {
+      "repository": "agosez/CrossInk-Bookorbit",
+      "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+      "pin": "tools/upstreams.lock:6"
+    },
+    {
+      "repository": "Free-Ink/freeink-sdk",
+      "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+      "pin": "CrossInk gitlink freeink-sdk at 87e2e1984481e8a3d996f12b34b50a383f9013b8"
+    }
+  ],
+  "hardware": [
+    {
+      "platform": "x4_pro",
+      "description": "800×480 panel; touch and capacitive Home key; warm/cool frontlight",
+      "evidence": [
+        {
+          "repository": "agosez/CrossInk-Bookorbit",
+          "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+          "path": "platformio.ini",
+          "line": 523
+        },
+        {
+          "repository": "Free-Ink/freeink-sdk",
+          "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+          "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+          "line": 1883
+        }
+      ]
+    },
+    {
+      "platform": "x4",
+      "description": "800×480 panel; two edge page-turn buttons and four front buttons; no touch or frontlight",
+      "evidence": [
+        {
+          "repository": "agosez/CrossInk-Bookorbit",
+          "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+          "path": "platformio.ini",
+          "line": 601
+        },
+        {
+          "repository": "Free-Ink/freeink-sdk",
+          "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+          "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+          "line": 2037
+        }
+      ]
+    },
+    {
+      "platform": "x3",
+      "description": "792×528 panel (UC8253 or UC8279d); physical ADC-ladder buttons; no touch or frontlight",
+      "evidence": [
+        {
+          "repository": "Free-Ink/freeink-sdk",
+          "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+          "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+          "line": 1068
+        },
+        {
+          "repository": "Free-Ink/freeink-sdk",
+          "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+          "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+          "line": 1111
+        }
+      ]
+    }
+  ],
+  "post_baseline_changes": [
+    {
+      "note": "Android/plugin updates distinguish Preview, RC and stable, with increasing Android package codes and an opt-in for previews and release candidates. Main targets v0.11.4-preview.1 next; no such release existed at audit time. Xteink rc/beta tag labels describe its upstream CrossInk base, and overlay builds remain pre-releases until that base is stable. See docs/design/release-versions.md.",
+      "evidence": [
+        {
+          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AndroidVersionCode.java",
+          "line": 9
+        },
+        {
+          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Logic.kt",
+          "line": 154
+        },
+        {
+          "path": "xteink/overlay/patches/v2.0/0051-orbify-prerelease-label.patch",
+          "line": 13
+        }
+      ]
+    },
+    {
+      "note": "Current main preserves reader-opening control-flow widgets, retires obsolete crawl progress and stops an old refresh before starting its replacement. These are fixes to existing reading/refresh behaviour, not features first shipped in rc.17.",
+      "evidence": [
+        {
+          "path": "android/koreader/orbit.koplugin/ko/home.lua",
+          "line": 271
+        },
+        {
+          "path": "android/koreader/orbit.koplugin/ko/mirror.lua",
+          "line": 71
+        },
+        {
+          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
+          "line": 223
+        }
+      ]
+    }
+  ]
+}
