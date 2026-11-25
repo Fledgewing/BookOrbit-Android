@@ -361,7 +361,10 @@ end
 
 function EOB.openBook(ui, path)
     EOB.onLeave(ui)
-    UIManager:nextTick(function() require("apps/reader/readerui"):showReader(path) end)
+    UIManager:nextTick(function()
+        log("orbit: closing reader because end-of-book selected another book")
+        require("apps/reader/readerui"):showReader(path)
+    end)
 end
 
 -- The plugin's catalog class with what its download and list code need, without opening the

@@ -89,6 +89,22 @@ return function(here, test, ok, eq)
         W.E,W.ui,W.v,W.Geom=E,ui,v,Geom
         return W,E.ReadingStatus,native
     end
+    test("status: startup ReaderReady completes before the reader is shown (CRE and paged)", function()
+        for _, paged in ipairs({false, true}) do
+            local w,R=world(paged)
+            w.top=nil
+            local co=coroutine.create(function()
+                w.E.OrbitAndroid.onReaderReady({ui=w.ui})
+                w.top=w.ui
+            end)
+            local resumed,err=coroutine.resume(co)
+            ok(resumed,err); eq(coroutine.status(co),"dead")
+            eq(w.top,w.ui); eq(R.session.ui,w.ui)
+            R.session.tick()
+            eq(w.top,w.ui, "status timer keeps the reader on top")
+            R.disable()
+        end
+    end)
     test("status: CRE reserve, restore absent/inherited native state and repeat toggles", function()
         local w,R,native=world(false)
         R.enable(w.ui); local s=R.session
