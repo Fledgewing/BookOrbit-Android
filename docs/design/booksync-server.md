@@ -2,7 +2,7 @@
 
 Status: **proposed, awaiting approval** (24 November 2026). Deferred roadmap work;
 no implementation is authorized. Design and any reader-facing mockups need approval under
-AGENTS.md before building. The [roadmap](../../ROADMAP.md#planned-continuity-and-booksync-ownership)
+AGENTS.md before building. The [roadmap](../../ROADMAP.md#planned-booksync-ownership)
 records the order below.
 
 BookSync should preserve reading history independently of library backends and offer one
@@ -10,38 +10,7 @@ stable device interface. The server stays optional: direct mode remains availabl
 
 ## Phases
 
-### 1. Insurance first
-
-Preserve BookOrbit before replacing any client or sync behavior. Keep a source mirror of
-**every release tag**, including the source/build inputs needed to build its container image,
-in a **private location chosen by the maintainer**. Preserve the AGPL license, notices and
-applicable terms with each archive. Record tag-to-commit mappings and checksums; retain prior
-copies if a tag changes or disappears. Document a build from the retained inputs and keep
-built images by immutable digest in a private registry/archive with an independent backup.
-
-A scheduled job will discover and mirror new release tags, build their container images,
-retain the source and images, and report missing inputs or failed builds. It must not prune
-previous releases or automatically upgrade a running service. Apply the same plan to Grimmory
-as an optional second insurance archive. Choosing storage, creating mirrors/registries and
-installing jobs are future work, not part of this proposal.
-
-Source and images alone do not preserve existing reading stats and information: those live
-in the BookOrbit database. Back up the database consistently, library files, deployment
-configuration and secrets (secrets separately), and retain the matching image/schema version.
-Document and periodically run an isolated restore drill: restore without the upstream repository
-or registry, start the retained image against a restored database, verify library access and
-representative reading history, and demonstrate rebuilding the image from the mirror. Record
-recovery steps and results privately; never test restoration over the production database.
-
-Evidence: BookOrbit at the pinned commit
-`c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`, `LICENSE:1–3` (AGPL);
-`server/src/modules/reading-session/reading-session.repository.ts:23–25`
-(database-backed sessions/statistics), and
-`server/src/modules/reading-session/book-reading-session.controller.ts:14–23`
-(per-book session reads/writes). This insurance restores the existing backend; the portable
-BookSync ledger below adds independent state ownership.
-
-### 2. Owned Android client and ledger
+### 1. Owned Android client and ledger
 
 Design the owned KOReader plugin and required companion **together with** the read-state
 ledger; there is no separate ledger-first implementation phase. The plugin owns UI and small
@@ -61,7 +30,7 @@ available, authorized history and report gaps. Migration backs up first, preview
 uses one active sync writer. Unsupported history remains in BookSync; do not promise lossless
 position/highlight conversion across editions or backend schemas.
 
-### 3. Server first API: catalog packages
+### 2. Server first API: catalog packages
 
 Deploy BookSync as a container on the **maintainer's Kubernetes cluster from the start**.
 Its first API serves authenticated **per-device catalog packages**: a scoped manifest,
@@ -74,7 +43,7 @@ bounds/checksums, and install complete generations atomically without replacing 
 state. Measure cold ingest separately from warm delivery, metadata separately from covers.
 Keep encoding and server language experimental until measurements justify them.
 
-### 4. Shared ledger and backend adapters
+### 3. Shared ledger and backend adapters
 
 Extend the service with the durable shared ledger/event API and BookOrbit + Grimmory read/write
 adapters. Keep backend endpoint/auth/status details out of server-mode clients. Acknowledge events
@@ -88,7 +57,7 @@ to direct mode is an explicit checkpointed transition, never automatic fallback 
 state authority. Backend permissions and capabilities remain binding; service placement grants
 no additional access ([server contract](../server-contract.md#app-attestation)).
 
-### 5. Xteink clients
+### 4. Xteink clients
 
 Add the neutral package/event client for X4 Pro, X4 and X3, preserving everything each device
 can supply. Use bounded streaming/index access and durable SD queues; do not require a full
@@ -117,7 +86,6 @@ Use synthetic fixtures and isolated services; these are proposed experiments, no
 
 | Experiment | Evidence / decision |
 |---|---|
-| Insurance drill on one retained release, then inventory every release's build inputs. | Can source and image be restored without upstream access, with database history intact? Identify unavailable dependencies before promising reproducibility. |
 | Enumerate a synthetic 10k catalog through both adapters; compare basic/rich fields, collections, request counts and cover bytes. | Establish direct-mode baseline and cold-ingest versus warm-package benefit; avoid adopting unverified performance claims. |
 | Test minimum-permission history import and write/read round trips on both backends, including timeout after commit. | Capability gaps, auth renewal, side effects and duplicate-session risk; no live data required. |
 | Round-trip identity/export/events: changed editions, stale reader, reread, deleted annotation, clock skew and repeated upload. | No lost or double-counted history; unknown records survive and ambiguous matches remain unresolved. |
