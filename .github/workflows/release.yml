@@ -188,6 +188,39 @@ jobs:
           fi
           echo "sha256=$GOT" >> "$GITHUB_OUTPUT"
 
+      # The release key signs the plugin zip (docs/design/release-signing.md); the companion checks
+      # it before installing. The key is in this step's environment only; Orbify's signing tool is
+      # the only code checked out here.
+      - name: Check out the signing tool
+        if: env.PUBLISH == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          path: orbify
+          persist-credentials: false
+          sparse-checkout: |
+            tools/feed-keys
+            shared
+
+      - name: Sign the plugin zip
+        if: env.PUBLISH == 'true'
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            if jq -e '.enforce' orbify/shared/release-signing.json >/dev/null; then
+              echo "::error::signatures are enforced but the secret RELEASE_SIGNING_KEY is not set"; exit 1
+            fi
+            echo "::warning::RELEASE_SIGNING_KEY is not set: the plugin zip is unsigned"
+            exit 0
+          fi
+          orbify/tools/feed-keys/feed-keys sign --tag "$TAG" dist/orbit.koplugin.zip > "$RUNNER_TEMP/SIGNATURES"
+          if [ -n "$(jq -r .root_public_key orbify/shared/release-signing.json)" ]; then
+            orbify/tools/feed-keys/feed-keys verify --tag "$TAG" "$RUNNER_TEMP/SIGNATURES" dist/orbit.koplugin.zip
+          fi
+          mv "$RUNNER_TEMP/SIGNATURES" dist/SIGNATURES
+
       - name: Notices and checksums
         run: |
           set -euo pipefail
@@ -195,6 +228,7 @@ jobs:
           unzip -p "dist/orbit-companion-$VER.apk" assets/open_source_licenses.txt > dist/THIRD-PARTY-NOTICES.txt
           test -s dist/THIRD-PARTY-NOTICES.txt
           (cd dist && sha256sum -- *.apk *.zip *.txt > SHA256SUMS)
+          rm -rf orbify
           cat dist/SHA256SUMS
 
       - name: Upload the test build

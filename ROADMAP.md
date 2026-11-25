@@ -32,6 +32,7 @@ CrossInk 2.x only; 1.6 is retired).
 | 13b | **Manual Full refresh, silent incremental updates**: keep Android’s SQLite cache indefinitely; show progress only for a user-started run, suppress other refresh notices, bound UI database waits and probe changed books on an already connected network. | Android (existing Xteink cache unchanged) | building (rc.8 feedback fixes) | [sqlite-cache](docs/design/sqlite-cache.md) |
 | 14 | **Every setting in the companion**: all of the Orbit plugin's settings (sleep screen included) are set from Orbit Companion and reach KOReader, also when it isn't running; Settings becomes eight sections with search, one line per row and rows that appear only when they apply. KOReader's Orbit menu keeps them, grouped the same way. | Android | building | [companion-settings](docs/design/companion-settings.md) |
 | 15 | **OrbiSmart sync on Xteink**: wire the shared decision table into sleep sync, the Yes / No popup, queued override and pending places; add wake and pause checks on the X4s. | X4 Pro, X4; X3 sleep sync only | approved: later separate step; shared table and Android shipped | [orbismart](docs/design/orbismart.md) |
+| 16 | **Root-certified update signatures**: firmware and plugin updates accept only artifacts signed by a rotatable release key certified by the offline root. | Android, X4 Pro, X4, X3 | building: verifiers log results; root setup and enforced rollout pending | [release-signing](docs/design/release-signing.md) |
 
 ## Later
 
