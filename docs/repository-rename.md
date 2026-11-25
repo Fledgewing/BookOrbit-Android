@@ -65,7 +65,9 @@ Published release notes and CHANGELOG entries remain historical.
 1. Merge this change with all checks green. Android and default firmware builds prefer the
    new repository name and fall back once on HTTP 404 to the previous name. Explicit custom
    firmware feeds never fall back to a public feed.
-2. Arrange a device-tested compatible firmware rollout, or explicitly preserve direct HTTP
+2. The [shared-version bridge](design/unified-version.md) on main can carry this redirect fix
+   in the same rollout; its publication and device validation are still pending. Arrange a
+   device-tested compatible firmware rollout, or explicitly preserve direct HTTP
    200 service at old raw feed URLs for every reader that remains on older firmware.
 3. Rename using GitHub's repository rename operation. Never create a second repository at
    the old name: that removes the redirects, per [GitHub's rename guidance](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository).

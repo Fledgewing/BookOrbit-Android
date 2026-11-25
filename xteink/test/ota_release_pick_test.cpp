@@ -140,6 +140,60 @@ int main(int argc, char** argv) {
                                     ota_release_pick::versionOf(feedStable.newest.tagName, "xteink-v")) == 1);
   }
 
+
+  // W39: actual streaming parser + picker, for each firmware asset line.
+  const char* chain[] = {"", "0.11.3-rc.17", "0.12.0-preview.1", "0.12.0-rc.1", "0.12.0"};
+  const char* tags[] = {"2.0.0.373+bookorbit.1-rc3", "2.0.0.400+bookorbit.1-rc3",
+                       "0.12.0-preview.1+crossink.2.0.0.bookorbit.1-rc3",
+                       "0.12.0-rc.1+crossink.2.0.0.bookorbit.1-rc3",
+                       "0.12.0+crossink.2.0.0.bookorbit.1-rc3"};
+  // Before the bridge is installed, the old comparator must select it over both
+  // the installed 2.x/1.6 lines and every lower-numbered unified release.
+  CHECK(firmware_version::compare(tags[1], tags[0]) > 0);
+  CHECK(firmware_version::compare(tags[1], "1.6.1.114+bookorbit.9") > 0);
+  for (int i = 2; i < 5; ++i) CHECK(firmware_version::compare(tags[1], tags[i]) > 0);
+  for (const char* device : {"firmware-x4-pro", "firmware-x4-classic", "firmware-x3-x4"}) {
+    std::string releases = "[";
+    for (int i = 0; i < 5; ++i) {
+      if (i) releases += ",";
+      releases += std::string("{\"tag_name\":\"xteink-v") + tags[i] +
+          "\",\"booksync_version\":\"" + chain[i] + "\",\"prerelease\":" +
+          (i == 4 ? "false" : "true") + ",\"assets\":[{\"name\":\"" + device +
+          "-v-test.bin\",\"browser_download_url\":\"https://example.invalid/fw.bin\"}]}";
+      const std::string partial = releases + "]";
+      const Pick step = pick("xteink-v", true, device, 1, true, &partial);
+      CHECK(std::string(step.newest.booksyncVersion) == chain[i]);
+      CHECK(std::string(step.newest.tagName) == std::string("xteink-v") + tags[i]);
+      if (i) {
+        CHECK(ota_release_pick::compare(chain[i], chain[i-1], tags[i], tags[i-1]) > 0);
+        CHECK(ota_release_pick::compare(chain[i-1], chain[i], tags[i-1], tags[i]) < 0);
+      }
+      CHECK(ota_release_pick::compare(chain[i], chain[i], tags[i], tags[i]) == 0);
+    }
+    releases += "]";
+    CHECK(std::string(pick("xteink-v", false, device, 7, false, &releases).newest.booksyncVersion) == "0.12.0");
+  }
+  {
+    ReleaseJsonParser::Release newest{}, test{};
+    std::strcpy(test.tagName, "xteink-v0.12.0-0.test.1");
+    std::strcpy(test.booksyncVersion, "0.12.0-0.test.1");
+    test.tagFound = test.firmwareFound = true;
+    ota_release_pick::keep(newest, test, {"xteink-v", true});
+    CHECK(!newest.tagFound);
+  }
+  CHECK(ota_release_pick::compare("0.12.0-preview.1", "0.12.0-0.test.999", "", "") > 0);
+  CHECK(ota_release_pick::compare("0.12.0-0.test.2", "0.12.0-0.test.1", "", "") > 0);
+  CHECK(ota_release_pick::compare("0.12.0-preview.10", "0.12.0-preview.2", "", "") > 0);
+  CHECK(ota_release_pick::compare("0.12.0-rc.1", "0.12.0-preview.99", "", "") > 0);
+  CHECK(ota_release_pick::compare("0.12.0+crossink.2", "0.12.0+crossink.3", "", "") == 0);
+  CHECK(ota_release_pick::compare("0.11.3-rc.17", "0.11.3-rc.17",
+        "2.0.0.401+bookorbit.1-rc3", "2.0.0.400-bookorbit.1-rc3-x4-pro") > 0);
+  CHECK(ota_release_pick::compare("0.12.0", "0.12.0",
+        "0.12.0+crossink.2.0.0.bookorbit.2", "0.12.0-crossink.2.0.0.bookorbit.1-x4-pro") == 0);
+  for (const char* invalid : {"0.12.0-preview.0", "0.12.0-rc", "0.12.0.400", "0.12.0-preview.01",
+                              "0.12.0-preview.999999999999999999999999999999", "0.12.0+", "0.12.0+."})
+    CHECK(!ota_release_pick::validBookSync(invalid));
+
   std::printf("%d passed, %d failed\n", passed, failed);
   return failed == 0 ? 0 : 1;
 }

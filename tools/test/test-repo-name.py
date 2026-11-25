@@ -66,7 +66,7 @@ class RepoName(unittest.TestCase):
         nodes = [n for n in source.body if isinstance(n, ast.Assign)
                  and isinstance(n.targets[0], ast.Name) and n.targets[0].id in names]
         def definitions(environment):
-            scope = {'os': os}
+            scope = {'os': os, 're': re, 'booksync_version': '0.11.0', 'crossink_base': '2.0.0'}
             with patch.dict(os.environ, environment, clear=True):
                 exec(compile(ast.Module(body=nodes, type_ignores=[]), '<ota defaults>', 'exec'), scope)
             return scope['ota_defines']
