@@ -5813,8 +5813,14 @@ test("startup smoke: last document remains the top reader through a yielding pro
         return stock_close(self, w, ...)
     end
     W.after_fail = function() UIManager.close = stock_close end
+    -- Host LuaJIT builds with Lua 5.2 compatibility may return (main_thread, true)
+    -- on the main thread. KOReader's Trapper expects Lua 5.1's nil there.
+    local function running()
+        local co, main = coroutine.running()
+        return not main and co or nil
+    end
     local Trapper = {
-        isWrapped = function() return coroutine.running() ~= nil end,
+        isWrapped = function() return running() ~= nil end,
         wrap = function(_, fn)
             local resumed, err = coroutine.resume(coroutine.create(fn))
             assert(resumed, err)
@@ -5824,7 +5830,8 @@ test("startup smoke: last document remains the top reader through a yielding pro
     local checkout = os.getenv("ORBIT_KOREADER_SOURCE")
     if checkout then
         local chunk = assert(loadfile(checkout .. "/frontend/ui/trapper.lua"))
-        setfenv(chunk, setmetatable({ require = function(name)
+        local co_api = setmetatable({ running = running }, { __index = coroutine })
+        setfenv(chunk, setmetatable({ coroutine = co_api, require = function(name)
             if name == "string.buffer" then return {} end
             return require(name)
         end }, { __index = _G }))

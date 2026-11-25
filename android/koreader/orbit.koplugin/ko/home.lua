@@ -596,7 +596,9 @@ function OrbitAndroid:smartHome(source, from_extra, mode, held)
     if not in_reader then
         log("home (smart): reopening the current book", tostring(last))
         UIManager:nextTick(function()
-            require("apps/reader/readerui"):showReader(last)
+            local ReaderUI = require("apps/reader/readerui")
+            if ReaderUI.instance then log("orbit: closing reader because Smart Home is reopening the current book") end
+            ReaderUI:showReader(last)
         end)
     end
     return true
@@ -685,7 +687,9 @@ function OrbitAndroid:reopenAfterRestart(source)
     local screen = S.restart_screen
     if screen then S.restart_screen = nil; saveSettings() end
     UIManager:nextTick(function()
-        require("apps/reader/readerui"):showReader(file)
+        local ReaderUI = require("apps/reader/readerui")
+        if ReaderUI.instance then log("orbit: closing reader because companion requested reopening the saved book") end
+        ReaderUI:showReader(file)
         if screen == "bookorbit" then
             UIManager:scheduleIn(2, function()
                 log("restart: back to BookOrbit Home, where the reader was")
