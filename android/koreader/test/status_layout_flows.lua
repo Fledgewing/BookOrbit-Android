@@ -180,6 +180,85 @@ return function(here, test, ok, eq)
         eq(s.top.height,10); eq(s.bottom.height,12); eq(s.left,40); eq(s.width,510)
         R.disable()
     end)
+    test("status: minimum inset and unclipped 100 percent plus charging mark at every size and scale", function()
+        for _, scale in ipairs({1,2}) do
+            for _, left in ipairs({0,15,31}) do
+                for _, size in ipairs({"small","medium","large"}) do
+                    for _, charging in ipairs({false,true}) do
+                        local w,R=world(false)
+                        w.capacity,w.charging=100,charging
+                        w.E.S.status_orbit_size=size
+                        w.E.Device.screen.scaleBySize=function(_,n) return n*scale end
+                        w.ui.typeset.unscaled_margins={left,25,17,29}
+                        local painted, pixels = {}, {}
+                        local nativeRequire=w.E.require
+                        w.E.require=function(name)
+                            if name=="ui/font" then return {getFace=function(_,_,n) return {size=n*scale} end} end
+                            if name=="ui/widget/textwidget" then return {new=function(_,t)
+                                local width=#t.text*t.face.size/2
+                                return {getSize=function() return {w=width,h=t.face.size-2*scale} end,
+                                    free=function() end,paintTo=function(_,bb,x,y)
+                                        painted[#painted+1]={text=t.text,x=x,y=y,w=width,h=t.face.size-2*scale}
+                                    end}
+                            end} end
+                            return nativeRequire(name)
+                        end
+                        R.enable(w.ui); local session=R.session
+                        eq(session.inset,4*scale)
+                        local stage
+                        local draw=w.E.BatteryGlyph.draw
+                        w.E.BatteryGlyph.draw=function(...)
+                            stage="battery"; draw(...); stage=nil
+                        end
+                        local mark=w.E.StatusLayout.chargingMark
+                        w.E.StatusLayout.chargingMark=function(h,rect)
+                            if not rect then return mark(h) end
+                            stage="charging"; local width=mark(h,rect); stage=nil; return width
+                        end
+                        -- Include a narrow, rotated-width draw: the whole left group may
+                        -- be hidden when impossible, but never partially clipped.
+                        for _,width in ipairs({600,240,40}) do
+                            w.width=width
+                            painted,pixels={},{}
+                            R.paint(session,{paintRect=function(_,x,y,pw,ph,color)
+                                ok(x>=left*scale and x+pw<=width-17*scale)
+                                ok(y>=800-29*scale and y+ph<=800)
+                                if stage then
+                                    ok(x>=left*scale+4*scale,"battery/charging minimum left inset")
+                                    ok(x+pw<=width-17*scale-4*scale,"battery/charging right inset")
+                                    pixels[#pixels+1]={stage=stage,x=x,y=y,w=pw,h=ph,color=color}
+                                end
+                            end},0,0,true)
+                            local percentage
+                            for _,text in ipairs(painted) do
+                                ok(text.x>=left*scale+4*scale)
+                                ok(text.x+text.w<=width-17*scale-4*scale)
+                                ok(text.y>=800-29*scale and text.y+text.h<=800)
+                                if text.text=="100%" then percentage=text end
+                            end
+                            if width==600 then ok(percentage,"100% remains complete at all tested margins/sizes/scales") end
+                            if percentage then
+                                ok(#pixels>=4)
+                                eq(pixels[1].stage,"battery"); eq(pixels[1].x,left*scale+4*scale)
+                                local batteryRight=0
+                                local marks=0
+                                for _,pixel in ipairs(pixels) do
+                                    if pixel.stage=="battery" then batteryRight=math.max(batteryRight,pixel.x+pixel.w)
+                                    else
+                                        marks=marks+1; eq(pixel.color,1)
+                                        ok(pixel.x>=percentage.x+percentage.w+4*scale-1,"charge mark gap")
+                                    end
+                                end
+                                ok(percentage.x>=batteryRight+4*scale-1,"percentage gap after battery terminal")
+                                eq(marks>0,charging,"charging mark remains visible at 100%")
+                            else eq(#pixels,0,"omit the entire group when it cannot fit") end
+                        end
+                        R.disable()
+                    end
+                end
+            end
+        end
+    end)
     test("status: PDF surround, zero margins and scroll never reserve space or change transforms", function()
         for _,paged in ipairs({false,true}) do
             local w,R=world(paged)

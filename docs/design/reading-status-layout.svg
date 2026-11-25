@@ -23,7 +23,7 @@
 <text class="body" x="882" y="296">time enough to read another</text>
 <text class="body" x="882" y="327">chapter before the evening came.</text>
 <rect x="871" y="645" width="18" height="9" fill="none" stroke="#111"/><rect x="873" y="647" width="12" height="5" fill="#111"/><path d="M890 648v3" stroke="#111" stroke-width="2"/><text class="status" x="895" y="654">82%</text><text class="status" text-anchor="middle" x="1045" y="654">The Long Jou…</text><text class="status" text-anchor="end" x="1219" y="654">128 / 340 · 38%</text>
-<text class="note" x="35" y="715">Both strips fit existing margins; no added space by default. Chapter stays at screen centre; the page group stays at the right edge.</text>
-<text class="note" x="35" y="745">No chapter metadata: centre is empty. Bottom taps retain KOReader’s footer/menu behaviour.</text>
+<text class="note" x="35" y="715">Both strips fit existing margins; no added space. Chapter stays centred; side groups stay inside the text-block edges.</text>
+<text class="note" x="35" y="745">No chapter metadata: centre is empty. Bottom taps show or hide the BookSync bottom strip without changing native settings.</text>
 <text class="note" x="35" y="775">BookSync › Reading › Status bar: BookSync layout (matches Xteink)     ☐ Off by default</text>
-<text class="note" x="35" y="805">Add space for the status bar: ☐ Off. When enabled, add only missing pixels; size is otherwise a maximum.</text></svg>
+<text class="note" x="35" y="805">Battery: four scaled pixels inside the text edge; glyph, 100% and charging mark have separate measured gaps.</text></svg>
