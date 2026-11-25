@@ -1145,6 +1145,13 @@ test("companion: an app with its name and another signer gets nothing, the login
     ok(RE.Companion.state() == "ok", "the release-signed one is used")
     ok(RE.Companion.send(RE.Companion.ACTION.SETUP_LATER, {}), "sent")
     ok(W.broadcasts[#W.broadcasts].kind == "call", "through the caller-checked call, not a broadcast")
+    -- Replacing the app must not inherit a recent menu/status check's cached trust.
+    W.companion_cert = "1234abcd"
+    W.broadcasts = {}
+    ok(not RE.Companion.send(RE.Companion.ACTION.CHECK, { userkey = "k" }), "cached trust cannot send a credential")
+    eq(#W.broadcasts, 0, "the replacement receives nothing")
+    W.companion_cert = RELEASE_CERT
+    RE.installed_cache.at = -1000
 end)
 
 test("companion: certificate fingerprints read as release.yml prints them", function()

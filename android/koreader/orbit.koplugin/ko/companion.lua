@@ -130,9 +130,9 @@ end
 
 -- "ok", "frozen" (installed but disabled, e.g. by a vendor launcher's app freeze), "untrusted"
 -- (an app with the companion's name and another signer: nothing is sent to it) or "missing".
-function Companion.state()
+function Companion.state(fresh)
     local t = now_s()
-    if t - installed_cache.at > 30 then
+    if fresh or t - installed_cache.at > 30 then
         local ok, v = pcall(android.isPackageEnabled, Companion.PACKAGE)
         local st
         if ok and v == true then
@@ -254,7 +254,7 @@ request_seq = 0
 function Companion.send(action, extras)
     extras = extras or {}
     local short = action:match("[^.]+$")
-    if Companion.state() ~= "ok" then
+    if Companion.state(true) ~= "ok" then
         log("companion", short, "NOT sent:", Companion.state(), extras.reason or "")
         return false
     end
