@@ -10,17 +10,18 @@ local function hook(s, obj, key, fn)
 end
 
 -- Called before layout and painting, so book margin changes and rotation take effect.
-function RS.geometry(s, top, bottom)
+function RS.geometry(s, top, bottom, add)
     local Screen = Device.screen
+    if add == nil then add = S.status_orbit_add_space == true end
     local maximum = StatusLayout.fontSize(S.status_orbit_size)
-    local key = table.concat({top, bottom, maximum, tostring(S.status_orbit_add_space == true), Screen:scaleBySize(1)}, ":")
+    local key = table.concat({top, bottom, maximum, tostring(add), Screen:scaleBySize(1)}, ":")
     if s.geometry_key == key then return end
     s.geometry_key = key
     local function fit(margin)
         local lane = StatusLayout.fit(margin, maximum, math.max(1, Screen:scaleBySize(1)), function(size)
             local w = s.Text:new{ text="Ag", face=s.Font:getFace("ffont", size) }
             local h = w:getSize().h; w:free(); return h
-        end, S.status_orbit_add_space == true)
+        end, add)
         lane.face = s.Font:getFace("ffont", math.max(1, lane.size))
         return lane
     end
@@ -43,6 +44,23 @@ function RS.margins(s)
     return Device.screen:scaleBySize(m[2]), Device.screen:scaleBySize(m[4])
 end
 function RS.refreshGeometry(s) RS.geometry(s, RS.margins(s)) end
+function RS.paintGeometry(s)
+    if S.status_orbit_add_space ~= true then RS.refreshGeometry(s); return end
+    local top, bottom = RS.margins(s)
+    local te, be = s.top.extra, s.bottom.extra
+    -- Rotation or a new PDF zoom can remove surround before the next relayout.
+    -- Fit this draw to the space that actually exists, keeping translations stable.
+    RS.geometry(s, top + te, bottom + be, false)
+    s.top.extra, s.bottom.extra = te, be
+    if (s.top.height < s.top.wanted or (s.view.footer_visible and s.bottom.height < s.bottom.wanted))
+            and not s.layout_pending then
+        s.layout_pending = true
+        UIManager:nextTick(function()
+            s.layout_pending = nil
+            if RS.session == s then RS.relayout(s) end
+        end)
+    end
+end
 
 function RS.visible(s)
     return not s.asleep and UIManager:getTopmostVisibleWidget() == s.ui
@@ -189,7 +207,7 @@ function RS.enable(ui)
     hook(s, f, "paintTo", function() return function() end end)
     hook(s, v, "paintTo", function(stock) return function(self, bb, x, y)
         stock(self, bb, x, y)
-        if S.status_orbit_add_space ~= true then RS.refreshGeometry(s) end
+        RS.paintGeometry(s)
         RS.paint(s, bb, x, y)
     end end)
     -- Native toggle/tap handlers still own visibility and their gesture return values.

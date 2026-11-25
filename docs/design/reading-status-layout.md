@@ -79,6 +79,8 @@ the rendered page, never guessed whitespace within PDF/CBZ content. Scroll modes
 have no safe page-edge margin: hide the strips by default; opting in reserves
 the minimum strip viewport and translates draw, highlight and hit coordinates.
 Retain the reading anchor and regenerate zoom/scroll geometry when space changes.
+If rotation or zoom consumes surround before relayout, fit the current draw to
+the actual available margin and defer any needed space adjustment to the next tick.
 
 Keep KOReader's footer controller and tap regions; replace its visible rendering
 while enabled. A footer-toggle gesture hides/shows the BookSync bottom strip through

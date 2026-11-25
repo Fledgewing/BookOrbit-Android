@@ -263,6 +263,18 @@ return function(here, test, ok, eq)
         R.relayout(s); eq(s.top.extra,22); eq(s.bottom.extra,22)
         R.disable()
     end)
+    test("status: PDF zoom changes fit the current draw before adding missing space", function()
+        local w,R=world(true); w.E.S.status_orbit_add_space=true
+        w.v.state={offset={y=20},zoom=1}
+        w.v.visible_area=w.Geom:new{x=0,y=0,w=600,h=760,offsetWithin=function() end}
+        R.enable(w.ui); eq(R.session.top.extra,0)
+        -- A zoom removes the old surround; never paint over the newly expanded page.
+        w.v.state.offset.y=0; w.v.visible_area.h=800
+        w.v:paintTo({paintRect=function() error("no safe margin before relayout") end},0,0)
+        eq(R.session.top.height,0); eq(R.session.bottom.height,0)
+        ok(w.next); w.next(); eq(R.session.top.extra,14); eq(R.session.bottom.extra,14)
+        R.disable()
+    end)
     test("status: default-off setting, off leaves native footer and safe next-tick changes", function()
         local w,R=world(true)
         w.E.S.status_orbit_layout=nil; w.E.OrbitAndroid.onReaderReady({ui=w.ui}); eq(R.session,nil)
