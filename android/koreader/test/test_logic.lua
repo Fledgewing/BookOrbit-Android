@@ -1272,7 +1272,7 @@ end)
 
 ---------------------------------------------------------------- companion caps (addon-mode §6)
 local Caps = M.Caps
-test("caps: from the file only, /status only, both (/status wins), an old companion (legacy), none", function()
+test("caps: from the file only, the status only, both (the status wins), none", function()
     local file = { mode = "addon", caps = { "install", "setup", "stats", "relaunch" } }
     local status = { mode = "full", caps = { "install", "home", "wifi" } }
     local c, mode, src = Caps.resolve("ok", file, nil, nil)
@@ -1282,7 +1282,7 @@ test("caps: from the file only, /status only, both (/status wins), an old compan
     c, mode, src = Caps.resolve("ok", file, status, nil)
     ok(c.wifi and src == "status", "/status wins")
     c, mode, src = Caps.resolve("ok", nil, { version = "0.10.0" }, nil)
-    ok(c.wifi and c.home and c.screen_off and src == "legacy", "older companion: every cap")
+    ok(next(c) == nil and src == "none", "a status without caps offers nothing")
     c, mode, src = Caps.resolve("missing", file, nil, nil)
     ok(next(c) == nil and src == "none", "a leftover file is ignored")
     c, mode, src = Caps.resolve("frozen", file, status, nil)
@@ -1290,7 +1290,7 @@ test("caps: from the file only, /status only, both (/status wins), an old compan
     c, mode, src = Caps.resolve("ok", nil, nil, { mode = "addon", caps = { "install" } })
     ok(c.install and not c.wifi and src == "cache", "the caps seen last time")
     c, mode, src = Caps.resolve("ok", nil, nil, nil)
-    ok(c.wifi and src == "legacy", "nothing known yet: as before")
+    ok(next(c) == nil and src == "none", "nothing known yet: nothing offered")
 end)
 
 test("caps: diff names what was lost and gained", function()
