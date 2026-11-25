@@ -240,3 +240,27 @@ Implementation: orbify/Mirror and orbify/RefreshBadge.
        const auto due = OrbifyMirror::dueNow();
        if (OrbifyMirror::requested() || due != orbify::mirror::Due::None) {
          LOG_INF("ORB", "Mirror: due (%s%s); a slice of %u requests in this sleep", orbify::mirror::dueName(due),
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -110,6 +110,7 @@
+ #include "OpdsServerStore.h"
+ #include "RecentBooksStore.h"
+ #include "SdCardFontSystem.h"
++#include "orbify/Mirror.h"
+ #include "SilentRestart.h"
+ #include "orbify/HeapFloor.h"
+ #include "orbify/CrashRecord.h"
+@@ -526,7 +527,12 @@
+   const bool displayReady = tailnet_display_ready(3000);
+   std::optional<RenderLock> lock;
+   if (!RenderLock::heldByCurrentTask()) lock.emplace();
+-  if (displayReady) {
++  bool showRestartNotice = displayReady;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  showRestartNotice = displayReady && !OrbifyMirror::quietRestart();
++  if (displayReady && !showRestartNotice) LOG_INF("ORB", "Full refresh: reboot notice suppressed");
++#endif
++  if (showRestartNotice) {
+     if (target == static_cast<uint32_t>(NetworkBootTarget::KOREADER_SYNC)) renderer.clearScreen();
+     GUI.drawPopup(renderer, s_silentRestartMessage != nullptr ? s_silentRestartMessage : tr(STR_LOADING));
+   }

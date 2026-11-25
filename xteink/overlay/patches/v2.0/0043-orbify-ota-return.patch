@@ -58,15 +58,15 @@ Implementation: orbify/OtaReturn; no verifier changes.
    void runUpdateInstall();
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -111,6 +111,7 @@
- #include "RecentBooksStore.h"
+@@ -112,6 +112,7 @@
  #include "SdCardFontSystem.h"
+ #include "orbify/Mirror.h"
  #include "SilentRestart.h"
 +#include "orbify/OtaReturn.h"
  #include "orbify/HeapFloor.h"
  #include "orbify/CrashRecord.h"
  #include "orbify/core/BootTrail.h"
-@@ -2371,6 +2372,8 @@
+@@ -2377,6 +2378,8 @@
    } else if (rebootedFromPanic) {
      // If we rebooted from a panic, go to crash report screen to show the panic info
      activityManager.goToCrashReport();

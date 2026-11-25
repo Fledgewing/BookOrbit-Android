@@ -36,6 +36,7 @@ const char* const STATE_PATH = "/.crosspoint/orbify/mirror.state";
 const char* const REQUEST_PATH = "/.crosspoint/orbify/mirror.request";
 constexpr size_t MAX_FILE = 32 * 1024;
 constexpr uint32_t MIN_PLAUSIBLE_EPOCH = 1700000000u;
+bool userRunThisBoot = false;
 
 uint32_t nowSeconds() {
   const time_t t = time(nullptr);
@@ -232,7 +233,10 @@ bool saved() { return loadState().saved; }
 uint32_t savedAt() { return loadState().at; }
 bool requested() { return Storage.exists(REQUEST_PATH); }
 
+bool quietRestart() { return userRunThisBoot || (Storage.ready() && requested()); }
+
 void request() {
+  userRunThisBoot = true;
   writeText(REQUEST_PATH, "1\n");
   LOG_INF(TAG, "Mirror: Full refresh asked for");
 }
@@ -284,6 +288,7 @@ void complete(const Plan& plan, const unsigned long seconds) {
 bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* progress, const size_t maxSteps,
          const bool heapFloor) {
   if (!requested()) return false;  // no automatic Full refresh, even through a future caller
+  userRunThisBoot = true;
   const unsigned long started = millis();
   Plan plan;
   loadOrSeed(plan);
@@ -335,6 +340,7 @@ int pendingPercent() {
 void Walk::begin(const bool userStarted) {
   if (userStarted) request();
   if (!orbify::mirror::showProgress(requested(), true)) return;
+  userRunThisBoot = true;
   plan = Plan{};
   connectionFailed = false;
   loadOrSeed(plan);

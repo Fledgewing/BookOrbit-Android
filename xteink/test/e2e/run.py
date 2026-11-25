@@ -509,6 +509,7 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 500}])
     run = ctx.sim.run(card, "hold", script=f"3000:TAP:{sx},{sy},1300", after_reboot="16000:TAP:240,700",
                       timeout_s=60)
+    after(run.output, "Full refresh: reboot notice suppressed")
     walk = after(run.output, "Home refresh: Full refresh popup: about")
     assert "saving for offline" not in run.output.lower(), "a per-step N/M was shown"
     after(walk, "Home refresh: Full refresh popup closed")

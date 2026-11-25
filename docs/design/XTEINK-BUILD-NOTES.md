@@ -406,7 +406,8 @@ zero switches. No position sync, OTA verifier or TLS implementation changes.
 - **Only a user starts a Full refresh.** The settings action and holds on the sync tile or
   catalog refresh persist `mirror.request`. A walker resume requires it; neither cache age nor
   a library-version change starts or requests a walk. Home's scan, matching, cover decode and
-  refresh steps log during that run, rather than showing additional notices. The one start
+  refresh steps log during that run, rather than showing additional notices. The generic reboot
+  popup is suppressed both on entry and on the final return after Done. The one start
   popup and corner percentage end with Done / Done with N errors. Ordinary Home refresh keeps
   its existing foreground activity; sleep work has no progress UI.
 - **Discovery, then a fixed data total.** Root and facet enumeration is a first pass at 0%.
