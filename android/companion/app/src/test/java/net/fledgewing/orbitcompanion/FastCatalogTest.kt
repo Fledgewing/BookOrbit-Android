@@ -38,6 +38,7 @@ class FastCatalogTest {
             val set = (memberships["$selector:$it"] as List<*>).toSet()
             selected = selected.filter { row -> row["id"] in set }
         }
+        q["series"]?.let { name -> selected = selected.filter { row -> row["seriesName"].toString().lowercase() == name.lowercase() } }
         q["ids"]?.let { value -> selected = selected.filter { (it["id"] as Long) in value.split(',').map(String::toLong) } }
         q["readStatus"]?.let { s -> selected = selected.filter { BulkCatalog.status(it["readStatus"]) == s } }
         val rank = ranks["${q["sort"]}:${q["order"]}"] as? List<*>
@@ -45,8 +46,8 @@ class FastCatalogTest {
             val c=a["title"].toString().compareTo(b["title"].toString())
             if(c!=0) if(q["order"]=="desc") -c else c else (a["id"] as Long).compareTo(b["id"] as Long)
         } else selected.sortedBy { if (rank != null) rank.indexOf(it["id"]) else (it["id"] as Long).toInt() }
-        if (q["seriesId"] != null) selected = selected.map { row ->
-            val c = (fixture["secondary_context"] as Map<*, *>)["seriesId:${q["seriesId"]}:${row["id"]}"] as? Map<*, *>
+        if (q["seriesId"] != null || q["series"] != null) selected = selected.map { row ->
+            val c = (fixture["secondary_context"] as Map<*, *>)["seriesId:${q["seriesId"] ?: "202"}:${row["id"]}"] as? Map<*, *>
             if (c == null) row else row.entries.associate { it.key to it.value } + c
         }.sortedBy { (it["seriesIndex"]?.toString()?.toDoubleOrNull() ?: 0.0) }
         return mapOf("items" to selected.drop((page-1)*size).take(size), "total" to selected.size.toLong())
@@ -71,6 +72,7 @@ class FastCatalogTest {
                 q["deviceId"] == "fixture-reader" && q["variant"] == "original"
             })
             assertEquals(1, requests.count { "seriesId=" in it })
+            assertEquals(1, requests.count { "series=" in it })
             for (value in fixture["windows"] as List<*>) {
                 val w = value as Map<*, *>
                 val identity = "$base/books?${w["query"]}"
@@ -84,7 +86,8 @@ class FastCatalogTest {
             assertFalse(store.hasDetail(2))
             val before = requests.size
             assertEquals("finished", run(store, "incremental", { requests.add(it); reply(it) }))
-            assertEquals("unchanged series makes no requests", 0, requests.drop(before).count { "seriesId=" in it })
+            assertEquals("unchanged series makes no requests", 0, requests.drop(before).count { "seriesId=" in it || "series=" in it })
+            assertEquals(listOf(1L,3L,4L,5L,6L,7L,8L,2L),ids(store.window("$base/books?series=Shared%20name&sort=series&order=asc",1,100,null)!!["items"] as List<*>))
             assertEquals(8L, store.db().query("SELECT count(*) FROM bulk_books") { it.long(0) }.single())
         }
         root.deleteRecursively()

@@ -90,6 +90,12 @@ whose identity is ambiguous, or whose previously saved secondary membership is
 affected by observed changes need size-100 series membership requests. Never
 request every sort/filter combination. Store contextual series fields separately
 from the canonical book; a secondary list must not overwrite its primary series.
+A name shared by distinct series IDs needs its own size-100 name feed in this
+later phase: its contextual row is chosen by per-book membership display order,
+which manifest and scoped-ID rows do not project (`server/src/modules/opds/opds-book.service.ts:1561-1575,1628-1652`).
+Reuse that name feed only when its contributing series and member records are
+unchanged. Rebuild unambiguous name lists from the retained contextual ID set on
+every generation, including unchanged refreshes.
 Record extra series requests separately in cold, unchanged and changed benchmarks.
 Incremental runs reuse unchanged series and re-fetch only series with evidence of
 a changed member set; count changes, affected old/new primary IDs and changed

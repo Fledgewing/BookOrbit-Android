@@ -57,6 +57,9 @@ class FastCatalogRefresh(
     private fun mark(path: String, g: Long = generation) = db.exec("INSERT OR IGNORE INTO bulk_pages VALUES (?,?)", g, CacheStore.u(path))
     private fun path(endpoint: String, q: Map<String, String>) = endpoint + "?" + MirrorLogic.encQuery(q)
     private fun member(kind: String, value: String, id: Long, context: Map<String, Any?>? = null, g: Long = generation) {
+        if (g < 0 && db.query("SELECT 1 FROM bulk_books WHERE g=? AND id=?",generation,id) {1}.isEmpty()) {
+            set("identity",null);error("catalog changed during enumeration")
+        }
         val ix = BulkCatalog.indexParts(context?.get("seriesIndex"))
         db.exec("INSERT OR REPLACE INTO bulk_members VALUES (?,?,?,?,?,?,?,?)", g, kind, CacheStore.u(value), id,
             context?.let(LuaValue::encode), *ix.toTypedArray())
@@ -295,6 +298,44 @@ class FastCatalogRefresh(
             store.setMeta("bulk_active", generation); store.setMeta("bulk_at", stamp()); set("base_published", true)
         }
     }
+    private fun seriesNames(prior: Long?) {
+        for ((name, rows) in entries("series").groupBy { it["title"]?.toString()?.trim()?.lowercase() }) {
+            if (name == null) continue
+            val series = rows.mapNotNull { it["seriesId"]?.toString() }.distinct()
+            val ambiguous = series.size != 1
+            val tag = "secondary-name:$name"
+            val changed = prior == null || db.query("SELECT 1 FROM bulk_members m LEFT JOIN bulk_books o ON o.g=? AND o.id=m.id LEFT JOIN bulk_books n ON n.g=? AND n.id=m.id WHERE m.g IN (?,?) AND m.kind='series' AND m.value=? AND (o.id IS NULL OR n.id IS NULL OR n.manifest<>o.manifest OR coalesce(n.updated,'')<>coalesce(o.updated,'')) LIMIT 1", prior, generation, prior, generation, CacheStore.u(name)) { 1 }.isNotEmpty()
+            val oldSeries = prior?.let { g -> db.query("SELECT item FROM bulk_sections WHERE g=? AND section='series'",g) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.filter { it["title"]?.toString()?.trim()?.lowercase()==name }.mapNotNull { it["seriesId"]?.toString() }.toSet() }
+            if (ambiguous && prior != null && !changed && oldSeries == series.toSet() && done(tag,prior)) {
+                store.transaction {
+                    db.exec("DELETE FROM bulk_members WHERE g=? AND kind='series' AND value=?",generation,CacheStore.u(name))
+                    db.exec("INSERT INTO bulk_members SELECT ?,'series',value,id,context,ix1,ix2,ix FROM bulk_members WHERE g=? AND kind='series' AND value=?",generation,prior,CacheStore.u(name))
+                    mark(tag)
+                }
+            } else if (ambiguous) {
+                pages("$base/books",mapOf("series" to name,"sort" to "series","order" to "asc"),tag,-generation) {row,_->
+                    member("series",name,(row["id"] as Number).toLong(),context(row),-generation)
+                }
+                boundary()
+                store.transaction {
+                    val expected = if(series.isEmpty()) meta("total:$tag")?.toLongOrNull() ?: -1L else db.query("SELECT count(DISTINCT id) FROM bulk_members WHERE g=? AND kind='seriesId' AND value IN (${series.joinToString(",") {"?"}})",generation,*series.toTypedArray()) {it.long(0)!!}.first()
+                    val received = db.query("SELECT count(*) FROM bulk_members WHERE g=? AND kind='series' AND value=?",-generation,CacheStore.u(name)) {it.long(0)!!}.first()
+                    check(expected==received) {"incomplete named series"}
+                    db.exec("DELETE FROM bulk_members WHERE g=? AND kind='series' AND value=?",generation,CacheStore.u(name))
+                    db.exec("INSERT INTO bulk_members SELECT ?,'series',value,id,context,ix1,ix2,ix FROM bulk_members WHERE g=? AND kind='series' AND value=?",generation,-generation,CacheStore.u(name))
+                    mark(tag)
+                }
+            } else {
+                // Rebuild even when the ID feed was reused: the copied contextual
+                // membership must replace the primary row made by derive().
+                store.transaction {
+                    db.exec("DELETE FROM bulk_members WHERE g=? AND kind='series' AND value=?",generation,CacheStore.u(name))
+                    for (sid in series) db.exec("INSERT OR REPLACE INTO bulk_members SELECT ?,'series',?,id,context,ix1,ix2,ix FROM bulk_members WHERE g=? AND kind='seriesId' AND value=?",generation,CacheStore.u(name),generation,sid)
+                }
+            }
+        }
+    }
+
     private fun secondary() {
         val prior = meta("previous")?.toLongOrNull()
         for (entry in entries("series")) {
@@ -326,5 +367,6 @@ class FastCatalogRefresh(
                 }
             }
         }
+        seriesNames(prior)
     }
 }
