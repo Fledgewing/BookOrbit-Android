@@ -79,13 +79,26 @@ class SettingsPagesTest {
     fun everyShownKeyHasARowInItsSection() {
         // Defaults: sleep screen off hides its children; Wi-Fi rows need the wifi cap (Full has it).
         val hiddenByDefault = setOf("sleep_from", "sleep_leave_out", "sleep_hours", "sleep_text", "sleep_battery", "sleep_style",
-            "sleep_text_position", "sleep_battery_corner", "home_button", "wifi_idle_min")
+            "sleep_text_position", "sleep_battery_corner", "home_button", "wifi_idle_min",
+            // Sync: OrbiSmart (the default) sets these and hides them; Custom shows them (below).
+            "sync_on_sleep", "sleep_cap", "sync_on_wake", "reading_schedule")
         schema.sections.filter { it.id != "sleep" }.forEach { s ->
             val a = section(s.id)
             schema.settings.filter { it.section == s.id && !it.hidden && it.key !in hiddenByDefault }.forEach { d ->
                 assertNotNull("${s.id}: ${d.key}", tagged(a, "key:${d.key}"))
             }
         }
+    }
+
+    @Test
+    fun syncCustomShowsTheRowsOrbiSmartHides() {
+        val hidden = listOf("sync_on_sleep", "sleep_cap", "sync_on_wake", "reading_schedule")
+        val smart = section("sync")
+        assertNotNull(tagged(smart, "key:sync_mode"))
+        hidden.forEach { assertNull("OrbiSmart hides $it", tagged(smart, "key:$it")) }
+        SettingsStore.set(RuntimeEnvironment.getApplication(), "sync_mode", "custom", "test")
+        val custom = section("sync")
+        hidden.forEach { assertNotNull("Custom shows $it", tagged(custom, "key:$it")) }
     }
 
     @Test
