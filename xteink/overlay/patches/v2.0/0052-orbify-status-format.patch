@@ -1,0 +1,42 @@
+--- a/src/components/themes/BaseTheme.cpp
++++ b/src/components/themes/BaseTheme.cpp
+@@ -1,4 +1,8 @@
+ #include "BaseTheme.h"
++
++#if CROSSINK_TAILNET_ORBIFY_STATUS
++#include "orbify/core/StatusFormat.h"
++#endif
+ 
+ #if FREEINK_DEVICE_PICCO && CROSSINK_BATTERY_DIAG_LOG
+ #include "util/BatteryDiagnosticLog.h"
+@@ -950,16 +954,30 @@
+         return content.timeLeftChapter;
+       case ReaderStatusBarItem::ChapterPageCount:
+         if (!content.showProgress || content.chapterPageCount <= 0) return nullptr;
++#if CROSSINK_TAILNET_ORBIFY_STATUS
++        orbify::statusPages(scratch, len, content.chapterPage, content.chapterPageCount, content.pageCountEstimated);
++#else
+         snprintf(scratch, len, "%s%d/%d", content.pageCountEstimated ? "~" : "", content.chapterPage,
+                  content.chapterPageCount);
++#endif
+         return scratch;
+       case ReaderStatusBarItem::StablePageNumber:
+         if (!content.showProgress || content.stablePageCount <= 0 || content.stablePage <= 0) return nullptr;
++#if CROSSINK_TAILNET_ORBIFY_STATUS
++        orbify::statusPages(scratch, len, content.stablePage, content.stablePageCount);
++#else
+         snprintf(scratch, len, "%d/%d", content.stablePage, content.stablePageCount);
++#endif
+         return scratch;
+       case ReaderStatusBarItem::BookProgressPercentage:
+         if (!content.showProgress) return nullptr;
++#if CROSSINK_TAILNET_ORBIFY_STATUS
++        orbify::statusPercent(scratch, len, content.bookProgress, static_cast<int>(config.percentageFormat), !config.centered && (
++                              (config.contains(ReaderStatusBarItem::ChapterPageCount) && content.chapterPageCount > 0) ||
++                              (config.contains(ReaderStatusBarItem::StablePageNumber) && content.stablePageCount > 0 && content.stablePage > 0)));
++#else
+         snprintf(scratch, len, "%.*f%%", static_cast<int>(config.percentageFormat), content.bookProgress);
++#endif
+         return scratch;
+       case ReaderStatusBarItem::ChapterProgressPercentage:
+         if (!content.showProgress || (content.chapterProgress < 0 && content.chapterPageCount <= 0)) return nullptr;

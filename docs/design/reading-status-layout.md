@@ -1,0 +1,126 @@
+# KOReader reading status matches Xteink (W17)
+
+Status: approved in chat, 2026-11-24 19:47 PST ("Yes do it."), including the
+Xteink spaced page format; implemented by W17.
+Platform: Android. Xteink already has configurable status slots; the shared format
+fixture and host test will keep the Orbify preset consistent on both platforms.
+
+![Proposed reading layouts](reading-status-layout.svg)
+
+## Native feasibility, checked against pinned source
+
+KOReader v2026.07.1, commit `9192014d8bd82a91dc1012473be0f238dedfdb54`:
+
+- `frontend/apps/reader/modules/readerfooter.lua:660`: item order is a list of unique
+  modes. `:414` provides one dynamic filler, sized from the remaining line width.
+- `readerfooter.lua:804`: left/right/centre alignment wraps the entire horizontal
+  group. `:2129` concatenates generated items into a single string; `:1946` offers
+  bar, bullet, middle dot and no separator. There are no independent left, centre
+  and right item anchors. A filler can split two groups, but cannot keep a chapter
+  at the physical centre between unequal side groups.
+- `frontend/apps/reader/modules/readercoptlistener.lua:366`: the alternate top
+  status bar belongs to CRE documents. It cannot supply a top clock for PDF/CBZ.
+- `frontend/apps/reader/modules/readertypeset.lua:540`: CRE page margins add the
+  footer height unless reclaimed. `frontend/apps/reader/modules/readerview.lua:751`
+  reserves footer height in paged documents; `:1060` recalculates on visibility
+  changes. Merely painting over the document would cover text.
+
+Native settings do not meet the complete request. Use a custom Orbit renderer
+integrated into the reader view, retaining native footer gesture handling.
+
+CrossInk v2.0.0+bookorbit.1-rc3, commit `87e2e1984481e8a3d996f12b34b50a383f9013b8`:
+
+- `src/components/themes/BaseTheme.cpp:861` draws top/bottom status lanes and uses
+  theme font metrics and display insets; `:94` places the battery icon before its
+  percentage in reader mode; `:935` formats clock, battery, pages and percentages.
+- `src/components/UITheme.cpp:334` selects SMALL_FONT_ID by default, or UI_10/UI_12
+  for the two larger preferences. Android will use KOReader's small UI face with
+  device scaling rather than copying unscaled panel pixels.
+- `src/util/ReaderStatusBarConfig.h:46` includes the middle dot among supported
+  separators. The upstream page item is `N/M` (`BaseTheme.cpp:958`), not the
+  example's spaced slash. Orbify's shared preset will use `12 / 340 · 4%`, as
+  requested, on both platforms; this is a small Orbify formatting change on Xteink.
+
+These references are relative to each pinned upstream repository, not overlay-
+modified checkout lines. Implementation must add every newly used KOReader hook
+or symbol to `android/koreader/test/koreader_compat.lua`.
+
+## Appearance and behaviour proposed for approval
+
+The top strip contains only a centred clock, using KOReader's 12/24-hour preference.
+The bottom strip contains an outlined battery and percentage at the left, chapter
+at the physical screen centre, and `N / M · P%` at the right. All are monochrome,
+with no divider line or progress bar. The SVG shows EPUB, PDF and a long chapter.
+No chapter metadata means an empty centre, including CBZ without an outline.
+
+Measure both sides first. The centre's available width is twice the distance from
+screen centre to the nearer side group's inner edge, minus a small gap. Truncate
+the chapter on Unicode boundaries with a single ellipsis using rendered widths.
+On very narrow displays suppress the chapter first; if needed omit battery percent
+before its icon. Do not overlap the page group. Percent uses document reading
+progress, clamped to 0–100 and rounded to the nearest whole percent; page numbers
+use KOReader's document pagination. Missing/unknown totals show no progress group.
+
+Reserve real reading space for both strips. For CRE, use the footer height and a
+top-margin adjustment while retaining the saved margin values and reading anchor.
+For paged documents, shrink and offset the document viewport and update coordinate
+transforms, zoom/recalculate and scroll page states together. Never just crop or
+paint across an existing page. Verify PDF/CBZ page and scroll modes plus rotation.
+
+Keep KOReader's footer controller and tap regions; replace its visible rendering
+while enabled. A footer-toggle gesture hides/shows the Orbit bottom strip through
+the same native visibility state. It must continue to reach the native controller,
+and the top/menu gesture regions must remain available. Menus cover the reader
+normally; the status renderer is a reader child, never a floating window.
+
+The setting is Orbit › Reading › “Status bar: Orbit layout (matches Xteink)”, on by
+default, with an Android-only shared schema entry. Off restores native footer/top
+bar and margin/viewport state, including values that were absent originally.
+Do not write Orbit's temporary geometry into book or global native settings.
+Cancel hooks and timers on close/disable; keep enable/disable idempotent. Shared
+setting changes apply at a safe reader layout update, preserving the reading anchor.
+
+Repaint on page changes, minute boundaries and battery events. Time/battery-only
+updates dirty only the changed strip using partial refresh, and are suspended when
+the reader is covered or asleep. Ordinary page turns retain KOReader's page refresh
+policy; enabling or changing geometry may require its normal document relayout.
+No additional full refresh is requested by Orbit's status timer or battery handler.
+
+## Implementation notes
+
+The default-on Android setting is `status_orbit_layout`. Only instance methods and
+private copies of footer settings are changed; disabling restores inherited slots,
+footer visibility/mode, the native text generator, header state and timers. Native
+footer gesture handlers remain in charge, and their temporary mode is not persisted.
+
+CRE page mode uses its margin setter. CRE scroll mode needs a reduced engine viewport
+and translated draw/hit coordinates: `frontend/document/credocument.lua:908-934`
+only adds the top margin in page mode, while
+`frontend/apps/reader/modules/readerrolling.lua:895-899,1133-1138` derives scroll
+steps and the final position from screen height and footer height (pinned KOReader
+commit above). The temporary height adjustment is scoped to those scroll operations.
+Paged documents use the reduced viewport for zoom and scroll-state regeneration,
+with draw, highlight and hit coordinates translated below the clock.
+
+X4 and X4 Pro use the shared spaced page format; centered/custom status groups keep
+their configured separator. X3's build flag is zero: preprocessing retains the exact
+native page/percent formatting and excludes the new formatter header. The existing
+99.5% firmware flash gate remains mandatory.
+
+## Implementation and verification after approval
+
+- Put pure formatting/layout/truncation logic in the plugin's logic directory and
+  UI/lifecycle integration in its ko directory. No network, scans or background work.
+- Add `shared/fixtures/status/format.json` and its registry entry; have Lua tests
+  and an Xteink host test read it. Apply any Xteink preset format adjustment through
+  Orbify's overlay, with no upstream contribution.
+- Cover Unicode, empty chapter, narrow widths, unequal sides, percent boundaries,
+  12/24-hour midnight/noon and unknown totals with Lua unit tests.
+- Flow tests cover native state snapshot/restore, repeated toggles, book close,
+  clock cleanup, CRE top/bottom reservation, paged viewport reservation and gesture
+  delegation. Add partial dirty-region checks for minute/battery updates.
+- Run plugin logic/flow suites and pinned KOReader compatibility checks. Run the
+  affected Xteink host suite. CI is the merge gate; no device tools or release tags.
+- One PR holds this design and implementation. Keep this outcome in ROADMAP until
+  shipped; then move it into FEATURES in the same change. Real-device visual and
+  gesture verification is for the user before a release.

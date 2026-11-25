@@ -1623,6 +1623,33 @@ test("orbismart: the popup's question", function()
     eq(OrbiSmart.question("X4 Pro", 12, "follow"), "Continue from X4 Pro, p. 12 (moved back there)?")
 end)
 
+-- @fixture status/format.json
+test("status layout: shared progress and clock formats", function()
+    local f = M.SettingsSync.decodeJson(readFile(here .. "/../../../shared/fixtures/status/format.json"))
+    for _, v in ipairs(f.progress) do eq(M.StatusLayout.progress(v.page,v.total,v.fraction), v.text) end
+    for _, v in ipairs(f.clock) do eq(M.StatusLayout.clock(v.hour,v.minute,v.twelve), v.text) end
+    eq(M.StatusLayout.progress(1,nil,0), "")
+    eq(M.StatusLayout.progress(1,0,0), "")
+    eq(M.StatusLayout.progress(1,10,-0.2), "1 / 10 · 0%")
+    eq(M.StatusLayout.progress(10,10,1.2), "10 / 10 · 100%")
+    eq(M.StatusLayout.progress(1,200), "1 / 200 · 1%")
+end)
+test("status layout: unequal sides retain physical centre, Unicode ellipsis and narrow fallback", function()
+    local L = M.StatusLayout
+    local function measure(s) local n=0; for _ in s:gmatch("[%z\1-\127\194-\244][\128-\191]*") do n=n+1 end; return n end
+    eq(L.truncate("日本語の章",4,measure), "日本語…")
+    eq(L.truncate("章",0,measure), "")
+    eq(L.truncate("",100,measure), "")
+    local a=L.layout(60,2,2,"battery","b","A very long chapter title", "12 / 340 · 4%",measure)
+    eq(a.cx+measure(a.chapter)/2,30)
+    ok(a.cx >= a.lx+measure(a.left)+2)
+    ok(a.cx+measure(a.chapter)+2 <= a.rx)
+    local b=L.layout(25,2,2,"battery percentage","b","chapter", "12 / 340 · 4%",measure)
+    eq(b.chapter, ""); eq(b.left,"b")
+    local c=L.layout(15,2,2,"battery percentage","b","chapter", "12 / 340 · 4%",measure)
+    eq(c.chapter, ""); eq(c.left, "")
+end)
+
 -- shared/fixtures/REGISTRY.json: every rule table has a row, and this suite reads what it names (test_registry.lua).
 test("fixture registry: the plugin reads every table it is named for, and every table has a row", function()
     local problems = dofile(here .. "/test_registry.lua")(here)

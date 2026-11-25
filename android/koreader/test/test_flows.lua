@@ -6149,6 +6149,8 @@ end)
 
 store.orbit_android.sync_mode = "custom"
 
+dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end
