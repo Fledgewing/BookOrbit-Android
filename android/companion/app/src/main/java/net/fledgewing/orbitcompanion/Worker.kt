@@ -101,10 +101,6 @@ object Worker {
             synchronized(lock) { patches.addLast { worker().savePluginState(LuaValue.str(state)) }; lock.notifyAll() }
             return start()
         }
-        if (i.action == ACTION_PATCH && i.hasExtra("repair_book")) {
-            StatusMarginRepair.beforeOpen(i.getStringExtra("repair_book") ?: return, i.getStringExtra("repair_token") ?: return)
-            return
-        }
         if (i.action == ACTION_PATCH && i.hasExtra("remember_id")) {
             val id = i.getStringExtra("remember_id")?.toLongOrNull() ?: return
             synchronized(lock) { patches.addLast { worker().rememberDetail(id) }; lock.notifyAll() }
@@ -220,7 +216,9 @@ object Worker {
                         OLog.i("worker: mirror ${plan.op} (${plan.reason}) run ${plan.run}")
                         val f = File(root(), "mirror/plan.lua")
                         f.parentFile?.mkdirs()
-                        File(root(), "mirror/stop").delete()
+                        // A replacement must stop the current run before the next
+                        // one clears this flag in loop().
+                        if (mirrorRunning) File(root(), "mirror/stop").writeText("stop")
                         val tmp = File(f.path + ".tmp")
                         tmp.writeBytes(bytes); check(tmp.renameTo(f))
                         synchronized(lock) { pending = plan to creds; lock.notifyAll() }
@@ -305,6 +303,8 @@ object Worker {
                 if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && sleep == null && pickers == null && recheck == null) { return }
                 pending.also { pending = null }
             } ?: continue
+            File(root(), "mirror/stop").delete()
+            progress = 0
             manualRefresh = p.first.m["manual"] == true
             mirrorRunning = true
             try {

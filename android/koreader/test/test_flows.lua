@@ -306,6 +306,7 @@ function PluginLoader:getPluginInstance() return nil end
 
 local ReaderUI, FileManager = {}, {}
 function ReaderUI:showReader(file) W.opened = file end
+local stockShowReader = ReaderUI.showReader
 local actions = {}
 
 local preload = {
@@ -6914,130 +6915,107 @@ test("W32: Full refresh supersedes preparation of an old crawl instead of showin
     cacheTeardown()
 end)
 
-test("W32: selecting a book waits for its companion margin check before loading settings", function()
-    local Reader = require("apps/reader/readerui")
-    local show, installed = Reader.showReader, E.MarginRepair.installed
-    local send, problem, folder = E.Companion.send, E.Companion.workerProblem, E.OC._dir
-    local tmp = os.tmpname(); os.remove(tmp); sh("mkdir -p", tmp)
-    E.OC._dir = tmp
-    local opened, sent = 0, 0
-    Reader.showReader = function(_, file, provider) opened = opened + 1; eq(file, "/books/synthetic.epub"); eq(provider, "epub") end
-    E.MarginRepair.installed = nil; E.MarginRepair.install()
-    E.Companion.workerProblem = function() return nil end
-    E.Companion.send = function(_, extras)
-        sent = sent + 1
-        eq(extras.repair_book, "/books/synthetic.epub")
-        schedule(0.2, function()
-            E.OC.writeFile(tmp .. "/repair-result.lua", E.Cache.encode({ token = extras.repair_token, result = "checked" }))
-        end)
-        return true
-    end
-    local success, err = pcall(function()
-        ReaderUI.instance = nil; W.shown = {}
-        Reader:showReader("/books/synthetic.epub", "epub")
-        eq(opened, 0, "sidecar not loaded before repair")
+test("W34: crawl progress is retired and a busy obsolete run cannot block bulk dispatch", function()
+    local client, Cat = cacheSetup()
+    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
+    local cat = pluginCatalog(Cat, client)
+    local d = E.Mirror.dir()
+    local stale = { done=85, total=100, left=15, bytes=3032748032, at=1, op="full", run="old" }
+    E.OC.writeFile(d .. "/status.lua", E.Cache.encode(stale))
+    E.Mirror._status = nil
+    eq(next(E.Mirror.status()), nil, "crawl status is not bulk progress")
+    eq(E.OC.readFile(d .. "/status.lua"), nil, "obsolete status deleted")
+    E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "resume"
+    E.Mirror._status, E.Mirror.run_id = stale, "old"
+    -- The old companion is gone and will never supply a summary.
+    local receive = W.on_broadcast
+    W.on_broadcast = nil
+    withHost(cat, function()
+        W.broadcasts = {}
+        E.OC.fullRefresh(cat)
+        eq(E.Mirror.status().pct, 0, "fresh progress immediately")
+        eq(E.Mirror.status().at, nil, "no stale completion time")
         run(1)
-        eq(opened, 1); eq(sent, 1)
-        ok(E.MarginRepair.pending == nil)
+        local sent = lastBroadcast(".MIRROR")
+        local plan = sent and E.Cache.decode(sent.extras.plan)
+        ok(plan and plan.op == "full" and plan.catalog, "bulk intent sent without old summary")
+        local status = E.Cache.decode(E.OC.readFile(d .. "/status.lua"))
+        eq(status.run, plan.run); eq(status.pct, 0); eq(status.engine, "bulk")
+        eq(status.bytes, nil, "old bytes not inherited")
+        W.on_broadcast = receive
+        W.deliver(sent)
+        run(60)
+        eq(E.Mirror.status().left, 0, "new run completes")
     end)
-    Reader.showReader, E.MarginRepair.installed = show, installed
-    E.Companion.send, E.Companion.workerProblem, E.OC._dir = send, problem, folder
-    E.MarginRepair.pending = nil
-    sh("rm -rf", tmp)
-    ok(success, err)
+    W.on_broadcast = receive
+    cacheTeardown()
 end)
 
--- Home and History converge on the hooked showReader entry point. With the pinned
--- checkout, History's selection and filemanagerutil.openFile are real upstream code.
-for _, origin in ipairs({ "Home", "history" }) do
-    test("startup: open from " .. origin .. " during Full refresh with margin repair pending", function()
-        local show, installed = ReaderUI.showReader, E.MarginRepair.installed
-        local send, problem, folder = E.Companion.send, E.Companion.workerProblem, E.OC._dir
-        local tmp = os.tmpname(); os.remove(tmp); sh("mkdir -p", tmp)
-        E.OC._dir = tmp
-        W.queue, W.shown = {}, {}
-        capsReset()
-        local home, module = newUI(false)
-        W.shown = { home }
-        local file = "/books/synthetic.epub"
-        W.files[file] = true
-        E.S.home_book = file
-        local reader, opened, quits = nil, 0, W.quits or 0
-        ReaderUI.showReader = function(_, selected)
-            eq(selected, file)
-            opened = opened + 1
-            local ui, m = osmBook(120, nil)
-            reader = ui
-            function ui.bookorbit:fetchRemoteProgress(_, cb)
-                UIManager:scheduleIn(0.125, function() cb(false) end)
-            end
-            local co = coroutine.create(function() m:onReaderReady(); UIManager:show(ui) end)
-            local resumed, err = coroutine.resume(co)
-            ok(resumed, err)
-            eq(coroutine.status(co), "dead", "ReaderUI construction must finish")
-        end
-        E.MarginRepair.installed = nil; E.MarginRepair.install()
-        E.Companion.workerProblem = function() return nil end
-        E.Companion.send = function(_, extras)
-            if extras.repair_book then
-                schedule(0.2, function()
-                    E.OC.writeFile(tmp .. "/repair-result.lua", E.Cache.encode({ token = extras.repair_token, result = "checked" }))
-                end)
-            end
-            return true
-        end
-        E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "full"
-        local success, err = pcall(function()
-            if origin == "Home" then
-                module:smartHome("resume", nil, "smart")
-                run(0.05)
-            else
-                local checkout = os.getenv("ORBIT_KOREADER_SOURCE")
-                if checkout then
-                    local function upstream(path, overrides)
-                        local chunk = assert(loadfile(checkout .. "/frontend/" .. path .. ".lua"))
-                        setfenv(chunk, setmetatable({ G_reader_settings = setmetatable({ isTrue = function() return false end }, { __index = G_reader_settings }), require = function(name)
-                            if overrides and overrides[name] then return overrides[name] end
-                            local success, result = pcall(require, name)
-                            return success and result or {}
-                        end }, { __index = _G }))
-                        return chunk()
-                    end
-                    local util = upstream("apps/filemanager/filemanagerutil")
-                    local history = upstream("apps/filemanager/filemanagerhistory", {
-                        ["apps/filemanager/filemanagerutil"] = util,
-                    })
-                    home.openFile = function(_, selected) ReaderUI:showReader(selected) end
-                    history.onMenuSelect({ ui = home, close_callback = function() end }, { file = file })
-                else
-                    ReaderUI:showReader(file)
-                end
-            end
-            eq(opened, 0, "repair must complete before settings load")
-            ok(E.MarginRepair.pending, "margin repair actually pending")
-            ok(E.Mirror.active and E.Mirror.busy, "Full refresh still running")
-            run(3)
-            eq(opened, 1, "selected book opened once")
-            eq(UIManager:getTopmostVisibleWidget(), reader, "ReaderUI shown")
-            eq(W.quits or 0, quits, "KOReader did not exit")
-            ok(not E.MarginRepair.pending, "repair finished")
-        end)
-        ReaderUI.showReader, E.MarginRepair.installed = show, installed
-        E.Companion.send, E.Companion.workerProblem, E.OC._dir = send, problem, folder
-        E.MarginRepair.pending, E.S.home_book = nil, nil
-        E.Mirror.active, E.Mirror.busy, E.Mirror.op = false, false, nil
-        sh("rm -rf", tmp)
-        ok(success, err)
-    end)
+-- This case is also in the emulated release gate (ORBIT_TEST_ONLY=startup).
+-- With a pinned checkout it executes KOReader's actual opening coroutine.
+test("startup smoke: Home, history and file browser open during Full refresh with repair pending", function()
+    local Reader = require("apps/reader/readerui")
+    eq(Reader.showReader, stockShowReader, "book opening is never intercepted for repair")
+    local show = Reader.showReader
+    local old_do, old_co = Reader.doShowReader, Reader.showReaderCoroutine
+    local old_notices, old_busy, old_active = E.Mirror.notices, E.Mirror.busy, E.Mirror.active
+    local Info = require("ui/widget/infomessage")
+    local source = [[
+function Reader:showReaderCoroutine(file, provider, seamless)
+    UIManager:show(InfoMessage:new{ text = "Opening file", timeout = 0.0, invisible = seamless })
+    UIManager:forceRePaint()
+    UIManager:nextTick(function() self:doShowReader(file, provider, seamless) end)
 end
+]]
+    local checkout = os.getenv("ORBIT_KOREADER_SOURCE")
+    if checkout then
+        local f = assert(io.open(checkout .. "/frontend/apps/reader/readerui.lua", "rb"))
+        local text = f:read("*a"); f:close()
+        source = assert(text:match("(function ReaderUI:showReaderCoroutine.-)\nfunction ReaderUI:doShowReader"))
+    end
+    local chunk = assert(loadstring(source))
+    setfenv(chunk, setmetatable({ Reader=Reader, ReaderUI=Reader, UIManager=UIManager, InfoMessage=Info,
+        _=function(t) return t end, T=function(t) return t end, BD={filepath=function(t) return t end},
+        filemanagerutil={abbreviate=function(t) return t end}, logger={dbg=function() end} }, {__index=_G}))
+    chunk()
+    Reader.showReader = function(self, ...) return self:showReaderCoroutine(...) end
+    local success, err = pcall(function()
+        for _, origin in ipairs({ "Home", "history", "file browser" }) do
+            W.queue, W.shown = {}, {}
+            ReaderUI.instance = nil
+            E.Mirror.notices, E.Mirror.busy, E.Mirror.active = true, true, true
+            -- No companion repair answer is delivered. Opening cannot wait for one.
+            local before, quits = #W.broadcasts, W.quits or 0
+            local reader = { document={file="/books/synthetic.epub"}, name="reader" }
+            Reader.doShowReader = function() ReaderUI.instance=reader; UIManager:show(reader) end
+            Reader:showReader("/books/synthetic.epub", "epub")
+            ok(#W.shown > 0, origin .. ": opening widget keeps UIManager alive before next tick")
+            run(0)
+            eq(UIManager:getTopmostVisibleWidget(), reader, origin .. ": ReaderUI shown")
+            eq(ReaderUI.instance, reader, origin .. ": reader instance survives")
+            eq(W.quits or 0, quits, origin .. ": KOReader did not exit")
+            for n=before+1,#W.broadcasts do ok(not W.broadcasts[n].extras.repair_book, "open never sends repair") end
+        end
+        local Trap = class()
+        local old = package.loaded["ui/widget/trapwidget"]
+        package.loaded["ui/widget/trapwidget"] = Trap
+        local w = Trap:new{ text="input trap", dismiss_callback=function() end }
+        UIManager:show(w)
+        eq(UIManager:getTopmostVisibleWidget(), w, "Trapper control widget is never suppressed")
+        package.loaded["ui/widget/trapwidget"] = old
+    end)
+    Reader.showReader, Reader.doShowReader, Reader.showReaderCoroutine = show, old_do, old_co
+    E.Mirror.notices, E.Mirror.busy, E.Mirror.active = old_notices, old_busy, old_active
+    ReaderUI.instance = nil; W.shown = {}
+    ok(success, err)
+end)
 
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
 
 if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
     for _, name in ipairs({
         "startup smoke: last document remains the top reader through a yielding progress pull",
-        "startup: open from Home during Full refresh with margin repair pending",
-        "startup: open from history during Full refresh with margin repair pending",
+        "startup smoke: Home, history and file browser open during Full refresh with repair pending",
     }) do
         assert(executed[name], "required reader flow did not run: " .. name)
     end

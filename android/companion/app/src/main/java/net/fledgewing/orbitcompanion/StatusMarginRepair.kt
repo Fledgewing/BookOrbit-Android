@@ -9,50 +9,27 @@ import java.security.MessageDigest
  */
 object StatusMarginRepair {
     private val queued = java.util.concurrent.atomic.AtomicBoolean()
-    @Volatile private var finished = false
     @Volatile private var closedReported = false
+    @Volatile private var finished = false
+
+    private var bookEpoch = 0L
+    @Synchronized fun bookOpened() { bookEpoch++; closedReported = false; finished = false }
 
     /** Never repair a loaded sidecar: KOReader would later save its stale in-memory values. */
-    fun schedule(ctx: android.content.Context, reportedClosed: Boolean = false) {
+    @Synchronized fun schedule(ctx: android.content.Context, reportedClosed: Boolean = false) {
         if (reportedClosed) closedReported = true
         if (finished || !queued.compareAndSet(false, true)) return
         val app = ctx.applicationContext
+        val epoch = bookEpoch
         BulkWork.executor.execute {
             try {
                 val prefs = Prefs(app)
-                finished = run(android.os.Environment.getExternalStorageDirectory(),
+                val complete = run(android.os.Environment.getExternalStorageDirectory(),
                     BulkWork::checkpoint, OLog::i) { closedReported && prefs.koreaderBook == "0" }
+                synchronized(this) { finished = complete && epoch == bookEpoch }
             } catch (e: Exception) {
                 OLog.w("status repair: deferred", e)
             } finally { queued.set(false) }
-        }
-    }
-
-    // Book-open checks must not sit behind a paused whole-library job. Only the
-    // selected, not-yet-loaded sidecar is touched; a fixed result file avoids the
-    // bulk mailbox's reading checkpoint and backlog.
-    private val bookExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task -> BulkWork.thread("orbit-repair", task) }
-    fun beforeOpen(path: String, token: String) {
-        require(token.matches(Regex("[0-9-]+")))
-        bookExecutor.execute {
-            var result = "checked"
-            try {
-                val root = android.os.Environment.getExternalStorageDirectory().canonicalFile
-                val book = File(path).canonicalFile
-                require(book.path.startsWith(root.path + File.separator))
-                val stem = book.name.substringBeforeLast('.', book.name)
-                val suffix = book.name.substringAfterLast('.', "_")
-                val target = File(book.parentFile, "$stem.sdr/metadata.$suffix.lua")
-                require(target.canonicalPath.startsWith(root.path + File.separator) && target.canonicalFile == target.absoluteFile)
-                if (target.isFile) run(root, {}, OLog::i, target = target)
-                else OLog.i("status repair: book-open check; no adjacent sidecar")
-            } catch (e: Exception) { result = "deferred"; OLog.w("status repair: book-open check deferred", e) }
-            val dir = Worker.root()
-            dir.mkdirs()
-            val file = File(dir, "repair-result.lua")
-            val tmp = File(file.path + ".tmp")
-            tmp.writeBytes(LuaValue.encode(mapOf("token" to token, "result" to result)))
-            check(tmp.renameTo(file))
         }
     }
 
@@ -147,7 +124,6 @@ object StatusMarginRepair {
     fun run(root: File, checkpoint: () -> Unit, log: (String) -> Unit, target: File? = null, canApply: () -> Boolean = { true }): Boolean {
         val base = root.canonicalFile
         val done = File(base, "koreader/settings/booksync-w31-repair.done")
-        if (target == null && done.exists()) return true
         var deferred = false
         val seen = HashSet<String>()
         fun walk(dir: File) {
@@ -222,7 +198,7 @@ object StatusMarginRepair {
                 marker.writeText("checked\n")
             }
         }
-        log("status repair: ${if (target == null) "scan" else "book-open check"} started")
+        log("status repair: ${if (target == null) "scan" else "selected sidecar scan"} started")
         walk(target?.canonicalFile?.parentFile ?: base)
         if (deferred) {
             log("status repair: recovery backups captured; waiting for a closed-book report")

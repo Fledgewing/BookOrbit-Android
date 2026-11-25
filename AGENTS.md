@@ -86,10 +86,12 @@ One repo releases both platforms; the tag prefix says which.
   reader, source archive, licenses, `SHA256SUMS`, attestations. Always `make_latest=false`.
   An upstream rc or beta builds a pre-release, a final upstream release a stable one
   (`xteink/scripts/upstream-line.sh`).
-- "latest" must stay an Android release: every companion and plugin (and the old patch) reads `releases/latest`
-  (0.6.x through the old BookOrbit-Android URL, and it parses only `v<version>` tags).
+- "latest" must stay an Android release: older companions and plugins (and the old patch) read
+  `releases/latest` (0.6.x through the old BookOrbit-Android URL, parsing only `v<version>` tags).
+  The companion now verifies the signed Android feed on `android-feed`, at `android/releases.json`;
+  withdrawals and recovery are described in `docs/design/release-safety.md`.
 - GitHub orders the release list by version-like tag name: `v…` tags first, prefixed tags
-  after all of them. So Android keeps plain `v…` tags (its pre-release check reads the list),
+  after all of them. So Android keeps plain `v…` tags (older pre-release checks read the list),
   and readers find firmware through the feed `xteink/releases.json` on the `xteink-feed`
   branch (newest stable and pre-release, written by the xteink workflow), never the list. The
   Android pieces also read `android-v` tags and skip `xteink-v` ones.

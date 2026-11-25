@@ -257,7 +257,6 @@ function Gate.installToast()
         local m = w and getmetatable(w)
         while m and not notice do
             notice = m == InfoMessage or m == package.loaded["ui/widget/notification"]
-                or m == package.loaded["ui/widget/trapwidget"]
             m = getmetatable(m)
         end
         if notice then
@@ -269,7 +268,11 @@ function Gate.installToast()
             end
             -- Invisible Trapper input traps have no message and must keep working.
             if text ~= nil then
-                if not w.orbit_refresh_popup and Gate.silent() then
+                -- Zero-timeout opening messages keep UIManager alive until its
+                -- next-tick ReaderUI constructor runs. Callback-bearing widgets
+                -- also belong to a caller's control flow, not the notice queue.
+                if not w.orbit_refresh_popup and w.timeout ~= 0 and not w.dismiss_callback
+                    and not w.invisible and Gate.silent() then
                     Gate.refreshNotice("notice: " .. tostring(text)); return
                 end
                 log("notice: shown: " .. tostring(text))

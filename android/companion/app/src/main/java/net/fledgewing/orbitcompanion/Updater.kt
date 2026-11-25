@@ -15,7 +15,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.ScrollView
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -471,15 +470,15 @@ object Updater {
     @Volatile
     private var ready: Pair<String, Intent>? = null
 
-    /** The update ready to install, while it is still newer than this app (Status shows "Install"). */
-    fun readyToInstall(): Pair<String, Intent>? = ready?.takeIf { stillNewer(it.first) }
+    /** The update ready to install, while it is still allowed by the signed policy (Status shows "Install"). */
+    fun readyToInstall(): Pair<String, Intent>? = ready?.takeIf { stillAllowed(it.first) }
 
-    private fun stillNewer(version: String): Boolean =
+    private fun stillAllowed(version: String): Boolean =
         UpdatePolicy.shouldInstall(Version.parse(version), Version.parse(BuildConfig.VERSION_NAME), withdrawn)
 
     /** Quiet: no sound, no vibration, no heads-up (IMPORTANCE_DEFAULT never peeks); shown only through Reading. */
     private fun notifyReady(ctx: Context, version: String, confirm: Intent) {
-        if (!stillNewer(version)) return log("v$version ready, but this app is already v${BuildConfig.VERSION_NAME}: no notification")
+        if (!stillAllowed(version)) return log("v$version ready, no longer eligible for installation: no notification")
         val nm = notifications(ctx)
         // The old "updates" channel had a sound, which can't be changed once created: replaced.
         if (nm.getNotificationChannel(OLD_CHANNEL) != null) nm.deleteNotificationChannel(OLD_CHANNEL)

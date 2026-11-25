@@ -58,7 +58,18 @@ def run(withdraw):
         subprocess.run([tool, 'verify', '--tag', BRANCH, str(signatures), str(payload)], check=True)
         envelope = json.dumps({'payload': payload.read_text(), 'signatures': signatures.read_text()}).encode()
         if not exists:
-            gh('api', f'repos/{repo}/git/refs', '-f', f'ref=refs/heads/{BRANCH}', '-f', f'sha={os.environ["GITHUB_SHA"]}')
+            # Create the first commit before exposing the branch: a failed bootstrap
+            # must never leave a branch with no verifiable feed on the next run.
+            request_file = tmp / 'request.json'
+            def post(path, body):
+                request_file.write_text(json.dumps(body))
+                return json.loads(gh('api', '-X', 'POST', f'repos/{repo}/{path}', '--input', str(request_file)))
+            blob = post('git/blobs', {'content': base64.b64encode(envelope).decode(), 'encoding': 'base64'})
+            tree = post('git/trees', {'tree': [{'path': PATH, 'mode': '100644', 'type': 'blob', 'sha': blob['sha']}]})
+            commit = post('git/commits', {'message': 'Initialize signed Android release safety feed', 'tree': tree['sha']})
+            post('git/refs', {'ref': f'refs/heads/{BRANCH}', 'sha': commit['sha']})
+            print('Signed Android feed initialized')
+            return
         request = {'message': 'Refresh signed Android release safety feed', 'branch': BRANCH,
                    'content': base64.b64encode(envelope).decode()}
         if old_sha:

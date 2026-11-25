@@ -30,9 +30,11 @@ class FeedTest(unittest.TestCase):
                 return '{}'
             if '-X' in args:
                 request = json.loads(Path(args[-1]).read_text())
-                published.append(json.loads(base64.b64decode(request['content'])))
-                self.assertEqual('previous-sha' if existing else None, request.get('sha'))
-                return '{}'
+                if 'content' in request:
+                    published.append(json.loads(base64.b64decode(request['content'])))
+                if args[2] == 'PUT':
+                    self.assertEqual('previous-sha', request.get('sha'))
+                return '{"sha":"created-object"}'
             if 'contents/' in args[-1]:
                 envelope = json.dumps({'payload': json.dumps(previous), 'signatures': 'previous signature'})
                 return json.dumps({'sha': 'previous-sha', 'content': base64.b64encode(envelope.encode()).decode()})
@@ -58,6 +60,15 @@ class FeedTest(unittest.TestCase):
     def test_rejects_non_android_tag(self):
         with self.assertRaises(ValueError):
             feed.run('xteink-v2.0.0')
+
+    def test_failed_signer_never_exposes_feed_branch(self):
+        with patch.object(feed, 'gh', side_effect=[json.dumps([[]]), json.dumps([[{
+                'tag_name': 'v0.11.3-rc.9', 'draft': False}]])]) as gh, \
+             patch.object(feed.subprocess, 'check_output', side_effect=RuntimeError('signing failed')), \
+             patch.dict(os.environ, {'GITHUB_REPOSITORY': 'fixture/repo'}):
+            with self.assertRaises(RuntimeError):
+                feed.run('')
+            self.assertEqual(2, gh.call_count)
 
     def test_bad_previous_signature_stops_publication(self):
         with patch.object(feed, 'gh', side_effect=[json.dumps([[{'name': 'android-feed'}]]),

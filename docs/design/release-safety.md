@@ -30,5 +30,6 @@ Later withdrawals use the same input; ordinary Android publication republishes t
 The reusable release test workflow runs reader startup and Home/history opening flows
 on plugin PRs and main pushes. An unconditional result job rejects a skipped reader
 job for Android/all invocations, so the release build cannot proceed without it.
-The flows use the pinned KOReader Trapper and the plugin harness, not a real Android
-reader or a complete CRE engine. Device validation remains required before release.
+The flows use pinned KOReader Trapper/showReaderCoroutine code and the plugin harness,
+with an explicit required-scenario manifest and no-exit assertion. They do not run a real
+Android reader or a complete CRE engine. Device validation remains required before release.
