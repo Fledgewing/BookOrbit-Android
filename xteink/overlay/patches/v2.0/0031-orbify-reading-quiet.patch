@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify reading quiet
+Subject: [PATCH] Orbify: reading quiet
 
 Defer background UI work while a book is being read.
 

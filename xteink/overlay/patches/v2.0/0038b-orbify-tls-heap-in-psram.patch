@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify tls heap in psram
+Subject: [PATCH] Orbify: tls heap in psram
 
 Allocate TLS and JSON in PSRAM on X4 readers to preserve internal heap.
 

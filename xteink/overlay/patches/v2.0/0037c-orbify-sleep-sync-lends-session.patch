@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify sleep sync lends session
+Subject: [PATCH] Orbify: sleep sync lends session
 
 Lend the sleep sync TLS session to catalog work instead of opening another.
 

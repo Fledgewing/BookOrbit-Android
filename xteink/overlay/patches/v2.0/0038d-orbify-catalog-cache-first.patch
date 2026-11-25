@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify catalog cache first
+Subject: [PATCH] Orbify: catalog cache first
 
 Open a current saved catalog without first joining Wi-Fi.
 

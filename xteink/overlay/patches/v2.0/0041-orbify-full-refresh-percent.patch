@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify full refresh percent
+Subject: [PATCH] Orbify: full refresh percent
 
 Show one monotonic Full refresh percentage and fit Tailscale status rows.
 

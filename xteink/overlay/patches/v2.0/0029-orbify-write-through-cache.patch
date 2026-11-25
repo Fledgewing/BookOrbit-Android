@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify write through cache
+Subject: [PATCH] Orbify: write through cache
 
 Read saved catalog replies and patch them after successful writes.
 

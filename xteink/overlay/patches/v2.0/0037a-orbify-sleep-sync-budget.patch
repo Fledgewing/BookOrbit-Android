@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify sleep sync budget
+Subject: [PATCH] Orbify: sleep sync budget
 
 Bound sleep sync time and let the power watcher end a blocked sync.
 

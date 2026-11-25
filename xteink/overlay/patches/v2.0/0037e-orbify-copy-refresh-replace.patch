@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify copy refresh replace
+Subject: [PATCH] Orbify: copy refresh replace
 
 Replace changed copies during sync, carrying unfinished work to the next run.
 

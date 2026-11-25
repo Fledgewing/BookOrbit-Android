@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify finish at end
+Subject: [PATCH] Orbify: finish at end
 
 Queue a finished book for sync when the reader reaches its end.
 

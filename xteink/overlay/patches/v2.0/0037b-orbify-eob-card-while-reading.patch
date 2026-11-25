@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify eob card while reading
+Subject: [PATCH] Orbify: eob card while reading
 
 Refresh the End-of-Book card while reading and support its Home swipe.
 

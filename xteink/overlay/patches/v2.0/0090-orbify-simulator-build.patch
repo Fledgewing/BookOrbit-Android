@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify simulator build
+Subject: [PATCH] Orbify: simulator build
 
 Build the same overlay hooks in the desktop simulator for release tests.
 

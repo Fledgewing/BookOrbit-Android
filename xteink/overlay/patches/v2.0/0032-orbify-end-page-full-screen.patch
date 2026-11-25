@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify end page full screen
+Subject: [PATCH] Orbify: end page full screen
 
 Render the End-of-Book page with the approved full-screen layout.
 

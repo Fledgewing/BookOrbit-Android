@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify offline catalog and boot trail
+Subject: [PATCH] Orbify: offline catalog and boot trail
 
 Avoid a catalog request before its network boot has started.
 

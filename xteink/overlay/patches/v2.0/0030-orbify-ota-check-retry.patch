@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify ota check retry
+Subject: [PATCH] Orbify: ota check retry
 
 Retry a failed firmware update check on a fresh connection.
 

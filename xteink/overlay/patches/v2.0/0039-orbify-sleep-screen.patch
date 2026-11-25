@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify sleep screen
+Subject: [PATCH] Orbify: sleep screen
 
 Hook sleep-screen rotation and cover preparation into sleep and wake.
 

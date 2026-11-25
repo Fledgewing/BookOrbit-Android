@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: orbify home cover heap floor
+Subject: [PATCH] Orbify: home cover heap floor
 
 Fetch Home covers only when the heap has room beside the current session.
 
