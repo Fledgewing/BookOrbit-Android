@@ -13,6 +13,7 @@ object StatusMarginRepair {
     @Volatile private var finished = false
 
     private var bookEpoch = 0L
+    private var footerNotified = false
     @Synchronized fun bookOpened() { bookEpoch++; closedReported = false; finished = false }
 
     /** Never repair a loaded sidecar: KOReader would later save its stale in-memory values. */
@@ -25,7 +26,9 @@ object StatusMarginRepair {
             try {
                 val prefs = Prefs(app)
                 val complete = run(android.os.Environment.getExternalStorageDirectory(),
-                    BulkWork::checkpoint, OLog::i) { closedReported && prefs.koreaderBook == "0" }
+                    BulkWork::checkpoint, OLog::i, globalRepair = { before, after, token ->
+                        if (!footerNotified) { Worker.nativeFooterRepair(before, after, token); footerNotified = true }
+                    }) { closedReported && prefs.koreaderBook == "0" }
                 synchronized(this) { finished = complete && epoch == bookEpoch }
             } catch (e: Exception) {
                 OLog.w("status repair: deferred", e)
@@ -121,7 +124,7 @@ object StatusMarginRepair {
         return result
     }
 
-    fun run(root: File, checkpoint: () -> Unit, log: (String) -> Unit, target: File? = null, canApply: () -> Boolean = { true }): Boolean {
+    fun run(root: File, checkpoint: () -> Unit, log: (String) -> Unit, target: File? = null, globalRepair: (String, String, String) -> Unit = { _, _, _ -> }, canApply: () -> Boolean = { true }): Boolean {
         val base = root.canonicalFile
         val done = File(base, "koreader/settings/booksync-w31-repair.done")
         var deferred = false
@@ -145,17 +148,29 @@ object StatusMarginRepair {
                 val old = snapshot.takeIf { it.isFile } ?: File(file.path + ".old")
                 val marker = File(file.path + ".booksync-w31.done")
                 if (marker.exists() && target != null) log("status repair: selected sidecar already checked")
+                if (marker.exists() && !global) continue
                 if (!old.isFile && target != null) log("status repair: selected sidecar has no recovery backup")
-                if (marker.exists() || !old.isFile || old.canonicalFile != old.absoluteFile
+                if (!old.isFile || old.canonicalFile != old.absoluteFile
                     || snapshot.canonicalFile != snapshot.absoluteFile) continue
                 // Bounded reads; unsupported files stay untouched and can be recovered manually.
                 if (file.length() > 16 * 1024 * 1024 || old.length() > 16 * 1024 * 1024) continue
+                val backup = File(file.path + ".booksync-before-w31")
                 val bytes = file.readBytes()
                 val text = String(bytes, Charsets.ISO_8859_1)
                 val keys = if (global) footerKeys else bookKeys + footerKeys
                 val oldBytes = old.readBytes()
-                val repaired = restore(text, String(oldBytes, Charsets.ISO_8859_1), keys)
+                val oldText = String(oldBytes, Charsets.ISO_8859_1)
+                val repaired = restore(text, oldText, keys)
                 val id = MessageDigest.getInstance("SHA-256").digest(file.path.toByteArray()).take(6).joinToString("") { "%02x".format(it) }
+                fun notifyGlobal() {
+                    if (!global || !backup.isFile || backup.canonicalFile != backup.absoluteFile || backup.length() > 16 * 1024 * 1024) return
+                    val before = table(backup.readText(Charsets.ISO_8859_1), footerKeys) ?: return
+                    val after = table(oldText, footerKeys) ?: return
+                    val b = before.entries["reader_footer_mode"]?.value ?: "nil"
+                    val a = after.entries["reader_footer_mode"]?.value ?: "nil"
+                    if (a != b) globalRepair(b, a, "$id:$b:$a")
+                }
+                if (marker.exists()) { notifyGlobal(); continue }
                 if (repaired == null) { log("status repair $id: unsupported settings; left untouched"); continue }
                 checkpoint()
                 // Preserve the recovery source before a loaded book can rotate .old on
@@ -167,18 +182,19 @@ object StatusMarginRepair {
                 }
                 // A native save during the scan invalidates the comparison; retry next startup.
                 check(file.readBytes().contentEquals(bytes)) { "settings changed during repair" }
-                val backup = File(file.path + ".booksync-before-w31")
                 val tmp = File(file.path + ".booksync-w31.tmp")
                 if (backup.canonicalFile != backup.absoluteFile || tmp.canonicalFile != tmp.absoluteFile) continue
                 // A prior attempt reached the write stage. Different current bytes mean
                 // it applied already, or the user saved since: never replay over that save.
                 if (backup.exists() && !backup.readBytes().contentEquals(bytes)) {
+                    notifyGlobal()
                     marker.writeText("already applied or subsequently changed\n")
                     log("status repair $id: retained subsequent settings")
                     continue
                 }
                 if (repaired != text) {
                     if (!backup.exists()) backup.writeBytes(bytes)
+                    if (!snapshot.exists()) snapshot.writeBytes(oldBytes)
                     tmp.writeText(repaired, Charsets.ISO_8859_1)
                     checkpoint()
                     if (!canApply()) {
@@ -195,6 +211,7 @@ object StatusMarginRepair {
                         .joinToString(", ") { "$it:${was[it]?.value ?: "unset"}->${restored[it]?.value ?: "unset"}" }
                     log("status repair $id: restored $changes from .old; original saved")
                 }
+                notifyGlobal()
                 marker.writeText("checked\n")
             }
         }
