@@ -100,7 +100,7 @@ Search stays online; offline it says "Search needs a connection".
 - **Size.** The mirror's lists and details are kept outside the 64 MB / 20000-entry cap: they
   neither count toward it nor are evicted (`shared/fixtures/cache/cases.json` `mirror.evict`).
 - **Storage limit (v0.11.2).** One limit on everything Orbit stores (Orbit menu › Storage limit:
-  100 MB, 250 MB (default), 500 MB, 1 GB or No limit; the line shows "Using N MB"): the browsing
+  100 MB, 250 MB (default), 500 MB, 1 GB, 2.5 GB, 5 GB, 10 GB or No limit; the line shows "Using N MB"): the browsing
   cache, the mirror's lists and details and every cover, mirrored or not. Book files and
   KOReader's own data don't count. It is counted on start and kept up to date on each write; over
   it, browsing entries and plain covers go first, least recently used first, then covers saved by

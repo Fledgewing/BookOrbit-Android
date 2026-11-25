@@ -1991,6 +1991,26 @@ test("home: the instance shows no handler but the UI routes the event -> BookOrb
     W.shown = {}
 end)
 
+test("storage menu: all sizes and fractional GB labels", function()
+    local E = getfenv(Orbit.onSuspend)
+    local _, m = newUI(false)
+    local row
+    for _, it in ipairs(menuAll(m:menuItems())) do
+        if it.text_func and it.text_func():find("Storage limit:", 1, true) == 1 then row = it; break end
+    end
+    ok(row ~= nil, "storage menu exists")
+    local labels = { "100 MB", "250 MB", "500 MB", "1 GB", "2.5 GB", "5 GB", "10 GB", "No limit" }
+    ok(#row.sub_item_table == #labels, "all choices")
+    local was = E.S.storage_limit_mb
+    for i, mb in ipairs(E.Cache.STORAGE_LIMITS_MB) do
+        E.S.storage_limit_mb = mb
+        ok(row.sub_item_table[i].text == labels[i], "choice label " .. labels[i])
+        ok(row.sub_item_table[i].checked_func(), "selected choice")
+        ok(row.text_func():find("Storage limit: " .. labels[i], 1, true) == 1, "summary label " .. labels[i])
+    end
+    E.S.storage_limit_mb = was
+end)
+
 local function scheduleMenu(m)
     for _, it in ipairs(menuAll(m:menuItems())) do
         local sub = it.sub_item_table
@@ -4676,6 +4696,15 @@ test("storage limit: Orbit Companion counts and removes; eligible covers go befo
     E.OC.storage = nil
     E.OC.client = function() return client end
     ok(E.OC.storageTotals() and E.OC.storageTotals().used == 30 * MB, "read back from the database")
+    -- 10 GB crosses the signed 32-bit byte boundary: preserve the limit over IPC and enforce it.
+    run(10)
+    E.S.storage_limit_mb = 10240
+    ok(E.OC.limitBytes() == 10737418240, "10 GB in bytes")
+    entry("big", 10240 * MB, 99)
+    E.OC.storageCount("limit changed")
+    ok(lastBroadcast(".STORAGE").extras.limit == "10737418240", "10 GB reaches the companion intact")
+    run(3)
+    ok(not has("big") and has("list"), "10 GB limit evicts browsing data, preserving saved data")
     -- No limit: nothing goes.
     run(10) -- drain the startup count before changing its limit
     E.S.storage_limit_mb = 0

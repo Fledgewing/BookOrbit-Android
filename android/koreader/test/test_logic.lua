@@ -1463,6 +1463,18 @@ test("settings schema: the plugin's own JSON reader loads it", function()
     end
 end)
 
+test("settings schema: storage choices match the plugin, including fractional GB", function()
+    local d = SIDX.byKey.storage_limit_mb
+    eq(d.default, 250)
+    eq(#d.values, #M.Cache.STORAGE_LIMITS_MB)
+    local labels = { "100 MB", "250 MB", "500 MB", "1 GB", "2.5 GB", "5 GB", "10 GB", "No limit" }
+    for i, v in ipairs(d.values) do
+        eq(tonumber(v.id), M.Cache.STORAGE_LIMITS_MB[i])
+        eq(v.label, labels[i])
+        eq(SettingsSync.fromWire(d, v.id), tonumber(v.id))
+    end
+end)
+
 test("settings schema: every plugin setting is in it, or listed as state", function()
     local STATE = { last_sleep_sync = 1, shared_settings_at = 1, settings_at = 1, patch_update_checked_at = 1,
         patch_update_status = 1, open_book_at_exit = 1, restart_screen = 1, restart_book = 1, home_book = 1,

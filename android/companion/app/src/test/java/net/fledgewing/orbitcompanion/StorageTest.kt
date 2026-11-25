@@ -28,6 +28,26 @@ class StorageTest {
         }
     }
 
+    @Test fun tenGbAccountingAndEvictionUseLongBytes() {
+        val gb = 1024L * 1024 * 1024
+        val limit = 10240L * 1024 * 1024
+        assertEquals(10737418240L, limit)
+        val items = listOf(
+            StorageLogic.Item("home", 4 * gb, 0, "kept"),
+            StorageLogic.Item("old", 3 * gb, 1, "cover"),
+            StorageLogic.Item("new", 3 * gb, 2, "mirror_cover"))
+        val full = StorageLogic.plan(items, limit)
+        assertTrue(full.drop.isEmpty())
+        assertEquals(limit, full.used)
+        assertEquals(limit, StorageLogic.totals(items).getValue("used"))
+        val over = items + StorageLogic.Item("latest", gb, 3, "cache")
+        val plan = StorageLogic.plan(over, limit)
+        assertEquals(listOf("old"), plan.drop)
+        assertEquals(11 * gb, plan.used)
+        assertEquals(8 * gb, plan.after)
+        assertEquals(plan.after, StorageLogic.totals(over, plan.drop).getValue("used"))
+    }
+
     @Test fun netGrowthAndDataPriorityMatchFirmwareContract() {
         // @fixture storage/cases.json
         val cases = JSONObject(File("../../../shared/fixtures/storage/cases.json").readText()).getJSONArray("cases")
