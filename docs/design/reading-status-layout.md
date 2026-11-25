@@ -58,8 +58,9 @@ No chapter metadata means an empty centre, including CBZ without an outline.
 Measure both sides first. The centre's available width is twice the distance from
 screen centre to the nearer side group's inner edge, minus a small gap. Truncate
 the chapter on Unicode boundaries with a single ellipsis using rendered widths.
-On very narrow displays suppress the chapter first; if needed omit battery percent
-before its icon. Do not overlap the page group. Percent uses document reading
+On narrow displays suppress the chapter first and shorten the page text while
+keeping the full battery percentage and charging mark together. If the entire
+battery group cannot fit, omit it whole. Do not overlap the page group. Percent uses document reading
 progress, clamped to 0–100 and rounded to the nearest whole percent; page numbers
 use KOReader's document pagination. Missing/unknown totals show no progress group.
 
@@ -76,7 +77,11 @@ Each lane fits measured bold black text to the existing margin, with zero widget
 padding and one scaled pixel of outer padding per side. Default Small selects the
 largest face fitting that margin, up to 48 pt; Medium and Large retain explicit
 18/22 pt caps. Horizontal anchors follow scaled left/right book margins, or the
-rendered PDF bounds. No text-block coordinate or hit transform changes.
+rendered PDF bounds. The battery group starts four scaled pixels inside that
+left edge; four-pixel scaled gaps separate its glyph, full percentage and separate
+black charging mark. Reserve the complete group before truncating page text. If
+it cannot fit at all, omit the whole group rather than clipping it. No text-block
+coordinate or hit transform changes.
 
 Native footer painting is suppressed only when an overlay fits. Its layout and
 refresh controller keep running. Footer-toggle events change only a private

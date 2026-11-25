@@ -93,31 +93,40 @@ function RS.paint(s, bb, x, y, bottom_only)
     local total = footer.pages or s.ui.document:getPageCount()
     local progress = StatusLayout.progress(page, total, footer.percent_finished)
     local chapter = s.ui.toc:getTocTitleByPage(page) or ""
-    local battery = Device:getPowerDevice():getCapacity()
+    local power = Device:getPowerDevice()
+    local battery = power:getCapacity()
+    local charging = power.isCharging and power:isCharging()
     s.battery = battery
     local icon = "▱"
     local glyph = s.battery_program
     local icon_size = math.max(1, (lane.height - 2 * Device.screen:scaleBySize(1)) / glyph.height)
     local icon_w = glyph.width * icon_size
     local battery_text = string.format("%d%%", battery)
-    local function itemWidth(v) return v == icon and icon_w or measure(v) end
+    local percent_w = measure(battery_text)
+    local mark_h = glyph.height*icon_size
+    local mark_w = charging and StatusLayout.chargingMark(mark_h) or 0
+    local battery_w = icon_w + s.gap + percent_w + (charging and s.gap+mark_w or 0)
     local layout = StatusLayout.layout(width, s.inset, s.gap,
-        icon .. " " .. battery_text, icon, chapter, progress,
-        function(v)
-            if v:sub(1,#icon) == icon then return icon_w + measure(v:sub(#icon+1)) end
-            return itemWidth(v)
-        end)
+        icon, icon, chapter, progress,
+        function(value) return value == icon and battery_w or measure(value) end, true)
     local by = height - lane.height
     bb:paintRect(x, y + by, width, lane.height, s.BB.COLOR_WHITE)
     if layout.left ~= "" then
-        local ix, iy = x+s.inset, y+by+(lane.height-glyph.height*icon_size)/2
-        BatteryGlyph.draw(glyph, icon_size, battery, function(dx,dy,w,h,color)
-            -- Round edges, not widths, so neighbouring rectangles share pixels.
-            local l,t = math.floor(ix+dx+0.5), math.floor(iy+dy+0.5)
-            local r,b = math.floor(ix+dx+w+0.5), math.floor(iy+dy+h+0.5)
-            if r>l and b>t then bb:paintRect(l,t,r-l,b-t,color==1 and s.BB.COLOR_BLACK or s.BB.COLOR_WHITE) end
-        end)
-        if layout.left ~= icon then text(" " .. battery_text, s.inset+icon_w, by) end
+        local ix, iy = x+layout.lx, y+by+(lane.height-glyph.height*icon_size)/2
+        local function rectangles(ox, oy)
+            return function(dx,dy,w,h,color)
+                -- Round edges, not widths, so neighbouring rectangles share pixels.
+                local l,t = math.floor(ox+dx+0.5), math.floor(oy+dy+0.5)
+                local r,b = math.floor(ox+dx+w+0.5), math.floor(oy+dy+h+0.5)
+                if r>l and b>t then bb:paintRect(l,t,r-l,b-t,color==1 and s.BB.COLOR_BLACK or s.BB.COLOR_WHITE) end
+            end
+        end
+        BatteryGlyph.draw(glyph, icon_size, battery, rectangles(ix, iy))
+        local percent_x = layout.lx+icon_w+s.gap
+        text(battery_text, percent_x, by)
+        if charging then
+            StatusLayout.chargingMark(mark_h, rectangles(x+percent_x+percent_w+s.gap, iy))
+        end
     end
     text(layout.chapter, layout.cx, by)
     text(layout.right, layout.rx, by)
@@ -128,7 +137,7 @@ function RS.enable(ui)
     local s = { ui=ui, view=ui.view, footer=ui.view.footer, undo={},
         Geom=require("ui/geometry"), Text=require("ui/widget/textwidget"),
         Font=require("ui/font"), BB=require("ffi/blitbuffer"),
-        inset=0, gap=Device.screen:scaleBySize(4) }
+        inset=math.max(1, Device.screen:scaleBySize(4)), gap=math.max(1, Device.screen:scaleBySize(4)) }
     RS.session = s
     for _, path in ipairs({ SOURCE_DIR .. "/battery.json", SOURCE_DIR .. "/../../../shared/ui/battery.json" }) do
         local file = io.open(path, "rb")

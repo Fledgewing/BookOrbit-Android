@@ -23,12 +23,20 @@ function StatusLayout.truncate(text, width, measure)
     end
     return table.concat(chars, "", 1, lo) .. "…"
 end
-function StatusLayout.layout(width, inset, gap, battery, icon, chapter, progress, measure)
-    progress = StatusLayout.truncate(progress, math.max(0, width-2*inset), measure)
-    local right = width - inset - measure(progress)
+function StatusLayout.layout(width, inset, gap, battery, icon, chapter, progress, measure, keep_battery)
     local left = battery
-    if inset + measure(left) + gap > right then left = icon end
-    if inset + measure(left) + gap > right then left = "" end
+    local available = math.max(0, width-2*inset)
+    if keep_battery then
+        -- Keep percentage and charging mark together; shorten lower-priority page text.
+        if measure(left) > available then left = "" end
+        available = math.max(0, available - (left ~= "" and measure(left)+gap or 0))
+    end
+    progress = StatusLayout.truncate(progress, available, measure)
+    local right = width - inset - measure(progress)
+    if not keep_battery then
+        if inset + measure(left) + gap > right then left = icon end
+        if inset + measure(left) + gap > right then left = "" end
+    end
     local inner = math.max(inset, inset + measure(left)) + gap
     local half = math.max(0, math.min(width/2 - inner, right - gap - width/2))
     local title = StatusLayout.truncate(chapter, half * 2, measure)
@@ -57,4 +65,16 @@ function BatteryGlyph.draw(program, size, capacity, rectangle)
         local fraction = r[6] and math.max(0, math.min(100, capacity))/100 or 1
         rectangle(r[1]*size, r[2]*size, r[3]*size*fraction, r[4]*size, r[5])
     end
+end
+
+-- A separate black charging mark keeps its polarity independent of battery fill.
+-- Seven by nine pixel silhouette, scaled to the same safe height as the battery.
+function StatusLayout.chargingMark(height, rectangle)
+    local unit = height / 9
+    if rectangle then
+        for row, run in ipairs({{3,2},{2,3},{1,3},{0,7},{3,3},{2,3},{2,2},{1,2},{1,1}}) do
+            rectangle(run[1]*unit, (row-1)*unit, run[2]*unit, unit, 1)
+        end
+    end
+    return 7*unit
 end
