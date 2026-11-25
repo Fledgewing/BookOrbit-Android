@@ -94,13 +94,11 @@ static void plan() {
   CHECK(!bad.parse("orbify-mirror 2\n0\nQ\tzz\n"));  // unknown kind
   // A version 1 plan joined a book list's fields with a space (a 400 on the device): not resumed.
   CHECK(!bad.parse("orbify-mirror 1\n0\nB\tsort=recently_read readStatus=reading\n"));
-  // The cap: the 200-entry cache keeps room for the views read by hand.
+  // No request-count cap; firmware uses the SD journal and storage budget.
   Plan big;
   size_t added = 0;
   for (int i = 0; i < 400; i++) added += big.add(Kind::Detail, std::to_string(i)) ? 1 : 0;
-  CHECK(added == MAX_STEPS && big.total() == MAX_STEPS);
-  // Per-kind caps leave room for the others: lists of one facet, details.
-  CHECK(MAX_LISTS_PER_FACET * 5 + MAX_DETAILS < MAX_STEPS);
+  CHECK(added == 400 && big.total() == 400);
 }
 
 static void queries() {

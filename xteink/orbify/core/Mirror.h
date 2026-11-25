@@ -14,14 +14,6 @@ namespace orbify {
 namespace mirror {
 
 constexpr uint32_t DEFAULT_TTL_DAYS = 0;
-// The cache holds 200 entries (core/CatalogCache MAX_ENTRIES): the mirror takes at most this many,
-// so the views read by hand keep their room.
-constexpr size_t MAX_STEPS = 150;
-// First pages only: a facet section (authors, series...) contributes the lists of its first rows.
-constexpr size_t MAX_LISTS_PER_FACET = 20;
-// Book details: the books on the reader and their next in series.
-constexpr size_t MAX_DETAILS = 30;
-
 // --- when ----------------------------------------------------------------------------------------
 
 enum class Due : uint8_t { None, Never, Ttl, Library };

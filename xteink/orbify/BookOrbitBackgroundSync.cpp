@@ -99,7 +99,7 @@ const char* runJob(const Job& job, size_t& lowest) {
 
   OrbifyWifi::Hold radio(OrbifyWifi::Owner::BackgroundSync);
   const bool wasConnected = WiFi.status() == WL_CONNECTED;
-  if (!SavedWifiConnect::connect(&shouldStop)) {
+  if (!OrbifyWifi::connect("reading", &shouldStop)) {
     if (!wasConnected) SavedWifiConnect::disconnect();
     return shouldStop() ? "aborted: reader closing" : "skipped: network";
   }

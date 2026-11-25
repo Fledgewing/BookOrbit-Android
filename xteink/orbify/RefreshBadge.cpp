@@ -30,6 +30,9 @@ void drawStartPopup(const GfxRenderer& renderer, const unsigned percent) {
   char text[96];
   snprintf(text, sizeof(text), "Full refresh in progress \xC2\xB7 about %u%% \xC2\xB7 you can keep reading and browsing",
            percent);
+  drawMessage(renderer, text);
+}
+void drawMessage(const GfxRenderer& renderer, const char* text) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
   const int frame = std::max(1, metrics.popupFrameThickness);
@@ -37,7 +40,7 @@ void drawStartPopup(const GfxRenderer& renderer, const unsigned percent) {
   const int marginY = metrics.popupMarginY;
   const int w = std::max(1, safe.width - 2 * (metrics.contentSidePadding + frame));
   // Wrapped, never cut: three lines hold it at the narrowest width.
-  const auto lines = renderer.wrappedText(UI_12_FONT_ID, text, std::max(1, w - 2 * marginX), 3, EpdFontFamily::BOLD);
+  const auto lines = renderer.wrappedText(UI_12_FONT_ID, text, std::max(1, w - 2 * marginX), 4, EpdFontFamily::BOLD);
   const int lineH = renderer.getLineHeight(UI_12_FONT_ID);
   const int h = static_cast<int>(lines.size()) * lineH + 2 * marginY;
   const int x = safe.x + (safe.width - w) / 2;

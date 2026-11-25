@@ -19,6 +19,7 @@
 #include <string>
 
 #include "core/CatalogCache.h"
+#include "core/RefreshPlan.h"
 
 namespace OrbifyCache {
 
@@ -71,6 +72,11 @@ void coverStored(int32_t bookId, uint32_t version, const std::string& etag);
 // Signed out, or another server or account: the cache directory goes.
 void dropAll();
 // Merge changed fields from the last recently_updated head into already saved book rows.
-void mergeRecent();
+std::vector<int64_t> mergeRecent();
+uint64_t bytesOnSd();
+void setPlanBytes(uint64_t bytes);
+orbify::mirror::Stop storageStop();
+void clearStorageStop();
+bool roomForReply();
 
 }  // namespace OrbifyCache

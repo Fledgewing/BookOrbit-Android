@@ -4,13 +4,16 @@
 #include "core/WifiHolds.h"
 namespace OrbifyWifi {
 using Owner = orbify::wifi::Owner;
+bool connect(const char* reason, bool (*stop)());
 // Shared by activities and the reading-sync worker; counters are protected by a mutex.
 #if CROSSINK_TAILNET_ORBIFY_MIRROR
 void acquire(Owner owner);
+void tick(bool reading, bool browsing = false);
 void release(Owner owner);
 void turnOff(const char* reason, void (*off)());
 #else
 inline void acquire(Owner) {}
+inline void tick(bool, bool = false) {}
 inline void release(Owner) {}
 inline void turnOff(const char*, void (*off)()) { off(); }
 #endif

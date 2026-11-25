@@ -173,7 +173,6 @@ bool decodeQuery(const std::string& text, FacetQuery& out) {
 }
 
 bool Plan::add(const Kind kind, const std::string& arg) {
-  if (steps.size() >= MAX_STEPS) return false;
   // Once the data pass starts, its denominator is sealed (including after a reboot).
   // A migrated v2/v3 walk can have old data before pending discovery; let that first
   // discovery pass finish while retaining the old displayed percentage.
@@ -284,7 +283,7 @@ bool Plan::parse(const std::string& text) {
     read.push_back(Step{kind, line.substr(2)});
     start = pos + 1;
   }
-  if (parsedDone > read.size() || read.size() > MAX_STEPS || parsedFailed > parsedDone) return false;
+  if (parsedDone > read.size() || parsedFailed > parsedDone) return false;
   steps = std::move(read);
   done = parsedDone;
   failed = parsedFailed;

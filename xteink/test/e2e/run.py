@@ -120,25 +120,111 @@ def sync_through_proxy(ctx: Context, tmp: Path) -> None:
 
 @scenario(*X4S)
 def mirror_urls(ctx: Context, tmp: Path) -> None:
-    """X5: the offline mirror's list requests reach the server as the server reads them. A query
-    whose separator turned into a space ("sort=recently_read readStatus=reading") was answered 400
-    and those lists were never saved (the mirror URL separator fix). Three sleep syncs: the mirror runs in
-    slices of 10 requests per sleep."""
+    """W9: a persisted request runs on Home, saves all pages and every detail."""
     card = ctx.card(tmp)
-    (card.crosspoint / "orbify").mkdir(exist_ok=True)
-    (card.crosspoint / "orbify" / "mirror.request").write_text("1\n")  # an unfinished user request
-    for n in range(1, 4):
-        run = sleep_sync(ctx, card, f"sleep-{n}")
-        if "Mirror: saved for offline" in run.output:
-            break
-    saved = re.search(r"Mirror: saved for offline: .* \((\d+) failed\)", run.output)
-    assert saved, "the mirror was not saved within three sleep syncs"
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    run = ctx.sim.run(card, "full-home", script="45000:QUIT", timeout_s=55)
+    after(run.output, "Full refresh: Done")
+    assert not (folder / "mirror.request").exists()
+    assert (folder / "walk.result").read_text() == "Done"
     lists = ctx.requests("/plugin/catalog/books")
-    assert lists, "the mirror asked for no lists"
-    # The X5 defect: one value swallowed the next parameter ("recently_read readStatus=reading").
     bad = [e for e in lists if e["status"] != 200 or any(re.search(r"\s\w+=", str(v)) for v in e["query"].values())]
-    assert not bad, f"list requests the server refused or that swallowed a parameter: {bad[:3]}"
-    assert saved.group(1) == "0", f"the mirror saved with failures: {saved.group(0)}"
+    assert not bad, f"server refused catalog requests: {bad[:3]}"
+    assert any(int(e["query"].get("page", ["1"])[0]) >= 3 for e in lists), "no last library page"
+    details = [e for e in lists if re.search(r"/books/\d+$", e["path"])]
+    assert len(details) >= len(ctx.manifest["books"]), "not every book detail was saved"
+    assert "open catalog to resume" not in run.output
+
+
+
+@scenario("x4-pro")
+def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
+    """Full refresh on Home; SD-only facet page 2, book page 3 and saved book details."""
+    import shutil
+    card = ctx.card(tmp)
+    cx, cy, _, _ = open_catalog(ctx, card)
+    live = kit.Device().call("GET", "/plugin/catalog/sections/series")["items"][0]
+    entries = [{**live, "id": f"W9 series {n:02}", "title": f"W9 series {n:02}"} for n in range(23)]
+    ctx.faults([
+        {"match": {"path": "/plugin/catalog/sections/series$", "query": {"page": "^2$"}},
+         "action": "status", "status": 200, "body": json.dumps({"items": entries[20:], "page": 2, "total": 23, "size": 20, "hasNext": False})},
+        {"match": {"path": "/plugin/catalog/sections/series$"}, "action": "status", "status": 200,
+         "body": json.dumps({"items": entries[:20], "page": 1, "total": 23, "size": 20, "hasNext": True})}])
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    full = ctx.sim.run(card, "full-home", script="15000:QUIT", timeout_s=22)
+    after(full.output, "Full refresh: Done")
+    saved = []
+    by_id = {b["id"]: b for b in ctx.manifest["books"]}
+    for file in (card.crosspoint / "bookorbit-cache").rglob("*.json"):
+        body = json.loads(file.read_text())
+        if not isinstance(body, dict) or body.get("id") not in by_id:
+            continue
+        for edition in body.get("files", []):
+            if edition.get("format") != "epub" or not edition.get("devicePath"):
+                continue
+            target = str(edition["devicePath"]).lstrip("/")
+            dest = card.fs / target
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(kit.STATE / "library" / by_id[body["id"]]["file"], dest)
+            saved.append((body["id"], "/" + target))
+            break
+    assert len(saved) == len(by_id), "a Full refresh left book details unsaved"
+    card.download_index(saved)
+    before = len(ctx.requests())
+    ctx.faults("offline")
+    downs = lambda at, count: ";".join(f"{at + n * 240}:DOWN:100" for n in range(count))
+    script = (f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};" + downs(6000, 6) +
+              ";7800:CONFIRM:100;" + downs(8500, 22) + ";14500:BACK:100;15000:DOWN:100;15500:CONFIRM:100;" +
+              downs(16500, 58) + ";31000:CONFIRM:100;38000:QUIT")
+    offline = ctx.sim.run(card, "offline-scroll-and-open", script=script, timeout_s=45)
+    after(offline.output, "Listing page 2")
+    after(offline.output, "Listing page 3")
+    assert "[WIFI] Joined" not in offline.output and "Joining saved network" not in offline.output
+    assert not ctx.requests()[before:], "saved navigation made network requests"
+    after(offline.output, "Entering activity: EpubReader")
+
+
+@scenario(*X4S)
+def full_refresh_while_reading(ctx: Context, tmp: Path) -> None:
+    """The worker completes beside reader page turns without notices or a 100 ms UI stall."""
+    card = ctx.card(tmp)
+    path = card.add_book(ctx.source("Standalone 03"))
+    card.download_index([(ctx.book("Standalone 03")["id"], path)])
+    card.open_book(path, asleep=True)
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 80}])
+    run = ctx.sim.run(card, "reading", script="3000:RIGHT:100;5000:RIGHT:100;16000:QUIT", timeout_s=24, wake=True)
+    reader = after(run.output, "Entering activity: EpubReader")
+    after(reader, "Full refresh: Done")
+    renders = [int(t) for t in re.findall(r"Page render ms: .* total=(\d+)", reader)]
+    assert len(renders) >= 3 and max(renders) < 100, f"reader page renders during refresh: {renders}"
+    assert "Full refresh popup" not in reader and "Entering activity: BookOrbitCatalogBrowser" not in reader
+    loops = [int(n) for n in re.findall(r"New max loop duration: (\d+) ms", reader)]
+    assert not loops or max(loops) < 100, f"main-loop stalls while refreshing: {loops}"
+
+
+@scenario(*X4S)
+def full_refresh_sd_full(ctx: Context, tmp: Path) -> None:
+    """A low-card-space report is terminal and never loops on the next main-loop turn."""
+    card = ctx.card(tmp)
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    run = ctx.sim.run(card, "sd-full", script="7000:QUIT", timeout_s=12,
+                      env={"ORBIFY_SIM_SD_FREE_BYTES": str(16 * 1024 * 1024 - 1)})
+    after(run.output, "Stopped at SD card full")
+    assert not (folder / "mirror.request").exists()
+    assert (folder / "walk.result").read_text().startswith("Stopped at SD card full")
+    assert not ctx.requests(), "SD-full refresh requested catalog data"
+    before = len(ctx.requests())
+    second = ctx.sim.run(card, "after-stop", script="4000:QUIT", timeout_s=8)
+    assert not ctx.requests()[before:] and "Wi-Fi up reason=refresh" not in second.output
 
 
 def stale_copy_on_card(ctx: Context, card: SdCard, role: str) -> tuple[str, str]:
@@ -214,10 +300,9 @@ def heap_floor_waits(ctx: Context, tmp: Path) -> None:
     (card.crosspoint / "orbify").mkdir(exist_ok=True)
     (card.crosspoint / "orbify" / "mirror.request").write_text("1\n")  # resume a user-started walk
     ctx.faults([{"match": {"path": "/plugin/catalog/root$"}, "action": "delay", "ms": 4000, "times": 1}])
-    run = sleep_sync(ctx, card, "sleep", env={"ORBIFY_SIM_HEAP": "w2000:10000/6000"})
+    run = ctx.sim.run(card, "home-low-heap", script="9000:QUIT", timeout_s=15, env={"ORBIFY_SIM_HEAP": "w2000:10000/6000"})
     tail = after(run.output, "ORBIFY_SIM_HEAP t=w2000")
     after(tail, "waiting for heap")
-    after(tail, "Sleep sync over")
     root = ctx.requests("/plugin/catalog/root")
     assert root, "the mirror never started"
     later = [e for e in ctx.requests("/plugin/catalog/") if e["t"] > root[0]["t"]]
@@ -515,17 +600,13 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     walk = after(run.output, "Home refresh: Full refresh popup: about")
     assert "saving for offline" not in run.output.lower(), "a per-step N/M was shown"
     after(walk, "Home refresh: Full refresh popup closed")
-    paused = re.search(r"Home refresh: Full refresh paused at (\d+)% \(a press\)", walk)
-    assert paused, "a press did not take the refresh boot back to Home"
-    assert "Mirror: saved for offline" not in walk, "the walk finished before the press: make it slower"
-    pcts = [int(p) for p in re.findall(r"Full refresh badge '(\d+)%'", walk)]
-    assert pcts == sorted(pcts) and pcts[-1] <= int(paused.group(1)), f"the % went down: {pcts} / {paused.group(1)}"
-    home = ctx.sim.run(card, "home-after", script="4000:QUIT", timeout_s=10, screenshots={3000: "x4-pro-home-pending"})
-    after(home.output, "Full refresh paused: open catalog to resume")
-    shown = re.search(r"BookOrbit Home: Full refresh (\d+)% in the header", home.output)
-    assert shown and int(shown.group(1)) >= int(paused.group(1)), f"Home's header: {shown and shown.group(0)}"
-    shot = (card.root / "shots" / "x4-pro-home-pending.bmp").read_bytes()
-    assert dark_pixels(shot, 12, 4, 150, 20) > 20, "Home's header shows no Full refresh %"
+    returned = re.search(r"Home refresh: Full refresh continues in background at (\d+)% \(a press\)", walk)
+    assert returned, "a press did not return to Home"
+    after(walk[returned.end():], "Entering activity: Home")
+    after(walk[returned.end():], "Full refresh: Done")
+    assert "open catalog to resume" not in walk
+    pcts = [int(p) for p in re.findall(r"Full refresh badge '(\d+)%'", walk[:returned.end()])]
+    assert pcts and pcts == sorted(pcts), f"the % went down: {pcts}"
 
 
 @scenario("x4-pro")
@@ -847,6 +928,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--profile", choices=sorted(PROFILES), default="x4-pro")
     parser.add_argument("--scenario", action="append", help="run only this one (repeatable)")
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--proxy-port", type=int, default=None, help="fault proxy port; 0 chooses a free port for parallel workers")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv[1:])
@@ -866,9 +948,10 @@ def main(argv: list[str]) -> int:
     if not program.exists():
         raise SystemExit(f"{program} missing: pio run -e {PROFILES[args.profile]} in {checkout}")
     out = (args.out or Path(tempfile.mkdtemp(prefix="orbify-e2e-"))).resolve()
+    port = int(kit.ENV["BOFAULT_PORT"]) if args.proxy_port is None else args.proxy_port
+    proxy = bofault.serve(port, kit.SERVER, log=out / f"bofault-{args.profile}.jsonl")
+    kit.PROXY = kit.PROXY.rsplit(":", 1)[0] + ":" + str(proxy.server_address[1])
     manifest = kit.seed()  # idempotent: puts back what an earlier run changed (want-to-read, users)
-
-    proxy = bofault.serve(int(kit.ENV["BOFAULT_PORT"]), kit.SERVER, log=out / f"bofault-{args.profile}.jsonl")
     results = []
     for name in names:
         artifacts = out / args.profile / name

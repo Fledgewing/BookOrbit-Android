@@ -223,7 +223,7 @@ void sizeCap() {
   n = entriesToEvict(e.data(), e.size(), 1000, 200, drop, 8);
   CHECK(n == 3 && drop[0] == 1 && drop[1] == 2 && drop[2] == 3);
   // Within both: nothing.
-  CHECK(entriesToEvict(e.data(), e.size(), MAX_BYTES, MAX_ENTRIES, drop, 8) == 0);
+  CHECK(entriesToEvict(e.data(), e.size(), 2u * 1024u * 1024u, 200, drop, 8) == 0);
 }
 
 

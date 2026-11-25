@@ -20,6 +20,12 @@ WifiPlan = {
     GRACE = 3, -- seconds after the last flow ends before acting (lets the plugin start its follow-ups)
 }
 
+-- Shared with X4 core/WifiPolicy.h and fixtures/wifi/policy.json. Modes govern
+-- release; every requested network flow may connect, while a saved view never does.
+function WifiPlan.shouldConnect(mode, reason, saved)
+    return not saved and type(reason) == "string" and reason ~= ""
+end
+
 function WifiPlan.validMode(m)
     for _i, o in ipairs(WifiPlan.MODES) do if o.id == m then return true end end
     return false

@@ -21,8 +21,6 @@ bool mergeRecentBooks(JsonVariant saved, JsonArrayConst recent);
 // Reads checked less than this long ago are served without asking the server again (self-grill 4).
 constexpr uint32_t REVALIDATE_WINDOW_S = 60;
 // X4 budget (the design's "Size" row): bytes and entries on the SD card.
-constexpr uint32_t MAX_BYTES = 2u * 1024u * 1024u;
-constexpr size_t MAX_ENTRIES = 200;
 
 // Open: a view opened (served from the cache, checked after 60 s). Refresh: ⟳ or an automatic
 // check (checked now). Full: Full refresh (the server's answer replaces the entry).
