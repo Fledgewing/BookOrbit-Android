@@ -44,7 +44,7 @@ function RS.paint(s, bb, x, y, bottom_only)
     if not s.view.footer_visible then return end
     local footer = s.footer
     local page = footer.pageno or (s.ui.paging and s.ui.paging.current_page) or s.ui.document:getCurrentPage()
-    local total = footer.pages
+    local total = footer.pages or s.ui.document:getPageCount()
     local progress = StatusLayout.progress(page, total, footer.percent_finished)
     local chapter = s.ui.toc:getTocTitleByPage(page) or ""
     local battery = Device:getPowerDevice():getCapacity()
@@ -118,6 +118,7 @@ function RS.enable(ui)
     s.native_generator = rawget(f, "genFooterText")
     s.native_setting_mode = G_reader_settings:readSetting("reader_footer_mode")
     -- The native table is shared with global settings: never modify it.
+    s.dormant_footer = f.settings.disabled == true
     local settings = {}; for k,val in pairs(f.settings) do settings[k] = val end
     settings.reclaim_height = false
     hook(s, f, "settings", function() return settings end)
@@ -134,7 +135,15 @@ function RS.enable(ui)
     -- Native toggle/tap handlers still own visibility and their gesture return values.
     hook(s, f, "applyFooterMode", function(stock) return function(self, ...)
         local was = v.footer_visible
-        stock(self, ...)
+        if s.dormant_footer then
+            -- KOReader stops initialization before creating footer widgets when disabled.
+            -- Keep its existing gesture registrations; only the visibility state is needed.
+            local mode = ...
+            if mode ~= nil then self.mode = mode end
+            v.footer_visible = self.mode ~= self.mode_list.off
+        else
+            stock(self, ...)
+        end
         if was ~= v.footer_visible then RS.relayout(s) end
     end end)
     hook(s, f, "onToggleFooterMode", function(stock) return function(self, ...)
@@ -272,9 +281,11 @@ function RS.disable(closing)
         if not closing then s.ui.document:setStatusLineProp(s.native_header or (s.native_top_enabled and 0 or 1)) end
     end
     if not closing then
-        s.footer:updateFooterContainer()
-        s.footer:resetLayout(true)
-        s.footer:onUpdateFooter(true)
+        if not s.dormant_footer then
+            s.footer:updateFooterContainer()
+            s.footer:resetLayout(true)
+            s.footer:onUpdateFooter(true)
+        end
         RS.relayout(s)
         s.footer:rescheduleFooterAutoRefreshIfNeeded()
         if s.ui.crelistener then s.ui.crelistener:rescheduleHeaderRefreshIfNeeded() end

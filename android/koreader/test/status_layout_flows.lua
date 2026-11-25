@@ -32,7 +32,7 @@ return function(here, test, ok, eq)
         local ui={dimen=Geom:new{w=600,h=800},document={configurable={},info={number_of_pages=340}}, toc={getTocTitleByPage=function() return "Chapter" end}}
         local v={footer_visible=false, view_mode="page", dimen=Geom:new{w=600,h=800}}
         local native={reclaim_height=true}
-        local base={settings=native,reclaim_height=true,mode_list={page_progress=1},mode=0,
+        local base={settings=native,reclaim_height=true,mode_list={off=0,page_progress=1},mode=0,
             updateFooterContainer=noop,resetLayout=noop,onUpdateFooter=noop,
             onToggleFooterMode=function(self) self:applyFooterMode(self.mode==0 and 1 or 0); return true end,
             unscheduleFooterAutoRefresh=function() W.footer_cancelled=true end,
@@ -129,6 +129,15 @@ return function(here, test, ok, eq)
         w.height,w.width=600,800; R.relayout(R.session)
         eq(w.v.dimen.h,576); eq(w.v.dimen.w,800); eq(w.scroll_height,552)
         R.disable(); eq(w.v.dimen.h,600); eq(w.ui.zooming.dimen.h,600); eq(w.v.footer_visible,false)
+    end)
+    test("status: a completely disabled native footer stays uninitialized on restore", function()
+        local w,R=world(true)
+        w.v.footer.settings={disabled=true}
+        w.v.footer.applyFooterMode=function() error("disabled footer has no widgets") end
+        w.v.footer.updateFooterContainer=function() error("disabled footer has no widgets") end
+        R.enable(w.ui); ok(w.v.footer_visible)
+        w.v.footer:applyFooterMode(0); eq(w.v.footer_visible,false)
+        R.disable(); eq(w.v.footer_visible,false); eq(w.v.footer.settings.disabled,true)
     end)
     test("status: CRE scroll reserves engine viewport and translates hits without skipping text", function()
         local w,R=world(false); R.enable(w.ui)
