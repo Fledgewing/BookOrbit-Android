@@ -24,6 +24,7 @@ function StatusLayout.truncate(text, width, measure)
     return table.concat(chars, "", 1, lo) .. "…"
 end
 function StatusLayout.layout(width, inset, gap, battery, icon, chapter, progress, measure)
+    progress = StatusLayout.truncate(progress, math.max(0, width-2*inset), measure)
     local right = width - inset - measure(progress)
     local left = battery
     if inset + measure(left) + gap > right then left = icon end
@@ -35,23 +36,21 @@ function StatusLayout.layout(width, inset, gap, battery, icon, chapter, progress
         cx = (width - measure(title))/2, rx = right }
 end
 
--- Sizes are unscaled font points, like KOReader's footer default (14).
-StatusLayout.SIZES = { small = 14, medium = 18, large = 22 }
-function StatusLayout.fontSize(choice) return StatusLayout.SIZES[choice] or 14 end
+-- Small uses the largest face fitting the margin (up to 48 pt); explicit sizes cap it.
+StatusLayout.SIZES = { small = 48, medium = 18, large = 22 }
+function StatusLayout.fontSize(choice) return StatusLayout.SIZES[choice] or 48 end
 function StatusLayout.stripHeight(text_height, padding) return math.ceil(text_height) + 2 * padding end
 -- Fit actual font metrics to each margin independently; the configured size is a maximum.
-function StatusLayout.fit(margin, maximum, padding, measureHeight, add)
+function StatusLayout.fit(margin, maximum, padding, measureHeight)
     margin = math.max(0, math.floor(margin or 0))
     local wanted = StatusLayout.stripHeight(measureHeight(maximum), padding)
-    local extra = add and math.max(0, wanted - margin) or 0
-    local available = margin + extra
     for size = maximum, 1, -1 do
         local height = StatusLayout.stripHeight(measureHeight(size), padding)
-        if height <= available then return { size=size, height=height, extra=extra, wanted=wanted } end
+        if height <= margin then return { size=size, height=height, extra=0, wanted=wanted } end
     end
-    return { size=0, height=0, extra=extra, wanted=wanted }
+    return { size=0, height=0, extra=0, wanted=wanted }
 end
--- Both Android renderers interpret shared/ui/battery.json; no status-specific geometry.
+-- Both Android renderers interpret shared/ui/battery.json.
 BatteryGlyph = {}
 function BatteryGlyph.draw(program, size, capacity, rectangle)
     for _, r in ipairs(program.rectangles) do

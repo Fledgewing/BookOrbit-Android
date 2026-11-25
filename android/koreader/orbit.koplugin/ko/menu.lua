@@ -240,15 +240,6 @@ function OrbitAndroid:menuItems()
             end
             return items
         end)() },
-        { text = _("Add space for the status bar"),
-            enabled_func = function()
-                local s = ReadingStatus.session
-                if not s then return false end
-                local top, bottom = ReadingStatus.margins(s)
-                return S.status_orbit_add_space == true or top < s.top.wanted or bottom < s.bottom.wanted
-            end,
-            checked_func = function() return S.status_orbit_add_space == true end,
-            callback = function() Shared.set("status_orbit_add_space", not S.status_orbit_add_space); ReadingStatus.changed() end },
         stoggle("local_first"),
         stoggle("eob_sheet"),
         stoggle("eob_auto"),

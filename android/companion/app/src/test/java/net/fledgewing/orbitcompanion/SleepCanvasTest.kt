@@ -44,9 +44,10 @@ class SleepCanvasTest {
             bitmap.eraseColor(Color.WHITE)
             BatteryGlyph.draw(canvas, 10f, 10f, 40f, level)
             assertEquals(Color.BLACK, bitmap.getPixel(10, 10)) // outline
+            assertEquals(Color.WHITE, bitmap.getPixel(14, 20)) // gap stays white even at full charge
             assertEquals(Color.BLACK, bitmap.getPixel(68, 22)) // terminal
-            assertEquals(if (level > 0) Color.BLACK else Color.WHITE, bitmap.getPixel(15, 15))
-            assertEquals(if (level == 100) Color.BLACK else Color.WHITE, bitmap.getPixel(60, 15))
+            assertEquals(if (level > 0) Color.BLACK else Color.WHITE, bitmap.getPixel(18, 18))
+            assertEquals(if (level == 100) Color.BLACK else Color.WHITE, bitmap.getPixel(58, 18))
         }
         bitmap.recycle()
     }
