@@ -162,15 +162,11 @@ class SettingsPagesTest {
         assertEquals("unticked", "want_to_read\ndiscover", SettingsStore.get(app, "sleep_from"))
         tagged(pick, "option:library")!!.performClick()
         assertEquals("Library alone", "library", SettingsStore.get(app, "sleep_from"))
-        assertEquals("Library", SettingsUi.valueLabel(schema.byKey.getValue("sleep_from"), "library"))
+        assertEquals("Whole library", SettingsUi.valueLabel(schema.byKey.getValue("sleep_from"), "library"))
         assertEquals("Want to read, Discover", SettingsUi.valueLabel(schema.byKey.getValue("sleep_from"), "want_to_read\ndiscover"))
 
         val lo = open<LeaveOutActivity>()
-        tagged(lo, "pick:library")!!.performClick()
-        assertEquals("library", SettingsStore.get(app, "sleep_leave_out"))
-        assertNotNull("the list page stays for more", tagged(lo, "pick:library"))
-        tagged(lo, "pick:library")!!.performClick()
-        assertEquals("ticked off again", "", SettingsStore.get(app, "sleep_leave_out"))
+        assertNull("Whole library is only a Pick from choice", tagged(lo, "pick:library"))
     }
 
     @Test

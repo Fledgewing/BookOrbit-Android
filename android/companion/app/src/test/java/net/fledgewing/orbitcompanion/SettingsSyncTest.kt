@@ -151,7 +151,7 @@ class SettingsUiTest {
         assertEquals(1, c.scopes.size)
         assertEquals("Short reads (smart scope)", c.title("scope:3"))
         assertEquals("age:18", c.tags.first().tag)
-        assertEquals("Smart scope 4 (not found)", c.ruleLabel("scope:4"))
+        assertEquals("Smart scope 4 (Removed on the server)", c.ruleLabel("scope:4"))
         assertNull(SleepChoices.parse("nope"))
     }
 

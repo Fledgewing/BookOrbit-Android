@@ -43,7 +43,7 @@ class SleepPoolBuilder(
         val ids = LinkedHashSet<Long>()
         for (page in 1..(max + SleepPoolLogic.PAGE_SIZE - 1) / SleepPoolLogic.PAGE_SIZE) {
             val params = listOf<Pair<String, Any>>("page" to page, "size" to SleepPoolLogic.PAGE_SIZE, "sort" to "recently_added", "order" to "desc") +
-                when (kind) { "scope" -> listOf("smartScopeId" to id); "collection" -> listOf("collectionId" to id); else -> emptyList() }
+                when (kind) { "scope" -> listOf("smartScopeId" to id); "collection" -> listOf("collectionId" to id); "library" -> if (id > 0) listOf("libraryId" to id) else emptyList(); else -> emptyList() }
             val body = get(c, q("/koreader/plugin/catalog/books", params)) as? JSONObject ?: return null
             val items = body.optJSONArray("items") ?: JSONArray()
             for (i in 0 until items.length()) {
@@ -147,7 +147,7 @@ class SleepPoolBuilder(
                 var failed = false
                 for (m in memberSources) {
                     val ids = listMembers(a.creds, m.kind, m.id, SleepPoolLogic.BAG_MAX - all.size)
-                    val name = if (m.kind == SleepPoolLogic.LIBRARY) m.kind else "${m.kind}:${m.id}"
+                    val name = if (m.kind == SleepPoolLogic.LIBRARY && m.id == 0L) m.kind else "${m.kind}:${m.id}"
                     if (ids == null) { failed = true; listed.add("$name failed") } else { all.addAll(ids); listed.add("$name=${ids.size}") }
                     if (all.size >= SleepPoolLogic.BAG_MAX) break
                 }
@@ -243,7 +243,8 @@ class SleepPoolBuilder(
     fun scopes(c: CacheWorker.Creds): Boolean {
         val scopes = listSection(c, "smart-scopes") ?: return false
         val collections = listSection(c, "collections") ?: return false
-        return write(File(dir, "scopes.json"), JSONObject().put("v", 1).put("at", now()).put("scopes", scopes).put("collections", collections).toString().toByteArray())
+        val libraries = listSection(c, "libraries") ?: return false
+        return write(File(dir, "scopes.json"), JSONObject().put("v", 1).put("at", now()).put("scopes", scopes).put("collections", collections).put("libraries", libraries).toString().toByteArray())
     }
 
     /** Leave out's tag picker: the tags in the saved book details, with counts (tags.json). [details]: model byte strings. */
@@ -265,7 +266,7 @@ class SleepPoolBuilder(
         val seen = HashSet<Long>()
         for (page in 1..20) {
             val body = get(c, q("/koreader/plugin/catalog/sections/$section", listOf("page" to page, "size" to SleepPoolLogic.PAGE_SIZE))) as? JSONObject
-                ?: return if (page == 1) null else out
+                ?: return null
             var new = 0
             val items = body.optJSONArray("items") ?: JSONArray()
             for (i in 0 until items.length()) {
@@ -277,8 +278,10 @@ class SleepPoolBuilder(
                     out.put(o); new++
                 }
             }
-            if (!body.optBoolean("hasNext") || new == 0) break
+            if (!body.optBoolean("hasNext")) return out
+            if (new == 0) return null
         }
-        return out
+        // An incomplete list must not make saved sources look removed on the server.
+        return null
     }
 }

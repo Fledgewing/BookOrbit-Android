@@ -27,7 +27,7 @@ object SleepPoolLogic {
     }
 
     data class Rule(val kind: String, val id: Long = 0, val tag: String = "") {
-        val key get() = when (kind) { "tag" -> "tag:$tag"; LIBRARY -> LIBRARY; else -> "$kind:$id" }
+        val key get() = when (kind) { "tag" -> "tag:$tag"; LIBRARY -> if (id == 0L) LIBRARY else "library:$id"; else -> "$kind:$id" }
     }
 
     private val REF = Regex("^([A-Za-z]+):(\\d+)$")
@@ -41,7 +41,7 @@ object SleepPoolLogic {
         LISTS.firstOrNull { it.first == v }?.let { return From("list", type = it.second) }
         val m = REF.find(v) ?: return null
         val id = m.groupValues[2].toLongOrNull() ?: return null
-        return if ((m.groupValues[1] == "scope" || m.groupValues[1] == "collection") && id > 0) From(m.groupValues[1], id) else null
+        return if ((m.groupValues[1] == "scope" || m.groupValues[1] == "collection" || m.groupValues[1] == "library") && id > 0) From(m.groupValues[1], id) else null
     }
 
     fun parseRule(v: String?): Rule? {
@@ -53,7 +53,7 @@ object SleepPoolLogic {
         }
         val m = REF.find(v) ?: return null
         val id = m.groupValues[2].toLongOrNull() ?: return null
-        return if ((m.groupValues[1] == "scope" || m.groupValues[1] == "collection") && id > 0) Rule(m.groupValues[1], id) else null
+        return if ((m.groupValues[1] == "scope" || m.groupValues[1] == "collection" || m.groupValues[1] == "library") && id > 0) Rule(m.groupValues[1], id) else null
     }
 
     /** Leave out as stored: valid, unique, in order; Library alone leaves out every book, so it stands for all (X8). */
@@ -124,7 +124,7 @@ object SleepPoolLogic {
     fun needsTags(rules: List<String>) = rules.any { parseRule(it)?.kind == "tag" }
 
     /** The rules checked by membership lists: smart scopes and collections (Library needs none). */
-    fun memberRules(rules: List<String>) = rules.mapNotNull { parseRule(it) }.filter { it.kind == "scope" || it.kind == "collection" }
+    fun memberRules(rules: List<String>) = rules.mapNotNull { parseRule(it) }.filter { it.kind == "scope" || it.kind == "collection" || (it.kind == LIBRARY && it.id > 0) }
 
     /** R2: a cover, not read, not the book open now. */
     fun eligible(b: Map<String, Any?>?, openId: Long?): Boolean {
@@ -139,7 +139,7 @@ object SleepPoolLogic {
         var unknown = false
         for (r in rules) {
             val p = parseRule(r) ?: continue
-            if (p.kind == LIBRARY) return "out"
+            if (p.kind == LIBRARY && p.id == 0L) return "out"
             if (p.kind == "tag") {
                 if (tags == null) unknown = true
                 else if (tags.any { lower(it.trim()) == p.tag }) return "out"

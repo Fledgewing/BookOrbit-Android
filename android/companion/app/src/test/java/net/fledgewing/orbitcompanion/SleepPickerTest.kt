@@ -37,7 +37,8 @@ class SleepPickerTest {
         SleepPickerWork.choices = SleepChoices(1, true,
             listOf(SleepChoices.Item(7, "Short books", 12)),
             listOf(SleepChoices.Item(8, "Favourites", 4)),
-            listOf(SleepChoices.Tag("age:18", "Age:18", 3)))
+            listOf(SleepChoices.Tag("age:18", "Age:18", 3)),
+            libraries = listOf(SleepChoices.Item(9, "Fiction", 6)))
         SettingsStore.store(app, "sleep_from", "up_next")
         SettingsStore.store(app, "sleep_leave_out", "")
     }
@@ -55,6 +56,35 @@ class SleepPickerTest {
         val r = row(a, tag)
         assertEquals("visible selection on $tag", selected, r.isSelected)
         assertEquals("painted checkmark on $tag", selected, all(r).filterIsInstance<TextView>().any { it.text == "✓" })
+    }
+
+    @Test fun removedSourceCanBeDroppedEvenWhenItIsTheLastPick() {
+        SleepPickerWork.choices = SleepChoices.parse("""{"at":5,"scopes":[],"collections":[],"libraries":[]}""")
+        SettingsStore.store(app, "sleep_from", "scope:99")
+        val pick = Robolectric.buildActivity(SettingChoiceActivity::class.java,
+            Intent(app, SettingChoiceActivity::class.java).putExtra(SettingsPage.EXTRA_KEY, "sleep_from")).setup()
+        val missing = row(pick.get(), "option:scope:99")
+        assertTrue(all(missing).filterIsInstance<TextView>().any { it.text.contains("Removed on the server") })
+        missing.performClick()
+        assertEquals("up_next", SettingsStore.get(app, "sleep_from"))
+        pick.pause().stop().destroy()
+    }
+
+    @Test fun namedLibraryReplacesWholeLibraryInBothPickers() {
+        SettingsStore.store(app, "sleep_from", "library")
+        val pick = Robolectric.buildActivity(SettingChoiceActivity::class.java,
+            Intent(app, SettingChoiceActivity::class.java).putExtra(SettingsPage.EXTRA_KEY, "sleep_from")).setup()
+        row(pick.get(), "option:library:9").performClick()
+        assertEquals("library:9", SettingsStore.get(app, "sleep_from"))
+        checked(pick.get(), "option:library", false)
+        checked(pick.get(), "option:library:9", true)
+        pick.pause().stop().destroy()
+        SettingsStore.store(app, "sleep_leave_out", "library")
+        val leave = Robolectric.buildActivity(LeaveOutActivity::class.java).setup()
+        row(leave.get(), "pick:library:9").performClick()
+        assertEquals("library:9", SettingsStore.get(app, "sleep_leave_out"))
+        checked(leave.get(), "pick:library:9", true)
+        leave.pause().stop().destroy()
     }
 
     @Test fun pickFromOpensAndTogglesWithoutWaitingForListsOrSync() {
@@ -94,21 +124,18 @@ class SleepPickerTest {
         original.performClick()
         assertSame("tag taps update the row in place", original, row(a, "pick:tag:age:18"))
         checked(a, "pick:tag:age:18", false)
-        row(a, "pick:library").performClick()
-        checked(a, "pick:library", true)
-        checked(a, "pick:scope:7", false)
-        assertEquals("library", SettingsStore.get(app, "sleep_leave_out"))
-        // Choosing a specific tag visibly replaces the all-books selection, without a Back tap.
+        row(a, "pick:library:9").performClick()
+        checked(a, "pick:library:9", true)
+        checked(a, "pick:scope:7", true)
         row(a, "pick:tag:age:18").performClick()
-        checked(a, "pick:library", false)
         checked(a, "pick:tag:age:18", true)
-        assertEquals("tag:age:18", SettingsStore.get(app, "sleep_leave_out"))
+        assertEquals("scope:7\ncollection:8\nlibrary:9\ntag:age:18", SettingsStore.get(app, "sleep_leave_out"))
         assertTrue(SettingsStore.pending(app, "sleep_leave_out"))
         assertFalse(a.isFinishing)
         page.pause().stop().destroy()
         val reopened = Robolectric.buildActivity(LeaveOutActivity::class.java).setup()
         checked(reopened.get(), "pick:tag:age:18", true)
-        assertEquals("tag:age:18", SettingsStore.stored(app, "sleep_leave_out"))
+        assertEquals("scope:7\ncollection:8\nlibrary:9\ntag:age:18", SettingsStore.stored(app, "sleep_leave_out"))
         reopened.pause().stop().destroy()
     }
 
@@ -123,7 +150,7 @@ class SleepPickerTest {
         tags.writeText("""{"at":1,"tags":[{"tag":"age:18","count":3}]}""")
         val page = Robolectric.buildActivity(LeaveOutActivity::class.java).setup()
         try {
-            assertNotNull("Library is usable before disk work", row(page.get(), "pick:library"))
+            assertTrue("Leave out draws before disk work", all(page.get().window.decorView).filterIsInstance<TextView>().any { it.text == "Leave out" })
             val work = pending.removeAt(0)
             val worker = Thread { work.run() }.apply { start() }
             worker.join(5000)

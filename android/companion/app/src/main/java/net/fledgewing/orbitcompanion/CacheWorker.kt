@@ -147,6 +147,14 @@ class CacheWorker(
         if (n > 0) log("store: a write patched $n saved replies")
     }
 
+    private class CoverUsage(items: List<StorageLogic.Item>) {
+        private val sizes = HashMap(items.filter { it.k.startsWith("c:") }.associate { it.k to it.bytes })
+        private var bytes = sizes.values.sum()
+        @Synchronized fun replace(key: String, size: Long) { bytes += size - (sizes.put(key, size) ?: 0L) }
+        @Synchronized fun total(): Long = bytes
+    }
+    @Volatile private var coverUsage: CoverUsage? = null
+
     // ------------------------------------------------------------------ the storage limit
 
     /** The plugin's STORAGE: count, and over [limit] remove (StorageLogic). [mirrorCovers]: "Save every cover" is on. */
@@ -190,6 +198,9 @@ class CacheWorker(
                 else if (k.startsWith("c:") && coverDir != null) {
                     allowed(File(coverDir, k.removePrefix("c:")).path)?.delete()
                     allowed(File(coverDir, k.removePrefix("c:") + ".etag").path)?.delete()
+                    val f = File(coverDir, k.removePrefix("c:"))
+                    val etag = File(f.path + ".etag")
+                    coverUsage?.replace(k, f.length() + etag.length())
                 }
                 removed[it.kind] = (removed[it.kind] ?: 0L) + 1
             }
@@ -355,6 +366,7 @@ class CacheWorker(
         var coverTotal = 0L
         var startedMs = 0L; var batches = 0L; var writeMs = 0L; var writeMax = 0L
         var limitNote: Map<String, Any?>? = null
+        var storageBlocked = false
         var errors = 0L
         val changed = ArrayList<String>()
         val written = ArrayList<Map<String, Any?>>()
@@ -523,6 +535,7 @@ class CacheWorker(
             rep.code == 304 && exists -> { part.delete(); Landed(job, rep, null, "not_modified") }
             rep.code == 200 && rep.contentType?.lowercase()?.trim()?.startsWith("image/") == true && part.isFile && part.length() > 0 && part.renameTo(f) -> {
                 if (rep.etag != null) write(etagFile, rep.etag.toByteArray()) else etagFile.delete()
+                coverUsage?.replace("c:${f.name}", f.length() + etagFile.length())
                 Landed(job, rep, null, "ok", f.length(), sortedMapOf("id" to job.id, "updatedAt" to book["updatedAt"]?.let { LuaValue.text(it) }))
             }
             rep.code == 0 -> { part.delete(); Landed(job, rep, null, "transport") }
@@ -588,7 +601,8 @@ class CacheWorker(
         val limit = r.plan.limit ?: return false
         val covers = kind == "cover"
         if (covers && !r.plan.coversOn) return false
-        val used = store.fileBytes() + baseCovers + r.covers[3]
+        val used = store.fileBytes() + (coverUsage?.total() ?: baseCovers)
+        // Read outside a transaction: the rollback journal is transient, counted only while live.
         if (used < limit || r.limitNote != null && !covers) return used >= limit
         val text: String
         if (covers) {
@@ -597,10 +611,13 @@ class CacheWorker(
             r.skipped += n
             text = MirrorLogic.limitText(true, (r.covers[0] + r.covers[1]).toInt(), r.coverTotal.toInt())
         } else {
-            store.db().exec("UPDATE jobs SET state = 2 WHERE state = 0")
+            r.storageBlocked = true
             text = MirrorLogic.limitText(false, r.done.toInt(), r.total.toInt())
         }
-        r.limitNote = sortedMapOf("text" to text, "at" to now(), "limit" to limit)
+        r.limitNote = sortedMapOf("text" to text, "at" to now(), "limit" to limit, "used" to used,
+            "database" to store.fileBytes(), "covers" to (coverUsage?.total() ?: baseCovers))
+        log(String.format(java.util.Locale.ROOT, "mirror: storage %.1f MB of %.1f MB (database + journal %.1f MB, covers + etags %.1f MB)",
+            used / MB, limit / MB, store.fileBytes() / MB, (coverUsage?.total() ?: baseCovers) / MB))
         log("mirror: $text")
         return true
     }
@@ -695,11 +712,15 @@ class CacheWorker(
         }
         r.pct = metaLong("run_pct") ?: 0L
         r.estimate = metaLong("run_estimate") ?: 0L
-        val baseCovers = if (plan.limit != null) storageItems(plan.coverDir, plan.coversOn).filter { it.k.startsWith("c:") }.sumOf { it.bytes } else 0L
+        // Prune browsing data before the first limit decision, using the same byte units and
+        // db + live journal + covers + etags accounting as Storage settings.
+        if (plan.limit != null) storage(StorageAsk("before refresh", plan.limit, plan.coverDir, plan.coversOn))
+        coverUsage = if (plan.limit != null) CoverUsage(storageItems(plan.coverDir, plan.coversOn)) else null
+        val baseCovers = coverUsage?.total() ?: 0L
         recount(r, false)
         log("mirror: ${st.meta("run_op")} (${plan.reason}): ${r.total - r.done} jobs to go, $parallel requests at a time")
         writeStatus(r, true)
-        val why = pump(r, creds, baseCovers, yieldTo)
+        val why = try { pump(r, creds, baseCovers, yieldTo) } finally { coverUsage = null }
         val secs = (clockMs() - r.startedMs) / 1000.0
         recount(r, why == "finished")
         val rate = r.done / maxOf(0.001, secs)
@@ -714,7 +735,7 @@ class CacheWorker(
                     val books = count("SELECT count(*) FROM books")
                     val lists = count("SELECT count(*) FROM lists")
                     log(String.format(java.util.Locale.ROOT, "mirror: Full refresh done: %d books, %d lists, %d jobs in %.0f s (%.1f items/s), %d skipped; " +
-                        "covers %d new, %d unchanged (304), %d failed; %.1f MB", books, lists, r.done, secs, rate, r.skipped,
+                        "covers %d new, %d unchanged (304), %d failed; database %.1f MB", books, lists, r.done, secs, rate, r.skipped,
                         r.covers[0], r.covers[1], r.covers[2], st.fileBytes() / MB))
                     newestStamp()?.let { st.setMeta("incremental_watermark", it) }
                     saved = true
@@ -757,7 +778,7 @@ class CacheWorker(
                 // AHEAD times the pool's size queued, so the pools never wait while the writer writes.
                 val reqSlots = parallel * AHEAD - inFlight.count { it.kind != "cover" }
                 val coverSlots = COVER_PARALLEL * AHEAD - inFlight.count { it.kind == "cover" }
-                if (reqSlots > 0 || coverSlots > 0) {
+                if (!r.storageBlocked && (reqSlots > 0 || coverSlots > 0)) {
                     val tnow = clockMs()
                     // Requests (lists first) and covers each from their own end of the queue: covers run
                     // alongside the details, not after them.
@@ -790,6 +811,7 @@ class CacheWorker(
                     }
                 }
                 if (inFlight.isEmpty()) {
+                    if (r.storageBlocked) { why = "storage limit"; break }
                     // Only retries left: wait for the first of them.
                     if (count("SELECT count(*) FROM jobs WHERE state = 0") == 0L) break
                     val first = notBefore.values.minOrNull() ?: break
@@ -887,7 +909,7 @@ class CacheWorker(
             coverItems.clear()
         }
         // Replies still in flight when it stopped: their jobs stay pending for the next run.
-        return why
+        return if (why == "finished" && r.limitNote != null) "storage limit" else why
     }
 
     private fun summary(plan: Plan, why: String, r: Run, jobs: Long, saved: Boolean = false, revalidated: Boolean = false) {

@@ -272,6 +272,7 @@ Sleep.SCOPES_WAIT_S = 60
 local function remember(v)
     Sleep.scope_names = Sleep.scope_names or {}
     for _i, e in ipairs(v.scopes or {}) do Sleep.scope_names["scope:" .. e.id] = e.title end
+    for _i, e in ipairs(v.libraries or {}) do Sleep.scope_names["library:" .. e.id] = e.title end
     for _i, e in ipairs(v.collections or {}) do Sleep.scope_names["collection:" .. e.id] = e.title end
 end
 
@@ -289,7 +290,7 @@ function Sleep.scopes()
     local d = Sleep.dir()
     local v = readJson(d and (d .. "/" .. Sleep.SCOPES_FILE))
     if not (v and type(v.scopes) == "table" and type(v.collections) == "table") then return nil end
-    local clean = { v = 1, at = tonumber(v.at), scopes = SleepPool.entries({ items = v.scopes }), collections = SleepPool.entries({ items = v.collections }) }
+    local clean = { v = 1, at = tonumber(v.at), scopes = SleepPool.entries({ items = v.scopes }), collections = SleepPool.entries({ items = v.collections }), libraries = SleepPool.entries({ items = v.libraries }) }
     remember(clean)
     Sleep.scopes_cache = clean
     return clean
@@ -332,14 +333,14 @@ function Sleep.ruleLabel(rule)
     local p = SleepPool.parseRule(rule)
     if not p then return tostring(rule) end
     if p.kind == "tag" then return _("Tag: ") .. p.tag end
-    if p.kind == "library" then return _("Library (every book)") end
+    if p.kind == "library" and not p.id then return _("Library (every book)") end
     if not Sleep.scope_names then Sleep.scopes() end
     local name = Sleep.scope_names and Sleep.scope_names[p.key]
-    local kind = p.kind == "scope" and _("smart scope") or _("collection")
+    local kind = p.kind == "library" and _("library") or (p.kind == "scope" and _("smart scope") or _("collection"))
     if name then return string.format("%s (%s)", name, kind) end
     local lo = Sleep.load("leave_out.lua") or {}
     local e = lo[p.key]
-    return string.format(_("%s %d (%s)"), p.kind == "scope" and _("Smart scope") or _("Collection"), p.id,
+    return string.format(_("%s %d (%s)"), p.kind == "library" and _("Library") or (p.kind == "scope" and _("Smart scope") or _("Collection")), p.id,
         e and string.format(_("%d books"), #(e.ids or {})) or _("not listed yet"))
 end
 
@@ -354,11 +355,11 @@ function Sleep.fromLabel(v)
     v = items[1]
     local p = SleepPool.parseFrom(v)
     if not p then return "?" end
-    if p.kind == "library" then return _("Library") end
+    if p.kind == "library" and not p.id then return _("Whole library") end
     if p.kind == "list" then return _(SleepPool.label(SleepPool.LISTS, p.id)) end
     if not Sleep.scope_names then Sleep.scopes() end
     local name = Sleep.scope_names and Sleep.scope_names[v]
-    return name or string.format("%s %d", p.kind == "scope" and _("Smart scope") or _("Collection"), p.id)
+    return name or string.format("%s %d", p.kind == "library" and _("Library") or (p.kind == "scope" and _("Smart scope") or _("Collection")), p.id)
 end
 
 ---------------------------------------------------------------- hooks
@@ -424,6 +425,7 @@ local function scopeRows(pick, checked)
                 })
             end
         end
+        if got.libraries and #got.libraries > 0 then add(_("Libraries"), got.libraries, "library") end
         add(_("Smart scopes"), got.scopes or {}, "scope")
         add(_("Collections"), got.collections or {}, "collection")
         return rows
@@ -489,7 +491,7 @@ function Sleep.menuItem(_plugin, later)
         Sleep.set("sleep_from", SleepPool.togglePick(Sleep.settings().sleep_from, id))
     end
     local from_items = {
-        { text = _("Library (every book)"), checked_func = function() return picked(SleepPool.LIBRARY) end,
+        { text = _("Whole library OR pick sources"), checked_func = function() return picked(SleepPool.LIBRARY) end,
             keep_menu_open = true, callback = function() togglePick(SleepPool.LIBRARY) end, separator = true },
     }
     for _i, l in ipairs(SleepPool.LISTS) do
@@ -503,7 +505,7 @@ function Sleep.menuItem(_plugin, later)
                 local p = SleepPool.parseFrom(it)
                 if p and (p.kind == "scope" or p.kind == "collection") then n = n + 1 end
             end
-            return _("Smart scopes and collections…") .. (n > 0 and string.format(" (%d)", n) or "")
+            return _("Libraries, smart scopes and collections…") .. (n > 0 and string.format(" (%d)", n) or "")
         end,
         sub_item_table_func = scopeRows(togglePick, picked),
     })
@@ -545,11 +547,9 @@ function Sleep.menuItem(_plugin, later)
             return false
         end
         local function toggleRule(key) if hasRule(key) then removeRule(key) else addRule(key) end end
-        table.insert(rows, { text = _("Add a rule: Smart scope or collection…"),
+        table.insert(rows, { text = _("Add a rule: Library, smart scope or collection…"),
             sub_item_table_func = scopeRows(toggleRule, hasRule) })
-        if not hasRule(SleepPool.LIBRARY) then
-            table.insert(rows, { text = _("Leave out the whole library (shows the current book)"), callback = function() addRule(SleepPool.LIBRARY) end })
-        end
+
         table.insert(rows, info(function()
             return _("For a custom field: make a smart scope with that condition in BookOrbit, then add it here.")
         end))

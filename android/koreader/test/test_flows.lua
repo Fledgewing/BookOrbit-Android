@@ -4477,6 +4477,11 @@ test("mirror: Full refresh suppresses loading, errors, direct notices and queued
     E.Gate.installToast()
     E.Mirror.notices = true
     local pill = Toast.loading("Loading book...")
+    Toast.loading("Loading EPUB delivery preference…"):close()
+    Toast.loading("Updating Home…"):close()
+    local detail = E.Badge.long({}, 0)
+    ok(detail:find("Loading book...", 1, true) and detail:find("Loading EPUB delivery preference…", 1, true)
+        and detail:find("Updating Home…", 1, true), "suppressed loading goes into badge details")
     ok(pill and pill.close, "loading keeps its close handle")
     pill:close()
     Toast.show("saved")
@@ -4485,6 +4490,7 @@ test("mirror: Full refresh suppresses loading, errors, direct notices and queued
     E.Gate.show("background result", function() error("notice escaped refresh gate") end)
     ok(#W.shown == old, "no notice appears")
     E.Mirror.notices = nil
+    E.Badge.notices = nil
     package.loaded["bookorbit_toast"] = saved_toast
 end)
 
@@ -5240,7 +5246,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     ok(picker.sub_item_table_func()[15].checked_func(), "ticked")
     -- Library stands alone: ticking it clears the others; ticking a list clears it.
     from[1].callback()
-    ok(S.sleep_from == "library" and Sleep.fromLabel(S.sleep_from) == "Library", "library: " .. tostring(S.sleep_from))
+    ok(S.sleep_from == "library" and Sleep.fromLabel(S.sleep_from) == "Whole library", "library: " .. tostring(S.sleep_from))
     from[3].callback()
     ok(S.sleep_from == "want_to_read", "a list clears Library: " .. tostring(S.sleep_from))
     from[3].callback()
@@ -5251,7 +5257,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil
     local leave = rows[3].sub_item_table_func()
     local add
-    for _, r in ipairs(leave) do if r.text == "Add a rule: Smart scope or collection…" then add = r end end
+    for _, r in ipairs(leave) do if r.text == "Add a rule: Library, smart scope or collection…" then add = r end end
     local lo = texts(add.sub_item_table_func())
     ok(#lo == 15 and lo[3] == "Space Opera · 8", "Leave out lists them offline: " .. #lo)
     add.sub_item_table_func()[4].callback()

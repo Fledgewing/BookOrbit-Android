@@ -184,11 +184,52 @@ class CacheWorkerTest {
         assertEquals("finished", w.run(plan(root, "resume"), creds))
     }
 
+    @Test fun underLimitRefreshSavesAndPruningDuringYieldUsesTheLiveCoverTotal() {
+        val (root, fake, w) = setup()
+        val thumbs = File(root, "thumbs").apply { mkdirs() }
+        File(thumbs, "old.jpg").writeBytes(ByteArray(2 * 1024 * 1024))
+        val p = plan(root, "full", mapOf("limit" to 1024L * 1024))
+        var yielded = false
+        assertEquals("finished", w.run(p, creds) {
+            if (!yielded) {
+                yielded = true
+                w.storage(CacheWorker.StorageAsk("during refresh", 1024L * 1024, thumbs.path, true))
+            }
+        })
+        val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        assertNull(status["limit_note"])
+        assertTrue(fake.asked.isNotEmpty())
+        assertNotNull(w.store.detail(1))
+        assertNotNull(w.store.meta("full_at"))
+    }
+
+    @Test fun coverPrunedWhileYieldingDoesNotRemainInTheRunBudget() {
+        val (root, _, w) = setup()
+        val thumbs = File(root, "thumbs").apply { mkdirs() }
+        File(thumbs, "old.jpg").writeBytes(ByteArray(850 * 1024))
+        val p = plan(root, "full", mapOf("limit" to 1024L * 1024))
+        var first = true
+        assertEquals("finished", w.run(p, creds) {
+            if (first) {
+                first = false
+                w.storage(CacheWorker.StorageAsk("prune while yielding", 1L, thumbs.path, true))
+                w.store.putEntry("kept", "/dashboard/test", mapOf("payload" to "x".repeat(250 * 1024)), 1L, home = true)
+            }
+        })
+        assertFalse(File(thumbs, "old.jpg").exists())
+        assertNotNull(w.store.detail(1))
+        val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        assertNull(status["limit_note"])
+    }
+
     @Test fun storageLimitStopsSavingAndSaysWhy() {
         val (root, _, w) = setup()
-        assertEquals("finished", w.run(plan(root, "full", mapOf("limit" to 1L, "base_kept" to 10L)), creds))
+        assertEquals("storage limit", w.run(plan(root, "full", mapOf("limit" to 1L)), creds))
         val st = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
         assertTrue(((st["limit_note"] as Map<*, *>)["text"] as String).startsWith("Storage limit reached"))
+        assertEquals(0L, st["done"])
+        assertNull(w.store.meta("full_at"))
+        assertTrue(w.store.db().query("SELECT count(*) FROM jobs WHERE state = 0") { it.long(0)!! }.single() > 0)
     }
 
     @Test fun checkComparesWithTheMirrorAndSavesOnlyChanges() {
