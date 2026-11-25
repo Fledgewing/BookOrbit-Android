@@ -43,7 +43,7 @@ class CopiesTest {
                 "4" to sortedMapOf<String, Any?>("files" to files(40, "cur4"), "saved_at" to 100L)),
             "owner" to owner, "server" to server, "detail_template" to template, "sentinel" to "987654321")))
         w.copies("test")
-        val ev = File(root, "events").listFiles()!!.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
+        val ev = File(root, "events").listFiles()!!.filter { it.extension == "lua" }.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
         assertEquals("copies", ev["kind"])
         assertEquals(3L, ev["checked"])
         assertEquals(listOf("${books.path}/b.epub"), (ev["found"] as List<*>).map { (it as Map<*, *>)["path"] })

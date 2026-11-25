@@ -75,6 +75,7 @@ object Reading {
         val p = Prefs(app)
         val was = now(app)
         p.readingAt = if (reading) System.currentTimeMillis() else 0
+        BulkWork.changed()
         if (was != reading) OLog.d("reading gate: ${if (reading) "reading" else "not reading"} ($why)")
         if (reading) {
             main.removeCallbacks(releaseTask)

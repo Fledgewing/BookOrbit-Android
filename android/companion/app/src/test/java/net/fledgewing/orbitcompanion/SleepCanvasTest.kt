@@ -140,16 +140,19 @@ class SleepCanvasTest {
         try {
             val pic = SleepScreen.picture().apply { delete() }
             SleepScreen.save(app, SleepSettings.DEFAULT.copy(mode = SleepMode.RECOMMENDED, hours = SleepSettings.EVERY_SLEEP), "test", shared = false)
+            BulkWork.executor.submit {}.get(10, java.util.concurrent.TimeUnit.SECONDS)
             assertTrue("written when turned on", pic.isFile)
             val first = SleepScreen.state(app)
             assertTrue(first.shown in ids)
             // A battery step redraws the same cover; only a wake moves on.
             SleepScreen.redrawPicture(app, "battery 81%")
+            BulkWork.executor.submit {}.get(10, java.util.concurrent.TimeUnit.SECONDS)
             assertEquals(first.shown, SleepScreen.state(app).shown)
             pic.delete()
             // The plugin's resume after a real sleep, through the manifest receiver: no service
             // needed, so Add-on mode moves on too (#43).
             CommandReceiver().onReceive(app, Intent(SleepScreen.ACTION_POOL).putExtra("reason", "wake").putExtra("wake", "1"))
+            BulkWork.executor.submit {}.get(10, java.util.concurrent.TimeUnit.SECONDS)
             val second = SleepScreen.state(app)
             assertTrue("a new picture for the next sleep", pic.isFile)
             assertTrue(second.shown in ids && second.shown != first.shown)
@@ -160,10 +163,12 @@ class SleepCanvasTest {
             assertEquals(second.shows, SleepScreen.state(app).shows)
             // The service's SCREEN_ON for the same wake: counted once.
             SleepScreen.onWake(app, "screen on")
+            BulkWork.executor.submit {}.get(10, java.util.concurrent.TimeUnit.SECONDS)
             assertEquals(second, SleepScreen.state(app))
             // The next wake moves on again.
             org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(SleepWake.SAME_WAKE_MS))
             SleepScreen.onWake(app, "screen on")
+            BulkWork.executor.submit {}.get(10, java.util.concurrent.TimeUnit.SECONDS)
             val third = SleepScreen.state(app)
             assertTrue(third.shown in ids && third.shown != second.shown)
         } finally {

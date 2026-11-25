@@ -18,6 +18,7 @@ class SleepPoolBuilder(
     private val http: CacheWorker.Http,
     private val now: () -> Long = { System.currentTimeMillis() / 1000 },
     private val rand: (Int) -> Int = { n -> 1 + kotlin.random.Random.nextInt(n) },
+    private val checkpoint: () -> Unit = {},
 ) {
     /**
      * from: Pick from; rules: Leave out (one per line); openId: the book open now (never shown);
@@ -26,6 +27,7 @@ class SleepPoolBuilder(
     data class Ask(val from: String, val rules: List<String>, val openId: Long?, val every: Boolean, val storageLimitMb: Long?, val creds: CacheWorker.Creds)
 
     private fun get(c: CacheWorker.Creds, path: String): Any? {
+        checkpoint()
         val r = http.get(c.server + path, mapOf("accept" to "application/json", "x-auth-user" to c.user, "x-auth-key" to c.key), null, CacheWorker.MAX_BODY)
         if (r.code != 200 || r.body == null) return null
         return try { org.json.JSONTokener(String(r.body, Charsets.UTF_8)).nextValue() } catch (e: Exception) { null }
@@ -58,7 +60,7 @@ class SleepPoolBuilder(
     private fun readLua(name: String): Map<*, *>? = File(dir, name).takeIf { it.isFile }?.let { runCatching { LuaValue.parse(it.readBytes()) as? Map<*, *> }.getOrNull() }
 
     private fun write(f: File, bytes: ByteArray): Boolean {
-        f.parentFile?.mkdirs()
+        f.parentFile?.let(NoMedia::directory)
         val tmp = File(f.parentFile, f.name + ".orbit-new")
         return try { tmp.writeBytes(bytes); tmp.renameTo(f) || run { tmp.delete(); false } } catch (e: Exception) { tmp.delete(); false }
     }
@@ -68,7 +70,9 @@ class SleepPoolBuilder(
         val etag = File(f.path + ".etag")
         val h = HashMap(mapOf("accept" to "image/jpeg,image/*", "Accept-Encoding" to "identity", "x-auth-user" to c.user, "x-auth-key" to c.key))
         if (f.isFile && etag.isFile) h["If-None-Match"] = etag.readText()
+        f.parentFile?.let(NoMedia::directory)
         val part = File(f.path + ".part")
+        checkpoint()
         val r = http.get(c.server + "/koreader/plugin/catalog/books/$id/thumbnail", h, part, CacheWorker.MAX_COVER)
         if (r.code == 304 && f.isFile) { f.setLastModified(System.currentTimeMillis()); return true }
         if (r.code != 200 || !part.isFile || part.length() == 0L) { part.delete(); return false }
@@ -92,7 +96,9 @@ class SleepPoolBuilder(
 
     /** Returns the summary: { items, kept, probed, left_out, unknown, skipped, carried, retired, fallback, listed, scopes }. */
     fun build(a: Ask): Map<String, Any?> {
-        File(dir, "covers").mkdirs()
+        checkpoint()
+        NoMedia.directory(dir)
+        NoMedia.directory(File(dir, "covers"))
         val t = now()
         val sum = sortedMapOf<String, Any?>()
         var probed = 0; var leftOut = 0; var unknown = 0; var skipped = 0
