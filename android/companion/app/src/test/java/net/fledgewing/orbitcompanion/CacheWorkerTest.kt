@@ -165,9 +165,10 @@ class CacheWorkerTest {
         assertEquals(listOf("$C/books?sort=title"), summary["changed"])
         // A recheck reads list pages, and details only for books it has not saved.
         assertEquals(listOf("$S$C/books/4"), fake.asked.filter { it.matches(Regex(".*/books/\\d+$")) })
-        // Covers already saved come back 304.
+        // Unchanged covers are not requested at all.
         val st = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
-        assertTrue(((st["covers"] as Map<*, *>)["not_modified"] as Long) > 0)
+        assertEquals(0L, (st["covers"] as Map<*, *>)["not_modified"])
+        assertEquals(1, fake.asked.count { it.endsWith("/thumbnail") })
     }
 
     @Test fun stopFileAndOutagesEndTheRunAndItResumes() {
@@ -363,6 +364,20 @@ class CacheWorkerTest {
         assertEquals("finished", w.run(p, creds))
         assertEquals(2, fake.asked.size)
         assertTrue(fake.asked.all { it.contains("sort=recently_updated") })
+        w.store.close(); root.deleteRecursively()
+    }
+
+    @Test fun incrementalFailureKeepsWatermarkAndReturnsSummary() {
+        val (root, fake, w) = setup()
+        val p = plan(root, "incremental", mapOf("covers_on" to false))
+        w.store.own(p.owner)
+        w.store.setMeta("full_at", 100L)
+        w.store.setMeta("incremental_watermark", "2026-01-04")
+        fake.down = true
+        assertEquals("no answer", w.run(p, creds))
+        assertEquals("2026-01-04", w.store.meta("incremental_watermark"))
+        val summary = LuaValue.parse(File(w.mirrorDir, "summary.lua").readBytes()) as Map<*, *>
+        assertEquals("no answer", summary["why"])
         w.store.close(); root.deleteRecursively()
     }
 

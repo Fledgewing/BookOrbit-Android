@@ -5550,9 +5550,10 @@ test("sqlite cache: a replaced or busy database is reopened or missed, never an 
     withStore(dir, function()
         local path = DBFX.reads[1].path
         ok(RE.Store.read(DBFX.owner, "k", path, nil) ~= nil, "first read")
-        -- The companion holds the commit lock: the read waits (busy timeout), then misses quietly.
+        -- The companion holds the commit lock: return the cached result within the UI budget.
         local saved_busy = RE.Db.BUSY_MS
-        RE.Db.close(dir .. "/orbit.db"); RE.Db.BUSY_MS = 50
+        RE.Db.close(dir .. "/orbit.db")
+        ok(RE.Db.BUSY_MS <= 20, "UI busy timeout stays short")
         st.conn:exec("BEGIN EXCLUSIVE")
         local before = W.wall()
         ok(RE.Store.read(DBFX.owner, "k", path, nil) ~= nil, "busy: cached fallback")

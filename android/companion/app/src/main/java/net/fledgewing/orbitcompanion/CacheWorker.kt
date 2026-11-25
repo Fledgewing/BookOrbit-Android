@@ -414,7 +414,8 @@ class CacheWorker(
             .mapNotNull { (it?.let { b -> LuaValue.parse(b) } as? Map<*, *>)?.get("updatedAt")?.let { v -> LuaValue.text(v) } }
             .maxOrNull()
 
-    private fun seedIncremental(plan: Plan, creds: Creds): Long {
+    private fun seedIncremental(r: Run, creds: Creds): Long {
+        val plan = r.plan
         val newest = store.meta("incremental_watermark") ?: newestStamp() ?: return 0L
         var target = newest
         var page = 1
@@ -436,6 +437,9 @@ class CacheWorker(
                 if (LuaValue.changed(store.bookItem(id), item) || !store.hasDetail(id) || store.meta("incremental_dirty_$id") != null) {
                     changed = true
                     store.transaction {
+                        for (identity in store.db().query("SELECT DISTINCT identity FROM list_items WHERE book_id = ?", id) { LuaValue.str(it.text(0)!!) }) {
+                            if (r.changed.size < CHANGED_MAX && identity !in r.changed) r.changed.add(identity)
+                        }
                         store.putItem(item, now())
                         store.setMeta("incremental_dirty_$id", true)
                         store.setMeta("incremental_lists_dirty", true)
@@ -447,6 +451,7 @@ class CacheWorker(
             if (older || page * 100 >= ((body["total"] as? Number)?.toInt() ?: 0) || items.isEmpty()) break
             page++
         }
+        check(!File(mirrorDir, "stop").exists()) { "incremental scan stopped" }
         if (changed) seedRecheck()
         store.setMeta("incremental_target", target)
         store.setMeta("incremental_scan_complete", true)
@@ -663,7 +668,7 @@ class CacheWorker(
                     st.setMeta("run_op", "incremental")
                     st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null)
                     st.setMeta("incremental_scan_complete", null)
-                    try { r.requests += seedIncremental(plan, creds) } catch (_: Exception) {
+                    try { r.requests += seedIncremental(r, creds) } catch (_: Exception) {
                         log("mirror: incremental probe unavailable; watermark kept")
                         writeStatus(r, false)
                         summary(plan, "no answer", r, 0)

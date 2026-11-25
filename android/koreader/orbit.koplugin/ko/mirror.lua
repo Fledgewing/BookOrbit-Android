@@ -174,7 +174,8 @@ end
 -- A Full refresh saving now (not a Refresh's recheck): a second press keeps it.
 function Mirror.fullRunning()
     local s = Mirror.status()
-    return Mirror.active == true and Mirror.busy == true and not s.revalidating and s.op ~= "revalidate" and Mirror.op ~= "incremental" and s.op ~= "incremental" and s.op ~= "covers"
+    return Mirror.active == true and Mirror.busy == true
+        and (Mirror.op == "full" or Mirror.op == "resume" and s.op == "full")
 end
 
 -- A Full refresh pressed while one is saving: keep that run and show where it is.
