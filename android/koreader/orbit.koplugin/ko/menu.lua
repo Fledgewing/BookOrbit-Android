@@ -98,7 +98,7 @@ function OrbitAndroid:menuItems()
     local limit_items = {}
     for _i, mb in ipairs(Cache.STORAGE_LIMITS_MB) do
         table.insert(limit_items, {
-            text = mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%d GB"), mb / 1024) or string.format(_("%d MB"), mb)),
+            text = mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%g GB"), mb / 1024) or string.format(_("%d MB"), mb)),
             radio = true,
             checked_func = function() return (tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB) == mb end,
             callback = function()
@@ -265,7 +265,7 @@ function OrbitAndroid:menuItems()
             text_func = function()
                 local mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB
                 local okt, used = pcall(OC.storageText)
-                return label("storage_limit_mb", _("Storage limit")) .. ": " .. (mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%d GB"), mb / 1024) or string.format(_("%d MB"), mb)))
+                return label("storage_limit_mb", _("Storage limit")) .. ": " .. (mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%g GB"), mb / 1024) or string.format(_("%d MB"), mb)))
                     .. (okt and (" · " .. used) or "")
             end,
             help_text = _("One limit on everything Orbit stores: pages it saved, books saved for offline and covers. Book files and KOReader's own data don't count. Over it, the least recently used pages and covers go first, then covers saved for offline; the lists and book details saved for offline always stay."),

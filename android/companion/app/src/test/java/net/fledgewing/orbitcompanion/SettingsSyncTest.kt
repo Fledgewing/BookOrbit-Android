@@ -29,6 +29,15 @@ class SettingsSyncTest {
         }
     }
 
+    @Test
+    fun storageChoicesIncludeLargerLimitsWithTheSameDefault() {
+        val d = schema.byKey.getValue("storage_limit_mb")
+        assertEquals("250", d.default)
+        assertEquals(listOf("100" to "100 MB", "250" to "250 MB", "500" to "500 MB",
+            "1024" to "1 GB", "2560" to "2.5 GB", "5120" to "5 GB", "10240" to "10 GB", "0" to "No limit"), d.values)
+        d.values.forEach { (id, _) -> assertEquals(id, SettingsSync.fromWire(d, id)) }
+    }
+
     /** The companion keeps every key the plugin shares (schema parity; the plugin checks its side). */
     @Test
     fun everySchemaKeyHasCompanionStorage() {
