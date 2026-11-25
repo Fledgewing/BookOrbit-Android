@@ -91,191 +91,139 @@ return function(here, test, ok, eq)
         W.E,W.ui,W.v,W.Geom=E,ui,v,Geom
         return W,E.ReadingStatus,native
     end
-    test("status: startup ReaderReady completes before the reader is shown (CRE and paged)", function()
-        for _, paged in ipairs({false, true}) do
+    test("status: enable, resize, tap, close and reopen never change document/global settings or layout", function()
+        for _, paged in ipairs({false,true}) do
+            local w,R,native=world(paged)
+            local doc='return { ["copt_t_page_margin"]=15, ["copt_b_page_margin"]=15, ["copt_sync_t_b_page_margins"]=1, ["copt_font_size"]=24, ["footer"]=false }'
+            local global='return { ["footer"]={ ["reclaim_height"]=true }, ["reader_footer_mode"]=0, ["copt_b_page_margin"]=15 }'
+            local files={os.tmpname(),os.tmpname()}
+            for i,text in ipairs({doc,global}) do local f=assert(io.open(files[i],"wb")); f:write(text); f:close() end
+            local function forbidden() error("status may not write native settings or reflow a document") end
+            w.E.G_reader_settings.saveSetting=forbidden
+            w.E.G_reader_settings.delSetting=forbidden
+            w.ui.doc_settings={saveSetting=forbidden,delSetting=forbidden}
+            for _, name in ipairs({"setPageMargins","setViewDimen","setViewMode","setStatusLineProp"}) do w.ui.document[name]=forbidden end
+            w.ui.handleEvent=forbidden
+            if not paged then w.ui.typeset.onSetPageMargins=forbidden end
+            local footer=w.v.footer
+            local height,mode,visible,settings=footer:getHeight(),footer.mode,w.v.footer_visible,footer.settings
+            local original=footer.onToggleFooterMode
+            for _,size in ipairs({"small","medium","large"}) do
+                w.E.S.status_orbit_size=size
+                w.E.S.status_orbit_add_space=true -- obsolete saved preference must do nothing
+                R.enable(w.ui)
+                eq(footer:onToggleFooterMode(),true)
+                eq(footer:onToggleFooterMode(),true)
+                R.refreshGeometry(R.session)
+                eq(footer:getHeight(),height); eq(footer.mode,mode); eq(w.v.footer_visible,visible)
+                eq(footer.settings,settings); eq(native.reclaim_height,true)
+                R.disable(); eq(footer.onToggleFooterMode,original)
+                eq(rawget(footer,"onToggleFooterMode"),nil); eq(rawget(footer,"paintTo"),nil)
+                R.enable(w.ui); w.E.OrbitAndroid.onCloseDocument({ui=w.ui})
+                eq(R.session,nil); eq(next(w.queue),nil)
+                eq(footer.settings,settings); eq(w.v.footer_visible,visible); eq(footer.mode,mode)
+            end
+            for i,text in ipairs({doc,global}) do
+                local f=assert(io.open(files[i],"rb")); eq(f:read("*a"),text); f:close(); os.remove(files[i])
+            end
+        end
+    end)
+    test("status: disabled and visible native footer restore exactly without changing its timers or header", function()
+        for _, disabled in ipairs({false,true}) do
+            local w,R=world(false)
+            w.v.footer.settings={disabled=disabled,reclaim_height=false}
+            w.v.footer.reclaim_height=false
+            w.v.footer_visible=not disabled
+            w.v.footer.mode=disabled and 0 or 1
+            w.v.footer.genFooterText=function() return "native" end
+            local generator=w.v.footer.genFooterText
+            R.enable(w.ui)
+            eq(w.v.footer.genFooterText,generator)
+            eq(w.v.footer_visible,not disabled)
+            R.disable()
+            eq(w.v.footer.settings.disabled,disabled)
+            eq(w.v.footer.genFooterText,generator)
+            eq(w.v.footer_visible,not disabled)
+            eq(w.footer_cancelled,nil); eq(w.header_cancelled,nil); eq(w.header,nil)
+        end
+    end)
+    test("status: fitted black text and battery align to the text block within existing margins", function()
+        local w,R=world(false)
+        w.ui.rolling.cre_top_bar_enabled=false
+        w.ui.typeset.unscaled_margins={31,25,47,29}
+        w.E.S.status_orbit_size="small"
+        R.enable(w.ui); local s=R.session
+        eq(s.top.height,25); eq(s.bottom.height,29)
+        eq(s.left,31); eq(s.width,522)
+        eq(s.top.size,25); eq(s.bottom.size,29)
+        local count=0
+        s.Text={new=function(_,t)
+            eq(t.fgcolor,s.BB.COLOR_BLACK); eq(t.bold,true)
+            return { getSize=function() return {w=#t.text,h=t.face.size-2} end,
+                free=function() end,paintTo=function(_,bb,x,y)
+                    ok(x>=31 and x+#t.text<=553)
+                    ok(y>=771 or y+t.face.size-2<=25)
+                    count=count+1
+                end }
+        end}
+        -- Geometry measurement also uses Text; restore it before geometry refresh.
+        local refresh=R.refreshGeometry; R.refreshGeometry=function() end
+        local rects={}
+        R.paint(s,{paintRect=function(_,x,y,width,height,color)
+            ok(x>=31 and x+width<=553); ok(y>=771 or y+height<=25)
+            rects[#rects+1]={x,y,width,height,color}
+        end},0,0)
+        R.refreshGeometry=refresh
+        ok(count>=3); ok(#rects>=6)
+        eq(rects[3][5],1); eq(rects[4][5],0) -- battery black outline, white inset
+        w.ui.typeset.unscaled_margins={40,10,50,12}; R.refreshGeometry(s)
+        eq(s.top.height,10); eq(s.bottom.height,12); eq(s.left,40); eq(s.width,510)
+        R.disable()
+    end)
+    test("status: PDF surround, zero margins and scroll never reserve space or change transforms", function()
+        for _,paged in ipairs({false,true}) do
             local w,R=world(paged)
-            w.top=nil
-            local co=coroutine.create(function()
-                w.E.OrbitAndroid.onReaderReady({ui=w.ui})
-                w.top=w.ui
-            end)
-            local resumed,err=coroutine.resume(co)
-            ok(resumed,err); eq(coroutine.status(co),"dead")
-            eq(w.top,w.ui); eq(R.session.ui,w.ui)
-            R.session.tick()
-            eq(w.top,w.ui, "status timer keeps the reader on top")
+            if not paged then w.v.view_mode="scroll" end
+            w.E.S.status_orbit_add_space=true
+            R.enable(w.ui); local s=R.session
+            eq(s.top.height,0); eq(s.bottom.height,0)
+            eq(w.v.dimen.h,800)
+            R.paint(s,{paintRect=function() error("no safe margin") end},0,0)
+            if paged then
+                w.v.state={offset={x=20,y=12}}
+                w.v.visible_area={w=560,h=772}
+                R.refreshGeometry(s)
+                eq(s.top.height,12); eq(s.bottom.height,16); eq(s.left,20); eq(s.width,560)
+                w.v.state.offset.y=0; w.v.visible_area.h=800
+                R.paint(s,{paintRect=function() error("zoom removed surround") end},0,0)
+                eq(s.top.height,0); eq(s.bottom.height,0)
+            end
             R.disable()
         end
     end)
-    test("status: CRE uses existing margins, restores absent/inherited native state and repeat toggles", function()
-        local w,R,native=world(false)
-        R.enable(w.ui); local s=R.session
-        eq(w.margins[2],20); eq(w.margins[4],30); eq(w.header,1)
-        ok(w.header_cancelled and w.footer_cancelled and w.anchor_preserved)
-        eq(native.reclaim_height,true); eq(w.ui.document.configurable.status_line,nil)
-        eq(rawget(w.v.footer,"settings").reclaim_height,false)
-        R.enable(w.ui); eq(R.session,s)
-        eq(w.v.footer:onToggleFooterMode(),true); eq(w.margins[4],30)
-        w.v.footer:applyFooterMode(1); eq(w.margins[4],30)
-        R.disable(); eq(w.margins[2],20); eq(w.margins[4],30)
-        eq(rawget(w.v.footer,"settings"),nil); eq(rawget(w.v.footer,"paintTo"),nil)
-        eq(w.v.footer_visible,false); eq(w.v.footer.mode,0)
-        eq(rawget(w.v.footer,"mode"),nil); eq(rawget(w.v.footer,"genFooterText"),nil)
-        ok(w.footer_resumed and w.header_resumed); eq(next(w.queue),nil)
-        R.disable(); R.enable(w.ui); R.disable(); eq(w.margins[2],20)
-    end)
-    test("status: PDF/CBZ opt-in viewport, zoom, scroll states, transforms, footer gesture and rotation", function()
-        local w,R=world(true); w.E.S.status_orbit_add_space=true
-        R.enable(w.ui)
-        eq(w.v.dimen.h,786); eq(w.ui.zooming.dimen.h,786); eq(w.scroll_height,772)
-        for _,name in ipairs({"drawSinglePage","drawScrollPages"}) do w.v[name](w.v,{},0,0); eq(w.draw_y,14) end
-        local p=w.Geom:new{x=10,y=24}
-        eq(w.v:getSinglePagePosition(p).y,10); eq(p.y,24)
-        eq(w.v:getScrollPagePosition(p).y,10)
-        eq(w.v:getSinglePagePosition(w.Geom:new{x=0,y=10}),nil)
-        eq(w.v:getSinglePagePosition(w.Geom:new{x=0,y=790}),nil)
-        eq(w.v:getSinglePageRect(p).y,38); eq(p.y,24)
-        eq(w.v:getScrollPageRect(12,p).y,38)
-        eq(w.v:getScreenPageArea(12).y,14)
-        w.v.page_scroll=true
-        w.ui.paging.getTopPosition=function() return 0.25 end
-        w.ui.paging.setPagePosition=function(_,page,pos) w.position=pos end
-        R.relayout(R.session); eq(w.position,0.25); eq(w.scroll_height,772)
-        -- Native applyFooterMode is delegated, not replaced by an Orbit tap handler.
-        w.v.footer:applyFooterMode(0); eq(w.scroll_height,786)
-        w.v.footer:applyFooterMode(1); eq(w.scroll_height,772)
-        w.height,w.width=600,800; R.relayout(R.session)
-        eq(w.v.dimen.h,586); eq(w.v.dimen.w,800); eq(w.scroll_height,572)
-        R.disable(); eq(w.v.dimen.h,600); eq(w.ui.zooming.dimen.h,600); eq(w.v.footer_visible,false)
-    end)
-    test("status: a completely disabled native footer stays uninitialized on restore", function()
-        local w,R=world(true)
-        w.v.footer.settings={disabled=true}
-        w.v.footer.applyFooterMode=function() error("disabled footer has no widgets") end
-        w.v.footer.updateFooterContainer=function() error("disabled footer has no widgets") end
-        R.enable(w.ui); ok(w.v.footer_visible)
-        w.v.footer:applyFooterMode(0); eq(w.v.footer_visible,false)
-        R.disable(); eq(w.v.footer_visible,false); eq(w.v.footer.settings.disabled,true)
-    end)
-    test("status: CRE scroll reserves engine viewport and translates hits without skipping text", function()
-        local w,R=world(false); w.E.S.status_orbit_add_space=true; R.enable(w.ui)
-        w.v.view_mode="scroll"; w.ui.document:setViewMode("scroll")
-        eq(w.engine_height,772); eq(w.v.visible_area.h,772)
-        w.v:drawScrollView({},0,0); eq(w.draw_y,14)
-        local pos=w.Geom:new{x=10,y=24}
-        eq(w.v:screenToPageTransform(pos).y,10); eq(pos.y,24)
-        eq(w.v:pageToScreenTransform(1,pos).y,38)
-        eq(w.ui.document:getScreenPositionFromXPointer("xp"),24)
-        eq(w.ui.document:getLinkFromPosition(pos),"link-at-10"); eq(pos.y,24)
-        eq(w.ui.document:getLinkFromPosition(w.Geom:new{x=0,y=10}),"")
-        w.ui.rolling:onGotoViewRel(1); eq(w.step,772); eq(w.max_pos,9228)
-        eq(w.ui.dimen.h,800)
-        w.v.footer:applyFooterMode(0); eq(w.engine_height,786); eq(w.v.visible_area.h,786)
-        w.ui.rolling:onGotoViewRel(1); eq(w.step,786)
-        R.disable(); eq(w.engine_height,800); eq(w.v.visible_area.h,800)
-    end)
-    test("status: minute and battery partial dirty regions, covered/asleep, close cleanup", function()
-        local w,R=world(true); w.E.S.status_orbit_add_space=true; R.enable(w.ui); local s=R.session
+    test("status: partial dirty regions, sleep and close cleanup", function()
+        local w,R=world(false); w.ui.rolling.cre_top_bar_enabled=false
+        R.enable(w.ui); local s=R.session; w.dirty={}
         s.clock="12:01"; s.battery=77
-        s.tick(); eq(#w.dirty,1); eq(w.dirty[1].rect.y,0); eq(w.dirty[1].rect.h,14)
+        s.tick(); eq(#w.dirty,1); eq(w.dirty[1].rect.y,0); eq(w.dirty[1].rect.h,20)
         eq(w.dirty[1].mode,"partial"); eq(w.queue[s.tick],60)
         s.clock="12:02"; w.capacity=76; s.tick()
-        eq(#w.dirty,2); eq(w.dirty[2].rect.y,786)
+        eq(#w.dirty,2); eq(w.dirty[2].rect.y,770)
         w.top={}; s.tick(); eq(#w.dirty,2)
         w.E.OrbitAndroid.onSuspend({ui=w.ui}); eq(w.queue[s.tick],nil)
         w.E.OrbitAndroid.onResume({ui=w.ui}); eq(w.queue[s.tick],60)
         w.E.OrbitAndroid.onCloseDocument({ui=w.ui}); eq(R.session,nil); eq(next(w.queue),nil)
         w.E.OrbitAndroid.onCloseWidget({ui=w.ui}); eq(next(w.queue),nil)
     end)
-    test("status: all sizes fit margins by default and share the sleep battery program", function()
-        for _, size in ipairs({"small","medium","large"}) do
-            local w,R=world(false); w.E.S.status_orbit_size=size
-            w.ui.typeset.unscaled_margins={10,9,10,11}
-            R.enable(w.ui); local s=R.session
-            eq(w.margins[2],9); eq(w.margins[4],11)
-            eq(s.top.extra,0); eq(s.bottom.extra,0)
-            ok(s.top.height<=9 and s.bottom.height<=11)
-            ok(s.top.size<=w.E.StatusLayout.fontSize(size))
-            local calls=0
-            local draw=w.E.BatteryGlyph.draw
-            w.E.BatteryGlyph.draw=function(program,px,capacity,rect)
-                eq(program,s.battery_program); eq(capacity,98); calls=calls+1
-                return draw(program,px,capacity,rect)
-            end
-            local rectangles={}
-            local bb={paintRect=function(_,x,y,width,height,color)
-                rectangles[#rectangles+1]={y=y,h=height}
-                ok(y>=789 or y+height<=9,"paint stays inside book margins")
-            end}
-            w.capacity=98; R.paint(s,bb,0,0); eq(calls,1); ok(#rectangles>2)
-            R.disable()
+    test("status: narrow lanes keep every group within text bounds", function()
+        local L=world(false).E.StatusLayout
+        for width=0,50 do
+            local layout=L.layout(width,0,4,"battery","b","chapter","123 / 1234 · 100%",function(t) return #t end)
+            ok(layout.rx>=0); ok(layout.rx+#layout.right<=width)
+            ok(layout.left=="" or #layout.left<=width)
         end
     end)
-    test("status: opt-in adds only missing margin space and responds to margin edits", function()
-        local w,R=world(false); w.E.S.status_orbit_add_space=true
-        w.ui.typeset.unscaled_margins={10,9,10,30}
-        R.enable(w.ui); local s=R.session
-        eq(s.top.extra,5); eq(s.bottom.extra,0)
-        eq(w.margins[2],14); eq(w.margins[4],30)
-        w.ui.typeset:onSetPageMargins({10,3,10,4})
-        eq(s.top.extra,11); eq(s.bottom.extra,10)
-        eq(w.margins[2],14); eq(w.margins[4],14)
-        R.disable()
-    end)
-    test("status: PDF and CRE scroll add nothing by default with no safe margin", function()
-        for _, paged in ipairs({false,true}) do
-            local w,R=world(paged)
-            if not paged then w.v.view_mode="scroll" end
-            R.enable(w.ui); local s=R.session
-            eq(s.top.extra,0); eq(s.bottom.extra,0)
-            eq(s.top.height,0); eq(s.bottom.height,0)
-            if paged then eq(w.v.dimen.h,800); eq(w.scroll_height,800)
-            else eq(w.engine_height,800); eq(w.v.visible_area.h,800) end
-            R.paint(s,{paintRect=function() error("no space to paint") end},0,0)
-            R.disable()
-        end
-    end)
-    test("status: PDF uses existing screen surround without reserving space", function()
-        local w,R=world(true)
-        w.v.state={offset={y=12},zoom=1}
-        w.v.visible_area=w.Geom:new{x=0,y=0,w=600,h=772,offsetWithin=function() end}
-        R.enable(w.ui)
-        eq(R.session.top.extra,0); eq(R.session.bottom.extra,0)
-        ok(R.session.top.height<=12); ok(R.session.bottom.height<=16)
-        eq(w.scroll_height,800)
-        R.disable()
-    end)
-    test("status: opt-in PDF rezoom accounts for consumed surround before painting", function()
-        local w,R=world(true)
-        w.E.S.status_orbit_size="large"; w.E.S.status_orbit_add_space=true
-        w.v.state={offset={y=14},zoom=1}
-        w.v.visible_area=w.Geom:new{x=0,y=0,w=600,h=772,offsetWithin=function() end}
-        local event=w.ui.handleEvent
-        w.ui.handleEvent=function(ui,e)
-            event(ui,e)
-            w.v.visible_area.h=math.min(772,w.v.visible_height)
-            w.v.state.offset.y=(w.v.visible_height-w.v.visible_area.h)/2
-        end
-        R.enable(w.ui); local s=R.session
-        local top,bottom=R.margins(s)
-        ok(top+s.top.extra>=s.top.height); ok(bottom+s.bottom.extra>=s.bottom.height)
-        eq(s.top.extra,22); eq(s.bottom.extra,22)
-        R.relayout(s); eq(s.top.extra,22); eq(s.bottom.extra,22)
-        R.disable()
-    end)
-    test("status: PDF zoom changes fit the current draw before adding missing space", function()
-        local w,R=world(true); w.E.S.status_orbit_add_space=true
-        w.v.state={offset={y=20},zoom=1}
-        w.v.visible_area=w.Geom:new{x=0,y=0,w=600,h=760,offsetWithin=function() end}
-        R.enable(w.ui); eq(R.session.top.extra,0)
-        -- A zoom removes the old surround; never paint over the newly expanded page.
-        w.v.state.offset.y=0; w.v.visible_area.h=800
-        w.v:paintTo({paintRect=function() error("no safe margin before relayout") end},0,0)
-        eq(R.session.top.height,0); eq(R.session.bottom.height,0)
-        ok(w.next); w.next(); eq(R.session.top.extra,14); eq(R.session.bottom.extra,14)
-        R.disable()
-    end)
-    test("status: default-off setting, off leaves native footer and safe next-tick changes", function()
+    test("status: default off and next-tick toggles", function()
         local w,R=world(true)
         w.E.S.status_orbit_layout=nil; w.E.OrbitAndroid.onReaderReady({ui=w.ui}); eq(R.session,nil)
         eq(rawget(w.v.footer,"paintTo"),nil)
