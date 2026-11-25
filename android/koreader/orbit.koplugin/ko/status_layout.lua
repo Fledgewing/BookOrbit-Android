@@ -13,7 +13,7 @@ function RS.visible(s)
     return not s.asleep and UIManager:getTopmostVisibleWidget() == s.ui
 end
 function RS.dirty(s, top)
-    if not RS.visible(s) then return end
+    if not RS.visible(s) or (not top and not s.view.footer_visible) then return end
     local Screen = Device.screen
     UIManager:setDirty(s.ui, "partial", s.Geom:new{
         x = 0, y = top and 0 or Screen:getHeight() - s.height,
@@ -110,11 +110,14 @@ function RS.enable(ui)
         local w = Text:new{ text = value, face = s.face }
         local width = w:getSize().w; w:free(); return width
     end
+    local sample = Text:new{ text = "Ag", face = s.face }
+    s.height = math.max(s.height, sample:getSize().h + Device.screen:scaleBySize(4))
+    sample:free()
     local f, v = s.footer, s.view
     s.native_visible, s.native_mode = rawget(v, "footer_visible"), rawget(f, "mode")
     s.native_generator = rawget(f, "genFooterText")
     s.native_setting_mode = G_reader_settings:readSetting("reader_footer_mode")
-        -- The native table is shared with global settings: never modify it.
+    -- The native table is shared with global settings: never modify it.
     local settings = {}; for k,val in pairs(f.settings) do settings[k] = val end
     settings.reclaim_height = false
     hook(s, f, "settings", function() return settings end)
@@ -158,7 +161,7 @@ function RS.enable(ui)
         for _, name in ipairs({"getSinglePagePosition", "getScrollPagePosition"}) do
             hook(s, v, name, function(stock) return function(self, pos, ...)
                 local p = pos:copy(); p.y = p.y-s.height
-                if p.y < 0 or p.y >= self.dimen.h then return nil end
+                if p.y < 0 or p.y >= self.dimen.h - f:getHeight() then return nil end
                 return stock(self, p, ...)
             end end)
         end
@@ -199,6 +202,13 @@ function RS.enable(ui)
             local rect = stock(self, ...)
             if scroll() and rect then rect=rect:copy(); rect.y=rect.y+s.height end
             return rect
+        end end)
+        hook(s, ui.document, "getLinkFromPosition", function(stock) return function(self, pos)
+            if scroll() then
+                pos = pos:copy(); pos.y = pos.y-s.height
+                if pos.y < 0 or pos.y >= v.dimen.h-reserve() then return "" end
+            end
+            return stock(self, pos)
         end end)
         hook(s, ui.document, "getScreenPositionFromXPointer", function(stock) return function(self, ...)
             local y,x = stock(self, ...)

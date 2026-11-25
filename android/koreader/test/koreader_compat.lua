@@ -109,7 +109,7 @@ local NEEDS = {
     { "frontend/apps/reader/modules/readerrolling.lua", { "onSetStatusLine", "onGotoViewRel", "_gotoPos", { "cre_top_bar_enabled", F } } },
     { "frontend/apps/reader/modules/readercoptlistener.lua", { "unscheduleHeaderRefresh", "rescheduleHeaderRefreshIfNeeded" } },
     { "frontend/apps/reader/modules/readertoc.lua", { "getTocTitleByPage" } },
-    { "frontend/document/credocument.lua", { "setPageMargins", "setStatusLineProp", "setViewDimen", "setViewMode", "getScreenPositionFromXPointer" } },
+    { "frontend/document/credocument.lua", { "setPageMargins", "setStatusLineProp", "setViewDimen", "setViewMode", "getScreenPositionFromXPointer", "getLinkFromPosition" } },
     { "frontend/ui/geometry.lua", { "copy", "offsetWithin" } },
     { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free" } },
     { "frontend/device/generic/device.lua", { "getPowerDevice" } },

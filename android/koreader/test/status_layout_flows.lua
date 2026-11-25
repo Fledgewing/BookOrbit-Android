@@ -63,6 +63,7 @@ return function(here, test, ok, eq)
             ui.document.setViewDimen=function(_,d) W.engine_height=d.h end
             ui.document.setViewMode=function() end
             ui.document.getScreenPositionFromXPointer=function() return 10,20 end
+            ui.document.getLinkFromPosition=function(_,pos) return "link-at-"..pos.y end
             v.visible_area=Geom:new{w=600,h=800}
             v.recalculate=function(self) self.visible_area.h=self.dimen.h end
             v.drawScrollView=function(_,bb,x,y) W.draw_y=y end
@@ -114,6 +115,7 @@ return function(here, test, ok, eq)
         eq(w.v:getSinglePagePosition(p).y,10); eq(p.y,34)
         eq(w.v:getScrollPagePosition(p).y,10)
         eq(w.v:getSinglePagePosition(w.Geom:new{x=0,y=10}),nil)
+        eq(w.v:getSinglePagePosition(w.Geom:new{x=0,y=790}),nil)
         eq(w.v:getSinglePageRect(p).y,58); eq(p.y,34)
         eq(w.v:getScrollPageRect(12,p).y,58)
         eq(w.v:getScreenPageArea(12).y,24)
@@ -137,6 +139,8 @@ return function(here, test, ok, eq)
         eq(w.v:screenToPageTransform(pos).y,10); eq(pos.y,34)
         eq(w.v:pageToScreenTransform(1,pos).y,58)
         eq(w.ui.document:getScreenPositionFromXPointer("xp"),34)
+        eq(w.ui.document:getLinkFromPosition(pos),"link-at-10"); eq(pos.y,34)
+        eq(w.ui.document:getLinkFromPosition(w.Geom:new{x=0,y=10}),"")
         w.ui.rolling:onGotoViewRel(1); eq(w.step,752); eq(w.max_pos,9248)
         eq(w.ui.dimen.h,800)
         w.v.footer:applyFooterMode(0); eq(w.engine_height,776); eq(w.v.visible_area.h,776)
