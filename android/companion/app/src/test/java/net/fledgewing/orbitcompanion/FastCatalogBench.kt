@@ -75,7 +75,7 @@ class FastCatalogBench {
             for(mode in (System.getenv("ORBIFY_BULK_MODES")?.split(',') ?: listOf("cold","unchanged","changed"))) {
                 changed=mode=="changed"
                 val before=calls; val received=bytes; val start=System.nanoTime()
-                val result=worker.run(CacheWorker.Plan(mapOf("op" to if(mode=="cold")"full" else "incremental","run" to mode,"owner" to "reader|https://books.example/api/v1","catalog" to inventory)),CacheWorker.Creds("https://books.example/api/v1","reader","key"))
+                val result=worker.run(CacheWorker.Plan(mapOf("op" to if(mode=="cold")"full" else "incremental","run" to mode,"owner" to "reader|https://books.example/api/v1","catalog" to inventory,"limit" to 250L*1024*1024)),CacheWorker.Creds("https://books.example/api/v1","reader","key"))
                 assertEquals("finished",result)
                 val seconds=(System.nanoTime()-start)/1e9
                 println("BULK BENCH $mode books=$n requests=${calls-before} bytes=${bytes-received} elapsedSeconds=$seconds latencyMs=$latency databaseBytes=${worker.store.fileBytes()}")

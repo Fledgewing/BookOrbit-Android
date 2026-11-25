@@ -14,6 +14,7 @@ class FastCatalogRefresh(
     private val progress: (Int) -> Unit,
     private val log: (String) -> Unit,
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val dataRoom: (Long) -> Boolean = { true },
 ) {
     private val db get() = store.db()
     private val base = "/koreader/plugin/catalog"
@@ -33,6 +34,7 @@ class FastCatalogRefresh(
         idle()
         check(!stopped()) { "stopped" }
         plan.limit?.let { check(store.fileBytes() < it) { "storage limit" } }
+        check(dataRoom(1)) { "storage limit" }
     }
     private fun ask(path: String): Map<*, *> {
         boundary()
@@ -44,6 +46,7 @@ class FastCatalogRefresh(
         }
         // Model bytes are the actual UTF-8 reply bytes supplied by the transport callback below.
         received += (body["_bulkBytes"] as? Number)?.toLong() ?: 0
+        check(dataRoom(LuaValue.encode(body).size * 4L + 4096)) { "storage limit" }
         return body
     }
     private fun <T> phase(name: String, job: () -> T): T {
@@ -66,11 +69,15 @@ class FastCatalogRefresh(
     }
     private fun rich(row: Map<*, *>) {
         val id = (row["id"] as? Number)?.toLong() ?: error("book id missing")
-        val manifest = db.query("SELECT item FROM bulk_books WHERE g=? AND id=?", generation, id) { it.bytes(0) }.firstOrNull() ?: run {
+        val manifest = db.query("SELECT item,status FROM bulk_books WHERE g=? AND id=?", generation, id) { it.bytes(0)!! to (it.text(1)!=null) }.firstOrNull() ?: run {
             set("reconcile", true); return
         }
-        val canonical = (LuaValue.parse(manifest) as Map<*, *>).entries.associate { it.key.toString() to it.value }.toMutableMap()
-        for (field in listOf("seriesId", "progressPercentage", "lastReadAt", "readStatus", "addedAt", "updatedAt", "hasCover", "thumbnailUrl", "detailUrl")) canonical[field] = row[field]
+        val canonical = (LuaValue.parse(manifest.first) as Map<*, *>).entries.associate { it.key.toString() to it.value }.toMutableMap()
+        var changed=false
+        for (field in listOf("seriesId", "progressPercentage", "lastReadAt", "readStatus", "addedAt", "updatedAt", "hasCover", "thumbnailUrl", "detailUrl")) {
+            if(canonical[field]!=row[field]){canonical[field]=row[field];changed=true}
+        }
+        if(manifest.second&&!changed)return
         db.exec("UPDATE bulk_books SET item=?,status=?,added=?,updated=? WHERE g=? AND id=?", LuaValue.encode(canonical),
             BulkCatalog.status(row["readStatus"]), row["addedAt"], row["updatedAt"], generation, id)
     }
@@ -195,7 +202,10 @@ class FastCatalogRefresh(
             "$base/dashboard/sections/want-to-read", "$base/dashboard/sections/up-next-in-series")).distinct()
         for (request in entries) {
             if (done(request)) continue
-            val body = ask(request).filterKeys { it != "_bulkBytes" }
+            val fresh = ask(request).filterKeys { it != "_bulkBytes" }
+            val saved = old?.let { prior -> db.query("SELECT body FROM bulk_replies WHERE g=? AND path=?",prior,CacheStore.u(request)) {LuaValue.parse(it.bytes(0)!!)}.firstOrNull() }
+            val full = if(plan.op=="resume") (store.meta("run_op") ?: "full")=="full" else plan.op=="full"
+            val body = LuaValue.settle(saved,fresh,if(full) "full" else "refresh")
             store.transaction { db.exec("INSERT OR REPLACE INTO bulk_replies VALUES (?,?,?)", generation, CacheStore.u(request), LuaValue.encode(body)); mark(request) }
         }
     }
@@ -246,7 +256,7 @@ class FastCatalogRefresh(
         // These sort keys are not projected by manifest/list rows (author sortName,
         // publication date, status-updated tie breaker). Retain both directions: ties
         // and NULLS LAST mean descending is not reverse(ascending).
-        for (sort in listOf("title", "author", "published", "recently_read")) for (dir in listOf("asc", "desc")) source(sort, dir)
+        for (sort in listOf("title", "author", "published", "recently_read", "series")) for (dir in listOf("asc", "desc")) source(sort, dir)
     }
     private fun derive() {
         if (meta("derived") != null) return
@@ -256,6 +266,7 @@ class FastCatalogRefresh(
             val id = (book["id"] as Number).toLong()
             val name = book["seriesName"] as? String ?: continue
             val sid = book["seriesId"]?.toString()
+            check(dataRoom(LuaValue.encode(context(book)).size * 4L + 16384)) { "storage limit" }
             val matching = if (sid != null) series.filter { it["seriesId"].toString() == sid } else series.filter { it["title"] == name }
             store.transaction {
                 val c = context(book)
@@ -271,16 +282,20 @@ class FastCatalogRefresh(
     private fun publishBase() {
         if (meta("base_published") != null) return
         boundary()
+        val searches=allBooks().map { it["id"] to CacheStore.searchText(it) }
+        val heads=old?.let { prior -> db.query("SELECT coalesce(sum(length(head)),0) FROM bulk_heads WHERE g=?",prior) {it.long(0)!!}.first() } ?: 0L
+        check(dataRoom(searches.sumOf {it.second.toByteArray(Charsets.UTF_8).size.toLong()}*2+heads+16384)) { "storage limit" }
         store.transaction {
             // Previously fetched detail-only fields survive until observed metadata changes.
             db.exec("UPDATE books SET detail=NULL,detail_at=NULL WHERE id IN (SELECT n.id FROM bulk_books n JOIN bulk_books o ON o.id=n.id WHERE n.g=? AND o.g=? AND (n.manifest<>o.manifest OR n.updated<>o.updated))", generation, old ?: 0L)
             db.exec("INSERT OR IGNORE INTO books(id) SELECT id FROM bulk_books WHERE g=?", generation)
             db.exec("UPDATE books SET item=NULL,item_at=? WHERE id IN (SELECT id FROM bulk_books WHERE g=?)", stamp(), generation)
-            for (book in allBooks()) db.exec("UPDATE books SET search=? WHERE id=?", CacheStore.searchText(book), book["id"])
+            for ((id,text) in searches) db.exec("UPDATE books SET search=? WHERE id=?", text, id)
             db.exec("DELETE FROM books WHERE id NOT IN (SELECT id FROM bulk_books WHERE g=?)", generation)
             // Copy old secondary contexts before the base becomes visible.
             old?.takeIf { it != generation }?.let { prior ->
                 set("previous", prior)
+                db.exec("INSERT OR IGNORE INTO bulk_heads SELECT ?,identity,head FROM bulk_heads WHERE g=?",generation,prior)
                 for (entry in entries("series")) {
                     val sid = entry["seriesId"]?.toString() ?: continue
                     val primary = db.query("SELECT count(*) FROM bulk_members WHERE g=? AND kind='primarySeriesId' AND value=?", generation, sid) { it.long(0)!! }.first()

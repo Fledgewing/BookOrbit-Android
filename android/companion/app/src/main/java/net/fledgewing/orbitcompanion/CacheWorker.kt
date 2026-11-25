@@ -838,6 +838,8 @@ class CacheWorker(
             st.setMeta("run_op", if (plan.op == "resume") st.meta("run_op") ?: "full" else plan.op)
             st.setMeta("run_started", now())
             r.total = 100
+            if(plan.limit!=null)storage(StorageAsk("before refresh",plan.limit,plan.coverDir,plan.coversOn))
+            coverUsage=if(plan.limit!=null)CoverUsage(storageItems(plan.coverDir,plan.coversOn)) else null
             val fast = FastCatalogRefresh(st, plan, { path ->
                 val reply = http.get(url(creds, path), headers(creds), null, MAX_BODY)
                 if(reply.code != 200 || reply.body == null) throw FastCatalogRefresh.FetchFailure(reply.body?.size?.toLong() ?: 0L)
@@ -846,7 +848,7 @@ class CacheWorker(
                 body.entries.associate { it.key.toString() to it.value } + ("_bulkBytes" to reply.body.size.toLong())
             }, { yieldTo(); checkpoint() }, { File(mirrorDir, "stop").isFile }, now, { pct ->
                 r.pct = pct.toLong(); r.done = pct.toLong(); writeStatus(r, true)
-            }, log)
+            }, log, dataRoom={growth -> plan.limit==null || room(r,growth,false,st.fileBytes())})
             val why = fast.run()
             if (why != "finished") r.errors++
             writeStatus(r, false)
