@@ -1,0 +1,266 @@
+diff --git a/src/SilentRestart.h b/src/SilentRestart.h
+index d7e8c42..be42ab3 100644
+--- a/src/SilentRestart.h
++++ b/src/SilentRestart.h
+@@ -67,6 +67,9 @@ constexpr uint32_t BOOKORBIT_SLEEP_SYNC_PAYLOAD_QUICK_RESUME = 1u << 1;
+ // sleep. The restart drops that knowledge, which upstream otherwise carries from sleep to
+ // wake (see library::ScanSleepToken), so the sleep sync hands it over to its own sleep.
+ constexpr uint32_t BOOKORBIT_SLEEP_SYNC_PAYLOAD_LIBRARY_CURRENT = 1u << 2;
++// BOOKORBIT_SLEEP_SYNC payload (patch 0037): the previous boot's sleep sync ran past its time
++// budget and was restarted; this boot completes the sleep without syncing.
++constexpr uint32_t BOOKORBIT_SLEEP_SYNC_PAYLOAD_SLEEP_NOW = 1u << 3;
+ // BOOKORBIT_HOME_REFRESH payload: the same for the Home tile's sync, whose device scan
+ // would otherwise rebuild a Library index that still matches the card.
+ constexpr uint32_t BOOKORBIT_HOME_REFRESH_PAYLOAD_LIBRARY_CURRENT = 1u << 0;
+@@ -119,8 +122,11 @@ bool silentRestartToNetwork(NetworkBootTarget target, uint32_t payload = 0);
+ bool silentRestartToManageFonts();
+ 
+ // The sleep sync (NetworkBootTarget::BOOKORBIT_SLEEP_SYNC) runs while the device looks
+-// asleep, so Power is its only input: the press that would wake the device.
++// asleep, so Power is its only input: the press that would wake the device. True once
++// that press came, or once the sync's time budget is spent (patch 0037): every step stops.
+ bool sleepSyncWakeRequested();
++// True only for the press: a stop for the budget ends in sleep, not a wake.
++bool sleepSyncWokenByPress();
+ // Abandons the sleep sync for that press and boots the way a power-button wake would.
+ void wakeFromSleepSync();
+ // Ends the sleep sync by entering the deep sleep it postponed (or waking, if Power
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index d48ecec..eec4045 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -416,6 +416,12 @@ bool BookOrbitSyncActivity::stopIfWoken() {
+   if (!wakeRequested()) return false;
+   // Checked only between steps, where every file the sync touches is consistent: each
+   // step is retried by the next sync, so the attempt can simply end here.
++  if (!sleepSyncWokenByPress()) {
++    // Patch 0037: the sync's time budget is spent. The remaining steps see it too; the
++    // device then sleeps (runSleepSync() goes on to completeSleepAfterSleepSync()).
++    LOG_INF("BookOrbit", "Sleep sync stopped: its time budget is spent");
++    return true;
++  }
+   LOG_INF("BookOrbit", "Sleep sync cancelled: the device was woken");
+   wakeFromSleepSync();
+   return true;
+diff --git a/src/main.cpp b/src/main.cpp
+index 30a101c..5991cb4 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -470,6 +470,8 @@ constexpr unsigned long FRONTLIGHT_REAPPLY_GUARD_MS = 1000;
+ static PowerButtonWakeWatcher sleepSyncWakeWatcher;
+ // Set from BOOKORBIT_SLEEP_SYNC_PAYLOAD_QUICK_RESUME.
+ static bool sleepSyncAfterQuickResumeSleep = false;
++// The sleep sync's payload, for a restart that has to finish going to sleep (patch 0037).
++static uint32_t sleepSyncPayload = 0;
+ // Defined after enterDeepSleep(), which upstream's sleep-overlay test expects right after
+ // the Picco charge overlay (test/scripts/test_sleep_charge_overlay.py).
+ static void powerDownForDeepSleep(bool monochromeSleepFrame);
+@@ -1656,7 +1658,47 @@ static void restartIntoSleepSync(const bool powerHeldAtSleep, const bool isQuick
+   restartForSleepSync(true);
+ }
+ 
++// Tailnet overlay (patch 0037): the sleep sync is bounded. Every step stops at its next
++// check once the budget is spent (sleepSyncWakeRequested() turns true) and the device
++// sleeps; a wake press the sync has not answered within the grace, or a sync still
++// running well past its budget (a request blocked on a starved heap), is ended by the
++// watcher's own task with a restart: into the wake, or into a boot that only sleeps.
++constexpr unsigned long SLEEP_SYNC_BUDGET_MS = 240000;
++constexpr unsigned long SLEEP_SYNC_WAKE_GRACE_MS = 2000;
++constexpr unsigned long SLEEP_SYNC_BUDGET_GRACE_MS = 20000;
++
++// The restart into a boot that completes the sleep straight away (no Wi-Fi, no sync).
++static void setSleepNowRestartToken() {
++  clearSilentRestartReaderPageBuild();
++  silentRebootTarget = static_cast<uint32_t>(NetworkBootTarget::BOOKORBIT_SLEEP_SYNC);
++  silentRebootPayload =
++      (sleepSyncPayload & ~BOOKORBIT_SLEEP_SYNC_PAYLOAD_POWER_HELD) | BOOKORBIT_SLEEP_SYNC_PAYLOAD_SLEEP_NOW;
++  silentRebootMagic = SILENT_REBOOT_MAGIC;
++}
++
++// On the watcher's task: the main task is stuck inside a request. Nothing here touches the
++// SD card (the stuck task may hold it): the tokens live in RTC memory, and the card's files
++// are written so that a reset between steps loses at most the step (queues and plans are
++// replaced by rename, downloads are staged as .part).
++static void forceSleepSyncExit(const bool wake) {
++  if (wake) {
++    LOG_ERR("SLP", "Wake press not answered by the BookOrbit sleep sync within %lu ms; restarting now",
++            SLEEP_SYNC_WAKE_GRACE_MS);
++    clearSilentRestartReaderPageBuild();
++    silentRebootTarget = 0;
++    silentRebootPayload = 0;
++    silentRebootMagic = SLEEP_SYNC_WAKE_MAGIC;
++  } else {
++    LOG_ERR("SLP", "BookOrbit sleep sync still running %lu s past its %lu s budget; restarting to sleep",
++            SLEEP_SYNC_BUDGET_GRACE_MS / 1000, SLEEP_SYNC_BUDGET_MS / 1000);
++    setSleepNowRestartToken();
++  }
++  silentRebootTarget |= SILENT_REBOOT_FRONTLIGHT_VALID;
++  ESP.restart();
++}
++
+ static bool startBookOrbitSleepSync(const uint32_t payload) {
++  sleepSyncPayload = payload;
+   sleepSyncAfterQuickResumeSleep = (payload & BOOKORBIT_SLEEP_SYNC_PAYLOAD_QUICK_RESUME) != 0;
+   // The sync leaves the books on the card alone, so a Library index that was current when
+   // the device went to sleep is still current when it finishes going to sleep.
+@@ -1671,10 +1713,19 @@ static bool startBookOrbitSleepSync(const uint32_t payload) {
+   // time, so the button handling there cannot see a press made meanwhile: this task
+   // samples it and remembers the press until the sync reaches a step it can stop at.
+   if (!sleepSyncWakeWatcher.start(holdMs, (payload & BOOKORBIT_SLEEP_SYNC_PAYLOAD_POWER_HELD) != 0)) return false;
++  if ((payload & BOOKORBIT_SLEEP_SYNC_PAYLOAD_SLEEP_NOW) != 0) {
++    // The last sleep sync ran out of time and was restarted: this boot only sleeps.
++    LOG_INF("SLP", "BookOrbit sleep sync ended at its time budget; sleeping");
++    return false;
++  }
++  sleepSyncWakeWatcher.armDeadlines(&forceSleepSyncExit, SLEEP_SYNC_WAKE_GRACE_MS, SLEEP_SYNC_BUDGET_MS,
++                                    SLEEP_SYNC_BUDGET_GRACE_MS);
+   return startGlobalBookOrbitSync(true, 0, true);
+ }
+ 
+-bool sleepSyncWakeRequested() { return sleepSyncWakeWatcher.wakeRequested(); }
++bool sleepSyncWakeRequested() { return sleepSyncWakeWatcher.wakeRequested() || sleepSyncWakeWatcher.outOfTime(); }
++
++bool sleepSyncWokenByPress() { return sleepSyncWakeWatcher.wakeRequested(); }
+ 
+ void wakeFromSleepSync() {
+   sleepSyncWakeWatcher.stop();
+@@ -1718,6 +1769,8 @@ static bool redrawSleepScreenAfterSleepSync() {
+ }
+ 
+ void completeSleepAfterSleepSync() {
++  // The sync is over: from here its budget no longer applies (a press still wakes).
++  sleepSyncWakeWatcher.disarmBudget();
+   // A press that landed during the last step still wakes the device, and so does one
+   // made while the sleep screen is drawn again.
+   if (sleepSyncWakeWatcher.wakeRequested()) wakeFromSleepSync();
+diff --git a/src/util/PowerButtonWakeWatcher.cpp b/src/util/PowerButtonWakeWatcher.cpp
+index 5528e09..821f0d7 100644
+--- a/src/util/PowerButtonWakeWatcher.cpp
++++ b/src/util/PowerButtonWakeWatcher.cpp
+@@ -5,8 +5,9 @@
+ 
+ #ifndef SIMULATOR
+ namespace {
+-// Only a GPIO read and a delay run on this stack; nothing logs from it.
+-constexpr uint32_t STACK_BYTES = 2048;
++// A GPIO read and a delay, and once per sync at most the forced exit: a log line and
++// esp_restart(), whose shutdown handlers stop Wi-Fi (and Tailscale before it) on this stack.
++constexpr uint32_t STACK_BYTES = 4096;
+ // Above the loop task's priority 1: sampling has to go on while the main task
+ // computes, and a TLS handshake keeps the C3's single core busy for a second or more.
+ constexpr UBaseType_t TASK_PRIORITY = 2;
+@@ -18,6 +19,9 @@ bool PowerButtonWakeWatcher::start(const unsigned long holdMs, const bool heldAt
+   stop();
+   detector = SleepWakePolicy::WakePressDetector(holdMs, heldAtStart);
+   requested.store(false);
++  requestedAt.store(0);
++  forceExit.store(nullptr);
++  budgetMs.store(0);
+ #ifdef SIMULATOR
+   return true;
+ #else
+@@ -40,6 +44,28 @@ void PowerButtonWakeWatcher::stop() {
+   taskHandle = nullptr;
+ }
+ 
++void PowerButtonWakeWatcher::armDeadlines(const ForceExit exit, const unsigned long wakeGrace,
++                                          const unsigned long budget, const unsigned long budgetGrace) {
++  wakeGraceMs.store(wakeGrace);
++  budgetGraceMs.store(budgetGrace);
++  armedAt.store(millis());
++  budgetMs.store(budget);
++  forceExit.store(exit);
++}
++
++void PowerButtonWakeWatcher::disarmBudget() { budgetMs.store(0); }
++
++orbify::sleepsync::Deadlines PowerButtonWakeWatcher::deadlines() const {
++  orbify::sleepsync::Deadlines d;
++  d.armedAt = armedAt.load();
++  d.wakeGraceMs = wakeGraceMs.load();
++  d.budgetMs = budgetMs.load();
++  d.budgetGraceMs = budgetGraceMs.load();
++  return d;
++}
++
++bool PowerButtonWakeWatcher::outOfTime() const { return orbify::sleepsync::outOfTime(deadlines(), millis()); }
++
+ bool PowerButtonWakeWatcher::wakeRequested() {
+ #ifdef SIMULATOR
+   // The simulator has no raw pin a task could sample. Its network calls return quickly,
+@@ -55,9 +81,19 @@ bool PowerButtonWakeWatcher::wakeRequested() {
+ void PowerButtonWakeWatcher::taskEntry(void* context) {
+   auto* self = static_cast<PowerButtonWakeWatcher*>(context);
+   while (true) {
+-    if (self->detector.update(gpio.isPowerButtonPhysicallyPressed(), millis())) {
++    const unsigned long now = millis();
++    if (self->detector.update(gpio.isPowerButtonPhysicallyPressed(), now) && !self->requested.load()) {
++      self->requestedAt.store(now | 1UL);
+       self->requested.store(true);
+     }
++    const ForceExit exit = self->forceExit.load();
++    if (exit != nullptr) {
++      const auto verdict = orbify::sleepsync::check(self->deadlines(), now, self->requestedAt.load());
++      if (verdict != orbify::sleepsync::Exit::None) {
++        self->forceExit.store(nullptr);
++        exit(verdict == orbify::sleepsync::Exit::Wake);
++      }
++    }
+     vTaskDelay(pdMS_TO_TICKS(SAMPLE_PERIOD_MS));
+   }
+ }
+diff --git a/src/util/PowerButtonWakeWatcher.h b/src/util/PowerButtonWakeWatcher.h
+index b930bd9..0753ec2 100644
+--- a/src/util/PowerButtonWakeWatcher.h
++++ b/src/util/PowerButtonWakeWatcher.h
+@@ -6,13 +6,22 @@
+ #include <atomic>
+ 
+ #include "SleepWakePolicy.h"
++#include "orbify/core/SleepSyncDeadline.h"
+ 
+ // Watches the power button during the BookOrbit sleep sync, whose network calls block
+ // the main loop for seconds at a time. A small task samples the button so that a press
+ // starting and ending inside one request still counts; SleepWakePolicy's
+ // WakePressDetector decides whether it is a wake press.
++//
++// Tailnet overlay (patch 0037): the sync checks the press only between its steps, and a
++// step can block for minutes on a starved heap (an X4 Pro's 47 KB catalog reply waited
++// 82 s, a TLS handshake took 14 s): the reader looked dead. The watcher now also bounds
++// the sync itself. A press the sync has not acted on within wakeGraceMs, and a sync
++// still running budgetGraceMs past its budget, end it from this task (forceExit).
+ class PowerButtonWakeWatcher {
+  public:
++  // Runs on the watcher's task; must not return (it restarts the device).
++  using ForceExit = void (*)(bool wake);
+   PowerButtonWakeWatcher() = default;
+   PowerButtonWakeWatcher(const PowerButtonWakeWatcher&) = delete;
+   PowerButtonWakeWatcher& operator=(const PowerButtonWakeWatcher&) = delete;
+@@ -23,6 +32,15 @@ class PowerButtonWakeWatcher {
+   void stop();
+   // Latched: stays true once a wake press has been seen.
+   bool wakeRequested();
++  // From now: after budgetMs the sync is out of time (outOfTime()); a wake press not acted
++  // on within wakeGraceMs, or a sync still running budgetGraceMs after its budget, calls
++  // forceExit(true) / forceExit(false) on the watcher's task.
++  void armDeadlines(ForceExit forceExit, unsigned long wakeGraceMs, unsigned long budgetMs,
++                    unsigned long budgetGraceMs);
++  // The sync is ending on its own (drawing the sleep screen, going to sleep): no budget exit.
++  void disarmBudget();
++  // The sync's time budget is spent: it stops at its next step and the device sleeps.
++  bool outOfTime() const;
+ 
+  private:
+   static void taskEntry(void* context);
+@@ -30,4 +48,11 @@ class PowerButtonWakeWatcher {
+   SleepWakePolicy::WakePressDetector detector{0, false};
+   std::atomic<bool> requested{false};
+   TaskHandle_t taskHandle = nullptr;
++  std::atomic<ForceExit> forceExit{nullptr};
++  std::atomic<unsigned long> armedAt{0};
++  std::atomic<unsigned long> wakeGraceMs{0};
++  std::atomic<unsigned long> budgetMs{0};  // 0 = no budget
++  std::atomic<unsigned long> budgetGraceMs{0};
++  std::atomic<unsigned long> requestedAt{0};  // bit 0 set: 0 means no press yet
++  orbify::sleepsync::Deadlines deadlines() const;
+ };

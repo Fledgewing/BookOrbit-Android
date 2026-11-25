@@ -26,7 +26,7 @@ CrossInk-Bookorbit `v2.0.0+bookorbit.1-rc3` `87e2e19`; KOReader `v2026.07.1` `91
 | A6 | Nothing shows while reading (`reading()`, `bookorbitOverBook`) | Android | [reading-gate](reading-gate.md) "The gate"; PR #10 item 1 |
 | A7 | Update flow: install-session states; KOReader restart rules | Android | `UpdateSession` (`Logic.kt:260`), `Installers.kt:126`; reading-gate "Restarts after an update" |
 | A8 | Storage limit with LRU eviction | Android | write-through-cache "Storage limit (v0.11.2)"; `cases.json` `storage` |
-| X1 | A power press wakes the reader during the sleep sync | Xteink | patch 0037 S5 (in flight, `xteink/rc3-device-fixes`) |
+| X1 | A power press wakes the reader during the sleep sync | Xteink | patch `0037a-orbify-sleep-sync-budget` (S5) |
 | X2 | Sleep-sync time budget (240 s, then a forced sleep) | Xteink | 0037 S5, `core/SleepSyncDeadline.h` |
 | X3 | Heap starvation: mirror + Tailscale + TLS | Xteink | 0037 S1-S4, `orbify/HeapFloor.h` |
 | X4 | DNS `udp_remove` core-lock panic | Xteink | commit `9db15e3`, `tailnet/shim/TailnetLwipLock.c` |

@@ -1,0 +1,171 @@
+diff --git a/lib/GfxRenderer/GfxRenderer.cpp b/lib/GfxRenderer/GfxRenderer.cpp
+index 9aeaf60..d40ddb6 100644
+--- a/lib/GfxRenderer/GfxRenderer.cpp
++++ b/lib/GfxRenderer/GfxRenderer.cpp
+@@ -1,4 +1,6 @@
+ #include "GfxRenderer.h"
++
++#include <atomic>
+ #if CROSSINK_SCALABLE_FONTS
+ #include <HalScalableFont.h>
+ #endif
+@@ -2440,11 +2442,17 @@ void GfxRenderer::invertRect(const int x, const int y, const int width, const in
+   }
+ }
+ 
++namespace {
++std::atomic<uint32_t> s_displaysSinceBoot{0};  // patch 0038
++}
++uint32_t GfxRenderer::displaysSinceBoot() { return s_displaysSinceBoot.load(); }
++
+ void GfxRenderer::displayBuffer(const HalDisplay::RefreshMode refreshMode, const bool turnOffScreen) const {
+ #if defined(CROSSINK_LANGUAGE_BENCHMARK)
+   language_benchmark::DisplayScope timing;
+ #endif
+   display.displayBuffer(refreshMode, fadingFix || turnOffScreen);
++  s_displaysSinceBoot.fetch_add(1);
+ }
+ 
+ size_t GfxRenderer::readFramebufferRegion(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t* dst,
+@@ -2498,6 +2506,7 @@ void GfxRenderer::waitRefreshComplete() const {
+   language_benchmark::DisplayScope timing;
+ #endif
+   display.waitRefreshComplete();
++  s_displaysSinceBoot.fetch_add(1);
+ }
+ 
+ bool GfxRenderer::supportsAsyncRefresh() const { return !fadingFix && display.supportsAsyncRefresh(); }
+@@ -3334,6 +3343,7 @@ void GfxRenderer::displayGrayBuffer(const bool turnOffScreen) const {
+   language_benchmark::DisplayScope timing;
+ #endif
+   display.displayGrayBuffer(fadingFix || turnOffScreen);
++  s_displaysSinceBoot.fetch_add(1);
+   absoluteGrayPlanes = false;
+ }
+ 
+diff --git a/lib/GfxRenderer/GfxRenderer.h b/lib/GfxRenderer/GfxRenderer.h
+index c256298..4b5cf2a 100644
+--- a/lib/GfxRenderer/GfxRenderer.h
++++ b/lib/GfxRenderer/GfxRenderer.h
+@@ -221,6 +221,9 @@ class GfxRenderer {
+   int getScreenHeight() const;
+   void tapToLogical(float nx, float ny, int& outX, int& outY) const;
+   void displayBuffer(HalDisplay::RefreshMode refreshMode = HalDisplay::FAST_REFRESH, bool turnOffScreen = false) const;
++  // Patch 0038: frames this process has put on the panel (blocking displays and completed async
++  // ones), for the wake's press-to-screen time.
++  static uint32_t displaysSinceBoot();
+   // Non-blocking refresh: starts the waveform and returns so CPU work (e.g.
+   // grayscale strip rendering) can overlap the panel's refresh time. The
+   // framebuffer must stay untouched until waitRefreshComplete(). Falls back to
+diff --git a/src/main.cpp b/src/main.cpp
+index 5991cb4..e15d766 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -23,6 +23,7 @@
+ #include <SPI.h>
+ #include <TrustedTime.h>
+ 
++#include <chrono>
+ #include <cstdlib>
+ 
+ #include "util/PluginEvents.h"
+@@ -381,6 +382,10 @@ RTC_NOINIT_ATTR uint32_t silentReaderPageBuildMagic;
+ RTC_NOINIT_ATTR uint32_t silentReaderPageBuildBookHash;
+ RTC_NOINIT_ATTR uint32_t silentReaderPageBuildPackedTarget;
+ RTC_NOINIT_ATTR uint32_t silentReaderPageBuildFlags;
++// Patch 0038: when the press that woke the device out of the sleep sync was made, on a clock that
++// runs across the restart (the RTC's; the wall clock on the simulator, which re-executes itself).
++RTC_NOINIT_ATTR uint32_t sleepSyncWakePressMagic;
++RTC_NOINIT_ATTR uint64_t sleepSyncWakePressClockMs;
+ #if FREEINK_DEVICE_PICCO
+ RTC_NOINIT_ATTR UsbSleepWakeToken piccoUsbWakeToken;
+ static SlideSwitchToggle piccoSlideSwitch;
+@@ -1667,6 +1672,51 @@ constexpr unsigned long SLEEP_SYNC_BUDGET_MS = 240000;
+ constexpr unsigned long SLEEP_SYNC_WAKE_GRACE_MS = 2000;
+ constexpr unsigned long SLEEP_SYNC_BUDGET_GRACE_MS = 20000;
+ 
++constexpr uint32_t SLEEP_SYNC_WAKE_PRESS_MAGIC = 0xC1EAB0A7;
++static uint64_t wakeClockMs() {
++#ifdef SIMULATOR
++  return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
++                                   std::chrono::system_clock::now().time_since_epoch())
++                                   .count());
++#else
++  return esp_rtc_get_time_us() / 1000;
++#endif
++}
++
++// Before the wake restart: the press's time, for the next boot's "Wake: N ms from press to screen".
++static void rememberWakePress(const char* how) {
++  const unsigned long pressed = sleepSyncWakeWatcher.pressedAt();
++  const unsigned long age = pressed != 0 ? millis() - pressed : 0;
++  LOG_INF("SLP", "Wake press %s %lu ms after it was made", how, age);
++  const uint64_t at = wakeClockMs() - age;
++#ifdef SIMULATOR
++  char value[24];
++  snprintf(value, sizeof(value), "%llu", static_cast<unsigned long long>(at));
++  setenv("ORBIFY_SIM_WAKE_PRESS_MS", value, 1);
++#else
++  sleepSyncWakePressClockMs = at;
++  sleepSyncWakePressMagic = SLEEP_SYNC_WAKE_PRESS_MAGIC;
++#endif
++}
++
++// This boot's wake press (0 = not a sleep-sync wake): logged once its first screen is on the panel.
++static uint64_t wakePressClockMs = 0;
++static void takeWakePress(const bool isSleepSyncWake) {
++#ifdef SIMULATOR
++  const char* value = getenv("ORBIFY_SIM_WAKE_PRESS_MS");
++  if (isSleepSyncWake && value != nullptr) wakePressClockMs = strtoull(value, nullptr, 10);
++  unsetenv("ORBIFY_SIM_WAKE_PRESS_MS");
++#else
++  if (isSleepSyncWake && sleepSyncWakePressMagic == SLEEP_SYNC_WAKE_PRESS_MAGIC) wakePressClockMs = sleepSyncWakePressClockMs;
++  sleepSyncWakePressMagic = 0;
++#endif
++}
++static void logWakeToScreen() {
++  if (wakePressClockMs == 0 || GfxRenderer::displaysSinceBoot() == 0) return;
++  LOG_INF("SLP", "Wake: %lums from press to screen", static_cast<unsigned long>(wakeClockMs() - wakePressClockMs));
++  wakePressClockMs = 0;
++}
++
+ // The restart into a boot that completes the sleep straight away (no Wi-Fi, no sync).
+ static void setSleepNowRestartToken() {
+   clearSilentRestartReaderPageBuild();
+@@ -1684,6 +1734,7 @@ static void forceSleepSyncExit(const bool wake) {
+   if (wake) {
+     LOG_ERR("SLP", "Wake press not answered by the BookOrbit sleep sync within %lu ms; restarting now",
+             SLEEP_SYNC_WAKE_GRACE_MS);
++    rememberWakePress("handled by the watcher");
+     clearSilentRestartReaderPageBuild();
+     silentRebootTarget = 0;
+     silentRebootPayload = 0;
+@@ -1730,6 +1781,7 @@ bool sleepSyncWokenByPress() { return sleepSyncWakeWatcher.wakeRequested(); }
+ void wakeFromSleepSync() {
+   sleepSyncWakeWatcher.stop();
+   LOG_INF("SLP", "Woken during the BookOrbit sleep sync; restarting as a power-button wake");
++  rememberWakePress("answered by the sync");
+   clearSilentRestartReaderPageBuild();
+   silentRebootTarget = 0;
+   silentRebootPayload = 0;
+@@ -2534,6 +2586,7 @@ void loop() {
+ #if CROSSINK_TAILNET_FRONTLIGHT_REAPPLY
+   reapplyFrontlightAfterFirstPaint();
+ #endif
++  logWakeToScreen();
+ #ifndef SIMULATOR
+   // The main task owns calibration. Exclude render-task battery/clock reads
+   // during each short SDK step without blocking input behind a busy renderer.
+diff --git a/src/util/PowerButtonWakeWatcher.h b/src/util/PowerButtonWakeWatcher.h
+index 0753ec2..a5a7b9f 100644
+--- a/src/util/PowerButtonWakeWatcher.h
++++ b/src/util/PowerButtonWakeWatcher.h
+@@ -41,6 +41,8 @@ class PowerButtonWakeWatcher {
+   void disarmBudget();
+   // The sync's time budget is spent: it stops at its next step and the device sleeps.
+   bool outOfTime() const;
++  // Patch 0038: when the wake press was recognised (millis()), 0 = none.
++  unsigned long pressedAt() const { return orbify::sleepsync::pressTime(requestedAt.load()); }
+ 
+  private:
+   static void taskEntry(void* context);

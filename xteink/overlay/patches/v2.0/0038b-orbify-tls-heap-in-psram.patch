@@ -1,0 +1,98 @@
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+index b0acf38..8ceac84 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+@@ -11,6 +11,9 @@
+ #include <Logging.h>
+ #include <Memory.h>
+ #include <esp_mac.h>
++#if CROSSINK_TAILNET_TLS_PSRAM
++#include <esp_heap_caps.h>
++#endif
+ #ifdef SIMULATOR
+ // With the SDK HTTP stack (CROSSPOINT_SIM_USE_SDK_HTTP), WiFi.h no longer brings
+ // WiFiClient; the SecureHttpClient shim does, as in KOReaderSyncClient.
+@@ -206,7 +209,13 @@ constexpr uint32_t MIN_HEAP_FOR_TLS = 55000;
+ // too large for what is left still has to fail gracefully, which is why bodies are
+ // measured and allocated without throwing (see JsonBody). Callers keep their batches
+ // small for the same reason -- 25 stat events, 8 annotations.
+-constexpr uint32_t MIN_HEAP_FOR_KEPT_SESSION = 20000;
++#ifndef CROSSINK_TAILNET_SYNC_KEPT_FLOOR
++#define CROSSINK_TAILNET_SYNC_KEPT_FLOOR 20000
++#endif
++// Patch 0038: 12000 on the X4s, whose wolfSSL allocates from PSRAM (orbify/HeapFloor.h): a request
++// on a kept session needs internal RAM only for Wi-Fi and lwIP buffers there. 20000 refused the
++// sleep sync's match check at 19392 free (.167).
++constexpr uint32_t MIN_HEAP_FOR_KEPT_SESSION = CROSSINK_TAILNET_SYNC_KEPT_FLOOR;
+ 
+ // True from the first completed request on the shared session until the Session ends.
+ // Never set on the simulator, which keeps the full floor. Blind spot: a server dropping
+@@ -504,6 +513,18 @@ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonB
+   return code;
+ }
+ 
++// Patch 0038: the largest block an allocation of this size can come from. ESP.getMaxAllocHeap() is
++// internal RAM only; on the X4s malloc puts 4 KB and more in PSRAM
++// (CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL), so a reply that size is measured against PSRAM.
++uint32_t largestBlockFor(const size_t bytes) {
++#if CROSSINK_TAILNET_TLS_PSRAM
++  if (bytes >= 4096 && heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0) {
++    return heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
++  }
++#endif
++  return ESP.getMaxAllocHeap();
++}
++
+ // A reply read whole into outBody, for the requests whose replies stay small.
+ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonBody* payload, std::string& outBody,
+                          const size_t maxBodyBytes = NO_BODY_LIMIT) {
+@@ -521,7 +542,7 @@ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonB
+           const size_t target = expected >= needed
+                                     ? expected
+                                     : (needed + RESPONSE_GROWTH_STEP - 1) / RESPONSE_GROWTH_STEP * RESPONSE_GROWTH_STEP;
+-          if (ESP.getMaxAllocHeap() < target + 1 + RESPONSE_HEAP_MARGIN) {
++          if (largestBlockFor(target + 1) < target + 1 + RESPONSE_HEAP_MARGIN) {
+             s_lastBodyRefusal = BodyRefusal::LowMemory;
+             return false;
+           }
+diff --git a/src/BookOrbitHomeStore.cpp b/src/BookOrbitHomeStore.cpp
+index a2e8225..cbb4208 100644
+--- a/src/BookOrbitHomeStore.cpp
++++ b/src/BookOrbitHomeStore.cpp
+@@ -42,11 +42,20 @@ constexpr int MAX_COVER_FETCHES = 8;
+ constexpr size_t MAX_COVER_FILES = 30;
+ // The sync client's handshake discipline, per cover transfer: wolfSSL churns through
+ // tens of KB, and the SDK's response headers go into containers that abort on OOM.
++#if CROSSINK_TAILNET_TLS_PSRAM
++// Patch 0038: wolfSSL allocates from PSRAM on the X4s (orbify/HeapFloor.h); a new session needs
++// internal RAM for Wi-Fi and lwIP buffers only, as the sync's own new session does
++// (CROSSINK_TAILNET_SYNC_TLS_FLOOR). 42 KB refused the X4 Pro's Home refresh boot at 38.9 KB free
++// (.167), which then restarted into a second refresh boot.
++constexpr uint32_t MIN_FREE_HEAP_FOR_FETCH = 20 * 1024;
++#else
+ constexpr uint32_t MIN_FREE_HEAP_FOR_FETCH = 42 * 1024;
+-#if defined(BOARD_HAS_PSRAM)
++#endif
++#if CROSSINK_TAILNET_TLS_PSRAM
+ // Patch 0037: wolfSSL's large buffers go to PSRAM on the X4s (allocations over 4 KB); a 20 KB
+ // internal block refused fetches there that fit (an X4 Pro at 28 KB free, 8 KB largest).
+-constexpr uint32_t MIN_MAX_ALLOC_FOR_FETCH = 8 * 1024;
++// Patch 0038: all of wolfSSL in PSRAM; a 4 KB block as the sync's new session (.167 had 7 KB).
++constexpr uint32_t MIN_MAX_ALLOC_FOR_FETCH = 4 * 1024;
+ #else
+ constexpr uint32_t MIN_MAX_ALLOC_FOR_FETCH = 20 * 1024;
+ #endif
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index a18aaf7..4531b6b 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -63,7 +63,8 @@
+ 
+ namespace {
+ // Patch 0037: the sleep sync lends its connection to the catalog requests that follow the book.
+-#if defined(BOARD_HAS_PSRAM)
++// Patch 0038: on the X4s by their switch, so their simulators take the same path.
++#if defined(BOARD_HAS_PSRAM) || CROSSINK_TAILNET_TLS_PSRAM
+ constexpr bool SLEEP_SYNC_LENDS = true;
+ #else
+ constexpr bool SLEEP_SYNC_LENDS = false;

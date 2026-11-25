@@ -1,0 +1,274 @@
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+index c82786f..b0acf38 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+@@ -543,7 +543,10 @@ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonB
+ #ifdef SIMULATOR
+ BookOrbitSyncClient::Session::Session() {}
+ BookOrbitSyncClient::Session::~Session() {}
++freeink::SecureHttpClient* BookOrbitSyncClient::sessionConnection() { return nullptr; }
+ #else
++freeink::SecureHttpClient* BookOrbitSyncClient::sessionConnection() { return s_session.get(); }
++
+ BookOrbitSyncClient::Session::Session() {
+   s_sessionHandshakePaid = false;
+   s_session = makeUniqueNoThrow<freeink::SecureHttpClient>();
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.h b/lib/BookOrbitSync/BookOrbitSyncClient.h
+index b124f63..2d0a830 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.h
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.h
+@@ -7,6 +7,10 @@
+ #include "BookOrbitStatsQueue.h"
+ #include "KOReaderSyncClient.h"
+ 
++namespace freeink {
++class SecureHttpClient;
++}
++
+ /**
+  * HTTP client for BookOrbit's KOReader-compatible sync API.
+  *
+@@ -83,6 +87,13 @@ class BookOrbitSyncClient {
+     Session& operator=(const Session&) = delete;
+   };
+ 
++  /**
++   * Tailnet overlay (patch 0037): the open Session's connection, nullptr without one (and on
++   * the simulator). The sleep sync lends it to the catalog requests that follow the book's
++   * sync (same server), so they need no TLS session of their own on a heap Tailscale shares.
++   */
++  static freeink::SecureHttpClient* sessionConnection();
++
+   /**
+    * Authenticate with the BookOrbit server (validate credentials).
+    * @return OK on success, error code on failure
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index 8a8d02f..2ff6fc7 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -29,6 +29,8 @@
+ #endif
+ #include "BookOrbitHomeStore.h"
+ #include "BookOrbitRemotePosition.h"
++#include "network/BookOrbitCatalogClient.h"
++#include "Tailnet.h"
+ #include "BookOrbitStatsUpload.h"
+ #include "BookOrbitSyncMarkerFile.h"
+ #include "BookOrbitSyncScreens.h"
+@@ -60,6 +62,18 @@
+ // support cannot regress the existing generic KOReader sync path.
+ 
+ namespace {
++// Patch 0037: the sleep sync lends its connection to the catalog requests that follow the book.
++#if defined(BOARD_HAS_PSRAM)
++constexpr bool SLEEP_SYNC_LENDS = true;
++#else
++constexpr bool SLEEP_SYNC_LENDS = false;
++#endif
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++// Patch 0037: the sleep sync walks the offline mirror a few requests at a time; a whole Full
++// refresh (hundreds of requests) is for Settings' and the catalog's own boots.
++constexpr size_t SLEEP_MIRROR_STEPS = 10;
++constexpr unsigned long SLEEP_MIRROR_BUDGET_MS = 30000;
++#endif
+ // The SNTP client lives behind halClock, whose esp-netif implementation routes every lwIP
+ // interaction through the core-lock-safe execution path -- this file and KOReaderSyncActivity
+ // used to carry hand-rolled copies of that discipline.
+@@ -110,13 +124,13 @@ void BookOrbitSyncActivity::completeAlreadySynced() {
+   OrbifyFinish::drain(hasRemoteProgress ? documentHash : std::string(), !sleepSync && !backgroundSync,
+                       sleepSync ? &sleepSyncWakeRequested : nullptr);
+   // Orbify (patch 0028): the open book's series card, near its end (design §5).
+-  if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
+-  syncSession.reset();  // no request follows; free the TLS session before the reader reloads
++  if (cardWanted()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
++  // The sleep sync keeps the session: its copy refresh, cover and mirror ride it (patch 0037).
++  if (!sleepSync) syncSession.reset();  // no request follows; free the TLS session before the reader reloads
+ #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+   // Orbify (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
+-  if (!backgroundSync && !wakeRequested()) {
+-    OrbifyFinish::fetchNextCover(epubPath, sleepSync ? &sleepSyncWakeRequested : nullptr);
+-  }
++  // The sleep sync fetches it in runSleepSync(), on the session.
++  if (!backgroundSync && !sleepSync) OrbifyFinish::fetchNextCover(epubPath, nullptr);
+ #endif
+   {
+     RenderLock lock(*this);
+@@ -367,7 +381,6 @@ void BookOrbitSyncActivity::runSleepSync() {
+     if (!syncSession) syncSession = makeUniqueNoThrow<BookOrbitSyncClient::Session>();
+     OrbifyFinish::drain(std::string(), false, &sleepSyncWakeRequested);
+   }
+-  syncSession.reset();
+   // The BookOrbit Home draws from what this boot's network leaves behind. Each step is
+   // retried by the next sync, so a wake press can end it anywhere. Its tile dates the
+   // snapshot as the last sync: a sync that failed for the book leaves it as it was, or
+@@ -376,28 +389,52 @@ void BookOrbitSyncActivity::runSleepSync() {
+   const bool refreshHome = homeShown && state != SYNC_FAILED;
+   if (homeShown && !refreshHome) LOG_INF("BookOrbit", "Sleep sync failed: the Home snapshot stays as it was");
+   const auto homeCoverSizes = BookOrbitHomeLayout::coverSizes(renderer);
+-  if (refreshHome && !sleepSyncWakeRequested()) BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
+-  if (refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
++  // Orbify (patch 0037): what follows the book rides the sync's own connection, lent to the
++  // catalog requests. With Tailscale up an X4 Pro has ~30 KB of internal RAM beside that one
++  // session: rc3 opened more for these and ran the relay's TLS out of memory (the device then
++  // stalled for minutes), and the Home's own floor left its snapshot and covers behind. Each
++  // request needs OrbifyHeap's floor; the watcher bounds the whole sync (SLEEP_SYNC_BUDGET_MS).
++  const bool extras = wifiConnectedForSleepSync && state != SYNC_FAILED;
++  if (extras && !syncSession) syncSession = makeUniqueNoThrow<BookOrbitSyncClient::Session>();
++  {
++    // The X3 has no PSRAM for a second set of TLS buffers beside the sync's: there the catalog
++    // requests keep their own connections, and the Home refreshes after the session closes, as before.
++    BookOrbitCatalogClient::LentConnection lent(extras && SLEEP_SYNC_LENDS ? BookOrbitSyncClient::sessionConnection()
++                                                                           : nullptr);
++    // The Home first: its snapshot and covers are what the reader shows on waking.
++    if (SLEEP_SYNC_LENDS && refreshHome && !sleepSyncWakeRequested()) {
++      BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
++    }
++#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
++    // The End-of-Book page's next cover (decoded below, with the radio off).
++    if (extras && !sleepSyncWakeRequested()) OrbifyFinish::fetchNextCover(epubPath, &sleepSyncWakeRequested);
++#endif
+ #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
+-  // Orbify (patch 0034): the device is asleep, Wi-Fi is up: find copies the server rewrote,
+-  // then replace queued ones, one book at a time, for up to three minutes per sleep.
+-  if (wifiConnectedForSleepSync && state != SYNC_FAILED && !sleepSyncWakeRequested()) {
+-    OrbifyCopyRefresh::detect(&sleepSyncWakeRequested);
+-    if (!sleepSyncWakeRequested()) OrbifyCopyRefresh::run(&sleepSyncWakeRequested, 180000UL);
+-  }
++    // Copies the server rewrote: the match check on the session, then the replacements, one book
++    // at a time, the book that was open included (it is not on screen now; the user's ruling of
++    // 2026-11-23). What does not fit carries over to the next sync.
++    if (extras && !sleepSyncWakeRequested()) OrbifyCopyRefresh::detect(&sleepSyncWakeRequested);
++    if (extras && !sleepSyncWakeRequested()) OrbifyCopyRefresh::run(&sleepSyncWakeRequested, 120000UL, "sleep sync");
+ #endif
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+-  // Orbify (patch 0035): the offline mirror, when asked for or due (never saved, 7 days old, a new
+-  // library version): up to two minutes per sleep, resumed by the next one.
+-  if (wifiConnectedForSleepSync && state != SYNC_FAILED && !sleepSyncWakeRequested()) {
+-    const auto due = OrbifyMirror::dueNow();
+-    if (OrbifyMirror::requested() || due != orbify::mirror::Due::None) {
+-      LOG_INF("ORB", "Mirror: due (%s%s)", orbify::mirror::dueName(due),
+-              OrbifyMirror::requested() ? ", asked for" : "");
+-      OrbifyMirror::run(&sleepSyncWakeRequested, 120000UL);
++    // The offline mirror, when asked for or due: a paced slice, never the whole Full refresh. The
++    // rest resumes in the next sleeps; Settings and a hold on the catalog's refresh run it whole in
++    // their own boots.
++    if (extras && !sleepSyncWakeRequested()) {
++      const auto due = OrbifyMirror::dueNow();
++      if (OrbifyMirror::requested() || due != orbify::mirror::Due::None) {
++        LOG_INF("ORB", "Mirror: due (%s%s); a slice of %u requests in this sleep", orbify::mirror::dueName(due),
++                OrbifyMirror::requested() ? ", asked for" : "", static_cast<unsigned>(SLEEP_MIRROR_STEPS));
++        OrbifyMirror::run(&sleepSyncWakeRequested, SLEEP_MIRROR_BUDGET_MS, nullptr, SLEEP_MIRROR_STEPS, true);
++      }
+     }
+-  }
+ #endif
++  }
++  syncSession.reset();
++  if (!SLEEP_SYNC_LENDS && refreshHome && !sleepSyncWakeRequested()) {
++    BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
++  }
++  if (refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
+   SavedWifiConnect::disconnect();
+   if (refreshHome && !sleepSyncWakeRequested()) {
+     BookOrbitHomeStore::decodePendingCovers(&sleepSyncWakeRequested, homeCoverSizes);
+@@ -848,14 +885,16 @@ void BookOrbitSyncActivity::performUpload() {
+   if (result == BookOrbitSyncClient::OK) {
+     OrbifyFinish::drain(documentHash, !sleepSync && !backgroundSync, sleepSync ? &sleepSyncWakeRequested : nullptr);
+     // Orbify (patch 0028): the open book's series card, near its end (design §5).
+-    if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
++    if (cardWanted()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
+   }
+ 
+-  syncSession.reset();
++  // The sleep sync keeps the session for what follows the book (patch 0037).
++  if (!sleepSync) syncSession.reset();
+ #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
+   // Orbify (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
+-  if (result == BookOrbitSyncClient::OK && !backgroundSync && !wakeRequested()) {
+-    OrbifyFinish::fetchNextCover(epubPath, sleepSync ? &sleepSyncWakeRequested : nullptr);
++  // The sleep sync fetches it in runSleepSync(), on the session.
++  if (result == BookOrbitSyncClient::OK && !backgroundSync && !sleepSync) {
++    OrbifyFinish::fetchNextCover(epubPath, nullptr);
+   }
+ #endif
+   // The sleep sync refreshes Home on this connection next; runSleepSync() closes it.
+diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+index 31a59e1..686f681 100644
+--- a/src/network/BookOrbitCatalogClient.cpp
++++ b/src/network/BookOrbitCatalogClient.cpp
+@@ -95,6 +95,10 @@ struct FileJsonReader {
+ // (SecureHttpClient retries a dead kept socket once, on a fresh connection).
+ std::unique_ptr<freeink::SecureHttpClient> s_catalogConnection;
+ #endif
++#if defined(FREEINK_NET_WOLFSSL)
++// Patch 0037: a connection lent by BookOrbitCatalogClient::LentConnection (the sleep sync's).
++freeink::SecureHttpClient* s_lentConnection = nullptr;
++#endif
+ #if CROSSINK_TAILNET_CATALOG_BOOT_SESSION && CROSSINK_TAILNET_CATALOG_KEEPALIVE && defined(FREEINK_NET_WOLFSSL)
+ #define CATALOG_BOOT_SESSION 1
+ // The connection is the boot's (openBootSession()), and the requests it has served.
+@@ -107,7 +111,9 @@ uint32_t s_bootSessionRequests = 0;
+ // The connection a catalog request runs on: the Session's, or nullptr for a fresh one.
+ freeink::SecureHttpClient* catalogConnection() {
+ #if CROSSINK_TAILNET_CATALOG_KEEPALIVE && defined(FREEINK_NET_WOLFSSL)
+-  return s_catalogConnection.get();
++  return s_catalogConnection ? s_catalogConnection.get() : s_lentConnection;
++#elif defined(FREEINK_NET_WOLFSSL)
++  return s_lentConnection;
+ #else
+   return nullptr;
+ #endif
+@@ -286,6 +292,7 @@ bool isSupportedSection(const std::string& sectionId) {
+ #if CROSSINK_TAILNET_CATALOG_KEEPALIVE && defined(FREEINK_NET_WOLFSSL)
+ BookOrbitCatalogClient::Session::Session() {
+   if (s_catalogConnection) return;  // nested: the outer Session's connection is shared
++  if (s_lentConnection) return;     // a lent connection (patch 0037) is shared the same way
+   s_catalogConnection = makeUniqueNoThrow<freeink::SecureHttpClient>();
+   if (!s_catalogConnection) {
+     LOG_ERR("BookOrbit", "Catalog session allocation failed; requests will open their own connections");
+@@ -307,6 +314,19 @@ BookOrbitCatalogClient::Session::Session() {}
+ BookOrbitCatalogClient::Session::~Session() {}
+ #endif
+ 
++#if defined(FREEINK_NET_WOLFSSL)
++BookOrbitCatalogClient::LentConnection::LentConnection(freeink::SecureHttpClient* connection) {
++  s_lentConnection = connection;
++  if (connection) LOG_INF("BookOrbit", "Catalog requests ride the sync's connection");
++}
++BookOrbitCatalogClient::LentConnection::~LentConnection() { s_lentConnection = nullptr; }
++#else
++BookOrbitCatalogClient::LentConnection::LentConnection(freeink::SecureHttpClient*) {}
++BookOrbitCatalogClient::LentConnection::~LentConnection() {}
++#endif
++
++freeink::SecureHttpClient* BookOrbitCatalogClient::keptConnection() { return catalogConnection(); }
++
+ #if CATALOG_BOOT_SESSION
+ void BookOrbitCatalogClient::openBootSession() {
+   if (s_bootSession) return;
+diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
+index cec91fb..382e50d 100644
+--- a/src/network/BookOrbitCatalogClient.h
++++ b/src/network/BookOrbitCatalogClient.h
+@@ -166,6 +166,21 @@ class BookOrbitCatalogClient {
+     bool owner_ = false;
+   };
+ 
++  /**
++   * Tailnet overlay (patch 0037): while one is alive, catalog requests (and thumbnail
++   * downloads) run on a connection the caller already holds open to the same server: the
++   * sleep sync lends its BookOrbit sync connection. A Session opened meanwhile shares it.
++   */
++  class LentConnection {
++   public:
++    explicit LentConnection(freeink::SecureHttpClient* connection);
++    ~LentConnection();
++    LentConnection(const LentConnection&) = delete;
++    LentConnection& operator=(const LentConnection&) = delete;
++  };
++  /** The connection catalog requests run on now (a Session's or a lent one), nullptr = their own. */
++  static freeink::SecureHttpClient* keptConnection();
++
+   /**
+    * CROSSINK_TAILNET_CATALOG_BOOT_SESSION: the catalog boot's own connection, kept from
+    * Wi-Fi up until it closes (leaving the catalog, or before a book download, which runs

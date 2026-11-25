@@ -1,0 +1,107 @@
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 5e89b07..7a873b5 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -292,7 +292,6 @@ STR_BOOKORBIT_SYNC_ON_SLEEP: "Sync on Sleep"
+ STR_BOOKORBIT_SYNC_WHILE_READING: "Sync While Reading"
+ STR_ORBIFY_MARK_AT_END: "Mark Finished at End"
+ STR_ORBIFY_KEEP_COPIES: "Keep Book Copies Current"
+-STR_ORBIFY_UPDATES_WHEN_LEFT: "Updates when you leave the book"
+ STR_ORBIFY_FINISHED: "Finished"
+ STR_ORBIFY_NOT_FINISHED: "Not finished"
+ STR_ORBIFY_MARK_FINISHED: "Mark finished"
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+index b992d36..f1c9827 100644
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+@@ -24,6 +24,7 @@
+ #include "components/UITheme.h"
+ #include "components/themes/bookorbit/BookOrbitHomeLayout.h"
+ #include "fontIds.h"
++#include "network/BookOrbitCatalogClient.h"
+ #include "network/SavedWifiConnect.h"
+ 
+ namespace {
+@@ -118,9 +119,19 @@ void BookOrbitHomeRefreshActivity::runRefresh() {
+     const BookOrbitDeviceScan::Progress progress{this, &BookOrbitHomeRefreshActivity::onScanProgress};
+     setScanSummary(BookOrbitDeviceScan::run(nullptr, &progress));
+ #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
+-    // Orbify (patch 0034): find copies the server rewrote; the next sleep sync replaces them
+-    // (a download here would hold this screen for minutes).
+-    OrbifyCopyRefresh::detect(nullptr);
++    // Orbify (patch 0034): find copies the server rewrote. Patch 0037 (the user's ruling of
++    // 2026-11-23): and replace them here too, no book being on screen, on one catalog connection;
++    // what does not fit in two minutes carries over to the next sync.
++    {
++      BookOrbitCatalogClient::Session session;
++      OrbifyCopyRefresh::detect(nullptr);
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++      const char* where = OrbifyMirror::requested() ? "Full refresh" : "Home";
++#else
++      const char* where = "Home";
++#endif
++      OrbifyCopyRefresh::run(nullptr, 120000UL, where);
++    }
+ #endif
+   }
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index 2ff6fc7..aedf8f0 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -265,6 +265,15 @@ void BookOrbitSyncActivity::resolveUpdateBook() {
+ bool BookOrbitSyncActivity::offerBookUpdate() {
+   if (updateOffered || !documentIncompatible()) return false;
+   updateOffered = true;
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++  // Orbify (patch 0037, the user's ruling of 2026-11-23): nothing is offered while reading and
++  // the file on screen is never swapped. The copy is queued; the next sync with Wi-Fi up and no
++  // book on screen (the sleep sync, the Home's refresh, a Full refresh) replaces it, position kept.
++  if (updateBookId != 0) {
++    OrbifyCopyRefresh::enqueue(updateBookId, epubPath, documentHash);
++    return false;
++  }
++#endif
+   syncSession.reset();  // nothing more goes over it; the update restarts into the catalog
+   {
+     RenderLock lock(*this);
+@@ -275,23 +284,6 @@ bool BookOrbitSyncActivity::offerBookUpdate() {
+ }
+ 
+ void BookOrbitSyncActivity::startBookUpdate() {
+-#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
+-  // Orbify (patch 0034, decision (a)): nothing restarts while the book is open. The copy is
+-  // queued; the next sleep sync replaces it in place, position and highlights carried over.
+-  if (OrbifyCopyRefresh::enqueue(updateBookId, epubPath, documentHash)) {
+-    {
+-      RenderLock lock(*this);
+-      state = SYNCING;
+-      statusMessage = tr(STR_ORBIFY_UPDATES_WHEN_LEFT);
+-      summaryLines[0].clear();
+-      summaryLines[1].clear();
+-    }
+-    requestUpdateAndWait();
+-    delay(1500);
+-    returnToReader();
+-    return;
+-  }
+-#endif
+   BookOrbitCatalogLink link;
+   link.bookId = updateBookId;
+   link.replacePath = epubPath;
+@@ -647,6 +639,15 @@ bool BookOrbitSyncActivity::exchangeReadingData() {
+   if (stopIfWoken()) return false;
+   // While the session is open: the offer at the end of the sync needs the book to download.
+   if (!sleepSync && documentIncompatible()) resolveUpdateBook();
++#if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
++  // Orbify (patch 0037): the server just said this copy is an older one of its book. It is queued:
++  // the sleep sync replaces it in this sleep (the book is not on screen now); a sync while reading
++  // leaves it to the next sync with no book on screen. A manual sync queues it in offerBookUpdate().
++  if ((sleepSync || backgroundSync) && documentIncompatible()) {
++    if (sleepSync) resolveUpdateBook();
++    if (updateBookId != 0) OrbifyCopyRefresh::enqueue(updateBookId, epubPath, documentHash);
++  }
++#endif
+ 
+   recordSweep(statsAccepted);
+   return !stopIfWoken();

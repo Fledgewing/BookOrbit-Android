@@ -258,6 +258,12 @@ the walker in `orbify/Mirror`.
 
 ## The rc3 device fixes: the sleep sync on a shared heap, copies, covers, refresh (patch 0037, 2026-11-23)
 
+Shipped as one patch, now split by concern (same result): `0037a-orbify-sleep-sync-budget` (S5),
+`0037b-orbify-eob-card-while-reading` (S9), `0037c-orbify-sleep-sync-lends-session` (S2, S4, S7),
+`0037d-orbify-home-cover-heap-floor` (S3, S11), `0037e-orbify-copy-refresh-replace` (S8),
+`0037f-orbify-catalog-refresh-and-mirror-urls` (S10, S12 catalog), `0037g-orbify-home-sync-tile`
+(S12 Home), `0037h-orbify-sync-retry-after-tailscale` (S15), `0037i-orbify-settings-swipe` (S13).
+
 The rc3 test on an X4 Pro: a wake press was ignored for minutes, the mirror sent a 400, the copy
 refresh failed its match check, and the End-of-Book page showed no card, drew no rows on the
 reader's Bitter font, and kept the Home swipe.
@@ -284,6 +290,10 @@ reader's Bitter font, and kept the Home swipe.
 | S17 | Flash | `default` (X3/X4) 6,510,769 of 6,553,600 bytes (99.35%, under the 99.5% gate by 10 KB; 99.27% before); `x4-pro` 96.20%; `x4-classic` 93.83% | |
 
 ## The .167 X4 Pro test: wake, heap, Home tile, catalog stamp, cache-first, menu swipe (patch 0038, 2026-11-23)
+
+Split by concern like 0037: `0038a-orbify-wake-press-timing` (W1), `0038b-orbify-tls-heap-in-psram`
+(H1, H2, T2), `0038c-orbify-boot-trail` (D1, D2; it also calls the heap and wake hooks from
+`setup()`), `0038d-orbify-catalog-cache-first` (C1, C2), `0038e-orbify-home-tile-touch` (T1, M1).
 
 | # | Question | Cause (file) | Change |
 |---|---|---|---|
