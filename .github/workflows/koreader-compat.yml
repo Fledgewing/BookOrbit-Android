@@ -76,6 +76,12 @@ jobs:
             | tee "$RUNNER_TEMP/compat.txt"
           exit "${PIPESTATUS[0]}"
 
+      - name: Start into last book without closing or exiting
+        env:
+          ORBIT_KOREADER_SOURCE: ${{ runner.temp }}/koreader
+          ORBIT_TEST_ONLY: startup
+        run: luajit android/koreader/test/test_flows.lua </dev/null
+
       - name: Open an issue (weekly run)
         if: failure() && github.event_name == 'schedule'
         env:

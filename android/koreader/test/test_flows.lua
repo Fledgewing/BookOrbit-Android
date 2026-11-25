@@ -5888,6 +5888,89 @@ local function osmBook(page, rec)
 end
 local function osmRec() return store.orbit_android.orbismart.d1 end
 
+-- KOReader doShowReader constructs ReaderUI in a coroutine, sends ReaderReady during
+-- init, then shows it. BookOrbit runInSyncCoroutine reuses ANY current coroutine
+-- (Trapper:isWrapped), and its background GET yields until the first 125 ms poll.
+-- An empty window stack exits UIManager before that poll can resume construction.
+test("startup smoke: last document remains the top reader through a yielding progress pull", function()
+    W.queue, W.shown = {}, {}
+    capsReset()
+    W.wifi, W.vpn, W.server_code = true, true, 200
+    W.radio = true
+    RE.Net.inflight, RE.state.started = nil, nil
+    store.lastfile = "/b.epub"
+    store.orbit_android.open_book_at_exit = store.lastfile
+    store.orbit_android.wifi_mode = "jit"
+    RE.Wifi.plan = nil
+    local ui, m, p = osmBook(120, nil)
+    local closes, quits = 0, W.quits or 0
+    local stock_close = UIManager.close
+    UIManager.close = function(self, w, ...)
+        if w == ui then closes = closes + 1 end
+        return stock_close(self, w, ...)
+    end
+    W.after_fail = function() UIManager.close = stock_close end
+    -- Host LuaJIT builds with Lua 5.2 compatibility may return (main_thread, true)
+    -- on the main thread. KOReader's Trapper expects Lua 5.1's nil there.
+    local function running()
+        local co, main = coroutine.running()
+        return not main and co or nil
+    end
+    local Trapper = {
+        isWrapped = function() return running() ~= nil end,
+        wrap = function(_, fn)
+            local resumed, err = coroutine.resume(coroutine.create(fn))
+            assert(resumed, err)
+        end,
+    }
+    -- CI also runs this case with the pinned KOReader's actual Trapper methods.
+    local checkout = os.getenv("ORBIT_KOREADER_SOURCE")
+    if checkout then
+        local chunk = assert(loadfile(checkout .. "/frontend/ui/trapper.lua"))
+        local co_api = setmetatable({ running = running }, { __index = coroutine })
+        setfenv(chunk, setmetatable({ coroutine = co_api, require = function(name)
+            if name == "string.buffer" then return {} end
+            return require(name)
+        end }, { __index = _G }))
+        Trapper = chunk()
+        UIManager.preventStandby, UIManager.allowStandby = function() end, function() end
+    end
+    local started, completed = 0, 0
+    function p:fetchRemoteProgress(_, cb)
+        local function fetch()
+            started = started + 1
+            local co = coroutine.running()
+            UIManager:scheduleIn(0.125, function()
+                local resumed, err = coroutine.resume(co)
+                assert(resumed, err)
+            end)
+            coroutine.yield()
+            completed = completed + 1
+            cb(false)
+        end
+        if Trapper:isWrapped() then return fetch() end
+        return Trapper:wrap(fetch)
+    end
+    -- The opening message has expired; the reader is the only persistent window.
+    local co = coroutine.create(function()
+        m:onReaderReady()
+        UIManager:show(ui)
+    end)
+    local resumed, err = coroutine.resume(co)
+    ok(resumed, err)
+    eq(UIManager:getTopmostVisibleWidget(), ui, "ReaderReady must finish before yielding network work")
+    eq(coroutine.status(co), "dead", "reader construction completed")
+    eq(started, 0, "network pull deferred until after construction")
+    run(30)
+    ok(started > 0, "progress pull actually ran")
+    eq(completed, started, "yielding pulls resumed and completed")
+    eq(UIManager:getTopmostVisibleWidget(), ui, "reader stays on top after open and wake tasks")
+    eq(closes, 0, "no reader close requested")
+    eq(W.quits or 0, quits, "no exit requested")
+    UIManager.close = stock_close
+    store.orbit_android.sync_mode = "custom"
+end)
+
 test("orbismart: before render, a further place already known opens there with no popup", function()
     local ui, m, p = osmBook(120, { server = { at = 5000, pct = 214 / 300, progress = "/p214", device = "Boox" } })
     m:onReaderReady()

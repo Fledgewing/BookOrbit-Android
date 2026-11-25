@@ -171,6 +171,36 @@ jobs:
           path: ${{ runner.temp }}/e2e
           if-no-files-found: warn
 
+  reader-startup:
+    name: KOReader start into last book
+    if: (inputs.platform || 'all') != 'xteink'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      # No prebuilt headless CRE engine is available in the source checkout. Exercise
+      # ReaderReady -> show(reader) with a yielding GET and the real pinned Trapper.
+      - name: Fetch pinned KOReader
+        run: |
+          set -euo pipefail
+          sha=$(awk '$1 == "koreader" {print $4}' tools/upstreams.lock)
+          git init -q "$RUNNER_TEMP/koreader"
+          git -C "$RUNNER_TEMP/koreader" remote add origin https://github.com/koreader/koreader
+          git -C "$RUNNER_TEMP/koreader" fetch -q --depth 1 origin "$sha"
+          git -C "$RUNNER_TEMP/koreader" checkout -q --detach FETCH_HEAD
+
+      - name: Start into last book without closing or exiting
+        env:
+          ORBIT_KOREADER_SOURCE: ${{ runner.temp }}/koreader
+          ORBIT_TEST_ONLY: startup
+        run: |
+          sudo apt-get install -y -qq luajit libsqlite3-0 >/dev/null
+          luajit android/koreader/test/test_flows.lua </dev/null
+
   android:
     name: stage 2 companion JVM tests
     if: (inputs.platform || 'all') != 'xteink'

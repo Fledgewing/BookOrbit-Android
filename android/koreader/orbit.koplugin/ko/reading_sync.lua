@@ -93,8 +93,16 @@ function OrbitAndroid:bookOpenFlow()
         if not ok then return Wifi.release("open") end
         -- OrbiSmart: pull, decide, then the outbox under the behind-hold.
         if OSM and OSM.on() and can(p, "reading_sync") then
-            return OSM.pullThenDrain(p, "open", "orbit_open", function()
-                UIManager:scheduleIn(1, function() Sync.waitOutbox(p, 20, function() Wifi.release("open") end) end)
+            -- ReaderReady runs inside doShowReader's construction coroutine, before
+            -- UIManager:show(reader). BookOrbit reuses that coroutine for its yielding
+            -- background GET; yielding here leaves no window and UIManager exits.
+            -- Start the pull from the UI loop, after construction has shown the reader.
+            local ui = self.ui
+            return UIManager:nextTick(function()
+                if liveUI() ~= ui or not ui.document then return Wifi.release("open") end
+                OSM.pullThenDrain(p, "open", "orbit_open", function()
+                    UIManager:scheduleIn(1, function() Sync.waitOutbox(p, 20, function() Wifi.release("open") end) end)
+                end)
             end)
         end
         -- The plugin pulls on open by itself, or on NetworkConnected when it was offline

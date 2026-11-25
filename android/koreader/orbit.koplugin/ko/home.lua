@@ -86,7 +86,7 @@ function OrbitAndroid:restartForCompanion(source, quit_only)
     -- Once: the quit ends this process (a second request in the meantime is the same restart).
     if state.restarting_at and now_s() - state.restarting_at < 5 then return end
     state.restarting_at = now_s()
-    log("restart:", quit_only and "KOReader is in the background; saving and quitting, the new plugin loads at the next start ("
+    log("orbit: closing reader because companion restart:", quit_only and "KOReader is in the background; saving and quitting, the new plugin loads at the next start ("
         .. tostring(source) .. ")" or ("requested (" .. tostring(source) .. "); saving, then quitting so the new patch loads"))
     local ui = liveUI()
     if ui and ui.document and ui.saveSettings then pcall(ui.saveSettings, ui) end
@@ -596,7 +596,9 @@ function OrbitAndroid:smartHome(source, from_extra, mode, held)
     if not in_reader then
         log("home (smart): reopening the current book", tostring(last))
         UIManager:nextTick(function()
-            require("apps/reader/readerui"):showReader(last)
+            local ReaderUI = require("apps/reader/readerui")
+            if ReaderUI.instance then log("orbit: closing reader because Smart Home is reopening the current book") end
+            ReaderUI:showReader(last)
         end)
     end
     return true
@@ -685,7 +687,9 @@ function OrbitAndroid:reopenAfterRestart(source)
     local screen = S.restart_screen
     if screen then S.restart_screen = nil; saveSettings() end
     UIManager:nextTick(function()
-        require("apps/reader/readerui"):showReader(file)
+        local ReaderUI = require("apps/reader/readerui")
+        if ReaderUI.instance then log("orbit: closing reader because companion requested reopening the saved book") end
+        ReaderUI:showReader(file)
         if screen == "bookorbit" then
             UIManager:scheduleIn(2, function()
                 log("restart: back to BookOrbit Home, where the reader was")
@@ -757,7 +761,10 @@ function OrbitAndroid:onOrbitGoHome()
     if ui and ui.document then
         log("home: closing book, then BookOrbit home (it stays the current book)")
         state.closing_for_home = ui.document.file
-        UIManager:nextTick(function() ui:onHome() end)
+        UIManager:nextTick(function()
+            log("orbit: closing reader because Home requested the file browser")
+            ui:onHome()
+        end)
     else
         self:finishHome()
     end
