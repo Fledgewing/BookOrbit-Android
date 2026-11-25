@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: x3 flash cuts
+
+Keep the ESP32-C3 firmware below its OTA-slot flash limit.
+
 diff --git a/src/CrossPointSettings.cpp b/src/CrossPointSettings.cpp
 index 92455abf..ae30dd19 100644
 --- a/src/CrossPointSettings.cpp

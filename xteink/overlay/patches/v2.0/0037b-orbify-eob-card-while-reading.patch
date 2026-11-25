@@ -1,0 +1,59 @@
+Subject: [PATCH] Orbify: eob card while reading
+
+Refresh the End-of-Book card while reading and support its Home swipe.
+
+diff --git a/src/activities/reader/EndOfBookOptions.cpp b/src/activities/reader/EndOfBookOptions.cpp
+index de997a7..85169e4 100644
+--- a/src/activities/reader/EndOfBookOptions.cpp
++++ b/src/activities/reader/EndOfBookOptions.cpp
+@@ -139,6 +139,18 @@ EndOfBookOptions::Action EndOfBookOptions::handleMenuInput(const MappedInputMana
+   if (orbify) {
+     // Patch 0032: every tap and button on this page ends here (Consumed when it does nothing),
+     // so none reaches the reader's page turns, short-Back-to-Home or gestures behind it.
++    // Orbify (patch 0037): the bottom-edge swipe up is Home here, as on every screen outside a
++    // book (ActivityManager::handleGlobalHomeGesture). The reader keeps vertical swipes for its
++    // drawers, and this page has none, so the swipe did nothing and the page could not be left.
++    if (input.wasBottomEdgeUpSwipe()) {
++      LOG_INF("ORB", "End page: Home swipe");
++      return Action::GoHome;
++    }
++    // A sync wrote this book's series card while the page was up without one: show it.
++    if (orbify->reloadIfCardArrived()) {
++      selector.store(orbify->selected(), std::memory_order_relaxed);
++      return Action::Redraw;
++    }
+     int tx = 0, ty = 0;
+     unsigned long heldMs = 0;
+     if (input.wasScreenTapped(tx, ty, heldMs)) {
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+index eec4045..8a8d02f 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -170,6 +170,14 @@ void BookOrbitSyncActivity::endPhase() {
+ 
+ bool BookOrbitSyncActivity::wakeRequested() const { return sleepSync && sleepSyncWakeRequested(); }
+ 
++bool BookOrbitSyncActivity::cardWanted() const {
++  if (wakeRequested()) return false;
++  // A sync while reading (patch 0037): only a missing card of a book near its end, so an End-of-Book
++  // page reached without one gets it (it reloads when the card arrives).
++  if (backgroundSync) return localProgress.percentage >= 0.9f && !OrbifyFinish::hasCard(epubPath);
++  return true;
++}
++
+ void BookOrbitSyncActivity::saveProgressAndReturn(const CrossPointPosition& position) {
+   syncSession.reset();  // applying remote progress is local work; free the TLS session first
+   assert(epub);
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+index 32693e5..e226a33 100644
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.h
+@@ -229,6 +229,8 @@ class BookOrbitSyncActivity final : public Activity, private BookOrbitSyncReport
+   void reportProgress(size_t done, size_t total) override;
+   void endPhase() override;
+   bool wakeRequested() const override;
++  // Orbify (patch 0037): this sync fetches the open book's series card.
++  bool cardWanted() const;
+ 
+   // The title band, whose height differs on touch devices: content below it
+   // starts from this rect, never from metrics.headerHeight.

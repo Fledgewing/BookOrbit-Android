@@ -1,7 +1,6 @@
-Orbify: offer only this firmware's own releases (tags xteink-v<version>) from a repo whose
-"latest" release is Android: read the release list, keep the newest tag with the prefix
-(CROSSINK_OTA_TAG_PREFIX), skip pre-releases unless asked for, and keep 48-byte tags.
-Host test: xteink/test/run-host-tests.sh.
+Subject: [PATCH] Orbify: ota tag prefix
+
+Select firmware releases from Orbify-prefixed tags.
 
 diff --git a/lib/JsonParser/ReleaseJsonParser.cpp b/lib/JsonParser/ReleaseJsonParser.cpp
 index ed157998..904d2773 100644

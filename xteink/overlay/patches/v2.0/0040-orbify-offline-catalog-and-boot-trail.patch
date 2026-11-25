@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: offline catalog and boot trail
+
+Avoid a catalog request before its network boot has started.
+
 diff --git a/src/main.cpp b/src/main.cpp
 index 156ee11..cdc8dbc 100644
 --- a/src/main.cpp

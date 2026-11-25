@@ -60,6 +60,8 @@ orbify_test end_of_book "$core/SeriesCard.cpp" "$core/EndPagePlan.cpp" "$core/Fi
   "$core/CatalogCache.cpp" "$core/LocalFirst.cpp"
 orbify_test localfirst "$core/LocalFirst.cpp"
 orbify_test reading_quiet "$core/ReadingQuiet.cpp"
+# OrbiSmart sync (docs/design/orbismart.md §3): the shared table, as Android runs it.
+orbify_test orbismart "$core/OrbiSmart.cpp"
 orbify_test cache "$core/CatalogCache.cpp" "$core/LocalFirst.cpp"
 orbify_test copy_check "$core/CopyCheck.cpp"
 orbify_test copy_queue "$core/CopyQueue.cpp" "$core/CopyCheck.cpp"

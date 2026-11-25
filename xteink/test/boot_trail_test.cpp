@@ -1,4 +1,4 @@
-// The boot trail and the crash record's build check (orbify/core/BootTrail.h, patch 0038).
+// The boot trail and the crash record's build check (orbify/core/BootTrail.h).
 #include <cstdint>
 #include <cstring>
 

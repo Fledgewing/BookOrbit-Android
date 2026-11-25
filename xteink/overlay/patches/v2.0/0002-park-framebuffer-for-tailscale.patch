@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: park framebuffer for tailscale
+
+Free the framebuffer while the ESP32-C3 starts its network stack.
+
 diff --git a/lib/hal/HalDisplay.h b/lib/hal/HalDisplay.h
 index b48503da..e2fecddc 100644
 --- a/lib/hal/HalDisplay.h

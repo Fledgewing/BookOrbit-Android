@@ -9,7 +9,7 @@
 // 2026-11-23: these readers cannot reach Wi-Fi when a book is closed): the sleep sync (every
 // queued copy, the book that was open included), the BookOrbit Home's refresh and a Full refresh.
 // A sync while reading only queues the open book's copy; nothing is offered or swapped on screen.
-// In the sleep sync the requests ride the sync's own connection (patch 0037) and need OrbifyHeap's
+// In the sleep sync the requests ride the sync's own connection and need OrbifyHeap's
 // floor; short of it, or of time, the rest carries over to the next sync.
 #include <cstddef>
 #include <cstdint>

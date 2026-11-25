@@ -1,3 +1,4 @@
+-- @fixture orbismart/cases.json
 -- Pure-Lua tests for the patch's scheduling and decision logic.
 -- Run from anywhere: luajit android/koreader/test/test_logic.lua  (or lua 5.1-5.4)
 local here = (arg and arg[0] or ""):match("^(.*)/[^/]*$") or "."
@@ -1548,6 +1549,47 @@ end)
 test("recommended choices from the companion", function()
     local c = SettingsSync.choices("bo.auto_sync=ours; g.apps=mine;x=bogus;all=undo")
     eq(#c, 3); eq(c[1].id, "bo.auto_sync"); eq(c[2].what, "mine"); eq(c[3].id, "all")
+end)
+
+-- OrbiSmart sync (docs/design/orbismart.md §3): every case of the shared table, which the Xteink's
+-- xteink/test/orbismart_test.cpp reads too.
+local OrbiSmart = M.OrbiSmart
+local OSM = JSON.fixture(here, "orbismart/cases.json")
+test("orbismart: every decide case", function()
+    local n = 0
+    for _, c in ipairs(OSM.decide) do
+        local out = OrbiSmart.decide(c["in"])
+        eq(out.decision, c.want.decision, c.name .. " decision")
+        eq(out.rule, c.want.rule, c.name .. " rule")
+        eq(out.dropped, c.want.dropped == true, c.name .. " dropped")
+        ok(OrbiSmart.DECISIONS[out.decision], c.name .. ": known decision")
+        if c.line then eq(OrbiSmart.line(c["in"], out, c.moment), c.line, c.name .. " line") end
+        n = n + 1
+    end
+    ok(n >= 30, "cases: " .. n)
+end)
+test("orbismart: every apply case", function()
+    for _, c in ipairs(OSM.apply) do
+        eq(OrbiSmart.apply(c.decision, c.moment), c.applied, c.decision .. " at " .. c.moment)
+    end
+end)
+test("orbismart: every behind-hold case", function()
+    for _, c in ipairs(OSM.push) do
+        eq(OrbiSmart.mayPush(c.place, c.server, c.tolerance, c.exempt), c.allowed, c.name)
+    end
+end)
+test("orbismart: the table covers every decision and rule", function()
+    local seen = {}
+    for _, c in ipairs(OSM.decide) do seen[c.want.decision] = true; seen[c.want.rule] = true end
+    for _, k in ipairs({ "same", "take", "follow", "push", "hold", "stay", "override", "rule1", "rule2", "rule3",
+        "rule4", "rule5", "rule6", "rule7", "declined", "override", "percent", "no-server" }) do
+        ok(seen[k], "no case for " .. k)
+    end
+    eq(OrbiSmart.SKEW_S, OSM.skew_s, "skew margin")
+end)
+test("orbismart: the popup's question", function()
+    eq(OrbiSmart.question("Boox", 214, "take"), "Continue from Boox, p. 214?")
+    eq(OrbiSmart.question("X4 Pro", 12, "follow"), "Continue from X4 Pro, p. 12 (moved back there)?")
 end)
 
 -- shared/fixtures/REGISTRY.json: every rule table has a row, and this suite reads what it names (test_registry.lua).

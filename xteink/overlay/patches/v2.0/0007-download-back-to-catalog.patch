@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: download back to catalog
+
+Return to the catalog after downloading a book.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index 6ec7b3d3..6eabb941 100644
 --- a/include/CrossInkTailnetCuts.h
