@@ -20,7 +20,8 @@ This is an **overlay**, not a fork. CrossInk's source is used as released; the o
 
 **CrossInk 2.x only.** Orbify no longer builds or supports CrossInk 1.6 (its patch series is in git
 history). Readers still on 1.6 stay on the feed's stable entry, `xteink-v1.6.1.114+bookorbit.9`,
-until CrossInk 2.0 leaves its release candidates (below).
+until CrossInk 2.0 leaves its release candidates (below). These rc labels describe CrossInk,
+not a release-candidate judgment about Orbify’s overlay builds.
 
 When CrossInk-Bookorbit releases, the daily CI run pins its newest 2.x tag in
 `tools/upstreams.lock` (the workflow commits the bump), builds the commit the lock records with the
@@ -37,7 +38,7 @@ the newest pre-release `xteink-v…` release. Which one a build becomes is decid
 
 | Upstream tag | Our release | Feed |
 |---|---|---|
-| a release candidate or beta (`v2.0.0+bookorbit.1-rc3`) | pre-release | the pre-release entry (readers with Include Release Candidates on) |
+| an upstream CrossInk release candidate or beta (`v2.0.0+bookorbit.1-rc3`) | pre-release | the pre-release entry (readers with Include pre-releases on) |
 | a final release (`v2.0.0+bookorbit.1`, no `-rc`/`-beta`) | stable | the stable entry: readers still on 1.6 are offered it at their next check |
 | 1.x | refused | — |
 

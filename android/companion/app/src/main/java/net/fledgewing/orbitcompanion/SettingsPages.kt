@@ -521,7 +521,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
             "app_version" -> {
                 val ready = Updater.readyToInstall()
                 if (ready != null) {
-                    root.addView(Ui.row(this, "App version", "Update ready: v${ready.first}", Ui.button(this, "Install", heightDp = 56, sp = 18f) {
+                    root.addView(Ui.row(this, "App version", "Update ready: v${Version.parse(ready.first)?.display() ?: ready.first}", Ui.button(this, "Install", heightDp = 56, sp = 18f) {
                         startActivity(PinActivity.thenInstall(this, ready.second))
                     }))
                 } else {
