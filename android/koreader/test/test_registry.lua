@@ -78,7 +78,7 @@ return function(here)
     local files = {}
     for _, path in ipairs(lines("cd " .. root .. " && find . -type f | sort")) do
         local rel = path:gsub("^%./", "")
-        if rel ~= "README.md" and rel ~= "REGISTRY.json" then
+        if not rel:match("README%.md$") and rel ~= "REGISTRY.json" then
             files[rel] = true
             if not rows[rel] then bad(rel .. " has no row in REGISTRY.json") end
         end
