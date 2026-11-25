@@ -3,7 +3,7 @@ docs/design/server-tls.md). Requests to the configured server set a CA list inst
 the Let's Encrypt roots plus the certificate the user trusted (src/orbify/ServerTrustNet.cpp). A
 failed check ends the handshake before the request, so credentials never go over it. The BookOrbit
 login screen offers an unknown or changed certificate for trust, with its SHA-256 fingerprint.
-Tailnet hosts and other hosts stay unverified. Host test: xteink/test/server_trust_test.cpp.
+Other hosts keep their existing policy. Host test: xteink/test/server_trust_test.cpp.
 
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 index cf2c217..2092cdc 100644
@@ -170,7 +170,7 @@ index cd021ea..d85bd2e 100644
 +#if CROSSINK_TAILNET_ORBIFY_SERVER_TLS && !defined(SIMULATOR)
 +    // Orbify: the BookOrbit server is verified (built-in roots or the certificate the user
 +    // trusted); a failed check ends the handshake before any credential is sent. Other hosts
-+    // and tailnet hosts stay as below.
++    // keep their existing policy.
 +    orbifyServerTrust(http, currentUrl);
 +#else
      // SecureNet does not yet expose ESP-IDF's CA bundle. This matches the

@@ -9,13 +9,13 @@ CrossInk's wolfSSL transport has no CA bundle. So every HTTPS request skips the 
 (`setInsecure()`), including the catalog, downloads and sync to the BookOrbit server. Those requests
 carry the user's BookOrbit credentials (Basic auth, `x-auth-user`/`x-auth-key`).
 
-Over Tailscale this is harmless, because WireGuard authenticates the peer. But when a reader reaches
-a public HTTPS URL, anyone on the same Wi-Fi could pose as the server, collect the password and
-change the books that are downloaded.
+WireGuard authenticates traffic routed through Tailscale. HTTPS certificate checks apply to the
+configured server regardless of its address or the network route.
 
 ## Design
 
-Only requests to the configured BookOrbit server's host, over `https`, are verified.
+Every request to the configured BookOrbit server's host over `https` is verified, including
+Tailscale addresses and names. A hostname alone does not establish its network route.
 
 `SecureHttpClient::setCACert()` replaces `setInsecure()` for those requests. It takes:
 
@@ -37,8 +37,6 @@ wolfSSL also checks the host name (`wolfSSL_check_domain_name`). So a certificat
 in the server URL, even when it is trusted by fingerprint.
 
 **Not verified, as before:**
-- tailnet hosts: `100.64.0.0/10`, `*.ts.net`, and single-label MagicDNS names, only while Tailscale is on.
-  WireGuard already authenticates them;
 - `http://` URLs;
 - every other host: OPDS catalogs, fonts and firmware downloads. Firmware has its own checks:
   the feed's digest and signatures.
@@ -52,7 +50,7 @@ covers:
 - the first use;
 - a match and a mismatch;
 - the re-trust step;
-- the exemption for tailnet hosts.
+- certificate checks for tailnet addresses and names as well as public and LAN hosts.
 
 The device side is `xteink/orbify/ServerTrustNet.cpp`.
 
