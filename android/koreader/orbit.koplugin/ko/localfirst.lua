@@ -268,6 +268,14 @@ end
 -- One small answer replaces a 364-day date/SQLite pass on every board rebuild.
 LF.year = { values = {}, start = 0, today = 0 }
 function LF.yearMinutes(now, year)
+    if LF.year.today == 0 then
+        -- A correctly dated empty calendar while the first worker snapshot is in flight.
+        local day = os.date("*t", now); day.hour, day.min, day.sec = 0, 0, 0
+        local today = os.time(day)
+        local dow = tonumber(os.date("%w", now))
+        local values = {}; for i=1,364-(6-dow) do values[i]=0 end
+        LF.year = { values = values, start = today + (6-dow-363)*86400 + 43200, today = today }
+    end
     local key = tostring(year) .. ":" .. os.date("%Y-%m-%d", now) .. ":" .. tostring(math.floor(now / 120))
     if LF.year_key ~= key and not Companion.workerProblem() then
         LF.year_key = key

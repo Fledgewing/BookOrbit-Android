@@ -6372,6 +6372,26 @@ end)
 
 store.orbit_android.sync_mode = "custom"
 
+test("Home calendar: worker snapshots replace a correctly dated empty calendar", function()
+    local LF, C, OC = E.LF, E.Companion, E.OC
+    local saved={year=LF.year,key=LF.year_key,waiting=LF.year_waiting,send=C.send,problem=C.workerProblem,watch=OC.watchChecks,catalog=E.Mirror.catalog}
+    local asks={}
+    C.send=function(action, extras) asks[#asks+1]=extras; return true end
+    C.workerProblem=function() return nil end
+    OC.watchChecks=function() end
+    E.Mirror.catalog=function() return nil end
+    LF.year={values={},start=0,today=0}; LF.year_key=nil
+    local now=os.time(); local body={}
+    local values,start,today=LF.yearMinutes(now,body)
+    ok(start>now-365*86400 and today<=now and now-today<86400,"current calendar dates before first answer")
+    ok(#values>=358 and #values<=364); eq(#asks,1)
+    LF.yearMinutes(now,body); eq(#asks,1,"pending ask coalesced")
+    LF.yearLanded({key=asks[1].board_key,data={values={10,20},start=start,today=today}})
+    eq(select(1,LF.yearMinutes(now,body))[2],20,"worker answer used")
+    LF.year,LF.year_key,LF.year_waiting=saved.year,saved.key,saved.waiting
+    C.send,C.workerProblem,OC.watchChecks,E.Mirror.catalog=saved.send,saved.problem,saved.watch,saved.catalog
+end)
+
 test("startup: 7000 cover files never cause a UI walk, bulk read or 50 ms callback", function()
     local client = cacheSetup()
     local lfs = require("libs/libkoreader-lfs")
