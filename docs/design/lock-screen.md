@@ -168,7 +168,7 @@ one server's fields or tags.
 
 | # | Case | Shown |
 |---|---|---|
-| F1 | Recommended, but no pool or no cover on the device (first use, offline since setup) | The Current book screen; if there is none, the default screen. |
+| F1 | Recommended, but no pool or no cover on the device (first use, offline since setup) | Android: the Current book screen, else default. X4s (W8): “BookOrbit Pick: covers not ready”, with a refresh hint; never silently the current book. |
 | F2 | The next cover isn't on the device yet (offline, fetch deferred) | The same cover as before. *Last change* doesn't move, so the next sleep tries again. |
 | F3 | Current book, and the book has no cover | Android: a drawn cover with the title and author on a plain frame. Xteink: CrossInk's own fallback (the default screen). |
 | F4 | No book ever read | The Recommended pool if it has covers, else the default screen. |

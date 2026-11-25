@@ -164,7 +164,7 @@ void seed(Plan& plan) {
 }
 
 // One request. Returns false when it failed.
-bool runStep(const orbify::mirror::Step& step, Plan& plan) {
+bool runStep(const orbify::mirror::Step& step, Plan& plan, const bool expand = true, const int requestPage = 1) {
   switch (step.kind) {
     case Kind::Root: {
       std::vector<BookOrbitCatalogSection> sections;
@@ -174,6 +174,7 @@ bool runStep(const orbify::mirror::Step& step, Plan& plan) {
       // Behind the same heap floor as a step (the sleep sync's slice).
       BookOrbitCatalogCounts counts;
       if (OrbifyHeap::roomForRequest("Mirror")) BookOrbitCatalogClient::fetchCatalogCounts(counts);
+      if (!expand) return true;
       for (const auto& section : sections) {
         if (orbify::mirror::isFacetSection(section.id)) {
           plan.add(Kind::Section, section.id);
@@ -186,7 +187,8 @@ bool runStep(const orbify::mirror::Step& step, Plan& plan) {
     }
     case Kind::Section: {
       BookOrbitFacetPage page;
-      if (!BookOrbitCatalogClient::fetchSectionEntries(step.arg, 1, page)) return false;
+      if (!BookOrbitCatalogClient::fetchSectionEntries(step.arg, requestPage, page)) return false;
+      if (!expand) return true;
       size_t lists = 0;
       for (const auto& entry : page.entries) {
         if (lists >= orbify::mirror::MAX_LISTS_PER_FACET) break;
@@ -201,7 +203,7 @@ bool runStep(const orbify::mirror::Step& step, Plan& plan) {
       orbify::mirror::FacetQuery facet;
       if (!orbify::mirror::decodeQuery(step.arg, facet)) return true;  // unreadable: skipped
       BookOrbitBookPage page;
-      return BookOrbitCatalogClient::fetchBooks(fromFacet(facet), 1, page);
+      return BookOrbitCatalogClient::fetchBooks(fromFacet(facet), requestPage, page);
     }
     case Kind::Detail: {
       BookOrbitBookDetail detail;
@@ -257,15 +259,19 @@ bool loadOrSeed(Plan& plan) {
   return resumed;
 }
 
-void runOne(Plan& plan) {
+void runOne(Plan& plan, const bool expand = true, const int requestPage = 1) {
+  const unsigned long began = millis();
   const orbify::mirror::Step current = *plan.next();
-  const bool ok = runStep(current, plan);
+  const bool ok = runStep(current, plan, expand, requestPage);
   if (!ok) {
     LOG_ERR(TAG, "Mirror: request %u failed (kind %u, %s)", static_cast<unsigned>(plan.doneCount() + 1),
             static_cast<unsigned>(current.kind), current.arg.c_str());
   }
   plan.advance(!ok);
-  savePlan(plan);
+  if (expand) savePlan(plan);
+  LOG_INF(TAG, "Refresh phase: kind=%u request=%u/%u elapsed=%lums ok=%d",
+          static_cast<unsigned>(current.kind), static_cast<unsigned>(plan.doneCount()),
+          static_cast<unsigned>(plan.total()), millis() - began, ok);
 }
 
 // The last request ran: the mirror is saved, the plan and the request go.
@@ -284,6 +290,7 @@ void complete(const Plan& plan, const unsigned long seconds) {
 bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* progress, const size_t maxSteps,
          const bool heapFloor) {
   if (!requested()) return false;  // no automatic Full refresh, even through a future caller
+  OrbifyWifi::Hold radio(OrbifyWifi::Owner::Refresh);
   const unsigned long started = millis();
   Plan plan;
   loadOrSeed(plan);
@@ -338,17 +345,41 @@ void Walk::begin(const bool userStarted) {
   plan = Plan{};
   connectionFailed = false;
   loadOrSeed(plan);
+  viewOnly = false;
+  if (!wifiHeld) { OrbifyWifi::acquire(OrbifyWifi::Owner::Refresh); wifiHeld = true; }
   started = true;
   startedAt = millis();
+}
+
+void Walk::beginView(const orbify::mirror::Step& view, const int page) {
+  viewPage = page > 0 ? page : 1;
+  end();
+  plan = Plan{};
+  plan.add(view.kind, view.arg);
+  connectionFailed = false;
+  viewOnly = true;
+  started = true;
+  startedAt = millis();
+  OrbifyWifi::acquire(OrbifyWifi::Owner::Refresh);
+  wifiHeld = true;
+  LOG_INF(TAG, "Refresh: queued visible view (%u); browsing continues", static_cast<unsigned>(view.kind));
+}
+
+void Walk::end() {
+  started = false;
+  if (wifiHeld) { wifiHeld = false; OrbifyWifi::release(OrbifyWifi::Owner::Refresh); }
 }
 
 void Walk::step() {
   if (!started || connectionFailed || plan.next() == nullptr) return;
   {
     OrbifyCache::ScopedMode full(orbify::cache::Mode::Full);
-    runOne(plan);
+    runOne(plan, !viewOnly, viewOnly ? viewPage : 1);
   }
-  if (plan.finished()) complete(plan, (millis() - startedAt) / 1000);
+  if (plan.finished()) {
+    if (!viewOnly) complete(plan, (millis() - startedAt) / 1000);
+    if (wifiHeld) { wifiHeld = false; OrbifyWifi::release(OrbifyWifi::Owner::Refresh); }
+  }
 }
 
 std::string savedLine() {

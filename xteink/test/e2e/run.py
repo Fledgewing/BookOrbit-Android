@@ -424,6 +424,8 @@ def catalog_refresh_stamp(ctx: Context, tmp: Path) -> None:
     assert busy, f"the stamp never read 'Refreshing…' after the tap: {[s[1] for s in stamps]}"
     first_get = re.search(r"\[(\d+)\] \[DBG\] \[HTTP\] \S+ GET: \S+/plugin/catalog/", refresh)
     assert first_get and busy[0] <= int(first_get.group(1)), "'Refreshing…' was not drawn before the first request"
+    queued = after(refresh, "foreground returned")
+    after(queued, "Refresh phase: kind=")
     done = after(refresh, "Catalog: Refresh done")
     final = [s for s in STAMP.finditer(done)]
     assert final and final[-1].group(2).lower().startswith("updated just now"), \
@@ -592,6 +594,8 @@ def catalog_cache_first(ctx: Context, tmp: Path) -> None:
     assert ctx.requests()[before:], "⟳ asked the server nothing"
     stamps = [m.group(2) for m in STAMP.finditer(refresh)]
     assert any(t.lower().startswith("refreshing") for t in stamps), f"no 'Refreshing…' stamp: {stamps}"
+    queued = after(refresh, "foreground returned")
+    after(queued, "Refresh phase: kind=")
     done = after(refresh, "Catalog: Refresh done")
     final = [m.group(2) for m in STAMP.finditer(done)]
     assert final and final[-1].lower().startswith("updated just now"), f"the stamp after the refresh: {final}"
@@ -699,14 +703,14 @@ def sleep_batch(run_output: str) -> tuple[int, int]:
 @scenario(*X4S)
 def sleep_pick_batch(ctx: Context, tmp: Path) -> None:
     """ROADMAP 11 (docs/design/lock-screen.md R3, X4s): Every sleep from Discover. The first sleep
-    has no ready cover (the open book's cover shows, F1); its sleep sync fetches a few covers on the
+    has no ready cover (a clear placeholder shows); its sleep sync fetches a few covers on the
     lent connection and decodes them with the radio off. The next sleeps draw a ready cover at once
     from the card, never the one just shown, and each sync tops the batch up. (The simulator's run
     ends with the sync, before the redraw.)"""
     card = ctx.card(tmp)
     sleep_pick(card, **{"from": "discover", "hours": 0})
     first = sleep_sync(ctx, card, "sleep-1", timeout_s=150)
-    after(first.output, "Sleep: BookOrbit Pick -> current book")
+    after(first.output, "Sleep: BookOrbit Pick -> placeholder")
     count, fetched = sleep_batch(first.output)
     assert fetched >= 1 and count == fetched, f"the first top-up fetched {fetched}, batch {count}"
     decoded = re.findall(r"Sleep cover: book (\d+) decoded", first.output)
@@ -721,6 +725,7 @@ def sleep_pick_batch(ctx: Context, tmp: Path) -> None:
         run = sleep_sync(ctx, card, f"sleep-{n}", timeout_s=150)
         drawn = re.search(r"Sleep: BookOrbit Pick -> cover (\d+) \(every sleep", run.output)
         assert drawn, f"sleep {n} drew no ready cover"
+        assert int(drawn.group(1)) != ctx.book("Standalone 01")["id"], "Every sleep picked the open book"
         shown.append(drawn.group(1))
         assert (card.crosspoint / "orbify_sleep" / f"{drawn.group(1)}.bmp").exists(), f"sleep {n}: not on the card"
         before = count
@@ -751,7 +756,7 @@ def sleep_pick_offline(ctx: Context, tmp: Path) -> None:
 def sleep_pick_library(ctx: Context, tmp: Path) -> None:
     """R1c and X8 (Pick from and Leave out as sets, cases.json "sources"): Library picked with a list
     stands alone and is listed into the bag with no filter; the batch fills from it. Library left out
-    leaves out every book: the covers leave the card and the sleep shows the current book (F1)."""
+    leaves out every book: the covers leave the card and the sleep shows a placeholder."""
     card = ctx.card(tmp)
     sleep_pick(card, **{"from": "discover\nlibrary", "hours": 0})
     first = sleep_sync(ctx, card, "sleep-1", timeout_s=150)
@@ -762,10 +767,29 @@ def sleep_pick_library(ctx: Context, tmp: Path) -> None:
     assert fetched >= 1, "nothing fetched from the library"
     sleep_pick(card, **{"from": "library", "hours": 0, "leaveScopes": "library"})
     second = sleep_sync(ctx, card, "sleep-2", timeout_s=150)
-    after(second.output, "Sleep: BookOrbit Pick -> current book")
+    after(second.output, "Sleep: BookOrbit Pick -> placeholder")
     count2, fetched2 = sleep_batch(second.output)
     assert count2 == 0 and fetched2 == 0, f"Library left out, yet batch {count2} ({fetched2} fetched)"
     assert not list((card.crosspoint / "orbify_sleep").glob("*.bmp")), "left-out covers stayed on the card"
+
+
+@scenario("x4-pro")
+def catalog_wifi_holds(ctx: Context, tmp: Path) -> None:
+    """Full refresh, browsing and uncached requests share the radio, including an idle-off request."""
+    card = ctx.card(tmp)
+    cx, cy, rx, ry = open_catalog(ctx, card)
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 250}])
+    run = ctx.sim.run(card, "holds",
+        script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};8000:TAP:{rx},{ry},1300;13000:TAP:240,116;45000:BACK:100;47000:BACK:100;50000:QUIT",
+        timeout_s=75, env={"ORBIFY_SIM_IDLE_OFF_ON_MISS": "1"})
+    walk = after(run.output, "Catalog: Full refresh of view")
+    after(walk, "Wi-Fi hold + refresh")
+    after(walk, "Wi-Fi hold + offline miss")
+    after(walk, "Wi-Fi off deferred")
+    # Every attempted idle-off inside a miss must wait: the GET then succeeds on the same radio.
+    until_exit = walk.split("Wi-Fi hold - catalog", 1)[0]
+    assert "Wi-Fi off:" not in until_exit, "an owner lost its radio"
+    after(walk, "Wi-Fi off: SavedWifiConnect disconnect (0 held)")
 
 
 # --- Runner -----------------------------------------------------------------------------------

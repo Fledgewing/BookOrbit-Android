@@ -11,6 +11,7 @@
 #include <string>
 
 #include "core/Mirror.h"
+#include "Wifi.h"
 
 namespace OrbifyMirror {
 
@@ -51,19 +52,24 @@ class Walk {
  public:
   // A user start persists its request; a resume requires an existing user request.
   void begin(bool userStarted = false);
+  void beginView(const orbify::mirror::Step& view, int page = 1);
+  ~Walk() { end(); }
   bool active() const { return started; }
   bool finished() const { return started && (connectionFailed || plan.finished()); }
   // One request, under OrbifyCache's Full mode. Saves the plan; on the last one, the mirror.
   void step();
   unsigned percent() const { return plan.percent(); }
   size_t failures() const { return plan.failures() + (connectionFailed ? 1 : 0); }
-  void end() { started = false; }
+  void end();
   // The activity could not open its connection. Keep the request resumable, show one final error.
   void failConnection() { connectionFailed = true; }
 
  private:
   orbify::mirror::Plan plan;
   bool started = false;
+  bool viewOnly = false;
+  int viewPage = 1;
+  bool wifiHeld = false;
   bool connectionFailed = false;
   unsigned long startedAt = 0;
 };

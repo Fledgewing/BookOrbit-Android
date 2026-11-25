@@ -1,4 +1,5 @@
 #include "SleepScreen.h"
+#include "Wifi.h"
 
 #if CROSSINK_TAILNET_ORBIFY_SLEEP
 
@@ -53,8 +54,7 @@ constexpr uint8_t LEGACY = 0x04;   // decoded with the legacy tone profile (a co
 constexpr uint8_t HIDDEN = 0x08;   // a Leave out list is not complete yet: not shown (X7)
 constexpr uint8_t TAGS_OK = 0x10;  // checked against the tag rules of rulesStamp
 
-// The top-up's share of the sleep sync (whose watcher bounds the whole at 240 s).
-constexpr unsigned long TOP_UP_BUDGET_MS = 40000;
+// Top-ups share the caller's budget; sleep sync also has its own whole-run watcher.
 // A radio-off decode: JPEGDEC and its buffers go to PSRAM (malloc puts blocks over 4 KB there).
 constexpr size_t DECODE_MIN_PSRAM_BLOCK = 96 * 1024;
 constexpr uint32_t BAG_MAGIC = 0x4741424Fu;  // "OBAG"
@@ -277,6 +277,7 @@ bool readScopes(void (*each)(const Scope&, void* ctx), void* ctx) {
     if (t3 == std::string::npos) continue;
     Scope s;
     s.collection = line[0] == 'c';
+    s.library = line[0] == 'l';
     s.id = static_cast<uint32_t>(std::strtoul(line.c_str() + t1 + 1, nullptr, 10));
     s.count = std::atoi(line.c_str() + t2 + 1);
     s.title = line.substr(t3 + 1);
@@ -299,6 +300,7 @@ bool pickCover(const bool redraw, std::string& bmpPath) {
   // The covers it may show: decoded, not held back by an incomplete Leave out list or unchecked tags,
   // and never the book open now (R2).
   const bool tagRules = hasTagRules(s.leaveTags.c_str());
+  const bool sourcesChanged = st.sourceStamp != fnv1a(s.from.c_str());
   const bool rulesChanged = st.rulesStamp != fnv1a(s.leaveScopes.c_str(), fnv1a(s.leaveTags.c_str()));
   const int64_t open = openBookId(APP_STATE.openEpubPath);
   Entry pool[BATCH];
@@ -306,7 +308,8 @@ bool pickCover(const bool redraw, std::string& bmpPath) {
   size_t n = 0;
   for (size_t i = 0; i < st.batch.count; i++) {
     const Entry& e = st.batch.entries[i];
-    if (!(e.flags & READY) || (e.flags & HIDDEN) || (tagRules && (!(e.flags & TAGS_OK) || rulesChanged))) continue;
+    if (sourcesChanged || !readyForPick(e, open > 0 ? static_cast<uint32_t>(open) : 0) ||
+        (tagRules && (!(e.flags & TAGS_OK) || rulesChanged))) continue;
     // Leave out as set now (Library, smart scopes, collections), from the lists on the card (X7, X8).
     if (memberCheck(s, e.id) != Check::Keep) continue;
     if (open > 0 && e.id == static_cast<uint64_t>(open)) continue;
@@ -328,7 +331,7 @@ bool pickCover(const bool redraw, std::string& bmpPath) {
   saveStore(st);
   const char* why = s.hours == EVERY_SLEEP ? "every sleep" : (epoch ? "by the hours" : "no clock: kept");
   if (d.show != Show::Pool) {
-    LOG_INF(TAG, "Sleep: BookOrbit Pick -> current book (%u of %u covers ready%s)", static_cast<unsigned>(n),
+    LOG_INF(TAG, "Sleep: BookOrbit Pick -> placeholder (no eligible decoded covers; %u of %u ready%s)", static_cast<unsigned>(n),
             static_cast<unsigned>(st.batch.count), redraw ? ", redraw" : "");
     return false;
   }
@@ -339,6 +342,13 @@ bool pickCover(const bool redraw, std::string& bmpPath) {
           static_cast<unsigned>(n), static_cast<unsigned>(st.batch.entries[std::max(0, st.batch.indexOf(d.id))].shows),
           redraw ? ", redraw" : "");
   return true;
+}
+
+void drawPlaceholder(const GfxRenderer& r, const bool redraw) {
+  r.clearScreen();
+  r.drawCenteredText(UI_12_FONT_ID, r.getScreenHeight() / 2, "BookOrbit Pick: covers not ready");
+  r.drawCenteredText(SMALL_FONT_ID, r.getScreenHeight() / 2 + 28, "Refresh with Wi-Fi to prepare covers");
+  drawExtras(r, redraw);
 }
 
 void coverFailed(const std::string& bmpPath) {
@@ -517,7 +527,7 @@ struct Run {
 // Scopes' lists in Settings, which never go online themselves.
 bool saveScopes() {
   std::string out;
-  for (const char* section : {"smart-scopes", "collections"}) {
+  for (const char* section : {"smart-scopes", "collections", "libraries"}) {
     JsonDocument filter;
     filter["items"][0]["id"] = true;
     filter["items"][0]["title"] = true;
@@ -532,7 +542,7 @@ bool saveScopes() {
       }
       if (!id) continue;
       char head[40];
-      std::snprintf(head, sizeof(head), "%c\t%" PRIu32 "\t%d\t", section[0] == 'c' ? 'c' : 's', id,
+      std::snprintf(head, sizeof(head), "%c\t%" PRIu32 "\t%d\t", section[0] == 'l' ? 'l' : (section[0] == 'c' ? 'c' : 's'), id,
                     item["count"] | 0);
       out += head;
       out += title;
@@ -600,12 +610,12 @@ bool listPages(const char* query, const char* partPath, Ids& ids, Run& run, cons
 
 // A Pick from source's members, in the server's order (eligible books only).
 void sourcePath(const From& f, char* out, const size_t size, const char* ext) {
-  const char k = f.kind == FromKind::Library ? 'l' : (f.kind == FromKind::Scope ? 's' : 'c');
+  const char k = f.kind == FromKind::Library ? 'l' : (f.kind == FromKind::LibrarySource ? 'b' : (f.kind == FromKind::Scope ? 's' : 'c'));
   std::snprintf(out, size, "%s/src_%c%" PRIu32 ".%s", DIR, k, f.id, ext);
 }
 
 void memberPath(const From& f, char* out, const size_t size, const char* ext) {
-  std::snprintf(out, size, "%s/lo_%c%" PRIu32 ".%s", DIR, f.kind == FromKind::Scope ? 's' : 'c', f.id, ext);
+  std::snprintf(out, size, "%s/lo_%c%" PRIu32 ".%s", DIR, f.kind == FromKind::LibrarySource ? 'b' : (f.kind == FromKind::Scope ? 's' : 'c'), f.id, ext);
 }
 
 struct MemberFile {
@@ -664,7 +674,7 @@ void refreshMembers(const Settings& s, const uint32_t now, Run& run) {
     char part[64];
     memberPath(rule, part, sizeof(part), "part");
     char query[48];
-    std::snprintf(query, sizeof(query), "%s=%" PRIu32, rule.kind == FromKind::Scope ? "smartScopeId" : "collectionId",
+    std::snprintf(query, sizeof(query), "%s=%" PRIu32, rule.kind == FromKind::LibrarySource ? "libraryId" : (rule.kind == FromKind::Scope ? "smartScopeId" : "collectionId"),
                   rule.id);
     if (!listPages(query, part, ids, run, false)) continue;
     ids.n = sortUnique(ids.p, ids.n);
@@ -763,7 +773,7 @@ bool listBagSources(const Settings& s, const uint32_t now, Run& run, Ids& member
       Ids ids(BAG_MAX);
       char query[48] = "";
       if (f.kind != FromKind::Library) {
-        std::snprintf(query, sizeof(query), "%s=%" PRIu32, f.kind == FromKind::Scope ? "smartScopeId" : "collectionId",
+        std::snprintf(query, sizeof(query), "%s=%" PRIu32, f.kind == FromKind::LibrarySource ? "libraryId" : (f.kind == FromKind::Scope ? "smartScopeId" : "collectionId"),
                       f.id);
       }
       if (ids.p && listPages(query, part, ids, run, true)) {
@@ -820,12 +830,14 @@ Probe probe(const uint32_t id, const Settings& s) {
 
 }  // namespace
 
-void topUp(const std::string& openBookPath, bool (*stop)()) {
+void topUp(const std::string& openBookPath, bool (*stop)(), const unsigned long budgetMs) {
   const Settings& s = settings();
   if (!s.pick || !BOOKORBIT_STORE.hasCredentials()) return;
+  OrbifyWifi::Hold radio(OrbifyWifi::Owner::SleepSync);
+  const unsigned long began = millis();
   Run run;
   run.stop = stop;
-  run.deadline = millis() + TOP_UP_BUDGET_MS;
+  run.deadline = millis() + budgetMs;
   const uint32_t now = nowEpoch();
   Store st = loadStore();
   Storage.mkdir(DIR);
@@ -854,8 +866,10 @@ void topUp(const std::string& openBookPath, bool (*stop)()) {
   const bool tagRules = hasTagRules(s.leaveTags.c_str());
   const int64_t open = openBookId(openBookPath);
 
-  if (due(st.scopesAt, now) && !run.over() && saveScopes()) st.scopesAt = now;
+  if (budgetMs > 1500 && due(st.scopesAt, now) && !run.over() && saveScopes()) st.scopesAt = now;
+  LOG_INF(TAG, "Sleep: phase sources elapsed=%lums", millis() - began);
   refreshMembers(s, now, run);
+  LOG_INF(TAG, "Sleep: phase exclusions elapsed=%lums", millis() - began);
 
   // The candidates, in the order they would be shown.
   Ids candidates(BAG_MAX + LIST_KINDS * BATCH);
@@ -916,6 +930,7 @@ void topUp(const std::string& openBookPath, bool (*stop)()) {
                                                candidates.cap, &fallback);
     }
   }
+  LOG_INF(TAG, "Sleep: phase candidates elapsed=%lums", millis() - began);
   if (fallback) LOG_INF(TAG, "Sleep screen: every picked source is empty, using %s", sectionType(*fallback));
 
   // The batch as it stands: covers now left out go, unknown ones wait hidden (X7); a list source in
@@ -1014,6 +1029,7 @@ void topUp(const std::string& openBookPath, bool (*stop)()) {
   }
   heap_caps_free(bagFile.bag.order);
   saveStore(st);
+  LOG_INF(TAG, "Sleep: phase covers elapsed=%lums budget=%lums", millis() - began, budgetMs);
   LOG_INF(TAG,
           "Sleep screen: batch %u of %u (%u fetched, %u retired, %u left out, %u waiting for Leave out, %u failed); "
           "source %s, %u candidates",

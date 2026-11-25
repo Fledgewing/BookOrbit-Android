@@ -47,6 +47,11 @@ struct Entry {
   uint8_t flags = 0;  // the firmware's (SleepScreen.cpp): decoded, checked against the rules
 };
 
+// READY and HIDDEN are persistent batch flags. The open book never enters the ready pool.
+inline bool readyForPick(const Entry& entry, const uint32_t openId) {
+  return entry.id != 0 && entry.id != openId && (entry.flags & 0x01) && !(entry.flags & 0x08);
+}
+
 // The cover shown last and when it last changed (ms since the epoch, as Android's).
 struct State {
   uint32_t shown = 0;
@@ -148,7 +153,7 @@ inline Check combine(Check a, Check b) {
 
 // Library: every book the account can see (R1c, X8). The three dashboard lists come first, so a
 // list's kind is its slot in the store.
-enum class FromKind : uint8_t { UpNext, WantToRead, Discover, Scope, Collection, Library };
+enum class FromKind : uint8_t { UpNext, WantToRead, Discover, Scope, Collection, Library, LibrarySource };
 constexpr size_t LIST_KINDS = 3;
 inline bool isList(FromKind k) { return k == FromKind::UpNext || k == FromKind::WantToRead || k == FromKind::Discover; }
 struct From {

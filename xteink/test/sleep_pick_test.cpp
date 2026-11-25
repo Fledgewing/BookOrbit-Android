@@ -416,6 +416,19 @@ void sourceCases(JsonObjectConst sources) {
 }
 
 void store() {
+  Entry ready{7, 0, 1};
+  CHECK(!readyForPick(ready, 7));
+  CHECK(readyForPick(ready, 5));
+  Entry covers[] = {{7, 0, 1}, {9, 0, 1}};
+  State rotation;
+  uint32_t previous = 0;
+  for (unsigned sleep = 0; sleep < 8; ++sleep) {
+    const Decision chosen = decide(Mode::Recommended, EVERY_SLEEP, 0, covers, 2, true, rotation, true, nullptr, nullptr);
+    CHECK(chosen.show == Show::Pool && chosen.id != 5 && chosen.id != previous);
+    previous = chosen.id;
+  }
+  ready.flags = 9;
+  CHECK(!readyForPick(ready, 5));
   Store s;
   s.sourceStamp = fnv1a("scope:12");
   s.rulesStamp = 0xDEADBEEF;

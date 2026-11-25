@@ -37,6 +37,7 @@ void SleepListActivity::onEnter() {
   for (int i = 0; i < count(); ++i) {
     rowItems[i].label = labels[i].c_str();
     rowItems[i].actionValue = static_cast<int16_t>(i);
+    if (i == 0) rowItems[i].subtitle = "Or pick sources below (clears Whole library)";
   }
   selectedIndex = topIndex = 0;
   visibleRows = 1;

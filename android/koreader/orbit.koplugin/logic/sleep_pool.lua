@@ -84,7 +84,7 @@ function SleepPool.parseFrom(v)
         if l.id == v then return { kind = "list", id = l.id, type = l.type } end
     end
     local kind, id = v:match("^(%a+):(%d+)$")
-    if (kind == "scope" or kind == "collection") and tonumber(id) and tonumber(id) > 0 then
+    if (kind == "scope" or kind == "collection" or kind == "library") and tonumber(id) and tonumber(id) > 0 then
         return { kind = kind, id = tonumber(id) }
     end
     return nil
@@ -137,7 +137,7 @@ function SleepPool.parseRule(v)
         return { kind = "tag", tag = tag, key = "tag:" .. tag }
     end
     local kind, id = v:match("^(%a+):(%d+)$")
-    if (kind == "scope" or kind == "collection") and tonumber(id) > 0 then
+    if (kind == "scope" or kind == "collection" or kind == "library") and tonumber(id) > 0 then
         return { kind = kind, id = tonumber(id), key = kind .. ":" .. tonumber(id) }
     end
     return nil

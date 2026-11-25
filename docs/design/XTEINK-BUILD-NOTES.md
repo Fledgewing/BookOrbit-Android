@@ -482,3 +482,46 @@ in this sleep`, and no `esp-aes: Failed to allocate memory`. `waiting for heap (
 during the sync wakes the device within ~2 s (`Wake press not answered … restarting now` when the
 watcher had to do it); `Sleep sync stopped: its time budget is spent` and `… past its 240 s budget;
 restarting to sleep` mark the budget.
+
+## X4 Pro feedback (W8, 2.0.0.224)
+
+The approved feedback extends the existing sleep and refresh designs. Integration is in patch
+0043; new implementation is in `orbify/` (GPL-3.0-or-later). X3 keeps its existing sleep screens
+and radio behavior; the new ownership implementation is gated with the X4 mirror.
+
+- Source names previously arrived only during a successful sleep sync, and Settings permanently
+  cached an empty first read within that boot. Settings now rereads the saved file when opened.
+  Any ordinary Home/manual sync refreshes it too. Both Pick From and Leave Out offer named server
+  libraries (`library:<id>`), smart scopes and collections. `library` retains its old wire meaning,
+  now labelled **Whole library**, exclusive with all named sources. The picker explains that choice
+  on its first row. Android accepts the same values and lists the server libraries too.
+- The pinned server returns all library/collection/smart-scope entries in those section replies;
+  these three sections do not paginate: BookOrbit `c1dd6b4`,
+  `server/src/modules/koreader/koreader-catalog.service.ts:435-442`. Named libraries use `libraryId`
+  (`:849-875`, `:1545`); they are not the unfiltered whole-library query.
+- A Pick with no eligible decoded covers draws “BookOrbit Pick: covers not ready”, with a refresh
+  hint, instead of silently becoming CrossInk's current-book Cover screen. The log records the
+  ready/batch counts. The open book and covers from a previous source selection never enter its
+  ready pool. Every sleep still cycles ready covers without a network request on the sleep path.
+- Home/manual/sleep syncs top up while Wi-Fi is already up, within 40 seconds; catalog refresh and
+  reading sync use a short 1.5-second slice. The budget is checked between requests, not a new
+  per-request socket timeout. Catalog and Home decode pending JPEGs too; reading sync leaves decode
+  for the next idle sync. The top-up never starts Wi-Fi itself.
+- A catalog tap queues a one-view plan using the Full refresh walk; Full refresh returns after
+  scheduling its popup rather than synchronously reloading the page. Requests run between input
+  events. Home's explicit Full refresh skips the foreground hash scan/Home/copy-replacement work
+  and starts its walk immediately after connecting. `Refresh phase` logs time connection, queueing
+  and each request; `Sleep: phase` logs sources, exclusions, candidates and cover work. Individual
+  network requests still occupy a main-loop turn, as the existing Full refresh walk does.
+- `OrbifyWifi` counts nested holds for the catalog, refresh, sleep sync, offline misses and reading
+  sync. `SavedWifiConnect::disconnect` defers an off request until the last hold leaves. The X4
+  catalog's direct disconnect now uses that gate. Logs name holds and every requested off. A lost
+  link retains the walk and displays **Paused — no Wi-Fi**, then resumes when it returns.
+- The supplied device log ends before the reported sleep tests and contains no wake sequence.
+  No timing defect was established from it. Existing watcher deadlines and press-to-screen timing
+  remain; new route/token and first-screen boot-time logs run once per boot. Capture those along
+  with `SLP Wake`, reset diagnostics and boot trail on the next device test.
+
+Tests: shared library-source cases on C++/Kotlin/Lua, ready-pool current-book exclusion and cycling,
+reference-counted radio holds; simulator sleep cycling, regular refresh return-before-request,
+Full refresh progress, a forced idle-off during uncached browsing, and the existing quick wake.

@@ -67,6 +67,7 @@ orbify_test copy_check "$core/CopyCheck.cpp"
 orbify_test copy_queue "$core/CopyQueue.cpp" "$core/CopyCheck.cpp"
 orbify_test mirror "$core/Mirror.cpp"
 orbify_test sleep_sync_deadline
+orbify_test wifi_holds
 # Battery stats (orbify/core/BatteryStatsCore): CrossInk-style GoogleTest cases through GtestShim.h.
 orbify_test battery_stats "$core/BatteryStatsCore.cpp"
 orbify_test boot_trail
