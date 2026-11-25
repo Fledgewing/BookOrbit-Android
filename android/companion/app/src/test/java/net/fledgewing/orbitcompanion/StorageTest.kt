@@ -12,6 +12,7 @@ import java.nio.file.Files
 class StorageTest {
     /** shared/fixtures/cache/cases.json storage.plans: the eviction order the plugin used to compute. */
     @Test fun evictionOrderMatchesTheSharedCases() {
+        // @fixture cache/cases.json#storage.plans
         val plans = JSONObject(File("../../../shared/fixtures/cache/cases.json").readText()).getJSONObject("storage").getJSONArray("plans")
         for (i in 0 until plans.length()) {
             val c = plans.getJSONObject(i)

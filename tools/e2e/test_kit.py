@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bofault  # noqa: E402
 import kit  # noqa: E402
 
+# @fixture e2e/faults/offline.json
 FAULTS = kit.ROOT / "shared" / "fixtures" / "e2e" / "faults"
 
 
@@ -152,6 +153,22 @@ class LibraryTest(unittest.TestCase):
         compose = (kit.HERE / "compose.yml").read_text()
         self.assertIn(f"ghcr.io/bookorbit/bookorbit:{pin}@sha256:", compose)
         self.assertEqual(len(re.findall(r"image: \S+@sha256:[0-9a-f]{64}", compose)), 2, "every image by digest")
+
+
+class RegistryTest(unittest.TestCase):
+    """shared/fixtures/REGISTRY.json: the e2e kit's tests read every table that names "py" (a
+    '@fixture <file>' mark here, in kit.py or in xteink/test/e2e), and mark nothing else."""
+
+    def test_reads_every_table_it_is_named_for(self):
+        reg = json.loads((kit.ROOT / "shared" / "fixtures" / "REGISTRY.json").read_text())
+        given = {r["file"] + ("#" + r["section"] if "section" in r else "") for r in reg["tables"] if "py" in r["readers"]}
+        marks = {}
+        for path in [*Path(__file__).resolve().parent.glob("*.py"), *(kit.ROOT / "xteink" / "test" / "e2e").glob("*.py")]:
+            for m in re.findall(r"@fixture ([\w./-]+(?:#[\w.]+)?)", path.read_text()):
+                marks[m] = path.name
+        self.assertTrue(given)
+        self.assertEqual(sorted(given - marks.keys()), [], "no e2e test reads these")
+        self.assertEqual(sorted(marks.keys() - given), [], "marked, but REGISTRY.json does not give them to py")
 
 
 @unittest.skipUnless(os.environ.get("ORBIFY_E2E_LIVE") == "1", "ORBIFY_E2E_LIVE=1 runs against the seeded server")
