@@ -693,7 +693,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "OrbiSmart pull/drain and prompt",
+          "note": "BookSync position sync pull/drain and prompt",
           "reason": null,
           "evidence": [
             {
@@ -705,7 +705,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "OrbiSmart state and reader prompt",
+          "note": "BookSync position sync state and reader prompt",
           "reason": null,
           "evidence": [
             {
@@ -721,7 +721,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "OrbiSmart state and reader prompt",
+          "note": "BookSync position sync state and reader prompt",
           "reason": null,
           "evidence": [
             {
@@ -760,7 +760,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "OrbiSmart override",
+          "note": "BookSync position sync override",
           "reason": null,
           "evidence": [
             {
@@ -870,7 +870,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Reading schedule and OrbiSmart pause",
+          "note": "Reading schedule and BookSync position sync pause",
           "reason": null,
           "evidence": [
             {
@@ -4093,7 +4093,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "OrbiSmart/custom control",
+          "note": "BookSync position sync/custom control",
           "reason": null,
           "evidence": [
             {
@@ -4105,7 +4105,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "OrbiSmart/custom control",
+          "note": "BookSync position sync/custom control",
           "reason": null,
           "evidence": [
             {
@@ -4117,7 +4117,7 @@
         },
         "x3": {
           "status": "supported",
-          "note": "OrbiSmart/custom control",
+          "note": "BookSync position sync/custom control",
           "reason": null,
           "evidence": [
             {
@@ -4419,7 +4419,7 @@
         },
         "x4_pro": {
           "status": "partial",
-          "note": "OrbiSmart wake logic; no independent shared wake toggle",
+          "note": "BookSync position sync wake logic; no independent shared wake toggle",
           "reason": "gap — no reason",
           "evidence": [
             {
@@ -4431,7 +4431,7 @@
         },
         "x4": {
           "status": "partial",
-          "note": "OrbiSmart wake logic; no independent shared wake toggle",
+          "note": "BookSync position sync wake logic; no independent shared wake toggle",
           "reason": "gap — no reason",
           "evidence": [
             {
