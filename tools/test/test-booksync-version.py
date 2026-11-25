@@ -2,6 +2,8 @@
 """Exercise shared identity, package stamping, channel ordering and retained OTA bridges."""
 import importlib.util
 import json
+import sys
+sys.dont_write_bytecode = True
 from pathlib import Path
 import subprocess
 import tempfile
@@ -33,7 +35,7 @@ class Versions(unittest.TestCase):
         self.assertIn('shared/version.json', gradle)
         self.assertIn('?: sharedVersion', gradle)
         build = (ROOT / "xteink/tailnet/tailnet_build.py").read_text()
-        self.assertIn('booksync_version = version_api["version"]()', build)
+        self.assertIn('version_api["build_identity"](version_api["version"]()', build)
         self.assertIn('"BOOKSYNC_VERSION": booksync_version', build)
 
     def test_release_identity(self):
@@ -43,6 +45,8 @@ class Versions(unittest.TestCase):
                              value + "+crossink.2.0.0.bookorbit.1-rc3")
         self.assertEqual(V.firmware("0.11.4-preview.1", "v2.0.0+bookorbit.1-rc3", 300),
                          "2.0.0.400+bookorbit.1-rc3")
+        self.assertEqual(V.firmware("0.12.0", "v2.0.0+bookorbit.1-rc3", 300, True),
+                         "0.12.0-0.test.300+crossink.2.0.0.bookorbit.1-rc3")
         self.assertFalse(V.unified("0.11.4-preview.1"))
         if not V.unified(V.version()):
             with self.assertRaises(ValueError):

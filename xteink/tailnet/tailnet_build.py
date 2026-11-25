@@ -40,7 +40,7 @@ here = os.path.realpath(os.path.join(env.subst("$PROJECT_DIR"), "tailnet"))  # n
 overlay_root = os.path.dirname(here)
 # One BookSync identity on all readers; legacy tags remain until the 0.12 transition.
 version_api = runpy.run_path(os.path.join(os.path.dirname(overlay_root), "tools", "booksync-version.py"))
-booksync_version = version_api["version"]()
+booksync_version = version_api["build_identity"](version_api["version"](), os.environ.get("BOOKSYNC_TEST_RUN"))
 with open(os.path.join(os.path.dirname(overlay_root), "tools", "upstreams.lock"), encoding="utf-8") as lock_file:
     crossink_base = next(line.split()[2].removeprefix("v") for line in lock_file
                          if line.startswith("crossink-v2.0 "))

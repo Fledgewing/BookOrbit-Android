@@ -20,10 +20,17 @@ def unified(value):
         raise ValueError("Invalid BookSync version")
     return tuple(map(int, match.group(1, 2, 3))) >= (0, 12, 0)
 
-def firmware(value, upstream, run):
+def build_identity(value, test_run=None):
+    if unified(value) and test_run:
+        if not str(test_run).isdigit() or int(test_run) <= 0:
+            raise ValueError("Invalid test run")
+        return value.split("-")[0] + "-0.test." + str(test_run)
+    return value
+
+def firmware(value, upstream, run, test=False):
     if unified(value):
         # '+' is reserved for the single SemVer metadata delimiter.
-        return value + "+crossink." + upstream.removeprefix("v").replace("+", ".")
+        return build_identity(value, run if test else None) + "+crossink." + upstream.removeprefix("v").replace("+", ".")
     base = upstream.removeprefix("v")
     match = re.match(r"\d+\.\d+\.\d+", base)
     if not match:

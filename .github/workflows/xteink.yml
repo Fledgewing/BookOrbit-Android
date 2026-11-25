@@ -197,7 +197,9 @@ jobs:
           numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"
           version="${numeric}.$((RUN_BASE + GITHUB_RUN_NUMBER))${base#"$numeric"}"
           if [ "$(python3 tools/booksync-version.py unified)" = true ]; then
-            version="$(python3 tools/booksync-version.py firmware "$tag" "$GITHUB_RUN_NUMBER")"
+            test_args=()
+            [ "${TEST_BUILD:-false}" = true ] && test_args+=(test)
+            version="$(python3 tools/booksync-version.py firmware "$tag" "$GITHUB_RUN_NUMBER" "${test_args[@]}")"
             channel="$(python3 tools/booksync-version.py channel)"
           fi
           asset_version="$(printf '%s' "$version" | sed 's/[^A-Za-z0-9._-]\{1,\}/-/g')"
@@ -308,6 +310,7 @@ jobs:
       - name: Build
         working-directory: upstream
         env:
+          BOOKSYNC_TEST_RUN: ${{ inputs.test_build && github.run_number || '' }}
           CROSSINK_RELEASE_VERSION: ${{ matrix.line.version }}
           TAILNET_OVERLAY_REPO: ${{ github.repository }}
           TAILNET_OTA_TAG_PREFIX: xteink-v

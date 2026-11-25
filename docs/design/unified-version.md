@@ -14,6 +14,9 @@ with "shared" stamps the manifest identity. Test APKs retain their explicit test
 Preview builds are MAJOR.MINOR.PATCH-preview.N, release candidates are
 MAJOR.MINOR.PATCH-rc.N, and stable builds have no suffix. Their ordering is
 preview.1 < preview.2 < rc.1 < rc.2 < stable. Test artifacts never publish.
+Unified firmware test identities use MAJOR.MINOR.PATCH-0.test.<run>, below every
+preview, so the next real release installs over a sideloaded test. Feed selection
+rejects test identities even when prereleases are enabled.
 From 0.12, release.yml dispatches xteink.yml at the same immutable Android tag
 after publishing Android. Both build the same commit and read the same manifest.
 Firmware publishing accepts only that matching tag; daily runs build the pinned

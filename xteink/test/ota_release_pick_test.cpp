@@ -168,6 +168,16 @@ int main(int argc, char** argv) {
     releases += "]";
     CHECK(std::string(pick("xteink-v", false, device, 7, false, &releases).newest.booksyncVersion) == "0.12.0");
   }
+  {
+    ReleaseJsonParser::Release newest{}, test{};
+    std::strcpy(test.tagName, "xteink-v0.12.0-0.test.1");
+    std::strcpy(test.booksyncVersion, "0.12.0-0.test.1");
+    test.tagFound = test.firmwareFound = true;
+    ota_release_pick::keep(newest, test, {"xteink-v", true});
+    CHECK(!newest.tagFound);
+  }
+  CHECK(ota_release_pick::compare("0.12.0-preview.1", "0.12.0-0.test.999", "", "") > 0);
+  CHECK(ota_release_pick::compare("0.12.0-0.test.2", "0.12.0-0.test.1", "", "") > 0);
   CHECK(ota_release_pick::compare("0.12.0-preview.10", "0.12.0-preview.2", "", "") > 0);
   CHECK(ota_release_pick::compare("0.12.0-rc.1", "0.12.0-preview.99", "", "") > 0);
   CHECK(ota_release_pick::compare("0.12.0+crossink.2", "0.12.0+crossink.3", "", "") == 0);

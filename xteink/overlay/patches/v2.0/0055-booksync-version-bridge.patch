@@ -76,7 +76,7 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
  
  #include "FirmwareVersion.h"
  
-@@ -13,12 +14,84 @@
+@@ -13,12 +14,86 @@
    return strncmp(tag, prefix, n) == 0 ? tag + n : nullptr;
  }
  
@@ -103,6 +103,7 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
 +    ++p;
 +    if (strncmp(p, "preview.", 8) == 0) { v.channel = 0; p += 8; }
 +    else if (strncmp(p, "rc.", 3) == 0) { v.channel = 1; p += 3; }
++    else if (strncmp(p, "0.test.", 7) == 0) { v.channel = -1; p += 7; }
 +    else return v;
 +    if (!number(p, v.parts[3]) || v.parts[3] == 0) return v;
 +  }
@@ -153,7 +154,8 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
    const char* version = versionOf(candidate.tagName, filter.tagPrefix);
    if (version == nullptr || !firmware_version::isComparable(version)) return;
 -  if (candidate.prerelease && !filter.includePrereleases) return;
-+  if (candidate.booksyncVersion[0] && !validBookSync(candidate.booksyncVersion)) return;
++  if (candidate.booksyncVersion[0] && (!validBookSync(candidate.booksyncVersion) ||
++      parse(candidate.booksyncVersion).channel < 0)) return;
 +  const Version book = parse(candidate.booksyncVersion);
 +  if ((candidate.prerelease || (book.valid && book.channel < 2)) && !filter.includePrereleases) return;
    if (newest.tagFound &&
