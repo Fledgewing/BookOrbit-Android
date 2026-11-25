@@ -83,6 +83,12 @@ packaged plugin and every firmware build. The ordering is -preview.N, then -rc.N
 See [the rollout and bridge](docs/design/unified-version.md). Main stays on 0.11 until its
 bridge has reached devices; 0.12 is prepared on feature/0.12.
 
+The upstream-driven Xteink release policy below applies through 0.11. From 0.12,
+firmware tags are xteink-v<booksync version>+crossink.<upstream tag>, with the upstream
+"+" replaced by ".". BookSync preview/rc/stable decides the channel. Daily pinning and
+publication remain limited to the legacy bridge line; unified builds keep the release
+commit's pin and publish only at the matching Android tag.
+
 - Android: `v<version>` (`.github/workflows/release.yml`): signed APK, stamped plugin zip,
   `SHA256SUMS`, attestations. Stable Android releases take "latest". Keep the package id and the signing
   certificate (SHA-256 `F5:07:8C:…:0A:15`, checked by the workflow): either change breaks updates.
@@ -94,12 +100,9 @@ bridge has reached devices; 0.12 is prepared on feature/0.12.
   See [version encoding](docs/design/release-versions.md) for Android package codes.
 - Xteink: `xteink-v<version>` (`.github/workflows/xteink.yml`, daily or by hand): firmware per
   reader, source archive, licenses, `SHA256SUMS`, attestations. Always `make_latest=false`.
-  Through 0.11, an upstream rc/beta makes a prerelease and a final upstream makes stable;
-  the suffix describes the upstream base, not the overlay's readiness.
-  From 0.12, tags are xteink-v<booksync version>+crossink.<upstream tag>, with upstream
-  "+" replaced by "."; the BookSync preview/rc/stable channel decides publication.
-  Daily upstream pinning/publication is limited to the legacy bridge line; unified builds
-  retain the release commit's pin and publish only at the matching Android tag.
+  An upstream rc or beta builds a pre-release, a final upstream release a stable one
+  (`xteink/scripts/upstream-line.sh`). Firmware tags keep CrossInk's upstream rc/beta labels;
+  they describe the upstream base, not a judgment that our overlay is a release candidate.
 - "latest" must stay an Android release: every companion and plugin (and the old patch) reads `releases/latest`
   (0.6.x through the old BookOrbit-Android URL, and it parses only `v<version>` tags).
 - GitHub orders the release list by version-like tag name: `v…` tags first, prefixed tags

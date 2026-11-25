@@ -2,11 +2,13 @@ Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
 
 --- a/lib/JsonParser/ReleaseJsonParser.h
 +++ b/lib/JsonParser/ReleaseJsonParser.h
-@@ -13,7 +13,8 @@
+@@ -12,8 +12,9 @@
+   // One release as read from the response: its tag, and the first firmware asset
    // assetMatcher accepted.
    struct Release {
-     // 48: room for a prefixed rc tag (xteink-v2.0.0.123+bookorbit.1-rc2) without truncating it.
+-    // 48: room for a prefixed rc tag (xteink-v2.0.0.123+bookorbit.1-rc2) without truncating it.
 -    char tagName[48];
++    // Room for the product version, CrossInk metadata and xteink-v prefix without truncation.
 +    char tagName[128];
 +    char booksyncVersion[48];
      char firmwareUrl[512];

@@ -137,6 +137,30 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  firmware:
+    needs: [build, sign]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tools
+            shared/version.json
+      - name: Dispatch the matching firmware release from 0.12
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$(python3 tools/booksync-version.py unified)" = true ]; then
+            gh workflow run xteink.yml --ref "$TAG" -R "$GITHUB_REPOSITORY"
+          fi
+
   # Signs and publishes. Never checks out or runs the build: it takes the build job's files,
   # signs the APK, checks the signing certificate and publishes.
   sign:
@@ -284,29 +308,4 @@ jobs:
             gh release edit "$TAG" --title "$TITLE" --notes-file notes.md -R "$GITHUB_REPOSITORY"
           else
             gh release create "$TAG" dist/* --verify-tag --title "$TITLE" --notes-file notes.md "${FLAGS[@]}" -R "$GITHUB_REPOSITORY"
-          fi
-
-
-  firmware:
-    needs: [build, sign]
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
-    runs-on: ubuntu-24.04
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.build.outputs.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            tools
-            shared/version.json
-      - name: Dispatch the matching firmware release from 0.12
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if [ "$(python3 tools/booksync-version.py unified)" = true ]; then
-            gh workflow run xteink.yml --ref "$TAG" -R "$GITHUB_REPOSITORY"
           fi
