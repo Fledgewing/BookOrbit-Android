@@ -82,6 +82,50 @@ local function run(limit)
     end
 end
 
+-- Bound UI work, not host speed: companion/child fakes may do arbitrary background IO.
+-- Wrap the file methods too, so repeated reads on one handle cannot evade the open budget.
+local function uiWorkBudget(fn, budget)
+    local lfs = require("libs/libkoreader-lfs")
+    local methods = getmetatable(io.stdout).__index
+    local saved = { open = io.open, read = methods.read, dir = lfs.dir, deliver = W.deliver }
+    local counts = { opens = 0, reads = 0, bytes = 0, walks = 0, entries = 0, intents = 0 }
+    local function ui() return not W.in_companion and not W.in_child end
+    io.open = function(...)
+        if ui() then counts.opens = counts.opens + 1 end
+        return saved.open(...)
+    end
+    methods.read = function(...)
+        local on_ui = ui()
+        if on_ui then counts.reads = counts.reads + 1 end
+        local result = { saved.read(...) }
+        if on_ui then
+            for _, v in ipairs(result) do if type(v) == "string" then counts.bytes = counts.bytes + #v end end
+        end
+        return unpack(result)
+    end
+    lfs.dir = function(...)
+        if ui() then counts.walks = counts.walks + 1 end
+        local iter, state, first = saved.dir(...)
+        return function(...)
+            if ui() then counts.entries = counts.entries + 1 end
+            return iter(...)
+        end, state, first
+    end
+    W.deliver = function(...)
+        if ui() then counts.intents = counts.intents + 1 end
+        return saved.deliver(...)
+    end
+    local success, err = pcall(fn)
+    io.open, methods.read, lfs.dir, W.deliver = saved.open, saved.read, saved.dir, saved.deliver
+    if not success then error(err, 0) end
+    -- Small status/ack files are allowed; catalog/cover inventory belongs to the companion.
+    local limits = budget or { opens = 8, reads = 8, bytes = 64 * 1024, walks = 0, entries = 0, intents = 4 }
+    for kind, limit in pairs(limits) do
+        assert(counts[kind] <= limit, "UI " .. kind .. " budget exceeded: " .. counts[kind] .. " > " .. limit)
+    end
+    return counts
+end
+
 local function class(base)
     local c = base or {}
     c.__index = c
@@ -528,6 +572,37 @@ local function test(name, fn)
 end
 local function ok(v, what) if not v then error(what or "expected true", 2) end end
 local function eq(a, b, what) if a ~= b then error((what or "value") .. ": expected " .. tostring(b) .. ", got " .. tostring(a), 2) end end
+
+test("harness: UI budgets reject walks, repeated/bulk reads and intents, but allow worker IO", function()
+    local path = os.tmpname()
+    local f = assert(io.open(path, "wb")); f:write(string.rep("x", 65537)); f:close()
+    local function rejects(kind, fn)
+        local success, err = pcall(uiWorkBudget, fn)
+        ok(not success and tostring(err):find("UI " .. kind .. " budget exceeded", 1, true), tostring(err))
+    end
+    rejects("opens", function() for i=1,9 do local h=assert(io.open(path)); h:close() end end)
+    -- One already-open file must not evade the read-call or byte budget.
+    f = assert(io.open(path, "rb"))
+    rejects("reads", function() for i=1,9 do f:read(1) end end)
+    f:seek("set")
+    rejects("bytes", function() f:read("*a") end)
+    f:close()
+    local lfs = require("libs/libkoreader-lfs")
+    local dir = lfs.dir
+    lfs.dir = function() return function() return nil end end
+    rejects("walks", function() lfs.dir(".") end)
+    rejects("intents", function() for i=1,5 do W.deliver({ action = "test", extras = {} }) end end)
+    local success, err = pcall(uiWorkBudget, function()
+        W.in_companion = true
+        for i=1,9 do local h=assert(io.open(path)); h:read("*a"); h:close() end
+        for _ in lfs.dir(".") do end
+        W.in_companion = nil
+    end)
+    W.in_companion = nil
+    lfs.dir = dir
+    os.remove(path)
+    ok(success, err)
+end)
 
 -- The guards themselves: a hang fails its test fast, by name, with a traceback.
 test("harness: a test that never returns fails after its time limit", function()
@@ -5968,15 +6043,31 @@ test("sqlite cache: a replaced or busy database is reopened or missed, never an 
         local path = DBFX.reads[1].path
         ok(RE.Store.read(DBFX.owner, "k", path, nil) ~= nil, "first read")
         -- The companion holds the commit lock: return the cached result within the UI budget.
-        local saved_busy = RE.Db.BUSY_MS
+        local sq3 = RE.Db.sq3()
+        local open, attempts, queries, busy_ms = sq3.open, 0, 0, nil
+        sq3.open = function(...)
+            attempts = attempts + 1
+            local conn = open(...)
+            return setmetatable({}, { __index = function(_, key)
+                return function(_, ...)
+                    if key == "set_busy_timeout" then busy_ms = ... end
+                    if key == "rowexec" or key == "exec" or key == "prepare" then queries = queries + 1 end
+                    return conn[key](conn, ...)
+                end
+            end })
+        end
         RE.Db.close(dir .. "/orbit.db")
         ok(RE.Db.BUSY_MS <= 20, "UI busy timeout stays short")
         st.conn:exec("BEGIN EXCLUSIVE")
-        local before = W.wall()
-        ok(RE.Store.read(DBFX.owner, "k", path, nil) ~= nil, "busy: cached fallback")
-        ok(W.wall() - before < 0.1, "UI read stays below 100 ms")
+        local success, err = pcall(function()
+            ok(RE.Store.read(DBFX.owner, "k", path, nil) ~= nil, "busy: cached fallback")
+        end)
+        sq3.open = open
         st.conn:exec("COMMIT")
-        RE.Db.BUSY_MS = saved_busy
+        ok(success, err)
+        eq(attempts, 1, "busy read opens once, without retries")
+        eq(queries, 1, "one busy query, without retries")
+        eq(busy_ms, RE.Db.BUSY_MS, "connection uses the bounded SQLite busy timeout")
         -- A new file (another inode): reopened. Here: an empty database of the same schema.
         st:close()
         os.remove(dir .. "/orbit.db")
@@ -6005,21 +6096,20 @@ test("reading: a locked cache cannot delay page turns or cold/warm cache reads",
         local opens = 0
         RE.Db.conn = function(...) opens = opens + 1; return conn(...) end
         st.conn:exec("BEGIN EXCLUSIVE")
-        local before = W.wall()
         local okf, err = pcall(function()
-            for page = 2, 26 do
-                m:onPageUpdate(page)
-                eq(RE.Store.read(DBFX.owner, "tap-warm", path, nil), warm, "memory hit")
-                eq(RE.Store.read(DBFX.owner, "tap-cold", path, nil), nil, "cold miss skips SQL")
-            end
+            uiWorkBudget(function()
+                for page = 2, 26 do
+                    m:onPageUpdate(page)
+                    eq(RE.Store.read(DBFX.owner, "tap-warm", path, nil), warm, "memory hit")
+                    eq(RE.Store.read(DBFX.owner, "tap-cold", path, nil), nil, "cold miss skips SQL")
+                end
+            end, { opens = 0, reads = 0, walks = 0, entries = 0, intents = 0 })
         end)
-        local elapsed = W.wall() - before
         st.conn:exec("COMMIT")
         RE.reading, RE.Db.conn, RE.EOB.bookOf = reading, conn, bookOf
         if not okf then error(err) end
         eq(RE.EOB.session["tap-regression"].forward, 24, "forward turns still release the stale-push hold")
         eq(opens, 0, "no SQLite access on a page turn, even under an exclusive lock")
-        ok(elapsed < 0.05, "25 page turns and 50 reads below 50 ms: " .. elapsed)
     end)
     st:close()
 end)
@@ -6043,14 +6133,20 @@ test("network: even an unanswered probe runs only in a background worker", funct
     run(30)
     local background, probe = RE.Background.run, RE.probeServer
     local job, done
-    RE.Background.run = function(name, fn, timeout, cb) job = { fn = fn, cb = cb } end
+    local jobs, probes = 0, 0
+    RE.Background.run = function(name, fn, timeout, cb)
+        jobs = jobs + 1; job = { fn = fn, cb = cb }
+    end
     RE.probeServer = function()
+        probes = probes + 1
         ok(W.in_child, "HTTP must never execute on the UI thread")
         return false, "timeout"
     end
-    local before = W.wall()
-    RE.Net.up(newPlugin(), { reason = "tap regression", cap = 2, need_server = true }, function() done = true end)
-    ok(W.wall() - before < 0.05, "starting a stalled probe returns below 50 ms")
+    uiWorkBudget(function()
+        RE.Net.up(newPlugin(), { reason = "tap regression", cap = 2, need_server = true }, function() done = true end)
+    end)
+    eq(jobs, 1, "one background job")
+    eq(probes, 0, "no synchronous probe")
     ok(job and not done, "probe pending without blocking input")
     W.in_child = true
     local result = job.fn()
@@ -6060,6 +6156,8 @@ test("network: even an unanswered probe runs only in a background worker", funct
     job.cb(result)
     RE.Background.run, RE.probeServer = background, probe
     ok(done and RE.Net.inflight == nil, "timeout completes, no synchronous retry")
+    eq(jobs, 1, "no retry job")
+    eq(probes, 1, "only the background probe ran")
 end)
 
 test("main-loop diagnostics: slow callbacks log, preserve returns/errors and cancel by original identity", function()
@@ -6664,14 +6762,13 @@ test("Home calendar: worker snapshots replace a correctly dated empty calendar",
     C.send,C.workerProblem,OC.watchChecks,E.Mirror.catalog=saved.send,saved.problem,saved.watch,saved.catalog
 end)
 
-test("startup: 7000 cover files never cause a UI walk, bulk read or 50 ms callback", function()
+test("startup: 7000 cover files keep each UI callback within a fixed IO/intent budget", function()
     local client = cacheSetup()
     local lfs = require("libs/libkoreader-lfs")
     local cdir = cache.dir .. "/covers"
     for i=1,7000 do local f=assert(io.open(cdir .. "/" .. i .. ".jpg.etag", "wb")); f:write("etag"); f:close() end
     E.OC.cover_dir = cdir
-    local dir, open = lfs.dir, io.open
-    local walks, reads, max_reads, max_ms, checked = 0, 0, 0, 0, 0
+    local checked = 0
     local items = FC.storageItems
     -- The fake worker walks the real directory; companion tests cover its actual cleanup/count.
     FC.storageItems = function(folder)
@@ -6680,39 +6777,24 @@ test("startup: 7000 cover files never cause a UI walk, bulk read or 50 ms callba
         eq(count,7000)
         return {}
     end
-    lfs.dir = function(folder)
-        if not W.in_companion and not W.in_child then walks=walks+1; error("UI directory walk") end
-        return dir(folder)
-    end
-    io.open = function(path, mode)
-        if not W.in_companion and not W.in_child and (not mode or mode:find("r",1,true)) then reads=reads+1 end
-        return open(path, mode)
-    end
     W.main_loop_guard = function(fn,args)
-        reads=0
-        local before=W.wall()
-        fn(unpack(args))
-        if getfenv(fn)==E then
-            checked=checked+1
-            local ms=(W.wall()-before)*1000
-            max_ms=math.max(max_ms,ms); max_reads=math.max(max_reads,reads)
-            ok(ms < 50, "main-loop callback exceeded 50 ms")
-            ok(reads <= 8, "main-loop callback read more than 8 files")
-        end
+        uiWorkBudget(function() fn(unpack(args)) end)
+        if getfenv(fn)==E then checked=checked+1 end
     end
     local passed_guard, err=pcall(function()
-        E.OC.cleanEtags(cdir)
-        eq(E.OC.olderCover(cdir,"no.jpg","1"),nil,"UI never scans older covers")
+        uiWorkBudget(function()
+            E.OC.cleanEtags(cdir)
+            eq(E.OC.olderCover(cdir,"no.jpg","1"),nil,"UI never scans older covers")
+        end)
         run(12)
         local reader={document={file="/books/reading.epub"}}
         ReaderUI.instance=reader; W.shown={reader}
-        E.OC.cleanEtags(cdir); run(12)
+        uiWorkBudget(function() E.OC.cleanEtags(cdir) end)
+        run(12)
         ReaderUI.instance=nil; W.shown={}
-        eq(walks,0)
         ok(checked > 0, "guard measured production callbacks")
-        ok(max_ms < 50 and max_reads <= 8)
     end)
-    W.main_loop_guard=nil; lfs.dir=dir; io.open=open; FC.storageItems=items
+    W.main_loop_guard=nil; FC.storageItems=items
     ReaderUI.instance=nil; W.shown={}
     cacheTeardown()
     ok(passed_guard,err)
@@ -6770,9 +6852,7 @@ test("W32: Full refresh starts companion work before any cover IO and shows prog
     end
     local success, err = pcall(function()
         withHost(cat, function()
-            local started = W.wall()
-            E.OC.fullRefresh(cat)
-            ok((W.wall() - started) * 1000 < 50, "Full refresh callback stays under 50 ms")
+            uiWorkBudget(function() E.OC.fullRefresh(cat) end)
             ok(E.Badge.running, "progress visible immediately")
             run(60)
             local ask = lastBroadcast(".MIRROR")
@@ -6797,14 +6877,14 @@ test("W32: detail persistence never opens or flushes a settings file on the UI t
     local LuaSettings = require("luasettings")
     local open = LuaSettings.open
     local send, problem = E.Companion.send, E.Companion.workerProblem
-    local ask
+    local ask, intents = nil, 0
     LuaSettings.open = function() error("UI settings IO") end
     E.Companion.workerProblem = function() return nil end
-    E.Companion.send = function(_, extras) ask = extras; return true end
+    E.Companion.send = function(_, extras) intents = intents + 1; ask = extras; return true end
     local success, err = pcall(function()
-        local started = W.wall()
-        E.EOB.remember({ id = 7, title = "Synthetic", files = {} })
-        ok((W.wall() - started) * 1000 < 50, "remember callback stays under 50 ms")
+        uiWorkBudget(function() E.EOB.remember({ id = 7, title = "Synthetic", files = {} }) end,
+            { opens = 0, reads = 0, walks = 0, entries = 0 })
+        eq(intents, 1, "one companion intent persists the detail")
         eq(ask.remember_id, "7")
         eq(E.EOB.cache()["7"].title, "Synthetic")
     end)
