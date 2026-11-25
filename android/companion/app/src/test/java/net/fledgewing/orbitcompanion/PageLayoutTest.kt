@@ -251,4 +251,25 @@ class PageLayoutTest {
         val card = tagged(a, "status:setup")!!
         assertTrue("Setup is on the first screen", onScreenY(card) + card.height <= a.resources.displayMetrics.heightPixels)
     }
+    private fun aboutNoticeWraps(): AboutActivity {
+        val a = open<AboutActivity>()
+        layout(a)
+        val credits = org.json.JSONObject(File("../../../shared/about/credits.json").readText())
+        val paragraphs = credits.getJSONArray("paragraphs")
+        for (i in 0 until paragraphs.length()) {
+            val view = all(a.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == paragraphs.getString(i) }
+            assertTrue("notice has no ellipsis", (0 until view.lineCount).all { view.layout.getEllipsisCount(it) == 0 })
+            assertTrue("notice wraps within the page", view.width <= a.resources.displayMetrics.widthPixels)
+        }
+        shot(a, "about")
+        return a
+    }
+
+    @Test
+    fun aboutNoticeWrapsOnTheReader() { aboutNoticeWraps() }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-port-xxhdpi")
+    fun aboutNoticeWrapsOnASmallPhone() { aboutNoticeWraps() }
+
 }

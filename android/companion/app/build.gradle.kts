@@ -224,8 +224,23 @@ abstract class SettingsSchemaAsset : DefaultTask() {
     }
 }
 
+abstract class AboutCreditsAsset : DefaultTask() {
+    @get:InputFile abstract val source: RegularFileProperty
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction fun copy() {
+        val out = outputDir.get().asFile
+        out.mkdirs()
+        source.get().asFile.copyTo(File(out, "about_credits.json"), overwrite = true)
+    }
+}
+
 androidComponents {
     onVariants { variant ->
+        val aboutCredits = tasks.register<AboutCreditsAsset>("${variant.name}AboutCredits") {
+            source.set(layout.projectDirectory.file("../../../shared/about/credits.json"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(aboutCredits, AboutCreditsAsset::outputDir)
         val schemaTask = tasks.register<SettingsSchemaAsset>("${variant.name}SettingsSchema") {
             schema.set(layout.projectDirectory.file("../../../shared/settings/schema.json"))
         }

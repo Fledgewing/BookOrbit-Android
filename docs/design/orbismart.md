@@ -1,8 +1,7 @@
 # OrbiSmart sync: one setting for seamless, low-battery reading across Orbify
 
-Status: approved with the user's rulings of 2026-11-24 (below). Step 1: the shared decision
-table and Android implemented; device validation remains before release. Xteink wiring is a later,
-separate step. Platforms: Android (KOReader + BookOrbit plugin + Orbit plugin + Orbit
+Status: approved with the user's rulings of 2026-11-24 (below). The shared decision table, Android and Xteink firmware wiring are implemented;
+device validation remains before release. Platforms: Android (KOReader + BookOrbit plugin + Orbit plugin + Orbit
 Companion), X4 Pro, X4, X3. Pins read: BookOrbit `c1dd6b4` (server + `koreader-plugin/`),
 CrossInk-Bookorbit `87e2e19` (rc3), Orbify working tree 2026-11-24.
 
@@ -352,3 +351,36 @@ pre-OrbiSmart week.
 Both were decided on 2026-11-24 (rulings 1 and 2 at the top): the jump is a Yes/No popup at open,
 wake or mid-reading (silent only before render), an exception to "nothing interrupts reading" that
 the user chose; and a backward override on a finished book starting a reread is accepted.
+
+## Xteink firmware wiring (W10)
+
+`OrbiSmartSync` adapts mapped CrossInk positions to the shared decision function. Sleep and
+background syncs pull before any ordinary push. A move discovered while the sleep screen or reader
+is visible is persisted for the reader's Yes / No popup; another book's prefetched place can
+be applied before its first draw. The popup uses CrossInk's existing touch and button mappings,
+with no timer or animation. Another background discovery can replace the open question.
+
+Each book has two checksummed `OSM1` records in `/.crosspoint/orbismart/<hash>.0` and `.1`.
+The newest complete generation wins. Records are scoped to the BookOrbit server and account and
+keep the declined timestamp, pending wire position, last turn, sleep time, finish-hold baseline,
+and one exact queued override. A failed write preserves the other slot. An override is tried
+before ordinary progress and the finish queue; failed sends retain it, and later remote reading
+can drop it under the shared decision rule.
+
+X4 Pro / X4 reuse the cancellable Sync While Reading task: an open/wake check after a real sleep
+of at least ten minutes, and a pause check after 120 seconds without a turn and more than one page
+of movement. Checks skip below 15% battery. The X3 builds no background task; it consumes sleep
+discoveries and cached pending places offline. Sleep sync refreshes Continue reading, then saves
+the places of its next three on-device books; the X4s reuse the kept session, and the X3 fetches
+them after Home's session closes.
+
+**Wi-Fi coordination:** W9's shared when-to-connect table was absent from main when W10 was
+wired. This follows Android's Just in time policy: join for the sync, reuse an already connected
+radio, and disconnect only a connection the sync brought up. Sleep owns its existing radio hold.
+The Wi-Fi setting stays independent of OrbiSmart; W9 can supply its shared policy at the existing
+connection boundary without changing the position decision.
+
+The X3 reader activities compile with GCC `-Oz` and link-time optimization. Its network, OTA, TLS
+and MicroLink sources keep their original compiler settings; no reader feature is removed.
+The unmodified main baseline had only 697 bytes of headroom below the 99.5% gate, so the
+new position state machine needs this reduction. The simulator keeps its normal build settings.

@@ -1,7 +1,7 @@
 #pragma once
 // Orbify OrbiSmart sync (docs/design/orbismart.md §3): which way a book's place moves, when a
-// move is shown, and whether a push may go. Pure and host-tested only: no firmware wiring yet
-// (the Xteink step wires it in place of BookOrbitSmartSync::decide). The table is
+// move is shown, and whether a push may go. OrbiSmartSync wires this pure policy into the
+// reader, background task and sleep sync. The table is
 // shared/fixtures/orbismart/cases.json, which Android's logic/orbismart.lua runs too
 // (xteink/test/orbismart_test.cpp).
 #include <cstddef>

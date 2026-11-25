@@ -526,6 +526,15 @@
       "note": "Canonical inventory for W9; no Xteink implementation in W15. Source coverage: tools/test/test-catalog-coverage.py."
     },
     {
+      "file": "status/format.json",
+      "rule": "W17 page and clock formats; X3 retains the native format for flash budget",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
       "file": "wifi/policy.json",
       "section": "connect",
       "rule": "Network-up decisions by mode, reason and saved reply",

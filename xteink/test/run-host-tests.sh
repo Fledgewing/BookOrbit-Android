@@ -66,6 +66,7 @@ signing="$repo/shared/fixtures/release-signing"
 "$out/ota_signature_test" "$signing"
 # shared/fixtures/REGISTRY.json: these tests read every rule table that names "cpp" (registry_test.cpp).
 orbify_test registry
+orbify_test status_format
 orbify_test finish "$core/FinishQueue.cpp"
 orbify_test end_of_book "$core/SeriesCard.cpp" "$core/EndPagePlan.cpp" "$core/FinishQueue.cpp" "$core/NextCover.cpp" \
   "$core/CatalogCache.cpp" "$core/LocalFirst.cpp"

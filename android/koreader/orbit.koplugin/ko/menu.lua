@@ -46,6 +46,27 @@ local function compact(items)
     return out
 end
 
+-- Tiny bundled notice, loaded only for this explicit menu action.
+function OrbitAndroid:showAbout()
+    local credits
+    for _, path in ipairs({ SOURCE_DIR .. "/about_credits.json", SOURCE_DIR .. "/../../../shared/about/credits.json" }) do
+        local f = io.open(path, "rb")
+        if f then
+            local text = f:read("*a")
+            f:close()
+            credits = SettingsSync.decodeJson(text)
+            if credits then break end
+        end
+    end
+    assert(credits, "Orbit: shared About credits missing")
+    local lines = { "Orbit " .. PATCH_VERSION }
+    for i, text in ipairs(credits.paragraphs) do
+        table.insert(lines, text)
+        if i == 2 then table.insert(lines, credits.url) end
+    end
+    UIManager:show(TextViewer:new{ title = _("About Orbit"), text = table.concat(lines, "\n\n") }) -- gate: user action (About menu)
+end
+
 function OrbitAndroid:statusText()
     local parts = {}
     local cstate = Companion.state()
@@ -206,6 +227,9 @@ function OrbitAndroid:menuItems()
             sub_item_table = home_items,
             separator = true,
         },
+        { text = _("Status bar: Orbit layout (matches Xteink)"),
+            checked_func = function() return S.status_orbit_layout ~= false end,
+            callback = function() Shared.set("status_orbit_layout", not S.status_orbit_layout); ReadingStatus.changed() end },
         stoggle("local_first"),
         stoggle("eob_sheet"),
         stoggle("eob_auto"),
@@ -285,6 +309,7 @@ function OrbitAndroid:menuItems()
         S.key_log and { text = _("SQLite stress test (2 min)"), callback = later(function() SqliteStress.start() end) } or false,
     })
     local items = {
+        { text = _("About"), read_only = true, callback = later(function() self:showAbout() end) },
         { text = sectionTitle("reading", _("Reading and Home")), sub_item_table = reading },
         Sleep.menuItem(self, later),
         { text = sectionTitle("sync", _("Sync and Wi-Fi")), sub_item_table = sync },
@@ -326,7 +351,7 @@ function OrbitAndroid.readOnly(items)
         elseif it.sub_item_table_func then
             local f = it.sub_item_table_func
             c.sub_item_table_func = function(...) return OrbitAndroid.readOnly(f(...) or {}) end
-        elseif not it.keep_menu_open then
+        elseif not it.keep_menu_open and not it.read_only then
             c.enabled_func = function() return false end
             c.callback = function() end
         end

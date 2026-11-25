@@ -4,6 +4,10 @@
 #include "BookOrbitBackgroundSync.h"
 #include "Wifi.h"
 #include "SleepScreen.h"
+#include "OrbiSmartSync.h"
+#include "core/OrbiSmartState.h"
+#include <HalPowerManager.h>
+extern HalPowerManager powerManager;
 
 #if CROSSINK_TAILNET_BACKGROUND_SYNC
 
@@ -47,6 +51,8 @@ struct Tracker {
   int syncedSpine = -1;  // the position the last run started from
   int syncedPage = -1;
   unsigned long sinceMs = 0;
+  unsigned long turnMs = 0;
+  bool opening = true;
   uint32_t pages = 0;
   uint32_t chapters = 0;
 };
@@ -175,7 +181,7 @@ void intervalLabel(const uint8_t interval, char* out, const unsigned outSize) {
 
 bool enabled() {
   const uint8_t interval = BOOKORBIT_STORE.getBackgroundSync();
-  return interval != OFF && interval < INTERVAL_COUNT &&
+  return (OrbiSmartSync::enabled() || (interval != OFF && interval < INTERVAL_COUNT)) &&
          BOOKORBIT_STORE.getSyncBehavior() == BookOrbitSyncBehavior::SMART && BOOKORBIT_STORE.hasCredentials() &&
          WIFI_STORE.getCredentialCount() > 0;
 }
@@ -188,15 +194,26 @@ const char* observe(const char* epubPath, const int spineIndex, const int page, 
     tracker.spine = tracker.syncedSpine = spineIndex;
     tracker.page = tracker.syncedPage = page;
     resetCounts(nowMs);
+    tracker.turnMs = nowMs;
     return nullptr;
   }
   if (spineIndex != tracker.spine || page != tracker.page) {
     if (spineIndex != tracker.spine) tracker.chapters++;
     tracker.pages++;
+    tracker.turnMs = nowMs;
     tracker.spine = spineIndex;
     tracker.page = page;
   }
   if (running.load()) return nullptr;
+  if (OrbiSmartSync::enabled()) {
+    if (powerManager.getBatteryPercentage() < 15) return nullptr;
+    if (tracker.opening) {
+      tracker.opening = false;
+      if (OrbiSmartSync::checkOnOpen(epubPath)) return "wake";
+    }
+    if (orbify::orbismart::pauseDue(nowMs - tracker.turnMs, tracker.pages, spineIndex, page, tracker.syncedSpine, tracker.syncedPage)) return "pause";
+    return nullptr;
+  }
   if (lastRunFailed.exchange(false)) {
     // Not reached last time: the next trigger tries again even from the same page.
     tracker.syncedSpine = -1;

@@ -13,6 +13,12 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 `xteink-v1.6.1.114`, which gets nothing new, until a final CrossInk 2.x release replaces it.
 **2.x rc**: in the CrossInk 2.x release-candidate build (Include Release Candidates). **no**: not on this reader, with the reason. Platforms: AGENTS.md "Platforms".
 
+## Credits
+
+| Feature | KOReader-Android | X4 Pro | X4 | X3 |
+|---|---|---|---|---|
+| Public About credit: Orbify independence, thanks to BookOrbit, and separate project licences ([design](design/bookorbit-credit.md)); same text in README | yes (plugin and companion) | 2.x rc | 2.x rc | no: flash |
+
 ## Network and sync
 
 | Feature | KOReader-Android | X4 Pro | X4 | X3 |
@@ -22,7 +28,7 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 | Tailnet names (`bookorbit`, `*.ts.net`) for every client on the device | n/a (Tailscale app) | yes | yes | yes |
 | Network brought up before the plugin syncs, and back off after | yes | n/a (firmware does it) | n/a | n/a |
 | Sync on sleep, wake pull, Sync and sleep | yes | n/a (firmware does it) | n/a | n/a |
-| OrbiSmart: furthest-place sync, behind-hold, pause sync, a Yes / No popup for another reader's place (silent only before render), and "Read from here everywhere" queued offline ([design](design/orbismart.md); upstream: [send-time stale-push guard](server-contract.md#the-stale-push-guard-compares-send-times)) | yes | planned | planned | planned: sleep sync only |
+| OrbiSmart: furthest-place sync, behind-hold, pause sync, a Yes / No popup for another reader's place (silent only before render), and "Read from here everywhere" queued offline ([design](design/orbismart.md); upstream: [send-time stale-push guard](server-contract.md#the-stale-push-guard-compares-send-times)) | yes | 2.x rc (sleep, wake and pause) | 2.x rc | 2.x rc (sleep only) |
 | Sync while reading (time, pages or chapters) | yes | 2.x rc | 2.x rc | no: no memory beside an open book |
 | Wi-Fi modes: Always on, Off while reading, Just in time | yes | n/a | n/a | n/a |
 | Faster Wi-Fi join and catalog boot session | n/a | yes | yes | yes |
@@ -52,6 +58,7 @@ shows, restarts or takes focus; it waits for the next non-reading moment
 
 | Feature | KOReader-Android | X4 Pro | X4 | X3 |
 |---|---|---|---|---|
+| Orbit reading layout: clock above; battery, centred chapter and `N / M · P%` below, reading space reserved, native footer restored when off ([design](design/reading-status-layout.md)) | yes (default on; next release) | spaced page format (next build) | spaced page format (next build) | original format retained (flash gate) |
 | Settings PIN (kid lock) | yes | 2.x rc | 2.x rc | 2.x rc |
 | Battery stats in the `orbit-battery-stats/1` format, Compare across readers | yes | 2.x rc | 2.x rc | 2.x rc (file only, no numbers on screen) |
 | Clicker buttons (page turns in KOReader and other apps, Send key) | yes | n/a | n/a | n/a |

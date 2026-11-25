@@ -17,6 +17,7 @@ the shim: Tailscale does not run on a host, so the test server is reached direct
 
 import json
 import os
+import runpy
 
 Import("env")  # noqa: F821  (SCons builtin)
 
@@ -65,11 +66,26 @@ wg_dir = os.path.join(ml_dir, "components", "wireguard_lwip", "src")
 shim_dir = os.path.join(here, "shim")
 config_h = os.path.join(here, "ml_config.h")
 
+# The notice is one shared source, also packaged by the Android surfaces.
+_about_dir = os.path.join(os.path.dirname(overlay_root), "shared", "about")
+_about_out = os.path.join(env.subst("$BUILD_DIR"), "orbify-about")
+runpy.run_path(os.path.join(_about_dir, "generate.py"))["generate"](
+    os.path.join(_about_dir, "credits.json"), os.path.join(_about_out, "OrbifyCredits.h"))
+env.Append(CPPPATH=[_about_out])
+
 pioenv = env.subst("$PIOENV")  # noqa: F821
 # Upstream's simulator envs (platformio.ini [simulator-base]) and the reader whose switch column
 # each one takes. overlay/platformio.local.ini hooks this script into each of them.
 SIM_ENVS = {"x4-pro-simulator": "x4-pro", "x4-classic-simulator": "x4-classic", "simulator-X3": "default"}
 SIMULATOR = pioenv in SIM_ENVS
+# W10: size optimization and LTO for the X3 reader activities. Network, OTA, TLS,
+# MicroLink and simulator sources keep their existing compile flags.
+if pioenv == "default":
+    def small_reader(node_env, node):
+        build_env = node_env.Clone()
+        build_env.Append(CCFLAGS=["-Oz", "-flto"])
+        return build_env.Object(node)
+    env.AddBuildMiddleware(small_reader, "*src/activities/reader/*")  # noqa: F821
 sim_dir = os.path.join(here, "sim")
 
 if not SIMULATOR and not os.path.isfile(os.path.join(ml_dir, "include", "microlink.h")):
@@ -250,6 +266,8 @@ SWITCHES = {
     # progress sync in a background task with the book open. Not on the X3: a TLS session
     # does not fit beside an open book there.
     "CROSSINK_TAILNET_BACKGROUND_SYNC":   (0,      1,      1),
+    # Patch 0052: About credit is omitted on the flash-constrained X3.
+    "CROSSINK_TAILNET_ABOUT_CREDIT":      (0,      1,      1),
     # Patch 0023: optional settings PIN (off until one is set in Settings > Settings PIN).
     "CROSSINK_TAILNET_SETTINGS_PIN":      (1,      1,      1),
     # Patch 0025: battery stats in the orbit-battery-stats/1 format (docs/design/XTEINK-BATTERY-STATS.md).
@@ -262,6 +280,8 @@ SWITCHES = {
     "CROSSINK_TAILNET_ORBIFY_COPY_CHECK": (1,      1,      1),
     "CROSSINK_TAILNET_ORBIFY_COPY_REFRESH": (1,    1,      1),
     # Ratings on the end-of-book page (item 2): not on the X3 (G31).
+    # W17: keep the X3 image byte-for-byte unchanged at its 99.5% flash gate.
+    "CROSSINK_TAILNET_ORBIFY_STATUS":     (0,      1,      1),
     "CROSSINK_TAILNET_ORBIFY_RATING":     (0,      1,      1),
     # Patch 0028, the End-of-Book page (item 2). The X3's flash drop order (design §5): lower
     # SUGGESTIONS to 0 first, then AUTHOR_ROW to 0, if `default` crosses the 99.5% CI gate.
@@ -391,6 +411,8 @@ _orig_process_project_deps = env.ProcessProjectDeps  # noqa: F821
 
 def _process_project_deps_with_tailnet(env):
     _orig_process_project_deps()
+    if pioenv == "default":
+        env.Append(LINKFLAGS=["-flto"])
     if os.path.basename(env.subst("$PROJECT_SRC_DIR")) == ".dummy":
         # The framework's lib-builder pass (custom_sdkconfig) links a dummy sketch to
         # rebuild the ESP-IDF libraries. It has none of CrossInk's libraries (CrossInk v2:

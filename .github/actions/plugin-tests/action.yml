@@ -14,6 +14,7 @@ runs:
         # stdin closed: nothing in the tests may wait on a terminal.
         luajit android/koreader/test/test_logic.lua </dev/null
         luajit android/koreader/test/test_flows.lua </dev/null
+        python3 shared/about/test_credits.py
         # The release zip builds, stamped, with everything under orbit.koplugin/.
         zip="$RUNNER_TEMP/plugin-check/orbit.koplugin.zip"
         mkdir -p "$(dirname "$zip")"

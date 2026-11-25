@@ -37,6 +37,27 @@
  ],
  "settings": [
   {
+   "key": "status_orbit_layout",
+   "type": "bool",
+   "default": true,
+   "section": "reading",
+   "label": "Status bar: Orbit layout (matches Xteink)",
+   "line": "Clock above; battery, chapter and reading progress below.",
+   "reader": [
+    "plugin"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "search": [
+    "status",
+    "footer",
+    "clock",
+    "battery"
+   ],
+   "applies": "now"
+  },
+  {
    "key": "home_button",
    "type": "choice",
    "default": "smart",
@@ -449,6 +470,7 @@
   },
   {
    "key": "sync_mode",
+   "platforms": ["KOReader-Android", "X4 Pro", "X4", "X3"],
    "type": "choice",
    "default": "orbismart",
    "values": [

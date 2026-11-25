@@ -31,3 +31,15 @@ the CrossInk simulator and the companion's JVM tests (`AGENTS.md`, "Emulated rel
 Per directory: `android/koreader/` is AGPL-3.0-or-later; `android/companion/`, `xteink/`
 (source) and everything else are MIT. Firmware binaries are GPL-3.0-or-later (they include
 wolfSSL; see `xteink/README.md`). Each directory has its `LICENSE`.
+
+## Credits
+
+Orbify is an independent project, not an official BookOrbit release, and does not include BookOrbit code.
+
+[That said, it wouldn't exist without BookOrbit.](https://github.com/bookorbit/bookorbit)
+
+Copyright (C) 2025-2026 neon. Additional copyright is held by the respective BookOrbit contributors.
+
+BookOrbit is licensed under the GNU AGPLv3 with additional terms.
+
+Orbify licences: Orbit Companion is MIT. The Xteink overlay source is MIT, except firmware code marked GPL-3.0-or-later; Xteink firmware binaries are GPL-3.0-or-later. Orbit is AGPL-3.0-or-later as a KOReader plugin.
