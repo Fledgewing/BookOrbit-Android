@@ -398,7 +398,7 @@ in" with `ORBIFY_SIM_TAILSCALE=joined`.
 
 ## Android feedback parity (W7)
 
-The user's Android rulings apply to X4 Pro and X4. Patch 0042 is integration hooks;
+The user's Android rulings apply to X4 Pro and X4. Patches 0042 (refresh) and 0043 (OTA return) are integration hooks;
 implementation is in `orbify/` with GPL-3.0-or-later headers. X3 builds only the OTA return
 marker; the mirror, incremental catalog cache and sleep pickers remain behind their existing
 zero switches. No position sync, OTA verifier or TLS implementation changes.
@@ -406,14 +406,15 @@ zero switches. No position sync, OTA verifier or TLS implementation changes.
 - **Only a user starts a Full refresh.** The settings action and holds on the sync tile or
   catalog refresh persist `mirror.request`. A walker resume requires it; neither cache age nor
   a library-version change starts or requests a walk. Home's scan, matching, cover decode and
-  refresh steps log during that run, rather than showing additional notices. The one start
+  refresh steps log during that run, rather than showing additional notices. The generic reboot
+  popup is suppressed both on entry and on the final return after Done. The one start
   popup and corner percentage end with Done / Done with N errors. Ordinary Home refresh keeps
   its existing foreground activity; sleep work has no progress UI.
 - **Discovery, then a fixed data total.** Root and facet enumeration is a first pass at 0%.
   Sections are queued ahead of data requests. Once the first data request finishes, `Plan::add`
   rejects additions, including after serialization. Book-detail requests deduplicate by book ID
-  across every source. A v4 plan retains the progress and failures; unfinished older plans start
-  over under this rule. The request budget and first-page scope stay unchanged.
+  across every source. A v4 plan retains the progress and failures. Older plans move pending
+  discovery ahead of remaining data and keep their highest displayed percentage during migration. The request budget and first-page scope stay unchanged.
 - **Protocol/storage limit on book-count parity:** Xteink stores whole JSON replies, rather
   than Android's normalized SQLite books and list membership. A book may appear in multiple
   cached list replies, though its detail is fetched only once. First-page list totals overlap

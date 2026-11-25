@@ -36,6 +36,7 @@ const char* const STATE_PATH = "/.crosspoint/orbify/mirror.state";
 const char* const REQUEST_PATH = "/.crosspoint/orbify/mirror.request";
 constexpr size_t MAX_FILE = 32 * 1024;
 constexpr uint32_t MIN_PLAUSIBLE_EPOCH = 1700000000u;
+bool userRunThisBoot = false;
 
 uint32_t nowSeconds() {
   const time_t t = time(nullptr);
@@ -90,9 +91,7 @@ State loadState() {
 
 bool loadPlan(Plan& plan) {
   if (!Storage.exists(PLAN_PATH) && Storage.exists(PLAN_TMP)) Storage.rename(PLAN_TMP, PLAN_PATH);
-  const std::string text = readText(PLAN_PATH);
-  // Older walks interleaved discovery and data. Restart them once under the fixed-total rule.
-  return text.find("orbify-mirror 4\n") == 0 && plan.parse(text);
+  return plan.parse(readText(PLAN_PATH));
 }
 
 void savePlan(const Plan& plan) {
@@ -234,7 +233,10 @@ bool saved() { return loadState().saved; }
 uint32_t savedAt() { return loadState().at; }
 bool requested() { return Storage.exists(REQUEST_PATH); }
 
+bool quietRestart() { return userRunThisBoot || (Storage.ready() && requested()); }
+
 void request() {
+  userRunThisBoot = true;
   writeText(REQUEST_PATH, "1\n");
   LOG_INF(TAG, "Mirror: Full refresh asked for");
 }
@@ -291,6 +293,7 @@ bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* prog
          const bool heapFloor) {
   if (!requested()) return false;  // no automatic Full refresh, even through a future caller
   OrbifyWifi::Hold radio(OrbifyWifi::Owner::Refresh);
+  userRunThisBoot = true;
   const unsigned long started = millis();
   Plan plan;
   loadOrSeed(plan);
@@ -342,6 +345,7 @@ int pendingPercent() {
 void Walk::begin(const bool userStarted) {
   if (userStarted) request();
   if (!orbify::mirror::showProgress(requested(), true)) return;
+  userRunThisBoot = true;
   plan = Plan{};
   connectionFailed = false;
   loadOrSeed(plan);

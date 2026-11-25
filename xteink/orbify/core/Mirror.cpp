@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "Mirror.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -13,7 +14,8 @@ namespace {
 constexpr uint32_t DAY_S = 86400;
 // 2: a book list's fields keep their separator in the plan. Version 1 plans turned it into a space
 // (one "sort" field holding the whole query, a 400 from the server) and are not resumed.
-// 3: the done line also carries the % shown and the failures (one % that never goes down).
+// 3: the done line also carries the % shown and failures.
+// 4: discovery before data; old plans migrate without lowering their displayed percentage.
 constexpr char HEADER[] = "orbify-mirror 4";
 constexpr char HEADER_V3[] = "orbify-mirror 3";
 constexpr char HEADER_V2[] = "orbify-mirror 2";
@@ -173,8 +175,16 @@ bool decodeQuery(const std::string& text, FacetQuery& out) {
 bool Plan::add(const Kind kind, const std::string& arg) {
   if (steps.size() >= MAX_STEPS) return false;
   // Once the data pass starts, its denominator is sealed (including after a reboot).
-  for (size_t i = 0; i < done; ++i) {
-    if (steps[i].kind == Kind::Books || steps[i].kind == Kind::Detail) return false;
+  // A migrated v2/v3 walk can have old data before pending discovery; let that first
+  // discovery pass finish while retaining the old displayed percentage.
+  bool pendingDiscovery = false;
+  for (size_t i = done; i < steps.size(); ++i) {
+    pendingDiscovery |= steps[i].kind == Kind::Root || steps[i].kind == Kind::Section;
+  }
+  if (!pendingDiscovery) {
+    for (size_t i = 0; i < done; ++i) {
+      if (steps[i].kind == Kind::Books || steps[i].kind == Kind::Detail) return false;
+    }
   }
   const std::string value = cleanLine(arg);
   for (const Step& s : steps)
@@ -278,7 +288,13 @@ bool Plan::parse(const std::string& text) {
   steps = std::move(read);
   done = parsedDone;
   failed = parsedFailed;
-  shown = static_cast<unsigned>(parsedShown);
+  shown = v3 ? static_cast<unsigned>(parsedShown)
+             : (steps.empty() ? 0 : static_cast<unsigned>(done * 100 / steps.size()));
+  // Old walks interleaved discovery and data. Bring only pending discovery forward;
+  // completed steps and the displayed high-water mark retain their meaning.
+  std::stable_partition(steps.begin() + done, steps.end(), [](const Step& step) {
+    return step.kind == Kind::Root || step.kind == Kind::Section;
+  });
   return true;
 }
 

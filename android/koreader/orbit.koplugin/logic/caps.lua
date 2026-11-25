@@ -4,9 +4,9 @@
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
 -- What the companion offers (docs/design/addon-mode.md §6): its mode and capabilities, from
--- /status (live, while its service runs) or the status file it writes into
--- koreader/settings/orbit-companion.json (always). An older companion that knows neither is
--- legacy: every feature, exactly as before.
+-- the status call (live, while its service runs) or the status file it writes into
+-- koreader/settings/orbit-companion.json (always). The plugin and the companion ship together,
+-- so there is no older companion to guess for: nothing known means nothing offered yet.
 ---------------------------------------------------------------------------------------------
 
 Caps = {}
@@ -22,10 +22,10 @@ local function set(list)
     return out
 end
 
--- state: Companion.state() ("ok" | "frozen" | "missing"); file: the decoded status file or nil;
--- status: the decoded /status or nil (no answer); cached: { mode, caps } last seen or nil.
--- Returns caps (a set), mode ("full" | "addon" | nil), source ("none" | "status" | "file" |
--- "legacy" | "cache").
+-- state: Companion.state() ("ok" | "frozen" | "untrusted" | "missing"); file: the decoded status
+-- file or nil; status: the decoded status or nil (no answer); cached: { mode, caps } last seen or
+-- nil. Returns caps (a set), mode ("full" | "addon" | nil), source ("none" | "status" | "file" |
+-- "cache").
 function Caps.resolve(state, file, status, cached)
     if state ~= "ok" then return {}, nil, "none" end -- a leftover file is ignored
     if type(status) == "table" and type(status.caps) == "table" then
@@ -34,9 +34,8 @@ function Caps.resolve(state, file, status, cached)
     if type(file) == "table" and type(file.caps) == "table" then
         return set(file.caps), file.mode, "file"
     end
-    if type(status) == "table" then return set(Caps.ALL), "full", "legacy" end -- an older companion
     if type(cached) == "table" and type(cached.caps) == "table" then return set(cached.caps), cached.mode, "cache" end
-    return set(Caps.ALL), nil, "legacy"
+    return {}, nil, "none"
 end
 
 -- Sorted list (for S.companion_caps and the log).

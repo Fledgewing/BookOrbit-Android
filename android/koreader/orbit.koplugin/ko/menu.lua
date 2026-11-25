@@ -212,7 +212,7 @@ function OrbitAndroid:menuItems()
         {
             text_func = function()
                 local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
-                -- The companion's "Home opens" (companion 0.4.8+): this applies only with KOReader.
+                -- The companion's "Home opens": this applies only with KOReader.
                 if Shared.home_opens == "launcher" then t = t .. _(" (Home opens the Orbit launcher page)")
                 elseif Shared.home_opens == "app" then t = t .. _(" (Home opens another app)") end
                 return t

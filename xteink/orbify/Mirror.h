@@ -21,6 +21,9 @@ uint32_t savedAt();
 // Only a user action (settings, sync-tile hold, catalog hold) requests a Full refresh.
 bool requested();
 void request();
+// Generic Loading/refresh reboot popups are suppressed throughout this user run, including
+// the final return after its request marker is removed. Resets naturally at the next boot.
+bool quietRestart();
 orbify::mirror::Due dueNow();
 // Cheap recent-items validation, only on the sleep sync's existing Wi-Fi session.
 void refreshChanged(bool (*cancelled)());

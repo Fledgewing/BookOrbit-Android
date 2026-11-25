@@ -3,7 +3,7 @@
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
--- The /clicks channel (companion 0.4.2+): a kept-open loopback connection the companion writes
+-- The /clicks channel: a kept-open loopback connection the companion writes
 -- one line per action to. Its fd is added to KOReader's own ALooper (the one
 -- ffi/input_android.lua waitForEvent polls), so a click wakes KOReader at once and nothing
 -- polls. waitForEvent is wrapped to read the socket after every wake-up.

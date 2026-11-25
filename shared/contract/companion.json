@@ -1,0 +1,529 @@
+{
+  "version": 1,
+  "about": "The Orbit KOReader plugin <-> Orbit Companion contract (android/docs/INTERFACE.md is the human view). Both sides test against this file: ContractTest.kt and test_flows.lua 'contract'. Change it with both sides in the same change.",
+  "package": "net.fledgewing.orbitcompanion",
+  "authority": "net.fledgewing.orbitcompanion.commands",
+  "common_extras": [
+    "proto",
+    "sender",
+    "patch_version"
+  ],
+  "answer": [
+    "ok",
+    "why",
+    "status",
+    "key",
+    "proof"
+  ],
+  "commands": [
+    {
+      "name": "NET_UP",
+      "method": "net.fledgewing.orbitcompanion.action.NET_UP",
+      "extras": [
+        "reason",
+        "request_id",
+        "wifi",
+        "tailscale",
+        "wake_lock_s",
+        "owner",
+        "mode"
+      ],
+      "does": "Wi-Fi on (if asked), a wake lock up to 25 s, Tailscale's connect"
+    },
+    {
+      "name": "NET_DONE",
+      "method": "net.fledgewing.orbitcompanion.action.NET_DONE",
+      "extras": [
+        "reason",
+        "ok",
+        "seconds",
+        "detail",
+        "restore"
+      ],
+      "does": "the sync is over: release the wake lock, apply Wi-Fi after a sleep sync"
+    },
+    {
+      "name": "WIFI_OFF",
+      "method": "net.fledgewing.orbitcompanion.action.WIFI_OFF",
+      "extras": [
+        "reason",
+        "auto",
+        "mode"
+      ],
+      "does": "Wi-Fi off (an automatic off is refused while the reader owns Wi-Fi)"
+    },
+    {
+      "name": "SLEEP_NOW",
+      "method": "net.fledgewing.orbitcompanion.action.SLEEP_NOW",
+      "extras": [
+        "reason"
+      ],
+      "does": "lock the screen (device admin force-lock), at most once per 5 s"
+    },
+    {
+      "name": "SETTINGS",
+      "method": "net.fledgewing.orbitcompanion.action.SETTINGS",
+      "extras": [
+        "values",
+        "settings_at",
+        "reading_schedule",
+        "reading_schedule_applied_at"
+      ],
+      "does": "the shared settings, newest per key wins"
+    },
+    {
+      "name": "STATS",
+      "method": "net.fledgewing.orbitcompanion.action.STATS",
+      "extras": [
+        "pages",
+        "full",
+        "partial",
+        "content",
+        "open",
+        "reading",
+        "wifi_mode",
+        "reading_schedule",
+        "reason"
+      ],
+      "does": "battery stats batch and the reading gate"
+    },
+    {
+      "name": "RELAUNCH",
+      "method": "net.fledgewing.orbitcompanion.action.RELAUNCH",
+      "extras": [
+        "reason"
+      ],
+      "does": "the plugin is quitting for a restart: start KOReader again"
+    },
+    {
+      "name": "SETUP_LATER",
+      "method": "net.fledgewing.orbitcompanion.action.SETUP_LATER",
+      "extras": [],
+      "does": "the setup box's Later"
+    },
+    {
+      "name": "REPORT",
+      "method": "net.fledgewing.orbitcompanion.action.REPORT",
+      "extras": [
+        "signed_in",
+        "recommended",
+        "conflicts",
+        "reason"
+      ],
+      "does": "signed in yes/no and the recommended settings' state, for two Setup rows"
+    },
+    {
+      "name": "SLEEP_POOL",
+      "method": "net.fledgewing.orbitcompanion.action.SLEEP_POOL",
+      "extras": [
+        "reason",
+        "wake"
+      ],
+      "does": "the sleep screen's files changed, or KOReader woke from a real sleep"
+    },
+    {
+      "name": "MIRROR",
+      "method": "net.fledgewing.orbitcompanion.action.MIRROR",
+      "extras": [
+        "reason",
+        "server",
+        "user",
+        "userkey"
+      ],
+      "does": "run the Full refresh from mirror/plan.lua",
+      "login": true
+    },
+    {
+      "name": "CHECK",
+      "method": "net.fledgewing.orbitcompanion.action.CHECK",
+      "extras": [
+        "reason",
+        "cache_key",
+        "path",
+        "mode",
+        "owner",
+        "template",
+        "server",
+        "user",
+        "userkey"
+      ],
+      "does": "check one reply against the server and save a changed one",
+      "login": true
+    },
+    {
+      "name": "STORAGE",
+      "method": "net.fledgewing.orbitcompanion.action.STORAGE",
+      "extras": [
+        "reason",
+        "limit",
+        "cover_dir",
+        "mirror_covers"
+      ],
+      "does": "count what Orbit stores and remove the oldest over the limit"
+    },
+    {
+      "name": "COPIES",
+      "method": "net.fledgewing.orbitcompanion.action.COPIES",
+      "extras": [
+        "reason"
+      ],
+      "does": "find the copies on the reader that changed in the library (copies/ask.lua)"
+    },
+    {
+      "name": "SLEEP_REFRESH",
+      "method": "net.fledgewing.orbitcompanion.action.SLEEP_REFRESH",
+      "extras": [
+        "reason",
+        "from",
+        "rules",
+        "open_id",
+        "every",
+        "storage_limit_mb",
+        "scopes_only",
+        "server",
+        "user",
+        "userkey"
+      ],
+      "does": "refresh the sleep screen's pool, or only the pickers' lists",
+      "login": true
+    },
+    {
+      "name": "RECHECK",
+      "method": "net.fledgewing.orbitcompanion.action.RECHECK",
+      "extras": [
+        "reason",
+        "ids",
+        "paths",
+        "server",
+        "user",
+        "userkey"
+      ],
+      "does": "ask a Full refresh's covers on screen again, If-None-Match",
+      "login": true
+    },
+    {
+      "name": "SQLITE_STRESS",
+      "method": "net.fledgewing.orbitcompanion.action.SQLITE_STRESS",
+      "extras": [
+        "seconds"
+      ],
+      "does": "debug: the shared-storage SQLite stress writer"
+    },
+    {
+      "name": "PATCH",
+      "method": "net.fledgewing.orbitcompanion.action.PATCH",
+      "extras": [
+        "reason",
+        "id",
+        "fields",
+        "stale_home",
+        "wipe"
+      ],
+      "does": "a write the plugin made, patched into orbit.db (or a wipe)"
+    },
+    {
+      "name": "UPDATE",
+      "method": "net.fledgewing.orbitcompanion.action.UPDATE",
+      "extras": [
+        "reason"
+      ],
+      "does": "check for an update: the companion, then the plugin of its release"
+    }
+  ],
+  "calls": [
+    {
+      "name": "STATUS",
+      "method": "net.fledgewing.orbitcompanion.call.STATUS",
+      "caller": "koreader",
+      "extras": [
+        "patch_version",
+        "book"
+      ],
+      "answer": [
+        "status"
+      ],
+      "does": "the status JSON, while the companion's service runs"
+    },
+    {
+      "name": "TAKE_COMMAND",
+      "method": "net.fledgewing.orbitcompanion.call.TAKE_COMMAND",
+      "caller": "koreader",
+      "extras": [
+        "command"
+      ],
+      "answer": [],
+      "does": "did the companion put this command on KOReader's start? once"
+    },
+    {
+      "name": "CLICKS",
+      "method": "net.fledgewing.orbitcompanion.call.CLICKS",
+      "caller": "koreader",
+      "extras": [],
+      "answer": [
+        "key",
+        "proof"
+      ],
+      "does": "a one-time key and proof for GET /clicks"
+    },
+    {
+      "name": "RESTART_KOREADER",
+      "method": "net.fledgewing.orbitcompanion.call.RESTART_KOREADER",
+      "caller": "shell",
+      "extras": [],
+      "answer": [],
+      "does": "USB only (tools/sideload-android.sh): restart KOReader the companion's way"
+    }
+  ],
+  "activities": [
+    {
+      "name": "SHOW_STATUS",
+      "action": "net.fledgewing.orbitcompanion.action.SHOW_STATUS"
+    },
+    {
+      "name": "SHOW_APPS",
+      "action": "net.fledgewing.orbitcompanion.action.SHOW_APPS"
+    },
+    {
+      "name": "SHOW_LAUNCHER",
+      "action": "net.fledgewing.orbitcompanion.action.SHOW_LAUNCHER"
+    },
+    {
+      "name": "SHOW_SETUP",
+      "action": "net.fledgewing.orbitcompanion.action.SHOW_SETUP"
+    },
+    {
+      "name": "SHOW_PIN",
+      "action": "net.fledgewing.orbitcompanion.action.SHOW_PIN"
+    },
+    {
+      "name": "RELAUNCH_UI",
+      "action": "net.fledgewing.orbitcompanion.action.RELAUNCH_UI"
+    },
+    {
+      "name": "SLEEP_PREVIEW",
+      "action": "net.fledgewing.orbitcompanion.action.SLEEP_PREVIEW"
+    },
+    {
+      "name": "SHOW_SLEEP",
+      "action": "net.fledgewing.orbitcompanion.action.SHOW_SLEEP"
+    }
+  ],
+  "usb": [
+    {
+      "name": "RESET_PIN",
+      "action": "net.fledgewing.orbitcompanion.action.RESET_PIN",
+      "does": "remove the Settings PIN; a receiver that needs android.permission.DUMP (adb only)"
+    }
+  ],
+  "koreader_start": {
+    "extras": {
+      "COMMAND": "net.fledgewing.orbitcompanion.extra.COMMAND",
+      "FROM": "net.fledgewing.orbitcompanion.extra.FROM",
+      "ROTATION": "net.fledgewing.orbitcompanion.extra.ROTATION"
+    },
+    "commands": [
+      "home",
+      "home_smart",
+      "restart",
+      "reopen_book",
+      "signin",
+      "recommended",
+      "full_refresh",
+      "sync_sleep",
+      "test_sync_path"
+    ]
+  },
+  "loopback": {
+    "port": 47913,
+    "paths": [
+      "/clicks"
+    ],
+    "lines": [
+      "ORBIT",
+      "SERVICE",
+      "CLICK",
+      "SETTINGS"
+    ]
+  },
+  "status": [
+    "version",
+    "proto",
+    "mode",
+    "caps",
+    "settings",
+    "values",
+    "keymap",
+    "clicker_service",
+    "pin_locked",
+    "vpn_lockdown",
+    "reading_schedule_request",
+    "setup_needed",
+    "setup_prompt",
+    "sleep",
+    "want_choices"
+  ],
+  "files": [
+    {
+      "path": "koreader/settings/orbit-companion.json",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "json",
+      "what": "the status file: mode, caps, version, settings"
+    },
+    {
+      "path": "koreader/settings/orbit-recommended.json",
+      "writer": "plugin",
+      "reader": "companion",
+      "format": "json",
+      "what": "the recommended settings' rows"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/mirror/plan.lua",
+      "writer": "plugin",
+      "reader": "companion",
+      "format": "lua",
+      "what": "what a Full refresh saves; no login"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/mirror/stop",
+      "writer": "plugin",
+      "reader": "companion",
+      "format": "empty",
+      "what": "stop the run"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/mirror/status.lua",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "lua",
+      "what": "the run's progress, every 2 s"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/mirror/summary.lua",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "lua",
+      "what": "how the run ended"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/events/",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "lua",
+      "what": "one answer per file"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/copies/ask.lua",
+      "writer": "plugin",
+      "reader": "companion",
+      "format": "lua",
+      "what": "the copies on the reader to check"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/stress-writer.lua",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "lua",
+      "what": "debug: the stress writer's result"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/stress.db",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "sqlite",
+      "what": "debug: the stress test's database"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/pool.json",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "json",
+      "what": "the sleep screen's covers"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/state.json",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "json",
+      "what": "what the sleep screen showed"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/bag.lua",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "lua",
+      "what": "the shuffle bag"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/leave_out.lua",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "lua",
+      "what": "Leave out's member ids"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/scopes.json",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "json",
+      "what": "the pickers' scopes and collections"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/tags.json",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "json",
+      "what": "the tag picker's counts"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/current.json",
+      "writer": "plugin",
+      "reader": "companion",
+      "format": "json",
+      "what": "the open book's cover (its image file) and caption"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/current.png",
+      "writer": "plugin",
+      "reader": "companion",
+      "format": "png",
+      "via": "current.json",
+      "what": "The current book cover named by current.json"
+    },
+    {
+      "path": "koreader/cache/bookorbit/",
+      "pattern": "<id>_<version>.jpg and matching .etag",
+      "writer": "plugin, companion",
+      "reader": "plugin, companion",
+      "format": "jpeg, etag",
+      "what": "BookOrbit thumbnails and mirror covers"
+    },
+    {
+      "path": "koreader/settings/orbit-sleep/covers/",
+      "pattern": "<id>.jpg and matching .etag",
+      "writer": "companion",
+      "reader": "companion",
+      "format": "jpeg, etag",
+      "what": "Recommended sleep covers named by pool.json"
+    }
+  ],
+  "db": {
+    "file": "koreader/settings/orbit-cache/orbit.db",
+    "writer": "companion",
+    "reader": "plugin",
+    "user_version": 1,
+    "schema": "shared/fixtures/cache/schema.sql",
+    "tables": [
+      "meta",
+      "books",
+      "lists",
+      "list_items",
+      "entries",
+      "cover_keep",
+      "tags",
+      "scopes",
+      "leave_out",
+      "jobs"
+    ]
+  }
+}
