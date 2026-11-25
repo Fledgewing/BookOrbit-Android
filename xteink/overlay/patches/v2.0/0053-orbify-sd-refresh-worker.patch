@@ -393,7 +393,7 @@ index 59dbba2..e2190a9 100644
      // The whole sync runs synchronously from here, decisions included.
      onWifiSelectionComplete(true);
 diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
-index 006e7a3..d4f59c0 100644
+index d96ac71..d00b2a2 100644
 --- a/src/activities/settings/BookOrbitSettingsActivity.cpp
 +++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
 @@ -31,6 +31,7 @@
@@ -529,7 +529,7 @@ index 006e7a3..d4f59c0 100644
 @@ -484,6 +512,11 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
        }
      } else if (i == SYNC_MODE_ROW) {
-       values[i] = BOOKORBIT_STORE.getOrbiSmart() ? "OrbiSmart (recommended)" : "Custom";
+       values[i] = BOOKORBIT_STORE.getOrbiSmart() ? "Furthest page wins" : "Custom";
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
 +    } else if (i >= STORAGE_ROW && i <= WIFI_IDLE_ROW) {
 +      const char* keys[] = {"storage_limit_mb", "wifi_mode", "wifi_idle_min"};
@@ -558,7 +558,7 @@ index 006e7a3..d4f59c0 100644
 @@ -528,6 +561,12 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
      const int i = page == Page::Home ? visible : settingRow(visible);
      fui::ListItem item;
-     item.label = page != Page::Home && i == SYNC_MODE_ROW ? "Sync" : I18N.get(page == Page::Home ? homeNames[i] : menuNames[i]);
+     item.label = page != Page::Home && i == SYNC_MODE_ROW ? "Reading position" : I18N.get(page == Page::Home ? homeNames[i] : menuNames[i]);
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
 +    if (page != Page::Home && i >= STORAGE_ROW && i <= WIFI_IDLE_ROW) {
 +      const char* keys[] = {"storage_limit_mb", "wifi_mode", "wifi_idle_min"};

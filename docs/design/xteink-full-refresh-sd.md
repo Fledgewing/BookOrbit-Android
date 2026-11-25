@@ -4,7 +4,7 @@ Approved scope: the user's W9 implementation brief and explicit rulings on SD st
 Android Wi-Fi parity and continuing a Full refresh while navigating Home/catalog/reader.
 X4 Pro and X4 Classic have PSRAM and ship this path. X3 retains its existing catalog;
 `CROSSINK_TAILNET_ORBIFY_MIRROR` and `CROSSINK_TAILNET_ORBIFY_CACHE` remain off there.
-No OTA verifier, TLS trust or OrbiSmart decisions change.
+No OTA verifier, TLS trust or BookSync position sync decisions change.
 
 ## Work and memory
 
@@ -81,7 +81,7 @@ page never connects. `always_on` restores a previously-off radio after its flow;
 `jit` also turns it off after the chosen 1/2/5/10 idle minutes (default 2). Holds defer off
 until every owner releases, with Android's three-second grace. Off work runs on a worker,
 so the Wi-Fi driver's delays cannot block main-loop input. The hidden sleep sync
-releases its last hold and turns the radio off before local cover decoding and SD shutdown. OrbiSmart moments and decisions
+releases its last hold and turns the radio off before local cover decoding and SD shutdown. BookSync position sync moments and decisions
 are unchanged. Lua and C++ read `shared/fixtures/wifi/policy.json` for connection decisions.
 
 Host tests cover paging beyond the former cap, detail deduplication, fixed progress,
