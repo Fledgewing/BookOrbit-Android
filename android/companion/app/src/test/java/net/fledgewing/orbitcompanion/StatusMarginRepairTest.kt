@@ -142,6 +142,30 @@ return {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun globalRepairPublishesMatchingNativeMemoryUpdateAndRetainsItsRecoverySource() {
+        val root = Files.createTempDirectory("repair-global-memory").toFile()
+        try {
+            val global = File(root, "koreader/settings.reader.lua").apply {
+                parentFile!!.mkdirs(); writeText("return { [\"reader_footer_mode\"] = 1, }")
+            }
+            val old = File(global.path + ".old").apply { writeText("return { [\"reader_footer_mode\"] = 0, }") }
+            val events = arrayListOf<Triple<String, String, String>>()
+            val notify: (String, String, String) -> Unit = { b, a, t -> events.add(Triple(b, a, t)) }
+            assertFalse(StatusMarginRepair.run(root, {}, {}, globalRepair = notify, canApply = { false }))
+            assertTrue(events.isEmpty())
+            assertTrue(StatusMarginRepair.run(root, {}, {}, globalRepair = notify))
+            assertEquals("1", events.single().first)
+            assertEquals("0", events.single().second)
+            assertTrue(global.readText().contains("= 0"))
+            // A subsequent native flush can rotate .old. The recovery event must
+            // survive a companion restart until KOReader acknowledges its mailbox.
+            old.writeText("return { [\"reader_footer_mode\"] = 1, }")
+            StatusMarginRepair.run(root, {}, {}, globalRepair = notify)
+            assertEquals(2, events.size)
+            assertEquals(events[0], events[1])
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun interruptionDoesNotMarkMigrationComplete() {
         val root=Files.createTempDirectory("margin-paused").toFile()
         try {

@@ -6949,6 +6949,34 @@ test("W34: crawl progress is retired and a busy obsolete run cannot block bulk d
     cacheTeardown()
 end)
 
+test("W34: global footer repair survives a native flush without touching the loaded document", function()
+    local prior_mode, prior_token = store.reader_footer_mode, E.S.native_footer_repair
+    local ui = newUI(true)
+    local footer = { mode=1 }
+    ui.view = { footer=footer }
+    store.reader_footer_mode, E.S.native_footer_repair = 1, nil
+    W.shown = {ui}
+    local event = { kind="native_footer_repair", before="1", after="0", token="synthetic-footer" }
+    E.OC.applyEvents({event})
+    eq(store.reader_footer_mode, 0, "native global memory agrees with companion disk repair")
+    eq(footer.mode, 1, "no change to open footer or document layout")
+    eq(UIManager:getTopmostVisibleWidget(), ui, "nothing interrupts reading")
+    -- KOReader's unconditional dump of G_reader_settings must now persist 0.
+    eq(G_reader_settings:readSetting("reader_footer_mode"), 0, "next native flush retains repair")
+    store.reader_footer_mode = 1 -- later deliberate user setting
+    E.OC.applyEvents({event})
+    eq(store.reader_footer_mode, 1, "replayed mailbox cannot undo a later user choice")
+    E.OC.applyEvents({{kind=event.kind,before="1",after="nil",token="synthetic-unset"}})
+    eq(store.reader_footer_mode, nil, "original absent setting is restored")
+    store.reader_footer_mode = 2
+    E.OC.applyEvents({{kind=event.kind,before="1",after="0",token="synthetic-changed"}})
+    eq(store.reader_footer_mode, 2, "a newer native value is retained")
+    E.OC.applyEvents({{kind=event.kind,before="2",after="invalid",token="synthetic-invalid"}})
+    eq(store.reader_footer_mode, 2, "malformed repair does nothing")
+    store.reader_footer_mode, E.S.native_footer_repair = prior_mode, prior_token
+    ReaderUI.instance = nil; W.shown = {}
+end)
+
 -- This case is also in the emulated release gate (ORBIT_TEST_ONLY=startup).
 -- With a pinned checkout it executes KOReader's actual opening coroutine.
 test("startup smoke: Home, history and file browser open during Full refresh with repair pending", function()
