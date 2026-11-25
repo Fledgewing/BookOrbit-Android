@@ -17,7 +17,7 @@
 //
 // Before the stack exists: tcpip_init() (esp_netif_init(), the first time Wi-Fi starts) creates
 // the core lock. Until then every lwIP API call that takes it (a name lookup, a new socket) asserts
-// on a NULL mutex. Seen on an X4 Pro, xteink-v2.0.0.194, the cache-first catalog (patch 0038)
+// on a NULL mutex. Seen on an X4 Pro, xteink-v2.0.0.194, the cache-first catalog
 // opened with Wi-Fi never started, then a list's next page:
 //   assert failed: xQueueSemaphoreTake queue.c:1709 (( pxQueue ))
 //   backtrace: xQueueSemaphoreTake(NULL) <- sys_mutex_lock(&lock_tcpip_core)

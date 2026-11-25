@@ -139,20 +139,19 @@ SWITCHES = {
     "TAILNET_PARK_DURING_CONNECT":        (1,      0,      0),      # live catalog: cached start kept, else control parked + restart
     # --- CrossInk patches 0004 (memory cuts, include/CrossInkTailnetCuts.h) and 0005 (WiFi join).
     # BookOrbit sync: a new TLS session needs this much free heap (0 = upstream's 55000)...
-    # The X4s: 20000, their wolfSSL allocates from PSRAM (patch 0038, orbify/HeapFloor.h), so a
+    # The X4s: 20000, their wolfSSL allocates from PSRAM (orbify/HeapFloor.h), so a
     # handshake needs internal RAM only for Wi-Fi and lwIP buffers.
     "CROSSINK_TAILNET_SYNC_TLS_FLOOR":    (35000,  20000,  20000),
     # ...and a largest free block this big (measured X3 handshake peaks: up to 24.0 KB). The X4s put
     # allocations over 4 KB in PSRAM, wolfSSL's buffers included: an 8 KB internal block is enough
-    # there, and 24 KB refused the copy refresh's match check at 39 KB free (patch 0037).
-    # there, and 24 KB refused the copy refresh's match check at 39 KB free (patch 0037). With wolfSSL in
-    # PSRAM (patch 0038) the X4s need only a Wi-Fi-buffer-sized block: 4 KB (.167 had 7 KB).
+    # there, and 24 KB refused the copy refresh's match check at 39 KB free. With wolfSSL in
+    # PSRAM the X4s need only a Wi-Fi-buffer-sized block: 4 KB (.167 had 7 KB).
     "CROSSINK_TAILNET_SYNC_TLS_BLOCK":    (24576,  4096,   4096),
-    # Patch 0038: wolfSSL allocates from PSRAM (orbify/HeapFloor.h installTlsPsram), and the floors
+    # The TLS PSRAM hook: wolfSSL allocates from PSRAM (orbify/HeapFloor.h installTlsPsram), and the floors
     # that measure internal RAM count only what is left there. The simulators take their reader's
     # column, so the scenarios run against the X4s' floors.
     "CROSSINK_TAILNET_TLS_PSRAM":         (0,      1,      1),
-    # ...and a request on a kept session this much free (patch 0038; 20000 refused .167's match check).
+    # ...and a request on a kept session this much free (20000 refused .167's match check).
     "CROSSINK_TAILNET_SYNC_KEPT_FLOOR":   (20000,  12000,  12000),
     # Catalog bursts (open, Home refresh, shelf options) share one keep-alive connection.
     "CROSSINK_TAILNET_CATALOG_KEEPALIVE": (1,      1,      1),

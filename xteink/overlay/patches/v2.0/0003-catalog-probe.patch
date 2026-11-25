@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: catalog probe
+
+Probe the catalog through Tailscale before entering its browser.
+
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 index 798381fe..8c43c2b7 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp

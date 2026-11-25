@@ -1,0 +1,180 @@
+Subject: [PATCH] Orbify: home tile touch
+
+Align the Home tile touch target and consume the menu-closing swipe.
+
+diff --git a/src/SilentRestart.h b/src/SilentRestart.h
+index be42ab3..c224f48 100644
+--- a/src/SilentRestart.h
++++ b/src/SilentRestart.h
+@@ -114,6 +114,9 @@ static_assert(isNetworkBootTargetValue(static_cast<uint32_t>(NetworkBootTarget::
+                   isNetworkBootTargetValue(static_cast<uint32_t>(NetworkBootTarget::BOOKORBIT_HOME_SHELVES)),
+               "Every network boot target must pass RTC target validation");
+ 
++// Patch 0038: the popup the next silent restart shows instead of "Loading" (a string that lives
++// for the program, e.g. tr(...)); used once.
++void setSilentRestartMessage(const char* message);
+ bool silentRestart();                                            // home screen
+ bool silentRestartToReader(bool cleanImageBaseOnEntry = false);  // currently-open EPUB (APP_STATE.openEpubPath)
+ // Reboots immediately after an activity releases exclusive raw storage.
+diff --git a/src/activities/home/HomeActivity.cpp b/src/activities/home/HomeActivity.cpp
+index e3fefc1..b2a848e 100644
+--- a/src/activities/home/HomeActivity.cpp
++++ b/src/activities/home/HomeActivity.cpp
+@@ -1142,6 +1142,7 @@ bool HomeActivity::waitingForInitialFrontRelease() {
+ 
+ void HomeActivity::openMinimalMenu() {
+   const auto menuItems = buildMinimalMenuItems(hasPlugins, hasReadingStats, hasBookmarks, hasClippings);
++  LOG_INF("HOME", "Home: menu opened");
+   minimalMenuOpen = true;
+   minimalMenuIndex = std::max(0, findMenuActionIndex(menuItems, lastMinimalMenuAction));
+   requestUpdate();
+@@ -1149,6 +1150,15 @@ void HomeActivity::openMinimalMenu() {
+ 
+ void HomeActivity::loopBookOrbitHome() {
+   if (waitingForInitialFrontRelease()) return;
++  if (firstRenderDone && bookOrbitTilesLoggedPage != bookOrbitUi->currentPage()) {
++    bookOrbitTilesLoggedPage = bookOrbitUi->currentPage();
++    if (const auto* tile = bookOrbitUi->pageStopWith(BookOrbitHomeUi::Action::Refresh)) {
++      LOG_INF("HOME", "BookOrbit Home: sync tile at %d,%d %dx%d", tile->x, tile->y, tile->width, tile->height);
++    }
++    if (const auto* tile = bookOrbitUi->pageStopWith(BookOrbitHomeUi::Action::OpenCatalog)) {
++      LOG_INF("HOME", "BookOrbit Home: catalog tile at %d,%d %dx%d", tile->x, tile->y, tile->width, tile->height);
++    }
++  }
+ 
+   const auto movePage = [this](const int delta) {
+     bookOrbitUi->movePage(delta);
+@@ -1158,24 +1168,40 @@ void HomeActivity::loopBookOrbitHome() {
+ 
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+   // Patch 0037: the sync tile is Home's refresh, as the ⟳ is the catalog's. A tap (Confirm)
+-  // refreshes Home and its lists; a long press (Confirm held, on the X4) starts a Full refresh,
+-  // which the Home's refresh boot runs with "Full refresh · saving for offline N/M".
+-  const auto startFullRefresh = [] {
++  // refreshes Home and its lists; a hold (Confirm held, on the X4) starts a Full refresh, which the
++  // Home's refresh boot runs with "Full refresh · saving for offline N/M".
++  //
++  // Patch 0038 (X4 Pro, .167: a hold did nothing, a tap failed, the next tap started a Full
++  // refresh): the tile no longer takes the SDK's screen long press. That fires at 500 ms, an
++  // ordinary e-ink tap's length, and suppresses the contact before the tile was even checked, so a
++  // slow tap on or beside the tile was lost, and a slow tap on it was a Full refresh. The tile
++  // times the contact itself: released before HOME_FULL_REFRESH_HOLD_MS is a tap, held that long is
++  // a hold. The restart's popup names which ("Refreshing…", "Full refresh").
++  const auto startFullRefresh = [this] {
+     LOG_INF("ORB", "Home: Full refresh asked for from the sync tile");
+     OrbifyMirror::request();
++    setSilentRestartMessage(tr(STR_ORBIFY_FULL_REFRESH));
+     silentRestartToNetwork(NetworkBootTarget::BOOKORBIT_HOME_REFRESH);
+   };
+   int heldX = 0;
+   int heldY = 0;
+-  if (mappedInput.wasScreenLongPress(heldX, heldY)) {
++  unsigned long heldMs = 0;
++  if (!bookOrbitFullRefreshHeld && mappedInput.isScreenTouchTapCandidate(heldX, heldY, heldMs) &&
++      heldMs >= HOME_FULL_REFRESH_HOLD_MS) {
+     const auto* stop = bookOrbitUi->stopContaining(heldX, heldY);
+     if (stop != nullptr && stop->action == BookOrbitHomeUi::Action::Refresh) {
++      bookOrbitFullRefreshHeld = true;
++      mappedInput.suppressCurrentTouchContact();
+       startFullRefresh();
+       return;
+     }
+   }
+   if (bookOrbitFullRefreshHeld) {
+-    if (!mappedInput.isPressed(MappedInputManager::Button::Confirm)) bookOrbitFullRefreshHeld = false;
++    int x = 0;
++    int y = 0;
++    if (!mappedInput.isPressed(MappedInputManager::Button::Confirm) && !mappedInput.isScreenTouchHeld(x, y)) {
++      bookOrbitFullRefreshHeld = false;
++    }
+     return;
+   }
+   if (mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
+@@ -1293,6 +1319,8 @@ void HomeActivity::activateBookOrbitStop(const BookOrbitHomeUi::Stop& stop) {
+       break;
+     }
+     case BookOrbitHomeUi::Action::Refresh:
++      LOG_INF("ORB", "Home: refresh asked for from the sync tile");
++      setSilentRestartMessage(tr(STR_ORBIFY_REFRESHING));  // patch 0038: the restart's popup
+       silentRestartToNetwork(NetworkBootTarget::BOOKORBIT_HOME_REFRESH);
+       break;
+     case BookOrbitHomeUi::Action::None:
+@@ -1790,10 +1818,17 @@ void HomeActivity::loop() {
+         return;
+       }
+ 
++      // Patch 0038 (X4 Pro, .167: a Home swipe on this menu flashed the BookOrbit Home and came back
++      // to the menu). The menu closed on the swipe's touch-down, below its panel; the same swipe then
++      // ended on the Home as an upward swipe, which opens this menu. Now a tap outside the panel or a
++      // Home swipe closes it, and the swipe is spent here.
+       int touchX = 0;
+       int touchY = 0;
+-      if (mappedInput.wasScreenTouchDown(touchX, touchY) &&
+-          !containsPoint(MinimalTheme::buttonMenuPanelRect(renderer, menuCount), touchX, touchY)) {
++      const bool homeSwipe = mappedInput.wasBottomEdgeUpSwipe() || mappedInput.wasHomeGesture() ||
++                             mappedInput.wasSwipe() == MappedInputManager::SwipeDir::Up;
++      if (homeSwipe || (mappedInput.wasScreenTapped(touchX, touchY) &&
++                        !containsPoint(MinimalTheme::buttonMenuPanelRect(renderer, menuCount), touchX, touchY))) {
++        if (homeSwipe) LOG_INF("HOME", "Home swipe on the menu: back to Home");
+         minimalMenuOpen = false;
+         minimalHomeNavIndex = -1;
+         requestUpdate();
+diff --git a/src/activities/home/HomeActivity.h b/src/activities/home/HomeActivity.h
+index f303ea7..60ce680 100644
+--- a/src/activities/home/HomeActivity.h
++++ b/src/activities/home/HomeActivity.h
+@@ -68,6 +68,7 @@ class HomeActivity final : public Activity {
+   bool homeBookSwapLongPressHandled = false;
+   // Patch 0037: Confirm held on the BookOrbit Home's sync tile started a Full refresh.
+   bool bookOrbitFullRefreshHeld = false;
++  int bookOrbitTilesLoggedPage = -1;  // patch 0038: the page whose tiles were logged (the scenarios tap them)
+   bool quickActionsLongPowerHandled = false;
+   int minimalMenuIndex = 0;
+   int minimalHomeNavIndex = -1;
+diff --git a/src/components/themes/bookorbit/BookOrbitHomeUi.h b/src/components/themes/bookorbit/BookOrbitHomeUi.h
+index e7bb6eb..4f30005 100644
+--- a/src/components/themes/bookorbit/BookOrbitHomeUi.h
++++ b/src/components/themes/bookorbit/BookOrbitHomeUi.h
+@@ -48,6 +48,17 @@ class BookOrbitHomeUi final {
+   // Null when the page has no stop to activate.
+   const Stop* selectedStop() const { return stops.selectedStop(); }
+   const Stop* stopAt(const int index) const { return stops.stopAt(index); }
++  int currentPage() const { return stops.currentPageIndex(); }
++  // Patch 0038: the current page's first stop with this action, null when none.
++  const Stop* pageStopWith(const Action action) const {
++    const int page = stops.currentPageIndex();
++    const int first = stops.pageFirstStopIndex(page);
++    for (int i = first; i < first + stops.pageStopCount(page); i++) {
++      const Stop* stop = stops.stopAt(i);
++      if (stop && stop->action == action) return stop;
++    }
++    return nullptr;
++  }
+   // Patch 0037: the current page's stop under a point (a long press), null when none.
+   const Stop* stopContaining(const int x, const int y) const {
+     const int page = stops.currentPageIndex();
+diff --git a/src/main.cpp b/src/main.cpp
+index cd78f19..e5988d0 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -514,6 +514,9 @@ static bool syncStorageBeforeTransition() {
+ #endif
+ }
+ 
++static const char* s_silentRestartMessage = nullptr;  // patch 0038
++void setSilentRestartMessage(const char* message) { s_silentRestartMessage = message; }
++
+ static bool restartWithSilentToken(const uint32_t target, const uint32_t payload, const bool restoreUsbSerial = false) {
+   if (deepSleepInProgress) return false;
+   BatteryStats::onRestart();  // CrossInk-Tailnet patch 0025 (before the flush below)
+@@ -523,8 +526,9 @@ static bool restartWithSilentToken(const uint32_t target, const uint32_t payload
+   if (!RenderLock::heldByCurrentTask()) lock.emplace();
+   if (displayReady) {
+     if (target == static_cast<uint32_t>(NetworkBootTarget::KOREADER_SYNC)) renderer.clearScreen();
+-    GUI.drawPopup(renderer, tr(STR_LOADING));
++    GUI.drawPopup(renderer, s_silentRestartMessage != nullptr ? s_silentRestartMessage : tr(STR_LOADING));
+   }
++  s_silentRestartMessage = nullptr;
+   delay(50);
+   // The last popup can read SD fonts. Flush after it, while rendering is
+   // quiescent; a successfully detached USB volume must never be reopened here.

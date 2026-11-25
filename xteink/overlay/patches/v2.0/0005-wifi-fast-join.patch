@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: wifi fast join
+
+Try the saved Wi-Fi channel and BSSID before scanning.
+
 diff --git a/src/network/SavedWifiConnect.cpp b/src/network/SavedWifiConnect.cpp
 index 145bf57f..8aed5099 100644
 --- a/src/network/SavedWifiConnect.cpp

@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: battery stats
+
+Hook battery history recording and its settings activity into the firmware.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index 6b42be45..e598b8b3 100644
 --- a/include/CrossInkTailnetCuts.h

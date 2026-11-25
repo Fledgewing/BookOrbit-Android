@@ -1,0 +1,117 @@
+Subject: [PATCH] Orbify: home sync tile
+
+Use the Home sync tile for refresh and long-press Full refresh.
+
+diff --git a/src/activities/home/HomeActivity.cpp b/src/activities/home/HomeActivity.cpp
+index 2fed132..e3fefc1 100644
+--- a/src/activities/home/HomeActivity.cpp
++++ b/src/activities/home/HomeActivity.cpp
+@@ -41,6 +41,10 @@
+ #include "SilentRestart.h"
+ #include "activities/browser/BookOrbitCatalogLink.h"
+ #include "components/UITheme.h"
++#include <CrossInkTailnetCuts.h>
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++#include "orbify/Mirror.h"
++#endif
+ #include "components/themes/bookorbit/BookOrbitHomeLayout.h"
+ #include "components/themes/dashboard/DashboardTheme.h"
+ #include "components/themes/lyra/LyraCarouselTheme.h"
+@@ -57,6 +61,10 @@ constexpr char CAROUSEL_CACHE_TMP_PATH[] = "/.crosspoint/home_carousel_cache.tmp
+ constexpr uint32_t CAROUSEL_FRAME_MIN_FREE_AFTER_ALLOC = 64U * 1024U;
+ constexpr uint32_t CAROUSEL_FRAME_MIN_MAX_ALLOC_AFTER_ALLOC = 24U * 1024U;
+ constexpr unsigned long HOME_BOOK_SWAP_LONG_PRESS_MS = 1000;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++// Patch 0037: holding Confirm on the BookOrbit Home's sync tile (the catalog ⟳'s long press).
++constexpr unsigned long HOME_FULL_REFRESH_HOLD_MS = 1000;
++#endif
+ constexpr int HOME_BOOK_SWAP_RECENT_COUNT = 2;
+ 
+ enum class HomeMenuAction {
+@@ -1148,6 +1156,38 @@ void HomeActivity::loopBookOrbitHome() {
+   };
+   const auto openMenu = [this] { openMinimalMenu(); };
+ 
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Patch 0037: the sync tile is Home's refresh, as the ⟳ is the catalog's. A tap (Confirm)
++  // refreshes Home and its lists; a long press (Confirm held, on the X4) starts a Full refresh,
++  // which the Home's refresh boot runs with "Full refresh · saving for offline N/M".
++  const auto startFullRefresh = [] {
++    LOG_INF("ORB", "Home: Full refresh asked for from the sync tile");
++    OrbifyMirror::request();
++    silentRestartToNetwork(NetworkBootTarget::BOOKORBIT_HOME_REFRESH);
++  };
++  int heldX = 0;
++  int heldY = 0;
++  if (mappedInput.wasScreenLongPress(heldX, heldY)) {
++    const auto* stop = bookOrbitUi->stopContaining(heldX, heldY);
++    if (stop != nullptr && stop->action == BookOrbitHomeUi::Action::Refresh) {
++      startFullRefresh();
++      return;
++    }
++  }
++  if (bookOrbitFullRefreshHeld) {
++    if (!mappedInput.isPressed(MappedInputManager::Button::Confirm)) bookOrbitFullRefreshHeld = false;
++    return;
++  }
++  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
++      mappedInput.getHeldTime() >= HOME_FULL_REFRESH_HOLD_MS) {
++    const auto* stop = bookOrbitUi->selectedStop();
++    if (stop != nullptr && stop->action == BookOrbitHomeUi::Action::Refresh) {
++      bookOrbitFullRefreshHeld = true;
++      startFullRefresh();
++      return;
++    }
++  }
++#endif
+   int tapped = -1;
+   if (mappedInput.wasItemTapped(tapped)) {
+     if (tapped == BookOrbitHomeUi::TAP_PREVIOUS_PAGE) {
+diff --git a/src/activities/home/HomeActivity.h b/src/activities/home/HomeActivity.h
+index 8679a7f..f303ea7 100644
+--- a/src/activities/home/HomeActivity.h
++++ b/src/activities/home/HomeActivity.h
+@@ -66,6 +66,8 @@ class HomeActivity final : public Activity {
+   bool minimalMenuOpen = false;
+   bool minimalSuppressInitialFrontRelease = false;
+   bool homeBookSwapLongPressHandled = false;
++  // Patch 0037: Confirm held on the BookOrbit Home's sync tile started a Full refresh.
++  bool bookOrbitFullRefreshHeld = false;
+   bool quickActionsLongPowerHandled = false;
+   int minimalMenuIndex = 0;
+   int minimalHomeNavIndex = -1;
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+index f1c9827..e1edfc7 100644
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+@@ -218,7 +218,8 @@ void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
+       }
+       break;
+     case State::Refreshing:
+-      status = tr(STR_HOME_FETCHING_STATS);
++      // Patch 0037: the word the catalog's ⟳ shows while it refreshes.
++      status = tr(STR_ORBIFY_REFRESHING);
+       break;
+     case State::Mirroring:
+       status = tr(STR_ORBIFY_FULL_REFRESH);
+diff --git a/src/components/themes/bookorbit/BookOrbitHomeUi.h b/src/components/themes/bookorbit/BookOrbitHomeUi.h
+index eac9146..e7bb6eb 100644
+--- a/src/components/themes/bookorbit/BookOrbitHomeUi.h
++++ b/src/components/themes/bookorbit/BookOrbitHomeUi.h
+@@ -48,6 +48,16 @@ class BookOrbitHomeUi final {
+   // Null when the page has no stop to activate.
+   const Stop* selectedStop() const { return stops.selectedStop(); }
+   const Stop* stopAt(const int index) const { return stops.stopAt(index); }
++  // Patch 0037: the current page's stop under a point (a long press), null when none.
++  const Stop* stopContaining(const int x, const int y) const {
++    const int page = stops.currentPageIndex();
++    const int first = stops.pageFirstStopIndex(page);
++    for (int i = first; i < first + stops.pageStopCount(page); i++) {
++      const Stop* stop = stops.stopAt(i);
++      if (stop && x >= stop->x && x < stop->x + stop->width && y >= stop->y && y < stop->y + stop->height) return stop;
++    }
++    return nullptr;
++  }
+   // The server book behind an OpenCatalogBook stop.
+   const BookOrbitHomeBook* catalogBook(const int arg) const { return model.catalogBook(arg); }
+ 

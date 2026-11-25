@@ -1,4 +1,4 @@
-// The sleep sync's watcher deadlines (orbify/core/SleepSyncDeadline.h, patch 0037).
+// The sleep sync's watcher deadlines (orbify/core/SleepSyncDeadline.h).
 #include <cstdint>
 
 #include "SleepSyncDeadline.h"

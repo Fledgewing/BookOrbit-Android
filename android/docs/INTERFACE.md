@@ -2,13 +2,19 @@
 
 The Orbit KOReader plugin (`android/koreader/orbit.koplugin`, up to 0.7.x the user patch
 `2-orbit-android.lua`; "the patch" below) and the Orbit Companion app talk
-through Android intents only. The companion never learns the login or the sync state: the
-BookOrbit plugin owns all of that. One exception: the sleep screen's sharp covers
-(docs/design/lock-screen.md L7) need the server URL and the KOReader username, which the plugin
-writes into `pool.json`; the companion signs in to OPDS with a login the user types once and keeps
-only the OPDS cover token. Never the KOReader key.
+through caller-checked Android provider calls, activities, a click channel and shared files.
+BookOrbit owns the account and sync state. The plugin passes credentials only to the verified
+companion for background jobs; the companion holds them in memory for the job and never returns
+them. See [the security model](../../docs/design/security.md).
 
-Package: `net.fledgewing.orbitcompanion` (placeholder, used everywhere below).
+Package: `net.fledgewing.orbitcompanion`.
+
+**The contract.** `shared/contract/companion.json` (versioned) lists every command and its
+extras, the calls, the pages, the commands on KOReader's start, the click channel's lines, the
+status keys, the shared files and `orbit.db`. Both sides test against it (`ContractTest.kt`,
+`test_flows.lua` "contract"): each entry must be used on both sides, and neither side may offer
+anything the contract lacks. Change the file, both sides and this page in the same change. This
+page is the human view.
 
 ## Patch → companion: the caller-checked call
 
@@ -299,7 +305,7 @@ KOReader isn't running, it simply waits in `/status` for the next start.
 launcher page) or `app`; the patch notes it on its Home button menu entry.
 `pin_locked` (v0.4.4): a Settings PIN is set and not unlocked right now. Then the patch's Orbit
 menu shows only "Enter the Settings PIN…" and starts `SHOW_PIN`. Only a real `true` locks:
-no answer (no companion, not running) or an older companion leaves the menu usable, so the
+no answer (no companion, not running) leaves the menu usable, so the
 patch never locks anyone out.
 
 ### `GET /clicks` (companion 0.4.2+): the click channel
@@ -343,12 +349,12 @@ atomically whenever its mode, caps or setup state change (only if a `koreader/` 
     {"proto":"1","version":"0.11.0","mode":"addon","caps":["install","setup","stats","relaunch"],
      "setup_prompt":{"key":"…","rows":["…"]},"setup_needed":1,"written_at":…}
 
-`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always), `sleep_screen` (always, from the sleep screen's release; an older companion never offers it, so the plugin hides the menu), `cache_worker` (always, from the cache worker's release); `home`,
+`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always), `sleep_screen`, `cache_worker` (always); `home`,
 `apps` (Full); `wifi`, `sleep_sync`, `screen_off`, `clicker`, `pin` (Full, or Add-on with that
 helper on; `screen_off` also needs the lock-screen permission). The plugin reads `/status` first,
-then the file; a companion that answers `/status` without `caps` is older and offers everything.
+then the file, then the caps seen last time. With none of those available it offers no capabilities.
 A file left behind by an uninstalled or frozen companion is ignored. The plugin logs
-`companion: mode … caps … (from status|file|legacy|cache, why)`.
+`companion: mode … caps … (from status|file|cache|none, why)`.
 
 COMMANDs added in 0.11.0 (the same extra as `home`): `signin` opens BookOrbit's own sign-in
 (`promptLogin`), `recommended` opens the plugin's Recommended settings page. After 0.11.2 (the

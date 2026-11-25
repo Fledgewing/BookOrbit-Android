@@ -165,9 +165,10 @@ class CacheWorkerTest {
         assertEquals(listOf("$C/books?sort=title"), summary["changed"])
         // A recheck reads list pages, and details only for books it has not saved.
         assertEquals(listOf("$S$C/books/4"), fake.asked.filter { it.matches(Regex(".*/books/\\d+$")) })
-        // Covers already saved come back 304.
+        // Unchanged covers are not requested at all.
         val st = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
-        assertTrue(((st["covers"] as Map<*, *>)["not_modified"] as Long) > 0)
+        assertEquals(0L, (st["covers"] as Map<*, *>)["not_modified"])
+        assertEquals(1, fake.asked.count { it.endsWith("/thumbnail") })
     }
 
     @Test fun stopFileAndOutagesEndTheRunAndItResumes() {
@@ -280,7 +281,7 @@ class CacheWorkerTest {
         assertTrue("rises: $shown", shown.zipWithNext().all { (a, b) -> b >= a })
         assertTrue("never 100 before the end: $shown", shown.dropLast(1).all { it < 100 })
         assertNull("the end clears it", pcts.last())
-        assertEquals("Saving BookOrbit for offline · 37%", MirrorLogic.progressLine(37))
+        assertEquals("Full refresh · 37%", MirrorLogic.progressLine(37))
         assertNull(MirrorLogic.progressLine(null))
     }
 
@@ -314,4 +315,70 @@ class CacheWorkerTest {
         assertEquals(1L, st["skipped"])
         assertTrue(log, log.contains("/sections/series?page=1&size=50") || !log.contains("series?page=1&size=50 failed"))
     }
+    @Test fun incrementalChecksNewestPageAndFetchesOnlyChangedDetailsAndMembership() {
+        val (root, fake, w) = setup()
+        val p = plan(root, "incremental", mapOf("covers_on" to false))
+        w.store.own(p.owner)
+        w.store.setMeta("full_at", 100L)
+        w.store.setMeta("incremental_watermark", "2026-01-04")
+        val initial = LuaValue.fromJson(books(listOf(1, 2, 3))) as Map<*, *>
+        w.store.putWindow("$C/books?collectionId=1", "books", null, 0, initial, 100L)
+        for (id in 1L..3L) w.store.putDetail(id, mapOf("id" to id), 100L)
+        val newest = "$S$C/books?order=desc&page=1&size=100&sort=recently_updated"
+        fake.routes[newest] = books(listOf(3, 2, 1))
+        assertEquals("finished", w.run(p, creds))
+        assertEquals(listOf(newest), fake.asked)
+        assertEquals(100L, w.store.meta("full_at")!!.toLong())
+        fake.asked.clear()
+        val changed = JSONObject(books(listOf(2, 3, 1)))
+        changed.getJSONArray("items").getJSONObject(0).put("updatedAt", "2026-02-01")
+        fake.routes[newest] = changed.toString()
+        fake.routes["$S$C/books?collectionId=1&page=1&size=100"] = changed.toString()
+        assertEquals("finished", w.run(p, creds))
+        assertEquals(1, fake.asked.count { it == "$S$C/books/2" })
+        assertFalse(fake.asked.any { it == "$S$C/books/1" || it == "$S$C/books/3" || it.endsWith("/thumbnail") })
+        assertTrue(fake.asked.contains("$S$C/books?collectionId=1&page=1&size=100"))
+        assertEquals("2026-02-01", w.store.meta("incremental_watermark"))
+        fake.asked.clear()
+        w.run(p, creds)
+        assertEquals(listOf(newest), fake.asked)
+        w.store.close(); root.deleteRecursively()
+    }
+
+    @Test fun incrementalIncludesWholeTimestampTieAcrossPages() {
+        val (root, fake, w) = setup()
+        val p = plan(root, "incremental", mapOf("covers_on" to false))
+        w.store.own(p.owner)
+        w.store.setMeta("full_at", 100L)
+        w.store.setMeta("incremental_watermark", "2026-01-01")
+        for (page in 1..2) {
+            val ids = if (page == 1) (1..100).toList() else listOf(101)
+            val body = JSONObject(books(ids, 101))
+            for (i in 0 until body.getJSONArray("items").length()) body.getJSONArray("items").getJSONObject(i).put("updatedAt", "2026-01-01")
+            for (id in ids) {
+                val item = LuaValue.fromJson(body.getJSONArray("items").getJSONObject(ids.indexOf(id)).toString()) as Map<*, *>
+                w.store.putItem(item, 100L); w.store.putDetail(id.toLong(), mapOf("id" to id.toLong()), 100L)
+            }
+            fake.routes["$S$C/books?order=desc&page=$page&size=100&sort=recently_updated"] = body.toString()
+        }
+        assertEquals("finished", w.run(p, creds))
+        assertEquals(2, fake.asked.size)
+        assertTrue(fake.asked.all { it.contains("sort=recently_updated") })
+        w.store.close(); root.deleteRecursively()
+    }
+
+    @Test fun incrementalFailureKeepsWatermarkAndReturnsSummary() {
+        val (root, fake, w) = setup()
+        val p = plan(root, "incremental", mapOf("covers_on" to false))
+        w.store.own(p.owner)
+        w.store.setMeta("full_at", 100L)
+        w.store.setMeta("incremental_watermark", "2026-01-04")
+        fake.down = true
+        assertEquals("no answer", w.run(p, creds))
+        assertEquals("2026-01-04", w.store.meta("incremental_watermark"))
+        val summary = LuaValue.parse(File(w.mirrorDir, "summary.lua").readBytes()) as Map<*, *>
+        assertEquals("no answer", summary["why"])
+        w.store.close(); root.deleteRecursively()
+    }
+
 }

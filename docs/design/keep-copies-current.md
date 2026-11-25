@@ -48,7 +48,7 @@ progress, highlights and bookmarks stop syncing for that book.
 ## Xteink
 
 Built in overlay patch 0034 (`CROSSINK_TAILNET_ORBIFY_COPY_REFRESH`, X4 Pro, X4 and X3); details
-in [XTEINK-BUILD-NOTES](XTEINK-BUILD-NOTES.md#keep-book-copies-current-patch-0034-2026-11-22).
+in [XTEINK-BUILD-NOTES](XTEINK-BUILD-NOTES.md#keep-book-copies-current-2026-11-22).
 
 - **Find.** The sleep sync (and the BookOrbit Home's refresh) hashes the catalog's downloads and
   sends them through the match check, 20 per request; a copy is queued when the server matched it

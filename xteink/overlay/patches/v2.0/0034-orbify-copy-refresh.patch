@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: copy refresh
+
+Replace queued outdated book copies during network work.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index 6b68f921..b0799aad 100644
 --- a/include/CrossInkTailnetCuts.h

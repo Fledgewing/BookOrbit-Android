@@ -94,21 +94,6 @@ function OrbitAndroid:menuItems()
             end,
         })
     end
-    -- The offline mirror's automatic Full refresh (docs/design/write-through-cache.md).
-    local ttl_items = {}
-    for _i, d in ipairs({ 1, 3, 7, 14, 30 }) do
-        table.insert(ttl_items, {
-            text = string.format(d == 1 and _("Every day") or _("Every %d days"), d),
-            radio = true,
-            checked_func = function() return S.mirror_auto ~= false and (S.mirror_ttl_days or 7) == d end,
-            callback = function() Shared.set("mirror_auto", true); Shared.set("mirror_ttl_days", d) end,
-        })
-    end
-    table.insert(ttl_items, {
-        text = _("Only by hand (hold ⟳)"), radio = true,
-        checked_func = function() return S.mirror_auto == false end,
-        callback = function() Shared.set("mirror_auto", false) end,
-    })
     -- Storage limit (v0.11.2): one limit on everything Orbit stores (OC.storageCount, counted by Orbit Companion).
     local limit_items = {}
     for _i, mb in ipairs(Cache.STORAGE_LIMITS_MB) do
@@ -212,7 +197,7 @@ function OrbitAndroid:menuItems()
         {
             text_func = function()
                 local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
-                -- The companion's "Home opens" (companion 0.4.8+): this applies only with KOReader.
+                -- The companion's "Home opens": this applies only with KOReader.
                 if Shared.home_opens == "launcher" then t = t .. _(" (Home opens the Orbit launcher page)")
                 elseif Shared.home_opens == "app" then t = t .. _(" (Home opens another app)") end
                 return t
@@ -243,13 +228,6 @@ function OrbitAndroid:menuItems()
     })
     local library = compact({
         stoggle("offline_cache"),
-        {
-            text_func = function()
-                if S.mirror_auto == false then return label("mirror_auto", _("Automatic Full refresh")) .. ": " .. _("only by hand") end
-                return string.format(label("mirror_auto", _("Automatic Full refresh")) .. ": " .. _("every %d days"), S.mirror_ttl_days or 7)
-            end,
-            sub_item_table = ttl_items,
-        },
         {
             text = label("mirror_covers", _("Save every cover for offline")),
             checked_func = function() return S.mirror_covers == true end,

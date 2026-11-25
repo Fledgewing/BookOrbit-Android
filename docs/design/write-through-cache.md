@@ -222,7 +222,7 @@ the overlay's patches up to 0028 applied.
   first pages only beyond Continue reading and Up next, the books on the reader and their next in
   series; files on SD under the same 2 MB cap, oldest lists dropped first. Same "Saved for offline"
   line in settings and the same TTL rule. X3 is excluded (no room). Built in overlay patch 0035
-  ([XTEINK-BUILD-NOTES](XTEINK-BUILD-NOTES.md#offline-mirror-full-refresh-and-the-catalogs--patch-0035-2026-11-22)):
+  ([XTEINK-BUILD-NOTES](XTEINK-BUILD-NOTES.md#offline-mirror-full-refresh-and-the-catalogs--2026-11-22)):
   the catalog root, each section's first page, the first 20 lists of each facet section, and up to
   30 book details, 150 requests at most; automatic in the sleep sync (2 min per sleep, resumed),
   by hand from the catalog's ⟳ (hold) or Settings › BookOrbit › Home › Full refresh. Without Wi-Fi
