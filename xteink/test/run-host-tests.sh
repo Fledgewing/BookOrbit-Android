@@ -58,6 +58,8 @@ orbify_test copy_check "$core/CopyCheck.cpp"
 orbify_test copy_queue "$core/CopyQueue.cpp" "$core/CopyCheck.cpp"
 orbify_test mirror "$core/Mirror.cpp"
 orbify_test sleep_sync_deadline
+# Battery stats (orbify/core/BatteryStatsCore): CrossInk-style GoogleTest cases through GtestShim.h.
+orbify_test battery_stats "$core/BatteryStatsCore.cpp"
 orbify_test boot_trail
 # The sleep screen (ROADMAP 11): the rotation and the batch read shared/fixtures/sleep/cases.json, as Android does.
 orbify_test sleep_pick "$core/SleepPick.cpp" "$core/SleepLayout.cpp"
