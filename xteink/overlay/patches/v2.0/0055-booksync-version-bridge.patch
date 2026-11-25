@@ -1,0 +1,232 @@
+Subject: [PATCH] BookSync: bridge legacy OTA to shared product versions
+
+--- a/lib/JsonParser/ReleaseJsonParser.h
++++ b/lib/JsonParser/ReleaseJsonParser.h
+@@ -12,8 +12,9 @@
+   // One release as read from the response: its tag, and the first firmware asset
+   // assetMatcher accepted.
+   struct Release {
+-    // 48: room for a prefixed rc tag (xteink-v2.0.0.123+bookorbit.1-rc2) without truncating it.
+-    char tagName[48];
++    // Room for the product version, CrossInk metadata and xteink-v prefix without truncation.
++    char tagName[128];
++    char booksyncVersion[48];
+     char firmwareUrl[512];
+     char firmwareSha256[65];
+     size_t firmwareSize;
+@@ -63,6 +64,7 @@
+   enum class LastKey : uint8_t {
+     NONE,
+     TAG_NAME,
++    BOOKSYNC_ID,
+     PRERELEASE,
+     ASSETS,
+     ASSET_NAME,
+--- a/lib/JsonParser/ReleaseJsonParser.cpp
++++ b/lib/JsonParser/ReleaseJsonParser.cpp
+@@ -71,6 +71,7 @@
+ 
+ void ReleaseJsonParser::clearRelease() {
+   current.tagName[0] = '\0';
++  current.booksyncVersion[0] = '\0';
+   current.firmwareUrl[0] = '\0';
+   current.firmwareSha256[0] = '\0';
+   current.firmwareSize = 0;
+@@ -114,6 +115,8 @@
+       if (self->depth == self->releaseDepth()) {
+         if (len == 8 && memcmp(key, "tag_name", 8) == 0)
+           self->lastKey = LastKey::TAG_NAME;
++        else if (len == 16 && memcmp(key, "booksync_version", 16) == 0)
++          self->lastKey = LastKey::BOOKSYNC_ID;
+         else if (len == 6 && memcmp(key, "assets", 6) == 0)
+           self->lastKey = LastKey::ASSETS;
+         else if (len == 10 && memcmp(key, "prerelease", 10) == 0)
+@@ -155,6 +158,11 @@
+         self->current.tagFound = true;
+       }
+       break;
++    case LastKey::BOOKSYNC_ID:
++      if (self->position == Position::TOP_LEVEL && self->depth == self->releaseDepth() &&
++          len < sizeof(self->current.booksyncVersion))
++        safeCopy(self->current.booksyncVersion, sizeof(self->current.booksyncVersion), value, len);
++      break;
+     case LastKey::ASSET_NAME:
+       if (self->position == Position::IN_ASSET_OBJECT && self->assetDepth == 1)
+         safeCopy(self->currentAssetName, sizeof(self->currentAssetName), value, len);
+--- a/src/network/OtaReleasePick.h
++++ b/src/network/OtaReleasePick.h
+@@ -19,6 +19,12 @@
+ // The version part of `tag`: what follows the prefix, or nullptr when `tag` lacks it.
+ const char* versionOf(const char* tag, const char* prefix);
+ 
++// BookSync versions use preview.N < rc.N < stable; metadata has no precedence.
++// Empty BookSync versions identify legacy firmware and sort below every BookSync version.
++bool validBookSync(const char* version);
++int compare(const char* latestBookSync, const char* currentBookSync,
++            const char* latestLegacy, const char* currentLegacy);
++
+ // Keeps in `newest` the newest release `filter` accepts; on a tie the earlier (more recent)
+ // entry stays. `newest` starts value-initialised (tagFound false).
+ void keep(ReleaseJsonParser::Release& newest, const ReleaseJsonParser::Release& candidate, const Filter& filter);
+--- a/src/network/OtaReleasePick.cpp
++++ b/src/network/OtaReleasePick.cpp
+@@ -1,6 +1,7 @@
+ #include "OtaReleasePick.h"
+ 
+ #include <cstring>
++#include <climits>
+ 
+ #include "FirmwareVersion.h"
+ 
+@@ -13,12 +14,86 @@
+   return strncmp(tag, prefix, n) == 0 ? tag + n : nullptr;
+ }
+ 
++namespace {
++struct Version { unsigned parts[4]{}; int channel = 2; bool valid = false; };
++bool number(const char*& p, unsigned& out) {
++  if (*p < '0' || *p > '9') return false;
++  const char* start = p;
++  while (*p >= '0' && *p <= '9') {
++    unsigned digit = *p++ - '0';
++    if (out > (UINT_MAX - digit) / 10) return false;
++    out = out * 10 + digit;
++  }
++  return p - start == 1 || *start != '0';
++}
++Version parse(const char* p) {
++  Version v;
++  if (!p) return v;
++  for (int i = 0; i < 3; ++i) {
++    if (!number(p, v.parts[i])) return v;
++    if (i < 2 && *p++ != '.') return v;
++  }
++  if (*p == '-') {
++    ++p;
++    if (strncmp(p, "preview.", 8) == 0) { v.channel = 0; p += 8; }
++    else if (strncmp(p, "rc.", 3) == 0) { v.channel = 1; p += 3; }
++    else if (strncmp(p, "0.test.", 7) == 0) { v.channel = -1; p += 7; }
++    else return v;
++    if (!number(p, v.parts[3]) || v.parts[3] == 0) return v;
++  }
++  if (*p == '+') {
++    ++p;
++    bool component = false;
++    for (; *p; ++p) {
++      if (*p == '.') { if (!component) return v; component = false; }
++      else if ((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'Z') ||
++               (*p >= 'a' && *p <= 'z') || *p == '-') component = true;
++      else return v;
++    }
++    if (!component) return v;
++  }
++  v.valid = *p == '\0';
++  return v;
++}
++bool legacy(const char* p) {
++  if (!p) return false;
++  unsigned unused = 0;
++  for (int i = 0; i < 4; ++i) {
++    unused = 0;
++    if (!number(p, unused)) return false;
++    if (i < 3 && *p++ != '.') return false;
++  }
++  return true;
++}
++}
++
++bool validBookSync(const char* version) { return parse(version).valid; }
++
++int compare(const char* latestBookSync, const char* currentBookSync,
++            const char* latestLegacy, const char* currentLegacy) {
++  const Version a = parse(latestBookSync), b = parse(currentBookSync);
++  if (a.valid != b.valid) return a.valid ? 1 : -1;
++  if (!a.valid) return firmware_version::compare(latestLegacy, currentLegacy);
++  for (int i = 0; i < 3; ++i)
++    if (a.parts[i] != b.parts[i]) return a.parts[i] > b.parts[i] ? 1 : -1;
++  if (a.channel != b.channel) return a.channel > b.channel ? 1 : -1;
++  if (a.parts[3] != b.parts[3]) return a.parts[3] > b.parts[3] ? 1 : -1;
++  // Bridge rebuilds share a BookSync identity; their legacy counter still orders them.
++  if (legacy(latestLegacy) && legacy(currentLegacy))
++    return firmware_version::compare(latestLegacy, currentLegacy);
++  return 0;
++}
++
+ void keep(ReleaseJsonParser::Release& newest, const ReleaseJsonParser::Release& candidate, const Filter& filter) {
+   const char* version = versionOf(candidate.tagName, filter.tagPrefix);
+   if (version == nullptr || !firmware_version::isComparable(version)) return;
+-  if (candidate.prerelease && !filter.includePrereleases) return;
++  if (candidate.booksyncVersion[0] && (!validBookSync(candidate.booksyncVersion) ||
++      parse(candidate.booksyncVersion).channel < 0)) return;
++  const Version book = parse(candidate.booksyncVersion);
++  if ((candidate.prerelease || (book.valid && book.channel < 2)) && !filter.includePrereleases) return;
+   if (newest.tagFound &&
+-      firmware_version::compare(version, versionOf(newest.tagName, filter.tagPrefix)) <= 0) {
++      compare(candidate.booksyncVersion, newest.booksyncVersion,
++              version, versionOf(newest.tagName, filter.tagPrefix)) <= 0) {
+     return;
+   }
+   newest = candidate;
+--- a/src/network/OtaUpdater.cpp
++++ b/src/network/OtaUpdater.cpp
+@@ -28,6 +28,9 @@
+ #include "FirmwareFlasher.h"
+ #include "FirmwareVersion.h"
+ #include "OtaReleasePick.h"
++#ifndef BOOKSYNC_VERSION
++#define BOOKSYNC_VERSION ""
++#endif
+ #include "OtaUpdater.h"
+ #include "esp_http_client.h"
+ #include "esp_ota_ops.h"
+@@ -312,6 +315,7 @@
+ 
+   updateAvailable = false;
+   latestVersion.clear();
++  latestBookSyncVersion.clear();
+   otaUrl.clear();
+   otaSha256.clear();
+ #if ORBIFY_OTA_SIGNATURE
+@@ -427,6 +431,7 @@
+   // Without its tag prefix: the version compares against AppVersion and shows as such.
+   const char* releaseVersion = ota_release_pick::versionOf(release->tagName, otaTagPrefix);
+   latestVersion = releaseVersion != nullptr ? releaseVersion : release->tagName;
++  latestBookSyncVersion = release->booksyncVersion;
+ 
+   if (!release->firmwareFound) {
+     LOG_ERR("OTA", "No matching %s asset found for release %s", firmwareAssetStem, latestVersion.c_str());
+@@ -455,7 +460,8 @@
+     return false;
+   }
+ 
+-  const int comparison = firmware_version::compare(latestVersion.c_str(), AppVersion::version());
++  const int comparison = ota_release_pick::compare(latestBookSyncVersion.c_str(), BOOKSYNC_VERSION,
++                                                    latestVersion.c_str(), AppVersion::version());
+   LOG_DBG("OTA", "Version comparison latest=%s current=%s result=%d", latestVersion.c_str(), AppVersion::version(),
+           comparison);
+   return comparison > 0;
+--- a/src/activities/settings/AboutActivity.cpp
++++ b/src/activities/settings/AboutActivity.cpp
+@@ -235,7 +235,12 @@
+       break;
+ #endif
+     case Firmware:
++#if defined(BOOKSYNC_VERSION) && defined(BOOKSYNC_CROSSINK_BASE)
++      snprintf(buf, size, "BookSync %s (CrossInk %s)", BOOKSYNC_VERSION, BOOKSYNC_CROSSINK_BASE);
++      item.subtitle = buf;
++#else
+       item.subtitle = AppVersion::version();
++#endif
+       break;
+     case Build:
+       snprintf(buf, size, "%s / %s / %s", CROSSINK_FIRMWARE_DEVICE_TYPE, AppVersion::gitSha(),
+--- a/src/network/OtaUpdater.h
++++ b/src/network/OtaUpdater.h
+@@ -7,6 +7,7 @@
+   bool updateAvailable = false;
+   bool includePrereleases = false;
+   std::string latestVersion;
++  std::string latestBookSyncVersion;
+   std::string otaUrl;
+   std::string otaSha256;
+   // Orbify (patch 0050): the release's tag and its firmware asset's signature (empty: unsigned).
