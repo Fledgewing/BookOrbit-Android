@@ -21,6 +21,8 @@ on:
       - "xteink/tailnet/sim/**"
       - "xteink/overlay/patches/v2.0/0090-orbify-simulator-build.patch"
       - ".github/workflows/release-tests.yml"
+      - ".github/actions/pio-setup/**"
+      - ".github/actions/android-setup/**"
   workflow_call:
     inputs:
       platform:
@@ -32,7 +34,7 @@ on:
         type: string
         default: ""
       upstream_ref:
-        description: "CrossInk tag or commit for stage 1 (default: tools/upstreams.lock)"
+        description: "CrossInk tag or commit for stage 1 (default: tools/upstreams.lock's commit)"
         type: string
         default: ""
   workflow_dispatch:
@@ -67,6 +69,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
 
       - name: Fault proxy and library tests
         run: python3 tools/e2e/test_kit.py </dev/null
@@ -107,6 +110,7 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           path: orbify
           submodules: recursive
+          persist-credentials: false
 
       - name: CrossInk version
         id: up
@@ -114,7 +118,7 @@ jobs:
           INPUT_REF: ${{ inputs.upstream_ref }}
         run: |
           set -euo pipefail
-          ref="${INPUT_REF:-$(awk '$1 == "crossink-v2.0" {print $3}' orbify/tools/upstreams.lock)}"
+          ref="${INPUT_REF:-$(awk '$1 == "crossink-v2.0" {print $4}' orbify/tools/upstreams.lock)}"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Check out CrossInk-Bookorbit ${{ steps.up.outputs.ref }}
@@ -124,30 +128,14 @@ jobs:
           ref: ${{ steps.up.outputs.ref }}
           path: upstream
           submodules: recursive
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: ./orbify/.github/actions/pio-setup
         with:
-          python-version: "3.14"
-
-      - uses: astral-sh/setup-uv@v7
-        with:
-          version: "latest"
-          enable-cache: true
-
-      - name: Cache PlatformIO packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.platformio/packages
-            ~/.platformio/platforms
-          key: ${{ runner.os }}-pio-sim-${{ env.PIO_CORE }}-${{ hashFiles('upstream/platformio.ini') }}
-
-      - name: Install PlatformIO Core, SDL2, OpenSSL and wolfSSL
-        run: |
-          set -euo pipefail
-          uv pip install --system -U "https://github.com/pioarduino/platformio-core/archive/refs/tags/v${PIO_CORE}.zip"
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends libsdl2-dev libssl-dev libwolfssl-dev pkg-config
+          pio-core: ${{ env.PIO_CORE }}
+          platformio-ini: upstream/platformio.ini
+          cache-prefix: pio-sim
+          extra-apt: libsdl2-dev libssl-dev libwolfssl-dev pkg-config
 
       - name: Apply the overlay
         run: orbify/xteink/scripts/apply.sh upstream
@@ -177,7 +165,7 @@ jobs:
 
       - name: Logs, screenshots and the proxy's request log
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-${{ matrix.profile }}
           path: ${{ runner.temp }}/e2e
@@ -193,20 +181,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
 
-      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
-        with:
-          distribution: temurin
-          java-version: "17"
-          # Robolectric's Android jars (350 MB) from Maven Central, which answers shared runners
-          # with 429 Too Many Requests: downloaded once per build-file change, then cached.
-          cache: gradle
-          cache-dependency-path: |
-            android/companion/*.gradle.kts
-            android/companion/app/build.gradle.kts
-            android/companion/gradle/wrapper/gradle-wrapper.properties
-
-      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      # The same Java, Gradle cache (setup-gradle) and SDK as android.yml and release.yml.
+      - uses: ./.github/actions/android-setup
 
       - name: Companion unit and Robolectric tests
         working-directory: android/companion

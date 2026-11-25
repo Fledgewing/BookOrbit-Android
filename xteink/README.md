@@ -22,8 +22,11 @@ This is an **overlay**, not a fork. CrossInk's source is used as released; the o
 history). Readers still on 1.6 stay on the feed's stable entry, `xteink-v1.6.1.114+bookorbit.9`,
 until CrossInk 2.0 leaves its release candidates (below).
 
-When CrossInk-Bookorbit releases, the daily CI run rebuilds its newest 2.x tag with the overlay and
-publishes a release here. The only thing that can need hand work is the patch series for that upstream
+When CrossInk-Bookorbit releases, the daily CI run pins its newest 2.x tag in
+`tools/upstreams.lock` (the workflow commits the bump), builds the commit the lock records with the
+overlay and publishes a release here. The build jobs that run upstream's build scripts hold no
+write token and no secret; a separate job, which never runs upstream code, checks the built files
+and publishes them. The only thing that can need hand work is the patch series for that upstream
 line, and CI says so if it stops applying.
 
 ### Releases and the update feed

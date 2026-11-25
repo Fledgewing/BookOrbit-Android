@@ -14,7 +14,7 @@
 -- fallback renamed a new one in) has another inode: the next read reopens.
 ---------------------------------------------------------------------------------------------
 
-Db = { BUSY_MS = 2000 }
+Db = { BUSY_MS = 20 }
 
 local ffi_ok, ffi = pcall(require, "ffi")
 if ffi_ok then pcall(ffi.cdef, "int getpid(void);") end

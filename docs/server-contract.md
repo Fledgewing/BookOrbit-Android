@@ -192,7 +192,11 @@ knows.
 ## Catalog replies carry no version
 
 The JSON catalog routes have no ETag, `since` or `updatedAt` filter, so a cache can only compare
-whole replies. Two fields change on every request and are ignored in that compare
+whole replies. `sort=recently_updated&order=desc` is supported
+(`c1dd6b4f`, `server/src/modules/koreader/dto/koreader-catalog-query.dto.ts:17-26`,
+`server/src/modules/koreader/koreader-catalog.service.ts:1568-1569`); the underlying order is
+book `updatedAt DESC`, id ascending (`server/src/modules/opds/opds-book.service.ts:91-92`).
+This permits a newest-first timestamp probe, not a membership change feed. Two fields change on every request and are ignored in that compare
 (`Cache.normalize`):
 - `generatedAt` is a fresh clock value per request (`koreader-catalog.service.ts:279`);
 - Home's `discover` row is random per request (`getRandomBooks`, `:417`).

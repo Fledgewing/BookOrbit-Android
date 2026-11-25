@@ -4,9 +4,9 @@ name: Xteink
 # - push / pull request touching xteink/: host tests and every reader's build of both pinned
 #   pinned CrossInk line, crossink-v2.0 in tools/upstreams.lock (no release). Only CrossInk 2.x
 #   and later is built: 1.6 is retired (xteink/scripts/upstream-line.sh refuses it).
-# - daily schedule and manual runs: build upstream's newest 2.x tag (rc included) or the one
-#   given, then publish a release when this (upstream tag, xteink/ tree) pair has not been
-#   released yet. A final upstream tag (no -rc/-beta) is published as a stable release, which
+# - daily schedule and manual runs: move tools/upstreams.lock to upstream's newest 2.x tag (rc
+#   included) or the one given (the lock job commits the bump), build the commit the lock records,
+#   then publish a release when this (upstream tag, xteink/ tree) pair has not been released yet. A final upstream tag (no -rc/-beta) is published as a stable release, which
 #   makes it the feed's stable entry; an rc or beta stays a pre-release (upstream-line.sh channel). Readers see it under
 #   Settings > Check for updates: the overlay points their updater at this repo's
 #   xteink-v releases (overlay patch ota-tag-prefix).
@@ -18,6 +18,11 @@ name: Xteink
 #   partitions.bin). tools/sideload-xteink.sh <run id> flashes it over USB. Its fourth number
 #   (RUN_BASE + run number) is below every later run's, so a reader on a test build takes the
 #   next release over the air.
+#
+# Trust: the build jobs run upstream's PlatformIO scripts, so they get a read-only token, no
+# stored credentials and no secrets. Only the lock, publish and feed jobs can write, and none of
+# them checks out or runs upstream code: publish downloads the built files, checks them and
+# releases them. Every action is pinned by commit (tools/test/test-workflows.py).
 #
 # Tags: xteink-v<version>. Firmware releases are published with make_latest=false: "latest"
 # is always an Android release (companions up to 0.6.x read releases/latest).
@@ -37,15 +42,15 @@ name: Xteink
 on:
   push:
     branches: [main]
-    paths: ["xteink/**", "shared/**", ".github/workflows/xteink.yml"]
+    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
   pull_request:
-    paths: ["xteink/**", "shared/**", ".github/workflows/xteink.yml"]
+    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
   schedule:
     - cron: "17 11 * * *"
   workflow_dispatch:
     inputs:
       upstream_ref:
-        description: "CrossInk-Bookorbit tag to build (empty = latest release)"
+        description: "CrossInk-Bookorbit tag to pin in tools/upstreams.lock and build (empty = upstream's newest 2.x tag)"
         required: false
         type: string
       patch_series:
@@ -69,9 +74,7 @@ on:
         default: false
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 env:
   UPSTREAM_REPO: agosez/CrossInk-Bookorbit
@@ -81,11 +84,81 @@ env:
   FEED_PATH: xteink/releases.json
 
 jobs:
-  resolve:
+  # Which upstream commit this run builds, always as recorded in tools/upstreams.lock. Push and
+  # pull request builds take the lock as it is, so an upstream release never turns an unrelated
+  # change red. Daily and manual runs first move the lock to one tag: upstream's newest 2.x
+  # release, rc included, unless one is given (a patch that stops applying shows up there);
+  # upstream's "latest" skips pre-releases. The tag is resolved to its commit here, through the
+  # API, and the bump is committed to this branch, so the release builds a commit, not a tag that
+  # could move. Runs no upstream code; the only job besides publish and feed that can write.
+  lock:
     if: ${{ !inputs.feed_only }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
+      sha: ${{ steps.l.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            xteink/scripts
+            tools
+
+      - id: l
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REF: ${{ inputs.upstream_ref }}
+          TEST_BUILD: ${{ inputs.test_build }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # Pushes, pull requests and test builds without upstream_ref build the lock as it is. A
+          # test build of another upstream tag pins it on its own branch, never on main.
+          if [ "$GITHUB_EVENT_NAME" = push ] || [ "$GITHUB_EVENT_NAME" = pull_request ] \
+            || { [ "${TEST_BUILD:-false}" = true ] && [ -z "$INPUT_REF" ]; }; then
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "$INPUT_REF" ]; then
+            tag="$INPUT_REF"
+          else
+            tag="$(gh api "repos/$UPSTREAM_REPO/releases?per_page=50" -q '.[] | select(.draft | not) | .tag_name' \
+              | xteink/scripts/upstream-line.sh pick)"
+          fi
+          xteink/scripts/upstream-line.sh channel "$tag" >/dev/null  # refuses a 1.x tag
+          commit="$(gh api "repos/$UPSTREAM_REPO/commits/$(printf '%s' "$tag" | sed 's/+/%2B/g')" -q .sha)"
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::no commit for upstream tag $tag"; exit 1; }
+          read -r _ repo ref pinned < <(awk '$1 == "crossink-v2.0"' tools/upstreams.lock)
+          if [ "$ref" = "$tag" ] && [ "$pinned" = "$commit" ]; then
+            echo "tools/upstreams.lock already pins $tag ($commit)"
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${TEST_BUILD:-false}" = true ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ]; then
+            echo "::error::a test build never moves $DEFAULT_BRANCH's pin; run it on a branch"
+            exit 1
+          fi
+          # tools/upstreams pin's format, committed through the API on top of this branch.
+          awk -v r="$tag" -v s="$commit" \
+            '$1 == "crossink-v2.0" && $0 !~ /^#/ {printf "%-17s %-28s %-23s %s\n", $1, $2, r, s; next} {print}' \
+            tools/upstreams.lock > "$RUNNER_TEMP/upstreams.lock"
+          blob="$(gh api "repos/$GITHUB_REPOSITORY/contents/tools/upstreams.lock?ref=$GITHUB_REF_NAME" -q .sha)"
+          sha="$(gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/tools/upstreams.lock" \
+            -f message="Pin CrossInk-Bookorbit $tag (${commit:0:12}) for the Xteink release build" \
+            -f branch="$GITHUB_REF_NAME" -f sha="$blob" -f content="$(base64 -w0 "$RUNNER_TEMP/upstreams.lock")" \
+            -q .commit.sha)"
+          echo "tools/upstreams.lock: $repo $ref ($pinned) -> $tag ($commit) in $sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  resolve:
+    needs: lock
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ needs.lock.outputs.sha }}
       upstream_tag: ${{ steps.r.outputs.upstream_tag }}
+      upstream_commit: ${{ steps.r.outputs.upstream_commit }}
       marker: ${{ steps.r.outputs.marker }}
       version: ${{ steps.r.outputs.version }}
       asset_version: ${{ steps.r.outputs.asset_version }}
@@ -93,8 +166,10 @@ jobs:
       prerelease: ${{ steps.r.outputs.prerelease }}
       lines: ${{ steps.r.outputs.lines }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.lock.outputs.sha }}
+          persist-credentials: false
           sparse-checkout: |
             xteink
             tools
@@ -102,49 +177,28 @@ jobs:
       - id: r
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_REF: ${{ inputs.upstream_ref }}
           FORCE: ${{ inputs.force_release }}
           TEST_BUILD: ${{ inputs.test_build }}
         run: |
           set -euo pipefail
-          # Push and pull request builds use the CrossInk version pinned in tools/upstreams.lock,
-          # so an upstream release never turns an unrelated change red; daily and manual runs take
-          # one tag: upstream's newest 2.x release, rc included, unless one is given (a patch that
-          # stops applying shows up there). Upstream's "latest" skips pre-releases, so it would
-          # pick 1.6 while 2.0 is an rc.
-          if [ -n "$INPUT_REF" ]; then
-            tags="$INPUT_REF"
-          elif [ "$GITHUB_EVENT_NAME" = push ] || [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            tags="$(awk '$1 == "crossink-v2.0" {print $3}' tools/upstreams.lock)"
-          else
-            tags="$(gh api "repos/$UPSTREAM_REPO/releases?per_page=50" -q '.[] | select(.draft | not) | .tag_name' \
-              | xteink/scripts/upstream-line.sh pick)"
-          fi
+          read -r _ _ tag commit < <(awk '$1 == "crossink-v2.0"' tools/upstreams.lock)
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::tools/upstreams.lock has no crossink-v2.0 commit"; exit 1; }
           # Refuses a 1.x tag; stable for a final release, prerelease for an rc or beta.
-          for t in $tags; do xteink/scripts/upstream-line.sh channel "$t" >/dev/null; done
-          version_of() { # 2.0.0+bookorbit.1-rc3 -> 2.0.0.<run>+bookorbit.1-rc3
-            local base="${1#v}" numeric rest
-            numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"
-            rest="${base#"$numeric"}"
-            printf '%s' "${numeric}.$((RUN_BASE + GITHUB_RUN_NUMBER))${rest}"
-          }
-          asset_of() { printf '%s' "$1" | sed 's/[^A-Za-z0-9._-]\{1,\}/-/g'; }
-          lines="$(for t in $tags; do
-            v="$(version_of "$t")"
-            jq -cn --arg tag "$t" --arg version "$v" --arg asset "$(asset_of "$v")" \
-              '{upstream_tag: $tag, version: $version, asset_version: $asset}'
-          done | jq -cs .)"
-          tag="$(printf '%s\n' $tags | head -1)"
-          version="$(version_of "$tag")"
-          asset_version="$(asset_of "$version")"
           channel="$(xteink/scripts/upstream-line.sh channel "$tag")"
+          # 2.0.0+bookorbit.1-rc3 -> 2.0.0.<run>+bookorbit.1-rc3
+          base="${tag#v}"
+          numeric="$(printf '%s' "$base" | sed -E 's/^([0-9]+(\.[0-9]+)*).*/\1/')"
+          version="${numeric}.$((RUN_BASE + GITHUB_RUN_NUMBER))${base#"$numeric"}"
+          asset_version="$(printf '%s' "$version" | sed 's/[^A-Za-z0-9._-]\{1,\}/-/g')"
+          lines="$(jq -cn --arg tag "$tag" --arg commit "$commit" --arg version "$version" --arg asset "$asset_version" \
+            '[{upstream_tag: $tag, upstream_commit: $commit, version: $version, asset_version: $asset}]')"
 
           # Only xteink/ decides: an Android-only commit never makes a firmware release. Releases are
           # batched (README "When a release is made"): the daily run publishes only for a new upstream
           # tag; our own changes go out by a manual run. The rule: upstream-line.sh publish.
           marker="upstream=$tag overlay-tree=$(git rev-parse HEAD:xteink)"
           publish=false
-          # A test build never publishes (the release and e2e jobs check test_build too).
+          # A test build never publishes (the publish and e2e jobs check test_build too).
           if [ "${TEST_BUILD:-false}" = true ]; then
             echo "Test build: firmware artifacts only, nothing published"
           elif [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
@@ -153,6 +207,7 @@ jobs:
           fi
           {
             echo "upstream_tag=$tag"
+            echo "upstream_commit=$commit"
             echo "marker=$marker"
             echo "version=$version"
             echo "asset_version=$asset_version"
@@ -160,12 +215,16 @@ jobs:
             echo "prerelease=$([ "$channel" = prerelease ] && echo true || echo false)"
             echo "lines=$lines"
           } >> "$GITHUB_OUTPUT"
-          echo "upstream $tags -> $lines (publish=$publish, $channel)"
+          echo "upstream $tag ($commit) -> $version (publish=$publish, $channel)"
 
+  # Runs upstream's build scripts: read-only token, no credentials left in either checkout, no
+  # secrets and no token in the environment.
   build:
     name: build ${{ matrix.line.upstream_tag }} ${{ matrix.environment }}
     needs: resolve
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -180,49 +239,41 @@ jobs:
             firmware: firmware-x3-x4
     steps:
       - name: Check out Orbify
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve.outputs.sha }}
           path: orbify
           submodules: recursive
+          persist-credentials: false
 
-      - name: Check out CrossInk-Bookorbit ${{ matrix.line.upstream_tag }}
-        uses: actions/checkout@v6
+      - name: Check out CrossInk-Bookorbit ${{ matrix.line.upstream_tag }} at the locked commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ env.UPSTREAM_REPO }}
-          ref: ${{ matrix.line.upstream_tag }}
+          ref: ${{ matrix.line.upstream_commit }}
           path: upstream
           submodules: recursive
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - name: The checkout is the locked commit
+        env:
+          WANT: ${{ matrix.line.upstream_commit }}
+        run: test "$(git -C upstream rev-parse HEAD)" = "$WANT"
+
+      - uses: ./orbify/.github/actions/pio-setup
         with:
-          python-version: "3.14"
-
-      - uses: astral-sh/setup-uv@v7
-        with:
-          version: "latest"
-          enable-cache: true
-
-      - name: Cache PlatformIO packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.platformio/packages
-            ~/.platformio/platforms
-          key: ${{ runner.os }}-pio-${{ env.PIO_CORE }}-${{ hashFiles('upstream/platformio.ini') }}
-
-      # Same toolchain setup as upstream's release workflow.
-      - name: Install PlatformIO Core
-        run: uv pip install --system -U "https://github.com/pioarduino/platformio-core/archive/refs/tags/v${PIO_CORE}.zip"
+          pio-core: ${{ env.PIO_CORE }}
+          platformio-ini: upstream/platformio.ini
 
       - name: Pin pioarduino core inside the platform penv
         working-directory: upstream
         run: |
           set -euo pipefail
-          pio pkg install -e "${{ matrix.environment }}"
+          pio pkg install -e "${{ matrix.environment }}" </dev/null
           uv pip install --python ~/.platformio/penv/bin/python "pioarduino==${PIO_CORE}"
 
       - name: Apply the overlay
-        # overlay/patches/v2.0 for CrossInk 2.x (picked from the tag).
+        # overlay/patches/v2.0 for CrossInk 2.x (picked from the checkout's version).
         env:
           CROSSINK_PATCH_SERIES: ${{ inputs.patch_series }}
         run: orbify/xteink/scripts/apply.sh upstream
@@ -241,7 +292,7 @@ jobs:
           TAILNET_OTA_TAG_PREFIX: xteink-v
         run: |
           set -o pipefail
-          pio run -j1 -e "${{ matrix.environment }}" 2>&1 | tee ../build.log
+          pio run -j1 -e "${{ matrix.environment }}" </dev/null 2>&1 | tee ../build.log
 
       # The app slot is fixed (the partition table changes only over USB), and the X3 build was
       # at 98.5% before the Orbify features: a build above 99.5% fails here, and the features drop
@@ -270,7 +321,7 @@ jobs:
       # The End-of-Book page as the host test drew it (X4 Pro online, offline, not finished; X4).
       - name: End-of-Book page images
         if: matrix.environment == 'x4-pro'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eob-page-${{ matrix.line.asset_version }}
           path: ${{ runner.temp }}/orbify-host/eob-*.png
@@ -284,13 +335,13 @@ jobs:
         working-directory: upstream
         run: |
           set -euo pipefail
-          pio pkg install -e default -e x4-classic
+          pio pkg install -e default -e x4-classic </dev/null
           ../orbify/xteink/scripts/source-archive.sh --upstream . \
             --version "${{ needs.resolve.outputs.version }}" \
             --core ~/.platformio/packages/framework-arduinoespressif32 \
             --out "../source/source-${{ needs.resolve.outputs.asset_version }}.tar.gz"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: matrix.environment == 'x4-pro' && needs.resolve.outputs.publish == 'true'
         with:
           name: source-archive
@@ -299,7 +350,7 @@ jobs:
           compression-level: 0
 
       # For tools/sideload-xteink.sh: the image's SHA-256 and the partition table the build used.
-      # Neither name ends in .bin, so the release job's *.bin never picks them up.
+      # Neither name ends in .bin, so the publish job's *.bin never picks them up.
       # The ELF (gzipped: ~170 MB raw, mostly DWARF), named per reader, decodes a core dump read off
       # a reader exactly: esp-coredump checks the dump's app SHA against it, and a rebuild elsewhere
       # differs in its embedded paths. gunzip it, then `esp-coredump info_corefile -c <dump> <elf>`.
@@ -312,7 +363,7 @@ jobs:
           cp partitions.bin "${bin%.bin}.parttable"
           gzip -6 -c firmware.elf > "${bin%.bin}.elf.gz"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: firmware-${{ matrix.environment }}-${{ matrix.line.asset_version }}
           path: |
@@ -322,7 +373,7 @@ jobs:
             upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.elf.gz
           if-no-files-found: error
 
-  # The emulated release tests (release-tests.yml) on the commit and CrossInk tag about to be
+  # The emulated release tests (release-tests.yml) on the commit and CrossInk commit about to be
   # published: only when this run publishes (upstream-line.sh decides), so pushes and the daily
   # run with nothing new stay as they were. The release waits for them.
   e2e:
@@ -331,29 +382,57 @@ jobs:
     uses: ./.github/workflows/release-tests.yml
     with:
       platform: xteink
-      upstream_ref: ${{ needs.resolve.outputs.upstream_tag }}
+      ref: ${{ needs.resolve.outputs.sha }}
+      upstream_ref: ${{ needs.resolve.outputs.upstream_commit }}
 
-  release:
+  # Never checks out or runs upstream code: it downloads the build jobs' files, checks them
+  # against what the run should have produced and publishes them. The only job with id-token.
+  publish:
     needs: [resolve, build, e2e]
     if: needs.resolve.outputs.publish == 'true' && !inputs.test_build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: firmware-*
           merge-multiple: true
           path: firmware
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: source-archive
           path: firmware
 
-      # The license list, texts and the release-notes section come from this commit.
+      # Orbify's own files at the built commit: the license list, texts and the notes section.
       - name: Check out Orbify
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve.outputs.sha }}
           path: orbify
+          persist-credentials: false
+
+      - name: Check the built files
+        working-directory: firmware
+        env:
+          ASSET_VERSION: ${{ needs.resolve.outputs.asset_version }}
+        run: |
+          set -euo pipefail
+          # Exactly one image per reader, each matching the checksum its build wrote beside it.
+          for fw in firmware-x4-pro firmware-x4-classic firmware-x3-x4; do
+            bin="$fw-v$ASSET_VERSION.bin"
+            test -s "$bin" || { echo "::error::missing $bin"; exit 1; }
+            sha256sum -c "$bin.sha256"
+            test -s "${bin%.bin}.elf.gz" && test -s "${bin%.bin}.parttable"
+          done
+          test "$(find . -maxdepth 1 -name '*.bin' | wc -l)" -eq 3
+          test "$(find . -maxdepth 1 -name 'source-*.tar.gz' | wc -l)" -eq 1
+          # Anything else is not ours to publish.
+          extra="$(find . -maxdepth 1 -type f ! -name 'firmware-*' ! -name 'source-*.tar.gz' | sort)"
+          [ -z "$extra" ] || { echo "::error::unexpected files: $extra"; exit 1; }
 
       - name: Write the release notes and license files
         env:
@@ -361,6 +440,7 @@ jobs:
           OVERLAY_REPO: ${{ github.repository }}
           TAG: ${{ needs.resolve.outputs.upstream_tag }}
           MARKER: ${{ needs.resolve.outputs.marker }}
+          SHA: ${{ needs.resolve.outputs.sha }}
         run: |
           set -euo pipefail
           cp orbify/xteink/THIRD_PARTY_LICENSES.md firmware/
@@ -374,7 +454,7 @@ jobs:
             echo "Verify: \`sha256sum -c SHA256SUMS\`, \`gh attestation verify <file> -R $OVERLAY_REPO\`."
             echo 'The X3 build leaves out Nearby transfer, mDNS, Plugins and language/hyphenation downloads (see "X3 (v2.0) differences" in the README for workarounds). The X4 Pro and X4 Classic keep everything.'
             echo
-            orbify/xteink/scripts/licenses-section.sh "$TAG" "$GITHUB_SHA"
+            orbify/xteink/scripts/licenses-section.sh "$TAG" "$SHA"
             echo
             # Marker the resolve job looks for to skip already-released pairs.
             echo "$MARKER"
@@ -392,32 +472,32 @@ jobs:
             firmware/licenses.zip
             firmware/SHA256SUMS
 
-      - uses: softprops/action-gh-release@v3
-        with:
-          tag_name: xteink-v${{ needs.resolve.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          name: xteink-v${{ needs.resolve.outputs.version }}
-          # "latest" stays an Android release (AGENTS.md "Releases").
-          make_latest: false
-          # An upstream rc or beta stays a pre-release here too: only readers with Include
-          # Release Candidates on are offered it. A final upstream release is stable, and the
-          # feed job makes it the stable entry (xteink/scripts/upstream-line.sh channel).
-          prerelease: ${{ needs.resolve.outputs.prerelease == 'true' }}
-          body_path: notes.md
-          files: |
-            firmware/*.bin
-            firmware/*.elf.gz
-            firmware/THIRD_PARTY_LICENSES.md
-            firmware/licenses.zip
-            firmware/source-*.tar.gz
-            firmware/SHA256SUMS
+      # "latest" stays an Android release (AGENTS.md "Releases"). An upstream rc or beta stays a
+      # pre-release here too: only readers with Include Release Candidates on are offered it. A
+      # final upstream release is stable, and the feed job makes it the stable entry
+      # (xteink/scripts/upstream-line.sh channel).
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: xteink-v${{ needs.resolve.outputs.version }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+          PRERELEASE: ${{ needs.resolve.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          flags=(--latest=false)
+          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$SHA" --title "$TAG" --notes-file notes.md "${flags[@]}" \
+            firmware/*.bin firmware/*.elf.gz firmware/THIRD_PARTY_LICENSES.md firmware/licenses.zip \
+            firmware/source-*.tar.gz firmware/SHA256SUMS
 
   # The readers' update feed: the newest stable and the newest pre-release xteink-v release,
   # reduced to what the updater reads (tag, pre-release flag, assets with size and digest).
   feed:
-    needs: release
-    if: ${{ always() && (needs.release.result == 'success' || inputs.feed_only) }}
+    needs: publish
+    if: ${{ always() && (needs.publish.result == 'success' || inputs.feed_only) }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Write the feed to the feed branch
         env:
