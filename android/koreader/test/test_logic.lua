@@ -431,9 +431,9 @@ test("start patch: Lock auto rotation, or no native rotation: KOReader as it is"
 end)
 
 test("disabled text names the disabler at run time, or stays neutral", function()
-    eq(M.disabledText("Orbit Companion", "Meebook Launcher", "Freeze management"),
-        "Orbit Companion is disabled by Meebook Launcher: re-enable it in Meebook Launcher › Freeze management.")
-    eq(M.disabledText("Orbit Companion", nil, nil), "Orbit Companion is disabled by the system: re-enable it in Settings › Apps.")
+    eq(M.disabledText("BookSync Companion", "Meebook Launcher", "Freeze management"),
+        "BookSync Companion is disabled by Meebook Launcher: re-enable it in Meebook Launcher › Freeze management.")
+    eq(M.disabledText("BookSync Companion", nil, nil), "BookSync Companion is disabled by the system: re-enable it in Settings › Apps.")
 end)
 
 test("compat: KOReader 2025.10+ HandlerSandbox (a callable table) counts as a function", function()
@@ -589,7 +589,7 @@ test("setup box: only off a book, once per key, never when snoozed", function()
     eq(SetupPrompt.decide({ key = "clicker,keyboard" }, "browser", "clicker"), true, "a new row shows again")
     eq(SetupPrompt.decide(nil, "browser", nil), false, "snoozed or nothing: the companion sends none")
     eq(SetupPrompt.decide({ key = "" }, "browser", nil), false)
-    eq(SetupPrompt.text(pr), "Orbit Companion needs 1 setup step: Clicker buttons (accessibility).")
+    eq(SetupPrompt.text(pr), "BookSync Companion needs 1 setup step: Clicker buttons (accessibility).")
     ok(SetupPrompt.text({ key = "a,b", rows = { "A", "B" } }):find("2 setup steps:\n• A\n• B", 1, true))
 end)
 
@@ -1255,7 +1255,7 @@ test("recommended: the same results with mode full, addon and no companion (the 
     end
 end)
 
-test("recommended: lost capabilities undo only Orbit's applied items that need them", function()
+test("recommended: lost capabilities undo only BookSync's applied items that need them", function()
     local rec = { items = { ["ko.wifi_on"] = "applied", ["g.apps"] = "already", ["g.sync_all"] = "applied" } }
     local lost = R.lostCaps(rec, function(cap) return cap ~= "wifi" and cap ~= "apps" end)
     eq(#lost, 1); eq(lost[1].id, "ko.wifi_on")
@@ -1265,7 +1265,7 @@ test("recommended: values in plain words", function()
     eq(R.valueLabel(R.item("bo.sync_forward"), 1), "Ask")
     eq(R.valueLabel(R.item("ko.wifi_on"), nil), "Ask")
     eq(R.valueLabel(R.item("g.apps"), nil), "Nothing")
-    eq(R.valueLabel(R.item("g.apps"), { orbit_open_apps = true }), "Orbit: other apps")
+    eq(R.valueLabel(R.item("g.apps"), { orbit_open_apps = true }), "BookSync: other apps")
     eq(R.reportState(nil), "none")
     eq(R.reportState({ items = { a = "kept", b = "applied" } }), "reviewed")
 end)
@@ -1535,7 +1535,7 @@ test("settings visible: rows show only while their parent has the value", functi
     v.sync_on_sleep = false
     eq(SettingsSync.visible(SIDX, "sleep_cap", v), false)
     eq(SettingsSync.visible(SIDX, "wifi_idle_min", v), true)
-    -- OrbiSmart sets the sync rows and hides them (docs/design/orbismart.md §6); Custom shows them.
+    -- OrbiSmart sets the sync rows and hides them (docs/design/position-sync.md §6); Custom shows them.
     v.sync_on_sleep = true
     for _, k in ipairs({ "sync_on_sleep", "sleep_cap", "sync_on_wake", "reading_schedule" }) do
         eq(SettingsSync.visible(SIDX, k, v), true, k .. " under Custom")
@@ -1553,7 +1553,9 @@ test("settings schema: Sync (OrbiSmart / Custom) is the sync section's first row
     for _, d in ipairs(SIDX.settings) do if d.section == "sync" then first = d; break end end
     eq(first.key, "sync_mode")
     eq(first.default, "orbismart")
-    eq(first.values[1].label, "OrbiSmart (recommended)")
+    eq(first.label, "Reading position")
+    eq(first.values[1].label, "Furthest page wins")
+    eq(first.line, "BookSync keeps the furthest place you've read on any device, and asks before jumping.")
 end)
 
 test("settings schema: every key KOReader reads has a row in its menu", function()
@@ -1582,7 +1584,7 @@ test("recommended choices from the companion", function()
     eq(#c, 3); eq(c[1].id, "bo.auto_sync"); eq(c[2].what, "mine"); eq(c[3].id, "all")
 end)
 
--- OrbiSmart sync (docs/design/orbismart.md §3): every case of the shared table, which the Xteink's
+-- OrbiSmart sync (docs/design/position-sync.md §3): every case of the shared table, which the Xteink's
 -- xteink/test/orbismart_test.cpp reads too.
 local OrbiSmart = M.OrbiSmart
 local OSM = JSON.fixture(here, "orbismart/cases.json")

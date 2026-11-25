@@ -1,4 +1,4 @@
-name: Orbit KOReader plugin tests
+name: BookSync KOReader plugin tests
 description: >
   The plugin's tests (LuaJIT with SQLite, stdin closed) and the release zip's checks: it builds,
   stamped, with the settings schema and nothing outside orbit.koplugin/. android.yml and
@@ -15,6 +15,7 @@ runs:
         luajit android/koreader/test/test_logic.lua </dev/null
         luajit android/koreader/test/test_flows.lua </dev/null
         python3 shared/about/test_credits.py
+        python3 tools/test/test-product-names.py
         # The release zip builds, stamped, with everything under orbit.koplugin/.
         zip="$RUNNER_TEMP/plugin-check/orbit.koplugin.zip"
         mkdir -p "$(dirname "$zip")"

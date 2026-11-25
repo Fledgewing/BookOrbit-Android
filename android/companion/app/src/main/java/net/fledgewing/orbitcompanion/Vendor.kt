@@ -166,7 +166,7 @@ object Vendor {
 
     /** Disabled apps among the three this setup needs. */
     fun disabledApps(ctx: Context): List<String> =
-        listOf(Koreader.PKG to "KOReader", Net.TAILSCALE_PKG to "Tailscale", ctx.packageName to "Orbit")
+        listOf(Koreader.PKG to "KOReader", Net.TAILSCALE_PKG to "Tailscale", ctx.packageName to "BookSync")
             .filter { (pkg, _) -> Net.appState(ctx, pkg) == AppState.FROZEN }
             .map { it.second }
 }

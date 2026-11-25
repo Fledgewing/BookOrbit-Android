@@ -787,7 +787,7 @@ test("menu is its own Tools entry, not inside the plugin's menu, and builds", fu
     m:addToMainMenu(items)
     ok(#items.bookorbit.sub_item_table == 0, "plugin menu untouched")
     local entry = items.orbit_android
-    ok(entry and entry.text == "Android sync" and entry.sorting_hint == "tools", "Tools entry")
+    ok(entry and entry.text == "BookSync" and entry.sorting_hint == "tools", "Tools entry")
     local sub = entry.sub_item_table_func()
     ok(#sub >= 9, "items " .. #sub)
     local titles = {}
@@ -946,7 +946,7 @@ test("frozen companion: says so, and a wake with Wi-Fi off gives up at once", fu
         if W.logs[i]:find("disabled by", 1, true) and W.logs[i]:find("network up: FAILED", 1, true) then skipped = true end
     end
     ok(skipped, "failed fast with the frozen reason")
-    ok(m:statusText():find("Orbit Companion is disabled by", 1, true), "menu status: " .. m:statusText())
+    ok(m:statusText():find("BookSync Companion is disabled by", 1, true), "menu status: " .. m:statusText())
     W.companion, W.companion_frozen = true, false
     W.clock = W.clock + 100
     done()
@@ -991,7 +991,7 @@ test("setup needs you: the companion's count shows in the menu status, no pop-up
     m:onResume()
     run(2)
     ok(#W.shown == 0, "no pop-up")
-    ok(m:statusText():find("Orbit Companion: 2 setup steps need you", 1, true), "status: " .. m:statusText())
+    ok(m:statusText():find("BookSync Companion: 2 setup steps need you", 1, true), "status: " .. m:statusText())
     W.json.STATUS = { version = "0.2.4", setup_needed = 0 }
     m:onResume()
     run(2)
@@ -1020,7 +1020,7 @@ test("setup box: once off a book, never in one; Fix opens the companion, Later s
     run(3)
     local n, box = boxes()
     ok(n == 1, "shown in the file browser")
-    ok(box.text == "Orbit Companion needs 1 setup step: Clicker buttons (accessibility).", box.text)
+    ok(box.text == "BookSync Companion needs 1 setup step: Clicker buttons (accessibility).", box.text)
     box.ok_callback()
     ok(W.activities[#W.activities].action:match("SHOW_SETUP$"), "Fix opens the companion's prompt")
     box.cancel_callback()
@@ -1069,7 +1069,7 @@ test("stats: page turns and refreshes go to the companion in batches, and on sus
     run(5)
 end)
 
-test("a command on KOReader's start that Orbit Companion didn't send is ignored", function()
+test("a command on KOReader's start that BookSync Companion didn't send is ignored", function()
     W.broadcasts = {}
     local ui, m = newUI(true)
     run(5)
@@ -1328,7 +1328,7 @@ test("recommended: a fresh KOReader at first start: every item applied with a ba
     run(1)
 end)
 
-test("recommended: a customised KOReader keeps every changed value; review offers Use Orbit's / Keep mine", function()
+test("recommended: a customised KOReader keeps every changed value; review offers Use BookSync's / Keep mine", function()
     local ui, m, p = recWorld(false)
     p.settings.sync_forward = 3
     ui.gestures.data.gesture_reader.hold_top_left_corner = { toc = true }
@@ -1339,10 +1339,10 @@ test("recommended: a customised KOReader keeps every changed value; review offer
     ok(shownText("Applied 6 · 2 to review"), "the line counts both")
     local menu = m:showRecommended("test")
     local row = menuRow(menu, "BookOrbit › When BookOrbit is further ahead")
-    ok(row and row.mandatory == "yours: Don't sync · Orbit's: Silent", row and row.mandatory)
+    ok(row and row.mandatory == "yours: Don't sync · BookSync's: Silent", row and row.mandatory)
     row.callback()
-    pressDialog("Use Orbit's")
-    ok(p.settings.sync_forward == 2, "Use Orbit's applies")
+    pressDialog("Use BookSync's")
+    ok(p.settings.sync_forward == 2, "Use BookSync's applies")
     ok(store.orbit_android.recommended.items["bo.sync_forward"] == "applied", "recorded")
     run(1)
     menu = m.rec_menu
@@ -1479,7 +1479,7 @@ test("caps: Add-on degrades: Sync and sleep asks for the power button, Other app
     ok(not lastBroadcast(".SLEEP_NOW"), "no SLEEP_NOW")
     ok(not lastBroadcast(".NET_UP"), "no NET_UP: the plugin wakes Tailscale itself")
     ok(lastBroadcast("CONNECT_VPN"), "Tailscale woken directly")
-    ok(shownText("Synced. Press the power button to sleep.\nOrbit Companion can do this for you"), "the hint, once")
+    ok(shownText("Synced. Press the power button to sleep.\nBookSync Companion can do this for you"), "the hint, once")
     W.shown = {}
     m:onOrbitSyncAndSleep()
     run(30)
@@ -1491,8 +1491,8 @@ test("caps: Add-on degrades: Sync and sleep asks for the power button, Other app
     ok(m:openCompanionHome() == true and #W.activities == 0, "Home at BookOrbit home stays")
     local hasWifiRow, hasHelperLine, hasApps = false, false, false
     for _, it in ipairs(menuAll(m:menuItems())) do
-        if it.text == "Let Orbit switch Wi-Fi for syncs" then hasWifiRow = true end
-        if it.text == "Wi-Fi switching and sleep sync: in Orbit Companion ›" then hasHelperLine = true end
+        if it.text == "Let BookSync switch Wi-Fi for syncs" then hasWifiRow = true end
+        if it.text == "Wi-Fi switching and sleep sync: in BookSync Companion ›" then hasHelperLine = true end
         if it.text == "Open another app…" then hasApps = true end
     end
     ok(not hasWifiRow and hasHelperLine and not hasApps, "rows hidden, one line instead")
@@ -1545,7 +1545,7 @@ test("caps: plugin only, a newer plugin on disk: asks to reopen KOReader, never 
     ok(m:maybeRestart("manual") == "ask", "asks")
     run(2)
     ok(W.quits == 0, "no quit")
-    ok(shownText("Orbit v9.9.9 is installed: close KOReader and open it again to finish."), "message")
+    ok(shownText("BookSync v9.9.9 is installed: close KOReader and open it again to finish."), "message")
     RE.patchFileVersion = was
     capsReset()
 end)
@@ -1624,7 +1624,7 @@ test("add-on: with no service, the setup box reads the companion's status file",
     RE.Shared.refresh("resume")
     W.server_code = code
     m:maybeSetupPrompt("resume")
-    local box, line = shownText("Orbit Companion needs 1 setup step: Signed in to BookOrbit."), m:statusText()
+    local box, line = shownText("BookSync Companion needs 1 setup step: Signed in to BookOrbit."), m:statusText()
     capsReset()
     ok(box, "box from the file")
     ok(line:find("1 setup step needs you", 1, true), "status line: " .. line)
@@ -1781,7 +1781,7 @@ test("clicker: one path; the service's clicks arrive over /clicks, no double pag
     W.web[url], W.json.STATUS = nil, nil
 end)
 
-test("clicker: a listener on the port that can't prove it is Orbit Companion is dropped", function()
+test("clicker: a listener on the port that can't prove it is BookSync Companion is dropped", function()
     W.web[STATUS_KEY] = "STATUS"
     W.json.STATUS = { version = "0.4.2", clicker_service = true, keymap = { ["38"] = { press = "prev" } } }
     local socket = require("socket")
@@ -1808,7 +1808,7 @@ test("clicker: a listener on the port that can't prove it is Orbit Companion is 
     run(1)
     ok(#events == 0, "no click done")
     ok(not RE.Channel.up, "closed")
-    ok(table.concat(W.logs, "\n"):find("it is not Orbit Companion", 1, true), "logged")
+    ok(table.concat(W.logs, "\n"):find("it is not BookSync Companion", 1, true), "logged")
     socket.tcp = nil
     W.web[STATUS_KEY], W.json.STATUS = nil, nil
 end)
@@ -2069,7 +2069,7 @@ test("home button menu says it is about KOReader, and notes the companion's Home
     ok(homeText() == "Home button in KOReader: Back to my book, then BookOrbit home", tostring(homeText()))
     W.json.STATUS = { version = "0.4.8", settings = { settings_at = 0, home_opens = "launcher" } }
     m:onResume(); run(1)
-    ok(homeText():find("(Home opens the Orbit launcher page)", 1, true), homeText())
+    ok(homeText():find("(Home opens the BookSync launcher page)", 1, true), homeText())
     W.web[url], W.json.STATUS = nil, nil
     m:onResume(); run(1)
     ok(not homeText():find("(", 1, true), "no companion: no note")
@@ -2434,17 +2434,17 @@ test("home: BookOrbit's true main page -> the companion's launcher page", functi
 end)
 
 test("apps gesture: registered and in the recommended set", function()
-    ok(actions.orbit_open_apps and actions.orbit_open_apps.title == "Orbit Companion: apps", "action title")
+    ok(actions.orbit_open_apps and actions.orbit_open_apps.title == "BookSync Companion: apps", "action title")
     local R = getfenv(Orbit.onSuspend).Recommended
     ok(R.item("g.apps").ours.orbit_open_apps and R.item("g.apps").key == "two_finger_swipe_north", "two-finger swipe up")
 end)
 
----------------------------------------------------------------- updates (Orbit Companion)
+---------------------------------------------------------------- updates (BookSync Companion)
 -- The plugin and the companion ship together: the menu's check asks the companion (UPDATE), and
 -- the plugin downloads, unpacks and installs nothing itself (docs/design/companion-worker.md).
 local function updateBroadcasts() return count(W.broadcasts, function(b) return b.action:sub(-7) == ".UPDATE" end) end
 
-test("update: the menu's check asks Orbit Companion; the plugin fetches nothing and forks nothing", function()
+test("update: the menu's check asks BookSync Companion; the plugin fetches nothing and forks nothing", function()
     local UE = getfenv(Orbit.onSuspend)
     local real = UE.Companion.workerProblem
     UE.Companion.workerProblem = function() return nil end
@@ -2460,14 +2460,14 @@ test("update: the menu's check asks Orbit Companion; the plugin fetches nothing 
     ok(b.extras.userkey == nil and b.extras.server == nil, "no login with it")
     ok(count(W.fetched, function(u) return u:find("github", 1, true) ~= nil end) == 0, "no GitHub request")
     ok(#W.children == children, "no background process")
-    ok(tostring(W.shown[#W.shown].text):find("Orbit Companion is checking", 1, true), "says the companion checks")
+    ok(tostring(W.shown[#W.shown].text):find("BookSync Companion is checking", 1, true), "says the companion checks")
 end)
 
 test("update: without the companion of this version the menu says what to do and asks nothing", function()
     local UE = getfenv(Orbit.onSuspend)
     local real = UE.Companion.workerProblem
     local asked
-    UE.Companion.workerProblem = function(purpose) asked = purpose; return "Orbit Companion needed " .. tostring(purpose) end
+    UE.Companion.workerProblem = function(purpose) asked = purpose; return "BookSync Companion needed " .. tostring(purpose) end
     W.broadcasts, W.shown = {}, {}
     local _ui, orbit = newUI(false)
     orbit:checkPatchUpdate()
@@ -2475,8 +2475,8 @@ test("update: without the companion of this version the menu says what to do and
     UE.Companion.workerProblem = real
     ok(updateBroadcasts() == 0, "nothing sent")
     ok(asked == "to check for updates", "the update's own wording: " .. tostring(asked))
-    ok(tostring(W.shown[#W.shown].text):find("Orbit Companion needed", 1, true), "says so")
-    ok(store.orbit_android.patch_update_status.text:find("Orbit Companion needed", 1, true), "status line too")
+    ok(tostring(W.shown[#W.shown].text):find("BookSync Companion needed", 1, true), "says so")
+    ok(store.orbit_android.patch_update_status.text:find("BookSync Companion needed", 1, true), "status line too")
 end)
 
 test("update: start and wake never check for updates themselves", function()
@@ -2653,7 +2653,7 @@ W.screen_on = false
 sh("rm -rf", ORBIT_ANDROID_PLUGIN_DIR)
 os.remove(SELF)
 
-test("settings PIN: a locked companion makes the Orbit menu read-only, with the keypad one tap away; unreachable stays usable", function()
+test("settings PIN: a locked companion makes the BookSync menu read-only, with the keypad one tap away; unreachable stays usable", function()
     local url = STATUS_KEY
     local ui, m = newUI(true)
     local items = {}
@@ -2959,7 +2959,7 @@ test("end of book: the last page marks it finished, opens the sheet; Undo takes 
     local ui = bookUI()
     W.stock_end = 0
     ui.status:onEndOfBook()
-    ok(W.stock_end == 0, "the Orbit sheet instead of KOReader's")
+    ok(W.stock_end == 0, "the BookSync sheet instead of KOReader's")
     ok(ui.doc_settings.data.summary.status == "complete", "marked finished")
     local job = E.EOB.queue()["d1"]
     ok(job and job.book_id == 42 and job.ready == false, "a job, not sent while the book is open")
@@ -2994,6 +2994,7 @@ test("end of book: stars, leave, sync -> guard read, read-status, rating, writte
     run(5)
     ok(#eob.calls == 0 or not table.concat(eob.calls, ","):find("status:", 1, true), "nothing sent with the book open")
     m:onCloseWidget()
+    ReaderUI.instance = nil -- KOReader destroys the reader after CloseWidget
     ok(E.EOB.queue()["d1"].ready, "ready once the book is left")
     E.Sync.waitOutbox(ui.bookorbit, 10, function() W.waited = true end)
     run(5)
@@ -3008,6 +3009,7 @@ test("end of book: a server error retries later; 404 drops", function()
     local ui, m = bookUI()
     ui.status:markBook(true)
     m:onCloseWidget()
+    ReaderUI.instance = nil -- the book was closed; the next sync runs outside reading
     eob.fail, eob.calls = 503, {}
     E.EOB.drain(ui.bookorbit, false)
     local job = E.EOB.queue()["d1"]
@@ -3116,7 +3118,7 @@ local function copiesSetup(books, md5s)
     function DCat:loadBooks() end
     package.loaded["bookorbit_catalog"] = DCat
     E.Copies.md5 = function(path) return copies.md5s[path] end
-    -- Orbit Companion finds the changed copies (fake_companion.lua), on its own cache folder.
+    -- BookSync Companion finds the changed copies (fake_companion.lua), on its own cache folder.
     copies.dir = os.tmpname(); os.remove(copies.dir); sh("mkdir -p", copies.dir .. "/events"); sh("mkdir -p", copies.dir .. "/copies")
     local lfs = require("libs/libkoreader-lfs")
     copies.lfs_dir = lfs.dir
@@ -3207,7 +3209,7 @@ test("copies: offline or turned off, nothing is downloaded; a copy already curre
     copiesTeardown()
 end)
 
-test("copies: Orbit Companion finds the changed copies; the UI thread reads no saved detail and checks no file", function()
+test("copies: BookSync Companion finds the changed copies; the UI thread reads no saved detail and checks no file", function()
     copiesSetup(copyBooks(), { ["/books/a.epub"] = "old1", ["/books/b.epub"] = "old2", ["/books/c.epub"] = "cur3" })
     copiesUI(false)
     local reads, exists = 0, 0
@@ -3227,7 +3229,7 @@ test("copies: Orbit Companion finds the changed copies; the UI thread reads no s
     ok(reads == 0 and exists == 0, "no detail read, no file checked on the UI thread: " .. reads .. " " .. exists)
     ok(#copies.calls == 4, "the two changed copies replaced: " .. table.concat(copies.calls, ","))
     -- Without the companion of this version nothing is checked.
-    copies.problem = "Orbit Companion needed"
+    copies.problem = "BookSync Companion needed"
     E.Copies.scanned_at = nil
     E.Copies.tick("test"); run(5)
     ok(copies.fc.copies_asks == 1, "not asked")
@@ -4676,7 +4678,7 @@ test("local-first: Home's first paint has the on-device marks; a changed tile na
     cacheTeardown()
 end)
 
-test("storage limit: Orbit Companion counts and removes; eligible covers go before browsing data, all in last-shown order; never the saved lists", function()
+test("storage limit: BookSync Companion counts and removes; eligible covers go before browsing data, all in last-shown order; never the saved lists", function()
     local client, Cat = cacheSetup()
     local MB = 1048576
     local lfs = require("libs/libkoreader-lfs")
@@ -4753,7 +4755,7 @@ test("storage limit: Orbit Companion counts and removes; eligible covers go befo
     ok(has("big"), "no limit")
     run(10) -- the plugin's own count at start
     -- Without the companion of this version nothing is counted on the UI thread.
-    cache.worker_problem = "Orbit Companion needed"
+    cache.worker_problem = "BookSync Companion needed"
     local n = FC.storage_asks
     E.OC.storageCount("count"); run(3)
     ok(FC.storage_asks == n and walks == 0, "nothing counted")
@@ -4794,7 +4796,7 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
         E.OC.fullRefresh(cat); run(900)
         local m = E.Mirror.status()
         local note = m.limit_note and m.limit_note.text or ""
-        ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. No room for new data; protected covers are kept%. Raise the limit in Orbit settings%.$"), "the stop: " .. note)
+        ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. No room for new data; protected covers are kept%. Raise the limit in BookSync settings%.$"), "the stop: " .. note)
         local shown
         for _, t in ipairs(E.Badge.history or {}) do if t == note then shown = true end end
         ok(shown, "the badge says it: " .. table.concat(E.Badge.history or {}, " | "))
@@ -5012,15 +5014,15 @@ test("companion: the cache worker needs the companion of the plugin's own versio
         E.OC.note = function(t) table.insert(notes, t) end
         E.OC.fullRefresh(cat); run(30)
         ok(mirrors() == 0 and not E.Mirror.active, "no run without the companion: " .. mirrors() .. " " .. tostring(E.Mirror.active))
-        ok(E.Mirror.savedText() == "Orbit Companion needed to save BookOrbit for offline", "menu: " .. E.Mirror.savedText())
-        ok(table.concat(notes, "|"):find("Orbit Companion needed", 1, true), "said when pressed: " .. table.concat(notes, " | "))
+        ok(E.Mirror.savedText() == "BookSync Companion needed to save BookOrbit for offline", "menu: " .. E.Mirror.savedText())
+        ok(table.concat(notes, "|"):find("BookSync Companion needed", 1, true), "said when pressed: " .. table.concat(notes, " | "))
         W.clock = W.clock + 61
         cache.calls = {}
         client:request("GET", DASH); run(5)
         ok(checks() == 0 and #cache.calls == 0, "no background check either: " .. table.concat(cache.calls, ","))
         -- Another version: update it.
         W.companion = true; file = { version = "0.0.1" }; fresh()
-        ok(E.Mirror.savedText():find("^Update Orbit Companion to " .. E.PATCH_VERSION:gsub("%p", "%%%0") .. " to save BookOrbit for offline %(it is 0%.0%.1%)$"), "menu: " .. E.Mirror.savedText())
+        ok(E.Mirror.savedText():find("^Update BookSync Companion to " .. E.PATCH_VERSION:gsub("%p", "%%%0") .. " to save BookOrbit for offline %(it is 0%.0%.1%)$"), "menu: " .. E.Mirror.savedText())
         E.OC.fullRefresh(cat); run(30)
         ok(mirrors() == 0, "no run with another version")
         -- The same version: the run goes to the companion, with the login in the broadcast only.
@@ -5076,7 +5078,7 @@ test("sleep screen: back from a real sleep the plugin tells the companion (no se
     W.screen_on = false
 end)
 
--- Orbit Companion refreshes the sleep screen's pool (fake_companion.lua plays SleepPoolBuilder).
+-- BookSync Companion refreshes the sleep screen's pool (fake_companion.lua plays SleepPoolBuilder).
 local function sleepCompanion()
     local fc = dofile(here .. "/fake_companion.lua")
     fc.install(RE, W, function() return nil, 404 end, UIManager)
@@ -5102,7 +5104,7 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
     for _, c in ipairs(FULL) do table.insert(caps, c) end
     table.insert(caps, "sleep_screen")
     W.web[STATUS_KEY] = "STATUS"
-    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps, sleep = { shown_by = "Orbit screen saver ✓" } }
+    W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps, sleep = { shown_by = "BookSync screen saver ✓" } }
     local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
     local lfs = require("libs/libkoreader-lfs")
     local saved = { attributes = lfs.attributes, dir = lfs.dir }
@@ -5125,11 +5127,11 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
     ok(RE.Companion.has("sleep_screen"), "the companion offers it")
     local item
     for _, it in ipairs(m:menuItems()) do if it.text == "Sleep screen" then item = it end end
-    ok(item, "Tools › Android sync › Sleep screen")
+    ok(item, "Tools › BookSync › Sleep screen")
     local rows = item.sub_item_table_func()
     ok(rows[1].text_func() == "Sleep screen: The reader's own", "off by default: " .. rows[1].text_func())
     ok(rows[2].enabled_func() == false, "Pick from waits for Recommended")
-    ok(rows[#rows - 1].text_func() == "Shown by: Orbit screen saver ✓", "how the companion shows it")
+    ok(rows[#rows - 1].text_func() == "Shown by: BookSync screen saver ✓", "how the companion shows it")
     -- Recommended on: saved, and the companion gets every sleep extra.
     W.broadcasts = {}
     rows[1].sub_item_table[2].callback()
@@ -5188,7 +5190,7 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
     ok(ui_calls == 0 and fc.sleep_asks == 1, "the companion lists, checks and fetches; KOReader asks nothing: " .. ui_calls)
     -- Without the right companion nothing is asked.
     local at = Sleep.refreshed_at
-    fc.problem = "Update Orbit Companion"
+    fc.problem = "Update BookSync Companion"
     Sleep.refreshed_at = nil
     ok(Sleep.refresh("old companion") == false and fc.sleep_asks == 1, "an older companion: not asked")
     fc.problem, Sleep.refreshed_at = nil, at
@@ -5724,6 +5726,99 @@ test("sqlite cache: a replaced or busy database is reopened or missed, never an 
     end)
 end)
 
+test("reading: a locked cache cannot delay page turns or cold/warm cache reads", function()
+    local dir, st = fixtureStore()
+    withStore(dir, function()
+        local path = DBFX.reads[1].path
+        local reading, conn = RE.reading, RE.Db.conn
+        RE.reading = function() return false end
+        local warm = RE.Store.read(DBFX.owner, "tap-warm", path, nil)
+        ok(warm ~= nil, "prime the decoded cache before reading")
+        local ui, m = newUI(true)
+        RE.EOB.page_digests[ui] = { file = ui.document.file, digest = "tap-regression" }
+        local bookOf = RE.EOB.bookOf
+        RE.EOB.bookOf = function() error("page turn read plugin state") end
+        RE.reading = function() return true end
+        local opens = 0
+        RE.Db.conn = function(...) opens = opens + 1; return conn(...) end
+        st.conn:exec("BEGIN EXCLUSIVE")
+        local before = W.wall()
+        local okf, err = pcall(function()
+            for page = 2, 26 do
+                m:onPageUpdate(page)
+                eq(RE.Store.read(DBFX.owner, "tap-warm", path, nil), warm, "memory hit")
+                eq(RE.Store.read(DBFX.owner, "tap-cold", path, nil), nil, "cold miss skips SQL")
+            end
+        end)
+        local elapsed = W.wall() - before
+        st.conn:exec("COMMIT")
+        RE.reading, RE.Db.conn, RE.EOB.bookOf = reading, conn, bookOf
+        if not okf then error(err) end
+        eq(RE.EOB.session["tap-regression"].forward, 24, "forward turns still release the stale-push hold")
+        eq(opens, 0, "no SQLite access on a page turn, even under an exclusive lock")
+        ok(elapsed < 0.05, "25 page turns and 50 reads below 50 ms: " .. elapsed)
+    end)
+    st:close()
+end)
+
+test("reading: finish sync skips catalog calls and file writes, then completes outside reading", function()
+    local reading, usable = RE.reading, RE.EOB.usable
+    local done, touched = 0, 0
+    RE.reading = function() return true end
+    RE.EOB.usable = function() touched = touched + 1; return false end
+    RE.EOB.drain({}, false, function() done = done + 1 end)
+    eq(touched, 0, "reading returns before any finish/detail work")
+    eq(done, 1, "the outbox callback is not held")
+    RE.reading = function() return false end
+    RE.EOB.drain({}, false, function() done = done + 1 end)
+    eq(touched, 1, "the next sync outside reading can do the deferred work")
+    eq(done, 2)
+    RE.reading, RE.EOB.usable = reading, usable
+end)
+
+test("network: even an unanswered probe runs only in a background worker", function()
+    run(30)
+    local background, probe = RE.Background.run, RE.probeServer
+    local job, done
+    RE.Background.run = function(name, fn, timeout, cb) job = { fn = fn, cb = cb } end
+    RE.probeServer = function()
+        ok(W.in_child, "HTTP must never execute on the UI thread")
+        return false, "timeout"
+    end
+    local before = W.wall()
+    RE.Net.up(newPlugin(), { reason = "tap regression", cap = 2, need_server = true }, function() done = true end)
+    ok(W.wall() - before < 0.05, "starting a stalled probe returns below 50 ms")
+    ok(job and not done, "probe pending without blocking input")
+    W.in_child = true
+    local result = job.fn()
+    W.in_child = nil
+    -- The whole network budget elapsed while input remained available.
+    W.clock = W.clock + 2
+    job.cb(result)
+    RE.Background.run, RE.probeServer = background, probe
+    ok(done and RE.Net.inflight == nil, "timeout completes, no synchronous retry")
+end)
+
+test("main-loop diagnostics: slow callbacks log, preserve returns/errors and cancel by original identity", function()
+    local f = RE.MainLoop.wrap(function() W.clock = W.clock + 0.125; return nil, "kept", false end, "test callback")
+    local a, b, c = f()
+    eq(a, nil); eq(b, "kept"); eq(c, false)
+    ok(table.concat(W.logs, "\n"):find("booksync: main-loop stall 125 ms in test callback", 1, true), "persistent stall diagnostic")
+    local bad = RE.MainLoop.wrap(function() W.clock = W.clock + 0.125; error("timing regression") end, "test error")
+    local good, err = pcall(bad)
+    ok(not good and tostring(err):find("timing regression", 1, true), "errors propagate")
+    local slow = setfenv(function() W.clock = W.clock + 0.125 end, RE)
+    local nlogs = #W.logs
+    UIManager:nextTick(slow)
+    run(0.2)
+    ok(#W.logs > nlogs and W.logs[#W.logs]:find("booksync: main-loop stall 125 ms", 1, true), "scheduled callbacks are timed")
+    local fn = setfenv(function() error("cancelled callback ran") end, RE)
+    UIManager:scheduleIn(0, fn)
+    UIManager:nextTick(fn)
+    UIManager:unschedule(fn)
+    run(0.1)
+end)
+
 test("sqlite stress: the verdict line", function()
     local line = RE.SqliteStress.verdict({ reads = 900, errors = 0, busy = 3, max_busy_ms = 41 },
         { writes = 1200, errors = 0, max_wait_ms = 12, integrity = "ok" })
@@ -5733,7 +5828,7 @@ test("sqlite stress: the verdict line", function()
     ok(notes[1]:find("didn't answer") ~= nil)
 end)
 
----------------------------------------------------------------- OrbiSmart sync (docs/design/orbismart.md)
+---------------------------------------------------------------- OrbiSmart sync (docs/design/position-sync.md)
 -- A 300-page book; places are pages, xpointers "/p<page>". The BookOrbit plugin's API client is
 -- a fake bookorbit_api (getProgress answers W.osm_server; updateProgress stores it), wrapped by
 -- ko/orbismart.lua like the real one.
@@ -6229,7 +6324,7 @@ test("orbismart: menu: Sync first in its section; the rows it sets hidden; the o
     local ui, m = osmBook(50, nil)
     local sync
     for _, it in ipairs(m:menuItems()) do if it.text == "Sync and Wi-Fi" then sync = it.sub_item_table end end
-    ok(sync[1].text_func():find("Sync: OrbiSmart", 1, true), sync[1].text_func())
+    ok(sync[1].text_func():find("Reading position: Furthest page wins", 1, true), sync[1].text_func())
     local texts = {}
     for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts + 1] = it.text or (it.text_func and it.text_func()) or "" end
     local all = table.concat(texts, "|")

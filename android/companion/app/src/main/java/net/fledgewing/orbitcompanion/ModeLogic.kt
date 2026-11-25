@@ -129,7 +129,7 @@ object PluginReport {
         state == "applied" -> Row(true, false, "applied · tap to review")
         state == "reviewed" -> Row(true, false, "reviewed · tap to change")
         state == "partial" -> Row(false, false, "$conflicts to review · tap to open them in KOReader")
-        else -> Row(true, true, "applied by the Orbit plugin at KOReader's next start")
+        else -> Row(true, true, "applied by the BookSync plugin at KOReader's next start")
     }
 }
 
@@ -197,7 +197,7 @@ object AddonLogic {
         Optional("install_updates", "Install apps"),
         Optional("notifications", "Notifications"),
         Optional("clicker", "Clicker buttons"),
-        Optional("keyboard", "Orbit keyboard"),
+        Optional("keyboard", "BookSync keyboard"),
         Optional("wifi_switching", "Wi-Fi switching"),
         Optional("sleep_sync", "Sleep sync"),
         Optional("admin", "Screen lock"),
@@ -266,14 +266,14 @@ object AddonLogic {
     /** What Full → Add-on changes, for the page before it (§8 step 1). */
     val TO_ADDON_CHANGES = listOf(
         "Home goes back to your reader's own launcher.",
-        "Orbit stops switching Wi-Fi and keeping the reader awake for sleep syncs.",
+        "BookSync stops switching Wi-Fi and keeping the reader awake for sleep syncs.",
         "The lock-screen permission is released.",
         "The clicker service and the Settings PIN stop, unless you keep them below.",
-        "KOReader keeps its reading settings. Orbit undoes only what needed Full mode: KOReader's Wi-Fi action and the two-finger swipe for other apps.",
+        "KOReader keeps its reading settings. BookSync undoes only what needed Full mode: KOReader's Wi-Fi action and the two-finger swipe for other apps.",
     )
     val TO_FULL_CHANGES = listOf(
-        "Orbit becomes the Home app: Home opens your book or BookOrbit.",
-        "Orbit switches Wi-Fi, keeps the reader awake for sleep syncs and runs in the background.",
+        "BookSync becomes the Home app: Home opens your book or BookOrbit.",
+        "BookSync switches Wi-Fi, keeps the reader awake for sleep syncs and runs in the background.",
         "Setup then walks the permissions Full mode needs.",
     )
 }

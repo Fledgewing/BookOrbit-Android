@@ -1,7 +1,7 @@
-# Orbit KOReader plugin
+# BookSync KOReader plugin
 
 Gets an Android e-reader's network ready for the official BookOrbit KOReader plugin and tells
-the plugin when to sync. The plugin does every pull and push and holds the login; Orbit
+the plugin when to sync. The plugin does every pull and push and holds the login; BookSync
 never calls BookOrbit's API. It only checks that the plugin's server answers at its base
 address, with no login.
 
@@ -11,7 +11,7 @@ Tested against KOReader v2026.07.1 (the pin) and v2026.07.2, and BookOrbit plugi
 
 ## Install
 
-Orbit Companion installs and updates it (Setup › "Orbit plugin installed"), and so does
+BookSync Companion installs and updates it (Setup › "BookSync plugin installed"), and so does
 `tools/install-usb.sh`. By hand:
 
 1. Download `orbit.koplugin.zip` from the latest
@@ -49,10 +49,10 @@ order it lists them, so the code reads as the single patch file did:
 | **Wi-Fi requests from KOReader** | With a usable companion: `NetworkMgr:turnOnWifi`/`turnOffWifi`/`isWifiOn` (Android's, device.lua:317-342; `isWifiOn = isConnected` at :341) go through the companion, and `wifi_enable_action` is set to `turn_on`, so `beforeWifiAction` (manager.lua:605-619) and `runWhenOnline` (manager.lua:698) bring Wi-Fi up without a prompt, and without KOReader's centred "Connecting to Wi-Fi…" message (`turnOnWifiAndWaitForConnection`, manager.lua:539, replaced by the same steps with no widget). That message used to flash on wakes, because the plugin asks for the network 1 s after every resume (main.lua:1329-1337). Network messages left on screen: real failures only (the patch's "Can't reach BookOrbit" banner), and KOReader's own Wi-Fi toggle when the reader uses it. Without one (missing or disabled): Tailscale is woken and KOReader's stock behaviour stays; if Wi-Fi is off, network steps fail at once. |
 | **Wi-Fi mode** (shared with the companion) | *Always on*; *Off while reading* (off once the open-time pull is done, restored at close); *Just in time* (default with the companion: off after 1/2/5/10 min without traffic, counted from `socket.http`/`ssl.https` requests; never during a request, the plugin's sync or an outbox drain; only Wi-Fi it turned on; never while another app is in front). Sleep sync, wake pull, Sync while reading, manual patch update and Test sync path put Wi-Fi back off when they had to turn it on. Every decision logs `wifi:` with the reason and mode. The radio state comes from `Settings.Global` `wifi_on` (no permission needed): KOReader has no `ACCESS_WIFI_STATE`, so `WifiManager.isWifiEnabled` throws there. KOReader's own `auto_disable_wifi` can't work here (it needs `getNetworkInterfaceName`, nil on Android, networklistener.lua:184-185). |
 
-Menu: **Tools › Android sync** (its own entry: a menu item with `sorting_hint = "tools"`,
+Menu: **Tools › BookSync** (its own entry: a menu item with `sorting_hint = "tools"`,
 frontend/ui/menusorter.lua:162-189; nothing is added to the plugin's menu). Toggles; Sync while reading; Sync and sleep now;
 Sleep sync limit (10/15/20 s); Recommended settings (a status line, opens the review page); Test
-sync path; Wi-Fi (mode, idle minutes); Home button; Open Orbit Companion; Open another app…; Auto-update patch; Include
+sync path; Wi-Fi (mode, idle minutes); Home button; Open BookSync Companion; Open another app…; Auto-update patch; Include
 pre-releases; Check for patch update; update status; status.
 
 **Self-update** (top-level README "Updates"): at most once a day, after a start or wake whose
@@ -73,13 +73,13 @@ KOReader's gestures defaults, or no value saved) is set, with a backup in
 "to review". Items: BookOrbit Auto-sync on, further ahead → Silent, Make BookOrbit home;
 KOReader's Action when Wi-Fi is off → Turn on (only with Wi-Fi via the companion); in books, hold
 top-right → Sync and sleep, hold top-left → BookOrbit: sync all books, swipe right along the
-bottom edge → BookOrbit: this book, two-finger swipe up → Orbit Companion: apps (only when the
+bottom edge → BookOrbit: this book, two-finger swipe up → BookSync Companion: apps (only when the
 companion offers other apps). A pass that changed something shows one line off-book for 4 s.
-The review page lists To review (Use Orbit's / Keep mine), Applied (Undo), Kept yours and
+The review page lists To review (Use BookSync's / Keep mine), Applied (Undo), Kept yours and
 Unavailable. Every pass logs `recommended (why): applied N | to review M | …`.
 
 Dispatcher actions (for any gesture): `orbit_sync_and_sleep`, `orbit_go_home`,
-`orbit_open_companion`, `orbit_open_apps` ("Orbit Companion: apps").
+`orbit_open_companion`, `orbit_open_apps` ("BookSync Companion: apps").
 
 The companion interface is in [`android/docs/INTERFACE.md`](../docs/INTERFACE.md).
 
@@ -106,7 +106,7 @@ The companion interface is in [`android/docs/INTERFACE.md`](../docs/INTERFACE.md
 | "Is BookOrbit home on top?" | the catalog widget `catalog_browser` (main.lua:1207-1230), `dashboardMode` bookorbit_catalog.lua:1875-1877, closed with its `close_callback` | Home there goes back to the book |
 | Test sync path, step 5 (needs `on_done`) | `onBookOrbitSyncBook{quiet, on_done}` main.lua:1269-1288; `startSweep{quiet, on_done}` main.lua:1246-1253; `errorLabel` | the step is skipped |
 | Auto-sync toggle (also registers its events) | `onBookOrbitToggleAutoSync` main.lua:1416-1448 | not toggled |
-| End of book: mark, sheet, send after the outbox, write back, hold a stale push ([design](../../docs/design/end-of-book/DESIGN.md)) | KOReader `ReaderStatus:onEndOfBook`/`markBook` (readerstatus.lua:38, :212); `enqueueLifecycleSnapshot` main.lua:394; `updateProgress`/`pushProgressAfterBookSync` bookorbit_progress_sync.lua:295, :284; `newClient` main.lua:272; `catalogBook`/`catalogSetReadStatus`/`catalogSetRating` bookorbit_api.lua:737, :705, :709; `StateManager.getBook`/`mutate`/`onDeviceMaps` :253, :307, :348; `BookOrbitSidecar.rememberServerState`/`applyServerStateLive`/`applyServerStateSidecar` :276, :401, :411; catalog `downloadDefaultFile`/`downloadFile` bookorbit_catalog_download.lua:166, :213 | KOReader's own end screen; nothing sent by Orbit |
+| End of book: mark, sheet, send after the outbox, write back, hold a stale push ([design](../../docs/design/end-of-book/DESIGN.md)) | KOReader `ReaderStatus:onEndOfBook`/`markBook` (readerstatus.lua:38, :212); `enqueueLifecycleSnapshot` main.lua:394; `updateProgress`/`pushProgressAfterBookSync` bookorbit_progress_sync.lua:295, :284; `newClient` main.lua:272; `catalogBook`/`catalogSetReadStatus`/`catalogSetRating` bookorbit_api.lua:737, :705, :709; `StateManager.getBook`/`mutate`/`onDeviceMaps` :253, :307, :348; `BookOrbitSidecar.rememberServerState`/`applyServerStateLive`/`applyServerStateSidecar` :276, :401, :411; catalog `downloadDefaultFile`/`downloadFile` bookorbit_catalog_download.lua:166, :213 | KOReader's own end screen; nothing sent by BookSync |
 | Local-first Home: overlay, quiet refresh, ⟳ and stamp ([design](../../docs/design/local-first/DESIGN.md)) | `BoardData.build` bookorbit_board_data.lua:628; catalog `dashboardRootFetch` bookorbit_catalog_dashboard.lua:113, `switchTo` :847, `refreshOnDevice` :592, `refreshCurrent` :475, `boardHeader` (its `statusCluster` upvalue) bookorbit_catalog_board.lua:149-151, `boardRun` :882, `boardRefreshTile` :811, `boardRefreshClock` :846, `listRun`/`listHeader` bookorbit_catalog_lists.lua:739, :1155; `ListView.header` (its `region` upvalue) bookorbit_list_view.lua:93, :162; outbox `listMetadata`/`isBlocked` bookorbit_lifecycle_outbox.lua:225, :247; `sidecarMtime` bookorbit_sidecar.lua:87 | Home stays the plugin's |
 | Write-through cache, Refresh / Full refresh, cover ETags ([design](../../docs/design/write-through-cache.md)) | API `request` bookorbit_api.lua:372, `requestBlocking` :261, `runInSubprocess` :336 (the catalog's `fetch` runs requests in a child, bookorbit_catalog.lua:881), `downloadCatalogThumbnail` :747, `getProxy` :215; catalog `evictCachedCovers` bookorbit_catalog_thumbnails.lua:237 (kept off for our ⟳), `scheduleThumbnailDownloads` :274, `thumbnailPath` :199, `invalidateThumbnail`, `dashboardBooks` bookorbit_catalog_dashboard.lua:275, `loadDashboardRoot` :248, `runConnected` bookorbit_catalog.lua:924 (offline: from the cache), API `download` (offline: connect first); end of book downloads with `fetchDeliveryBook` bookorbit_catalog_download.lua:92 and `supportedFiles` bookorbit_catalog_detail.lua:382; outbox `diagnostics().drainable` bookorbit_lifecycle_outbox.lua:303-316 | requests go straight to the server, as before |
 | Offline mirror, first paint from the cache, cover logging, remove with a book open (v0.11.1) | catalog `initialDashboardContext` bookorbit_catalog_dashboard.lua:69, `hydrateOnDeviceMaps` bookorbit_catalog.lua:614, `paramsForEntry` :1111, `fetchBookPage` :1133, `loadOnDevice` :1187, `effectiveOrder` :1453; `listDecorateBookQuery`/`listSectionParams` bookorbit_catalog_lists.lua:229, :246; `cancelThumbnailJobs`/`downloadThumbnailBatch` bookorbit_catalog_thumbnails.lua:249, :368; `boardDustRemove` bookorbit_catalog_board.lua:953, `detailRemoveFromDevice` bookorbit_catalog_detail.lua:762; `_onSuspend` main.lua:1340 (skipped on an app switch with the book unchanged) | as before: no mirror, the plugin's own paint and remove |
@@ -123,7 +123,7 @@ run, opens an issue "BookOrbit plugin <ver> changed: <symbols>".
 KOReader loads it like any plugin (`PluginLoader:loadPlugins`, used by readerui.lua:464 and
 filemanager.lua:418), sorted by path, so `orbit.koplugin` comes after `bookorbit.koplugin` in
 the same plugins folder and gets each event (Suspend, Resume, PageUpdate, ReaderReady) after
-the BookOrbit plugin has handled it. It shows in the Plugin manager as "Orbit".
+the BookOrbit plugin has handled it. It shows in the Plugin manager as "BookSync".
 
 ## Logs
 

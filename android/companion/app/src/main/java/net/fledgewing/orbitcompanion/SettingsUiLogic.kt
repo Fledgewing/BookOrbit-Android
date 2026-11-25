@@ -264,8 +264,8 @@ data class RecommendedReview(val at: Long, val items: List<Item>) {
         }
 
         val stateLine: String get() = when (state) {
-            "applied" -> "Orbit's: $orbit"
-            "conflict" -> "Yours: $yours · Orbit's: $orbit"
+            "applied" -> "BookSync's: $orbit"
+            "conflict" -> "Yours: $yours · BookSync's: $orbit"
             "kept" -> "Kept yours: $yours"
             "unavailable" -> reason.ifEmpty { "Not on this reader" }
             else -> state
@@ -285,6 +285,6 @@ data class RecommendedReview(val at: Long, val items: List<Item>) {
             return RecommendedReview(o.optLong("at"), items)
         }
 
-        val CHOICE_WORDS = mapOf("ours" to "Use Orbit's", "mine" to "Keep mine", "undo" to "Undo")
+        val CHOICE_WORDS = mapOf("ours" to "Use BookSync's", "mine" to "Keep mine", "undo" to "Undo")
     }
 }

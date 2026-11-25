@@ -28,7 +28,7 @@ function Updater.check(why)
         return problem
     end
     Companion.send(Companion.ACTION.UPDATE, { reason = why })
-    local text = _("Orbit Companion is checking for an update. The plugin comes with it.")
-    setUpdateStatus("asked Orbit Companion to check (" .. why .. ")")
+    local text = _("BookSync Companion is checking for an update. The plugin comes with it.")
+    setUpdateStatus("asked BookSync Companion to check (" .. why .. ")")
     return text
 end

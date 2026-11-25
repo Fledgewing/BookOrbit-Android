@@ -3,7 +3,7 @@
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
--- OrbiSmart sync (docs/design/orbismart.md §3): which way a book's place moves, when a move is
+-- OrbiSmart sync (docs/design/position-sync.md §3): which way a book's place moves, when a move is
 -- shown, and whether a push may go. Pure: no KOReader modules. The table is
 -- shared/fixtures/orbismart/cases.json; the Xteink's orbify::orbismart (xteink/orbify/core/
 -- OrbiSmart.cpp) runs the same cases.

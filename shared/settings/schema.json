@@ -1,6 +1,6 @@
 {
  "v": 1,
- "comment": "Every setting shared by Orbit Companion and the Orbit KOReader plugin (docs/design/companion-settings.md). Wire values are strings: bool 1/0, numbers in decimal, rules one per line.",
+ "comment": "Every setting shared by BookSync Companion and the BookSync KOReader plugin (docs/design/companion-settings.md). Wire values are strings: bool 1/0, numbers in decimal, rules one per line.",
  "sections": [
   {
    "id": "reading",
@@ -41,7 +41,7 @@
    "type": "bool",
    "default": true,
    "section": "reading",
-   "label": "Status bar: Orbit layout (matches Xteink)",
+   "label": "Status bar: BookSync layout (matches Xteink)",
    "line": "Clock above; battery, chapter and reading progress below.",
    "reader": [
     "plugin"
@@ -105,7 +105,7 @@
    "type": "bool",
    "default": true,
    "section": "reading",
-   "label": "End of book: Orbit's sheet",
+   "label": "End of book: BookSync's sheet",
    "line": "Stars, next in series and a suggestion when you finish a BookOrbit book.",
    "reader": [
     "plugin"
@@ -476,7 +476,7 @@
    "values": [
     {
      "id": "orbismart",
-     "label": "OrbiSmart (recommended)"
+     "label": "Furthest page wins"
     },
     {
      "id": "custom",
@@ -484,8 +484,8 @@
     }
    ],
    "section": "sync",
-   "label": "Sync",
-   "line": "OrbiSmart: the furthest place wins, and moving to another reader's place is asked once. Custom: set each sync yourself.",
+   "label": "Reading position",
+   "line": "BookSync keeps the furthest place you've read on any device, and asks before jumping.",
    "reader": [
     "plugin"
    ],
@@ -520,7 +520,7 @@
    ],
    "section": "sync",
    "label": "Wi-Fi",
-   "line": "When Orbit turns Wi-Fi on and off.",
+   "line": "When BookSync turns Wi-Fi on and off.",
    "reader": [
     "companion",
     "plugin"
@@ -750,7 +750,7 @@
    "type": "bool",
    "default": true,
    "section": "library",
-   "label": "BookOrbit opens from Orbit's cache",
+   "label": "BookOrbit opens from BookSync's cache",
    "line": "Pages open at once and offline, then are checked.",
    "reader": [
     "plugin"
@@ -905,7 +905,7 @@
    "type": "bool",
    "default": true,
    "section": "updates",
-   "label": "Let Orbit switch Wi-Fi for syncs",
+   "label": "Let BookSync switch Wi-Fi for syncs",
    "line": "Off: syncs fail when Wi-Fi is off instead of turning it on.",
    "reader": [
     "plugin"

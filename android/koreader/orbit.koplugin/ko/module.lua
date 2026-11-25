@@ -5,7 +5,7 @@
 
 OrbitAndroid = WidgetContainer:extend{
     name = "orbit", -- PluginLoader names it after its folder, orbit.koplugin
-    fullname = "Orbit",
+    fullname = "BookSync",
     is_doc_only = false,
 }
 
@@ -61,13 +61,13 @@ end
 
 function OrbitAndroid:onDispatcherRegisterActions()
     Dispatcher:registerAction("orbit_sync_and_sleep",
-        { category = "none", event = "OrbitSyncAndSleep", title = _("Orbit: sync and sleep"), general = true })
+        { category = "none", event = "OrbitSyncAndSleep", title = _("BookSync: sync and sleep"), general = true })
     Dispatcher:registerAction("orbit_go_home",
-        { category = "none", event = "OrbitGoHome", title = _("Orbit: go to BookOrbit home"), general = true })
+        { category = "none", event = "OrbitGoHome", title = _("BookSync: go to BookOrbit home"), general = true })
     Dispatcher:registerAction("orbit_open_companion",
-        { category = "none", event = "OrbitOpenCompanion", title = _("Orbit: open Orbit Companion"), general = true })
+        { category = "none", event = "OrbitOpenCompanion", title = _("BookSync: open BookSync Companion"), general = true })
     Dispatcher:registerAction("orbit_open_apps",
-        { category = "none", event = "OrbitOpenApps", title = _("Orbit Companion: apps"), general = true, separator = true })
+        { category = "none", event = "OrbitOpenApps", title = _("BookSync Companion: apps"), general = true, separator = true })
 end
 
 -- "Sync while reading" replaces the plugin's every-few-pages push while it is on.
@@ -79,7 +79,7 @@ function OrbitAndroid:hookPluginPagePush()
     local p = bookorbit(self.ui)
     if not p or type(p.settings) ~= "table" then return end
     local cur = p.settings.pages_before_update
-    -- OrbiSmart pushes at a pause instead (docs/design/orbismart.md §3.3).
+    -- OrbiSmart pushes at a pause instead (docs/design/position-sync.md §3.3).
     if S.reading_schedule ~= "off" or (OSM and OSM.on()) then
         if S.saved_pages_before_update == nil and (cur or 0) > 0 then
             S.saved_pages_before_update = cur

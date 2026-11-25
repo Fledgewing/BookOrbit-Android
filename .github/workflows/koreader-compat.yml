@@ -1,4 +1,4 @@
-# Checks that every KOReader internal the Orbit plugin hooks or calls still exists
+# Checks that every KOReader internal the BookSync plugin hooks or calls still exists
 # (android/koreader/test/koreader_compat.lua): KOReader's frontend and plugins, and the ffi
 # modules of the koreader-base commit that KOReader pins.
 #   push / pull request: the KOReader pinned in tools/upstreams.lock.
@@ -96,7 +96,7 @@ jobs:
             exit 0
           fi
           body=$(printf '%s\n\n%s\n\n%s\n' \
-            "The weekly check found KOReader internals the Orbit plugin uses that are gone in KOReader ${KOREADER_REF}." \
+            "The weekly check found KOReader internals the BookSync plugin uses that are gone in KOReader ${KOREADER_REF}." \
             "Missing: ${symbols}" \
             "Update the plugin (android/koreader/orbit.koplugin) and android/koreader/test/koreader_compat.lua, then re-pin with tools/upstreams pin koreader ${KOREADER_REF}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
           gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"

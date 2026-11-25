@@ -47,11 +47,11 @@ function OrbitAndroid:testSyncPath()
     if cstate == "ok" then
         local status = Companion.status(1)
         add(status ~= nil, _("Companion answered"), now_s() - c0,
-            _("Orbit Companion is installed but did not answer: open it once."))
+            _("BookSync Companion is installed but did not answer: open it once."))
     elseif cstate == "frozen" then
         add(false, _("Companion answered"), nil, Companion.disabledText())
     else
-        add(false, _("Companion answered"), nil, _("Orbit Companion is not installed: Wi-Fi stays as it is, Tailscale is woken directly."))
+        add(false, _("Companion answered"), nil, _("BookSync Companion is not installed: Wi-Fi stays as it is, Tailscale is woken directly."))
     end
     if not p or not p:isLoggedIn() then
         add(false, _("BookOrbit plugin signed in"), nil, _("Sign in to BookOrbit first."))
@@ -61,7 +61,7 @@ function OrbitAndroid:testSyncPath()
     held = true
     if was_on == false then add(Companion.has("wifi"), _("Wi-Fi was off: turning it on for the test"), nil, Companion.problem()) end
     Net.up(p, { reason = "test", cap = 20, need_server = true }, function(ok, res)
-        add(res.wifi_s ~= nil, _("Wi-Fi connected"), res.wifi_s, _("Turn Wi-Fi on, or check Orbit Companion's Wi-Fi permission."))
+        add(res.wifi_s ~= nil, _("Wi-Fi connected"), res.wifi_s, _("Turn Wi-Fi on, or check BookSync Companion's Wi-Fi permission."))
         add(res.vpn_s ~= nil, _("Tailscale up"), res.vpn_s, _("Tailscale not connected: open Tailscale and sign in."))
         add(res.server_s ~= nil, _("BookOrbit server answered"), res.server_s, _("No answer from the server: check Tailscale and the server address in BookOrbit settings."))
         if not ok then return show() end

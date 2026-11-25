@@ -144,7 +144,7 @@ function OrbitAndroid:maybeRestart(event)
     elseif act == "gave_up" then
         if state.restart_gave_up ~= want then
             state.restart_gave_up = want
-            setUpdateStatus("v" .. tostring(want) .. " is installed but didn't load after a restart: restart KOReader by hand (Orbit Companion > Setup)")
+            setUpdateStatus("v" .. tostring(want) .. " is installed but didn't load after a restart: restart KOReader by hand (BookSync Companion > Setup)")
         end
     elseif act == "quit" then
         S.restart_tried = want
@@ -155,7 +155,7 @@ function OrbitAndroid:maybeRestart(event)
         -- (docs/design/addon-mode.md §3, "Restart KOReader after an update").
         if state.restart_asked ~= want then
             state.restart_asked = want
-            local text = string.format(_("Orbit v%s is installed: close KOReader and open it again to finish."), tostring(want))
+            local text = string.format(_("BookSync v%s is installed: close KOReader and open it again to finish."), tostring(want))
             setUpdateStatus(text)
             log("restart: v" .. tostring(want) .. " installed; no companion to relaunch KOReader, asking the reader")
             Gate.show("restart ask", function() UIManager:show(InfoMessage:new{ text = text, timeout = 6 }) end) -- gate: Gate.show

@@ -341,7 +341,7 @@ object SleepSystem {
 
     /** "How it is shown" (S2): one line for the menus. */
     fun shownBy(sink: SleepSink, oursChosen: Boolean, pictureReady: Boolean): String = when (sink) {
-        SleepSink.DREAM -> if (oursChosen) "Orbit screen saver ✓" else "Set up ›"
+        SleepSink.DREAM -> if (oursChosen) "BookSync screen saver ✓" else "Set up ›"
         SleepSink.PICTURE -> if (pictureReady) "Picture: Pictures/Orbit/sleep.png" else "Set up ›"
     }
 }

@@ -132,7 +132,7 @@ behaviour:
 
 | Hook | Use |
 |---|---|
-| `ReaderStatus:onEndOfBook` (wrap) | For a BookOrbit-linked book, show the Orbit sheet. Otherwise call the original. |
+| `ReaderStatus:onEndOfBook` (wrap) | For a BookOrbit-linked book, show the BookSync sheet. Otherwise call the original. |
 | `ReaderStatus:markBook` (wrap) | Every KOReader "Mark as finished" also creates a FinishJob, and "Mark as reading" deletes an unsent one. |
 | Plugin lifecycle outbox drain and state | Ordering of steps 1–2 (`2-orbit-android.lua:2084-2140`). |
 | `api:catalogBook`, `catalogSetReadStatus`, `catalogSetRating` | Steps 3–5, and the series and suggestion cache. |
@@ -160,7 +160,7 @@ Contents, top to bottom:
 
 **Flow.**
 1. Turning past the last page raises `EndOfBook`. This calls `markBook(true)` and opens the sheet.
-   The series and suggestion data come from the Orbit detail cache, written when the book was
+   The series and suggestion data come from the BookSync detail cache, written when the book was
    opened and on every sync while online, so the sheet never waits on the network.
 2. Leaving the book (Home, opening the next book, sleep or close) creates a FinishJob and drains it
    on the same network-up. Paging back to read the afterword is not undo; only **Undo** is.
@@ -296,7 +296,7 @@ new in revision 2. Superseded entries are kept and marked.
 | G19 | Xteink clock unset | send the date; drop it | **Drop it** | Better a drain-day date than 1970. | two-way |
 | G20 | X3 scope | full; mark-done only; reduced | *Superseded by G31* | | |
 | G21 | Offline "next" on the server | queue by default; cached list | *Superseded by G27*: the user rejected the default queue ("Wait randomly?") | | |
-| G22 | KOReader's `end_document_action` | respect it; override for linked books | **Override for linked books**, with an Orbit setting | Our sheet is the feature. | two-way |
+| G22 | KOReader's `end_document_action` | respect it; override for linked books | **Override for linked books**, with an BookSync setting | Our sheet is the feature. | two-way |
 | G23 | "Also reading" right after the finish | edit the cache; refetch | **Mark stale and refetch**; local overlay is ROADMAP #3 | | two-way |
 | G24 | Xteink patch shape | one big patch; hooks + new file | **Small hooks + `OrbifyEndOfBook.{h,cpp}`** | Keeps the per-line patch series reapplicable. | two-way |
 | G25 | Undo label | "Not finished"; "Undo"; "Mark as reading" | **"Undo"**, a secondary outlined button (Android) or the status row's right label (Xteink) | "Not finished" beside "Marked as finished" reads like a second status (user's comment). "Mark as reading" would imply a reread. | two-way |
@@ -377,7 +377,7 @@ None open. All three were approved by the user on 2026-11-22 PT:
 - **D1, approved.** Reaching the end marks the book finished on the server without asking. On
   every Orbify reader, turning past the last page marks the book finished, and BookOrbit gets
   "read" with the finish day when the reader leaves the book. Until then, **Undo** cancels it.
-  A per-device Orbit setting turns auto-marking off; it is on by default.
+  A per-device BookSync setting turns auto-marking off; it is on by default.
 - **D2, approved.** Ratings given at the end of a book are written to the reader's BookOrbit
   account, kids' accounts included: whole stars 1–5, attached to this read, replacing any earlier
   rating by that account.
@@ -387,7 +387,7 @@ None open. All three were approved by the user on 2026-11-22 PT:
 ## Delivery (Android)
 
 Items 1–3 (mark done at the end of the book, the end-of-book screen, and the local-first home)
-ship together in the same Android release. They are built in the new **Orbit KOReader plugin**
+ship together in the same Android release. They are built in the new **BookSync KOReader plugin**
 (ROADMAP 8a, being built now), not in the user patch `2-orbit-android.lua`. The hooks in §4 are
 written as patch `Compat` probes; carry them into the plugin's own hook layer, and point the
 patch-file references in §4 and §10 at the plugin.

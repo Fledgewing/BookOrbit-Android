@@ -13,17 +13,22 @@ import java.io.File
 
 /** The Setup checklist's rules alone (docs/design/companion-checklist.md §6). */
 class ChecklistLogicTest {
+    @org.junit.Test fun renamedBatteryAppKeepsSavedKey() {
+        val app = BatteryMerge.App("BookSync", BatteryRow.Row(true, "done"))
+        org.junit.Assert.assertEquals("battery:Orbit", app.id)
+    }
+
     private fun full(vararg open: String, pending: Set<String> = emptySet()): List<Row> = listOf(
         Row("koreader", "KOReader", "koreader" !in open, short = "KOReader 2025.10", verb = "Install"),
         Row("plugin", "BookOrbit plugin", "plugin" !in open, verb = "Install"),
-        Row("patch", "Orbit plugin", "patch" !in open, short = "Orbit plugin 0.11.2", pinFree = true, verb = "Update", pending = "patch" in pending),
+        Row("patch", "BookSync plugin", "patch" !in open, short = "BookSync plugin 0.11.2", pinFree = true, verb = "Update", pending = "patch" in pending),
         Row("signed_in", "BookOrbit account", "signed_in" !in open, short = "Signed in", verb = if ("signed_in" in pending) null else "Sign in", pending = "signed_in" in pending),
         Row("recommended", "Recommended settings", "recommended" !in open, short = "recommended settings on", verb = "Review"),
         Row("home", "Home app", "home" !in open, verb = "Set"),
         Row("install_updates", "Install apps", "install_updates" !in open, verb = "Allow"),
         Row("notifications", "Notifications", "notifications" !in open, verb = "Allow"),
         Row("admin", "Screen lock", "admin" !in open, verb = "Allow"),
-        Row("keyboard", "Orbit keyboard", "keyboard" !in open, verb = "Turn on"),
+        Row("keyboard", "BookSync keyboard", "keyboard" !in open, verb = "Turn on"),
         Row("tailscale", "Tailscale", "tailscale" !in open, short = "Tailscale connected", verb = "Connect"),
         Row("wifi_test", "Wi-Fi off/on test", true, short = "Wi-Fi test passed 17:02", info = true, verb = "Run"),
     )
@@ -47,7 +52,7 @@ class ChecklistLogicTest {
         val skipped = Checklist.summary(items(full("keyboard"), ignored = setOf("keyboard")))
         assertEquals(Summary.AllSet(optionalBelow = true), skipped)
         assertEquals("Everything this reader needs is done. Optional items below.", Checklist.summaryLine(skipped))
-        val optional = Checklist.summary(items(full() + Row("screen_saver", "Screen saver from Orbit", false, optional = true, verb = "Show how")))
+        val optional = Checklist.summary(items(full() + Row("screen_saver", "Screen saver from BookSync", false, optional = true, verb = "Show how")))
         assertEquals(Summary.AllSet(optionalBelow = true), optional)
     }
 
@@ -144,7 +149,7 @@ class ChecklistLogicTest {
         val addon = listOf(
             Row("koreader", "KOReader", true),
             Row("plugin", "BookOrbit plugin", true),
-            Row("patch", "Orbit plugin", true),
+            Row("patch", "BookSync plugin", true),
             Row("signed_in", "BookOrbit account", false, verb = "Sign in"),
             Row("recommended", "Recommended settings", false, info = true, verb = "Review"),
             Row("tailscale", "Tailscale", false, info = true),
@@ -156,7 +161,7 @@ class ChecklistLogicTest {
         assertEquals(1, Checklist.count(its))
         assertEquals(Group.OPTIONAL, its.single { it.id == "notifications" }.group)
         assertEquals(Group.OPTIONAL, its.single { it.id == "battery" }.group)
-        assertEquals("Without it: you see updates and steps only in KOReader and when you open Orbit.", its.single { it.id == "notifications" }.loss)
+        assertEquals("Without it: you see updates and steps only in KOReader and when you open BookSync.", its.single { it.id == "notifications" }.loss)
         assertEquals("1 of 3 on", Checklist.groups(its).single { it.group == Group.OPTIONAL }.line)
     }
 
@@ -171,7 +176,7 @@ class ChecklistLogicTest {
     @Test
     fun collapsedLinesWhenFine() {
         val g = Checklist.groups(items(full())).associateBy { it.group }
-        assertEquals("KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2", g.getValue(Group.APPS).line)
+        assertEquals("KOReader 2025.10, BookOrbit plugin, BookSync plugin 0.11.2", g.getValue(Group.APPS).line)
         assertEquals("Signed in · recommended settings on", g.getValue(Group.BOOKORBIT).line)
         assertEquals("5 of 5 allowed", g.getValue(Group.PERMISSIONS).line)
         assertEquals("Tailscale connected · Wi-Fi test passed 17:02", g.getValue(Group.CONNECTION).line)
@@ -185,13 +190,13 @@ class ChecklistLogicTest {
         val g = Checklist.groups(items(rows, ignored = setOf("keyboard"))).associateBy { it.group }
         assertEquals("1 needs you · recommended settings on", g.getValue(Group.BOOKORBIT).line)
         assertEquals(State.NEEDS_YOU, g.getValue(Group.BOOKORBIT).state)
-        assertEquals("1 needs you · 4 of 6 · Orbit keyboard skipped · set by the reader: Battery", g.getValue(Group.PERMISSIONS).line)
+        assertEquals("1 needs you · 4 of 6 · BookSync keyboard skipped · set by the reader: Battery", g.getValue(Group.PERMISSIONS).line)
     }
 
     @Test
     fun optionalGroupWithOneRowNamesIt() {
-        val g = Checklist.groups(items(full() + Row("screen_saver", "Screen saver from Orbit", false, optional = true))).single { it.group == Group.OPTIONAL }
-        assertEquals("Screen saver from Orbit: off", g.line)
+        val g = Checklist.groups(items(full() + Row("screen_saver", "Screen saver from BookSync", false, optional = true))).single { it.group == Group.OPTIONAL }
+        assertEquals("Screen saver from BookSync: off", g.line)
         assertEquals(State.OFF, g.state)
     }
 
@@ -252,7 +257,7 @@ class ChecklistLogicTest {
     fun batteryMergesAppsAndKeepsPerAppIds() {
         val ok = BatteryRow.Row(true, "done")
         val bad = BatteryRow.Row(false, "set App battery usage › Unrestricted")
-        val apps = listOf(BatteryMerge.App("Orbit", ok), BatteryMerge.App("KOReader", bad), BatteryMerge.App("Tailscale", ok))
+        val apps = listOf(BatteryMerge.App("BookSync", ok), BatteryMerge.App("KOReader", bad), BatteryMerge.App("Tailscale", ok))
         val r = BatteryMerge.row(apps)
         assertFalse(r.done)
         assertEquals("KOReader is restricted", r.stateLine)
@@ -264,18 +269,18 @@ class ChecklistLogicTest {
         assertTrue(i.skipped)
         val t = Checklist.items(listOf(BatteryMerge.row(apps.map { if (it.name == "Tailscale") it.copy(row = bad) else it })), ignored = setOf("battery:Tailscale")).single()
         assertEquals("KOReader still needs you", State.NEEDS_YOU, t.state)
-        assertEquals("Unrestricted for Orbit, KOReader, Tailscale", BatteryMerge.row(apps.map { it.copy(row = ok) }).stateLine)
+        assertEquals("Unrestricted for BookSync, KOReader, Tailscale", BatteryMerge.row(apps.map { it.copy(row = ok) }).stateLine)
     }
 
     @Test
     fun batterySetByTheReader() {
         val ok = BatteryRow.Row(true, "done")
-        val orbit = BatteryMerge.App("Orbit", ok, locked = true)
+        val orbit = BatteryMerge.App("BookSync", ok, locked = true)
         assertEquals(BatteryMerge.AppState.SET_BY_READER, BatteryMerge.state(orbit))
         assertEquals("Set by the reader", BatteryMerge.appLine(orbit))
         val r = BatteryMerge.row(listOf(orbit, BatteryMerge.App("KOReader", ok)))
         assertTrue(r.done)
-        assertEquals("Unrestricted for KOReader · set by the reader for Orbit", r.stateLine)
+        assertEquals("Unrestricted for KOReader · set by the reader for BookSync", r.stateLine)
         assertTrue(BatteryMerge.row(listOf(orbit)).setByReader)
         // Locked the wrong way: Needs you, with Help instead of a verb (§3.4)…
         val wrong = BatteryMerge.App("KOReader", BatteryRow.Row(false, BatteryRow.LOCKED_OTHER), locked = true)
@@ -283,7 +288,7 @@ class ChecklistLogicTest {
         assertEquals("Help", BatteryMerge.row(listOf(wrong)).verb)
         assertEquals("KOReader: can't be changed in Settings on this reader", BatteryMerge.row(listOf(wrong)).stateLine)
         // …unless Android's own Allow prompt can change it (Orbit, BatteryRow.Open.PROMPT).
-        val prompt = BatteryMerge.App("Orbit", BatteryRow.Row(false, BatteryRow.LOCKED, BatteryRow.Open.PROMPT), locked = true)
+        val prompt = BatteryMerge.App("BookSync", BatteryRow.Row(false, BatteryRow.LOCKED, BatteryRow.Open.PROMPT), locked = true)
         assertEquals("Allow", BatteryMerge.appVerb(prompt))
         assertEquals("Fix", BatteryMerge.row(listOf(prompt)).verb)
     }
@@ -306,7 +311,7 @@ class ChecklistLogicTest {
 
     @Test
     fun newRowTagsItsGroup() {
-        val its = Checklist.items(full() + Row("screen_saver", "Screen saver from Orbit", false, optional = true)) { r ->
+        val its = Checklist.items(full() + Row("screen_saver", "Screen saver from BookSync", false, optional = true)) { r ->
             if (r.id == "screen_saver") "New in 0.12" else null
         }
         val g = Checklist.groups(its)
@@ -324,11 +329,11 @@ class ChecklistLogicTest {
         val its = items(full("keyboard"))
         val s = Checklist.summary(its)
         assertEquals("Setup: 1 thing needs you ›", Checklist.statusTitle(s))
-        assertEquals("Orbit keyboard · tap to fix", Checklist.statusLine(s, its))
+        assertEquals("BookSync keyboard · tap to fix", Checklist.statusLine(s, its))
     }
 
     @Test
     fun detailsCopyText() {
-        assertEquals("Orbit Companion 1.0.0 setup details\nA: b\nC: d", SetupDetails.copyText("1.0.0", listOf("A" to "b", "C" to "d")))
+        assertEquals("BookSync Companion 1.0.0 setup details\nA: b\nC: d", SetupDetails.copyText("1.0.0", listOf("A" to "b", "C" to "d")))
     }
 }

@@ -718,7 +718,19 @@ def sleep_pick_batch(ctx: Context, tmp: Path) -> None:
     ends with the sync, before the redraw.)"""
     card = ctx.card(tmp)
     sleep_pick(card, **{"from": "discover", "hours": 0})
+    opened = ctx.book("Standalone 01")
+    path = card.add_book(ctx.source("Standalone 01"))
+    card.open_book(path)
+    # Firmware excludes catalog IDs through the same index a catalog download writes.
+    card.download_index([(opened["id"], path)])
+    # Discover is random on the server. Always put the open book first so exclusion is
+    # exercised on every run, then use real library covers for the rest of the batch.
+    candidates = [opened] + [b for b in ctx.manifest["books"] if b["id"] != opened["id"] and b["cover"]][:11]
+    ctx.faults([{"match": {"path": "/dashboard/sections/random$"}, "action": "status", "status": 200,
+                 "body": json.dumps({"section": {"books": [
+                     {"id": b["id"], "hasCover": True, "readStatus": "unread"} for b in candidates]}})}])
     first = sleep_sync(ctx, card, "sleep-1", timeout_s=150)
+    assert not ctx.requests(f"/books/{opened['id']}/thumbnail"), "Every sleep fetched the open book"
     after(first.output, "Sleep: BookOrbit Pick -> placeholder")
     count, fetched = sleep_batch(first.output)
     assert fetched >= 1 and count == fetched, f"the first top-up fetched {fetched}, batch {count}"

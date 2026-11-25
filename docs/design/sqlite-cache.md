@@ -215,7 +215,7 @@ copies `orbit.db` to `orbit.db.next` at the start of a run, writes there, and at
 both modes: before each read, `ko/db.lua` compares the file's inode and size
 (`lfs.attributes`) with what it opened and reopens when they changed. Nothing else changes.
 
-## Everything Orbit caches or persists, and where it goes
+## Everything BookSync caches or persists, and where it goes
 
 "Into SQLite" names the table. P = plugin, C = companion. Paths under `koreader/settings/`.
 
@@ -417,7 +417,7 @@ lands. The plugin sends bounds and shown paths but owns no budget calculation.
 
 The companion's `SQLITE_STRESS` broadcast writes nonstop for 2 minutes into
 `orbit-cache/stress.db` (pages of 100 rows, each page one transaction that also bumps a
-`gen` row, so a reader can check it saw a whole page). The plugin's "SQLite stress test" (Orbit
+`gen` row, so a reader can check it saw a whole page). The plugin's "SQLite stress test" (BookSync
 menu › About › Debug) sends it and reads the same file nonstop from a forked child: a random page,
 then checks that all 100 rows carry the generation `gen` says and that the checksum row matches.
 It counts reads, `SQLITE_BUSY` waits (and the longest), and every other error (`SQLITE_CORRUPT`,

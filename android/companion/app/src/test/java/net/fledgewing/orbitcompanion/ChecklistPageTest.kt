@@ -28,17 +28,17 @@ class ChecklistPageTest {
     private val rows = listOf(
         Row("koreader", "KOReader", true, "Version 2025.10", short = "KOReader 2025.10"),
         Row("plugin", "BookOrbit plugin", true, "Version 1.8"),
-        Row("patch", "Orbit plugin", true, "Version 0.11.2", short = "Orbit plugin 0.11.2", pinFree = true),
+        Row("patch", "BookSync plugin", true, "Version 0.11.2", short = "BookSync plugin 0.11.2", pinFree = true),
         Row("signed_in", "BookOrbit account", true, "Signed in", short = "Signed in", verb = "Sign in"),
         Row("recommended", "Recommended settings", true, "Applied", short = "recommended settings on", verb = "Review"),
-        Row("home", "Home app", true, "Orbit is the Home app", verb = "Set"),
+        Row("home", "Home app", true, "BookSync is the Home app", verb = "Set"),
         Row("install_updates", "Install apps", true, "Allowed", verb = "Allow"),
         Row("notifications", "Notifications", true, "Allowed", verb = "Allow"),
-        BatteryMerge.row(listOf(BatteryMerge.App("Orbit", BatteryRow.Row(true, "done"), locked = true), BatteryMerge.App("KOReader", BatteryRow.Row(true, "done")))),
+        BatteryMerge.row(listOf(BatteryMerge.App("BookSync", BatteryRow.Row(true, "done"), locked = true), BatteryMerge.App("KOReader", BatteryRow.Row(true, "done")))),
         Row("admin", "Screen lock", true, "Allowed", verb = "Allow"),
         Row("tailscale", "Tailscale", true, "Connected", short = "Tailscale connected", verb = "Connect"),
         Row("wifi_test", "Wi-Fi off/on test", true, "Passed 17:02", short = "Wi-Fi test passed 17:02", info = true, verb = "Run"),
-        Row("screen_saver", "Screen saver from Orbit", false, optional = true, verb = "Show how"),
+        Row("screen_saver", "Screen saver from BookSync", false, optional = true, verb = "Show how"),
     )
 
     private fun open(vararg ids: String) = rows.map { if (it.id in ids) it.copy(done = false, stateLine = "Not yet") else it }
@@ -96,8 +96,8 @@ class ChecklistPageTest {
         val t = texts(root)
         assertTrue(t.contains("All set"))
         assertTrue(t.contains("Everything this reader needs is done. Optional items below."))
-        assertTrue(t.contains("KOReader 2025.10, BookOrbit plugin, Orbit plugin 0.11.2"))
-        assertTrue(t.contains("Screen saver from Orbit: off"))
+        assertTrue(t.contains("KOReader 2025.10, BookOrbit plugin, BookSync plugin 0.11.2"))
+        assertTrue(t.contains("Screen saver from BookSync: off"))
         assertTrue(t.contains("Full mode · change in Settings"))
         assertFalse("no verbs on a set-up reader", buttons(root).any { it in setOf("Sign in", "Allow", "Set", "Fix next") })
         val d = activity.resources.displayMetrics
@@ -141,7 +141,7 @@ class ChecklistPageTest {
     @Test
     fun setByTheReaderShowsItsMark() {
         val t = texts(Checklist.page(Checklist.items(rows)).drawn(frame.copy(open = Checklist.Group.PERMISSIONS.name)))
-        assertTrue(t.any { it.startsWith("Unrestricted for KOReader · set by the reader for Orbit") })
+        assertTrue(t.any { it.startsWith("Unrestricted for KOReader · set by the reader for BookSync") })
     }
 
     @Test
@@ -187,9 +187,9 @@ class ChecklistPageTest {
 
     @Test
     fun newInTagShowsOnTheRow() {
-        val items = Checklist.items(open("keyboard") + Row("keyboard", "Orbit keyboard", false, verb = "Turn on")) { r -> if (r.id == "keyboard") "New in 0.12" else null }
+        val items = Checklist.items(open("keyboard") + Row("keyboard", "BookSync keyboard", false, verb = "Turn on")) { r -> if (r.id == "keyboard") "New in 0.12" else null }
         val t = texts(Checklist.page(items).drawn())
-        assertTrue(t.any { it.startsWith("Orbit keyboard  [NEW IN 0.12]") })
+        assertTrue(t.any { it.startsWith("BookSync keyboard  [NEW IN 0.12]") })
     }
 
     @Test
@@ -221,13 +221,13 @@ class ChecklistPageTest {
     fun detailsPageHasCopyForSupport() {
         val a = Robolectric.buildActivity(SetupDetailsActivity::class.java).setup().get()
         val t = texts(a.window.decorView)
-        assertTrue(t.contains("Orbit plugin last answered"))
+        assertTrue(t.contains("BookSync plugin last answered"))
         assertTrue(buttons(a.window.decorView).contains("Copy for support"))
     }
 
     @Test
     fun batteryDetailListsEachApp() {
         val a = Robolectric.buildActivity(SetupBatteryActivity::class.java).setup().get()
-        assertTrue(texts(a.window.decorView).contains("Orbit"))
+        assertTrue(texts(a.window.decorView).contains("BookSync"))
     }
 }

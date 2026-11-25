@@ -147,13 +147,13 @@ function sleepNow(reason)
         if not S.screen_off_hint_shown then
             S.screen_off_hint_shown = true
             saveSettings()
-            text = text .. "\n" .. _("Orbit Companion can do this for you: Screen off after Sync and sleep.")
+            text = text .. "\n" .. _("BookSync Companion can do this for you: Screen off after Sync and sleep.")
         end
         UIManager:show(InfoMessage:new{ text = text, timeout = 4 }) -- gate: user action (Sync and sleep)
     else
         log("sleep now: no companion; asking the reader to press the power button")
         UIManager:show(InfoMessage:new{ -- gate: user action (Sync and sleep)
-            text = _("Synced. Press the power button to sleep.\n(Install Orbit Companion to turn the screen off by itself.)"),
+            text = _("Synced. Press the power button to sleep.\n(Install BookSync Companion to turn the screen off by itself.)"),
             timeout = 4,
         })
     end

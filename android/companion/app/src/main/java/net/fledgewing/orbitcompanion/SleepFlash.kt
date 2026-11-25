@@ -21,7 +21,7 @@ object SleepFlash {
     fun frames(flash: Boolean): List<Frame> = if (flash) SEQUENCE else listOf(Frame.COVER)
 
     const val LABEL = "Clearing flash before the cover"
-    const val ABOUT = "If the sleep screen shows ghosting and you can't set the reader's screen mode for Orbit, " +
+    const val ABOUT = "If the sleep screen shows ghosting and you can't set the reader's screen mode for BookSync, " +
         "a short black-and-white flash clears it before the cover appears."
 
     /** How long each flash frame stays after it is drawn: long enough for one panel update. */

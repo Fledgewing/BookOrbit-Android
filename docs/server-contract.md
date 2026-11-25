@@ -12,7 +12,7 @@ to that commit. Add a finding here, with its citation, before a design depends o
 - **Xteink**: CrossInk-Bookorbit's own client calls the catalog and exchange routes below, but
   pushes positions with KOSync's `PUT /koreader/syncs/progress` (`lib/BookOrbitSync/BookOrbitSyncClient.cpp`
   in `upstream/crossink-v1.6`). The overlay only makes the server reachable over Tailscale.
-- **Android, Orbit Companion**: one exception, the sleep screen's sharp covers (below, "OPDS
+- **Android, BookSync Companion**: one exception, the sleep screen's sharp covers (below, "OPDS
   covers for the sleep screen"): the companion calls two OPDS routes itself.
 - Every route is under `/api/v1` ([`main.ts:74`](https://github.com/bookorbit/bookorbit/blob/c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7/server/src/main.ts#L74)).
 
@@ -48,7 +48,7 @@ servers, so it is closed too. The guard is not global
 books, uploads, user preferences and statistics, TTS, watch downloads), none under
 `koreader/*` or `opds/*`.
 
-`tools/attest-check` enforces this: it reads the routes Orbify calls from the code (the Orbit
+`tools/attest-check` enforces this: it reads the routes Orbify calls from the code (the BookSync
 plugin's Lua, the companion's Kotlin, and the stock plugin it hooks; `check.mjs --list` prints
 them) and fails when the pinned server puts the guard on one of them, at controller or handler
 level, or installs it globally (`GLOBAL_GUARDS`, `APP_GUARD`). It also fails when a route Orbify

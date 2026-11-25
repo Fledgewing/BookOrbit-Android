@@ -160,7 +160,7 @@ class LauncherActivity : EinkActivity() {
 
     private fun render() {
         val root = page()
-        root.addView(Ui.header(this, "Orbit"))
+        root.addView(Ui.header(this, "BookSync"))
         val choice = Prefs(this).homeApp
         if (HomeApp.isApp(choice)) {
             // "Home opens" another app: it is the big first tile; KOReader stays a tile below.

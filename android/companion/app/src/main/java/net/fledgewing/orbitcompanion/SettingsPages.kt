@@ -222,7 +222,7 @@ class SettingsActivity : SleepPickerPage() {
             out.addView(Ui.row(this, "About", "Credits and legal notices", Ui.value(this, "›"), onClick = {
                 startActivity(Intent(this, AboutActivity::class.java))
             }).apply { tag = "about" })
-            out.addView(note("Orbit ${BuildConfig.VERSION_NAME}" + prefs.patchVersionSeen.takeIf { it.isNotEmpty() }?.let { " · plugin $it" }.orEmpty()))
+            out.addView(note("BookSync ${BuildConfig.VERSION_NAME}" + prefs.patchVersionSeen.takeIf { it.isNotEmpty() }?.let { " · plugin $it" }.orEmpty()))
             return
         }
         val hits = SettingsUi.search(schema, q)
@@ -262,8 +262,8 @@ class SettingsActivity : SleepPickerPage() {
                 if (g("sleep_mode") == "recommended") " · ${label("sleep_from")} · every ${g("sleep_hours")} h" else ""
             "sync" -> listOfNotNull(
                 label("wifi_mode").takeIf { "wifi" in Mode.caps(this) },
-                // OrbiSmart sets the sync rows itself (docs/design/orbismart.md §6).
-                if (g("sync_mode") != "custom") "OrbiSmart"
+                // OrbiSmart sets the sync rows itself (docs/design/position-sync.md §6).
+                if (g("sync_mode") != "custom") "Reading position: Furthest page wins"
                 else listOfNotNull("sleep".takeIf { g("sync_on_sleep") == "1" }, "wake".takeIf { g("sync_on_wake") == "1" }).let { if (it.isEmpty()) "no automatic syncs" else "sync on " + it.joinToString(" and ") },
             ).joinToString(" · ")
             "library" -> "Limit ${label("storage_limit_mb")} · " + if (g("mirror_auto") == "1") "Full refresh every ${label("mirror_ttl_days")}" else "Full refresh by hand"
@@ -443,7 +443,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
                     startActivity(Intent(this, HomeAppActivity::class.java))
                 }
             }
-            "helper_wifi" -> helper(root, "Wi-Fi switching", "Orbit turns Wi-Fi on for a sync and off again", prefs.helperWifi) { prefs.helperWifi = it }
+            "helper_wifi" -> helper(root, "Wi-Fi switching", "BookSync turns Wi-Fi on for a sync and off again", prefs.helperWifi) { prefs.helperWifi = it }
             "helper_sleep_sync" -> helper(root, "Sleep sync", "keeps the reader awake while it syncs on sleep", prefs.helperSleepSync) { prefs.helperSleepSync = it }
             "screen_off" -> if (addon && prefs.helperSleepSync) {
                 helper(root, "Screen off after Sync and sleep", if (Net.adminActive(this)) "uses the lock-screen permission" else "asks for the lock-screen permission", prefs.helperScreenOff) {
@@ -479,7 +479,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
             "clickers" -> if (!addon || prefs.helperClicker) {
                 linkRow(root, "Clicker buttons", "Bluetooth page clicker: page turns, Home, Back, Sleep") { startActivity(Intent(this, ClickersActivity::class.java)) }
             } else root.addView(note("Without the Clicker buttons helper, clicker buttons are KOReader's own."))
-            "helper_pin" -> helper(root, "Settings PIN", "locks Orbit's settings (not your launcher's)", prefs.helperPin) { prefs.helperPin = it }
+            "helper_pin" -> helper(root, "Settings PIN", "locks BookSync's settings (not your launcher's)", prefs.helperPin) { prefs.helperPin = it }
             "pin" -> when {
                 addon && !prefs.helperPin -> Unit
                 Pin.isSet(this) -> {
@@ -496,10 +496,10 @@ open class SettingsSectionActivity : SleepPickerPage() {
             "guarded" -> if ((!addon || prefs.helperPin) && Pin.isSet(this)) {
                 linkRow(root, "Guarded apps", "${Pin.guarded(this).size} · open only after the PIN") { Pin.run(this) { startActivity(Intent(this, GuardedAppsActivity::class.java)) } }
             }
-            "setup" -> linkRow(root, "Setup", "The checklist: what Orbit needs on this reader") { startActivity(Intent(this, SetupActivity::class.java)) }
+            "setup" -> linkRow(root, "Setup", "The checklist: what BookSync needs on this reader") { startActivity(Intent(this, SetupActivity::class.java)) }
             "mode" -> linkRow(root, "Mode", when (prefs.mode) {
                 OrbitMode.ADDON -> "Add-on: your launcher stays · Switch"
-                OrbitMode.FULL -> "Full: Orbit runs the reader · Switch"
+                OrbitMode.FULL -> "Full: BookSync runs the reader · Switch"
                 null -> "not chosen yet"
             }) { Pin.run(this) { startActivity(Intent(this, ModeActivity::class.java)) } }
             "recommended" -> {
@@ -507,7 +507,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
                 val n = r?.items?.count { it.state == "conflict" } ?: 0
                 linkRow(root, "Recommended settings", when {
                     r == null -> "Open KOReader once to see them here."
-                    n > 0 -> "$n differ from Orbit's"
+                    n > 0 -> "$n differ from BookSync's"
                     else -> "${r.items.count { it.state == "applied" }} applied"
                 }) { startActivity(Intent(this, RecommendedReviewActivity::class.java)) }
             }
@@ -561,7 +561,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
         root.addView(Ui.button(this, label, heightDp = 56, sp = 20f) {
             val plugin = prefs.patchVersionSeen.ifEmpty { null }
             if (PluginCommands.allowed(cmd, plugin) == null) {
-                Ui.note(this, "This needs a newer Orbit plugin in KOReader. Install this app's update in Setup, then try again.")
+                Ui.note(this, "This needs a newer BookSync plugin in KOReader. Install this app's update in Setup, then try again.")
             } else {
                 Koreader.start(this, "settings: $label", cmd)
             }
@@ -736,7 +736,7 @@ class RecommendedReviewActivity : SettingsPage() {
         lockedBar(root)
         val r = RecommendedPages.read()
         if (r == null) {
-            root.addView(note("Open KOReader once: the Orbit plugin lists its recommended settings here."))
+            root.addView(note("Open KOReader once: the BookSync plugin lists its recommended settings here."))
             return
         }
         val queued = SettingsStore.get(this, "recommended_choice")
@@ -754,7 +754,7 @@ class RecommendedReviewActivity : SettingsPage() {
         }
         if (!locked && r.items.any { it.state == "conflict" } && queued.isEmpty()) {
             root.addView(Ui.gap(this, 12))
-            root.addView(Ui.button(this, "Use Orbit's for all", heightDp = 56, sp = 20f) { choose("all", "ours") })
+            root.addView(Ui.button(this, "Use BookSync's for all", heightDp = 56, sp = 20f) { choose("all", "ours") })
         }
     }
 
@@ -768,14 +768,14 @@ object SleepSetupHelp {
     fun setUp(a: EinkActivity, redraw: () -> Unit) {
         when (SleepScreen.sink(a)) {
             SleepSink.DREAM -> when {
-                SleepScreen.oursChosen(a) -> Ui.note(a, "Orbit's screen saver shows the sleep screen.")
+                SleepScreen.oursChosen(a) -> Ui.note(a, "BookSync's screen saver shows the sleep screen.")
                 SleepScreen.chooseOurs(a, "Set up") -> redraw()
                 !a.tryStart(Intent(android.provider.Settings.ACTION_DREAM_SETTINGS), "screen saver settings") -> Ui.note(a,
                     "This reader hides its Screen saver settings. Connect it to a computer and run:\n\ntools/install-usb.sh --sleep-screen on\n\n" +
-                        "or, once, tools/install-usb.sh --grant-screen-saver so Orbit can switch it itself.")
+                        "or, once, tools/install-usb.sh --grant-screen-saver so BookSync can switch it itself.")
             }
             SleepSink.PICTURE -> Ui.note(a,
-                "On the reader: Apps › Screensaver › Screensaver style, pick the picture Pictures/Orbit/sleep.png. Orbit keeps it up to date.")
+                "On the reader: Apps › Screensaver › Screensaver style, pick the picture Pictures/Orbit/sleep.png. BookSync keeps it up to date.")
         }
     }
 }

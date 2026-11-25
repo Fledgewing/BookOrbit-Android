@@ -2,6 +2,6 @@
 -- Copyright (c) 2026 Fledgewing. Part of Orbify (see android/koreader/LICENSE).
 local _ = require("gettext")
 return {
-    fullname = _("Orbit"),
-    description = _([[Gets an Android e-reader's network ready for the BookOrbit plugin and tells it when to sync (Orbify, with Orbit Companion).]]),
+    fullname = _("BookSync"),
+    description = _([[Gets an Android e-reader's network ready for the BookOrbit plugin and tells it when to sync (Orbify, with BookSync Companion).]]),
 }

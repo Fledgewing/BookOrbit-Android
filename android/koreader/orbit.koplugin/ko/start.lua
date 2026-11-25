@@ -36,7 +36,7 @@ end
 
 function OrbitAndroid:wakeFlow(reason)
     -- OrbiSmart: a short nap rarely follows reading elsewhere; its sleep sync already ran
-    -- (docs/design/orbismart.md §3.3, wake check after >= 5 min asleep).
+    -- (docs/design/position-sync.md §3.3, wake check after >= 5 min asleep).
     if OSM and OSM.on() and reason == "wake" and state.paused_for and state.paused_for < OSM.WAKE_MIN_S then
         log("orbismart: woke after " .. fmt(state.paused_for) .. "; no wake check under " .. OSM.WAKE_MIN_S .. " s")
         return

@@ -3,7 +3,7 @@
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
--- Menu (mockup screen 6): Tools › Android sync
+-- Menu (mockup screen 6): Tools › BookSync
 ---------------------------------------------------------------------------------------------
 
 function toggle(key, text, help)
@@ -58,13 +58,13 @@ function OrbitAndroid:showAbout()
             if credits then break end
         end
     end
-    assert(credits, "Orbit: shared About credits missing")
-    local lines = { "Orbit " .. PATCH_VERSION }
+    assert(credits, "BookSync: shared About credits missing")
+    local lines = { "BookSync " .. PATCH_VERSION }
     for i, text in ipairs(credits.paragraphs) do
         table.insert(lines, text)
         if i == 2 then table.insert(lines, credits.url) end
     end
-    UIManager:show(TextViewer:new{ title = _("About Orbit"), text = table.concat(lines, "\n\n") }) -- gate: user action (About menu)
+    UIManager:show(TextViewer:new{ title = _("About BookSync"), text = table.concat(lines, "\n\n") }) -- gate: user action (About menu)
 end
 
 function OrbitAndroid:statusText()
@@ -177,7 +177,7 @@ function OrbitAndroid:menuItems()
     })
     table.insert(wifi_items, {
         text_func = function()
-            return Companion.problem() or _("Only Orbit Companion switches Wi-Fi. It never turns off Wi-Fi you turned on by hand in just in time, and never while another app is in front.")
+            return Companion.problem() or _("Only BookSync Companion switches Wi-Fi. It never turns off Wi-Fi you turned on by hand in just in time, and never while another app is in front.")
         end,
         keep_menu_open = true,
         callback = function() end,
@@ -205,11 +205,11 @@ function OrbitAndroid:menuItems()
             stoggle("wifi_via_companion"),
         }
     elseif Companion.installed() then
-        wifi_rows = { { text = _("Wi-Fi switching and sleep sync: in Orbit Companion ›"),
+        wifi_rows = { { text = _("Wi-Fi switching and sleep sync: in BookSync Companion ›"),
             callback = later(function() self:onOrbitOpenCompanion() end) } }
     else
         wifi_rows = { { text_func = function()
-            return (Companion.problem() or "") .. " " .. _("Wi-Fi stays as you leave it: switching it needs Orbit Companion.")
+            return (Companion.problem() or "") .. " " .. _("Wi-Fi stays as you leave it: switching it needs BookSync Companion.")
         end, keep_menu_open = true, callback = function() end } }
     end
     -- The companion's eight sections (docs/design/companion-settings.md §5.7): five submenus here
@@ -219,7 +219,7 @@ function OrbitAndroid:menuItems()
             text_func = function()
                 local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
                 -- The companion's "Home opens": this applies only with KOReader.
-                if Shared.home_opens == "launcher" then t = t .. _(" (Home opens the Orbit launcher page)")
+                if Shared.home_opens == "launcher" then t = t .. _(" (Home opens the BookSync launcher page)")
                 elseif Shared.home_opens == "app" then t = t .. _(" (Home opens another app)") end
                 return t
             end,
@@ -227,18 +227,18 @@ function OrbitAndroid:menuItems()
             sub_item_table = home_items,
             separator = true,
         },
-        { text = _("Status bar: Orbit layout (matches Xteink)"),
+        { text = _("Status bar: BookSync layout (matches Xteink)"),
             checked_func = function() return S.status_orbit_layout ~= false end,
             callback = function() Shared.set("status_orbit_layout", not S.status_orbit_layout); ReadingStatus.changed() end },
         stoggle("local_first"),
         stoggle("eob_sheet"),
         stoggle("eob_auto"),
     })
-    -- Sync: OrbiSmart / Custom (docs/design/orbismart.md §6), the section's first row. OrbiSmart
+    -- Sync: OrbiSmart / Custom (docs/design/position-sync.md §6), the section's first row. OrbiSmart
     -- sets the rows below it and hides them; Custom shows them again, with their last values.
     local mode_items = {}
     local mode_def = SCHEMA.byKey.sync_mode
-    for _i, v in ipairs(mode_def and mode_def.values or { { id = "orbismart", label = "OrbiSmart (recommended)" }, { id = "custom", label = "Custom" } }) do
+    for _i, v in ipairs(mode_def and mode_def.values or { { id = "orbismart", label = "Furthest page wins" }, { id = "custom", label = "Custom" } }) do
         table.insert(mode_items, {
             text = _(v.label),
             radio = true,
@@ -253,7 +253,7 @@ function OrbitAndroid:menuItems()
     local custom = not (OSM and OSM.on())
     local sync = compact({
         {
-            text_func = function() return label("sync_mode", _("Sync")) .. ": " .. ((OSM and OSM.on()) and _("OrbiSmart") or _("Custom")) end,
+            text_func = function() return label("sync_mode", _("Reading position")) .. ": " .. ((OSM and OSM.on()) and _("Furthest page wins") or _("Custom")) end,
             help_text = _(mode_def and mode_def.line or ""),
             sub_item_table = mode_items,
             separator = true,
@@ -292,7 +292,7 @@ function OrbitAndroid:menuItems()
                 return label("storage_limit_mb", _("Storage limit")) .. ": " .. (mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%g GB"), mb / 1024) or string.format(_("%d MB"), mb)))
                     .. (okt and (" · " .. used) or "")
             end,
-            help_text = _("One limit on everything Orbit stores: pages it saved, books saved for offline and covers. Book files and KOReader's own data don't count. Over it, the least recently shown covers go first, including covers saved for offline. Browsing pages go only after eligible covers. Protected covers and lists and book details saved for offline always stay."),
+            help_text = _("One limit on everything BookSync stores: pages it saved, books saved for offline and covers. Book files and KOReader's own data don't count. Over it, the least recently shown covers go first, including covers saved for offline. Browsing pages go only after eligible covers. Protected covers and lists and book details saved for offline always stay."),
             sub_item_table = limit_items,
         },
         toggle("keep_copies_current", label("keep_copies_current", _("Keep book copies current")),
@@ -301,7 +301,7 @@ function OrbitAndroid:menuItems()
     })
     local updates = compact({
         -- Updates come with Orbit Companion, which updates the plugin with it (its own switches).
-        { text = _("Check for updates (Orbit Companion)"), callback = later(function() self:checkPatchUpdate() end) },
+        { text = _("Check for updates (BookSync Companion)"), callback = later(function() self:checkPatchUpdate() end) },
         { text_func = function() return self:updateStatusText() end, keep_menu_open = true, callback = function() end, separator = true },
         stoggle("key_log"),
         wifi_rows[2] or false,
@@ -315,7 +315,7 @@ function OrbitAndroid:menuItems()
         { text = sectionTitle("sync", _("Sync and Wi-Fi")), sub_item_table = sync },
         { text = sectionTitle("library", _("Library and storage")), sub_item_table = library },
         { text = sectionTitle("updates", _("Updates and details")), sub_item_table = updates, separator = true },
-        -- OrbiSmart's override (docs/design/orbismart.md §3.5), in a book only.
+        -- OrbiSmart's override (docs/design/position-sync.md §3.5), in a book only.
         (OSM and OSM.on() and self.ui and self.ui.document) and { text = _("Read from here everywhere"),
           help_text = _("Sends this page to BookOrbit now, even if it is behind the place there. Your other readers move here at their next sync. Offline, it is sent first at the next sync."),
           callback = later(function() OSM.readFromHere("menu") end) } or false,
@@ -323,9 +323,9 @@ function OrbitAndroid:menuItems()
         { text = _("Full refresh of BookOrbit"), callback = later(function() OC.menuFullRefresh() end),
           help_text = _("Gets this view and Home fresh from the server, re-checks the covers, then saves everything reachable from Home for reading offline. Tap ⟳ for a normal refresh; hold ⟳ for this.") },
         { text_func = function() return self:recommendedMenuText() end, callback = later(function() self:showRecommended("menu") end), separator = true },
-        { text = _("Open Orbit Companion"), callback = later(function() self:onOrbitOpenCompanion() end) },
+        { text = _("Open BookSync Companion"), callback = later(function() self:onOrbitOpenCompanion() end) },
         Companion.has("apps") and { text = _("Open another app…"), callback = later(function() self:onOrbitOpenApps() end) } or false,
-        Companion.installed() and { text = _("Buttons, PIN and setup: in Orbit Companion ›"), callback = later(function() self:onOrbitOpenCompanion() end), separator = true } or false,
+        Companion.installed() and { text = _("Buttons, PIN and setup: in BookSync Companion ›"), callback = later(function() self:onOrbitOpenCompanion() end), separator = true } or false,
         { text_func = function() return self:statusText() end, keep_menu_open = true, callback = function() end },
     }
     return compact(items)
@@ -371,7 +371,7 @@ function OrbitAndroid:lockedMenuItems()
 end
 
 function OrbitAndroid:addToMainMenu(menu_items)
-    local entry = { text = _("Android sync"), sub_item_table_func = function()
+    local entry = { text = _("BookSync"), sub_item_table_func = function()
         Shared.refresh("menu")
         if Shared.pin_locked then return self:lockedMenuItems() end
         UIManager:scheduleIn(0.5, function() self:maybeSetupPrompt("menu", "menu") end)

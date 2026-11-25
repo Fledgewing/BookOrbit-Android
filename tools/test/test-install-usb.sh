@@ -65,7 +65,7 @@ check "epub via OPF + KOReader sidecar" '"/sdcard/Books/plain.epub","Plain","Wri
 check "a pdf: path only" '"/sdcard/Books/doc.pdf","","","","",file' "$(grep doc.pdf "$out")"
 rm -f "$out"
 
-# ---- the Orbit plugin: unpack checks, then the push, the swap and the old patch removed
+# ---- the BookSync plugin: unpack checks, then the push, the swap and the old patch removed
 zwork=$(mktemp -d)
 mkdir -p "$zwork/src/orbit.koplugin/ko"
 printf 'local PATCH_VERSION = "0.8.0"\n' >"$zwork/src/orbit.koplugin/main.lua"

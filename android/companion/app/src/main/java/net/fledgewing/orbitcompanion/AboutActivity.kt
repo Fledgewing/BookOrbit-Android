@@ -13,8 +13,8 @@ class AboutActivity : EinkActivity() {
         super.onCreate(savedInstanceState)
         val credits = JSONObject(assets.open("about_credits.json").bufferedReader().use { it.readText() })
         val root = page()
-        root.addView(Ui.header(this, "About Orbit", "‹ Back") { finish() })
-        root.addView(Ui.text(this, "Orbit ${BuildConfig.VERSION_NAME}", 21f, bold = true))
+        root.addView(Ui.header(this, "About BookSync", "‹ Back") { finish() })
+        root.addView(Ui.text(this, "BookSync ${BuildConfig.VERSION_NAME}", 21f, bold = true))
         val paragraphs = credits.getJSONArray("paragraphs")
         for (i in 0 until paragraphs.length()) {
             root.addView(Ui.text(this, paragraphs.getString(i), 18f))

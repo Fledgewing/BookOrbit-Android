@@ -388,7 +388,7 @@ end
 
 -- What keeps Wi-Fi on (Wifi.busy): checks in flight or the offline mirror saving.
 function OC.busy()
-    if next(OC.inflight) ~= nil then return "the Orbit cache checking BookOrbit" end
+    if next(OC.inflight) ~= nil then return "the BookSync cache checking BookOrbit" end
     if Mirror and Mirror.active then return "saving BookOrbit for offline" end
     return nil
 end

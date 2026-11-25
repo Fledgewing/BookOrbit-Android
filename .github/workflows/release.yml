@@ -1,4 +1,4 @@
-# Builds and publishes an Android release: the signed Orbit Companion APK, the version-stamped
+# Builds and publishes an Android release: the signed BookSync Companion APK, the version-stamped
 # KOReader patch, SHA256SUMS, license and notice files, all with keyless build-provenance
 # attestations. Both pieces update themselves from these releases (README "Updates").
 #
@@ -121,7 +121,7 @@ jobs:
           VER="${{ steps.ver.outputs.version }}"
           mkdir -p dist
           cp android/companion/app/build/outputs/apk/release/app-release-unsigned.apk "dist/orbit-companion-$VER-unsigned.apk"
-          # The Orbit KOReader plugin, zipped with its version stamped into main.lua (the
+          # The BookSync KOReader plugin, zipped with its version stamped into main.lua (the
           # script refuses a stamp that didn't take).
           android/koreader/package.sh "$VER" dist/orbit.koplugin.zip
           # Licenses: the companion (MIT), the plugin (AGPL-3.0-or-later).
@@ -261,18 +261,18 @@ jobs:
         run: |
           set -euo pipefail
           cat > notes.md <<NOTES
-          Orbit Companion $VER and the Orbit KOReader plugin $VER.
+          BookSync Companion $VER and the BookSync KOReader plugin $VER.
 
           **Install**
-          - Orbit Companion: install \`orbit-companion-$VER.apk\`. After that it updates itself from these releases.
-          - Orbit KOReader plugin: the companion installs it. By hand: unzip \`orbit.koplugin.zip\` into \`koreader/plugins/\`, delete \`koreader/patches/2-orbit-android.lua\` if present, and restart KOReader. After that it updates itself.
+          - BookSync Companion: install \`orbit-companion-$VER.apk\`. After that it updates itself from these releases.
+          - BookSync KOReader plugin: the companion installs it. By hand: unzip \`orbit.koplugin.zip\` into \`koreader/plugins/\`, delete \`koreader/patches/2-orbit-android.lua\` if present, and restart KOReader. After that it updates itself.
 
           **Verify**
           - Provenance: \`gh attestation verify <file> -R ${{ github.repository }}\`
           - Checksums: \`sha256sum -c SHA256SUMS\`
           - APK signing certificate SHA-256: \`${{ steps.cert.outputs.sha256 }}\`
 
-          Licenses: the companion is MIT, the Orbit KOReader plugin is AGPL-3.0-or-later; bundled library notices are in \`THIRD-PARTY-NOTICES.txt\`.
+          Licenses: the companion is MIT, the BookSync KOReader plugin is AGPL-3.0-or-later; bundled library notices are in \`THIRD-PARTY-NOTICES.txt\`.
           NOTES
           sed -i 's/^          //' notes.md
           FLAGS=()
