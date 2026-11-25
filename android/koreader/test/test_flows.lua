@@ -3876,7 +3876,7 @@ test("cache: a series gains a 21st book -> Refresh rechecks every saved page and
     cacheTeardown()
 end)
 
-test("cache: the mirror's TTL starts an automatic Full refresh when online (default 7 days, a setting)", function()
+test("cache: a Full refresh is manual only, even after the old TTL", function()
     local client, Cat = cacheSetup()
     W.wifi = true
     cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
@@ -3886,18 +3886,9 @@ test("cache: the mirror's TTL starts an automatic Full refresh when online (defa
         E.OC.fullRefresh(cat); run(600)
         local first = E.Mirror.status().at
         ok(first, "saved once")
-        W.clock = W.clock + 6 * 86400
-        client:request("GET", DASH); run(600)
-        ok(E.Mirror.status().at == first, "6 days: not yet")
-        W.clock = W.clock + 2 * 86400
-        client:request("GET", DASH); run(600)
-        ok(E.Mirror.status().at > first, "8 days: refreshed by itself")
-        local second = E.Mirror.status().at
-        E.S.mirror_ttl_days = 1
-        W.clock = W.clock + 86400 + 61
-        client:request("GET", DASH); run(600)
-        ok(E.Mirror.status().at > second, "the setting: 1 day")
-        E.S.mirror_ttl_days = nil
+        W.clock = W.clock + 30 * 86400
+        E.Mirror.tick("network up"); run(600)
+        ok(E.Mirror.status().at == first, "no scheduled Full refresh")
     end)
     cacheTeardown()
 end)
@@ -4303,7 +4294,7 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
         m = E.Mirror.status()
         ok(m.done >= done and m.total >= total and m.left > 0, "the run is kept, not restarted")
         local h = E.Badge.history or {}
-        ok(#notes == 0 and E.Badge.expanded and (h[#h] or ""):find("^Saving for offline · %d+%% · [%d,]+ of [%d,]+"), "the badge opens on its full message: " .. tostring(h[#h]))
+        ok(#notes == 0 and E.Badge.expanded and (h[#h] or ""):find("^Full refresh · %d+%% · [%d,]+ of [%d,]+"), "the badge opens on its full message: " .. tostring(h[#h]))
         ok(table.concat(W.logs, "\n"):find("Full refresh already running (pressed again); kept", 1, true), "logged")
         -- The network goes mid-run: paused; it comes back: resumed, no read needed.
         W.wifi = false
@@ -4318,6 +4309,50 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
         ok(m.left == 0 and m.at, "finished")
     end)
     cacheTeardown()
+end)
+
+test("mirror: background full runs and resumes never display a badge", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    cache.server_fn = libraryServer({ n_books = 50, series4 = 2 })
+    local rate = FC.rate
+    FC.rate = 1
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        E.Mirror.cat = cat
+        E.Badge.close(); E.Badge.running = nil
+        E.Mirror.start("background legacy run", false)
+        ok(not E.Badge.running, "background start is silent")
+        run(3)
+        E.Mirror.manual = nil
+        ok(not E.Badge.running, "background polls are silent")
+        W.wifi = false; E.Mirror.stop("offline"); run(6)
+        W.wifi = true; E.Mirror.tick("network up")
+        ok(not E.Badge.running, "background resume is silent")
+        run(600)
+        ok(not E.Badge.running, "background completion is silent")
+    end)
+    FC.rate = rate
+    cacheTeardown()
+end)
+
+test("mirror: Full refresh suppresses loading, errors, direct notices and queued notes", function()
+    local old = #W.shown
+    local saved_toast = package.loaded["bookorbit_toast"]
+    local Toast = { show = function() error("toast escaped") end, error = function() error("error escaped") end, loading = function() error("loading escaped refresh gate") end }
+    package.loaded["bookorbit_toast"] = Toast
+    E.Gate.installToast()
+    E.Mirror.notices = true
+    local pill = Toast.loading("Loading book...")
+    ok(pill and pill.close, "loading keeps its close handle")
+    pill:close()
+    Toast.show("saved")
+    Toast.error("failed")
+    UIManager:show(require("ui/widget/infomessage"):new{ text = "direct notice" })
+    E.Gate.show("background result", function() error("notice escaped refresh gate") end)
+    ok(#W.shown == old, "no notice appears")
+    E.Mirror.notices = nil
+    package.loaded["bookorbit_toast"] = saved_toast
 end)
 
 test("mirror: Full refresh saves every book's details, outside the cap; covers only with 'Save every cover' (v0.11.2)", function()
@@ -4503,6 +4538,7 @@ test("storage limit: Orbit Companion counts and removes; browsing pages and plai
     E.OC.client = function() return client end
     ok(E.OC.storageTotals() and E.OC.storageTotals().used == 50 * MB, "read back from the database")
     -- No limit: nothing goes.
+    run(10) -- drain the startup count before changing its limit
     E.S.storage_limit_mb = 0
     entry("big", 900 * MB, 99)
     E.OC.storageCount("limit changed"); run(3)
@@ -4737,7 +4773,7 @@ test("mirror: the Full refresh badge: a popup at the start, then one % that only
     E.Badge.draw()
     E.Badge.toggle()
     local h = E.Badge.history
-    ok(h[#h] == "Saving for offline · 40% · 400 of 1,000 · about 10 min left · 2 errors", "unfolded: " .. h[#h])
+    ok(h[#h] == "Full refresh · 40% · 400 of 1,000 · about 10 min left · 2 errors", "unfolded: " .. h[#h])
     E.Badge.toggle()
     ok(h[#h] == "40%", "folded")
     E.Badge.running = nil; E.Badge.close()
@@ -5451,7 +5487,9 @@ test("sqlite cache: a replaced or busy database is reopened or missed, never an 
         local saved_busy = RE.Db.BUSY_MS
         RE.Db.close(dir .. "/orbit.db"); RE.Db.BUSY_MS = 50
         st.conn:exec("BEGIN EXCLUSIVE")
-        eq(RE.Store.read(DBFX.owner, "k", path, nil), nil, "busy: a miss")
+        local before = W.wall()
+        ok(RE.Store.read(DBFX.owner, "k", path, nil) ~= nil, "busy: cached fallback")
+        ok(W.wall() - before < 0.1, "UI read stays below 100 ms")
         st.conn:exec("COMMIT")
         RE.Db.BUSY_MS = saved_busy
         -- A new file (another inode): reopened. Here: an empty database of the same schema.

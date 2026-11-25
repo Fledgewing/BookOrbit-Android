@@ -406,6 +406,54 @@ class CacheWorker(
         }
     }
 
+    /** No server-side since/ETag exists. Walk newest first, stopping below the saved
+     * watermark; include its entire timestamp tie. Fetch details only for changed items.
+     * Membership replies have no version, so recheck saved list pages when a book changed.
+     * No network or parsing happens inside a write transaction. */
+    private fun newestStamp(): String? = store.db().query("SELECT item FROM books WHERE item IS NOT NULL") { it.bytes(0) }
+            .mapNotNull { (it?.let { b -> LuaValue.parse(b) } as? Map<*, *>)?.get("updatedAt")?.let { v -> LuaValue.text(v) } }
+            .maxOrNull()
+
+    private fun seedIncremental(plan: Plan, creds: Creds): Long {
+        val newest = store.meta("incremental_watermark") ?: newestStamp() ?: return 0L
+        var target = newest
+        var page = 1
+        var changed = store.meta("incremental_lists_dirty") != null || plan.m["lib_version"]?.let { LuaValue.text(it) != store.meta("lib_version") } == true
+        val base = "/koreader/plugin/catalog/books?order=desc&sort=recently_updated"
+        while (!File(mirrorDir, "stop").exists()) {
+            val path = MirrorLogic.mirrorPage(base, page, 100)
+            val reply = http.get(url(creds, path), headers(creds), null, MAX_BODY)
+            check(reply.code == 200) { "incremental scan unavailable" }
+            val body = reply.body?.let { LuaValue.fromJson(String(it, Charsets.UTF_8)) } as? Map<*, *> ?: error("incremental scan invalid")
+            val items = body["items"] as? List<*> ?: error("incremental items missing")
+            var older = false
+            for (v in items) {
+                val item = v as? Map<*, *> ?: continue
+                val id = item["id"] as? Long ?: continue
+                val stamp = item["updatedAt"]?.let { LuaValue.text(it) } ?: continue
+                if (stamp > target) target = stamp
+                if (stamp < newest) { older = true; continue }
+                if (LuaValue.changed(store.bookItem(id), item) || !store.hasDetail(id) || store.meta("incremental_dirty_$id") != null) {
+                    changed = true
+                    store.transaction {
+                        store.putItem(item, now())
+                        store.setMeta("incremental_dirty_$id", true)
+                        store.setMeta("incremental_lists_dirty", true)
+                        addJob(Job("detail", id.toString()))
+                        if (plan.coversOn) addJob(Job("cover", id.toString()))
+                    }
+                }
+            }
+            if (older || page * 100 >= ((body["total"] as? Number)?.toInt() ?: 0) || items.isEmpty()) break
+            page++
+        }
+        if (changed) seedRecheck()
+        store.setMeta("incremental_target", target)
+        store.setMeta("incremental_scan_complete", true)
+        log("mirror: incremental checked $page newest pages; changed books only queued for details")
+        return page.toLong()
+    }
+
     /** "Save every cover for offline" turned on: the cover of every saved book. */
     private fun seedCovers() {
         store.db().query("SELECT id FROM books WHERE item IS NOT NULL") { it.long(0)!! }.forEach { addJob(Job("cover", it.toString())) }
@@ -484,13 +532,14 @@ class CacheWorker(
         r.requests++
         if (job.kind == "detail") {
             store.putDetail(job.id, body, t)
+            store.setMeta("incremental_dirty_${job.id}", null)
             r.details++
             // The next unread book of its series (the reader's neighbour).
             val mine = (body["seriesIndex"] as? Number)?.toDouble() ?: 0.0
             for (m in body["seriesMembers"] as? List<*> ?: emptyList<Any?>()) {
                 val sm = m as? Map<*, *> ?: continue
                 val id = (sm["id"] as? Long) ?: continue
-                if (id != job.id && sm["readStatus"] != "read" && ((sm["seriesIndex"] as? Number)?.toDouble() ?: 0.0) > mine) {
+                if ((store.meta("run_op") == "full" || !store.hasDetail(id)) && id != job.id && sm["readStatus"] != "read" && ((sm["seriesIndex"] as? Number)?.toDouble() ?: 0.0) > mine) {
                     addJob(Job("detail", id.toString()))
                     break
                 }
@@ -500,6 +549,11 @@ class CacheWorker(
         val w = MirrorLogic.listWindow(job.identity) ?: return
         val recheck = job.kind == "recheck"
         val oldTotal = if (job.page == 1) store.db().query("SELECT total FROM lists WHERE identity = ?", CacheStore.u(w.identity)) { it.long(0) }.firstOrNull() else null
+        val changedBooks = if (recheck && w.kind == "books") (body["items"] as? List<*> ?: emptyList<Any?>()).mapNotNull { b ->
+            val item = b as? Map<*, *> ?: return@mapNotNull null
+            val id = item["id"] as? Long ?: return@mapNotNull null
+            id.takeIf { !store.hasDetail(id) || LuaValue.changed(store.bookItem(id), item) }
+        }.toSet() else emptySet()
         val changed = store.putWindow(w.identity, w.kind, w.section, (job.page - 1) * job.size, body, t)
         r.lists.add(w.identity)
         val total = (body["total"] as? Number)?.toInt() ?: 0
@@ -517,8 +571,8 @@ class CacheWorker(
             }
         } else if (!recheck || changed) {
             for (b in items) ((b as? Map<*, *>)?.get("id") as? Long)?.let { id ->
-                if (!recheck || !store.hasDetail(id)) addJob(Job("detail", id.toString()))
-                if (plan.coversOn) addJob(Job("cover", id.toString()))
+                if (!recheck || id in changedBooks) addJob(Job("detail", id.toString()))
+                if (plan.coversOn && (!recheck || id in changedBooks)) addJob(Job("cover", id.toString()))
             }
         }
         if (recheck && changed && r.changed.size < CHANGED_MAX) r.changed.add(w.identity)
@@ -603,6 +657,20 @@ class CacheWorker(
                 st.setMeta("run_op", "full"); st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null)
                 seed(plan)
             }
+            "incremental" -> {
+                if (pendingBefore == 0L) {
+                    st.db().exec("DELETE FROM jobs")
+                    st.setMeta("run_op", "incremental")
+                    st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null)
+                    st.setMeta("incremental_scan_complete", null)
+                    try { r.requests += seedIncremental(plan, creds) } catch (_: Exception) {
+                        log("mirror: incremental probe unavailable; watermark kept")
+                        writeStatus(r, false)
+                        summary(plan, "no answer", r, 0)
+                        return "no answer"
+                    }
+                }
+            }
             "revalidate" -> {
                 if (metaLong("full_at") == null || pendingBefore > 0) {
                     writeStatus(r, false)
@@ -643,7 +711,17 @@ class CacheWorker(
                     log(String.format(java.util.Locale.ROOT, "mirror: Full refresh done: %d books, %d lists, %d jobs in %.0f s (%.1f items/s), %d skipped; " +
                         "covers %d new, %d unchanged (304), %d failed; %.1f MB", books, lists, r.done, secs, rate, r.skipped,
                         r.covers[0], r.covers[1], r.covers[2], st.fileBytes() / MB))
+                    newestStamp()?.let { st.setMeta("incremental_watermark", it) }
                     saved = true
+                }
+                "incremental" -> {
+                    if (r.skipped == 0L && r.errors == 0L && st.meta("incremental_scan_complete") != null) {
+                        st.setMeta("incremental_lists_dirty", null)
+                        st.meta("incremental_target")?.let { st.setMeta("incremental_watermark", it) }
+                        plan.m["lib_version"]?.let { st.setMeta("lib_version", LuaValue.text(it)) }
+                    }
+                    st.setMeta("incremental_target", null)
+                    st.setMeta("incremental_scan_complete", null)
                 }
                 "revalidate" -> { log("mirror: Refresh rechecked ${r.done} pages in ${secs.toLong()} s"); revalidated = true }
             }
@@ -819,11 +897,11 @@ class CacheWorker(
         /** The cache's files before the database (0.11.x), removed at the first open. */
         val OLD_FILES = setOf("index.lua", "storage.lua", "worker-state.lua", "cover_keep.lua")
         /** Requests in flight at once: tuned with the stage 0 kit (docs/design/sqlite-cache.md "Speed"). */
-        const val PARALLEL = 6
-        const val COVER_PARALLEL = 4
+        const val PARALLEL = 8
+        const val COVER_PARALLEL = 6
         /** Landed replies written in one transaction, at most (or what landed within BATCH_MS). */
-        const val BATCH = 100
-        const val BATCH_MS = 250L
+        const val BATCH = 8
+        const val BATCH_MS = 20L
         /** Jobs queued per pool thread (a batch's write must not starve the pools). */
         const val AHEAD = 4
         const val CHANGED_MAX = 50

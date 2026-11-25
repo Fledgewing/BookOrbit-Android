@@ -151,7 +151,7 @@ object MirrorLogic {
     }
 
     /** The companion's status line while a Full refresh saves (docs/design/sqlite-cache.md "Progress display"). */
-    fun progressLine(pct: Long?): String? = pct?.let { "Saving BookOrbit for offline · ${it.coerceIn(0, 100)}%" }
+    fun progressLine(pct: Long?): String? = pct?.let { "Full refresh · ${it.coerceIn(0, 100)}%" }
 
     /** `Cache.limitText`. */
     fun limitText(covers: Boolean, done: Int, total: Int): String =

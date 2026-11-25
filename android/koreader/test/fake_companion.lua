@@ -348,6 +348,8 @@ function F.mirror(extras)
     if plan.op == "full" then
         run = newRun("full")
         seed(run, plan)
+    elseif plan.op == "incremental" then
+        run = newRun("incremental") -- incremental request/selection is covered by CacheWorkerTest
     elseif plan.op == "revalidate" then
         if not F.meta("full_at") or (run and pending(run)) then
             local r = run or newRun("revalidate")
