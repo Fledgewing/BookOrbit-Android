@@ -360,7 +360,6 @@ class CacheWorker(
         val written = ArrayList<Map<String, Any?>>()
         var writtenMore = false
         var details = 0L
-        var lists = HashSet<String>()
     }
 
 
@@ -413,7 +412,8 @@ class CacheWorker(
 
     /** Expand using fresh indexes, never on KOReader's UI thread. Jobs deduplicate identities.
      * Recheck queues all existing pages, even when membership moves without changing the total. */
-    private fun seedCatalogVariants(plan: Plan, recheck: Boolean, yieldTo: () -> Unit): Boolean {
+    private fun seedCatalogVariants(r: Run, recheck: Boolean, yieldTo: () -> Unit): Boolean {
+        val plan = r.plan
         if (plan.m["catalog"] !is Map<*, *>) return true
         val catalog = CatalogPlan(plan)
         val libraries = ArrayList<String>()
@@ -440,8 +440,10 @@ class CacheWorker(
         val recent = recentItems.mapNotNull { (it as? Map<*, *>)?.get("id") as? Long }.filter { it !in deviceSet }.take(catalog.absentLimit)
         if (recent.isNotEmpty()) bases.add("/koreader/plugin/catalog/books?ids=${recent.joinToString(",")}&sort=recently_added&order=desc")
         val batch = ArrayList<Job>()
+        var statusAt = clockMs()
         fun flush() {
             if (batch.isNotEmpty()) { store.transaction { batch.forEach(::addJob) }; batch.clear() }
+            if (clockMs() - statusAt >= STATUS_EVERY_MS) { recount(r, false); writeStatus(r, true); statusAt = clockMs() }
             yieldTo()
         }
         fun queue(path: String) {
@@ -633,7 +635,6 @@ class CacheWorker(
             id.takeIf { !store.hasDetail(id) || LuaValue.changed(store.bookItem(id), item) }
         }.toSet() else emptySet()
         val changed = store.putWindow(w.identity, w.kind, w.section, (job.page - 1) * job.size, body, t)
-        r.lists.add(w.identity)
         val total = (body["total"] as? Number)?.toInt() ?: 0
         if (job.page == 1) {
             val pages = MirrorLogic.pageCount(total, job.size)
@@ -777,7 +778,7 @@ class CacheWorker(
         writeStatus(r, true)
         var why = pump(r, creds, baseCovers, yieldTo)
         if (why == "finished" && st.meta("catalog_expanded") == null && st.meta("run_op") in setOf("full", "incremental", "revalidate")) {
-            if (seedCatalogVariants(plan, st.meta("run_op") != "full", yieldTo)) st.setMeta("catalog_expanded", true)
+            if (seedCatalogVariants(r, st.meta("run_op") != "full", yieldTo)) st.setMeta("catalog_expanded", true)
             recount(r, false)
             why = pump(r, creds, baseCovers, yieldTo)
         }
@@ -797,9 +798,13 @@ class CacheWorker(
                     log(String.format(java.util.Locale.ROOT, "mirror: Full refresh done: %d books, %d lists, %d jobs in %.0f s (%.1f items/s), %d skipped; " +
                         "covers %d new, %d unchanged (304), %d failed; %.1f MB", books, lists, r.done, secs, rate, r.skipped,
                         r.covers[0], r.covers[1], r.covers[2], st.fileBytes() / MB))
-                    val kinds = st.db().query("SELECT ref FROM jobs WHERE state = 1 AND kind IN ('page', 'recheck')") { LuaValue.str(it.text(0)!!) }
-                        .map { it.substringAfter('|').substringAfter('|') }.distinct()
-                        .groupingBy(CatalogPlan::kind).eachCount().toSortedMap()
+                    val kinds = sortedMapOf<String, Int>()
+                    // Collapse pages in SQL; do not retain a large run's paths in memory just to log counts.
+                    st.db().query("SELECT DISTINCT substr(tail, instr(tail, '|') + 1) FROM " +
+                        "(SELECT substr(ref, instr(ref, '|') + 1) AS tail FROM jobs WHERE state = 1 AND kind IN ('page', 'recheck'))") {
+                        val kind = CatalogPlan.kind(LuaValue.str(it.text(0)!!))
+                        kinds[kind] = (kinds[kind] ?: 0) + 1
+                    }
                     log("mirror: lists saved by kind: " + kinds.entries.joinToString(", ") { "${it.key}=${it.value}" })
                     newestStamp()?.let { st.setMeta("incremental_watermark", it) }
                     saved = true
