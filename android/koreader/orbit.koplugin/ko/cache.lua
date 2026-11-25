@@ -789,12 +789,16 @@ end
 -- One line per paint: covers the view needs, how many are on disk, how many are queued.
 function OC.coverSummary(cat)
     local books = OC.visibleBooks(cat)
-    local need, have = 0, 0
+    local need, have, shown = 0, 0, {}
     for _, b in ipairs(books) do
         if type(b) == "table" and b.hasCover then
             need = need + 1
-            if Compat.callable(cat.cachedThumbnailPath) and cat:cachedThumbnailPath(b) then have = have + 1 end
+            local path = Compat.callable(cat.cachedThumbnailPath) and cat:cachedThumbnailPath(b)
+            if path then have = have + 1; table.insert(shown, path) end
         end
+    end
+    if #shown > 0 and not Companion.workerProblem() then
+        Companion.send(Companion.ACTION.STORAGE, { shown = table.concat(shown, "\n") })
     end
     local q = cat.thumbnail_queue
     local queued = type(q) == "table" and q.tail and q.head and (q.tail - q.head + 1) or 0

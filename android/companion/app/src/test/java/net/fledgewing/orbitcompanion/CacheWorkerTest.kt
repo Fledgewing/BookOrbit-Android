@@ -79,12 +79,13 @@ class CacheWorkerTest {
         val asked = ArrayList<String>()
         val headersSeen = ArrayList<Map<String, String>>()
         var down = false
+        var forceCover = false
         @Synchronized
         override fun get(url: String, headers: Map<String, String>, sink: File?, maxBytes: Long): CacheWorker.Reply {
             asked.add(url); headersSeen.add(headers)
             if (down) return CacheWorker.Reply(0, err = "timeout")
             if (url.endsWith("/thumbnail")) {
-                if (headers["If-None-Match"] == "\"e1\"") return CacheWorker.Reply(304)
+                if (!forceCover && headers["If-None-Match"] == "\"e1\"") return CacheWorker.Reply(304)
                 sink!!.writeBytes(byteArrayOf(1, 2, 3))
                 return CacheWorker.Reply(200, etag = "\"e1\"", contentType = "image/jpeg")
             }
@@ -107,7 +108,7 @@ class CacheWorkerTest {
         return CacheWorker.Plan(m)
     }
 
-    private fun setup(parallel: Int = 1): Triple<File, Fake, CacheWorker> {
+    private fun setup(parallel: Int = 1, resize: (File, Int, Int) -> Unit = { _, _, _ -> }): Triple<File, Fake, CacheWorker> {
         val root = Files.createTempDirectory("orbit-cache").toFile()
         val routes = mutableMapOf(
             "$S$C/books?page=1&size=100&sort=title" to books(listOf(1, 2)),
@@ -121,7 +122,7 @@ class CacheWorkerTest {
         var t = 1000L
         var ms = 0L
         val w = CacheWorker(root, fake, now = { synchronized(this) { t++ } }, log = {}, sleep = { synchronized(this) { ms += it * 1000L } }, parallel = parallel,
-            openSql = { JdbcSql(it) }, clockMs = { synchronized(this) { ms } })
+            openSql = { JdbcSql(it) }, clockMs = { synchronized(this) { ms } }, resizeThumbnail = resize)
         return Triple(root, fake, w)
     }
 
@@ -184,11 +185,115 @@ class CacheWorkerTest {
         assertEquals("finished", w.run(plan(root, "resume"), creds))
     }
 
+    @Test fun underLimitRefreshSavesAndPruningDuringYieldUsesTheLiveCoverTotal() {
+        val (root, fake, w) = setup()
+        val thumbs = File(root, "thumbs").apply { mkdirs() }
+        File(thumbs, "old.jpg").writeBytes(ByteArray(2 * 1024 * 1024))
+        val p = plan(root, "full", mapOf("limit" to 1024L * 1024))
+        var yielded = false
+        assertEquals("finished", w.run(p, creds) {
+            if (!yielded) {
+                yielded = true
+                w.storage(CacheWorker.StorageAsk("during refresh", 1024L * 1024, thumbs.path, true))
+            }
+        })
+        val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        assertNull(status["limit_note"])
+        assertTrue(fake.asked.isNotEmpty())
+        assertNotNull(w.store.detail(1))
+        assertNotNull(w.store.meta("full_at"))
+    }
+
+    @Test fun coverPrunedWhileYieldingDoesNotRemainInTheRunBudget() {
+        val (root, _, w) = setup()
+        val thumbs = File(root, "thumbs").apply { mkdirs() }
+        File(thumbs, "old.jpg").writeBytes(ByteArray(850 * 1024))
+        val p = plan(root, "full", mapOf("limit" to 1024L * 1024))
+        var first = true
+        assertEquals("finished", w.run(p, creds) {
+            if (first) {
+                first = false
+                w.storage(CacheWorker.StorageAsk("prune while yielding", 1L, thumbs.path, true))
+                w.store.putEntry("kept", "/dashboard/test", mapOf("payload" to "x".repeat(250 * 1024)), 1L, home = true)
+            }
+        })
+        assertFalse(File(thumbs, "old.jpg").exists())
+        assertNotNull(w.store.detail(1))
+        val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        assertNull(status["limit_note"])
+    }
+
+    @Test fun fullRefreshReplacesExistingRowsAtTheLimit() {
+        val (root, fake, w) = setup()
+        assertEquals("finished", w.run(plan(root, "full"), creds))
+        val used = w.storageItems(File(root, "thumbs").path, true).sumOf { it.bytes }
+        // Force 200 replacements too, so both rows and image bodies are exercised at capacity.
+        fake.forceCover = true
+        assertEquals("finished", w.run(plan(root, "full", mapOf("limit" to used)), creds))
+        val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        assertNull(status["limit_note"])
+        assertNotNull(w.store.detail(1))
+    }
+
+    @Test fun growingDataEvictsCoversButKeepsProtectedAndStopsOnlyAfterExhaustion() {
+        val (root, fake, w) = setup()
+        assertEquals("finished", w.run(plan(root, "full", mapOf("covers_on" to false)), creds))
+        val thumbs = File(root, "thumbs").apply { mkdirs() }
+        File(thumbs, "99_0.jpg").writeBytes(ByteArray(128 * 1024))
+        File(thumbs, "1_0.jpg").writeBytes(ByteArray(128 * 1024))
+        val used = w.storageItems(thumbs.path, false).sumOf { it.bytes }
+        fake.routes["$S$C/books/1"] = """{"id":1,"title":"${"x".repeat(64 * 1024)}"}"""
+        assertEquals("finished", w.run(plan(root, "full", mapOf("limit" to used, "covers_on" to false, "seed_details" to listOf(1L))), creds))
+        assertFalse(File(thumbs, "99_0.jpg").exists())
+        assertTrue(File(thumbs, "1_0.jpg").exists())
+        fake.routes["$S$C/books/1"] = """{"id":1,"title":"${"x".repeat(512 * 1024)}"}"""
+        assertEquals("storage limit", w.run(plan(root, "full", mapOf("limit" to used, "covers_on" to false, "seed_details" to listOf(1L))), creds))
+        assertTrue(File(thumbs, "1_0.jpg").exists())
+        val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
+        assertTrue(((status["limit_note"] as Map<*, *>)["text"] as String).contains("protected covers"))
+        assertEquals(64 * 1024, ((w.store.detail(1)!!.first as Map<*, *>)["title"] as String).length)
+    }
+
+    @Test fun existingCoversResizeOnTheWriterAlongsideEviction() {
+        val touched = java.util.concurrent.ConcurrentLinkedQueue<Pair<String, Thread>>()
+        val (root, _, w) = setup(resize = { f, _, _ -> touched.add(f.name to Thread.currentThread()) })
+        assertEquals("finished", w.run(plan(root, "full"), creds))
+        val writer = Thread.currentThread()
+        for (withoutEtag in listOf(false, true)) {
+            touched.clear()
+            if (withoutEtag) File(root, "thumbs").listFiles()!!.filter { it.name.endsWith(".etag") }.forEach { it.delete() }
+            assertEquals("finished", w.run(plan(root, "full"), creds))
+            assertTrue(touched.isNotEmpty())
+            assertTrue("304 and untagged existing images cannot race writer eviction", touched.all { it.first.endsWith(".jpg") && it.second === writer })
+        }
+    }
+
+    @Test fun recheckedCoverShrinkImmediatelyReturnsBudgetWhileYielding() {
+        val (root, fake, w) = setup()
+        val thumbs = File(root, "thumbs").apply { mkdirs() }
+        val cover = File(thumbs, "99_0.jpg").apply { writeBytes(ByteArray(850 * 1024)) }
+        File(cover.path + ".etag").writeText("old")
+        fake.forceCover = true
+        var first = true
+        assertEquals("finished", w.run(plan(root, "full", mapOf("limit" to 1024L * 1024)), creds) {
+            if (first) {
+                first = false
+                w.recheckCovers("test", creds, listOf(99L to cover.path))
+                w.store.putEntry("home", "/dashboard/test", mapOf("payload" to "x".repeat(250 * 1024)), 1L, home = true)
+            }
+        })
+        assertTrue("resized/rechecked cover did not need eviction", cover.exists())
+        assertEquals(3L, cover.length())
+    }
+
     @Test fun storageLimitStopsSavingAndSaysWhy() {
         val (root, _, w) = setup()
-        assertEquals("finished", w.run(plan(root, "full", mapOf("limit" to 1L, "base_kept" to 10L)), creds))
+        assertEquals("storage limit", w.run(plan(root, "full", mapOf("limit" to 1L)), creds))
         val st = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
         assertTrue(((st["limit_note"] as Map<*, *>)["text"] as String).startsWith("Storage limit reached"))
+        assertEquals(0L, st["done"])
+        assertNull(w.store.meta("full_at"))
+        assertTrue(w.store.db().query("SELECT count(*) FROM jobs WHERE state = 0") { it.long(0)!! }.single() > 0)
     }
 
     @Test fun checkComparesWithTheMirrorAndSavesOnlyChanges() {

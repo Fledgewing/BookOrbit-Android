@@ -37,6 +37,20 @@ class CacheStoreTest {
         return st
     }
 
+    @Test fun sleepNamesComeFromCompleteCurrentDatabaseLists() {
+        val root = java.nio.file.Files.createTempDirectory("choices-db").toFile()
+        CacheStore(root, log = {}, open = { JdbcSql(it) }).use { store ->
+            val path = "/koreader/plugin/catalog/sections/smart-scopes"
+            val body = mapOf("total" to 1L, "items" to listOf(mapOf("id" to 2L, "title" to LuaValue.str("Cosy reads"))))
+            store.putWindow(path, "section", "smart-scopes", 0, body, 20L)
+            val stale = SleepChoices.parse("""{"at":1,"scopes":[{"id":2,"title":"Old name"}]}""")
+            val choices = SleepChoices.fromSql(store.db(), stale)!!
+            assertEquals("Cosy reads (smart scope)", choices.title("scope:2"))
+            assertEquals("Smart scope 3 (Removed on the server)", choices.missingLabel("scope:3"))
+            assertTrue(SleepChoices.fallback("scope:3").contains("Lists not loaded yet"))
+        }
+    }
+
     @Test
     fun schemaIsTheSharedOne() {
         val file = File(shared, "schema.sql").readLines().filter { it.isNotBlank() && !it.startsWith("--") }.map { it.removeSuffix(";") }

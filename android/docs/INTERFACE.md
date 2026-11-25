@@ -120,7 +120,7 @@ read-only. The small files beside it are Lua literals in the cache's format (`Ca
 | `copies/ask.lua` | plugin, before each `COPIES` | `books` (`md5`, `path`, `book_id`, `file_id`, `incompatible`), `eob` (book id -> `files`, `saved_at`), `owner`, `server`, `detail_template`, `sentinel` |
 | `mirror/plan.lua` | plugin, before each `MIRROR` | `run`, `op` (`full`/`resume`/`revalidate`/`covers`), `reason`, `owner`, `lib_version`, `sentinel`, `templates` (per section: `path`, `series_name_path`), `detail_template`, `all_books`, `sections`, `seed_lists`, `seed_details`, `cover_dir`, `covers_on`, `limit` |
 | `mirror/status.lua` | companion, every 2 s and at the end | `{v = 4, runner, run, running, beat, op, at, lib_version, done, total, left, pct, rate, eta_s, skipped, errors, covers, cover_total, limit_note, revalidating, bytes, started_at}`; `pct` never goes down within a run |
-| `mirror/summary.lua` | companion, at the end of a run | `{run, why (finished/stopped/no answer/busy), jobs, status, changed, written, written_more, saved, revalidated, cover_bytes_delta}` |
+| `mirror/summary.lua` | companion, at the end of a run | `{run, why (finished/stopped/no answer/busy), jobs, status, changed, written, written_more, saved, revalidated}` |
 | `mirror/stop` | plugin | stop the run after the batch in hand |
 | covers, in the plugin's thumbnail folder | companion | `<memoKey>.jpg` and `.etag`, as the plugin names them |
 
@@ -407,3 +407,9 @@ KOReader's start goes only to the pinned KOReader.
 patch broadcast: it removes the Settings PIN and is for USB recovery only. Its receiver
 (`.PinResetReceiver`) requires `android.permission.DUMP`, which only the shell (adb) holds,
 and on Android 14+ refuses a sender uid other than shell or root when Android reports one.
+
+STORAGE may carry `shown` (newline-separated visible cover paths, bounded by the
+companion to 100). That form queues timestamp/thumbnail work only; it does not
+request a storage sweep. Mirror plans also carry `cover_width`, `cover_height`
+(the device's grid cell bounds in pixels) for browsing JPEGs. Sleep covers keep
+their separate full-screen dimensions.

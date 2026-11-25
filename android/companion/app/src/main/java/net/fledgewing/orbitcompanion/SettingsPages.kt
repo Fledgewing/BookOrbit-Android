@@ -144,7 +144,7 @@ abstract class SettingsPage : EinkActivity() {
 }
 
 /** Settings: search, then the eight sections with their state in one line (§5.1). */
-class SettingsActivity : SettingsPage() {
+class SettingsActivity : SleepPickerPage() {
     private val main = Handler(Looper.getMainLooper())
     private var query = ""
     private var results: LinearLayout? = null
@@ -252,7 +252,7 @@ class SettingsActivity : SettingsPage() {
     /** Each section's state in one line (§5.1). */
     private fun summary(id: String): String {
         val g = { k: String -> SettingsStore.get(this, k) }
-        fun label(k: String) = schema.byKey[k]?.let { SettingsUi.valueLabel(it, g(k)) }.orEmpty()
+        fun label(k: String) = schema.byKey[k]?.let { SettingsUi.valueLabel(it, g(k), choices) }.orEmpty()
         val line = when (id) {
             "reading" -> "Home: ${label("home_button")} · end-of-book sheet ${if (g("eob_sheet") == "1") "on" else "off"}"
             "sleep" -> if (g("sleep_mode") == "off") "The reader's own" else "${label("sleep_mode")}" +
@@ -281,9 +281,10 @@ class SettingsActivity : SettingsPage() {
 }
 
 /** One section: its shared rows from the schema, the companion's own rows, then Do now (§5.5). */
-open class SettingsSectionActivity : SettingsPage() {
+open class SettingsSectionActivity : SleepPickerPage() {
     protected open val fixedSection: String? = null
     private val sectionId: String get() = fixedSection ?: intent.getStringExtra(EXTRA_SECTION) ?: "reading"
+    override val loadsChoices: Boolean get() = sectionId == "sleep"
     private var focus: String? = null
     private var testResult: String? = null
     private var test: NetTest? = null
@@ -291,7 +292,17 @@ open class SettingsSectionActivity : SettingsPage() {
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        if (fixedSection == null && !intent.hasExtra(EXTRA_SECTION)) {
+            val last = getSharedPreferences("settings_ui", MODE_PRIVATE).getString("section", null)
+            intent.putExtra(EXTRA_SECTION, last?.takeIf { schema.section(it) != null } ?: "reading")
+        }
+        getSharedPreferences("settings_ui", MODE_PRIVATE).edit().putString("section", sectionId).apply()
         focus = intent.getStringExtra(EXTRA_FOCUS)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        getSharedPreferences("settings_ui", MODE_PRIVATE).edit().putString("section", sectionId).apply()
     }
 
     /** After an update from this section: the same section, at the App version row ("Updated to v…"). */
@@ -372,7 +383,7 @@ open class SettingsSectionActivity : SettingsPage() {
                 segmented(root, label, line, d.values, v) { setShared(d.key, it) }
                 root.getChildAt(before)?.tag = "key:${d.key}"
             }
-            d.type == "choice" || d.type == "source" -> linkRow(root, d.label, line, SettingsUi.valueLabel(d, v, choices()) + "  ›") {
+            d.type == "choice" || d.type == "source" -> linkRow(root, d.label, line, SettingsUi.valueLabel(d, v, choices) + "  ›") {
                 startActivity(Intent(this, SettingChoiceActivity::class.java).putExtra(EXTRA_KEY, d.key))
             }.tag = "key:${d.key}"
             d.type == "rules" -> linkRow(root, d.label, line, SettingsUi.valueLabel(d, v) + "  ›") {
@@ -387,7 +398,6 @@ open class SettingsSectionActivity : SettingsPage() {
         }
     }
 
-    private fun choices(): SleepChoices? = SleepChoices.read(SleepScreen.dir())
 
     /** A one-line text, "12 of 60" under it. */
     private fun editText(d: SettingDef, v: String) {
@@ -633,11 +643,13 @@ class SettingChoiceActivity : SleepPickerPage() {
         val picked = SleepPoolLogic.sources(v)
         fun tick(id: String, label: String, sub: String? = null) {
             pickerRow(root, id, label, sub, id in picked, "option:$id") {
-                setPicked(key, SleepPoolLogic.togglePick(SettingsStore.get(this, key), id))
+                val current = SettingsStore.get(this, key)
+                val missing = id.contains(':') && choices?.title(id) == null && id in SleepPoolLogic.sources(current)
+                setPicked(key, if (missing) SleepPoolLogic.sources(current).filter { it != id }.joinToString("\n") else SleepPoolLogic.togglePick(current, id))
             }
         }
-        tick(SleepPoolLogic.LIBRARY, "Library", "Every book you can see. The others are part of it.")
-        subhead(root, "Lists")
+        tick(SleepPoolLogic.LIBRARY, "Whole library", "Every book you can see, OR pick sources below.")
+        subhead(root, "Pick sources")
         d.values.filter { it.first != SleepPoolLogic.LIBRARY }.forEach { (id, label) -> tick(id, label) }
         val c = choices
         if (c == null) {
@@ -651,7 +663,7 @@ class SettingChoiceActivity : SleepPickerPage() {
             c.collections.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.at > 0) root.addView(note("Lists from BookOrbit, ${Ui.clock(this, c.at)}"))
         }
-        picked.filter { (it.startsWith("scope:") || it.startsWith("collection:") || it.startsWith("library:")) && c?.title(it) == null }.forEach { tick(it, SleepChoices.fallback(it)) }
+        picked.filter { (it.startsWith("scope:") || it.startsWith("collection:") || it.startsWith("library:")) && c?.title(it) == null }.forEach { tick(it, c?.missingLabel(it) ?: SleepChoices.fallback(it), "Tap to drop this source") }
         root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then pick it here."))
     }
 }
@@ -676,12 +688,17 @@ class LeaveOutActivity : SleepPickerPage() {
         fun tick(rule: String, label: String, sub: String? = null) {
             pickerRow(root, rule, label, sub, rule in rules, "pick:$rule") { toggle(rule) }
         }
-        tick(SleepPoolLogic.LIBRARY, "Library", "Every book: show the current book instead. Choosing an individual rule clears Library.")
+        if (SleepPoolLogic.LIBRARY in rules) {
+            linkRow(root, "Remove old whole-library exclusion", "Choose the libraries to leave out below.") {
+                setPicked(d.key, "")
+                render()
+            }
+        }
         subhead(root, "Tags")
         if (!locked) linkRow(root, "Type a tag…", null) { typeTag { if ("tag:$it" !in SleepPoolLogic.rules(SettingsStore.get(this, d.key))) toggle("tag:$it") } }
         c?.tags?.forEach { t -> tick("tag:${t.tag}", t.label, "${t.count} books") }
         rules.filter { it.startsWith("tag:") && c?.tags?.none { t -> "tag:${t.tag}" == it } != false }
-            .forEach { tick(it, SleepChoices.fallback(it)) }
+            .forEach { tick(it, c?.missingLabel(it) ?: SleepChoices.fallback(it), "Tap to drop this source") }
         if (c == null) root.addView(note("Open KOReader once to load your tags, smart scopes and collections."))
         if (c?.libraries?.isNotEmpty() == true) subhead(root, "Libraries")
         c?.libraries?.forEach { tick("library:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
@@ -690,7 +707,7 @@ class LeaveOutActivity : SleepPickerPage() {
         if (c?.collections?.isNotEmpty() == true) subhead(root, "Collections")
         c?.collections?.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
         rules.filter { (it.startsWith("scope:") || it.startsWith("collection:") || it.startsWith("library:")) && c?.title(it) == null }
-            .forEach { tick(it, SleepChoices.fallback(it)) }
+            .forEach { tick(it, c?.missingLabel(it) ?: SleepChoices.fallback(it), "Tap to drop this source") }
         root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then leave it out here."))
     }
 

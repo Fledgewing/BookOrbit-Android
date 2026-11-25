@@ -4537,6 +4537,11 @@ test("mirror: Full refresh suppresses loading, errors, direct notices and queued
     E.Gate.installToast()
     E.Mirror.notices = true
     local pill = Toast.loading("Loading book...")
+    Toast.loading("Loading EPUB delivery preference…"):close()
+    Toast.loading("Updating Home…"):close()
+    local detail = E.Badge.long({}, 0)
+    ok(detail:find("Loading book...", 1, true) and detail:find("Loading EPUB delivery preference…", 1, true)
+        and detail:find("Updating Home…", 1, true), "suppressed loading goes into badge details")
     ok(pill and pill.close, "loading keeps its close handle")
     pill:close()
     Toast.show("saved")
@@ -4545,6 +4550,7 @@ test("mirror: Full refresh suppresses loading, errors, direct notices and queued
     E.Gate.show("background result", function() error("notice escaped refresh gate") end)
     ok(#W.shown == old, "no notice appears")
     E.Mirror.notices = nil
+    E.Badge.notices = nil
     package.loaded["bookorbit_toast"] = saved_toast
 end)
 
@@ -4670,7 +4676,7 @@ test("local-first: Home's first paint has the on-device marks; a changed tile na
     cacheTeardown()
 end)
 
-test("storage limit: Orbit Companion counts and removes; browsing pages and plain covers go first (least recently used), then covers saved for offline; never the saved lists", function()
+test("storage limit: Orbit Companion counts and removes; eligible covers go before browsing data, all in last-shown order; never the saved lists", function()
     local client, Cat = cacheSetup()
     local MB = 1048576
     local lfs = require("libs/libkoreader-lfs")
@@ -4712,24 +4718,24 @@ test("storage limit: Orbit Companion counts and removes; browsing pages and plai
     run(3)
     ok(FC.storage_asks == asks + 1, "the companion counted")
     ok(walks == 0, "the UI thread never walks the cover folder")
-    ok(not has("old") and not io.open(cdir .. "/a.jpg", "rb"), "the oldest page and the plain cover went first")
-    ok(has("new") and io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then it was under the limit")
-    ok(E.OC.storage.used == 100 * MB and E.OC.storageText() == "Using 100 MB", "Using: " .. E.OC.storageText())
-    ok(table.concat(W.logs, "\n"):find("storage: 150.0 MB of 100 MB (start); removed 1 browsing entries, 1 covers, 0 saved-for-offline covers -> 100.0 MB", 1, true), "logged: " .. table.concat(W.logs, " | "))
-    -- A lower limit: the last browsing page, then the least recently seen saved cover; Home stays.
+    ok(has("old") and has("new"), "browsing data wins over both cover tiers")
+    ok(not io.open(cdir .. "/a.jpg", "rb") and not io.open(cdir .. "/m1.jpg", "rb") and not io.open(cdir .. "/m2.jpg", "rb"), "eligible covers went first")
+    ok(E.OC.storage.used == 90 * MB and E.OC.storageText() == "Using 90 MB", "Using: " .. E.OC.storageText())
+    ok(table.concat(W.logs, "\n"):find("storage: 150.0 MB of 100 MB (start); removed 0 browsing entries, 1 covers, 2 saved-for-offline covers -> 90.0 MB", 1, true), "logged: " .. table.concat(W.logs, " | "))
+    -- Once every eligible cover is gone, expendable browsing pages can go; Home stays.
     E.S.storage_limit_mb = 55
     E.OC.storageCount("limit changed"); run(3)
-    ok(not has("new") and not io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then saved covers, oldest first")
+    ok(not has("old") and not has("new"), "browsing pages go only after eligible covers")
     ok(has("list"), "Home stays")
     -- A write over the limit asks for a count.
     E.S.storage_limit_mb = 60
-    entry("big", 20 * MB, 99)
-    E.OC.storageAdd(20 * MB, "cache"); run(3)
-    ok(not has("big") and io.open(cdir .. "/m2.jpg", "rb") and E.OC.storage.used == 50 * MB, "checked on the write")
+    entry("big", 40 * MB, 99)
+    E.OC.storageAdd(40 * MB, "cache"); run(3)
+    ok(not has("big") and E.OC.storage.used == 30 * MB, "checked on the write")
     -- The totals are there at the next start (the database's meta).
     E.OC.storage = nil
     E.OC.client = function() return client end
-    ok(E.OC.storageTotals() and E.OC.storageTotals().used == 50 * MB, "read back from the database")
+    ok(E.OC.storageTotals() and E.OC.storageTotals().used == 30 * MB, "read back from the database")
     -- 10 GB crosses the signed 32-bit byte boundary: preserve the limit over IPC and enforce it.
     run(10)
     E.S.storage_limit_mb = 10240
@@ -4788,7 +4794,7 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
         E.OC.fullRefresh(cat); run(900)
         local m = E.Mirror.status()
         local note = m.limit_note and m.limit_note.text or ""
-        ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. Raise the limit in Orbit settings%.$"), "the stop: " .. note)
+        ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. No room for new data; protected covers are kept%. Raise the limit in Orbit settings%.$"), "the stop: " .. note)
         local shown
         for _, t in ipairs(E.Badge.history or {}) do if t == note then shown = true end end
         ok(shown, "the badge says it: " .. table.concat(E.Badge.history or {}, " | "))
@@ -5028,6 +5034,13 @@ test("companion: the cache worker needs the companion of the plugin's own versio
             and b.extras.server == client.server_url, "the login goes to the companion's package")
         local plan = io.open(cache.dir .. "/mirror/plan.lua", "rb"):read("*a")
         ok(not plan:find(client.userkey, 1, true) and not plan:find("userkey", 1, true), "never in the plan file")
+        local decoded = E.Cache.decode(plan)
+        ok(decoded.cover_width > 0 and decoded.cover_height > 0, "device thumbnail bounds travel in the plan")
+        local counted = false
+        for _, x in ipairs(W.broadcasts) do
+            if x.action:match("%.STORAGE$") and x.extras.reason == "after refresh" then counted = true end
+        end
+        ok(counted, "run completion requests live totals instead of adding replacement bytes")
         local log = table.concat(W.logs, "\n")
         ok(not log:find(client.userkey, 1, true), "never in the log")
     end)
@@ -5309,7 +5322,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     ok(picker.sub_item_table_func()[15].checked_func(), "ticked")
     -- Library stands alone: ticking it clears the others; ticking a list clears it.
     from[1].callback()
-    ok(S.sleep_from == "library" and Sleep.fromLabel(S.sleep_from) == "Library", "library: " .. tostring(S.sleep_from))
+    ok(S.sleep_from == "library" and Sleep.fromLabel(S.sleep_from) == "Whole library", "library: " .. tostring(S.sleep_from))
     from[3].callback()
     ok(S.sleep_from == "want_to_read", "a list clears Library: " .. tostring(S.sleep_from))
     from[3].callback()
@@ -5320,7 +5333,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil
     local leave = rows[3].sub_item_table_func()
     local add
-    for _, r in ipairs(leave) do if r.text == "Add a rule: Smart scope or collection…" then add = r end end
+    for _, r in ipairs(leave) do if r.text == "Add a rule: Library, smart scope or collection…" then add = r end end
     local lo = texts(add.sub_item_table_func())
     ok(#lo == 15 and lo[3] == "Space Opera · 8", "Leave out lists them offline: " .. #lo)
     add.sub_item_table_func()[4].callback()

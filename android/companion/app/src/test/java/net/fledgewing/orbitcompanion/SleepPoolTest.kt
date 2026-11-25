@@ -130,6 +130,33 @@ class SleepPoolTest {
 
     private val creds = CacheWorker.Creds("https://books.example", "reader", "secret-key")
 
+    @Test fun namedLibraryListsItsOwnMembersAndAppearsInChoices() {
+        val dir = Files.createTempDirectory("library-choice").toFile()
+        val paths = ArrayList<String>()
+        val http = CacheWorker.Http { url, _, _, _ ->
+            paths += url
+            CacheWorker.Reply(200, """{"items":[{"id":2,"title":"Fiction"}],"hasNext":false}""".toByteArray())
+        }
+        val builder = SleepPoolBuilder(dir, http)
+        assertEquals(listOf(2L), builder.listMembers(creds, "library", 9L, 100))
+        assertTrue(paths.single().contains("libraryId=9"))
+        assertTrue(builder.scopes(creds))
+        assertEquals("Fiction (library)", SleepChoices.read(dir)!!.title("library:2"))
+    }
+
+    @Test fun incompleteServerListsKeepThePreviousChoices() {
+        val dir = Files.createTempDirectory("incomplete-choices").toFile()
+        val file = File(dir, "scopes.json")
+        val old = """{"at":1,"scopes":[{"id":2,"title":"Still saved"}]}"""
+        file.writeText(old)
+        val builder = SleepPoolBuilder(dir, CacheWorker.Http { url, _, _, _ ->
+            if (url.contains("page=1&")) CacheWorker.Reply(200, """{"items":[{"id":3,"title":"First page"}],"hasNext":true}""".toByteArray())
+            else CacheWorker.Reply(0, err = "offline")
+        })
+        assertFalse(builder.scopes(creds))
+        assertEquals(old, file.readText())
+    }
+
     @Test fun aPoolFromUpNextFallsBackLeavesOutAndWritesTheFiles() {
         val dir = Files.createTempDirectory("sleep").toFile()
         File(dir, "covers").mkdirs()
