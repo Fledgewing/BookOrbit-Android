@@ -108,7 +108,7 @@ class CacheWorkerTest {
         return CacheWorker.Plan(m)
     }
 
-    private fun setup(parallel: Int = 1): Triple<File, Fake, CacheWorker> {
+    private fun setup(parallel: Int = 1, resize: (File, Int, Int) -> Unit = { _, _, _ -> }): Triple<File, Fake, CacheWorker> {
         val root = Files.createTempDirectory("orbit-cache").toFile()
         val routes = mutableMapOf(
             "$S$C/books?page=1&size=100&sort=title" to books(listOf(1, 2)),
@@ -122,7 +122,7 @@ class CacheWorkerTest {
         var t = 1000L
         var ms = 0L
         val w = CacheWorker(root, fake, now = { synchronized(this) { t++ } }, log = {}, sleep = { synchronized(this) { ms += it * 1000L } }, parallel = parallel,
-            openSql = { JdbcSql(it) }, clockMs = { synchronized(this) { ms } })
+            openSql = { JdbcSql(it) }, clockMs = { synchronized(this) { ms } }, resizeThumbnail = resize)
         return Triple(root, fake, w)
     }
 
@@ -252,6 +252,20 @@ class CacheWorkerTest {
         val status = LuaValue.parse(File(w.mirrorDir, "status.lua").readBytes()) as Map<*, *>
         assertTrue(((status["limit_note"] as Map<*, *>)["text"] as String).contains("protected covers"))
         assertEquals(64 * 1024, ((w.store.detail(1)!!.first as Map<*, *>)["title"] as String).length)
+    }
+
+    @Test fun existingCoversResizeOnTheWriterAlongsideEviction() {
+        val touched = java.util.concurrent.ConcurrentLinkedQueue<Pair<String, Thread>>()
+        val (root, _, w) = setup(resize = { f, _, _ -> touched.add(f.name to Thread.currentThread()) })
+        assertEquals("finished", w.run(plan(root, "full"), creds))
+        val writer = Thread.currentThread()
+        for (withoutEtag in listOf(false, true)) {
+            touched.clear()
+            if (withoutEtag) File(root, "thumbs").listFiles()!!.filter { it.name.endsWith(".etag") }.forEach { it.delete() }
+            assertEquals("finished", w.run(plan(root, "full"), creds))
+            assertTrue(touched.isNotEmpty())
+            assertTrue("304 and untagged existing images cannot race writer eviction", touched.all { it.first.endsWith(".jpg") && it.second === writer })
+        }
     }
 
     @Test fun recheckedCoverShrinkImmediatelyReturnsBudgetWhileYielding() {

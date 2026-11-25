@@ -563,7 +563,7 @@ class CacheWorker(
         val etagFile = allowed("$path.etag") ?: return Landed(job, null, null, "none")
         val exists = f.isFile
         // A file the plugin saved without an ETag is left alone.
-        if (exists && !etagFile.isFile) { thumbnail(f); coverUsage?.replace("c:${f.name}", f.length()); return Landed(job, null, null, "kept") }
+        if (exists && !etagFile.isFile) return Landed(job, null, null, "kept", target = f)
         val h = headers(creds, "image/jpeg,image/*").toMutableMap()
         h["Accept-Encoding"] = "identity"
         if (exists) h["If-None-Match"] = etagFile.readText()
@@ -573,7 +573,7 @@ class CacheWorker(
         val rep = http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail", h, part, MAX_COVER)
         if (Thread.currentThread().isInterrupted) { part.delete(); return Landed(job, rep, null, "transport") }
         return when {
-            rep.code == 304 && exists -> { part.delete(); thumbnail(f); coverUsage?.replace("c:${f.name}", f.length() + etagFile.length()); Landed(job, rep, null, "not_modified") }
+            rep.code == 304 && exists -> { part.delete(); Landed(job, rep, null, "not_modified", target = f) }
             rep.code == 200 && rep.contentType?.lowercase()?.trim()?.startsWith("image/") == true && part.isFile && part.length() > 0 -> {
                 thumbnail(part)
                 Landed(job, rep, null, "ok", part.length(), sortedMapOf("id" to job.id, "updatedAt" to book["updatedAt"]?.let { LuaValue.text(it) }), part, f)
@@ -899,6 +899,11 @@ class CacheWorker(
                         val ref = CacheStore.u(j.ref)
                         if (r.storageBlocked) { l.part?.delete(); continue }
                         if (j.kind == "cover") {
+                            // Existing images are mutated only by the writer, alongside eviction.
+                            if (l.part == null && l.target != null && l.target.isFile) {
+                                thumbnail(l.target)
+                                coverUsage?.replace("c:${l.target.name}", l.target.length() + File(l.target.path + ".etag").length())
+                            }
                             if (l.part != null && l.target != null) {
                                 val tag = File(l.target.path + ".etag")
                                 val growth = l.part.length() + (l.reply?.etag?.toByteArray()?.size ?: 0) - l.target.length() - tag.length()
