@@ -5802,7 +5802,9 @@ test("startup smoke: last document remains the top reader through a yielding pro
     capsReset()
     W.wifi, W.vpn, W.server_code = true, true, 200
     W.radio = true
-    RE.Net.inflight = nil
+    RE.Net.inflight, RE.state.started = nil, nil
+    store.lastfile = "/b.epub"
+    store.orbit_android.open_book_at_exit = store.lastfile
     store.orbit_android.wifi_mode = "jit"
     RE.Wifi.plan = nil
     local ui, m, p = osmBook(120, nil)
@@ -5838,14 +5840,17 @@ test("startup smoke: last document remains the top reader through a yielding pro
         Trapper = chunk()
         UIManager.preventStandby, UIManager.allowStandby = function() end, function() end
     end
+    local started, completed = 0, 0
     function p:fetchRemoteProgress(_, cb)
         local function fetch()
+            started = started + 1
             local co = coroutine.running()
             UIManager:scheduleIn(0.125, function()
                 local resumed, err = coroutine.resume(co)
                 assert(resumed, err)
             end)
             coroutine.yield()
+            completed = completed + 1
             cb(false)
         end
         if Trapper:isWrapped() then return fetch() end
@@ -5860,7 +5865,10 @@ test("startup smoke: last document remains the top reader through a yielding pro
     ok(resumed, err)
     eq(UIManager:getTopmostVisibleWidget(), ui, "ReaderReady must finish before yielding network work")
     eq(coroutine.status(co), "dead", "reader construction completed")
+    eq(started, 0, "network pull deferred until after construction")
     run(30)
+    ok(started > 0, "progress pull actually ran")
+    eq(completed, started, "yielding pulls resumed and completed")
     eq(UIManager:getTopmostVisibleWidget(), ui, "reader stays on top after open and wake tasks")
     eq(closes, 0, "no reader close requested")
     eq(W.quits or 0, quits, "no exit requested")
