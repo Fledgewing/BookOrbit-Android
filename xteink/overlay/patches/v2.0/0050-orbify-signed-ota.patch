@@ -159,7 +159,7 @@ index cd94dd10..f0d30173 100644
 +  namespace sig = orbify::update_signature;
 +  const sig::Result result = sig::checkDownload(
 +      ORBIFY_RELEASE_ROOT_KEY, ORBIFY_RELEASE_MIN_SERIAL, tag.c_str(), url.c_str(), sha256Hex,
-+      signature.size() == sig::kSignatureBytes ? reinterpret_cast<const uint8_t*>(signature.data()) : nullptr);
++      signature.size() == sig::kSignatureBytes ? reinterpret_cast<const uint8_t*>(signature.data()) : nullptr, firmwareAssetStem);
 +  if (result == sig::Result::Ok) {
 +    LOG_INF("OTA", "Firmware signed by Orbify's release key");
 +    return true;

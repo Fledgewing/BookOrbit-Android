@@ -37,9 +37,10 @@ Result check(const uint8_t* signature, const Trust& trust, const char* tag, cons
 
 // The updater's check (overlay patch 0050): `rootHex` is the build's root key define ("" when
 // none), the asset is the last path segment of the download URL, and `signature` the feed's
-// decoded orbify_signature (nullptr when the asset has none).
+// decoded orbify_signature (nullptr when the asset has none). The signed filename must also
+// match this reader's expectedDeviceStem (the updater's firmwareAssetStem).
 Result checkDownload(const char* rootHex, uint32_t minSerial, const char* tag, const char* url, const char* sha256Hex,
-                     const uint8_t* signature);
+                     const uint8_t* signature, const char* expectedDeviceStem);
 
 // Whether the update may be installed: always when signed; otherwise only while not enforced.
 inline bool accepted(Result result, bool enforce) { return result == Result::Ok || !enforce; }

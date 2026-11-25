@@ -69,11 +69,20 @@ Result check(const uint8_t* signature, const Trust& trust, const char* tag, cons
 }
 
 Result checkDownload(const char* rootHex, uint32_t minSerial, const char* tag, const char* url, const char* sha256Hex,
-                     const uint8_t* signature) {
+                     const uint8_t* signature, const char* expectedDeviceStem) {
   uint8_t root[32];
   const bool haveRoot = decodeHex(rootHex, root, sizeof(root));
   const char* slash = url != nullptr ? strrchr(url, '/') : nullptr;
   const char* asset = slash != nullptr ? slash + 1 : url;
+  if (haveRoot) {
+    if (asset == nullptr || expectedDeviceStem == nullptr) return Result::BadSignature;
+    const size_t stemLength = strlen(expectedDeviceStem);
+    if (strncmp(asset, expectedDeviceStem, stemLength) != 0) return Result::BadSignature;
+    const char* suffix = asset + stemLength;
+    const size_t length = strlen(suffix);
+    if (strcmp(suffix, ".bin") != 0 &&
+        (length < 5 || suffix[0] != '-' || strcmp(suffix + length - 4, ".bin") != 0)) return Result::BadSignature;
+  }
   return check(signature, Trust{haveRoot ? root : nullptr, minSerial}, tag, asset, sha256Hex);
 }
 

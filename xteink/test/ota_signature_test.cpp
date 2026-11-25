@@ -49,7 +49,7 @@ static sig::Result update(const std::string& feed, const char* root, const char*
   for (size_t i = 0; i < feed.size(); i += 61) parser.feed(feed.data() + i, std::min<size_t>(61, feed.size() - i));
   CHECK(parser.isReleaseList() && picked.tagFound && picked.firmwareFound);
   return sig::checkDownload(root, 1, picked.tagName, picked.firmwareUrl, picked.firmwareSha256,
-                            picked.firmwareSigned ? picked.firmwareSignature : nullptr);
+                            picked.firmwareSigned ? picked.firmwareSignature : nullptr, stem);
 }
 
 int main(int argc, char** argv) {
@@ -69,6 +69,17 @@ int main(int argc, char** argv) {
   // The release as published: signed, installs either way.
   CHECK(update(feed, root.c_str()) == sig::Result::Ok);
   CHECK(sig::accepted(update(feed, root.c_str()), true));
+
+  // A valid signature for another reader must not be selected through a changed display name.
+  JsonDocument relabeledDoc;
+  CHECK(!deserializeJson(relabeledDoc, feed));
+  auto assets = relabeledDoc[0]["assets"].as<JsonArray>();
+  assets.remove(0);
+  assets[0]["name"] = "firmware-x4-classic-v2.0.0.150.bin";
+  std::string relabeled;
+  serializeJson(relabeledDoc, relabeled);
+  CHECK(update(relabeled, root.c_str(), "firmware-x4-classic") == sig::Result::BadSignature);
+  CHECK(!sig::accepted(update(relabeled, root.c_str(), "firmware-x4-classic"), true));
 
   // An attacker swaps the image and the feed's digest to match it: the staged image passes its
   // SHA-256 check, but the signature covers the original digest.
