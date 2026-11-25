@@ -287,8 +287,8 @@ function Mirror.ran(r)
         return
     end
     Mirror._status = r.status
-    if (r.bytes_delta or 0) ~= 0 then pcall(OC.storageAdd, r.bytes_delta, "kept") end
-    if (r.cover_bytes_delta or 0) ~= 0 then pcall(OC.storageAdd, r.cover_bytes_delta, S.mirror_covers and "mirror_cover" or "cover") end
+    -- Replacements and lazy shrinkage are not additive bytes. Ask the worker for live totals.
+    pcall(OC.storageCount, "after refresh")
     local cat = Mirror.catalog()
     if #(r.written or {}) > 0 and cat then
         if r.written_more and Compat.callable(cat.resetThumbnailMemo) then pcall(cat.resetThumbnailMemo, cat)

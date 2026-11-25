@@ -296,6 +296,7 @@ class CacheWorker(
                 }
                 else -> { part.delete(); failed++ }
             }
+            coverUsage?.replace("c:${f.name}", f.length() + etagFile.length())
         }
         log("worker: covers re-asked: ${items.size} checked, ${changed.size} replaced, $failed failed ($why)")
         event(sortedMapOf("kind" to "covers_rechecked", "why" to why, "checked" to items.size.toLong(), "changed" to changed, "failed" to failed))
@@ -638,13 +639,13 @@ class CacheWorker(
     /** Committed bytes plus net growth, never the transient rollback journal's duplicate pages. */
     private fun room(r: Run, growth: Long, covers: Boolean, databaseBytes: Long): Boolean {
         val limit = r.plan.limit ?: return true
-        if (StorageLogic.admit(0, 0, growth, limit, emptyList(), data = !covers).growth == 0L) return true
+        if (growth <= 0) return true
         var used = databaseBytes + (coverUsage?.total() ?: 0L)
         if (!covers && used + growth > limit) {
             // Saved list/book data wins over every eligible cover, in last-shown order.
             val items = storageItems(r.plan.coverDir, r.plan.coversOn)
-            val admission = StorageLogic.admit(used, 0, growth, limit, items, data = true)
-            val candidates = admission.drop.mapNotNull { key -> items.firstOrNull { it.k == key } }
+            // Try every eligible candidate: an undeletable file must not hide later candidates.
+            val candidates = StorageLogic.evictableCovers(items)
             for (item in candidates) {
                 if (used + growth <= limit) break
                 val f = allowed(r.plan.coverDir)?.let { File(it, item.k.removePrefix("c:")) } ?: continue
@@ -1008,8 +1009,7 @@ class CacheWorker(
         write(File(mirrorDir, "summary.lua"), LuaValue.encode(sortedMapOf<String, Any?>(
             "run" to plan.run, "why" to why, "jobs" to jobs, "status" to status(r, false, why),
             "changed" to r.changed.toList(), "written" to r.written.toList(), "written_more" to r.writtenMore.takeIf { it },
-            "saved" to saved.takeIf { it }, "revalidated" to revalidated.takeIf { it },
-            "cover_bytes_delta" to r.covers[3])))
+            "saved" to saved.takeIf { it }, "revalidated" to revalidated.takeIf { it })))
     }
 
     companion object {

@@ -254,6 +254,24 @@ class CacheWorkerTest {
         assertEquals(64 * 1024, ((w.store.detail(1)!!.first as Map<*, *>)["title"] as String).length)
     }
 
+    @Test fun recheckedCoverShrinkImmediatelyReturnsBudgetWhileYielding() {
+        val (root, fake, w) = setup()
+        val thumbs = File(root, "thumbs").apply { mkdirs() }
+        val cover = File(thumbs, "99_0.jpg").apply { writeBytes(ByteArray(850 * 1024)) }
+        File(cover.path + ".etag").writeText("old")
+        fake.forceCover = true
+        var first = true
+        assertEquals("finished", w.run(plan(root, "full", mapOf("limit" to 1024L * 1024)), creds) {
+            if (first) {
+                first = false
+                w.recheckCovers("test", creds, listOf(99L to cover.path))
+                w.store.putEntry("home", "/dashboard/test", mapOf("payload" to "x".repeat(250 * 1024)), 1L, home = true)
+            }
+        })
+        assertTrue("resized/rechecked cover did not need eviction", cover.exists())
+        assertEquals(3L, cover.length())
+    }
+
     @Test fun storageLimitStopsSavingAndSaysWhy() {
         val (root, _, w) = setup()
         assertEquals("storage limit", w.run(plan(root, "full", mapOf("limit" to 1L)), creds))

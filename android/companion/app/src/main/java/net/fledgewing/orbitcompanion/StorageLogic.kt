@@ -32,14 +32,17 @@ object StorageLogic {
 
     data class Admission(val growth: Long, val drop: List<String>, val allowed: Boolean)
 
+    fun evictableCovers(items: List<Item>): List<Item> = items
+        .filter { it.kind in setOf("cover", "mirror_cover") }
+        .sortedWith(compareBy<Item> { it.at }.thenBy { it.k })
+
     /** Shared with the firmware's W9 limit: replacements spend only their positive delta. */
     fun admit(used: Long, oldBytes: Long, newBytes: Long, limit: Long?, items: List<Item>, data: Boolean): Admission {
         val growth = maxOf(0L, newBytes - oldBytes)
         if (growth == 0L || limit == null || limit <= 0) return Admission(growth, emptyList(), true)
         var after = used + growth
         val drop = ArrayList<String>()
-        if (data) for (item in items.filter { it.kind in setOf("cover", "mirror_cover") }
-            .sortedWith(compareBy<Item> { it.at }.thenBy { it.k })) {
+        if (data) for (item in evictableCovers(items)) {
             if (after <= limit) break
             drop.add(item.k)
             after -= item.bytes

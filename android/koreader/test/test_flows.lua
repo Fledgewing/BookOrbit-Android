@@ -4967,6 +4967,11 @@ test("companion: the cache worker needs the companion of the plugin's own versio
         ok(not plan:find(client.userkey, 1, true) and not plan:find("userkey", 1, true), "never in the plan file")
         local decoded = E.Cache.decode(plan)
         ok(decoded.cover_width > 0 and decoded.cover_height > 0, "device thumbnail bounds travel in the plan")
+        local counted = false
+        for _, x in ipairs(W.broadcasts) do
+            if x.action:match("%.STORAGE$") and x.extras.reason == "after refresh" then counted = true end
+        end
+        ok(counted, "run completion requests live totals instead of adding replacement bytes")
         local log = table.concat(W.logs, "\n")
         ok(not log:find(client.userkey, 1, true), "never in the log")
     end)

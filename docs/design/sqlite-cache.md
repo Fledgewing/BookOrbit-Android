@@ -390,7 +390,8 @@ books (the plan and copies snapshot), and the current sleep batch are protected.
 A rejected data save rolls back its savepoint, leaves its job pending, retains the
 previous rows, and reports the storage limit only after eligible covers are exhausted.
 A new/growing cover never displaces list/book data; existing cover replacements
-continue even when no new cover fits. A limit stop never marks Full refresh complete.
+continue even when no new cover fits. A limit stop never marks Full refresh complete. The plugin requests live storage
+totals after the run, rather than adding downloaded replacement bytes to usage.
 
 Browsing covers are JPEG quality 85, fitted without upscaling to the current grid
 cell bounds (`cover_width`, `cover_height` in the plan, from the screen and effective
