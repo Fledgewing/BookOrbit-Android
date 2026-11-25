@@ -309,7 +309,7 @@ class CacheWorker(
         fun ids(k: String) = (m[k] as? List<*>)?.mapNotNull { it as? Long } ?: emptyList()
     }
 
-    /** The plugin's cover file name: Cache.coverName (shared/fixtures/cache/worker.json "covers"). */
+    /** KOReader's BookOrbit plugin's cover file name (shared/fixtures/cache/worker.json "covers"). */
     fun coverName(book: Map<*, *>): String? {
         val id = book["id"] as? Long ?: return null
         if (id < 1 || id > 2147483647L) return null

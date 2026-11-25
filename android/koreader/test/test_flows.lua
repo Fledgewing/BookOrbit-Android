@@ -4331,7 +4331,7 @@ test("mirror: Full refresh saves every book's details, outside the cap; covers o
     W.wifi = true
     cache.server_fn = libraryServer({ n_books = 4, series4 = 2, covers = true })
     local cat = pluginCatalog(Cat, client)
-    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. E.Cache.coverName(b) end
+    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. dofile(here .. "/companion_rules.lua")(E.Cache).coverName(b) end
     withHost(cat, function()
         client:request("GET", DASH)
         client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
@@ -4528,7 +4528,7 @@ test("storage limit: it stops the every-cover pass, then the run, and the Full r
     W.wifi = true
     cache.server_fn = libraryServer({ n_books = 4, series4 = 2, covers = true })
     local cat = pluginCatalog(Cat, client)
-    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. E.Cache.coverName(b) end
+    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. dofile(here .. "/companion_rules.lua")(E.Cache).coverName(b) end
     local MB = 1048576
     local notes = {}
     E.OC.note = function(t) table.insert(notes, t) end
