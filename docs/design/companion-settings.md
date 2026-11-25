@@ -410,9 +410,12 @@ The companion's worker writes the lists into `koreader/settings/orbit-sleep/`: `
 (`{v, at, details, tags: [{tag, label, count}]}`, from the saved book details), both at a
 `SLEEP_REFRESH` (`SleepPoolBuilder.scopes`, `.tags`). The worker needs the login, which only the
 plugin sends, so the picker asks: `/status` carries `"want_choices": <ms>` while the picker is open,
-and the plugin answers at its next refresh with `SLEEP_REFRESH scopes_only=1`. The companion redraws
-the picker once when either file changes. (The plugin's `choices.json` is gone: it stopped being
-written when `Sleep.cachedTags` went, `docs/design/sqlite-cache.md`.)
+and the plugin answers at its next refresh with `SLEEP_REFRESH scopes_only=1`. Both companion
+pickers load these saved lists on a serial background worker and draw from an in-memory snapshot. Opening either picker requests a refresh; file-change events reload the
+snapshot on the worker. Taps update local preferences and the checkmark immediately; status-file
+writes, plugin sync and sleep-picture rendering run in the worker. Timing logs record list work
+and the tap-to-draw duration. The companion redraws the picker when either file changes. (The
+plugin's `choices.json` is gone: it stopped being written when `Sleep.cachedTags` went, `docs/design/sqlite-cache.md`.)
 
 - **KOReader not running, file present:** the lists show with "From KOReader, Monday 14:02".
 - **No file yet:** "Open KOReader once to load your smart scopes and collections." The three lists
@@ -424,13 +427,14 @@ pool's titles (`pool.json` already holds book titles there).
 
 ### 6.3 Leave out
 
-The rule list: each rule a row, "Tag: age:18" or "Romance (smart scope)", with **Remove**. Then
-**Add a rule**: **Tag…** opens the tag list from `tags.json` (tag and count, most first) with
-**Type a tag…** at the top; **Library, smart scopes and collections…** opens Library and the
-picker's two groups. Each item there has a tick box: a tap adds or removes its rule and the page
-stays, so several go in at once (X8). Library leaves out every book (the sleep screen then shows the
-current book) and stands alone. The X2
-custom-field note sits under Add a rule. Rules are the same `sleep_leave_out` strings.
+One page: **Library**, **Tags**, **Smart scopes**, **Collections**, each with a visible tick box.
+A tap updates the checkmark and persists on this page; no Add/Remove subpage or Back tap is needed.
+**Type a tag…** adds a selected row immediately, even if the saved list does not contain that tag.
+Selected scopes or collections missing from the saved lists remain visible and can be unticked.
+Library leaves out every book (the sleep screen then shows the current book) and stands alone;
+choosing an individual rule clears the Library selection before applying the existing rule helper.
+The shared rule strings and membership rules are unchanged. The custom-field note sits below the
+choices. Locked settings show the same rows read-only.
 
 ## 7. Self-grill log (two-way doors, settled)
 

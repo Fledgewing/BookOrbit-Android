@@ -71,7 +71,7 @@ class HomeActivity : Activity() {
 
     private fun decide(press: Boolean) {
         // Just after an update started from one of our pages: that page, not KOReader (UpdateReturn).
-        UpdateReturn.forHome()?.let { if (UpdateReturn.open(this, it, "home after the update")) return }
+        UpdateReturn.forHome()?.let { if (UpdateReturn.open(this, it, "home after the update", reuse = true)) return }
         // A new setup step: the prompt once, then (when it closes) on to KOReader as usual.
         if (press && Attention.promptOnHome(this)) return
         val prefs = Prefs(this)

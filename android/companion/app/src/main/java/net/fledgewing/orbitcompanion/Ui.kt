@@ -34,7 +34,46 @@ abstract class EinkActivity : Activity() {
         /** One of our pages is in front, or was until a moment ago (Home pauses it first). */
         fun companionPageInFront(): Boolean =
             resumed > 0 || android.os.SystemClock.elapsedRealtime() - lastPausedAt < 2_000
+
+        /** One of our pages is resumed right now (no grace period: a Home press has paused it). */
+        fun pageResumed(): Boolean = resumed > 0
+
+        /** Our live pages, oldest first: the back stack an update returns to (UpdateReturn). */
+        private val live = mutableListOf<java.lang.ref.WeakReference<EinkActivity>>()
+
+        /**
+         * The pages to rebuild after an update started on [top]: the live pages of its task up to
+         * and including it, each as [returnIntent] (M8C 11-24: only the top page's class came
+         * back, without its section, and Back from it fell out to KOReader).
+         */
+        @Synchronized
+        fun returnStack(top: Activity): List<Intent> {
+            val pages = live.mapNotNull { it.get() }.filter { !it.isDestroyed && !it.isFinishing && it.taskId == top.taskId && it.returnable }
+            val below = if (pages.any { it === top }) pages.takeWhile { it !== top } else emptyList()
+            val page = (top as? EinkActivity)?.returnIntent() ?: Intent().setComponent(top.componentName).apply { top.intent?.let { putExtras(it) } }
+            return below.map { it.returnIntent() } + page
+        }
+
+        @Synchronized
+        private fun track(a: EinkActivity, add: Boolean) {
+            live.removeAll { it.get().let { p -> p == null || p === a } }
+            if (add) live += java.lang.ref.WeakReference(a)
+        }
+
+        /** For tests: a fresh process. */
+        @Synchronized
+        internal fun forgetPages() {
+            live.clear()
+            resumed = 0
+            lastPausedAt = 0
+        }
     }
+
+    /** This page can be reopened after an update (not the keypad or other transient pages). */
+    open val returnable = true
+
+    /** How to reopen this page after an update: its class and extras (a Settings section's id). */
+    open fun returnIntent(): Intent = Intent().setComponent(componentName).apply { intent?.let { putExtras(it) } }
 
     /** Behind the Settings PIN: locked on resume → the keypad; cancel closes this page. */
     open val pinGuarded = false
@@ -45,6 +84,7 @@ abstract class EinkActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed++
+        UpdateReturn.onPageShown(this)
         Pin.onPage(pinPage, javaClass.simpleName)
         // A companion page is in front: nobody is reading; what waited may show (Reading).
         Reading.onCompanionPage(this)
@@ -61,6 +101,12 @@ abstract class EinkActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.setWindowAnimations(0)
         noTransition()
+        track(this, add = true)
+    }
+
+    override fun onDestroy() {
+        track(this, add = false)
+        super.onDestroy()
     }
 
     override fun startActivity(intent: Intent, options: Bundle?) {

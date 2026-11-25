@@ -3,7 +3,6 @@ package net.fledgewing.orbitcompanion
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Environment
-import android.os.FileObserver
 import android.os.Handler
 import android.os.Looper
 import android.text.Editable
@@ -121,6 +120,9 @@ abstract class SettingsPage : EinkActivity() {
         const val EXTRA_SECTION = "section"
         const val EXTRA_FOCUS = "focus"
         const val EXTRA_KEY = "key"
+
+        /** The Updates section's App version row (Check for updates, Install, "Updated to v…"). */
+        const val UPDATE_ROW = "app_version"
 
         fun section(ctx: android.content.Context, id: String, focus: String? = null): Intent =
             Intent(ctx, if (id == "sleep") SleepScreenActivity::class.java else SettingsSectionActivity::class.java)
@@ -288,6 +290,11 @@ open class SettingsSectionActivity : SettingsPage() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         focus = intent.getStringExtra(EXTRA_FOCUS)
+    }
+
+    /** After an update from this section: the same section, at the App version row ("Updated to v…"). */
+    override fun returnIntent(): Intent = super.returnIntent().apply {
+        if (getStringExtra(EXTRA_FOCUS) == null && SettingsUi.extras(sectionId).any { it.id == UPDATE_ROW }) putExtra(EXTRA_FOCUS, UPDATE_ROW)
     }
 
     override fun onPause() {
@@ -600,42 +607,17 @@ object SettingsSlots {
 }
 
 /** A choice with five or more values, or the sleep screen's Pick from (§5.5, §6.1). */
-class SettingChoiceActivity : SettingsPage() {
-    private var watch: FileObserver? = null
-
+class SettingChoiceActivity : SleepPickerPage() {
     private val key: String get() = intent.getStringExtra(EXTRA_KEY).orEmpty()
-
-    override fun onResume() {
-        super.onResume()
-        if (schema.byKey[key]?.type == "source") askForLists()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        watch?.stopWatching()
-        watch = null
-    }
-
-    /** The picker is open: the plugin asks the worker for fresh lists (scopes.json, tags.json) at its next look (§6.2). */
-    private fun askForLists() {
-        val now = System.currentTimeMillis()
-        prefs.wantChoicesAt = now
-        StatusFile.write(this, "sleep picker open")
-        ClickChannel.settings(now)
-        @Suppress("DEPRECATION")
-        watch = object : FileObserver(SleepScreen.dir().path, CLOSE_WRITE or MOVED_TO) {
-            override fun onEvent(event: Int, path: String?) {
-                if (path == SleepChoices.SCOPES_FILE || path == SleepChoices.TAGS_FILE) runOnUiThread { if (!isFinishing) render() }
-            }
-        }.also { it.startWatching() }
-    }
+    override val loadsChoices: Boolean get() = schema.byKey[key]?.type == "source"
 
     override fun render() {
+        beginPicker()
         val d = schema.byKey[key] ?: return finish()
         val root = page(scroll = true)
         root.addView(Ui.header(this, d.label, "‹ Back") { finish() })
         lockedBar(root)
-        root.addView(note(lineFor(d)))
+        root.addView(pickerNote(d))
         val v = SettingsStore.get(this, key)
         fun option(id: String, label: String, sub: String? = null) {
             val sel = id == v
@@ -648,13 +630,14 @@ class SettingChoiceActivity : SettingsPage() {
         // Pick from is a set (docs/design/lock-screen.md R1c): each item ticks on and off, the page stays.
         val picked = SleepPoolLogic.sources(v)
         fun tick(id: String, label: String, sub: String? = null) {
-            root.addView(Ui.row(this, label, sub, left = Ui.check(this, id in picked),
-                onClick = if (locked) null else ({ setShared(key, SleepPoolLogic.togglePick(v, id)) })).apply { tag = "option:$id" })
+            pickerRow(root, id, label, sub, id in picked, "option:$id") {
+                setPicked(key, SleepPoolLogic.togglePick(SettingsStore.get(this, key), id))
+            }
         }
         tick(SleepPoolLogic.LIBRARY, "Library", "Every book you can see. The others are part of it.")
         subhead(root, "Lists")
         d.values.filter { it.first != SleepPoolLogic.LIBRARY }.forEach { (id, label) -> tick(id, label) }
-        val c = SleepChoices.read(SleepScreen.dir())
+        val c = choices
         if (c == null) {
             root.addView(note("Open KOReader once to load your smart scopes and collections."))
         } else {
@@ -669,63 +652,47 @@ class SettingChoiceActivity : SettingsPage() {
     }
 }
 
-/** Sleep screen › Leave out: the rules, Remove, and Add a rule (§6.3). */
-class LeaveOutActivity : SettingsPage() {
-    private enum class View0 { RULES, TAGS, LISTS }
-    private var view = View0.RULES
-
+/** Sleep screen › Leave out: every rule toggles in place, including tags typed by the reader. */
+class LeaveOutActivity : SleepPickerPage() {
     override fun render() {
+        beginPicker()
         val d = schema.byKey["sleep_leave_out"] ?: return finish()
-        val c = SleepChoices.read(SleepScreen.dir())
-        val rules = SettingsStore.get(this, d.key).split('\n').filter { it.isNotBlank() }
+        val c = choices
+        val rules = SleepPoolLogic.rules(SettingsStore.get(this, d.key))
         val root = page(scroll = true)
-        // Ticks on and off; the page stays, so several can be added at once (X8).
-        fun toggle(rule: String) = setShared(d.key, SleepPoolLogic.toggleRule(rules.joinToString("\n"), rule))
-        fun tickRow(rule: String, label: String, sub: String?) =
-            root.addView(Ui.row(this, label, sub, left = Ui.check(this, rule in rules), onClick = if (locked) null else ({ toggle(rule) })).apply { tag = "pick:$rule" })
-        when (view) {
-            View0.RULES -> {
-                root.addView(Ui.header(this, "Leave out", "‹ Back") { finish() })
-                lockedBar(root)
-                root.addView(note(lineFor(d)))
-                if (rules.isEmpty()) root.addView(note("No rules: every book can show."))
-                rules.forEach { r ->
-                    root.addView(Ui.row(this, c?.ruleLabel(r) ?: SleepChoices.fallback(r), null,
-                        if (locked) null else Ui.button(this, "Remove", heightDp = 56, sp = 18f) { setShared(d.key, (rules - r).joinToString("\n")) }).apply { tag = "rule:$r" })
-                }
-                if (!locked) {
-                    subhead(root, "Add a rule")
-                    linkRow(root, "Tag…", "From your books' tags, or type one") { view = View0.TAGS; render() }
-                    linkRow(root, "Library, smart scopes and collections…", null) { view = View0.LISTS; render() }
-                    root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then leave it out here."))
-                }
-            }
-            View0.TAGS -> {
-                root.addView(Ui.header(this, "Leave out a tag", "‹ Back") { view = View0.RULES; render() })
-                linkRow(root, "Type a tag…", null) { typeTag { if ("tag:$it" !in rules) toggle("tag:$it") } }
-                if (c == null) root.addView(note("Open KOReader once to list your tags here."))
-                c?.tags?.forEach { t -> tickRow("tag:${t.tag}", t.label, "${t.count} books") }
-            }
-            View0.LISTS -> {
-                root.addView(Ui.header(this, "Leave out a list", "‹ Back") { view = View0.RULES; render() })
-                tickRow(SleepPoolLogic.LIBRARY, "Library", "Every book: the sleep screen shows the current book instead.")
-                if (c == null) root.addView(note("Open KOReader once to load your smart scopes and collections."))
-                c?.scopes?.let { l -> if (l.isNotEmpty()) subhead(root, "Smart scopes"); l.forEach { s -> tickRow("scope:${s.id}", s.title, s.count?.let { "$it books" }) } }
-                c?.collections?.let { l -> if (l.isNotEmpty()) subhead(root, "Collections"); l.forEach { s -> tickRow("collection:${s.id}", s.title, s.count?.let { "$it books" }) } }
-            }
+        root.addView(Ui.header(this, "Leave out", "‹ Back") { finish() })
+        lockedBar(root)
+        root.addView(pickerNote(d))
+        fun toggle(rule: String) {
+            // Choosing an individual rule explicitly replaces the all-books selection.
+            val current = SleepPoolLogic.rules(SettingsStore.get(this, d.key))
+            val base = if (rule != SleepPoolLogic.LIBRARY) current - SleepPoolLogic.LIBRARY else current
+            setPicked(d.key, SleepPoolLogic.toggleRule(base.joinToString("\n"), rule))
         }
+        fun tick(rule: String, label: String, sub: String? = null) {
+            pickerRow(root, rule, label, sub, rule in rules, "pick:$rule") { toggle(rule) }
+        }
+        tick(SleepPoolLogic.LIBRARY, "Library", "Every book: show the current book instead. Choosing an individual rule clears Library.")
+        subhead(root, "Tags")
+        if (!locked) linkRow(root, "Type a tag…", null) { typeTag { if ("tag:$it" !in SleepPoolLogic.rules(SettingsStore.get(this, d.key))) toggle("tag:$it") } }
+        c?.tags?.forEach { t -> tick("tag:${t.tag}", t.label, "${t.count} books") }
+        rules.filter { it.startsWith("tag:") && c?.tags?.none { t -> "tag:${t.tag}" == it } != false }
+            .forEach { tick(it, SleepChoices.fallback(it)) }
+        if (c == null) root.addView(note("Open KOReader once to load your tags, smart scopes and collections."))
+        if (c?.scopes?.isNotEmpty() == true) subhead(root, "Smart scopes")
+        c?.scopes?.forEach { tick("scope:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
+        if (c?.collections?.isNotEmpty() == true) subhead(root, "Collections")
+        c?.collections?.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
+        rules.filter { (it.startsWith("scope:") || it.startsWith("collection:")) && c?.title(it) == null }
+            .forEach { tick(it, SleepChoices.fallback(it)) }
+        root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then leave it out here."))
     }
 
     private fun typeTag(done: (String) -> Unit) {
         val input = EditText(this).apply { setSingleLine(); hint = "age:18" }
         AlertDialog.Builder(this).setTitle("Tag").setView(input)
-            .setPositiveButton("Add") { _, _ -> input.text.toString().trim().lowercase().takeIf { it.isNotEmpty() }?.let(done) }
+            .setPositiveButton("Add") { _, _ -> SleepPoolLogic.parseRule("tag:${input.text}")?.tag?.let(done) }
             .setNegativeButton("Cancel", null).show()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (view != View0.RULES) { view = View0.RULES; render() } else super.onBackPressed()
     }
 }
 

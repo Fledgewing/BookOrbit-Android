@@ -153,7 +153,6 @@ class SettingsPagesTest {
         assertEquals("Want to read, Discover", SettingsUi.valueLabel(schema.byKey.getValue("sleep_from"), "want_to_read\ndiscover"))
 
         val lo = open<LeaveOutActivity>()
-        all(lo.window.decorView).filterIsInstance<TextView>().first { it.text.toString().startsWith("Library, smart scopes") }.let { (it.parent.parent as View).performClick() }
         tagged(lo, "pick:library")!!.performClick()
         assertEquals("library", SettingsStore.get(app, "sleep_leave_out"))
         assertNotNull("the list page stays for more", tagged(lo, "pick:library"))
