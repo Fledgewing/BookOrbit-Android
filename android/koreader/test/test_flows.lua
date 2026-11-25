@@ -6372,6 +6372,27 @@ end)
 
 store.orbit_android.sync_mode = "custom"
 
+test("main loop: yielding work is attributed to each resume rather than a combined stall", function()
+    local M=E.MainLoop
+    local logs=W.logs; W.logs={}
+    local co=coroutine.create(function()
+        M.wrap(function()
+            for i=1,3 do
+                W.clock=W.clock+0.03
+                if i<3 then
+                    coroutine.yield()
+                    local current=coroutine.running()
+                    M.turns[current]=(M.turns[current] or 0)+1
+                end
+            end
+        end,"cooperative test")()
+    end)
+    for i=1,3 do local resumed,err=coroutine.resume(co); ok(resumed,err) end
+    eq(coroutine.status(co),"dead")
+    ok(not table.concat(W.logs,"\n"):find("cooperative test",1,true),"90 ms spread over three turns is not one stall")
+    W.logs=logs
+end)
+
 test("Home calendar: worker snapshots replace a correctly dated empty calendar", function()
     local LF, C, OC = E.LF, E.Companion, E.OC
     local saved={year=LF.year,key=LF.year_key,waiting=LF.year_waiting,send=C.send,problem=C.workerProblem,watch=OC.watchChecks,catalog=E.Mirror.catalog}

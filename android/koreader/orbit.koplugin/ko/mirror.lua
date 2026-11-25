@@ -313,6 +313,7 @@ function Mirror.launch(op, reason)
             if MainLoop then
                 local co = coroutine.running()
                 MainLoop.paused[co] = (MainLoop.paused[co] or 0) + now_s() - before
+                MainLoop.turns[co] = (MainLoop.turns[co] or 0) + 1
             end
         end)
     end)
