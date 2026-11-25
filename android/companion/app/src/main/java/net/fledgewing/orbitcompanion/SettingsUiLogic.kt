@@ -117,7 +117,7 @@ object SettingsUi {
         "text" -> wire.ifEmpty { "None" }
         // Pick from is a set (R1c): its items' names, joined.
         "source" -> SleepPoolLogic.sources(wire).joinToString(", ") { item ->
-            d.values.firstOrNull { it.first == item }?.second ?: choices?.title(item) ?: SleepChoices.fallback(item)
+            if (item == SleepPoolLogic.LIBRARY) "Whole library" else d.values.firstOrNull { it.first == item }?.second ?: choices?.title(item) ?: choices?.missingLabel(item) ?: SleepChoices.fallback(item)
         }
         else -> d.valueLabel(wire)
     }
@@ -141,6 +141,7 @@ data class SleepChoices(
     val collections: List<Item>,
     val tags: List<Tag>,
     val libraries: List<Item> = emptyList(),
+    val listed: Set<String> = emptySet(),
 ) {
     data class Item(val id: Long, val title: String, val count: Int?)
     data class Tag(val tag: String, val label: String, val count: Int)
@@ -156,21 +157,24 @@ data class SleepChoices(
         }
     }
 
+    fun missingLabel(wire: String): String = fallback(wire).substringBefore(" (") +
+        if (wire.substringBefore(':') in listed) " (Removed on the server)" else " (Lists not loaded yet)"
+
     /** A leave-out rule in words. */
     fun ruleLabel(rule: String): String = when {
         rule == SleepPoolLogic.LIBRARY -> LIBRARY_RULE
         rule.startsWith("tag:") -> "Tag: ${rule.removePrefix("tag:")}"
-        else -> title(rule) ?: fallback(rule)
+        else -> title(rule) ?: missingLabel(rule)
     }
 
     companion object {
         const val LIBRARY_RULE = "Library: every book (the sleep screen shows the current book)"
 
-        /** "Scope not found" (X7) when an id is not in the lists. */
+        /** Without a complete server list, absence is unknown rather than removal (X7). */
         fun fallback(wire: String): String = when (wire.substringBefore(':')) {
-            "scope" -> "Smart scope ${wire.substringAfter(':')} (not found)"
-            "library" -> "Library ${wire.substringAfter(':')} (not found)"
-            "collection" -> "Collection ${wire.substringAfter(':')} (not found)"
+            "scope" -> "Smart scope ${wire.substringAfter(':')} (Lists not loaded yet)"
+            "library" -> "Library ${wire.substringAfter(':')} (Lists not loaded yet)"
+            "collection" -> "Collection ${wire.substringAfter(':')} (Lists not loaded yet)"
             "tag" -> "Tag: ${wire.substringAfter(':')}"
             else -> wire
         }
@@ -182,10 +186,44 @@ data class SleepChoices(
         const val TAGS_FILE = "tags.json"
 
         /** The picker's lists from scopes.json, its tag list from tags.json. */
-        fun read(dir: java.io.File): SleepChoices? = combine(
-            runCatching { java.io.File(dir, SCOPES_FILE).readText() }.getOrNull(),
-            runCatching { java.io.File(dir, TAGS_FILE).readText() }.getOrNull(),
-        )
+        fun read(dir: java.io.File): SleepChoices? {
+            val saved = combine(
+                runCatching { java.io.File(dir, SCOPES_FILE).readText() }.getOrNull(),
+                runCatching { java.io.File(dir, TAGS_FILE).readText() }.getOrNull(),
+            )
+            val file = java.io.File(dir.parentFile, "orbit-cache/${CacheStore.FILE}")
+            if (!file.isFile) return saved
+            return runCatching { AndroidSql(file, readOnly = true).use { fromSql(it, saved) } }.getOrNull() ?: saved
+        }
+
+        /** Complete section lists in orbit.db are also used by the catalog. Never call on the UI thread. */
+        fun fromSql(sql: Sql, saved: SleepChoices? = null): SleepChoices? {
+            var out = saved ?: SleepChoices(0, true, emptyList(), emptyList(), emptyList())
+            var found = saved != null
+            for ((kind, section) in listOf("scope" to "smart-scopes", "collection" to "collections", "library" to "libraries")) {
+                val head = sql.query("SELECT identity, total, MAX(fetched_at, validated_at) FROM lists WHERE kind = 'section' AND section = ? ORDER BY MAX(fetched_at, validated_at) DESC LIMIT 1", section) {
+                    Triple(it.text(0)!!, it.long(1) ?: 0, it.long(2) ?: 0)
+                }.firstOrNull() ?: continue
+                if (saved != null && kind in saved.listed && head.third < saved.at) continue
+                val rows = sql.query("SELECT item FROM list_items WHERE identity = ? ORDER BY pos", head.first) {
+                    it.bytes(0)?.let { b -> LuaValue.parse(b) as? Map<*, *> }
+                }
+                if (rows.size.toLong() != head.second || rows.any { it == null }) continue
+                val items = rows.filterNotNull().mapNotNull { r ->
+                    val id = (r["id"] as? Number)?.toLong() ?: r["id"]?.toString()?.toLongOrNull() ?: return@mapNotNull null
+                    val title = r["title"]?.let { LuaValue.text(it) } ?: return@mapNotNull null
+                    Item(id, title, (r["count"] as? Number)?.toInt())
+                }
+                if (items.size != rows.size) continue
+                out = when (kind) {
+                    "scope" -> out.copy(scopes = items)
+                    "collection" -> out.copy(collections = items)
+                    else -> out.copy(libraries = items)
+                }.copy(at = maxOf(out.at, head.third), listed = out.listed + kind)
+                found = true
+            }
+            return out.takeIf { found }
+        }
 
         fun combine(scopesText: String?, tagsText: String?): SleepChoices? {
             val s = parse(scopesText)
@@ -208,7 +246,8 @@ data class SleepChoices(
                     Tag(t, j.optString("label").ifEmpty { t }, j.optInt("count", 0))
                 }
             }.orEmpty().sortedByDescending { it.count }
-            return SleepChoices(o.optLong("at", 0L), o.optBoolean("cached", false), items("scopes"), items("collections"), tags, items("libraries"))
+            return SleepChoices(o.optLong("at", 0L), o.optBoolean("cached", false), items("scopes"), items("collections"), tags, items("libraries"),
+                listOf("scope" to "scopes", "collection" to "collections", "library" to "libraries").filter { o.has(it.second) }.map { it.first }.toSet())
         }
     }
 }

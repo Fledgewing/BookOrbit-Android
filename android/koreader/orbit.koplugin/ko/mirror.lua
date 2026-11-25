@@ -172,12 +172,22 @@ function Mirror.plan(cat, op, reason)
         local okc, p = pcall(cat.thumbnailPath, cat, { id = 1, updatedAt = "1", hasCover = true })
         cover_dir = okc and type(p) == "string" and p:match("^(.*)/[^/]+$") or nil
     end
+    local cols, rows = 3, 3
+    if Compat.callable(cat.effectiveGridDimensions) then
+        local okg, c, r = pcall(cat.effectiveGridDimensions, cat)
+        if okg then cols, rows = tonumber(c) or cols, tonumber(r) or rows end
+    end
+    local okd, device = pcall(require, "device")
+    local screen = okd and device.screen
+    local width = screen and screen:getWidth() or 1080
+    local height = screen and screen:getHeight() or 1440
     Mirror.seq = (Mirror.seq or 0) + 1
     local plan = { run = string.format("%d-%d", nowT(), Mirror.seq), op = op, reason = reason, owner = OC.owner(client),
         manual = Mirror.manual == true, lib_version = libraryVersion(), sentinel = SENT, templates = templates, detail_template = Mirror.detailPath(client, SENT),
         sections = sections, seed_lists = { Mirror.onDevicePath(cat) }, seed_details = seed_details,
         catalog = Mirror.INVENTORY,
         all_books = client:query("/koreader/plugin/catalog/books", { sort = "title", order = "asc" }),
+        cover_width = math.floor(width / math.max(1, cols)), cover_height = math.floor(height / math.max(1, rows)),
         cover_dir = cover_dir, covers_on = S.mirror_covers == true, limit = OC.limitBytes() }
     plan.dynamic_lists, plan.browse_lists = {}, {}
     local sources = {}
@@ -317,8 +327,8 @@ function Mirror.ran(r)
         return
     end
     Mirror._status = r.status
-    if (r.bytes_delta or 0) ~= 0 then pcall(OC.storageAdd, r.bytes_delta, "kept") end
-    if (r.cover_bytes_delta or 0) ~= 0 then pcall(OC.storageAdd, r.cover_bytes_delta, S.mirror_covers and "mirror_cover" or "cover") end
+    -- Replacements and lazy shrinkage are not additive bytes. Ask the worker for live totals.
+    pcall(OC.storageCount, "after refresh")
     local cat = Mirror.catalog()
     if #(r.written or {}) > 0 and cat then
         if r.written_more and Compat.callable(cat.resetThumbnailMemo) then pcall(cat.resetThumbnailMemo, cat)

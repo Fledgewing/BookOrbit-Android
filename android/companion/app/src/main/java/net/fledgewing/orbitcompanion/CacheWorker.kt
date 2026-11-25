@@ -37,6 +37,7 @@ class CacheWorker(
     private val onProgress: (Long?) -> Unit = {},
     /** The folders a command may touch files in ([Places]); a path outside them is refused. */
     private val places: List<File> = listOf(root),
+    private val resizeThumbnail: (File, Int, Int) -> Unit = { _, _, _ -> },
 ) {
     /** A GET. sink: write the body there (a cover) instead of returning it. */
     fun interface Http {
@@ -57,6 +58,13 @@ class CacheWorker(
         mapOf("accept" to accept, "x-auth-user" to c.user, "x-auth-key" to c.key)
 
     private fun url(c: Creds, path: String) = c.server + LuaValue.utf8(path)
+
+    private var thumbnailWidth = 0
+    private var thumbnailHeight = 0
+    private var runProtected = emptySet<Long>()
+    private fun thumbnail(f: File) {
+        if (!f.path.contains("/orbit-sleep/")) resizeThumbnail(f, thumbnailWidth, thumbnailHeight)
+    }
 
     // ------------------------------------------------------------------ files
 
@@ -81,6 +89,7 @@ class CacheWorker(
      * and queue. No backwards compatibility: they go, and the next Full refresh saves everything.
      */
     private fun removeOldFiles() {
+        SqliteStress.cleanup(root)
         var n = 0
         val entry = Regex("^[0-9a-f]{8}\\.lua$")
         for (dir in listOf(root, mirrorDir)) for (f in dir.listFiles() ?: emptyArray()) {
@@ -147,6 +156,14 @@ class CacheWorker(
         if (n > 0) log("store: a write patched $n saved replies")
     }
 
+    private class CoverUsage(items: List<StorageLogic.Item>) {
+        private val sizes = HashMap(items.filter { it.k.startsWith("c:") }.associate { it.k to it.bytes })
+        private var bytes = sizes.values.sum()
+        @Synchronized fun replace(key: String, size: Long) { bytes += size - (sizes.put(key, size) ?: 0L) }
+        @Synchronized fun total(): Long = bytes
+    }
+    @Volatile private var coverUsage: CoverUsage? = null
+
     // ------------------------------------------------------------------ the storage limit
 
     /** The plugin's STORAGE: count, and over [limit] remove (StorageLogic). [mirrorCovers]: "Save every cover" is on. */
@@ -155,21 +172,40 @@ class CacheWorker(
     /** Everything Orbit stores: the database (browsing entries apart, as they can go) and the cover folder's files. */
     fun storageItems(coverDir: String?, mirrorCovers: Boolean): List<StorageLogic.Item> {
         val st = store
+        SqliteStress.cleanup(root)
         val entries = st.entrySizes()
         val items = ArrayList<StorageLogic.Item>(entries)
         items.add(StorageLogic.Item("db", maxOf(0L, st.fileBytes() - entries.sumOf { it.bytes }), 0L, "kept"))
         val dir = allowed(coverDir)
         if (coverDir != null && dir == null) log("storage: cover folder outside Orbit's folders; not counted")
         if (dir != null && dir.isDirectory) {
+            val protected = protectedIds()
             val keep = if (mirrorCovers) st.coversKept() else emptySet()
             for (f in dir.listFiles() ?: emptyArray()) {
+                if (f.name.endsWith(".etag") && !File(f.path.removeSuffix(".etag")).isFile) { f.delete(); continue }
                 if (!f.name.endsWith(".jpg") || !f.isFile || allowed(f.path) == null) continue
                 val etag = File(dir, f.name + ".etag")
                 items.add(StorageLogic.Item("c:${f.name}", f.length() + (if (etag.isFile) etag.length() else 0L), f.lastModified() / 1000,
-                    if (f.name in keep) "mirror_cover" else "cover"))
+                    if (f.name.substringBefore('_').toLongOrNull() in protected) "kept" else if (f.name in keep) "mirror_cover" else "cover"))
             }
         }
         return items
+    }
+
+    private fun protectedIds(): Set<Long> {
+        val ids = HashSet<Long>(runProtected)
+        val copies = read(File(root, "copies/ask.lua")) as? Map<*, *>
+        (copies?.get("books") as? List<*>)?.forEach { ((it as? Map<*, *>)?.get("book_id") as? Long)?.let(ids::add) }
+        val plan = read(File(mirrorDir, "plan.lua")) as? Map<*, *>
+        (plan?.get("seed_details") as? List<*>)?.filterIsInstance<Long>()?.let(ids::addAll)
+        store.db().query("SELECT body FROM entries WHERE home = 1") { it.bytes(0) }.forEach { bytes ->
+            val home = bytes?.let { LuaValue.parse(it) } as? Map<*, *>
+            (home?.get("continueReading") as? List<*>)?.forEach { ((it as? Map<*, *>)?.get("id") as? Long)?.let(ids::add) }
+        }
+        val pool = File(root.parentFile, "orbit-sleep/pool.json")
+        val model = runCatching { LuaValue.fromJson(pool.readText()) as? Map<*, *> }.getOrNull()
+        (model?.get("items") as? List<*>)?.forEach { ((it as? Map<*, *>)?.get("id") as? Long)?.let(ids::add) }
+        return ids
     }
 
     /**
@@ -190,6 +226,9 @@ class CacheWorker(
                 else if (k.startsWith("c:") && coverDir != null) {
                     allowed(File(coverDir, k.removePrefix("c:")).path)?.delete()
                     allowed(File(coverDir, k.removePrefix("c:") + ".etag").path)?.delete()
+                    val f = File(coverDir, k.removePrefix("c:"))
+                    val etag = File(f.path + ".etag")
+                    coverUsage?.replace(k, f.length() + etag.length())
                 }
                 removed[it.kind] = (removed[it.kind] ?: 0L) + 1
             }
@@ -208,6 +247,16 @@ class CacheWorker(
     }
 
     // ------------------------------------------------------------------ copies, tags, covers on screen
+
+    fun coversShown(paths: List<String>) {
+        for (path in paths.take(100)) {
+            val f = allowed(path) ?: continue
+            if (!f.name.endsWith(".jpg") || !f.isFile) continue
+            thumbnail(f)
+            f.setLastModified(now() * 1000)
+            coverUsage?.replace("c:${f.name}", f.length() + File(f.path + ".etag").length())
+        }
+    }
 
     /**
      * Tags in the saved book details, at most [max] details, for the Leave out tag picker. Model
@@ -239,13 +288,15 @@ class CacheWorker(
             part.delete()
             val r = http.get(creds.server + "/koreader/plugin/catalog/books/$id/thumbnail", h, part, MAX_COVER)
             when {
-                r.code == 304 -> { part.delete(); f.setLastModified(now() * 1000) }
+                r.code == 304 -> { part.delete(); thumbnail(f) }
                 r.code == 200 && r.contentType?.lowercase()?.trim()?.startsWith("image/") == true && part.isFile && part.length() > 0 && part.renameTo(f) -> {
+                    thumbnail(f)
                     if (r.etag != null) write(etagFile, r.etag.toByteArray()) else etagFile.delete()
                     changed.add(id)
                 }
                 else -> { part.delete(); failed++ }
             }
+            coverUsage?.replace("c:${f.name}", f.length() + etagFile.length())
         }
         log("worker: covers re-asked: ${items.size} checked, ${changed.size} replaced, $failed failed ($why)")
         event(sortedMapOf("kind" to "covers_rechecked", "why" to why, "checked" to items.size.toLong(), "changed" to changed, "failed" to failed))
@@ -346,7 +397,7 @@ class CacheWorker(
     private fun pageJob(kind: String, identity: String, page: Int, size: Int = MirrorLogic.PAGE) = Job(kind, "$page|$size|$identity")
 
     /** A fetched job, back from a pool thread. body: a page's or detail's reply; cover: the cover's outcome. */
-    private class Landed(val job: Job, val reply: Reply?, val path: String?, val cover: String? = null, val coverBytes: Long = 0, val coverWritten: Map<String, Any?>? = null)
+    private class Landed(val job: Job, val reply: Reply?, val path: String?, val cover: String? = null, val coverBytes: Long = 0, val coverWritten: Map<String, Any?>? = null, val part: File? = null, val target: File? = null)
 
     /** The run's counters, in memory; the jobs table is the durable part. */
     private class Run(val plan: Plan) {
@@ -355,6 +406,7 @@ class CacheWorker(
         var coverTotal = 0L
         var startedMs = 0L; var batches = 0L; var writeMs = 0L; var writeMax = 0L
         var limitNote: Map<String, Any?>? = null
+        var storageBlocked = false
         var errors = 0L
         val changed = ArrayList<String>()
         val written = ArrayList<Map<String, Any?>>()
@@ -580,7 +632,7 @@ class CacheWorker(
         val etagFile = allowed("$path.etag") ?: return Landed(job, null, null, "none")
         val exists = f.isFile
         // A file the plugin saved without an ETag is left alone.
-        if (exists && !etagFile.isFile) return Landed(job, null, null, "kept")
+        if (exists && !etagFile.isFile) return Landed(job, null, null, "kept", target = f)
         val h = headers(creds, "image/jpeg,image/*").toMutableMap()
         h["Accept-Encoding"] = "identity"
         if (exists) h["If-None-Match"] = etagFile.readText()
@@ -588,11 +640,12 @@ class CacheWorker(
         part.parentFile?.mkdirs()
         part.delete()
         val rep = http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail", h, part, MAX_COVER)
+        if (Thread.currentThread().isInterrupted) { part.delete(); return Landed(job, rep, null, "transport") }
         return when {
-            rep.code == 304 && exists -> { part.delete(); Landed(job, rep, null, "not_modified") }
-            rep.code == 200 && rep.contentType?.lowercase()?.trim()?.startsWith("image/") == true && part.isFile && part.length() > 0 && part.renameTo(f) -> {
-                if (rep.etag != null) write(etagFile, rep.etag.toByteArray()) else etagFile.delete()
-                Landed(job, rep, null, "ok", f.length(), sortedMapOf("id" to job.id, "updatedAt" to book["updatedAt"]?.let { LuaValue.text(it) }))
+            rep.code == 304 && exists -> { part.delete(); Landed(job, rep, null, "not_modified", target = f) }
+            rep.code == 200 && rep.contentType?.lowercase()?.trim()?.startsWith("image/") == true && part.isFile && part.length() > 0 -> {
+                thumbnail(part)
+                Landed(job, rep, null, "ok", part.length(), sortedMapOf("id" to job.id, "updatedAt" to book["updatedAt"]?.let { LuaValue.text(it) }), part, f)
             }
             rep.code == 0 -> { part.delete(); Landed(job, rep, null, "transport") }
             else -> { part.delete(); Landed(job, rep, null, "failed") }
@@ -657,26 +710,47 @@ class CacheWorker(
         if (recheck && changed && r.changed.size < CHANGED_MAX) r.changed.add(w.identity)
     }
 
-    /** The storage limit (counted at the run's start, plus what it saved since). -> the job may not run. */
-    private fun limited(r: Run, kind: String, baseCovers: Long): Boolean {
-        val limit = r.plan.limit ?: return false
-        val covers = kind == "cover"
-        if (covers && !r.plan.coversOn) return false
-        val used = store.fileBytes() + baseCovers + r.covers[3]
-        if (used < limit || r.limitNote != null && !covers) return used >= limit
-        val text: String
-        if (covers) {
-            val n = count("SELECT count(*) FROM jobs WHERE kind = 'cover' AND state = 0")
-            store.db().exec("UPDATE jobs SET state = 2 WHERE kind = 'cover' AND state = 0")
-            r.skipped += n
-            text = MirrorLogic.limitText(true, (r.covers[0] + r.covers[1]).toInt(), r.coverTotal.toInt())
-        } else {
-            store.db().exec("UPDATE jobs SET state = 2 WHERE state = 0")
-            text = MirrorLogic.limitText(false, r.done.toInt(), r.total.toInt())
+    /** Committed bytes plus net growth, never the transient rollback journal's duplicate pages. */
+    private fun room(r: Run, growth: Long, covers: Boolean, databaseBytes: Long): Boolean {
+        val limit = r.plan.limit ?: return true
+        if (growth <= 0) return true
+        var used = databaseBytes + (coverUsage?.total() ?: 0L)
+        if (!covers && used + growth > limit) {
+            // Saved list/book data wins over every eligible cover, in last-shown order.
+            val items = storageItems(r.plan.coverDir, r.plan.coversOn)
+            // Try every eligible candidate: an undeletable file must not hide later candidates.
+            val candidates = StorageLogic.evictableCovers(items)
+            for (item in candidates) {
+                if (used + growth <= limit) break
+                val f = allowed(r.plan.coverDir)?.let { File(it, item.k.removePrefix("c:")) } ?: continue
+                if (!f.delete()) continue
+                File(f.path + ".etag").delete()
+                coverUsage?.replace(item.k, 0)
+                used = databaseBytes + (coverUsage?.total() ?: 0L)
+                log("storage: evicted cover for list/book data (${item.bytes} bytes)")
+            }
         }
-        r.limitNote = sortedMapOf("text" to text, "at" to now(), "limit" to limit)
+        if (used + growth <= limit) return true
+        if (!covers) r.storageBlocked = true
+        val text = MirrorLogic.limitText(covers, r.done.toInt(), r.total.toInt())
+        r.limitNote = sortedMapOf("text" to text, "at" to now(), "limit" to limit, "used" to used)
         log("mirror: $text")
-        return true
+        return false
+    }
+
+    /** Only rows touched by this reply; includes fixed row/index overhead for new rows. */
+    private fun footprint(job: Job, body: Map<*, *>): Long {
+        val ids = if (job.kind == "detail") listOf(job.id) else
+            (body["items"] as? List<*>)?.mapNotNull { (it as? Map<*, *>)?.get("id") as? Long } ?: emptyList()
+        var bytes = ids.distinct().chunked(400).sumOf { chunk ->
+            count("SELECT coalesce(sum(coalesce(length(item),0)+coalesce(length(detail),0)+coalesce(length(CAST(search AS BLOB)),0)+64),0) FROM books WHERE id IN (${chunk.joinToString(",") { "?" }})", *chunk.toTypedArray())
+        }
+        if (job.kind != "detail") {
+            val identity = CacheStore.u(job.identity)
+            bytes += count("SELECT coalesce(length(head),0)+length(CAST(identity AS BLOB))+128 FROM lists WHERE identity = ?", identity)
+            bytes += count("SELECT coalesce(sum(coalesce(length(item),0)+32),0) FROM list_items WHERE identity = ?", identity)
+        }
+        return bytes
     }
 
     private fun status(r: Run, running: Boolean, why: String? = null): Map<String, Any?> {
@@ -725,6 +799,9 @@ class CacheWorker(
      */
     fun run(plan: Plan, creds: Creds, yieldTo: () -> Unit = {}): String {
         mirrorDir.mkdirs()
+        thumbnailWidth = (plan.m["cover_width"] as? Number)?.toInt() ?: 0
+        thumbnailHeight = (plan.m["cover_height"] as? Number)?.toInt() ?: 0
+        runProtected = plan.ids("seed_details").toSet()
         val st = store
         st.own(plan.owner)
         plan.detailTemplate?.let { st.setMeta("detail_template", it) }
@@ -772,16 +849,22 @@ class CacheWorker(
         }
         r.pct = metaLong("run_pct") ?: 0L
         r.estimate = metaLong("run_estimate") ?: 0L
-        val baseCovers = if (plan.limit != null) storageItems(plan.coverDir, plan.coversOn).filter { it.k.startsWith("c:") }.sumOf { it.bytes } else 0L
+        // Prune browsing data before the first limit decision, using the same byte units and
+        // db + live journal + covers + etags accounting as Storage settings.
+        if (plan.limit != null) storage(StorageAsk("before refresh", plan.limit, plan.coverDir, plan.coversOn))
+        coverUsage = if (plan.limit != null) CoverUsage(storageItems(plan.coverDir, plan.coversOn)) else null
         recount(r, false)
         log("mirror: ${st.meta("run_op")} (${plan.reason}): ${r.total - r.done} jobs to go, $parallel requests at a time")
         writeStatus(r, true)
-        var why = pump(r, creds, baseCovers, yieldTo)
-        if (why == "finished" && st.meta("catalog_expanded") == null && st.meta("run_op") in setOf("full", "incremental", "revalidate")) {
-            if (seedCatalogVariants(r, st.meta("run_op") != "full", yieldTo)) st.setMeta("catalog_expanded", true)
-            recount(r, false)
-            why = pump(r, creds, baseCovers, yieldTo)
-        }
+        val why = try {
+            var why = pump(r, creds, yieldTo)
+            if (why == "finished" && st.meta("catalog_expanded") == null && st.meta("run_op") in setOf("full", "incremental", "revalidate")) {
+                if (seedCatalogVariants(r, st.meta("run_op") != "full", yieldTo)) st.setMeta("catalog_expanded", true)
+                recount(r, false)
+                why = pump(r, creds, yieldTo)
+            }
+            why
+        } finally { coverUsage = null; runProtected = emptySet() }
         val secs = (clockMs() - r.startedMs) / 1000.0
         recount(r, why == "finished")
         val rate = r.done / maxOf(0.001, secs)
@@ -796,7 +879,7 @@ class CacheWorker(
                     val books = count("SELECT count(*) FROM books")
                     val lists = count("SELECT count(*) FROM lists")
                     log(String.format(java.util.Locale.ROOT, "mirror: Full refresh done: %d books, %d lists, %d jobs in %.0f s (%.1f items/s), %d skipped; " +
-                        "covers %d new, %d unchanged (304), %d failed; %.1f MB", books, lists, r.done, secs, rate, r.skipped,
+                        "covers %d new, %d unchanged (304), %d failed; database %.1f MB", books, lists, r.done, secs, rate, r.skipped,
                         r.covers[0], r.covers[1], r.covers[2], st.fileBytes() / MB))
                     val kinds = sortedMapOf<String, Int>()
                     // Collapse pages in SQL; do not retain a large run's paths in memory just to log counts.
@@ -828,7 +911,7 @@ class CacheWorker(
     }
 
     /** The pipeline: requests in flight up to [parallel] (covers on their own pool), landed replies written in batches. */
-    private fun pump(r: Run, creds: Creds, baseCovers: Long, yieldTo: () -> Unit): String {
+    private fun pump(r: Run, creds: Creds, yieldTo: () -> Unit): String {
         val st = store
         val pool = Executors.newFixedThreadPool(maxOf(1, parallel)) { x -> Thread(x, "orbit-cache-fetch").also { it.isDaemon = true } }
         val coverPool = Executors.newFixedThreadPool(COVER_PARALLEL) { x -> Thread(x, "orbit-cache-cover").also { it.isDaemon = true } }
@@ -847,7 +930,7 @@ class CacheWorker(
                 // AHEAD times the pool's size queued, so the pools never wait while the writer writes.
                 val reqSlots = parallel * AHEAD - inFlight.count { it.kind != "cover" }
                 val coverSlots = COVER_PARALLEL * AHEAD - inFlight.count { it.kind == "cover" }
-                if (reqSlots > 0 || coverSlots > 0) {
+                if (!r.storageBlocked && (reqSlots > 0 || coverSlots > 0)) {
                     val tnow = clockMs()
                     // Requests (lists first) and covers each from their own end of the queue: covers run
                     // alongside the details, not after them.
@@ -861,7 +944,6 @@ class CacheWorker(
                         if (j in inFlight || (notBefore[j] ?: 0L) > tnow) continue
                         if (j.kind == "cover") {
                             if (cs <= 0) continue
-                            if (limited(r, "cover", baseCovers)) continue
                             // The book's list item names its cover (else its detail); a book not saved yet waits for the lists.
                             val item = (st.bookItem(j.id) ?: st.detail(j.id)?.first) as? Map<*, *>
                             if (item == null) {
@@ -873,13 +955,13 @@ class CacheWorker(
                             inFlight.add(j); coverPool.submit { landed.put(try { fetch(r, creds, j) } catch (e: Exception) { Landed(j, Reply(0, err = e.javaClass.simpleName), null, "transport") }) }
                         } else {
                             if (rs <= 0) continue
-                            if (limited(r, j.kind, baseCovers)) break
                             rs--
                             inFlight.add(j); pool.submit { landed.put(try { fetch(r, creds, j) } catch (e: Exception) { Landed(j, Reply(0, err = e.javaClass.simpleName), null) }) }
                         }
                     }
                 }
                 if (inFlight.isEmpty()) {
+                    if (r.storageBlocked) { why = "storage limit"; break }
                     // Only retries left: wait for the first of them.
                     if (count("SELECT count(*) FROM jobs WHERE state = 0") == 0L) break
                     val first = notBefore.values.minOrNull() ?: break
@@ -901,12 +983,35 @@ class CacheWorker(
                 }
                 val t0 = clockMs()
                 var allTransport = true
+                val databaseBytes = st.file.length()
+                var batchGrowth = 0L
                 st.transaction {
                     for (l in batch) {
                         inFlight.remove(l.job)
                         val j = l.job
                         val ref = CacheStore.u(j.ref)
+                        if (r.storageBlocked) { l.part?.delete(); continue }
                         if (j.kind == "cover") {
+                            // Existing images are mutated only by the writer, alongside eviction.
+                            if (l.part == null && l.target != null && l.target.isFile) {
+                                thumbnail(l.target)
+                                coverUsage?.replace("c:${l.target.name}", l.target.length() + File(l.target.path + ".etag").length())
+                            }
+                            if (l.part != null && l.target != null) {
+                                val tag = File(l.target.path + ".etag")
+                                val growth = l.part.length() + (l.reply?.etag?.toByteArray()?.size ?: 0) - l.target.length() - tag.length()
+                                if (!room(r, growth, true, databaseBytes + batchGrowth)) {
+                                    l.part.delete()
+                                    st.db().exec("UPDATE jobs SET state = 2 WHERE kind = ? AND ref = ?", j.kind, ref)
+                                    r.skipped++
+                                    continue
+                                }
+                                val shown = l.target.lastModified()
+                                if (!l.part.renameTo(l.target)) { l.part.delete(); continue }
+                                if (shown > 0) l.target.setLastModified(shown)
+                                l.reply?.etag?.let { write(tag, it.toByteArray()) } ?: tag.delete()
+                                coverUsage?.replace("c:${l.target.name}", l.target.length() + tag.length())
+                            }
                             when (l.cover) {
                                 "ok" -> { r.covers[0]++; r.covers[3] += l.coverBytes; l.coverWritten?.let { if (r.written.size < WRITTEN_MAX) r.written.add(it) else r.writtenMore = true } }
                                 "not_modified" -> r.covers[1]++
@@ -924,8 +1029,22 @@ class CacheWorker(
                         if (body is Map<*, *> && l.path != null) {
                             allTransport = false
                             notBefore.remove(j)
-                            st.db().exec("UPDATE jobs SET state = 1 WHERE kind = ? AND ref = ?", j.kind, ref)
-                            try { landPage(r, j, l.path, body) } catch (e: Exception) { r.errors++; log("mirror: step failed: $e") }
+                            val before = if (r.plan.limit != null) footprint(j, body) else 0L
+                            val requests = r.requests; val details = r.details
+                            val changed = r.changed.toList()
+                            st.db().exec("SAVEPOINT storage_write")
+                            try {
+                                landPage(r, j, l.path, body)
+                                val growth = if (r.plan.limit != null) footprint(j, body) - before else 0L
+                                if (!room(r, growth, false, databaseBytes + batchGrowth)) {
+                                    st.db().exec("ROLLBACK TO storage_write")
+                                    r.requests = requests; r.details = details
+                                    r.changed.clear(); r.changed.addAll(changed)
+                                } else {
+                                    batchGrowth += growth
+                                    st.db().exec("UPDATE jobs SET state = 1 WHERE kind = ? AND ref = ?", j.kind, ref)
+                                }
+                            } finally { st.db().exec("RELEASE storage_write") }
                             continue
                         }
                         val status = rep?.code?.takeIf { it in 1..499 }
@@ -974,18 +1093,21 @@ class CacheWorker(
         } finally {
             pool.shutdownNow()
             coverPool.shutdownNow()
+            coverPool.awaitTermination(5, TimeUnit.SECONDS)
+            val abandoned = ArrayList<Landed>()
+            landed.drainTo(abandoned)
+            abandoned.forEach { it.part?.delete() }
             coverItems.clear()
         }
         // Replies still in flight when it stopped: their jobs stay pending for the next run.
-        return why
+        return if (why == "finished" && r.limitNote != null) "storage limit" else why
     }
 
     private fun summary(plan: Plan, why: String, r: Run, jobs: Long, saved: Boolean = false, revalidated: Boolean = false) {
         write(File(mirrorDir, "summary.lua"), LuaValue.encode(sortedMapOf<String, Any?>(
             "run" to plan.run, "why" to why, "jobs" to jobs, "status" to status(r, false, why),
             "changed" to r.changed.toList(), "written" to r.written.toList(), "written_more" to r.writtenMore.takeIf { it },
-            "saved" to saved.takeIf { it }, "revalidated" to revalidated.takeIf { it },
-            "cover_bytes_delta" to r.covers[3])))
+            "saved" to saved.takeIf { it }, "revalidated" to revalidated.takeIf { it })))
     }
 
     companion object {

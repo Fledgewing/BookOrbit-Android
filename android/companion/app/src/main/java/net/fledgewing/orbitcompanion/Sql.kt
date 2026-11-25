@@ -29,14 +29,16 @@ interface Sql : AutoCloseable {
 }
 
 /** Android's SQLite, rollback journal (TRUNCATE), never WAL: WAL's shared memory is unreliable on FUSE storage. */
-class AndroidSql(file: File) : Sql {
+class AndroidSql(file: File, readOnly: Boolean = false) : Sql {
     private val db: SQLiteDatabase
 
     init {
         file.parentFile?.mkdirs()
-        db = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY)
-        db.disableWriteAheadLogging()
-        pragma("journal_mode=TRUNCATE")
+        db = SQLiteDatabase.openDatabase(file.path, null, if (readOnly) SQLiteDatabase.OPEN_READONLY else SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY)
+        if (!readOnly) {
+            db.disableWriteAheadLogging()
+            pragma("journal_mode=TRUNCATE")
+        }
     }
 
     private fun bind(st: SQLiteStatement, args: Array<out Any?>) {

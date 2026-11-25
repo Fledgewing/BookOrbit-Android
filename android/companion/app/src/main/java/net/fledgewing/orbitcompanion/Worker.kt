@@ -62,7 +62,11 @@ object Worker {
 
     fun progressLine(): String? = if (mirrorRunning && manualRefresh) MirrorLogic.progressLine(progress) else null
 
-    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, onProgress = { progress = it }, places = Places.roots()).also { worker = it }
+    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, onProgress = { progress = it }, places = Places.roots(), resizeThumbnail = { f, w, h ->
+        val dm = app?.resources?.displayMetrics
+        ThumbnailCache.shrink(f, if (w > 0) w else (dm?.widthPixels ?: 1080) / 3,
+            if (h > 0) h else (dm?.heightPixels ?: 1440) / 3)
+    }).also { worker = it }
 
     private fun creds(i: Intent): CacheWorker.Creds? {
         val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
@@ -77,6 +81,11 @@ object Worker {
             return SqliteStress.start(root(), secs)
         }
         if (i.action == ACTION_STORAGE) {
+            val shown = i.getStringExtra("shown")?.lines()?.filter { it.isNotEmpty() }
+            if (shown != null) {
+                synchronized(lock) { patches.addLast { worker().coversShown(shown) }; lock.notifyAll() }
+                return start()
+            }
             // No login: files only. A newer ask replaces a waiting one.
             val a = CacheWorker.StorageAsk(i.getStringExtra("reason") ?: "plugin", i.getStringExtra("limit")?.toLongOrNull()?.takeIf { it > 0 },
                 i.getStringExtra("cover_dir")?.takeIf { it.isNotEmpty() }, i.getStringExtra("mirror_covers") == "1")

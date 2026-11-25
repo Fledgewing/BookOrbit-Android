@@ -266,7 +266,7 @@ class SleepPoolBuilder(
         val seen = HashSet<Long>()
         for (page in 1..20) {
             val body = get(c, q("/koreader/plugin/catalog/sections/$section", listOf("page" to page, "size" to SleepPoolLogic.PAGE_SIZE))) as? JSONObject
-                ?: return if (page == 1) null else out
+                ?: return null
             var new = 0
             val items = body.optJSONArray("items") ?: JSONArray()
             for (i in 0 until items.length()) {
@@ -278,8 +278,10 @@ class SleepPoolBuilder(
                     out.put(o); new++
                 }
             }
-            if (!body.optBoolean("hasNext") || new == 0) break
+            if (!body.optBoolean("hasNext")) return out
+            if (new == 0) return null
         }
-        return out
+        // An incomplete list must not make saved sources look removed on the server.
+        return null
     }
 }

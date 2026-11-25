@@ -100,6 +100,14 @@ object UpdateReturn {
         handled = true
         val sp = prefs(ctx)
         replaced = pages(sp.getString(KEY_FROM, null), sp.getLong(KEY_AT, 0), System.currentTimeMillis(), ctx.packageName)
+        // rc.8 only recorded the class. Recover the section from durable UI state; when
+        // upgrading a version predating that state, a section update came from Updates.
+        if (replaced.size == 1 && replaced[0].component?.className == SettingsSectionActivity::class.java.name &&
+            !replaced[0].hasExtra(SettingsPage.EXTRA_SECTION)) {
+            val last = ctx.getSharedPreferences("settings_ui", Context.MODE_PRIVATE).getString("section", null)
+            val section = last?.takeIf { SettingsStore.schema(ctx).section(it) != null } ?: "updates"
+            replaced = listOf(Intent(ctx, SettingsActivity::class.java), SettingsPage.section(ctx, section))
+        }
         sp.edit().clear().apply()
         if (replaced.isEmpty()) return null
         reopenedAt = SystemClock.elapsedRealtime()
