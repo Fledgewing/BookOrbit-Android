@@ -162,7 +162,7 @@ function Mirror.plan(cat, op, reason)
     end
     Mirror.seq = (Mirror.seq or 0) + 1
     local plan = { run = string.format("%d-%d", nowT(), Mirror.seq), op = op, reason = reason, owner = OC.owner(client),
-        lib_version = libraryVersion(), sentinel = SENT, templates = templates, detail_template = Mirror.detailPath(client, SENT),
+        manual = Mirror.manual == true, lib_version = libraryVersion(), sentinel = SENT, templates = templates, detail_template = Mirror.detailPath(client, SENT),
         sections = sections, seed_lists = { Mirror.onDevicePath(cat) }, seed_details = seed_details,
         all_books = client:query("/koreader/plugin/catalog/books", { sort = "title", order = "asc" }),
         cover_dir = cover_dir, covers_on = S.mirror_covers == true, limit = OC.limitBytes() }
@@ -174,7 +174,8 @@ end
 -- A Full refresh saving now (not a Refresh's recheck): a second press keeps it.
 function Mirror.fullRunning()
     local s = Mirror.status()
-    return Mirror.active == true and Mirror.busy == true and not s.revalidating and s.op ~= "revalidate"
+    return Mirror.active == true and Mirror.busy == true
+        and (Mirror.op == "full" or Mirror.op == "resume" and s.op == "full")
 end
 
 -- A Full refresh pressed while one is saving: keep that run and show where it is.
@@ -227,11 +228,13 @@ function Mirror.launch(op, reason)
     if problem then
         if Mirror.blocked ~= problem then log("mirror: not started:", problem) end
         Mirror.blocked = problem
+        Mirror.notices = nil
         if Mirror.manual then OC.note(problem, 4) end
         Mirror.manual = nil
         return false
     end
     Mirror.blocked = nil
+    Mirror.op = op
     local cat = Mirror.catalog()
     local client = cat and cat.client
     if not client then Mirror.stop("no BookOrbit catalog"); return false end
@@ -243,6 +246,7 @@ function Mirror.launch(op, reason)
         log("mirror: running;", op == "resume" and ((s.left or 0) .. " to go") or op, "; Wi-Fi held until it ends")
     end
     if op == "full" then
+        Mirror.ticked_at = nowT()
         Mirror._status = { v = 4, op = "full", at = s.at, lib_version = s.lib_version, done = 0, total = 0, left = 1, pct = 0 }
     end
     local plan = Mirror.plan(cat, op, reason)
@@ -256,8 +260,8 @@ function Mirror.launch(op, reason)
     Companion.send(Companion.ACTION.MIRROR, { reason = op .. ": " .. tostring(reason), server = client.server_url,
         user = client.username, userkey = client.userkey })
     -- The progress: a Full refresh (or its run resumed) shows the badge; a Refresh's recheck doesn't.
-    if op == "full" then Badge.start(Mirror.manual, Mirror._status)
-    elseif op == "resume" and Mirror.status().op == "full" and not Badge.running then Badge.start(false, Mirror.status()) end
+    if Mirror.manual and op == "full" then Badge.start(true, Mirror._status)
+    elseif Mirror.manual and op == "resume" and Mirror.status().op == "full" and not Badge.running then Badge.start(false, Mirror.status()) end
     Mirror.poll()
     return true
 end
@@ -309,6 +313,7 @@ end
 function Mirror.running() return Mirror.active == true end
 
 function Mirror.stop(why)
+    Mirror.notices = nil
     if Mirror.busy then OC.writeFile(Mirror.stopFile(), "stop") end
     Badge.finish(_("Paused · it goes on when BookOrbit answers"))
     if not Mirror.active then return end
@@ -324,6 +329,7 @@ function Mirror.finish(r)
     elseif Badge.running then Badge.running = nil; Badge.close() end
     if not was then return end
     Mirror.manual = nil
+    Mirror.notices = nil
     Wifi.release("mirror")
     -- The saved details now carry every book's file hash: copies that changed are replaced next.
     if r and r.saved then
@@ -385,8 +391,8 @@ function Mirror.savedText()
     return _("Saved for offline · ") .. os.date("%a %H:%M", s.at) .. (s.limit_note and _(" · storage limit reached") or "")
 end
 
--- Online: a run left over resumes; an automatic Full refresh starts when the mirror is older
--- than its TTL or the library changed; with nothing to save, changed copies are replaced.
+-- Online: a run left over resumes; otherwise a silent incremental probe checks changed books.
+-- Full refresh is manual only and cached rows never expire.
 function Mirror.tick(why)
     if Mirror.busy or Mirror.active then return end
     local s = Mirror.status()
@@ -396,19 +402,13 @@ function Mirror.tick(why)
         return Mirror.launch("resume", why)
     end
     if Copies and Copies.tick then pcall(Copies.tick, why) end
-    if S.mirror_auto == false then return end
+    -- Cache rows never expire. Only an explicit action starts a Full refresh.
+    -- Opportunistic checks use an already connected network and never acquire it.
+    if why == "read" or not s.at or not NetworkMgr:isConnected() or reading() then return end
     local t = nowT()
-    if Mirror.ticked_at and t - Mirror.ticked_at < 60 then return end
+    if Mirror.ticked_at and t - Mirror.ticked_at < 900 then return end
     Mirror.ticked_at = t
-    local due = Cache.mirrorDue(s, t, S.mirror_ttl_days or Cache.MIRROR_TTL_DAYS, libraryVersion())
-    -- Stopped by the storage limit: no automatic run again until the limit changes.
-    if due and s.limit_note and s.limit_note.limit == OC.limitBytes() and due ~= "library" then due = nil end
-    -- A new automatic run never starts in a book (it would hold Wi-Fi while reading); a paused one
-    -- resumes above.
-    if due and due ~= "never" and NetworkMgr:isConnected() and not reading() then
-        log("mirror: automatic Full refresh:", due == "ttl" and "older than " .. tostring(S.mirror_ttl_days or Cache.MIRROR_TTL_DAYS) .. " days" or "the library changed")
-        Mirror.start("auto: " .. due, false)
-    end
+    Mirror.launch("incremental", why)
 end
 
 OC.mirrorTick = function(why) return Mirror.tick(why) end

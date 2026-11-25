@@ -1,6 +1,8 @@
 package net.fledgewing.orbitcompanion
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.SharedPreferences
 import org.robolectric.RuntimeEnvironment
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -122,6 +124,66 @@ class SettingsStoreTest {
         orbit.edit().putString("wifi_mode", "always_on").commit()
         SettingsStore.resetForTest()
         assertEquals(WifiMode.OFF_READING, Prefs(ctx).wifiMode)
+    }
+
+    private fun interceptCommit(file: String, commit: (SharedPreferences.Editor) -> Boolean): Context =
+        object : ContextWrapper(ctx) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+                val prefs = ctx.getSharedPreferences(name, mode)
+                if (name != file) return prefs
+                return object : SharedPreferences by prefs {
+                    override fun edit(): SharedPreferences.Editor {
+                        val editor = prefs.edit()
+                        return object : SharedPreferences.Editor by editor {
+                            override fun commit(): Boolean = commit(editor)
+                        }
+                    }
+                }
+            }
+        }
+
+    @Test
+    fun aFailedDestinationWriteLeavesTheOldSettingsForTheNextAttempt() {
+        val old = ctx.getSharedPreferences("orbit", Context.MODE_PRIVATE)
+        old.edit().putString("wifi_mode", "off_reading").putInt("wifi_idle_min", 5).commit()
+        var attempted = false
+        SettingsStore.migrate(interceptCommit("orbit_settings") {
+            attempted = true
+            false
+        })
+        assertTrue(attempted)
+        assertEquals("off_reading", old.getString("wifi_mode", null))
+        assertEquals(5, old.getInt("wifi_idle_min", 0))
+        assertFalse(ctx.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).contains("_migrated"))
+        // The same process can retry; it must not have cached migration as complete.
+        SettingsStore.migrate(ctx)
+        assertEquals(WifiMode.OFF_READING, Prefs(ctx).wifiMode)
+        assertEquals(5, Prefs(ctx).wifiIdleMin)
+        assertFalse(old.contains("wifi_mode"))
+    }
+
+    @Test
+    fun anInterruptionDuringCleanupKeepsEveryReplacementDurable() {
+        ctx.getSharedPreferences("orbit", Context.MODE_PRIVATE).edit()
+            .putString("wifi_mode", "off_reading").putInt("wifi_idle_min", 5).commit()
+        ctx.getSharedPreferences("orbit_sleep", Context.MODE_PRIVATE).edit()
+            .putString("sleep_text", "Bedtime").commit()
+        val stopped = IllegalStateException("simulated process interruption")
+        try {
+            SettingsStore.migrate(interceptCommit("orbit_sleep") { throw stopped })
+            throw AssertionError("cleanup did not run")
+        } catch (e: IllegalStateException) {
+            assertTrue(e === stopped)
+        }
+        val saved = ctx.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE)
+        assertTrue(saved.getBoolean("_migrated", false))
+        assertEquals("off_reading", saved.getString("wifi_mode", null))
+        assertEquals("5", saved.getString("wifi_idle_min", null))
+        assertEquals("Bedtime", saved.getString("sleep_text", null))
+        SettingsStore.resetForTest()
+        assertEquals(WifiMode.OFF_READING, Prefs(ctx).wifiMode)
+        assertEquals("Bedtime", SettingsStore.get(ctx, "sleep_text"))
     }
 
     @Test

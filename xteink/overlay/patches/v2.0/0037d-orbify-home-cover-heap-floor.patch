@@ -1,0 +1,127 @@
+Subject: [PATCH] Orbify: home cover heap floor
+
+Fetch Home covers only when the heap has room beside the current session.
+
+diff --git a/src/BookOrbitHomeStore.cpp b/src/BookOrbitHomeStore.cpp
+index 2fbe13b..a2e8225 100644
+--- a/src/BookOrbitHomeStore.cpp
++++ b/src/BookOrbitHomeStore.cpp
+@@ -18,6 +18,7 @@
+ #include "activities/reader/ReadingDailyMinutes.h"
+ #include "activities/reader/ReadingStatsUtils.h"
+ #include "network/BookOrbitCatalogClient.h"
++#include "orbify/HeapFloor.h"
+ #if CROSSINK_TAILNET_ORBIFY_CACHE
+ #include "orbify/CacheStore.h"
+ #endif
+@@ -30,14 +31,25 @@ constexpr char COVER_DIR[] = "/.crosspoint/bookorbit_home";
+ constexpr uint32_t MAGIC = 0x484F4242;  // "BBOH"
+ constexpr uint16_t VERSION = 3;         // 2: continueTotal, 3: shelves chosen in the settings
+ constexpr size_t HEADER_SIZE = 8;       // magic, version, sizeof(BookOrbitHomeSnapshot)
+-// One boot's worth of covers: the rest comes with the next sync.
++// One boot's worth of covers: the rest comes with the next sync. Patch 0037: on the X4s (PSRAM) a
++// whole Home's worth, so a sync catches up instead of leaving most covers to later ones.
++#if defined(BOARD_HAS_PSRAM)
++constexpr int MAX_COVER_FETCHES = 30;
++#else
+ constexpr int MAX_COVER_FETCHES = 8;
++#endif
+ // Shelves and rows hold 11 covers; the older ones stay until a sync finds more than this.
+ constexpr size_t MAX_COVER_FILES = 30;
+ // The sync client's handshake discipline, per cover transfer: wolfSSL churns through
+ // tens of KB, and the SDK's response headers go into containers that abort on OOM.
+ constexpr uint32_t MIN_FREE_HEAP_FOR_FETCH = 42 * 1024;
++#if defined(BOARD_HAS_PSRAM)
++// Patch 0037: wolfSSL's large buffers go to PSRAM on the X4s (allocations over 4 KB); a 20 KB
++// internal block refused fetches there that fit (an X4 Pro at 28 KB free, 8 KB largest).
++constexpr uint32_t MIN_MAX_ALLOC_FOR_FETCH = 8 * 1024;
++#else
+ constexpr uint32_t MIN_MAX_ALLOC_FOR_FETCH = 20 * 1024;
++#endif
+ constexpr uint32_t MIN_MAX_ALLOC_FOR_DECODE = 54 * 1024;
+ constexpr uint32_t MIN_PLAUSIBLE_EPOCH = 1700000000;
+ constexpr char BOOK_STATE_ROOT[] = "/.crosspoint";
+@@ -79,6 +91,15 @@ bool readHeader(HalFile& file) {
+   return magic == MAGIC && version == VERSION && size == sizeof(BookOrbitHomeSnapshot);
+ }
+ 
++// Room for one more request. On a connection already open (the Home's own session, or the one the
++// sleep sync lends, patch 0037) only OrbifyHeap's floor beside it: no handshake to pay.
++bool roomToFetch() {
++  if (BookOrbitCatalogClient::keptConnection() != nullptr) {
++    return ESP.getFreeHeap() >= OrbifyHeap::KEPT_CONNECTION_MIN_FREE;
++  }
++  return ESP.getFreeHeap() >= MIN_FREE_HEAP_FOR_FETCH && ESP.getMaxAllocHeap() >= MIN_MAX_ALLOC_FOR_FETCH;
++}
++
+ void pendingCoverPath(const BookOrbitHomeBook& book, char* out, const size_t outSize) {
+   snprintf(out, outSize, "%s/%ld_%08lx.jpg", COVER_DIR, static_cast<long>(book.id),
+            static_cast<unsigned long>(book.coverVersion));
+@@ -100,23 +121,29 @@ void forEachCover(const BookOrbitHomeSnapshot& snapshot, const CoverSizes& sizes
+ void fetchMissingCovers(const BookOrbitHomeSnapshot& snapshot, const StopCheck shouldStop, const CoverSizes& sizes) {
+   Storage.mkdir(COVER_DIR);
+   int fetched = 0;
+-  bool stopped = false;
++  // Patch 0037: one summary line per sync ("covers: N needed, N on SD, N fetched, N deferred (why)").
++  int needed = 0, onCard = 0, failed = 0, deferred = 0;
++  const char* why = "";
++  uint32_t deferFree = 0, deferMaxAlloc = 0;
+   forEachCover(snapshot, sizes, [&](const BookOrbitHomeBook& book, const int width, const int height) {
+-    if (stopped || fetched >= MAX_COVER_FETCHES) return;
+-    if (shouldStop != nullptr && shouldStop()) {
+-      stopped = true;
+-      return;
+-    }
++    ++needed;
+     char path[64];
+     coverPath(book, width, height, path, sizeof(path));
+-    if (Storage.exists(path)) return;
+     char pending[64];
+     pendingCoverPath(book, pending, sizeof(pending));
+-    if (Storage.exists(pending)) return;
+-    if (ESP.getFreeHeap() < MIN_FREE_HEAP_FOR_FETCH || ESP.getMaxAllocHeap() < MIN_MAX_ALLOC_FOR_FETCH) {
+-      LOG_INF("BookOrbit", "Leaving covers for the next sync (free=%u maxAlloc=%u)", ESP.getFreeHeap(),
+-              ESP.getMaxAllocHeap());
+-      stopped = true;
++    if (Storage.exists(path) || Storage.exists(pending)) {
++      ++onCard;
++      return;
++    }
++    if (!why[0] && fetched >= MAX_COVER_FETCHES) why = "this sync's limit";
++    if (!why[0] && shouldStop != nullptr && shouldStop()) why = "the sync stopped";
++    if (!why[0] && !roomToFetch()) {
++      why = "heap";
++      deferFree = ESP.getFreeHeap();
++      deferMaxAlloc = ESP.getMaxAllocHeap();
++    }
++    if (why[0]) {
++      ++deferred;
+       return;
+     }
+     fetched++;
+@@ -160,8 +187,16 @@ void fetchMissingCovers(const BookOrbitHomeSnapshot& snapshot, const StopCheck s
+       LOG_ERR("BookOrbit", "Cover of book %ld not fetched (err=%d, http=%d)", static_cast<long>(book.id),
+               static_cast<int>(result), HttpDownloader::lastHttpStatus);
+       Storage.remove(pending);
++      ++failed;
+     }
+   });
++  if (deferred > 0 && deferFree != 0) {
++    LOG_INF("BookOrbit", "covers: %d needed, %d on SD, %d fetched, %d deferred (heap: free=%u maxAlloc=%u)", needed,
++            onCard, fetched - failed, deferred, static_cast<unsigned>(deferFree), static_cast<unsigned>(deferMaxAlloc));
++  } else {
++    LOG_INF("BookOrbit", "covers: %d needed, %d on SD, %d fetched, %d deferred%s%s%s", needed, onCard, fetched - failed,
++            deferred, deferred ? " (" : "", deferred ? why : "", deferred ? ")" : "");
++  }
+ }
+ 
+ // Removes covers nothing shows any more, once there are more than a shelf turnover's worth.
+@@ -296,7 +331,7 @@ bool fetchShelf(BookOrbitHomeShelf& shelf) {
+ bool refresh(const StopCheck shouldStop, const CoverSizes& sizes) {
+   // The sleep sync comes here after the book's own exchanges. Everything below is
+   // retried by the next sync, so short of heap it can simply wait for one.
+-  if (ESP.getFreeHeap() < MIN_FREE_HEAP_FOR_FETCH || ESP.getMaxAllocHeap() < MIN_MAX_ALLOC_FOR_FETCH) {
++  if (!roomToFetch()) {
+     LOG_INF("BookOrbit", "Leaving the Home snapshot for the next sync (free=%u maxAlloc=%u)", ESP.getFreeHeap(),
+             ESP.getMaxAllocHeap());
+     return false;

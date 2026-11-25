@@ -692,68 +692,6 @@
    ]
   },
   {
-   "key": "mirror_auto",
-   "type": "bool",
-   "default": true,
-   "section": "library",
-   "label": "Automatic Full refresh",
-   "line": "Saves everything Home reaches, for reading offline.",
-   "reader": [
-    "plugin"
-   ],
-   "search": [
-    "offline",
-    "mirror",
-    "refresh"
-   ],
-   "applies": "now"
-  },
-  {
-   "key": "mirror_ttl_days",
-   "type": "choice",
-   "int": true,
-   "default": 7,
-   "values": [
-    {
-     "id": "1",
-     "label": "Every day"
-    },
-    {
-     "id": "3",
-     "label": "Every 3 days"
-    },
-    {
-     "id": "7",
-     "label": "Every 7 days"
-    },
-    {
-     "id": "14",
-     "label": "Every 14 days"
-    },
-    {
-     "id": "30",
-     "label": "Every 30 days"
-    }
-   ],
-   "section": "library",
-   "label": "Full refresh every",
-   "line": "Also when the library changes.",
-   "reader": [
-    "plugin"
-   ],
-   "parent": {
-    "key": "mirror_auto",
-    "is": [
-     "1"
-    ]
-   },
-   "search": [
-    "offline",
-    "days"
-   ],
-   "applies": "now"
-  },
-  {
    "key": "mirror_covers",
    "type": "bool",
    "default": false,

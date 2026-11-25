@@ -12,7 +12,8 @@
 # signing certificate (release.yml EXPECTED_CERT_SHA256, read from the workflow) and the
 # version stamped into the plugin. Then: `adb install -r` (keeps the app's data), the plugin
 # pushed beside the live one and swapped in (as the companion installs it), and, when KOReader
-# runs, the companion's restart (COMMAND=restart: the plugin saves, quits and is started again).
+# runs, the companion's restart (the plugin saves, quits and is started again), asked through the
+# companion's call that only the shell may use (docs/design/security.md).
 # It deletes no user data: only the plugin folder it replaces and the old Orbit user patch.
 # Needs: adb, gh (for a run id), unzip, apksigner (Android SDK build-tools; not with
 # --plugin-only), shasum or sha256sum.
@@ -26,8 +27,9 @@ REPO="Fledgewing/Orbify" # artifacts come from this repo only
 ARTIFACT_PREFIX="android-test-"
 COMPANION_PKG="net.fledgewing.orbitcompanion"
 KO_PKG="org.koreader.launcher"
-KO_ACTIVITY="org.koreader.launcher.MainActivity"
-EXTRA_COMMAND="$COMPANION_PKG.extra.COMMAND" # companion Contract.EXTRA_COMMAND
+# CommandProvider: the companion restarts KOReader with a command the plugin can confirm.
+COMMANDS_URI="content://$COMPANION_PKG.commands"
+RESTART_METHOD="$COMPANION_PKG.call.RESTART_KOREADER"
 RELEASE_YML="$here/../.github/workflows/release.yml"
 
 PLUGIN_ONLY=0
@@ -157,7 +159,7 @@ plan() {
         n=$((n + 1))
     fi
     if [[ $running == yes ]]; then
-        say "  $n. Restart KOReader the companion's way (COMMAND=restart): the plugin saves, quits, and the companion starts it again."
+        say "  $n. Restart KOReader the companion's way (restart): the plugin saves, quits, and the companion starts it again."
         [[ $PLUGIN_ONLY == 1 ]] || say "     Skipped when the updated companion restarts it first (it does after its own update)."
     else
         say "  $n. KOReader isn't running: it loads the new plugin when it next starts."
@@ -202,8 +204,8 @@ apply() {
         fi
     fi
     if [[ -n $pid ]] && koreader_running; then
-        say "Restarting KOReader (COMMAND=restart)"
-        dsh am start -n "$KO_PKG/$KO_ACTIVITY" -a android.intent.action.MAIN -f 0x10010000 --es "$EXTRA_COMMAND" restart >/dev/null
+        say "Restarting KOReader (the companion's restart)"
+        dsh content call --uri "$COMMANDS_URI" --method "$RESTART_METHOD" >/dev/null
     fi
     say "Done: companion ${VER} and plugin ${VER} on $MODEL. Test it there; release only once it works."
 }

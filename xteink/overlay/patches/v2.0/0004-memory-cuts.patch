@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: memory cuts
+
+Bound network memory use on readers with little internal RAM.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 new file mode 100644
 index 00000000..e9743f4a

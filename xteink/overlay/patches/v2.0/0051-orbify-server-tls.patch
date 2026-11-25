@@ -1,0 +1,182 @@
+Orbify: the BookOrbit server's HTTPS connections verify the server (CROSSINK_TAILNET_ORBIFY_SERVER_TLS,
+docs/design/server-tls.md). Requests to the configured server set a CA list instead of setInsecure():
+the Let's Encrypt roots plus the certificate the user trusted (src/orbify/ServerTrustNet.cpp). A
+failed check ends the handshake before the request, so credentials never go over it. The BookOrbit
+login screen offers an unknown or changed certificate for trust, with its SHA-256 fingerprint.
+Tailnet hosts and other hosts stay unverified. Host test: xteink/test/server_trust_test.cpp.
+
+diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+index cf2c217..2092cdc 100644
+--- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp
++++ b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
+@@ -440,6 +440,13 @@ void orbifyCacheAfterWrite(const char* method, const std::string& url, const cha
+ namespace {
+ #endif
+ 
++#if CROSSINK_TAILNET_ORBIFY_SERVER_TLS && !defined(SIMULATOR)
++}  // namespace
++// Orbify (src/orbify/ServerTrustNet.h): verifies the BookOrbit server, before begin().
++void orbifyServerTrust(freeink::SecureHttpClient& http, const std::string& url);
++namespace {
++#endif
++
+ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonBody* payload, const ReplySink& onBody) {
+   s_lastBodyRefusal = BodyRefusal::None;
+   const bool pooled = s_session != nullptr;
+@@ -448,6 +455,11 @@ int sendBookOrbitRequest(const char* method, const std::string& url, const JsonB
+   if (!pooled) {
+     configureClient(http, false);
+   }
++#if CROSSINK_TAILNET_ORBIFY_SERVER_TLS && !defined(SIMULATOR)
++  // Replaces configureClient's setInsecure() for the BookOrbit server: a connection that fails
++  // the check never sends the x-auth headers below.
++  orbifyServerTrust(http, url);
++#endif
+   logHeapStats("Before request", url.c_str());
+ #if TAILNET_PROBE_CATALOG_LIVE
+   tailnet_probe_window_begin(pooled && s_sessionHandshakePaid ? "BookOrbit request (kept session)"
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 0c8a9e1..611bae3 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -353,6 +353,10 @@ STR_AUTH_SUCCESS: "Successfully authenticated!"
+ STR_SYNC_READY: "Sync is ready to use"
+ STR_BOOKORBIT_AUTH: "BookOrbit Auth"
+ STR_BOOKORBIT_SYNC_READY: "BookOrbit sync is ready to use"
++STR_ORBIFY_TLS_UNKNOWN: "Unknown server certificate"
++STR_ORBIFY_TLS_CHANGED: "Server certificate changed"
++STR_ORBIFY_TLS_COMPARE: "Trust it only if your server shows this SHA-256:"
++STR_ORBIFY_TLS_TRUST: "Trust"
+ STR_AUTH_FAILED: "Authentication Failed"
+ STR_DONE: "Done"
+ STR_COMPLETE: "Complete"
+diff --git a/src/activities/settings/BookOrbitAuthActivity.cpp b/src/activities/settings/BookOrbitAuthActivity.cpp
+index ed35393..37cf33a 100644
+--- a/src/activities/settings/BookOrbitAuthActivity.cpp
++++ b/src/activities/settings/BookOrbitAuthActivity.cpp
+@@ -12,6 +12,7 @@
+ #include "components/TouchHeaderBackButton.h"
+ #include "components/UITheme.h"
+ #include "fontIds.h"
++#include "orbify/ServerTrustNet.h"
+ 
+ void BookOrbitAuthActivity::onWifiSelectionComplete(const bool success) {
+   if (!success) {
+@@ -39,6 +40,24 @@ void BookOrbitAuthActivity::onWifiSelectionComplete(const bool success) {
+ void BookOrbitAuthActivity::performAuthentication() {
+   const auto result = BookOrbitSyncClient::authenticate();
+ 
++#if CROSSINK_TAILNET_ORBIFY_SERVER_TLS && !defined(SIMULATOR)
++  // Orbify: no answer at all may be a certificate this reader doesn't trust yet (or one that
++  // changed). Show what the server presents and let the user trust it.
++  orbify::server_tls::Offer offer;
++  if (result == BookOrbitSyncClient::NETWORK_ERROR && BookOrbitSyncClient::lastHttpCode <= 0 &&
++      orbify::server_tls::offer(offer)) {
++    {
++      RenderLock lock(*this);
++      state = TRUST_PROMPT;
++      statusMessage = offer.title;
++      errorMessage = offer.fingerprint;
++      trustHint = offer.hint;
++      trustLabel = offer.trustLabel;
++    }
++    requestUpdate();
++    return;
++  }
++#endif
+   {
+     RenderLock lock(*this);
+     if (result == BookOrbitSyncClient::OK) {
+@@ -101,14 +120,41 @@ void BookOrbitAuthActivity::render(RenderLock&&) {
+   } else if (state == FAILED) {
+     renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_AUTH_FAILED), true, EpdFontFamily::BOLD);
+     renderer.drawCenteredText(UI_10_FONT_ID, top + height + 10, errorMessage.c_str());
++  } else if (state == TRUST_PROMPT) {
++    // The fingerprint in two halves of 16 bytes ("AB:CD:...", 47 characters each).
++    const auto half = errorMessage.size() / 2;
++    renderer.drawCenteredText(UI_10_FONT_ID, top - 2 * (height + 10), statusMessage.c_str(), true,
++                              EpdFontFamily::BOLD);
++    renderer.drawCenteredText(UI_10_FONT_ID, top - (height + 10), trustHint.c_str());
++    renderer.drawCenteredText(UI_10_FONT_ID, top, errorMessage.substr(0, half).c_str());
++    renderer.drawCenteredText(UI_10_FONT_ID, top + height + 10, errorMessage.substr(half + 1).c_str());
+   }
+ 
+-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
++  const auto labels = mappedInput.mapLabels(tr(STR_BACK), state == TRUST_PROMPT ? trustLabel.c_str() : "", "", "");
+   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+   renderer.displayBuffer();
+ }
+ 
+ void BookOrbitAuthActivity::loop() {
++#if CROSSINK_TAILNET_ORBIFY_SERVER_TLS && !defined(SIMULATOR)
++  if (state == TRUST_PROMPT) {
++    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
++      const bool saved = orbify::server_tls::acceptOffer();
++      {
++        RenderLock lock(*this);
++        state = saved ? AUTHENTICATING : FAILED;
++        statusMessage = tr(STR_AUTHENTICATING);
++        if (!saved) errorMessage = tr(STR_CONNECTION_FAILED);
++      }
++      requestUpdate();
++      if (saved) performAuthentication();
++    } else if (mappedInput.wasPressed(MappedInputManager::Button::Back) ||
++               TouchHeaderBackButton::wasTapped(mappedInput, renderer)) {
++      onGoHome();
++    }
++    return;
++  }
++#endif
+   if (state == SUCCESS || state == FAILED) {
+     // This activity replaced the settings stack rather than stacking on it, so there is
+     // nothing to return to: both buttons go home. When WiFi came up, onExit() restarts
+diff --git a/src/activities/settings/BookOrbitAuthActivity.h b/src/activities/settings/BookOrbitAuthActivity.h
+index 0943e32..7fa7152 100644
+--- a/src/activities/settings/BookOrbitAuthActivity.h
++++ b/src/activities/settings/BookOrbitAuthActivity.h
+@@ -20,11 +20,15 @@ class BookOrbitAuthActivity final : public Activity {
+   bool preventAutoSleep() override { return state == CONNECTING || state == AUTHENTICATING; }
+ 
+  private:
+-  enum State { WIFI_SELECTION, CONNECTING, AUTHENTICATING, SUCCESS, FAILED };
++  // TRUST_PROMPT (Orbify, src/orbify/ServerTrustNet.h): the server's certificate was not
++  // accepted; its fingerprint is shown and Confirm trusts it.
++  enum State { WIFI_SELECTION, CONNECTING, AUTHENTICATING, SUCCESS, FAILED, TRUST_PROMPT };
+ 
+   State state = WIFI_SELECTION;
+   std::string statusMessage;
+   std::string errorMessage;
++  std::string trustHint;
++  std::string trustLabel;
+ 
+   void onWifiSelectionComplete(bool success);
+   void performAuthentication();
+diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
+index cd021ea..d85bd2e 100644
+--- a/src/network/HttpDownloader.cpp
++++ b/src/network/HttpDownloader.cpp
+@@ -29,6 +29,7 @@
+ #include "util/UrlUtils.h"
+ #include "Tailnet.h"
+ #include <CrossInkTailnetCuts.h>
++#include "orbify/ServerTrustNet.h"  // Orbify: the BookOrbit server's TLS check
+ 
+ struct HttpDownloader::Session::State {
+ #if defined(FREEINK_NET_WOLFSSL) || defined(FREEINK_NET_EXTERNAL_TLS)
+@@ -458,9 +459,16 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
+ #else
+     http.setReserveFullRecord(sink.options->reserveFullRecord);
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_SERVER_TLS && !defined(SIMULATOR)
++    // Orbify: the BookOrbit server is verified (built-in roots or the certificate the user
++    // trusted); a failed check ends the handshake before any credential is sent. Other hosts
++    // and tailnet hosts stay as below.
++    orbifyServerTrust(http, currentUrl);
++#else
+     // SecureNet does not yet expose ESP-IDF's CA bundle. This matches the
+     // existing KOSync transport; cross-origin hops omit Basic credentials.
+     http.setInsecure();
++#endif
+     if (!http.begin(currentUrl)) {
+       LOG_ERR("HTTP", "wolfSSL rejected URL: %s", UrlUtils::forLog(currentUrl).c_str());
+       return HttpDownloader::HTTP_ERROR;

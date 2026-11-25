@@ -55,7 +55,7 @@ function Shared.refresh(why)
     local src = st or Companion.file
     Shared.setup_needed = src and tonumber(src.setup_needed) or nil
     Shared.setup_prompt = src and type(src.setup_prompt) == "table" and src.setup_prompt or nil
-    -- The companion's "Home opens": koreader, launcher or app (nil: unknown, older companion).
+    -- The companion's "Home opens": koreader, launcher or app (nil: unknown).
     local so = st and type(st.settings) == "table" and st.settings.home_opens or nil
     Shared.home_opens = (so == "koreader" or so == "launcher" or so == "app") and so or nil
     -- Sync while reading set in the companion: apply and save it here, then tell the companion.

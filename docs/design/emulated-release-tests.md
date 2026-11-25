@@ -26,15 +26,15 @@ CrossInk-Bookorbit `v2.0.0+bookorbit.1-rc3` `87e2e19`; KOReader `v2026.07.1` `91
 | A6 | Nothing shows while reading (`reading()`, `bookorbitOverBook`) | Android | [reading-gate](reading-gate.md) "The gate"; PR #10 item 1 |
 | A7 | Update flow: install-session states; KOReader restart rules | Android | `UpdateSession` (`Logic.kt:260`), `Installers.kt:126`; reading-gate "Restarts after an update" |
 | A8 | Storage limit with LRU eviction | Android | write-through-cache "Storage limit (v0.11.2)"; `cases.json` `storage` |
-| X1 | A power press wakes the reader during the sleep sync | Xteink | patch 0037 S5 (in flight, `xteink/rc3-device-fixes`) |
-| X2 | Sleep-sync time budget (240 s, then a forced sleep) | Xteink | 0037 S5, `core/SleepSyncDeadline.h` |
-| X3 | Heap starvation: mirror + Tailscale + TLS | Xteink | 0037 S1-S4, `orbify/HeapFloor.h` |
+| X1 | A power press wakes the reader during the sleep sync | Xteink | sleep-sync watcher (`core/SleepSyncDeadline.h`) |
+| X2 | Sleep-sync time budget (240 s, then a forced sleep) | Xteink | sleep-sync budget, `core/SleepSyncDeadline.h` |
+| X3 | Heap starvation: mirror + Tailscale + TLS | Xteink | session lending and `orbify/HeapFloor.h` |
 | X4 | DNS `udp_remove` core-lock panic | Xteink | commit `9db15e3`, `tailnet/shim/TailnetLwipLock.c` |
-| X5 | Mirror URL building (the `\x1f` separator turned into a space gave a 400) | Xteink | 0037 S6, `core/Mirror` `Plan::add` |
-| X6 | Copy refresh (match check `LOW_MEMORY`, replace in place, carry-over) | Xteink | patch 0034; 0037 S7 |
-| X7 | End-of-Book page layout and gestures | Xteink | patches 0032 and 0036; 0037 S8 |
+| X5 | Mirror URL building (the `\x1f` separator turned into a space gave a 400) | Xteink | `core/Mirror` `Plan::add` |
+| X6 | Copy refresh (match check `LOW_MEMORY`, replace in place, carry-over) | Xteink | `orbify/CopyRefresh`, session lending |
+| X7 | End-of-Book page layout and gestures | Xteink | `orbify/EndPageActivity`, `core/EndPageLayout` |
 | X8 | The catalog's ⟳ feedback | Xteink | patch 0035 M5-M7 |
-| X9 | Cover fetch under a heap floor | Xteink | patch 0036 N5-N6 (54 KB block); 0037 S3 |
+| X9 | Cover fetch under a heap floor | Xteink | `orbify/HeapFloor.h`, Home cover floor |
 | X10 | OTA download and boot | Xteink | patch 0030; `ota_release_pick_test.cpp` |
 
 ## 2. What already exists (reuse first)
@@ -232,7 +232,7 @@ MicroLink, mbedTLS/wolfSSL, the `dns_clear_cache` wrapper and an HTTPS fetch loo
 lwIP's core-locking assertions on, that app would be the only emulated place where a real lwIP
 `udp_remove` called off `tcpip_thread` asserts (X4). It would also give real ESP-IDF heap numbers
 for TLS plus a DERP session, minus the Wi-Fi driver's buffers, which on the device are what leaves
-~30 KB free (0037 S1). That makes it a spike with a narrow payoff (stage 4, optional).
+~30 KB free (the shared-heap analysis in XTEINK-BUILD-NOTES.md). That makes it a spike with a narrow payoff (stage 4, optional).
 
 ### 4.2 Option X-S: the upstream CrossInk/CrossPoint simulator
 
@@ -258,7 +258,7 @@ To run Orbify in it:
 What it can and can't show:
 - **Timing.** The simulator runs in real time. Scenarios that are about *a step that doesn't check
   for a press*, or *a budget that isn't enforced*, reproduce exactly: the fault proxy stalls a reply
-  for 90 s and the input script presses `POWER` at 10 s. 0037's X1/X2 bug (one step blocked 82 s)
+  for 90 s and the input script presses `POWER` at 10 s. The sleep-sync wake/budget bug (one step blocked 82 s)
   is that shape.
 - **Heap.** The simulator can't show real heap or fragmentation: its README says neither the shims
   nor native TLS are "evidence of wolfSSL heap use or ESP32 certificate behavior".
@@ -269,7 +269,7 @@ This exists: `orbify/core` and the host tests, plus `eob_render`. Two ways to ex
 - **More renderers.** Render the catalog header ⟳ and stamp states, and the Full refresh progress
   line, to PNG the same way. That means pulling their layout into `core/` as `EndPageLayout` was.
 - **More shared tables.** Every Mirror request kind through add, serialize, parse and decode, which
-  0037 S6 already adds.
+  the mirror URL fix already adds.
 
 It is fast (seconds) and exact for logic and layout. It can't show flows across activities, the
 real sync's ordering, input handling in the real activity (0032 P4: input falling through to page
@@ -285,7 +285,7 @@ turns), or anything on the network.
 | X4 DNS / `udp_remove` lock | wrapper rule (`lwip_lock_test`) | no (no lwIP) | **yes**, with core-lock asserts | the race with real STUN timing |
 | X5 mirror URL building | **yes** (round trip) | **yes**: the real server answers 400 to a bad query | - | - |
 | X6 copy refresh | queue and hash rules | **yes**: the real server rewrites the file (upstream's `book_update_offer` pattern); `BookUpdateMigration` carry-over, which isn't host-tested today | - | `LOW_MEMORY` on a second TLS session |
-| X7 EOB layout and gestures | layout and touch rules + PNGs | **yes**: real activity input (`TAP`, `SWIPE`, Home swipe, stale tap), screenshots, fonts registered (0037 S8) | - | e-ink refresh and ghosting |
+| X7 EOB layout and gestures | layout and touch rules + PNGs | **yes**: real activity input (`TAP`, `SWIPE`, Home swipe, stale tap), screenshots, fonts registered by the End-of-Book activity | - | e-ink refresh and ghosting |
 | X8 ⟳ feedback | stamp text | **yes**: tap, hold, offline "Couldn't connect", screenshots | - | - |
 | X9 cover under heap floor | `planCover` | decision via scripted heap; 304/200 via the real server | - | a real 54 KB block |
 | X10 OTA | release pick, retry | the check UI against a mocked feed (`CROSSINK_SIM_HTTP_MOCK_ROOT`); the simulator stubs the flash itself | - | **download, flash, boot, rollback** |
@@ -398,7 +398,7 @@ input `platform: android | xteink | both`, and `ref`):
 | D5 | Image pin: `:3.9.0` by digest vs `latest` | two-way | **Digest**, re-pinned with `tools/upstreams pin bookorbit` |
 | D6 | Android: desktop vs AVD | two-way | **Both**: desktop first (stage 3), AVD for the Android-only rows (stage 4) |
 | D7 | UI driver: in-KOReader plugin vs coordinate taps | two-way | **`orbit-e2e.koplugin`**, never packaged (`package.sh` zips only `orbit.koplugin/`) |
-| D8 | Assertions: JSONL events vs screenshot diffs | two-way | **JSONL**; screenshots are review artifacts, never compared. One exception (0038): `catalog_refresh_stamp` checks that the rectangle the log names for the catalog's final stamp has ink, since the defect was a draw the log said happened. The simulator presents and saves screenshots only from its main loop, which the refresh holds, so "Refreshing…" is judged from the log (drawn before the first request) and the screenshots are taken well after the refresh and before the QUIT. The harness asks SDL for its software renderer (`SDL_RENDER_DRIVER=software`): with the dummy video driver on Linux there is no accelerated one, and the simulator then saved no screenshots, silently |
+| D8 | Assertions: JSONL events vs screenshot diffs | two-way | **JSONL**; screenshots are review artifacts, never compared. One exception (the catalog stamp fix): `catalog_refresh_stamp` checks that the rectangle the log names for the catalog's final stamp has ink, since the defect was a draw the log said happened. The simulator presents and saves screenshots only from its main loop, which the refresh holds, so "Refreshing…" is judged from the log (drawn before the first request) and the screenshots are taken well after the refresh and before the QUIT. The harness asks SDL for its software renderer (`SDL_RENDER_DRIVER=software`): with the dummy video driver on Linux there is no accelerated one, and the simulator then saved no screenshots, silently |
 | D9 | Test-only code in shipped firmware | two-way | Only under `#ifdef SIMULATOR` (compiled out of reader builds, as upstream's scenario hooks are) |
 | D10 | Scripted heap under `SIMULATOR` | two-way | **Yes**: tests the decisions; the numbers stay a device check. Built at the HAL (the simulator's `heap_caps_*`), not in `HeapFloor` (§8) |
 | D11 | Robolectric in the companion's unit tests | two-way | **Yes** (test-only dependency) |
@@ -434,7 +434,7 @@ Where it differs from §4-§6:
 - **X10** (OTA check UI) is not a simulator scenario: upstream's simulator build leaves
   `OtaUpdater.cpp` out. It stays on the device checklist.
 
-Scenarios (`run.py --list --profile P`), all passing with 0037 on main; X3 has no mirror, no
+Scenarios (`run.py --list --profile P`), covering the sleep-sync and device fixes on main; X3 has no mirror, no
 series-card cover fetch and no lent connection, so it runs the three that apply to it:
 
 | Scenario | Rows | Readers |
@@ -442,18 +442,18 @@ series-card cover fetch and no lent connection, so it runs the three that apply 
 | `sync_through_proxy` | foundation | all |
 | `mirror_urls` | X5 | X4s |
 | `copy_refresh_sleep_sync` | X6 | all |
-| `copy_refresh_tight_heap` | X6, 0037 S1/S7 | X4s |
+| `copy_refresh_tight_heap` | X6, shared-session heap floors | X4s |
 | `heap_floor_waits` | X3 | X4s |
 | `next_cover_heap_floor` | X9 | X4s |
 | `eob_page_finish` | X7, finish queue | all |
-| `eob_series_home_swipe` | X7, 0037 S9 | X4 Pro |
+| `eob_series_home_swipe` | X7, series card and Home swipe | X4 Pro |
 | `sleep_sync_power_wake` | X1 | X4s |
 | `sleep_sync_budget` | X2 (~255 s) | X4 Pro |
-| `home_tile_refresh` | X8, 0037 S12 | X4 Classic |
+| `home_tile_refresh` | X8, Home sync tile | X4 Classic |
 | `offline_sleep_sync` | offline | X4s |
-| `sleep_sync_device_heap` | X3, X6, 0038 H1/H2 | X4s |
-| `sleep_sync_quick_wake` | X1, 0038 W1 | X4s |
-| `home_tile_touch` | X8, 0038 T1 | X4 Pro |
-| `catalog_refresh_stamp` | 0038 C1 (screenshot) | X4 Pro |
-| `catalog_cache_first` | 0038 C2 | X4 Pro |
-| `menu_home_swipe` | 0038 M1 | X4 Pro |
+| `sleep_sync_device_heap` | X3, X6, TLS in PSRAM | X4s |
+| `sleep_sync_quick_wake` | X1, wake-press timing | X4s |
+| `home_tile_touch` | X8, Home touch target | X4 Pro |
+| `catalog_refresh_stamp` | catalog refresh stamp (screenshot) | X4 Pro |
+| `catalog_cache_first` | cache-first catalog | X4 Pro |
+| `menu_home_swipe` | menu Home swipe | X4 Pro |

@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: download rate log
+
+Record download throughput for diagnosis.
+
 diff --git a/src/network/HttpDownloader.cpp b/src/network/HttpDownloader.cpp
 index 42641b83..3c192cec 100644
 --- a/src/network/HttpDownloader.cpp

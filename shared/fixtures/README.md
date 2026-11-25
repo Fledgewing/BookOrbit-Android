@@ -19,6 +19,7 @@ owner, changes its row in the same change.
 | `github/orbify-releases.json` | GitHub `GET /repos/Fledgewing/Orbify/releases`: Android (`android-v`, `v`) and firmware (`xteink-v`) releases mixed, stable and pre-release |
 | `bookorbit/catalog-dashboard-section.want-to-read.json` | `GET …/catalog/dashboard/sections/want-to-read`, recorded from the e2e server (synthetic library) |
 | `bookorbit/catalog-sections.smart-scopes.json`, `bookorbit/catalog-sections.collections.json` | `GET …/catalog/sections/smart-scopes` and `/collections` in the server's shape (`{section, items}`, ids as strings, no `count` on scopes past the shelf-extras cap); made up: 12 scopes, 1 collection |
+| `orbismart/cases.json` | OrbiSmart shared decisions, application moments and behind-hold (`docs/design/orbismart.md` §3) |
 | `sleep/cases.json` | Not a recording: the sleep screen's rotation rule and fallbacks (`docs/design/lock-screen.md` R4, F1, F4) |
 | `opds/recent-feed.xml` | `GET /api/v1/opds/recent` as BookOrbit v3.9.0 writes it (synthetic books, made-up cover token): one book without a cover, one with image links |
 | `e2e/library.json` | Not a recording: the synthetic library the emulated release tests seed into a real BookOrbit server (series, authors, standalones, a want-to-read shelf, books by role) |

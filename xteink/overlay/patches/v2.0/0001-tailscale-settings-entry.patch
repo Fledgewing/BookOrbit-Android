@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: tailscale settings entry
+
+Expose Tailscale setup through the firmware settings menu.
+
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
 index f30dd92e..02d05d49 100644
 --- a/lib/I18n/translations/english.yaml

@@ -1,0 +1,27 @@
+Subject: [PATCH] Orbify: settings swipe
+
+Page BookOrbit settings with up and down swipes.
+
+diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
+index 7253440..f3ca177 100644
+--- a/src/activities/settings/BookOrbitSettingsActivity.cpp
++++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
+@@ -193,6 +193,18 @@ void BookOrbitSettingsActivity::loop() {
+   }
+ 
+   const int count = rowCount();
++  // Patch 0037: a swipe pages the list on the X4 Pro, as the other scrollable settings pages do
++  // (KOReaderSettingsActivity); the selection stays where it was.
++  const auto swipe = mappedInput.wasSwipe();
++  if (swipe == MappedInputManager::SwipeDir::Up || swipe == MappedInputManager::SwipeDir::Down) {
++    {
++      RenderLock lock(*this);
++      topIndex = scrollListBy(topIndex, swipe == MappedInputManager::SwipeDir::Up ? visibleRows : -visibleRows,
++                              visibleRows, count);
++    }
++    requestUpdate();
++    return;
++  }
+   buttonNavigator.onNext([this, count] {
+     selectedIndex = (selectedIndex + 1) % count;
+     topIndex = followListSelection(static_cast<int>(selectedIndex), topIndex, visibleRows, count);

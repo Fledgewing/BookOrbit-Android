@@ -2,13 +2,19 @@
 
 The Orbit KOReader plugin (`android/koreader/orbit.koplugin`, up to 0.7.x the user patch
 `2-orbit-android.lua`; "the patch" below) and the Orbit Companion app talk
-through Android intents only. The companion never learns the login or the sync state: the
-BookOrbit plugin owns all of that. One exception: the sleep screen's sharp covers
-(docs/design/lock-screen.md L7) need the server URL and the KOReader username, which the plugin
-writes into `pool.json`; the companion signs in to OPDS with a login the user types once and keeps
-only the OPDS cover token. Never the KOReader key.
+through caller-checked Android provider calls, activities, a click channel and shared files.
+BookOrbit owns the account and sync state. The plugin passes credentials only to the verified
+companion for background jobs; the companion holds them in memory for the job and never returns
+them. See [the security model](../../docs/design/security.md).
 
-Package: `net.fledgewing.orbitcompanion` (placeholder, used everywhere below).
+Package: `net.fledgewing.orbitcompanion`.
+
+**The contract.** `shared/contract/companion.json` (versioned) lists every command and its
+extras, the calls, the pages, the commands on KOReader's start, the click channel's lines, the
+status keys, the shared files and `orbit.db`. Both sides test against it (`ContractTest.kt`,
+`test_flows.lua` "contract"): each entry must be used on both sides, and neither side may offer
+anything the contract lacks. Change the file, both sides and this page in the same change. This
+page is the human view.
 
 ## Patch → companion: the caller-checked call
 
@@ -154,6 +160,16 @@ extra:     net.fledgewing.orbitcompanion.extra.FROM = "other_app"   (optional, h
 extra:     net.fledgewing.orbitcompanion.extra.ROTATION = "portrait" | "landscape" | "reverse_portrait" | "reverse_landscape"   (companions after 0.11.2)
 ```
 
+**Every command is confirmed.** Any app can start KOReader with this extra, so the plugin obeys a
+`COMMAND` only after the companion confirms it sent it: the caller-checked call with method
+`net.fledgewing.orbitcompanion.call.TAKE_COMMAND` and the extra `command`. The companion
+answers `ok = "1"` once for a command it put on KOReader's start in the last 10 minutes
+(`SentCommands`), else `"0"`, and the plugin then ignores the command. The companion puts a
+command only on the pinned KOReader's start (docs/design/security.md). Over USB,
+`tools/sideload-android.sh` asks for the restart with `adb shell content call --uri
+content://net.fledgewing.orbitcompanion.commands --method
+net.fledgewing.orbitcompanion.call.RESTART_KOREADER`, a method only the shell UID may call.
+
 `ROTATION` is how the display is held when Home is pressed (`Display.getRotation()` of the
 default display), named as KOReader's rotation modes the way KOReader's launcher reads the display
 (android-luajit-launcher `extensions/ActivityExtensions.kt:295-302`: on a portrait panel
@@ -289,14 +305,18 @@ KOReader isn't running, it simply waits in `/status` for the next start.
 launcher page) or `app`; the patch notes it on its Home button menu entry.
 `pin_locked` (v0.4.4): a Settings PIN is set and not unlocked right now. Then the patch's Orbit
 menu shows only "Enter the Settings PIN…" and starts `SHOW_PIN`. Only a real `true` locks:
-no answer (no companion, not running) or an older companion leaves the menu usable, so the
+no answer (no companion, not running) leaves the menu usable, so the
 patch never locks anyone out.
 
 ### `GET /clicks` (companion 0.4.2+): the click channel
 
-The patch opens `GET /clicks?patch_version=X` on the loopback port 47913 (the only request it
-still answers) and keeps it open. After an HTTP
-200 header, the companion writes one line per event:
+The plugin first asks for a key: the caller-checked call with method
+`net.fledgewing.orbitcompanion.call.CLICKS` answers `key` and `proof` (random, 128 bits each, good
+once within a minute). It then opens `GET /clicks?patch_version=X&key=K` on the loopback port
+47913 (the only request the port answers; without a valid key it answers 404) and keeps it open.
+After an HTTP 200 header, the companion's first line is `ORBIT <proof>`; the plugin ignores every
+line before it and closes a channel whose proof is wrong or missing, so another app listening on
+the port can't pose as the companion. Then one line per event:
 - `SERVICE on|off`: the accessibility service is running, or isn't.
 - `SETTINGS <ms>` (cap `settings2`): a setting changed in the companion; the plugin reads `/status`
   now. The plugin keeps the channel open for this even without a clicker.
@@ -329,12 +349,12 @@ atomically whenever its mode, caps or setup state change (only if a `koreader/` 
     {"proto":"1","version":"0.11.0","mode":"addon","caps":["install","setup","stats","relaunch"],
      "setup_prompt":{"key":"…","rows":["…"]},"setup_needed":1,"written_at":…}
 
-`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always), `sleep_screen` (always, from the sleep screen's release; an older companion never offers it, so the plugin hides the menu), `cache_worker` (always, from the cache worker's release); `home`,
+`mode` is `full` or `addon`. Caps: `install`, `setup`, `stats`, `relaunch` (always), `sleep_screen`, `cache_worker` (always); `home`,
 `apps` (Full); `wifi`, `sleep_sync`, `screen_off`, `clicker`, `pin` (Full, or Add-on with that
 helper on; `screen_off` also needs the lock-screen permission). The plugin reads `/status` first,
-then the file; a companion that answers `/status` without `caps` is older and offers everything.
+then the file, then the caps seen last time. With none of those available it offers no capabilities.
 A file left behind by an uninstalled or frozen companion is ignored. The plugin logs
-`companion: mode … caps … (from status|file|legacy|cache, why)`.
+`companion: mode … caps … (from status|file|cache|none, why)`.
 
 COMMANDs added in 0.11.0 (the same extra as `home`): `signin` opens BookOrbit's own sign-in
 (`promptLogin`), `recommended` opens the plugin's Recommended settings page. After 0.11.2 (the

@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: write through cache
+
+Read saved catalog replies and patch them after successful writes.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index 98548aac..637436d3 100644
 --- a/include/CrossInkTailnetCuts.h

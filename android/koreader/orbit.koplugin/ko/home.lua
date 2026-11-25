@@ -11,6 +11,10 @@ function OrbitAndroid:checkCommand(source)
     if not cmd or cmd == "" then return false end
     local from = Jni.takeIntentExtra(Companion.EXTRA_FROM)
     local held = Jni.takeIntentExtra(Companion.EXTRA_ROTATION)
+    if not Companion.confirmCommand(cmd) then
+        log("command ignored:", cmd, "(" .. source .. "): not sent by Orbit Companion")
+        return false
+    end
     log("command from companion:", cmd, "(" .. source .. ")", from and ("from " .. tostring(from)) or "",
         held and ("held " .. tostring(held)) or "")
     if cmd == "home" or cmd == "home_smart" then
@@ -203,6 +207,10 @@ Gate = { queue = {}, MAX_AGE_S = 600 }
 
 -- what: for the log; fn: shows it; max_age_s: dropped after this long held.
 function Gate.show(what, fn, max_age_s)
+    if Mirror and (Mirror.notices or Mirror.fullRunning()) then
+        log("Full refresh: " .. tostring(what))
+        return
+    end
     if not reading() then return fn() end
     for _, q in ipairs(Gate.queue) do
         if q.what == what then q.fn, q.at = fn, now_s(); return end -- the newest of the same kind
@@ -212,6 +220,11 @@ function Gate.show(what, fn, max_age_s)
 end
 
 function Gate.drain(why)
+    if Mirror and (Mirror.notices or Mirror.fullRunning()) then
+        for _, q in ipairs(Gate.queue) do log("Full refresh: " .. tostring(q.what)) end
+        Gate.queue = {}
+        return
+    end
     if #Gate.queue == 0 or reading() then return end
     local list = Gate.queue
     Gate.queue = {}
@@ -227,12 +240,33 @@ end
 
 -- BookOrbit's own toasts (sync results and the like) wait too: bookorbit_toast.show/error.
 function Gate.installToast()
+    -- Direct InfoMessages and Notifications do not pass through BookOrbit's Toast API.
+    wrap(UIManager, "show", function(stock) return function(self, w, ...)
+        if w and not w.orbit_refresh_popup and Mirror and (Mirror.notices or Mirror.fullRunning()) then
+            local m = getmetatable(w)
+            while m do
+                if m == InfoMessage or m == package.loaded["ui/widget/notification"] then
+                    log("Full refresh: notice: " .. tostring(w.text))
+                    return
+                end
+                m = getmetatable(m)
+            end
+        end
+        return stock(self, w, ...)
+    end end, "refresh_notices")
     local okt, Toast = pcall(require, "bookorbit_toast")
     if not okt or type(Toast) ~= "table" then return end
-    for _, name in ipairs({ "show", "error" }) do
+    for _, name in ipairs({ "show", "error", "loading" }) do
         if type(Toast[name]) == "function" then
             wrap(Toast, name, function(stock) return function(...)
                 local args = { n = select("#", ...), ... }
+                if Mirror and (Mirror.notices or Mirror.fullRunning()) then
+                    log("Full refresh: BookOrbit " .. name .. ": " .. tostring(args[1]))
+                    -- Loading callers close the returned handle, including withLoading.
+                    if name == "loading" then return { close = function() end, closed = false } end
+                    return
+                end
+                if name == "loading" then return stock(unpack(args, 1, args.n)) end
                 return Gate.show("BookOrbit " .. name .. ": " .. tostring(args[1]), function() return stock(unpack(args, 1, args.n)) end, 120)
             end end, "gate")
         end
@@ -242,18 +276,21 @@ end
 -- A short note that never sits in the way: KOReader's Notification is a toast (it lets every
 -- tap through and closes on the next event, notification.lua:63), so Home opening under it
 -- still sees Home on top. Without it: an InfoMessage marked as a note. Held while reading.
-function orbitNote(text, timeout)
-    return Gate.show("note: " .. tostring(text), function()
+function orbitNote(text, timeout, refresh_popup)
+    local show = function()
         local okn, Notification = pcall(require, "ui/widget/notification")
         if okn and type(Notification) == "table" and type(Notification.new) == "function" then
             local okw, w = pcall(Notification.new, Notification, { text = text, timeout = timeout or 4 })
-            if okw and w then w.orbit_note = true; UIManager:show(w); return w end -- gate: inside Gate.show
+            if okw and w then w.orbit_note = true; w.orbit_refresh_popup = refresh_popup; UIManager:show(w); return w end -- gate: inside Gate.show
         end
         local w = InfoMessage:new{ text = text, timeout = timeout or 4 }
         w.orbit_note = true
+        w.orbit_refresh_popup = refresh_popup
         UIManager:show(w) -- gate: inside Gate.show
         return w
-    end)
+    end
+    if refresh_popup then return show() end
+    return Gate.show("note: " .. tostring(text), show)
 end
 
 -- BookOrbit is in front of the open book: its catalog (Home or any list), or one of its own

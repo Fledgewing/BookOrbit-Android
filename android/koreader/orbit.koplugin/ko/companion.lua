@@ -12,12 +12,16 @@ Companion = {
     -- The companion's caller-checked entry (android/docs/INTERFACE.md, docs/design/security.md).
     AUTHORITY = "net.fledgewing.orbitcompanion.commands",
     STATUS = "net.fledgewing.orbitcompanion.call.STATUS",
+    TAKE_COMMAND = "net.fledgewing.orbitcompanion.call.TAKE_COMMAND",
+    CLICKS = "net.fledgewing.orbitcompanion.call.CLICKS",
     -- The certificate that signs every Orbit Companion release (SHA-256; release.yml checks it).
     -- Nothing goes to an app with the companion's name and another signer.
     SIGNERS = {
         ["F5:07:8C:85:F8:23:18:30:C1:F1:8D:93:FE:30:D7:1F:87:93:6C:1D:94:24:F2:D8:15:98:3D:1D:21:A9:0A:15"] = true,
     },
 }
+-- The commands (caller-checked calls) and pages (activities): shared/contract/companion.json,
+-- which test_flows.lua "contract" checks this table against.
 Companion.ACTION = {
     -- The cache worker (docs/design/companion-worker.md): a mirror run, a cache check.
     MIRROR = Companion.PACKAGE .. ".action.MIRROR",
@@ -44,15 +48,15 @@ Companion.ACTION = {
     SHOW_LAUNCHER = Companion.PACKAGE .. ".action.SHOW_LAUNCHER",
     STATS = Companion.PACKAGE .. ".action.STATS",
     RELAUNCH = Companion.PACKAGE .. ".action.RELAUNCH",
-    -- Companion 0.4.1+: the setup box's "Fix now" (activity) and "Later" (broadcast).
+    -- The setup box's "Fix now" (a page) and "Later" (a command).
     SHOW_SETUP = Companion.PACKAGE .. ".action.SHOW_SETUP",
     SETUP_LATER = Companion.PACKAGE .. ".action.SETUP_LATER",
-    -- Companion 0.4.4+: the Settings PIN keypad (activity).
+    -- The Settings PIN keypad (a page).
     SHOW_PIN = Companion.PACKAGE .. ".action.SHOW_PIN",
-    -- Companion 0.11.0+ (docs/design/addon-mode.md §7.3): signed in yes/no and the recommended
+    -- (docs/design/addon-mode.md §7.3) Signed in yes/no and the recommended
     -- settings' state, for its two Setup rows. Never the server, the account or the key.
     REPORT = Companion.PACKAGE .. ".action.REPORT",
-    -- Companion 0.11.0+ in Add-on mode: its invisible window that starts KOReader again after a
+    -- In Add-on mode: the companion's invisible window that starts KOReader again after a
     -- restart (no Home role to do it from the background, docs/design/addon-mode.md §7.4).
     RELAUNCH_UI = Companion.PACKAGE .. ".action.RELAUNCH_UI",
     -- Companion with the "sleep_screen" cap (docs/design/lock-screen.md): the files in
@@ -66,7 +70,7 @@ Companion.ACTION = {
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
 -- With "home_smart": "other_app" when the companion knows Home came from outside KOReader.
 Companion.EXTRA_FROM = Companion.PACKAGE .. ".extra.FROM"
--- The display orientation when Home was pressed (companions after 0.11.2): portrait, landscape,
+-- The display orientation when Home was pressed: portrait, landscape,
 -- reverse_portrait, reverse_landscape (HomePlan.ROTATIONS).
 Companion.EXTRA_ROTATION = Companion.PACKAGE .. ".extra.ROTATION"
 
@@ -128,9 +132,9 @@ end
 
 -- "ok", "frozen" (installed but disabled, e.g. by a vendor launcher's app freeze), "untrusted"
 -- (an app with the companion's name and another signer: nothing is sent to it) or "missing".
-function Companion.state()
+function Companion.state(fresh)
     local t = now_s()
-    if t - installed_cache.at > 30 then
+    if fresh or t - installed_cache.at > 30 then
         local ok, v = pcall(android.isPackageEnabled, Companion.PACKAGE)
         local st
         if ok and v == true then
@@ -252,7 +256,7 @@ request_seq = 0
 function Companion.send(action, extras)
     extras = extras or {}
     local short = action:match("[^.]+$")
-    if Companion.state() ~= "ok" then
+    if Companion.state(true) ~= "ok" then
         log("companion", short, "NOT sent:", Companion.state(), extras.reason or "")
         return false
     end
@@ -303,6 +307,14 @@ end
 function Companion.bookOpen()
     local okr, ReaderUI = pcall(require, "apps/reader/readerui")
     return okr and type(ReaderUI) == "table" and ReaderUI.instance ~= nil and ReaderUI.instance.document ~= nil
+end
+
+-- A command on KOReader's start counts only when the companion says it sent it (once): any app
+-- can start KOReader with that extra (docs/design/security.md).
+function Companion.confirmCommand(cmd)
+    if Companion.state() ~= "ok" then return false end
+    local r = Jni.call(Companion.AUTHORITY, Companion.TAKE_COMMAND, { command = cmd })
+    return r ~= nil and r.ok == "1"
 end
 
 -- The companion's status (a binder call on this device: it answers at once). nil when the

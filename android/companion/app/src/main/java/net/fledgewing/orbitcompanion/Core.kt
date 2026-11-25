@@ -651,6 +651,7 @@ object Koreader {
         val held = if (HeldRotation.sendsWith(command)) heldRotation(ctx) else null
         if (held != null) i.putExtra(Contract.EXTRA_ROTATION, held)
         return try {
+            if (command != null) SentCommands.shared.record(command, SystemClock.elapsedRealtime())
             ctx.startActivity(i)
             OLog.i("koreader started command=${command ?: "-"}${if (from != null) " from=$from" else ""}${if (held != null) " held=$held" else ""} ($why) in ${OLog.since(t0)} ms")
             true

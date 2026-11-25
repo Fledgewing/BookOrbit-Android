@@ -150,7 +150,9 @@ one place defaults live.
 
 Before 2026-11 the companion kept `wifi_mode`, `wifi_idle_min` and `home_button` in `Prefs` and the
 sleep screen's keys in `orbit_sleep`. `SettingsStore.migrate` moves them into `orbit_settings` once,
-before the first read: a value the schema accepts is kept, the old key is removed. A companion
+before the first read: a value the schema accepts is kept. It commits every replacement and the
+migration marker before deleting any old key. A failed destination write leaves the old values for
+a later attempt; an interruption during cleanup leaves the committed replacements intact. A companion
 downgraded past this change finds those keys at their defaults. `reading_schedule` stays apart: its
 value is the plugin's, and the companion's change is a request until the plugin echoes it.
 

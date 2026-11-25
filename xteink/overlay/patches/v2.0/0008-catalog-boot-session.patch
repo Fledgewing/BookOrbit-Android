@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: catalog boot session
+
+Keep catalog networking in its own boot session.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index 6eabb941..007b1e7d 100644
 --- a/include/CrossInkTailnetCuts.h

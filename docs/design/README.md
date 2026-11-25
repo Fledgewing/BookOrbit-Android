@@ -23,5 +23,7 @@ item moves to building. Android-only designs are in [`android/docs/`](../../andr
   platforms: reads from the cache and revalidated, writes through. ROADMAP 4 and 4a.
 - [`sqlite-cache.md`](sqlite-cache.md): the offline cache in one SQLite database (companion
   writes, KOReader reads), the Full refresh's counting, speed and progress badge. ROADMAP 13a.
+- [`orbismart.md`](orbismart.md): OrbiSmart sync: furthest wins, the behind-hold, the Yes / No
+  popup, "Read from here everywhere"; one decision table for both platforms (ROADMAP 15, building).
 - Mockups for end-of-book and local-first: `mockups.html` in each folder, also at
   https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk.

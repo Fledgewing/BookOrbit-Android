@@ -714,6 +714,7 @@ function OC.fullRefresh(cat)
     -- M8C: four presses restarted it four times).
     if Mirror and Mirror.fullRunning() then return Mirror.showProgress("pressed again") end
     if whenOnline("Full refresh", function() OC.fullRefresh(cat) end) then return end
+    Mirror.notices = true
     log("cache: Full refresh")
     -- Copies whose library file changed are looked for now (and again once the details are saved).
     if Copies and Copies.tick then UIManager:scheduleIn(2, function() pcall(Copies.tick, "full refresh") end) end

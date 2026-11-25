@@ -138,20 +138,19 @@ SWITCHES = {
     "TAILNET_PARK_DURING_CONNECT":        (1,      0,      0),      # live catalog: cached start kept, else control parked + restart
     # --- CrossInk patches 0004 (memory cuts, include/CrossInkTailnetCuts.h) and 0005 (WiFi join).
     # BookOrbit sync: a new TLS session needs this much free heap (0 = upstream's 55000)...
-    # The X4s: 20000, their wolfSSL allocates from PSRAM (patch 0038, orbify/HeapFloor.h), so a
+    # The X4s: 20000, their wolfSSL allocates from PSRAM (orbify/HeapFloor.h), so a
     # handshake needs internal RAM only for Wi-Fi and lwIP buffers.
     "CROSSINK_TAILNET_SYNC_TLS_FLOOR":    (35000,  20000,  20000),
     # ...and a largest free block this big (measured X3 handshake peaks: up to 24.0 KB). The X4s put
     # allocations over 4 KB in PSRAM, wolfSSL's buffers included: an 8 KB internal block is enough
-    # there, and 24 KB refused the copy refresh's match check at 39 KB free (patch 0037).
-    # there, and 24 KB refused the copy refresh's match check at 39 KB free (patch 0037). With wolfSSL in
-    # PSRAM (patch 0038) the X4s need only a Wi-Fi-buffer-sized block: 4 KB (.167 had 7 KB).
+    # there, and 24 KB refused the copy refresh's match check at 39 KB free. With wolfSSL in
+    # PSRAM the X4s need only a Wi-Fi-buffer-sized block: 4 KB (.167 had 7 KB).
     "CROSSINK_TAILNET_SYNC_TLS_BLOCK":    (24576,  4096,   4096),
-    # Patch 0038: wolfSSL allocates from PSRAM (orbify/HeapFloor.h installTlsPsram), and the floors
+    # The TLS PSRAM hook: wolfSSL allocates from PSRAM (orbify/HeapFloor.h installTlsPsram), and the floors
     # that measure internal RAM count only what is left there. The simulators take their reader's
     # column, so the scenarios run against the X4s' floors.
     "CROSSINK_TAILNET_TLS_PSRAM":         (0,      1,      1),
-    # ...and a request on a kept session this much free (patch 0038; 20000 refused .167's match check).
+    # ...and a request on a kept session this much free (20000 refused .167's match check).
     "CROSSINK_TAILNET_SYNC_KEPT_FLOOR":   (20000,  12000,  12000),
     # Catalog bursts (open, Home refresh, shelf options) share one keep-alive connection.
     "CROSSINK_TAILNET_CATALOG_KEEPALIVE": (1,      1,      1),
@@ -256,6 +255,11 @@ SWITCHES = {
     # batch of covers on the card, and the text and battery extras. X4 Pro and X4 only: the X3 builds
     # none of it, its settings' strings included (ORBIFY_I18N_SKIP below).
     "CROSSINK_TAILNET_ORBIFY_SLEEP":      (0,      1,      1),
+    # Patch 0051, the BookOrbit server's TLS is verified: the Let's Encrypt roots or the certificate
+    # the user trusted at login (docs/design/server-tls.md). Tailnet hosts stay unverified. Not on
+    # the X3: it costs ~9.6 KB of flash (code, the two roots, wolfSSL's chain checks) and the X3 had
+    # 7.7 KB left under the 99.5% gate.
+    "CROSSINK_TAILNET_ORBIFY_SERVER_TLS": (0,      1,      1),
 }
 # Switches that stand for wolfSSL defines rather than a define of their own.
 WOLFSSL_SWITCH_DEFINES = {
@@ -273,6 +277,7 @@ SIM_SWITCHES = {
     "CROSSINK_TAILNET_BATTERY_STATS": 0,   # the fuel gauge, ADC and Wi-Fi driver events
     "CROSSINK_TAILNET_SETTINGS_PIN": 0,    # NVS and RTC memory
     "CROSSINK_TAILNET_TLS_ARENA": 0,       # X3: an arena in the on-device wolfSSL's allocator
+    "CROSSINK_TAILNET_ORBIFY_SERVER_TLS": 0,  # the device's wolfSSL and SD card
 }
 
 
@@ -292,6 +297,8 @@ SWITCH_VALUES = {name: switch_value(name) for name in SWITCHES}
 _I18N_SKIP = []
 if not SWITCH_VALUES["CROSSINK_TAILNET_ORBIFY_SLEEP"]:
     _I18N_SKIP += ["SleepSettings.cpp", "SleepListActivity.cpp"]
+if not SWITCH_VALUES["CROSSINK_TAILNET_ORBIFY_SERVER_TLS"]:
+    _I18N_SKIP += ["ServerTrustNet.cpp"]
 os.environ["ORBIFY_I18N_SKIP"] = ",".join(_I18N_SKIP)
 
 print(f"Tailnet switches for {pioenv} (column {SWITCH_COLUMN}):")

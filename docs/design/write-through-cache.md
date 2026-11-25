@@ -111,7 +111,7 @@ Search stays online; offline it says "Search needs a connection".
   64 MB / 20000-entry cap stays the browsing cache's share inside the limit
   (`shared/fixtures/cache/cases.json` `storage`).
 - **Refresh.** A normal Refresh rechecks **every saved page** of a list, never only the first one.
-  When a list's total changes, the list is paged again (`Cache.repage`): a series that gains a
+  When a list's total changes, the list is paged again (`MirrorLogic.repage`): a series that gains a
   21st book shows it after Refresh.
 - **When.** A Full refresh can be started by hand (hold ⟳, or the menu). It also starts by itself
   when the mirror is older than its TTL (default 7 days; Orbit menu › Automatic Full refresh, or
@@ -222,7 +222,7 @@ the overlay's patches up to 0028 applied.
   first pages only beyond Continue reading and Up next, the books on the reader and their next in
   series; files on SD under the same 2 MB cap, oldest lists dropped first. Same "Saved for offline"
   line in settings and the same TTL rule. X3 is excluded (no room). Built in overlay patch 0035
-  ([XTEINK-BUILD-NOTES](XTEINK-BUILD-NOTES.md#offline-mirror-full-refresh-and-the-catalogs--patch-0035-2026-11-22)):
+  ([XTEINK-BUILD-NOTES](XTEINK-BUILD-NOTES.md#offline-mirror-full-refresh-and-the-catalogs--2026-11-22)):
   the catalog root, each section's first page, the first 20 lists of each facet section, and up to
   30 book details, 150 requests at most; automatic in the sleep sync (2 min per sleep, resumed),
   by hand from the catalog's ⟳ (hold) or Settings › BookOrbit › Home › Full refresh. Without Wi-Fi

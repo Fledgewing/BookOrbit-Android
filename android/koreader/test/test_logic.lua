@@ -1,3 +1,4 @@
+-- @fixture orbismart/cases.json
 -- Pure-Lua tests for the patch's scheduling and decision logic.
 -- Run from anywhere: luajit android/koreader/test/test_logic.lua  (or lua 5.1-5.4)
 local here = (arg and arg[0] or ""):match("^(.*)/[^/]*$") or "."
@@ -908,6 +909,9 @@ end)
 
 ---------------------------------------------------------------- write-through cache (shared cases)
 local C = M.Cache
+-- The companion's rules as the fake companion plays them (test/companion_rules.lua): checked here
+-- against the tables the companion's tests read, so the fake cannot drift from the real worker.
+local CR = dofile(here .. "/companion_rules.lua")(C)
 local CC = JSON.fixture(here, "cache/cases.json")
 local function set(list) local t = {} for _, v in ipairs(list or {}) do t[tostring(v)] = true end return t end
 local function sameSet(a, b, what)
@@ -953,7 +957,7 @@ test("cache: writes patch what they change (shared cases)", function()
             eq(eff.id, c.effect.id, c.name .. " effect id"); eq(eff.stale_home, c.effect.stale_home, c.name .. " effect stale_home")
             for k, v in pairs(c.effect.fields) do eq(C.encode(eff.fields[k]), C.encode(v), c.name .. " effect " .. k) end
             for k, v in pairs(eff.fields) do ok(c.effect.fields[k] ~= nil or v == C.NULL, c.name .. " effect sets " .. k) end
-            for _, body in pairs(entries) do if eff.id then C.patch(body, eff.id, eff.fields) end end
+            for _, body in pairs(entries) do if eff.id then CR.patch(body, eff.id, eff.fields) end end
             if eff.stale_home then stale = { "dashboard" } end
         else
             eq(c.effect, nil, c.name .. ": a failed write sends nothing")
@@ -963,36 +967,9 @@ test("cache: writes patch what they change (shared cases)", function()
     end
 end)
 
-test("cache: covers fetch only what changed; ETag 304s keep the file (shared cases)", function()
-    -- @fixture cache/cases.json#covers
-    for _, c in ipairs(CC.covers) do
-        local failed = set(c.failed)
-        local download, conditional, not_modified, remove, after = {}, {}, {}, {}, {}
-        for _, b in ipairs(c.listed) do
-            local have = c.disk[tostring(b.id)]
-            local need = C.coverNeed(b, have, failed[tostring(b.id)], c.mode)
-            if need.remove then table.insert(remove, b.id) end
-            if need.fetch then
-                if need.conditional then table.insert(conditional, b.id) end
-                if need.conditional and need.conditional == b.server_etag then
-                    table.insert(not_modified, b.id)
-                else
-                    table.insert(download, b.id)
-                end
-                after[tostring(b.id)] = { version = b.updatedAt, etag = b.server_etag }
-            end
-        end
-        sameSet(download, c.download, c.name .. " download")
-        sameSet(remove, c.remove, c.name .. " remove")
-        if c.conditional then sameSet(conditional, c.conditional, c.name .. " conditional") end
-        if c.not_modified then sameSet(not_modified, c.not_modified, c.name .. " 304") end
-        for id, want in pairs(c.after or {}) do eq(C.encode(after[id]), C.encode(want), c.name .. " after " .. id) end
-    end
-end)
-
-test("cache: a check keeps the saved random pick; a Full refresh takes the new one (shared cases)", function()
+test("companion rules: a check keeps the saved random pick; a Full refresh takes the new one (shared cases)", function()
     -- @fixture cache/cases.json#settle
-    for _, c in ipairs(CC.settle) do eq(C.encode(C.settle(c.cached, c.reply, c.mode)), C.encode(c.expect), c.name) end
+    for _, c in ipairs(CC.settle) do eq(C.encode(CR.settle(c.cached, c.reply, c.mode)), C.encode(c.expect), c.name) end
 end)
 
 test("cache: the offline mirror's list identities, pages, re-paging and TTL (shared cases)", function()
@@ -1004,7 +981,7 @@ test("cache: the offline mirror's list identities, pages, re-paging and TTL (sha
         else
             local o = C.listWindow(c.identity_of)
             eq(C.key({ path = w.identity }) == C.key({ path = o.identity }), c.same, c.path)
-            eq(C.listWindow(C.mirrorPage(w.identity, 2)).identity, w.identity, "a mirror page keeps the identity")
+            eq(C.listWindow(CR.mirrorPage(w.identity, 2)).identity, w.identity, "a mirror page keeps the identity")
         end
     end
     -- @fixture cache/cases.json#mirror.slices
@@ -1024,12 +1001,6 @@ test("cache: the offline mirror's list identities, pages, re-paging and TTL (sha
             eq(b.total, c.total, c.name .. " total"); eq(b.hasNext, c.hasNext, c.name .. " hasNext"); eq(b.hasPrevious, c.hasPrevious, c.name .. " hasPrevious")
             eq(b.seriesSummary.total, c.total, c.name .. " keeps the list's other fields")
         end
-    end
-    -- @fixture cache/cases.json#mirror.repage
-    for _, c in ipairs(CC.mirror.repage) do
-        local fetch, drop = C.repage(c.old, c.new)
-        eq(table.concat(fetch, ","), table.concat(c.fetch, ","), c.name .. " fetch")
-        eq(table.concat(drop, ","), table.concat(c.drop, ","), c.name .. " drop")
     end
     -- @fixture cache/cases.json#mirror.due
     for _, c in ipairs(CC.mirror.due) do eq(C.mirrorDue(c.mirror, c.now, c.ttl_days, c.lib_version), c.due, c.name) end
@@ -1054,31 +1025,16 @@ test("cache: encode is canonical and round-trips", function()
     ok(C.imageHeader("\255\216\255\224xxxx") and C.imageHeader("\137PNG\r\n") and not C.imageHeader("<html>"), "headers")
 end)
 
-test("cache: LRU eviction keeps Home and the open book", function()
-    local idx = { a = { bytes = 5, used_at = 1 }, home = { bytes = 5, used_at = 0, keep = true }, b = { bytes = 5, used_at = 2 }, c = { bytes = 5, used_at = 3 } }
-    local drop = C.evict(idx, 10, 10)
-    eq(table.concat(drop, ","), "a", "oldest first, Home kept (and outside the cap)")
-    eq(#C.evict(idx, 100, 2), 1, "entry cap")
-end)
-
-test("cache: kept entries (Home, the mirror's lists and details) are outside the caps (shared cases)", function()
-    -- @fixture cache/cases.json#mirror.evict
-    for _, c in ipairs(CC.mirror.evict) do
-        eq(table.concat(C.evict(c.index, c.max_bytes, c.max_entries), ","), table.concat(c.drop, ","), c.name)
-    end
-end)
-
-test("cache: the mirror's room and its stop note (shared cases; the eviction order is StorageLogic's)", function()
-    -- @fixture cache/cases.json#storage.room @fixture cache/cases.json#storage.notes
-    for _, c in ipairs(CC.storage.room) do eq(C.storageRoom(c.totals, c.limit, c.what), c.room, c.name) end
-    for _, c in ipairs(CC.storage.notes) do eq(C.limitText(c.what, c.done, c.total), c.text, c.text) end
+test("companion rules: the mirror's stop note (shared cases; the eviction order is StorageLogic's)", function()
+    -- @fixture cache/cases.json#storage.notes
+    for _, c in ipairs(CC.storage.notes) do eq(CR.limitText(c.what, c.done, c.total), c.text, c.text) end
     eq(C.STORAGE_DEFAULT_MB, 250, "250 MB by default")
 end)
 
 test("cache: a mirror request with no answer is retried, smaller pages, then skipped (shared cases)", function()
     -- @fixture cache/cases.json#mirror.retry
     for _, c in ipairs(CC.mirror.retry) do
-        local r = C.mirrorRetry(c.tries, c.size, c.page)
+        local r = CR.mirrorRetry(c.tries, c.size, c.page)
         eq(r.skip == true, c.skip == true, c.name .. " skip")
         if not c.skip then eq(r.wait_s, c.wait_s, c.name .. " wait"); eq(r.size, c.size_next, c.name .. " size") end
     end
@@ -1091,7 +1047,7 @@ test("cache: a mirror request with no answer is retried, smaller pages, then ski
             pages[n] = { items = items, total = c.total, page = n, size = c.page_size }
         end
         eq(C.pageCount(c.total, c.page_size), c.pages, c.name .. " pages")
-        local w = C.listWindow(C.mirrorPage("/koreader/plugin/catalog/sections/series", 3, c.page_size))
+        local w = C.listWindow(CR.mirrorPage("/koreader/plugin/catalog/sections/series", 3, c.page_size))
         eq(w.size, c.page_size, c.name .. " asks that size")
         local b = C.slice(c.window, pages, c.page_size)
         if c.items == nil then eq(b, nil, c.name) else
@@ -1316,7 +1272,7 @@ end)
 
 ---------------------------------------------------------------- companion caps (addon-mode §6)
 local Caps = M.Caps
-test("caps: from the file only, /status only, both (/status wins), an old companion (legacy), none", function()
+test("caps: from the file only, the status only, both (the status wins), none", function()
     local file = { mode = "addon", caps = { "install", "setup", "stats", "relaunch" } }
     local status = { mode = "full", caps = { "install", "home", "wifi" } }
     local c, mode, src = Caps.resolve("ok", file, nil, nil)
@@ -1326,7 +1282,7 @@ test("caps: from the file only, /status only, both (/status wins), an old compan
     c, mode, src = Caps.resolve("ok", file, status, nil)
     ok(c.wifi and src == "status", "/status wins")
     c, mode, src = Caps.resolve("ok", nil, { version = "0.10.0" }, nil)
-    ok(c.wifi and c.home and c.screen_off and src == "legacy", "older companion: every cap")
+    ok(next(c) == nil and src == "none", "a status without caps offers nothing")
     c, mode, src = Caps.resolve("missing", file, nil, nil)
     ok(next(c) == nil and src == "none", "a leftover file is ignored")
     c, mode, src = Caps.resolve("frozen", file, status, nil)
@@ -1334,7 +1290,7 @@ test("caps: from the file only, /status only, both (/status wins), an old compan
     c, mode, src = Caps.resolve("ok", nil, nil, { mode = "addon", caps = { "install" } })
     ok(c.install and not c.wifi and src == "cache", "the caps seen last time")
     c, mode, src = Caps.resolve("ok", nil, nil, nil)
-    ok(c.wifi and src == "legacy", "nothing known yet: as before")
+    ok(next(c) == nil and src == "none", "nothing known yet: nothing offered")
 end)
 
 test("caps: diff names what was lost and gained", function()
@@ -1468,11 +1424,11 @@ test("cache worker fixture: the plugin's keys, hashes, pages, cover names and en
         eq(got and got.identity, w.identity, "identity of " .. w.path)
         if got then
             eq(got.kind, w.kind, "kind"); eq(got.section, w.section, "section")
-            eq(Cache.mirrorPage(got.identity, 2, nil), w.page2, "page 2"); eq(Cache.mirrorPage(got.identity, 1, 50), w.page1_50, "page 1 of 50")
+            eq(CR.mirrorPage(got.identity, 2, nil), w.page2, "page 2"); eq(CR.mirrorPage(got.identity, 1, 50), w.page1_50, "page 1 of 50")
         end
     end
     for _, c in ipairs(fx.covers) do
-        eq(Cache.coverName({ id = c.id, updatedAt = c.updatedAt, author_photo = c.author_photo or nil }), c.name, "cover of " .. c.id)
+        eq(CR.coverName({ id = c.id, updatedAt = c.updatedAt, author_photo = c.author_photo or nil }), c.name, "cover of " .. c.id)
     end
     local e = fx.entry
     local body = JSON.decode(e.body_json)
@@ -1593,6 +1549,47 @@ end)
 test("recommended choices from the companion", function()
     local c = SettingsSync.choices("bo.auto_sync=ours; g.apps=mine;x=bogus;all=undo")
     eq(#c, 3); eq(c[1].id, "bo.auto_sync"); eq(c[2].what, "mine"); eq(c[3].id, "all")
+end)
+
+-- OrbiSmart sync (docs/design/orbismart.md §3): every case of the shared table, which the Xteink's
+-- xteink/test/orbismart_test.cpp reads too.
+local OrbiSmart = M.OrbiSmart
+local OSM = JSON.fixture(here, "orbismart/cases.json")
+test("orbismart: every decide case", function()
+    local n = 0
+    for _, c in ipairs(OSM.decide) do
+        local out = OrbiSmart.decide(c["in"])
+        eq(out.decision, c.want.decision, c.name .. " decision")
+        eq(out.rule, c.want.rule, c.name .. " rule")
+        eq(out.dropped, c.want.dropped == true, c.name .. " dropped")
+        ok(OrbiSmart.DECISIONS[out.decision], c.name .. ": known decision")
+        if c.line then eq(OrbiSmart.line(c["in"], out, c.moment), c.line, c.name .. " line") end
+        n = n + 1
+    end
+    ok(n >= 30, "cases: " .. n)
+end)
+test("orbismart: every apply case", function()
+    for _, c in ipairs(OSM.apply) do
+        eq(OrbiSmart.apply(c.decision, c.moment), c.applied, c.decision .. " at " .. c.moment)
+    end
+end)
+test("orbismart: every behind-hold case", function()
+    for _, c in ipairs(OSM.push) do
+        eq(OrbiSmart.mayPush(c.place, c.server, c.tolerance, c.exempt), c.allowed, c.name)
+    end
+end)
+test("orbismart: the table covers every decision and rule", function()
+    local seen = {}
+    for _, c in ipairs(OSM.decide) do seen[c.want.decision] = true; seen[c.want.rule] = true end
+    for _, k in ipairs({ "same", "take", "follow", "push", "hold", "stay", "override", "rule1", "rule2", "rule3",
+        "rule4", "rule5", "rule6", "rule7", "declined", "override", "percent", "no-server" }) do
+        ok(seen[k], "no case for " .. k)
+    end
+    eq(OrbiSmart.SKEW_S, OSM.skew_s, "skew margin")
+end)
+test("orbismart: the popup's question", function()
+    eq(OrbiSmart.question("Boox", 214, "take"), "Continue from Boox, p. 214?")
+    eq(OrbiSmart.question("X4 Pro", 12, "follow"), "Continue from X4 Pro, p. 12 (moved back there)?")
 end)
 
 -- shared/fixtures/REGISTRY.json: every rule table has a row, and this suite reads what it names (test_registry.lua).

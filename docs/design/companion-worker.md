@@ -3,6 +3,13 @@
 Status: building (step 1 merged; step 2, the companion as the worker, in this change).
 Platforms: KOReader-Android.
 
+The W6/rc.8 correction in [sqlite-cache](sqlite-cache.md#cache-lifetime-and-incremental-refresh-rc8-feedback-w6)
+supersedes the older scheduling, indicator wording and batch sizes below: Full refresh is manual
+only, its badge belongs only to a user-started run, the cache lives indefinitely, and opportunistic
+incremental probes are silent. Full-refresh notices (including BookOrbit loading pills and direct
+InfoMessages) go to the log. Companion refresh work emits status files and logs, not Android
+notifications or toasts. Its visible status is “Full refresh · 37%” only for a manual run.
+
 ## Why
 
 KOReader runs on a single Lua thread: input, drawing and every plugin callback share it. Android
