@@ -10,6 +10,7 @@ import java.io.File
 
 /** Sharp sleep-screen covers' rules (docs/design/lock-screen.md L7). */
 class SharpCoversLogicTest {
+    // @fixture opds/recent-feed.xml
     private val feed = File("../../../shared/fixtures/opds/recent-feed.xml").readText()
 
     @Test

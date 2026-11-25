@@ -32,6 +32,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+# @fixture e2e/library.json
 SPEC = ROOT / "shared" / "fixtures" / "e2e" / "library.json"
 STATE = Path(os.environ.get("ORBIFY_E2E_STATE", ROOT / "upstream" / "e2e"))  # gitignored
 FIXED_DATE = (2024, 1, 1, 0, 0, 0)

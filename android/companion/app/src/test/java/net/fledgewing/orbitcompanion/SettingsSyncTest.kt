@@ -40,6 +40,7 @@ class SettingsSyncTest {
 
     @Test
     fun mergeCases() {
+        // @fixture settings/merge.json
         val cases = JSONObject(File("../../../shared/fixtures/settings/merge.json").readText()).getJSONArray("cases")
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
