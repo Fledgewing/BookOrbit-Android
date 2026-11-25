@@ -8,6 +8,7 @@ return function(here, test, ok, eq)
         function Geom:new(t) return setmetatable(t or {}, {__index=self}) end
         function Geom:copy() local t={}; for k,v in pairs(self) do t[k]=v end; return Geom:new(t) end
         local W = { queue={}, dirty={}, now=0, capacity=77, height=800, width=600 }
+        E.log=function(line) W.log=line end
         E.Device={screen={ getWidth=function() return W.width end, getHeight=function() return W.height end,
             scaleBySize=function(_,n) return n end, getSize=function() return Geom:new{w=W.width,h=W.height} end},
             getPowerDevice=function() return {getCapacity=function() return W.capacity end, isCharging=function() return W.charging end} end}
@@ -112,6 +113,8 @@ return function(here, test, ok, eq)
                 w.E.S.status_orbit_size=size
                 w.E.S.status_orbit_add_space=true -- obsolete saved preference must do nothing
                 R.enable(w.ui)
+                ok(w.log:find("footer_height=18",1,true), "native footer reservation logged")
+                if not paged then ok(w.log:find("top=20 bottom=30",1,true), "loaded margin values logged") end
                 eq(footer:onToggleFooterMode(),true)
                 eq(footer:onToggleFooterMode(),true)
                 R.refreshGeometry(R.session)

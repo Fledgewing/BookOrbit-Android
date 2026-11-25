@@ -65,7 +65,7 @@ return {
             File(root,"koreader/settings/booksync-w31-repair.done").delete() // interrupted/restarted scan
             StatusMarginRepair.run(root, {}, {})
             assertEquals(lua(25),book.readText())
-            StatusMarginRepair.run(root, { fail("completed scan must not walk again") }, {})
+            StatusMarginRepair.run(root, {}, {})
         } finally { root.deleteRecursively(); external.deleteRecursively() }
     }
     @Test fun loadedBookCapturesGoodBackupBeforeNativeCloseRotatesIt() {
@@ -120,11 +120,25 @@ return {
             assertTrue(StatusMarginRepair.run(root, {}, logs::add, target = file))
             assertEquals(lua(15), file.readText())
             assertEquals(lua(10), File(file.path + ".booksync-before-w31").readText())
-            assertTrue(logs.any { "book-open check" in it })
+            assertTrue(logs.any { "selected sidecar scan" in it })
             assertTrue(logs.any { "restored" in it })
             file.writeText(lua(25))
             StatusMarginRepair.run(root, {}, {}, target = file)
             assertEquals("a later user choice survives", lua(25), file.readText())
+        } finally { root.deleteRecursively() }
+    }
+
+
+    @Test fun closedBookScanDiscoversAnotherBookAfterAnEarlierCompleteScan() {
+        val root = Files.createTempDirectory("repair-new-history").toFile()
+        try {
+            assertTrue(StatusMarginRepair.run(root, {}, {}))
+            val book = File(root, "New.sdr/metadata.epub.lua").apply { parentFile!!.mkdirs(); writeText(lua(10)) }
+            File(book.path + ".old").writeText(lua(15))
+            val logs = arrayListOf<String>()
+            assertTrue(StatusMarginRepair.run(root, {}, logs::add))
+            assertEquals(lua(15), book.readText())
+            assertTrue(logs.any { "copt_b_page_margin:10->15" in it })
         } finally { root.deleteRecursively() }
     }
 
@@ -136,7 +150,7 @@ return {
             val source=File("src/main/java/net/fledgewing/orbitcompanion/StatusMarginRepair.kt").readText()
             assertTrue(source.contains("BulkWork::checkpoint"))
             assertTrue(source.contains("closedReported && prefs.koreaderBook == \"0\""))
-            assertTrue(source.indexOf("BulkWork.executor.execute") < source.indexOf("finished = run(android.os.Environment"))
+            assertTrue(source.indexOf("BulkWork.executor.execute") < source.indexOf("val complete = run(android.os.Environment"))
         } finally { root.deleteRecursively() }
     }
 }

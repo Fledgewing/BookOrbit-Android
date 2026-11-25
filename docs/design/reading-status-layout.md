@@ -125,7 +125,9 @@ a live closed-book report, rather than trusting a persisted state from a prior
 session. Before replacement, the current bytes are saved as `.booksync-before-w31` and
 rechecked for concurrent native saves. `.old` is never touched. Per-file
 `.booksync-w31.done` markers prevent an interrupted scan from restoring a user's
-later choices again, and a completion marker stops future walks. Logs identify
+later choices again, and a completion marker records the last completed walk. A new closed-book report
+following an open book scans again, so newly discovered history books are included.
+Book opening never waits for a repair or wraps `ReaderUI.showReader`. Logs identify
 repairs by a path hash, without book titles or paths. Interrupted or failed walks
 retry on a later service startup or closed-book report. Opening a book during
 the walk defers the remaining work. Close an already-open book to allow the repair;

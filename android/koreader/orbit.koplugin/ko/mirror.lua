@@ -63,6 +63,13 @@ function Mirror.status()
     local d = Mirror.dir()
     if not Mirror._status or Mirror._status_dir ~= d then
         Mirror._status = load("status.lua") or {}
+        if next(Mirror._status) and Mirror._status.engine ~= "bulk" then
+            -- Crawl-era progress is neither resumable bulk work nor live storage.
+            os.remove(d .. "/status.lua")
+            os.remove(d .. "/summary.lua")
+            Mirror._status = {}
+            log("mirror: retired legacy crawl progress")
+        end
         Mirror._status_dir = d
     end
     return Mirror._status
@@ -245,7 +252,9 @@ end
 function Mirror.poll()
     if Mirror.polling then return end
     Mirror.polling = true
+    local run_id = Mirror.run_id
     local function tick()
+        if Mirror.run_id ~= run_id then return end
         if not Mirror.busy then Mirror.polling = nil; return end
         local sum = load("summary.lua")
         if sum and sum.run == Mirror.run_id then
@@ -301,7 +310,7 @@ function Mirror.launch(op, reason)
     end
     if op == "full" then
         Mirror.ticked_at = nowT()
-        Mirror._status = { v = 4, op = "full", at = s.at, lib_version = s.lib_version, done = 0, total = 0, left = 1, pct = 0 }
+        Mirror._status = { v = 4, engine = "bulk", op = "full", done = 0, total = 100, left = 100, pct = 0, beat = nowT() }
     end
     Mirror.busy = true
     local prepare = {}
@@ -327,6 +336,10 @@ function Mirror.launch(op, reason)
         if coroutine.status(co) ~= "dead" then return UIManager:scheduleIn(0.01, advance) end
         Mirror.preparing = nil
         Mirror.run_id, Mirror.sent_at, Mirror.seen_beat = plan.run, nowT(), nil
+        if op == "full" then
+            Mirror._status.run = plan.run
+            OC.writeFile(Mirror.dir() .. "/status.lua", Cache.encode(Mirror._status))
+        end
         Companion.send(Companion.ACTION.MIRROR, { reason = op .. ": " .. tostring(reason), server = client.server_url,
             user = client.username, userkey = client.userkey, plan = Cache.encode(plan) })
         Mirror.poll()
@@ -439,8 +452,13 @@ function Mirror.start(reason, manual)
         -- No companion job exists yet: discard the obsolete resume plan now.
         Mirror.preparing, Mirror.busy = nil, nil
     end
-    if manual and Mirror.busy then Badge.start(true, { pct = 0, done = 0, total = 0, left = 1 }) end
-    if Mirror.busy then OC.writeFile(Mirror.stopFile(), "stop") end
+    if Mirror.busy then
+        OC.writeFile(Mirror.stopFile(), "stop")
+        -- A manual bulk run replaces an obsolete crawl immediately. Do not wait
+        -- for its summary (which may belong to an already dead process).
+        Mirror.busy, Mirror.run_id, Mirror.polling = nil, nil, nil
+        Mirror.next = nil
+    end
     return Mirror.launch("full", reason)
 end
 

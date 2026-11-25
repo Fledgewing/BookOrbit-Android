@@ -233,8 +233,6 @@
         "board_key",
         "board_now",
         "remember_id",
-        "repair_book",
-        "repair_token",
         "copy_path",
         "plugin_state"
       ],
@@ -538,13 +536,6 @@
       "reader": "companion",
       "format": "lua",
       "what": "spool filenames belonging to the outstanding mailbox, for durable acknowledgement"
-    },
-    {
-      "path": "koreader/settings/orbit-cache/repair-result.lua",
-      "writer": "companion",
-      "reader": "plugin",
-      "format": "lua",
-      "what": "targeted pre-open sidecar check token and result"
     },
     {
       "path": "koreader/settings/orbit-cache/plugin-state.lua",
