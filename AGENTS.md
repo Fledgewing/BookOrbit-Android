@@ -42,7 +42,9 @@ CrossInk 2.x release becomes the stable one (`xteink/README.md` "Releases and th
 - **Nothing interrupts reading.** While a book is open in the foreground, nothing from Orbify,
   the companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader
   or takes focus. It waits for the next moment nobody is reading, or is dropped when stale. The
-  only exceptions are what the reader does in the book: menus they open, the end-of-book sheet.
+  only exceptions are what the reader does in the book: menus they open, the end-of-book sheet;
+  and, by the user's ruling, OrbiSmart's one-draw "Continue from <device>, p. N? Yes / No" popup
+  ([orbismart](docs/design/orbismart.md)).
   Enforced by one gate per side (plugin `reading()`/`Gate.show`, companion `Reading`) and guard
   tests that fail on a new show or notify path that bypasses it
   ([design](docs/design/reading-gate.md)). Xteink firmware follows the same rule.

@@ -1,7 +1,8 @@
 # OrbiSmart sync: one setting for seamless, low-battery reading across Orbify
 
-Status: approved with the user's rulings of 2026-11-24 (below); building. Step 1: the shared
-decision table and Android. Platforms: Android (KOReader + BookOrbit plugin + Orbit plugin + Orbit
+Status: approved with the user's rulings of 2026-11-24 (below). Step 1: the shared decision
+table and Android implemented; device validation remains before release. Xteink wiring is a later,
+separate step. Platforms: Android (KOReader + BookOrbit plugin + Orbit plugin + Orbit
 Companion), X4 Pro, X4, X3. Pins read: BookOrbit `c1dd6b4` (server + `koreader-plugin/`),
 CrossInk-Bookorbit `87e2e19` (rc3), Orbify working tree 2026-11-24.
 
@@ -13,8 +14,12 @@ CrossInk-Bookorbit `87e2e19` (rc3), Orbify working tree 2026-11-24.
    decline that one remote place (never asked again for it); it is not an override. The popup
    replaces the 4-second "Stay here" line; it is e-ink friendly: one draw, no animation.
 2. **A backward override on a finished book starts a reread** in BookOrbit's history: accepted.
-3. **"Read from here everywhere"** is the explicit override, as designed.
-4. **The X3 gets the sleep sync only in the first version** (no wake check).
+3. **"Read from here everywhere"** is the explicit override in the Orbit menu and This book sheet;
+   queued offline with the chosen place, and sent before ordinary snapshots.
+4. **Furthest wins**; ordinary pushes never go behind the last known server place. Replace the
+   old silent jump to any newer-dated place.
+5. **The X3 gets the sleep sync only in the first version** (no wake check). Xteink firmware wiring
+   is a later separate step; step 1 includes only its host-tested C++ decision function.
 
 **In one paragraph.** Every device syncs at the moments it is already paying for (sleep, open,
 wake), never keeps a radio up, and never moves the page by itself while you read. The furthest
@@ -212,7 +217,7 @@ user's (Just in time is the right partner).
 On the Xteink a take/follow found at wake or a pause is asked with the same popup (ruling 1), drawn
 once; one found offline from a pending place before the first draw opens there silently.
 
-**X3** (no memory beside a book; flash 99.38%, F1): **v1 is the sleep sync only** (ruling 4):
+**X3** (no memory beside a book; flash 99.38%, F1): **v1 is the sleep sync only** (ruling 5):
 pending places on their own connection after the session, as the Home today. Later, not v1: a
 **wake check behind the page**: after
 ≥30 min asleep, draw the page, then restart into a network boot that leaves the panel as is (the
@@ -299,7 +304,7 @@ as a Setup checklist row with "what you lose without it".
 
 **Phases.** 1) The shared decision table (Lua + C++ host-tested function), Android OrbiSmart
 (setting, behind-hold, state machine, popup, override, marker). 2) Xteink: X4s sleep sync rules +
-pending places + wake check + popup + override; X3 sleep sync rules only (ruling 4). 3) Later: the
+pending places + wake check + popup + override; X3 sleep sync rules only (ruling 5). 3) Later: the
 X3 wake check behind the page (flash permitting: the X3 is at 99.38 %). Each: sideload test, then release
 (AGENTS "Test builds").
 
