@@ -268,7 +268,30 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
 
     fun dropEntry(key: String) = db().exec("DELETE FROM entries WHERE key = ?", u(key))
 
-    fun fileBytes(): Long = listOf(FILE, "$FILE-journal").sumOf { File(root, it).let { f -> if (f.isFile) f.length() else 0L } }
+    /** Reusable SQLite pages and the transient rollback journal are not cache growth.
+     * Charging them repeatedly prevented a smaller replacement generation from ever starting. */
+    fun fileBytes(): Long {
+        val pages = db().pragma("page_count")?.toLongOrNull() ?: 0L
+        val free = db().pragma("freelist_count")?.toLongOrNull() ?: 0L
+        val size = db().pragma("page_size")?.toLongOrNull() ?: 4096L
+        return maxOf(0L, pages - free) * size
+    }
+
+    fun reclaimStorage() {
+        val allocated = file.length()
+        val live = fileBytes()
+        log("storage: database allocated=$allocated live=$live reusable=${maxOf(0L, allocated-live)}")
+        // Only the companion writer calls this, outside a transaction. Avoid rewriting
+        // a healthy database on every count; native books are outside this database.
+        if (allocated - live >= maxOf(16L * 1024 * 1024, allocated / 4)) db().exec("VACUUM")
+    }
+
+    /** A complete bulk generation supersedes the old combinatorial list crawl. */
+    fun retireLegacyCatalog() = transaction {
+        db().exec("DELETE FROM list_items")
+        db().exec("DELETE FROM lists")
+        db().exec("DELETE FROM jobs")
+    }
 
     // ------------------------------------------------------------------ covers kept by "Save every cover"
 

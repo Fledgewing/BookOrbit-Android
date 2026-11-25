@@ -846,3 +846,21 @@ function OrbitAndroid:maybeSetupPrompt(why, where)
 end
 
 ---------------------------------------------------------------------------------------------
+
+-- Catalog fetches use their subprocess path only inside a Trapper context. Home
+-- actions (including scheduled opens) must enter it before invoking upstream UI.
+local function homeJob(fn)
+    local okt, Trapper = pcall(require, "ui/trapper")
+    if okt and Trapper.wrap then return Trapper:wrap(fn) end
+    return fn()
+end
+local directPluginEvent = pluginEvent
+function pluginEvent(...)
+    local args = pack(...)
+    return homeJob(function() return directPluginEvent(unpack(args, 1, args.n)) end)
+end
+local directBookorbitMain = OrbitAndroid.bookorbitMain
+function OrbitAndroid:bookorbitMain(...)
+    local args = pack(...)
+    return homeJob(function() return directBookorbitMain(self, unpack(args, 1, args.n)) end)
+end

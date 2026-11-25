@@ -57,6 +57,19 @@ class FastCatalogTest {
     private fun run(store: CacheStore, op: String = "full", request: (String) -> Map<*, *> = ::reply, progress: (Int)->Unit = {}) =
         FastCatalogRefresh(store, plan(op), request, {}, {false}, {1000}, progress, { println(it) }).run()
 
+    @Test fun refreshLogsStartEachPhaseAndFinish() {
+        val root = Files.createTempDirectory("bulk-observable").toFile()
+        try {
+            CacheStore(root, {}, ::JdbcSql).use { store ->
+                val logs = arrayListOf<String>()
+                assertEquals("finished", FastCatalogRefresh(store, plan(), ::reply, {}, { false }, { 1000 }, {}, logs::add).run())
+                assertTrue(logs.any { it.startsWith("bulk: start") })
+                assertTrue(logs.any { it.startsWith("bulk: manifest requests=") })
+                assertTrue(logs.any { it.startsWith("bulk: finish result=finished") })
+            }
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun schemaMatchesThePluginFixture() {
         assertEquals(BulkCatalog.schema,File("../../../shared/fixtures/catalog/bulk-refresh/schema.sql").readLines().filter(String::isNotBlank).map {it.removeSuffix(";")})
     }

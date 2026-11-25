@@ -85,6 +85,7 @@ class FastCatalogRefresh(
     private fun allBooks(): List<Map<*, *>> = db.query("SELECT item FROM bulk_books WHERE g=? ORDER BY id", generation) { LuaValue.parse(it.bytes(0)!!) as Map<*, *> }
 
     fun run(): String {
+        log("bulk: start op=${plan.op}")
         BulkCatalog.initialize(db)
         val identity = plan.owner + "|" + plan.detailTemplate.orEmpty() + "|" + plan.strings("seed_lists").joinToString("|")
         if (plan.op == "full" || meta("identity") != identity || meta("g") == null) {
@@ -99,6 +100,7 @@ class FastCatalogRefresh(
         } else generation = meta("g")!!.toLong()
         percent = meta("pct")?.toIntOrNull() ?: 0
         val start = clock()
+        var outcome = "incomplete coverage"
         try {
             phase("manifest") { manifest() }; tick(15)
             phase("section metadata") { sections() }; tick(20)
@@ -118,14 +120,17 @@ class FastCatalogRefresh(
                 // Release old generations only after a complete successful run.
                 for (table in BulkCatalog.tables) db.exec("DELETE FROM $table WHERE g<>?", generation)
             }
+            store.retireLegacyCatalog()
             progress(100)
-            return "finished"
+            outcome = "finished"
+            return outcome
         } catch (e: Exception) {
             set("pct", percent)
             log("bulk: paused (${e.message?.takeIf { it in setOf("stopped", "storage limit") } ?: "incomplete coverage"}); published generation retained")
-            return if (stopped()) "stopped" else if (e.message == "storage limit") "storage limit" else "incomplete coverage"
+            outcome = if (stopped()) "stopped" else if (e.message == "storage limit") "storage limit" else "incomplete coverage"
+            return outcome
         } finally {
-            log("bulk: total requests=$requests bytes=$received failures=$failures elapsedMs=${clock()-start} databaseBytes=${store.fileBytes()}")
+            log("bulk: finish result=$outcome requests=$requests bytes=$received failures=$failures elapsedMs=${clock()-start} databaseBytes=${store.fileBytes()}")
         }
     }
     private fun manifest() {

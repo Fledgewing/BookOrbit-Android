@@ -28,6 +28,34 @@ object StatusMarginRepair {
         }
     }
 
+    // Book-open checks must not sit behind a paused whole-library job. Only the
+    // selected, not-yet-loaded sidecar is touched; a fixed result file avoids the
+    // bulk mailbox's reading checkpoint and backlog.
+    private val bookExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task -> BulkWork.thread("orbit-repair", task) }
+    fun beforeOpen(path: String, token: String) {
+        require(token.matches(Regex("[0-9-]+")))
+        bookExecutor.execute {
+            var result = "checked"
+            try {
+                val root = android.os.Environment.getExternalStorageDirectory().canonicalFile
+                val book = File(path).canonicalFile
+                require(book.path.startsWith(root.path + File.separator))
+                val stem = book.name.substringBeforeLast('.', book.name)
+                val suffix = book.name.substringAfterLast('.', "_")
+                val target = File(book.parentFile, "$stem.sdr/metadata.$suffix.lua")
+                require(target.canonicalPath.startsWith(root.path + File.separator) && target.canonicalFile == target.absoluteFile)
+                if (target.isFile) run(root, {}, OLog::i, target = target)
+                else OLog.i("status repair: book-open check; no adjacent sidecar")
+            } catch (e: Exception) { result = "deferred"; OLog.w("status repair: book-open check deferred", e) }
+            val dir = Worker.root()
+            dir.mkdirs()
+            val file = File(dir, "repair-result.lua")
+            val tmp = File(file.path + ".tmp")
+            tmp.writeBytes(LuaValue.encode(mapOf("token" to token, "result" to result)))
+            check(tmp.renameTo(file))
+        }
+    }
+
     internal val bookKeys = setOf("copt_t_page_margin", "copt_b_page_margin", "copt_sync_t_b_page_margins")
     // The only global key written by the old status controller (onToggleFooterMode).
     internal val footerKeys = setOf("reader_footer_mode")
@@ -116,16 +144,16 @@ object StatusMarginRepair {
         return result
     }
 
-    fun run(root: File, checkpoint: () -> Unit, log: (String) -> Unit, canApply: () -> Boolean = { true }): Boolean {
+    fun run(root: File, checkpoint: () -> Unit, log: (String) -> Unit, target: File? = null, canApply: () -> Boolean = { true }): Boolean {
         val base = root.canonicalFile
         val done = File(base, "koreader/settings/booksync-w31-repair.done")
-        if (done.exists()) return true
+        if (target == null && done.exists()) return true
         var deferred = false
         val seen = HashSet<String>()
         fun walk(dir: File) {
             checkpoint()
             if (dir.canonicalFile != dir.absoluteFile || !seen.add(dir.path)) return
-            val files = dir.listFiles() ?: error("repair folder unavailable")
+            val files = target?.let { arrayOf(it.canonicalFile) } ?: dir.listFiles() ?: error("repair folder unavailable")
             for (file in files) {
                 checkpoint()
                 if (file.canonicalFile != file.absoluteFile) continue
@@ -134,11 +162,14 @@ object StatusMarginRepair {
                     if (file.name != "Android") walk(file)
                     continue
                 }
+                if (target != null && file != target.canonicalFile) continue
                 val global = file == File(base, "koreader/settings.reader.lua")
                 if (!global && !(dir.name.endsWith(".sdr") && file.name.matches(Regex("metadata\\..+\\.lua")))) continue
                 val snapshot = File(file.path + ".booksync-w31.old")
                 val old = snapshot.takeIf { it.isFile } ?: File(file.path + ".old")
                 val marker = File(file.path + ".booksync-w31.done")
+                if (marker.exists() && target != null) log("status repair: selected sidecar already checked")
+                if (!old.isFile && target != null) log("status repair: selected sidecar has no recovery backup")
                 if (marker.exists() || !old.isFile || old.canonicalFile != old.absoluteFile
                     || snapshot.canonicalFile != snapshot.absoluteFile) continue
                 // Bounded reads; unsupported files stay untouched and can be recovered manually.
@@ -182,18 +213,25 @@ object StatusMarginRepair {
                     }
                     check(file.readBytes().contentEquals(bytes)) { "settings changed before replacement" }
                     check(tmp.renameTo(file))
-                    log("status repair $id: restored vertical/footer keys from .old; original saved")
+                    val was = table(text, keys)!!.entries
+                    val restored = table(repaired, keys)!!.entries
+                    val changes = keys.sorted().filter { was[it]?.value != restored[it]?.value }
+                        .joinToString(", ") { "$it:${was[it]?.value ?: "unset"}->${restored[it]?.value ?: "unset"}" }
+                    log("status repair $id: restored $changes from .old; original saved")
                 }
                 marker.writeText("checked\n")
             }
         }
-        walk(base)
+        log("status repair: ${if (target == null) "scan" else "book-open check"} started")
+        walk(target?.canonicalFile?.parentFile ?: base)
         if (deferred) {
             log("status repair: recovery backups captured; waiting for a closed-book report")
             return false
         }
-        done.parentFile?.mkdirs()
-        done.writeText("complete\n")
+        if (target == null) {
+            done.parentFile?.mkdirs()
+            done.writeText("complete\n")
+        }
         log("status repair: complete")
         return true
     }

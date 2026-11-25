@@ -207,7 +207,7 @@ class CacheWorkerTest {
     @Test fun coverPrunedWhileYieldingDoesNotRemainInTheRunBudget() {
         val (root, _, w) = setup()
         val thumbs = File(root, "thumbs").apply { mkdirs() }
-        File(thumbs, "old.jpg").writeBytes(ByteArray(850 * 1024))
+        File(thumbs, "old.jpg").writeBytes(ByteArray(850 * 1024).apply { this[0] = -1; this[1] = -40; this[2] = -1 })
         val p = plan(root, "full", mapOf("limit" to 1024L * 1024))
         var first = true
         assertEquals("finished", w.run(p, creds) {
@@ -271,7 +271,7 @@ class CacheWorkerTest {
     @Test fun recheckedCoverShrinkImmediatelyReturnsBudgetWhileYielding() {
         val (root, fake, w) = setup()
         val thumbs = File(root, "thumbs").apply { mkdirs() }
-        val cover = File(thumbs, "99_0.jpg").apply { writeBytes(ByteArray(850 * 1024)) }
+        val cover = File(thumbs, "99_0.jpg").apply { writeBytes(ByteArray(850 * 1024).apply { this[0] = -1; this[1] = -40; this[2] = -1 }) }
         File(cover.path + ".etag").writeText("old")
         fake.forceCover = true
         var first = true

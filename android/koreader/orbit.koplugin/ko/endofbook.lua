@@ -124,11 +124,11 @@ function EOB.remember(detail)
     for k, v in pairs(c) do table.insert(ids, { k = k, at = v.saved_at or 0 }) end
     table.sort(ids, function(a, b) return a.at > b.at end)
     for i = EOB.CACHE_MAX + 1, #ids do c[ids[i].k] = nil end
-    pcall(function()
-        local st = store(EOB.CACHE_FILE)
-        st:saveSetting("books", c)
-        st:flush()
-    end)
+    -- The companion persists its saved detail by id. Never serialize/flush the
+    -- growing detail cache on KOReader's UI thread.
+    if not Companion.workerProblem() then
+        Companion.send(Companion.ACTION.PATCH, { reason = "remember detail", remember_id = tostring(detail.id) })
+    end
 end
 
 -- The open book: { digest, file, book_id, summary, doc_settings } or nil when it isn't a

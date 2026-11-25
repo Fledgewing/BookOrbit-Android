@@ -41,6 +41,7 @@ class CacheWorker(
     private val decodeJson: (String) -> Any? = LuaValue::fromJson,
     private val cpuMs: () -> Long = { 0L },
     private val threadFactory: (String, Runnable) -> Thread = { name, task -> Thread(task, name).apply { isDaemon = true; priority = Thread.MIN_PRIORITY } },
+    private val bookRoots: List<File> = places,
 ) {
     private val parallel = parallel.coerceIn(1, PARALLEL)
 
@@ -150,9 +151,27 @@ class CacheWorker(
             ev["err"] = "not saved"
             return event(ev)
         }
+        if (reply is Map<*, *>) (reply["id"] as? Long)?.let { if (CacheStore.detailId(c.path, template, MirrorLogic.SENTINEL) != null) rememberDetail(it) }
         ev["changed"] = true
         ev["at"] = t
         event(ev)
+    }
+
+    fun savePluginState(encoded: String) {
+        val bytes = encoded.toByteArray(Charsets.ISO_8859_1)
+        require(LuaValue.parse(bytes) is Map<*, *>)
+        check(write(File(root, "plugin-state.lua"), bytes))
+    }
+
+    fun rememberDetail(id: Long) {
+        val detail = store.detail(id)?.first as? Map<*, *> ?: return
+        val file = File(root.parentFile, "orbit-detail-cache.lua")
+        val saved = read(file) as? Map<*, *>
+        val books = (saved?.get("books") as? Map<*, *>)?.entries?.associate { it.key.toString() to it.value }?.toMutableMap() ?: linkedMapOf()
+        val fields = setOf("id", "title", "authors", "seriesId", "seriesName", "seriesIndex", "readStatus", "rating", "files", "seriesMembers", "relatedSections")
+        books[id.toString()] = detail.filterKeys { it in fields } + ("saved_at" to now())
+        val keep = books.entries.sortedByDescending { ((it.value as? Map<*, *>)?.get("saved_at") as? Number)?.toLong() ?: 0L }.take(32).associate { it.toPair() }
+        write(file, LuaValue.encode(mapOf("books" to keep)))
     }
 
     /** A write the plugin made (PATCH): { id, fields (a Lua literal), stale_home }, or a wipe. */
@@ -222,6 +241,8 @@ class CacheWorker(
      * the totals are also kept in the database (meta "storage") for the plugin's start.
      */
     fun storage(a: StorageAsk) {
+        if (store.meta("bulk_active") != null) store.retireLegacyCatalog()
+        store.reclaimStorage()
         val items = storageItems(a.coverDir, a.mirrorCovers)
         val coverDir = allowed(a.coverDir)
         val plan = StorageLogic.plan(items, a.limit)
@@ -243,16 +264,22 @@ class CacheWorker(
                 removed[it.kind] = (removed[it.kind] ?: 0L) + 1
             }
         }
-        val totals = StorageLogic.totals(items, plan.drop)
+        store.reclaimStorage()
+        // DELETE frees pages: recount rather than subtracting payload sizes from an
+        // allocated file length. Protected offline data can legitimately exceed a limit.
+        val remaining = storageItems(a.coverDir, a.mirrorCovers)
+        val totals = StorageLogic.totals(remaining)
         store.setMeta("storage", String(LuaValue.encode(sortedMapOf<String, Any?>("totals" to totals, "at" to now())), Charsets.ISO_8859_1))
         val ev = sortedMapOf<String, Any?>("kind" to "storage", "why" to a.reason, "totals" to totals,
-            "removed" to removed, "used" to plan.used, "after" to plan.after)
+            "removed" to removed, "used" to plan.used, "after" to totals.getValue("used"))
         a.limit?.let { ev["limit"] = it }
+        if (a.limit != null && totals.getValue("used") > a.limit && StorageLogic.plan(remaining, a.limit).drop.isEmpty())
+            log("storage: limit cannot be reduced further; protected offline data retained; used=${totals.getValue("used")} limit=${a.limit}")
         event(ev)
         if (plan.drop.isNotEmpty()) {
             log("storage: ${"%.1f".format(java.util.Locale.ROOT, plan.used / MB)} MB over ${a.limit?.let { it / (1024 * 1024) }} MB (${a.reason}); " +
                 "${removed["cache"]} browsing entries, ${removed["cover"]} covers, ${removed["mirror_cover"]} saved-for-offline covers go -> " +
-                "%.1f MB".format(java.util.Locale.ROOT, plan.after / MB))
+                "%.1f MB".format(java.util.Locale.ROOT, totals.getValue("used") / MB))
         }
     }
 
@@ -290,7 +317,16 @@ class CacheWorker(
             if (f == null) { failed++; continue }
             val path = f.path
             val etagFile = allowed("$path.etag") ?: run { failed++; null } ?: continue
-            if (!f.isFile || !etagFile.isFile) continue
+            if (!f.isFile) continue
+            val head = ByteArray(16)
+            val n = f.inputStream().use { it.read(head) }
+            val magic = String(head, Charsets.ISO_8859_1)
+            val jpeg = n >= 3 && (head[0].toInt() and 255) == 255 && (head[1].toInt() and 255) == 216 && (head[2].toInt() and 255) == 255
+            val image = jpeg || magic.startsWith("\u0089PNG") || magic.startsWith("GIF8") || (magic.startsWith("RIFF") && magic.substring(8, 12) == "WEBP")
+            if (!image) {
+                f.delete(); etagFile.delete(); changed.add(id); continue
+            }
+            if (!etagFile.isFile) continue
             val h = headers(creds, "image/jpeg,image/*").toMutableMap()
             h["Accept-Encoding"] = "identity"
             h["If-None-Match"] = etagFile.readText()
@@ -344,6 +380,54 @@ class CacheWorker(
         val present = found.filter { File(LuaValue.utf8(it["path"] as String)).isFile }
         event(sortedMapOf("kind" to "copies", "why" to why, "checked" to books.size.toLong(), "found" to present,
             "gone" to (found.size - present.size).toLong()))
+    }
+
+    fun carryCopySettings(path: String, old: String, new: String) {
+        require(Regex("[0-9a-f]{32}").matches(old) && Regex("[0-9a-f]{32}").matches(new))
+        checkpoint()
+        val book = Places.inside(File(LuaValue.utf8(path)), bookRoots) ?: return
+        val stem = book.name.substringBeforeLast('.', book.name)
+        val suffix = book.name.substringAfterLast('.', "_")
+        val sidecar = Places.inside(File(book.parentFile, "$stem.sdr/metadata.$suffix.lua"), bookRoots)
+        val settings = sidecar?.let { read(it) as? Map<*, *> }
+        if (settings?.get("partial_md5_checksum") == old) {
+            check(write(sidecar, LuaValue.encode(settings + ("partial_md5_checksum" to new))))
+        }
+        val stats = File(root.parentFile, "statistics.sqlite3")
+        // KOReader Android statistics use WAL; do not reconfigure its live connection.
+        if (stats.isFile) AndroidSql(stats, wal = true).use { db -> db.exec("UPDATE OR IGNORE book SET md5=? WHERE md5=?", new, old) }
+    }
+
+    /** A bounded preparation result: all network, file sampling and JSON work stays here. */
+    fun prepareCopy(job: Map<*, *>, template: String, creds: Creds) {
+        val path = job["path"] as? String ?: return
+        val ev = sortedMapOf<String, Any?>("kind" to "copy_prepared", "path" to path)
+        try {
+            checkpoint()
+            val file = File(LuaValue.utf8(path)).canonicalFile
+            require(bookRoots.any { file.path.startsWith(it.canonicalPath + File.separator) })
+            val id = (job["book_id"] as? Number)?.toLong() ?: error("book missing")
+            val request = template.replace(MirrorLogic.SENTINEL, id.toString())
+            val reply = http.get(url(creds, request), headers(creds), null, MAX_BODY)
+            require(reply.code == 200 && reply.body != null)
+            val body = decodeJson(String(reply.body!!, Charsets.UTF_8)) as? Map<*, *> ?: error("detail missing")
+            val fields = setOf("id", "title", "authors", "seriesId", "seriesName", "seriesIndex", "files", "readStatus")
+            ev["detail"] = body.filterKeys { it in fields }
+            val digest = java.security.MessageDigest.getInstance("MD5")
+            java.io.RandomAccessFile(file, "r").use { input ->
+                val bytes = ByteArray(1024)
+                for (offset in listOf(0L) + (0..10).map { 1024L shl (2 * it) }) {
+                    checkpoint()
+                    input.seek(offset)
+                    val n = input.read(bytes)
+                    if (n < 0) break
+                    digest.update(bytes, 0, n)
+                }
+            }
+            ev["md5"] = digest.digest().joinToString("") { "%02x".format(it) }
+            require(LuaValue.encode(ev).size <= 48000)
+        } catch (_: Exception) { ev.remove("detail"); ev["err"] = "preparation failed" }
+        event(ev)
     }
 
     /** Acknowledged mailbox; listing/parsing event files belongs to this worker only. */
@@ -784,7 +868,7 @@ class CacheWorker(
         val secs = maxOf(1L, (clockMs() - r.startedMs) / 1000)
         val rate = r.done.toDouble() / secs
         return sortedMapOf(
-            "v" to 4L, "runner" to "companion", "run" to r.plan.run, "running" to running.takeIf { it }, "beat" to now(),
+            "v" to 4L, "runner" to "companion", "engine" to (if (r.plan.m["catalog"] is Map<*, *>) "bulk" else "crawl"), "run" to r.plan.run, "running" to running.takeIf { it }, "beat" to now(),
             "op" to store.meta("run_op"), "at" to metaLong("full_at"), "lib_version" to store.meta("lib_version"),
             "done" to r.done, "total" to r.total, "left" to left, "pct" to r.pct, "rate" to Math.round(rate * 10) / 10.0,
             "eta_s" to (if (rate > 0 && left > 0) (left / rate).toLong() else null), "skipped" to r.skipped, "errors" to r.errors,
@@ -850,6 +934,8 @@ class CacheWorker(
                 r.pct = pct.toLong(); r.done = pct.toLong(); writeStatus(r, true)
             }, log, dataRoom={growth -> plan.limit==null || room(r,growth,false,st.fileBytes())})
             val why = fast.run()
+            if (why == "storage limit") r.limitNote = mapOf("at" to now(), "limit" to plan.limit,
+                "text" to "Storage limit reached. Protected offline data is kept. Raise the limit in BookSync settings, then try Full refresh again.")
             if (why != "finished") r.errors++
             writeStatus(r, false)
             summary(plan, why, r, r.done, why == "finished" && st.meta("run_op") == "full", why == "finished" && st.meta("run_op") == "revalidate")

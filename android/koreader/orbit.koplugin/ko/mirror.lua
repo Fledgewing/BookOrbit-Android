@@ -229,7 +229,7 @@ end
 function Mirror.fullRunning()
     local s = Mirror.status()
     return Mirror.active == true and Mirror.busy == true
-        and (Mirror.op == "full" or Mirror.op == "resume" and s.op == "full")
+        and (Mirror.op == "full" or Mirror.op == "resume" and s.op == "full" and s.engine == "bulk")
 end
 
 -- A Full refresh pressed while one is saving: keep that run and show where it is.
@@ -371,6 +371,11 @@ function Mirror.ran(r)
         Badge.finish(s.limit_note.text, s)
         Mirror.manual = nil
     end
+    if r.why == "storage limit" then
+        Mirror.active, Mirror.manual, Mirror.notices = nil, nil, nil
+        Wifi.release("mirror")
+        return -- wait for a changed limit or an explicit request; never retry pressure
+    end
     if r.why == "finished" or r.why == "busy" then return Mirror.finish(r) end
     if r.why == "stopped" then
         if not NetworkMgr:isConnected() then return Mirror.stop("offline") end
@@ -404,6 +409,15 @@ function Mirror.finish(r)
     Mirror.manual = nil
     Mirror.notices = nil
     Wifi.release("mirror")
+    -- Repaint the visible view from the completed cache, inside the catalog's
+    -- asynchronous fetch context. Opening a book meanwhile cancels this paint.
+    local cat = Mirror.catalog()
+    if r and r.saved and cat and not cat.catalog_closed and not reading() then
+        UIManager:nextTick(function()
+            if cat.catalog_closed or reading() then return end
+            require("ui/trapper"):wrap(function() LF.refreshKeepingCovers(cat) end)
+        end)
+    end
     -- The saved details now carry every book's file hash: copies that changed are replaced next.
     if r and r.saved then
         UIManager:scheduleIn(1, function() if Copies and Copies.tick then pcall(Copies.tick, "full refresh") end end)
@@ -421,6 +435,11 @@ function Mirror.start(reason, manual)
         return true
     end
     Mirror.manual = manual
+    if manual and Mirror.preparing then
+        -- No companion job exists yet: discard the obsolete resume plan now.
+        Mirror.preparing, Mirror.busy = nil, nil
+    end
+    if manual and Mirror.busy then Badge.start(true, { pct = 0, done = 0, total = 0, left = 1 }) end
     if Mirror.busy then OC.writeFile(Mirror.stopFile(), "stop") end
     return Mirror.launch("full", reason)
 end
@@ -470,6 +489,9 @@ function Mirror.tick(why)
     if Mirror.busy or Mirror.active then return end
     local s = Mirror.status()
     if (s.left or 0) > 0 then
+        local blocked = s.limit_note and tonumber(s.limit_note.limit)
+        local limit = OC.limitBytes()
+        if blocked and limit and limit <= blocked then return end
         if not NetworkMgr:isConnected() then return end
         log("mirror: resuming (" .. tostring(why) .. "),", s.left, "left")
         return Mirror.launch("resume", why)

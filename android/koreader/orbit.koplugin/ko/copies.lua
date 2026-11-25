@@ -23,14 +23,6 @@ local function index()
 end
 Copies.state = index
 
--- Seam (tests): the file's partial MD5.
-function Copies.md5(path)
-    local oku, util = pcall(require, "util")
-    if not oku or type(util.partialMD5) ~= "function" then return nil end
-    local okm, d = pcall(util.partialMD5, path)
-    return okm and d or nil
-end
-
 Copies.WAIT_S = 60
 -- Replacements are numbered, so an answer to an ask made before one doesn't queue it again.
 Copies.seq, Copies.done_seq = 0, {}
@@ -45,6 +37,7 @@ local function openFile()
     return ui and ui.document and ui.document.file or nil
 end
 
+-- The companion writes copies/ask.lua; KOReader sends only in-memory state.
 -- Asks Orbit Companion which copies changed (COPIES, docs/design/companion-worker.md). The ask
 -- is small and comes from memory: BookOrbit's state books, the end-of-book cache's file lists,
 -- and how the mirror names a book's detail; the companion reads the saved details (the cache's
@@ -80,13 +73,8 @@ function Copies.ask(why)
     -- How the mirror names a book's detail (its saved details count too).
     local okp, path = pcall(function() return client and Mirror.detailPath(client, Mirror.SENTINEL) end)
     if okp and path then ask.owner, ask.server, ask.detail_template = OC.owner(client), client.server_url, path end
-    if lfs_ok then lfs.mkdir(OC.dir() .. "/copies") end
-    if not OC.writeFile(OC.dir() .. "/copies/ask.lua", Cache.encode(ask)) then
-        log("copies: the ask wasn't written; not checked")
-        return false
-    end
     Copies.asked, Copies.asked_seq = OC.now(), Copies.seq
-    Companion.send(Companion.ACTION.COPIES, { reason = tostring(why) })
+    Companion.send(Companion.ACTION.COPIES, { reason = tostring(why), ask = Cache.encode(ask) })
     OC.watchChecks()
     return true
 end
@@ -130,46 +118,13 @@ local function finish()
     Copies.active, Copies.replaced, Copies.failed = nil, nil, nil
 end
 
--- KOReader's hash-keyed sidecar ("hash" location) follows the new hash: the files are copied, the
--- old folder stays (KOReader may still have the old hash cached for this path).
-local function carryHashSidecar(old, new)
-    if Companion.workerProblem() then return end
-    Companion.send(Companion.ACTION.PATCH, { reason = "hash sidecar", old_hash = old, new_hash = new })
-end
-
--- KOReader's reading statistics key a book by (title, authors, md5): move its rows to the new hash.
-local function carryStats(old, new)
-    local okd, DataStorage = pcall(require, "datastorage")
-    local oks, SQ3 = pcall(require, "lua-ljsqlite3/init")
-    if not (okd and oks) then return end
-    local db_path = DataStorage:getSettingsDir() .. "/statistics.sqlite3"
-    local okl, lfs = pcall(require, "libs/libkoreader-lfs")
-    if not okl or lfs.attributes(db_path, "mode") ~= "file" then return end
-    pcall(function()
-        local conn = SQ3.open(db_path)
-        local stmt = conn:prepare("UPDATE OR IGNORE book SET md5 = ? WHERE md5 = ?;")
-        stmt:reset():bind(new, old):step()
-        stmt:close()
-        conn:close()
-    end)
-end
-
 -- After the new file is in place: the sidecar's stored hash, KOReader's hash-keyed folder and
 -- statistics, and BookOrbit's state (repairFileIdentity: the plugin's own path for a file whose
 -- bytes changed, bookorbit_state_manager.lua:453).
 function Copies.carry(path, old, new)
-    local okds, DocSettings = pcall(require, "docsettings")
-    if okds and type(DocSettings) == "table" and DocSettings.open then
-        pcall(function()
-            local ds = DocSettings:open(path)
-            if ds:readSetting("partial_md5_checksum") then
-                ds:saveSetting("partial_md5_checksum", new)
-                ds:flush()
-            end
-        end)
+    if not Companion.workerProblem() then
+        Companion.send(Companion.ACTION.PATCH, { reason = "copy identity", old_hash = old, new_hash = new, copy_path = path })
     end
-    pcall(carryHashSidecar, old, new)
-    pcall(carryStats, old, new)
     local sm = stateManager()
     if sm and type(sm.repairFileIdentity) == "function" then
         local okr, err = pcall(sm.repairFileIdentity, path, old, new)
@@ -207,18 +162,37 @@ function Copies.pump()
         log("copies: running;", #c.queue, "to go; Wi-Fi held until it ends")
     end
     Copies.busy = true
-    local detail, err
-    if Compat.callable(cat.fetchDeliveryBook) then detail, err = cat:fetchDeliveryBook(job.book_id)
-    else detail, err = cat.client:catalogBook(job.book_id) end
+    local client = cat.client
+    local Delivery = require("bookorbit_delivery")
+    local template = client:query("/koreader/plugin/catalog/books/" .. Mirror.SENTINEL,
+        { deviceId = client.device_id, variant = Delivery.preference(cat.settings or {}, client) })
+    Copies.preparing, Copies.prepare_at = job, OC.now()
+    Companion.send(Companion.ACTION.COPIES, { reason = "prepare replacement", prepare = Cache.encode(job),
+        template = template, server = client.server_url, user = client.username, userkey = client.userkey })
+    OC.watchChecks()
+end
+
+function Copies.prepared(ev)
+    local job = Copies.preparing
+    if not job or ev.path ~= job.path then return end
+    Copies.preparing, Copies.prepare_at = nil, nil
+    local c = index()
+    if c.queue[1] ~= job then Copies.busy = nil; return end
+    local p = bookorbit(liveUI())
+    local cat = p and EOB.headlessCatalog(p)
+    local detail = ev.detail
+    if not cat or reading() or openFile() == job.path then
+        Copies.busy = nil
+        return Copies.stop("reading or catalog closed")
+    end
     if type(detail) ~= "table" then
         Copies.busy = nil
         Copies.failed = (Copies.failed or 0) + 1
-        return nextJob(c, "could not load the book;", job, tostring(err))
+        return nextJob(c, "could not prepare the book;", job, tostring(ev.err))
     end
-    pcall(EOB.remember, detail)
     local files = Compat.callable(cat.supportedFiles) and cat:supportedFiles(detail) or detail.files or {}
     local file = CopiesPlan.pick(files, job.file_id)
-    local old = Copies.md5(job.path) or job.md5
+    local old = ev.md5 or job.md5
     local act = CopiesPlan.decide(old, file)
     if act ~= "replace" then
         Copies.busy = nil
@@ -233,7 +207,7 @@ function Copies.pump()
                 Copies.failed = (Copies.failed or 0) + 1
                 return nextJob(c, "replace failed (" .. tostring(ferr) .. "); the old copy stays:", job)
             end
-            local new = Copies.md5(job.path) or file.fileHash
+            local new = file.fileHash -- downloadFile already verifies the delivered artifact hash
             Copies.carry(job.path, old, new)
             Copies.replaced = (Copies.replaced or 0) + 1
             Copies.seq = Copies.seq + 1
