@@ -380,10 +380,10 @@ index c716322..1a8f58b 100644
   private:
    enum class State { Connecting, Scanning, Refreshing, Mirroring, DecodingCovers, ScanSummary, Failed };
 diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-index 98b492d..6aba84e 100644
+index 59dbba2..e2190a9 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
-@@ -366,7 +366,7 @@ void BookOrbitSyncActivity::runSleepSync() {
+@@ -367,7 +367,7 @@ void BookOrbitSyncActivity::runSleepSync() {
    if (bookOrbitHome) BookOrbitDeviceScan::prepare(&sleepSyncWakeRequested);
    wifiActivated = true;
    bool wifiConnectedForSleepSync = false;
@@ -393,7 +393,7 @@ index 98b492d..6aba84e 100644
      // The whole sync runs synchronously from here, decisions included.
      onWifiSelectionComplete(true);
 diff --git a/src/activities/settings/BookOrbitSettingsActivity.cpp b/src/activities/settings/BookOrbitSettingsActivity.cpp
-index f3ca177..d8c289c 100644
+index 006e7a3..d4f59c0 100644
 --- a/src/activities/settings/BookOrbitSettingsActivity.cpp
 +++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
 @@ -31,6 +31,7 @@
@@ -404,17 +404,24 @@ index f3ca177..d8c289c 100644
  #endif
 
  namespace fui = freeink::ui;
-@@ -40,7 +41,8 @@ namespace {
+@@ -40,13 +41,14 @@ namespace {
  // Orbify (patch 0027): "Mark Finished at End" sits before Home.
  // Orbify (patch 0034): "Keep book copies current" follows it.
  constexpr int ORBIFY_MARK_ROWS = CROSSINK_TAILNET_ORBIFY_FINISH ? 1 : 0;
 -constexpr int ORBIFY_ROWS = ORBIFY_MARK_ROWS + (CROSSINK_TAILNET_ORBIFY_COPY_REFRESH ? 1 : 0);
 +constexpr int ORBIFY_SETTING_ROWS = CROSSINK_TAILNET_ORBIFY_MIRROR ? 3 : 0;
 +constexpr int ORBIFY_ROWS = ORBIFY_SETTING_ROWS + ORBIFY_MARK_ROWS + (CROSSINK_TAILNET_ORBIFY_COPY_REFRESH ? 1 : 0);
- constexpr int MENU_ITEMS = 9 + ORBIFY_ROWS + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);
+ constexpr int MENU_ITEMS = 10 + ORBIFY_ROWS + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);
+ constexpr int SYNC_MODE_ROW = MENU_ITEMS - 1;
+ int settingRow(int visible) {
+   if (visible == 0) return SYNC_MODE_ROW;
+   int row = visible - 1;
+-  if (BOOKORBIT_STORE.getOrbiSmart() && row >= 6) row += 2;
++  if (BOOKORBIT_STORE.getOrbiSmart() && row >= 6 + ORBIFY_SETTING_ROWS) row += 2;
+   return row;
+ }
  // The folder row reuses the OPDS strings: "Download Folder" and "SD Root" are
- // generic and already translated in every language file.
-@@ -49,6 +51,11 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
+@@ -56,6 +58,11 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
                                       StrId::STR_BOOKORBIT_SERVER_URL,
                                       StrId::STR_AUTHENTICATE,
                                       StrId::STR_BOOKORBIT_CATALOG,
@@ -426,9 +433,9 @@ index f3ca177..d8c289c 100644
                                       StrId::STR_OPDS_DOWNLOAD_FOLDER,
                                       StrId::STR_SYNC_BEHAVIOR,
                                       StrId::STR_BOOKORBIT_SYNC_ON_SLEEP,
-@@ -63,8 +70,11 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
-                                      StrId::STR_BOOKORBIT_SYNC_WHILE_READING,
+@@ -71,8 +78,11 @@ const StrId menuNames[MENU_ITEMS] = {StrId::STR_USERNAME,
  #endif
+                                      StrId::STR_SYNC_BEHAVIOR,
  };
 -constexpr int ORBIFY_MARK_ROW = 8;  // with ORBIFY_ROWS
 -constexpr int ORBIFY_KEEP_ROW = 8 + ORBIFY_MARK_ROWS;
@@ -440,7 +447,7 @@ index f3ca177..d8c289c 100644
  constexpr int HOME_ROW = 8 + ORBIFY_ROWS;
  constexpr int BACKGROUND_SYNC_ROW = 9 + ORBIFY_ROWS;
  // The Home page: the top shelf, the bottom shelf, then the refresh, and Orbify's Full refresh
-@@ -228,6 +238,9 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -243,6 +253,9 @@ void BookOrbitSettingsActivity::handleSelection() {
                             [this](const ActivityResult& result) {
                               if (!result.isCancelled) {
                                 const auto& kb = std::get<KeyboardResult>(result.data);
@@ -450,7 +457,7 @@ index f3ca177..d8c289c 100644
                                 BOOKORBIT_STORE.setCredentials(kb.text, BOOKORBIT_STORE.getPassword());
                                 BOOKORBIT_STORE.saveToFile();
                               }
-@@ -239,6 +252,9 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -254,6 +267,9 @@ void BookOrbitSettingsActivity::handleSelection() {
                             [this](const ActivityResult& result) {
                               if (!result.isCancelled) {
                                 const auto& kb = std::get<KeyboardResult>(result.data);
@@ -460,7 +467,7 @@ index f3ca177..d8c289c 100644
                                 BOOKORBIT_STORE.setCredentials(BOOKORBIT_STORE.getUsername(), kb.text);
                                 BOOKORBIT_STORE.saveToFile();
                               }
-@@ -254,6 +270,9 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -269,6 +285,9 @@ void BookOrbitSettingsActivity::handleSelection() {
                                 const auto& kb = std::get<KeyboardResult>(result.data);
                                 const std::string urlToSave =
                                     (kb.text == "https://" || kb.text == "http://") ? "" : kb.text;
@@ -470,7 +477,7 @@ index f3ca177..d8c289c 100644
                                 BOOKORBIT_STORE.setServerUrl(urlToSave);
                                 BOOKORBIT_STORE.saveToFile();
                               }
-@@ -264,6 +283,9 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -279,6 +298,9 @@ void BookOrbitSettingsActivity::handleSelection() {
        // Can't authenticate without credentials - just show message briefly
        return;
      }
@@ -480,49 +487,49 @@ index f3ca177..d8c289c 100644
      // Replaces this screen rather than stacking on top of it, so the TLS handshake gets
      // the memory the settings stack was holding (see ActivityManager::goToBookOrbitAuth).
      activityManager.goToBookOrbitAuth();
-@@ -273,7 +295,7 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -288,7 +310,7 @@ void BookOrbitSettingsActivity::handleSelection() {
        return;
      }
      activityManager.goToBookOrbitCatalog();
--  } else if (selectedIndex == 5) {
-+  } else if (selectedIndex == 5 + ORBIFY_SETTING_ROWS) {
+-  } else if (row == 5) {
++  } else if (row == 5 + ORBIFY_SETTING_ROWS) {
      // Catalog download folder ("" = SD root); created on first download.
      startActivityForResult(
          std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_OPDS_DOWNLOAD_FOLDER),
-@@ -285,14 +307,14 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -300,14 +322,14 @@ void BookOrbitSettingsActivity::handleSelection() {
              BOOKORBIT_STORE.saveToFile();
            }
          });
--  } else if (selectedIndex == 6) {
-+  } else if (selectedIndex == 6 + ORBIFY_SETTING_ROWS) {
+-  } else if (row == 6) {
++  } else if (row == 6 + ORBIFY_SETTING_ROWS) {
      const auto current = BOOKORBIT_STORE.getSyncBehavior();
      BOOKORBIT_STORE.setSyncBehavior(current == BookOrbitSyncBehavior::ASK_EVERY_TIME
                                          ? BookOrbitSyncBehavior::SMART
                                          : BookOrbitSyncBehavior::ASK_EVERY_TIME);
      BOOKORBIT_STORE.saveToFile();
      requestUpdate();
--  } else if (selectedIndex == 7) {
-+  } else if (selectedIndex == 7 + ORBIFY_SETTING_ROWS) {
+-  } else if (row == 7) {
++  } else if (row == 7 + ORBIFY_SETTING_ROWS) {
      BOOKORBIT_STORE.setSyncOnSleep(!BOOKORBIT_STORE.getSyncOnSleep());
      BOOKORBIT_STORE.saveToFile();
      requestUpdate();
-@@ -307,6 +329,12 @@ void BookOrbitSettingsActivity::handleSelection() {
+@@ -322,6 +344,12 @@ void BookOrbitSettingsActivity::handleSelection() {
      BOOKORBIT_STORE.setOrbifyKeepCopiesCurrent(!BOOKORBIT_STORE.getOrbifyKeepCopiesCurrent());
      BOOKORBIT_STORE.saveToFile();
      requestUpdate();
 +#endif
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  } else if (selectedIndex >= STORAGE_ROW && selectedIndex <= WIFI_IDLE_ROW) {
++  } else if (row >= STORAGE_ROW && row <= WIFI_IDLE_ROW) {
 +    const char* keys[] = {"storage_limit_mb", "wifi_mode", "wifi_idle_min"};
-+    OrbifySettings::cycle(keys[selectedIndex - STORAGE_ROW]);
++    OrbifySettings::cycle(keys[row - STORAGE_ROW]);
 +    requestUpdate();
  #endif
-   } else if (selectedIndex == HOME_ROW) {
+   } else if (row == HOME_ROW) {
      startActivityForResult(std::make_unique<BookOrbitSettingsActivity>(renderer, mappedInput, Page::Home),
-@@ -467,6 +495,11 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
-                  static_cast<unsigned>(shelfOptions.size()) - collections);
-         values[i] = counts;
+@@ -484,6 +512,11 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
        }
+     } else if (i == SYNC_MODE_ROW) {
+       values[i] = BOOKORBIT_STORE.getOrbiSmart() ? "OrbiSmart (recommended)" : "Custom";
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
 +    } else if (i >= STORAGE_ROW && i <= WIFI_IDLE_ROW) {
 +      const char* keys[] = {"storage_limit_mb", "wifi_mode", "wifi_idle_min"};
@@ -531,7 +538,7 @@ index f3ca177..d8c289c 100644
      } else if (i == 0) {
        const auto username = BOOKORBIT_STORE.getUsername();
        values[i] = username.empty() ? tr(STR_NOT_SET) : username;
-@@ -475,13 +508,13 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+@@ -492,13 +525,13 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
      } else if (i == 2) {
        const auto serverUrl = BOOKORBIT_STORE.getServerUrl();
        values[i] = serverUrl.empty() ? tr(STR_NOT_SET) : serverUrl;
@@ -548,10 +555,10 @@ index f3ca177..d8c289c 100644
        values[i] = BOOKORBIT_STORE.getSyncOnSleep() ? tr(STR_ON) : tr(STR_OFF);
  #if CROSSINK_TAILNET_ORBIFY_FINISH
      } else if (i == ORBIFY_MARK_ROW) {
-@@ -510,6 +543,12 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
-   for (int i = 0; i < count; i++) {
+@@ -528,6 +561,12 @@ void BookOrbitSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+     const int i = page == Page::Home ? visible : settingRow(visible);
      fui::ListItem item;
-     item.label = I18N.get(page == Page::Home ? homeNames[i] : menuNames[i]);
+     item.label = page != Page::Home && i == SYNC_MODE_ROW ? "Sync" : I18N.get(page == Page::Home ? homeNames[i] : menuNames[i]);
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
 +    if (page != Page::Home && i >= STORAGE_ROW && i <= WIFI_IDLE_ROW) {
 +      const char* keys[] = {"storage_limit_mb", "wifi_mode", "wifi_idle_min"};
@@ -559,7 +566,7 @@ index f3ca177..d8c289c 100644
 +    }
 +#endif
      if (!values[i].empty()) item.value = values[i].c_str();
-     item.actionValue = static_cast<int16_t>(i);
+     item.actionValue = static_cast<int16_t>(visible);
      items.push_back(item);
 diff --git a/src/components/themes/bookorbit/BookOrbitHomeUi.cpp b/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
 index f146597..74ca819 100644
