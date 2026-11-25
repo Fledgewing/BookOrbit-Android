@@ -28,9 +28,23 @@ function Channel.close(why)
     end
     if Channel.up then log("clicks: channel closed (" .. why .. "); KOReader's own key path is on") end
     Channel.sock, Channel.fd, Channel.up, Channel.service_on, Channel.buf = nil, nil, false, false, ""
+    Channel.proof, Channel.proven = nil, false
 end
 
 function Channel.onLine(line)
+    -- Nothing counts before the proof line ("ORBIT <proof>"); a channel line before it, or another
+    -- proof, means something else answered on the port.
+    if not Channel.proven then
+        local proof = line:match("^ORBIT%s+(%S+)")
+        if proof and proof == Channel.proof then
+            Channel.proven = true
+            return false
+        end
+        if proof or line:match("^SETTINGS") or line:match("^SERVICE") or line:match("^CLICK") then
+            Channel.close("it is not Orbit Companion")
+        end
+        return false
+    end
     -- "SETTINGS <ms>": a setting changed in the companion; read /status now (companion-settings §4.5).
     local sat = line:match("^SETTINGS%s+(%d+)")
     if sat then
@@ -102,6 +116,12 @@ function Channel.connect(why)
     if not lp or not wrapWait() then return false end
     local oks, socket = pcall(require, "socket")
     if not oks or type(socket.tcp) ~= "function" then return false end
+    -- The key opens the channel; the proof, the channel's first line, shows it is the companion.
+    local keys = Jni.call(Companion.AUTHORITY, Companion.CLICKS, {})
+    if not keys or keys.ok ~= "1" or not keys.key or not keys.proof then
+        log("clicks: no channel (" .. why .. "): the companion gave no key")
+        return false
+    end
     local sock = socket.tcp()
     sock:settimeout(1)
     local ok, err = sock:connect("127.0.0.1", 47913)
@@ -117,9 +137,10 @@ function Channel.connect(why)
         log("clicks: can't watch the channel in KOReader's event loop; own key path only")
         return false
     end
-    sock:send("GET /clicks?patch_version=" .. PATCH_VERSION .. " HTTP/1.0\r\n\r\n")
+    sock:send("GET /clicks?patch_version=" .. PATCH_VERSION .. "&key=" .. keys.key .. " HTTP/1.0\r\n\r\n")
     sock:settimeout(0)
     Channel.sock, Channel.fd, Channel.up, Channel.buf = sock, fd, true, ""
+    Channel.proof, Channel.proven = keys.proof, false
     log("clicks: channel open (" .. why .. ")")
     return true
 end
