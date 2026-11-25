@@ -540,6 +540,31 @@ store.orbit_android = store.orbit_android or {}
 store.orbit_android.open_book_at_exit = "/books/killed.epub"
 local PLUGIN_MAIN = here .. "/../orbit.koplugin/main.lua"
 local Orbit = dofile(PLUGIN_MAIN)
+-- The companion's status file. A real companion always writes one with its mode and caps;
+-- the fake's is a Full-mode companion with every cap unless a test says otherwise.
+local CAPS_FILE = os.tmpname()
+local ADDON = { "install", "setup", "stats", "relaunch" }
+local FULL = { "install", "setup", "stats", "relaunch", "home", "apps", "wifi", "sleep_sync", "screen_off", "clicker", "pin" }
+local function capsFile(mode, caps)
+    local f = io.open(CAPS_FILE, "wb")
+    if mode then f:write("CAPSFILE"); W.json.CAPSFILE = { proto = "1", mode = mode, caps = caps } end
+    f:close()
+end
+do
+    local CO = getfenv(Orbit.onSuspend).Companion
+    CO.statusFile = function() return CAPS_FILE end
+    capsFile("full", FULL)
+end
+-- Back to the default companion; empty = true leaves no status file (a test sets its own).
+local function capsReset(empty)
+    local E = getfenv(Orbit.onSuspend)
+    if empty then capsFile(nil) else capsFile("full", FULL) end
+    W.web[STATUS_KEY], W.json.STATUS = nil, nil
+    store.orbit_android.companion_caps, store.orbit_android.companion_mode = nil, nil
+    E.Companion.cap_set, E.Companion.caps_known = nil, nil
+    E.installed_cache.at = -1000
+    W.companion = true
+end
 
 local function newUI(in_book)
     local menu = { registered = {} }
@@ -1178,6 +1203,65 @@ test("settings defaults: every shared setting starts at the schema's default", f
     eq(RE.SCHEMA.byKey.wifi_mode.default, "jit", "the schema's wifi_mode")
 end)
 
+---------------------------------------------------------------- the contract (shared/contract/companion.json)
+-- The plugin's side; the companion's is ContractTest.kt. Every entry is the plugin's own and used.
+test("contract: every command, call, page, launch command, status key, file and the database", function()
+    local C = dofile(here .. "/json_mini.lua").fixture(here, "../contract/companion.json")
+    local src = {}
+    local p = io.popen("find '" .. here .. "/../orbit.koplugin' -name '*.lua'")
+    for f in p:lines() do local h = io.open(f, "rb"); src[#src + 1] = h:read("*a"); h:close() end
+    p:close()
+    src = table.concat(src, "\n")
+    local function count(pat) local n = 0; for _ in src:gmatch(pat) do n = n + 1 end; return n end
+    local function esc(x) return (x:gsub("%p", "%%%0")) end
+    local CO = RE.Companion
+    eq(C.version, 1)
+    eq(CO.PACKAGE, C.package); eq(CO.AUTHORITY, C.authority)
+    -- Companion.ACTION is exactly the commands and the pages.
+    local want = {}
+    for _, c in ipairs(C.commands) do want[c.name] = c.method end
+    for _, a in ipairs(C.activities) do want[a.name] = a.action end
+    for k, v in pairs(want) do eq(CO.ACTION[k], v, "Companion.ACTION." .. k) end
+    for k in pairs(CO.ACTION) do ok(want[k], "Companion.ACTION." .. k .. " is in the contract") end
+    -- Each is used (beyond its definition), and each extra is set somewhere.
+    for k in pairs(want) do ok(count("Companion%.ACTION%." .. k .. "%f[^%w_]") >= 1, k .. " is sent or opened") end
+    for _, c in ipairs(C.commands) do
+        for _, e in ipairs(c.extras) do
+            ok(src:find("%f[%w_]" .. esc(e) .. "%s*=") or src:find("%." .. esc(e) .. "%f[^%w_]") or src:find('%["' .. esc(e) .. '"%]'), c.name .. " extra " .. e)
+        end
+    end
+    for _, e in ipairs(C.common_extras) do ok(src:find("extras%." .. esc(e) .. "%s*="), "every call carries " .. e) end
+    -- The calls the plugin makes, and what their answers may carry.
+    for _, c in ipairs(C.calls) do
+        if c.caller == "koreader" then eq(CO[c.name], c.method, "Companion." .. c.name) end
+    end
+    eq(table.concat(RE.CALL_ANSWER, ","), table.concat(C.answer, ","), "CALL_ANSWER")
+    -- KOReader's start: the extras and every command the plugin obeys, nothing more.
+    eq(CO.EXTRA_COMMAND, C.koreader_start.extras.COMMAND); eq(CO.EXTRA_FROM, C.koreader_start.extras.FROM)
+    eq(CO.EXTRA_ROTATION, C.koreader_start.extras.ROTATION)
+    local h = io.open(here .. "/../orbit.koplugin/ko/home.lua", "rb"); local home = h:read("*a"); h:close()
+    local obeyed = {}
+    for cmd in home:gmatch('cmd == "([%w_]+)"') do obeyed[cmd] = true end
+    local listed = {}
+    for _, cmd in ipairs(C.koreader_start.commands) do listed[cmd] = true; ok(obeyed[cmd], "checkCommand obeys " .. cmd) end
+    for cmd in pairs(obeyed) do ok(listed[cmd], cmd .. " is in the contract") end
+    -- The click channel, the status keys, the shared files, the database.
+    ok(src:find("connect%(\"127%.0%.0%.1\", " .. C.loopback.port .. "%)"), "the click channel's port")
+    for _, l in ipairs(C.loopback.lines) do ok(src:find('"%^' .. l), "the channel line " .. l) end
+    for _, k in ipairs(C.status) do ok(src:find("%." .. k .. "%f[^%w_]"), "status key " .. k .. " is read") end
+    for _, f in ipairs(C.files) do
+        local name = f.path:gsub("/$", ""):match("[^/]+$")
+        ok(src:find(esc(name), 1), "file " .. name)
+    end
+    eq(RE.Store.VERSION, C.db.user_version, "orbit.db user_version")
+    eq(RE.Store.FILE, C.db.file:match("[^/]+$"))
+    local schema = assert(io.open(here .. "/../../../" .. C.db.schema, "rb"))
+    local tables = {}
+    for name in schema:read("*a"):gmatch("CREATE TABLE ([%w_]+)") do tables[#tables + 1] = name end
+    schema:close()
+    eq(table.concat(tables, ","), table.concat(C.db.tables, ","), "every orbit.db table")
+end)
+
 ---------------------------------------------------------------- recommended settings (addon-mode §5)
 local BO_DEFAULTS = { auto_sync = false, sync_forward = 1, sync_backward = 3, catalog_auto_open = "off" }
 -- A KOReader with nothing changed: the plugin and gestures at their stock defaults.
@@ -1358,25 +1442,8 @@ test("recommended: Keep mine on KOReader's Wi-Fi action offers to turn Wi-Fi swi
 end)
 
 ---------------------------------------------------------------- companion caps (addon-mode §6)
-local CAPS_FILE = os.tmpname()
-RE.Companion.statusFile = function() return CAPS_FILE end
-local ADDON = { "install", "setup", "stats", "relaunch" }
-local FULL = { "install", "setup", "stats", "relaunch", "home", "apps", "wifi", "sleep_sync", "screen_off", "clicker", "pin" }
-local function capsFile(mode, caps)
-    local f = io.open(CAPS_FILE, "wb")
-    if mode then f:write("CAPSFILE"); W.json.CAPSFILE = { proto = "1", mode = mode, caps = caps } end
-    f:close()
-end
-local function capsReset()
-    capsFile(nil)
-    W.web[STATUS_KEY], W.json.STATUS = nil, nil
-    store.orbit_android.companion_caps, store.orbit_android.companion_mode = nil, nil
-    RE.Companion.cap_set, RE.Companion.caps_known = nil, nil
-    RE.installed_cache.at = -1000
-    W.companion = true
-end
 
-test("caps: from the status file with no service; /status wins when it answers; a leftover file without the companion is ignored", function()
+test("caps: from the status file with no service; the status wins when it answers; a leftover file without the companion is ignored", function()
     capsReset()
     capsFile("addon", ADDON)
     RE.Shared.refresh("test")
@@ -1389,7 +1456,7 @@ test("caps: from the status file with no service; /status wins when it answers; 
     W.json.STATUS = { version = "0.10.0" }
     capsFile(nil)
     RE.Shared.refresh("test")
-    ok(RE.Companion.has("home") and RE.Companion.has("screen_off"), "older companion: legacy, every cap")
+    ok(RE.Companion.has("home") and RE.Companion.caps_source == "cache", "a status without caps: the caps seen last time, never a guess")
     capsFile("addon", ADDON)
     W.companion = false
     RE.installed_cache.at = -1000

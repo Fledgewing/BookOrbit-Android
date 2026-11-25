@@ -8,6 +8,10 @@ moves to building; when it ships it moves into [`docs/FEATURES.md`](docs/FEATURE
 Status: idea, designing, approved, building, shipped. Platforms: Android, X4 Pro, X4, X3 (Xteink:
 CrossInk 2.x only; 1.6 is retired).
 
+| Outcome | Platforms | Status | Design |
+|---|---|---|---|
+| Caller-verified companion commands and one tested plugin–companion contract, with file operations confined to Orbit data. | Android | building (approved design; caller checks merged) | [security](docs/design/security.md), [contract](android/docs/INTERFACE.md) |
+
 ## Next
 
 | # | Outcome | Platforms | Status | Design |
