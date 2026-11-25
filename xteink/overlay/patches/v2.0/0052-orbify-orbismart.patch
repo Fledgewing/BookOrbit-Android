@@ -131,7 +131,7 @@ index aa7e4b6..a788134 100644
 +  char text[160];
 +  snprintf(text, sizeof(text), "Continue from %s, p. %d?", remote.device.empty() ? "another reader" : remote.device.c_str(),
 +           mapped.pageNumber + 1);
-+  auto popup = makeUniqueNoThrow<ConfirmationActivity>(renderer, mappedInput, "OrbiSmart", text, false, true);
++  auto popup = makeUniqueNoThrow<ConfirmationActivity>(renderer, mappedInput, "", text, false, true);
 +  if (!popup) { orbiGeneration = UINT32_MAX; return false; }
 +  LOG_INF("ORB", "%s", text);
 +  popup->setOptionLabels("No", "Yes");
@@ -152,7 +152,7 @@ index aa7e4b6..a788134 100644
 +    if (orbify::orbismart::apply(r.decision, orbify::orbismart::Moment::Wake) != orbify::orbismart::Applied::Ask) return std::string();
 +    offer->remote = newer; offer->mapped = mapped; orbiAskedAt = newer.timestamp;
 +    char text[192];
-+    snprintf(text, sizeof(text), "OrbiSmart Continue from %s, p. %d?", newer.device.c_str(), mapped.pageNumber + 1);
++    snprintf(text, sizeof(text), "Continue from %s, p. %d?", newer.device.c_str(), mapped.pageNumber + 1);
 +    return text;
 +  });
 +  orbiAskedAt = remote.timestamp;
@@ -585,7 +585,7 @@ index f3ca177..006e7a3 100644
          values[i] = counts;
        }
 +    } else if (i == SYNC_MODE_ROW) {
-+      values[i] = BOOKORBIT_STORE.getOrbiSmart() ? "OrbiSmart (recommended)" : "Custom";
++      values[i] = BOOKORBIT_STORE.getOrbiSmart() ? "Furthest page wins" : "Custom";
      } else if (i == 0) {
        const auto username = BOOKORBIT_STORE.getUsername();
        values[i] = username.empty() ? tr(STR_NOT_SET) : username;
@@ -598,7 +598,7 @@ index f3ca177..006e7a3 100644
 +    const int i = page == Page::Home ? visible : settingRow(visible);
      fui::ListItem item;
 -    item.label = I18N.get(page == Page::Home ? homeNames[i] : menuNames[i]);
-+    item.label = page != Page::Home && i == SYNC_MODE_ROW ? "Sync" : I18N.get(page == Page::Home ? homeNames[i] : menuNames[i]);
++    item.label = page != Page::Home && i == SYNC_MODE_ROW ? "Reading position" : I18N.get(page == Page::Home ? homeNames[i] : menuNames[i]);
      if (!values[i].empty()) item.value = values[i].c_str();
 -    item.actionValue = static_cast<int16_t>(i);
 +    item.actionValue = static_cast<int16_t>(visible);

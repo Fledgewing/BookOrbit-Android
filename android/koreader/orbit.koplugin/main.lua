@@ -44,7 +44,7 @@ local KO = {
     "ko/wifi_backend.lua", "ko/grouping.lua", "ko/endsheet.lua", "ko/endofbook.lua",
     "ko/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/badge.lua", "ko/cache.lua", "ko/mirror.lua", "ko/copies.lua", "ko/sleepscreen.lua",
     "ko/sqlite_stress.lua",
-    "ko/orbismart.lua", "ko/status_layout.lua",
+    "ko/orbismart.lua", "ko/status_layout.lua", "ko/main_loop.lua",
 }
 
 -- This plugin's folder: PluginLoader dofile()s <folder>/main.lua (frontend/pluginloader.lua:244).

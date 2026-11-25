@@ -2994,6 +2994,7 @@ test("end of book: stars, leave, sync -> guard read, read-status, rating, writte
     run(5)
     ok(#eob.calls == 0 or not table.concat(eob.calls, ","):find("status:", 1, true), "nothing sent with the book open")
     m:onCloseWidget()
+    ReaderUI.instance = nil -- KOReader destroys the reader after CloseWidget
     ok(E.EOB.queue()["d1"].ready, "ready once the book is left")
     E.Sync.waitOutbox(ui.bookorbit, 10, function() W.waited = true end)
     run(5)
@@ -3008,6 +3009,7 @@ test("end of book: a server error retries later; 404 drops", function()
     local ui, m = bookUI()
     ui.status:markBook(true)
     m:onCloseWidget()
+    ReaderUI.instance = nil -- the book was closed; the next sync runs outside reading
     eob.fail, eob.calls = 503, {}
     E.EOB.drain(ui.bookorbit, false)
     local job = E.EOB.queue()["d1"]
@@ -5724,6 +5726,99 @@ test("sqlite cache: a replaced or busy database is reopened or missed, never an 
     end)
 end)
 
+test("reading: a locked cache cannot delay page turns or cold/warm cache reads", function()
+    local dir, st = fixtureStore()
+    withStore(dir, function()
+        local path = DBFX.reads[1].path
+        local reading, conn = RE.reading, RE.Db.conn
+        RE.reading = function() return false end
+        local warm = RE.Store.read(DBFX.owner, "tap-warm", path, nil)
+        ok(warm ~= nil, "prime the decoded cache before reading")
+        local ui, m = newUI(true)
+        RE.EOB.page_digests[ui] = { file = ui.document.file, digest = "tap-regression" }
+        local bookOf = RE.EOB.bookOf
+        RE.EOB.bookOf = function() error("page turn read plugin state") end
+        RE.reading = function() return true end
+        local opens = 0
+        RE.Db.conn = function(...) opens = opens + 1; return conn(...) end
+        st.conn:exec("BEGIN EXCLUSIVE")
+        local before = W.wall()
+        local okf, err = pcall(function()
+            for page = 2, 26 do
+                m:onPageUpdate(page)
+                eq(RE.Store.read(DBFX.owner, "tap-warm", path, nil), warm, "memory hit")
+                eq(RE.Store.read(DBFX.owner, "tap-cold", path, nil), nil, "cold miss skips SQL")
+            end
+        end)
+        local elapsed = W.wall() - before
+        st.conn:exec("COMMIT")
+        RE.reading, RE.Db.conn, RE.EOB.bookOf = reading, conn, bookOf
+        if not okf then error(err) end
+        eq(RE.EOB.session["tap-regression"].forward, 24, "forward turns still release the stale-push hold")
+        eq(opens, 0, "no SQLite access on a page turn, even under an exclusive lock")
+        ok(elapsed < 0.05, "25 page turns and 50 reads below 50 ms: " .. elapsed)
+    end)
+    st:close()
+end)
+
+test("reading: finish sync skips catalog calls and file writes, then completes outside reading", function()
+    local reading, usable = RE.reading, RE.EOB.usable
+    local done, touched = 0, 0
+    RE.reading = function() return true end
+    RE.EOB.usable = function() touched = touched + 1; return false end
+    RE.EOB.drain({}, false, function() done = done + 1 end)
+    eq(touched, 0, "reading returns before any finish/detail work")
+    eq(done, 1, "the outbox callback is not held")
+    RE.reading = function() return false end
+    RE.EOB.drain({}, false, function() done = done + 1 end)
+    eq(touched, 1, "the next sync outside reading can do the deferred work")
+    eq(done, 2)
+    RE.reading, RE.EOB.usable = reading, usable
+end)
+
+test("network: even an unanswered probe runs only in a background worker", function()
+    run(30)
+    local background, probe = RE.Background.run, RE.probeServer
+    local job, done
+    RE.Background.run = function(name, fn, timeout, cb) job = { fn = fn, cb = cb } end
+    RE.probeServer = function()
+        ok(W.in_child, "HTTP must never execute on the UI thread")
+        return false, "timeout"
+    end
+    local before = W.wall()
+    RE.Net.up(newPlugin(), { reason = "tap regression", cap = 2, need_server = true }, function() done = true end)
+    ok(W.wall() - before < 0.05, "starting a stalled probe returns below 50 ms")
+    ok(job and not done, "probe pending without blocking input")
+    W.in_child = true
+    local result = job.fn()
+    W.in_child = nil
+    -- The whole network budget elapsed while input remained available.
+    W.clock = W.clock + 2
+    job.cb(result)
+    RE.Background.run, RE.probeServer = background, probe
+    ok(done and RE.Net.inflight == nil, "timeout completes, no synchronous retry")
+end)
+
+test("main-loop diagnostics: slow callbacks log, preserve returns/errors and cancel by original identity", function()
+    local f = RE.MainLoop.wrap(function() W.clock = W.clock + 0.125; return nil, "kept", false end, "test callback")
+    local a, b, c = f()
+    eq(a, nil); eq(b, "kept"); eq(c, false)
+    ok(table.concat(W.logs, "\n"):find("booksync: main-loop stall 125 ms in test callback", 1, true), "persistent stall diagnostic")
+    local bad = RE.MainLoop.wrap(function() W.clock = W.clock + 0.125; error("timing regression") end, "test error")
+    local good, err = pcall(bad)
+    ok(not good and tostring(err):find("timing regression", 1, true), "errors propagate")
+    local slow = setfenv(function() W.clock = W.clock + 0.125 end, RE)
+    local nlogs = #W.logs
+    UIManager:nextTick(slow)
+    run(0.2)
+    ok(#W.logs > nlogs and W.logs[#W.logs]:find("booksync: main-loop stall 125 ms", 1, true), "scheduled callbacks are timed")
+    local fn = setfenv(function() error("cancelled callback ran") end, RE)
+    UIManager:scheduleIn(0, fn)
+    UIManager:nextTick(fn)
+    UIManager:unschedule(fn)
+    run(0.1)
+end)
+
 test("sqlite stress: the verdict line", function()
     local line = RE.SqliteStress.verdict({ reads = 900, errors = 0, busy = 3, max_busy_ms = 41 },
         { writes = 1200, errors = 0, max_wait_ms = 12, integrity = "ok" })
@@ -5733,7 +5828,7 @@ test("sqlite stress: the verdict line", function()
     ok(notes[1]:find("didn't answer") ~= nil)
 end)
 
----------------------------------------------------------------- OrbiSmart sync (docs/design/orbismart.md)
+---------------------------------------------------------------- OrbiSmart sync (docs/design/position-sync.md)
 -- A 300-page book; places are pages, xpointers "/p<page>". The BookOrbit plugin's API client is
 -- a fake bookorbit_api (getProgress answers W.osm_server; updateProgress stores it), wrapped by
 -- ko/orbismart.lua like the real one.
@@ -6146,7 +6241,7 @@ test("orbismart: menu: Sync first in its section; the rows it sets hidden; the o
     local ui, m = osmBook(50, nil)
     local sync
     for _, it in ipairs(m:menuItems()) do if it.text == "Sync and Wi-Fi" then sync = it.sub_item_table end end
-    ok(sync[1].text_func():find("Sync: OrbiSmart", 1, true), sync[1].text_func())
+    ok(sync[1].text_func():find("Reading position: Furthest page wins", 1, true), sync[1].text_func())
     local texts = {}
     for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts + 1] = it.text or (it.text_func and it.text_func()) or "" end
     local all = table.concat(texts, "|")

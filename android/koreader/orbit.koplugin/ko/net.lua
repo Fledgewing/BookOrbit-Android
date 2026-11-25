@@ -91,18 +91,26 @@ function Net.up(p, opts, cb)
             log("network: VPN up after", fmt(el))
         end
         if not url then return finish(true) end
-        if el >= next_probe then
+        if el < cap and el >= next_probe then
             local remaining = cap - el
-            local answered, code = probeServer(url, math.max(0.5, math.min(1.5, remaining)))
-            local after = now_s() - t0
-            if answered then
-                res.server_s = after
-                log("network: server answered", code, "after", fmt(after))
-                return finish(true)
-            end
-            log("network: server not answering yet:", tostring(code), "at", fmt(after))
-            next_probe = after + 1
-            el = after
+            -- A HEAD can wait on DNS/connect/read for seconds. Scheduling tick does not
+            -- make that I/O asynchronous: run it in a child, including while reading.
+            Background.run("network probe", function()
+                local answered, code = probeServer(url, math.max(0.05, math.min(1.5, remaining)))
+                return answered and tostring(code) or ""
+            end, math.min(2, remaining), function(result)
+                local after = now_s() - t0
+                local code = tonumber(result)
+                if code then
+                    res.server_s = after
+                    log("network: server answered", code, "after", fmt(after))
+                    return finish(true)
+                end
+                log("network: server not answering yet at", fmt(after))
+                next_probe = after + 1
+                tick()
+            end)
+            return
         end
         if el >= cap then
             local stage = (S.wake_tailscale and not res.vpn_s) and "tailscale" or "server"

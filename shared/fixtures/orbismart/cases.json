@@ -1,5 +1,5 @@
 {
-  "rule": "OrbiSmart sync (docs/design/orbismart.md §3): furthest wins; never push behind the server's place except an override or a released reread; a move is silent only before the page renders, else asked (Yes / No); No declines that one remote place.",
+  "rule": "BookSync position sync (docs/design/position-sync.md §3): furthest wins; never push behind the server's place except an override or a released reread; a move is silent only before the page renders, else asked (Yes / No); No declines that one remote place.",
   "inputs": {
     "local": "L: this device's place, in local pages (Android: page; Xteink: a linear page ordinal)",
     "server": "R: the server's place mapped to local pages; null = the server has none",

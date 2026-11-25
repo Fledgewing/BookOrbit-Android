@@ -115,6 +115,9 @@ class SettingsPagesTest {
         val hidden = listOf("sync_on_sleep", "sleep_cap", "sync_on_wake", "reading_schedule")
         val smart = section("sync")
         assertNotNull(tagged(smart, "key:sync_mode"))
+        assertTrue(texts(smart).contains("Reading position"))
+        assertTrue(texts(smart).contains("Furthest page wins"))
+        assertTrue(texts(smart).contains("BookSync keeps the furthest place you've read on any device, and asks before jumping."))
         hidden.forEach { assertNull("OrbiSmart hides $it", tagged(smart, "key:$it")) }
         SettingsStore.set(RuntimeEnvironment.getApplication(), "sync_mode", "custom", "test")
         val custom = section("sync")

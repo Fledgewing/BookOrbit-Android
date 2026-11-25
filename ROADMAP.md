@@ -5,12 +5,24 @@ moves to building; when it ships it moves into [`docs/FEATURES.md`](docs/FEATURE
 (AGENTS.md "Features and roadmap"). Items are outcomes only: designs live in
 [`docs/design/`](docs/design/).
 
-Status: idea, designing, approved, building, shipped. Platforms: Android, X4 Pro, X4, X3 (Xteink:
+Status: idea, planned, designing, approved, building, shipped. Platforms: Android, X4 Pro, X4, X3 (Xteink:
 CrossInk 2.x only; 1.6 is retired).
 
 | Outcome | Platforms | Status | Design |
 |---|---|---|---|
 | Caller-verified companion commands and one tested plugin–companion contract, with file operations confined to BookSync data. | Android | building (approved design; caller checks merged) | [security](docs/design/security.md), [contract](android/docs/INTERFACE.md) |
+
+## Planned: BookSync ownership
+
+Deferred work, in the order below; existing work in progress continues. The proposed design
+and any UI mockups still need approval before implementation.
+
+| # | Outcome | Platforms | Status | Design |
+|---|---|---|---|---|
+| 1 | **Owned KOReader plugin and portable read state**: the plugin + required companion retain BookSync's own positions, status, sessions, highlights, ratings and shelves, with open export and BookOrbit + Grimmory direct adapters. | Android | designing | [owned client and ledger](docs/design/booksync-server.md#1-owned-android-client-and-ledger) |
+| 2 | **Per-device catalog packages from BookSync**: an optional container on the maintainer's Kubernetes cluster serves profile-sized catalogs and covers as its first API. | Server, Android; packages designed for X4 Pro, X4, X3 | planned | [first server API](docs/design/booksync-server.md#2-server-first-api-catalog-packages) |
+| 3 | **Shared portable history across backends**: BookSync adds durable ledger/event sync and BookOrbit + Grimmory adapters, with backup/restore and explicit direct/server mode transitions. | Server, Android | planned | [shared ledger](docs/design/booksync-server.md#3-shared-ledger-and-backend-adapters) |
+| 4 | **BookSync on Xteink**: X4 Pro, X4 and X3 consume catalog packages and sync hardware-supported read state; retain direct mode, with a separate X3 server profile if fit requires it. | X4 Pro, X4, X3 (subject to flash/RAM validation) | planned | [Xteink clients](docs/design/booksync-server.md#4-xteink-clients) |
 
 ## Next
 

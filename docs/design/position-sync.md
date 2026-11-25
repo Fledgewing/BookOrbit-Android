@@ -1,4 +1,4 @@
-# OrbiSmart sync: one setting for seamless, low-battery reading across Orbify
+# BookSync position sync: one setting for seamless, low-battery reading across Orbify
 
 Status: approved with the user's rulings of 2026-11-24 (below). The shared decision table, Android and Xteink firmware wiring are implemented;
 device validation remains before release. Platforms: Android (KOReader + BookOrbit plugin + BookSync plugin + BookSync
@@ -116,7 +116,7 @@ labelled and should be replaced from it (§6).
 
 ---
 
-## 3. The OrbiSmart policy
+## 3. The BookSync position sync policy
 
 ### 3.1 One decision, both platforms
 
@@ -160,7 +160,7 @@ Xteink already does; Android's outbox drain waits for BookSync's pull, extending
 backward move on the server is always deliberate.
 
 The table is `shared/fixtures/orbismart/cases.json` (sections `decide`, `apply`, `push`): the Lua
-`OrbiSmart` (`android/koreader/orbit.koplugin/logic/orbismart.lua`) and the C++
+`OrbiSmart` (internal policy identifier; `android/koreader/orbit.koplugin/logic/orbismart.lua`) and the C++
 `orbify::orbismart` (`xteink/orbify/core/OrbiSmart.{h,cpp}`) both run every case.
 
 ### 3.2 When a place is applied
@@ -196,7 +196,7 @@ open one. No choice screen anywhere.
 Per book, BookSync keeps a **sync marker** M (server timestamp and place of the last sync, the
 declined remote place, a queued override) in its settings (`S.orbismart[digest]`).
 
-Under OrbiSmart the plugin's "further ahead" and "further behind" are both **Don't sync** and its
+Under BookSync position sync the plugin's "further ahead" and "further behind" are both **Don't sync** and its
 page push is off: BookSync reads with `fetchRemoteProgress`, decides, and calls `syncToProgress` or
 `requestProgressPush` (all already hooked, `logic/compat.lua:13-29`). The Wi-Fi mode stays the
 user's (Just in time is the right partner).
@@ -248,7 +248,7 @@ sleep sync with its catalog work ≈45 s ≈ 1.4 mAh; battery 650 mAh (the X3's 
 XTEINK-BATTERY-STATS §1; X4 capacity unrecorded). Android quick sync ≈6 s at ≈200 mA above base ≈
 0.33 mAh plus a 2-min Just-in-time tail ≈0.33 mAh; battery ≈3000 mAh.
 
-| | Today (Xteink: Smart + Sync on Sleep on; Android: recommended) | OrbiSmart |
+| | Today (Xteink: Smart + Sync on Sleep on; Android: recommended) | BookSync position sync |
 |---|---|---|
 | X4 radio per day | 3 sleep syncs + ~1 manual sync ≈ 4.7 mAh ≈ **0.7 %** | 3 sleep syncs + 3 wake checks + ~2 pause pushes ≈ 6.0 mAh ≈ **0.9 %** |
 | X3 radio per day | ≈ 4.7 mAh ≈ 0.7 % | v1: 3 sleep syncs ≈ 4.2 mAh ≈ **0.65 %** (later, with wake checks: ≈ 5.6 mAh ≈ 0.85 %) |
@@ -288,20 +288,21 @@ Net: about +0.2 points of battery per Xteink per day and +0.05 on Android, for z
 
 ## 6. Rollout
 
-**Setting.** "Sync" with two values: **OrbiSmart (recommended)** and **Custom**. Android: first row
+**Setting.** "Reading position" with two values: **Furthest page wins** and **Custom**.
+Help: "BookSync keeps the furthest place you've read on any device, and asks before jumping." Android: first row
 of Companion Settings › Sync, mirrored in KOReader's BookSync menu (one schema, companion-settings.md).
-Xteink: first row of Settings › BookOrbit Sync. OrbiSmart presets and hides:
+Xteink: first row of BookSync › Sync. BookSync position sync presets and hides:
 
 | Platform | Settings it sets (Custom shows them again, last values kept) |
 |---|---|
 | Android | Plugin: auto-sync on; further ahead and further behind: Don't sync (BookSync decides); push every N pages off. BookSync: sync on wake on, sync on sleep on, Sync while reading → "When you pause". Wi-Fi mode untouched. |
-| Xteink | Sync behaviour Smart (OrbiSmart rules), Sync on Sleep on, Sync While Reading → "When you pause" (X4s), Wake check on. Mark Finished at End untouched. |
+| Xteink | Sync behaviour Smart (BookSync position sync rules), Sync on Sleep on, Sync While Reading → "When you pause" (X4s), Wake check on. Mark Finished at End untouched. |
 
-New installs get OrbiSmart. On update it follows the recommended-settings rule (addon-mode §5): applied
+New installs get BookSync position sync. On update it follows the recommended-settings rule (addon-mode §5): applied
 where the sync settings are still at their defaults or Orbify's recommended values; otherwise offered
 as a Setup checklist row with "what you lose without it".
 
-**Phases.** 1) The shared decision table (Lua + C++ host-tested function), Android OrbiSmart
+**Phases.** 1) The shared decision table (Lua + C++ host-tested function), Android BookSync position sync
 (setting, behind-hold, state machine, popup, override, marker). 2) Xteink: X4s sleep sync rules +
 pending places + wake check + popup + override; X3 sleep sync rules only (ruling 5). 3) Later: the
 X3 wake check behind the page (flash permitting: the X3 is at 99.38 %). Each: sideload test, then release
@@ -320,7 +321,7 @@ X3 wake check behind the page (flash permitting: the X3 is at 99.38 %). Each: si
 **It works when** (per device, real use): 10 device switches in a row land on the right page with no
 manual sync; no backward server move without an override line; Stay-here under 10 % of jumps; late
 finds under 20 % of wake checks; battery-stats standby and reading rates within +0.5 %/day of the
-pre-OrbiSmart week.
+week before BookSync position sync.
 
 ---
 
@@ -340,12 +341,12 @@ pre-OrbiSmart week.
 | 8 | Android background pulls | No | Ruling 2 (companion has no login); KOReader is frozen asleep. |
 | 9 | Wake-check thresholds | X4 ≥10 min asleep, Android ≥5 min (X3: no wake check in v1) | A short nap rarely follows reading elsewhere; X3's check costs more. |
 | 10 | Pre-fetch other books | 3 on-device Continue reading books, X only | Cheap on the lent session; Android's open pull is fast. |
-| 11 | Choice screen | Gone under OrbiSmart, kept under Custom; the Yes/No popup is not a choice screen | Furthest wins; the reader only confirms the move. |
+| 11 | Choice screen | Gone under BookSync position sync, kept under Custom; the Yes/No popup is not a choice screen | Furthest wins; the reader only confirms the move. |
 | 12 | Same-place tolerance | ±1 page (xpointer/spine-page), 2 % for percent-only | Existing `PAGE_TOLERANCE`; percent across renderers is loose. |
 | 13 | Skew margin | 10 min, then furthest | Safe default; an override can be repeated. |
 | 14 | X3 wake check redraw | Restart without a redraw when nothing changed | Avoids a flash on an unchanged page. |
 | 15 | Kids | Same policy; override not PIN-gated | Rereads are reading, and rule 7 handles favourites. |
-| 16 | Name and place | "Sync: OrbiSmart / Custom", first row of the sync settings | One choice; details only under Custom. |
+| 16 | Name and place | "Reading position: Furthest page wins / Custom", first row of the sync settings | One choice; details only under Custom. |
 
 **Decided by the user.**
 Both were decided on 2026-11-24 (rulings 1 and 2 at the top): the jump is a Yes/No popup at open,
@@ -377,7 +378,7 @@ them after Home's session closes.
 **Wi-Fi coordination:** W9's shared when-to-connect table was absent from main when W10 was
 wired. This follows Android's Just in time policy: join for the sync, reuse an already connected
 radio, and disconnect only a connection the sync brought up. Sleep owns its existing radio hold.
-The Wi-Fi setting stays independent of OrbiSmart; W9 can supply its shared policy at the existing
+The Wi-Fi setting stays independent of BookSync position sync; W9 can supply its shared policy at the existing
 connection boundary without changing the position decision.
 
 The X3 reader activities compile with GCC `-Oz` and link-time optimization. Its network, OTA, TLS

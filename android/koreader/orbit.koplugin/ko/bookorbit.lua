@@ -77,10 +77,8 @@ function serverUrl(p)
 end
 
 -- Any HTTP status from the base URL counts: it proves the route and the server, with no login.
--- Runs on the UI thread, so each probe is capped (block and total) at `timeout` <= 1.5 s,
--- with the UI loop running between probes: well under Android's 5 s input timeout. Name
--- lookup isn't covered by socket timeouts; the server is usually a Tailscale address or name
--- that Tailscale's resolver answers locally.
+-- Blocking primitive: only called by Net.up's background child. Socket timeouts
+-- do not bound DNS resolution; Background.run also caps the child's lifetime.
 function probeServer(url, timeout)
     local http = require("socket.http")
     local socket = require("socket")

@@ -23,7 +23,7 @@
 -- (bookorbit_catalog.lua :1181 loadBooks).
 ---------------------------------------------------------------------------------------------
 
-EOB = { jobs = nil, details = nil, session = {}, sheet = nil, wants_download = nil }
+EOB = { page_digests = setmetatable({}, { __mode = "k" }), jobs = nil, details = nil, session = {}, sheet = nil, wants_download = nil }
 EOB.QUEUE_FILE = "orbit-finish-queue.lua"
 EOB.CACHE_FILE = "orbit-detail-cache.lua"
 EOB.CACHE_MAX = 32
@@ -139,6 +139,7 @@ function EOB.bookOf(ui)
     if not (p and m and ui.document and ui.doc_settings) or not EOB.usable(p) then return nil end
     local okd, digest = pcall(p.getDocumentDigest, p)
     if not okd or type(digest) ~= "string" then return nil end
+    EOB.page_digests[ui] = { file = ui.document.file, digest = digest }
     local okb, book = pcall(m.state.getBook, digest)
     local id = okb and type(book) == "table" and book.bookId or nil
     return { digest = digest, file = ui.document.file, book_id = id, summary = ui.doc_settings:readSetting("summary") or {},
@@ -496,6 +497,10 @@ end
 -- for the sheet. Runs only with the network up (Sync.waitOutbox's callers bring it up).
 function EOB.drain(p, manual, done)
     done = done or function() end
+    -- Outbox waits also complete during reading. These finish/detail operations
+    -- include synchronous catalog calls and file writes: wait for the next lifecycle
+    -- sync outside reading, rather than running them on a page's input loop.
+    if reading() then return done() end
     if not EOB.usable(p) then return done() end
     local m = EOB.mods()
     local client = p:newClient()
@@ -512,7 +517,7 @@ function EOB.drain(p, manual, done)
         end
     end
     EOB.save()
-    if sent > 0 then
+    if sent > 0 and EOB.sheet then
         UIManager:show(require("ui/widget/infomessage"):new{ text = "Finished · sent", timeout = 2 }) -- gate: exception (end-of-book sheet)
     end
     EOB.refreshOpenDetail(p, client)
@@ -656,8 +661,8 @@ end
 
 -- Page turns forward this session release the hold (§7).
 function EOB.onPage(ui, page)
-    local b = EOB.bookOf(ui)
-    if not b then return end
+    local b = ui and EOB.page_digests[ui]
+    if not b or not ui.document or b.file ~= ui.document.file then return end
     local s = EOB.session[b.digest] or { forward = 0 }
     EOB.session[b.digest] = s
     if s.last and page > s.last then s.forward = (s.forward or 0) + 1 end
@@ -699,6 +704,7 @@ do
     function OrbitAndroid:onReaderReady(...)
         local p = bookorbit(self.ui)
         if p then pcall(EOB.installPluginHooks, p) end
+        pcall(EOB.bookOf, self.ui) -- prime the digest once; page turns never read plugin state
         return base_ready(self, ...)
     end
 end
