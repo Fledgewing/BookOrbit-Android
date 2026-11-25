@@ -124,7 +124,8 @@ class FastCatalogRefresh(
         var restarted = false
         while (true) {
             val query = linkedMapOf("size" to "200")
-            plan.detailTemplate?.let { MirrorLogic.parseQuery(MirrorLogic.splitPath(it).second)["variant"] }?.let { query["variant"] = it }
+            val detailQuery = plan.detailTemplate?.let { MirrorLogic.parseQuery(MirrorLogic.splitPath(it).second) }.orEmpty()
+            for (field in listOf("deviceId", "variant")) detailQuery[field]?.let { query[field] = it }
             cursor?.let { query["cursor"] = it }
             val request = path("$base/manifest", query)
             val body = ask(request)

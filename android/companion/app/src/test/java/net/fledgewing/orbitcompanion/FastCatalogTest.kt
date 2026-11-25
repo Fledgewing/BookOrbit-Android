@@ -16,7 +16,7 @@ class FastCatalogTest {
     private val memberships = fixture["memberships"] as Map<*, *>
     private val ranks = fixture["ranks"] as Map<*, *>
     private fun ids(items: List<*>) = items.map { (it as Map<*, *>)["id"] as Long }
-    private fun plan(op: String = "full") = CacheWorker.Plan(mapOf("op" to op, "run" to "bulk", "owner" to "reader|https://books.example/api/v1", "catalog" to inventory))
+    private fun plan(op: String = "full") = CacheWorker.Plan(mapOf("op" to op, "run" to "bulk", "owner" to "reader|https://books.example/api/v1", "catalog" to inventory, "detail_template" to "$base/books/BOOK_ID?deviceId=fixture-reader&variant=original"))
     private class CatalogFailure : RuntimeException()
     private fun reply(request: String): Map<*, *> {
         val (endpoint, encoded) = MirrorLogic.splitPath(request)
@@ -66,6 +66,10 @@ class FastCatalogTest {
             assertEquals(progress.sorted(), progress)
             assertEquals(100, progress.last())
             assertTrue(requests.none { Regex("/books/[0-9]+").containsMatchIn(it) })
+            assertTrue(requests.filter { "/manifest?" in it }.all {
+                val q = MirrorLogic.parseQuery(MirrorLogic.splitPath(it).second)
+                q["deviceId"] == "fixture-reader" && q["variant"] == "original"
+            })
             assertEquals(1, requests.count { "seriesId=" in it })
             for (value in fixture["windows"] as List<*>) {
                 val w = value as Map<*, *>
