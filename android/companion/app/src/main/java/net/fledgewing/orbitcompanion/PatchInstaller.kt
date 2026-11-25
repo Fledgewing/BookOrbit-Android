@@ -278,7 +278,7 @@ object PatchInstaller {
         java.util.zip.ZipInputStream(zip.inputStream().buffered()).use { zin ->
             while (true) {
                 val e = zin.nextEntry ?: break
-                val rel = PatchFile.zipMember(e.name) ?: return "unexpected file ${e.name} in ${PatchFile.ZIP}; not installed"
+                val rel = PatchFile.zipMember(e.name) ?: return "unexpected file ${e.name} in the BookSync plugin archive; not installed"
                 val f = File(to, rel)
                 if (e.isDirectory) {
                     f.mkdirs()
@@ -289,7 +289,7 @@ object PatchInstaller {
                 files++
             }
         }
-        if (files == 0) return "${PatchFile.ZIP} holds no plugin files; not installed"
+        if (files == 0) return "The BookSync plugin archive holds no plugin files; not installed"
         log("unpacked $files files")
         return null
     }
@@ -308,10 +308,10 @@ object PatchInstaller {
         val dev = Version.parse(v) == null || v.contains("dev")
         log("fetching ${if (dev) "the latest release" else "release v$v"}")
         val rel = Updater.release(JSONObject(if (dev) Updater.httpText("${Updater.API}/releases/latest") else releaseText(v)))
-        val zipUrl = rel.assets[PatchFile.ZIP] ?: return "${rel.tag} has no ${PatchFile.ZIP}"
+        val zipUrl = rel.assets[PatchFile.ZIP] ?: return "${rel.tag} has no BookSync plugin archive"
         val sumsUrl = rel.assets[UpdatePolicy.SUMS_NAME] ?: return "${rel.tag} has no ${UpdatePolicy.SUMS_NAME}"
         val expected = Checksums.parse(Updater.httpText(sumsUrl))[PatchFile.ZIP]
-            ?: return "${UpdatePolicy.SUMS_NAME} has no line for ${PatchFile.ZIP}"
+            ?: return "${UpdatePolicy.SUMS_NAME} has no line for the BookSync plugin archive"
         val parent = Installers.pluginsDir()
         if (!parent.isDirectory && !parent.mkdirs()) {
             log("can't create $parent")

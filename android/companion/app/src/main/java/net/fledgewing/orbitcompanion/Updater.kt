@@ -222,9 +222,9 @@ object Updater {
         }
 
         val apkName = UpdatePolicy.apkName(ver)
-        val apkUrl = rel.assets[apkName] ?: return "${rel.tag} has no $apkName"
+        val apkUrl = rel.assets[apkName] ?: return "${rel.tag} has no BookSync Companion APK"
         val sumsUrl = rel.assets[UpdatePolicy.SUMS_NAME] ?: return "${rel.tag} has no ${UpdatePolicy.SUMS_NAME}"
-        val expected = Checksums.parse(httpText(sumsUrl))[apkName] ?: return "${UpdatePolicy.SUMS_NAME} has no line for $apkName"
+        val expected = Checksums.parse(httpText(sumsUrl))[apkName] ?: return "${UpdatePolicy.SUMS_NAME} has no line for the BookSync Companion APK"
         log("${rel.tag}: expecting sha256 $expected for $apkName")
 
         val dir = File(ctx.filesDir, "updates").apply { mkdirs() }
