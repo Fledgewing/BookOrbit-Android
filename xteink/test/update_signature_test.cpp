@@ -1,3 +1,8 @@
+// @fixture release-signing/cases.json
+// @fixture release-signing/SIGNATURES-firmware
+// @fixture release-signing/SIGNATURES-plugin
+// @fixture release-signing/SIGNATURES-plugin-other-root
+// @fixture release-signing/SIGNATURES-plugin-rotated
 // Host test for signed updates (orbify/core/Ed25519Verify, orbify/core/UpdateSignature;
 // docs/design/release-signing.md): SHA-512 and RFC 8032 known answers, then every case in
 // shared/fixtures/release-signing/cases.json, the cases the companion's verifier checks too:

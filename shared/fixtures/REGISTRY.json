@@ -445,7 +445,8 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
-        "py"
+        "cpp",
+        "kt"
       ]
     },
     {
@@ -453,7 +454,8 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
-        "py"
+        "cpp",
+        "kt"
       ]
     },
     {
@@ -461,7 +463,8 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
-        "py"
+        "cpp",
+        "kt"
       ]
     },
     {
@@ -469,7 +472,8 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
-        "py"
+        "cpp",
+        "kt"
       ]
     },
     {
@@ -477,7 +481,8 @@
       "rule": "Release-signing reference vectors and certificates",
       "owner": "release verifiers",
       "readers": [
-        "py"
+        "cpp",
+        "kt"
       ]
     },
     {

@@ -1,3 +1,8 @@
+// @fixture release-signing/cases.json
+// @fixture release-signing/SIGNATURES-firmware
+// @fixture release-signing/SIGNATURES-plugin
+// @fixture release-signing/SIGNATURES-plugin-other-root
+// @fixture release-signing/SIGNATURES-plugin-rotated
 package net.fledgewing.orbitcompanion
 
 import org.json.JSONObject
