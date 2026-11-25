@@ -23,7 +23,9 @@ KOReader v2026.07.1, commit `9192014d8bd82a91dc1012473be0f238dedfdb54`:
 - `frontend/apps/reader/modules/readertypeset.lua:540`: CRE page margins add the
   footer height unless reclaimed. `frontend/apps/reader/modules/readerview.lua:751`
   reserves footer height in paged documents; `:1060` recalculates on visibility
-  changes. Merely painting over the document would cover text.
+  changes. `readerview.lua:344-346,359-363,449-456` identifies the rendered
+  page bounds from `state.offset.y` and `visible_area.h`; only screen surround
+  outside those bounds is safe to use as PDF/CBZ margin.
 
 Native settings do not meet the complete request. Use a custom BookSync renderer
 integrated into the reader view, retaining native footer gesture handling.
@@ -61,11 +63,24 @@ before its icon. Do not overlap the page group. Percent uses document reading
 progress, clamped to 0–100 and rounded to the nearest whole percent; page numbers
 use KOReader's document pagination. Missing/unknown totals show no progress group.
 
-Reserve real reading space for both strips. For CRE, use the footer height and a
-top-margin adjustment while retaining the saved margin values and reading anchor.
-For paged documents, shrink and offset the document viewport and update coordinate
-transforms, zoom/recalculate and scroll page states together. Never just crop or
-paint across an existing page. Verify PDF/CBZ page and scroll modes plus rotation.
+W29 follows the maintainer's rulings in the task brief: draw inside the book's
+existing top and bottom margins and reuse the sleep-screen battery. No additional
+space is reserved by default. Fit each strip's measured font height independently
+to its margin, with the size setting as a maximum and one scaled pixel of padding
+on each side. A margin too small even for the smallest font leaves that strip hidden.
+
+“Add space for the status bar” defaults off. Offer it in the reader when either
+margin cannot accommodate the selected size (keep it available while enabled so
+it can be turned off). When on, add only `max(0, chosen strip height - margin)`
+on each visible side. A sufficiently large margin adds nothing. Native saved
+margins remain untouched. For CRE page mode, apply the missing pixels through
+the margin setter. For paged documents, use only blank screen surround outside
+the rendered page, never guessed whitespace within PDF/CBZ content. Scroll modes
+have no safe page-edge margin: hide the strips by default; opting in reserves
+the minimum strip viewport and translates draw, highlight and hit coordinates.
+Retain the reading anchor and regenerate zoom/scroll geometry when space changes.
+If rotation or zoom consumes surround before relayout, fit the current draw to
+the actual available margin and defer any needed space adjustment to the next tick.
 
 Keep KOReader's footer controller and tap regions; replace its visible rendering
 while enabled. A footer-toggle gesture hides/shows the BookSync bottom strip through
@@ -73,8 +88,8 @@ the same native visibility state. It must continue to reach the native controlle
 and the top/menu gesture regions must remain available. Menus cover the reader
 normally; the status renderer is a reader child, never a floating window.
 
-The setting is BookSync › Reading › “Status bar: BookSync layout (matches Xteink)”, on by
-default, with an Android-only shared schema entry. Off restores native footer/top
+The setting is BookSync › Reading › “Status bar: BookSync layout (matches Xteink)”,
+default off, with an Android-only shared schema entry. Off restores native footer/top
 bar and margin/viewport state, including values that were absent originally.
 Do not write BookSync's temporary geometry into book or global native settings.
 Cancel hooks and timers on close/disable; keep enable/disable idempotent. Shared
@@ -88,23 +103,34 @@ No additional full refresh is requested by BookSync's status timer or battery ha
 
 ## Implementation notes
 
-W27 updates the approved layout per the user's rc.12 feedback: `status_orbit_layout` defaults
-to false (saved choices remain), and `status_orbit_size` selects Small (14 pt), Medium (18 pt)
-or Large (22 pt), default Small. Both text and the battery scale together. Strip height is
-the measured text height plus one scaled pixel of padding on each side; horizontal inset is
-two scaled pixels. The battery has a proportional fill and a contrasting charging mark.
+W27 made `status_orbit_layout` default false (saved choices remain), and added
+Small (14 pt), Medium (18 pt) and Large (22 pt), default Small. W29 keeps those
+choices as maxima, fits each margin independently, and adds `status_orbit_add_space`
+(default false). Strip height is measured text plus two scaled padding pixels;
+only missing pixels are reserved when explicitly enabled. Horizontal inset is two
+scaled pixels. The SVG illustrates the unchanged book margins and default-off settings.
+
+The sleep glyph actually lives in the companion's `SleepCanvas`, not the Lua sleep
+menu. Its outline, terminal and proportional fill now live in one declarative
+rectangle drawing program, `shared/ui/battery.json`. `BatteryGlyph.draw` in Kotlin
+and Lua interprets that same program on their respective canvases; both sleep and
+reading call that entry point. There is no separate status battery geometry or
+charging mark. The glyph scales with the fitted text. The companion packages the
+program as a Java resource, and `package.sh` puts the same file in the plugin zip.
+Tests check both call sites, packaged resource equality and empty/half/full pixels.
 Xteink and the shared format fixture are unchanged. Only instance methods and
 private copies of footer settings are changed; disabling restores inherited slots,
 footer visibility/mode, the native text generator, header state and timers. Native
 footer gesture handlers remain in charge, and their temporary mode is not persisted.
 
-CRE page mode uses its margin setter. CRE scroll mode needs a reduced engine viewport
+CRE page mode uses its margin setter only to add missing space when opted in.
+When extra space is enabled, CRE scroll mode needs a reduced engine viewport
 and translated draw/hit coordinates: `frontend/document/credocument.lua:908-934`
 only adds the top margin in page mode, while
 `frontend/apps/reader/modules/readerrolling.lua:895-899,1133-1138` derives scroll
 steps and the final position from screen height and footer height (pinned KOReader
 commit above). The temporary height adjustment is scoped to those scroll operations.
-Paged documents use the reduced viewport for zoom and scroll-state regeneration,
+With extra space enabled, paged documents use the reduced viewport for zoom and scroll-state regeneration,
 with draw, highlight and hit coordinates translated below the clock.
 
 X4 and X4 Pro use the shared spaced page format; centered/custom status groups keep
@@ -122,7 +148,7 @@ native page/percent formatting and excludes the new formatter header. The existi
 - Cover Unicode, empty chapter, narrow widths, unequal sides, percent boundaries,
   12/24-hour midnight/noon and unknown totals with Lua unit tests.
 - Flow tests cover native state snapshot/restore, repeated toggles, book close,
-  clock cleanup, CRE top/bottom reservation, paged viewport reservation and gesture
+  clock cleanup, zero reservation by default, text fitting, minimum opt-in CRE and paged reservation, and gesture
   delegation. Add partial dirty-region checks for minute/battery updates.
 - Run plugin logic/flow suites and pinned KOReader compatibility checks. Run the
   affected Xteink host suite. CI is the merge gate; no device tools or release tags.

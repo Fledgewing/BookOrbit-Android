@@ -253,3 +253,6 @@ androidComponents {
         variant.sources.assets?.addGeneratedSourceDirectory(task, OpenSourceNotices::outputDir)
     }
 }
+
+// One battery drawing program for the companion sleep screen and Lua reading strips.
+android.sourceSets["main"].resources.srcDir("../../../shared/ui")

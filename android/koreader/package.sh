@@ -17,6 +17,7 @@ cp "$here/LICENSE" "$stage/orbit.koplugin/LICENSE"
 cp "$here/../../shared/settings/schema.json" "$stage/orbit.koplugin/settings_schema.json"
 cp "$here/../../shared/fixtures/catalog/sections.json" "$stage/orbit.koplugin/catalog_sections.json"
 cp "$here/../../shared/about/credits.json" "$stage/orbit.koplugin/about_credits.json"
+cp "$here/../../shared/ui/battery.json" "$stage/orbit.koplugin/battery.json"
 main="$stage/orbit.koplugin/main.lua"
 sed -E "s/^local PATCH_VERSION = \"[^\"]*\"$/local PATCH_VERSION = \"$ver\"/" "$here/orbit.koplugin/main.lua" > "$main"
 grep -qx "local PATCH_VERSION = \"$ver\"" "$main" || { echo "package.sh: version stamp failed" >&2; exit 1; }

@@ -135,19 +135,12 @@ object SleepCanvas {
     }
 
     /** The battery: an outline icon, then the percent (L4). */
-    private fun batteryWidth(p: Paint, level: Int): Int = (p.textSize * 1.6f + p.measureText(" $level%")).toInt()
+    private fun batteryWidth(p: Paint, level: Int): Int = (BatteryGlyph.width(p.textSize) + p.measureText(" $level%")).toInt()
 
     private fun drawBattery(c: Canvas, p: Paint, b: Box, level: Int) {
-        val iconW = p.textSize * 1.4f
-        val iconH = p.textSize * 0.7f
-        val top = b.top + (b.height - iconH) / 2f
-        val body = RectF(b.left.toFloat(), top, b.left + iconW, top + iconH)
-        c.drawRect(body, stroke(2))
-        val nub = iconH / 3f
-        c.drawRect(body.right, top + nub, body.right + p.textSize * 0.15f, top + 2 * nub, Paint().apply { color = Color.BLACK })
-        val inner = RectF(body.left + 4f, body.top + 4f, body.left + 4f + (body.width() - 8f) * level.coerceIn(0, 100) / 100f, body.bottom - 4f)
-        c.drawRect(inner, Paint().apply { color = Color.BLACK })
-        val tx = b.left + p.textSize * 1.6f
+        val top = b.top + (b.height - BatteryGlyph.height(p.textSize)) / 2f
+        BatteryGlyph.draw(c, b.left.toFloat(), top, p.textSize, level)
+        val tx = b.left + BatteryGlyph.width(p.textSize)
         c.drawText("$level%", tx, b.top + (b.height - (p.descent() - p.ascent())) / 2f - p.ascent(), p)
     }
 

@@ -77,7 +77,7 @@
    ],
    "section": "reading",
    "label": "Status bar size",
-   "line": "Text and battery size for the BookSync status bar.",
+   "line": "Maximum text and battery size; shrinks to fit the existing page margins.",
    "reader": [
     "plugin"
    ],
@@ -88,6 +88,26 @@
     "status",
     "footer",
     "size"
+   ],
+   "applies": "now"
+  },
+  {
+   "key": "status_orbit_add_space",
+   "type": "bool",
+   "default": false,
+   "section": "reading",
+   "label": "Add space for the status bar",
+   "line": "When page margins are too small, add only the space missing for the selected status bar size.",
+   "reader": [
+    "plugin"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "search": [
+    "status",
+    "footer",
+    "margin"
    ],
    "applies": "now"
   },

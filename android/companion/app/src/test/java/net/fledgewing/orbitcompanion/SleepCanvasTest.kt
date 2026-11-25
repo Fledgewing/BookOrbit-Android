@@ -29,6 +29,28 @@ class SleepCanvasTest {
         app = RuntimeEnvironment.getApplication()
     }
 
+    @Test fun sleepAndReadingUseTheSharedBatteryDrawingProgram() {
+        // One declarative drawing function, interpreted by each platform's canvas adapter.
+        val root = File("../../..").canonicalFile
+        val reader = File(root, "android/koreader/orbit.koplugin/ko/status_layout.lua").readText()
+        val sleep = File(root, "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SleepCanvas.kt").readText()
+        assertTrue(reader.contains("BatteryGlyph.draw("))
+        assertTrue(sleep.contains("BatteryGlyph.draw("))
+        val packaged = checkNotNull(javaClass.getResourceAsStream("/battery.json")).bufferedReader().use { it.readText() }
+        assertEquals(File(root, "shared/ui/battery.json").readText(), packaged)
+        val bitmap = Bitmap.createBitmap(100, 40, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        for (level in listOf(0, 50, 100)) {
+            bitmap.eraseColor(Color.WHITE)
+            BatteryGlyph.draw(canvas, 10f, 10f, 40f, level)
+            assertEquals(Color.BLACK, bitmap.getPixel(10, 10)) // outline
+            assertEquals(Color.BLACK, bitmap.getPixel(68, 22)) // terminal
+            assertEquals(if (level > 0) Color.BLACK else Color.WHITE, bitmap.getPixel(15, 15))
+            assertEquals(if (level == 100) Color.BLACK else Color.WHITE, bitmap.getPixel(60, 15))
+        }
+        bitmap.recycle()
+    }
+
     private fun cover(): Bitmap = Bitmap.createBitmap(400, 600, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.GRAY) }
 
     private fun input(s: SleepSettings, battery: Int? = 82, cover: Bitmap? = cover(), kind: String = "pool") =

@@ -1655,13 +1655,20 @@ test("status layout: default off, sizes, compact strips and proportional battery
     eq(L.fontSize("small"), 14); eq(L.fontSize("medium"), 18); eq(L.fontSize("large"), 22)
     eq(L.fontSize("unknown"), 14)
     for _, h in ipairs({12, 16, 24, 40}) do eq(L.stripHeight(h, 1), h+2) end
+    eq(indexed.byKey.status_orbit_add_space.default, false)
+    local program=M.SettingsSync.decodeJson(readFile(here.."/../../../shared/ui/battery.json"))
     for _, charge in ipairs({0, 1, 25, 50, 98, 100}) do
-        local g = L.battery(charge, 12)
-        eq(g.fill, math.floor(g.inner*charge/100+0.5))
-        ok(g.h <= 12 and g.fill <= g.inner)
+        local rectangles={}
+        M.BatteryGlyph.draw(program,20,charge,function(x,y,w,h,color) rectangles[#rectangles+1]={x,y,w,h,color} end)
+        eq(#rectangles,4); eq(rectangles[4][3],24*charge/100)
     end
-    eq(L.battery(0, 12).fill, 0)
-    eq(L.battery(100, 12).fill, L.battery(100, 12).inner)
+    local measure=function(size) return size-2 end
+    for margin=0,30 do
+        local fit=L.fit(margin,22,1,measure,false)
+        eq(fit.extra,0); ok(fit.height<=margin)
+        local added=L.fit(margin,22,1,measure,true)
+        eq(added.extra,math.max(0,22-margin)); eq(added.height,22)
+    end
 end)
 
 -- @fixture status/format.json
