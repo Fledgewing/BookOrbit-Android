@@ -59,6 +59,7 @@ object SettingsStore {
                 val schema = schema(ctx)
                 val e = values.edit()
                 val moved = mutableListOf<String>()
+                val cleanup = mutableListOf<SharedPreferences.Editor>()
                 for ((file, keys) in LEGACY.entries.groupBy({ it.value }, { it.key })) {
                     val old = sp(ctx, file)
                     val oe = old.edit()
@@ -69,9 +70,13 @@ object SettingsStore {
                         if (wire != null && d != null && !values.contains(key)) SettingsSync.fromWire(d, wire)?.let { e.putString(key, it); moved += key }
                         oe.remove(key)
                     }
-                    oe.commit()
+                    cleanup += oe
                 }
-                e.putBoolean(MIGRATED, true).commit()
+                // Persist every replacement before deleting any source. A failed write or a
+                // process death during cleanup leaves at least one durable copy of each value.
+                e.putBoolean(MIGRATED, true)
+                if (!e.commit()) return
+                cleanup.forEach { it.commit() }
                 if (moved.isNotEmpty()) OLog.i("settings: moved ${moved.joinToString(" ")} into the schema store")
             }
             migrated = true
