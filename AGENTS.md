@@ -34,8 +34,8 @@ every platform whose hardware allows it.
 | X3 | Xteink X3 and C3 X4, ESP32-C3, no PSRAM; flash nearly full | `default` |
 
 Xteink firmware is built on CrossInk 2.x only. CrossInk 1.6 is retired: no builds, no patches
-(they are in git history); its readers stay on the stable `xteink-v1.6.1.114` until a final
-CrossInk 2.x release becomes the stable one (`xteink/README.md` "Releases and the update feed").
+(they are in git history); its readers stay on the stable `xteink-v1.6.1.114` until a stable
+CrossInk 2.x bridge and the later stable BookSync releases become available (`xteink/README.md` "Releases and the update feed").
 
 ## Product principles
 
@@ -79,13 +79,12 @@ commit when a design or `docs/server-contract.md` relies on upstream behaviour; 
 
 One repo releases both platforms; the tag prefix says which. From 0.12, the product
 version comes from shared/version.json on the release commit, shared by the companion,
-packaged plugin and every firmware build. Preview.N precedes rc.N, then stable (lowercase
-suffixes: -preview.N, -rc.N). release.yml dispatches firmware at the same immutable tag.
+packaged plugin and every firmware build. The ordering is -preview.N, then -rc.N, then stable. release.yml dispatches firmware at the same immutable tag.
 See [the rollout and bridge](docs/design/unified-version.md). Main stays on 0.11 until its
 bridge has reached devices; 0.12 is prepared on feature/0.12.
 
 - Android: `v<version>` (`.github/workflows/release.yml`): signed APK, stamped plugin zip,
-  `SHA256SUMS`, attestations. Always marked "latest". Keep the package id and the signing
+  `SHA256SUMS`, attestations. Stable Android releases take "latest". Keep the package id and the signing
   certificate (SHA-256 `F5:07:8C:…:0A:15`, checked by the workflow): either change breaks updates.
 - Android/plugin builds start as `vMAJOR.MINOR.PATCH-preview.N`; use `-rc.N` only when a
   maintainer judges it a real release candidate, then the plain version for stable. Preview
@@ -136,15 +135,16 @@ ask before changing it (`--yes` skips the question). Agents never run them again
   match `--env` or a port another program holds (it stops nothing), reads the offsets from the
   reader's partition table (checked against the build's `.parttable`), writes the image to
   `ota_0` and blanks `otadata` so `ota_0` boots. NVS (Wi-Fi, Tailscale keys, settings) and the
-  SD card are untouched. The test build's fourth version number is below every later run's, so
-  the reader takes the next release over the air.
+  SD card are untouched. Through 0.11, the test build's fourth version number is below every later run's.
+  From 0.12, its BookSync identity is <version core>-0.test.<run>, below preview/rc/stable,
+  so the reader takes the next release over the air. Test identities are rejected by the feed picker.
 - Tests: `bash tools/test/test-sideload.sh` (CI: android.yml).
 
 ## Checks
 
 - Android: `luajit android/koreader/test/test_logic.lua`, `.../test_flows.lua`,
   `bash tools/test/test-install-usb.sh`, `bash tools/test/test-sideload.sh`, and in `android/companion`
-  `./gradlew testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
+  `./gradlew verifySharedVersion testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
 - Xteink: `xteink/scripts/apply.sh <CrossInk checkout>`, `xteink/test/run-host-tests.sh <checkout>`,
   then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the
   CrossInk pinned as `crossink-v2.0` in `tools/upstreams.lock`; daily runs first move that pin to

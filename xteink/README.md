@@ -20,8 +20,8 @@ This is an **overlay**, not a fork. CrossInk's source is used as released; the o
 
 **CrossInk 2.x only.** Orbify no longer builds or supports CrossInk 1.6 (its patch series is in git
 history). Readers still on 1.6 stay on the feed's stable entry, `xteink-v1.6.1.114+bookorbit.9`,
-until CrossInk 2.0 leaves its release candidates (below). These rc labels describe CrossInk,
-not a release-candidate judgment about Orbify’s overlay builds.
+until a stable 2.x bridge and the later stable BookSync releases become available (below).
+Through 0.11, rc labels describe CrossInk, not the overlay's readiness.
 
 When CrossInk-Bookorbit releases, the daily CI run pins its newest 2.x tag in
 `tools/upstreams.lock` (the workflow commits the bump), builds the commit the lock records with the

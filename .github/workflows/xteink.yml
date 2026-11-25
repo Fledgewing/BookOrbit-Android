@@ -42,9 +42,9 @@ name: Xteink
 on:
   push:
     branches: [main]
-    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
+    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", "tools/booksync-version.py", "tools/xteink-feed.py", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
   pull_request:
-    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
+    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", "tools/booksync-version.py", "tools/xteink-feed.py", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
   schedule:
     - cron: "17 11 * * *"
   workflow_dispatch:
