@@ -594,9 +594,9 @@
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         },
         "x3": {
-          "status": "supported",
-          "note": "Explicit progress with heap margin",
-          "reason": null,
+          "status": "partial",
+          "note": "Progress bar only if largest free block fits framebuffer plus 40,000-byte margin; otherwise static Downloading screen",
+          "reason": "hardware: conditional framebuffer restoration to preserve TLS heap",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -605,6 +605,10 @@
             {
               "path": "xteink/tailnet/tailnet_build.py",
               "line": 248
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0013-download-progress-ui.patch",
+              "line": 13
             }
           ],
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
@@ -2309,8 +2313,87 @@
       }
     },
     {
+      "id": "remote-clicker",
+      "feature": "Pair and use a wireless remote page-turn clicker",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "supported",
+          "note": "Accessibility clicker service and key mappings",
+          "reason": null,
+          "version": "v0.11.3-rc.17",
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ClickerService.kt",
+              "line": 19
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path. Fit/coexistence not measured",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "platformio.ini",
+              "line": 186
+            },
+            {
+              "repository": "Free-Ink/freeink-sdk",
+              "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+              "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+              "line": 307
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path. Fit/coexistence not measured",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "platformio.ini",
+              "line": 186
+            },
+            {
+              "repository": "Free-Ink/freeink-sdk",
+              "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+              "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+              "line": 307
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path. Fit/coexistence not measured",
+          "reason": "gap — no reason",
+          "evidence": [
+            {
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "platformio.ini",
+              "line": 186
+            },
+            {
+              "repository": "Free-Ink/freeink-sdk",
+              "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+              "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+              "line": 307
+            }
+          ],
+          "version": null
+        }
+      }
+    },
+    {
       "id": "buttons",
-      "feature": "Remap clicker keys, page turns in other apps, Send key",
+      "feature": "Cross-app page turns and Send key",
       "category": "Behaviour",
       "platforms": {
         "android": {
@@ -2331,7 +2414,7 @@
         },
         "x4_pro": {
           "status": "not_applicable",
-          "note": "Android accessibility/other-app Send key does not apply to dedicated firmware buttons",
+          "note": "Cross-app Android accessibility service does not apply to dedicated firmware",
           "reason": "not applicable: Android accessibility/other-app Send key does not apply to dedicated firmware buttons",
           "evidence": [
             {
@@ -2343,7 +2426,7 @@
         },
         "x4": {
           "status": "not_applicable",
-          "note": "Android accessibility/other-app Send key does not apply to dedicated firmware buttons",
+          "note": "Cross-app Android accessibility service does not apply to dedicated firmware",
           "reason": "not applicable: Android accessibility/other-app Send key does not apply to dedicated firmware buttons",
           "evidence": [
             {
@@ -2355,7 +2438,7 @@
         },
         "x3": {
           "status": "not_applicable",
-          "note": "Android accessibility/other-app Send key does not apply to dedicated firmware buttons",
+          "note": "Cross-app Android accessibility service does not apply to dedicated firmware",
           "reason": "not applicable: Android accessibility/other-app Send key does not apply to dedicated firmware buttons",
           "evidence": [
             {
@@ -2699,33 +2782,41 @@
             {
               "path": "xteink/tailnet/tailnet_build.py",
               "line": 251
+            },
+            {
+              "path": "xteink/overlay/patches/v2.0/0024-frontlight-reapply.patch",
+              "line": 102
             }
           ],
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
         },
         "x4": {
-          "status": "supported",
-          "note": "Boot repaint patch enabled",
-          "reason": null,
+          "status": "not_applicable",
+          "note": "No frontlight on this hardware",
+          "reason": "not applicable: no frontlight",
           "evidence": [
             {
-              "path": "xteink/tailnet/tailnet_build.py",
-              "line": 251
+              "repository": "agosez/CrossInk-Bookorbit",
+              "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+              "path": "platformio.ini",
+              "line": 603
             }
           ],
-          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+          "version": null
         },
         "x3": {
-          "status": "supported",
-          "note": "Boot repaint patch enabled",
-          "reason": null,
+          "status": "not_applicable",
+          "note": "No frontlight on this hardware",
+          "reason": "not applicable: no frontlight",
           "evidence": [
             {
-              "path": "xteink/tailnet/tailnet_build.py",
-              "line": 251
+              "repository": "Free-Ink/freeink-sdk",
+              "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+              "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+              "line": 1091
             }
           ],
-          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+          "version": null
         }
       }
     },
@@ -5226,6 +5317,21 @@
     },
     {
       "priority": 2,
+      "id": "remote-clicker",
+      "features": [
+        "remote-clicker"
+      ],
+      "platforms": [
+        "x4_pro",
+        "x4",
+        "x3"
+      ],
+      "size": "M–L (BLE host, mapping UI and radio coexistence validation)",
+      "x3_fit": "Unknown; disabled Bluetooth stack must be measured against 54,065-byte gate margin and runtime TLS coexistence. Hardware supports BLE; flash/RAM fit is not established.",
+      "outcome": "Offer remote page-turn input on firmware; physical buttons remain usable. No documented product reason for excluding a remote."
+    },
+    {
+      "priority": 3,
       "id": "reading-layout",
       "features": [
         "layout",
@@ -5241,7 +5347,7 @@
       "outcome": "Match Android clock/battery/chapter/progress layout and size choice within hardware input/screen constraints."
     },
     {
-      "priority": 3,
+      "priority": 4,
       "id": "battery-compare",
       "features": [
         "battery-ui"
@@ -5255,7 +5361,7 @@
       "outcome": "Compare another reader export on device; X4 currently shows only local rates."
     },
     {
-      "priority": 4,
+      "priority": 5,
       "id": "settings-search",
       "features": [
         "settings-ui"
@@ -5269,7 +5375,7 @@
       "outcome": "Make equivalent settings discoverable; retain button navigation rather than require touch."
     },
     {
-      "priority": 5,
+      "priority": 6,
       "id": "clearing-flash",
       "features": [
         "setting-sleep_flash"
@@ -5283,7 +5389,7 @@
       "outcome": "Expose optional clearing flash with the sleep-cover settings."
     },
     {
-      "priority": 6,
+      "priority": 7,
       "id": "android-crash-record",
       "features": [
         "crash"
@@ -5320,5 +5426,73 @@
     "Fonts, stock Home/catalog and annotations are native integrations; only Orbify adapters, lifecycle hooks and explicit cuts are scored, not all upstream reader capabilities.",
     "X3 upstream cuts also remove Nearby, mDNS, plugin hub and asset downloads; English-only built-in UI in platformio.local.ini. These are constraints on inherited capabilities, not Orbify features.",
     "Server quirks motivating overlays: final progress alone may not finish a book; send-time stale pushes can win; metadata writes change file hashes. See docs/server-contract.md sections linked in the matrix notes."
+  ],
+  "pinned_sources": [
+    {
+      "repository": "agosez/CrossInk-Bookorbit",
+      "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+      "pin": "tools/upstreams.lock:6"
+    },
+    {
+      "repository": "Free-Ink/freeink-sdk",
+      "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+      "pin": "CrossInk gitlink freeink-sdk at 87e2e1984481e8a3d996f12b34b50a383f9013b8"
+    }
+  ],
+  "hardware": [
+    {
+      "platform": "x4_pro",
+      "description": "800×480 panel; touch and capacitive Home key; warm/cool frontlight",
+      "evidence": [
+        {
+          "repository": "agosez/CrossInk-Bookorbit",
+          "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+          "path": "platformio.ini",
+          "line": 523
+        },
+        {
+          "repository": "Free-Ink/freeink-sdk",
+          "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+          "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+          "line": 1883
+        }
+      ]
+    },
+    {
+      "platform": "x4",
+      "description": "800×480 panel; two edge page-turn buttons and four front buttons; no touch or frontlight",
+      "evidence": [
+        {
+          "repository": "agosez/CrossInk-Bookorbit",
+          "revision": "87e2e1984481e8a3d996f12b34b50a383f9013b8",
+          "path": "platformio.ini",
+          "line": 601
+        },
+        {
+          "repository": "Free-Ink/freeink-sdk",
+          "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+          "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+          "line": 2037
+        }
+      ]
+    },
+    {
+      "platform": "x3",
+      "description": "792×528 panel (UC8253 or UC8279d); physical ADC-ladder buttons; no touch or frontlight",
+      "evidence": [
+        {
+          "repository": "Free-Ink/freeink-sdk",
+          "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+          "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+          "line": 1068
+        },
+        {
+          "repository": "Free-Ink/freeink-sdk",
+          "revision": "9d5bba3ef02a1c35363ecadbb50ad0e1ac279653",
+          "path": "libs/hardware/BoardConfig/include/BoardConfig.h",
+          "line": 1111
+        }
+      ]
+    }
   ]
 }

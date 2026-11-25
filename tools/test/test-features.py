@@ -40,13 +40,18 @@ class FeatureMatrixTest(unittest.TestCase):
                     else:
                         self.assertTrue(c["reason"])
                         self.assertTrue(c["reason"].startswith(("hardware:", "deliberately deferred:", "gap — no reason", "not applicable:")))
-        for e in [e for f in self.data["features"] for c in f["platforms"].values() for e in c["evidence"]] + self.data["constraints"]["evidence"] + [e for c in self.data["constraints"]["costs"] for e in c["evidence"]]:
+        for e in [e for f in self.data["features"] for c in f["platforms"].values() for e in c["evidence"]] + self.data["constraints"]["evidence"] + [e for c in self.data["constraints"]["costs"] for e in c["evidence"]] + [e for h in self.data["hardware"] for e in h["evidence"]]:
             with self.subTest(evidence=e):
                 path = ROOT / e["path"]
                 self.assertFalse(Path(e["path"]).is_absolute())
                 self.assertNotIn("..", Path(e["path"]).parts)
-                self.assertTrue(path.is_file())
                 self.assertGreater(e["line"], 0)
+                if "repository" in e:
+                    self.assertIn((e["repository"], e["revision"]), {
+                        (s["repository"], s["revision"]) for s in self.data["pinned_sources"]
+                    })
+                    continue
+                self.assertTrue(path.is_file())
                 self.assertLessEqual(e["line"], len(path.read_text().splitlines()))
 
     def test_constraints_and_priorities(self):

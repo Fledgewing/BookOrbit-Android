@@ -11,7 +11,9 @@ SYMBOLS = {"supported": "✅", "partial": "🟡", "missing": "❌", "not_applica
 
 def citations(items):
     return ", ".join(
-        f"[{e['path']}:{e['line']}](../{e['path']}#L{e['line']})" for e in items
+        f"[{e['path']}:{e['line']}]"
+        f"({'https://github.com/' + e['repository'] + '/blob/' + e['revision'] + '/' if 'repository' in e else '../'}{e['path']}#L{e['line']})"
+        for e in items
     )
 
 
@@ -63,8 +65,11 @@ def render(data):
                    f"{d['static_ram_total_bytes']-d['static_ram_used_bytes']:,} B |")
     out += ["", "Build selection and generated `CrossInkTailnetCuts.h` inputs: " + citations(c["evidence"]) + ". "
             "The header is added by patch 0004; the per-environment SWITCHES table supplies explicit values. "
-            "Both S3 readers have PSRAM but limited application flash; X3 has neither PSRAM nor room for the current open-book TLS path.", "",
-            "| Feature cost / bound | Evidence and interpretation |", "|---|---|"]
+            "Both S3 readers have PSRAM but limited application flash; X3 has neither PSRAM nor room for the current open-book TLS path.", ""]
+    for hardware in data["hardware"]:
+        out.append(f"- **{platforms[hardware['platform']]['label']}:** {hardware['description']}. {citations(hardware['evidence'])}")
+    out += ["", "Upstream citations use the CrossInk commit in `tools/upstreams.lock` and its pinned FreeInk SDK gitlink, "
+            "not moving upstream branches.", "", "| Feature cost / bound | Evidence and interpretation |", "|---|---|"]
     for cost in c["costs"]:
         out.append(f"| {cost['feature']} | {cost['cost']} {citations(cost['evidence'])} |")
     out += ["", "## Prioritised parity bugs", "",
