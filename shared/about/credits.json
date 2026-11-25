@@ -1,0 +1,10 @@
+{
+  "url": "https://github.com/bookorbit/bookorbit",
+  "paragraphs": [
+    "Orbify is an independent project, not an official BookOrbit release, and does not include BookOrbit code.",
+    "That said, it wouldn't exist without BookOrbit.",
+    "Copyright (C) 2025-2026 neon. Additional copyright is held by the respective BookOrbit contributors.",
+    "BookOrbit is licensed under the GNU AGPLv3 with additional terms.",
+    "Orbify licences: Orbit Companion is MIT. The Xteink overlay source is MIT, except firmware code marked GPL-3.0-or-later; Xteink firmware binaries are GPL-3.0-or-later. Orbit is AGPL-3.0-or-later as a KOReader plugin."
+  ]
+}

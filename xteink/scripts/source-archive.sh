@@ -39,6 +39,9 @@ copy_tracked() { # <repo> <dest> [exclude-prefix]
     | (cd "$1" && tar --null -T - -cf -) | tar -C "$2" -xf -
 }
 copy_tracked "$overlay" "$stage/overlay"
+# Build-time About strings come from the repository-level shared source.
+mkdir -p "$stage/shared/about"
+cp "$overlay/../shared/about/credits.json" "$overlay/../shared/about/generate.py" "$stage/shared/about/"
 # Tabler's SVG sources are a large submodule; only icons converted into src/ are compiled.
 copy_tracked "$upstream" "$stage/crossink" assets/tabler-icons/
 

@@ -1,0 +1,55 @@
+--- a/src/activities/settings/AboutActivity.cpp
++++ b/src/activities/settings/AboutActivity.cpp
+@@ -3,6 +3,7 @@
+ #include <AppVersion.h>
+ #include <I18n.h>
+ #include <Memory.h>
++#include <OrbifyCredits.h>
+ 
+ #include <cstdio>
+ 
+@@ -140,7 +141,7 @@
+     return;
+   }
+   const auto scroll = [this](int delta) {
+-    const int next = scrollListBy(topIndex, delta, visibleRows, RowCount);
++    const int next = scrollListBy(topIndex, delta, visibleRows, RowCount + OrbifyCredits::count);
+     if (next != topIndex) {
+       topIndex = next;
+       requestUpdate();
+@@ -212,6 +213,9 @@
+   const auto& s = self.snapshot;
+   auto* buf = self.valueBuffer;
+   const auto size = sizeof(self.valueBuffer);
++#if CROSSINK_TAILNET_ABOUT_CREDIT
++  if (OrbifyCredits::provideRow(index, item)) return;
++#endif
+   item.label = I18N.get(labels[index]);
+ #ifdef SIMULATOR
+   if (index == Device && self.simulatorHeading) item.label = self.simulatorHeading;
+@@ -390,7 +394,7 @@
+                     });
+   }
+   fui::ListProps props;
+-  props.count = RowCount;
++  props.count = RowCount + OrbifyCredits::count;
+   props.rowProvider = &AboutActivity::provideRow;
+   props.rowProviderCtx = &self;
+   props.inputMask = fui::InputNone;
+@@ -408,7 +412,7 @@
+                                       self.uiTarget.lineHeight(props.subtitleText.font) + props.rowPaddingY * 2);
+   self.visibleRows =
+       std::max<int>(1, configureUiList(props, screen.theme(), screen.body(), UiListRowType::WithSubtitle));
+-  self.topIndex = scrollListBy(self.topIndex, 0, self.visibleRows, RowCount);
++  self.topIndex = scrollListBy(self.topIndex, 0, self.visibleRows, RowCount + OrbifyCredits::count);
+   props.topIndex = self.topIndex;
+   screen.list(props);
+ }
+@@ -431,5 +435,5 @@
+ }
+ 
+ #ifdef SIMULATOR
+-int AboutActivity::simulatorRowCount() const { return RowCount; }
+-#endif
++int AboutActivity::simulatorRowCount() const { return RowCount + OrbifyCredits::count; }
++#endif
