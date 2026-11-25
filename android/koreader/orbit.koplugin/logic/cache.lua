@@ -355,7 +355,7 @@ end
 
 -- One limit on everything Orbit stores (Orbit menu › Storage limit; book files and KOReader's
 -- own data do not count); Orbit Companion counts and removes (StorageLogic, CacheWorker).
-Cache.STORAGE_LIMITS_MB = { 100, 250, 500, 1024, 0 } -- 0: no limit
+Cache.STORAGE_LIMITS_MB = { 100, 250, 500, 1024, 2560, 5120, 10240, 0 } -- 0: no limit
 Cache.STORAGE_DEFAULT_MB = 250
 
 ---------------------------------------------------------------- cover files
