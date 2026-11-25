@@ -1,0 +1,121 @@
+Subject: [PATCH] Orbify: catalog refresh and mirror urls
+
+Build valid mirror list URLs and show catalog refresh feedback.
+
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+index 7a873b5..8aa8d40 100644
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -320,6 +320,7 @@ STR_ORBIFY_ON_READER_OPEN: "On this reader · Open"
+ STR_ORBIFY_CONNECT_NEXT: "Connect to see what's next"
+ STR_ORBIFY_BOOK_N_OF: "Book %s of %s"
+ STR_ORBIFY_REFRESH: "Refresh"
++STR_ORBIFY_REFRESHING: "Refreshing…"
+ STR_ORBIFY_FULL_REFRESH: "Full refresh"
+ STR_ORBIFY_SAVING_OFFLINE: "Full refresh · saving for offline %u/%u"
+ STR_ORBIFY_SAVED_OFFLINE: "Saved for offline"
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+index 403cf67..1fffb70 100644
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+@@ -2614,6 +2614,14 @@ void BookOrbitCatalogBrowserActivity::refreshView(const bool full) {
+     const OrbifyMirror::Progress progress{this, &BookOrbitCatalogBrowserActivity::onMirrorStep};
+     OrbifyMirror::run(nullptr, 0, &progress);
+   }
++  if (!full) {
++    // Patch 0037: the tap shows at once ("Refreshing…" in place of the stamp), the view stays.
++    {
++      RenderLock lock(*this);
++      refreshing = true;
++    }
++    requestUpdateAndWait();
++  }
+   // This session's own page copies would answer first: the view is read again.
+   BookOrbitCatalogListCache::clear();
+   OrbifyCache::ScopedMode mode(full ? orbify::cache::Mode::Full : orbify::cache::Mode::Refresh);
+@@ -2641,7 +2649,13 @@ void BookOrbitCatalogBrowserActivity::refreshView(const bool full) {
+       }
+       break;
+   }
+-  viewNotUpdated[level] = !ok;
++  {
++    RenderLock lock(*this);
++    refreshing = false;
++    viewNotUpdated[level] = !ok;
++  }
++  // The stamp now reads "updated just now" (or "Not updated · …").
++  requestUpdate();
+   LOG_INF("BookOrbit", "Catalog: %s %s", full ? "Full refresh" : "Refresh", ok ? "done" : "failed");
+ }
+ 
+@@ -2654,6 +2668,7 @@ void BookOrbitCatalogBrowserActivity::markViewLoaded(const bool fromSessionList)
+ }
+ 
+ std::string BookOrbitCatalogBrowserActivity::viewStamp() const {
++  if (refreshing) return tr(STR_ORBIFY_REFRESHING);
+   const int level = static_cast<int>(navLevel);
+   char out[64];
+   orbify::formatStamp(!offlineSession && WiFi.status() == WL_CONNECTED, viewLoadedAt[level], nowEpoch(),
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+index a2a1136..ccdf546 100644
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+@@ -187,6 +187,8 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
+   uint32_t viewLoadedAt[3] = {};
+   bool viewNotUpdated[3] = {};
+   unsigned long mirrorPaintedAt = 0;
++  // Patch 0037: a Refresh under way; the header's stamp says "Refreshing…" until it ends.
++  bool refreshing = false;
+ #endif
+   std::string errorMessage;
+   std::string statusMessage;
+diff --git a/src/activities/browser/BookOrbitCatalogListCache.cpp b/src/activities/browser/BookOrbitCatalogListCache.cpp
+index 29bbf4a..aeb452c 100644
+--- a/src/activities/browser/BookOrbitCatalogListCache.cpp
++++ b/src/activities/browser/BookOrbitCatalogListCache.cpp
+@@ -37,6 +37,8 @@ bool writeJsonStringFile(const std::string& path, const std::string& text) {
+ 
+ bool readJsonStringFile(const std::string& path, std::string& out) {
+   out.clear();
++  // Patch 0037: a page this session has not loaded yet is the usual case, not an error to log.
++  if (!Storage.exists(path.c_str())) return false;
+   FsFile file;
+   if (!Storage.openFileForRead("BookOrbit", path, file)) {
+     return false;
+diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+index 686f681..5b4a274 100644
+--- a/src/network/BookOrbitCatalogClient.cpp
++++ b/src/network/BookOrbitCatalogClient.cpp
+@@ -29,6 +29,9 @@
+ #include "orbify/CacheStore.h"
+ #endif
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++#include "orbify/core/Mirror.h"
++#endif
+ #if CROSSINK_TAILNET_CATALOG_KEEPALIVE && defined(FREEINK_NET_WOLFSSL)
+ #include <Memory.h>
+ #include <SecureHttpClient.h>
+@@ -389,6 +392,22 @@ namespace {
+ // withLetters asks for the listing's letter buckets, which the server ranks over the whole
+ // listing: only worth it on a title or author sort's first page.
+ std::string booksUrl(const BookOrbitBookQuery& query, const int page, const int size, const bool withLetters = false) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Patch 0037: built by orbify/core/Mirror (host-tested with every request the mirror plans).
++  orbify::mirror::FacetQuery q;
++  q.sort = query.sort;
++  q.order = query.order;
++  q.readStatus = query.readStatus;
++  q.shelf = query.shelf;
++  q.query = query.query;
++  q.author = query.author;
++  q.seriesId = query.seriesId;
++  q.series = query.series;
++  q.collectionId = query.collectionId;
++  q.smartScopeId = query.smartScopeId;
++  q.libraryId = query.libraryId;
++  return BOOKORBIT_STORE.getBaseUrl() + orbify::mirror::booksPath(q, page, size, withLetters);
++#endif
+   if (!query.shelf.empty()) {
+     return BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/dashboard/sections/" + urlEncode(query.shelf);
+   }

@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: simulator build
+
+Build the same overlay hooks in the desktop simulator for release tests.
+
 diff --git a/lib/BookOrbitSync/BookOrbitSyncClient.cpp b/lib/BookOrbitSync/BookOrbitSyncClient.cpp
 index c82786f..efda252 100644
 --- a/lib/BookOrbitSync/BookOrbitSyncClient.cpp

@@ -1,0 +1,149 @@
+Subject: [PATCH] Orbify: boot trail
+
+Record boot milestones and identify stale crash records.
+
+diff --git a/lib/hal/HalPowerManager.cpp b/lib/hal/HalPowerManager.cpp
+index 07211d3..0322899 100644
+--- a/lib/hal/HalPowerManager.cpp
++++ b/lib/hal/HalPowerManager.cpp
+@@ -1,5 +1,9 @@
+ #include "HalPowerManager.h"
+ 
++// Patch 0038: the deep-sleep steps after the serial port closes (src/orbify/core/BootTrail.h).
++#include "../../src/orbify/core/BootTrail.h"
++void orbifyBootStep(orbify::boottrail::Step step);
++
+ #include <BoardConfig.h>
+ #include <Logging.h>
+ #include <PowerManager.h>
+@@ -169,6 +173,7 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio, const bool keepPowerLatched)
+   logSerial.flush();
+   logSerial.end();
+ #endif
++  orbifyBootStep(orbify::boottrail::Step::SerialEnded);
+ 
+ #if !SOC_PM_SUPPORT_EXT1_WAKEUP
+   // Release every configured battery latch. BoardConfig owns the pin mapping;
+@@ -220,10 +225,12 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio, const bool keepPowerLatched)
+   // wake source. On the ESP32-C3 that overwrites the power pin's sleep input
+   // configuration, so short presses can be missed. Isolate first, then restore
+   // and arm the board-configured power pin immediately before sleeping.
++  orbifyBootStep(orbify::boottrail::Step::ReleaseWait);
+   freeink::PowerManager::waitForPowerButtonRelease();
+   esp_sleep_config_gpio_isolate();
+   freeink::PowerManager::armPowerButtonWakeup();
+   gpio_deep_sleep_hold_en();
++  orbifyBootStep(orbify::boottrail::Step::SleepEntered);
+   esp_deep_sleep_start();
+ }
+ 
+diff --git a/src/main.cpp b/src/main.cpp
+index e15d766..cd78f19 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -111,6 +111,9 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
+ #include "RecentBooksStore.h"
+ #include "SdCardFontSystem.h"
+ #include "SilentRestart.h"
++#include "orbify/HeapFloor.h"
++#include "orbify/CrashRecord.h"
++#include "orbify/core/BootTrail.h"
+ #include "WifiCredentialStore.h"
+ #include "orbify/SettingsPin.h"
+ #include "activities/network/StatsUploadActivity.h"
+@@ -374,6 +377,10 @@ void logMemoryStats(const char* phase) {
+ // Consume the pair on every boot, including resets that preserve RTC memory.
+ RTC_NOINIT_ATTR library::ScanSleepToken libraryScanSleepToken;
+ 
++// Patch 0038: the last step this run reached (orbify/core/BootTrail.h), for the next boot's log.
++RTC_NOINIT_ATTR uint32_t orbifyBootTrailWord;
++void orbifyBootStep(const orbify::boottrail::Step step) { orbifyBootTrailWord = orbify::boottrail::pack(step); }
++
+ // Definitions for SilentRestart.h. RTC_NOINIT survives ESP.restart() but not power loss.
+ RTC_NOINIT_ATTR uint32_t silentRebootMagic;
+ RTC_NOINIT_ATTR uint32_t silentRebootTarget;
+@@ -1499,7 +1506,9 @@ void enterDeepSleep(bool fromTimeout) {
+   // Commit to sleeping before goToSleep() runs the outgoing activity's onExit():
+   // a WiFi activity would otherwise silentRestart() here and reboot instead.
+   deepSleepInProgress = true;
++  orbifyBootStep(orbify::boottrail::Step::SleepStarted);
+   const bool monochromeSleepFrame = activityManager.goToSleep(fromTimeout, syncBeforeSleep);
++  orbifyBootStep(orbify::boottrail::Step::SleepScreenDrawn);
+   trustedtime::note();
+   // Reader exit may already have saved this state. Save after the sleep screen
+   // appears, skipping an unchanged snapshot while still retrying failed saves.
+@@ -1585,8 +1594,10 @@ static void powerDownForDeepSleep([[maybe_unused]] const bool monochromeSleepFra
+   Frontlight.setOn(false);
+   const bool usbWakeRequested = holdSleepWhileUsbPowered(monochromeSleepFrame);
+ #endif
++  orbifyBootStep(orbify::boottrail::Step::StorageStopped);
+   putTiltSensorToSleepForDeepSleep();
+   display.deepSleep();
++  orbifyBootStep(orbify::boottrail::Step::DisplayAsleep);
+   mirrorWakeShortPressToNvs();
+   LOG_DBG("MAIN", "Entering deep sleep");
+ 
+@@ -1826,7 +1837,9 @@ void completeSleepAfterSleepSync() {
+   // A press that landed during the last step still wakes the device, and so does one
+   // made while the sleep screen is drawn again.
+   if (sleepSyncWakeWatcher.wakeRequested()) wakeFromSleepSync();
++  orbifyBootStep(orbify::boottrail::Step::SleepStarted);
+   const bool monochromeSleepFrame = redrawSleepScreenAfterSleepSync();
++  orbifyBootStep(orbify::boottrail::Step::SleepScreenDrawn);
+   if (sleepSyncWakeWatcher.wakeRequested()) wakeFromSleepSync();
+   sleepSyncWakeWatcher.stop();
+ 
+@@ -1893,6 +1906,9 @@ void setup() {
+   SimulatorLifecycle::restoreSilentRebootToken(silentRebootMagic, silentRebootTarget, silentRebootPayload);
+ #endif
+   BoardConfig::holdPowerRails();
++  // Where the last run stopped, read before this boot records its own first step.
++  const orbify::boottrail::Step lastRunStep = orbify::boottrail::unpack(orbifyBootTrailWord);
++  orbifyBootStep(orbify::boottrail::Step::SetupStarted);
+ 
+   const esp_reset_reason_t rawResetReason = esp_reset_reason();
+   const esp_sleep_wakeup_cause_t rawWakeupCause = esp_sleep_get_wakeup_cause();
+@@ -1942,12 +1958,27 @@ void setup() {
+ #endif
+   LOG_INF("BOOT", "Reset diagnostic: reset=%d(%s) sleepWake=%d(%s) rtcUpMs=%llu", static_cast<int>(rawResetReason),
+           resetReasonName(rawResetReason), static_cast<int>(rawWakeupCause), wakeupCauseName(rawWakeupCause), rtcUpMs);
++  orbifyBootStep(orbify::boottrail::Step::SerialUp);
++  {
++    // A reset by anything but the firmware itself (a USB reset, the watchdog, a brownout) after
++    // a run that stopped before deep sleep or loop(): the step it stopped at.
++    const bool firmwareRestart = rawResetReason == ESP_RST_SW || rawResetReason == ESP_RST_DEEPSLEEP;
++    if (orbify::boottrail::stoppedEarly(lastRunStep, firmwareRestart)) {
++      LOG_ERR("BOOT", "Last run stopped at: %s", orbify::boottrail::name(lastRunStep));
++    } else {
++      LOG_INF("BOOT", "Last run ended at: %s", orbify::boottrail::name(lastRunStep));
++    }
++  }
++  orbify::logCrashRecord();
++  // Patch 0038: wolfSSL's allocations in PSRAM on the X4s, before any TLS session (orbify/HeapFloor.h).
++  OrbifyHeap::installTlsPsram();
+ 
+   // Read-and-clear so a panic later in setup() doesn't loop into silent reboot.
+   // Validate the target too — RTC_NOINIT memory is uninitialized on cold boot.
+   const bool isSilentReboot = (silentRebootMagic == SILENT_REBOOT_MAGIC);
+   // Power was pressed during the BookOrbit sleep sync: this boot is the wake it stands for.
+   const bool isSleepSyncWake = (silentRebootMagic == SLEEP_SYNC_WAKE_MAGIC);
++  takeWakePress(isSleepSyncWake);
+   const bool hasRestartFrontlight = (silentRebootTarget & SILENT_REBOOT_FRONTLIGHT_VALID) != 0;
+   const bool restartFrontlightOn = (silentRebootTarget & SILENT_REBOOT_FRONTLIGHT_ON) != 0;
+   silentRebootTarget &= ~(SILENT_REBOOT_FRONTLIGHT_VALID | SILENT_REBOOT_FRONTLIGHT_ON);
+@@ -1998,6 +2029,7 @@ void setup() {
+     powerManager.startDeepSleep(gpio, keepLatchInSleep);
+   }
+ #endif
++  orbifyBootStep(orbify::boottrail::Step::WakeChecked);
+ 
+ #ifndef SIMULATOR
+   // X4 Pro and X4 Classic both map Up to the GPIO0 boot strap. Use Down for
+@@ -2503,6 +2535,7 @@ void setup() {
+ #if CROSSINK_TAILNET_FRONTLIGHT_REAPPLY
+   frontlightReapplyFrom = millis() + FRONTLIGHT_REAPPLY_AFTER_SETUP_MS;
+ #endif
++  orbifyBootStep(orbify::boottrail::Step::SetupDone);
+ }
+ 
+ #if FREEINK_DEVICE_PICCO

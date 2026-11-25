@@ -1,0 +1,182 @@
+Subject: [PATCH] Orbify: catalog cache first
+
+Open a current saved catalog without first joining Wi-Fi.
+
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+index 1fffb70..5b80dd9 100644
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+@@ -545,6 +545,25 @@ void BookOrbitCatalogBrowserActivity::onEnter() {
+ #endif
+     return;
+   }
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Patch 0038, cache-first (the user's rule, .167): a catalog opened in place (the X4s) with a
++  // saved copy that is not stale opens from the cache without Wi-Fi. The network comes up only on
++  // ⟳, for a view the cache does not hold (connectForMiss), or from the Home tile. Stale = the
++  // 7-day Full refresh is due or the Home's refresh learned a new library version (dueNow()).
++  // Before, every open joined Wi-Fi first (WifiSelectionActivity), even offline with Tailscale off.
++  if (!networkBoot && pendingDownload.fileId == 0 && entryLink.bookId == 0 && WiFi.status() != WL_CONNECTED) {
++    const auto due = OrbifyMirror::dueNow();
++    if (orbify::mirror::catalogFromCache(OrbifyMirror::saved(), due)) {
++      LOG_INF("BookOrbit", "Catalog: opening from the cache, no Wi-Fi (saved %lu)",
++              static_cast<unsigned long>(OrbifyMirror::savedAt()));
++      offlineSession = true;
++      cacheFirst = true;
++      openEntryViews();
++      return;
++    }
++    LOG_INF("BookOrbit", "Catalog: the saved copy is %s; connecting", orbify::mirror::dueName(due));
++  }
++#endif
+   state = BrowserState::CHECK_WIFI;
+   requestUpdate();
+   checkAndConnectWifi();
+@@ -640,6 +659,10 @@ void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connect
+     downloadBook(link.bookId, link.title, link.replacePath, /*openExisting=*/link.replacePath.empty());
+     return;
+   }
++  openEntryViews();
++}
++
++void BookOrbitCatalogBrowserActivity::openEntryViews() {
+   if (!loadRoot(/*allowNetwork=*/false)) {
+     showLoadingBeforeFetch();
+     loadRoot();
+@@ -690,7 +713,7 @@ bool BookOrbitCatalogBrowserActivity::loadRoot(const bool allowNetwork) {
+   // The root's requests share one TLS connection; it closes before the rows are drawn.
+   std::optional<BookOrbitCatalogClient::Session> catalogSession;
+   if (allowNetwork) catalogSession.emplace();
+-  if (!cacheHit && !BookOrbitCatalogClient::fetchRootSections(sections)) {
++  if (!cacheHit && !BookOrbitCatalogClient::fetchRootSections(sections) && !(connectForMiss() && BookOrbitCatalogClient::fetchRootSections(sections))) {
+     state = BrowserState::ERROR;
+     errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
+                                                                 : tr(STR_BOOKORBIT_CATALOG_ERROR);
+@@ -908,7 +931,7 @@ bool BookOrbitCatalogBrowserActivity::loadFacetEntries(const std::string& sectio
+   if (!cacheHit && !allowNetwork) {
+     return false;
+   }
+-  if (!cacheHit && !BookOrbitCatalogClient::fetchSectionEntries(sectionId, page, result)) {
++  if (!cacheHit && !BookOrbitCatalogClient::fetchSectionEntries(sectionId, page, result) && !(connectForMiss() && BookOrbitCatalogClient::fetchSectionEntries(sectionId, page, result))) {
+     state = BrowserState::ERROR;
+     errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
+                                                                 : tr(STR_BOOKORBIT_CATALOG_ERROR);
+@@ -971,7 +994,7 @@ bool BookOrbitCatalogBrowserActivity::loadBooks(const BookOrbitBookQuery& query,
+   if (!cacheHit && !allowNetwork) {
+     return false;
+   }
+-  if (!cacheHit && !BookOrbitCatalogClient::fetchBooks(query, page, result)) {
++  if (!cacheHit && !BookOrbitCatalogClient::fetchBooks(query, page, result) && !(connectForMiss() && BookOrbitCatalogClient::fetchBooks(query, page, result))) {
+     state = BrowserState::ERROR;
+     errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
+                                                                 : tr(STR_BOOKORBIT_CATALOG_ERROR);
+@@ -1488,7 +1511,8 @@ void BookOrbitCatalogBrowserActivity::downloadBook(const int64_t bookId, const s
+   showDownloadScreen(title);
+ 
+   BookOrbitBookDetail detail;
+-  if (!BookOrbitCatalogClient::fetchBookDetail(bookId, detail)) {
++  if (!BookOrbitCatalogClient::fetchBookDetail(bookId, detail) &&
++      !(connectForMiss() && BookOrbitCatalogClient::fetchBookDetail(bookId, detail))) {
+     state = BrowserState::ERROR;
+     errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
+                                                                 : tr(STR_BOOKORBIT_CATALOG_ERROR);
+@@ -2460,10 +2484,33 @@ void BookOrbitCatalogBrowserActivity::render(RenderLock&&) {
+     // Orbify (patch 0035): the ⟳ at the right, its "updated …" stamp beside it.
+     const std::string stamp = viewStamp();
+     if (mappedInput.hasTouchHardware()) {
++      // Patch 0038: the stamp is drawn here, just left of the controls. Passed as the header's
++      // subtitle (0037) it went to the band's right edge, under the ⟳ and the battery, so the X4 Pro
++      // never showed "Refreshing…" or "updated just now".
+       const int controls = listOptionsShown ? 3 * HEADER_CONTROL_SIZE + 2 * HEADER_CONTROL_GAP : HEADER_CONTROL_SIZE;
+-      TouchHeaderBackButton::draw(renderer, TouchHeaderBackButton::compactHeaderRect(renderer), title.c_str(),
+-                                  /*readerContext=*/false,
+-                                  controls + TouchHeaderBackButton::controlRightInset() + 10, stamp.c_str());
++      const Rect header = TouchHeaderBackButton::compactHeaderRect(renderer);
++      int bounds[4]{};
++      renderer.getOrientedViewableTRBL(&bounds[0], &bounds[1], &bounds[2], &bounds[3]);
++      // The controls' right edge, as addRefreshControl places them.
++      const int right = renderer.getScreenWidth() - bounds[1] - TouchHeaderBackButton::controlRightInset();
++      const int controlsLeft = right - controls;
++      const int stampW = renderer.getTextWidth(SMALL_FONT_ID, stamp.c_str());
++      const int stampX = controlsLeft - 10 - stampW;
++      TouchHeaderBackButton::draw(renderer, header, title.c_str(), /*readerContext=*/false,
++                                  header.x + header.width - stampX + 12);
++      const TouchHeaderBackButton::Layout back = TouchHeaderBackButton::layout(header);
++      // The title row, moved down as TouchHeaderBackButton::draw moves it.
++      const int iconBottom = back.iconRect.y + (back.iconRect.height + TouchHeaderBackButton::ICON_SIZE) / 2;
++      const int rowY = back.iconRect.y + std::clamp(TouchHeaderBackButton::TITLE_VERTICAL_OFFSET, 0,
++                                                    std::max(0, header.y + header.height - iconBottom));
++      const int stampY = rowY + (back.iconRect.height - renderer.getLineHeight(SMALL_FONT_ID)) / 2;
++      if (!stamp.empty()) renderer.drawText(SMALL_FONT_ID, stampX, stampY, stamp.c_str());
++      if (stamp != loggedStamp) {  // where it is, for the scenarios' screenshots
++        loggedStamp = stamp;
++        LOG_INF("BookOrbit", "Catalog stamp '%s' at %d,%d %dx%d; refresh control at %d,%d", stamp.c_str(), stampX,
++                stampY, stampW, renderer.getLineHeight(SMALL_FONT_ID), right - HEADER_CONTROL_SIZE / 2,
++                header.y + header.height - HEADER_CONTROL_SIZE / 2);
++      }
+       return;
+     }
+     const auto& metrics = UITheme::getInstance().getMetrics();
+@@ -2659,6 +2706,25 @@ void BookOrbitCatalogBrowserActivity::refreshView(const bool full) {
+   LOG_INF("BookOrbit", "Catalog: %s %s", full ? "Full refresh" : "Refresh", ok ? "done" : "failed");
+ }
+ 
++bool BookOrbitCatalogBrowserActivity::connectForMiss() {
++  if (!cacheFirst || WiFi.status() == WL_CONNECTED) return false;
++  cacheFirst = false;  // one try: offline, the view's error says so
++  LOG_INF("BookOrbit", "Catalog: not in the cache; connecting");
++  {
++    RenderLock lock(*this);
++    state = BrowserState::LOADING;
++    statusMessage = tr(STR_CONNECTING);
++  }
++  requestUpdateAndWait();
++  if (!SavedWifiConnect::connect([] { return false; })) {
++    LOG_INF("BookOrbit", "Catalog: could not connect for a view not in the cache");
++    return false;
++  }
++  offlineSession = false;
++  sdFontSystem.releaseForNetwork(renderer);
++  return true;
++}
++
+ void BookOrbitCatalogBrowserActivity::markViewLoaded(const bool fromSessionList) {
+   const int level = static_cast<int>(navLevel);
+   // Back to a view read earlier this session keeps that view's stamp.
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.h b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+index ccdf546..96971db 100644
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.h
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.h
+@@ -182,6 +182,9 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
+   int refreshTapped = 0;
+   // Opened without Wi-Fi from the saved mirror; every read comes from the cache.
+   bool offlineSession = false;
++  // Patch 0038: opened from the cache by choice (cache-first), not for want of Wi-Fi: the first
++  // view the cache does not hold connects (connectForMiss).
++  bool cacheFirst = false;
+   // When each level's view was last loaded (epoch s, 0 = unknown), and whether its last
+   // refresh failed.
+   uint32_t viewLoadedAt[3] = {};
+@@ -189,6 +192,7 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
+   unsigned long mirrorPaintedAt = 0;
+   // Patch 0037: a Refresh under way; the header's stamp says "Refreshing…" until it ends.
+   bool refreshing = false;
++  mutable std::string loggedStamp;  // patch 0038: the last stamp logged (render task)
+ #endif
+   std::string errorMessage;
+   std::string statusMessage;
+@@ -325,6 +329,14 @@ class BookOrbitCatalogBrowserActivity final : public Activity {
+   void launchWifiSelection();
+   void onWifiSelectionComplete(bool connected);
+   void showLoadingBeforeFetch();
++  // The views the catalog opens on (root, then an entry link's author or section).
++  void openEntryViews();
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Patch 0038: in a cache-first session, Wi-Fi for a view the cache does not hold. True once up.
++  bool connectForMiss();
++#else
++  bool connectForMiss() { return false; }
++#endif
+   bool loadRoot(bool allowNetwork = true);
+   // By value: callers pass a row's own section id, and the listing it opens replaces that row.
+   void loadLocalBooks(std::string kind);

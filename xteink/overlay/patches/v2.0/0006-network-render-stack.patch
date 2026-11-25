@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: network render stack
+
+Reduce render-task memory during network-only boots.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index e9743f4a..6ec7b3d3 100644
 --- a/include/CrossInkTailnetCuts.h
