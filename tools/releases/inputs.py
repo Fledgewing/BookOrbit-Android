@@ -81,9 +81,9 @@ def make_plan(version, current, history, force=False):
 
 def receipt(platforms, scope, tag, root=ROOT):
     fps = fingerprints(root)
-    return [dict(platform=p, fingerprint=fps[p], scope=scope, result="passed", tag=tag,
-                 sha=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
-                 run=os.environ.get("GITHUB_RUN_ID", "local")) for p in platforms]
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    return [dict(platform=p, fingerprint=fps[p], scope=scope, result="passed", tag=tag or sha,
+                 sha=sha, run=os.environ.get("GITHUB_RUN_ID", "local")) for p in platforms]
 
 def published(plan, platforms, tag):
     builds, evidence = {}, []
@@ -102,6 +102,8 @@ def published(plan, platforms, tag):
 
 def notes(plan, publishing=PLATFORMS):
     lines = ["<!-- booksync-builds -->", "", "| Platform | Current build | Tests |", "|---|---|---|"]
+    labels = {"app": "Android app", "plugin": "KOReader plugin", "x4-pro": "X4 Pro",
+              "x4-classic": "X4 Classic", "default": "X3 / C3 X4"}
     for p, row in plan["platforms"].items():
         previous = row["previous"]
         built = row["build"] and p in publishing
@@ -111,7 +113,7 @@ def notes(plan, publishing=PLATFORMS):
         details = [f"tests: reused from {tag} ({scope})" if tag else f"{scope}: full tests"
                    for scope, tag in row["reuse"].items()]
         tests = "; ".join(details) if built else "previous build"
-        lines.append(f"| {p} | BookSync {current}{unchanged} | {tests} |")
+        lines.append(f"| {labels[p]} | BookSync {current}{unchanged} | {tests} |")
     return "\n".join(lines + ["<!-- /booksync-builds -->"]) + "\n"
 
 def refresh_notes(body, plan):
@@ -136,7 +138,7 @@ def collect(repo):
     """Immutable published receipts plus successful trusted Actions evidence; misses run tests."""
     history = dict(builds={}, evidence=[])
     releases = json.loads(gh("api", f"repos/{repo}/releases?per_page=100"))
-    for release in sorted(releases, key=lambda r: r["created_at"], reverse=True):
+    for release in sorted(releases, key=lambda r: r.get("published_at") or r["created_at"], reverse=True):
         if release["draft"]:
             continue
         for asset in release["assets"]:
@@ -182,7 +184,7 @@ def main():
     parser.add_argument("--platforms", default=",".join(PLATFORMS))
     parser.add_argument("--scope", default="component", choices=("component", "release"))
     parser.add_argument("--tag", default=(os.environ.get("GITHUB_REF_NAME") if os.environ.get("GITHUB_REF_TYPE") == "tag"
-                                         else os.environ.get("GITHUB_SHA", "local")))
+                                         else None))
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY"))
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
