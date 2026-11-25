@@ -76,6 +76,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "usage: %s shared/fixtures/github/orbify-releases.json\n", argv[0]);
     return 2;
   }
+  // @fixture github/orbify-releases.json
   FILE* f = std::fopen(argv[1], "rb");
   if (!f) {
     std::perror(argv[1]);
@@ -125,6 +126,7 @@ int main(int argc, char** argv) {
   // The feed the firmware reads (xteink/releases.json on the xteink-feed branch): the stable and
   // the pre-release entry, in GitHub's release format.
   if (argc > 2) {
+    // @fixture github/xteink-feed.json
     const std::string feed = readFile(argv[2]);
     CHECK(!feed.empty());
     const Pick feedStable = pick("xteink-v", false, "firmware-x3-x4", 97, true, &feed);

@@ -1,3 +1,4 @@
+// @fixture orbismart/cases.json
 // Host test for OrbiSmart sync (xteink/orbify/core/OrbiSmart): every case of the shared table in
 // shared/fixtures/orbismart/cases.json (Android's logic/orbismart.lua reads the same one).
 #include <ArduinoJson.h>

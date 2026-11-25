@@ -32,6 +32,7 @@ BookState stateOf(const char* s) {
 
 void stampCases(const std::string& dir) {
   JsonDocument doc;
+  // @fixture localfirst/stamp-cases.json
   if (!loadJsonFile((dir + "/stamp-cases.json").c_str(), doc)) {
     CHECK(false);
     return;
@@ -48,6 +49,7 @@ void stampCases(const std::string& dir) {
 // are the Android Home's (Xteink rows show one book at a time).
 void overlayCases(const std::string& dir) {
   JsonDocument doc;
+  // @fixture localfirst/overlay-cases.json
   if (!loadJsonFile((dir + "/overlay-cases.json").c_str(), doc)) {
     CHECK(false);
     return;
