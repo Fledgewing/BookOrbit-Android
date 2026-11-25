@@ -816,6 +816,201 @@ def catalog_wifi_holds(ctx: Context, tmp: Path) -> None:
     after(walk, "Wi-Fi off: SavedWifiConnect disconnect (0 held)")
 
 
+# OrbiSmart: exercise the firmware task, on-card journal and reader popup (no alternate policy).
+def smart_card(ctx: Context, tmp: Path):
+    card = ctx.card(tmp)
+    card.bookorbit["sync_mode"] = "orbismart"
+    card.save()
+    path = card.add_book(ctx.source("Standalone 03"))
+    card.open_book(path, asleep=True)
+    card.progress(path, 1, 0, 1)
+    return card, path
+
+
+def smart_remote(ctx: Context, chapter: int = 4, timestamp: int | None = None):
+    book = ctx.book("Standalone 03")
+    remote = {"document": book["hash"], "progress": f"/body/DocFragment[{chapter}]/body",
+              "percentage": (chapter - 1) / 5, "device": "another reader", "device_id": "orbify-e2e-seed",
+              "timestamp": timestamp or int(time.time())}
+    ctx.faults([{"match": {"path": f"/syncs/progress/{book['hash']}$", "method": "GET"},
+                 "action": "status", "status": 200, "body": json.dumps(remote)}])
+    return remote
+
+
+@scenario(*X4S)
+def orbismart_wake_yes(ctx: Context, tmp: Path) -> None:
+    card, path = smart_card(ctx, tmp)
+    smart_remote(ctx)
+    run = ctx.sim.run(card, "wake-yes", wake=True, quit_after_sync=False, timeout_s=18,
+                      script="9000:DOWN:120;10000:CONFIRM:120;15000:QUIT")
+    after(run.output, "orbismart: rule3")
+    after(run.output, "Continue from another reader, p.")
+    after(run.output, "yes after")
+    after(run.output, "orbismart: applied spine=3")
+    assert not [e for e in ctx.requests("/syncs/progress") if e["method"] == "PUT"], "wake pushed behind server"
+
+
+@scenario(*X4S)
+def orbismart_wake_no(ctx: Context, tmp: Path) -> None:
+    card, path = smart_card(ctx, tmp)
+    smart_remote(ctx)
+    run = ctx.sim.run(card, "wake-no", wake=True, quit_after_sync=False, timeout_s=18,
+                      script="9000:BACK:120;15000:QUIT")
+    after(run.output, "Continue from another reader, p.")
+    after(run.output, "no after")
+    assert "orbismart: applied" not in run.output
+    # Same remote place after another real boot/check: no repeat and no stale upload.
+    card.open_book(path, asleep=True)
+    run = ctx.sim.run(card, "wake-no-again", wake=True, quit_after_sync=False, timeout_s=13,
+                      script="10000:QUIT")
+    after(run.output, "orbismart: declined")
+    assert "Continue from" not in run.output
+    assert "orbismart: applied" not in run.output
+    assert not [e for e in ctx.requests("/syncs/progress") if e["method"] == "PUT"]
+
+
+@scenario(*ALL)
+def orbismart_prerender(ctx: Context, tmp: Path) -> None:
+    card, path = smart_card(ctx, tmp)
+    remote = smart_remote(ctx)
+    journal = card.crosspoint / "orbismart"
+    journal.mkdir()
+    # Packed OSM1 journal: the exact firmware format (OrbiSmartState.h), including checksum.
+    import struct
+    def fnv32(raw):
+        value = 2166136261
+        for byte in raw:
+            value = ((value ^ byte) * 16777619) & 0xffffffff
+        return value
+    def record(xpath="", percent=0, at=0, device=""):
+        return struct.pack("<qf256s64s64s", at, percent, xpath.encode(), device.encode(), b"")
+    scope = card.bookorbit["serverUrl"] + "\n" + card.bookorbit["username"]
+    raw = bytearray(struct.pack("<IIIIBqqqI384s", 0x314d534f, 1, fnv32(scope.encode()), 0, 1, 0, 0, 0, 0, b""))
+    raw += record(remote["progress"], remote["percentage"], remote["timestamp"], remote["device"])
+    raw += record() + record() + struct.pack("<iii", 0, 0, 1)
+    struct.pack_into("<I", raw, 12, fnv32(raw))
+    (journal / (ctx.book("Standalone 03")["hash"] + ".0")).write_bytes(raw)
+    (journal / (ctx.book("Standalone 03")["hash"] + ".1")).write_bytes(raw[:80])  # torn newer slot
+    # No usable network. The cached place is consumed by the actual pre-render path.
+    (card.crosspoint / "wifi.json").write_text('{"credentials": []}')
+    run = ctx.sim.run(card, "prerender", wake=True, quit_after_sync=False, timeout_s=12, script="9000:QUIT")
+    after(run.output, "-> take (prerender, now)")
+    after(run.output, "pending place used (offline)")
+    assert "Continue from" not in run.output
+    assert not ctx.requests("/syncs/progress")
+
+
+@scenario(*ALL)
+def orbismart_override_offline(ctx: Context, tmp: Path) -> None:
+    card, path = smart_card(ctx, tmp)
+    (card.crosspoint / "wifi.json").write_text('{"credentials": []}')
+    run = ctx.sim.run(card, "queue", wake=True, quit_after_sync=False, timeout_s=12, script="9000:QUIT",
+                      env={"ORBIFY_SIM_OVERRIDE_AT_OPEN": "1"})
+    after(run.output, "orbismart: override queued")
+    assert not ctx.requests("/syncs/progress")
+    (card.crosspoint / "wifi.json").write_text(json.dumps(
+        {"lastConnectedSsid": "SimNet", "credentials": [{"ssid": "SimNet", "password": "simnet"}]}))
+    # No later server reading: the queued backward place goes before the ordinary snapshot.
+    smart_remote(ctx, timestamp=int(time.time()) - 3600)
+    run = sleep_sync(ctx, card, "send")
+    after(run.output, "orbismart: override sent")
+    puts = [e for e in ctx.requests("/syncs/progress") if e["method"] == "PUT"]
+    assert puts and puts[0]["status"] == 200
+    sent = json.loads(re.search(r"Request body: (.*)", run.output).group(1))
+    assert "DocFragment[2]" in sent["progress"], "override lost its offline chosen place"
+    assert run.output.index("orbismart: override sent") < run.output.index("orbismart: rule")
+
+
+@scenario(*ALL)
+def orbismart_sleep_pending(ctx: Context, tmp: Path) -> None:
+    card, path = smart_card(ctx, tmp)
+    smart_remote(ctx)
+    card.open_book(path)
+    run = sleep_sync(ctx, card, "sleep")
+    after(run.output, "-> take (sleep, wake)")
+    assert "Continue from" not in run.output
+    # The sleep screen discovery is asked at wake before a new connection is available.
+    (card.crosspoint / "wifi.json").write_text('{"credentials": []}')
+    card.open_book(path, asleep=True)
+    run = ctx.sim.run(card, "wake-pending", wake=True, quit_after_sync=False, timeout_s=14,
+                      script="9000:BACK:120;11000:QUIT")
+    after(run.output, "Continue from another reader, p.")
+    after(run.output, "no after")
+
+
+@scenario(*X4S)
+def orbismart_override_superseded(ctx: Context, tmp: Path) -> None:
+    card, path = smart_card(ctx, tmp)
+    smart_remote(ctx, timestamp=int(time.time()) - 3600)
+    ctx.sim.run(card, "seen", wake=True, quit_after_sync=False, timeout_s=12,
+                script="8000:BACK:120;10000:QUIT")
+    card.open_book(path, asleep=True)
+    (card.crosspoint / "wifi.json").write_text('{"credentials": []}')
+    run = ctx.sim.run(card, "queue", wake=True, quit_after_sync=False, timeout_s=12,
+                      script="9000:QUIT", env={"ORBIFY_SIM_OVERRIDE_AT_OPEN": "1"})
+    after(run.output, "orbismart: override queued")
+    (card.crosspoint / "wifi.json").write_text(json.dumps(
+        {"lastConnectedSsid": "SimNet", "credentials": [{"ssid": "SimNet", "password": "simnet"}]}))
+    smart_remote(ctx, chapter=5, timestamp=int(time.time()) + 10)
+    card.open_book(path)
+    run = sleep_sync(ctx, card, "later-reading")
+    after(run.output, "orbismart: override dropped")
+    after(run.output, "-> take (sleep, wake)")
+    assert not [e for e in ctx.requests("/syncs/progress") if e["method"] == "PUT"]
+
+
+@scenario(*X4S)
+def orbismart_override_redated(ctx: Context, tmp: Path) -> None:
+    card, path = smart_card(ctx, tmp)
+    remote = smart_remote(ctx, timestamp=int(time.time()) - 3600)
+    remote["progress"] += "/p[4]"
+    ctx.faults([{"match": {"path": f"/syncs/progress/{ctx.book('Standalone 03')['hash']}$", "method": "GET"},
+                 "action": "status", "status": 200, "body": json.dumps(remote)}])
+    ctx.sim.run(card, "seen", wake=True, quit_after_sync=False, timeout_s=12,
+                script="8000:BACK:120;10000:QUIT")
+    card.open_book(path, asleep=True)
+    (card.crosspoint / "wifi.json").write_text('{"credentials": []}')
+    run = ctx.sim.run(card, "queue", wake=True, quit_after_sync=False, timeout_s=12,
+                      script="9000:QUIT", env={"ORBIFY_SIM_OVERRIDE_AT_OPEN": "1"})
+    after(run.output, "orbismart: override queued")
+    (card.crosspoint / "wifi.json").write_text(json.dumps(
+        {"lastConnectedSsid": "SimNet", "credentials": [{"ssid": "SimNet", "password": "simnet"}]}))
+    smart_remote(ctx, timestamp=int(time.time()) + 10)  # same chapter, earlier place, newly dated
+    card.open_book(path)
+    run = sleep_sync(ctx, card, "web-open")
+    after(run.output, "orbismart: override sent")
+    assert "orbismart: override dropped" not in run.output
+
+
+@scenario(*ALL)
+def orbismart_sleep_prefetch(ctx: Context, tmp: Path) -> None:
+    card, path = smart_card(ctx, tmp)
+    card.open_book(path)
+    entries = []
+    for n, title in enumerate(("Standalone 01", "Standalone 02", "Standalone 04")):
+        book = ctx.book(title)
+        other = card.add_book(ctx.source(title))
+        entries.append((book["id"], other))
+        kit.Device().call("PUT", f"/plugin/catalog/books/{book['id']}/read-status", {"status": "reading"})
+        kit.Device().call("PUT", "/syncs/progress", {"document": book["hash"],
+            "progress": "/body/DocFragment[4]/body", "percentage": .6,
+            "device": "another reader", "device_id": "orbify-e2e-seed", "timestamp": int(time.time()) + n})
+    card.download_index(entries)
+    current = ctx.book("Standalone 03")
+    kit.Device().call("PUT", "/syncs/progress", {"document": current["hash"],
+        "progress": "/body/DocFragment[2]/body", "percentage": .2,
+        "device": "another reader", "device_id": "orbify-e2e-seed", "timestamp": int(time.time()) + 30})
+    run = sleep_sync(ctx, card, "prefetch")
+    after(run.output, "OrbiSmart: pending places saved 3/3")
+    (card.crosspoint / "wifi.json").write_text('{"credentials": []}')
+    card.open_book(entries[0][1], asleep=True)
+    before = len(ctx.requests("/syncs/progress"))
+    run = ctx.sim.run(card, "offline-other-book", wake=True, quit_after_sync=False, timeout_s=12, script="9000:QUIT")
+    after(run.output, "pending place used (offline)")
+    assert "Continue from" not in run.output
+    assert len(ctx.requests("/syncs/progress")) == before
+
+
 # --- Runner -----------------------------------------------------------------------------------
 
 # What only a reader shows (docs/design/emulated-release-tests.md 6.2): written beside the results.

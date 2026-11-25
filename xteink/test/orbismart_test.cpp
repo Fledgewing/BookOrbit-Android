@@ -8,6 +8,7 @@
 #include <string>
 
 #include "OrbiSmart.h"
+#include "OrbiSmartState.h"
 #include "TestSupport.h"
 
 using namespace orbify::orbismart;
@@ -94,5 +95,35 @@ int main(int argc, char** argv) {
   char tiny[12];
   const size_t n = formatLine(in, decide(in), Moment::Open, tiny, sizeof(tiny));
   CHECK(n == sizeof(tiny) - 1 && std::strlen(tiny) == n);
+  // A reboot retains the pending place, a No and the exact queued override, or falls back
+  // to the other generation when any byte was torn. Account changes cannot replay intents.
+  CHECK(!pauseDue(119999, 4, 1, 8, 1, 2));
+  CHECK(pauseDue(120000, 4, 1, 8, 1, 2));
+  CHECK(!pauseDue(120000, 4, 1, 3, 1, 2));
+  CHECK(!pauseDue(120000, 4, 1, 2, 1, 2));
+  CHECK(pauseDue(120000, 4, 2, 0, 1, 2));
+  CHECK(!wakeDue(1599, 1000)); CHECK(wakeDue(1600, 1000)); CHECK(wakeDue(1000, 0));
+  State state;
+  state.generation = 7; state.server = 42;
+  state.flags = State::PENDING | State::WAKE | State::OVERRIDE;
+  state.declined = 1234; state.chosen.at = 5678;
+  std::strcpy(state.pending.xpath, "/body/DocFragment[4]/body");
+  std::strcpy(state.chosen.xpath, "/body/DocFragment[2]/body");
+  seal(state);
+  CHECK(sizeof(RemoteRecord) == 396);
+  CHECK(sizeof(State) == 1629);
+  CHECK(valid(state, 42));
+  CHECK(!valid(state, 43));
+  State reboot;
+  std::memcpy(&reboot, &state, sizeof(state));
+  CHECK(valid(reboot, 42) && reboot.declined == 1234 && reboot.chosen.at == 5678);
+  const auto* raw = reinterpret_cast<const uint8_t*>(&state);
+  for (size_t i = 0; i < sizeof(state); ++i) {
+    std::memcpy(&reboot, raw, sizeof(state));
+    reinterpret_cast<uint8_t*>(&reboot)[i] ^= 1;
+    CHECK(!valid(reboot, 42));
+  }
+  state.generation = 0; seal(state);
+  CHECK(!valid(state, 42));
   return report("orbismart");
 }
