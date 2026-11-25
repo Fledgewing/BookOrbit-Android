@@ -616,7 +616,7 @@ class SettingChoiceActivity : SettingsPage() {
         watch = null
     }
 
-    /** The picker is open: the plugin writes fresh lists (choices.json) at its next look (§6.2). */
+    /** The picker is open: the plugin asks the worker for fresh lists (scopes.json, tags.json) at its next look (§6.2). */
     private fun askForLists() {
         val now = System.currentTimeMillis()
         prefs.wantChoicesAt = now
@@ -625,7 +625,7 @@ class SettingChoiceActivity : SettingsPage() {
         @Suppress("DEPRECATION")
         watch = object : FileObserver(SleepScreen.dir().path, CLOSE_WRITE or MOVED_TO) {
             override fun onEvent(event: Int, path: String?) {
-                if (path == SleepChoices.FILE || path == SleepChoices.SCOPES_FILE) runOnUiThread { if (!isFinishing) render() }
+                if (path == SleepChoices.SCOPES_FILE || path == SleepChoices.TAGS_FILE) runOnUiThread { if (!isFinishing) render() }
             }
         }.also { it.startWatching() }
     }
@@ -662,7 +662,7 @@ class SettingChoiceActivity : SettingsPage() {
             c.scopes.forEach { tick("scope:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.collections.isNotEmpty()) subhead(root, "Collections")
             c.collections.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
-            if (c.at > 0) root.addView(note("Lists from KOReader, ${Ui.clock(this, c.at)}" + if (c.cached) " (saved, offline)" else ""))
+            if (c.at > 0) root.addView(note("Lists from BookOrbit, ${Ui.clock(this, c.at)}"))
         }
         picked.filter { (it.startsWith("scope:") || it.startsWith("collection:")) && c?.title(it) == null }.forEach { tick(it, SleepChoices.fallback(it)) }
         root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then pick it here."))

@@ -25,6 +25,7 @@ import java.io.File
 class SharpCoversTest {
     private val ctx: Context = org.robolectric.RuntimeEnvironment.getApplication()
     private val password = "pw-Zq81-never-stored"
+    // @fixture opds/recent-feed.xml
     private val feed = File("../../../shared/fixtures/opds/recent-feed.xml").readBytes()
     private val requests = mutableListOf<Pair<String, Map<String, String>>>()
     private var reply: (String, Map<String, String>) -> SharpCovers.Resp = { _, _ -> SharpCovers.Resp(500, null, null) }
@@ -39,7 +40,7 @@ class SharpCoversTest {
         SharpCovers.http = SharpCovers.Http { url, h -> requests += url to h; reply(url, h) }
         SharpCovers.vault = FakeVault
         SharpCovers.scaler = { bytes, _, _ -> byteArrayOf(1, 2) + bytes }
-        ctx.getSharedPreferences("orbit_sleep", Context.MODE_PRIVATE).edit().putString("sleep_mode", "recommended").commit()
+        SettingsStore.store(ctx, "sleep_mode", "recommended")
         val d = SleepScreen.dir().apply { mkdirs() }
         File(d, "covers").mkdirs()
         listOf(5L, 6L).forEach { File(d, "covers/$it.jpg").writeBytes(byteArrayOf(9)) }

@@ -6,10 +6,16 @@ import android.content.SharedPreferences
 
 /**
  * The companion's copy of every shared setting, with the time each last changed
- * (docs/design/companion-settings.md §4.2). Keys the companion already kept keep their old
- * storage (Prefs, the sleep screen's prefs), so nothing a reader set is reset; the rest live in
- * "orbit_settings". Times: "orbit_settings_at"; the plugin's last reported time per key (its echo):
- * "orbit_settings_plugin_at"; when a key last came from KOReader: "orbit_settings_from_plugin".
+ * (docs/design/companion-settings.md §4.2). Values live in "orbit_settings" as wire strings, keyed
+ * by the schema, and a key never set reads as the schema's default: the one place defaults come
+ * from. Prefs and SleepScreen read and write their shared keys here. Keys an older companion kept
+ * elsewhere (Prefs "orbit", the sleep screen's "orbit_sleep") are moved in once ([migrate]), so
+ * nothing a reader set is reset. Times: "orbit_settings_at"; the plugin's last reported time per
+ * key (its echo): "orbit_settings_plugin_at"; when a key last came from KOReader:
+ * "orbit_settings_from_plugin".
+ *
+ * reading_schedule is the exception: its value is the plugin's (Prefs.readingSchedule, as the
+ * plugin reported it) and the companion's change is a request until the plugin echoes it.
  */
 object SettingsStore {
     private const val VALUES = "orbit_settings"
@@ -17,6 +23,15 @@ object SettingsStore {
     private const val PLUGIN_AT = "orbit_settings_plugin_at"
     private const val FROM_PLUGIN = "orbit_settings_from_plugin"
     private const val SEEDED = "_seeded"
+    private const val MIGRATED = "_migrated"
+
+    /** Where an older companion kept a shared key: its SharedPreferences file. */
+    internal val LEGACY = mapOf(
+        "wifi_mode" to "orbit", "wifi_idle_min" to "orbit", "home_button" to "orbit",
+    ) + SleepSettings.KEYS.associateWith { "orbit_sleep" }
+
+    @Volatile
+    private var migrated = false
 
     @Volatile
     private var cached: SettingsSchema? = null
@@ -30,18 +45,62 @@ object SettingsStore {
 
     private fun sp(ctx: Context, name: String): SharedPreferences = ctx.applicationContext.getSharedPreferences(name, Context.MODE_PRIVATE)
 
-    /** The value now, as a wire string (the default when never set). */
+    /**
+     * Moves the shared keys an older companion kept in Prefs and the sleep screen's prefs into
+     * "orbit_settings", once: a value set there and valid for the schema is kept (one already in
+     * "orbit_settings" wins), then the old key is removed. Runs before any read or write here.
+     */
+    fun migrate(ctx: Context) {
+        if (migrated) return
+        synchronized(this) {
+            if (migrated) return
+            val values = sp(ctx, VALUES)
+            if (!values.getBoolean(MIGRATED, false)) {
+                val schema = schema(ctx)
+                val e = values.edit()
+                val moved = mutableListOf<String>()
+                for ((file, keys) in LEGACY.entries.groupBy({ it.value }, { it.key })) {
+                    val old = sp(ctx, file)
+                    val oe = old.edit()
+                    for (key in keys) {
+                        if (!old.contains(key)) continue
+                        val wire = SettingsMigration.wire(old.all[key])
+                        val d = schema.byKey[key]
+                        if (wire != null && d != null && !values.contains(key)) SettingsSync.fromWire(d, wire)?.let { e.putString(key, it); moved += key }
+                        oe.remove(key)
+                    }
+                    oe.commit()
+                }
+                e.putBoolean(MIGRATED, true).commit()
+                if (moved.isNotEmpty()) OLog.i("settings: moved ${moved.joinToString(" ")} into the schema store")
+            }
+            migrated = true
+        }
+    }
+
+    /** Tests: forget that this process migrated (a new reader's preferences). */
+    internal fun resetForTest() { migrated = false }
+
+    /** The stored wire value, or null when never set (no default). */
+    fun stored(ctx: Context, key: String): String? {
+        migrate(ctx)
+        return sp(ctx, VALUES).getString(key, null)
+    }
+
+    /** Stores a wire value as is: no time, no notice (Prefs, SleepScreen.save). */
+    fun store(ctx: Context, key: String, wire: String) {
+        migrate(ctx)
+        sp(ctx, VALUES).edit().putString(key, wire).apply()
+    }
+
+    /** The value now, as a wire string (the schema's default when never set). */
     fun get(ctx: Context, key: String): String {
         val d = schema(ctx).byKey[key] ?: return ""
-        val p = Prefs(ctx)
-        return when (key) {
-            "wifi_mode" -> p.wifiMode.key
-            "wifi_idle_min" -> p.wifiIdleMin.toString()
-            "home_button" -> p.homeButton.key
-            "reading_schedule" -> ReadingSchedule.shown(p.readingSchedule, p.readingScheduleRequest)
-            in SleepSettings.KEYS -> SleepScreen.settings(ctx).toMap()[key] ?: d.default
-            else -> sp(ctx, VALUES).getString(key, null) ?: d.default
+        if (key == "reading_schedule") {
+            val p = Prefs(ctx)
+            return ReadingSchedule.shown(p.readingSchedule, p.readingScheduleRequest)
         }
+        return stored(ctx, key) ?: d.default
     }
 
     fun bool(ctx: Context, key: String): Boolean = get(ctx, key) == "1"
@@ -66,19 +125,15 @@ object SettingsStore {
         e.apply()
     }
 
-    /** Writes the value into its storage (no time, no notice). */
+    /** Writes the value (no time, no notice); a sleep screen key through SleepScreen.save, which redraws. */
     private fun put(ctx: Context, key: String, wire: String, why: String) {
-        val p = Prefs(ctx)
         when (key) {
-            "wifi_mode" -> p.wifiMode = WifiMode.fromKey(wire)
-            "wifi_idle_min" -> wire.toIntOrNull()?.let { p.wifiIdleMin = it }
-            "home_button" -> p.homeButton = HomeButton.fromKey(wire)
-            "reading_schedule" -> p.readingSchedule = wire
+            "reading_schedule" -> Prefs(ctx).readingSchedule = wire
             in SleepSettings.KEYS -> {
                 val s = SleepSettings.merge(SleepScreen.settings(ctx)) { if (it == key) wire else null }
                 if (s != SleepScreen.settings(ctx)) SleepScreen.save(ctx, s, why, shared = false)
             }
-            else -> sp(ctx, VALUES).edit().putString(key, wire).apply()
+            else -> store(ctx, key, wire)
         }
     }
 
@@ -179,5 +234,16 @@ object SettingsStore {
             StatusFile.write(ctx, "settings from KOReader")
         }
         return changedKeys
+    }
+}
+
+/** The one-time move into the schema store (SettingsStore.migrate). */
+internal object SettingsMigration {
+    /** An old SharedPreferences value as a wire string: strings as they are, numbers in decimal, bools 1/0. */
+    fun wire(v: Any?): String? = when (v) {
+        is String -> v
+        is Int, is Long -> v.toString()
+        is Boolean -> if (v) "1" else "0"
+        else -> null
     }
 }

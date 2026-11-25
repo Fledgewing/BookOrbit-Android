@@ -76,17 +76,13 @@ function Shared.refresh(why)
     -- How the companion shows the sleep screen ("Orbit screen saver ✓", "Set up ›"), for the menu.
     local sl = (st and type(st.sleep) == "table" and st.sleep) or (Companion.file and type(Companion.file.sleep) == "table" and Companion.file.sleep) or nil
     Shared.sleep_shown_by = sl and type(sl.shown_by) == "string" and sl.shown_by or nil
-    -- The companion asks for the sleep screen's lists (its picker is open): answer with choices.json.
+    -- The companion's sleep-screen picker is open: ask it to fetch fresh lists (scopes.json,
+    -- tags.json; the login travels with the request, Sleep.refreshScopes).
     local want = tonumber((st and st.want_choices) or (Companion.file and Companion.file.want_choices)) or 0
-    if want > (S.choices_asked_at or 0) and Sleep and Sleep.writeChoices then
+    if want > (S.choices_asked_at or 0) and Sleep and Sleep.refreshScopes then
         S.choices_asked_at = want
         saveSettings()
-        pcall(Sleep.writeChoices, "asked by the companion")
-        if Sleep.refreshScopes then pcall(Sleep.refreshScopes, "companion picker") end
-    end
-    -- The lists for the companion's sleep-screen picker, once per start (and on Home refreshes).
-    if why == "start" and Sleep and Sleep.writeChoices then
-        UIManager:scheduleIn(20, function() if Sleep.choicesDue() then pcall(Sleep.writeChoices, "start") end end)
+        pcall(Sleep.refreshScopes, "companion picker")
     end
     -- The "look now" line needs the channel (docs/design/companion-settings.md §4.5).
     if st and not Channel.up and Companion.has("settings2") then pcall(Channel.connect, why) end

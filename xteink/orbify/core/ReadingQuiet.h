@@ -5,7 +5,7 @@
 // background repaint. Those are held: the caller drops them or shows them at the next screen that
 // is not the book (Home, the catalog, the Library). Shown anyway: the End-of-Book page (reached
 // by reading), a menu or screen the reader opened, and what happens behind the sleep screen.
-// The table is shared/fixtures/reading-quiet/cases.json, which Android reads too.
+// The table is shared/fixtures/reading-quiet/cases.json (no Android test reads it yet: REGISTRY.json).
 namespace orbify::quiet {
 
 enum class Event {

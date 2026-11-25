@@ -1,0 +1,455 @@
+{
+  "_comment": "Every rule table in shared/fixtures: which section holds which rule, who owns the rule, and which test suites must read it (kt: the companion's unit tests, lua: the plugin's tests, cpp: the Xteink host tests, py: the e2e kit's tests). Each suite fails when a section names it as a reader and none of its tests carries the mark '@fixture <file>#<section>' (or '@fixture <file>' for a whole file), or when it carries a mark the registry does not give it. The plugin's suite also fails on a fixture file or section with no row. A section is a key path ('mirror.due'); a row without one covers the whole file.",
+  "tables": [
+    {
+      "file": "cache/cases.json",
+      "section": "keys",
+      "rule": "What makes two requests one cache entry",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "cacheable",
+      "rule": "Which requests are cached",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "reads",
+      "rule": "When a read is served from the cache and when it is checked",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "revalidate",
+      "rule": "Whether a check changed the saved reply",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "writes",
+      "rule": "A write patches the book wherever it is cached and marks Home stale (the plugin's Cache.writeEffect gives effect; the companion's CacheStore.patched applies it)",
+      "owner": "plugin, companion, xteink",
+      "readers": [
+        "kt",
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "covers",
+      "rule": "Which covers a check fetches, keeps or removes",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "full_refresh_overlay",
+      "rule": "A Full refresh keeps the unsent local finish on top",
+      "owner": "xteink",
+      "readers": [
+        "cpp"
+      ],
+      "note": "Android's overlay rule is localfirst/overlay-cases.json"
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "settle",
+      "rule": "A check keeps the saved random pick; a Full refresh takes the new one",
+      "owner": "plugin",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "mirror.windows",
+      "rule": "The offline mirror's list identities",
+      "owner": "plugin",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "mirror.slices",
+      "rule": "A read cut from the mirror's saved pages",
+      "owner": "plugin",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "mirror.repage",
+      "rule": "Pages to fetch and drop when a list's total changes",
+      "owner": "plugin",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "mirror.due",
+      "rule": "When the automatic Full refresh is due",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "mirror.evict",
+      "rule": "Kept entries are outside the caps",
+      "owner": "plugin",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "mirror.retry",
+      "rule": "A mirror request with no answer is retried with smaller pages, then skipped",
+      "owner": "plugin",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "mirror.small_pages",
+      "rule": "A list saved in a smaller page size",
+      "owner": "plugin",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "storage.plans",
+      "rule": "What goes, in order, when Orbit's storage is over the limit",
+      "owner": "companion",
+      "readers": [
+        "kt"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "storage.room",
+      "rule": "Whether the offline mirror may go on under the limit",
+      "owner": "plugin",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/cases.json",
+      "section": "storage.notes",
+      "rule": "The note when the mirror stops at the limit",
+      "owner": "plugin",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/worker.json",
+      "rule": "The plugin's cache keys, hashes, list pages, cover names and entry format, which the companion's worker matches byte for byte",
+      "owner": "companion",
+      "readers": [
+        "kt",
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/db.json",
+      "rule": "orbit.db: replies saved by the companion answer the plugin's reads",
+      "owner": "companion",
+      "readers": [
+        "kt",
+        "lua"
+      ]
+    },
+    {
+      "file": "cache/schema.sql",
+      "rule": "orbit.db's schema",
+      "owner": "companion",
+      "readers": [
+        "kt",
+        "lua"
+      ]
+    },
+    {
+      "file": "sleep/cases.json",
+      "section": "cases",
+      "rule": "The sleep screen's rotation rule and fallbacks (lock-screen.md R4, F1, F4)",
+      "owner": "companion, xteink",
+      "readers": [
+        "kt",
+        "cpp"
+      ]
+    },
+    {
+      "file": "sleep/cases.json",
+      "section": "batch",
+      "rule": "Every sleep's carry at a refresh (R4b)",
+      "owner": "companion, xteink",
+      "readers": [
+        "kt",
+        "cpp"
+      ]
+    },
+    {
+      "file": "sleep/cases.json",
+      "section": "sources",
+      "rule": "Pick from and Leave out as sets, Library (R1c, X8)",
+      "owner": "companion, plugin, xteink",
+      "readers": [
+        "kt",
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/finish-cases.json",
+      "section": "picker",
+      "rule": "End of book: next in series, suggestions and author",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/finish-cases.json",
+      "section": "drain",
+      "rule": "End of book: the finish queue's drain guard",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/finish-cases.json",
+      "section": "errors",
+      "rule": "End of book: error backoff",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/finish-cases.json",
+      "section": "hold",
+      "rule": "End of book: the stale-push hold",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/finish-steps.json",
+      "rule": "The Xteink drain request by request",
+      "owner": "xteink",
+      "readers": [
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-book.no-author.json",
+      "rule": "Recorded book detail for the end-of-book picker",
+      "owner": "server",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-book.no-series.json",
+      "rule": "Recorded book detail for the end-of-book picker",
+      "owner": "server",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-book.series-fractional.json",
+      "rule": "Recorded book detail for the end-of-book picker",
+      "owner": "server",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-book.series-gap.json",
+      "rule": "Recorded book detail for the end-of-book picker",
+      "owner": "server",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-book.series-last-all-read.json",
+      "rule": "Recorded book detail for the end-of-book picker",
+      "owner": "server",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-book.series-last-unread-earlier.json",
+      "rule": "Recorded book detail for the end-of-book picker",
+      "owner": "server",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-book.series-middle.json",
+      "rule": "Recorded book detail for the end-of-book picker",
+      "owner": "server",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-book.delivery-variants.json",
+      "rule": "Recorded book detail with and without a delivery variant",
+      "owner": "server",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-dashboard-section.want-to-read.json",
+      "rule": "Recorded Want to read section for the sleep screen's pool",
+      "owner": "server",
+      "readers": [
+        "kt"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-sections.smart-scopes.json",
+      "rule": "Smart scopes in the server's shape, for the sleep screen's pickers",
+      "owner": "server",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "bookorbit/catalog-sections.collections.json",
+      "rule": "Collections in the server's shape, for the sleep screen's pickers",
+      "owner": "server",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "github/orbify-releases.json",
+      "rule": "Android and firmware releases in one list: each side offers only its own",
+      "owner": "companion, xteink",
+      "readers": [
+        "kt",
+        "cpp"
+      ],
+      "note": "The plugin's Update.parseVersion does not read it yet"
+    },
+    {
+      "file": "github/xteink-feed.json",
+      "rule": "The Xteink update feed",
+      "owner": "xteink",
+      "readers": [
+        "cpp"
+      ]
+    },
+    {
+      "file": "localfirst/overlay-cases.json",
+      "rule": "Local-first: this device's reading over the server's",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "localfirst/stamp-cases.json",
+      "rule": "Local-first: the reading stamp",
+      "owner": "plugin, xteink",
+      "readers": [
+        "lua",
+        "cpp"
+      ]
+    },
+    {
+      "file": "opds/recent-feed.xml",
+      "rule": "Recorded OPDS recent feed for sharp covers",
+      "owner": "server",
+      "readers": [
+        "kt"
+      ]
+    },
+    {
+      "file": "reading-quiet/cases.json",
+      "rule": "Nothing interrupts reading: what waits, what is dropped",
+      "owner": "xteink",
+      "readers": [
+        "cpp"
+      ],
+      "note": "Android enforces the same rule with its gates (docs/design/reading-gate.md) but no Android test reads this table yet"
+    },
+    {
+      "file": "settings/merge.json",
+      "rule": "Shared settings: per-key newest-wins merge",
+      "owner": "companion, plugin",
+      "readers": [
+        "kt",
+        "lua"
+      ]
+    },
+    {
+      "file": "e2e/library.json",
+      "rule": "The synthetic library the emulated release tests seed",
+      "owner": "tools",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "e2e/faults/offline.json",
+      "rule": "Fault-proxy rules: offline",
+      "owner": "tools",
+      "readers": [
+        "py"
+      ]
+    }
+  ]
+}

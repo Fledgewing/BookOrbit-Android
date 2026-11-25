@@ -3,7 +3,8 @@
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
--- JNI: explicit broadcasts, activities, screen state, VPN state, launch extras
+-- JNI: the companion's caller-checked call, package signers, explicit broadcasts, activities,
+-- screen state, VPN state, launch extras
 -- Built on KOReader's own JNI bridge (android-luajit-launcher assets/android.lua:1400-1416,
 -- JNI:context, with the raw JNIEnv). Every Java call is checked for a pending exception,
 -- because calling on with one pending aborts the VM.
@@ -127,6 +128,135 @@ function Jni.sendBroadcast(spec)
         callVoid(env, activity, "sendBroadcast", "(Landroid/content/Intent;)V", intent)
         del(env, intent)
         return true
+    end)
+end
+
+-- A new android.os.Bundle with string extras.
+function newBundle(env, extras)
+    local cls = env[0].FindClass(env, "android/os/Bundle")
+    check(env, "FindClass Bundle")
+    local ctor = env[0].GetMethodID(env, cls, "<init>", "()V")
+    check(env, "Bundle.<init>")
+    local b = env[0].NewObject(env, cls, ctor)
+    check(env, "new Bundle")
+    del(env, cls)
+    for k, v in pairs(extras or {}) do
+        local jk = env[0].NewStringUTF(env, k)
+        local jv = env[0].NewStringUTF(env, tostring(v))
+        callVoid(env, b, "putString", "(Ljava/lang/String;Ljava/lang/String;)V", jk, jv)
+        del(env, jk); del(env, jv)
+    end
+    return b
+end
+
+function bundleString(env, jni, b, key)
+    local jk = env[0].NewStringUTF(env, key)
+    local jv = callObject(env, b, "getString", "(Ljava/lang/String;)Ljava/lang/String;", jk)
+    del(env, jk)
+    if jv == nil then return nil end
+    local v = jni:to_string(jv)
+    del(env, jv)
+    return v
+end
+
+-- ContentResolver.call(content://<authority>, method, null, extras) (android/docs/INTERFACE.md):
+-- the companion checks who called before it acts. Returns the answer's { ok, why, status }
+-- (strings), or nil and the error (no such provider, a Java exception).
+function Jni.call(authority, method, extras)
+    return withEnv("call " .. method, function(env, activity, jni)
+        local cr = callObject(env, activity, "getContentResolver", "()Landroid/content/ContentResolver;")
+        if cr == nil then error("no ContentResolver", 0) end
+        local ucls = env[0].FindClass(env, "android/net/Uri")
+        check(env, "FindClass Uri")
+        local parse = env[0].GetStaticMethodID(env, ucls, "parse", "(Ljava/lang/String;)Landroid/net/Uri;")
+        check(env, "Uri.parse")
+        local js = env[0].NewStringUTF(env, "content://" .. authority)
+        local uri = env[0].CallStaticObjectMethod(env, ucls, parse, js)
+        check(env, "Uri.parse()")
+        del(env, js); del(env, ucls)
+        local b = newBundle(env, extras)
+        local jm = env[0].NewStringUTF(env, method)
+        local r = callObject(env, cr, "call",
+            "(Landroid/net/Uri;Ljava/lang/String;Ljava/lang/String;Landroid/os/Bundle;)Landroid/os/Bundle;", uri, jm, nil, b)
+        del(env, jm); del(env, b); del(env, uri); del(env, cr)
+        if r == nil then return { ok = "0", why = "no answer" } end
+        local out = { ok = bundleString(env, jni, r, "ok"), why = bundleString(env, jni, r, "why"), status = bundleString(env, jni, r, "status") }
+        del(env, r)
+        return out
+    end)
+end
+
+-- The SHA-256 of each certificate that signs pkg ("AB:CD:…", upper case), as PackageManager
+-- reports it (signingInfo on Android 9+, else signatures). {} when it isn't installed; nil
+-- when it can't be read.
+GET_SIGNING_CERTIFICATES = 0x08000000
+GET_SIGNATURES = 0x40
+
+function certHex(env, jni, sig)
+    local bytes = callObject(env, sig, "toByteArray", "()[B")
+    local mcls = env[0].FindClass(env, "java/security/MessageDigest")
+    check(env, "FindClass MessageDigest")
+    local gi = env[0].GetStaticMethodID(env, mcls, "getInstance", "(Ljava/lang/String;)Ljava/security/MessageDigest;")
+    check(env, "MessageDigest.getInstance")
+    local alg = env[0].NewStringUTF(env, "SHA-256")
+    local md = env[0].CallStaticObjectMethod(env, mcls, gi, alg)
+    check(env, "MessageDigest.getInstance()")
+    del(env, alg); del(env, mcls)
+    local digest = callObject(env, md, "digest", "([B)[B", bytes)
+    local bcls = env[0].FindClass(env, "java/math/BigInteger")
+    check(env, "FindClass BigInteger")
+    local ctor = env[0].GetMethodID(env, bcls, "<init>", "(I[B)V")
+    check(env, "BigInteger.<init>")
+    local big = env[0].NewObject(env, bcls, ctor, int32(1), digest)
+    check(env, "new BigInteger")
+    local js = callObject(env, big, "toString", "(I)Ljava/lang/String;", int32(16))
+    local hex = jni:to_string(js)
+    del(env, js); del(env, big); del(env, bcls); del(env, digest); del(env, md); del(env, bytes)
+    return Companion.fingerprint(hex)
+end
+
+function Jni.packageSigners(pkg)
+    return withEnv("signers " .. pkg, function(env, activity, jni)
+        local pm = callObject(env, activity, "getPackageManager", "()Landroid/content/pm/PackageManager;")
+        if pm == nil then error("no PackageManager", 0) end
+        local jp = env[0].NewStringUTF(env, pkg)
+        local sigs
+        local okn, pi = pcall(callObject, env, pm, "getPackageInfo", "(Ljava/lang/String;I)Landroid/content/pm/PackageInfo;", jp, int32(GET_SIGNING_CERTIFICATES))
+        if okn and pi ~= nil then
+            local pcls = env[0].GetObjectClass(env, pi)
+            local fid = env[0].GetFieldID(env, pcls, "signingInfo", "Landroid/content/pm/SigningInfo;")
+            if env[0].ExceptionCheck(env) ~= 0 then env[0].ExceptionClear(env); fid = nil end
+            del(env, pcls)
+            local si = fid ~= nil and env[0].GetObjectField(env, pi, fid) or nil
+            if si ~= nil then
+                local multi = callBool(env, si, "hasMultipleSigners", "()Z")
+                sigs = callObject(env, si, multi and "getApkContentsSigners" or "getSigningCertificateHistory", "()[Landroid/content/pm/Signature;")
+                del(env, si)
+            end
+            del(env, pi)
+        end
+        if sigs == nil then
+            local oko, old = pcall(callObject, env, pm, "getPackageInfo", "(Ljava/lang/String;I)Landroid/content/pm/PackageInfo;", jp, int32(GET_SIGNATURES))
+            if not oko or old == nil then del(env, jp); del(env, pm); return {} end
+            local pcls = env[0].GetObjectClass(env, old)
+            local fid = env[0].GetFieldID(env, pcls, "signatures", "[Landroid/content/pm/Signature;")
+            check(env, "PackageInfo.signatures")
+            del(env, pcls)
+            sigs = env[0].GetObjectField(env, old, fid)
+            del(env, old)
+        end
+        del(env, jp); del(env, pm)
+        local out = {}
+        if sigs ~= nil then
+            for i = 0, env[0].GetArrayLength(env, sigs) - 1 do
+                local sig = env[0].GetObjectArrayElement(env, sigs, i)
+                check(env, "GetObjectArrayElement")
+                table.insert(out, certHex(env, jni, sig))
+                del(env, sig)
+            end
+            del(env, sigs)
+        end
+        return out
     end)
 end
 
