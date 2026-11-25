@@ -874,7 +874,10 @@ reader data availability is explicit, never a blanket X3 Home exclusion.
 
 Maintainer direction: **one canonical BookSync version** across Android Companion,
 KOReader plugin and Xteink firmware, starting at `0.12.0` (same prerelease suffix
-on a coordinated candidate). This replaces the old idea of merely sharing a
+on a coordinated preview/candidate). Follow the approved
+[preview → RC → stable rule](../release-versions.md): start native builds as
+`0.12.0-preview.N`; only the maintainer promotes an actual candidate to `-rc.N`.
+This replaces the old idea of merely sharing a
 release name while maintaining independently numbered product versions. Xteink
 About shows `BookSync 0.12.0`; `CrossInk <tag> (<commit>)` is base metadata only,
 not the product version or the source of release-channel policy. The same manifest

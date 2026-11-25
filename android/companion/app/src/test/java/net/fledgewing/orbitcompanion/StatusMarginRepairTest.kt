@@ -65,7 +65,7 @@ return {
             File(root,"koreader/settings/booksync-w31-repair.done").delete() // interrupted/restarted scan
             StatusMarginRepair.run(root, {}, {})
             assertEquals(lua(25),book.readText())
-            StatusMarginRepair.run(root, { fail("completed scan must not walk again") }, {})
+            StatusMarginRepair.run(root, {}, {})
         } finally { root.deleteRecursively(); external.deleteRecursively() }
     }
     @Test fun loadedBookCapturesGoodBackupBeforeNativeCloseRotatesIt() {
@@ -120,11 +120,49 @@ return {
             assertTrue(StatusMarginRepair.run(root, {}, logs::add, target = file))
             assertEquals(lua(15), file.readText())
             assertEquals(lua(10), File(file.path + ".booksync-before-w31").readText())
-            assertTrue(logs.any { "book-open check" in it })
+            assertTrue(logs.any { "selected sidecar scan" in it })
             assertTrue(logs.any { "restored" in it })
             file.writeText(lua(25))
             StatusMarginRepair.run(root, {}, {}, target = file)
             assertEquals("a later user choice survives", lua(25), file.readText())
+        } finally { root.deleteRecursively() }
+    }
+
+
+    @Test fun closedBookScanDiscoversAnotherBookAfterAnEarlierCompleteScan() {
+        val root = Files.createTempDirectory("repair-new-history").toFile()
+        try {
+            assertTrue(StatusMarginRepair.run(root, {}, {}))
+            val book = File(root, "New.sdr/metadata.epub.lua").apply { parentFile!!.mkdirs(); writeText(lua(10)) }
+            File(book.path + ".old").writeText(lua(15))
+            val logs = arrayListOf<String>()
+            assertTrue(StatusMarginRepair.run(root, {}, logs::add))
+            assertEquals(lua(15), book.readText())
+            assertTrue(logs.any { "copt_b_page_margin:10->15" in it })
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun globalRepairPublishesMatchingNativeMemoryUpdateAndRetainsItsRecoverySource() {
+        val root = Files.createTempDirectory("repair-global-memory").toFile()
+        try {
+            val global = File(root, "koreader/settings.reader.lua").apply {
+                parentFile!!.mkdirs(); writeText("return { [\"reader_footer_mode\"] = 1, }")
+            }
+            val old = File(global.path + ".old").apply { writeText("return { [\"reader_footer_mode\"] = 0, }") }
+            val events = arrayListOf<Triple<String, String, String>>()
+            val notify: (String, String, String) -> Unit = { b, a, t -> events.add(Triple(b, a, t)) }
+            assertFalse(StatusMarginRepair.run(root, {}, {}, globalRepair = notify, canApply = { false }))
+            assertTrue(events.isEmpty())
+            assertTrue(StatusMarginRepair.run(root, {}, {}, globalRepair = notify))
+            assertEquals("1", events.single().first)
+            assertEquals("0", events.single().second)
+            assertTrue(global.readText().contains("= 0"))
+            // A subsequent native flush can rotate .old. The recovery event must
+            // survive a companion restart until KOReader acknowledges its mailbox.
+            old.writeText("return { [\"reader_footer_mode\"] = 1, }")
+            StatusMarginRepair.run(root, {}, {}, globalRepair = notify)
+            assertEquals(2, events.size)
+            assertEquals(events[0], events[1])
         } finally { root.deleteRecursively() }
     }
 
@@ -136,7 +174,7 @@ return {
             val source=File("src/main/java/net/fledgewing/orbitcompanion/StatusMarginRepair.kt").readText()
             assertTrue(source.contains("BulkWork::checkpoint"))
             assertTrue(source.contains("closedReported && prefs.koreaderBook == \"0\""))
-            assertTrue(source.indexOf("BulkWork.executor.execute") < source.indexOf("finished = run(android.os.Environment"))
+            assertTrue(source.indexOf("BulkWork.executor.execute") < source.indexOf("val complete = run(android.os.Environment"))
         } finally { root.deleteRecursively() }
     }
 }

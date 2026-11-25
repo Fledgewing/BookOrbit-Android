@@ -70,6 +70,10 @@ object Worker {
             if (h > 0) h else (dm?.heightPixels ?: 1440) / 3) }
     }).also { worker = it }
 
+    internal fun nativeFooterRepair(before: String, after: String, token: String) {
+        worker().event(mapOf("kind" to "native_footer_repair", "before" to before, "after" to after, "token" to token))
+    }
+
     private fun creds(i: Intent): CacheWorker.Creds? {
         val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
         val user = i.getStringExtra("user") ?: return null
@@ -100,10 +104,6 @@ object Worker {
             val state = i.getStringExtra("plugin_state") ?: return
             synchronized(lock) { patches.addLast { worker().savePluginState(LuaValue.str(state)) }; lock.notifyAll() }
             return start()
-        }
-        if (i.action == ACTION_PATCH && i.hasExtra("repair_book")) {
-            StatusMarginRepair.beforeOpen(i.getStringExtra("repair_book") ?: return, i.getStringExtra("repair_token") ?: return)
-            return
         }
         if (i.action == ACTION_PATCH && i.hasExtra("remember_id")) {
             val id = i.getStringExtra("remember_id")?.toLongOrNull() ?: return
@@ -220,7 +220,9 @@ object Worker {
                         OLog.i("worker: mirror ${plan.op} (${plan.reason}) run ${plan.run}")
                         val f = File(root(), "mirror/plan.lua")
                         f.parentFile?.mkdirs()
-                        File(root(), "mirror/stop").delete()
+                        // A replacement must stop the current run before the next
+                        // one clears this flag in loop().
+                        if (mirrorRunning) File(root(), "mirror/stop").writeText("stop")
                         val tmp = File(f.path + ".tmp")
                         tmp.writeBytes(bytes); check(tmp.renameTo(f))
                         synchronized(lock) { pending = plan to creds; lock.notifyAll() }
@@ -305,6 +307,8 @@ object Worker {
                 if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && sleep == null && pickers == null && recheck == null) { return }
                 pending.also { pending = null }
             } ?: continue
+            File(root(), "mirror/stop").delete()
+            progress = 0
             manualRefresh = p.first.m["manual"] == true
             mirrorRunning = true
             try {

@@ -1,3 +1,4 @@
+import net.fledgewing.orbitcompanion.AndroidVersionCode
 import java.util.zip.ZipFile
 
 plugins {
@@ -6,14 +7,13 @@ plugins {
 }
 
 // Release builds pass -PorbitVersion=<tag without "v"> (.github/workflows/release.yml).
-// versionCode = MAJOR*10000 + MINOR*100 + PATCH, so every release tag installs over the last.
+// Shared encoder: preview.N < rc.N < stable, with codes above the legacy releases.
 val orbitVersion = (findProperty("orbitVersion") as String?)?.removePrefix("v") ?: "0.0.0-dev"
 val orbitVersionCode: Int = run {
-    val m = Regex("""^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$""").matchEntire(orbitVersion)
+    val m = Regex("""^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$""").matchEntire(orbitVersion)
         ?: error("orbitVersion '$orbitVersion' is not MAJOR.MINOR.PATCH[-pre]")
-    val (major, minor, patch) = m.destructured.toList().map { it.toInt() }
-    require(minor < 100 && patch < 100) { "minor and patch must stay below 100 for the versionCode formula" }
-    maxOf(1, major * 10_000 + minor * 100 + patch)
+    val (major, minor, patch, pre) = m.destructured
+    AndroidVersionCode.encode(major.toInt(), minor.toInt(), patch.toInt(), pre.ifEmpty { null })
 }
 
 // Release signing from the environment only; without it, release builds are unsigned and

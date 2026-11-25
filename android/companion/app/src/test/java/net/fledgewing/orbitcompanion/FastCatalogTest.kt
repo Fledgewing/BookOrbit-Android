@@ -70,6 +70,41 @@ class FastCatalogTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun workerReplacesCrawlStatusWithFreshZeroBeforeFetchingAndReportsBulkCompletion() {
+        val root = Files.createTempDirectory("bulk-fresh-status").toFile()
+        val status = File(root, "mirror/status.lua").apply {
+            parentFile!!.mkdirs()
+            writeBytes(LuaValue.encode(mapOf("run" to "old", "done" to 85L, "left" to 15L, "at" to 1L, "bytes" to 3032748032L)))
+        }
+        val logs = arrayListOf<String>()
+        val progress = arrayListOf<Long?>()
+        var requests = 0
+        fun state() = LuaValue.parse(status.readBytes()) as Map<*, *>
+        val worker = CacheWorker(root, { url, _, _, _ ->
+            if (requests++ == 0) {
+                assertEquals("bulk", state()["engine"])
+                assertEquals("bulk", state()["run"])
+                assertEquals(0L, state()["pct"])
+                assertEquals(0L, state()["done"])
+                assertTrue((state()["bytes"] as Long) < 1024 * 1024)
+                assertTrue((state()["beat"] as Long) > 1L)
+            }
+            CacheWorker.Reply(200, JSONObject(reply(url.substringAfter("/api/v1"))).toString().toByteArray())
+        }, now = { 2000L }, log = logs::add, openSql = ::JdbcSql, onProgress = progress::add)
+        try {
+            assertEquals("finished", worker.run(plan(), CacheWorker.Creds("https://books.example/api/v1", "reader", "key")))
+            assertTrue(requests > 0)
+            assertEquals(0L, progress.first())
+            assertTrue(progress.filterNotNull().any { it in 1L..99L })
+            assertEquals(100L, state()["pct"])
+            assertEquals(0L, state()["left"])
+            assertEquals(2000L, state()["at"])
+            assertTrue(logs.any { it.startsWith("bulk: start op=full") })
+            assertTrue(logs.any { it.startsWith("bulk: manifest requests=") })
+            assertTrue(logs.any { it.startsWith("bulk: finish result=finished") })
+        } finally { worker.store.close(); root.deleteRecursively() }
+    }
+
     @Test fun schemaMatchesThePluginFixture() {
         assertEquals(BulkCatalog.schema,File("../../../shared/fixtures/catalog/bulk-refresh/schema.sql").readLines().filter(String::isNotBlank).map {it.removeSuffix(";")})
     }

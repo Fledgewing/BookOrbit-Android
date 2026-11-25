@@ -16,10 +16,13 @@ check() { # name expected actual
 
 # ---- the Android test-build version
 tv() { printf '%s\n' "$@" | "$tools/android-test-version.sh" 42 2>/dev/null || echo error; }
-check "next patch after the newest release" 0.11.3-0.test.42 "$(tv v0.9.0 v0.11.2 v0.11.1 v0.10.9)"
-check "numeric, not text, order" 0.10.1-0.test.42 "$(tv v0.9.9 v0.10.0 v0.2.0)"
-check "android-v tags count" 0.7.2-0.test.42 "$(tv android-v0.7.1 v0.7.0)"
-check "pre-releases and firmware tags don't" 0.11.3-0.test.42 "$(tv v0.11.2 v0.12.0-rc.1 xteink-v2.0.0.167+bookorbit.1-rc3 v0.11.3-0.test.9)"
+check "next patch after the newest release" 0.11.3-preview.42 "$(tv v0.9.0 v0.11.2 v0.11.1 v0.10.9)"
+check "numeric, not text, order" 0.10.1-preview.42 "$(tv v0.9.9 v0.10.0 v0.2.0)"
+check "android-v tags count" 0.7.2-preview.42 "$(tv android-v0.7.1 v0.7.0)"
+check "RCs advance the patch; firmware and legacy artifacts do not count" 0.12.1-preview.42 "$(tv v0.11.2 v0.12.0-rc.1 xteink-v2.0.0.167+bookorbit.1-rc3 v0.11.3-0.test.9)"
+check "installed rc.17 gets a newer preview" 0.11.4-preview.1 "$(printf '%s\n' v0.11.2 v0.11.3-rc.17 | "$tools/android-test-version.sh" 1)"
+check "continue previews" 0.11.4-preview.43 "$(tv v0.11.3-rc.17 v0.11.4-preview.42)"
+check "stable closes previews" 0.11.5-preview.42 "$(tv v0.11.4-preview.1 v0.11.4)"
 check "no release tag" error "$(tv xteink-v2.0.0.1 nightly)"
 check "run number must be a number" error "$(printf 'v0.1.0\n' | "$tools/android-test-version.sh" abc 2>/dev/null || echo error)"
 
@@ -31,8 +34,8 @@ check "run number must be a number" error "$(printf 'v0.1.0\n' | "$tools/android
     check "release certificate read from release.yml" "$want" "$(expected_cert)"
     check "apksigner output -> certificate" "AB:CD:01" \
         "$(printf 'Signer #1 certificate DN: CN=x\nSigner #1 certificate SHA-256 digest: abcd01\nSigner #1 certificate SHA-1 digest: ff\n' | cert_from_apksigner)"
-    check "version from the APK name" 0.11.3-0.test.42 "$(apk_version /x/orbit-companion-0.11.3-0.test.42.apk)"
-    check "one test artifact" android-test-0.11.3-0.test.42 "$(printf 'other\nandroid-test-0.11.3-0.test.42\n' | pick_artifact)"
+    check "version from the APK name" 0.11.3-preview.42 "$(apk_version /x/orbit-companion-0.11.3-preview.42.apk)"
+    check "one test artifact" android-test-0.11.3-preview.42 "$(printf 'other\nandroid-test-0.11.3-preview.42\n' | pick_artifact)"
     check "no test artifact" none "$(printf 'firmware-x4-pro-1\n' | pick_artifact 2>/dev/null || echo none)"
     check "two test artifacts" none "$(printf 'android-test-a\nandroid-test-b\n' | pick_artifact 2>/dev/null || echo none)"
     mkdir -p "$tmp/art"

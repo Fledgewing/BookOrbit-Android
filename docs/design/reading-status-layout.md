@@ -125,12 +125,19 @@ a live closed-book report, rather than trusting a persisted state from a prior
 session. Before replacement, the current bytes are saved as `.booksync-before-w31` and
 rechecked for concurrent native saves. `.old` is never touched. Per-file
 `.booksync-w31.done` markers prevent an interrupted scan from restoring a user's
-later choices again, and a completion marker stops future walks. Logs identify
+later choices again, and a completion marker records the last completed walk. A new closed-book report
+following an open book scans again, so newly discovered history books are included.
+Book opening never waits for a repair or wraps `ReaderUI.showReader`. Logs identify
 repairs by a path hash, without book titles or paths. Interrupted or failed walks
 retry on a later service startup or closed-book report. Opening a book during
 the walk defers the remaining work. Close an already-open book to allow the repair;
-reopen after repair to use the recovered margins. Native global footer state
-already loaded by KOReader takes effect on its next restart.
+reopen after repair to use the recovered margins. The companion also sends a bounded `native_footer_repair` mailbox event with the
+original and recovered global mode. The plugin changes only a matching scalar in
+`G_reader_settings` through its native settings API, so a subsequent native flush
+cannot undo the disk repair. It does not change the loaded footer or reflow an open
+book; the recovered global mode takes effect on the next book open. A persisted
+repair token makes mailbox replay harmless to later user choices. Recovery source
+snapshots survive `.old` rotation, including across companion restarts.
 
 At pinned KOReader commit `9192014d8bd82a91dc1012473be0f238dedfdb54`,
 `frontend/apps/reader/modules/readertypeset.lua:541-552` adds native footer height
@@ -163,3 +170,8 @@ native page/percent formatting and excludes the new formatter header. The existi
 - One PR holds this design and implementation. Keep this outcome in ROADMAP until
   shipped; then move it into FEATURES in the same change. Real-device visual and
   gesture verification is for the user before a release.
+
+W34 additionally checks KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`:
+`frontend/luasettings.lua:270-274` unconditionally dumps the loaded settings on flush;
+`frontend/ui/uimanager.lua:222-225` flushes before CloseWidget. Updating native global
+memory as well as the file is required to retain the recovered footer mode.
