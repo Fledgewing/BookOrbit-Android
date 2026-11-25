@@ -20,6 +20,16 @@ val orbitVersionCode: Int = run {
 // debug builds use the usual debug key.
 val releaseKeystore: String? = System.getenv("ORBIT_KEYSTORE_FILE")
 
+// The release-signing root key, minimum release-key serial and enforce switch, shared with the
+// firmware (docs/design/release-signing.md): the plugin zip is checked against them.
+@Suppress("UNCHECKED_CAST")
+val releaseSigning = groovy.json.JsonSlurper()
+    .parse(file("../../../shared/release-signing.json")) as Map<String, Any?>
+val releaseRootKey = (releaseSigning["root_public_key"] as String?).orEmpty()
+require(releaseRootKey.isEmpty() || Regex("^[0-9a-f]{64}$").matches(releaseRootKey)) {
+    "shared/release-signing.json root_public_key must be empty or 64 lowercase hex characters"
+}
+
 android {
     namespace = "net.fledgewing.orbitcompanion"
     compileSdk = 34
@@ -33,6 +43,9 @@ android {
         targetSdk = 28
         versionCode = orbitVersionCode
         versionName = orbitVersion
+        buildConfigField("String", "RELEASE_ROOT_KEY", "\"$releaseRootKey\"")
+        buildConfigField("long", "RELEASE_MIN_SERIAL", "${(releaseSigning["min_release_key_serial"] as Number).toLong()}L")
+        buildConfigField("boolean", "RELEASE_SIG_ENFORCE", "${releaseSigning["enforce"] == true}")
     }
 
     signingConfigs {
