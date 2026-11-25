@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.*
 import org.junit.Test
+import org.json.JSONObject
 
 // @fixture catalog/bulk-refresh/catalog.json @fixture catalog/bulk-refresh/schema.sql
 class FastCatalogTest {
@@ -46,6 +47,7 @@ class FastCatalogTest {
             val c=a["title"].toString().compareTo(b["title"].toString())
             if(c!=0) if(q["order"]=="desc") -c else c else (a["id"] as Long).compareTo(b["id"] as Long)
         } else selected.sortedBy { if (rank != null) rank.indexOf(it["id"]) else (it["id"] as Long).toInt() }
+        if(q["sort"]=="series" && q["order"]=="desc")selected=selected.reversed()
         if (q["seriesId"] != null || q["series"] != null) selected = selected.map { row ->
             val c = (fixture["secondary_context"] as Map<*, *>)["seriesId:${q["seriesId"] ?: "202"}:${row["id"]}"] as? Map<*, *>
             if (c == null) row else row.entries.associate { it.key to it.value } + c
@@ -92,6 +94,73 @@ class FastCatalogTest {
         }
         root.deleteRecursively()
     }
+    @Test fun generationRollKeepsLazyAuthorMetadataAndCheckedDiscover() {
+        val root=Files.createTempDirectory("bulk-heads").toFile()
+        CacheStore(root,{},::JdbcSql).use {store->
+            fun withPick(id:Long):(String)->Map<*,*> = {request ->
+                val body=reply(request)
+                if(MirrorLogic.splitPath(request).first.endsWith("/dashboard")) body+mapOf("discover" to listOf(mapOf("id" to id))) else body
+            }
+            assertEquals("finished",run(store,request=withPick(1)))
+            val identity=MirrorLogic.listWindow("$base/books?author=Author%20B&sort=title")!!.identity
+            BulkCatalog.saveObservedWindow(store,identity,mapOf("authorSummary" to mapOf("name" to "Author B","biography" to "Saved bio"),"items" to emptyList<Any>()),1000)
+            assertEquals("finished",run(store,"incremental",withPick(2)))
+            assertEquals("Saved bio",(store.window(identity,1,100,null)!!["authorSummary"] as Map<*,*>)["biography"])
+            val request="$base/dashboard"
+            val key=MirrorLogic.key(plan().owner,plan().owner.substringAfter('|'),request)
+            fun pick()=(((store.read(key,request,null)!!.body as Map<*,*>)["discover"] as List<*>).first() as Map<*,*>)["id"]
+            assertEquals(1L,pick())
+            assertEquals("finished",run(store,request=withPick(3)))
+            assertEquals(3L,pick())
+            assertEquals("Saved bio",(store.window(identity,1,100,null)!!["authorSummary"] as Map<*,*>)["biography"])
+        }
+        root.deleteRecursively()
+    }
+
+    @Test fun bulkWorkerCountsCoversAndKeepsProtectedDataAtTheSharedLimit() {
+        for(protected in listOf(false,true)) {
+            val root=Files.createTempDirectory("bulk-budget").toFile()
+            val covers=File(root,"covers").apply {mkdirs()}
+            val cover=File(covers,"999_1.jpg").apply {writeBytes(ByteArray(2_000_000))}
+            var requests=0
+            val worker=CacheWorker(root,{url,_,sink,_->
+                assertNull(sink);requests++
+                CacheWorker.Reply(200,JSONObject(reply(url.substringAfter("/api/v1"))).toString().toByteArray())
+            },log={},openSql=::JdbcSql)
+            try {
+                val m=plan().m+mapOf("limit" to 1_000_000L,"cover_dir" to covers.path,"seed_details" to if(protected)listOf(999L) else emptyList<Long>())
+                val result=worker.run(CacheWorker.Plan(m),CacheWorker.Creds("https://books.example/api/v1","reader","key"))
+                if(protected) {
+                    assertEquals("storage limit",result);assertEquals(0,requests);assertTrue(cover.isFile)
+                    assertNull(worker.store.meta("bulk_active"))
+                } else {
+                    assertEquals("finished",result);assertFalse(cover.exists())
+                    assertTrue(worker.storageItems(covers.path,false).sumOf {it.bytes}<=1_000_000L)
+                }
+            } finally {worker.store.close();root.deleteRecursively()}
+        }
+    }
+
+    @Test fun contextualSeriesTiesUseTheServerTitleRank() {
+        val root=Files.createTempDirectory("bulk-title-ties").toFile()
+        CacheStore(root,{},::JdbcSql).use {store->
+            assertEquals("finished",run(store,request={request->
+                val body=reply(request)
+                val items=(body["items"] as? List<*>)?.map { value->
+                    val row=value as Map<*,*>
+                    if(row["id"]==3L)row+mapOf("seriesIndex" to "1") else row
+                }
+                val q=MirrorLogic.parseQuery(MirrorLogic.splitPath(request).second)
+                val order=listOf(3L,1L,2L,4L,5L,6L,7L,8L)
+                if(items==null)body else body+mapOf("items" to if(q["sort"]=="title"&&q["order"]=="asc")items.sortedBy {order.indexOf(it["id"])} else items)
+            }))
+            // Server collation ranks Book 03 before Book 01. Equal series indexes
+            // must use that rank rather than SQLite's text comparison.
+            assertEquals(listOf(3L,1L,2L,4L),ids(store.window("$base/books?seriesId=101&sort=series&order=asc",1,100,null)!!["items"] as List<*>))
+        }
+        root.deleteRecursively()
+    }
+
     private fun expectedOrder(q: Map<String,String>, candidates: Set<Long>): List<Long> {
         val sort=q["sort"] ?: "recently_added"
         val dir=q["order"] ?: if(sort.startsWith("recently_")) "desc" else "asc"
