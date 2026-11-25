@@ -643,13 +643,15 @@ class SettingChoiceActivity : SleepPickerPage() {
         if (c == null) {
             root.addView(note("Open KOReader once to load your smart scopes and collections."))
         } else {
+            if (c.libraries.isNotEmpty()) subhead(root, "Libraries")
+            c.libraries.forEach { tick("library:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.scopes.isNotEmpty()) subhead(root, "Smart scopes")
             c.scopes.forEach { tick("scope:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.collections.isNotEmpty()) subhead(root, "Collections")
             c.collections.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.at > 0) root.addView(note("Lists from BookOrbit, ${Ui.clock(this, c.at)}"))
         }
-        picked.filter { (it.startsWith("scope:") || it.startsWith("collection:")) && c?.title(it) == null }.forEach { tick(it, SleepChoices.fallback(it)) }
+        picked.filter { (it.startsWith("scope:") || it.startsWith("collection:") || it.startsWith("library:")) && c?.title(it) == null }.forEach { tick(it, SleepChoices.fallback(it)) }
         root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then pick it here."))
     }
 }
@@ -681,11 +683,13 @@ class LeaveOutActivity : SleepPickerPage() {
         rules.filter { it.startsWith("tag:") && c?.tags?.none { t -> "tag:${t.tag}" == it } != false }
             .forEach { tick(it, SleepChoices.fallback(it)) }
         if (c == null) root.addView(note("Open KOReader once to load your tags, smart scopes and collections."))
+        if (c?.libraries?.isNotEmpty() == true) subhead(root, "Libraries")
+        c?.libraries?.forEach { tick("library:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
         if (c?.scopes?.isNotEmpty() == true) subhead(root, "Smart scopes")
         c?.scopes?.forEach { tick("scope:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
         if (c?.collections?.isNotEmpty() == true) subhead(root, "Collections")
         c?.collections?.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
-        rules.filter { (it.startsWith("scope:") || it.startsWith("collection:")) && c?.title(it) == null }
+        rules.filter { (it.startsWith("scope:") || it.startsWith("collection:") || it.startsWith("library:")) && c?.title(it) == null }
             .forEach { tick(it, SleepChoices.fallback(it)) }
         root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then leave it out here."))
     }

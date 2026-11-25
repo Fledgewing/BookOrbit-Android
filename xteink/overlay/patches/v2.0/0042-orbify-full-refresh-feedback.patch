@@ -1,0 +1,266 @@
+Subject: [PATCH] Orbify: explicit-only Full refresh feedback
+
+Keep intermediate notices silent and use the persisted user request as the progress gate.
+Implementation: orbify/Mirror and orbify/RefreshBadge.
+
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -322,8 +322,8 @@
+ STR_ORBIFY_REFRESH: "Refresh"
+ STR_ORBIFY_REFRESHING: "Refreshing…"
+ STR_ORBIFY_FULL_REFRESH: "Full refresh"
+-STR_ORBIFY_SAVED_OFFLINE: "Saved for offline"
+-STR_ORBIFY_NOT_SAVED_OFFLINE: "Not saved for offline yet"
++STR_ORBIFY_SAVED_OFFLINE: "Last Full refresh"
++STR_ORBIFY_NOT_SAVED_OFFLINE: "No Full refresh yet"
+ STR_ORBIFY_SEARCH_NEEDS_CONNECTION: "Search needs a connection"
+ STR_ORBIFY_COULDNT_CONNECT: "Couldn't connect"
+ STR_ORBIFY_SLEEP_PICK: "BookOrbit Pick"
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+@@ -697,6 +697,9 @@
+ }
+ 
+ void BookOrbitCatalogBrowserActivity::showLoadingBeforeFetch() {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (mirrorWalk.active() && !mirrorWalk.finished()) return;
++#endif
+   state = BrowserState::LOADING;
+   statusMessage = tr(STR_LOADING);
+   if (requestUpdateAndWait() != RequestUpdateResult::Rendered) {
+@@ -2650,29 +2653,11 @@
+   const int level = static_cast<int>(navLevel);
+   LOG_INF("BookOrbit", "Catalog: %s of view %d%s", full ? "Full refresh" : "Refresh", level,
+           offlineSession ? " (offline: connecting)" : "");
+-  if (WiFi.status() != WL_CONNECTED) {
+-    {
+-      RenderLock lock(*this);
+-      state = BrowserState::LOADING;
+-      statusMessage = tr(STR_CONNECTING);
+-    }
+-    requestUpdateAndWait();
+-    if (!SavedWifiConnect::connect([] { return false; })) {
+-      LOG_INF("BookOrbit", "Catalog: refresh could not connect");
+-      viewNotUpdated[level] = true;
+-      state = BrowserState::ERROR;
+-      errorMessage = tr(STR_ORBIFY_COULDNT_CONNECT);
+-      requestUpdate();
+-      return;
+-    }
+-    offlineSession = false;
+-    sdFontSystem.releaseForNetwork(renderer);
+-  }
+   if (full) {
+     // Patch 0041 (one progress number): a start popup, then the walk runs from loop() one request
+     // at a time while the reader browses, its % in the stamp's place. Asked for on the card first:
+     // leaving the catalog or a reset part-way resumes it at the next sleep sync or catalog visit.
+-    if (!mirrorWalk.active() || mirrorWalk.finished()) mirrorWalk.begin();
++    if (!mirrorWalk.active() || mirrorWalk.finished()) mirrorWalk.begin(/*userStarted=*/true);
+     mirrorResumeChecked = true;
+     {
+       RenderLock lock(*this);
+@@ -2683,8 +2668,38 @@
+     }
+     syncMirrorShown();
+     mirrorInputAt = millis();
++    state = BrowserState::BROWSING;
+     requestUpdateAndWait();
+   }
++  if (WiFi.status() != WL_CONNECTED) {
++    if (!full) {
++      {
++        RenderLock lock(*this);
++        state = BrowserState::LOADING;
++        statusMessage = tr(STR_CONNECTING);
++      }
++      requestUpdateAndWait();
++    }
++    if (!SavedWifiConnect::connect([] { return false; })) {
++      LOG_INF("BookOrbit", "Catalog: refresh could not connect");
++      if (full) {
++        mirrorWalk.failConnection();
++        mirrorDoneUntil = millis() + orbify::mirror::DONE_MS;
++        mirrorPopupUntil = 0;
++        syncMirrorShown();
++        requestUpdate();
++        return;
++      }
++      viewNotUpdated[level] = true;
++      state = BrowserState::ERROR;
++      errorMessage = tr(STR_ORBIFY_COULDNT_CONNECT);
++      requestUpdate();
++      return;
++    }
++    offlineSession = false;
++    sdFontSystem.releaseForNetwork(renderer);
++  }
++  if (full) return;
+   if (!full) {
+     // Patch 0037: the tap shows at once ("Refreshing…" in place of the stamp), the view stays.
+     {
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+@@ -40,6 +40,10 @@
+ void BookOrbitHomeRefreshActivity::onEnter() {
+   Activity::onEnter();
+   // This boot's onEnter() can run inside setup(): the scan waits for the first loop().
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  userFullRefresh = OrbifyMirror::requested();
++  if (userFullRefresh) mirrorPopupUntil = millis() + orbify::mirror::START_POPUP_MS;
++#endif
+   scanPending = true;
+   requestUpdate();
+ }
+@@ -47,6 +51,25 @@
+ void BookOrbitHomeRefreshActivity::connect() {
+   // The BookOrbit theme's sync also recognises books copied to the card; its offline half
+   // (the Library index, the hashes) runs before Wi-Fi takes its share of the heap.
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (userFullRefresh) {
++    requestUpdateAndWait();  // the one start popup before any blocking work
++    LOG_INF("BookOrbit", "Home refresh: Full refresh popup: about 0%%");
++    BookOrbitDeviceScan::prepare(nullptr);
++    if (SavedWifiConnect::connect([] { return false; })) {
++      refreshPending = true;
++    } else {
++      LOG_ERR("BookOrbit", "Full refresh: connection failed");
++      mirrorPopupUntil = 0;
++      mirrorFailures = 1;
++      mirrorFinished = true;
++      mirrorDoneUntil = millis() + orbify::mirror::DONE_MS;
++      state = State::Mirroring;
++      requestUpdate();
++    }
++    return;
++  }
++#endif
+   const BookOrbitDeviceScan::Progress progress{this, &BookOrbitHomeRefreshActivity::onScanProgress};
+   BookOrbitDeviceScan::prepare(nullptr, &progress);
+   // Shown again if the Wi-Fi screen hands back before the refresh starts.
+@@ -64,6 +87,12 @@
+ 
+ void BookOrbitHomeRefreshActivity::showStep(const State step) {
+   state = step;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (userFullRefresh) {
++    LOG_INF("BookOrbit", "Full refresh: background step %d", static_cast<int>(step));
++    return;
++  }
++#endif
+   if (requestUpdateAndWait() != RequestUpdateResult::Rendered) {
+     LOG_ERR("BookOrbit", "Home refresh step %d could not be shown", static_cast<int>(step));
+   }
+@@ -135,12 +164,24 @@
+   if (refreshed && OrbifyMirror::requested()) {
+     mirrorSession.reset(new BookOrbitCatalogClient::Session());
+     mirrorWalk.begin();
++    LOG_INF("BookOrbit", "Home refresh: Full refresh popup closed");
+     {
+       RenderLock lock(*this);
+       mirrorPercent = mirrorWalk.percent();
+-      mirrorPopupUntil = millis() + orbify::mirror::START_POPUP_MS;
++      mirrorPopupUntil = 0;  // the initial frame already showed the one start popup
+       state = State::Mirroring;
+     }
++    requestUpdate();
++    return;
++  }
++#endif
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (userFullRefresh && !refreshed) {
++    mirrorFinished = true;
++    mirrorFailures = 1;
++    mirrorPopupUntil = 0;
++    mirrorDoneUntil = millis() + orbify::mirror::DONE_MS;
++    state = State::Mirroring;
+     requestUpdate();
+     return;
+   }
+@@ -158,6 +199,12 @@
+   }
+   LOG_INF("BookOrbit", "Home refresh over (ok=%d, free=%u maxAlloc=%u)", refreshed, ESP.getFreeHeap(),
+           ESP.getMaxAllocHeap());
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (userFullRefresh) {
++    silentRestart();
++    return;
++  }
++#endif
+   if (refreshed && summaryLines[0].empty()) {
+     silentRestart();
+     return;
+@@ -178,7 +225,7 @@
+ void BookOrbitHomeRefreshActivity::tickMirror() {
+   const unsigned long now = millis();
+   const bool input = mappedInput.hasPendingActivity() || mappedInput.wasAnyPressed() || mappedInput.wasAnyReleased();
+-  const bool done = mirrorWalk.finished();
++  const bool done = mirrorFinished || mirrorWalk.finished();
+   if (input || (done && now >= mirrorDoneUntil) || (!done && WiFi.status() != WL_CONNECTED)) {
+     if (!done) {
+       LOG_INF("BookOrbit", "Home refresh: Full refresh paused at %u%% (%s); it carries on later", mirrorPercent,
+@@ -247,6 +294,12 @@
+ }
+ 
+ void BookOrbitHomeRefreshActivity::render(RenderLock&&) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (userFullRefresh && state != State::Mirroring) {
++    OrbifyRefreshBadge::drawPreparing(renderer, mirrorPopupUntil != 0 && millis() < mirrorPopupUntil);
++    return;
++  }
++#endif
+   char line[96];
+   const char* status = tr(STR_LOADING);
+   bool showSummary = false;
+@@ -284,7 +337,7 @@
+       status = tr(STR_ORBIFY_REFRESHING);
+       break;
+     case State::Mirroring:
+-      status = "Saving BookOrbit for offline";
++      status = "Full refresh";
+       break;
+     case State::DecodingCovers:
+       status = tr(STR_HOME_PREPARING_COVERS);
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.h
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.h
+@@ -50,6 +50,7 @@
+   void tickMirror();
+   OrbifyMirror::Walk mirrorWalk;
+   std::unique_ptr<BookOrbitCatalogClient::Session> mirrorSession;
++  bool userFullRefresh = false;
+   unsigned mirrorPercent = 0;
+   bool mirrorFinished = false;
+   size_t mirrorFailures = 0;
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -421,6 +421,7 @@
+     // rest resumes in the next sleeps; Settings and a hold on the catalog's refresh run it whole in
+     // their own boots.
+     if (extras && !sleepSyncWakeRequested()) {
++      OrbifyMirror::refreshChanged(&sleepSyncWakeRequested);
+       const auto due = OrbifyMirror::dueNow();
+       if (OrbifyMirror::requested() || due != orbify::mirror::Due::None) {
+         LOG_INF("ORB", "Mirror: due (%s%s); a slice of %u requests in this sleep", orbify::mirror::dueName(due),
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -110,6 +110,7 @@
+ #include "OpdsServerStore.h"
+ #include "RecentBooksStore.h"
+ #include "SdCardFontSystem.h"
++#include "orbify/Mirror.h"
+ #include "SilentRestart.h"
+ #include "orbify/HeapFloor.h"
+ #include "orbify/CrashRecord.h"
+@@ -526,7 +527,12 @@
+   const bool displayReady = tailnet_display_ready(3000);
+   std::optional<RenderLock> lock;
+   if (!RenderLock::heldByCurrentTask()) lock.emplace();
+-  if (displayReady) {
++  bool showRestartNotice = displayReady;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  showRestartNotice = displayReady && !OrbifyMirror::quietRestart();
++  if (displayReady && !showRestartNotice) LOG_INF("ORB", "Full refresh: reboot notice suppressed");
++#endif
++  if (showRestartNotice) {
+     if (target == static_cast<uint32_t>(NetworkBootTarget::KOREADER_SYNC)) renderer.clearScreen();
+     GUI.drawPopup(renderer, s_silentRestartMessage != nullptr ? s_silentRestartMessage : tr(STR_LOADING));
+   }

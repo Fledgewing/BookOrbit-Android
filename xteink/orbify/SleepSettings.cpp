@@ -35,21 +35,19 @@ std::vector<std::string> labels(const char* const* names, const size_t count) {
 // goes online for them (design "Scope sources and Leave out on the X4s").
 const std::vector<Scope>& scopes() {
   static std::vector<Scope> list;
-  static bool loaded = false;
-  if (!loaded) {
-    loaded = true;
-    readScopes([](const Scope& s, void* ctx) { static_cast<std::vector<Scope>*>(ctx)->push_back(s); }, &list);
-  }
+  // Reload when opening the picker: a sync can populate this file during the same boot.
+  list.clear();
+  readScopes([](const Scope& s, void* ctx) { static_cast<std::vector<Scope>*>(ctx)->push_back(s); }, &list);
   return list;
 }
 
 std::string ruleOf(const Scope& s) {
   char text[32];
-  std::snprintf(text, sizeof(text), "%s:%" PRIu32, s.collection ? "collection" : "scope", s.id);
+  std::snprintf(text, sizeof(text), "%s:%" PRIu32, s.library ? "library" : (s.collection ? "collection" : "scope"), s.id);
   return text;
 }
 
-std::string scopeLabel(const Scope& s) { return (s.collection ? "Collection: " : "Smart scope: ") + s.title; }
+std::string scopeLabel(const Scope& s) { return (s.library ? "Library: " : (s.collection ? "Collection: " : "Smart scope: ")) + s.title; }
 
 // A set as the web page shows and types it: comma-separated.
 std::string commas(std::string text) {
@@ -225,7 +223,7 @@ void choices(const bool pick, std::vector<std::string>& labels, std::vector<std:
   labels.clear();
   items.clear();
   // Library first: every book (R1c, X8). Pick from adds the three lists.
-  labels.emplace_back("Library");
+  labels.emplace_back("Whole library");
   items.emplace_back("library");
   if (pick) {
     labels.insert(labels.end(), {"Up Next", "Want to Read", "Discover"});
@@ -271,7 +269,7 @@ std::string setSummary(const bool pick) { return summary(pick); }
 const char* statusLine(const SettingInfo& row) {
   // X8: Library leaves out every book; the sleep screen shows the current book.
   if (row.action == SettingAction::OrbifySleepScopes && hasLibrary(settings().leaveScopes.c_str())) {
-    return "Every book is left out: the current book shows";
+    return "Every book is left out: no pick can be shown";
   }
   // R6: without Keep Clock in Sleep the X4 learns the time only in the sleep sync.
   if (row.nameId == StrId::STR_ORBIFY_SLEEP_EVERY && settings().hours != EVERY_SLEEP && !SETTINGS.keepClockInSleep) {

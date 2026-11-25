@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "CacheStore.h"
 
 #if CROSSINK_TAILNET_ORBIFY_CACHE
@@ -330,6 +331,47 @@ void coverStored(const int32_t bookId, const uint32_t version, const std::string
     c->etag = etag;
   }
   save();
+}
+
+void mergeRecent() {
+  const std::lock_guard<std::recursive_mutex> guard(s_lock);
+  Index& idx = index();
+  JsonDocument recent(&psram);
+  for (const auto& e : idx.entries) {
+    if (e.url.find("sort=recently_updated") == std::string::npos) continue;
+    std::string text;
+    if (readFile(entryPath(e.hash), text, MAX_REPLY_BYTES)) {
+      const auto error = deserializeJson(recent, text);
+      if (error) LOG_ERR(TAG, "Catalog incremental: recent page parse failed (%s)", error.c_str());
+    }
+    break;
+  }
+  const JsonArrayConst items = recent["items"].as<JsonArrayConst>();
+  if (items.isNull()) {
+    LOG_INF(TAG, "Catalog incremental: no saved recent-items page (%u entries)", static_cast<unsigned>(idx.entries.size()));
+    return;
+  }
+  unsigned changed = 0;
+  for (auto& e : idx.entries) {
+    if (e.url.find("sort=recently_updated") != std::string::npos) continue;
+    std::string text;
+    if (!readFile(entryPath(e.hash), text, MAX_REPLY_BYTES)) continue;
+    JsonDocument doc(&psram);
+    if (deserializeJson(doc, text) || !mergeRecentBooks(doc.as<JsonVariant>(), items)) continue;
+    text.clear();
+    serializeJson(doc, text);
+    // Keep the previous reply if a write is interrupted: use a side file first.
+    const std::string path = entryPath(e.hash);
+    const std::string tmp = path + ".tmp";
+    if (!writeFile(tmp.c_str(), text)) continue;
+    Storage.remove(path.c_str());
+    if (!Storage.rename(tmp.c_str(), path.c_str())) continue;
+    e.bytes = static_cast<uint32_t>(text.size());
+    e.replyHash = canonicalHash(doc.as<JsonVariantConst>());
+    ++changed;
+  }
+  if (changed) save();
+  LOG_INF(TAG, "Catalog incremental: %u saved replies changed (one recent-items page)", changed);
 }
 
 void dropAll() {

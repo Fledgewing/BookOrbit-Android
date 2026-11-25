@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Fledgewing. Part of Orbify's Xteink firmware code (xteink/README.md "License"):
 // it builds into CrossInk-Bookorbit, so it is GPL-3.0-or-later, unlike the MIT overlay around it.
 #include "BookOrbitBackgroundSync.h"
+#include "Wifi.h"
+#include "SleepScreen.h"
 
 #if CROSSINK_TAILNET_BACKGROUND_SYNC
 
@@ -95,6 +97,7 @@ const char* runJob(const Job& job, size_t& lowest) {
   KOReaderPosition localKo = ProgressMapper::toKOReader(epub, local);
   if (shouldStop()) return "aborted: reader closing";
 
+  OrbifyWifi::Hold radio(OrbifyWifi::Owner::BackgroundSync);
   const bool wasConnected = WiFi.status() == WL_CONNECTED;
   if (!SavedWifiConnect::connect(&shouldStop)) {
     if (!wasConnected) SavedWifiConnect::disconnect();
@@ -112,6 +115,10 @@ const char* runJob(const Job& job, size_t& lowest) {
     sample();
     activity.reset();
   }
+#if CROSSINK_TAILNET_ORBIFY_SLEEP
+  // The radio is already up: a small cancellable top-up, with no drawing on the reader.
+  if (!shouldStop() && WiFi.status() == WL_CONNECTED) OrbifySleep::topUp(job.epubPath, &shouldStop, 1500);
+#endif
   // Off again whatever happened; MicroLink stops before the driver does (esp_wifi_stop wrap).
   if (!wasConnected) SavedWifiConnect::disconnect();
   return outcome;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "RefreshBadge.h"
 
 #if CROSSINK_TAILNET_ORBIFY_MIRROR
@@ -11,6 +12,19 @@
 #include "fontIds.h"
 
 namespace OrbifyRefreshBadge {
+
+void drawPreparing(const GfxRenderer& renderer, const bool popup) {
+  renderer.clearScreen();
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
+  GUI.drawHeader(renderer, Rect{safe.x, safe.y + metrics.topPadding, safe.width, metrics.headerHeight}, "Full refresh");
+  const int w = badgeWidth(renderer);
+  drawBadge(renderer, safe.x + safe.width - metrics.contentSidePadding - w,
+            safe.y + metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing,
+            w, renderer.getLineHeight(SMALL_FONT_ID), "0%");
+  if (popup) drawStartPopup(renderer, 0);
+  renderer.displayBuffer();
+}
 
 void drawStartPopup(const GfxRenderer& renderer, const unsigned percent) {
   char text[96];

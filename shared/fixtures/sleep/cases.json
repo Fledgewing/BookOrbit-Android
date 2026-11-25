@@ -714,6 +714,16 @@
     "name": "empty: the default",
     "wire": "",
     "expect": "up_next"
+   },
+   {
+    "name": "server libraries combine with scopes and lists",
+    "wire": "library:2\nscope:12\nlibrary:3\nup_next",
+    "expect": "library:2\nscope:12\nlibrary:3\nup_next"
+   },
+   {
+    "name": "whole library is exclusive over named libraries",
+    "wire": "library:2\nlibrary",
+    "expect": "library"
    }
   ],
   "leave_out": [
@@ -736,6 +746,11 @@
     "name": "none",
     "wire": "",
     "expect": ""
+   },
+   {
+    "name": "named library is a membership rule",
+    "wire": "library:2\ncollection:7",
+    "expect": "library:2\ncollection:7"
    }
   ],
   "candidates": [
@@ -892,6 +907,22 @@
     "bag": [],
     "expect": [],
     "fallback": null
+   },
+   {
+    "name": "named libraries share the bag with scopes",
+    "from": "library:2\nscope:3",
+    "lists": {},
+    "bag": [
+     5,
+     9,
+     7
+    ],
+    "expect": [
+     5,
+     9,
+     7
+    ],
+    "fallback": null
    }
   ],
   "check": [
@@ -956,6 +987,40 @@
      "fantasy"
     ],
     "expect": "keep"
+   },
+   {
+    "name": "named library excludes its members only",
+    "id": 7,
+    "rules": "library:2",
+    "members": {
+     "library:2": [
+      7,
+      9
+     ]
+    },
+    "tags": [],
+    "expect": "out"
+   },
+   {
+    "name": "other library remains eligible",
+    "id": 5,
+    "rules": "library:2",
+    "members": {
+     "library:2": [
+      7,
+      9
+     ]
+    },
+    "tags": [],
+    "expect": "keep"
+   },
+   {
+    "name": "unlisted library fails closed",
+    "id": 5,
+    "rules": "library:2",
+    "members": {},
+    "tags": [],
+    "expect": "unknown"
    }
   ]
  }

@@ -84,7 +84,9 @@ def after(output: str, marker: str) -> str:
 def sleep_sync(ctx: Context, card: SdCard, name: str, **kw):
     """Sync on Sleep with the reader on Home: a short Power press sleeps, the sleep sync runs in
     the restarted process, and the device goes back to sleep (the process ends)."""
-    if not (card.crosspoint / "state.json").exists():  # the sleep sync runs for the last open book
+    state_path = card.crosspoint / "state.json"
+    if not state_path.exists() or not json.loads(state_path.read_text()).get("openEpubPath"):
+        # The sleep sync needs the last open book, even when the card already has UI state.
         card.open_book(card.add_book(ctx.source("Standalone 01")))
     card.sync_on_sleep()
     run = ctx.sim.run(card, name, script="2500:POWER:120", timeout_s=kw.pop("timeout_s", 90), **kw)
@@ -120,9 +122,11 @@ def sync_through_proxy(ctx: Context, tmp: Path) -> None:
 def mirror_urls(ctx: Context, tmp: Path) -> None:
     """X5: the offline mirror's list requests reach the server as the server reads them. A query
     whose separator turned into a space ("sort=recently_read readStatus=reading") was answered 400
-    and those lists were never saved (the mirror URL separator fix). Three sleep syncs: the mirror runs the mirror in
+    and those lists were never saved (the mirror URL separator fix). Three sleep syncs: the mirror runs in
     slices of 10 requests per sleep."""
     card = ctx.card(tmp)
+    (card.crosspoint / "orbify").mkdir(exist_ok=True)
+    (card.crosspoint / "orbify" / "mirror.request").write_text("1\n")  # an unfinished user request
     for n in range(1, 4):
         run = sleep_sync(ctx, card, f"sleep-{n}")
         if "Mirror: saved for offline" in run.output:
@@ -207,6 +211,8 @@ def heap_floor_waits(ctx: Context, tmp: Path) -> None:
     mirror's first request is held by the proxy; the mirror then waits for the next sync instead of
     opening another request."""
     card = ctx.card(tmp)
+    (card.crosspoint / "orbify").mkdir(exist_ok=True)
+    (card.crosspoint / "orbify" / "mirror.request").write_text("1\n")  # resume a user-started walk
     ctx.faults([{"match": {"path": "/plugin/catalog/root$"}, "action": "delay", "ms": 4000, "times": 1}])
     run = sleep_sync(ctx, card, "sleep", env={"ORBIFY_SIM_HEAP": "w2000:10000/6000"})
     tail = after(run.output, "ORBIFY_SIM_HEAP t=w2000")
@@ -420,6 +426,8 @@ def catalog_refresh_stamp(ctx: Context, tmp: Path) -> None:
     assert busy, f"the stamp never read 'Refreshing…' after the tap: {[s[1] for s in stamps]}"
     first_get = re.search(r"\[(\d+)\] \[DBG\] \[HTTP\] \S+ GET: \S+/plugin/catalog/", refresh)
     assert first_get and busy[0] <= int(first_get.group(1)), "'Refreshing…' was not drawn before the first request"
+    queued = after(refresh, "foreground returned")
+    after(queued, "Refresh phase: kind=")
     done = after(refresh, "Catalog: Refresh done")
     final = [s for s in STAMP.finditer(done)]
     assert final and final[-1].group(2).lower().startswith("updated just now"), \
@@ -501,8 +509,9 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     card.theme(UI_THEME_BOOKORBIT)
     sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
     ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 500}])
-    run = ctx.sim.run(card, "hold", script=f"3000:TAP:{sx},{sy},1300", after_reboot="16000:TAP:240,700",
+    run = ctx.sim.run(card, "hold", script=f"3000:TAP:{sx},{sy},1300", after_reboot="8000:TAP:240,700",
                       timeout_s=60)
+    after(run.output, "Full refresh: reboot notice suppressed")
     walk = after(run.output, "Home refresh: Full refresh popup: about")
     assert "saving for offline" not in run.output.lower(), "a per-step N/M was shown"
     after(walk, "Home refresh: Full refresh popup closed")
@@ -512,6 +521,7 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     pcts = [int(p) for p in re.findall(r"Full refresh badge '(\d+)%'", walk)]
     assert pcts == sorted(pcts) and pcts[-1] <= int(paused.group(1)), f"the % went down: {pcts} / {paused.group(1)}"
     home = ctx.sim.run(card, "home-after", script="4000:QUIT", timeout_s=10, screenshots={3000: "x4-pro-home-pending"})
+    after(home.output, "Full refresh paused: open catalog to resume")
     shown = re.search(r"BookOrbit Home: Full refresh (\d+)% in the header", home.output)
     assert shown and int(shown.group(1)) >= int(paused.group(1)), f"Home's header: {shown and shown.group(0)}"
     shot = (card.root / "shots" / "x4-pro-home-pending.bmp").read_bytes()
@@ -559,8 +569,13 @@ def catalog_cache_first(ctx: Context, tmp: Path) -> None:
     card = ctx.card(tmp)
     card.theme(UI_THEME_BOOKORBIT)
     sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
+    # Full refresh only walks the catalog; an ordinary sync creates Home's snapshot and
+    # its Library page, as on a configured reader. Do not rely on the walk fetching Home.
+    ctx.sim.run(card, "seed", script=f"3000:TAP:{sx},{sy}", timeout_s=30)
     full = ctx.sim.run(card, "full", script=f"3000:TAP:{sx},{sy},1300", timeout_s=60)
     after(full.output, "Mirror: saved for offline")
+    # Age and a different saved library version must never force a reconnect/full walk.
+    (card.crosspoint / "orbify" / "mirror.state").write_text("1700000000\tolder-library\n")
     first = ctx.sim.run(card, "library", script="3000:SWIPE:0.8,0.5,0.2,0.5,250;5000:QUIT", timeout_s=10)
     cx, cy = home_tile(first.output, "catalog")  # on the Library page
     before = len(ctx.requests())
@@ -586,6 +601,10 @@ def catalog_cache_first(ctx: Context, tmp: Path) -> None:
     assert ctx.requests()[before:], "⟳ asked the server nothing"
     stamps = [m.group(2) for m in STAMP.finditer(refresh)]
     assert any(t.lower().startswith("refreshing") for t in stamps), f"no 'Refreshing…' stamp: {stamps}"
+    queued = after(refresh, "foreground returned")
+    after(queued, "Refresh phase: kind=")
+    roots = [r for r in ctx.requests()[before:] if r["path"].endswith("/plugin/catalog/root")]
+    assert len(roots) == 1, f"reloading the refreshed root repeated its network request: {roots}"
     done = after(refresh, "Catalog: Refresh done")
     final = [m.group(2) for m in STAMP.finditer(done)]
     assert final and final[-1].lower().startswith("updated just now"), f"the stamp after the refresh: {final}"
@@ -602,6 +621,64 @@ def menu_home_swipe(ctx: Context, tmp: Path) -> None:
                       timeout_s=14, screenshots={4500: "x4-pro-menu", 7500: "x4-pro-menu-home-swipe"})
     tail = after(run.output, "Home swipe on the menu: back to Home")
     assert "Home: menu opened" not in tail, "the Home swipe reopened the menu"
+
+
+@scenario(*ALL)
+def ota_returns_to_update(ctx: Context, tmp: Path) -> None:
+    """The completed-install marker returns to the OTA screen without Wi-Fi, then is consumed."""
+    card = ctx.card(tmp)
+    marker = card.crosspoint / "orbify_ota_return"
+    marker.write_text("older-firmware")
+    before = len(ctx.requests())
+    first = ctx.sim.run(card, "updated", script="4000:QUIT", timeout_s=8,
+                        screenshots={3000: "updated"})
+    after(first.output, "Updated to v")
+    assert not marker.exists() and len(ctx.requests()) == before
+    assert "[WIFI] Joined" not in first.output and "Entering activity: OtaUpdate" in first.output
+    second = ctx.sim.run(card, "next-boot", script="3000:QUIT", timeout_s=7)
+    assert "Updated to v" not in second.output and "Entering activity: OtaUpdate" not in second.output
+
+
+@scenario("x4-pro")
+def sleep_picker_in_place(ctx: Context, tmp: Path) -> None:
+    """Both Display sleep pickers toggle and save on the same SD-only screen. Visible switches
+    change before Back, and the Leave Out selection is still checked on reopening the list."""
+    card = ctx.card(tmp)
+    sleep_pick(card, **{"from": "up_next", "leaveScopes": ""})
+    before = len(ctx.requests())
+    run = ctx.sim.run(card, "pickers", script="3000:TAP:120,593;5000:TAP:60,111;6500:TAP:100,173;"
+                      "8000:TAP:100,455;9500:TAP:100,300;12000:TAP:25,55;14000:TAP:100,572;"
+                      "16000:TAP:100,125;18000:TAP:25,55;20000:TAP:100,572;22000:QUIT",
+                      timeout_s=26, screenshots={8500: "pick-before", 10500: "pick-after",
+                      15000: "leave-before", 17000: "leave-after", 21000: "leave-reopened"})
+    settings = json.loads((card.crosspoint / "orbify_sleep" / "settings.json").read_text())
+    assert set(settings["from"].splitlines()) == {"up_next", "discover"}
+    assert settings["leaveScopes"] == "library"
+    def ink(name, y):
+        return dark_pixels((card.root / "shots" / f"{name}.bmp").read_bytes(), 399, y, 42, 20)
+    assert ink("pick-after", 285) > ink("pick-before", 285) + 80, "Pick From did not change in place"
+    assert ink("leave-after", 111) > ink("leave-before", 111) + 80, "Leave Out did not change in place"
+    assert ink("leave-reopened", 111) == ink("leave-after", 111), "the saved state did not reopen checked"
+    assert len(ctx.requests()) == before and "[WIFI] Joined" not in run.output, "picker opened the network"
+
+
+@scenario(*X4S)
+def catalog_incremental_silent(ctx: Context, tmp: Path) -> None:
+    """An old cache never schedules a Full refresh. The existing sleep connection checks one
+    recent-items page, silently, even when the library version differs from the saved one."""
+    card = ctx.card(tmp)
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.state").write_text("1700000000\told-library\n")
+    run = sleep_sync(ctx, card, "incremental", timeout_s=120)
+    after(run.output, "Catalog incremental:")
+    assert "no saved recent-items page" not in run.output and "parse failed" not in run.output
+    assert "Full refresh popup" not in run.output and "Full refresh badge" not in run.output
+    assert "Mirror: Full refresh started" not in run.output
+    assert not (folder / "mirror.tsv").exists() and not (folder / "mirror.request").exists()
+    recent = [r for r in ctx.requests("/plugin/catalog/books") if r.get("query", {}).get("sort") == "recently_updated"]
+    assert len(recent) == 1, f"expected one recent-items page, got {recent}"
+    assert (folder / "mirror.state").read_text() == "1700000000\told-library\n"
 
 
 @scenario(*X4S)
@@ -635,14 +712,14 @@ def sleep_batch(run_output: str) -> tuple[int, int]:
 @scenario(*X4S)
 def sleep_pick_batch(ctx: Context, tmp: Path) -> None:
     """ROADMAP 11 (docs/design/lock-screen.md R3, X4s): Every sleep from Discover. The first sleep
-    has no ready cover (the open book's cover shows, F1); its sleep sync fetches a few covers on the
+    has no ready cover (a clear placeholder shows); its sleep sync fetches a few covers on the
     lent connection and decodes them with the radio off. The next sleeps draw a ready cover at once
     from the card, never the one just shown, and each sync tops the batch up. (The simulator's run
     ends with the sync, before the redraw.)"""
     card = ctx.card(tmp)
     sleep_pick(card, **{"from": "discover", "hours": 0})
     first = sleep_sync(ctx, card, "sleep-1", timeout_s=150)
-    after(first.output, "Sleep: BookOrbit Pick -> current book")
+    after(first.output, "Sleep: BookOrbit Pick -> placeholder")
     count, fetched = sleep_batch(first.output)
     assert fetched >= 1 and count == fetched, f"the first top-up fetched {fetched}, batch {count}"
     decoded = re.findall(r"Sleep cover: book (\d+) decoded", first.output)
@@ -657,6 +734,7 @@ def sleep_pick_batch(ctx: Context, tmp: Path) -> None:
         run = sleep_sync(ctx, card, f"sleep-{n}", timeout_s=150)
         drawn = re.search(r"Sleep: BookOrbit Pick -> cover (\d+) \(every sleep", run.output)
         assert drawn, f"sleep {n} drew no ready cover"
+        assert int(drawn.group(1)) != ctx.book("Standalone 01")["id"], "Every sleep picked the open book"
         shown.append(drawn.group(1))
         assert (card.crosspoint / "orbify_sleep" / f"{drawn.group(1)}.bmp").exists(), f"sleep {n}: not on the card"
         before = count
@@ -687,7 +765,7 @@ def sleep_pick_offline(ctx: Context, tmp: Path) -> None:
 def sleep_pick_library(ctx: Context, tmp: Path) -> None:
     """R1c and X8 (Pick from and Leave out as sets, cases.json "sources"): Library picked with a list
     stands alone and is listed into the bag with no filter; the batch fills from it. Library left out
-    leaves out every book: the covers leave the card and the sleep shows the current book (F1)."""
+    leaves out every book: the covers leave the card and the sleep shows a placeholder."""
     card = ctx.card(tmp)
     sleep_pick(card, **{"from": "discover\nlibrary", "hours": 0})
     first = sleep_sync(ctx, card, "sleep-1", timeout_s=150)
@@ -698,10 +776,44 @@ def sleep_pick_library(ctx: Context, tmp: Path) -> None:
     assert fetched >= 1, "nothing fetched from the library"
     sleep_pick(card, **{"from": "library", "hours": 0, "leaveScopes": "library"})
     second = sleep_sync(ctx, card, "sleep-2", timeout_s=150)
-    after(second.output, "Sleep: BookOrbit Pick -> current book")
+    after(second.output, "Sleep: BookOrbit Pick -> placeholder")
     count2, fetched2 = sleep_batch(second.output)
     assert count2 == 0 and fetched2 == 0, f"Library left out, yet batch {count2} ({fetched2} fetched)"
     assert not list((card.crosspoint / "orbify_sleep").glob("*.bmp")), "left-out covers stayed on the card"
+
+
+@scenario("x4-pro")
+def sleep_sources_regular_sync(ctx: Context, tmp: Path) -> None:
+    """The first ordinary Home sync lists named libraries and prepares covers before any sleep."""
+    card = ctx.card(tmp)
+    library = ctx.manifest["library_id"]
+    sleep_pick(card, **{"from": f"library:{library}", "hours": 0})
+    open_catalog(ctx, card)
+    names = (card.crosspoint / "orbify_sleep" / "scopes.tsv").read_text()
+    assert f"l\t{library}\t" in names, "the user's separate library was missing before the first sleep"
+    assert ctx.requests("/sections/smart-scopes") and ctx.requests("/sections/collections")
+    filtered = [r for r in ctx.requests("/catalog/books") if str(r.get("query", {}).get("libraryId")) == str(library)]
+    assert filtered, "a named library did not apply its libraryId filter"
+    assert list((card.crosspoint / "orbify_sleep").glob("*.bmp")), "the ordinary sync prepared no ready covers"
+
+
+@scenario("x4-pro")
+def catalog_wifi_holds(ctx: Context, tmp: Path) -> None:
+    """Full refresh, browsing and uncached requests share the radio, including an idle-off request."""
+    card = ctx.card(tmp)
+    cx, cy, rx, ry = open_catalog(ctx, card)
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 250}])
+    run = ctx.sim.run(card, "holds",
+        script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};8000:TAP:{rx},{ry},1300;13000:TAP:240,116;45000:BACK:100;47000:BACK:100;50000:QUIT",
+        timeout_s=75, env={"ORBIFY_SIM_IDLE_OFF_ON_MISS": "1"})
+    walk = after(run.output, "Catalog: Full refresh of view")
+    after(walk, "Wi-Fi hold + refresh")
+    after(walk, "Wi-Fi hold + offline miss")
+    after(walk, "Wi-Fi off deferred")
+    # Every attempted idle-off inside a miss must wait: the GET then succeeds on the same radio.
+    until_exit = walk.split("Wi-Fi hold - catalog", 1)[0]
+    assert "Wi-Fi off:" not in until_exit, "an owner lost its radio"
+    after(walk, "Wi-Fi off: SavedWifiConnect disconnect (0 held)")
 
 
 # --- Runner -----------------------------------------------------------------------------------

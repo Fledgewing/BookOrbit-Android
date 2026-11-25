@@ -37,7 +37,8 @@ class SleepPickerTest {
         SleepPickerWork.choices = SleepChoices(1, true,
             listOf(SleepChoices.Item(7, "Short books", 12)),
             listOf(SleepChoices.Item(8, "Favourites", 4)),
-            listOf(SleepChoices.Tag("age:18", "Age:18", 3)))
+            listOf(SleepChoices.Tag("age:18", "Age:18", 3)),
+            libraries = listOf(SleepChoices.Item(9, "Fiction", 6)))
         SettingsStore.store(app, "sleep_from", "up_next")
         SettingsStore.store(app, "sleep_leave_out", "")
     }
@@ -55,6 +56,24 @@ class SleepPickerTest {
         val r = row(a, tag)
         assertEquals("visible selection on $tag", selected, r.isSelected)
         assertEquals("painted checkmark on $tag", selected, all(r).filterIsInstance<TextView>().any { it.text == "✓" })
+    }
+
+    @Test fun namedLibraryReplacesWholeLibraryInBothPickers() {
+        SettingsStore.store(app, "sleep_from", "library")
+        val pick = Robolectric.buildActivity(SettingChoiceActivity::class.java,
+            Intent(app, SettingChoiceActivity::class.java).putExtra(SettingsPage.EXTRA_KEY, "sleep_from")).setup()
+        row(pick.get(), "option:library:9").performClick()
+        assertEquals("library:9", SettingsStore.get(app, "sleep_from"))
+        checked(pick.get(), "option:library", false)
+        checked(pick.get(), "option:library:9", true)
+        pick.pause().stop().destroy()
+        SettingsStore.store(app, "sleep_leave_out", "library")
+        val leave = Robolectric.buildActivity(LeaveOutActivity::class.java).setup()
+        row(leave.get(), "pick:library:9").performClick()
+        assertEquals("library:9", SettingsStore.get(app, "sleep_leave_out"))
+        checked(leave.get(), "pick:library", false)
+        checked(leave.get(), "pick:library:9", true)
+        leave.pause().stop().destroy()
     }
 
     @Test fun pickFromOpensAndTogglesWithoutWaitingForListsOrSync() {

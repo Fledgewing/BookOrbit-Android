@@ -120,6 +120,7 @@ class SleepPoolTest {
                 path.endsWith("/catalog/books/2") -> """{"id":2,"title":"Tagged","hasCover":true,"tags":["Age:18"]}"""
                 path.endsWith("/catalog/books/3") -> """{"id":3,"title":"Kept","hasCover":true,"tags":["cosy"]}"""
                 path.contains("/sections/smart-scopes") -> """{"items":[{"id":12,"title":"Romance","count":4}]}"""
+                path.contains("/sections/libraries") -> """{"items":[{"id":2,"title":"Fiction","count":3}]}"""
                 path.contains("/sections/collections") -> """{"items":[]}"""
                 else -> return CacheWorker.Reply(404)
             }
@@ -149,6 +150,7 @@ class SleepPoolTest {
         dir.walk().filter { it.isFile }.forEach { assertFalse(it.name, it.readText().contains("secret-key")) }
         assertEquals("secret-key", server.auth)
         assertEquals("the pickers' lists", 12L, JSONObject(File(dir, "scopes.json").readText()).getJSONArray("scopes").getJSONObject(0).getLong("id"))
+        assertEquals(2L, JSONObject(File(dir, "scopes.json").readText()).getJSONArray("libraries").getJSONObject(0).getLong("id"))
         dir.deleteRecursively()
     }
 

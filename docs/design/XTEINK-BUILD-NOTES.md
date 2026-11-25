@@ -396,6 +396,64 @@ header %), `tailscale_layout` (ink: nothing between header and list, each status
 under its row, clear of the row's value). The simulator's Tailscale shim answers "on and logged
 in" with `ORBIFY_SIM_TAILSCALE=joined`.
 
+## Android feedback parity (W7)
+
+The user's Android rulings apply to X4 Pro and X4. Patches 0042 (refresh) and 0043 (OTA return) are integration hooks;
+implementation is in `orbify/` with GPL-3.0-or-later headers. X3 builds only the OTA return
+marker; the mirror, incremental catalog cache and sleep pickers remain behind their existing
+zero switches. No position sync, OTA verifier or TLS implementation changes.
+
+- **Only a user starts a Full refresh.** The settings action and holds on the sync tile or
+  catalog refresh persist `mirror.request`. A walker resume requires it; neither cache age nor
+  a library-version change starts or requests a walk. Home's scan, matching, cover decode and
+  refresh steps log during that run, rather than showing additional notices. The generic reboot
+  popup is suppressed both on entry and on the final return after Done. The one start
+  popup and corner percentage end with Done / Done with N errors. Ordinary Home refresh keeps
+  its existing foreground activity; sleep work has no progress UI.
+- **Discovery, then a fixed data total.** Root and facet enumeration is a first pass at 0%.
+  Sections are queued ahead of data requests. Once the first data request finishes, `Plan::add`
+  rejects additions, including after serialization. Book-detail requests deduplicate by book ID
+  across every source. A v4 plan retains the progress and failures. Older plans move pending
+  discovery ahead of remaining data and keep their highest displayed percentage during migration. The request budget and first-page scope stay unchanged.
+- **Protocol/storage limit on book-count parity:** Xteink stores whole JSON replies, rather
+  than Android's normalized SQLite books and list membership. A book may appear in multiple
+  cached list replies, though its detail is fetched only once. First-page list totals overlap
+  and do not identify unique books; they cannot supply a unique-book denominator. Counting every
+  library book would require a full paginated enumeration and a normalized cache outside this
+  mirror's bounded first-page scope. Xteink therefore counts unique requests in its data pass,
+  fixed after discovery, rather than claiming to count each listed book once.
+- **Keep the cache indefinitely.** Saved catalog entry points open without Wi-Fi regardless of
+  age or library version. No scheduled Full refresh or expiry. The existing capacity-based LRU
+  limits still apply; signing out or changing accounts still clears the account's cache.
+- **Bounded incremental check:** on the sleep sync's already-open connection, ask for one
+  `books?sort=recently_updated` page (20 books), then compare and merge shared book fields into
+  saved replies. Unchanged rows cause no SD rewrite. Never join Wi-Fi for this check. This is a
+  bounded recent-items check, not a server delta feed: changes outside the newest page, removals,
+  list order and changed filter membership wait for an explicit refresh. The server has no
+  `since`/`updatedAt` filter or catalog ETag ([server contract](../server-contract.md#catalog-replies-carry-no-version)).
+  The pin `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7` accepts `recently_updated` in
+  `server/src/modules/koreader/dto/koreader-catalog-query.dto.ts:22,92`; its descending updated
+  sort is `server/src/modules/koreader/koreader-catalog.service.ts:1568-1569`. Android's
+  full-refresh-feedback fix was not on origin/main when this work began; this uses that documented
+  API directly, without assuming a new server route.
+- **Pickers:** both lists read SD settings and saved scopes only. Toggle under the render lock,
+  persist immediately, invalidate the same list, and show Selected / Not selected under each row
+  alongside the switch. No network request is added to the UI path.
+- **OTA return:** successful installation writes the old application version to a one-shot SD
+  marker immediately before the existing restart. On boot, a different version routes to the OTA
+  activity, which consumes the marker and shows Updated to vX without Wi-Fi. Same-version boots,
+  rollback and malformed markers discard it. Crash/recovery routing keeps priority. The hook
+  uses CrossInk `87e2e1984481e8a3d996f12b34b50a383f9013b8`'s successful install/restart at
+  `src/activities/settings/OtaUpdateActivity.cpp:241-255,313-315` and boot routing in
+  `src/main.cpp:2128-2135` (unpatched pin); the verifier is untouched.
+
+Validation: `mirror_test` covers discovery ordering, fixed totals, duplicate detail IDs, persisted
+nondecreasing progress and the explicit-user progress gate; `cache_test` covers changed-only merges,
+unrelated rows/facets and persisted results; `ota_return_test` compiles the actual marker code
+against storage/version stubs to simulate reboot, consumption, same-version boots and bad files.
+Simulator scenarios cover the two Full refresh entry points and a silent incremental sleep check.
+Flash measurements and the in-place picker scenario are recorded with the PR's final validation.
+
 ## Measurements needed on a device
 
 Item 1 adds only small requests on the sync's existing TLS session, so no new memory measurement
@@ -425,3 +483,57 @@ in this sleep`, and no `esp-aes: Failed to allocate memory`. `waiting for heap (
 during the sync wakes the device within ~2 s (`Wake press not answered … restarting now` when the
 watcher had to do it); `Sleep sync stopped: its time budget is spent` and `… past its 240 s budget;
 restarting to sleep` mark the budget.
+
+## X4 Pro feedback (W8, 2.0.0.224)
+
+The approved feedback extends the existing sleep and refresh designs. Integration is in patch
+0044; new implementation is in `orbify/` (GPL-3.0-or-later). X3 keeps its existing sleep screens
+and radio behavior; the new ownership implementation is gated with the X4 mirror.
+
+- Source names previously arrived only during a successful sleep sync, and Settings permanently
+  cached an empty first read within that boot. Settings now rereads the saved file when opened.
+  Any ordinary Home/manual sync refreshes it too. Both Pick From and Leave Out offer named server
+  libraries (`library:<id>`), smart scopes and collections. `library` retains its old wire meaning,
+  now labelled **Whole library**, exclusive with all named sources. The picker explains that choice
+  on its first row. Android accepts the same values and lists the server libraries too.
+- The pinned server returns all library/collection/smart-scope entries in those section replies;
+  these three sections do not paginate: BookOrbit `c1dd6b4`,
+  `server/src/modules/koreader/koreader-catalog.service.ts:435-442`. Named libraries use `libraryId`
+  (`:849-875`, `:1545`); they are not the unfiltered whole-library query.
+- A Pick with no eligible decoded covers draws “BookOrbit Pick: covers not ready”, with a refresh
+  hint, instead of silently becoming CrossInk's current-book Cover screen. The log records the
+  ready/batch counts. The open book and covers from a previous source selection never enter its
+  ready pool. Every sleep still cycles ready covers without a network request on the sleep path.
+- Home/manual/sleep syncs top up while Wi-Fi is already up, within 40 seconds; catalog refresh and
+  reading sync use a short 1.5-second slice. The budget is checked between requests, not a new
+  per-request socket timeout. Catalog and Home decode pending JPEGs too; reading sync leaves decode
+  for the next idle sync. The top-up never starts Wi-Fi itself.
+- A catalog tap queues a one-view plan using the Full refresh walk; Full refresh returns after
+  scheduling its popup rather than synchronously reloading the page. Requests run between input
+  events. Home's explicit Full refresh skips the foreground hash scan/Home/copy-replacement work
+  and starts its walk immediately after connecting. `Refresh phase` logs time connection, queueing
+  and each request; `Sleep: phase` logs sources, exclusions, candidates and cover work. Individual
+  network requests still occupy a main-loop turn, as the existing Full refresh walk does.
+- `OrbifyWifi` counts nested holds for the catalog, refresh, sleep sync, offline misses and reading
+  sync. `SavedWifiConnect::disconnect` defers an off request until the last hold leaves. The X4
+  catalog's direct disconnect now uses that gate. Logs name holds and every requested off. A lost
+  link retains the walk and displays **Paused — no Wi-Fi**, then resumes when it returns. Leaving the refresh boot for Home intentionally pauses the
+  saved plan; Home now says “Paused N% - open catalog”, instead of presenting a frozen % as running.
+- The supplied device log ends before the reported sleep tests and contains no wake sequence.
+  No timing defect was established from it. Existing watcher deadlines and press-to-screen timing
+  remain; new route/token and first-screen boot-time logs run once per boot. Capture those along
+  with `SLP Wake`, reset diagnostics and boot trail on the next device test.
+
+Tests: shared library-source cases on C++/Kotlin/Lua, ready-pool current-book exclusion and cycling,
+reference-counted radio holds; simulator sleep cycling, regular refresh return-before-request,
+Full refresh progress, a forced idle-off during uncached browsing, and the existing quick wake.
+
+W8 validation: host suite, Lua logic/flows, companion JVM suite and nine X4 Pro simulator
+scenarios passed (including Home's earlier pause/resume hint). No device was used. The local
+PlatformIO flash-gate measurements at the pinned rc3 are:
+
+| Environment | Used / 6,553,600 bytes | Percent | Below the 99.5% gate |
+|---|---:|---:|---:|
+| `x4-pro` | 6,375,685 | 97.29% | 145,247 bytes |
+| `x4-classic` | 6,218,742 | 94.89% | 302,190 bytes |
+| `default` | 6,514,417 | 99.40% | 6,515 bytes |

@@ -33,6 +33,11 @@ fi
   -o "$out/ota_release_pick_test"
 "$out/ota_release_pick_test" "$repo/shared/fixtures/github/orbify-releases.json" "$repo/shared/fixtures/github/xteink-feed.json"
 
+# The actual SD-marker implementation, with storage and version replaced for a reboot test.
+"${CXX:-c++}" -std=c++17 -Wall -Wextra -O1 -I"$here/ota_return_stubs" -I"$repo/xteink/orbify" -I"$here" \
+  "$here/ota_return_test.cpp" "$repo/xteink/orbify/OtaReturn.cpp" -o "$out/ota_return_test"
+"$out/ota_return_test"
+
 # Orbify's own logic (xteink/orbify/core): pure C++, tested with ArduinoJson, the JSON library the
 # firmware links: the build fetches it, so CI runs these after the build.
 ajson="${ARDUINOJSON_DIR:-}"
@@ -73,6 +78,7 @@ orbify_test copy_check "$core/CopyCheck.cpp"
 orbify_test copy_queue "$core/CopyQueue.cpp" "$core/CopyCheck.cpp"
 orbify_test mirror "$core/Mirror.cpp"
 orbify_test sleep_sync_deadline
+orbify_test wifi_holds
 # Battery stats (orbify/core/BatteryStatsCore): CrossInk-style GoogleTest cases through GtestShim.h.
 orbify_test battery_stats "$core/BatteryStatsCore.cpp"
 orbify_test boot_trail

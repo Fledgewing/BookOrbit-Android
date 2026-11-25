@@ -251,6 +251,22 @@ void indexRoundTrip() {
 
 }  // namespace
 
+static void recentItems() {
+  JsonDocument saved, recent;
+  deserializeJson(saved, R"({"items":[{"id":7,"title":"Old","authors":[{"name":"A"}],"local":"keep"},{"id":8,"title":"Other","authors":[]}],"facet":{"id":7,"title":"Scope"}})");
+  deserializeJson(recent, R"([{"id":7,"title":"New","authors":[{"name":"B"}],"newField":"ignored"}])");
+  CHECK(mergeRecentBooks(saved.as<JsonVariant>(), recent.as<JsonArrayConst>()));
+  CHECK(saved["items"][0]["title"] == "New" && saved["items"][0]["authors"][0]["name"] == "B");
+  CHECK(saved["items"][0]["local"] == "keep" && saved["items"][0]["newField"].isUnbound());
+  CHECK(saved["items"][1]["title"] == "Other" && saved["facet"]["title"] == "Scope");
+  CHECK(!mergeRecentBooks(saved.as<JsonVariant>(), recent.as<JsonArrayConst>()));
+  std::string bytes;
+  serializeJson(saved, bytes);
+  JsonDocument reopened;
+  CHECK(!deserializeJson(reopened, bytes));
+  CHECK(reopened["items"][0]["title"] == "New");
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) return 2;
   std::string dir = argv[1];
@@ -263,6 +279,7 @@ int main(int argc, char** argv) {
   writes(all);
   covers(all);
   fullRefreshOverlay(all);
+  recentItems();
   sizeCap();
   indexRoundTrip();
   return report("cache");

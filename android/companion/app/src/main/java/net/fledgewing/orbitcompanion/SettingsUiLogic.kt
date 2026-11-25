@@ -140,6 +140,7 @@ data class SleepChoices(
     val scopes: List<Item>,
     val collections: List<Item>,
     val tags: List<Tag>,
+    val libraries: List<Item> = emptyList(),
 ) {
     data class Item(val id: Long, val title: String, val count: Int?)
     data class Tag(val tag: String, val label: String, val count: Int)
@@ -149,6 +150,7 @@ data class SleepChoices(
         val id = wire.substringAfter(':').toLongOrNull() ?: return null
         return when (wire.substringBefore(':')) {
             "scope" -> scopes.firstOrNull { it.id == id }?.let { "${it.title} (smart scope)" }
+            "library" -> libraries.firstOrNull { it.id == id }?.let { "${it.title} (library)" }
             "collection" -> collections.firstOrNull { it.id == id }?.let { "${it.title} (collection)" }
             else -> null
         }
@@ -167,6 +169,7 @@ data class SleepChoices(
         /** "Scope not found" (X7) when an id is not in the lists. */
         fun fallback(wire: String): String = when (wire.substringBefore(':')) {
             "scope" -> "Smart scope ${wire.substringAfter(':')} (not found)"
+            "library" -> "Library ${wire.substringAfter(':')} (not found)"
             "collection" -> "Collection ${wire.substringAfter(':')} (not found)"
             "tag" -> "Tag: ${wire.substringAfter(':')}"
             else -> wire
@@ -205,7 +208,7 @@ data class SleepChoices(
                     Tag(t, j.optString("label").ifEmpty { t }, j.optInt("count", 0))
                 }
             }.orEmpty().sortedByDescending { it.count }
-            return SleepChoices(o.optLong("at", 0L), o.optBoolean("cached", false), items("scopes"), items("collections"), tags)
+            return SleepChoices(o.optLong("at", 0L), o.optBoolean("cached", false), items("scopes"), items("collections"), tags, items("libraries"))
         }
     }
 }

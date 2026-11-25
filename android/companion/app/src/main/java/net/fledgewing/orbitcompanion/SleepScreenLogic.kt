@@ -128,7 +128,7 @@ data class SleepSettings(
             "up_next" -> "Up next in series"
             "want_to_read" -> "Want to read"
             "discover" -> "Discover"
-            else -> item.substringBefore(':').let { if (it == "scope") "Smart scope" else "Collection" } + " " + item.substringAfter(':')
+            else -> item.substringBefore(':').let { when (it) { "scope" -> "Smart scope"; "library" -> "Library"; else -> "Collection" } } + " " + item.substringAfter(':')
         }
     }
 }
