@@ -2348,9 +2348,9 @@
           ]
         },
         "x4_pro": {
-          "status": "missing",
-          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path. Fit/coexistence not measured",
-          "reason": "gap — no reason",
+          "status": "not_applicable",
+          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path",
+          "reason": "not applicable: Maintainer ruling 2026-11-25: the device is so small a Bluetooth remote is often bigger than it; not planned.",
           "evidence": [
             {
               "repository": "agosez/CrossInk-Bookorbit",
@@ -2368,9 +2368,9 @@
           "version": null
         },
         "x4": {
-          "status": "missing",
-          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path. Fit/coexistence not measured",
-          "reason": "gap — no reason",
+          "status": "not_applicable",
+          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path",
+          "reason": "not applicable: Maintainer ruling 2026-11-25: the device is so small a Bluetooth remote is often bigger than it; not planned.",
           "evidence": [
             {
               "repository": "agosez/CrossInk-Bookorbit",
@@ -2388,9 +2388,9 @@
           "version": null
         },
         "x3": {
-          "status": "missing",
-          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path. Fit/coexistence not measured",
-          "reason": "gap — no reason",
+          "status": "not_applicable",
+          "note": "Bluetooth disabled in firmware; no enabled remote-clicker path",
+          "reason": "not applicable: Maintainer ruling 2026-11-25: the device is so small a Bluetooth remote is often bigger than it; not planned.",
           "evidence": [
             {
               "repository": "agosez/CrossInk-Bookorbit",
@@ -2620,40 +2620,40 @@
           "version": "v0.11.3-rc.17"
         },
         "x4_pro": {
-          "status": "partial",
-          "note": "Rates page and export; no cross-reader Compare UI",
-          "reason": "gap — no reason",
+          "status": "not_applicable",
+          "note": "Rates page and export remain available",
+          "reason": "not applicable: Android-only by design (screen size); a future BookSync server could serve the data to other devices.",
           "evidence": [
             {
               "path": "xteink/orbify/BatteryStatsActivity.cpp",
               "line": 18
             }
           ],
-          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+          "version": null
         },
         "x4": {
-          "status": "partial",
-          "note": "Rates page and export; no cross-reader Compare UI",
-          "reason": "gap — no reason",
+          "status": "not_applicable",
+          "note": "Rates page and export remain available",
+          "reason": "not applicable: Android-only by design (screen size); a future BookSync server could serve the data to other devices.",
           "evidence": [
             {
               "path": "xteink/orbify/BatteryStatsActivity.cpp",
               "line": 18
             }
           ],
-          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+          "version": null
         },
         "x3": {
-          "status": "partial",
-          "note": "Export only; no numeric rates/Compare UI",
-          "reason": "hardware: level 2 cuts rate display for flash; comparison also missing",
+          "status": "not_applicable",
+          "note": "Export remains available; numeric rates display cut for flash",
+          "reason": "not applicable: Android-only by design (screen size); a future BookSync server could serve the data to other devices.",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
               "line": 276
             }
           ],
-          "version": "xteink-v2.0.0.373+bookorbit.1-rc3"
+          "version": null
         }
       }
     },
@@ -4030,9 +4030,9 @@
           "version": "v0.11.3-rc.17"
         },
         "x4_pro": {
-          "status": "missing",
+          "status": "not_applicable",
           "note": "No separate clearing-flash setting",
-          "reason": "gap — no reason",
+          "reason": "not applicable: Maintainer ruling 2026-11-25: not needed for quality on Xteink panels.",
           "evidence": [
             {
               "path": "xteink/orbify/SleepSettings.cpp",
@@ -4042,9 +4042,9 @@
           "version": null
         },
         "x4": {
-          "status": "missing",
+          "status": "not_applicable",
           "note": "No separate clearing-flash setting",
-          "reason": "gap — no reason",
+          "reason": "not applicable: Maintainer ruling 2026-11-25: not needed for quality on Xteink panels.",
           "evidence": [
             {
               "path": "xteink/orbify/SleepSettings.cpp",
@@ -4054,9 +4054,9 @@
           "version": null
         },
         "x3": {
-          "status": "missing",
-          "note": "Matching BookSync setting compiled out for X3 flash/PSRAM profile",
-          "reason": "hardware: Matching BookSync setting compiled out for X3 flash/PSRAM profile",
+          "status": "not_applicable",
+          "note": "No separate clearing-flash setting",
+          "reason": "not applicable: Maintainer ruling 2026-11-25: not needed for quality on Xteink panels.",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -5377,21 +5377,6 @@
     },
     {
       "priority": 2,
-      "id": "remote-clicker",
-      "features": [
-        "remote-clicker"
-      ],
-      "platforms": [
-        "x4_pro",
-        "x4",
-        "x3"
-      ],
-      "size": "M–L (BLE host, mapping UI and radio coexistence validation)",
-      "x3_fit": "Unknown; disabled Bluetooth stack must be measured against 54,065-byte gate margin and runtime TLS coexistence. Hardware supports BLE; flash/RAM fit is not established.",
-      "outcome": "Offer remote page-turn input on firmware; physical buttons remain usable. No documented product reason for excluding a remote."
-    },
-    {
-      "priority": 3,
       "id": "reading-layout",
       "features": [
         "layout",
@@ -5406,21 +5391,7 @@
       "outcome": "Add a single BookSync preset over existing native status-bar controls; do not rebuild controls that CrossInk already supplies."
     },
     {
-      "priority": 4,
-      "id": "battery-compare",
-      "features": [
-        "battery-ui"
-      ],
-      "platforms": [
-        "x4_pro",
-        "x4"
-      ],
-      "size": "M",
-      "x3_fit": "Export already works. Compare UI and numeric rate display need measured flash fit; no need for book-open TLS.",
-      "outcome": "Compare another reader export on device; X4 currently shows only local rates."
-    },
-    {
-      "priority": 5,
+      "priority": 3,
       "id": "settings-search",
       "features": [
         "settings-ui"
@@ -5434,21 +5405,7 @@
       "outcome": "Make equivalent settings discoverable; retain button navigation rather than require touch."
     },
     {
-      "priority": 6,
-      "id": "clearing-flash",
-      "features": [
-        "setting-sleep_flash"
-      ],
-      "platforms": [
-        "x4_pro",
-        "x4"
-      ],
-      "size": "S",
-      "x3_fit": "No BookSync sleep screen built on X3; would first require that subsystem.",
-      "outcome": "Expose optional clearing flash with the sleep-cover settings."
-    },
-    {
-      "priority": 7,
+      "priority": 4,
       "id": "android-crash-record",
       "features": [
         "crash"
@@ -5476,6 +5433,11 @@
       "feature": "signatures",
       "roadmap": "Next 16",
       "note": "Verifier shipped; enforced rollout still deferred."
+    },
+    {
+      "feature": "battery-ui",
+      "roadmap": "Ideas",
+      "note": "Future idea (maintainer ruling 2026-11-25): a BookSync server could serve cross-reader battery comparison data to other devices. On-device comparison remains Android-only by design (screen size)."
     }
   ],
   "limitations": [
