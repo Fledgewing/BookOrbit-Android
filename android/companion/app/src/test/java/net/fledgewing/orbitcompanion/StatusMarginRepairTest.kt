@@ -68,6 +68,37 @@ return {
             StatusMarginRepair.run(root, { fail("completed scan must not walk again") }, {})
         } finally { root.deleteRecursively(); external.deleteRecursively() }
     }
+    @Test fun loadedBookCapturesGoodBackupBeforeNativeCloseRotatesIt() {
+        val root=Files.createTempDirectory("margin-loaded").toFile()
+        try {
+            val book=File(root,"Book.sdr/metadata.epub.lua").apply { parentFile!!.mkdirs(); writeText(lua(10)) }
+            val old=File(book.path+".old").apply { writeText(lua(15)) }
+            assertFalse(StatusMarginRepair.run(root, {}, {}, canApply={false}))
+            assertEquals(lua(10),book.readText())
+            assertEquals(lua(15),File(book.path+".booksync-w31.old").readText())
+            assertFalse(File(root,"koreader/settings/booksync-w31-repair.done").exists())
+            // KOReader closes and saves progress, rotating the original backup.
+            old.writeText(lua(10))
+            book.writeText(lua(10).replace("= 0.75", "= 0.8"))
+            assertTrue(StatusMarginRepair.run(root, {}, {}, canApply={true}))
+            assertEquals(lua(15).replace("= 0.75", "= 0.8"),book.readText())
+            assertEquals(lua(10),old.readText())
+        } finally { root.deleteRecursively() }
+    }
+    @Test fun openingBookBeforeReplacementDefersWithoutChangingNativeFile() {
+        val root=Files.createTempDirectory("margin-reopen").toFile()
+        try {
+            val book=File(root,"Book.sdr/metadata.epub.lua").apply { parentFile!!.mkdirs(); writeText(lua(10)) }
+            File(book.path+".old").writeText(lua(15))
+            var queries=0
+            assertFalse(StatusMarginRepair.run(root, {}, {}, canApply={ ++queries < 2 }))
+            assertEquals(lua(10),book.readText())
+            assertFalse(File(book.path+".booksync-w31.tmp").exists())
+            assertFalse(File(book.path+".booksync-w31.done").exists())
+            assertTrue(StatusMarginRepair.run(root, {}, {}))
+            assertEquals(lua(15),book.readText())
+        } finally { root.deleteRecursively() }
+    }
     @Test fun crashAfterReplacementNeverReplaysOverLaterUserValues() {
         val root=Files.createTempDirectory("margin-crash").toFile()
         try {
@@ -84,9 +115,9 @@ return {
             try { StatusMarginRepair.run(root, { throw InterruptedException() }, {}); fail() } catch (_: InterruptedException) { }
             assertFalse(File(root,"koreader/settings/booksync-w31-repair.done").exists())
             val source=File("src/main/java/net/fledgewing/orbitcompanion/StatusMarginRepair.kt").readText()
-            assertTrue(source.contains("BulkWork.checkpoint()"))
-            assertTrue(source.contains("if (prefs.koreaderBook != \"0\") throw BookOpened()"))
-            assertTrue(source.indexOf("BulkWork.executor.execute") < source.indexOf("run(android.os.Environment"))
+            assertTrue(source.contains("BulkWork::checkpoint"))
+            assertTrue(source.contains("closedReported && prefs.koreaderBook == \"0\""))
+            assertTrue(source.indexOf("BulkWork.executor.execute") < source.indexOf("finished = run(android.os.Environment"))
         } finally { root.deleteRecursively() }
     }
 }

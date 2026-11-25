@@ -166,7 +166,7 @@ object PatchInstaller {
         val v = if (book) "1" else "0"
         if (p.koreaderBook != v) p.koreaderBook = v
         if (!book) {
-            StatusMarginRepair.schedule(ctx)
+            StatusMarginRepair.schedule(ctx, reportedClosed = true)
             follow(ctx, why)
         }
     }

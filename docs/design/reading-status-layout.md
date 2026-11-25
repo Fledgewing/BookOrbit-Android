@@ -94,8 +94,7 @@ the program's actual height. Both canvases retain the same black/white polarity.
 ### One-time repair
 
 The old controller has no per-book change journal. On companion service startup,
-`StatusMarginRepair` runs on the existing background bulk executor, waits for a
-reported closed-book state, and checkpoints
+`StatusMarginRepair` runs on the existing background bulk executor and checkpoints
 before folder visits, file comparisons and writes. It walks external storage
 without following symlinks or entering Android app-private trees, covering book
 sidecars plus KOReader's central `docsettings` and `hashdocsettings` sidecars.
@@ -114,7 +113,11 @@ unsupported values are left untouched: there is no inferred default. The backup
 cannot establish whether a later user change caused an allowlisted difference;
 this is the conservative key-limited fallback requested by the maintainer.
 
-Before replacement, the current bytes are saved as `.booksync-before-w31` and
+While a book is loaded or its current state is unknown, capture differing `.old`
+backups as `.booksync-w31.old` without changing native settings. This preserves
+the recovery source if KOReader rotates `.old` on close. Actual repairs wait for
+a live closed-book report, rather than trusting a persisted state from a prior
+session. Before replacement, the current bytes are saved as `.booksync-before-w31` and
 rechecked for concurrent native saves. `.old` is never touched. Per-file
 `.booksync-w31.done` markers prevent an interrupted scan from restoring a user's
 later choices again, and a completion marker stops future walks. Logs identify

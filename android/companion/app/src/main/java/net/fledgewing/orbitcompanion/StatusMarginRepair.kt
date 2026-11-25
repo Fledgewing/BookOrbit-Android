@@ -10,23 +10,18 @@ import java.security.MessageDigest
 object StatusMarginRepair {
     private val queued = java.util.concurrent.atomic.AtomicBoolean()
     @Volatile private var finished = false
-    private class BookOpened : Exception()
+    @Volatile private var closedReported = false
 
     /** Never repair a loaded sidecar: KOReader would later save its stale in-memory values. */
-    fun schedule(ctx: android.content.Context) {
+    fun schedule(ctx: android.content.Context, reportedClosed: Boolean = false) {
+        if (reportedClosed) closedReported = true
         if (finished || !queued.compareAndSet(false, true)) return
         val app = ctx.applicationContext
         BulkWork.executor.execute {
             try {
                 val prefs = Prefs(app)
-                if (prefs.koreaderBook != "0") return@execute
-                run(android.os.Environment.getExternalStorageDirectory(), {
-                    BulkWork.checkpoint()
-                    if (prefs.koreaderBook != "0") throw BookOpened()
-                }, OLog::i)
-                finished = true
-            } catch (_: BookOpened) {
-                OLog.i("status repair: deferred until the book closes")
+                finished = run(android.os.Environment.getExternalStorageDirectory(),
+                    BulkWork::checkpoint, OLog::i) { closedReported && prefs.koreaderBook == "0" }
             } catch (e: Exception) {
                 OLog.w("status repair: deferred", e)
             } finally { queued.set(false) }
@@ -121,10 +116,11 @@ object StatusMarginRepair {
         return result
     }
 
-    fun run(root: File, checkpoint: () -> Unit, log: (String) -> Unit) {
+    fun run(root: File, checkpoint: () -> Unit, log: (String) -> Unit, canApply: () -> Boolean = { true }): Boolean {
         val base = root.canonicalFile
         val done = File(base, "koreader/settings/booksync-w31-repair.done")
-        if (done.exists()) return
+        if (done.exists()) return true
+        var deferred = false
         val seen = HashSet<String>()
         fun walk(dir: File) {
             checkpoint()
@@ -140,21 +136,33 @@ object StatusMarginRepair {
                 }
                 val global = file == File(base, "koreader/settings.reader.lua")
                 if (!global && !(dir.name.endsWith(".sdr") && file.name.matches(Regex("metadata\\..+\\.lua")))) continue
-                val old = File(file.path + ".old")
+                val snapshot = File(file.path + ".booksync-w31.old")
+                val old = snapshot.takeIf { it.isFile } ?: File(file.path + ".old")
                 val marker = File(file.path + ".booksync-w31.done")
-                if (marker.exists() || !old.isFile) continue
+                if (marker.exists() || !old.isFile || old.canonicalFile != old.absoluteFile
+                    || snapshot.canonicalFile != snapshot.absoluteFile) continue
                 // Bounded reads; unsupported files stay untouched and can be recovered manually.
                 if (file.length() > 16 * 1024 * 1024 || old.length() > 16 * 1024 * 1024) continue
                 val bytes = file.readBytes()
                 val text = String(bytes, Charsets.ISO_8859_1)
                 val keys = if (global) footerKeys else bookKeys + footerKeys
-                val repaired = restore(text, old.readText(Charsets.ISO_8859_1), keys)
+                val oldBytes = old.readBytes()
+                val repaired = restore(text, String(oldBytes, Charsets.ISO_8859_1), keys)
                 val id = MessageDigest.getInstance("SHA-256").digest(file.path.toByteArray()).take(6).joinToString("") { "%02x".format(it) }
                 if (repaired == null) { log("status repair $id: unsupported settings; left untouched"); continue }
                 checkpoint()
+                // Preserve the recovery source before a loaded book can rotate .old on
+                // close. Capturing a backup does not change any native settings file.
+                if (!canApply()) {
+                    if (repaired != text && !snapshot.exists()) snapshot.writeBytes(oldBytes)
+                    deferred = true
+                    continue
+                }
                 // A native save during the scan invalidates the comparison; retry next startup.
                 check(file.readBytes().contentEquals(bytes)) { "settings changed during repair" }
                 val backup = File(file.path + ".booksync-before-w31")
+                val tmp = File(file.path + ".booksync-w31.tmp")
+                if (backup.canonicalFile != backup.absoluteFile || tmp.canonicalFile != tmp.absoluteFile) continue
                 // A prior attempt reached the write stage. Different current bytes mean
                 // it applied already, or the user saved since: never replay over that save.
                 if (backup.exists() && !backup.readBytes().contentEquals(bytes)) {
@@ -164,8 +172,15 @@ object StatusMarginRepair {
                 }
                 if (repaired != text) {
                     if (!backup.exists()) backup.writeBytes(bytes)
-                    val tmp = File(file.path + ".booksync-w31.tmp")
                     tmp.writeText(repaired, Charsets.ISO_8859_1)
+                    checkpoint()
+                    if (!canApply()) {
+                        if (!snapshot.exists()) snapshot.writeBytes(oldBytes)
+                        tmp.delete()
+                        deferred = true
+                        continue
+                    }
+                    check(file.readBytes().contentEquals(bytes)) { "settings changed before replacement" }
                     check(tmp.renameTo(file))
                     log("status repair $id: restored vertical/footer keys from .old; original saved")
                 }
@@ -173,8 +188,13 @@ object StatusMarginRepair {
             }
         }
         walk(base)
+        if (deferred) {
+            log("status repair: recovery backups captured; waiting for a closed-book report")
+            return false
+        }
         done.parentFile?.mkdirs()
         done.writeText("complete\n")
         log("status repair: complete")
+        return true
     }
 }
