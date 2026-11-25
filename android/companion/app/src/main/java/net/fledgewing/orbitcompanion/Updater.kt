@@ -82,7 +82,7 @@ object Updater {
 
     fun statusLine(ctx: Context): String {
         val p = Prefs(ctx)
-        val base = "v${BuildConfig.VERSION_NAME}"
+        val base = "v${Version.parse(BuildConfig.VERSION_NAME)?.display() ?: BuildConfig.VERSION_NAME}"
         if (busy) return "$base · checking…"
         if (p.updateStatus.isEmpty()) return "$base · not checked yet"
         return "$base · ${p.updateStatus} (${Ui.clock(ctx, p.updateStatusAt)})"

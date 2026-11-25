@@ -82,10 +82,17 @@ One repo releases both platforms; the tag prefix says which.
 - Android: `v<version>` (`.github/workflows/release.yml`): signed APK, stamped plugin zip,
   `SHA256SUMS`, attestations. Always marked "latest". Keep the package id and the signing
   certificate (SHA-256 `F5:07:8C:…:0A:15`, checked by the workflow): either change breaks updates.
+- Android/plugin builds start as `vMAJOR.MINOR.PATCH-preview.N`; use `-rc.N` only when a
+  maintainer judges it a real release candidate, then the plain version for stable. Preview
+  release titles are `BookSync 0.11.4 preview 1`. The next published preview is
+  `v0.11.4-preview.1`: bumping the patch makes it newer than every `0.11.3-rc.N` already
+  installed. Within a patch, semver orders `preview.N < rc.N < stable`.
+  See [version encoding](docs/design/release-versions.md) for Android package codes.
 - Xteink: `xteink-v<version>` (`.github/workflows/xteink.yml`, daily or by hand): firmware per
   reader, source archive, licenses, `SHA256SUMS`, attestations. Always `make_latest=false`.
   An upstream rc or beta builds a pre-release, a final upstream release a stable one
-  (`xteink/scripts/upstream-line.sh`).
+  (`xteink/scripts/upstream-line.sh`). Firmware tags keep CrossInk's upstream rc/beta labels;
+  they describe the upstream base, not a judgment that our overlay is a release candidate.
 - "latest" must stay an Android release: older companions and plugins (and the old patch) read
   `releases/latest` (0.6.x through the old BookOrbit-Android URL, parsing only `v<version>` tags).
   The companion now verifies the signed Android feed on `android-feed`, at `android/releases.json`;
@@ -108,11 +115,13 @@ ask before changing it (`--yes` skips the question). Agents never run them again
 
 - Android: `gh workflow run release.yml --ref <branch> -f publish=false`, then
   `tools/sideload-android.sh <run id> [--serial S] [--plugin-only]`. The build is release-signed
-  (the only key that updates an installed companion) and versioned `<next patch>-0.test.<run>`
-  (`tools/android-test-version.sh`): it installs over the last release, and the next release or
-  pre-release is newer, so the device updates normally afterwards. The companion and the plugin
-  never pick a test version from a release list (`TestBuild`, `Update.isTest`), and release.yml
-  refuses to publish one. The script checks SHA256SUMS and the signing certificate, `adb install
+  (the only key that updates an installed companion) and versioned `<patch>-preview.<run>`
+  (`tools/android-test-version.sh`): the helper continues a preview patch or bumps the patch
+  after an RC/stable tag. These workflow artifacts create no release or tag. Published previews
+  use the same version format and are offered with Include previews and release candidates;
+  choose a number above any preview already sideloaded. Legacy `-0.test.N` artifacts remain
+  excluded from release selection and publication. The script checks SHA256SUMS and the signing
+  certificate, `adb install
   -r`s the APK (its settings stay), swaps in the plugin as the companion does, and restarts
   KOReader with the companion's `restart` command.
 - Xteink: `gh workflow run xteink.yml --ref <branch> -f test_build=true` (a pull request's

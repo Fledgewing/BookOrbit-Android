@@ -912,7 +912,7 @@
    "type": "bool",
    "default": false,
    "section": "updates",
-   "label": "Include pre-releases",
+   "label": "Include previews and release candidates",
    "line": "Off: only finished releases.",
    "reader": [
     "companion"

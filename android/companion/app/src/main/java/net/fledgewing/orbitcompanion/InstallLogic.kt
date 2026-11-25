@@ -44,6 +44,11 @@ object KoreaderRelease {
 
     /** [latest] is newer than [installed] (null installed: nothing to compare, so false). */
     fun newer(latest: String?, installed: String?): Boolean {
+        // KOReader also has two-part calendar versions; preserve that format while comparing
+        // full semver suffixes whenever both sides have three components.
+        val lv = Version.parse(latest)
+        val iv = Version.parse(installed)
+        if (lv != null && iv != null) return lv > iv
         val l = parts(latest) ?: return false
         val i = parts(installed) ?: return false
         for (k in 0 until maxOf(l.size, i.size)) {

@@ -51,11 +51,11 @@ Tailscale row warns about it. A connect timeout or reset (common for a few secon
 or Tailscale comes up) is retried twice, after 3 s and 10 s, each try connecting within 8 s;
 if GitHub still doesn't answer they say "GitHub didn't answer (the network may still be
 starting). Try again in a minute." A failed automatic check waits an hour before trying again.
-With **Include pre-releases** on, the companion also considers pre-releases. It verifies
+With **Include previews and release candidates** on, the companion also considers pre-releases. It verifies
 the feed signature before reading any candidate or withdrawal. Withdrawn versions are skipped;
 a withdrawn installed version can recover to the newest allowed version even when older.
-Android may refuse a rollback across patch versions because of its versionCode check; release
-candidates within one patch share a code. Older companions need this updater installed before
+Android refuses a lower versionCode; legacy candidates through 0.11.3-rc.17 shared a code,
+while new preview/RC builds use increasing codes and need a forward recovery release. Older companions need this updater installed before
 they obey withdrawals. Firmware has a separate feed. Only `v…` (and `android-v…`) tags count,
 and APK downloads still require the release's `SHA256SUMS` and the installed signing certificate.
 
@@ -65,7 +65,7 @@ prior withdrawals and includes the checked-in rc.10/rc.11 seed. See the
 [release safety design](../docs/design/release-safety.md).
 
 - **KOReader patch** (Tools › BookSync): **Auto-update patch** (on by default),
-  **Include pre-releases** (off), **Check for patch update**, and a status line. The check
+  **Include previews and release candidates** (off), **Check for patch update**, and a status line. The check
   runs about 8 s after a start or wake once the network is up, never with a book open (it
   waits for the file browser or BookOrbit home), and holds Wi-Fi until it ends. It runs in a
   background process, so KOReader never waits on the network (v0.4.3). A newer `orbit.koplugin.zip`

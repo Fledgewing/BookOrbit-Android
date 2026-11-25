@@ -275,13 +275,14 @@ jobs:
           Licenses: the companion is MIT, the BookSync KOReader plugin is AGPL-3.0-or-later; bundled library notices are in \`THIRD-PARTY-NOTICES.txt\`.
           NOTES
           sed -i 's/^          //' notes.md
+          TITLE="BookSync $(printf '%s' "$VER" | sed -E 's/-preview\.([0-9]+)$/ preview \1/; s/-rc\.([0-9]+)$/ RC \1/')"
           FLAGS=()
           [ "$PRERELEASE" = "true" ] && FLAGS+=(--prerelease) || FLAGS+=(--latest)
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber -R "$GITHUB_REPOSITORY"
-            gh release edit "$TAG" --notes-file notes.md -R "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --title "$TITLE" --notes-file notes.md -R "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes-file notes.md "${FLAGS[@]}" -R "$GITHUB_REPOSITORY"
+            gh release create "$TAG" dist/* --verify-tag --title "$TITLE" --notes-file notes.md "${FLAGS[@]}" -R "$GITHUB_REPOSITORY"
           fi
 
   feed:

@@ -49,7 +49,8 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17) ANDROID_HOME=$HOME/Library/Andr
 
 APK: `app/build/outputs/apk/debug/app-debug.apk` (version `0.0.0-dev`, debug key).
 
-Release builds take `-PorbitVersion=X.Y.Z` (versionCode `X*10000+Y*100+Z`) and sign with the
+Release builds take `-PorbitVersion=X.Y.Z[-preview.N|-rc.N]`
+([versionCode encoding](../../docs/design/release-versions.md)) and sign with the
 key named by `ORBIT_KEYSTORE_FILE` (PKCS12), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`
 and `ANDROID_KEY_PASSWORD`; without them `assembleRelease` is unsigned. The release workflow
 does this. Every build generates `assets/open_source_licenses.txt` from the runtime classpath.

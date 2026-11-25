@@ -18,8 +18,10 @@ list, and an optional workflow-dispatch tag. Version comparison normalizes `v` a
 pre-release preference still applies. If the installed version is withdrawn, the
 newest allowed candidate is offered even when older. APK checksums and signing
 certificate checks still apply. Android may refuse an APK with a lower versionCode;
-release candidates within one patch share a code and can recover between candidates.
-Cross-patch recovery requires a forward recovery release if Android refuses it.
+legacy candidates through 0.11.3-rc.17 share a code and can recover between candidates.
+New preview/RC builds use increasing codes ([version encoding](release-versions.md)),
+so recovery to a lower-code APK requires a forward recovery release. The policy permits
+an older version, but cannot override Android's package installer.
 Existing companions must first receive this updater; already released clients cannot
 learn the new policy retroactively.
 
