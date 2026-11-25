@@ -14,8 +14,8 @@ CrossInk 2.x only; 1.6 is retired).
 
 ## Next release (0.12): BookSync Home
 
-The release after 0.11.3 graduates from release candidates. Built in parallel on the
-`feature/0.12` branch while 0.11.3 stabilises on `main`; design and mockups need approval first
+The release after 0.11.4 graduates from previews and release candidates. Built in parallel on the
+`feature/0.12` branch while 0.11.4 stabilises on `main`; design and mockups need approval first
 ([BookSync Home design](docs/design/booksync-home/DESIGN.md), in progress). This is the first step
 of [backend independence](#planned-backend-independence): BookSync owns the screens and BookOrbit
 becomes a data source.

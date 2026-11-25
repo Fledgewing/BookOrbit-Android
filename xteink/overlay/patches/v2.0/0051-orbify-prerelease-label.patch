@@ -1,0 +1,17 @@
+Subject: [PATCH] BookSync: describe overlay updates as pre-releases
+
+CrossInk's rc tag describes its base, not the readiness of BookSync's overlay.
+Keep the upstream version tags and setting key; label our OTA opt-in generically.
+
+diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
+--- a/lib/I18n/translations/english.yaml
++++ b/lib/I18n/translations/english.yaml
+@@ -259,7 +259,7 @@
+ STR_BOOKORBIT_SYNC: "BookOrbit Sync"
+ STR_BOOKORBIT: "BookOrbit"
+ STR_CHECK_UPDATES: "Check for Updates"
+-STR_OTA_INCLUDE_PRERELEASES: "Include Release Candidates"
++STR_OTA_INCLUDE_PRERELEASES: "Include pre-releases"
+ STR_LANGUAGE: "Language"
+ STR_KEYBOARD_LAYOUTS: "Keyboard layouts"
+ STR_CLEAR_READING_CACHE: "Clear Reading Cache"

@@ -62,6 +62,21 @@ class StorageTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun oldMirrorProgressBytesNeverCountTowardTheLiveStorageLimit() {
+        val root = Files.createTempDirectory("storage-old-progress").toFile()
+        val w = CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, log = {}, openSql = ::JdbcSql)
+        try {
+            val before = w.storageItems(null, false).sumOf { it.bytes }
+            File(root, "mirror/status.lua").apply {
+                parentFile!!.mkdirs()
+                writeBytes(LuaValue.encode(mapOf("bytes" to 3032748032L, "done" to 85L, "left" to 15L)))
+            }
+            val after = w.storageItems(null, false).sumOf { it.bytes }
+            assertEquals(before, after)
+            assertTrue(StorageLogic.plan(w.storageItems(null, false), 1024L * 1024 * 1024).drop.isEmpty())
+        } finally { w.store.close(); root.deleteRecursively() }
+    }
+
     @Test fun tenGbAccountingAndEvictionUseLongBytes() {
         val gb = 1024L * 1024 * 1024
         val limit = 10240L * 1024 * 1024

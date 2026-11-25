@@ -148,7 +148,15 @@ class RateLimiter(private val intervalMs: Long) {
 /** A release version: MAJOR.MINOR.PATCH with an optional pre-release ("v" prefix and "+build" ignored). */
 data class Version(val major: Int, val minor: Int, val patch: Int, val pre: String? = null) : Comparable<Version> {
     /** Monotonic Android versionCode, the same formula the release workflow uses. */
-    val code: Int get() = major * 10_000 + minor * 100 + patch
+    val code: Int get() = AndroidVersionCode.encode(major, minor, patch, pre)
+
+    /** Human label for the Updates screen; keep the wire version unchanged. */
+    fun display(): String = "$major.$minor.$patch" + when {
+        pre?.startsWith("preview.") == true -> " Preview ${pre.removePrefix("preview.")}"
+        pre?.startsWith("rc.") == true -> " RC ${pre.removePrefix("rc.")}"
+        pre != null -> "-$pre"
+        else -> ""
+    }
 
     override fun compareTo(other: Version): Int {
         compareValues(major, other.major).let { if (it != 0) return it }
@@ -294,9 +302,9 @@ object UpdateSession {
 }
 
 /**
- * A test build (release.yml run with publish off, sideloaded by tools/sideload-android.sh):
+ * A legacy artifact build (before preview versions, sideloaded by tools/sideload-android.sh):
  * `<next patch>-0.test.<run>`, e.g. 0.11.3-0.test.42 after v0.11.2. It is never published, so no
- * updater ever sees it; and it sorts above the release it was built after but below every
+ * updater should offer it; and it sorts above the release it was built after but below every
  * release or pre-release of the next patch (a numeric "0" sorts before "rc", "beta", ...), so
  * the device leaves it for the next real release.
  */
@@ -1133,8 +1141,10 @@ object WhatsNew {
 
     fun since(fromCode: Int, toCode: Int, notes: List<Pair<String, List<String>>> = NOTES): List<Pair<String, List<String>>> =
         notes.filter { (v, _) ->
-            val c = Version.parse(v)?.code ?: return@filter false
-            c in (fromCode + 1)..toCode
+            val version = Version.parse(v) ?: return@filter false
+            val from = NewIn.versionOf(fromCode)
+            val to = NewIn.versionOf(toCode) ?: return@filter false
+            (from == null || version > from) && version <= to
         }
 }
 

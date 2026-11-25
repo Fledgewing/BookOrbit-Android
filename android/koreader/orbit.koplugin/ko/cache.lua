@@ -152,6 +152,27 @@ function OC.applyEvents(events)
                 -- (0.11.x) nothing: the companion saves now.
             elseif ev.kind == "board_year" and LF then
                 LF.yearLanded(ev)
+            elseif ev.kind == "native_footer_repair" then
+                -- G_reader_settings is already loaded. Correct its matching scalar
+                -- too, or KOReader's next native flush would undo the disk repair.
+                -- This does not touch an open ReaderFooter or reflow the document.
+                if type(ev.token) == "string" and S.native_footer_repair ~= ev.token then
+                    local function scalar(text)
+                        if text == "nil" then return nil, true end
+                        local n = tonumber(text)
+                        return n, n ~= nil and n == n and n ~= math.huge and n ~= -math.huge
+                    end
+                    local before, valid_before = scalar(ev.before)
+                    local after, valid_after = scalar(ev.after)
+                    if valid_before and valid_after then
+                        if G_reader_settings:readSetting("reader_footer_mode") == before then
+                            G_reader_settings:saveSetting("reader_footer_mode", after)
+                            log("status repair: native global footer mode " .. tostring(before) .. "->" .. tostring(after))
+                        end
+                        S.native_footer_repair = ev.token
+                        saveSettings()
+                    end
+                end
             elseif ev.kind == "storage" then
                 OC.storageCounted(ev)
             elseif ev.kind == "covers_rechecked" then

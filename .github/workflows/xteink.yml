@@ -495,7 +495,7 @@ jobs:
             firmware/SHA256SUMS
 
       # "latest" stays an Android release (AGENTS.md "Releases"). An upstream rc or beta stays a
-      # pre-release here too: only readers with Include Release Candidates on are offered it. A
+      # pre-release here too: only readers with Include pre-releases on are offered it. A
       # final upstream release is stable, and the feed job makes it the stable entry
       # (xteink/scripts/upstream-line.sh channel).
       - name: Publish the release

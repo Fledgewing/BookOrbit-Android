@@ -120,7 +120,7 @@ verify() {
     sum_ok "$ART/SHA256SUMS" "$ART" "$(basename "$APK")" || die "checksum failed"
     sum_ok "$ART/SHA256SUMS" "$ART" "$ORBIT_ZIP" || die "checksum failed"
     say "Checked: $(basename "$APK") and $ORBIT_ZIP match SHA256SUMS"
-    case "$VER" in *-0.test.*) ;; *) say "Note: $VER is not a test-build version (<next patch>-0.test.<run>)" ;; esac
+    case "$VER" in *-preview.*|*-0.test.*) ;; *) say "Note: $VER is not a preview build (<patch>-preview.<run>)" ;; esac
 
     if [[ $PLUGIN_ONLY == 0 ]]; then
         local signer want got

@@ -1,5 +1,10 @@
 # Features
 
+Android/plugin updates distinguish **Preview**, **RC**, and stable builds, with increasing
+Android package codes and an opt-in for previews and release candidates
+([version policy](design/release-versions.md)). Xteink rc/beta tag labels describe the upstream
+CrossInk base; overlay builds are pre-releases until that base is stable.
+
 The product is **BookSync**, with **BookSync Companion** on Android; display names match across Android, X4 Pro, X4 and X3. Update identifiers and saved settings retain their existing names.
 
 What BookSync ships, per platform. Only what we add: KOReader's, BookOrbit's and CrossInk's own

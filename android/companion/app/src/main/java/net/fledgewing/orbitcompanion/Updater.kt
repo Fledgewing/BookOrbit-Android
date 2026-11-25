@@ -27,7 +27,7 @@ import kotlin.concurrent.thread
 /**
  * Self-update from this repo's public GitHub releases (README "Updates").
  *
- * 1. Fetch releases/latest (or the releases list with "Include pre-releases"); only Android tags count.
+ * 1. Fetch releases/latest (or the releases list with "Include previews and release candidates"); only Android tags count.
  * 2. Newer than BuildConfig.VERSION_NAME? Download SHA256SUMS and orbit-companion-<ver>.apk.
  * 3. The APK's SHA-256 must match SHA256SUMS, and its signing certificate must match the
  *    installed app's.
@@ -82,7 +82,7 @@ object Updater {
 
     fun statusLine(ctx: Context): String {
         val p = Prefs(ctx)
-        val base = "v${BuildConfig.VERSION_NAME}"
+        val base = "v${Version.parse(BuildConfig.VERSION_NAME)?.display() ?: BuildConfig.VERSION_NAME}"
         if (busy) return "$base · checking…"
         if (p.updateStatus.isEmpty()) return "$base · not checked yet"
         return "$base · ${p.updateStatus} (${Ui.clock(ctx, p.updateStatusAt)})"

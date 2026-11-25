@@ -420,11 +420,16 @@ Android also gates releases on `release-tests.yml`'s `reader-startup` job. It ru
 plugin's `startup` flow cases with the pinned KOReader's real `Trapper` module, a yielding
 progress GET, and ReaderReady before showing ReaderUI. It asserts that construction completes,
 the reader stays on top, and no close or quit is requested; status layout initialization is
-checked for both CRE and paged documents. This is a coroutine/lifecycle smoke test, without a
+checked for both CRE and paged documents. The gate also opens from Home, history and the file
+browser during Full refresh with a repair pending, using the pinned `showReaderCoroutine`.
+Its zero-timeout opening message must keep a window present until ReaderUI is shown, and no
+repair request or result may delay opening. Trapper lifecycle widgets remain present.
+This is a coroutine/lifecycle smoke test, without a
 rendering engine or Android JNI; stage 3's desktop reader remains planned.
 
 The ordering is from KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`:
-`frontend/apps/reader/readerui.lua:517` sends ReaderReady during init and `:791` shows the reader
+`frontend/apps/reader/readerui.lua:711-738` shows the opening message before scheduling reader
+construction; `:517` sends ReaderReady during init and `:791` shows the reader
 only after construction; `frontend/ui/trapper.lua:66` treats any running coroutine as wrapped.
 BookOrbit `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`'s
 `koreader-plugin/bookorbit.koplugin/main.lua:276` reuses that coroutine, and

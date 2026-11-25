@@ -185,9 +185,29 @@ class VersionTest {
     }
 
     @Test
+    fun previewToCandidateToStable() {
+        val sequence = listOf("0.11.3-rc.17", "0.11.4-preview.1", "0.11.4-preview.2", "0.11.4-rc.1", "0.11.4").map(::v)
+        for ((older, newer) in sequence.zipWithNext()) {
+            assertTrue("$older < $newer", older < newer)
+            assertTrue("Android installs $newer over $older", older.code < newer.code)
+            assertTrue(KoreaderRelease.newer(newer.toString(), older.toString()))
+            assertFalse(KoreaderRelease.newer(older.toString(), newer.toString()))
+        }
+        sequence.forEach { assertEquals(it, NewIn.versionOf(it.code)) }
+        assertTrue(v("0.11.4-preview.10") > v("0.11.4-preview.2"))
+        assertTrue(v("0.11.4-preview.3999").code < v("0.11.4-rc.1").code)
+        assertTrue(v("0.11.4-rc.3999").code < v("0.11.4").code)
+        assertTrue(sequence[1].code > 1103) // rc.17's actual legacy code on devices
+        assertEquals("0.11.4 Preview 1", sequence[1].display())
+        assertEquals("0.11.4 RC 1", sequence[3].display())
+        assertEquals("0.11.4", sequence[4].display())
+        assertEquals(Version.parse(BuildConfig.VERSION_NAME)!!.code, BuildConfig.VERSION_CODE)
+    }
+
+    @Test
     fun versionCodeIsMonotonic() {
-        assertEquals(100, v("0.1.0").code)
-        assertEquals(10203, v("1.2.3").code)
+        assertEquals(101_009_999, v("0.1.0").code)
+        assertEquals(202_039_999, v("1.2.3").code)
         assertTrue(v("0.1.1").code > v("0.1.0").code)
         assertTrue(v("1.0.0").code > v("0.99.99").code)
     }
@@ -195,6 +215,16 @@ class VersionTest {
 
 class UpdatePolicyTest {
     private fun r(tag: String, pre: Boolean = false, draft: Boolean = false) = ReleaseInfo(tag, pre, draft, emptyMap())
+
+    @Test
+    fun installedRc17SeesPreview1() {
+        val release = r("v0.11.4-preview.1", pre = true)
+        assertNull(UpdatePolicy.pick(listOf(release), includePre = false))
+        val picked = UpdatePolicy.pick(listOf(release, r("v0.11.3-rc.17", pre = true)), includePre = true)!!
+        assertEquals(release, picked)
+        assertTrue(UpdatePolicy.isNewer(picked.version, Version.parse("0.11.3-rc.17")))
+        assertFalse(TestBuild.isTest(picked.version)) // previews may be published; legacy 0.test builds may not
+    }
 
     @Test
     fun picksNewestStableUnlessPreReleasesWanted() {
@@ -616,6 +646,8 @@ class SetupAttentionTest {
         val notes = listOf("0.2.2" to listOf("a"), "0.2.3" to listOf("b"), "0.2.4" to listOf("c"))
         assertEquals(listOf("0.2.3", "0.2.4"), WhatsNew.since(202, 204, notes).map { it.first })
         assertTrue(WhatsNew.since(204, 204, notes).isEmpty())
+        assertEquals(listOf("0.2.3", "0.2.4"), WhatsNew.since(202, Version(0, 2, 4).code, notes).map { it.first })
+        assertEquals(listOf("0.2.3", "0.2.4"), WhatsNew.since(Version(0, 2, 2).code, Version(0, 2, 4).code, notes).map { it.first })
     }
 }
 
