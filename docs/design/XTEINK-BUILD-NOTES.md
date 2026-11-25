@@ -398,7 +398,7 @@ in" with `ORBIFY_SIM_TAILSCALE=joined`.
 
 ## Android feedback parity (W7)
 
-The user's Android rulings apply to X4 Pro and X4. Patch 0042 is integration hooks;
+The user's Android rulings apply to X4 Pro and X4. Patches 0042 (refresh) and 0043 (OTA return) are integration hooks;
 implementation is in `orbify/` with GPL-3.0-or-later headers. X3 builds only the OTA return
 marker; the mirror, incremental catalog cache and sleep pickers remain behind their existing
 zero switches. No position sync, OTA verifier or TLS implementation changes.

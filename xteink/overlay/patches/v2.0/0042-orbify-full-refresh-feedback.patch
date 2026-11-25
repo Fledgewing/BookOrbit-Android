@@ -1,3 +1,8 @@
+Subject: [PATCH] Orbify: explicit-only Full refresh feedback
+
+Keep intermediate notices silent and use the persisted user request as the progress gate.
+Implementation: orbify/Mirror and orbify/RefreshBadge.
+
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
 @@ -322,8 +322,8 @@
@@ -235,75 +240,3 @@
        const auto due = OrbifyMirror::dueNow();
        if (OrbifyMirror::requested() || due != orbify::mirror::Due::None) {
          LOG_INF("ORB", "Mirror: due (%s%s); a slice of %u requests in this sleep", orbify::mirror::dueName(due),
---- a/src/activities/settings/OtaUpdateActivity.cpp
-+++ b/src/activities/settings/OtaUpdateActivity.cpp
-@@ -5,6 +5,7 @@
- #include <WiFi.h>
- 
- #include "AppVersion.h"
-+#include "orbify/OtaReturn.h"
- #include "CrossPointSettings.h"
- #include "MappedInputManager.h"
- #include "SdCardFontSystem.h"
-@@ -91,6 +92,13 @@
- void OtaUpdateActivity::onEnter() {
-   Activity::onEnter();
-   sdFontSystem.releaseLoadedFont(renderer);
-+  returnedAfterUpdate = OrbifyOtaReturn::consume();
-+  if (returnedAfterUpdate) {
-+    LOG_INF("OTA", "Updated to v%s", AppVersion::version());
-+    state = NO_UPDATE;
-+    requestUpdate();
-+    return;  // no Wi-Fi join or update check on the return screen
-+  }
- 
-   if (hasActiveWifiConnection()) {
-     onWifiSelectionComplete(true);
-@@ -186,7 +194,9 @@
-         renderer, safe, UI_10_FONT_ID, y,
-         (std::to_string(updater.getProcessedSize()) + " / " + std::to_string(updater.getTotalSize())).c_str());
-   } else if (state == NO_UPDATE) {
--    UITheme::drawCenteredText(renderer, safe, UI_10_FONT_ID, top, tr(STR_NO_UPDATE), true, EpdFontFamily::BOLD);
-+    const std::string message = returnedAfterUpdate ? std::string("Updated to v") + AppVersion::version()
-+                                                    : tr(STR_NO_UPDATE);
-+    UITheme::drawCenteredText(renderer, safe, UI_10_FONT_ID, top, message.c_str(), true, EpdFontFamily::BOLD);
-     const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
-     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-   } else if (state == FAILED) {
-@@ -311,6 +321,7 @@
-   }
- 
-   if (state == SHUTTING_DOWN) {
-+    OrbifyOtaReturn::installed();
-     ESP.restart();
-   }
- }
---- a/src/activities/settings/OtaUpdateActivity.h
-+++ b/src/activities/settings/OtaUpdateActivity.h
-@@ -28,6 +28,7 @@
-   unsigned int lastUpdaterPercentage = UNINITIALIZED_PERCENTAGE;
-   StrId failureMessage = StrId::STR_UPDATE_FAILED;
-   OtaUpdater updater;
-+  bool returnedAfterUpdate = false;
- 
-   void onWifiSelectionComplete(bool success);
-   void runUpdateInstall();
---- a/src/main.cpp
-+++ b/src/main.cpp
-@@ -111,6 +111,7 @@
- #include "RecentBooksStore.h"
- #include "SdCardFontSystem.h"
- #include "SilentRestart.h"
-+#include "orbify/OtaReturn.h"
- #include "orbify/HeapFloor.h"
- #include "orbify/CrashRecord.h"
- #include "orbify/core/BootTrail.h"
-@@ -2371,6 +2372,8 @@
-   } else if (rebootedFromPanic) {
-     // If we rebooted from a panic, go to crash report screen to show the panic info
-     activityManager.goToCrashReport();
-+  } else if (OrbifyOtaReturn::pending()) {
-+    activityManager.replaceActivity(std::make_unique<OtaUpdateActivity>(renderer, mappedInputManager));
-   } else if (resume == BootResume::Network) {
-     bool launched = false;
-     switch (static_cast<NetworkBootTarget>(snapshotTarget)) {
