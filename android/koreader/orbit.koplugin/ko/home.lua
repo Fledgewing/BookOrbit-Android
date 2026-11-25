@@ -205,10 +205,15 @@ end
 
 Gate = { queue = {}, MAX_AGE_S = 600 }
 
+function Gate.refreshNotice(what)
+    log("Full refresh: suppressed notice: " .. tostring(what))
+    if Badge and Badge.notice then Badge.notice(what) end
+end
+
 -- what: for the log; fn: shows it; max_age_s: dropped after this long held.
 function Gate.show(what, fn, max_age_s)
     if Mirror and (Mirror.notices or Mirror.fullRunning()) then
-        log("Full refresh: " .. tostring(what))
+        Gate.refreshNotice(what)
         return
     end
     if not reading() then return fn() end
@@ -221,7 +226,7 @@ end
 
 function Gate.drain(why)
     if Mirror and (Mirror.notices or Mirror.fullRunning()) then
-        for _, q in ipairs(Gate.queue) do log("Full refresh: " .. tostring(q.what)) end
+        for _, q in ipairs(Gate.queue) do Gate.refreshNotice(q.what) end
         Gate.queue = {}
         return
     end
@@ -246,7 +251,7 @@ function Gate.installToast()
             local m = getmetatable(w)
             while m do
                 if m == InfoMessage or m == package.loaded["ui/widget/notification"] then
-                    log("Full refresh: notice: " .. tostring(w.text))
+                    Gate.refreshNotice("notice: " .. tostring(w.text))
                     return
                 end
                 m = getmetatable(m)
@@ -261,7 +266,7 @@ function Gate.installToast()
             wrap(Toast, name, function(stock) return function(...)
                 local args = { n = select("#", ...), ... }
                 if Mirror and (Mirror.notices or Mirror.fullRunning()) then
-                    log("Full refresh: BookOrbit " .. name .. ": " .. tostring(args[1]))
+                    Gate.refreshNotice("BookOrbit " .. name .. ": " .. tostring(args[1]))
                     -- Loading callers close the returned handle, including withLoading.
                     if name == "loading" then return { close = function() end, closed = false } end
                     return

@@ -355,7 +355,7 @@ function Sleep.fromLabel(v)
     v = items[1]
     local p = SleepPool.parseFrom(v)
     if not p then return "?" end
-    if p.kind == "library" and not p.id then return _("Library") end
+    if p.kind == "library" and not p.id then return _("Whole library") end
     if p.kind == "list" then return _(SleepPool.label(SleepPool.LISTS, p.id)) end
     if not Sleep.scope_names then Sleep.scopes() end
     local name = Sleep.scope_names and Sleep.scope_names[v]
@@ -491,7 +491,7 @@ function Sleep.menuItem(_plugin, later)
         Sleep.set("sleep_from", SleepPool.togglePick(Sleep.settings().sleep_from, id))
     end
     local from_items = {
-        { text = _("Library (every book)"), checked_func = function() return picked(SleepPool.LIBRARY) end,
+        { text = _("Whole library OR pick sources"), checked_func = function() return picked(SleepPool.LIBRARY) end,
             keep_menu_open = true, callback = function() togglePick(SleepPool.LIBRARY) end, separator = true },
     }
     for _i, l in ipairs(SleepPool.LISTS) do
@@ -505,7 +505,7 @@ function Sleep.menuItem(_plugin, later)
                 local p = SleepPool.parseFrom(it)
                 if p and (p.kind == "scope" or p.kind == "collection") then n = n + 1 end
             end
-            return _("Smart scopes and collections…") .. (n > 0 and string.format(" (%d)", n) or "")
+            return _("Libraries, smart scopes and collections…") .. (n > 0 and string.format(" (%d)", n) or "")
         end,
         sub_item_table_func = scopeRows(togglePick, picked),
     })
@@ -547,11 +547,9 @@ function Sleep.menuItem(_plugin, later)
             return false
         end
         local function toggleRule(key) if hasRule(key) then removeRule(key) else addRule(key) end end
-        table.insert(rows, { text = _("Add a rule: Smart scope or collection…"),
+        table.insert(rows, { text = _("Add a rule: Library, smart scope or collection…"),
             sub_item_table_func = scopeRows(toggleRule, hasRule) })
-        if not hasRule(SleepPool.LIBRARY) then
-            table.insert(rows, { text = _("Leave out the whole library (shows the current book)"), callback = function() addRule(SleepPool.LIBRARY) end })
-        end
+
         table.insert(rows, info(function()
             return _("For a custom field: make a smart scope with that condition in BookOrbit, then add it here.")
         end))

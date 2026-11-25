@@ -154,6 +154,31 @@ class UpdateReturnTest {
     }
 
     @Test
+    fun legacyUpdateMarkRestoresThePersistedSection() {
+        for (id in listOf("sleep", "sync", "updates")) {
+            UpdateReturn.reset(app)
+            val section = Robolectric.buildActivity(SettingsSectionActivity::class.java, SettingsPage.section(app, id)).create()
+            section.destroy()
+            // rc.8's mark carries no extras; simulate its process being killed at install.
+            UpdateReturn.mark(app, SettingsSectionActivity::class.java.name)
+            Updater.onReplaced(app)
+            val top = drain().last { it.component?.packageName == app.packageName }
+            assertEquals(id, top.getStringExtra(SettingsPage.EXTRA_SECTION))
+            val reopened = Robolectric.buildActivity(SettingsSectionActivity::class.java, top).setup()
+            assertEquals(id, reopened.get().returnIntent().getStringExtra(SettingsPage.EXTRA_SECTION))
+            reopened.pause().stop().destroy()
+        }
+    }
+
+    @Test
+    fun legacyVersionWithoutPersistedSectionReturnsToUpdates() {
+        app.getSharedPreferences("settings_ui", 0).edit().clear().commit()
+        UpdateReturn.mark(app, SettingsSectionActivity::class.java.name)
+        Updater.onReplaced(app)
+        assertEquals("updates", drain().last().getStringExtra(SettingsPage.EXTRA_SECTION))
+    }
+
+    @Test
     fun updateFromTheLauncherReturnsToTheLauncher() {
         val launcher = Robolectric.buildActivity(LauncherActivity::class.java).create().get()
         install(launcher)

@@ -369,6 +369,50 @@ No details view: errors are in the log and the final "Done with N errors".
   larger than 8 KB on the UI thread.
 - **Stress test on the device** (below).
 
+## Storage admission (W14)
+
+The byte limit admits **net growth**, rather than rejecting work when the cache is
+already full. A same-size or smaller row/image replacement is always admitted.
+The writer measures touched book payload/search rows, list heads and membership rows
+before and after a savepoint (including fixed row/index overhead for new rows). It
+charges the positive delta against committed database bytes plus live cover/ETag
+bytes. A batch also includes its earlier accepted deltas. The rollback journal is
+still included in storage reporting, but its temporary copy of existing pages is
+not new cached data and cannot block replacement. SQLite page allocation can round
+committed usage above the payload estimate; subsequent growth uses that committed
+size. This is a cache budget, not a promise of sufficient filesystem free space.
+
+Lists and book data win over covers. The initial storage sweep likewise removes
+eligible covers before expendable browsing entries. To admit growing data, evict eligible browsing
+and saved-for-offline covers together, least recently **shown** first (filename breaks
+ties). The plugin sends the bounded visible paths through STORAGE; the companion
+alone touches their timestamps and lazily checks image sizes. Fetching/revalidating
+a cover preserves its display timestamp. Covers for Continue reading, on-device
+books (the plan and copies snapshot), and the current sleep batch are protected.
+A rejected data save rolls back its savepoint, leaves its job pending, retains the
+previous rows, and reports the storage limit only after eligible covers are exhausted.
+A new/growing cover never displaces list/book data; existing cover replacements
+continue even when no new cover fits. A limit stop never marks Full refresh complete. The plugin requests live storage
+totals after the run, rather than adding downloaded replacement bytes to usage.
+
+Browsing covers are JPEG quality 85, fitted without upscaling to the current grid
+cell bounds (`cover_width`, `cover_height` in the plan, from the screen and effective
+grid dimensions). Rechecks outside a run use the device screen's three-column bounds.
+The companion resizes downloaded covers before admission and existing oversized
+covers only when shown or individually rechecked, including a 304 or a missing ETag.
+No sweep decodes thousands of images at once. Each shrink logs before/after bytes,
+actual saving and a percentage estimate for similarly sized covers; the expected
+68 KB to 15–25 KB is a device/content-dependent estimate, not a test assertion.
+`orbit-sleep` retains separate full-screen covers. Orphan image ETags are removed
+on storage enumeration. Inactive `stress.db`, its journal and `stress-writer.lua`
+are removed on cache open or a storage check; the stress menu is available only with debug key logging.
+
+`shared/fixtures/storage/cases.json` is the shared Android/Xteink W9 admission
+contract: same-size/shrinking replacement, last-shown eviction across both cover
+tiers, protection, exhaustion, new covers and unlimited storage. The JVM suite
+consumes it now; W9 must wire it into the firmware tests when the firmware limit
+lands. The plugin sends bounds and shown paths but owns no budget calculation.
+
 ## Stress test (before the migration)
 
 The companion's `SQLITE_STRESS` broadcast writes nonstop for 2 minutes into

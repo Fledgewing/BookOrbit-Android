@@ -14,6 +14,14 @@
 
 Badge = { EVERY_S = 3, DONE_S = 5, POPUP_S = 6, MARGIN = 6 }
 
+-- Bounded details only: these messages never open another widget.
+function Badge.notice(what)
+    Badge.notices = Badge.notices or {}
+    if Badge.notices[#Badge.notices] == tostring(what) then return end
+    table.insert(Badge.notices, tostring(what))
+    if #Badge.notices > 8 then table.remove(Badge.notices, 1) end
+end
+
 local function nowT() return OC.now() end
 
 -- "37%".
@@ -32,7 +40,9 @@ function Badge.long(s, pct)
     local errors = (tonumber(s.errors) or 0) + (tonumber(s.skipped) or 0)
     if errors > 0 then table.insert(parts, string.format(errors == 1 and _("%d error") or _("%d errors"), errors)) end
     if type(s.limit_note) == "table" and s.limit_note.text then table.insert(parts, s.limit_note.text) end
-    return table.concat(parts, " · ")
+    local line = table.concat(parts, " · ")
+    if Badge.notices and #Badge.notices > 0 then line = line .. "\n" .. table.concat(Badge.notices, "\n") end
+    return line
 end
 
 -- The start popup's text.
@@ -136,6 +146,7 @@ end
 
 -- A Full refresh starts: the popup (only one the reader started), then the badge.
 function Badge.start(manual, s)
+    Badge.notices = {}
     if Badge.closing then UIManager:unschedule(Badge.closing); Badge.closing = nil end
     Badge.pct, Badge.text_now, Badge.expanded, Badge.status, Badge.running = math.max(0, tonumber(s and s.pct) or 0), nil, nil, s, true
     if manual then orbitNote(Badge.popupText(Badge.pct), Badge.POPUP_S, true) end
