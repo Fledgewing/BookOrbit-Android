@@ -531,7 +531,7 @@ function F.storagePlan(items, limit)
     for _, e in ipairs(items) do used = used + (e.bytes or 0) end
     local out = { drop = {}, used = used, after = used }
     if not limit or limit <= 0 or used <= limit then return out end
-    for _, tier in ipairs({ { cache = true, cover = true }, { mirror_cover = true } }) do
+    for _, tier in ipairs({ { cover = true, mirror_cover = true }, { cache = true } }) do
         local list = {}
         for _, e in ipairs(items) do if tier[e.kind] then table.insert(list, e) end end
         table.sort(list, function(a, b) if (a.at or 0) ~= (b.at or 0) then return (a.at or 0) < (b.at or 0) end return a.k < b.k end)

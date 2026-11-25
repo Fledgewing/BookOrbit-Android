@@ -67,6 +67,11 @@ class SqliteStress(private val open: () -> Sql, private val log: (String) -> Uni
         const val FILE = "stress.db"
         const val RESULT = "stress-writer.lua"
 
+        @Synchronized fun cleanup(root: File) {
+            if (running) return
+            listOf(FILE, "$FILE-journal", RESULT).forEach { File(root, it).delete() }
+        }
+
         /** A row's text: its length varies with generation and position (the reader's checksum). */
         fun value(gen: Long, pos: Int): String {
             val n = 40 + ((gen * 7 + pos * 13) % 160).toInt()

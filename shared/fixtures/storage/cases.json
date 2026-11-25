@@ -1,0 +1,305 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "same size at limit",
+      "used": 100,
+      "old": 20,
+      "new": 20,
+      "limit": 100,
+      "data": true,
+      "items": [
+        {
+          "k": "old",
+          "bytes": 20,
+          "at": 1,
+          "kind": "mirror_cover"
+        },
+        {
+          "k": "new",
+          "bytes": 20,
+          "at": 2,
+          "kind": "cover"
+        },
+        {
+          "k": "sleep",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "continue",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "device",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        }
+      ],
+      "drop": [],
+      "allowed": true
+    },
+    {
+      "name": "smaller over limit",
+      "used": 100,
+      "old": 20,
+      "new": 10,
+      "limit": 90,
+      "data": true,
+      "items": [
+        {
+          "k": "old",
+          "bytes": 20,
+          "at": 1,
+          "kind": "mirror_cover"
+        },
+        {
+          "k": "new",
+          "bytes": 20,
+          "at": 2,
+          "kind": "cover"
+        },
+        {
+          "k": "sleep",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "continue",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "device",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        }
+      ],
+      "drop": [],
+      "allowed": true
+    },
+    {
+      "name": "lists evict oldest shown across cover tiers",
+      "used": 100,
+      "old": 0,
+      "new": 30,
+      "limit": 100,
+      "data": true,
+      "items": [
+        {
+          "k": "old",
+          "bytes": 20,
+          "at": 1,
+          "kind": "mirror_cover"
+        },
+        {
+          "k": "new",
+          "bytes": 20,
+          "at": 2,
+          "kind": "cover"
+        },
+        {
+          "k": "sleep",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "continue",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "device",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        }
+      ],
+      "drop": [
+        "old",
+        "new"
+      ],
+      "allowed": true
+    },
+    {
+      "name": "protected covers cannot fund data",
+      "used": 100,
+      "old": 0,
+      "new": 41,
+      "limit": 100,
+      "data": true,
+      "items": [
+        {
+          "k": "old",
+          "bytes": 20,
+          "at": 1,
+          "kind": "mirror_cover"
+        },
+        {
+          "k": "new",
+          "bytes": 20,
+          "at": 2,
+          "kind": "cover"
+        },
+        {
+          "k": "sleep",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "continue",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "device",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        }
+      ],
+      "drop": [
+        "old",
+        "new"
+      ],
+      "allowed": false
+    },
+    {
+      "name": "new covers never displace data",
+      "used": 100,
+      "old": 0,
+      "new": 1,
+      "limit": 100,
+      "data": false,
+      "items": [
+        {
+          "k": "old",
+          "bytes": 20,
+          "at": 1,
+          "kind": "mirror_cover"
+        },
+        {
+          "k": "new",
+          "bytes": 20,
+          "at": 2,
+          "kind": "cover"
+        },
+        {
+          "k": "sleep",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "continue",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "device",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        }
+      ],
+      "drop": [],
+      "allowed": false
+    },
+    {
+      "name": "cover replacement at limit",
+      "used": 100,
+      "old": 20,
+      "new": 20,
+      "limit": 100,
+      "data": false,
+      "items": [
+        {
+          "k": "old",
+          "bytes": 20,
+          "at": 1,
+          "kind": "mirror_cover"
+        },
+        {
+          "k": "new",
+          "bytes": 20,
+          "at": 2,
+          "kind": "cover"
+        },
+        {
+          "k": "sleep",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "continue",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "device",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        }
+      ],
+      "drop": [],
+      "allowed": true
+    },
+    {
+      "name": "unlimited",
+      "used": 100,
+      "old": 0,
+      "new": 100,
+      "limit": null,
+      "data": true,
+      "items": [
+        {
+          "k": "old",
+          "bytes": 20,
+          "at": 1,
+          "kind": "mirror_cover"
+        },
+        {
+          "k": "new",
+          "bytes": 20,
+          "at": 2,
+          "kind": "cover"
+        },
+        {
+          "k": "sleep",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "continue",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        },
+        {
+          "k": "device",
+          "bytes": 20,
+          "at": 0,
+          "kind": "kept"
+        }
+      ],
+      "drop": [],
+      "allowed": true
+    }
+  ]
+}
