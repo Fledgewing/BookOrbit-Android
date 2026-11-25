@@ -14,15 +14,43 @@
 #x4-states .row{padding:11px 0}
 #x4-states .sub{margin-top:8px}
 #x4-browse .row{padding:10px 0} #x4-browse .banner{margin:12px 0} .version{font:700 1.7em system-ui;margin:1em 0} .aboutrow{border-bottom:2px solid #aaa;padding:20px 0;font:.9em/1.5 system-ui}
+
+.x3 .viewport{width:380.16px;height:570.24px}
+.x3 .screen{width:528px;height:792px;transform:scale(.72)}
+.contentcards{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.contentcard{border:2px solid #777;padding:18px;min-width:0}
+.contentcard h2{margin:0 0 10px;font-size:1.12em}
+.contentcard p{font:.86em/1.45 system-ui;margin:0}
+.contentcard.wide{grid-column:1/-1}
+.newcontent .tabs{font-size:.9em;gap:1em}
+.x4 .contentcards{grid-template-columns:1fr;gap:10px;margin-top:14px}
+.x4 .contentcard{padding:10px 12px}
+.x4 .contentcard h2{font-size:1em;margin:0 0 5px}
+.x4 .contentcard p{font-size:.8em;line-height:1.35}
+.x4.newcontent .banner{padding:10px;margin:12px 0;font-size:.75em}
+.months{font:1em monospace;letter-spacing:.1em;margin-top:8px}
+.newcontent .cal{display:grid;grid-template-columns:repeat(14,1fr);gap:5px;margin:12px 0}
+.newcontent .cal i{height:20px;background:#eee;border:1px solid #888}
+.newcontent .cal i:nth-child(3n){background:#777}
+.x4.newcontent .cal i{height:12px}
+.x3 .cover{display:none}
+.x3 .detailhead{display:block}
+.x3 .stars{font-size:1.2em}
+.x3 .row{padding:13px 0}
+.x3 .row.focus{padding:13px 7px}
+.x3 .sub{font-size:.76em;margin-top:10px}
+.x3 .footer{font-size:.67em}
 </style>
 <body>
 <h1>BookSync Home</h1>
-<p>W36 revision 2 · 0.12 on Android and X4 together · Design review only · Synthetic books and data. Grayscale, fixed native panel canvases; scaled previews below. These are static mockups, not working controls. No external fonts, images or scripts. X3 layout and fit remain conditional.</p>
+<p>W36 revision 3 · 0.12 on Android, X4 and X3 together · Design review only · Synthetic books and data. Grayscale, fixed native panel canvases; scaled previews below. These are static mockups, not working controls. No external fonts, images or scripts. X3 uses the sole compiled BookSync Home and a text layout. Fit is a release gate. All examples are synthetic; no device data is included.</p>
 <nav>
 <a href="#home">M8C Home</a>
 <a href="#series">Series</a>
 <a href="#detail">Detail</a>
 <a href="#x4-home">X4</a>
+<a href="#x3-home">X3</a>
+<a href="#m8-home-content">Full content inventory</a>
 <a href="DESIGN.md">Design and decisions</a>
 </nav>
 <main>
@@ -38,8 +66,9 @@
 <div class="stamp">Updated 12 min ago · BookOrbit</div>
 <div class="tabs">
 <span class="active">Home</span>
-<span>Browse</span>
-<span>Reading</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
 </div>
 <div class="section">
 <h2>Currently reading</h2>
@@ -132,8 +161,9 @@
 <div class="stamp">Offline · saved yesterday</div>
 <div class="tabs">
 <span class="active">Home</span>
-<span>Browse</span>
-<span>Reading</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
 </div>
 <div class="section">
 <h2>Currently reading</h2>
@@ -407,8 +437,9 @@
 <div class="stamp">Updated 12 min ago · BookOrbit</div>
 <div class="tabs">
 <span class="active">Home</span>
-<span>Browse</span>
-<span>Reading</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
 </div>
 <div class="section">
 <h2>Currently reading</h2>
@@ -562,7 +593,7 @@
 </figure>
 <figure id="reading" class="">
 <figcaption>
-<b>M8C · Reading summary</b>Calendar, optional original buddy, truthful history coverage; Finished has no invented year filter.</figcaption>
+<b>M8C · Insights summary</b>Calendar, retained original buddy, truthful history coverage; Finished in year retains the dashboard selection; All finished is separate.</figcaption>
 <div class="viewport">
 <article class="screen">
 <div class="top">
@@ -614,7 +645,7 @@
 </div>
 <div class="banner">[•ᴗ•]　Reading buddy<br>A little reading today.</div>
 <div class="section">
-<h2>Finished</h2>
+<h2>Finished in 2026</h2>
 <div class="row">
 <div class="grow">The Winter Map<br>
 <span class="meta">Read · On device</span>
@@ -649,8 +680,9 @@
 <div class="stamp">Updated 12 min ago · BookOrbit</div>
 <div class="tabs">
 <span class="active">Home</span>
-<span>Browse</span>
-<span>Reading</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
 </div>
 <div class="section">
 <h2>Currently reading</h2>
@@ -723,8 +755,9 @@
 <div class="stamp">Offline · saved yesterday</div>
 <div class="tabs">
 <span class="active">Home</span>
-<span>Browse</span>
-<span>Reading</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
 </div>
 <div class="section">
 <h2>Currently reading</h2>
@@ -955,8 +988,9 @@
 <div class="stamp">Updated 12 min ago · BookOrbit</div>
 <div class="tabs">
 <span class="active">Home</span>
-<span>Browse</span>
-<span>Reading</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
 </div>
 <div class="section">
 <h2>Currently reading</h2>
@@ -1031,7 +1065,7 @@
 </figure>
 <figure id="x4-reading" class="x4 ">
 <figcaption>
-<b>X4 · Reading summary</b>Text/calendar parity, original static buddy. Optional history cards on later pages.</figcaption>
+<b>X4 · Insights summary</b>Text/calendar parity, original static buddy. Optional history cards on later pages.</figcaption>
 <div class="viewport">
 <article class="screen">
 <div class="top">
@@ -1083,7 +1117,7 @@
 </div>
 <div class="banner">[•ᴗ•]　Reading buddy<br>A little reading today.</div>
 <div class="section">
-<h2>Finished</h2>
+<h2>Finished in 2026</h2>
 <div class="row">
 <div class="grow">The Winter Map<br>
 <span class="meta">Read · On device</span>
@@ -1199,6 +1233,1689 @@
 <div class="footer">
 <span>BookSync 0.12.0</span>
 <span>1 / 1</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="m8-home-content" class="newcontent">
+<figcaption>
+<b>M8C · Home · reading & goals</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span class="active">Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Also reading / In progress</h2>
+<p>2 books · Reading 18% / 64% · View list</p>
+</section>
+<section class="contentcard">
+<h2>Reading buddy</h2>
+<p>[•ᴗ•] Reading today · 24 minutes · 4-day streak</p>
+</section>
+<section class="contentcard">
+<h2>This week</h2>
+<p>Daily minutes: 15 · 20 · 0 · 24 · 30 · 12 · 24<br>Total 125 min</p>
+</section>
+<section class="contentcard">
+<h2>Reading goal</h2>
+<p>2026 · 8 / 24 books · 16 remaining · Pace available in Insights</p>
+</section>
+</div>
+<div class="footer">
+<span>BookSync 0.12.0 · Local library</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="m8-insights-content" class="newcontent">
+<figcaption>
+<b>M8C · Insights · year and goal</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span class="active">Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Reading goal</h2>
+<p>2026 · 8 / 24 books · Required pace: 2 per month</p>
+</section>
+<section class="contentcard">
+<h2>Reading streak</h2>
+<p>4 days current · 9 longest · This week: ● ● ○ ● ● ● ●</p>
+</section>
+<section class="contentcard">
+<h2>Today / This week</h2>
+<p>24 min today · 125 min this week · On this reader</p>
+</section>
+<section class="contentcard wide">
+<h2>Year in reading</h2>
+<p>2026 · 28 hours · Day buckets; unknown days marked separately<div class="cal">
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+</div>
+</p>
+</section>
+<section class="contentcard">
+<h2>Finished in 2026</h2>
+<p>8 completed · Saved year selection →<br>All finished → (separate general list)</p>
+</section>
+</div>
+<div class="footer">
+<span>BookSync 0.12.0 · Local library</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="m8-insights-details" class="newcontent">
+<figcaption>
+<b>M8C · Insights · records, words and history</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span class="active">Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Finish forecast</h2>
+<p>Current book: 3 h left · 8 days at recent pace</p>
+</section>
+<section class="contentcard">
+<h2>Reading hours</h2>
+<p>Hour-of-day distribution · Peak 20:00–21:00</p>
+</section>
+<section class="contentcard">
+<h2>Personal records</h2>
+<p>Longest session 54 min · Most-read day 90 min</p>
+</section>
+<section class="contentcard">
+<h2>A year ago</h2>
+<p>Saved book · 3 reading days · 52 min · Stopped at 38%</p>
+</section>
+<section class="contentcard">
+<h2>Word of the day</h2>
+<p>Example: harbor · Saved lookup context · Look up →</p>
+</section>
+<section class="contentcard">
+<h2>Highlight of the day</h2>
+<p>[Synthetic saved passage] · Source book →</p>
+</section>
+</div>
+<div class="footer">
+<span>BookSync 0.12.0 · Local library</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="m8-library-content" class="newcontent">
+<figcaption>
+<b>M8C · Library · distinct shelves</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span class="active">Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Pick back up</h2>
+<p>Older in-progress books · Oldest read first →</p>
+</section>
+<section class="contentcard">
+<h2>Unopened</h2>
+<p>3 downloaded books never opened on this reader →</p>
+</section>
+<section class="contentcard">
+<h2>Up next in series</h2>
+<p>Saved next-book selection · Series →</p>
+</section>
+<section class="contentcard">
+<h2>Want to read</h2>
+<p>2 saved picks · Selection may be capped</p>
+</section>
+<section class="contentcard">
+<h2>Discover / Recently added</h2>
+<p>Separate shelves: Shuffle → / Recently added →</p>
+</section>
+</div>
+<div class="footer">
+<span>BookSync 0.12.0 · Local library</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="m8-library-counts" class="newcontent">
+<figcaption>
+<b>M8C · Library · counts and named scopes</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span class="active">Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Library counts</h2>
+<p>120 all books · 32 authors · 3 libraries · 8 collections<br>20 series · 5 Smart scopes · 2 in progress · 12 on device</p>
+</section>
+<section class="contentcard">
+<h2>Named collection shortcuts</h2>
+<p>Collection A → · Collection B →</p>
+</section>
+<section class="contentcard">
+<h2>Named SmartScope shortcuts</h2>
+<p>Scope A → · Scope B →</p>
+</section>
+<section class="contentcard">
+<h2>All browse destinations</h2>
+<p>Continue reading · Recently added · Libraries · Collections<br>Smart scopes · Authors · Series · All books</p>
+</section>
+<section class="contentcard">
+<h2>Local lists and search</h2>
+<p>On device · Not on device · Search saved library<br>Sort / status / format / group by series or author</p>
+</section>
+</div>
+<div class="footer">
+<span>BookSync 0.12.0 · Local library</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="m8-more-content" class="newcontent">
+<figcaption>
+<b>M8C · More · achievements and reading detail</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span class="active">More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Achievements</h2>
+<p>6 / 20 earned<br>Latest: Example award · earned yesterday<br>Next: Example goal · 3 / 5 · 60%</p>
+</section>
+<section class="contentcard">
+<h2>Pages turned</h2>
+<p>1,240 total · 42 today · On this reader</p>
+</section>
+<section class="contentcard">
+<h2>Tree rings / Monthly reading</h2>
+<p>12-month view · Jan 2h · Feb 3h · Mar 4h<br>Remaining month totals available →</p>
+</section>
+<section class="contentcard">
+<h2>Next stop</h2>
+<p>Chapter 3 → Chapter 4 · 12 min to next<br>7 chapters / 3 h to end</p>
+</section>
+<section class="contentcard">
+<h2>Gathering dust</h2>
+<p>3 unopened · 8 MB · Oldest 30 days<br>Daily saved pick → · Next pick →</p>
+</section>
+</div>
+<div class="footer">
+<span>BookSync 0.12.0 · Local library</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="m8-more-tools" class="newcontent">
+<figcaption>
+<b>M8C · More · daily content and controls</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span class="active">More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Moon phase</h2>
+<p>Waxing crescent · 24% illuminated · Next change saved</p>
+</section>
+<section class="contentcard">
+<h2>Glyph of the day</h2>
+<p>A · U+0041 · Latin capital letter A<br>Local font sample; unavailable glyphs have a named empty state</p>
+</section>
+<section class="contentcard">
+<h2>Clock and date</h2>
+<p>10:24 · Local date/time · Set time →<br>Digital / analog are duplicate presentations</p>
+</section>
+<section class="contentcard">
+<h2>Sync and controls</h2>
+<p>Sync now → · Last sync saved<br>Wi-Fi → · Night → · Rotate →</p>
+</section>
+<section class="contentcard">
+<h2>Frontlight / Settings</h2>
+<p>Brightness where supported · Settings → · Local files →<br>X3: no frontlight hardware; explicit unavailable control</p>
+</section>
+</div>
+<div class="footer">
+<span>BookSync 0.12.0 · Local library</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x4-home-content" class="newcontent x4">
+<figcaption>
+<b>X4 · Home · reading & goals</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span class="active">Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Also reading / In progress</h2>
+<p>2 books · Reading 18% / 64% · View list</p>
+</section>
+<section class="contentcard">
+<h2>Reading buddy</h2>
+<p>[•ᴗ•] Reading today · 24 minutes · 4-day streak</p>
+</section>
+<section class="contentcard">
+<h2>This week</h2>
+<p>Daily minutes: 15 · 20 · 0 · 24 · 30 · 12 · 24<br>Total 125 min</p>
+</section>
+<section class="contentcard">
+<h2>Reading goal</h2>
+<p>2026 · 8 / 24 books · 16 remaining · Pace available in Insights</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x4-insights-content" class="newcontent x4">
+<figcaption>
+<b>X4 · Insights · year and goal</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span class="active">Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Reading goal</h2>
+<p>2026 · 8 / 24 books · Required pace: 2 per month</p>
+</section>
+<section class="contentcard">
+<h2>Reading streak</h2>
+<p>4 days current · 9 longest · This week: ● ● ○ ● ● ● ●</p>
+</section>
+<section class="contentcard">
+<h2>Today / This week</h2>
+<p>24 min today · 125 min this week · On this reader</p>
+</section>
+<section class="contentcard wide">
+<h2>Year in reading</h2>
+<p>2026 · 28 hours · Day buckets; unknown days marked separately<div class="cal">
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+</div>
+</p>
+</section>
+<section class="contentcard">
+<h2>Finished in 2026</h2>
+<p>8 completed · Saved year selection →<br>All finished → (separate general list)</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x4-insights-details" class="newcontent x4">
+<figcaption>
+<b>X4 · Insights · records, words and history</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span class="active">Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Finish forecast</h2>
+<p>Current book: 3 h left · 8 days at recent pace</p>
+</section>
+<section class="contentcard">
+<h2>Reading hours</h2>
+<p>Hour-of-day distribution · Peak 20:00–21:00</p>
+</section>
+<section class="contentcard">
+<h2>Personal records</h2>
+<p>Longest session 54 min · Most-read day 90 min</p>
+</section>
+<section class="contentcard">
+<h2>A year ago</h2>
+<p>Saved book · 3 reading days · 52 min · Stopped at 38%</p>
+</section>
+<section class="contentcard">
+<h2>Word of the day</h2>
+<p>Example: harbor · Saved lookup context · Look up →</p>
+</section>
+<section class="contentcard">
+<h2>Highlight of the day</h2>
+<p>[Synthetic saved passage] · Source book →</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x4-library-content" class="newcontent x4">
+<figcaption>
+<b>X4 · Library · distinct shelves</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span class="active">Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Pick back up</h2>
+<p>Older in-progress books · Oldest read first →</p>
+</section>
+<section class="contentcard">
+<h2>Unopened</h2>
+<p>3 downloaded books never opened on this reader →</p>
+</section>
+<section class="contentcard">
+<h2>Up next in series</h2>
+<p>Saved next-book selection · Series →</p>
+</section>
+<section class="contentcard">
+<h2>Want to read</h2>
+<p>2 saved picks · Selection may be capped</p>
+</section>
+<section class="contentcard">
+<h2>Discover / Recently added</h2>
+<p>Separate shelves: Shuffle → / Recently added →</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x4-library-counts" class="newcontent x4">
+<figcaption>
+<b>X4 · Library · counts and named scopes</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span class="active">Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Library counts</h2>
+<p>120 all books · 32 authors · 3 libraries · 8 collections<br>20 series · 5 Smart scopes · 2 in progress · 12 on device</p>
+</section>
+<section class="contentcard">
+<h2>Named collection shortcuts</h2>
+<p>Collection A → · Collection B →</p>
+</section>
+<section class="contentcard">
+<h2>Named SmartScope shortcuts</h2>
+<p>Scope A → · Scope B →</p>
+</section>
+<section class="contentcard">
+<h2>All browse destinations</h2>
+<p>Continue reading · Recently added · Libraries · Collections<br>Smart scopes · Authors · Series · All books</p>
+</section>
+<section class="contentcard">
+<h2>Local lists and search</h2>
+<p>On device · Not on device · Search saved library<br>Sort / status / format / group by series or author</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x4-more-content" class="newcontent x4">
+<figcaption>
+<b>X4 · More · achievements and reading detail</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span class="active">More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Achievements</h2>
+<p>6 / 20 earned<br>Latest: Example award · earned yesterday<br>Next: Example goal · 3 / 5 · 60%</p>
+</section>
+<section class="contentcard">
+<h2>Pages turned</h2>
+<p>1,240 total · 42 today · On this reader</p>
+</section>
+<section class="contentcard">
+<h2>Tree rings / Monthly reading</h2>
+<p>12-month view · Jan 2h · Feb 3h · Mar 4h<br>Remaining month totals available →</p>
+</section>
+<section class="contentcard">
+<h2>Next stop</h2>
+<p>Chapter 3 → Chapter 4 · 12 min to next<br>7 chapters / 3 h to end</p>
+</section>
+<section class="contentcard">
+<h2>Gathering dust</h2>
+<p>3 unopened · 8 MB · Oldest 30 days<br>Daily saved pick → · Next pick →</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x4-more-tools" class="newcontent x4">
+<figcaption>
+<b>X4 · More · daily content and controls</b>Retained reader-preset content · same source/completeness rules.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span class="active">More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Moon phase</h2>
+<p>Waxing crescent · 24% illuminated · Next change saved</p>
+</section>
+<section class="contentcard">
+<h2>Glyph of the day</h2>
+<p>A · U+0041 · Latin capital letter A<br>Local font sample; unavailable glyphs have a named empty state</p>
+</section>
+<section class="contentcard">
+<h2>Clock and date</h2>
+<p>10:24 · Local date/time · Set time →<br>Digital / analog are duplicate presentations</p>
+</section>
+<section class="contentcard">
+<h2>Sync and controls</h2>
+<p>Sync now → · Last sync saved<br>Wi-Fi → · Night → · Rotate →</p>
+</section>
+<section class="contentcard">
+<h2>Frontlight / Settings</h2>
+<p>Brightness where supported · Settings → · Local files →<br>X3: no frontlight hardware; explicit unavailable control</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-home-content" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Home · reading & goals</b>528 × 792 native · button navigation · full 0.12 target.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span class="active">Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="banner">X3 · Sole Home · Text layout · Offline SD database</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Also reading / In progress</h2>
+<p>2 books · Reading 18% / 64% · View list</p>
+</section>
+<section class="contentcard">
+<h2>Reading buddy</h2>
+<p>[•ᴗ•] Reading today · 24 minutes · 4-day streak</p>
+</section>
+<section class="contentcard">
+<h2>This week</h2>
+<p>Daily minutes: 15 · 20 · 0 · 24 · 30 · 12 · 24<br>Total 125 min</p>
+</section>
+<section class="contentcard">
+<h2>Reading goal</h2>
+<p>2026 · 8 / 24 books · 16 remaining · Pace available in Insights</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-insights-content" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Insights · year and goal</b>528 × 792 native · button navigation · full 0.12 target.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span class="active">Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Reading goal</h2>
+<p>2026 · 8 / 24 books · Required pace: 2 per month</p>
+</section>
+<section class="contentcard">
+<h2>Reading streak</h2>
+<p>4 days current · 9 longest · This week: ● ● ○ ● ● ● ●</p>
+</section>
+<section class="contentcard">
+<h2>Today / This week</h2>
+<p>24 min today · 125 min this week · On this reader</p>
+</section>
+<section class="contentcard wide">
+<h2>Year in reading</h2>
+<p>2026 · 28 hours · Day buckets; unknown days marked separately<div class="cal">
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+</div>
+</p>
+</section>
+<section class="contentcard">
+<h2>Finished in 2026</h2>
+<p>8 completed · Saved year selection →<br>All finished → (separate general list)</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-insights-details" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Insights · records, words and history</b>528 × 792 native · button navigation · full 0.12 target.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span class="active">Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Finish forecast</h2>
+<p>Current book: 3 h left · 8 days at recent pace</p>
+</section>
+<section class="contentcard">
+<h2>Reading hours</h2>
+<p>Hour-of-day distribution · Peak 20:00–21:00</p>
+</section>
+<section class="contentcard">
+<h2>Personal records</h2>
+<p>Longest session 54 min · Most-read day 90 min</p>
+</section>
+<section class="contentcard">
+<h2>A year ago</h2>
+<p>Saved book · 3 reading days · 52 min · Stopped at 38%</p>
+</section>
+<section class="contentcard">
+<h2>Word of the day</h2>
+<p>Example: harbor · Saved lookup context · Look up →</p>
+</section>
+<section class="contentcard">
+<h2>Highlight of the day</h2>
+<p>[Synthetic saved passage] · Source book →</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-library-content" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Library · distinct shelves</b>528 × 792 native · button navigation · full 0.12 target.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span class="active">Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Pick back up</h2>
+<p>Older in-progress books · Oldest read first →</p>
+</section>
+<section class="contentcard">
+<h2>Unopened</h2>
+<p>3 downloaded books never opened on this reader →</p>
+</section>
+<section class="contentcard">
+<h2>Up next in series</h2>
+<p>Saved next-book selection · Series →</p>
+</section>
+<section class="contentcard">
+<h2>Want to read</h2>
+<p>2 saved picks · Selection may be capped</p>
+</section>
+<section class="contentcard">
+<h2>Discover / Recently added</h2>
+<p>Separate shelves: Shuffle → / Recently added →</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-library-counts" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Library · counts and named scopes</b>528 × 792 native · button navigation · full 0.12 target.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span class="active">Library</span>
+<span>More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Library counts</h2>
+<p>120 all books · 32 authors · 3 libraries · 8 collections<br>20 series · 5 Smart scopes · 2 in progress · 12 on device</p>
+</section>
+<section class="contentcard">
+<h2>Named collection shortcuts</h2>
+<p>Collection A → · Collection B →</p>
+</section>
+<section class="contentcard">
+<h2>Named SmartScope shortcuts</h2>
+<p>Scope A → · Scope B →</p>
+</section>
+<section class="contentcard">
+<h2>All browse destinations</h2>
+<p>Continue reading · Recently added · Libraries · Collections<br>Smart scopes · Authors · Series · All books</p>
+</section>
+<section class="contentcard">
+<h2>Local lists and search</h2>
+<p>On device · Not on device · Search saved library<br>Sort / status / format / group by series or author</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-more-content" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · More · achievements and reading detail</b>528 × 792 native · button navigation · full 0.12 target.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span class="active">More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Achievements</h2>
+<p>6 / 20 earned<br>Latest: Example award · earned yesterday<br>Next: Example goal · 3 / 5 · 60%</p>
+</section>
+<section class="contentcard">
+<h2>Pages turned</h2>
+<p>1,240 total · 42 today · On this reader</p>
+</section>
+<section class="contentcard">
+<h2>Tree rings / Monthly reading</h2>
+<p>12-month view · Jan 2h · Feb 3h · Mar 4h<br>Remaining month totals available →</p>
+</section>
+<section class="contentcard">
+<h2>Next stop</h2>
+<p>Chapter 3 → Chapter 4 · 12 min to next<br>7 chapters / 3 h to end</p>
+</section>
+<section class="contentcard">
+<h2>Gathering dust</h2>
+<p>3 unopened · 8 MB · Oldest 30 days<br>Daily saved pick → · Next pick →</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-more-tools" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · More · daily content and controls</b>528 × 792 native · button navigation · full 0.12 target.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%</span>
+</div>
+<div class="stamp">Saved library · updated 12 min ago</div>
+<div class="tabs">
+<span>Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span class="active">More</span>
+</div>
+<div class="contentcards">
+<section class="contentcard">
+<h2>Moon phase</h2>
+<p>Waxing crescent · 24% illuminated · Next change saved</p>
+</section>
+<section class="contentcard">
+<h2>Glyph of the day</h2>
+<p>A · U+0041 · Latin capital letter A<br>Local font sample; unavailable glyphs have a named empty state</p>
+</section>
+<section class="contentcard">
+<h2>Clock and date</h2>
+<p>10:24 · Local date/time · Set time →<br>Digital / analog are duplicate presentations</p>
+</section>
+<section class="contentcard">
+<h2>Sync and controls</h2>
+<p>Sync now → · Last sync saved<br>Wi-Fi → · Night → · Rotate →</p>
+</section>
+<section class="contentcard">
+<h2>Frontlight / Settings</h2>
+<p>Brightness where supported · Settings → · Local files →<br>X3: no frontlight hardware; explicit unavailable control</p>
+</section>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>2 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-home" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Home</b>528 × 792 · text layout; Select/More replaces touch.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%　☰</span>
+</div>
+<div class="stamp">Updated 12 min ago · BookOrbit</div>
+<div class="tabs">
+<span class="active">Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="section">
+<h2>Currently reading</h2>
+<div class="resume">
+<div class="cover">
+<span>THE<br>LANTERN</span>
+</div>
+<div>
+<div class="name">The Lantern</div>
+<div class="meta">Lantern Cycle · 1<br>Reading · 42%</div>
+<span class="pill">On device · Open</span>
+</div>
+</div>
+</div>
+<div class="section">
+<div class="heading">
+<h2>Up next in series</h2>
+<span class="link">Series →</span>
+</div>
+<div class="books">
+<div class="book">
+<div class="cover alt">
+<span>Glass Harbor</span>
+</div>
+<div class="name">Glass Harbor</div>
+<div class="meta">The Lantern Cycle</div>
+<span class="state">Server only</span>
+<div class="sub">Tap to download</div>
+</div>
+<div class="book">
+<div class="cover alt">
+<span>A Small Tide</span>
+</div>
+<div class="name">A Small Tide</div>
+<div class="meta">The Lantern Cycle</div>
+<span class="state">On device · Unread</span>
+<div class="sub">Tap to open</div>
+</div>
+</div>
+</div>
+<div class="section">
+<div class="heading">
+<h2>Want to read</h2>
+<span class="meta">2 saved</span>
+</div>
+<div class="row">
+<div class="grow">The Paper Garden<br>
+<span class="meta">Server only</span>
+</div>
+<span class="meta">Download</span>
+</div>
+</div>
+<div class="sub">Next page: Recently added · Discover</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-offline" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Home offline</b>528 × 792 · text layout; Select/More replaces touch.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%　☰</span>
+</div>
+<div class="stamp">Offline · saved yesterday</div>
+<div class="tabs">
+<span class="active">Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="section">
+<h2>Currently reading</h2>
+<div class="resume">
+<div class="cover">
+<span>THE<br>LANTERN</span>
+</div>
+<div>
+<div class="name">The Lantern</div>
+<div class="meta">Lantern Cycle · 1<br>Reading · 42%</div>
+<span class="pill">On device · Open</span>
+</div>
+</div>
+</div>
+<div class="section">
+<div class="heading">
+<h2>Up next in series</h2>
+<span class="link">Series →</span>
+</div>
+<div class="books">
+<div class="book">
+<div class="cover alt">
+<span>Glass Harbor</span>
+</div>
+<div class="name">Glass Harbor</div>
+<div class="meta">The Lantern Cycle</div>
+<span class="state">Server only</span>
+<div class="sub">Connect to get it</div>
+</div>
+<div class="book">
+<div class="cover alt">
+<span>A Small Tide</span>
+</div>
+<div class="name">A Small Tide</div>
+<div class="meta">The Lantern Cycle</div>
+<span class="state">On device · Unread</span>
+<div class="sub">Tap to open</div>
+</div>
+</div>
+</div>
+<div class="section">
+<div class="heading">
+<h2>Want to read</h2>
+<span class="meta">2 saved</span>
+</div>
+<div class="row">
+<div class="grow">The Paper Garden<br>
+<span class="meta">Server only</span>
+</div>
+<span class="meta">Connect</span>
+</div>
+</div>
+<div class="sub">Next page: Recently added · Discover</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-series" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Series</b>528 × 792 · text layout; Select/More replaces touch.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">‹ Lantern Cycle</span>
+<span>10:24 · 78%　☰</span>
+</div>
+<div class="stamp">Updated 12 min ago · BookOrbit</div>
+<h2>Lantern Cycle</h2>
+<div class="meta">5 books · 2 on device<br>Reading order · All saved memberships</div>
+<div class="row">
+<div class="num">1</div>
+<div class="grow">
+<div class="name">The Lantern</div>
+<div class="meta">On device · Reading 42%</div>
+</div>
+<span class="action">Open</span>
+</div>
+<div class="row">
+<div class="num">1.5</div>
+<div class="grow">
+<div class="name">Between Lights</div>
+<div class="meta">Server only · Read</div>
+</div>
+<span class="action">Download</span>
+</div>
+<div class="row focus">
+<div class="num">2</div>
+<div class="grow">
+<div class="name">Glass Harbor</div>
+<div class="meta">Server only · Unread</div>
+</div>
+<span class="action">Download</span>
+</div>
+<div class="row">
+<div class="num">3</div>
+<div class="grow">
+<div class="name">A Small Tide</div>
+<div class="meta">On device · Unread</div>
+</div>
+<span class="action">Open</span>
+</div>
+<div class="row">
+<div class="num">—</div>
+<div class="grow">
+<div class="name">A Lantern Almanac</div>
+<div class="meta">Server only · Unread</div>
+</div>
+<span class="action">Download</span>
+</div>
+<div class="action primary">Download next 3…</div>
+<div class="sub">Preview: Glass Harbor, A Lantern Almanac.<br>Only 2 eligible; read and on-device books skipped.</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-detail" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Book detail offline</b>528 × 792 · text layout; Select/More replaces touch.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">‹ Book details</span>
+<span>10:24 · 78%　☰</span>
+</div>
+<div class="stamp">Offline · saved yesterday</div>
+<div class="detailhead">
+<div class="cover alt">
+<span>GLASS<br>HARBOR</span>
+</div>
+<div>
+<h2>Glass Harbor</h2>
+<div class="meta">The Lantern Cycle · 2<br>Unread · Server only<br>EPUB · 20 MB</div>
+<div class="note">Rating not saved</div>
+</div>
+</div>
+<div class="action primary">Connect and download</div>
+<div class="sub">Destination: saved download folder / Lantern Cycle<br>Downloaded books are never cache-evicted.</div>
+<div class="section">
+<h2>Description</h2>
+<div class="description">Description not saved. Connect to load it; the book’s title, series and file choices are available offline.</div>
+</div>
+<div class="section">
+<h2>Series memberships</h2>
+<div class="row">
+<span class="grow">Lantern Cycle · 2</span>
+<span>→</span>
+</div>
+<div class="row">
+<span class="grow">Harbor Stories · 4 <span class="meta">(secondary)</span>
+</span>
+<span>→</span>
+</div>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-states" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · Availability and connect prompt</b>528 × 792 · text layout; Select/More replaces touch.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">Book states</span>
+<span>10:24 · 78%　☰</span>
+</div>
+<div class="stamp">Updated 12 min ago · BookOrbit</div>
+<div class="row">
+<div class="grow">
+<div class="name">The Lantern</div>
+<div class="meta">On device · Reading 42%</div>
+<div class="sub">Select → Open</div>
+</div>
+</div>
+<div class="row">
+<div class="grow">
+<div class="name">Glass Harbor</div>
+<div class="meta">Downloading</div>
+<div class="bar">
+<i>
+</i>
+</div>
+<div class="sub">8.4 / 20 MB · Cancel</div>
+</div>
+</div>
+<div class="row">
+<div class="grow">
+<div class="name">A Small Tide</div>
+<div class="meta">Server only · Unread</div>
+<div class="sub">Select → Download</div>
+</div>
+</div>
+<div class="row">
+<div class="grow">
+<div class="name">The Last Light</div>
+<div class="meta">Offline · Not downloaded</div>
+<div class="sub">Select → Connect prompt</div>
+</div>
+</div>
+<div class="banner">Not downloaded — connect to get it<div class="action primary">Connect and download</div>
+<div class="action">Cancel</div>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
+</div>
+</article>
+</div>
+</figure>
+<figure id="x3-menu" class="newcontent x4 x3">
+<figcaption>
+<b>X3 · More actions</b>528 × 792 · text layout; Select/More replaces touch.</figcaption>
+<div class="viewport">
+<article class="screen">
+<div class="top">
+<span class="brand">BookSync</span>
+<span>10:24 · 78%　☰</span>
+</div>
+<div class="stamp">Updated 12 min ago · BookOrbit</div>
+<div class="tabs">
+<span class="active">Home</span>
+<span>Insights</span>
+<span>Library</span>
+<span>More</span>
+</div>
+<div class="section">
+<h2>Currently reading</h2>
+<div class="resume">
+<div class="cover">
+<span>THE<br>LANTERN</span>
+</div>
+<div>
+<div class="name">The Lantern</div>
+<div class="meta">Lantern Cycle · 1<br>Reading · 42%</div>
+<span class="pill">On device · Open</span>
+</div>
+</div>
+</div>
+<div class="section">
+<div class="heading">
+<h2>Up next in series</h2>
+<span class="link">Series →</span>
+</div>
+<div class="books">
+<div class="book">
+<div class="cover alt">
+<span>Glass Harbor</span>
+</div>
+<div class="name">Glass Harbor</div>
+<div class="meta">The Lantern Cycle</div>
+<span class="state">Server only</span>
+<div class="sub">Tap to download</div>
+</div>
+<div class="book">
+<div class="cover alt">
+<span>A Small Tide</span>
+</div>
+<div class="name">A Small Tide</div>
+<div class="meta">The Lantern Cycle</div>
+<span class="state">On device · Unread</span>
+<div class="sub">Tap to open</div>
+</div>
+</div>
+</div>
+<div class="section">
+<div class="heading">
+<h2>Want to read</h2>
+<span class="meta">2 saved</span>
+</div>
+<div class="row">
+<div class="grow">The Paper Garden<br>
+<span class="meta">Server only</span>
+</div>
+<span class="meta">Download</span>
+</div>
+</div>
+<div class="sub">Next page: Recently added · Discover</div>
+<div class="shade">
+<div class="dialog">
+<h2>The Lantern</h2>
+<div class="menuitem">Open</div>
+<div class="menuitem">Details</div>
+<div class="menuitem">View series…</div>
+<div class="menuitem">Mark read</div>
+<div class="menuitem">Remove download…</div>
+<div class="menuitem">Cancel</div>
+<div class="note">Remove only the local book.<br>Reading state stays.</div>
+</div>
+</div>
+<div class="footer">
+<span>Back · Page − / + · Select · More</span>
+<span>1 / 2</span>
 </div>
 </article>
 </div>

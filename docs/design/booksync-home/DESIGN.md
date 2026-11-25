@@ -5,7 +5,8 @@ Design and [self-contained mockups](mockups.html) only; no implementation or
 release is authorized. This is the UI portion of
 [backend independence step 1](../backend-independence.md#1-owned-android-client-and-ledger),
 not approval of that document's ledger, export or server proposals.
-Revision 2 incorporates the maintainer's cross-platform ruling: owned X4 Home in
+Revision 3 retains every reader-preset content type and makes X3 a full 0.12
+target by replacing all other Home paths. Revision 2 incorporated the maintainer's cross-platform ruling: owned X4 Home in
 0.12 alongside Android, eventual plain-firmware base, and unified product versions.
 
 ## 1. Existing behavior and evidence
@@ -43,7 +44,7 @@ the Xteink statements above were checked against the current pinned 2.x source.
 ## 2. Outcome and boundaries
 
 BookSync owns Home, catalog lists, series and book detail on Android and X4 in
-0.12 (X3 subject to fit). Android uses independently authored KOReader widgets;
+0.12, including X3 with a text layout and replacement Home budget. Android uses independently authored KOReader widgets;
 Xteink uses our own firmware activities and SD database (§8). No BookOrbit board registry, layout engine, detail screen,
 Activity or catalog UI is called on this route. KOReader still supplies its normal
 widget and document APIs. The required, same-version companion owns networking,
@@ -97,48 +98,131 @@ never claims the server was refreshed. Rich detail and cover availability remain
 independent. An offline window read has no side effect beyond a cheap request to
 the companion for a later eligible check.
 
-## 3. Home inventory: keep, merge, drop
+## 3. Content parity with the reader preset
 
-Default pages are **Home / Browse / Reading**. Each is paged, not an endlessly
-scrolling dashboard. Home starts with Currently reading, then Up next in series,
-Want to read and Recently added. On Android, each shelf has a small cover window
-and a link where a complete source exists. Page indicators expose overflow.
-Browse provides every index, sorting/filtering/grouping and search. Reading holds
-calendar/stats and Finished. Users can hide/reorder sections with a simple list;
-there is no free-form widget grid. Empty sections say why; hidden sections remain
-reachable through Browse. No new title/author/status queries are run on entry.
+The maintainer supplied a **content-types-only** inventory and the settings values
+`reader` / `outline`; no screenshots or device settings file were supplied to this
+worktree. No device was accessed. Do not infer personal layout/content from those
+values or commit names, accounts, hosts, book titles or quotes from the device.
+All mockup values are invented examples, not an export of the maintainer's data.
 
-“Neutral” describes the client concept; it does not assert that every backend
-provides the same selection or history. All sources are rendered from local
-records, including cached server-selected memberships and summary snapshots.
+At the pinned BookOrbit commit, `P/bookorbit_board_store.lua:28` identifies
+`catalog_board`, `:115-163` defines the starter pages, and `:166-182` reads the
+preset/style. **reader changes page order, not the content set**: Home, Insights,
+Library, Decor. Portrait layouts at 2, 4 and 6 columns retain Word of the day and
+all Decor content (`:122-135`, `:143-149`). We preserve the union because UI scale,
+orientation and custom placement were not supplied. The landscape preset omits
+some placements, not permission to remove their content. Outline is presentation,
+not a content filter. Earlier revisions incorrectly treated useful Decor as
+ornament and collapsed Pick back up; this revision supersedes those choices.
 
-| Upstream tile/section | BookSync disposition and local source | Backend boundary |
+BookSync navigation becomes **Home / Insights / Library / More**, with paged
+content within each tab. Browse indexes remain in Library; More includes Decor,
+controls and Settings. Existing content is visible by default, including a named
+empty/unavailable card where its source has no data. Users may deliberately hide
+or reorder cards later; migration never silently hides a content type. Duplicate
+clock drawings or repeated links may share one presentation, but their distinct
+information and actions remain accessible. Android and Xteink use the same content
+IDs and source/completeness rules; X3 uses text instead of elaborate art.
+
+### 3.1 Preset tile → owned content mapping
+
+Each row is retained content, not a promise of identical artwork or backend
+semantics. Neutral presentation may consume a cached BookOrbit-specific summary.
+Cached card data lives in our offline database; no upstream UI/renderer runs.
+
+| Preset tile / supplied data | Owned visible content and placement | Source / boundary |
 |---|---|---|
-| Hero / Currently reading | Keep one large resume row, local last-opened first; cached reading rank plus local overlay. | Neutral; absent local position shows server percent without inventing a locator. |
-| Also Reading / In progress / Pick back up | Merge into Currently reading → All reading, with Recent / Oldest first. Preserve server order ranks, then overlay local completions/rereads. | Neutral; local-only books remain visible. |
-| Up next in series | Keep shelf; cached bounded server selection first, local completion overlay; Series page is the complete accessible inventory. Do not silently substitute a new recommendation algorithm. | Neutral slot; BookOrbit selection is adapter-provided. |
-| Want to read | Keep cached server selection and locally pending intent; show “Saved selection” if capped. No invented complete See all. | Neutral status/shelf capability; unsupported adapters hide it with an explanation in settings. |
-| Recently added | Keep first window of complete cached recently-added rank, See all paged locally. | Neutral when adapter supplies addition order. |
-| Shelf / Discover / random | Keep one Discover section, drawing cached selected IDs; an explicit Shuffle chooses locally among eligible cached records. Distinguish “From saved library” from cached server recommendations. No network on shuffle. | Neutral local sample; BookOrbit's recommendation selection retained as source metadata. |
-| Libraries / All books | Keep separate named libraries and All books; never assume a library means a user shelf. | Adapter scope identities; neutral display. |
-| Collections / Smart scopes | Keep separate Browse indexes, memberships stored by opaque IDs; scope rules are never evaluated client-side. | Collections are neutral where supported; BookOrbit SmartScopes retain that name and capability. |
-| Authors / Series / On device / Not on device | Keep; local membership/rank windows, device intersection and series/author grouping. Not on device explicitly says when coverage is incomplete. | Neutral; no extension of upstream's newest-500 promise without complete cache. |
-| Search | Keep offline title/author search labeled “Saved library”; explicit server search is a capability and prompts to connect offline. | Neutral query; adapter-specific search support. |
-| Finished in YEAR | Keep as **Finished** with all cached finished/recently-read IDs. A year picker is only offered with reliable completion dates; missing dates go in “Date unknown.” | Neutral. This avoids claiming a year filter the current link never applies. |
-| Goal pace / streak / week / today / heatmap / calendar / hours / records | Merge into Reading summary and calendar, with drill-down cards. Cache aggregates and local pending deltas separately to prevent double counting. Mark “On this reader” versus “From server”; unknown history is unavailable, never zero. | Neutral presentation; BookOrbit aggregates remain snapshots with provenance, not a portable ledger. |
-| Forecast | Merge into book detail: “Time left on this reader,” only with enough local rate data. | Neutral, optional; no fabricated duration. |
-| Highlight / Year ago | Keep optional Reading cards only when cached authorized data exists. No history crawl during Home entry. | Capability-based; source and coverage visible. |
-| Reading buddy | Keep one optional static, independently drawn monochrome buddy in Reading summary; based on today's known local minutes, no animation. | Neutral; no upstream art or pose code reused. |
-| Clock / Sync / toggles / Light | Merge into header and menu: clock, battery, connection, Sync now, reading controls/frontlight when supported. Sync now is distinct from catalog Refresh. | Local platform controls; sync state from its active owner. |
-| Word-of-day | Drop from Home: unrelated to selecting or tracking a book; no reliable offline source promised. | No backend dependency introduced. |
-| Decor: analog clock, moon, odometer, glyph, rings, chapters, badge, dust | Drop duplicate clocks and ornamental tiles. Useful reading totals move to Reading summary; no copied graphics. | Local design choice; no arbitrary upstream widget compatibility. |
-| Presets / custom four-page board | Replace with section ordering/hiding, not a board-layout import. Preserve old settings for rollback; show a one-time migration explanation outside reading. | BookSync setting, independent of backend. |
+| `hero`, continueReading | **Currently reading**, resume position and cover, Home. | Cached reading IDs/ranks plus local progress/file overlay. |
+| `also`, in-progress | **Also reading / In progress**, a distinct visible list after resume; not merely buried in a filter. | Same canonical records, separate selection and local overlay. |
+| `streak`, readingStreak | **Reading streak**, current, longest and last seven days, Home/Insights. | Saved account summary plus explicitly separate pending local contribution. |
+| `week`, `today` | **This week** daily minutes and total; **Today** minutes, separate labeled cards. | Cached readingYear/local session aggregates, coverage and source watermark. |
+| `goalpace`, readingGoal | **Reading goal**, completed/target/year, required pace and ahead/behind status, Home/Insights. | Cached server goal/completed count; unavailable if unsupported. Do not substitute a device-only count for an account goal. |
+| `buddy` | **Reading buddy**, state and reading message retained on Home; original static drawing or text on X3. | Known reading/streak/finish state; no copied sprite or pose code. |
+| `highlight`, highlightOfTheDay | **Highlight of the day**, passage, book/source and open action. | Saved authorized snapshot, marked unavailable if absent; no remote fetch at Home entry. |
+| `shelf(random)`, discover | **Discover** shelf and Shuffle, Home/Library. | Cached server selection, distinct from explicitly labeled local sample. |
+| `shelf(recent)` | **Recently added** shelf and complete cached list. | Canonical recently-added order and source completeness. |
+| `heatmap`, readingYear | **Year in reading**, annual heatmap/calendar and total, Insights. | Saved day buckets + local pending deltas without double counting; no fake zero for unknown days. |
+| `forecast` | **Finish forecast**, remaining time / expected finish for the current book, Insights. Keep the card, not detail-only. | Measured local pace and known locator, or “Not enough reading yet.” |
+| `hours` | **Reading hours**, hour-of-day distribution and peak time, Insights. | Worker-derived session histogram with source/coverage. |
+| `records` | **Personal records**, longest session, most-read day and other available records, Insights. | Cached aggregates; retain each known metric, unknown values explicit. |
+| `yearago`, yearAgo | **A year ago**, book, reading minutes/days and stop position, Insights. | Cached server snapshot + availability; retained even when the current snapshot is empty. |
+| `shelf(finished)`, finishedThisYear | **Finished in YEAR**, year-specific shelf/count, Insights. | Preserve the dashboard's year selection and finishedOn, not a generic all-finished replacement. See §3.3. |
+| `word` | **Word of the day**, word/context/source and lookup, Insights. **It is in reader and stays.** | KOReader vocabulary snapshot on Android; owned lookup history on firmware (§3.4). |
+| `shelf(pickup)` | **Pick back up**, a distinct visible shelf of older in-progress books, Library. | Saved `reading` / `recently_read` ascending order plus local-state overlay; not merged into Currently reading. |
+| `shelf(upnext)` | **Up next in series**, Library/Home. | Preserve bounded dashboard selection/rank; complete membership on the Series page. |
+| `shelf(wtr)` | **Want to read**, Library/Home. | Saved server selection and pending intent; disclose cap, no fabricated complete list. |
+| shelves.unopened + `dust` | **Unopened** list AND **Gathering dust** daily pick, age/count/size and Next pick action, Library/More. | Local downloaded-but-never-opened history; saved shelf joins IDs. Distinct from server unread and Not on device. |
+| `link` + totalBooks / browseCounts | **Library counts** and links: all books, authors, libraries, collections, series, Smart scopes, in progress and on device. | Cached totals with provenance; do not replace an incomplete server total with the count of a visible window. |
+| boardNames | **Named collection / SmartScope shortcuts**, Library, alongside their indexes. | Opaque scope IDs + saved labels/memberships; no client evaluation of scope rules. All fixtures use synthetic scope names. |
+| sections | **Continue reading, Recently added, Libraries, Collections, Smart scopes, Authors, Series, All books**. | Retain every root destination; all finite browse identities work from the saved catalog. |
+| `sync`, `toggles`, `light` | **Sync now**, sync result/freshness; Wi-Fi, Night, Rotate and Sync controls; frontlight control where hardware supports it, More. | Local controls/active sync owner; no hardware capability invented on X3. Sync is distinct from catalog Refresh. |
+| `clock`, `analog` | **Clock/date**, retain timezone/time uncertainty and clock control; duplicate analog/digital drawing may share one card/header. | Local clock; X3 explicitly flags approximate/unknown time until established. |
+| `moon` | **Moon phase**, phase name, illumination and next change, More. | Local date-derived information; text on X3, unknown when date is unknown. No copied art. |
+| `odometer` | **Pages turned**, lifetime and today counters, More. | Own reading counters with source/coverage, not a cached book percentage. |
+| `glyph` | **Glyph of the day**, sample, name/code point and font/source, More. | Locally available font sample; missing glyph is an explicit card state. |
+| `rings` | **Tree rings / Monthly reading**, 12 monthly totals and comparative growth, More. | Same saved day/session data as Year in reading, separate visible monthly presentation. Text totals on X3. |
+| `chapters` | **Next stop**, current/next chapter, time to next/end and remaining chapters, More. | Reader-captured locator/TOC and worker pace; show pending/unknown when unavailable. |
+| `badge`, achievements | **Achievements**: earned/total, latest award and next achievement with progress/threshold, More/Home. | Cached authorized BookOrbit summary; latest and next both visible, off/unsupported distinct from zero earned. |
 
-BookOrbit server selection order is authoritative for capped dashboard sources:
-`B/server/src/modules/koreader/koreader-catalog.service.ts:372`.
-Rows supply status/progress and cover/list metadata at `:1187`; manifests omit
-rich fields at `:597`. The existing bulk plan preserves ordered sources and
-hydration; Home consumes them rather than fetching detail for every tile.
+Evidence: shelves/counts/goals/highlights/year/word mapping is in
+`P/bookorbit_board_data.lua:665-740`; achievement normalization `:503-540`;
+local unopened scan/selection `:547-608`. Decor's meaningful fields are at
+`P/bookorbit_board_decor.lua:413` (moon), `:485` (pages), `:576` (glyph),
+`:714` (months), `:927` (chapter timing), `:1069` (achievements), `:1271` (dust).
+Server dashboard supplies year-finished and achievement summaries at
+`B/server/src/modules/koreader/koreader-catalog.service.ts:245-340`.
+
+### 3.2 Backend-neutral retention and offline behavior
+
+Keep canonical book rows, primary/secondary memberships, ranked shelf selections,
+account totals, day/session aggregates and rich card snapshots separate. Store
+source, generated time, coverage, optional field availability and owner. Shared
+fixtures assert every content ID's presence and values, not only book order.
+BookOrbit summary selection/ranking is adapter-owned; another backend may not
+provide achievements/goals/highlights/year-ago. Keep an explicit “Unavailable from
+this backend” card rather than silently dropping a reader-preset content type.
+Local equivalents are labeled “On this reader” and never impersonate server
+history. Account summaries and device summaries are shown separately when their
+watermarks cannot be reconciled. No duplicated local/server minutes or awards.
+
+Missing summary data triggers only an eligible background check; no network or
+history crawl blocks drawing. Cached snapshots remain offline. Permission loss,
+feature-off, unknown, incomplete and genuinely empty are distinct states. Cards
+containing a book use the same safe open/download/details behavior as shelves.
+Author/series grouping, status/format/scope sorting, offline search, On device and
+Not on device remain available in Library, with explicit incomplete coverage.
+
+### 3.3 Finished in year is retained, without inventing a list predicate
+
+The dashboard's `finishedThisYear` is a real year-specific selection, including
+finishedOn (`B/server/src/modules/koreader/koreader-catalog.service.ts:332-340`);
+retain it with goal year/count on the **Finished in YEAR** card. The old card's
+linked general list has no year predicate
+(`P/bookorbit_catalog_board.lua:994-1007`): this does not justify removing the
+card's year semantics. BookSync opens the saved year selection first, then pages
+a complete year index only when completion-date coverage is proven. A separate
+**All finished** link may show the general status list. Missing completion dates
+are labeled Date unknown, never attributed to the current year using lastReadAt.
+If the year selection is capped, label Saved selection and preserve server count;
+local completions overlay it with provenance until acknowledged. Year rollover
+retains previous snapshots and marks the new year's summary as pending until known.
+
+### 3.4 Data that comes from the reader, not the backend
+
+Word of the day is sourced from KOReader's vocabulary DB, not a network dictionary
+(`P/bookorbit_board_data.lua:267-302`). The companion reads a bounded read-only
+snapshot off the UI thread and publishes one word/context record to the owned
+Home DB. No BookOrbit UI code or Lua vocabulary scan is retained. An empty pool
+shows “Look up a word while reading.” On X4/X3, propose recording dictionary
+lookups through the owned reader event/worker path into SD vocabulary history;
+select a daily word locally, preserving context/source when captured. No lookup
+history or dictionary means the same named empty card, not a removed feature.
+Cross-device vocabulary transfer is outside this design; no backend field is
+invented to make it appear supported. Chapter timing, page counters, records and
+monthly/hourly aggregates similarly use bounded reader captures and worker-owned
+SD projections. X3's text cards share these meanings without an animation engine,
+vector artwork library or full series/catalog in RAM.
 
 ## 4. Tap to download and file ownership
 
@@ -327,9 +411,10 @@ The escape setting must be reachable without successfully opening either Home.
 ## 8. Xteink is a 0.12 client, not a later port
 
 **0.12 scope:** BookSync Home replaces the BookOrbit Home on **Android, X4 Pro
-and X4 Classic together**, with X3 included only if measured flash/RAM fit passes.
+X4 Classic and X3 together**. X3 fit is a release gate for this scope, not
+permission to defer its owned Home.
 The [X4 mockups](mockups.html#x4-home) are acceptance screens for the release,
-not illustrations of a later roadmap phase. Home/Browse/Reading, all inventory
+not illustrations of a later roadmap phase. Home/Insights/Library/More, all inventory
 entries in §3, series (including secondary memberships), detail, tap-to-download,
 next-N, cancellation and offline errors have the same behavior and shared fixture
 expectations as Android. Local Files, Recent books, Settings and OTA remain
@@ -371,12 +456,25 @@ update the initiating tile only while that screen is visible. Navigating away
 revokes auto-open, and bulk never auto-opens. End-of-book, sleep sources and status
 layout use the same owned read model and existing reading gate.
 
-X3 is 528×792, button-only, with no PSRAM. Its intended reduced presentation is
-text Home/Series/Detail backed by paged SD indexes; network boot can own transfers
-if reader-plus-network does not fit. Do not silently ship a BookOrbit Home under
-the BookSync name: if fit fails, publish a clear 0.12 capability matrix with the
-existing X3 screens retained and the missing owned-Home feature identified. No
-full-catalog or direct Grimmory promise before measured fit and recovery evidence.
+X3 is a **full 0.12 target**, 528×792, button-only, no PSRAM. BookSync Home
+**replaces**, rather than joins, the existing Home variants. Exclude BookOrbit,
+Classic, Lyra, Lyra 3 Covers, Lyra Carousel, Cover Grid, Minimal and Dashboard Home
+renderers/routing/assets from the X3 link, including their setting choices.
+Do not merely hide a runtime menu: remove references and source units or guard
+Home-specific paths so linker GC can discard them. Retain generic reader/list
+styling, file browser, fonts, Settings, sync, OTA and signed recovery; theme classes
+that also draw reader/list screens cannot be removed wholesale. Persisted old
+Home/theme selections map to the sole BookSync Home without losing unrelated
+reader styling. Other devices may retain optional Home alternatives if budget
+allows, but all reader-preset *content* belongs to our one Home.
+
+Text/paged SD cards keep every §3 content ID and all download/series/detail
+behavior. Network boot may own transfers on C3, with saved return location and
+cancel state; never require reader plus TLS plus full catalog in RAM. Failures
+of flash/heap/SD/recovery gates block the X3 portion of 0.12 acceptance and require
+further scoped replacement work or maintainer scope review—no automatic fallback
+to shipping the old Home as the new feature. Measured symbol inventory and a
+clearly estimated replacement budget are in §8.4 / [flash audit](flash-audit.md).
 
 ### 8.2 What currently depends on CrossInk-Bookorbit
 
@@ -478,17 +576,35 @@ records 98.69% after the early finish change. Later W8 measurements at rc3
 (`:535`) record the following. These are recorded results, **not fresh builds
 of this design**, and must not be mixed with a current branch or a plain-base build.
 
-| Device | W8 used / 6,553,600 bytes | Free to slot end | Free to 99.5% gate (6,520,932) |
+| Device | W8 used / 6,553,600 bytes | Free to slot end | Free to 99.5% gate (6,520,832) |
 |---|---:|---:|---:|
-| X4 Pro | 6,375,685 (97.29%) | 177,915 | 145,247 |
-| X4 Classic | 6,218,742 (94.89%) | 334,858 | 302,190 |
-| X3/C3 | 6,514,417 (99.40%) | 39,183 | 6,515 |
+| X4 Pro | 6,375,685 (97.29%) | 177,915 | 145,147 |
+| X4 Classic | 6,218,742 (94.89%) | 334,858 | 302,090 |
+| X3/C3 | 6,514,417 (99.40%) | 39,183 | 6,415 |
+
+**Newer X3 evidence for this revision:** public run
+[45688398918](https://github.com/Fledgewing/Orbify/actions/runs/45688398918)
+(commit `0ebe1858cfd9ca213715b44d8daeba5ed265429f`) used **6,466,767 B
+(98.68%)**, leaving **54,065 B** to the actual 6,520,832 B gate. Its debug ELF
+contains **17,520 B** of named BookOrbit Home presentation symbols and **5,108 B**
+of CoverGridHomeUi symbols. Dropping these is a **22,628 B gross-removal estimate**,
+not a measured net saving; do not count generic theme code used by the reader.
+A further **23,608 B** in HomeActivity includes shared routing and gets zero
+savings credit. The [flash audit](flash-audit.md) records source/hash/method and
+an estimated replacement envelope: 54,065 + 22,628 − 8,192 integration reserve
+= **68,501 B**, with a **49,152 B design target** for the new text Home/SD projections
+leaving **19,349 B** under the gate if the assumptions hold. No after-build/map
+was fabricated; actual compile-time elimination, image size, heap and recovery
+are mandatory release evidence. Other Home paths may save more, but get no
+unmeasured credit. This targets X3 by replacing redundant implementations,
+not by dropping content or deferring Home.
 
 CI/CP both define 0x640000-byte dual app slots (`CI/partitions.csv:4`,
 `CP/partitions.csv:4`). Their bare firmware and **base + complete BookSync layer**
 flash/heap headroom per device are unmeasured here. Removing fork code may save
 space, but adding owned equivalents and restoring native sync can cost it back.
-No estimated KB saving justifies X3 enablement. Compare identical toolchain,
+X3 is targeted by removing redundant Home code; estimated savings do not satisfy
+the final release fit check. Compare identical toolchain,
 feature flags, dependencies and partition layout for current base, CI and CP;
 record ELF/map sections and actual firmware bytes separately for all three
 readers, cold/warm heap and peak parse/transfer allocations. Require the existing
@@ -521,7 +637,7 @@ configuration and environments; port that validation, CI and source packaging to
 
 ### 8.5 Staged delivery and rollback
 
-1. **0.12, both platforms:** owned Home/Browse/Reading/Series/Detail; BookOrbit
+1. **0.12, all reader platforms:** owned Home/Insights/Library/More, Series and Detail; BookOrbit
    adapter facade and SD read model on the current pinned firmware base. All new
    UI, refresh, end-of-book and sleep consumers call our adapter/read model, never
    BookOrbit UI or network classes directly. During transition only a private
@@ -541,7 +657,9 @@ configuration and environments; port that validation, CI and source packaging to
    then maintainer device tests. Preserve native OTA partitions and signed recovery.
    The cutover can follow 0.12; owned X4 Home in 0.12 does not wait for it.
 
-Before cutover, Home setting rollback can return to old Home on the current base.
+Before base cutover, Android/X4 can route to old Home if it is retained. X3 has
+no alternate Home code in its 0.12 image: its rollback is a signed prior firmware
+even while still on the current base.
 After cutover, the BookOrbit Home no longer exists: **rollback is a signed previous
 firmware**, not a setting. Retain a last-known-good image plus source, preserve
 SD books/sidecars/local queues and NVS/Tailscale credentials, and make migrations
@@ -569,7 +687,8 @@ No invented progress/annotation conversion and no promise to fit two complete
 direct adapters simultaneously on X3. If server-assisted X3 is needed, that is an
 explicit later profile; a BookSync server is not a 0.12 Home prerequisite.
 Lua, JVM and C++ consume the same expected projection/job/error cases (§9), with
-X4 touch/button equivalents and X3 capability exclusions declared in fixtures.
+X4 touch/button and X3 button/text equivalents declared in fixtures; backend or
+reader data availability is explicit, never a blanket X3 Home exclusion.
 
 ### 8.7 One BookSync version from 0.12
 
@@ -613,7 +732,9 @@ authorized by this draft. Acceptance adds: owned X4 first paint with network off
 no old Home/catalog UI invocations; consumer imports confined to our adapter;
 sole sync writer; login and credential migration/rollback; positions/bookmarks/
 annotations/session preservation; SD power cuts during publication and transfer;
-full X4 touch/button fixture parity; X3 fit report; version bridge/feed tests;
+full X4 touch/button and X3 button/text fixture parity; complete preset-content
+inventory (including empty/unsupported states); X3 alternative-Home symbol absence
+and A/B map/fit report; version bridge/feed tests;
 and signed OTA/SD rollback across the proposed base switch. CrossPoint/CrossInk
 comparison builds are future evidence, not performed in this design change.
 
@@ -647,11 +768,11 @@ are gates; mockup dimensions alone are not device validation.
 
 | Decision | Rationale |
 |---|---|
-| Three pages, reorder/hide sections, no layout editor | Faster reading choices, smaller UI surface; old layout retained for rollback. |
-| Finished label without a year by default | Truthful with current order source; year filter can follow reliable date coverage. |
+| Home / Insights / Library / More with paged cards, no layout editor | Preserve all reader-preset content by default; deliberate hide/reorder stays reversible. X3 rollback uses firmware. |
+| Finished in YEAR shelf plus separate All finished | Retain dashboard year selection; never invent a year filter for the old general list. |
 | Tap opens/downloads; details on long press/More | The maintainer's requested fast path; discoverable hint and explicit Details on every menu. |
 | Next N defaults to 3, one transfer at a time | Predictable storage/connection use; count and concurrency can change later. |
-| Typographic covers and static optional buddy | Self-contained offline fallback and low refresh cost; original artwork can evolve. |
+| Typographic covers and original static/text buddy | Keep buddy, word and meaningful Decor content; artwork may change without losing information. |
 | Opt-in migration for existing installs | Limits surprise and makes comparison/rollback easy; new-install default reviewed after acceptance. |
 | Operation names and physical schema remain internal | Validate both adapters before any public compatibility promise. |
 
@@ -673,10 +794,11 @@ from the reversible UI choices. Recommended answers are proposals.
    owner per platform, with intents through the companion/firmware adapter and no
    bulk replay of history? Any future
    writer takeover needs a checkpoint/backup review; rollback cannot unsend writes.
-4. **Support commitment:** approve complete cached Home/Series/Detail on Android
-   and X4 Pro/X4 **in 0.12 together**, with X3 explicitly conditional on measured
-   fit and Grimmory capability validation before enabling it? No universal
-   direct-mode or X3 parity promise before evidence.
+4. **Support commitment (maintainer ruling captured):** complete cached
+   Home/Series/Detail on **Android, X4 Pro, X4 and X3 in 0.12 together**, with
+   BookSync the sole compiled X3 Home.
+   The maintainer directed this scope; measured fit/recovery remain release gates,
+   not automatic platform deferral. Grimmory capabilities still require validation.
 5. **Firmware base switch:** approve the staged destination **plain CrossInk +
    our layer**, removing the CrossInk-Bookorbit layer only after owned sync,
    downloads, credentials/login and all used history features pass acceptance?
@@ -690,7 +812,7 @@ from the reversible UI choices. Recommended answers are proposals.
    Immutable tags, signed migration identities and readers that miss the bridge
    are lasting compatibility obligations (§8.7).
 
-Maintainer also reviews the full inventory (especially dropped decor/layout
-customization), offline prompt, series ordering, detail/actions and both device
+Maintainer also reviews the full inventory (every retained reader-preset content type and changed layout
+organization), offline prompt, series ordering, detail/actions and Android/X4/X3
 mockups before changing status from designing. Draft PR acceptance alone does
 not authorize implementation or a default flip.
