@@ -43,6 +43,8 @@ class ScopedMode {
 orbify::cache::Mode currentMode();
 
 struct Lookup {
+  std::string bulkGeneration;
+  bool bulk = false;  // derived window projected directly into the caller's JSON filter
   bool cacheable = false;
   bool hasEntry = false;
   bool serve = false;  // parse `path` now
@@ -91,6 +93,7 @@ uint64_t bytesOnSd();
 void setPlanBytes(uint64_t bytes);
 orbify::mirror::Stop storageStop();
 void clearStorageStop();
+void setStorageStop(orbify::mirror::Stop reason);
 bool roomForReply();
 
 }  // namespace OrbifyCache

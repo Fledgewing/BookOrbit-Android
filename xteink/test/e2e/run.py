@@ -120,7 +120,7 @@ def sync_through_proxy(ctx: Context, tmp: Path) -> None:
 
 @scenario(*X4S)
 def mirror_urls(ctx: Context, tmp: Path) -> None:
-    """W9: a persisted request runs on Home, saves all pages and every detail."""
+    """W30: a persisted request runs on Home; complete base lists, lazy details/covers."""
     card = ctx.card(tmp)
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
@@ -132,16 +132,21 @@ def mirror_urls(ctx: Context, tmp: Path) -> None:
     lists = ctx.requests("/plugin/catalog/books")
     bad = [e for e in lists if e["status"] != 200 or any(re.search(r"\s\w+=", str(v)) for v in e["query"].values())]
     assert not bad, f"server refused catalog requests: {bad[:3]}"
-    assert any(int(e["query"].get("page", ["1"])[0]) >= 3 for e in lists), "no last library page"
+    assert ctx.requests("/plugin/catalog/manifest"), "no bulk manifest"
+    assert all(e["query"].get("size") == "100" for e in lists if e["path"].endswith("/books"))
     details = [e for e in lists if re.search(r"/books/\d+$", e["path"])]
-    assert len(details) >= len(ctx.manifest["books"]), "not every book detail was saved"
+    assert not details, "Full refresh fetched eager details"
+    bulk = card.crosspoint / "orbify-catalog" / "bulk"
+    generation = (bulk / "active").read_text()
+    assert (bulk / generation / "complete").exists()
+    assert len(list((bulk / generation / "books").rglob("*.json"))) == len(ctx.manifest["books"])
     assert "open catalog to resume" not in run.output
 
 
 
 @scenario("x4-pro")
 def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
-    """Full refresh on Home; SD-only facet page 2, book page 3 and saved book details."""
+    """Full refresh on Home; SD-only facet page 2, book page 3 and lazy file information."""
     import shutil
     card = ctx.card(tmp)
     cx, cy, _, _ = open_catalog(ctx, card)
@@ -159,7 +164,9 @@ def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
     after(full.output, "Full refresh: Done")
     saved = []
     by_id = {b["id"]: b for b in ctx.manifest["books"]}
-    for file in (card.crosspoint / "bookorbit-cache").rglob("*.json"):
+    bulk = card.crosspoint / "orbify-catalog" / "bulk"
+    generation = (bulk / "active").read_text()
+    for file in (bulk / generation / "books").rglob("*.json"):
         body = json.loads(file.read_text())
         if not isinstance(body, dict) or body.get("id") not in by_id:
             continue
@@ -172,7 +179,7 @@ def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
             shutil.copy2(kit.STATE / "library" / by_id[body["id"]]["file"], dest)
             saved.append((body["id"], "/" + target))
             break
-    assert len(saved) == len(by_id), "a Full refresh left book details unsaved"
+    assert len(saved) == len(by_id), "a Full refresh left manifest files unsaved"
     card.download_index(saved)
     before = len(ctx.requests())
     ctx.faults("offline")
@@ -197,6 +204,9 @@ def partial_refresh_keeps_saved_pages(ctx: Context, tmp: Path) -> None:
     ctx.sim.run(card, "seed", script=f"3000:TAP:{sx},{sy}", timeout_s=30)
     library = ctx.sim.run(card, "library", script="3000:SWIPE:0.8,0.5,0.2,0.5,250;5000:QUIT", timeout_s=9)
     cx, cy = home_tile(library.output, "catalog")
+    # Save an actual browse page before the new atomic bulk run is interrupted.
+    # Home's snapshot alone is not a previously published catalog generation.
+    ctx.sim.run(card,"saved-before-partial",script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};6000:DOWN:100;6500:CONFIRM:100;12000:QUIT",timeout_s=18)
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
     (folder / "mirror.request").write_text("1\n")
@@ -224,7 +234,7 @@ def full_refresh_while_reading(ctx: Context, tmp: Path) -> None:
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
     (folder / "mirror.request").write_text("1\n")
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 5}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 150}])
     run = ctx.sim.run(card, "reading", script="3000:RIGHT:100;5000:RIGHT:100;90000:QUIT", timeout_s=105, wake=True)
     reader = after(run.output, "Entering activity: EpubReader")
     after(reader, "Full refresh: Done")
@@ -320,16 +330,16 @@ def sleep_sync_device_heap(ctx: Context, tmp: Path) -> None:
 @scenario(*X4S)
 def heap_floor_waits(ctx: Context, tmp: Path) -> None:
     """X3: the sleep sync's extras start no request when the heap is under the floor (OrbifyHeap): the heap falls to 10 KB (under the X4s' 12 KB floor) while the
-    mirror's first request is held by the proxy; the mirror then waits for the next sync instead of
+    bulk worker's first request is held by the proxy; the mirror then waits for the next sync instead of
     opening another request."""
     card = ctx.card(tmp)
     (card.crosspoint / "orbify").mkdir(exist_ok=True)
     (card.crosspoint / "orbify" / "mirror.request").write_text("1\n")  # resume a user-started walk
-    ctx.faults([{"match": {"path": "/plugin/catalog/root$"}, "action": "delay", "ms": 4000, "times": 1}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/manifest$"}, "action": "delay", "ms": 4000, "times": 1}])
     run = ctx.sim.run(card, "home-low-heap", script="9000:QUIT", timeout_s=15, env={"ORBIFY_SIM_HEAP": "w2000:10000/6000"})
     tail = after(run.output, "ORBIFY_SIM_HEAP t=w2000")
     after(tail, "waiting for heap")
-    root = ctx.requests("/plugin/catalog/root")
+    root = ctx.requests("/plugin/catalog/manifest")
     assert root, "the mirror never started"
     later = [e for e in ctx.requests("/plugin/catalog/") if e["t"] > root[0]["t"]]
     assert not later, f"requests opened under the floor: {[e['path'] for e in later][:5]}"
@@ -578,7 +588,7 @@ def catalog_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     card = ctx.card(tmp)
     cx, cy, rx, ry = open_catalog(ctx, card)
     # Each catalog request waits 400 ms at the proxy: the walk lasts long enough for the badge to move.
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 25}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400}])
     shots = {ms: f"x4-pro-full-{ms}" for ms in range(16000, 120001, 3000)}
     run = ctx.sim.run(card, "full", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};"
                       f"14000:TAP:{rx},{ry},1300;140000:QUIT", timeout_s=155, screenshots=shots)
@@ -619,7 +629,7 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     card = ctx.card(tmp)
     card.theme(UI_THEME_BOOKORBIT)
     sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 15}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400}])
     run = ctx.sim.run(card, "hold", script=f"3000:TAP:{sx},{sy},1300", after_reboot="8000:TAP:240,700",
                       timeout_s=140)
     after(run.output, "Full refresh: reboot notice suppressed")

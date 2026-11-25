@@ -14,6 +14,7 @@ struct Snapshot {
 #if CROSSINK_TAILNET_ORBIFY_MIRROR
 Snapshot snapshot();
 void freshRequest();
+void requestIncremental();
 // Main-loop scheduling only: no network, parsing, scans, or waiting on the UI
 // task.
 void service();

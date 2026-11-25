@@ -62,6 +62,7 @@ void BookOrbitCatalogBrowserActivity::tickMirror() {
     if (regularRefresh) {
       regularRefresh = false;
       refreshing = false;
+      viewLoadedAt[static_cast<int>(navLevel)] = 0;
       BookOrbitCatalogListCache::clear();
       LOG_INF("BookOrbit", "Catalog: Refresh done (%u errors); saved replies ready", static_cast<unsigned>(mirrorWalk.failures()));
     }

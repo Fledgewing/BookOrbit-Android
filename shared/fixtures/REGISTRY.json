@@ -547,10 +547,11 @@
     {
       "file": "catalog/bulk-refresh/catalog.json",
       "rule": "Bulk manifest, contextual secondary membership, server ranks and offline windows; shared benchmark shape",
-      "owner": "companion, plugin",
+      "owner": "companion, plugin, xteink",
       "readers": [
         "kt",
-        "lua"
+        "lua",
+        "cpp"
       ]
     },
     {

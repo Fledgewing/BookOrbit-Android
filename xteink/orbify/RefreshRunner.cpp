@@ -12,10 +12,13 @@
 #include <freertos/idf_additions.h>
 #endif
 #include <atomic>
+#include <cstdlib>
+#include <cstdio>
 #include <ctime>
 #include <mutex>
 
 #include "CacheStore.h"
+#include "BulkCatalog.h"
 #include "CopyRefresh.h"
 #include "HeapFloor.h"
 #include "Mirror.h"
@@ -30,6 +33,7 @@ constexpr const char* CHECKPOINT = "/.crosspoint/orbify/walk.state";
 constexpr const char* RESULT = "/.crosspoint/orbify/walk.result";
 constexpr const char* REQUEST = "/.crosspoint/orbify/mirror.request";
 std::atomic<bool> running{false}, stopping{false}, fresh{false}, sleeping{false}, terminalThisBoot{false};
+std::atomic<bool> incrementalRequested{false}, quiet{false};
 std::atomic<unsigned long> retryAt{0}, requestCount{0};
 std::atomic<TaskHandle_t> workerTask{nullptr};
 std::mutex stateMutex;
@@ -43,18 +47,6 @@ void reap() {
   }
 }
 #endif
-void publish(const RefreshPlan& plan, bool finished = false, bool paused = false,
-             const std::string& result = "") {
-  std::lock_guard<std::mutex> lock(stateMutex);
-  state = {true,
-           finished,
-           paused,
-           finished ? plan.percent() : std::min(99u, plan.percent()),
-           plan.doneCount(),
-           plan.total(),
-           plan.errors(),
-           result};
-}
 bool write(const char* path, const std::string& text) {
   const std::string tmp = std::string(path) + ".tmp";
   HalFile file;
@@ -68,199 +60,69 @@ bool write(const char* path, const std::string& text) {
   return ok;
 }
 std::string read(const char* path) {
-  char text[512]{};
-  Storage.readFileToBuffer(path, text, sizeof(text));
-  return text;
+  char text[512]{};Storage.readFileToBuffer(path,text,sizeof(text));return text;
 }
 bool stop() { return stopping.load() || fresh.load() || OrbifyHeap::starved(); }
-FacetQuery facet(const BookOrbitBookQuery& q) {
-  return {q.sort,     q.order,  q.readStatus,   q.shelf,        q.query,    q.author,
-          q.seriesId, q.series, q.collectionId, q.smartScopeId, q.libraryId};
-}
-BookOrbitBookQuery query(const FacetQuery& f) {
-  BookOrbitBookQuery q;
-  q.sort = f.sort;
-  q.order = f.order;
-  q.readStatus = f.readStatus;
-  q.shelf = f.shelf;
-  q.query = f.query;
-  q.author = f.author;
-  q.seriesId = f.seriesId;
-  q.series = f.series;
-  q.collectionId = f.collectionId;
-  q.smartScopeId = f.smartScopeId;
-  q.libraryId = f.libraryId;
-  return q;
-}
-void addList(RefreshPlan& plan, const FacetQuery& query) {
-  browseQueries(query, [&](const FacetQuery& option) { plan.add(Kind::Books, encodeQuery(option)); });
-}
-bool step(const Step& current, int pageNumber, RefreshPlan& plan) {
-  switch (current.kind) {
-    case Kind::Root: {
-      std::vector<BookOrbitCatalogSection> sections;
-      if (!BookOrbitCatalogClient::fetchRootSections(sections)) return false;
-      BookOrbitCatalogCounts counts;
-      if (!stop() && OrbifyHeap::roomForRequest("Full refresh counts"))
-        BookOrbitCatalogClient::fetchCatalogCounts(counts);
-      for (const auto& section : sections) {
-        if (isFacetSection(section.id))
-          plan.add(Kind::Section, section.id);
-        else
-          addList(plan, facet(BookOrbitCatalogClient::sectionBookQuery(section.id)));
-      }
-      plan.add(Kind::Books, encodeQuery(facet(BookOrbitCatalogClient::sectionBookQuery(
-                                BookOrbitCatalogClient::WANT_TO_READ_SHELF))));
-      return true;
-    }
-    case Kind::Section: {
-      BookOrbitFacetPage page;
-      if (!BookOrbitCatalogClient::fetchSectionEntries(current.arg, pageNumber, page)) return false;
-      // Read total/size on the first page and enqueue every remaining page up
-      // front. hasNext also supports sections which send their entire list
-      // without totals.
-      if (pageNumber == 1 && page.total >= 0 && page.pageSize > 0) {
-        const int pages = std::max(1, (page.total + page.pageSize - 1) / page.pageSize);
-        for (int n = 2; n <= pages; ++n) plan.add(Kind::Section, current.arg, n);
-      } else if ((page.total < 0 || page.pageSize <= 0) && page.hasNext) {
-        plan.add(Kind::Section, current.arg, pageNumber + 1);
-      }
-      for (const auto& entry : page.entries) addList(plan, facetQuery(current.arg, entry.id, entry.seriesId));
-      return true;
-    }
-    case Kind::Books: {
-      FacetQuery f;
-      if (!decodeQuery(current.arg, f)) return false;
-      BookOrbitBookPage page;
-      if (!BookOrbitCatalogClient::fetchBooks(query(f), pageNumber, page)) return false;
-      if (pageNumber == 1) {
-        // Canonical all-books includes every downloadable catalog book. Its total
-        // fixes the number of distinct detail jobs before the data pass starts.
-        if (f.query.empty() && f.author.empty() && f.series.empty() && f.seriesId.empty() &&
-            f.collectionId.empty() && f.smartScopeId.empty() && f.libraryId.empty() && f.readStatus.empty() &&
-            f.shelf.empty())
-          plan.expectDetails(std::max(0, page.total));
-        const int size = std::max(1, page.pageSize);
-        const int pages = std::max(1, (page.total + size - 1) / size);
-        for (int n = 2; n <= pages; ++n) plan.add(Kind::Books, current.arg, n, true);
-      }
-      for (const auto& book : page.books)
-        if (book.id > 0) plan.add(Kind::Detail, std::to_string(book.id));
-      return true;
-    }
-    case Kind::Detail: {
-      BookOrbitBookDetail detail;
-      return BookOrbitCatalogClient::fetchBookDetail(strtoll(current.arg.c_str(), nullptr, 10), detail);
-    }
-  }
-  return false;
-}
 void runTask() {
   const unsigned long began = millis();
   workerTask.store(xTaskGetCurrentTaskHandle());
   requestCount.store(0);
   const bool reset = fresh.exchange(false);
+  quiet.store(!requested());
+  incrementalRequested.store(false);
   if (reset) {
     Storage.remove(CHECKPOINT);
     Storage.remove(RESULT);
   }
-  RefreshJournal journal(reset, &stop);
-  if (journal.wasInterrupted()) {
-    std::lock_guard<std::mutex> lock(stateMutex);
-    state.paused = true;
-    return;  // leave the checkpoint/request untouched for wake
+  // Retire the previous exhaustive walk's queue, never its published catalog.
+  if(Storage.exists("/.crosspoint/orbify/walk")) {
+    RefreshJournal retired(true,&stop);
+    if(!retired.good()||stop())return;
   }
-  RefreshPlan plan(journal);
-  const std::string checkpoint = read(CHECKPOINT);
-  bool valid = journal.good() && (checkpoint.empty() || plan.restore(checkpoint));
-  if (!journal.count(0)) plan.add(Kind::Root, "");
+  RefreshJournal::cleanup(&stop);
+  if(stop())return;
   OrbifyCache::clearStorageStop();
-  unsigned long requests = 0, pagesSaved = 0, noteAt = began;
-  Stop terminal = valid ? Stop::None : Stop::Io;
-  publish(plan);
+  if(!OrbifyCache::roomForReply()) {
+    const auto result=stopText(OrbifyCache::storageStop(),0,0);write(RESULT,result);Storage.remove(REQUEST);terminalThisBoot.store(true);
+    std::lock_guard<std::mutex> lock(stateMutex);state.active=!quiet.load();state.finished=true;state.failures=1;state.result=result;
+    LOG_INF("ORB","%s",result.c_str());return;
+  }
   {
     OrbifyWifi::Hold radio(OrbifyWifi::Owner::Refresh);
-    if (terminal == Stop::None && !plan.finished() && !OrbifyWifi::connect("refresh", &stop))
-      publish(plan, false, true);
-    else if (terminal == Stop::None) {
-      // Per-task modes and serialized network requests let cached foreground
-      // reads proceed independently. No render operation runs on this task.
-      OrbifyCache::ScopedMode full(orbify::cache::Mode::Full);
-      BookOrbitCatalogClient::Session session;
-      Step current;
-      int page;
-      while (!stop() && WiFi.status() == WL_CONNECTED && plan.next(current, page)) {
-        if (!OrbifyHeap::roomForRequest("Full refresh")) {
-          delay(100);
-          continue;
-        }
-        OrbifyCache::setPlanBytes(journal.bytes());
-        if (!OrbifyCache::roomForReply()) {
-          terminal = OrbifyCache::storageStop();
-          break;
-        }
-        const bool ok = step(current, page, plan);
-        requests = requestCount.load();
-        if (ok && current.kind != Kind::Detail) ++pagesSaved;
-        terminal = OrbifyCache::storageStop();
-        if (!journal.good()) terminal = Stop::Io;
-        if (terminal != Stop::None) break;
-        plan.advance(!ok);
-        if (!write(CHECKPOINT, plan.checkpoint())) {
-          terminal = Stop::Io;
-          break;
-        }
-        publish(plan);
-        if (millis() - noteAt >= 10000) {
-          noteAt = millis();
-          const auto elapsed = std::max<unsigned long>(1, millis() - began);
-          const double rate = requests * 1000.0 / elapsed;
-          LOG_INF("ORB",
-                  "Full refresh: pagesSaved=%lu itemsSaved=%u/%u bytesOnSD=%llu "
-                  "elapsed=%lums requests/s=%.2f estimateRemaining=%.0fs",
-                  pagesSaved, static_cast<unsigned>(plan.savedCount()), static_cast<unsigned>(plan.total()),
-                  static_cast<unsigned long long>(OrbifyCache::bytesOnSd()), elapsed, rate,
-                  rate > 0 ? (plan.total() - plan.doneCount()) / rate : 0);
-        }
-        delay(10);  // lend the CPU after each page; input stays on the main task
+    if (!OrbifyWifi::connect("refresh", &stop)) {
+      std::lock_guard<std::mutex> lock(stateMutex); state.active = !quiet.load(); state.paused = true;
+      retryAt.store(millis()+60000); return;
+    }
+    OrbifyCache::ScopedMode full(orbify::cache::Mode::Full);
+    BookOrbitCatalogClient::Session session;
+    const bool ok = OrbifyBulk::refresh(reset,&stop,[](unsigned p) {
+      std::lock_guard<std::mutex> lock(stateMutex);
+      state.active = !quiet.load(); state.percent = std::max(state.percent,p); state.paused = false;
+    }, !quiet.load());
+    if(ok) {
+      if (!quiet.load()) {
+      const auto now=time(nullptr);
+      write("/.crosspoint/orbify/mirror.state",std::to_string(now>1700000000?now:0)+"\t"+OrbifyCopyRefresh::libraryVersion()+"\n");
+      write(RESULT,"Done");Storage.remove(REQUEST);terminalThisBoot.store(true);
+      LOG_INF("ORB","Full refresh: Done");LOG_INF("ORB","Mirror: saved for offline");
+      std::lock_guard<std::mutex> lock(stateMutex);state.active=true;state.finished=true;state.percent=100;state.result="Done";
+      } else {terminalThisBoot.store(true);}
+    } else {
+      const auto terminal=OrbifyCache::storageStop();
+      if(terminal!=Stop::None) {
+        const auto result=stopText(terminal,requestCount.load(),requestCount.load());write(RESULT,result);Storage.remove(REQUEST);terminalThisBoot.store(true);
+        LOG_INF("ORB","%s",result.c_str());
+        std::lock_guard<std::mutex> lock(stateMutex);state.finished=true;state.result=result;state.failures=1;
+      } else {
+        if(OrbifyHeap::starved()) LOG_INF("ORB","Full refresh: waiting for heap");
+        std::lock_guard<std::mutex> lock(stateMutex);state.paused=true;retryAt.store(millis()+60000);
       }
     }
-    if (!journal.good()) terminal = Stop::Io;
-    if (terminal != Stop::None) {
-      auto result = stopText(terminal, plan.savedCount(), plan.total());
-      if (!plan.enumerated()) result += " (inventory incomplete)";
-      write(RESULT, result);
-      terminalThisBoot.store(true);
-      Storage.remove(REQUEST);  // terminal: no sleep/wake/main-loop retry
-      publish(plan, true, false, result);
-      LOG_INF("ORB", "%s", result.c_str());
-    } else if (plan.finished() && valid && !stop()) {
-      const auto now = time(nullptr);
-      if (!plan.errors())
-        write("/.crosspoint/orbify/mirror.state",
-              std::to_string(now > 1700000000 ? now : 0) + "\t" + OrbifyCopyRefresh::libraryVersion() + "\n");
-      terminalThisBoot.store(true);
-      Storage.remove(REQUEST);
-      const auto result = plan.errors() ? "Done with " + std::to_string(plan.errors()) + " errors" : "Done";
-      write(RESULT, result);
-      publish(plan, true, false, result);
-      LOG_INF("ORB", "Mirror: saved for offline: %u requests (%u failed)",
-              static_cast<unsigned>(plan.doneCount()), static_cast<unsigned>(plan.errors()));
-      LOG_INF("ORB",
-              "Full refresh: %s pagesSaved=%lu saved=%u/%u bytesOnSD=%llu "
-              "elapsed=%lums requests/s=%.2f estimate10300books=%.0fs",
-              result.c_str(), pagesSaved, static_cast<unsigned>(plan.savedCount()),
-              static_cast<unsigned>(plan.total()), static_cast<unsigned long long>(OrbifyCache::bytesOnSd()),
-              millis() - began, requests * 1000.0 / std::max<unsigned long>(1, millis() - began),
-              plan.bookCount() && requests
-                  ? plan.total() * 10300.0 / plan.bookCount() * (millis() - began) / (requests * 1000.0)
-                  : 0);
-    } else {
-      publish(plan, false, true);
-      retryAt.store(millis() + 60000);  // a failed join is paced, never a tight retry loop
-    }
+    LOG_INF("ORB","Full refresh worker: ok=%d requests=%lu elapsedMs=%lu",ok,requestCount.load(),millis()-began);
+#ifdef SIMULATOR
+    if (std::getenv("ORBIFY_SIM_QUIT_BULK_DONE")) {std::fflush(nullptr);std::_Exit(ok ? 0 : 1); }
+#endif
   }
-  if (terminalThisBoot.load()) RefreshJournal::cleanup(&stop);
   workerTask.store(nullptr);
 }
 void task(void*) {
@@ -288,6 +150,10 @@ void countCatalogRequest() {
 bool catalogTask() { return xTaskGetCurrentTaskHandle() == workerTask.load(); }
 bool cancelCatalogRequest() { return xTaskGetCurrentTaskHandle() == workerTask.load() && stop(); }
 
+void requestIncremental() {
+  if (!OrbifyBulk::active() || running.load() || requested() || WiFi.status()!=WL_CONNECTED) return;
+  incrementalRequested.store(true);terminalThisBoot.store(false);retryAt.store(0);sleeping.store(false);
+}
 void freshRequest() {
   fresh.store(true);
   terminalThisBoot.store(false);
@@ -309,7 +175,7 @@ void service() {
   static unsigned long checkedAt = 0;
   if (!fresh.load() && checkedAt && millis() - checkedAt < 1000) return;
   checkedAt = millis();
-  if (!requested()) {
+  if (!requested() && !incrementalRequested.load()) {
     static bool loadedResult = false;
     if (!loadedResult) {
       loadedResult = true;
@@ -323,6 +189,7 @@ void service() {
     }
     return;
   }
+  if (incrementalRequested.load() && !requested() && WiFi.status()!=WL_CONNECTED) return;
   if (!OrbifyHeap::roomForRequest("Full refresh worker")) return;
   running.store(true);
   stopping.store(false);
@@ -346,7 +213,7 @@ void credentialsChanging() {
   Storage.remove(CHECKPOINT);
   Storage.remove(RESULT);
   Storage.remove("/.crosspoint/orbify/mirror.state");
-  terminalThisBoot.store(true);
+  terminalThisBoot.store(true);incrementalRequested.store(false);
   std::lock_guard<std::mutex> lock(stateMutex);
   state = Snapshot{};
 }
