@@ -11,7 +11,7 @@
 -- A busy or broken database is a miss, never an error on screen.
 ---------------------------------------------------------------------------------------------
 
-Store = { VERSION = 1, FILE = "orbit.db", memo = {}, memo_order = {} }
+Store = { ui_pid = Db.pid(), VERSION = 1, FILE = "orbit.db", memo = {}, memo_order = {} }
 
 function Store.path() return OC.dir() .. "/" .. Store.FILE end
 
@@ -39,12 +39,22 @@ end
 
 -- Runs fn(conn) in one read transaction. -> fn's result, or nil (logged once per kind of failure).
 local function within(owner, what, fn)
+    local while_reading = Db.pid() == Store.ui_pid and not (OC and OC.child) and reading and reading()
+    if while_reading and not OC._dir then return nil end
     local memo_key = Store.path() .. "|" .. tostring(owner) .. "|" .. what
     local function fallback(err)
         if Db.code(err) == "busy" or Db.code(err) == "locked" then
             local m = Store.memo[memo_key]
             if m then return m[1], m[2] end
         end
+    end
+    -- No SQLite open/stat/PRAGMA/queries on the reading path, even on a miss.
+    -- Several short busy waits in one event can still exceed the tap budget.
+    -- Only a previously decoded result is safe here; refresh outside reading.
+    if while_reading then
+        local m = Store.memo[memo_key]
+        if m then return m[1], m[2] end
+        return nil
     end
     local conn, err = Store.conn(owner)
     if not conn then

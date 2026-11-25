@@ -123,7 +123,7 @@ function Channel.connect(why)
         return false
     end
     local sock = socket.tcp()
-    sock:settimeout(1)
+    sock:settimeout(0.02) -- loopback only: never spend a second on the UI thread
     local ok, err = sock:connect("127.0.0.1", 47913)
     if not ok then
         sock:close()
