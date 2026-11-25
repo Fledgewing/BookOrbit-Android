@@ -109,6 +109,25 @@ return {
             assertEquals(lua(25),book.readText())
         } finally { root.deleteRecursively() }
     }
+    @Test fun selectedStarbreakerSidecarIsCheckedEvenAfterTheStartupScanFinished() {
+        val root = Files.createTempDirectory("repair-selected").toFile()
+        try {
+            File(root, "koreader/settings/booksync-w31-repair.done").apply { parentFile!!.mkdirs(); writeText("complete") }
+            val file = File(root, "Books/MoonReader/Series/Starbreaker/06.00 - Starbreaker_ Volume 6_ Starbreaker (Unabridged) - Text Only [21234].sdr/metadata.epub.lua")
+            file.parentFile!!.mkdirs(); file.writeText(lua(10))
+            File(file.path + ".old").writeText(lua(15))
+            val logs = arrayListOf<String>()
+            assertTrue(StatusMarginRepair.run(root, {}, logs::add, target = file))
+            assertEquals(lua(15), file.readText())
+            assertEquals(lua(10), File(file.path + ".booksync-before-w31").readText())
+            assertTrue(logs.any { "book-open check" in it })
+            assertTrue(logs.any { "restored" in it })
+            file.writeText(lua(25))
+            StatusMarginRepair.run(root, {}, {}, target = file)
+            assertEquals("a later user choice survives", lua(25), file.readText())
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun interruptionDoesNotMarkMigrationComplete() {
         val root=Files.createTempDirectory("margin-paused").toFile()
         try {

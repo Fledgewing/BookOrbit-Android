@@ -166,9 +166,15 @@
       "name": "COPIES",
       "method": "net.fledgewing.orbitcompanion.action.COPIES",
       "extras": [
-        "reason"
+        "reason",
+        "ask",
+        "prepare",
+        "template",
+        "server",
+        "user",
+        "userkey"
       ],
-      "does": "find the copies on the reader that changed in the library (copies/ask.lua)"
+      "does": "find changed copies from an in-memory ask, or prepare one replacement in the companion"
     },
     {
       "name": "SLEEP_REFRESH",
@@ -225,7 +231,12 @@
         "new_hash",
         "board_year",
         "board_key",
-        "board_now"
+        "board_now",
+        "remember_id",
+        "repair_book",
+        "repair_token",
+        "copy_path",
+        "plugin_state"
       ],
       "does": "a write the plugin made, patched into orbit.db (or a wipe)"
     },
@@ -422,7 +433,7 @@
     },
     {
       "path": "koreader/settings/orbit-cache/copies/ask.lua",
-      "writer": "plugin",
+      "writer": "companion",
       "reader": "companion",
       "format": "lua",
       "what": "the copies on the reader to check"
@@ -527,6 +538,20 @@
       "reader": "companion",
       "format": "lua",
       "what": "spool filenames belonging to the outstanding mailbox, for durable acknowledgement"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/repair-result.lua",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "lua",
+      "what": "targeted pre-open sidecar check token and result"
+    },
+    {
+      "path": "koreader/settings/orbit-cache/plugin-state.lua",
+      "writer": "companion",
+      "reader": "plugin",
+      "format": "lua",
+      "what": "detail variant and copies queue snapshot"
     }
   ],
   "db": {

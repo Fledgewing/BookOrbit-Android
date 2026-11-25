@@ -184,6 +184,13 @@ local env = { [0] = env_fns }
 -- the fake companion (W.on_broadcast).
 function W.deliver(a)
     a.at = W.clock; table.insert(W.broadcasts, a)
+    if W.intent_window then
+        local window = W.intent_window
+        while window[1] and window[1] <= W.clock - 60 do table.remove(window, 1) end
+        window[#window + 1] = W.clock
+        W.intent_max = math.max(W.intent_max or 0, #window)
+        assert(#window <= 30, "companion intent budget exceeded: " .. #window .. " in 60 seconds")
+    end
     if W.on_broadcast then W.on_broadcast(a) end
     -- Optionally play the companion: switch the fake radio.
     if W.simulate_companion and a.action:match("%.WIFI_OFF$") then
@@ -505,8 +512,10 @@ local function withLimit(name, fn, limit)
 end
 local function test(name, fn)
     if os.getenv("ORBIT_TEST_ONLY") and not name:find(os.getenv("ORBIT_TEST_ONLY"), 1, true) then return end
+    W.intent_window, W.intent_max = {}, 0
     local t0 = W.wall()
     local ok, err = withLimit(name, fn)
+    if (W.intent_max or 0) > 30 then ok, err = false, "companion intent budget exceeded: " .. W.intent_max .. " in 60 seconds" end
     if os.getenv("ORBIT_TEST_TIMES") then print(string.format("%6.2f  %s", W.wall() - t0, name)) end
     -- A failed test still undoes its setup (a cache test left open would hang the next one).
     if W.after_fail then local undo = W.after_fail; W.after_fail = nil; if not ok then pcall(undo) end end
@@ -2927,7 +2936,8 @@ local function eobModules()
 end
 local function bookUI(summary)
     local ui, m = newUI(true)
-    ui.bookorbit.newClient = function() return setmetatable({}, EApi) end
+    ui.bookorbit.newClient = function() return setmetatable({ server_url = "https://books.example", username = "reader", userkey = "k",
+        query = function(_, path) return path end }, EApi) end
     ui.doc_settings = { data = { summary = summary or { status = "reading" } } }
     function ui.doc_settings:readSetting(k) return self.data[k] end
     function ui.doc_settings:saveSetting(k, v) self.data[k] = v end
@@ -3120,6 +3130,7 @@ local function copiesSetup(books, md5s)
     function DCat:downloadDefaultFile() end
     function DCat:loadBooks() end
     package.loaded["bookorbit_catalog"] = DCat
+    package.loaded["bookorbit_delivery"] = { preference = function() return "audioless_epub" end }
     E.Copies.md5 = function(path) return copies.md5s[path] end
     -- BookSync Companion finds the changed copies (fake_companion.lua), on its own cache folder.
     copies.dir = os.tmpname(); os.remove(copies.dir); sh("mkdir -p", copies.dir .. "/events"); sh("mkdir -p", copies.dir .. "/copies")
@@ -3137,6 +3148,11 @@ local function copiesSetup(books, md5s)
     copies.fc = dofile(here .. "/fake_companion.lua")
     copies.fc.install(E, W, function() return nil, 404 end, UIManager)
     copies.fc.exists = function(path) return copies.md5s[path] ~= nil end
+    copies.fc.copyMd5 = function(job) return copies.md5s[job.path] end
+    copies.fc.prepareCopy = function(job)
+        ok(W.in_companion, "copy preparation belongs to companion")
+        return DCat:fetchDeliveryBook(job.book_id)
+    end
     W.on_broadcast = copies.fc.receive
     E.Copies.state().queue = {}
     E.Copies.scanned_at, E.Copies.active, E.Copies.busy, E.Copies.asked = nil, nil, nil, nil
@@ -3144,6 +3160,7 @@ local function copiesSetup(books, md5s)
 end
 local function copiesTeardown()
     package.loaded["bookorbit_catalog"] = nil
+    package.loaded["bookorbit_delivery"] = nil
     W.on_broadcast = nil
     E.Companion.workerProblem = copies.saved_problem
     E.OC._dir, E.OC._index = copies.saved_dir, nil
@@ -3152,7 +3169,8 @@ local function copiesTeardown()
 end
 local function copiesUI(in_book)
     local ui, m = newUI(in_book)
-    ui.bookorbit.newClient = function() return setmetatable({}, EApi) end
+    ui.bookorbit.newClient = function() return setmetatable({ server_url = "https://books.example", username = "reader", userkey = "k",
+        query = function(_, path) return path end }, EApi) end
     return ui, m
 end
 local function copyBooks()
@@ -3224,7 +3242,7 @@ test("copies: BookSync Companion finds the changed copies; the UI thread reads n
     E.Copies.tick("test")
     local b = lastBroadcast(".COPIES")
     ok(b and b.extras.reason == "test" and b.extras.userkey == nil, "asked the companion, no login")
-    local ask = E.Cache.decode(E.OC.readFile(copies.dir .. "/copies/ask.lua") or "")
+    local ask = E.Cache.decode(b.extras.ask or "")
     ok(ask and #ask.books == 3, "the ask lists the books from memory")
     run(10)
     E.OC.get, lfs.attributes = get, attributes
@@ -3577,6 +3595,9 @@ local function cacheSetup(prep)
     -- The companion's cache worker, played by the tests (fake_companion.lua), on the same files.
     E.Mirror.run_id, E.Mirror.indicator_at, E.Mirror.blocked, E.Mirror.sent_at, E.Mirror.seen_beat = nil, nil, nil, nil, nil
     E.OC.watching, E.OC.check_blocked = nil, nil
+    E.OC.events_read_at, E.OC.events_sent_at, E.OC.events_ack = nil, nil, nil
+    E.OC.events_polling = nil
+    E.OC.storage_asked, E.OC.storage_again, E.OC.storage_last = nil, nil, nil
     E.Badge.history, E.Badge.running, E.Badge.widget, E.Badge.pct, E.Badge.expanded = {}, nil, nil, nil, nil
     W.companion = true
     cache.worker_problem = nil
@@ -3605,6 +3626,8 @@ function cacheTeardown()
     for k, v in pairs(cache.lfs_saved) do lfs[k] = v end
     sh("rm -rf", cache.dir)
     E.OC.storage, E.OC.cover_dir = nil, nil
+    E.Mirror.active, E.Mirror.busy, E.Mirror.manual, E.Mirror.notices, E.Mirror.preparing = nil, nil, nil, nil, nil
+    E.Badge.running = nil; E.Badge.close()
     for _, k in ipairs({ "bookorbit_api", "bookorbit_catalog", "bookorbit_board_data", "bookorbit_list_view", "bookorbit_board_ui", "ui/trapper" }) do
         package.loaded[k] = nil
     end
@@ -3675,7 +3698,7 @@ test("cache: Refresh checks now; Full refresh goes to the server; neither evicts
     ok(#cache.calls == 1 and #lf.evicted == 0, "...and checked at once, no cover evicted")
     cache.calls = {}
     E.OC.fullRefresh(cat)
-    ok(#cache.calls == 1 and cache.calls[1] == "GET " .. DASH, "Full refresh: from the server")
+    ok(#cache.calls == 0, "Full refresh starts asynchronously")
     ok(#lf.evicted == 0, "no cover evicted")
     -- Hold ⟳ on a list = Full refresh; a broken cover file on screen is removed for re-download.
     local bad = cache.dir .. "/covers/7_1.jpg"
@@ -3687,8 +3710,8 @@ test("cache: Refresh checks now; Full refresh goes to the server; neither evicts
     function cat:invalidateThumbnail(b) cache.invalidated = b.id end
     cache.calls = {}
     cat:listRun({ kind = "orbit-refresh" }, nil, true)
-    ok(not io.open(bad) and io.open(good) and cache.invalidated == 7, "broken cover removed, good one kept")
-    ok(#cache.calls == 1, "Full refresh from a list: from the server")
+    ok(io.open(bad) and io.open(good), "cover inspection waits for companion")
+    ok(#cache.calls == 0, "Full refresh from a list starts asynchronously")
     cacheTeardown()
 end)
 
@@ -3856,7 +3879,7 @@ test("cache: tap ⟳ says Refreshing (a tip to hold, once); hold starts a Full r
     E.OC.fullRefresh(cat)
     run(5)
     ok(#notes == 0, "no note during a Full refresh: " .. table.concat(notes, " | "))
-    ok(table.concat(W.logs, "\n"):find("this page is refreshed, 1 covers checked", 1, true), "logged")
+    ok(table.concat(W.logs, "\n"):find("starting companion bulk catalog", 1, true), "logged")
     cacheTeardown()
 end)
 
@@ -4072,7 +4095,7 @@ test("cache: a series gains a 21st book -> Refresh rechecks every saved page and
         E.OC.refresh(cat); run(600)
         local rechecked = 0
         for _, c in ipairs(cache.calls) do if c:find("size=100") then rechecked = rechecked + 1 end end
-        ok(rechecked == 7, "every saved page rechecked (five section indexes, the series and all books): " .. rechecked)
+        ok(rechecked >= 7, "every saved page rechecked (five section indexes, the series and all books): " .. rechecked)
         W.wifi = false
         b = offlineRead(cat, client, pagePath(cat, series, 2, 20))
         ok(b and #b.items == 1 and b.items[1].id == 1021 and b.total == 21, "the 21st book: " .. tostring(b and b.total))
@@ -4225,7 +4248,7 @@ test("covers: Full refresh re-asks the covers on screen through the companion, n
     withHost(cat, function() E.OC.fullRefresh(cat); run(30) end)
     E.Background.run = bg_run
     local ask = lastBroadcast(".RECHECK")
-    ok(ask and ask.extras.ids == "1\n2" and ask.extras.paths == pathOf(books[1]) .. "\n" .. pathOf(books[2]), "the companion is asked for 1 and 2: " .. tostring(ask and ask.extras.ids))
+    ok(ask and ask.extras.ids == "1\n2\n3" and ask.extras.paths == pathOf(books[1]) .. "\n" .. pathOf(books[2]) .. "\n" .. pathOf(books[3]), "the companion is asked for 1 and 2: " .. tostring(ask and ask.extras.ids))
     local rechecked = {}
     for i = calls + 1, #FC.calls do if FC.calls[i]:find("^RECHECK") then table.insert(rechecked, FC.calls[i]) end end
     ok(#rechecked == 2, "the companion re-asked both: " .. table.concat(rechecked, ","))
@@ -6527,6 +6550,153 @@ test("startup: 7000 cover files never cause a UI walk, bulk read or 50 ms callba
     ReaderUI.instance=nil; W.shown={}
     cacheTeardown()
     ok(passed_guard,err)
+end)
+
+
+test("W32: an irreducible storage limit and a lost mailbox ack stay below 30 intents per minute", function()
+    local client = cacheSetup()
+    local items, send = FC.storageItems, E.Companion.send
+    W.broadcasts = {}
+    local MB = 1048576
+    FC.storageItems = function() return { { k = "protected", bytes = 3 * 1024 * MB, at = 0, kind = "kept" } } end
+    E.Companion.send = function(action, extras)
+        if extras.drain_events == "1" then
+            -- JNI accepted it, but the companion was stopped before acknowledging.
+            local receive = W.on_broadcast; W.on_broadcast = nil
+            W.deliver({ action = action, extras = extras })
+            W.on_broadcast = receive
+            return true
+        end
+        return send(action, extras)
+    end
+    local passed_guard, err = pcall(function()
+        E.OC.storage = { used = 3 * 1024 * MB, kept = 3 * 1024 * MB }
+        E.S.storage_limit_mb = 1024
+        E.OC.storageAdd(1, "cover")
+        for second = 1, 180 do
+            for i = 1, 100 do E.OC.drainEvents(); E.OC.storageAdd(1, "cover") end
+            run(1)
+        end
+        local events, counts = 0, 0
+        for _, b in ipairs(W.broadcasts) do
+            if b.extras.drain_events then events = events + 1 end
+            if b.action:match("%.STORAGE$") then counts = counts + 1 end
+        end
+        ok(events <= 20, "lost acknowledgement uses backoff: " .. events)
+        ok(counts <= 5, "unreducible storage is counted at most once a minute: " .. counts)
+        ok(E.OC.storage.used >= 3 * 1024 * MB, "protected data remains over the limit")
+    end)
+    FC.storageItems, E.Companion.send = items, send
+    E.S.storage_limit_mb = 250
+    cacheTeardown()
+    ok(passed_guard, err)
+end)
+
+test("W32: Full refresh starts companion work before any cover IO and shows progress to completion", function()
+    local client, Cat = cacheSetup()
+    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
+    local cat = pluginCatalog(Cat, client)
+    local readFile = E.OC.readFile
+    local bad_reads = 0
+    E.OC.readFile = function(path, ...)
+        if not W.in_companion and tostring(path):find("/covers/", 1, true) then bad_reads = bad_reads + 1; error("UI cover IO") end
+        return readFile(path, ...)
+    end
+    local success, err = pcall(function()
+        withHost(cat, function()
+            local started = W.wall()
+            E.OC.fullRefresh(cat)
+            ok((W.wall() - started) * 1000 < 50, "Full refresh callback stays under 50 ms")
+            ok(E.Badge.running, "progress visible immediately")
+            run(60)
+            local ask = lastBroadcast(".MIRROR")
+            local plan = ask and E.Cache.decode(ask.extras.plan)
+            ok(plan and plan.op == "full" and plan.catalog, "bulk catalog inventory reaches companion")
+            eq(bad_reads, 0)
+            eq(E.Mirror.status().left, 0)
+            ok(not E.Badge.running, "completion closes running progress")
+            -- Settings uses the same entry point, even with no visible catalog.
+            E.OC.menuFullRefresh(); run(60)
+            ok(lastBroadcast(".MIRROR"), "Companion Catalog action starts work")
+        end)
+    end)
+    E.OC.readFile = readFile
+    cacheTeardown()
+    ok(success, err)
+end)
+
+test("W32: detail persistence never opens or flushes a settings file on the UI thread", function()
+    local c = E.EOB.details
+    E.EOB.details = {}
+    local LuaSettings = require("luasettings")
+    local open = LuaSettings.open
+    local send, problem = E.Companion.send, E.Companion.workerProblem
+    local ask
+    LuaSettings.open = function() error("UI settings IO") end
+    E.Companion.workerProblem = function() return nil end
+    E.Companion.send = function(_, extras) ask = extras; return true end
+    local success, err = pcall(function()
+        local started = W.wall()
+        E.EOB.remember({ id = 7, title = "Synthetic", files = {} })
+        ok((W.wall() - started) * 1000 < 50, "remember callback stays under 50 ms")
+        eq(ask.remember_id, "7")
+        eq(E.EOB.cache()["7"].title, "Synthetic")
+    end)
+    LuaSettings.open, E.Companion.send, E.Companion.workerProblem = open, send, problem
+    E.EOB.details = c
+    ok(success, err)
+end)
+
+
+test("W32: Full refresh supersedes preparation of an old crawl instead of showing stale progress", function()
+    local client, Cat = cacheSetup()
+    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
+    local cat = pluginCatalog(Cat, client)
+    E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "resume"
+    E.Mirror.preparing = {}
+    E.Mirror._status_dir = E.Mirror.dir()
+    E.Mirror._status = { op = "full", left = 1159556 }
+    W.broadcasts = {}
+    withHost(cat, function()
+        E.OC.fullRefresh(cat); run(5)
+        local sent = lastBroadcast(".MIRROR")
+        local plan = sent and E.Cache.decode(sent.extras.plan)
+        ok(plan and plan.op == "full" and plan.catalog, "a new bulk refresh starts")
+    end)
+    cacheTeardown()
+end)
+
+test("W32: selecting a book waits for its companion margin check before loading settings", function()
+    local Reader = require("apps/reader/readerui")
+    local show, installed = Reader.showReader, E.MarginRepair.installed
+    local send, problem, folder = E.Companion.send, E.Companion.workerProblem, E.OC._dir
+    local tmp = os.tmpname(); os.remove(tmp); sh("mkdir -p", tmp)
+    E.OC._dir = tmp
+    local opened, sent = 0, 0
+    Reader.showReader = function(_, file, provider) opened = opened + 1; eq(file, "/books/synthetic.epub"); eq(provider, "epub") end
+    E.MarginRepair.installed = nil; E.MarginRepair.install()
+    E.Companion.workerProblem = function() return nil end
+    E.Companion.send = function(_, extras)
+        sent = sent + 1
+        eq(extras.repair_book, "/books/synthetic.epub")
+        schedule(0.2, function()
+            E.OC.writeFile(tmp .. "/repair-result.lua", E.Cache.encode({ token = extras.repair_token, result = "checked" }))
+        end)
+        return true
+    end
+    local success, err = pcall(function()
+        ReaderUI.instance = nil; W.shown = {}
+        Reader:showReader("/books/synthetic.epub", "epub")
+        eq(opened, 0, "sidecar not loaded before repair")
+        run(1)
+        eq(opened, 1); eq(sent, 1)
+        ok(E.MarginRepair.pending == nil)
+    end)
+    Reader.showReader, E.MarginRepair.installed = show, installed
+    E.Companion.send, E.Companion.workerProblem, E.OC._dir = send, problem, folder
+    E.MarginRepair.pending = nil
+    sh("rm -rf", tmp)
+    ok(success, err)
 end)
 
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)

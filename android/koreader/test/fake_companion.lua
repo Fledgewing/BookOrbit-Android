@@ -132,6 +132,7 @@ end
 local function seed(run, plan)
     addList(run, plan.all_books)
     for _, p in ipairs(plan.seed_lists or {}) do addList(run, p) end
+    for _, p in ipairs(plan.browse_lists or {}) do addList(run, p) end
     for _, p in ipairs(plan.sections or {}) do addList(run, p) end
     local ids = {}
     for _, r in ipairs(rows("SELECT identity FROM lists ORDER BY identity")) do addList(run, val(r[1])) end
@@ -316,7 +317,7 @@ end
 
 local function status(run, plan, running, why)
     local left = math.max(0, (run.total or 0) - (run.done or 0))
-    return { v = 4, runner = "fake companion", run = plan.run, running = running or nil, beat = now(), op = run.op,
+    return { v = 4, runner = "fake companion", engine = plan.catalog and "bulk" or "crawl", run = plan.run, running = running or nil, beat = now(), op = run.op,
         at = tonumber(F.meta("full_at")), lib_version = F.meta("lib_version"), done = run.done, total = run.total, left = left,
         pct = run.pct, skipped = run.skipped, errors = 0, covers = run.covers, cover_total = run.cover_total,
         limit_note = run.limit_note, revalidating = (run.op == "revalidate" and running) or nil,
@@ -513,6 +514,8 @@ function F.patch(extras)
 end
 
 function F.patchNow(extras)
+    if extras.plugin_state then return writeFile(dir() .. "/plugin-state.lua", extras.plugin_state) end
+    if extras.remember_id then return end
     if extras.old_hash then return end
     if extras.drain_events == "1" then return F.drainEvents(extras.events_ack) end
     F.patches = (F.patches or 0) + 1
@@ -646,8 +649,14 @@ end
 function F.exists(path) local f = io.open(path, "rb"); if f then f:close() end return f ~= nil end
 
 function F.copiesNow(extras)
+    if extras.prepare then
+        local job = C().decode(extras.prepare)
+        local detail = F.prepareCopy and F.prepareCopy(job) or select(1, F.detail(job.book_id))
+        return event({ kind = "copy_prepared", path = job.path, md5 = F.copyMd5 and F.copyMd5(job) or job.md5, detail = detail })
+    end
     F.copies_asks = (F.copies_asks or 0) + 1
-    local ask = load(dir() .. "/copies/ask.lua")
+    local ask = extras.ask and C().decode(extras.ask) or load(dir() .. "/copies/ask.lua")
+    if extras.ask then writeFile(dir() .. "/copies/ask.lua", extras.ask) end
     local ev = { kind = "copies", why = extras.reason }
     if not ask then ev.err = "no ask" else
         local want, details = {}, {}

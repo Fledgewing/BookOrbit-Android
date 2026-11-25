@@ -86,7 +86,8 @@ end
 
 function OC.saveState()
     if OC.child then return end
-    writeFile(OC.dir() .. "/plugin-state.lua", Cache.encode(OC.state()))
+    if Companion.workerProblem() then return end
+    Companion.send(Companion.ACTION.PATCH, { reason = "plugin state", plugin_state = Cache.encode(OC.state()) })
 end
 
 -- Everything goes: the setting turned off, or on request (another account or server: the
@@ -120,19 +121,28 @@ function OC.event(kind, data)
     table.insert(OC.child_events, data)
 end
 
+-- A single poll chain, shared by startup, reads and all job watchers. A lost ack is
+-- retried with backoff; reading the same durable batch never creates another timer.
+OC.EVENT_POLL_S, OC.EVENT_RETRY_S = 0.5, 10
 function OC.drainEvents()
-    if OC.child or Companion.workerProblem() then return end
-    -- A fixed mailbox: one bounded read, never a directory walk on the UI loop.
+    if OC.child then return end
+    UIManager:unschedule(OC.drainEvents)
+    UIManager:scheduleIn(OC.EVENT_POLL_S, OC.drainEvents)
+    if Companion.workerProblem() then return end
+    local t = now_s()
+    if OC.events_read_at and t - OC.events_read_at < OC.EVENT_POLL_S then return end
+    OC.events_read_at = t
     local batch = Cache.decode(readFile(OC.dir() .. "/events-batch.lua", 65536) or "")
-    local fresh = type(batch) == "table" and batch.id ~= OC.events_ack
     if type(batch) ~= "table" or not batch.id then return end
-    if fresh then
+    if batch.id ~= OC.events_ack then
+        -- Record before dispatch: an event may synchronously call a watcher again.
+        OC.events_ack, OC.events_sent_at = batch.id, nil
         OC.applyEvents(batch.events or {})
-        OC.events_ack = batch.id
     end
-    -- Repeat the acknowledgement if a call was lost; never apply an id twice in this process.
-    Companion.send(Companion.ACTION.PATCH, { reason = "events", drain_events = "1", events_ack = batch.id })
-    UIManager:scheduleIn(0.5, OC.drainEvents)
+    if not OC.events_sent_at or t - OC.events_sent_at >= OC.EVENT_RETRY_S then
+        OC.events_sent_at = t
+        Companion.send(Companion.ACTION.PATCH, { reason = "events", drain_events = "1", events_ack = batch.id })
+    end
 end
 
 function OC.applyEvents(events)
@@ -148,6 +158,8 @@ function OC.applyEvents(events)
                 OC.rechecked(ev)
             elseif ev.kind == "sleep_pool" and Sleep then
                 Sleep.landed(ev)
+            elseif ev.kind == "copy_prepared" and Copies then
+                Copies.prepared(ev)
             elseif ev.kind == "copies" and Copies then
                 Copies.found(ev)
             elseif ev.kind == "checked" and ev.key then
@@ -333,7 +345,11 @@ function OC.watchChecks()
             log("cache: the companion didn't answer the cover recheck")
             OC.rechecked({ err = "no answer" })
         end
-        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and Copies.asked) and not sleep_waits and not OC.recheck and not (LF and LF.year_waiting) then OC.watching = nil; return end
+        if Copies and Copies.prepare_at and t - Copies.prepare_at >= Copies.WAIT_S then
+            Copies.preparing, Copies.prepare_at, Copies.busy = nil, nil, nil
+            Copies.stop("companion preparation timed out")
+        end
+        if next(OC.inflight) == nil and not OC.storage_asked and not (Copies and (Copies.asked or Copies.prepare_at)) and not sleep_waits and not OC.recheck and not (LF and LF.year_waiting) then OC.watching = nil; return end
         UIManager:scheduleIn(1, tick)
     end
     UIManager:scheduleIn(1, tick)
@@ -563,6 +579,7 @@ end
 -- meanwhile follows it.
 function OC.storageCount(why)
     if OC.child then return end
+    if why == "over the limit" and OC.storage_last and nowT() - OC.storage_last < 60 then return end
     if OC.storage_asked and nowT() - OC.storage_asked < OC.STORAGE_WAIT_S then OC.storage_again = why; return end
     local problem = Companion.workerProblem()
     if problem then
@@ -570,7 +587,7 @@ function OC.storageCount(why)
         return
     end
     OC.storage_problem = nil
-    OC.storage_asked, OC.storage_again = nowT(), nil
+    OC.storage_asked, OC.storage_again, OC.storage_last = nowT(), nil, nowT()
     local limit = OC.limitBytes()
     Companion.send(Companion.ACTION.STORAGE, { reason = tostring(why), limit = limit and tostring(limit) or "",
         cover_dir = OC.coverDir() or "", mirror_covers = S.mirror_covers and "1" or "0" })
@@ -592,7 +609,9 @@ function OC.storageCounted(ev)
             (st.used or 0) / MB, limit and (math.floor(limit / MB) .. " MB") or "no limit", (st.kept or 0) / MB,
             ((st.cover or 0) + (st.mirror_cover or 0)) / MB, (st.mirror_cover or 0) / MB))
     end
-    if OC.storage_again then OC.storageCount(OC.storage_again) end
+    local again = OC.storage_again
+    OC.storage_again = nil
+    if again and again ~= "over the limit" then OC.storageCount(again) end
 end
 
 -- What Orbit stores now ({ used, kept, cache, cover, mirror_cover } bytes): the last count (the
@@ -692,37 +711,24 @@ function OC.fullRefresh(cat)
     -- M8C: four presses restarted it four times).
     if Mirror and Mirror.fullRunning() then return Mirror.showProgress("pressed again") end
     if whenOnline("Full refresh", function() OC.fullRefresh(cat) end) then return end
-    Mirror.notices = true
-    log("cache: Full refresh")
-    -- Copies whose library file changed are looked for now (and again once the details are saved).
-    if Copies and Copies.tick then UIManager:scheduleIn(2, function() pcall(Copies.tick, "full refresh") end) end
-    OC.begin("full")
-    if type(cat.thumbnail_failures) == "table" then cat.thumbnail_failures = {} end
-    local books, bad, recheck = OC.visibleBooks(cat), 0, {}
-    for _, b in ipairs(books) do
-        local path = Compat.callable(cat.thumbnailPath) and cat:thumbnailPath(b)
-        if path and b.hasCover ~= false then
-            if lfs_ok and lfs.attributes(path, "mode") and not OC.coverOk(path) then
-                os.remove(path); os.remove(path .. ".etag")
-                if Compat.callable(cat.invalidateThumbnail) then cat:invalidateThumbnail(b, false) end
-                bad = bad + 1
-            elseif OC.coverOk(path) and readFile(path .. ".etag", 200) then
-                table.insert(recheck, { book = b, path = path })
+    local problem = Companion.workerProblem()
+    if problem then return OC.note(problem, 4) end
+    -- Start the bulk job before any view work. The companion owns validation,
+    -- hashing, cover checks and the manifest. No synchronous Home refresh here.
+    Mirror.cat, Mirror.notices = cat, true
+    log("cache: Full refresh: starting companion bulk catalog")
+    local started = Mirror.start("Full refresh", true)
+    if started then
+        local jobs = {}
+        for _, book in ipairs(OC.visibleBooks(cat)) do
+            if book.hasCover ~= false and Compat.callable(cat.thumbnailPath) then
+                local path = cat:thumbnailPath(book)
+                if path then jobs[#jobs + 1] = { book = book, path = path } end
             end
         end
+        if #jobs > 0 then OC.recheckCovers(cat, jobs) end
     end
-    log("cache: Full refresh:", #books, "covers on screen,", bad, "broken (replaced),", #recheck, "re-asked")
-    OC.full = { covers = #books }
-    if #recheck > 0 then OC.recheckCovers(cat, recheck) else OC.fullStep("covers", bad) end
-    -- Home's sections are fetched with the view when on Home; elsewhere, Home is marked stale.
-    if not Companion.workerProblem() then Companion.send(Companion.ACTION.PATCH, { reason = "Full refresh", id = "", fields = "", stale_home = "1" }) end
-    local r = LF.refreshKeepingCovers(cat)
-    -- Then everything reachable from Home, for offline (ko/mirror.lua).
-    if Mirror then
-        Mirror.cat = cat
-        UIManager:scheduleIn(1, function() pcall(Mirror.start, "Full refresh", true) end)
-    end
-    return r
+    return started
 end
 
 -- Orbit Companion asks them again If-None-Match (CacheWorker.recheckCovers) and answers with a
@@ -758,10 +764,9 @@ end
 function OC.menuFullRefresh()
     local p = bookorbit(liveUI())
     local cat = p and p.catalog_browser
-    if cat and not cat.catalog_closed then return OC.fullRefresh(cat) end
-    OC.begin("full")
-    OC.active.until_t = nowT() + 600
-    pcall(function() require("bookorbit_toast").show(_("Full refresh when BookOrbit opens next"), { timeout = 3 }) end) -- gate: bookorbit_toast is gated (Gate.installToast)
+    if not cat and p and EOB then cat = EOB.headlessCatalog(p) end
+    if cat then return OC.fullRefresh(cat) end
+    OC.note(_("Open BookOrbit and sign in to refresh the catalog."), 4)
 end
 
 -- One line per paint: covers the view needs, how many are on disk, how many are queued.

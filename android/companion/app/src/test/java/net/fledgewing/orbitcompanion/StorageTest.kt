@@ -28,6 +28,40 @@ class StorageTest {
         }
     }
 
+    @Test fun reusableDatabasePagesAreReclaimedAndDownloadedBooksAreOutsideTheLimit() {
+        val base = Files.createTempDirectory("storage-live").toFile()
+        try {
+            val root = File(base, "orbit-cache")
+            val downloaded = File(base, "Books/kept.epub").apply { parentFile!!.mkdirs(); writeText("downloaded book") }
+            CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, log = {}, openSql = { JdbcSql(it) }).let { worker ->
+                val store = worker.store
+                store.db().exec("CREATE TABLE obsolete (body BLOB)")
+                store.db().exec("INSERT INTO obsolete VALUES (?)", ByteArray(20 * 1024 * 1024))
+                val allocated = store.file.length()
+                store.db().exec("DELETE FROM obsolete")
+                assertTrue(store.fileBytes() < allocated / 2)
+                worker.storage(CacheWorker.StorageAsk("test", 1024 * 1024, null, false))
+                assertTrue(store.file.length() < allocated / 2)
+                assertEquals("downloaded book", downloaded.readText())
+                assertFalse(worker.storageItems(null, false).any { "kept.epub" in it.k })
+            }
+        } finally { base.deleteRecursively() }
+    }
+
+    @Test fun irreducibleOfflineDataReportsTheSameTotalsWithoutRepeatedDeletion() {
+        val root = Files.createTempDirectory("storage-protected").toFile()
+        val logs = arrayListOf<String>()
+        try {
+            CacheWorker(root, { _, _, _, _ -> CacheWorker.Reply(0) }, log = logs::add, openSql = { JdbcSql(it) }).let { w ->
+                w.store.putDetail(1, mapOf("title" to "x".repeat(10000)), 1)
+                repeat(2) { w.storage(CacheWorker.StorageAsk("over the limit", 1, null, false)) }
+                assertTrue(w.store.hasDetail(1))
+                assertEquals(2, logs.count { "cannot be reduced further" in it })
+                assertTrue(StorageLogic.plan(w.storageItems(null, false), 1).drop.isEmpty())
+            }
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun tenGbAccountingAndEvictionUseLongBytes() {
         val gb = 1024L * 1024 * 1024
         val limit = 10240L * 1024 * 1024

@@ -36,7 +36,6 @@ object Worker {
     private val patches = ArrayDeque<() -> Unit>()
     private var pending: Pair<CacheWorker.Plan, CacheWorker.Creds>? = null
     private var storage: CacheWorker.StorageAsk? = null
-    private var copies: String? = null
     private var sleep: Pair<String, SleepPoolBuilder.Ask>? = null
     private var pickers: Pair<String, CacheWorker.Creds>? = null
     private var recheck: Triple<String, CacheWorker.Creds, List<Pair<Long, String>>>? = null
@@ -48,7 +47,7 @@ object Worker {
         private set
 
     /** Work in hand: an automatic Wi-Fi off waits for it. */
-    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || patches.isNotEmpty() || pending != null || storage != null || copies != null || sleep != null || pickers != null || recheck != null }
+    fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || patches.isNotEmpty() || pending != null || storage != null || sleep != null || pickers != null || recheck != null }
 
     private var worker: CacheWorker? = null
 
@@ -65,7 +64,7 @@ object Worker {
         return MirrorLogic.progressLine(progress) + if (BulkWork.paused) " · paused while reading" else ""
     }
 
-    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, cpuMs = { android.os.SystemClock.currentThreadTimeMillis() }, checkpoint = { BulkWork.checkpoint() }, threadFactory = { name, task -> BulkWork.thread(name, task) }, onProgress = { progress = it }, places = Places.roots(), resizeThumbnail = { f, w, h ->
+    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, cpuMs = { android.os.SystemClock.currentThreadTimeMillis() }, checkpoint = { BulkWork.checkpoint() }, threadFactory = { name, task -> BulkWork.thread(name, task) }, onProgress = { progress = it }, places = Places.roots(), bookRoots = listOf(Environment.getExternalStorageDirectory()), resizeThumbnail = { f, w, h ->
         val dm = app?.resources?.displayMetrics
         BulkWork.phase("cover") { ThumbnailCache.shrink(f, if (w > 0) w else (dm?.widthPixels ?: 1080) / 3,
             if (h > 0) h else (dm?.heightPixels ?: 1440) / 3) }
@@ -97,6 +96,20 @@ object Worker {
             synchronized(lock) { storage = a; lock.notifyAll() }
             return start()
         }
+        if (i.action == ACTION_PATCH && i.hasExtra("plugin_state")) {
+            val state = i.getStringExtra("plugin_state") ?: return
+            synchronized(lock) { patches.addLast { worker().savePluginState(LuaValue.str(state)) }; lock.notifyAll() }
+            return start()
+        }
+        if (i.action == ACTION_PATCH && i.hasExtra("repair_book")) {
+            StatusMarginRepair.beforeOpen(i.getStringExtra("repair_book") ?: return, i.getStringExtra("repair_token") ?: return)
+            return
+        }
+        if (i.action == ACTION_PATCH && i.hasExtra("remember_id")) {
+            val id = i.getStringExtra("remember_id")?.toLongOrNull() ?: return
+            synchronized(lock) { patches.addLast { worker().rememberDetail(id) }; lock.notifyAll() }
+            return start()
+        }
         if (i.action == ACTION_PATCH && i.hasExtra("board_year")) {
             val encoded = i.getStringExtra("board_year") ?: return
             val key = i.getStringExtra("board_key") ?: return
@@ -122,7 +135,11 @@ object Worker {
         if (i.action == ACTION_PATCH && i.hasExtra("old_hash")) {
             val old = i.getStringExtra("old_hash") ?: return
             val new = i.getStringExtra("new_hash") ?: return
-            synchronized(lock) { patches.addLast { HashSidecar.carry(File(root().parentFile?.parentFile, "hashdocsettings"), old, new, BulkWork::checkpoint) }; lock.notifyAll() }
+            val path = i.getStringExtra("copy_path")
+            synchronized(lock) { patches.addLast {
+                HashSidecar.carry(File(root().parentFile?.parentFile, "hashdocsettings"), old, new, BulkWork::checkpoint)
+                if (path != null) worker().carryCopySettings(path, old, new)
+            }; lock.notifyAll() }
             return start()
         }
         if (i.action == ACTION_PATCH && i.getStringExtra("drain_events") == "1") {
@@ -140,10 +157,30 @@ object Worker {
             return start()
         }
         if (i.action == ACTION_COPIES) {
-            // Files only (copies/ask.lua), no login.
-            synchronized(lock) { copies = i.getStringExtra("reason") ?: "plugin"; lock.notifyAll() }
+            val prepare = i.getStringExtra("prepare")
+            val ask = i.getStringExtra("ask")
+            val reason = i.getStringExtra("reason") ?: "plugin"
+            val credentials = creds(i)
+            val template = i.getStringExtra("template")
+            synchronized(lock) {
+                patches.addLast {
+                    if (prepare != null && credentials != null && template != null) {
+                        val job = LuaValue.parse(LuaValue.str(prepare).toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: return@addLast
+                        worker().prepareCopy(job, template, credentials)
+                    } else {
+                        if (ask != null) {
+                            val file = File(root(), "copies/ask.lua")
+                            file.parentFile?.mkdirs()
+                            file.writeBytes(LuaValue.str(ask).toByteArray(Charsets.ISO_8859_1))
+                        }
+                        worker().copies(reason)
+                    }
+                }
+                lock.notifyAll()
+            }
             return start()
         }
+
         app = ctx.applicationContext
         val creds = creds(i)
         if (creds == null) {
@@ -210,8 +247,6 @@ object Worker {
     private fun drainChecks() {
         val a = synchronized(lock) { storage.also { storage = null } }
         if (a != null) try { BulkWork.phase("storage") { worker().storage(a) } } catch (e: Exception) { OLog.w("worker: storage count failed", e) }
-        val cp = synchronized(lock) { copies.also { copies = null } }
-        if (cp != null) try { worker().copies(cp) } catch (e: Exception) { OLog.w("worker: copies lookup failed", e) }
         val rc = synchronized(lock) { recheck.also { recheck = null } }
         if (rc != null) try { worker().recheckCovers(rc.first, rc.second, rc.third) } catch (e: Exception) {
             OLog.w("worker: cover recheck failed", e)
@@ -267,7 +302,7 @@ object Worker {
         while (true) {
             drainChecks()
             val p = synchronized(lock) {
-                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && copies == null && sleep == null && pickers == null && recheck == null) { return }
+                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && sleep == null && pickers == null && recheck == null) { return }
                 pending.also { pending = null }
             } ?: continue
             manualRefresh = p.first.m["manual"] == true

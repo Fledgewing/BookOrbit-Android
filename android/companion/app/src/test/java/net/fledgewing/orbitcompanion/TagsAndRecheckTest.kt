@@ -37,12 +37,12 @@ class TagsAndRecheckTest {
         }
         val w = CacheWorker(root, http, now = { 100L }, log = {}, openSql = { JdbcSql(it) })
         val covers = File(root, "covers").apply { mkdirs() }
-        for (id in 1..3) File(covers, "$id.jpg").writeText("old")
+        for (id in 1..3) File(covers, "$id.jpg").writeBytes(byteArrayOf(-1, -40, -1) + "old".toByteArray())
         File(covers, "1.jpg.etag").writeText("\"a\""); File(covers, "2.jpg.etag").writeText("\"b\"")
         w.recheckCovers("full refresh", CacheWorker.Creds("https://books.example", "reader", "k"), (1L..3L).map { it to File(covers, "$it.jpg").path })
         assertEquals(mapOf(1L to "\"a\"", 2L to "\"b\""), sent)
         assertEquals("new", File(covers, "2.jpg").readText()); assertEquals("\"n\"", File(covers, "2.jpg.etag").readText())
-        assertEquals("old", File(covers, "1.jpg").readText())
+        assertEquals("old", File(covers, "1.jpg").readBytes().drop(3).toByteArray().toString(Charsets.UTF_8))
         assertFalse(File(covers, "2.jpg.part").exists())
         val ev = File(root, "events").listFiles()!!.filter { it.extension == "lua" }.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
         assertEquals("covers_rechecked", ev["kind"]); assertEquals(listOf(2L), ev["changed"]); assertEquals(3L, ev["checked"])
