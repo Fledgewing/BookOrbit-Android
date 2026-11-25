@@ -1,4 +1,4 @@
-# KOReader patch ↔ Orbit Companion interface (protocol 1)
+# KOReader plugin ↔ Orbit Companion interface (protocol 1)
 
 The Orbit KOReader plugin (`android/koreader/orbit.koplugin`, up to 0.7.x the user patch
 `2-orbit-android.lua`; "the patch" below) and the Orbit Companion app talk
@@ -10,15 +10,23 @@ only the OPDS cover token. Never the KOReader key.
 
 Package: `net.fledgewing.orbitcompanion` (placeholder, used everywhere below).
 
-## Patch → companion: explicit broadcasts
+## Patch → companion: the caller-checked call
 
-The patch builds an `Intent(action)`, calls `setPackage("net.fledgewing.orbitcompanion")`,
-adds `FLAG_INCLUDE_STOPPED_PACKAGES | FLAG_RECEIVER_FOREGROUND`, and calls
-`Context.sendBroadcast`. The companion declares one exported manifest receiver with an
-intent filter for these actions (manifest, not runtime: KOReader may be in the background
-and the companion may not be running).
+The plugin calls `ContentResolver.call(content://net.fledgewing.orbitcompanion.commands,
+<action>, null, extras)` through KOReader's JNI bridge (`Jni.call`). The companion's
+`CommandProvider` checks the calling UID first: only the KOReader whose signing certificate it
+pinned the first time it saw it is accepted (docs/design/security.md "The caller check"). A
+provider is started on demand, so a companion that isn't running still answers. The call
+returns at once with `ok` (`"1"`, or `"0"` and `why`: `caller`, `unknown`); the command then
+runs on the companion's main thread. There is no broadcast path: the companion's receiver is
+not exported and takes only the system's boot and package-replaced broadcasts.
 
-Every extra is a **string**. Every broadcast carries `proto = "1"`,
+Before any call the plugin checks the companion itself: installed under its package name and
+signed only by Orbify's release certificate (`Companion.state()` `"ok"`, read with
+`PackageManager` over JNI). An app with the companion's name and another signer is
+`"untrusted"`: nothing is sent to it, the login least of all, and the menus say so.
+
+Every extra is a **string**. Every call carries `proto = "1"`,
 `sender = "org.koreader.launcher"` and `patch_version` (the patch's `PATCH_VERSION`; the
 companion's "KOReader patch installed" row uses it when it can't read the file).
 
@@ -58,10 +66,10 @@ a KOReader that is frozen or killed before it sends `NET_DONE`.
 "Sync and sleep": `NET_UP`, `NET_DONE`, then `SLEEP_NOW`. On failure the patch shows its
 message for 3 s first.
 
-The companion's setup row "KOReader patch answered" is ticked by any broadcast carrying
-`sender = "org.koreader.launcher"` or by a loopback `GET /status`.
+The companion's setup row "KOReader patch answered" is ticked by any command carrying
+`sender = "org.koreader.launcher"` or by the status call.
 
-In Add-on mode (companion 0.11.0+, `docs/design/addon-mode.md` §7.1) the receiver routes by
+In Add-on mode (companion 0.11.0+, `docs/design/addon-mode.md` §7.1) the companion routes by
 capability: an action reaches the service only when a helper keeps it running; `SETUP_LATER`,
 `REPORT` and the book state from `STATS` are recorded without it; the rest are logged and
 dropped. In Full every action reaches the service as before.
@@ -237,12 +245,13 @@ restart went out with a book open: reopen `restart_book`, else KOReader's `lastf
 book is already open (BookOrbit home opened by the start is closed first). It covers a restart
 done by an older patch, which doesn't keep `restart_book`. Older patches ignore the command.
 
-## Optional: companion status over loopback
+## Companion status: the status call
 
-`GET http://127.0.0.1:47913/status?patch_version=0.3.1` → `200` with JSON. The query
-(patch 0.3.1+) tells the companion which patch is running; patch 0.5.2+ adds `&book=1|0` (a book
-is open), so the companion's restart after a patch install waits for the book. Like `patch_version` in the
-broadcasts. For example:
+The same caller-checked call with method `net.fledgewing.orbitcompanion.call.STATUS` and the
+extras `patch_version` (which plugin is running) and `book` (`"1"`/`"0"`: a book is open, so the
+companion's restart after a plugin install waits for it). It answers `ok = "1"` and `status`, a
+JSON string, while the companion's service runs; otherwise `ok = "0"` and the plugin reads the
+status file. For example:
 
 ```json
 { "proto": "1", "version": "0.2.0", "wifi": true, "wifi_enabled": true, "wifi_owner": "auto",
@@ -285,7 +294,8 @@ patch never locks anyone out.
 
 ### `GET /clicks` (companion 0.4.2+): the click channel
 
-The patch opens `GET /clicks?patch_version=X` on the same port and keeps it open. After an HTTP
+The patch opens `GET /clicks?patch_version=X` on the loopback port 47913 (the only request it
+still answers) and keeps it open. After an HTTP
 200 header, the companion writes one line per event:
 - `SERVICE on|off`: the accessibility service is running, or isn't.
 - `SETTINGS <ms>` (cap `settings2`): a setting changed in the companion; the plugin reads `/status`
@@ -346,13 +356,15 @@ companion's Settings "Do now" buttons): `full_refresh` (Full refresh of BookOrbi
 - "Sync and sleep" syncs, then asks the reader to press the power button.
 - "Open Orbit Companion" and "Open another app…" say the companion isn't installed.
 
-## Why broadcasts, and how the patch sends them
+## How the patch calls the companion
 
 KOReader's Android JNI bridge (android-luajit-launcher `assets/android.lua`) exposes
 `JNI:context(vm, fn)` (`android.lua:1400-1416`), which attaches the thread and hands over the
-raw `JNIEnv`. With it the patch calls framework classes directly: `new Intent(action)`,
-`setPackage`/`setClassName`, `putExtra(String, String)`, `addFlags`, then
-`activity.sendBroadcast` or `activity.startActivity`. It also reads
+raw `JNIEnv`. With it the patch calls framework classes directly: for a command or the status,
+`new Bundle()`, `putString`, `Uri.parse` and `ContentResolver.call`; for a page of the companion,
+`new Intent(action)`, `setPackage`, `addFlags` and `activity.startActivity`; for the companion's
+signer, `PackageManager.getPackageInfo` (`signingInfo`, or `signatures` before Android 9),
+`MessageDigest` SHA-256. It also reads
 `PowerManager.isInteractive()` (is the screen really off?) and
 `ConnectivityManager`/`NetworkCapabilities.hasTransport(TRANSPORT_VPN)` (is Tailscale up?).
 Each call checks for a pending Java exception and clears it, so a bad call is logged rather
@@ -361,18 +373,15 @@ than aborting KOReader.
 Not `android.openLink` (`android.lua:2497`, `MainActivity.kt:631-641`): it only starts an
 `ACTION_VIEW` activity, which brings another app to the front and pauses KOReader (a
 Suspend). The patch cannot register a broadcast receiver (that needs a Java class), so
-answers come back through the launch intent or the loopback status, never as broadcasts.
+answers come back through the call's answer, the launch intent and the companion's files.
 
 ## Security
 
-The broadcasts are not authenticated: any app on the device could ask the companion to turn
-Wi-Fi on, hold a wake lock (25 s cap), lock the screen, or save a server of its choosing into
-`koreader/settings/orbit-cache/` (`MIRROR`, `CHECK`; any app with storage access can write there
-anyway). The BookOrbit login travels only from KOReader to the companion's package in an explicit
-broadcast, which no other app receives. That is acceptable on a
-single-user e-reader. Android 14 only reveals the sender when the sender opts in, so the
-companion should simply bound what each action can do (the wake-lock cap, at most one
-`SLEEP_NOW` per few seconds).
+The threat model, the caller check and what remains are in docs/design/security.md. In short:
+only the pinned KOReader reaches the companion's commands (`CommandProvider`); the plugin sends
+nothing, the login least of all, to a companion not signed by Orbify's release certificate; a
+command that names a file acts only inside the companion's own folders (`Places`); a command on
+KOReader's start goes only to the pinned KOReader.
 
 `RESET_PIN` (companion 0.4.4+, `net.fledgewing.orbitcompanion.action.RESET_PIN`) is not a
 patch broadcast: it removes the Settings PIN and is for USB recovery only. Its receiver

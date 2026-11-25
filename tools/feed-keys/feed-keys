@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+# Release signing keys for Orbify's update artifacts (firmware images, the firmware feed and the
+# KOReader plugin zip). Design: docs/design/release-signing.md. Needs openssl 3 and perl.
+#
+# Two levels of Ed25519 key:
+#   root key     offline, held by the maintainer (password manager plus a backup). Its public key
+#                is compiled into the firmware and the companion (shared/release-signing.json).
+#                It only ever signs release-key certificates.
+#   release key  the CI key (secret RELEASE_SIGNING_KEY). It signs each release's artifacts.
+#                Rotating it needs only the root key, never a reflash.
+#
+#   feed-keys new-root [DIR]                       new root key DIR/root.pem (default ~/orbify-release-keys)
+#   feed-keys new-release-key --root ROOT.pem --serial N [--out FILE]
+#                                                  new release key, certified by the root, as the
+#                                                  bundle CI reads (default DIR/release-key-N.bundle)
+#   feed-keys public-key KEY.pem                   the raw public key, 64 hex characters
+#   feed-keys set-root ROOT.pem|HEX                write the root public key into shared/release-signing.json
+#   feed-keys sign --tag TAG [--bundle FILE] FILE...
+#                                                  SIGNATURES for FILEs released under TAG, on stdout;
+#                                                  the bundle comes from --bundle or $RELEASE_SIGNING_KEY
+#   feed-keys verify --tag TAG [--root HEX] [--min-serial N] SIGNATURES FILE...
+#                                                  checks the certificate and every FILE's signature
+#                                                  (root and minimum serial default to shared/release-signing.json)
+#   feed-keys feed-field SIGNATURES NAME           the feed's "orbify_signature" value for asset NAME
+#
+# Formats (all hex lowercase):
+#   certificate  serial (4 bytes, big-endian) || release public key (32) || root signature (64),
+#                the root signing "orbify-release-key-v1\n" || serial || release public key
+#   artifact     the release key signing "orbify-artifact-v1\n<tag>\n<asset name>\n<sha256 hex>\n"
+#   SIGNATURES   "release-key <certificate>", then "<signature>  <asset name>" per artifact
+#   bundle       "release-key <certificate>" followed by the release key's PEM
+set -euo pipefail
+
+root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
+config="${FEED_KEYS_CONFIG:-$root_dir/shared/release-signing.json}"
+CERT_DOMAIN='orbify-release-key-v1'
+ARTIFACT_DOMAIN='orbify-artifact-v1'
+DER_PREFIX='302a300506032b6570032100' # SubjectPublicKeyInfo of an Ed25519 key, before its 32 bytes
+
+die() { echo "feed-keys: $*" >&2; exit 1; }
+hex2bin() { perl -e 'binmode STDOUT; print pack("H*", $ARGV[0])' "$1"; }
+bin2hex() { od -An -tx1 -v | tr -d ' \n'; }
+is_hex() { [[ "$1" =~ ^[0-9a-f]+$ ]] && [ "${#1}" -eq "$2" ]; }
+sha256_hex() { openssl dgst -sha256 -r "$1" | cut -d' ' -f1; }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+pub_of() { # KEY.pem -> 64 hex
+  openssl pkey -in "$1" -pubout -outform DER | tail -c 32 | bin2hex
+}
+
+pub_pem() { # HEX -> PEM file path
+  local f="$tmp/pub-$1.pem"
+  hex2bin "$DER_PREFIX$1" | openssl pkey -pubin -inform DER -out "$f"
+  printf '%s' "$f"
+}
+
+sign_file() { # KEY.pem MESSAGE-FILE -> 128 hex
+  openssl pkeyutl -sign -inkey "$1" -rawin -in "$2" | bin2hex
+}
+
+verify_file() { # PUBHEX MESSAGE-FILE SIGHEX
+  hex2bin "$3" > "$tmp/sig"
+  openssl pkeyutl -verify -pubin -inkey "$(pub_pem "$1")" -rawin -in "$2" -sigfile "$tmp/sig" >/dev/null 2>&1
+}
+
+cert_message() { # SERIAL PUBHEX -> file
+  { printf '%s\n' "$CERT_DOMAIN"; hex2bin "$(printf '%08x' "$1")$2"; } > "$tmp/cert-msg"
+  printf '%s' "$tmp/cert-msg"
+}
+
+artifact_message() { # TAG NAME SHA256HEX -> file
+  printf '%s\n%s\n%s\n%s\n' "$ARTIFACT_DOMAIN" "$1" "$2" "$3" > "$tmp/artifact-msg"
+  printf '%s' "$tmp/artifact-msg"
+}
+
+config_value() { # key -> value (empty for "")
+  perl -ne 'print "$1\n" if /"\Q'"$1"'\E"\s*:\s*"?([^",}]*)"?/' "$config" | head -1
+}
+
+cmd="${1:-}"
+[ $# -gt 0 ] && shift
+case "$cmd" in
+  new-root)
+    dir="${1:-$HOME/orbify-release-keys}"
+    mkdir -p "$dir"
+    chmod 700 "$dir"
+    [ -e "$dir/root.pem" ] && die "$dir/root.pem exists; refusing to replace a root key"
+    (umask 077 && openssl genpkey -algorithm ed25519 -out "$dir/root.pem")
+    echo "root key: $dir/root.pem (keep it offline: password manager plus a backup)" >&2
+    pub_of "$dir/root.pem"; echo
+    ;;
+  new-release-key)
+    root="" serial="" out=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --root) root="$2"; shift 2 ;;
+        --serial) serial="$2"; shift 2 ;;
+        --out) out="$2"; shift 2 ;;
+        *) die "new-release-key: unknown argument $1" ;;
+      esac
+    done
+    [ -f "$root" ] || die "new-release-key: --root ROOT.pem is required"
+    if ! [[ "$serial" =~ ^[0-9]+$ ]] || [ "$serial" -lt 1 ] || [ "$serial" -gt 4294967295 ]; then
+      die "new-release-key: --serial must be 1..4294967295"
+    fi
+    out="${out:-$(dirname "$root")/release-key-$serial.bundle}"
+    [ -e "$out" ] && die "$out exists"
+    (umask 077 && openssl genpkey -algorithm ed25519 -out "$tmp/release.pem")
+    pub="$(pub_of "$tmp/release.pem")"
+    sig="$(sign_file "$root" "$(cert_message "$serial" "$pub")")"
+    (umask 077 && { echo "release-key $(printf '%08x' "$serial")$pub$sig"; cat "$tmp/release.pem"; } > "$out")
+    echo "release key $serial: $out (set it as the CI secret RELEASE_SIGNING_KEY, then delete it)" >&2
+    ;;
+  public-key)
+    [ -f "${1:-}" ] || die "public-key: KEY.pem"
+    pub_of "$1"; echo
+    ;;
+  set-root)
+    arg="${1:?set-root ROOT.pem|HEX}"
+    if [ -f "$arg" ]; then hex="$(pub_of "$arg")"; else hex="$arg"; fi
+    is_hex "$hex" 64 || die "set-root: not a 64-hex-character Ed25519 public key: $hex"
+    perl -0pi -e 's/("root_public_key"\s*:\s*)"[^"]*"/$1"'"$hex"'"/' "$config"
+    [ "$(config_value root_public_key)" = "$hex" ] || die "set-root: could not write $config"
+    echo "root public key $hex written to ${config#"$root_dir"/}" >&2
+    ;;
+  sign)
+    tag="" bundle=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --tag) tag="$2"; shift 2 ;;
+        --bundle) bundle="$2"; shift 2 ;;
+        --) shift; break ;;
+        -*) die "sign: unknown argument $1" ;;
+        *) break ;;
+      esac
+    done
+    [ -n "$tag" ] || die "sign: --tag TAG is required"
+    [ $# -gt 0 ] || die "sign: no files"
+    if [ -n "$bundle" ]; then cat "$bundle" > "$tmp/bundle"; else printf '%s\n' "${RELEASE_SIGNING_KEY:?sign: no --bundle and RELEASE_SIGNING_KEY is unset}" > "$tmp/bundle"; fi
+    cert="$(sed -n 's/^release-key \([0-9a-f]*\)$/\1/p' "$tmp/bundle" | head -1)"
+    is_hex "$cert" 200 || die "sign: the bundle has no release-key certificate line"
+    (umask 077 && sed -n '/^-----BEGIN PRIVATE KEY-----$/,/^-----END PRIVATE KEY-----$/p' "$tmp/bundle" > "$tmp/release.pem")
+    [ "$(pub_of "$tmp/release.pem")" = "${cert:8:64}" ] || die "sign: the bundle's key does not match its certificate"
+    echo "release-key $cert"
+    for f in "$@"; do
+      [ -f "$f" ] || die "sign: no file $f"
+      name="$(basename "$f")"
+      [[ "$name" =~ ^[A-Za-z0-9._+-]+$ ]] || die "sign: asset name $name has characters a feed can't carry"
+      echo "$(sign_file "$tmp/release.pem" "$(artifact_message "$tag" "$name" "$(sha256_hex "$f")")")  $name"
+    done
+    ;;
+  verify)
+    tag="" root="" min=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --tag) tag="$2"; shift 2 ;;
+        --root) root="$2"; shift 2 ;;
+        --min-serial) min="$2"; shift 2 ;;
+        -*) die "verify: unknown argument $1" ;;
+        *) break ;;
+      esac
+    done
+    [ -n "$tag" ] || die "verify: --tag TAG is required"
+    sigs="${1:?verify: SIGNATURES FILE...}"
+    shift
+    root="${root:-$(config_value root_public_key)}"
+    min="${min:-$(config_value min_release_key_serial)}"
+    is_hex "$root" 64 || die "verify: no root public key (shared/release-signing.json root_public_key is empty)"
+    cert="$(sed -n 's/^release-key \([0-9a-f]*\)$/\1/p' "$sigs" | head -1)"
+    is_hex "$cert" 200 || die "verify: $sigs has no release-key certificate"
+    serial=$((16#${cert:0:8}))
+    [ "$serial" -ge "${min:-1}" ] || die "verify: release key $serial is below the minimum serial $min"
+    verify_file "$root" "$(cert_message "$serial" "${cert:8:64}")" "${cert:72:128}" \
+      || die "verify: the release-key certificate is not signed by root $root"
+    for f in "$@"; do
+      name="$(basename "$f")"
+      sig="$(awk -v n="$name" '$1 != "release-key" && $2 == n {print $1}' "$sigs" | head -1)"
+      is_hex "$sig" 128 || die "verify: $sigs has no signature for $name"
+      verify_file "${cert:8:64}" "$(artifact_message "$tag" "$name" "$(sha256_hex "$f")")" "$sig" \
+        || die "verify: $name: bad signature for $tag"
+      echo "$name: signed by release key $serial"
+    done
+    ;;
+  feed-field)
+    sigs="${1:?feed-field SIGNATURES NAME}"
+    name="${2:?feed-field SIGNATURES NAME}"
+    cert="$(sed -n 's/^release-key \([0-9a-f]*\)$/\1/p' "$sigs" | head -1)"
+    sig="$(awk -v n="$name" '$1 != "release-key" && $2 == n {print $1}' "$sigs" | head -1)"
+    is_hex "$cert" 200 && is_hex "$sig" 128 || exit 1
+    echo "$cert$sig"
+    ;;
+  *)
+    sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'
+    [ -z "$cmd" ] || exit 1
+    ;;
+esac

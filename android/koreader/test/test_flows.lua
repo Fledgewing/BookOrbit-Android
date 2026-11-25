@@ -14,6 +14,12 @@ local W = {
     fetched = {}, web = {}, json = {}, files = {}, children = {}, ino = {},
 }
 function W.fake_sha(s) return string.format("%064x", #s) end
+-- The companion's status call (Companion.status): W.web[STATUS_KEY] is its JSON's W.json key.
+local STATUS_KEY = "companion:STATUS"
+-- The installed companion's certificate (BigInteger hex, as Jni.packageSigners reads it):
+-- Orbify's release key unless a test sets another.
+local RELEASE_CERT = "f5078c85f8231830c1f18d93fe30d71f87936c1d9424f2d815983d1d21a90a15"
+W.companion_cert = RELEASE_CERT
 local SELF = os.tmpname()
 -- The plugin folder the self-update replaces (the code itself loads from orbit.koplugin/).
 ORBIT_ANDROID_PLUGIN_DIR = SELF .. ".koplugin"
@@ -106,10 +112,36 @@ local env_fns = {
     GetMethodID = function(_, _, name) return name end,
     FindClass = function(_, name) return { name = name } end,
     NewStringUTF = function(_, s) return { str = s } end,
-    NewObject = function(_, _, _, action) return { kind = "intent", action = action.str, extras = {} } end,
+    NewObject = function(_, cls, _, a, b)
+        if cls.name == "android/os/Bundle" then return { kind = "bundle", extras = {} } end
+        if cls.name == "java/math/BigInteger" then return { kind = "big", of = b } end
+        return { kind = "intent", action = a.str, extras = {} }
+    end,
+    CallStaticObjectMethod = function(_, _, m, a)
+        if m == "parse" then return { uri = a.str } end
+        if m == "getInstance" then return { digest = true } end
+    end,
+    GetFieldID = function(_, _, name) return name end,
+    GetObjectField = function(_, obj, f)
+        if f == "signingInfo" then return { signing = obj.pkginfo } end
+        if f == "signatures" then return { { sig = obj.pkginfo } } end
+    end,
     GetArrayLength = function(_, arr) return #arr end,
     GetObjectArrayElement = function(_, arr, i) return arr[i + 1] end,
-    CallObjectMethod = function(_, obj, m, a, b)
+    CallObjectMethod = function(_, obj, m, a, b, c, d)
+        if m == "call" then return W.companionCall(b.str, d.extras) end
+        if obj.kind == "bundle" and m == "getString" then
+            local v = obj.extras[a.str]
+            return v and { str = v } or nil
+        end
+        if m == "getPackageInfo" then
+            if a.str == "net.fledgewing.orbitcompanion" and W.companion then return { pkginfo = a.str } end
+            W.exception = true
+            return nil
+        end
+        if m == "getSigningCertificateHistory" or m == "getApkContentsSigners" then return { { sig = obj.signing } } end
+        if m == "toByteArray" or m == "digest" then return { cert = true } end
+        if obj.kind == "big" and m == "toString" then return { str = W.companion_cert } end
         if m == "setPackage" then obj.package = a.str
         elseif m == "setClassName" then obj.package, obj.class = a.str, b.str
         elseif m == "putExtra" then obj.extras[a.str] = b.str
@@ -124,17 +156,9 @@ local env_fns = {
         end
         return obj
     end,
-    CallVoidMethod = function(_, obj, m, a)
-        if m == "sendBroadcast" then
-            a.at = W.clock; table.insert(W.broadcasts, a)
-            if W.on_broadcast then W.on_broadcast(a) end
-            -- Optionally play the companion: switch the fake radio.
-            if W.simulate_companion and a.action:match("%.WIFI_OFF$") then
-                if a.extras.auto ~= "1" or W.owner ~= "manual" then W.radio, W.wifi = false, false end
-            elseif W.simulate_companion and a.action:match("%.NET_UP$") then
-                if not W.radio then W.owner = a.extras.owner end
-                W.radio, W.wifi = true, true
-            end
+    CallVoidMethod = function(_, obj, m, a, b)
+        if m == "putString" then obj.extras[a.str] = b.str
+        elseif m == "sendBroadcast" then W.deliver(a)
         elseif m == "startActivity" then table.insert(W.activities, a)
         elseif m == "removeExtra" then W.intent_extras[a.str] = nil end
     end,
@@ -155,6 +179,33 @@ local env_fns = {
     end,
 }
 local env = { [0] = env_fns }
+
+-- What reaches the companion: W.broadcasts (the commands, as { action, package, extras }) and
+-- the fake companion (W.on_broadcast).
+function W.deliver(a)
+    a.at = W.clock; table.insert(W.broadcasts, a)
+    if W.on_broadcast then W.on_broadcast(a) end
+    -- Optionally play the companion: switch the fake radio.
+    if W.simulate_companion and a.action:match("%.WIFI_OFF$") then
+        if a.extras.auto ~= "1" or W.owner ~= "manual" then W.radio, W.wifi = false, false end
+    elseif W.simulate_companion and a.action:match("%.NET_UP$") then
+        if not W.radio then W.owner = a.extras.owner end
+        W.radio, W.wifi = true, true
+    end
+end
+
+-- ContentResolver.call to the companion (Jni.call): the status, or a command.
+function W.companionCall(method, extras)
+    local function answer(t) return { kind = "bundle", extras = t } end
+    if method:match("%.call%.STATUS$") then
+        W.last_status = extras
+        local body = W.web[STATUS_KEY]
+        if body == nil then return answer({ ok = "0", why = "no service" }) end
+        return answer({ ok = "1", status = body })
+    end
+    W.deliver({ kind = "call", action = method, package = "net.fledgewing.orbitcompanion", extras = extras })
+    return answer({ ok = "1" })
+end
 local jni = { env = env, to_string = function(_, j) return j.str end,
     context = function(self, _, fn) return fn(self) end }
 
@@ -898,7 +949,7 @@ test("wifi: without the companion, KOReader's stock path (and message) is kept",
 end)
 
 test("setup needs you: the companion's count shows in the menu status, no pop-up in a book", function()
-    local url = "http://127.0.0.1:47913/status"
+    local url = STATUS_KEY
     W.web[url] = "STATUS"
     W.json.STATUS = { version = "0.2.4", setup_needed = 2 }
     local ui, m = newUI(true)
@@ -915,7 +966,7 @@ test("setup needs you: the companion's count shows in the menu status, no pop-up
 end)
 
 test("setup box: once off a book, never in one; Fix opens the companion, Later snoozes there", function()
-    local url = "http://127.0.0.1:47913/status"
+    local url = STATUS_KEY
     W.web[url] = "STATUS"
     W.json.STATUS = { version = "0.4.1", setup_needed = 1,
         setup_prompt = { key = "clicker", rows = { "Clicker buttons (accessibility)" } } }
@@ -1053,8 +1104,33 @@ test("restart by an older patch: COMMAND=reopen_book opens KOReader's last book"
     ok(W.opened == nil, "a book already open stays")
 end)
 
----------------------------------------------------------------- recommended settings (addon-mode §5)
 local RE = getfenv(Orbit.onSuspend)
+
+---------------------------------------------------------------- the companion's signer (security.md)
+test("companion: an app with its name and another signer gets nothing, the login above all", function()
+    W.companion_cert = "1234abcd"
+    RE.installed_cache.at = -1000
+    W.broadcasts = {}
+    ok(RE.Companion.state() == "untrusted", "untrusted: " .. tostring(RE.Companion.state()))
+    ok(not RE.Companion.send(RE.Companion.ACTION.CHECK, { server = "https://books.example", user = "u", userkey = "k" }), "not sent")
+    ok(#W.broadcasts == 0, "nothing reached it")
+    ok(RE.Companion.status() == nil, "no status asked")
+    ok(RE.Companion.workerProblem() ~= nil, "nothing heavy runs")
+    ok(tostring(RE.Companion.problem()):find("not an Orbify release", 1, true), "the menus' problem line")
+    W.companion_cert = RELEASE_CERT
+    RE.installed_cache.at = -1000
+    ok(RE.Companion.state() == "ok", "the release-signed one is used")
+    ok(RE.Companion.send(RE.Companion.ACTION.SETUP_LATER, {}), "sent")
+    ok(W.broadcasts[#W.broadcasts].kind == "call", "through the caller-checked call, not a broadcast")
+end)
+
+test("companion: certificate fingerprints read as release.yml prints them", function()
+    ok(RE.Companion.fingerprint("abc") == string.rep("00:", 30) .. "0A:BC", RE.Companion.fingerprint("abc"))
+    ok(RE.Companion.signedByUs({ RE.Companion.fingerprint(RELEASE_CERT) }), "the release key")
+    ok(not RE.Companion.signedByUs({ RE.Companion.fingerprint(RELEASE_CERT), "AA" }), "every signer must be ours")
+    ok(not RE.Companion.signedByUs({}) and not RE.Companion.signedByUs(nil), "none read")
+end)
+
 -- Settings defaults have one source, shared/settings/schema.json: the plugin's are the schema's
 -- (SettingsStoreTest checks the companion's), except where the device decides (DEVICE_DEFAULTS).
 test("settings defaults: every shared setting starts at the schema's default", function()
@@ -1072,6 +1148,7 @@ test("settings defaults: every shared setting starts at the schema's default", f
     eq(RE.SCHEMA.byKey.wifi_mode.default, "jit", "the schema's wifi_mode")
 end)
 
+---------------------------------------------------------------- recommended settings (addon-mode §5)
 local BO_DEFAULTS = { auto_sync = false, sync_forward = 1, sync_backward = 3, catalog_auto_open = "off" }
 -- A KOReader with nothing changed: the plugin and gestures at their stock defaults.
 local function recWorld(in_book)
@@ -1262,7 +1339,7 @@ local function capsFile(mode, caps)
 end
 local function capsReset()
     capsFile(nil)
-    W.web["http://127.0.0.1:47913/status"], W.json.STATUS = nil, nil
+    W.web[STATUS_KEY], W.json.STATUS = nil, nil
     store.orbit_android.companion_caps, store.orbit_android.companion_mode = nil, nil
     RE.Companion.cap_set, RE.Companion.caps_known = nil, nil
     RE.installed_cache.at = -1000
@@ -1275,7 +1352,7 @@ test("caps: from the status file with no service; /status wins when it answers; 
     RE.Shared.refresh("test")
     ok(RE.Companion.has("install") and not RE.Companion.has("wifi"), "file: Add-on caps")
     ok(store.orbit_android.companion_mode == "addon", "cached for load-time hooks")
-    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.web[STATUS_KEY] = "STATUS"
     W.json.STATUS = { version = "0.11.0", mode = "full", caps = FULL }
     RE.Shared.refresh("test")
     ok(RE.Companion.has("wifi"), "/status wins")
@@ -1455,27 +1532,27 @@ end)
 
 test("the status ping says whether a book is open (the companion's restart waits for it)", function()
     local _, m = newUI(true)
-    W.last_url = nil
+    W.last_status = nil
     m:onResume()
     run(2)
-    ok(W.last_url and W.last_url:find("&book=1", 1, true), "in a book: " .. tostring(W.last_url))
+    ok(W.last_status and W.last_status.book == "1", "in a book")
     local _, m2 = newUI(false)
-    W.last_url = nil
+    W.last_status = nil
     m2:onResume()
     run(2)
-    ok(W.last_url and W.last_url:find("&book=0", 1, true), "file browser: " .. tostring(W.last_url))
+    ok(W.last_status and W.last_status.book == "0", "file browser")
 end)
 
 test("the status ping tells the companion which patch is running", function()
     local _, m = newUI(false)
-    W.last_url = nil
+    W.last_status = nil
     m:onResume()
     run(2)
-    ok(W.last_url and W.last_url:find("/status?patch_version=", 1, true), "url " .. tostring(W.last_url))
+    ok(W.last_status and W.last_status.patch_version, "patch_version sent")
 end)
 
 test("clicker: mapped keys turn pages inside KOReader; others reach KOReader untouched", function()
-    local url = "http://127.0.0.1:47913/status"
+    local url = STATUS_KEY
     W.web[url] = "STATUS"
     W.json.STATUS = { version = "0.4.0", keymap = { ["87"] = { press = "next" }, ["88"] = { press = "prev", hold = "light" }, ["66"] = { press = "nothing" } } }
     local ui, m = newUI(true)
@@ -1512,7 +1589,7 @@ test("clicker: mapped keys turn pages inside KOReader; others reach KOReader unt
 end)
 
 test("clicker: letters, gamepad buttons, DPAD and volume reach the action through the live Device.input", function()
-    local url = "http://127.0.0.1:47913/status"
+    local url = STATUS_KEY
     W.web[url] = "STATUS"
     W.json.STATUS = { version = "0.4.2", keymap = { ["38"] = { press = "prev" }, ["36"] = { press = "next" },
         ["96"] = { press = "next" }, ["22"] = { press = "next" }, ["25"] = { press = "next" } } }
@@ -1544,7 +1621,7 @@ test("clicker: letters, gamepad buttons, DPAD and volume reach the action throug
 end)
 
 test("clicker: one path; the service's clicks arrive over /clicks, no double page turn, fallback when it's off", function()
-    local url = "http://127.0.0.1:47913/status"
+    local url = STATUS_KEY
     W.web[url] = "STATUS"
     W.json.STATUS = { version = "0.4.2", clicker_service = true, keymap = { ["38"] = { press = "prev" } } }
     local socket = require("socket")
@@ -1790,7 +1867,7 @@ local function scheduleMenu(m)
 end
 
 test("sync while reading: set in the companion, applied and saved by the patch, shown in its menu, acked", function()
-    local url = "http://127.0.0.1:47913/status"
+    local url = STATUS_KEY
     store.orbit_android.reading_schedule = "off"
     store.orbit_android.reading_schedule_request_at = nil
     -- KOReader wasn't running when the user chose it: the companion's /status still carries it.
@@ -1824,7 +1901,7 @@ test("sync while reading: set in the companion, applied and saved by the patch, 
 end)
 
 test("home button menu says it is about KOReader, and notes the companion's Home opens", function()
-    local url = "http://127.0.0.1:47913/status"
+    local url = STATUS_KEY
     W.web[url] = "STATUS"
     local ui, m = newUI(false)
     local function homeText()
@@ -2425,7 +2502,7 @@ sh("rm -rf", ORBIT_ANDROID_PLUGIN_DIR)
 os.remove(SELF)
 
 test("settings PIN: a locked companion makes the Orbit menu read-only, with the keypad one tap away; unreachable stays usable", function()
-    local url = "http://127.0.0.1:47913/status"
+    local url = STATUS_KEY
     local ui, m = newUI(true)
     local items = {}
     m:addToMainMenu(items)
@@ -2834,6 +2911,7 @@ end)
 test("end of book: Download and open uses the reader's delivery variant and a supported file (hash_mismatch on M8C)", function()
     eobModules()
     local JSON = dofile(here .. "/json_mini.lua")
+    -- @fixture bookorbit/catalog-book.delivery-variants.json
     local fx = JSON.fixture(here, "bookorbit/catalog-book.delivery-variants.json")
     local DCat = {}
     DCat.__index = DCat
@@ -4773,7 +4851,7 @@ test("sleep screen: the menu, SETTINGS to the companion, a pool from Up next thr
     local caps = {}
     for _, c in ipairs(FULL) do table.insert(caps, c) end
     table.insert(caps, "sleep_screen")
-    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.web[STATUS_KEY] = "STATUS"
     W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps, sleep = { shown_by = "Orbit screen saver ✓" } }
     local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
     local lfs = require("libs/libkoreader-lfs")
@@ -4900,7 +4978,7 @@ test("sleep screen: settings changed in the companion are applied; an older comp
     capsReset()
     local S = RE.S
     S.shared_settings_at = 1000
-    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.web[STATUS_KEY] = "STATUS"
     W.json.STATUS = { version = "0.11.0", mode = "full", caps = FULL, settings = { wifi_mode = "always_on", settings_at = 2000 } }
     RE.Shared.refresh("test")
     ok(S.sleep_mode == "off" and S.sleep_hours == 6, "no sleep keys: unchanged")
@@ -4923,6 +5001,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
         local f = assert(io.open(here .. "/../../../shared/fixtures/bookorbit/" .. name, "rb"))
         local v = JSON.decode(f:read("*a")); f:close(); return v
     end
+    -- @fixture bookorbit/catalog-sections.smart-scopes.json @fixture bookorbit/catalog-sections.collections.json
     local scopes, collections = fixture("catalog-sections.smart-scopes.json"), fixture("catalog-sections.collections.json")
     -- scopes.json is read back with KOReader's json module: the real decoder here.
     local jm = require("json")
@@ -4932,7 +5011,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     local caps = {}
     for _, c in ipairs(FULL) do table.insert(caps, c) end
     table.insert(caps, "sleep_screen")
-    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.web[STATUS_KEY] = "STATUS"
     W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
     local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
     local S, Sleep = RE.S, RE.Sleep
@@ -5023,7 +5102,7 @@ test("sleep screen: the tag picker opens from the companion's tags.json; KOReade
     local caps = {}
     for _, c in ipairs(FULL) do table.insert(caps, c) end
     table.insert(caps, "sleep_screen")
-    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.web[STATUS_KEY] = "STATUS"
     W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
     local jm = require("json")
     local JSON = dofile(here .. "/json_mini.lua")
@@ -5095,7 +5174,7 @@ test("sleep screen: 24 covers ready whatever the source; Every sleep retires the
     local caps = {}
     for _, c in ipairs(FULL) do table.insert(caps, c) end
     table.insert(caps, "sleep_screen")
-    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.web[STATUS_KEY] = "STATUS"
     W.json.STATUS = { version = "0.12.0", mode = "full", caps = caps }
     local dir = os.tmpname(); os.remove(dir); sh("mkdir -p", dir .. "/covers")
     local lfs = require("libs/libkoreader-lfs")
@@ -5178,7 +5257,7 @@ test("settings v2: a change queued in the companion while KOReader was off appli
     local at = S.settings_at
     S.settings_at = { sync_on_sleep = 1, storage_limit_mb = 1, wifi_mode = 5000 }
     S.sync_on_sleep, S.storage_limit_mb, S.wifi_mode = true, 250, "always_on"
-    W.web["http://127.0.0.1:47913/status"] = "STATUS"
+    W.web[STATUS_KEY] = "STATUS"
     -- The companion changed two keys while KOReader was closed; its Wi-Fi mode is older than ours.
     W.json.STATUS = { version = "0.12.0", mode = "full", caps = FULL, settings = { settings_at = 9000, values = {
         sync_on_sleep = { v = "0", at = 8000 }, storage_limit_mb = { v = "500", at = 8000 },
@@ -5282,6 +5361,7 @@ end)
 
 -- The offline cache's database, as CacheStoreTest reads it: the same fixture, the plugin's reads.
 local JSONF = dofile(here .. "/json_mini.lua")
+-- @fixture cache/db.json @fixture cache/schema.sql
 local DBFX = JSONF.decode(io.open(here .. "/../../../shared/fixtures/cache/db.json", "rb"):read("*a"))
 local FakeStore = dofile(here .. "/fake_store.lua")(RE.Cache, SQ3, here .. "/../../../shared/fixtures/cache/schema.sql")
 

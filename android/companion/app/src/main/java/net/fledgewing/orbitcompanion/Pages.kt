@@ -346,6 +346,8 @@ object Setup {
         full.filter { it.advisory }.forEach { out += it }
         // A frozen app is a warning on the app it breaks, only while it is frozen.
         byId["disabled"]?.takeIf { !it.done }?.let { out += it }
+        // KOReader came back with another signer: Orbit ignores it until the user trusts it.
+        byId[KoreaderTrust.ROW_ID]?.let { out += it }
         AddonLogic.REQUIRED.forEach { id -> byId[id]?.let { out += it } }
         byId["recommended"]?.let { out += it.asInfo() }
         if (Net.installed(ctx, Net.TAILSCALE_PKG)) byId["tailscale"]?.let { out += it.asInfo() }
@@ -563,6 +565,16 @@ object Setup {
                 }
             },
         )
+
+        // The caller check (docs/design/security.md): KOReader came back with another signer.
+        KoreaderTrust.changed(ctx)?.let { c ->
+            list.add(Check("KOReader changed", false, "KOReader changed: trust this copy? Orbit ignores it until you do.",
+                action = "Trust", id = KoreaderTrust.ROW_ID, short = "KOReader trusted") { a ->
+                KoreaderTrust.trustChanged(a)
+                OLog.i("setup: KOReader ${c.pkg} trusted")
+                a.refresh()
+            })
+        }
 
         val plV = Installers.pluginVersion()
         val plNeeds = PluginRelease.needsInstall(plV)

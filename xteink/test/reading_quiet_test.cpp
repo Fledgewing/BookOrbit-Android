@@ -1,5 +1,5 @@
 // Host test for "nothing interrupts reading" (xteink/orbify/core/ReadingQuiet): the shared table in
-// shared/fixtures/reading-quiet/cases.json (Android reads the same one).
+// shared/fixtures/reading-quiet/cases.json (only this test reads it so far: REGISTRY.json).
 #include <ArduinoJson.h>
 
 #include <string>
@@ -14,6 +14,7 @@ int main(int argc, char** argv) {
   std::string dir = argv[1];
   dir = dir.substr(0, dir.rfind('/')) + "/reading-quiet";
   JsonDocument doc;
+  // @fixture reading-quiet/cases.json
   CHECK(loadJsonFile((dir + "/cases.json").c_str(), doc));
   int cases = 0;
   for (JsonObjectConst c : doc["cases"].as<JsonArrayConst>()) {

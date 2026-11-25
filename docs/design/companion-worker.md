@@ -120,14 +120,13 @@ Guards (`test_flows.lua`, "v0.11.3: the mirror off the UI thread"):
   `shared/fixtures/cache/worker.json` by both `test_logic.lua` and `CacheWorkerTest`. The plan
   carries the plugin's own request templates (`paramsForEntry`, `effectiveOrder`,
   `listDecorateBookQuery` with a sentinel id), so BookOrbit's query rules stay in the plugin.
-- **Credentials.** Server URL, username and key go only in explicit broadcasts to the
-  companion's package (`Jni.sendBroadcast` with `package`). They are held in memory, used only as
-  `x-auth-user`/`x-auth-key` on requests to that server (a redirect is followed only to the same
-  scheme, host and port), and never written to a file, `/status` or a log (`Companion.send` logs
-  only the reason; tests: the key is in no file under `orbit-cache/` and not in the plugin's log).
-  The receiver is exported like every other action, so another app could also send `MIRROR` with
-  a login of its own. The worst it can do is make the companion save a server's replies into
-  `koreader/settings/orbit-cache/`, which any app with storage access can write to anyway.
+- **Credentials.** Server URL, username and key go only in the caller-checked call to the
+  companion (`Companion.send`, `Jni.call`), and only when the companion is signed by Orbify's
+  release certificate. They are held in memory, used only as `x-auth-user`/`x-auth-key` on
+  requests to that server (a redirect is followed only to the same scheme, host and port), and
+  never written to a file, the status or a log (`Companion.send` logs only the reason; tests: the
+  key is in no file under `orbit-cache/` and not in the plugin's log). Only the pinned KOReader
+  can call (docs/design/security.md).
 - **The indicator (rc.1 report).** The Full refresh indicator now follows the run, not a step:
   it is shown at every poll with an 8 s timeout (longer than the 3 s poll), reads "Full refresh ·
   saving 512 of 8,551 for offline", and goes when the run finishes, pauses or fails. Before, it

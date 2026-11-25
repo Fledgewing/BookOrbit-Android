@@ -1,5 +1,5 @@
 {
-  "_comment": "Write-through cache (docs/design/write-through-cache.md). Both platforms' tests read this. Times are epoch seconds; 'now' is the time of the step. A cover version is the book's updatedAt as the server lists it. Cover files: ok | missing | empty | corrupt. A disk entry may carry the etag stored with it; a listed book may carry server_etag (the thumbnail's current ETag). download = covers whose body was transferred (200); not_modified = conditional requests answered 304 (file kept, renamed to the listed version); conditional = requests sent with If-None-Match.",
+  "_comment": "Write-through cache (docs/design/write-through-cache.md). Both platforms' tests read this. Times are epoch seconds; 'now' is the time of the step. A cover version is the book's updatedAt as the server lists it. Cover files: ok | missing | empty | corrupt. A disk entry may carry the etag stored with it; a listed book may carry server_etag (the thumbnail's current ETag). download = covers whose body was transferred (200); not_modified = conditional requests answered 304 (file kept, renamed to the listed version); conditional = requests sent with If-None-Match. writes: effect is what the plugin sends the companion (Cache.writeEffect: the book id, the fields it sets, a null field is cleared, and whether Home goes stale; null when the write failed, so nothing is sent); the companion applies it to every cached reply (CacheStore.patched).",
   "keys": [
     {
       "name": "query order and empty values don't matter",
@@ -322,6 +322,13 @@
         },
         "status": 200
       },
+      "effect": {
+        "id": 7,
+        "fields": {
+          "readStatus": "read"
+        },
+        "stale_home": true
+      },
       "entries": {
         "dashboard": {
           "continueReading": [
@@ -408,6 +415,13 @@
         },
         "status": 200
       },
+      "effect": {
+        "id": 7,
+        "fields": {
+          "rating": 4
+        },
+        "stale_home": true
+      },
       "entries": {
         "detail7": {
           "id": 7,
@@ -434,6 +448,7 @@
         },
         "status": 503
       },
+      "effect": null,
       "entries": {
         "detail7": {
           "id": 7,

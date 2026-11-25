@@ -22,6 +22,7 @@ every platform whose hardware allows it.
 | `tools/sideload-android.sh`, `tools/sideload-xteink.sh` | Put a test build on a test device over USB ("Test builds" below) | MIT |
 | `tools/upstreams` | Clones pinned upstream source into `upstream/` (gitignored) | MIT |
 | `tools/attest-check/` | Fails when the pinned BookOrbit server requires app attestation on a route Orbify calls | MIT |
+| `tools/feed-keys/`, `shared/release-signing.json` | Release signing keys for firmware, the feed and the plugin zip ([design](docs/design/release-signing.md)) | MIT |
 
 ## Platforms
 

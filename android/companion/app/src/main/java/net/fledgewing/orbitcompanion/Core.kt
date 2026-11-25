@@ -69,7 +69,8 @@ object OLog {
 }
 
 class Prefs(ctx: Context) {
-    private val sp: SharedPreferences = ctx.applicationContext.getSharedPreferences("orbit", Context.MODE_PRIVATE)
+    private val app: Context = ctx.applicationContext
+    private val sp: SharedPreferences = app.getSharedPreferences("orbit", Context.MODE_PRIVATE)
 
     private fun bool(key: String, def: Boolean) = sp.getBoolean(key, def)
     private fun setBool(key: String, v: Boolean) = sp.edit().putBoolean(key, v).apply()
@@ -153,16 +154,16 @@ class Prefs(ctx: Context) {
     var notifyTailscale: Boolean
         get() = bool("notify_tailscale", true)
         set(v) = setBool("notify_tailscale", v)
-    // Shared with the KOReader patch (android/docs/INTERFACE.md "Settings"); newest settings_at wins.
+    // Shared with the plugin: stored in SettingsStore, keyed by the schema (its defaults too).
     var wifiMode: WifiMode
-        get() = WifiMode.fromKey(sp.getString("wifi_mode", null))
-        set(v) = setStr("wifi_mode", v.key)
+        get() = WifiMode.fromKey(SettingsStore.get(app, "wifi_mode"))
+        set(v) = SettingsStore.store(app, "wifi_mode", v.key)
     var wifiIdleMin: Int
-        get() = sp.getInt("wifi_idle_min", 2)
-        set(v) = sp.edit().putInt("wifi_idle_min", v).apply()
+        get() = SettingsStore.get(app, "wifi_idle_min").toIntOrNull() ?: 2
+        set(v) = SettingsStore.store(app, "wifi_idle_min", v.toString())
     var homeButton: HomeButton
-        get() = HomeButton.fromKey(sp.getString("home_button", null))
-        set(v) = setStr("home_button", v.key)
+        get() = HomeButton.fromKey(SettingsStore.get(app, "home_button"))
+        set(v) = SettingsStore.store(app, "home_button", v.key)
     var sharedSettingsAt by LongPref("shared_settings_at")
     /** Sync while reading as the patch last reported it ("" = not yet). */
     var readingSchedule: String
@@ -630,6 +631,9 @@ object Koreader {
 
     private fun launch(ctx: Context, why: String, command: String?, from: String?): Boolean {
         val t0 = SystemClock.elapsedRealtime()
+        // A command goes only to the trusted KOReader (docs/design/security.md); another copy starts plain.
+        @Suppress("NAME_SHADOWING")
+        val command = command?.takeIf { KoreaderTrust.koreaderTrusted(ctx) }
         val i = Intent(Intent.ACTION_MAIN)
             .setComponent(ComponentName(PKG, ACTIVITY))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
