@@ -1,0 +1,25 @@
+name: Orbit KOReader plugin tests
+description: >
+  The plugin's tests (LuaJIT with SQLite, stdin closed) and the release zip's checks: it builds,
+  stamped, with the settings schema and nothing outside orbit.koplugin/. android.yml and
+  release.yml both run this, so a release runs exactly what CI ran.
+runs:
+  using: composite
+  steps:
+    - name: KOReader plugin tests
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get install -y -qq luajit libsqlite3-0 >/dev/null
+        # stdin closed: nothing in the tests may wait on a terminal.
+        luajit android/koreader/test/test_logic.lua </dev/null
+        luajit android/koreader/test/test_flows.lua </dev/null
+        # The release zip builds, stamped, with everything under orbit.koplugin/.
+        zip="$RUNNER_TEMP/plugin-check/orbit.koplugin.zip"
+        mkdir -p "$(dirname "$zip")"
+        android/koreader/package.sh 0.0.0-ci "$zip"
+        unzip -p "$zip" orbit.koplugin/main.lua | grep -qx 'local PATCH_VERSION = "0.0.0-ci"'
+        # The shared settings schema rides along (docs/design/companion-settings.md §4.1).
+        unzip -p "$zip" orbit.koplugin/settings_schema.json | cmp - shared/settings/schema.json
+        if unzip -Z1 "$zip" | grep -v '^orbit\.koplugin/'; then exit 1; fi
+        rm -rf "$(dirname "$zip")"

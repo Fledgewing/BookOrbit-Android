@@ -5,9 +5,9 @@ name: Android
 on:
   push:
     branches: [main]
-    paths: ["android/**", "shared/**", "tools/**", ".github/workflows/android.yml"]
+    paths: ["android/**", "shared/**", "tools/**", ".github/workflows/android.yml", ".github/actions/**"]
   pull_request:
-    paths: ["android/**", "shared/**", "tools/**", ".github/workflows/android.yml"]
+    paths: ["android/**", "shared/**", "tools/**", ".github/workflows/android.yml", ".github/actions/**"]
   workflow_dispatch:
   # Keeps main's Gradle cache entry fresh: entries unused for 7 days are evicted.
   schedule:
@@ -21,58 +21,30 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
-          distribution: temurin
-          java-version: "17"
+          persist-credentials: false
 
-      # Gradle User Home (dependencies, Robolectric's 350 MB of Android jars, the wrapper) from
-      # the Actions cache. setup-java's `cache: gradle` keyed on an exact hash of the build files
-      # with no fallback, so any build-file change started from an empty cache and fetched
-      # everything from Maven Central, which answers shared runners with 429. setup-gradle falls
-      # back to the closest entry (restore keys), so a change downloads only what is new. PRs
-      # write too (into their own scope, which only that PR restores), so a PR that adds a
-      # dependency downloads it once, not on every push.
-      - uses: gradle/actions/setup-gradle@7296c772c13d12d9871528814b51fb2143c138ef # v6.4.1
+      # Java, setup-gradle and the SDK (.github/actions/android-setup). PRs write the Gradle cache
+      # too (into their own scope, which only that PR restores), so a PR that adds a dependency
+      # downloads it once, not on every push.
+      - uses: ./.github/actions/android-setup
         with:
-          cache-read-only: false
+          cache-read-only: "false"
 
-      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
-
-      - name: KOReader plugin tests
+      # The same plugin tests and zip checks release.yml runs (.github/actions/plugin-tests).
+      - uses: ./.github/actions/plugin-tests
         timeout-minutes: 5
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y -qq luajit libsqlite3-0 >/dev/null
-          # stdin closed: nothing in the tests may wait on a terminal.
-          luajit android/koreader/test/test_logic.lua </dev/null
-          luajit android/koreader/test/test_flows.lua </dev/null
-          # The release zip builds, stamped, with everything under orbit.koplugin/.
-          android/koreader/package.sh 0.0.0-ci "$RUNNER_TEMP/orbit.koplugin.zip"
-          unzip -p "$RUNNER_TEMP/orbit.koplugin.zip" orbit.koplugin/main.lua | grep -qx 'local PATCH_VERSION = "0.0.0-ci"'
-          # The shared settings schema rides along (docs/design/companion-settings.md §4.1).
-          unzip -p "$RUNNER_TEMP/orbit.koplugin.zip" orbit.koplugin/settings_schema.json | cmp - shared/settings/schema.json
-          if unzip -Z1 "$RUNNER_TEMP/orbit.koplugin.zip" | grep -v '^orbit\.koplugin/'; then exit 1; fi
 
-      - name: USB installer checks
-        run: |
-          set -euo pipefail
-          shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh android/koreader/package.sh tools/upstreams \
-            tools/android-test-version.sh tools/sideload-android.sh tools/sideload-xteink.sh tools/test/test-sideload.sh \
-            tools/feed-keys/feed-keys tools/test/test-feed-keys.sh
-          bash tools/test/test-install-usb.sh
-          bash tools/test/test-sideload.sh
-          bash tools/test/test-feed-keys.sh
+      - uses: ./.github/actions/script-checks
 
       - name: Companion tests, debug build and lint
         working-directory: android/companion
-        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug lintDebug
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug lintDebug </dev/null
 
       # The pages as Robolectric draws them (PageLayoutTest), at the M8C's size and a phone's.
       - name: Page screenshots
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: companion-screenshots
           path: android/companion/app/build/screenshots/
