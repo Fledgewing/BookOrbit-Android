@@ -1698,6 +1698,23 @@ test("status layout: unequal sides retain physical centre, Unicode ellipsis and 
     eq(c.chapter, ""); eq(c.left, "")
 end)
 
+test("status layout: inset full battery group has priority over page text", function()
+    local L=M.StatusLayout
+    local measure=function(t) return #t end
+    local layout=L.layout(35,4,4,"100% + charge","icon","Chapter", "123 / 1234 · 100%",measure,true)
+    eq(layout.left,"100% + charge"); eq(layout.lx,4)
+    ok(layout.lx+measure(layout.left)+4<=layout.rx)
+    ok(layout.rx+measure(layout.right)<=31)
+    local hidden=L.layout(12,4,4,"100% + charge","icon","Chapter","1 / 2",measure,true)
+    eq(hidden.left,"")
+    local rectangles={}
+    eq(L.chargingMark(18,function(x,y,w,h,color)
+        eq(color,1); ok(x>=0 and x+w<=14 and y>=0 and y+h<=18)
+        rectangles[#rectangles+1]={x,y,w,h}
+    end),14)
+    eq(#rectangles,9)
+end)
+
 -- shared/fixtures/REGISTRY.json: every rule table has a row, and this suite reads what it names (test_registry.lua).
 test("fixture registry: the plugin reads every table it is named for, and every table has a row", function()
     local problems = dofile(here .. "/test_registry.lua")(here)
