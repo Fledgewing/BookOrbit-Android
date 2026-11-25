@@ -612,11 +612,12 @@ class SettingChoiceActivity : SleepPickerPage() {
     override val loadsChoices: Boolean get() = schema.byKey[key]?.type == "source"
 
     override fun render() {
+        beginPicker()
         val d = schema.byKey[key] ?: return finish()
         val root = page(scroll = true)
         root.addView(Ui.header(this, d.label, "‹ Back") { finish() })
         lockedBar(root)
-        root.addView(note(lineFor(d)))
+        root.addView(pickerNote(d))
         val v = SettingsStore.get(this, key)
         fun option(id: String, label: String, sub: String? = null) {
             val sel = id == v
@@ -629,8 +630,9 @@ class SettingChoiceActivity : SleepPickerPage() {
         // Pick from is a set (docs/design/lock-screen.md R1c): each item ticks on and off, the page stays.
         val picked = SleepPoolLogic.sources(v)
         fun tick(id: String, label: String, sub: String? = null) {
-            root.addView(Ui.row(this, label, sub, left = Ui.check(this, id in picked),
-                onClick = if (locked) null else ({ setPicked(key, SleepPoolLogic.togglePick(SettingsStore.get(this, key), id)) })).apply { tag = "option:$id"; isSelected = id in picked; contentDescription = "$label: ${if (id in picked) "picked" else "not picked"}" })
+            pickerRow(root, id, label, sub, id in picked, "option:$id") {
+                setPicked(key, SleepPoolLogic.togglePick(SettingsStore.get(this, key), id))
+            }
         }
         tick(SleepPoolLogic.LIBRARY, "Library", "Every book you can see. The others are part of it.")
         subhead(root, "Lists")
@@ -653,13 +655,14 @@ class SettingChoiceActivity : SleepPickerPage() {
 /** Sleep screen › Leave out: every rule toggles in place, including tags typed by the reader. */
 class LeaveOutActivity : SleepPickerPage() {
     override fun render() {
+        beginPicker()
         val d = schema.byKey["sleep_leave_out"] ?: return finish()
         val c = choices
         val rules = SleepPoolLogic.rules(SettingsStore.get(this, d.key))
         val root = page(scroll = true)
         root.addView(Ui.header(this, "Leave out", "‹ Back") { finish() })
         lockedBar(root)
-        root.addView(note(lineFor(d)))
+        root.addView(pickerNote(d))
         fun toggle(rule: String) {
             // Choosing an individual rule explicitly replaces the all-books selection.
             val current = SleepPoolLogic.rules(SettingsStore.get(this, d.key))
@@ -667,17 +670,11 @@ class LeaveOutActivity : SleepPickerPage() {
             setPicked(d.key, SleepPoolLogic.toggleRule(base.joinToString("\n"), rule))
         }
         fun tick(rule: String, label: String, sub: String? = null) {
-            val selected = rule in rules
-            root.addView(Ui.row(this, label, sub, left = Ui.check(this, selected),
-                onClick = if (locked) null else ({ toggle(rule) })).apply {
-                tag = "pick:$rule"
-                isSelected = selected
-                contentDescription = "$label: ${if (selected) "left out" else "included"}"
-            })
+            pickerRow(root, rule, label, sub, rule in rules, "pick:$rule") { toggle(rule) }
         }
         tick(SleepPoolLogic.LIBRARY, "Library", "Every book: show the current book instead. Choosing an individual rule clears Library.")
         subhead(root, "Tags")
-        if (!locked) linkRow(root, "Type a tag…", null) { typeTag { if ("tag:$it" !in rules) toggle("tag:$it") } }
+        if (!locked) linkRow(root, "Type a tag…", null) { typeTag { if ("tag:$it" !in SleepPoolLogic.rules(SettingsStore.get(this, d.key))) toggle("tag:$it") } }
         c?.tags?.forEach { t -> tick("tag:${t.tag}", t.label, "${t.count} books") }
         rules.filter { it.startsWith("tag:") && c?.tags?.none { t -> "tag:${t.tag}" == it } != false }
             .forEach { tick(it, SleepChoices.fallback(it)) }

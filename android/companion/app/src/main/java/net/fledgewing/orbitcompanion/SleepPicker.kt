@@ -3,6 +3,9 @@ package net.fledgewing.orbitcompanion
 import android.os.FileObserver
 import android.os.Handler
 import android.os.Looper
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.view.View
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -22,6 +25,24 @@ abstract class SleepPickerPage : SettingsPage() {
     private val main = Handler(Looper.getMainLooper())
     private var generation = 0
     private var watch: FileObserver? = null
+    private data class Tick(val id: String, val row: View, val box: TextView, val label: String)
+    private val ticks = mutableListOf<Tick>()
+    private var statusNote: TextView? = null
+
+    protected fun beginPicker() { ticks.clear(); statusNote = null }
+
+    protected fun pickerNote(d: SettingDef): TextView = note(lineFor(d)).also { statusNote = it }
+
+    protected fun pickerRow(root: LinearLayout, id: String, label: String, sub: String?, selected: Boolean, tag: String, choose: () -> Unit) {
+        val box = Ui.check(this, selected)
+        val row = Ui.row(this, label, sub, left = box, onClick = if (locked) null else choose).apply {
+            this.tag = tag
+            isSelected = selected
+            contentDescription = "$label: ${if (selected) "selected" else "not selected"}"
+        }
+        ticks += Tick(id, row, box, label)
+        root.addView(row)
+    }
 
     override fun onResume() {
         val opened = System.nanoTime()
@@ -71,7 +92,23 @@ abstract class SleepPickerPage : SettingsPage() {
         if (locked) return
         val start = System.nanoTime()
         SettingsStore.setPicker(this, key, value)
-        render()
+        val wire = SettingsStore.get(this, key)
+        val selected = (if (key == "sleep_from") SleepPoolLogic.sources(wire) else SleepPoolLogic.rules(wire)).toSet()
+        if (selected.any { id -> ticks.none { it.id == id } }) {
+            // A typed tag needs a new row; ordinary taps keep the existing rows and scroll position.
+            render()
+        } else {
+            ticks.forEach { tick ->
+                val on = tick.id in selected
+                if (tick.row.isSelected != on) {
+                    tick.row.isSelected = on
+                    tick.row.contentDescription = "${tick.label}: ${if (on) "selected" else "not selected"}"
+                    tick.box.text = if (on) "✓" else ""
+                    tick.box.background = Ui.box(this, if (on) Ui.INK else Ui.PAPER, radiusDp = 2)
+                }
+            }
+            statusNote?.text = lineFor(schema.byKey.getValue(key))
+        }
         OLog.i("sleep picker: toggle and draw in ${(System.nanoTime() - start) / 1_000_000} ms")
     }
 }
