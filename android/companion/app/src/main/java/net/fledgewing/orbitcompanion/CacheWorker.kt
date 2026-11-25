@@ -35,6 +35,8 @@ class CacheWorker(
     private val clockMs: () -> Long = { System.currentTimeMillis() },
     /** The run's % (never down; 100 at the end), each time the status is written; null when it ends. */
     private val onProgress: (Long?) -> Unit = {},
+    /** The folders a command may touch files in ([Places]); a path outside them is refused. */
+    private val places: List<File> = listOf(root),
 ) {
     /** A GET. sink: write the body there (a cover) instead of returning it. */
     fun interface Http {
@@ -70,6 +72,9 @@ class CacheWorker(
     }
 
     private fun read(f: File): Any? = if (f.isFile) LuaValue.parse(f.readBytes()) else null
+
+    /** A path a command named, resolved, when it lies in [places]; else null (refused). */
+    private fun allowed(path: String?): File? = Places.inside(path, places)
 
     /**
      * The files of the cache before the database (0.11.x): entries, the index, the mirror's pages
@@ -153,11 +158,12 @@ class CacheWorker(
         val entries = st.entrySizes()
         val items = ArrayList<StorageLogic.Item>(entries)
         items.add(StorageLogic.Item("db", maxOf(0L, st.fileBytes() - entries.sumOf { it.bytes }), 0L, "kept"))
-        val dir = coverDir?.let { File(it) }
+        val dir = allowed(coverDir)
+        if (coverDir != null && dir == null) log("storage: cover folder outside Orbit's folders; not counted")
         if (dir != null && dir.isDirectory) {
             val keep = if (mirrorCovers) st.coversKept() else emptySet()
             for (f in dir.listFiles() ?: emptyArray()) {
-                if (!f.name.endsWith(".jpg") || !f.isFile) continue
+                if (!f.name.endsWith(".jpg") || !f.isFile || allowed(f.path) == null) continue
                 val etag = File(dir, f.name + ".etag")
                 items.add(StorageLogic.Item("c:${f.name}", f.length() + (if (etag.isFile) etag.length() else 0L), f.lastModified() / 1000,
                     if (f.name in keep) "mirror_cover" else "cover"))
@@ -173,6 +179,7 @@ class CacheWorker(
      */
     fun storage(a: StorageAsk) {
         val items = storageItems(a.coverDir, a.mirrorCovers)
+        val coverDir = allowed(a.coverDir)
         val plan = StorageLogic.plan(items, a.limit)
         val byK = items.associateBy { it.k }
         val removed = sortedMapOf("cache" to 0L, "cover" to 0L, "mirror_cover" to 0L)
@@ -180,9 +187,9 @@ class CacheWorker(
             for (k in plan.drop) {
                 val it = byK[k] ?: continue
                 if (k.startsWith("e:")) store.dropEntry(k.removePrefix("e:"))
-                else if (k.startsWith("c:") && a.coverDir != null) {
-                    File(a.coverDir, k.removePrefix("c:")).delete()
-                    File(a.coverDir, k.removePrefix("c:") + ".etag").delete()
+                else if (k.startsWith("c:") && coverDir != null) {
+                    allowed(File(coverDir, k.removePrefix("c:")).path)?.delete()
+                    allowed(File(coverDir, k.removePrefix("c:") + ".etag").path)?.delete()
                 }
                 removed[it.kind] = (removed[it.kind] ?: 0L) + 1
             }
@@ -219,14 +226,17 @@ class CacheWorker(
     fun recheckCovers(why: String, creds: Creds, items: List<Pair<Long, String>>) {
         val changed = ArrayList<Long>()
         var failed = 0L
-        for ((id, path) in items) {
-            val f = File(path)
-            val etagFile = File("$path.etag")
+        for ((id, asked) in items) {
+            val f = allowed(asked)
+            if (f == null) { failed++; continue }
+            val path = f.path
+            val etagFile = allowed("$path.etag") ?: run { failed++; null } ?: continue
             if (!f.isFile || !etagFile.isFile) continue
             val h = headers(creds, "image/jpeg,image/*").toMutableMap()
             h["Accept-Encoding"] = "identity"
             h["If-None-Match"] = etagFile.readText()
-            val part = File("$path.part")
+            val part = allowed("$path.part") ?: run { failed++; null } ?: continue
+            part.delete()
             val r = http.get(creds.server + "/koreader/plugin/catalog/books/$id/thumbnail", h, part, MAX_COVER)
             when {
                 r.code == 304 -> { part.delete(); f.setLastModified(now() * 1000) }
@@ -312,7 +322,7 @@ class CacheWorker(
 
     /** The plugin's cover file name (bookorbit_catalog_thumbnails.lua:62-85 coverToken, memoKey). */
     fun coverPath(plan: Plan, book: Map<*, *>): String? {
-        val dir = plan.coverDir ?: return null
+        val dir = allowed(plan.coverDir)?.path ?: return null
         if (book["hasCover"] != true) return null
         return coverName(book)?.let { "$dir/$it" }
     }
@@ -444,16 +454,17 @@ class CacheWorker(
     private fun fetchCover(plan: Plan, creds: Creds, job: Job): Landed {
         val book = coverItems.remove(job.id) ?: return Landed(job, null, null, "none")
         val path = coverPath(plan, book) ?: return Landed(job, null, null, "none")
-        val f = File(path)
-        val etagFile = File("$path.etag")
+        val f = allowed(path) ?: return Landed(job, null, null, "none")
+        val etagFile = allowed("$path.etag") ?: return Landed(job, null, null, "none")
         val exists = f.isFile
         // A file the plugin saved without an ETag is left alone.
         if (exists && !etagFile.isFile) return Landed(job, null, null, "kept")
         val h = headers(creds, "image/jpeg,image/*").toMutableMap()
         h["Accept-Encoding"] = "identity"
         if (exists) h["If-None-Match"] = etagFile.readText()
-        val part = File("$path.part${Thread.currentThread().id}")
+        val part = allowed("$path.part${Thread.currentThread().id}") ?: return Landed(job, null, null, "none")
         part.parentFile?.mkdirs()
+        part.delete()
         val rep = http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail", h, part, MAX_COVER)
         return when {
             rep.code == 304 && exists -> { part.delete(); Landed(job, rep, null, "not_modified") }

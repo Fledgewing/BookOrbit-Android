@@ -306,31 +306,18 @@
             android:name=".SleepReceiver"
             android:exported="false" />
 
-        <!-- android/docs/INTERFACE.md broadcasts. A manifest receiver, so a stopped companion still gets them. -->
+        <!-- KOReader's commands (android/docs/INTERFACE.md): call() checks the calling UID against
+             the pinned KOReader first (CallerTrust, docs/design/security.md). -->
+        <provider
+            android:name=".CommandProvider"
+            android:authorities="net.fledgewing.orbitcompanion.commands"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
+        <!-- The system's broadcasts and the companion's own alarms only: not exported. -->
         <receiver
             android:name=".CommandReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="net.fledgewing.orbitcompanion.action.NET_UP" />
-                <action android:name="net.fledgewing.orbitcompanion.action.NET_DONE" />
-                <action android:name="net.fledgewing.orbitcompanion.action.WIFI_OFF" />
-                <action android:name="net.fledgewing.orbitcompanion.action.SLEEP_NOW" />
-                <action android:name="net.fledgewing.orbitcompanion.action.SETTINGS" />
-                <action android:name="net.fledgewing.orbitcompanion.action.STATS" />
-                <action android:name="net.fledgewing.orbitcompanion.action.RELAUNCH" />
-                <action android:name="net.fledgewing.orbitcompanion.action.SETUP_LATER" />
-                <action android:name="net.fledgewing.orbitcompanion.action.REPORT" />
-                <action android:name="net.fledgewing.orbitcompanion.action.SLEEP_POOL" />
-                <action android:name="net.fledgewing.orbitcompanion.action.MIRROR" />
-                <action android:name="net.fledgewing.orbitcompanion.action.CHECK" />
-                <action android:name="net.fledgewing.orbitcompanion.action.STORAGE" />
-                <action android:name="net.fledgewing.orbitcompanion.action.COPIES" />
-                <action android:name="net.fledgewing.orbitcompanion.action.SLEEP_REFRESH" />
-                <action android:name="net.fledgewing.orbitcompanion.action.RECHECK" />
-                <action android:name="net.fledgewing.orbitcompanion.action.SQLITE_STRESS" />
-                <action android:name="net.fledgewing.orbitcompanion.action.PATCH" />
-                <action android:name="net.fledgewing.orbitcompanion.action.UPDATE" />
-            </intent-filter>
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />

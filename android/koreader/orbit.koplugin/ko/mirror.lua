@@ -252,7 +252,7 @@ function Mirror.launch(op, reason)
         return false
     end
     Mirror.busy, Mirror.run_id, Mirror.sent_at, Mirror.seen_beat = true, plan.run, nowT(), nil
-    -- The login goes in the broadcast only (to the companion's package): never in a file or the log.
+    -- The login goes in the caller-checked call only (to the verified companion): never in a file or the log.
     Companion.send(Companion.ACTION.MIRROR, { reason = op .. ": " .. tostring(reason), server = client.server_url,
         user = client.username, userkey = client.userkey })
     -- The progress: a Full refresh (or its run resumed) shows the badge; a Refresh's recheck doesn't.
