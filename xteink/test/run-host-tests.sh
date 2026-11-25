@@ -60,6 +60,8 @@ orbify_test copy_check "$core/CopyCheck.cpp"
 orbify_test copy_queue "$core/CopyQueue.cpp" "$core/CopyCheck.cpp"
 orbify_test mirror "$core/Mirror.cpp"
 orbify_test sleep_sync_deadline
+# Battery stats (orbify/core/BatteryStatsCore): CrossInk-style GoogleTest cases through GtestShim.h.
+orbify_test battery_stats "$core/BatteryStatsCore.cpp"
 orbify_test boot_trail
 # The BookOrbit server's TLS trust (orbify/core/ServerTrust): which requests are verified, and the pin.
 orbify_test server_trust "$core/ServerTrust.cpp"
