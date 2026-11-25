@@ -18,11 +18,13 @@ int main(int, char**) {
   CHECK(isHttps("HTTPS://x") && !isHttps("http://x"));
 
   // Tailnet hosts stay unverified: WireGuard authenticates them.
-  CHECK(isTailnetHost("100.64.0.1", false));
-  CHECK(isTailnetHost("100.127.255.254", false));
+  CHECK(isTailnetHost("100.64.0.1", true));
+  CHECK(!isTailnetHost("100.64.0.1", false));
+  CHECK(isTailnetHost("100.127.255.254", true));
   CHECK(!isTailnetHost("100.128.0.1", false));
   CHECK(!isTailnetHost("100.63.255.255", false));
-  CHECK(isTailnetHost("bookorbit.tail1234.ts.net", false));
+  CHECK(isTailnetHost("bookorbit.tail1234.ts.net", true));
+  CHECK(!isTailnetHost("bookorbit.tail1234.ts.net", false));
   CHECK(!isTailnetHost("ts.net", false));
   CHECK(isTailnetHost("bookorbit", true));    // MagicDNS short name while Tailscale is on
   CHECK(!isTailnetHost("bookorbit", false));  // a LAN name otherwise
@@ -42,6 +44,9 @@ int main(int, char**) {
   CHECK(modeFor(true, "https://bookorbit/x", "https://bookorbit", false) == Mode::Verify);
   CHECK(modeFor(true, "https://192.168.1.10/x", "https://192.168.1.10", true) == Mode::Verify);
   CHECK(modeFor(true, "https://books.example.org/x", "", false) == Mode::Unverified);
+
+  CHECK(modeFor(true, "https://100.64.0.1/x", "https://100.64.0.1", false) == Mode::Verify);
+  CHECK(modeFor(true, "https://bookorbit.tail1234.ts.net/x", "https://bookorbit.tail1234.ts.net", false) == Mode::Verify);
 
   // The pin.
   uint8_t first[32], second[32];

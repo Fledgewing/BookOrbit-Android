@@ -76,6 +76,7 @@ std::string hostOf(std::string_view url) {
 bool isHttps(std::string_view url) { return startsWithNoCase(url, "https://"); }
 
 bool isTailnetHost(std::string_view host, bool tailnetOn) {
+  if (!tailnetOn) return false;
   uint32_t ip;
   if (parseIpv4(host, ip)) return (ip & 0xFFC00000u) == 0x64400000u;
   constexpr std::string_view suffix = ".ts.net";

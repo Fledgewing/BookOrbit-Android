@@ -37,7 +37,7 @@ wolfSSL also checks the host name (`wolfSSL_check_domain_name`). So a certificat
 in the server URL, even when it is trusted by fingerprint.
 
 **Not verified, as before:**
-- tailnet hosts: `100.64.0.0/10`, `*.ts.net`, and single-label MagicDNS names while Tailscale is on.
+- tailnet hosts: `100.64.0.0/10`, `*.ts.net`, and single-label MagicDNS names, only while Tailscale is on.
   WireGuard already authenticates them;
 - `http://` URLs;
 - every other host: OPDS catalogs, fonts and firmware downloads. Firmware has its own checks:
