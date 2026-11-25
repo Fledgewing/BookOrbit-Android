@@ -799,7 +799,7 @@ class UpdateFlowTest {
         assertTrue(UpdateFlow.autoRestart("0.6.1"))
         assertFalse(UpdateFlow.autoRestart("0.4.9"))
         assertFalse(UpdateFlow.autoRestart(null))
-        assertEquals("Updated to v0.5.2; KOReader loads it the next time it starts, or when the screen next goes off", UpdateFlow.installedLine("0.5.2"))
+        assertEquals("Updated to v0.5.2; KOReader loads it the next time it starts", UpdateFlow.installedLine("0.5.2"))
         assertEquals("Updated to v0.5.2; KOReader restarts now to load it (an open book reopens)", UpdateFlow.installedLine("0.5.2", now = true))
     }
 
@@ -1009,7 +1009,7 @@ class UpdateFlowTest {
         assertFalse(UpdateFlow.loaded("0.5.1", null))
         assertTrue(UpdateFlow.loaded("0.5.1", "0.5.1"))
         assertTrue(UpdateFlow.loaded("0.5.1", "0.5.2"))
-        assertEquals("Updated to v0.5.1 (KOReader restarted)", UpdateFlow.doneLine("0.5.1"))
+        assertEquals("Updated to v0.5.1 (KOReader loaded it)", UpdateFlow.doneLine("0.5.1"))
         assertTrue(UpdateFlow.manualLine("0.5.1", "storage access isn't allowed").endsWith("storage access isn't allowed. Setup > Orbit plugin"))
     }
 }

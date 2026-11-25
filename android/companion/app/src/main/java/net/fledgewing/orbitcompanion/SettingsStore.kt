@@ -178,6 +178,24 @@ object SettingsStore {
         return true
     }
 
+    /** Picker taps only change preference memory here; shared storage and picture work are queued. */
+    fun setPicker(ctx: Context, key: String, value: String): Boolean {
+        require(key == "sleep_from" || key == "sleep_leave_out")
+        seed(ctx)
+        val wire = SettingsSync.fromWire(schema(ctx).byKey.getValue(key), value) ?: return false
+        val t = maxOf(System.currentTimeMillis(), (at(ctx, key) ?: 0L) + 1)
+        store(ctx, key, wire)
+        sp(ctx, AT).edit().putLong(key, t).apply()
+        clearFromPlugin(ctx, listOf(key))
+        Prefs(ctx).sharedSettingsAt = t
+        val app = ctx.applicationContext
+        SleepPickerWork.submit {
+            changed(app, t, "sleep picker")
+            SleepScreen.redrawPicture(app, "sleep picker")
+        }
+        return true
+    }
+
     /** Tells the plugin and the service something changed. */
     private fun changed(ctx: Context, at: Long, why: String) {
         StatusFile.write(ctx, why)

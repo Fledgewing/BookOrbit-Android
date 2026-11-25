@@ -765,7 +765,7 @@ object UpdateFlow {
         return r >= w
     }
 
-    fun doneLine(app: String) = "Updated to v$app (KOReader restarted)"
+    fun doneLine(app: String) = "Updated to v$app (KOReader loaded it)"
 
     /**
      * The patch is installed. [now]: the user started the update, KOReader restarts at once;
@@ -773,7 +773,7 @@ object UpdateFlow {
      */
     fun installedLine(app: String, now: Boolean = false) =
         if (now) "Updated to v$app; KOReader restarts now to load it (an open book reopens)"
-        else "Updated to v$app; KOReader loads it the next time it starts, or when the screen next goes off"
+        else "Updated to v$app; KOReader loads it the next time it starts"
 
     enum class Restart { NOW, WAIT, NONE }
 

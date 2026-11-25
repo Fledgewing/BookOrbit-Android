@@ -66,7 +66,7 @@ class UpdateReturnTest {
         assertTrue("KOReader is not brought to the front", started.none { it.component?.packageName == Koreader.PKG })
         assertTrue("the page shows the result", Prefs(app).updateStatus.startsWith("updated to v"))
         assertTrue(UpdateReturn.fromPage())
-        assertFalse("the patch restart waits for the screen-off", UpdateReturn.restartNow(userConfirmed = true, fromPage = UpdateReturn.fromPage()))
+        assertFalse("the patch loads at the next safe start", UpdateReturn.restartNow(userConfirmed = true, fromPage = UpdateReturn.fromPage()))
 
         // A second MY_PACKAGE_REPLACED delivery (service and Add-on paths) opens nothing more.
         Updater.onReplaced(app)
@@ -101,9 +101,13 @@ class UpdateReturnTest {
         assertEquals(SettingsActivity::class.java.name, drain().mapNotNull { page(it) }.single { it.startsWith(app.packageName) })
         val home = Robolectric.buildActivity(HomeActivity::class.java).setup().get()
         val fromHome = generateSequence { shadowOf(home).nextStartedActivity }.toList()
-        assertEquals(listOf(SettingsActivity::class.java.name), fromHome.map { page(it) })
-        // Only once: a later Home press goes to KOReader as usual.
-        assertNull(UpdateReturn.forHome())
+        assertTrue("Home never dispatches a second copy of the stack", fromHome.isEmpty())
+        assertTrue("the restored page has not resumed yet", UpdateReturn.awaitingLanding())
+        // A second package broadcast or Home callback before resume also opens nothing.
+        Updater.onReplaced(app)
+        assertTrue(drain().isEmpty())
+        Robolectric.buildActivity(SettingsActivity::class.java).setup()
+        assertNull("after landing, Home is ordinary again", UpdateReturn.forHome())
     }
 
     /** M8C 11-24 15:55: Settings › Updates came back as a bare SettingsSectionActivity (the default section, no stack under it). */
@@ -186,6 +190,36 @@ class UpdateReturnTest {
             p.patchRestartNow = ""
             p.patchRestartSentFor = ""
         }
+    }
+
+    @Test
+    fun delayedRelaunchCannotCoverACompanionPageEvenAtScreenOff() {
+        val page = Robolectric.buildActivity(SettingsSectionActivity::class.java, SettingsPage.section(app, "sleep")).setup()
+        drain()
+        assertFalse(Koreader.relaunch(app, "plugin quit", null))
+        val p = Prefs(app)
+        p.patchVersionSeen = "0.11.3-rc.6"
+        p.patchAwaitVersion = "0.11.3-rc.8"
+        p.patchRestartSentFor = ""
+        assertFalse("screen-off cannot start KOReader over a companion page", PatchInstaller.follow(app, "screen off", screenOff = true))
+        assertTrue(drain().none { it.component?.packageName == Koreader.PKG })
+        page.pause().stop().destroy()
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(3))
+        assertFalse("the page was in front when the delayed request arrived", Koreader.relaunch(app, "delayed plugin quit", null, fromCompanion = true))
+        assertTrue(drain().none { it.component?.packageName == Koreader.PKG })
+        p.patchVersionSeen = ""
+        p.patchAwaitVersion = ""
+    }
+
+    @Test
+    fun addonRelaunchRechecksFocusAfterTheDelay() {
+        val relaunch = Robolectric.buildActivity(RelaunchActivity::class.java).create()
+        val page = Robolectric.buildActivity(SettingsActivity::class.java).setup()
+        drain()
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(3))
+        assertTrue(relaunch.get().isFinishing)
+        assertTrue(drain().none { it.component?.packageName == Koreader.PKG })
+        page.pause().stop().destroy()
     }
 
     @Test

@@ -193,11 +193,12 @@ class RelaunchActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setWindowAnimations(0)
-        OLog.i("relaunch: KOReader is restarting; starting it again in 2.5 s")
+        OLog.i("relaunch: KOReader is quitting; checking whether relaunch is safe in 2.5 s")
         // The plugin read the restart: this start is not a lost one (RestartLatch).
         Koreader.restartRead()
+        val fromCompanion = EinkActivity.companionPageInFront() || UpdateReturn.awaitingLanding()
         Handler(Looper.getMainLooper()).postDelayed({
-            Koreader.start(this, "restart (add-on)", null)
+            Koreader.relaunch(this, "restart (add-on)", null, fromCompanion = fromCompanion)
             finish()
         }, 2_500)
     }

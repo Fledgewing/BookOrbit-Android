@@ -112,6 +112,8 @@ object UpdateReturn {
     /** The update was started from one of our pages (after [onReplaced] ran in this process). */
     fun fromPage(): Boolean = replaced.isNotEmpty()
 
+    fun awaitingLanding(): Boolean = replaced.isNotEmpty() && !landed && SystemClock.elapsedRealtime() - reopenedAt in 0..HOME_HOLD_MS
+
     /** A page resumed (EinkActivity): once the reopened page shows, the return has landed. */
     fun onPageShown(a: Activity) {
         if (!landed && replaced.isNotEmpty() && a.javaClass.name == top()) {
@@ -122,14 +124,13 @@ object UpdateReturn {
 
     /**
      * HomeActivity's decision right after the reopen: the system's Home relaunch must not cover
-     * the reopened page with KOReader. Only before that page has shown, once; after it, a Home
+     * the reopened page with KOReader. Only before that page has shown; after it, a Home
      * press is the user's and goes where Home always goes (M8C 11-24 15:56:01: it reopened the
      * page a second time).
      */
     @Synchronized
     fun forHome(nowElapsed: Long = SystemClock.elapsedRealtime()): List<Intent>? {
         if (replaced.isEmpty() || landed || nowElapsed - reopenedAt !in 0..HOME_HOLD_MS) return null
-        landed = true
         return replaced
     }
 
@@ -138,8 +139,11 @@ object UpdateReturn {
      * [reuse]: when the reopened page's task is still there (Home covered it), bring it forward.
      */
     fun open(ctx: Context, pages: List<Intent>, why: String, reuse: Boolean = false): Boolean = try {
-        if (reuse && bringToFront(ctx, pages)) {
-            OLog.i("update: back to ${describe(pages)} ($why, already open)")
+        if (reuse) {
+            // startActivities was already dispatched by onReplaced. A Home relaunch may race
+            // its first resume, before appTasks exposes the top page: never dispatch it twice.
+            val moved = bringToFront(ctx, pages)
+            OLog.i("update: ${if (moved) "back to" else "waiting for"} ${describe(pages)} ($why, already dispatched)")
         } else {
             val list = pages.mapIndexed { i, p ->
                 Intent(p).addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION or if (i == 0) Intent.FLAG_ACTIVITY_NEW_TASK else 0)
