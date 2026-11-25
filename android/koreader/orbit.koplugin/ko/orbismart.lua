@@ -211,6 +211,9 @@ function OSM.decide(moment, R)
         log("orbismart: override dropped (newer reading elsewhere)")
     end
     local d = out.decision
+    -- A released reread may replace the completed read's place once, even when that read
+    -- finished short of 100%. A successful push consumes this exemption.
+    if out.rule == "rule7" and d == "push" then rec.reread_at = i.server_at end
     if d == "same" and R then
         OSM.mark(rec, R)
         rec.pending = nil
@@ -323,7 +326,7 @@ end
 function OSM.holdPush(digest, pct, progress)
     local rec = OSM.rec(digest)
     if not rec or not rec.server or type(pct) ~= "number" then return false end
-    if rec.override or (released(digest) and (rec.server.pct or 0) >= 1) then return false end
+    if rec.override or (rec.reread_at ~= nil and rec.reread_at == (tonumber(rec.server.at) or 0)) then return false end
     local ui = liveUI and liveUI() or nil
     local p = bookorbit(ui)
     local L, R, tol
@@ -347,7 +350,7 @@ function OSM.onPushed(digest, pct, progress, ts)
     rec.server = rec.server or {}
     rec.server.at, rec.server.pct, rec.server.progress = ts, pct, progress
     rec.server.device_id = nil
-    rec.pushed = pct
+    rec.pushed, rec.reread_at = pct, nil
     if rec.override then
         rec.override = nil
         log("orbismart: override sent")
@@ -612,6 +615,8 @@ end
 Compat.ORBISMART_API = { getProgress = "function", updateProgress = "function" }
 
 OSM.migrate()
+-- Cover closed-book startup outbox drains too; ReaderReady retries if BookOrbit loads later.
+OSM.installApi()
 
 do
     local base_ready = OrbitAndroid.onReaderReady

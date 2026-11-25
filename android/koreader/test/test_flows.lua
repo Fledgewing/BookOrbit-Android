@@ -5676,6 +5676,19 @@ test("orbismart: Read from here everywhere offline: queued, then sent first at t
     eq(osmRec().override, nil)
 end)
 
+test("orbismart: a released reread replaces a completed place short of the end once", function()
+    local ui, m, p = osmBook(50, { server = { at = 5000, pct = 0.9, progress = "/p270" } })
+    run(1)
+    W.osm_status = "complete"
+    RE.EOB.session.d1 = { released = true, forward = 10 }
+    OSM.installApi()
+    OSM.decide("pause")
+    eq(W.osm_server.progress, "/p50", "released reread starts behind completed place")
+    require("bookorbit_api"):updateProgress("d1", 0.1, "/p30", 4000)
+    eq(OSMApi.puts, 1, "exemption consumed after successful push")
+    W.osm_status = nil
+end)
+
 test("orbismart: a finished-book override is one shot and later stale pushes stay held", function()
     local ui, m, p = osmBook(50, { server = { at = 5000, pct = 1, progress = "/p300" } })
     run(1)
