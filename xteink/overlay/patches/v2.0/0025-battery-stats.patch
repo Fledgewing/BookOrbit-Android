@@ -163,7 +163,7 @@ index ce2a1ea4..c69f3f4f 100644
 +++ b/src/activities/settings/SettingsActivity.cpp
 @@ -28,6 +28,9 @@
  #if CROSSINK_TAILNET_SETTINGS_PIN
- #include "SettingsPinActivity.h"
+ #include "orbify/SettingsPinActivity.h"
  #endif
 +#if CROSSINK_TAILNET_BATTERY_STATS >= 2
 +#include "orbify/BatteryStatsActivity.h"

@@ -539,7 +539,7 @@ index 8c2f6a94..156ee11c 100644
 +#include "orbify/CrashRecord.h"
 +#include "orbify/core/BootTrail.h"
  #include "WifiCredentialStore.h"
- #include "util/SettingsPin.h"
+ #include "orbify/SettingsPin.h"
  #include "activities/network/StatsUploadActivity.h"
 @@ -373,6 +377,10 @@ void logMemoryStats(const char* phase) {
  // Consume the pair on every boot, including resets that preserve RTC memory.
