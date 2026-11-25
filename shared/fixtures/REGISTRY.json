@@ -450,6 +450,54 @@
       "readers": [
         "py"
       ]
+    },
+    {
+      "file": "release-signing/README.md",
+      "rule": "Release signature fixture inventory and envelope consistency",
+      "owner": "release signing",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-firmware",
+      "rule": "Release signature fixture inventory and envelope consistency",
+      "owner": "release signing",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-plugin",
+      "rule": "Release signature fixture inventory and envelope consistency",
+      "owner": "release signing",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-plugin-other-root",
+      "rule": "Release signature fixture inventory and envelope consistency",
+      "owner": "release signing",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-plugin-rotated",
+      "rule": "Release signature fixture inventory and envelope consistency",
+      "owner": "release signing",
+      "readers": [
+        "lua"
+      ]
+    },
+    {
+      "file": "release-signing/cases.json",
+      "rule": "Release signature fixture inventory and envelope consistency",
+      "owner": "release signing",
+      "readers": [
+        "lua"
+      ]
     }
   ]
 }
