@@ -10,6 +10,7 @@ CrossInk 2.x only; 1.6 is retired).
 
 | Outcome | Platforms | Status | Design |
 |---|---|---|---|
+| Withdraw broken releases through a signed Android feed and require reader opening flows before publication. | Android | building (W35 implementation requested) | [release safety](docs/design/release-safety.md) |
 | Caller-verified companion commands and one tested plugin–companion contract, with file operations confined to BookSync data. | Android | building (approved design; caller checks merged) | [security](docs/design/security.md), [contract](android/docs/INTERFACE.md) |
 
 ## Next release (0.12): BookSync Home
@@ -79,6 +80,7 @@ and any UI mockups still need approval before implementation.
 
 | Outcome | Platforms | Status | Design |
 |---|---|---|---|
+| **Server-served battery comparison data**: a future BookSync server could serve cross-reader battery comparison data to other devices; on-device comparison remains Android-only by design (screen size), per maintainer ruling 2026-11-25. | Server, Android, X4 Pro, X4, X3 | idea (deferred) | |
 | Submit the companion for Google Play Protect review. | Android | idea | |
 | X3 parity review for each feature above. | X3 | idea | |
 | **One BookSync version from 0.12**: companion, plugin and all Xteink readers share a product version and release channel; previews retain unchanged platform builds, RC/stable converge with passing-test reuse by source fingerprint, and an old-scheme firmware bridge keeps OTA working across the transition. | Android, X4 Pro, X4, X3 | building (maintainer-approved W39; bridge release and device validation pending) | [unified version](docs/design/unified-version.md) |

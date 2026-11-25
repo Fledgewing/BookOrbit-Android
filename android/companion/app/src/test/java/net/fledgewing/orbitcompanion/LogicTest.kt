@@ -234,6 +234,22 @@ class UpdatePolicyTest {
         assertNull(UpdatePolicy.pick(listOf(r("v1.0.0-rc.1", pre = true)), includePre = false))
     }
 
+    @Test
+    fun withdrawalsSkipAliasesAndAllowRecoveryOnlyFromWithdrawnInstalledVersions() {
+        val bad = setOf(Version.parse("0.11.3-rc.10")!!, Version.parse("0.11.3-rc.11")!!)
+        val list = listOf(r("v0.11.3-rc.11", true), r("android-v0.11.3-rc.10", true),
+            r("v0.11.3-rc.9", true), r("v0.11.2"))
+        val candidate = UpdatePolicy.pick(list, true, bad)!!.version
+        assertEquals(Version.parse("0.11.3-rc.9"), candidate)
+        assertTrue(UpdatePolicy.shouldInstall(candidate, Version.parse("0.11.3-rc.11"), bad))
+        assertFalse(UpdatePolicy.shouldInstall(candidate, Version.parse("0.11.3-rc.12"), bad))
+        assertFalse(UpdatePolicy.shouldInstall(Version.parse("0.11.3-rc.11"), Version.parse("0.11.2"), bad))
+        assertNull(UpdatePolicy.pick(list.take(2), true, bad))
+        assertEquals("v0.11.2", UpdatePolicy.pick(list, false, bad)?.tag)
+        assertFalse(UpdatePolicy.shouldInstall(candidate, candidate, bad))
+        assertFalse(UpdatePolicy.shouldInstall(null, Version.parse("0.11.3-rc.11"), bad))
+    }
+
     /** shared/fixtures/github/orbify-releases.json: Android and firmware releases in one list. */
     private fun fixture(): List<ReleaseInfo> {
         // @fixture github/orbify-releases.json

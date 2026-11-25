@@ -201,6 +201,8 @@ class Collection(unittest.TestCase):
         downloads = []
         def gh(*args, binary=False):
             endpoint = args[1]
+            if '/branches?' in args[-1]:
+                return '[[]]'
             if '/releases?' in endpoint:
                 return '[]'
             if '/artifacts?' in endpoint:
@@ -215,6 +217,24 @@ class Collection(unittest.TestCase):
             history = I.collect('org/repo')
         self.assertEqual(history['evidence'], evidence + evidence)
         self.assertEqual(downloads, ['repos/org/repo/actions/artifacts/1/zip', 'repos/org/repo/actions/artifacts/7/zip'])
+
+
+    def test_withdrawn_build_cannot_select_an_unchanged_preview(self):
+        bad = dict(tag_name='v0.12.0-preview.2', created_at='2', draft=False,
+                   assets=[dict(name='RELEASE-INPUTS.json', id=2)])
+        good = dict(tag_name='v0.12.0-preview.1', created_at='1', draft=False,
+                    assets=[dict(name='RELEASE-INPUTS.json', id=1)])
+        def gh(*args, binary=False):
+            if '/releases?' in args[1]:
+                return json.dumps([bad, good])
+            if '/assets/1' in args[1]:
+                return json.dumps(dict(builds={'app': dict(fingerprint='old', version='0.12.0-preview.1', tag=good['tag_name'])}, evidence=[]))
+            if '/artifacts?' in args[1]:
+                return '{"artifacts":[]}'
+            raise AssertionError('withdrawn release receipt must not be downloaded')
+        with patch.object(I, 'gh', gh), patch.object(I, 'withdrawn', return_value={bad['tag_name']}):
+            history = I.collect('org/repo')
+        self.assertEqual(history['builds']['app']['tag'], good['tag_name'])
 
 
 class Feed(unittest.TestCase):

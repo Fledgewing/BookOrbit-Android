@@ -82,6 +82,12 @@ the server kit and the platform's release scenarios; the Android receipt also
 requires KOReader startup. Diagnostic simulator runs against an upstream override
 cannot prove the pinned firmware's inputs.
 
+Before selecting builds, the planner verifies W35's signed Android feed and unions
+its monotonic withdrawals with the committed list. Withdrawn releases cannot
+supply the current Android build or authorize test reuse by their tags. Firmware
+dispatch waits for Android's signed feed when the Android pair publishes; an
+unchanged Android pair retains its existing feed entry.
+
 The read-only planner collects published receipts and receipts from successful
 same-repository Actions runs. PR receipts authorize reuse only after the exact
 tested head has merged in this repository. Unmerged, superseded or fork PR heads

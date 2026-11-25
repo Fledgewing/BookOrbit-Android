@@ -55,15 +55,12 @@ Sleep sync limit (10/15/20 s); Recommended settings (a status line, opens the re
 sync path; Wi-Fi (mode, idle minutes); Home button; Open BookSync Companion; Open another app…; Auto-update patch; Include
 pre-releases; Check for patch update; update status; status.
 
-**Self-update** (top-level README "Updates"): at most once a day, after a start or wake whose
-network is already up, the plugin asks GitHub for the latest release of this repo, and if it
-is newer than its `PATCH_VERSION` (in `main.lua`), downloads `orbit.koplugin.zip` and
-`SHA256SUMS`, checks the SHA-256 with KOReader's own `ffi/sha2` (koreader-base
-`ffi/sha2.lua:5612`, also used by `frontend/util.lua`), unpacks it with KOReader's
-`ffi/archiver` into `orbit.koplugin.new` (every file must sit under `orbit.koplugin/`), checks
-the unpacked `main.lua` declares the release's version, and swaps the folder in through
-`orbit.koplugin.old`. The new version runs from the next KOReader start. A copy taken straight
-from the repo says `0.0.0-dev`; releases stamp the tag into it (`package.sh`).
+**Self-update** (Android README "Updates"): after a start or wake, the plugin asks the
+required companion to check for updates. The companion verifies the signed Android feed,
+skips withdrawn releases, and handles downloading and installation. Network, hashing and
+archive work run in the companion. The plugin of the installed companion's release loads
+at the next safe KOReader start. Releases stamp `PATCH_VERSION` in `main.lua` (`package.sh`);
+a repo copy says `0.0.0-dev`.
 
 **Recommended settings** (0.11.0, [design](../../docs/design/addon-mode.md) §5): at KOReader's
 start, on update and when the companion's capabilities change, the plugin looks at each item it

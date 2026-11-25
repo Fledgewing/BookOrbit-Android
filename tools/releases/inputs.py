@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Source identities, passing-test receipts and selective BookSync releases."""
 import argparse
+import base64
 import hashlib
 import io
 import json
@@ -9,6 +10,7 @@ from pathlib import Path
 import subprocess
 import re
 import zipfile
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = ("app", "plugin", "x4-pro", "x4-classic", "default")
@@ -134,12 +136,32 @@ def require_android(plan):
 def gh(*args, binary=False):
     return subprocess.check_output(["gh", *args], text=not binary)
 
+def withdrawn(repo):
+    """Read W35's authenticated, monotonic Android withdrawal set before selection."""
+    tags = set(json.loads((ROOT / "shared/withdrawn-android.json").read_text()))
+    pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{repo}/branches?per_page=100"))
+    if not any(b["name"] == "android-feed" for page in pages for b in page):
+        return tags
+    content = json.loads(gh("api", f"repos/{repo}/contents/android/releases.json?ref=android-feed"))
+    envelope = json.loads(base64.b64decode(content["content"]))
+    with tempfile.TemporaryDirectory() as directory:
+        payload = Path(directory) / "releases.json"
+        signatures = Path(directory) / "SIGNATURES"
+        payload.write_text(envelope["payload"])
+        signatures.write_text(envelope["signatures"])
+        subprocess.run([str(ROOT / "tools/feed-keys/feed-keys"), "verify", "--tag", "android-feed",
+                        str(signatures), str(payload)], check=True, stdout=subprocess.DEVNULL)
+    tags.update(json.loads(envelope["payload"])["withdrawn"])
+    return tags
+
+
 def collect(repo):
     """Immutable published receipts plus successful trusted Actions evidence; misses run tests."""
     history = dict(builds={}, evidence=[])
+    excluded = withdrawn(repo)
     releases = json.loads(gh("api", f"repos/{repo}/releases?per_page=100"))
     for release in sorted(releases, key=lambda r: r.get("published_at") or r["created_at"], reverse=True):
-        if release["draft"]:
+        if release["draft"] or release["tag_name"] in excluded:
             continue
         for asset in release["assets"]:
             if asset["name"] not in ("RELEASE-INPUTS.json", "FIRMWARE-INPUTS.json"):
@@ -148,7 +170,7 @@ def collect(repo):
                                  "-H", "Accept: application/octet-stream"))
             for p, build in data["builds"].items():
                 history["builds"].setdefault(p, build)
-            history["evidence"].extend(data["evidence"])
+            history["evidence"].extend(r for r in data["evidence"] if r["tag"] not in excluded)
     artifacts = json.loads(gh("api", f"repos/{repo}/actions/artifacts?per_page=100"))["artifacts"]
     runs, prs = {}, {}
     for artifact in artifacts:
@@ -183,7 +205,7 @@ def collect(repo):
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             for name in archive.namelist():
                 if name.endswith(".json"):
-                    history["evidence"].extend(json.loads(archive.read(name)))
+                    history["evidence"].extend(r for r in json.loads(archive.read(name)) if r["tag"] not in excluded)
     return history
 
 def main():
