@@ -69,6 +69,7 @@ class SharpCoversLogicTest {
     fun storageStaysBounded() {
         assertEquals(24L * 1024 * 1024, SharpCoversLogic.maxBytes(0))
         assertEquals(24L * 1024 * 1024, SharpCoversLogic.maxBytes(1024))
+        assertEquals(24L * 1024 * 1024, SharpCoversLogic.maxBytes(10240))
         assertEquals(10L * 1024 * 1024, SharpCoversLogic.maxBytes(100))
         val s = listOf(
             SharpCoversLogic.Stored(1, 400, usedAt = 30), SharpCoversLogic.Stored(2, 400, usedAt = 10),
