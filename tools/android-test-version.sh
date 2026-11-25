@@ -4,7 +4,10 @@
 # preview is newer. Published previews use preview.N too; RC is a maintainer decision.
 set -euo pipefail
 run=${1:?usage: android-test-version.sh <run number>  (tags on stdin)}
-[[ $run =~ ^[1-9][0-9]*$ ]] && ((run <= 3999)) || { echo "android-test-version: run must be 1..3999" >&2; exit 2; }
+if ! [[ $run =~ ^[1-9][0-9]*$ ]] || ((run > 3999)); then
+    echo "android-test-version: run must be 1..3999" >&2
+    exit 2
+fi
 tags=$(sed -nE 's/^(android-)?v([0-9]+\.[0-9]+\.[0-9]+(-(preview|rc)\.[0-9]+)?)$/\2/p')
 newest=$(printf '%s\n' "$tags" | sed 's/-.*//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)
 [[ -n $newest ]] || { echo "android-test-version: no Android release tag on stdin" >&2; exit 1; }
