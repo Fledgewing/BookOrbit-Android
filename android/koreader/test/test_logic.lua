@@ -431,9 +431,9 @@ test("start patch: Lock auto rotation, or no native rotation: KOReader as it is"
 end)
 
 test("disabled text names the disabler at run time, or stays neutral", function()
-    eq(M.disabledText("Orbit Companion", "Meebook Launcher", "Freeze management"),
-        "Orbit Companion is disabled by Meebook Launcher: re-enable it in Meebook Launcher › Freeze management.")
-    eq(M.disabledText("Orbit Companion", nil, nil), "Orbit Companion is disabled by the system: re-enable it in Settings › Apps.")
+    eq(M.disabledText("BookSync Companion", "Meebook Launcher", "Freeze management"),
+        "BookSync Companion is disabled by Meebook Launcher: re-enable it in Meebook Launcher › Freeze management.")
+    eq(M.disabledText("BookSync Companion", nil, nil), "BookSync Companion is disabled by the system: re-enable it in Settings › Apps.")
 end)
 
 test("compat: KOReader 2025.10+ HandlerSandbox (a callable table) counts as a function", function()
@@ -589,7 +589,7 @@ test("setup box: only off a book, once per key, never when snoozed", function()
     eq(SetupPrompt.decide({ key = "clicker,keyboard" }, "browser", "clicker"), true, "a new row shows again")
     eq(SetupPrompt.decide(nil, "browser", nil), false, "snoozed or nothing: the companion sends none")
     eq(SetupPrompt.decide({ key = "" }, "browser", nil), false)
-    eq(SetupPrompt.text(pr), "Orbit Companion needs 1 setup step: Clicker buttons (accessibility).")
+    eq(SetupPrompt.text(pr), "BookSync Companion needs 1 setup step: Clicker buttons (accessibility).")
     ok(SetupPrompt.text({ key = "a,b", rows = { "A", "B" } }):find("2 setup steps:\n• A\n• B", 1, true))
 end)
 
@@ -1255,7 +1255,7 @@ test("recommended: the same results with mode full, addon and no companion (the 
     end
 end)
 
-test("recommended: lost capabilities undo only Orbit's applied items that need them", function()
+test("recommended: lost capabilities undo only BookSync's applied items that need them", function()
     local rec = { items = { ["ko.wifi_on"] = "applied", ["g.apps"] = "already", ["g.sync_all"] = "applied" } }
     local lost = R.lostCaps(rec, function(cap) return cap ~= "wifi" and cap ~= "apps" end)
     eq(#lost, 1); eq(lost[1].id, "ko.wifi_on")
@@ -1265,7 +1265,7 @@ test("recommended: values in plain words", function()
     eq(R.valueLabel(R.item("bo.sync_forward"), 1), "Ask")
     eq(R.valueLabel(R.item("ko.wifi_on"), nil), "Ask")
     eq(R.valueLabel(R.item("g.apps"), nil), "Nothing")
-    eq(R.valueLabel(R.item("g.apps"), { orbit_open_apps = true }), "Orbit: other apps")
+    eq(R.valueLabel(R.item("g.apps"), { orbit_open_apps = true }), "BookSync: other apps")
     eq(R.reportState(nil), "none")
     eq(R.reportState({ items = { a = "kept", b = "applied" } }), "reviewed")
 end)

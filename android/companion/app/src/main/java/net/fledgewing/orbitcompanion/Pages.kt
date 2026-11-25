@@ -186,7 +186,7 @@ class StatusActivity : EinkActivity() {
 
     private fun render() {
         val root = page()
-        root.addView(Ui.header(this, "Orbit Companion", "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) })
+        root.addView(Ui.header(this, "BookSync Companion", "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) })
         StatusPanel.draw(this, root, wifiRow = true) { if (!isFinishing) render() }
     }
 }
@@ -398,7 +398,7 @@ object Setup {
                 c.advisory || c.id == "keymapper" -> Unit
                 c.id == "disabled" && c.done -> Unit
                 c.battery != null -> if (c === battery.first()) out += BatteryMerge.row(battery.map { it.battery!! })
-                c.id == "clicker" -> out += c.row(extra = keymapper?.let { "$it · two key filters fight: turn it off once Orbit's buttons work" })
+                c.id == "clicker" -> out += c.row(extra = keymapper?.let { "$it · two key filters fight: turn it off once BookSync's buttons work" })
                 else -> out += c.row()
             }
         }
@@ -425,7 +425,7 @@ object Setup {
     fun details(ctx: Context): List<Pair<String, String>> {
         val p = Prefs(ctx)
         val out = mutableListOf<Pair<String, String>>()
-        out += "Orbit plugin last answered" to if (p.patchSeenAt > 0) "${Ui.clock(ctx, p.patchSeenAt)} (${p.patchSeenVia})" else "never"
+        out += "BookSync plugin last answered" to if (p.patchSeenAt > 0) "${Ui.clock(ctx, p.patchSeenAt)} (${p.patchSeenVia})" else "never"
         out += "Plugin version KOReader runs" to p.patchVersionSeen.ifEmpty { "not reported" }
         out += "Plugin file version" to (PatchInstaller.installedVersion() ?: "unreadable")
         out += "KOReader" to "${Installers.koreaderVersion(ctx) ?: "-"} (${Installers.koreaderState(ctx)})"
@@ -524,7 +524,7 @@ object Setup {
         )
         val freezeHint = Vendor.profile(ctx).freezeHint
         if (frozen.isEmpty() && freezeHint != null) {
-            val tip = "This ${disabler ?: "launcher"} can freeze apps it thinks are unused. If KOReader or Orbit stop working, Setup says so; to prevent it, set them to never freeze in $freezeHint."
+            val tip = "This ${disabler ?: "launcher"} can freeze apps it thinks are unused. If KOReader or BookSync stop working, Setup says so; to prevent it, set them to never freeze in $freezeHint."
             list.add(Check("Launcher can freeze apps", true, tip, action = "Help", advisory = true, id = "freeze_tip") { a ->
                 a.tryStart(Vendor.reenablePage(ctx), "freeze settings")
             })
@@ -557,7 +557,7 @@ object Setup {
                 if (ko == KoreaderRelease.State.OTHER_SIGNER) {
                     a.tryStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${Koreader.PKG}")), "KOReader app info")
                 } else if (!a.packageManager.canRequestPackageInstalls()) {
-                    prefs.koreaderInstallStatus = "allow Orbit to install apps first (Install apps)"
+                    prefs.koreaderInstallStatus = "allow BookSync to install apps first (Install apps)"
                     a.tryStart(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${a.packageName}")), "install unknown apps")
                 } else {
                     Installers.koreader(a) { a.refresh() }
@@ -568,7 +568,7 @@ object Setup {
 
         // The caller check (docs/design/security.md): KOReader came back with another signer.
         KoreaderTrust.changed(ctx)?.let { c ->
-            list.add(Check("KOReader changed", false, "KOReader changed: trust this copy? Orbit ignores it until you do.",
+            list.add(Check("KOReader changed", false, "KOReader changed: trust this copy? BookSync ignores it until you do.",
                 action = "Trust", id = KoreaderTrust.ROW_ID, short = "KOReader trusted") { a ->
                 KoreaderTrust.trustChanged(a)
                 OLog.i("setup: KOReader ${c.pkg} trusted")
@@ -587,7 +587,7 @@ object Setup {
                     !plNeeds -> "Version $plV · it updates itself from your BookOrbit server"
                     prefs.pluginInstallStatus.isNotEmpty() -> "Not installed: ${prefs.pluginInstallStatus}"
                     plV == null -> "Not installed"
-                    else -> "Older than the Orbit plugin needs (v${PluginRelease.MIN_VERSION})"
+                    else -> "Older than the BookSync plugin needs (v${PluginRelease.MIN_VERSION})"
                 },
                 action = if (!plNeeds) null else if (plV == null) "Install" else "Update",
                 id = "plugin",
@@ -607,7 +607,7 @@ object Setup {
         val neverSeen = patchState == PatchRowState.CURRENT && prefs.patchSeenAt <= 0L
         list.add(
             Check(
-                "Orbit plugin",
+                "BookSync plugin",
                 patchState == PatchRowState.CURRENT || patchState == PatchRowState.RESTART,
                 when {
                     PatchInstaller.busy -> "Installing…"
@@ -631,7 +631,7 @@ object Setup {
                 // Update follow-through (this release's patch, a restart): changes no setting, no PIN.
                 pinFree = true,
                 id = "patch",
-                short = "Orbit plugin${patchV?.let { " $it" } ?: ""}",
+                short = "BookSync plugin${patchV?.let { " $it" } ?: ""}",
             ) { a ->
                 when {
                     PatchInstaller.busy -> Unit
@@ -669,7 +669,7 @@ object Setup {
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
         )?.activityInfo?.packageName
         val isHome = home == ctx.packageName
-        list.add(Check("Home app", isHome, if (isHome) "Orbit is the Home app" else "Now: ${home?.let { HomeTarget.label(ctx, it) } ?: "ask every time"}",
+        list.add(Check("Home app", isHome, if (isHome) "BookSync is the Home app" else "Now: ${home?.let { HomeTarget.label(ctx, it) } ?: "ask every time"}",
             action = "Set", id = "home") { a ->
             a.tryStart(Intent(Settings.ACTION_HOME_SETTINGS), "Home app settings") ||
                 a.tryStart(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS), "default apps settings")
@@ -684,7 +684,7 @@ object Setup {
         })
 
         // Battery: one row per installed app, merged on the page (BatteryMerge); the ids stay per app.
-        listOf(ctx.packageName to "Orbit", Koreader.PKG to "KOReader", Net.TAILSCALE_PKG to "Tailscale").forEach { (pkg, name) ->
+        listOf(ctx.packageName to "BookSync", Koreader.PKG to "KOReader", Net.TAILSCALE_PKG to "Tailscale").forEach { (pkg, name) ->
             if (pkg != ctx.packageName && !Net.installed(ctx, pkg)) return@forEach
             val row = Net.batteryRow(ctx, pkg)
             val app = BatteryMerge.App(name, row, locked = pkg == ctx.packageName && Net.adminActive(ctx))
@@ -754,7 +754,7 @@ object Setup {
                 clicker == ClickerRowState.DONE,
                 when (clicker) {
                     ClickerRowState.DONE -> "On in every app"
-                    ClickerRowState.OFF -> "Off. Orbit uses it only to see button presses and which app is in front, and to send page taps, Home and Back. It can't read what's on screen."
+                    ClickerRowState.OFF -> "Off. BookSync uses it only to see button presses and which app is in front, and to send page taps, Home and Back. It can't read what's on screen."
                     else -> "On in Android but not running yet: turn it off and on in Settings › Accessibility"
                 },
                 action = "Turn on",
@@ -766,7 +766,7 @@ object Setup {
                 list.add(Check(
                     if (km) "Key Mapper is also on" else "${HomeTarget.label(ctx, other)} is also on",
                     false,
-                    "Turn it off once Orbit's buttons work; you can then uninstall it. Two key filters both see every key and can fight.",
+                    "Turn it off once BookSync's buttons work; you can then uninstall it. Two key filters both see every key and can fight.",
                     action = "Turn off",
                     id = "keymapper",
                 ) { a -> a.tryStart(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), "accessibility settings") })
@@ -777,10 +777,10 @@ object Setup {
         if (ClickerStore.map(ctx).sendsKeys) {
             val on = KeySender.enabled(ctx)
             list.add(Check(
-                "Orbit keyboard",
+                "BookSync keyboard",
                 on,
                 if (on) "On: switches in only for a key press, then your keyboard comes back"
-                else "Off. Turn on \"Orbit clicker keys\". It has no keys, never stays your keyboard and never reads what you type; Android's warning is the same for every keyboard.",
+                else "Off. Turn on \"BookSync clicker keys\". It has no keys, never stays your keyboard and never reads what you type; Android's warning is the same for every keyboard.",
                 action = "Turn on",
                 id = "keyboard",
             ) { a -> a.tryStart(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS), "keyboard settings") })
@@ -1044,7 +1044,7 @@ class HomeAppActivity : EinkActivity() {
         rows.drop(pageIndex * perPage).take(perPage).forEach { (pkg, label) ->
             val sub = when {
                 pkg == HomeApp.KOREADER_BOOKORBIT -> "Smart Home, sync on sleep, Just in time Wi-Fi"
-                pkg == HomeApp.LAUNCHER -> "Orbit's own page of apps"
+                pkg == HomeApp.LAUNCHER -> "BookSync's own page of apps"
                 pkg in readers -> "reader app"
                 else -> null
             }

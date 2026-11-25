@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Sideload an Android test build over USB (adb): the release-signed Orbit Companion and the
-# stamped Orbit KOReader plugin from a release.yml run with publish off (AGENTS.md "Test builds:
+# Sideload an Android test build over USB (adb): the release-signed BookSync Companion and the
+# stamped BookSync KOReader plugin from a release.yml run with publish off (AGENTS.md "Test builds:
 # sideload first, release after"). Test on the device first; publish a release once it works.
 #
 #   tools/sideload-android.sh <run-id>                 download the run's android-test-* artifact
@@ -14,7 +14,7 @@
 # pushed beside the live one and swapped in (as the companion installs it), and, when KOReader
 # runs, the companion's restart (the plugin saves, quits and is started again), asked through the
 # companion's call that only the shell may use (docs/design/security.md).
-# It deletes no user data: only the plugin folder it replaces and the old Orbit user patch.
+# It deletes no user data: only the plugin folder it replaces and the old BookSync user patch.
 # Needs: adb, gh (for a run id), unzip, apksigner (Android SDK build-tools; not with
 # --plugin-only), shasum or sha256sum.
 set -euo pipefail
@@ -150,9 +150,9 @@ plan() {
     say ""
     say "Plan for $MODEL:"
     local n=1
-    say "  $n. Push the Orbit KOReader plugin $VER to $KO_DIR/plugins/$ORBIT_PLUGIN (now: ${have_plugin:-none})."
+    say "  $n. Push the BookSync KOReader plugin $VER to $KO_DIR/plugins/$ORBIT_PLUGIN (now: ${have_plugin:-none})."
     say "     Copied to $ORBIT_PLUGIN.orbit-new, then swapped in; the old folder is removed after the swap."
-    say "     Removes $KO_DIR/patches/$OLD_PATCH if present (the old Orbit user patch)."
+    say "     Removes $KO_DIR/patches/$OLD_PATCH if present (the old BookSync user patch)."
     n=$((n + 1))
     if [[ $PLUGIN_ONLY == 0 ]]; then
         say "  $n. adb install -r $(basename "$APK") (now: ${have_app:-not installed}); the app keeps its settings."
@@ -185,7 +185,7 @@ apply() {
     local pid
     pid=$(koreader_pid)
     if [[ $PLUGIN_ONLY == 0 ]]; then
-        say "Installing Orbit Companion $VER"
+        say "Installing BookSync Companion $VER"
         "${ADB[@]}" install -r "$APK" ||
             die "the companion didn't install (a debug-signed install must be uninstalled first; that clears its settings, so do it yourself if you want it)"
         [[ $(companion_version) == "$VER" ]] || die "the device reports companion $(companion_version), not $VER"

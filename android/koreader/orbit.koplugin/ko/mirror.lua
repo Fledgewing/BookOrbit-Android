@@ -34,7 +34,7 @@ local function catalogInventory()
             if value then return value end
         end
     end
-    error("Orbit catalog_sections.json missing or unreadable")
+    error("BookSync catalog_sections.json missing or unreadable")
 end
 Mirror.INVENTORY = catalogInventory()
 Mirror.SECTIONS = Mirror.INVENTORY.sections

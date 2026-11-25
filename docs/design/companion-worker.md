@@ -51,7 +51,7 @@ parsing of replies, comparing, file writes and directory scans. Even where the r
 in KOReader, only the apply step stays on the UI thread, and it handles a few fields, never a
 whole reply.
 
-The worker is the Orbit Companion (a separate process with real threads). A forked child of
+The worker is the BookSync Companion (a separate process with real threads). A forked child of
 KOReader (`Background.run`, koreader-base `ffi/util` `runInSubProcess`) is only for work the
 companion can't do, because it needs KOReader's own code (the BookOrbit plugin's reads).
 
@@ -65,7 +65,7 @@ one version).
   no "no companion" or "old companion" path.
 - **No version-skew handling.** One check (`Companion.workerProblem`, `ko/companion.lua`): the
   companion must be installed and report the plugin's own version in its status file. Otherwise
-  the plugin shows "Orbit Companion needed to save BookOrbit for offline" or "Update Orbit
+  the plugin shows "BookSync Companion needed to save BookOrbit for offline" or "Update BookSync
   Companion to <version> …" (the offline line in the menu, and a note when Full refresh is pressed)
   and does nothing heavy: no mirror run, no background check. Reads keep coming from what is saved.
 - Test: "companion: the cache worker needs the companion of the plugin's own version".
@@ -156,7 +156,7 @@ Guards (`test_flows.lua`, "v0.11.3: the mirror off the UI thread"):
 ## Audit: background work in KOReader's process
 
 "UI" means KOReader's UI thread. "Child" means a forked child of KOReader. "Companion" means the
-Orbit Companion's worker thread. Rule: an item stays in KOReader only if it needs KOReader's state
+BookSync Companion's worker thread. Rule: an item stays in KOReader only if it needs KOReader's state
 at that moment, and even then its fetch side moves.
 
 | Work | Now | Decision | Why |
@@ -175,8 +175,8 @@ at that moment, and even then its fetch side moves.
 | Plugin self-update check and download (`Updater.check`) | companion (step 3): the menu's check sends `UPDATE`; the companion installs itself, then the plugin of its release | **moved**; the plugin's download, unpack and swap are deleted | the restart for a newer file on disk stays in KOReader (`maybeRestart`) |
 | Companion status (`Companion.status`, loopback GET, 1 s timeout) | UI at start, resume and menu | stays | loopback answers in ms; the result drives the UI |
 | Outbox drain, progress, annotations, stats sync | BookOrbit plugin; forked when Trapper-wrapped (`bookorbit_api.lua:325-372`), otherwise blocking | not redirected now (see below) | upstream code; no measured stall |
-| Home dashboard, discover, search, series reads | BookOrbit plugin, forked (`runInSubprocess`); Orbit's cache answers inside the child | stays | upstream code; its result feeds the plugin's own view |
-| Cover and thumbnail downloads | BookOrbit plugin, forked (`bookorbit_catalog_thumbnails.lua:388, :571`) with Orbit's ETag download inside | stays | already off the UI thread; resizing is the plugin's, on draw |
+| Home dashboard, discover, search, series reads | BookOrbit plugin, forked (`runInSubprocess`); BookSync's cache answers inside the child | stays | upstream code; its result feeds the plugin's own view |
+| Cover and thumbnail downloads | BookOrbit plugin, forked (`bookorbit_catalog_thumbnails.lua:388, :571`) with BookSync's ETag download inside | stays | already off the UI thread; resizing is the plugin's, on draw |
 | Full refresh cover recheck (`OC.recheckCovers`) | companion: `RECHECK` with the covers on screen; it asks If-None-Match and answers `covers_rechecked`; the view redraws | **moved**; its forked child is gone | a child per Full refresh |
 | Index load at start (`OC.index`) | UI, once per start | stays | small since step 1 |
 

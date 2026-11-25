@@ -222,9 +222,9 @@ object Updater {
         }
 
         val apkName = UpdatePolicy.apkName(ver)
-        val apkUrl = rel.assets[apkName] ?: return "${rel.tag} has no $apkName"
+        val apkUrl = rel.assets[apkName] ?: return "${rel.tag} has no BookSync Companion APK"
         val sumsUrl = rel.assets[UpdatePolicy.SUMS_NAME] ?: return "${rel.tag} has no ${UpdatePolicy.SUMS_NAME}"
-        val expected = Checksums.parse(httpText(sumsUrl))[apkName] ?: return "${UpdatePolicy.SUMS_NAME} has no line for $apkName"
+        val expected = Checksums.parse(httpText(sumsUrl))[apkName] ?: return "${UpdatePolicy.SUMS_NAME} has no line for the BookSync Companion APK"
         log("${rel.tag}: expecting sha256 $expected for $apkName")
 
         val dir = File(ctx.filesDir, "updates").apply { mkdirs() }
@@ -340,7 +340,7 @@ object Updater {
         val pm = ctx.packageManager
         @Suppress("DEPRECATION")
         val archivePkg = pm.getPackageArchiveInfo(apk.path, 0)?.packageName
-        if (archivePkg != ctx.packageName) return "the download is not Orbit Companion ($archivePkg); not installed"
+        if (archivePkg != ctx.packageName) return "the download is not BookSync Companion ($archivePkg); not installed"
         val theirs = signers(pm, apk.path, null)
         val ours = signers(pm, null, ctx.packageName)
         log("signer of the download: ${theirs.joinToString()} / installed: ${ours.joinToString()}")
@@ -488,7 +488,7 @@ object Updater {
             enableVibration(false)
             setSound(null, null)
         })
-        val text = "Orbit Companion $version is ready. Tap to install."
+        val text = "BookSync Companion $version is ready. Tap to install."
         val n = Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentText(text)

@@ -189,8 +189,8 @@ local LABELS = {
     wifi_enable_action = function(v) return ({ turn_on = "Turn on", prompt = "Ask", ignore = "Ignore" })[v or "prompt"] or tostring(v) end,
 }
 local ACTIONS = {
-    orbit_sync_and_sleep = "Orbit: Sync and sleep", bookorbit_sync_now = "BookOrbit: sync all books",
-    bookorbit_this_book = "BookOrbit: this book", orbit_open_apps = "Orbit: other apps",
+    orbit_sync_and_sleep = "BookSync: Sync and sleep", bookorbit_sync_now = "BookOrbit: sync all books",
+    bookorbit_this_book = "BookOrbit: this book", orbit_open_apps = "BookSync: other apps",
     increase_frontlight = "Brighter frontlight", toggle_page_flipping = "Page flipping",
 }
 function Recommended.valueLabel(item, v)

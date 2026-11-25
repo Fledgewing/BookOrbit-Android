@@ -113,7 +113,7 @@ CrossInk-Bookorbit `v2.0.0+bookorbit.1-rc3` `87e2e19`; KOReader `v2026.07.1` `91
   (never packaged), pushed with `adb push` next to `orbit.koplugin`. It:
   - reads a scenario script;
   - sends KOReader events (open BookOrbit Home, hold ⟳, open a book, close it, suspend);
-  - writes one JSONL line per Orbit log event and per paint of an Orbit widget;
+  - writes one JSONL line per BookSync log event and per paint of an BookSync widget;
   - takes screenshots with KOReader's own `Screen:shot` (`frontend/ui/widget/screenshoter.lua:63`).
 
   `adb shell screencap` is the cross-check. System UI (the package installer's prompt) is
@@ -144,7 +144,7 @@ CrossInk-Bookorbit `v2.0.0+bookorbit.1-rc3` `87e2e19`; KOReader `v2026.07.1` `91
   `DISABLE_TOUCH`, `EMULATE_READER_FORCE_PORTRAIT` (`frontend/device/sdl/device.lua:173-184`).
   Under `xvfb-run` it is a normal process; the same `orbit-e2e.koplugin` drives it and calls
   `Screen:shot`.
-- **The catch.** Orbit refuses to load off Android: `ko/base.lua:16` (`if not Device:isAndroid()
+- **The catch.** BookSync refuses to load off Android: `ko/base.lua:16` (`if not Device:isAndroid()
   then … INACTIVE`). A desktop run needs a test-only preload that:
   - reports Android;
   - supplies the `android` module and JNI from `test_flows.lua`'s fakes (wifi, foreground, screen,

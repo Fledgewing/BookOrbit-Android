@@ -26,7 +26,7 @@ modes), which both platforms' tests read.
 | Writes | Every non-`GET` passes through untouched. On `2xx`, the write's effects are applied to the cache: `read-status` and `rating` on book *id* patch `readStatus`/`rating` of that book wherever a cached body lists it (detail, Home lists, series members, list pages) and mark Home stale; progress and book-states mark Home stale. Stale = revalidate on the next read (immediately if it is on screen). A failed write changes nothing. |
 | Size | Total cap (Android 64 MB since v0.11.1, logged at each Full refresh; X4 2 MB on SD) and entry cap (20000 / 200). Least recently used goes first; the Home body and the open book's detail are never evicted by a list page. |
 | Overlay | Unchanged: local-first's rules (device wins while newer or unsent; a local finish leaves Continue reading and counts toward the goal at once; design D4) are applied to what the cache returns, never written into it. |
-| Offline | Reads come from the cache, with the "Offline, saved …" stamp. Writes made offline use the existing queues (the plugin's outbox, Orbit's finish queue, the firmware's sync queue); the cache only learns of them when they succeed. |
+| Offline | Reads come from the cache, with the "Offline, saved …" stamp. Writes made offline use the existing queues (the plugin's outbox, BookSync's finish queue, the firmware's sync queue); the cache only learns of them when they succeed. |
 | Covers | Part of the cache: a disk file per book id + cover version, the version being the book's `updatedAt` as the server lists it (the plugin already names its files this way: `bookorbit_catalog_thumbnails.lua:58-85` coverToken/memoKey, files in `cache/bookorbit`, pruned at 600). A cover is downloaded only when it is missing, failed earlier, or listed with a version other than the one on disk; a cover whose version is unchanged is never downloaded again. A cover changed on the server without a new version is what Full refresh is for. Reading never changes the version (see "Cover version" below). |
 
 ## Cover version
@@ -55,7 +55,7 @@ The thumbnail itself has a cover-only version: `ETag` = the cover file's mtime, 
   so the versioned path finds it. A `200` replaces it through the same temp-file-then-rename and
   size cap (4 MB) as before, and the old file goes.
 - A metadata-only edit therefore costs one 304, not a cover.
-- Android: Orbit wraps the plugin's `downloadCatalogThumbnail` (`bookorbit_api.lua:747`) with its own
+- Android: BookSync wraps the plugin's `downloadCatalogThumbnail` (`bookorbit_api.lua:747`) with its own
   conditional GET that reuses the client's server, auth headers and the worker's temp path and size
   cap. The plugin's downloader neither sends nor keeps ETags (`bookorbit_api.lua:455-527`). Behind a
   proxy or on a redirect, it falls back to the plugin's download (no ETag).
@@ -79,7 +79,7 @@ Search stays online; offline it says "Search needs a connection".
 - **Details (v0.11.2).** Every book a saved list names gets its details saved too
   (`/books/{id}`, about 7-8 KB each), so details open offline. Covers are not fetched for every
   book: only for the books on the reader, Continue reading, Up next and the next in each series,
-  unless "Save every cover for offline (about 100 KB per book)" is on (Orbit menu, off by
+  unless "Save every cover for offline (about 100 KB per book)" is on (BookSync menu, off by
   default). With it on, every listed book's cover is saved (paced like the details, ETag rules
   unchanged) and the plugin's cover pruner (newest 600 files) leaves those files alone; turned off,
   nothing is deleted and they go back under the pruner.
@@ -87,7 +87,7 @@ Search stays online; offline it says "Search needs a connection".
   (with "· covers N/M" when covers are saved), `mirror: N/M saved` in the log, and a queue kept on
   disk that resumes after a restart. Wi-Fi is held only while it runs. A second Full refresh while
   one is saving keeps that run and shows its progress.
-- **Off the UI thread (v0.11.3).** The whole run happens in the Orbit Companion's cache worker,
+- **Off the UI thread (v0.11.3).** The whole run happens in the BookSync Companion's cache worker,
   which owns `orbit-cache/mirror/`; nothing of the mirror is in the index or on KOReader's UI
   thread, and background checks run there too. The companion is required: without it (or with
   another version) the menu says so and no run starts. Lists are saved before details, so the
@@ -99,7 +99,7 @@ Search stays online; offline it says "Search needs a connection".
   pauses the run; a paused run resumes at the next network up, wake or BookOrbit Home.
 - **Size.** The mirror's lists and details are kept outside the 64 MB / 20000-entry cap: they
   neither count toward it nor are evicted (`shared/fixtures/cache/cases.json` `mirror.evict`).
-- **Storage limit (v0.11.2).** One limit on everything Orbit stores (Orbit menu › Storage limit:
+- **Storage limit (v0.11.2).** One limit on everything BookSync stores (BookSync menu › Storage limit:
   100 MB, 250 MB (default), 500 MB, 1 GB, 2.5 GB, 5 GB, 10 GB or No limit; the line shows "Using N MB"): the browsing
   cache, the mirror's lists and details and every cover, mirrored or not. Book files and
   KOReader's own data don't count. It is counted on start and kept up to date on each write; over
@@ -107,16 +107,16 @@ Search stays online; offline it says "Search needs a connection".
   "Save every cover", least recently seen first; the mirror's lists and details never go (about
   7 MB for 850 books). The every-cover pass stops when the mirror's own share reaches the limit,
   and the run stops when its lists and details alone fill it; the Full refresh note and the log
-  say "Storage limit reached: 412 of 855 covers saved. Raise the limit in Orbit settings." The
+  say "Storage limit reached: 412 of 855 covers saved. Raise the limit in BookSync settings." The
   64 MB / 20000-entry cap stays the browsing cache's share inside the limit
   (`shared/fixtures/cache/cases.json` `storage`).
 - **Refresh.** A normal Refresh rechecks **every saved page** of a list, never only the first one.
   When a list's total changes, the list is paged again (`MirrorLogic.repage`): a series that gains a
   21st book shows it after Refresh.
 - **When.** A Full refresh can be started by hand (hold ⟳, or the menu). It also starts by itself
-  when the mirror is older than its TTL (default 7 days; Orbit menu › Automatic Full refresh, or
+  when the mirror is older than its TTL (default 7 days; BookSync menu › Automatic Full refresh, or
   off) or when the library version changes (the sweep reply's `libraryVersion`).
-- **Shown as** "Saved for offline · <day time>" in the Orbit menu. The log reports lists, pages,
+- **Shown as** "Saved for offline · <day time>" in the BookSync menu. The log reports lists, pages,
   requests and MB at the end of each run.
 
 The first paint of Home comes from the cache with the local overlay already applied: Resume
@@ -128,7 +128,7 @@ The same two modes and words on both platforms.
 
 | | Refresh | Full refresh |
 |---|---|---|
-| What starts it | Tap ⟳; every automatic background check. Xteink: Confirm on ⟳ (X4 Pro: tap). | Hold ⟳ (a short "Full refresh…" note); "Full refresh" in the Orbit menu / Xteink settings. Xteink: long-press Confirm on ⟳ (X4 Pro: hold). |
+| What starts it | Tap ⟳; every automatic background check. Xteink: Confirm on ⟳ (X4 Pro: tap). | Hold ⟳ (a short "Full refresh…" note); "Full refresh" in the BookSync menu / Xteink settings. Xteink: long-press Confirm on ⟳ (X4 Pro: hold). |
 | Data | Revalidate this view's entries (and Home's when on Home), skipping the 60 s window, and merge what changed. | Fetch this view and Home's sections from the server, ignoring the cache, and replace those entries. |
 | Covers | Fetch only missing, failed or re-versioned covers (a re-versioned one with an ETag asks `If-None-Match`). | Also check every visible cover file: a missing, empty or unreadable file is removed and fetched again. A good file with an ETag is asked `If-None-Match`: a 304 keeps it, a 200 replaces it (this catches a cover changed without a new version). Never a blind re-download. |
 | Evicts | Nothing. | Only the entries and cover files it replaces. |
@@ -138,11 +138,11 @@ BookOrbit's own refresh (plugin `refreshCurrent`, `bookorbit_catalog.lua:475-490
 cover on screen (`evictCachedCovers`, `bookorbit_catalog_thumbnails.lua:237`) and cancels the
 cover jobs. Neither of our modes goes through that deletion.
 
-## Android (Orbit plugin)
+## Android (BookSync plugin)
 
 - **Choke point:** `BookOrbitApi:request(method, path, body, headers)` (plugin `bookorbit_api.lua:372-383`)
   is every JSON call; it runs `requestBlocking` (:261) inline or in a forked child
-  (`runInSubprocess`, :336). Orbit wraps it on the API class (`wrap`, feature key `cache`).
+  (`runInSubprocess`, :336). BookSync wraps it on the API class (`wrap`, feature key `cache`).
 - **Child processes:** the catalog runs most requests inside a forked child (`fetch`,
   `bookorbit_catalog.lua:881`), so the wrapper runs there. A child never calls JNI or the UI:
   `NetworkMgr:isConnected` is JNI on Android (`device/android/device.lua:333`), and a child that
@@ -150,34 +150,34 @@ cover jobs. Neither of our modes goes through that deletion.
   records its connectivity just before forking; the child reads that, and reports what it read,
   stored, wants checked or missed as event files the parent applies when the child returns.
 - **Offline:** the catalog's `runConnected` (`bookorbit_catalog.lua:924`) would ask for Wi-Fi first.
-  Offline, Orbit runs the view's load from the cache instead. A page that isn't saved answers
+  Offline, BookSync runs the view's load from the cache instead. A page that isn't saved answers
   "cancelled" (the plugin's quiet path) and then asks "Connect and load more", which runs the load
   connected; a write or download in that load just connects, as before.
 - **Synchronous answer:** the wrapper returns the cached body directly, so the catalog code that
   called it (`fetch`, `loadBooks`, `dashboardRootFetch`, `loadBookDetail`, …) carries on as if
   the server answered, with no spinner and no network.
-- **Revalidation:** a KOReader subprocess (`ffi/util` `runInSubProcess`, as Orbit's update check
+- **Revalidation:** a KOReader subprocess (`ffi/util` `runInSubProcess`, as BookSync's update check
   does, `ko/background.lua`) runs `requestBlocking` and pipes the reply back; the UI polls it.
   A different reply updates the entry, then calls the redraw hook for the view showing that key:
   - Home: local-first's quiet path (`ko/localfirst.lua` `LF.quietSwitch`): header stamp and the
     tiles whose content changed, nothing else.
   - Lists and book detail: the catalog's own reload (`refreshCurrent`, `bookorbit_catalog.lua:475`)
-    with its cover eviction turned off (Orbit wraps `evictCachedCovers`); it reads the
+    with its cover eviction turned off (BookSync wraps `evictCachedCovers`); it reads the
     now-current entry from the cache, so it is one repaint with no request.
 - **Covers:** the plugin's queue already skips a cover whose versioned file exists
-  (`queueThumbnails`, `bookorbit_catalog_thumbnails.lua:257`). Orbit keeps the jobs alive across
+  (`queueThumbnails`, `bookorbit_catalog_thumbnails.lua:257`). BookSync keeps the jobs alive across
   its quiet Home repaint (the stock `switchTo` cancels them, `bookorbit_catalog.lua:848`), queues
   the covers of books a refresh brings in, lets a cover that lands redraw its tile, and clears
   the session's failed-cover memo on Refresh. Full refresh checks the visible files (size, JPEG
   or PNG header) and removes the bad ones before queueing.
-- **⟳:** tap = Refresh, hold = Full refresh, on Home and on lists; the Orbit menu has "Full refresh".
+- **⟳:** tap = Refresh, hold = Full refresh, on Home and on lists; the BookSync menu has "Full refresh".
 - **What it replaces:** local-first's Home-only body handling (the `dashboardRootFetch` tag and
   `fetchedAt` stamps) moves onto the cache: freshness stamps read `validated_at` per key, lists
   included. The overlay, tile diff, ⟳ and stamp UI stay.
 - **Storage:** `<settings>/orbit-cache/` (one JSON file per entry, named by a hash of its key)
   plus `index.lua` (key → file, bytes, fetched_at, validated_at, used_at). Disposable: deleted
   on a version mismatch or if unreadable.
-- **Off-switch:** Orbit menu "Use the offline cache" (on). Off, or a plugin without the hooks
+- **Off-switch:** BookSync menu "Use the offline cache" (on). Off, or a plugin without the hooks
   (compat probe): requests go straight through, as before.
 
 ## Xteink (CrossInk-Tailnet overlay)

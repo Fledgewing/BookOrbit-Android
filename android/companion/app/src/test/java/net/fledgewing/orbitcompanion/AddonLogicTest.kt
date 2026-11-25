@@ -91,7 +91,7 @@ class AddonLogicTest {
         assertEquals(listOf(Step.SET_MODE, Step.ENABLE_HOME, Step.START_SERVICE, Step.WRITE_STATUS, Step.OPEN_SETUP),
             AddonLogic.toFull(OrbitMode.ADDON, homeEnabled = false, serviceRunning = false))
         assertTrue(AddonLogic.toFull(OrbitMode.FULL, homeEnabled = true, serviceRunning = true).isEmpty())
-        assertTrue("a first-run Add-on choice needs no other Home: Orbit was never Home",
+        assertTrue("a first-run Add-on choice needs no other Home: BookSync was never Home",
             AddonLogic.toAddon(null, homeEnabled = false, otherHome = false, keep = Helpers(), adminActive = false, accessibilityOn = false, serviceRunning = false).first() == Step.SET_MODE)
     }
 }

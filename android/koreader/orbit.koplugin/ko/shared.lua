@@ -26,8 +26,8 @@ end
 function Shared.setupNeededText()
     local n = Shared.setup_needed
     if not n or n < 1 or not Companion.has("setup") then return nil end
-    return string.format(n == 1 and _("Orbit Companion: %d setup step needs you (open the companion)")
-        or _("Orbit Companion: %d setup steps need you (open the companion)"), n)
+    return string.format(n == 1 and _("BookSync Companion: %d setup step needs you (open the companion)")
+        or _("BookSync Companion: %d setup steps need you (open the companion)"), n)
 end
 
 function Shared.refresh(why)

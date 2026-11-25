@@ -325,7 +325,7 @@ class SetupDetailsActivity : EinkActivity() {
             root.addView(Ui.gap(this, 12))
             root.addView(Ui.button(this, "Copy for support", heightDp = 56, sp = 20f) {
                 val text = SetupDetails.copyText(BuildConfig.VERSION_NAME, lines)
-                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Orbit setup details", text))
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("BookSync setup details", text))
                 OLog.i("setup: details copied for support")
                 Ui.note(this, "Copied. Paste it into your message.")
             })

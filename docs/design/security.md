@@ -1,13 +1,13 @@
 # Security: the plugin ↔ companion channel (Android)
 
-How the Orbit KOReader plugin and Orbit Companion trust each other, what that protects, and what
+How the BookSync KOReader plugin and BookSync Companion trust each other, what that protects, and what
 it does not. The interface itself is `android/docs/INTERFACE.md`.
 
 ## What is trusted
 
 - **Android** and its package manager: the UID of a binder caller, and the signing certificates
   it reports for an installed package.
-- **Orbify's release key.** It signs every Orbit Companion release (SHA-256 `F5:07:8C:…:0A:15`,
+- **Orbify's release key.** It signs every BookSync Companion release (SHA-256 `F5:07:8C:…:0A:15`,
   checked by `release.yml`). Test builds are signed with it too.
 - **KOReader, as first seen.** KOReader is not signed by us, and people install it from GitHub,
   F-Droid or their own build. The companion trusts the KOReader it first sees (trust on first use)
@@ -51,7 +51,7 @@ Before it sends anything, the plugin reads the installed companion's signing cer
 JNI (`PackageManager`, then SHA-256) and requires every one of them to be Orbify's release
 certificate (`Companion.state()`). An app that has the companion's package name but another
 signer is "untrusted": the plugin sends it nothing, the BookOrbit login least of all, and the
-menus say "This Orbit Companion is not an Orbify release". The login goes only in the call, never
+menus say "This BookSync Companion is not an Orbify release". The login goes only in the call, never
 in a file or a log.
 
 ## The companion → KOReader direction
@@ -79,7 +79,7 @@ relative paths are refused.
 
 ## Residual risk
 
-**Any KOReader plugin can call the companion.** A KOReader plugin, Orbit or another, runs inside
+**Any KOReader plugin can call the companion.** A KOReader plugin, BookSync or another, runs inside
 KOReader's process with KOReader's UID, so the caller check cannot tell them apart. A malicious
 KOReader plugin already has KOReader's own file and network access, so what it gains from the
 companion is limited to the companion's command set. That set is kept narrow:
@@ -110,5 +110,5 @@ Other limits, unchanged by this design:
 - `CallerTrustTest`: a command on KOReader's start is confirmed once and only when sent, and
   only to the pinned KOReader; the click key works once; only the shell may ask for a restart.
 - `test_flows.lua` "companion: an app with its name and another signer gets nothing": no call,
-  no login, the problem line; "a command on KOReader's start that Orbit Companion didn't send is
-  ignored"; "a listener on the port that can't prove it is Orbit Companion is dropped".
+  no login, the problem line; "a command on KOReader's start that BookSync Companion didn't send is
+  ignored"; "a listener on the port that can't prove it is BookSync Companion is dropped".

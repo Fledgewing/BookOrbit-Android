@@ -344,7 +344,7 @@ turns the frontlight on or off, or its battery level changes while awake. The lo
 record it, and nothing leaves the reader on its own.
 
 **Settings > System > Battery stats** writes `battery_stats.json` to the root of the SD card in
-the `orbit-battery-stats/1` format, which Orbit Companion's Battery › Compare reads. On the X4
+the `orbit-battery-stats/1` format, which BookSync Companion's Battery › Compare reads. On the X4
 Pro and X4 Classic the same page shows the time left and the battery used per hour asleep,
 per hour reading and per 100 pages, and the file is written again whenever USB Drive mode
 starts. The X3 and X4 build (`default`) writes the file without the numbers on the page.

@@ -18,10 +18,10 @@ GPL-3.0-or-later (`xteink/README.md`, “License”). These match main; no licen
 
 Approved screen layouts:
 
-- Companion Settings › About: Orbit version, full notice at normal body size, browser link
+- Companion Settings › About: BookSync version, full notice at normal body size, browser link
   immediately after the thanks, then Open-source licenses. Scrollable and available while
   settings are locked. The generated asset task and manifest entry deliver this screen.
-- Orbit menu › About: scrollable text viewer with version, full notice and visible project URL
+- BookSync menu › About: scrollable text viewer with version, full notice and visible project URL
   immediately after the thanks. Available while settings are locked. `package.sh` bundles
   the JSON; no QR widget or new KOReader API is needed.
 - X4 Pro and X4 Classic Settings › About: notice first in the existing paged system-info list,

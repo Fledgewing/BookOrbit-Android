@@ -377,7 +377,7 @@ end
 
 ---------------------------------------------------------------------------------------------
 
--- Menu (docs/design/lock-screen.md S2): Tools › Android sync › Sleep screen, behind the Settings
+-- Menu (docs/design/lock-screen.md S2): Tools › BookSync › Sleep screen, behind the Settings
 -- PIN with the rest of the Orbit menu.
 ---------------------------------------------------------------------------------------------
 
@@ -478,7 +478,7 @@ end
 function Sleep.menuItem(_plugin, later)
     if not Companion.installed() then return false end
     if not Sleep.available() then
-        return info(function() return _("Sleep screen: needs a newer Orbit Companion") end)
+        return info(function() return _("Sleep screen: needs a newer BookSync Companion") end)
     end
     local function rec() return Sleep.settings().sleep_mode == "recommended" end
     local function overlay() return Sleep.settings().sleep_style == "overlay" end
@@ -622,7 +622,7 @@ function Sleep.menuItem(_plugin, later)
                     separator = true,
                 },
                 {
-                    text_func = function() return _("Shown by: ") .. (Shared.sleep_shown_by or _("Orbit Companion")) end,
+                    text_func = function() return _("Shown by: ") .. (Shared.sleep_shown_by or _("BookSync Companion")) end,
                     callback = later(function() Sleep.openCompanion() end),
                 },
                 { text = _("Preview"), enabled_func = function() return Sleep.settings().sleep_mode ~= "off" end,

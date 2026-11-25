@@ -1,7 +1,7 @@
-# KOReader plugin ↔ Orbit Companion interface (protocol 1)
+# KOReader plugin ↔ BookSync Companion interface (protocol 1)
 
-The Orbit KOReader plugin (`android/koreader/orbit.koplugin`, up to 0.7.x the user patch
-`2-orbit-android.lua`; "the patch" below) and the Orbit Companion app talk
+The BookSync KOReader plugin (`android/koreader/orbit.koplugin`, up to 0.7.x the user patch
+`2-orbit-android.lua`; "the patch" below) and the BookSync Companion app talk
 through caller-checked Android provider calls, activities, a click channel and shared files.
 BookOrbit owns the account and sync state. The plugin passes credentials only to the verified
 companion for background jobs; the companion holds them in memory for the job and never returns
@@ -53,7 +53,7 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `MIRROR` | `reason`, `server`, `user`, `userkey` | Cap `cache_worker` (docs/design/companion-worker.md): run the offline mirror from `koreader/settings/orbit-cache/mirror/plan.lua` on the cache worker thread (below). The login is used only as `x-auth-user`/`x-auth-key` on requests to `server`, held in memory, never written or logged. A new `MIRROR` replaces a waiting one. Needs no service. |
 | `CHECK` | `reason`, `cache_key`, `path`, `mode` (`open`/`refresh`/`full`, or `store`: the plugin read it from the server), `owner`, `template` (the plugin's detail request with the sentinel id), `server`, `user`, `userkey` | Cap `cache_worker`: ask `server` for `path`, compare with what the plugin would serve from `orbit.db`, save a changed reply there and answer with an event (below). Checks go before Full refresh jobs. Needs no service. |
 | `PATCH` | `reason`, `id` (a book id, or empty), `fields` (a Lua literal of the changed fields, or empty), `stale_home` (`"1"`/`"0"`); or `wipe` = `"1"` | Cap `cache_worker`: a write the plugin made (`Cache.writeEffect`), patched into the saved book, the lists that name it and other saved replies; Home marked stale. `wipe` empties the database. In order with the checks. No login. Needs no service. |
-| `STORAGE` | `reason`, `limit` (bytes, empty: none), `cover_dir`, `mirror_covers` (`"1"`/`"0"`) | Cap `cache_worker`: count everything Orbit stores (`orbit.db` and the cover folder) and, over `limit`, remove what StorageLogic says: the oldest browsing replies and plain covers first, then covers saved for offline, never lists and books saved for offline nor Home. The companion removes them itself and answers with a `storage` event. No login. Needs no service. |
+| `STORAGE` | `reason`, `limit` (bytes, empty: none), `cover_dir`, `mirror_covers` (`"1"`/`"0"`) | Cap `cache_worker`: count everything BookSync stores (`orbit.db` and the cover folder) and, over `limit`, remove what StorageLogic says: the oldest browsing replies and plain covers first, then covers saved for offline, never lists and books saved for offline nor Home. The companion removes them itself and answers with a `storage` event. No login. Needs no service. |
 | `COPIES` | `reason` | Cap `cache_worker`: which copies on the reader changed in the library (docs/design/keep-copies-current.md), from `koreader/settings/orbit-cache/copies/ask.lua` (below): the newer of the end-of-book cache's, the cache's and the database's saved details per book, compared with each copy's hash, and only copies whose file is on the reader. Answers with a `copies` event; the plugin queues and downloads them. No login. Needs no service. |
 | `UPDATE` | `reason` | The plugin's "Check for updates" (it downloads nothing itself: the plugin and the companion ship together). A check by hand, as from the companion's Update page: a newer release installs the companion and then the plugin of that release; an up-to-date companion installs the plugin of its own release when the one on disk is older (PatchInstaller). Every mode; needs no service. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
@@ -87,7 +87,7 @@ only reads, except `state.json`.
 
 | File | Written by | Holds |
 |---|---|---|
-| `pool.json` | companion, at a `SLEEP_REFRESH` (never at sleep) | `{v, at, source, items: [{id, title, file}], server, user, storage_limit_mb}`: the batch of up to 24 ready covers, in show order; `file` is `covers/<id>.jpg`; `server` is the plugin's `server_url` (`…/api/v1`), `user` its KOReader username (the OPDS sign-in's default), `storage_limit_mb` Orbit's storage limit (the sharp covers take at most a tenth of it, 24 MB cap) |
+| `pool.json` | companion, at a `SLEEP_REFRESH` (never at sleep) | `{v, at, source, items: [{id, title, file}], server, user, storage_limit_mb}`: the batch of up to 24 ready covers, in show order; `file` is `covers/<id>.jpg`; `server` is the plugin's `server_url` (`…/api/v1`), `user` its KOReader username (the OPDS sign-in's default), `storage_limit_mb` BookSync's storage limit (the sharp covers take at most a tenth of it, 24 MB cap) |
 | `covers/<id>.jpg` | companion, at a `SLEEP_REFRESH` | the pool's covers (400 × 600 thumbnails), fetched by ETag; others pruned. The companion's sharp covers (its own storage, `files/sharp-covers/`) replace them on screen when signed in |
 | `current.png`, `current.json` | plugin, when a book opens | the current book's cover and `{v, title, authors, path, id, file, at}` |
 | `state.json` | companion | `{v, shown, changed_at, shows: {"<id>": n}}`: the cover shown, when it changed, and with Every sleep how often each ready cover was shown; the shuffle bag moves past `shown` (hours) and the refresh retires covers shown 3 times (Every sleep) |
@@ -125,7 +125,7 @@ read-only. The small files beside it are Lua literals in the cache's format (`Ca
 | covers, in the plugin's thumbnail folder | companion | `<memoKey>.jpg` and `.etag`, as the plugin names them |
 
 The plugin needs the companion of its own version for any of this (`Companion.workerProblem`):
-otherwise it shows "Orbit Companion needed" or "Update Orbit Companion" and sends nothing.
+otherwise it shows "BookSync Companion needed" or "Update BookSync Companion" and sends nothing.
 
 ## Patch → companion: activities
 
@@ -137,10 +137,10 @@ activity needs an intent filter with the action and `android.intent.category.DEF
 | `net.fledgewing.orbitcompanion.action.SHOW_STATUS` | Companion status (mockup screen 3) |
 | `net.fledgewing.orbitcompanion.action.SHOW_APPS` | The launcher's apps page (mockup screen 2) |
 | `net.fledgewing.orbitcompanion.action.SHOW_SETUP` | The "Setup needs you" prompt (the setup box's "Fix now"). Companion 0.4.1+; the patch falls back to `SHOW_STATUS`. |
-| `net.fledgewing.orbitcompanion.action.SHOW_PIN` | The Settings PIN keypad (companion 0.4.4+). The patch's Orbit menu asks for it while `/status` says `pin_locked: true`; it closes at once when no PIN is set or it's already unlocked. The unlock state comes back through `/status`. |
+| `net.fledgewing.orbitcompanion.action.SHOW_PIN` | The Settings PIN keypad (companion 0.4.4+). The patch's BookSync menu asks for it while `/status` says `pin_locked: true`; it closes at once when no PIN is set or it's already unlocked. The unlock state comes back through `/status`. |
 | `net.fledgewing.orbitcompanion.action.RELAUNCH_UI` | Companion 0.11.0+, Add-on only: an invisible window the plugin starts just before it quits for a restart; it starts KOReader again 2.5 s later (no Home role to do it from the background). |
 | `net.fledgewing.orbitcompanion.action.SHOW_LAUNCHER` | The launcher page (the one a double Home shows); Home pressed on BookOrbit home. Companions before 0.2.1 lack it; the patch then opens `SHOW_APPS`. |
-| `net.fledgewing.orbitcompanion.action.SHOW_SLEEP` | Settings › Sleep screen (cap `sleep_screen`), behind the Settings PIN: the Orbit menu's "Shown by" row. |
+| `net.fledgewing.orbitcompanion.action.SHOW_SLEEP` | Settings › Sleep screen (cap `sleep_screen`), behind the Settings PIN: the BookSync menu's "Shown by" row. |
 | `net.fledgewing.orbitcompanion.action.SLEEP_PREVIEW` | The sleep screen as it would show now, for 5 s or until a tap (cap `sleep_screen`); never moves the rotation on. |
 
 ## Companion → patch: "go home"
@@ -301,9 +301,9 @@ it is `true`.
 the setting: at start, resume and menu open it applies a request whose `at` is newer than the
 last one it applied, saves it (with that `at`) and acknowledges with `SETTINGS`. Chosen while
 KOReader isn't running, it simply waits in `/status` for the next start.
-`settings.home_opens` (v0.4.8): the companion's "Home opens", `koreader`, `launcher` (the Orbit
+`settings.home_opens` (v0.4.8): the companion's "Home opens", `koreader`, `launcher` (the BookSync
 launcher page) or `app`; the patch notes it on its Home button menu entry.
-`pin_locked` (v0.4.4): a Settings PIN is set and not unlocked right now. Then the patch's Orbit
+`pin_locked` (v0.4.4): a Settings PIN is set and not unlocked right now. Then the patch's BookSync
 menu shows only "Enter the Settings PIN…" and starts `SHOW_PIN`. Only a real `true` locks:
 no answer (no companion, not running) leaves the menu usable, so the
 patch never locks anyone out.
@@ -374,7 +374,7 @@ companion's Settings "Do now" buttons): `full_refresh` (Full refresh of BookOrbi
   Android's Wi-Fi; a request the reader made by hand opens Android's Wi-Fi settings (stock
   KOReader).
 - "Sync and sleep" syncs, then asks the reader to press the power button.
-- "Open Orbit Companion" and "Open another app…" say the companion isn't installed.
+- "Open BookSync Companion" and "Open another app…" say the companion isn't installed.
 
 ## How the patch calls the companion
 

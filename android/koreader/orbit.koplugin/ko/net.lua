@@ -54,11 +54,11 @@ function Net.up(p, opts, cb)
         if Companion.state() == "frozen" then
             why = Companion.disabledText()
         elseif res.wifi_switch then
-            why = "Wi-Fi is off and \"Wi-Fi via Orbit Companion\" is off"
+            why = "Wi-Fi is off and \"Wi-Fi via BookSync Companion\" is off"
         elseif Companion.installed() then
-            why = "Wi-Fi is off and Wi-Fi switching is off in Orbit Companion"
+            why = "Wi-Fi is off and Wi-Fi switching is off in BookSync Companion"
         else
-            why = "Wi-Fi is off and Orbit Companion isn't installed to turn it on"
+            why = "Wi-Fi is off and BookSync Companion isn't installed to turn it on"
         end
         log("network up: Wi-Fi is off and can't be turned on; skipped:", why)
         if S.wake_tailscale then tailscaleConnect(opts.reason) end

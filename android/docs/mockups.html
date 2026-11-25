@@ -98,7 +98,7 @@
   (1404 x 1872, Android 14: spec-site figures, not yet checked on the device).
   <b>The official BookOrbit KOReader plugin does every pull and push and holds the only copy of the login.</b>
   The "orbit-android" KOReader patch only gets the network ready and tells the plugin when to sync.
-  "Orbit Companion" (one APK: launcher + background service) only switches Wi-Fi, wakes Tailscale,
+  "BookSync Companion" (one APK: launcher + background service) only switches Wi-Fi, wakes Tailscale,
   holds a wake lock and turns the screen off. It never talks to BookOrbit.</p>
 
   <h2>The flow</h2>
@@ -165,13 +165,13 @@
     </svg>
   </div>
 
-  <h2>Launcher (part of Orbit Companion)</h2>
+  <h2>Launcher (part of BookSync Companion)</h2>
   <div class="grid">
     <figure>
       <div class="dev">
         <div class="sb"><span>9:41</span><span>Wi-Fi · TS ● · 82%</span></div>
         <div class="body">
-          <div class="title">Orbit</div>
+          <div class="title">BookSync</div>
           <div class="btn solid" style="height:130px;flex-direction:column;font-size:18px;">
             Open KOReader<span style="font-size:12px;font-weight:400;margin-top:6px">opens on BookOrbit home</span>
           </div>
@@ -228,7 +228,7 @@
       <div class="dev">
         <div class="sb"><span>9:41</span><span>Wi-Fi · TS ● · 82%</span></div>
         <div class="body">
-          <div class="row" style="border:0;padding:0 0 4px"><span class="title" style="margin:0">Orbit Companion</span><span class="btn" style="min-height:36px">Settings</span></div>
+          <div class="row" style="border:0;padding:0 0 4px"><span class="title" style="margin:0">BookSync Companion</span><span class="btn" style="min-height:36px">Settings</span></div>
           <div class="card">
             <div class="row"><span>Wi-Fi</span><b>On · connected</b></div>
             <div class="row"><span>Tailscale</span><b>Connected</b></div>
@@ -278,9 +278,9 @@
         <div class="sb"><span>9:41</span><span>Wi-Fi · 82%</span></div>
         <div class="body">
           <div class="title">First-run setup</div>
-          <div class="row"><span style="display:flex"><span class="chk done">✓</span>Set Orbit as Home app</span><span class="dim">done</span></div>
+          <div class="row"><span style="display:flex"><span class="chk done">✓</span>Set BookSync as Home app</span><span class="dim">done</span></div>
           <div class="row"><span style="display:flex"><span class="chk done">✓</span>Allow notifications</span><span class="dim">done</span></div>
-          <div class="row"><span style="display:flex"><span class="chk done">✓</span>Battery: Unrestricted (Orbit)</span><span class="dim">done</span></div>
+          <div class="row"><span style="display:flex"><span class="chk done">✓</span>Battery: Unrestricted (BookSync)</span><span class="dim">done</span></div>
           <div class="row"><span style="display:flex"><span class="chk done">✓</span>Battery: Unrestricted (Tailscale)</span><span class="dim">done</span></div>
           <div class="row"><span style="display:flex"><span class="chk done">✓</span>Battery: Unrestricted (KOReader)</span><span class="dim">done</span></div>
           <div class="row"><span style="display:flex"><span class="chk done">✓</span>Tailscale signed in + Always-on</span><span class="dim">done</span></div>
@@ -301,8 +301,8 @@
     <figure>
       <div class="dev">
         <div class="km-tabs"><span>▤</span><span>☰</span><span>⚙</span><span class="on">✎</span><span>🔍</span><span>≡</span></div>
-        <div class="km-path">Tools › BookOrbit › Android sync (patch)</div>
-        <div class="km-item"><span class="l"><span class="chk done">✓</span>Wi-Fi via Orbit Companion</span></div>
+        <div class="km-path">Tools › BookOrbit › BookSync (patch)</div>
+        <div class="km-item"><span class="l"><span class="chk done">✓</span>Wi-Fi via BookSync Companion</span></div>
         <div class="km-item"><span class="l"><span class="chk done">✓</span>Wake Tailscale before syncing</span></div>
         <div class="km-item"><span class="l"><span class="chk done">✓</span>Always sync on wake</span></div>
         <div class="km-item"><span class="l"><span class="chk done">✓</span>Sync when the screen goes off</span></div>
@@ -311,7 +311,7 @@
         <div class="km-item"><span>Sleep sync limit: 20 s</span><span class="dim">›</span></div>
         <div class="km-item"><span>Apply recommended settings</span><span class="dim">›</span></div>
         <div class="km-item"><span>Test sync path</span><span class="dim">›</span></div>
-        <div class="km-item"><span>Open Orbit Companion</span><span class="dim">›</span></div>
+        <div class="km-item"><span>Open BookSync Companion</span><span class="dim">›</span></div>
         <div class="km-item"><span>Open another app…</span><span class="dim">›</span></div>
         <div class="km-item"><span>Status: companion v1 · last sleep sync 4 s</span></div>
         <div class="km-foot"><span>« ‹</span><span>Page 1 of 1</span><span>› »</span></div>
@@ -322,14 +322,14 @@
         "Sync and sleep now" is the same action as the gesture. It is registered as a KOReader action, so it can also go on any gesture or the plugin's shortcut.
         "Apply recommended" sets the plugin's own options: Auto-sync on; BookOrbit is further ahead → Silent; further behind → Don't sync; Make BookOrbit home. It also sets KOReader's "Action when Wi-Fi is off" → Turn on.
         "Test sync path" asks the companion for the network, then runs the plugin's "Sync now", and reports each step.
-        "Open Orbit Companion" and "Open another app…" (the launcher's apps page, screen 2) make KOReader's menu the way to everything else, since Home always lands on BookOrbit home. Both are also KOReader actions, so they can go on a gesture.
+        "Open BookSync Companion" and "Open another app…" (the launcher's apps page, screen 2) make KOReader's menu the way to everything else, since Home always lands on BookOrbit home. Both are also KOReader actions, so they can go on a gesture.
         <span class="q">Open: none.</span></figcaption>
     </figure>
 
     <figure>
       <div class="dev">
         <div class="km-tabs"><span>▤</span><span>☰</span><span>⚙</span><span class="on">✎</span><span>🔍</span><span>≡</span></div>
-        <div class="km-path">… › Android sync › Test sync path</div>
+        <div class="km-path">… › BookSync › Test sync path</div>
         <div class="body">
           <div class="card">
             <div class="row"><span>1. Companion answered</span><b>✓ 0.1 s</b></div>
@@ -445,8 +445,8 @@
       <div class="dev">
         <div class="shade"></div>
         <div class="sb" style="position:relative;background:#fff"><span>9:41</span><span>Wi-Fi · TS ● · 82%</span></div>
-        <div class="notif"><b>Orbit Companion</b> · ongoing<br>Network ready · Wi-Fi off in 28 min</div>
-        <div class="notif"><b>Orbit Companion</b> · now<br>Tailscale didn't connect. Open Tailscale to sign in again.</div>
+        <div class="notif"><b>BookSync Companion</b> · ongoing<br>Network ready · Wi-Fi off in 28 min</div>
+        <div class="notif"><b>BookSync Companion</b> · now<br>Tailscale didn't connect. Open Tailscale to sign in again.</div>
       </div>
       <figcaption><b>10c. Notification shade</b>
         The ongoing notification belongs to the foreground service and shows the Wi-Fi timer. The only alert is a network one (Tailscale won't connect). There are no sync alerts: unsent positions belong to the plugin, which shows them in its own Sync status page.

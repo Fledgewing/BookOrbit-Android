@@ -416,7 +416,7 @@ class PinActivity : EinkActivity() {
         }
         val scope = when {
             mode == Mode.GUARD -> listOfNotNull(intent.getStringExtra("guarded"))
-            intent.action == SHOW_PIN -> listOf(Koreader.PKG) // KOReader's Android sync menu
+            intent.action == SHOW_PIN -> listOf(Koreader.PKG) // KOReader's BookSync menu
             else -> emptyList()
         }
         val err = Pin.check(this, pin, scope)
@@ -451,7 +451,7 @@ class GuardedAppsActivity : EinkActivity() {
     private fun render() {
         val root = page(scroll = true)
         root.addView(Ui.header(this, "Guarded apps", "‹ Back") { finish() })
-        root.addView(Ui.text(this, "With the PIN set, these open only after the PIN. Needs Settings › Accessibility › Orbit clicker buttons.", 16f, color = Ui.MID))
+        root.addView(Ui.text(this, "With the PIN set, these open only after the PIN. Needs Settings › Accessibility › BookSync clicker buttons.", 16f, color = Ui.MID))
         val pm = packageManager
         val settings = Pin.defaultGuarded(this)
         val homes = Pin.homePackages(this)
