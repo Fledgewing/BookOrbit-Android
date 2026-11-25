@@ -63,75 +63,75 @@ before its icon. Do not overlap the page group. Percent uses document reading
 progress, clamped to 0–100 and rounded to the nearest whole percent; page numbers
 use KOReader's document pagination. Missing/unknown totals show no progress group.
 
-W29 follows the maintainer's rulings in the task brief: draw inside the book's
-existing top and bottom margins and reuse the sleep-screen battery. No additional
-space is reserved by default. Fit each strip's measured font height independently
-to its margin, with the size setting as a maximum and one scaled pixel of padding
-on each side. A margin too small even for the smallest font leaves that strip hidden.
+## W31 correction (maintainer brief approved)
 
-“Add space for the status bar” defaults off. Offer it in the reader when either
-margin cannot accommodate the selected size (keep it available while enabled so
-it can be turned off). When on, add only `max(0, chosen strip height - margin)`
-on each visible side. A sufficiently large margin adds nothing. Native saved
-margins remain untouched. For CRE page mode, apply the missing pixels through
-the margin setter. For paged documents, use only blank screen surround outside
-the rendered page, never guessed whitespace within PDF/CBZ content. Scroll modes
-have no safe page-edge margin: hide the strips by default; opting in reserves
-the minimum strip viewport and translates draw, highlight and hit coordinates.
-Retain the reading anchor and regenerate zoom/scroll geometry when space changes.
-If rotation or zoom consumes surround before relayout, fit the current draw to
-the actual available margin and defer any needed space adjustment to the next tick.
+The renderer is now strictly a paint-only overlay. It calls no document, engine,
+viewport, typeset or settings setters, and changes no footer settings, height,
+visibility, mode, generator, header or timers. The native layout runs exactly as
+it does with BookSync off. “Add space” is removed and its saved value ignored.
+Scroll modes and PDFs without unused screen surround show no overlay. An enabled
+CRE header remains native; the overlay clock is omitted there to avoid collision.
 
-Keep KOReader's footer controller and tap regions; replace its visible rendering
-while enabled. A footer-toggle gesture hides/shows the BookSync bottom strip through
-the same native visibility state. It must continue to reach the native controller,
-and the top/menu gesture regions must remain available. Menus cover the reader
-normally; the status renderer is a reader child, never a floating window.
+Each lane fits measured bold black text to the existing margin, with zero widget
+padding and one scaled pixel of outer padding per side. Default Small selects the
+largest face fitting that margin, up to 48 pt; Medium and Large retain explicit
+18/22 pt caps. Horizontal anchors follow scaled left/right book margins, or the
+rendered PDF bounds. No text-block coordinate or hit transform changes.
 
-The setting is BookSync › Reading › “Status bar: BookSync layout (matches Xteink)”,
-default off, with an Android-only shared schema entry. Off restores native footer/top
-bar and margin/viewport state, including values that were absent originally.
-Do not write BookSync's temporary geometry into book or global native settings.
-Cancel hooks and timers on close/disable; keep enable/disable idempotent. Shared
-setting changes apply at a safe reader layout update, preserving the reading anchor.
+Native footer painting is suppressed only when an overlay fits. Its layout and
+refresh controller keep running. Footer-toggle events change only a private
+BookSync bottom-lane flag, without calling KOReader's settings-writing handler.
+Disabling or closing removes the three instance paint/toggle hooks and the minute
+timer; inherited or absent methods become inherited/absent again. No restore
+setter is necessary because native state never changes. Native footer settings
+menus remain the user's own controls.
 
-Repaint on page changes, minute boundaries and battery events. Time/battery-only
-updates dirty only the changed strip using partial refresh, and are suspended when
-the reader is covered or asleep. Ordinary page turns retain KOReader's page refresh
-policy; enabling or changing geometry may require its normal document relayout.
-No additional full refresh is requested by BookSync's status timer or battery handler.
+The shared sleep/reading battery program retains a black outline and terminal,
+white inner gap, and black proportional fill at 0–100%. A wider gap prevents the
+outline merging into the fill at full capacity; the reading glyph's scale uses
+the program's actual height. Both canvases retain the same black/white polarity.
 
-## Implementation notes
+### One-time repair
 
-W27 made `status_orbit_layout` default false (saved choices remain), and added
-Small (14 pt), Medium (18 pt) and Large (22 pt), default Small. W29 keeps those
-choices as maxima, fits each margin independently, and adds `status_orbit_add_space`
-(default false). Strip height is measured text plus two scaled padding pixels;
-only missing pixels are reserved when explicitly enabled. Horizontal inset is two
-scaled pixels. The SVG illustrates the unchanged book margins and default-off settings.
+The old controller has no per-book change journal. On companion service startup,
+`StatusMarginRepair` runs on the existing background bulk executor, waits for a
+reported closed-book state, and checkpoints
+before folder visits, file comparisons and writes. It walks external storage
+without following symlinks or entering Android app-private trees, covering book
+sidecars plus KOReader's central `docsettings` and `hashdocsettings` sidecars.
+It compares `metadata.*.lua` against `metadata.*.lua.old`. Following the W31 brief,
+only `copt_t_page_margin`, `copt_b_page_margin`,
+`copt_sync_t_b_page_margins`, and `reader_footer_mode` may be restored. For
+`koreader/settings.reader.lua`, only `reader_footer_mode` may be restored.
+The old overlay explicitly wrote that global key; no other global footer table
+field was written, so the repair never replaces the `footer` table.
 
-The sleep glyph actually lives in the companion's `SleepCanvas`, not the Lua sleep
-menu. Its outline, terminal and proportional fill now live in one declarative
-rectangle drawing program, `shared/ui/battery.json`. `BatteryGlyph.draw` in Kotlin
-and Lua interprets that same program on their respective canvases; both sleep and
-reading call that entry point. There is no separate status battery geometry or
-charging mark. The glyph scales with the fitted text. The companion packages the
-program as a Java resource, and `package.sh` puts the same file in the plugin zip.
-Tests check both call sites, packaged resource equality and empty/half/full pixels.
-Xteink and the shared format fixture are unchanged. Only instance methods and
-private copies of footer settings are changed; disabling restores inherited slots,
-footer visibility/mode, the native text generator, header state and timers. Native
-footer gesture handlers remain in charge, and their temporary mode is not persisted.
+A lexer skips quoted strings, long strings and comments without executing Lua.
+Only top-level scalar values on that allowlist are patched; every unrelated byte,
+including horizontal margins, fonts and reading position, stays intact. Missing
+keys in the backup remove those keys from the repaired file. Missing backups or
+unsupported values are left untouched: there is no inferred default. The backup
+cannot establish whether a later user change caused an allowlisted difference;
+this is the conservative key-limited fallback requested by the maintainer.
 
-CRE page mode uses its margin setter only to add missing space when opted in.
-When extra space is enabled, CRE scroll mode needs a reduced engine viewport
-and translated draw/hit coordinates: `frontend/document/credocument.lua:908-934`
-only adds the top margin in page mode, while
-`frontend/apps/reader/modules/readerrolling.lua:895-899,1133-1138` derives scroll
-steps and the final position from screen height and footer height (pinned KOReader
-commit above). The temporary height adjustment is scoped to those scroll operations.
-With extra space enabled, paged documents use the reduced viewport for zoom and scroll-state regeneration,
-with draw, highlight and hit coordinates translated below the clock.
+Before replacement, the current bytes are saved as `.booksync-before-w31` and
+rechecked for concurrent native saves. `.old` is never touched. Per-file
+`.booksync-w31.done` markers prevent an interrupted scan from restoring a user's
+later choices again, and a completion marker stops future walks. Logs identify
+repairs by a path hash, without book titles or paths. Interrupted or failed walks
+retry on a later service startup or closed-book report. Opening a book during
+the walk defers the remaining work. Close an already-open book to allow the repair;
+reopen after repair to use the recovered margins. Native global footer state
+already loaded by KOReader takes effect on its next restart.
+
+At pinned KOReader commit `9192014d8bd82a91dc1012473be0f238dedfdb54`,
+`frontend/apps/reader/modules/readertypeset.lua:541-552` adds native footer height
+to CRE margins unless reclaimed; `frontend/document/credocument.lua:1346-1351`
+applies engine margins. The overlay calls neither method.
+`frontend/apps/reader/modules/readerfooter.lua:2485-2510` changes native footer
+mode and persists it; the overlay consumes that event without invoking this path.
+`frontend/ui/widget/textwidget.lua:30-35` defines bold/black text and widget
+padding; all measuring and drawing use the same explicit parameters.
 
 X4 and X4 Pro use the shared spaced page format; centered/custom status groups keep
 their configured separator. X3's build flag is zero: preprocessing retains the exact
@@ -148,8 +148,8 @@ native page/percent formatting and excludes the new formatter header. The existi
 - Cover Unicode, empty chapter, narrow widths, unequal sides, percent boundaries,
   12/24-hour midnight/noon and unknown totals with Lua unit tests.
 - Flow tests cover native state snapshot/restore, repeated toggles, book close,
-  clock cleanup, zero reservation by default, text fitting, minimum opt-in CRE and paged reservation, and gesture
-  delegation. Add partial dirty-region checks for minute/battery updates.
+  clock cleanup, zero reservation in every mode, text fitting, byte-identical native
+  settings and private footer gestures. Add partial dirty-region checks for minute/battery updates.
 - Run plugin logic/flow suites and pinned KOReader compatibility checks. Run the
   affected Xteink host suite. CI is the merge gate; no device tools or release tags.
 - One PR holds this design and implementation. Keep this outcome in ROADMAP until

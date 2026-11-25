@@ -244,6 +244,7 @@ class OrbitService : Service() {
         super.onCreate()
         BulkWork.attach(this)
         BulkWork.executor.execute { runCatching { NoMedia.roots(Places.roots()) }.onFailure { OLog.w("cache: no-media setup deferred", it) } }
+        StatusMarginRepair.schedule(this)
         val t0 = SystemClock.elapsedRealtime()
         running = true
         prefs = Prefs(this)

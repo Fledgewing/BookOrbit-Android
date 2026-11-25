@@ -165,7 +165,10 @@ object PatchInstaller {
         val p = Prefs(ctx)
         val v = if (book) "1" else "0"
         if (p.koreaderBook != v) p.koreaderBook = v
-        if (!book) follow(ctx, why)
+        if (!book) {
+            StatusMarginRepair.schedule(ctx)
+            follow(ctx, why)
+        }
     }
 
     /**
