@@ -256,6 +256,11 @@ SWITCHES = {
     # batch of covers on the card, and the text and battery extras. X4 Pro and X4 only: the X3 builds
     # none of it, its settings' strings included (ORBIFY_I18N_SKIP below).
     "CROSSINK_TAILNET_ORBIFY_SLEEP":      (0,      1,      1),
+    # Patch 0051, the BookOrbit server's TLS is verified: the Let's Encrypt roots or the certificate
+    # the user trusted at login (docs/design/server-tls.md). Tailnet hosts stay unverified. Not on
+    # the X3: it costs ~9.6 KB of flash (code, the two roots, wolfSSL's chain checks) and the X3 had
+    # 7.7 KB left under the 99.5% gate.
+    "CROSSINK_TAILNET_ORBIFY_SERVER_TLS": (0,      1,      1),
 }
 # Switches that stand for wolfSSL defines rather than a define of their own.
 WOLFSSL_SWITCH_DEFINES = {
@@ -273,6 +278,7 @@ SIM_SWITCHES = {
     "CROSSINK_TAILNET_BATTERY_STATS": 0,   # the fuel gauge, ADC and Wi-Fi driver events
     "CROSSINK_TAILNET_SETTINGS_PIN": 0,    # NVS and RTC memory
     "CROSSINK_TAILNET_TLS_ARENA": 0,       # X3: an arena in the on-device wolfSSL's allocator
+    "CROSSINK_TAILNET_ORBIFY_SERVER_TLS": 0,  # the device's wolfSSL and SD card
 }
 
 
@@ -292,6 +298,8 @@ SWITCH_VALUES = {name: switch_value(name) for name in SWITCHES}
 _I18N_SKIP = []
 if not SWITCH_VALUES["CROSSINK_TAILNET_ORBIFY_SLEEP"]:
     _I18N_SKIP += ["SleepSettings.cpp", "SleepListActivity.cpp"]
+if not SWITCH_VALUES["CROSSINK_TAILNET_ORBIFY_SERVER_TLS"]:
+    _I18N_SKIP += ["ServerTrustNet.cpp"]
 os.environ["ORBIFY_I18N_SKIP"] = ",".join(_I18N_SKIP)
 
 print(f"Tailnet switches for {pioenv} (column {SWITCH_COLUMN}):")

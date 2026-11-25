@@ -63,6 +63,8 @@ orbify_test sleep_sync_deadline
 # Battery stats (orbify/core/BatteryStatsCore): CrossInk-style GoogleTest cases through GtestShim.h.
 orbify_test battery_stats "$core/BatteryStatsCore.cpp"
 orbify_test boot_trail
+# The BookOrbit server's TLS trust (orbify/core/ServerTrust): which requests are verified, and the pin.
+orbify_test server_trust "$core/ServerTrust.cpp"
 # The sleep screen (ROADMAP 11): the rotation and the batch read shared/fixtures/sleep/cases.json, as Android does.
 orbify_test sleep_pick "$core/SleepPick.cpp" "$core/SleepLayout.cpp"
 # The End-of-Book page (orbify/core/EndPageLayout): touch rules on the X4 Pro and X4 layouts, and

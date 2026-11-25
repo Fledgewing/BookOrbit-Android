@@ -66,7 +66,7 @@ The partition table is never changed (that can only be done over USB).
 ### X3 (v2.0) differences
 
 CrossInk 2.x plus Tailscale does not fit the ESP32-C3's app slot, so the `default` build
-(X3 and the C3 X4) of CrossInk 2.x leaves out four upstream features. The X4 Pro and X4 Classic
+(X3 and the C3 X4) of CrossInk 2.x leaves out four upstream features and Orbify's server certificate check. The X4 Pro and X4 Classic
 keep everything. Each is a switch in `tailnet/tailnet_build.py` (`CROSSINK_TAILNET_NO_*`).
 
 | Removed on the X3 | Workaround |
@@ -75,6 +75,7 @@ keep everything. Each is a switch in `tailnet/tailnet_build.py` (`CROSSINK_TAILN
 | mDNS (`<name>.local`) | Connect Calibre and the web file transfer with the IP address shown on the reader's screen. |
 | Plugins (hub, catalog, plugin events, the web plugin pages) | None on the X3. |
 | Language and hyphenation pack downloads | Install from the SD card (below). Packs already on the card keep working. |
+| The BookOrbit server certificate check ([below](#bookorbit-server-certificate)) | Reach BookOrbit over Tailscale, which authenticates the server itself. |
 
 To install from the SD card, download `crossink-languages-<version>.zip` from the
 CrossInk-Bookorbit release that matches the firmware (upstream CrossInk's packs lack this fork's
@@ -290,6 +291,23 @@ the catalog was last saved. The reader also refreshes the saved catalog by itsel
 (with Wi-Fi in reach) every 7 days, or when the library changes. With a saved catalog, opening
 the catalog without Wi-Fi shows it from the card instead of giving up. Search and downloads still
 need a connection.
+
+## BookOrbit server certificate
+
+The reader checks the BookOrbit server's HTTPS certificate before it sends your credentials
+([design](../docs/design/server-tls.md)). Certificates from Let's Encrypt (including `tailscale
+cert`) are accepted as they are. For any other certificate (self-signed, or from your own CA),
+the first **Settings > BookOrbit > Authenticate** shows **Unknown server certificate** and its
+SHA-256 fingerprint: compare it with your server's (`openssl x509 -noout -fingerprint -sha256
+-in <cert>`), then press Confirm to trust it. If the server's certificate later changes, the
+catalog and sync stop connecting. Run Authenticate again: it shows **Server certificate changed**
+and the new fingerprint to trust. The certificate must name the host in the server URL.
+
+Servers reached over Tailscale (`100.x` addresses, `*.ts.net` and short tailnet names) are not
+checked this way: WireGuard already authenticates them.
+
+Not on the X3 and C3 X4 (`default`): its flash has no room for the check. There, reach BookOrbit
+over Tailscale rather than a public HTTPS URL on shared Wi-Fi.
 
 ## Settings PIN
 
