@@ -20,6 +20,8 @@ Companion = {
         ["F5:07:8C:85:F8:23:18:30:C1:F1:8D:93:FE:30:D7:1F:87:93:6C:1D:94:24:F2:D8:15:98:3D:1D:21:A9:0A:15"] = true,
     },
 }
+-- The commands (caller-checked calls) and pages (activities): shared/contract/companion.json,
+-- which test_flows.lua "contract" checks this table against.
 Companion.ACTION = {
     -- The cache worker (docs/design/companion-worker.md): a mirror run, a cache check.
     MIRROR = Companion.PACKAGE .. ".action.MIRROR",
@@ -46,15 +48,15 @@ Companion.ACTION = {
     SHOW_LAUNCHER = Companion.PACKAGE .. ".action.SHOW_LAUNCHER",
     STATS = Companion.PACKAGE .. ".action.STATS",
     RELAUNCH = Companion.PACKAGE .. ".action.RELAUNCH",
-    -- Companion 0.4.1+: the setup box's "Fix now" (activity) and "Later" (broadcast).
+    -- The setup box's "Fix now" (a page) and "Later" (a command).
     SHOW_SETUP = Companion.PACKAGE .. ".action.SHOW_SETUP",
     SETUP_LATER = Companion.PACKAGE .. ".action.SETUP_LATER",
-    -- Companion 0.4.4+: the Settings PIN keypad (activity).
+    -- The Settings PIN keypad (a page).
     SHOW_PIN = Companion.PACKAGE .. ".action.SHOW_PIN",
-    -- Companion 0.11.0+ (docs/design/addon-mode.md §7.3): signed in yes/no and the recommended
+    -- (docs/design/addon-mode.md §7.3) Signed in yes/no and the recommended
     -- settings' state, for its two Setup rows. Never the server, the account or the key.
     REPORT = Companion.PACKAGE .. ".action.REPORT",
-    -- Companion 0.11.0+ in Add-on mode: its invisible window that starts KOReader again after a
+    -- In Add-on mode: the companion's invisible window that starts KOReader again after a
     -- restart (no Home role to do it from the background, docs/design/addon-mode.md §7.4).
     RELAUNCH_UI = Companion.PACKAGE .. ".action.RELAUNCH_UI",
     -- Companion with the "sleep_screen" cap (docs/design/lock-screen.md): the files in
@@ -68,7 +70,7 @@ Companion.ACTION = {
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
 -- With "home_smart": "other_app" when the companion knows Home came from outside KOReader.
 Companion.EXTRA_FROM = Companion.PACKAGE .. ".extra.FROM"
--- The display orientation when Home was pressed (companions after 0.11.2): portrait, landscape,
+-- The display orientation when Home was pressed: portrait, landscape,
 -- reverse_portrait, reverse_landscape (HomePlan.ROTATIONS).
 Companion.EXTRA_ROTATION = Companion.PACKAGE .. ".extra.ROTATION"
 

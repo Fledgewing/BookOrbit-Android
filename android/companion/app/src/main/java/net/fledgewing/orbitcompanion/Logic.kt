@@ -515,6 +515,9 @@ object HomeCommands {
     const val SYNC_SLEEP = "sync_sleep"
     const val TEST_SYNC_PATH = "test_sync_path"
 
+    /** Every command the plugin obeys (shared/contract/companion.json koreader_start.commands). */
+    val ALL = listOf(HOME, HOME_SMART, RESTART, REOPEN_BOOK, SIGNIN, RECOMMENDED, FULL_REFRESH, SYNC_SLEEP, TEST_SYNC_PATH)
+
     fun forPress(button: HomeButton): String = if (button == HomeButton.SMART) HOME_SMART else HOME
 
     /** KOReader went away and Home came back: smart mode reopens the book; otherwise a plain start. */

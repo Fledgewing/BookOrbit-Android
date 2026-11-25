@@ -415,8 +415,9 @@ The plugin's order, in `Shared.refresh` (`O/ko/shared.lua`):
 2. Read the file: mode, caps, setup_prompt.
 3. If caps include a service cap (`wifi`, `sleep_sync`, `clicker`, `pin`, `home`), call
    `/status` as today for the live fields. Its `mode`/`caps` win over the file's.
-4. **No file and `/status` answers without `caps`** (an older companion): legacy, every cap on,
-   today's behaviour exactly.
+4. **No file and the status answers without `caps`**: the caps seen last time (step 5), else
+   none. The plugin and the companion ship together (`shared/contract/companion.json`), so there
+   is no older companion to guess for; the former "legacy: every cap" fallback is gone.
 5. The last caps seen are cached in `S.companion_caps`, so `silentWifiOn` and the other
    load-time hooks (`O/ko/wifi_backend.lua:106`) decide before the first refresh.
 
@@ -599,7 +600,7 @@ No device changes mode at the update (§4.1).
 | No other Home app when switching to Add-on | refused: "Your reader has no other Home app, so Orbit has to stay Home." |
 | `disableSelf()` not possible (service not connected) | opens Accessibility settings with "Turn off Orbit clicker" |
 | Device admin removal fails | the row stays, with "Settings › Security › Device admin apps" |
-| Status file missing, unreadable or half-written | the plugin ignores it and falls back to `/status`, then legacy (§6.2); written by rename, so a half file doesn't happen in practice |
+| Status file missing, unreadable or half-written | the plugin ignores it and falls back to the status call, then the caps seen last time (§6.2); written by rename, so a half file doesn't happen in practice |
 | Status file left by an uninstalled companion | ignored: `Companion.state()` says missing |
 | Older plugin with a new companion in Add-on | it sees the companion installed and sends `NET_UP`; the receiver drops it (§7.1), so its sync waits for Wi-Fi as stock KOReader does. The companion installs the matching plugin on its own update anyway (`O` design "One update"). |
 | BookOrbit plugin not loaded during a pass | its items are unavailable; re-evaluated on the next start where it loads |
@@ -626,7 +627,7 @@ No device changes mode at the update (§4.1).
 
 **Plugin, `test/test_flows.lua`**:
 - caps from the file only; from `/status` only; both (`/status` wins); neither with an old
-  companion (legacy: all on); missing companion with a leftover file (no caps);
+  companion (the caps seen last time, never a guess); missing companion with a leftover file (no caps);
 - each degraded action in §6.4 shows its message and sends no broadcast;
 - every row of the §3.1 table, with the permission missing: the feature falls back as listed,
   shows its note at most once, and raises no error box;
@@ -664,7 +665,7 @@ Each is small enough for one brief, and ships on its own.
    applied line, backup and undo; `silentWifiOn` and the two menu entries go through it; a pass
    on first setup and on the update. *Answers request 2 for every device, before any mode work.*
 2. **Capabilities** (both sides, no behaviour change). `mode`/`caps` in `/status`, the status
-   file, `Companion.has(cap)` at every call site, legacy fallback. Full stays exactly as it is.
+   file, `Companion.has(cap)` at every call site. Full stays exactly as it is.
 3. **Plugin reports and the new rows.** `REPORT`, "Signed in to BookOrbit" and "Recommended
    settings" in the Full checklist, `COMMAND=signin` and `COMMAND=recommended`.
 4. **Add-on mode, core.** The first-run choice, existing-install migration, `HomeActivity`
@@ -695,7 +696,7 @@ Order: 1 first (independent), 2 before 3–6, 4 before 5 and 6.
 | 8 | Is `wifi_enable_action` a recommendation? | always / only with Wi-Fi switching | **Only with Wi-Fi switching, then required** | On Android, BookOrbit's auto-sync doesn't need it (`hasSeamlessWifiToggle = no`); without a switcher "turn on" just opens Settings. |
 | 9 | Clean menus in the list? | Orbit default on / offered | **In the list; at default only when KOReader has no conflicts** | A customised KOReader is exactly where replacing menus surprises people; an untouched one gets the simpler menus. |
 | 10 | How does the plugin learn the caps when no service runs? | always run the service / a status file / a content provider over JNI | **A status file in `koreader/settings/`, plus `/status` for live fields** | No permanent notification in Add-on; the companion already writes into `koreader/`; a provider would need new JNI code. |
-| 11 | What does a missing `caps` field mean? | nothing works / everything works | **Legacy: everything, as today** | Only older companions lack it, and those are Full by construction. |
+| 11 | What does a missing `caps` field mean? | nothing works / everything works | **Superseded:** the caps seen last time, else none | Both sides ship together under `shared/contract/companion.json`; the legacy fallback is deleted. |
 | 12 | How does Add-on give up Home? | ask the user to change Home / clear preferred activities / disable `HomeActivity` | **Disable the component** | Works on every Android version, can't leave a dangling default, and keeps Orbit out of the Home chooser; reversible. |
 | 13 | Service in Add-on? | always / only with helpers | **Only with helpers** | "Wouldn't manage Wi-Fi or sleep or anything"; fewer setup steps (no battery rows); update checks move to a daily job. |
 | 14 | Helper granularity | one "device helpers" switch / one per feature | **Four switches and a screen-off sub-option** | Each needs a different Android permission; an owner may want only the clicker. |
