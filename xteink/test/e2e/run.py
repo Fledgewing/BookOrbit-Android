@@ -588,7 +588,7 @@ def catalog_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     card = ctx.card(tmp)
     cx, cy, rx, ry = open_catalog(ctx, card)
     # Each catalog request waits 400 ms at the proxy: the walk lasts long enough for the badge to move.
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 25}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400}])
     shots = {ms: f"x4-pro-full-{ms}" for ms in range(16000, 120001, 3000)}
     run = ctx.sim.run(card, "full", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};"
                       f"14000:TAP:{rx},{ry},1300;140000:QUIT", timeout_s=155, screenshots=shots)
@@ -629,7 +629,7 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     card = ctx.card(tmp)
     card.theme(UI_THEME_BOOKORBIT)
     sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 15}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400}])
     run = ctx.sim.run(card, "hold", script=f"3000:TAP:{sx},{sy},1300", after_reboot="8000:TAP:240,700",
                       timeout_s=140)
     after(run.output, "Full refresh: reboot notice suppressed")
