@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "SleepListActivity.h"
 
 #if CROSSINK_TAILNET_ORBIFY_SLEEP
@@ -47,10 +48,12 @@ void SleepListActivity::onEnter() {
 }
 
 void SleepListActivity::toggleSelected() {
+  RenderLock lock(*this);
   if (selectedIndex >= 0 && selectedIndex < static_cast<int>(items.size())) {
     OrbifySleep::toggle(pick, items[selectedIndex]);
   }
   app.clearTapFlash();
+  app.invalidate();
   requestUpdate();
 }
 
@@ -118,6 +121,7 @@ void SleepListActivity::buildListScreen(UiApp::ScreenType& screen) {
     const bool real = i < static_cast<int>(items.size());
     rowItems[i].toggle = real;
     rowItems[i].toggleChecked = real && OrbifySleep::chosen(pick, items[i]);
+    rowItems[i].subtitle = real ? (rowItems[i].toggleChecked ? "Selected" : "Not selected") : nullptr;
   }
   fui::ListProps props;
   props.items = rowItems.get();

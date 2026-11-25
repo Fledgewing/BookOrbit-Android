@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "Mirror.h"
 
 #include <cctype>
@@ -13,7 +14,8 @@ constexpr uint32_t DAY_S = 86400;
 // 2: a book list's fields keep their separator in the plan. Version 1 plans turned it into a space
 // (one "sort" field holding the whole query, a 400 from the server) and are not resumed.
 // 3: the done line also carries the % shown and the failures (one % that never goes down).
-constexpr char HEADER[] = "orbify-mirror 3";
+constexpr char HEADER[] = "orbify-mirror 4";
+constexpr char HEADER_V3[] = "orbify-mirror 3";
 constexpr char HEADER_V2[] = "orbify-mirror 2";
 constexpr char SEP = '\x1f';
 
@@ -170,10 +172,20 @@ bool decodeQuery(const std::string& text, FacetQuery& out) {
 
 bool Plan::add(const Kind kind, const std::string& arg) {
   if (steps.size() >= MAX_STEPS) return false;
+  // Once the data pass starts, its denominator is sealed (including after a reboot).
+  for (size_t i = 0; i < done; ++i) {
+    if (steps[i].kind == Kind::Books || steps[i].kind == Kind::Detail) return false;
+  }
   const std::string value = cleanLine(arg);
   for (const Step& s : steps)
     if (s.kind == kind && s.arg == value) return false;
-  steps.push_back(Step{kind, value});
+  if (kind == Kind::Root || kind == Kind::Section) {
+    auto at = steps.begin() + done;
+    while (at != steps.end() && (at->kind == Kind::Root || at->kind == Kind::Section)) ++at;
+    steps.insert(at, Step{kind, value});
+  } else {
+    steps.push_back(Step{kind, value});
+  }
   return true;
 }
 
@@ -190,8 +202,15 @@ void Plan::advance(const bool failedStep) {
 unsigned Plan::rawPercent() const {
   if (steps.empty()) return 0;
   if (done >= steps.size()) return 100;
-  // Below 100 until the last step ran: a total that grows can still add steps.
-  const unsigned pct = static_cast<unsigned>(done * 100 / steps.size());
+  // Root and facet enumeration is a first pass. Hold at 0 until every list is known;
+  // the data pass then has a fixed total. Detail steps are deduplicated by book id.
+  size_t discovery = 0;
+  for (size_t i = 0; i < steps.size(); ++i) {
+    if (steps[i].kind != Kind::Root && steps[i].kind != Kind::Section) continue;
+    if (i >= done) return 0;
+    ++discovery;
+  }
+  const unsigned pct = static_cast<unsigned>((done - discovery) * 100 / (steps.size() - discovery));
   return pct > 99 ? 99 : pct;
 }
 
@@ -227,7 +246,7 @@ bool Plan::parse(const std::string& text) {
   shown = 0;
   size_t pos = text.find('\n');
   if (pos == std::string::npos) return false;
-  const bool v3 = text.compare(0, pos, HEADER) == 0;
+  const bool v3 = text.compare(0, pos, HEADER) == 0 || text.compare(0, pos, HEADER_V3) == 0;
   if (!v3 && text.compare(0, pos, HEADER_V2) != 0) return false;
   size_t start = pos + 1;
   pos = text.find('\n', start);

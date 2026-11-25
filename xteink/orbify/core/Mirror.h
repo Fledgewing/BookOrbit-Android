@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 // Orbify offline mirror, X4 Pro and X4 (docs/design/write-through-cache.md, "Offline mirror" and
 // its Xteink section): the rules, as pure functions. The firmware walker (orbify/Mirror) makes the
@@ -12,7 +13,7 @@
 namespace orbify {
 namespace mirror {
 
-constexpr uint32_t DEFAULT_TTL_DAYS = 7;
+constexpr uint32_t DEFAULT_TTL_DAYS = 0;
 // The cache holds 200 entries (core/CatalogCache MAX_ENTRIES): the mirror takes at most this many,
 // so the views read by hand keep their room.
 constexpr size_t MAX_STEPS = 150;
@@ -24,12 +25,13 @@ constexpr size_t MAX_DETAILS = 30;
 // --- when ----------------------------------------------------------------------------------------
 
 enum class Due : uint8_t { None, Never, Ttl, Library };
+// Legacy shared-table rule, not a firmware scheduler: dueNow() always returns None and both
+// firmware walkers require a persisted user request. Kept for reading the old cross-platform table.
 // saved: a mirror finished before, at `at` (epoch s), with the library version then (may be "").
 // libNow: the server's library version now ("" = unknown). ttlDays 0: automatic runs off.
 Due due(bool saved, uint32_t at, const char* savedLib, const char* libNow, uint32_t now, uint32_t ttlDays);
-// Patch 0038, cache-first: the catalog opens a saved copy without Wi-Fi unless it is stale (the
-// 7-day Full refresh due, or a new library version). Never saved: it connects.
-inline bool catalogFromCache(const bool saved, const Due due) { return saved && due == Due::None; }
+// Saved replies remain usable at any age; opening one never joins Wi-Fi to revalidate it.
+inline bool catalogFromCache(const bool saved, const Due) { return saved; }
 // "none" / "never" / "ttl" / "library": the shared table's words, and the log's.
 const char* dueName(Due due);
 
@@ -82,13 +84,12 @@ class Plan {
   size_t doneCount() const { return done; }
   size_t count(Kind kind) const;
   size_t failures() const { return failed; }
-  // The one progress number (docs/design/sqlite-cache.md "Progress display", the Xteink rule):
-  // done * 100 / total, which never goes down. The total grows while the root and the facet
-  // sections land (they add their lists), so the % shown keeps the highest value it reached, kept
-  // in the plan across wakes and resets; 100 only once every step ran.
+  // Enumeration stays at 0%; data requests then use a sealed total. A book detail is
+  // deduplicated by id, including across lists and after a reboot. No section discovers
+  // more work after the data phase begins. Old persisted percentages never decrease.
   unsigned percent() const;
 
-  // "orbify-mirror 3\n<done>\t<percent shown>\t<failed>\n" then one "<kind letter>\t<arg>\n" per
+  // "orbify-mirror 4\n<done>\t<percent shown>\t<failed>\n" then one "<kind letter>\t<arg>\n" per
   // step. A version 2 plan (no percent, no failures) is still read.
   std::string serialize() const;
   bool parse(const std::string& text);
@@ -106,6 +107,8 @@ class Plan {
 // The badge is redrawn (its own rectangle only) when the % changed, at most this often: each paint
 // is an e-ink refresh.
 constexpr unsigned long BADGE_REPAINT_MS = 3000;
+// Background work cannot arm a progress display; only an explicit user request can.
+inline bool showProgress(bool userRequested, bool running) { return userRequested && running; }
 // The start popup closes by itself after this long (or at the next button press).
 constexpr unsigned long START_POPUP_MS = 5000;
 // "Done" / "Done with N errors" stays this long, then the header's stamp comes back.

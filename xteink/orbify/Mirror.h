@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 // Orbify offline mirror, X4 Pro and X4 (CROSSINK_TAILNET_ORBIFY_MIRROR; docs/design/
 // write-through-cache.md "Offline mirror", Xteink section; XTEINK-BUILD-NOTES "Offline mirror").
@@ -16,11 +17,12 @@ namespace OrbifyMirror {
 // A mirror finished before: when (epoch s, 0 = never or clock unset).
 bool saved();
 uint32_t savedAt();
-// Why it should run now: a hand start (the settings row, a hold on ⟳), never saved, the 7-day TTL,
-// or a new library version.
+// Only a user action (settings, sync-tile hold, catalog hold) requests a Full refresh.
 bool requested();
 void request();
 orbify::mirror::Due dueNow();
+// Cheap recent-items validation, only on the sleep sync's existing Wi-Fi session.
+void refreshChanged(bool (*cancelled)());
 
 struct Progress {
   void* context = nullptr;
@@ -47,19 +49,22 @@ int pendingPercent();
 // holds the connection (the catalog's boot session, or a Session) and checks Wi-Fi.
 class Walk {
  public:
-  // Asks for a Full refresh on the card (request()) and loads its plan, or seeds a new one.
-  void begin();
+  // A user start persists its request; a resume requires an existing user request.
+  void begin(bool userStarted = false);
   bool active() const { return started; }
-  bool finished() const { return started && plan.finished(); }
+  bool finished() const { return started && (connectionFailed || plan.finished()); }
   // One request, under OrbifyCache's Full mode. Saves the plan; on the last one, the mirror.
   void step();
   unsigned percent() const { return plan.percent(); }
-  size_t failures() const { return plan.failures(); }
+  size_t failures() const { return plan.failures() + (connectionFailed ? 1 : 0); }
   void end() { started = false; }
+  // The activity could not open its connection. Keep the request resumable, show one final error.
+  void failConnection() { connectionFailed = true; }
 
  private:
   orbify::mirror::Plan plan;
   bool started = false;
+  bool connectionFailed = false;
   unsigned long startedAt = 0;
 };
 

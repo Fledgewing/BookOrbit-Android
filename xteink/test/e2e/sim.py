@@ -68,6 +68,8 @@ class SdCard:
                           "serverUrl": proxy, "syncBehavior": SYNC_BEHAVIOR_SMART, "downloadFolder": ""}
         self.settings = {"shortPwrBtn": SHORT_PWRBTN_BOOKORBIT_SYNC, "bookOrbitShortcutIds": BOOKORBIT_SHORTCUT_IDS}
         self.save()
+        # These scenarios start on a configured reader; first-install release notes obscure input.
+        (self.crosspoint / "state.json").write_text(json.dumps({"releaseNotesSeen": 65535}))
         # The simulator's Wi-Fi accepts any saved network: without one a network boot waits on the
         # network picker.
         (self.crosspoint / "wifi.json").write_text(json.dumps(
@@ -93,7 +95,7 @@ class SdCard:
         return f"/{folder}/{source.name}"
 
     def open_book(self, sim_path: str, asleep: bool = False) -> None:
-        state = {"openEpubPath": sim_path}
+        state = {"openEpubPath": sim_path, "releaseNotesSeen": 65535}
         if asleep:  # a run with wake=True resumes straight into the book
             state.update(lastSleepFromReader=True, showBootScreen=False)
         (self.crosspoint / "state.json").write_text(json.dumps(state))
@@ -144,6 +146,9 @@ class Simulator:
         # The software renderer: SDL's dummy video driver has no accelerated one on Linux (CI), where the
         # simulator then had no renderer and silently saved no screenshots.
         e.update(SDL_VIDEODRIVER="dummy", SDL_RENDER_DRIVER="software", CROSSPOINT_SIM_INPUT_SCRIPT=script, CROSSINK_SIM_BOOKORBIT_CHOICE=choice)
+        if self.program.parent.name in ("x4-pro-simulator", "x4-classic-simulator"):
+            # X4 cache JSON allocates in PSRAM. A zero-sized simulator pool silently defeats it.
+            e["CROSSINK_SIMULATOR_PSRAM_TOTAL"] = "8388608"
         if quit_after_sync:
             e["CROSSINK_SIM_BOOKORBIT_QUIT_AFTER_SYNC"] = "1"
         if after_reboot is not None:

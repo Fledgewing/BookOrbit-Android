@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 // Orbify write-through cache in front of BookOrbit (docs/design/write-through-cache.md, ROADMAP
 // item 4): the rules, as pure functions. The firmware glue (CatalogCacheStore, the hooks in
@@ -14,6 +15,8 @@
 
 namespace orbify {
 namespace cache {
+// Match book rows by id and update only shared fields. Returns whether anything changed.
+bool mergeRecentBooks(JsonVariant saved, JsonArrayConst recent);
 
 // Reads checked less than this long ago are served without asking the server again (self-grill 4).
 constexpr uint32_t REVALIDATE_WINDOW_S = 60;

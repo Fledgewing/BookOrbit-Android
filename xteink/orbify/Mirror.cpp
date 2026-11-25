@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "Mirror.h"
 
 #include <CrossInkTailnetCuts.h>
@@ -89,7 +90,9 @@ State loadState() {
 
 bool loadPlan(Plan& plan) {
   if (!Storage.exists(PLAN_PATH) && Storage.exists(PLAN_TMP)) Storage.rename(PLAN_TMP, PLAN_PATH);
-  return plan.parse(readText(PLAN_PATH));
+  const std::string text = readText(PLAN_PATH);
+  // Older walks interleaved discovery and data. Restart them once under the fixed-total rule.
+  return text.find("orbify-mirror 4\n") == 0 && plan.parse(text);
 }
 
 void savePlan(const Plan& plan) {
@@ -212,6 +215,19 @@ bool runStep(const orbify::mirror::Step& step, Plan& plan) {
 
 namespace OrbifyMirror {
 
+void refreshChanged(bool (*cancelled)()) {
+  if (requested() || WiFi.status() != WL_CONNECTED || (cancelled && cancelled()) ||
+      !OrbifyHeap::roomForRequest("Catalog incremental")) return;
+  // The pinned catalog has no delta endpoint. One bounded head page, never a full walk.
+  OrbifyCache::ScopedMode refresh(orbify::cache::Mode::Refresh);
+  BookOrbitBookQuery query;
+  query.sort = "recently_updated";
+  BookOrbitBookPage page;
+  if (BookOrbitCatalogClient::fetchBooks(query, 1, page) && !(cancelled && cancelled())) {
+    OrbifyCache::mergeRecent();
+  }
+}
+
 bool saved() { return loadState().saved; }
 uint32_t savedAt() { return loadState().at; }
 bool requested() { return Storage.exists(REQUEST_PATH); }
@@ -222,10 +238,8 @@ void request() {
 }
 
 Due dueNow() {
-  const State s = loadState();
-  const std::string library = OrbifyCopyRefresh::libraryVersion();
-  return orbify::mirror::due(s.saved, s.at, s.library.c_str(), library.c_str(), nowSeconds(),
-                             orbify::mirror::DEFAULT_TTL_DAYS);
+  // Retain the cache indefinitely. Only request() (a user action) starts a Full refresh.
+  return Due::None;
 }
 
 namespace {
@@ -269,6 +283,7 @@ void complete(const Plan& plan, const unsigned long seconds) {
 
 bool run(bool (*cancelled)(), const unsigned long budgetMs, const Progress* progress, const size_t maxSteps,
          const bool heapFloor) {
+  if (!requested()) return false;  // no automatic Full refresh, even through a future caller
   const unsigned long started = millis();
   Plan plan;
   loadOrSeed(plan);
@@ -317,16 +332,18 @@ int pendingPercent() {
   return static_cast<int>(plan.percent());
 }
 
-void Walk::begin() {
-  request();
+void Walk::begin(const bool userStarted) {
+  if (userStarted) request();
+  if (!orbify::mirror::showProgress(requested(), true)) return;
   plan = Plan{};
+  connectionFailed = false;
   loadOrSeed(plan);
   started = true;
   startedAt = millis();
 }
 
 void Walk::step() {
-  if (!started || plan.next() == nullptr) return;
+  if (!started || connectionFailed || plan.next() == nullptr) return;
   {
     OrbifyCache::ScopedMode full(orbify::cache::Mode::Full);
     runOne(plan);

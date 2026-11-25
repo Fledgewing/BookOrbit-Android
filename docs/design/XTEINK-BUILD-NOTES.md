@@ -386,6 +386,63 @@ header %), `tailscale_layout` (ink: nothing between header and list, each status
 under its row, clear of the row's value). The simulator's Tailscale shim answers "on and logged
 in" with `ORBIFY_SIM_TAILSCALE=joined`.
 
+## Android feedback parity (W7)
+
+The user's Android rulings apply to X4 Pro and X4. Patch 0042 is integration hooks;
+implementation is in `orbify/` with GPL-3.0-or-later headers. X3 builds only the OTA return
+marker; the mirror, incremental catalog cache and sleep pickers remain behind their existing
+zero switches. No position sync, OTA verifier or TLS implementation changes.
+
+- **Only a user starts a Full refresh.** The settings action and holds on the sync tile or
+  catalog refresh persist `mirror.request`. A walker resume requires it; neither cache age nor
+  a library-version change starts or requests a walk. Home's scan, matching, cover decode and
+  refresh steps log during that run, rather than showing additional notices. The one start
+  popup and corner percentage end with Done / Done with N errors. Ordinary Home refresh keeps
+  its existing foreground activity; sleep work has no progress UI.
+- **Discovery, then a fixed data total.** Root and facet enumeration is a first pass at 0%.
+  Sections are queued ahead of data requests. Once the first data request finishes, `Plan::add`
+  rejects additions, including after serialization. Book-detail requests deduplicate by book ID
+  across every source. A v4 plan retains the progress and failures; unfinished older plans start
+  over under this rule. The request budget and first-page scope stay unchanged.
+- **Protocol/storage limit on book-count parity:** Xteink stores whole JSON replies, rather
+  than Android's normalized SQLite books and list membership. A book may appear in multiple
+  cached list replies, though its detail is fetched only once. First-page list totals overlap
+  and do not identify unique books; they cannot supply a unique-book denominator. Counting every
+  library book would require a full paginated enumeration and a normalized cache outside this
+  mirror's bounded first-page scope. Xteink therefore counts unique requests in its data pass,
+  fixed after discovery, rather than claiming to count each listed book once.
+- **Keep the cache indefinitely.** Saved catalog entry points open without Wi-Fi regardless of
+  age or library version. No scheduled Full refresh or expiry. The existing capacity-based LRU
+  limits still apply; signing out or changing accounts still clears the account's cache.
+- **Bounded incremental check:** on the sleep sync's already-open connection, ask for one
+  `books?sort=recently_updated` page (20 books), then compare and merge shared book fields into
+  saved replies. Unchanged rows cause no SD rewrite. Never join Wi-Fi for this check. This is a
+  bounded recent-items check, not a server delta feed: changes outside the newest page, removals,
+  list order and changed filter membership wait for an explicit refresh. The server has no
+  `since`/`updatedAt` filter or catalog ETag ([server contract](../server-contract.md#catalog-replies-carry-no-version)).
+  The pin `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7` accepts `recently_updated` in
+  `server/src/modules/koreader/dto/koreader-catalog-query.dto.ts:22,92`; its descending updated
+  sort is `server/src/modules/koreader/koreader-catalog.service.ts:1568-1569`. Android's
+  full-refresh-feedback fix was not on origin/main when this work began; this uses that documented
+  API directly, without assuming a new server route.
+- **Pickers:** both lists read SD settings and saved scopes only. Toggle under the render lock,
+  persist immediately, invalidate the same list, and show Selected / Not selected under each row
+  alongside the switch. No network request is added to the UI path.
+- **OTA return:** successful installation writes the old application version to a one-shot SD
+  marker immediately before the existing restart. On boot, a different version routes to the OTA
+  activity, which consumes the marker and shows Updated to vX without Wi-Fi. Same-version boots,
+  rollback and malformed markers discard it. Crash/recovery routing keeps priority. The hook
+  uses CrossInk `87e2e1984481e8a3d996f12b34b50a383f9013b8`'s successful install/restart at
+  `src/activities/settings/OtaUpdateActivity.cpp:241-255,313-315` and boot routing in
+  `src/main.cpp:2128-2135` (unpatched pin); the verifier is untouched.
+
+Validation: `mirror_test` covers discovery ordering, fixed totals, duplicate detail IDs, persisted
+nondecreasing progress and the explicit-user progress gate; `cache_test` covers changed-only merges,
+unrelated rows/facets and persisted results; `ota_return_test` compiles the actual marker code
+against storage/version stubs to simulate reboot, consumption, same-version boots and bad files.
+Simulator scenarios cover the two Full refresh entry points and a silent incremental sleep check.
+Flash measurements and the in-place picker scenario are recorded with the PR's final validation.
+
 ## Measurements needed on a device
 
 Item 1 adds only small requests on the sync's existing TLS session, so no new memory measurement
