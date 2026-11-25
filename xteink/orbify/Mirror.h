@@ -32,7 +32,7 @@ struct Progress {
 
 // Wi-Fi up. Runs or resumes the plan until it is finished, cancelled() says stop, the network
 // goes, or budgetMs (0 = no limit) is used. Returns true when it finished.
-// maxSteps (0 = no limit) and heapFloor: the sleep sync's paced slice (patch 0037): a few requests
+// maxSteps (0 = no limit) and heapFloor: the sleep sync's paced slice: a few requests
 // per sleep, each only with OrbifyHeap's floor free, on the connection the sync lends.
 bool run(bool (*cancelled)(), unsigned long budgetMs, const Progress* progress = nullptr, size_t maxSteps = 0,
          bool heapFloor = false);

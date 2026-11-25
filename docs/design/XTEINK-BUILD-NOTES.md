@@ -10,7 +10,7 @@ rc2 lines; the rc3 lines are below. Code: `xteink/orbify/` (symlinked into Cross
 `src/orbify`), pure logic in `xteink/orbify/core/`, hooks in `xteink/overlay/patches/v2.0/0027-…`
 onwards, switches in `xteink/tailnet/tailnet_build.py`.
 
-## Item 1: mark done at the end of a book (patch 0027)
+## Item 1: mark done at the end of a book
 
 ### Upstream lines at rc3
 
@@ -44,7 +44,7 @@ onwards, switches in `xteink/tailnet/tailnet_build.py`.
 | B12 | The D1 setting | **Settings > BookOrbit Sync > Mark Finished at End**, on by default, stored with the BookOrbit settings | It is a BookOrbit behaviour; the row sits before Home. |
 | B13 | Flash | Item 1 costs **13.3 KB** on the X3 `default` (6,454,127 → 6,467,459 bytes, 98.48% → 98.69%), 11.8 KB on `x4-pro` (94.86%) and `x4-classic` (92.51%) | Mostly ArduinoJson's filtered parse of the detail reply, which item 2 reuses. CI now reports every env's use and fails `default` above 99.5% (6,520,932 bytes). |
 
-## Item 2: the End-of-Book page (patch 0028)
+## Item 2: the End-of-Book page
 
 ### Upstream lines at rc3
 
@@ -76,7 +76,7 @@ onwards, switches in `xteink/tailnet/tailnet_build.py`.
 | E14 | Flash | Item 2 adds **10.7 KB** on the X3 `default` (6,478,163 bytes, 98.85%, 42.8 KB under the gate), 7.5 KB on `x4-pro` (94.97%) and 6.8 KB on `x4-classic` (92.62%) | Under the gate: the X3 keeps its suggestions and author row. |
 | E13 | "Get it at the next sync" (X4) | **Not in this release** | It needs a download queue in the sync; the page offers Download & open, Back to book, and the catalog's own retry. |
 
-### The page rebuilt to the mockup (patch 0032, 2026-11-22)
+### The page rebuilt to the mockup (2026-11-22)
 
 The first device test showed a plain list in small type, and a tap that dropped the reader back to
 Home. Patch 0032 draws the page itself, on the whole safe area, from `orbify/core/EndPageLayout`
@@ -94,7 +94,7 @@ to PNGs. CI uploads the PNGs as the `eob-page-*` artifact.
 | P6 | Logs: `ORB End page: <state>, card <yes/no>, series <none/offline>, <n> rows`; `tap row <i> (kind <k>, star <s>)`; `row <i> acts (<act>)`; `tap … ignored`; `Back, to the last page`; `ERS End of book: Home` | Names the exit next time. |
 | P7 | Not in this patch: the next book's cover | Added by patch 0036 (below), X4 Pro and X4 only. |
 
-### The next book's cover (patch 0036, 2026-11-22)
+### The next book's cover (2026-11-22)
 
 `CROSSINK_TAILNET_ORBIFY_EOB_COVER` (0,1,1): X4 Pro and X4; the X3 has no flash for it. The rules are
 `orbify/core/NextCover` (host test `end_of_book`); the files and requests are `orbify/FinishSync.cpp`.
@@ -111,7 +111,7 @@ to PNGs. CI uploads the PNGs as the `eob-page-*` artifact.
 | N8 | Page | The cover at the left of the Next row, centred in a row grown to 106 px; label and second line beside it (`EndPageLayout` `COVER_*`). `fitRows` counts the taller row (`FitMetrics::nextRowHeight`). No file: no image and no space, the row as before. | Mockup 7, cover at the left. |
 | N9 | Flash | `x4-pro` +8,192 B (6,283,597, 95.88%), `x4-classic` +8,380 B (6,129,086, 93.52%); X3 `default` +466 B with the switch off (6,505,613, 99.27%, 15.2 KB under the 99.5% gate): the shared card, plan and layout code | |
 
-## Item 4: the write-through cache, seams (patch 0029)
+## Item 4: the write-through cache, seams
 
 Design: [`write-through-cache.md`](write-through-cache.md) ("Xteink"). Rules in `orbify/core/CatalogCache` (host test
 `cache_test.cpp` runs `shared/fixtures/cache/cases.json`); disk and hooks in `orbify/CacheStore`.
@@ -128,7 +128,7 @@ Design: [`write-through-cache.md`](write-through-cache.md) ("Xteink"). Rules in 
 | C8 | Covers | Home covers only, by `planCover`: a missing file at the listed version with an older file that has an ETag is asked `If-None-Match`; 304 renames every size | The catalog browser draws no covers; Home's `<ver>` is already `updatedAt`'s hash. |
 | C9 | Flash | `x4-pro` +27.3 KB (95.39%), `x4-classic` +27.0 KB (93.03%); X3 +414 B (shared signature changes only) | |
 
-## X3 update check and download (patch 0030, 2026-11-22)
+## X3 update check and download (2026-11-22)
 
 Field report from an X3 on the CrossInk-Tailnet bridge `v2.0.0.51+bookorbit.1-rc2` (serial log):
 
@@ -154,7 +154,7 @@ Device check (X3, serial log): `WiFi tier parked (boot target 2)` at the update;
 `Download progress: … KB/s` well above 4 KB/s with "waiting" no longer the whole interval; heap
 min during the download.
 
-## Nothing interrupts reading (patch 0031, 2026-11-22)
+## Nothing interrupts reading (2026-11-22)
 
 The user's standing rule: while a book is open, nothing the reader did not ask for appears. The
 rule is `orbify/core/ReadingQuiet` (table `shared/fixtures/reading-quiet/cases.json`, shared with
@@ -173,7 +173,7 @@ Android); the firmware asks `OrbifyQuiet::allow()`, whose `reading()` is
 Upstream CrossInk's own reader toasts (page load errors, menu actions) answer what the reader did
 and are left alone. Flash: X3 +410 B (6,478,797, 98.86%).
 
-## "This copy differs from the library file" (patch 0033, 2026-11-22)
+## "This copy differs from the library file" (2026-11-22)
 
 An X4 Pro sync of book 1207 (file 3563) ended with `Server has another copy of this document`,
 `positionIncompatible` and `This copy differs from the library file`, then offered the update.
@@ -209,7 +209,7 @@ explainable and stops a pointless re-download:
 | C3 | An update logs `card copy <hash> (<path>), library file <id> <hash> (changed <contentVersion>): same/differs/unknown`; `same` opens the copy instead of downloading. | BookOrbitCatalogBrowserActivity::downloadBook |
 | C4 | The compare rule, host-tested. | orbify/core/CopyCheck, test/copy_check_test.cpp |
 
-## Keep book copies current (patch 0034, 2026-11-22)
+## Keep book copies current (2026-11-22)
 
 After the tag rewrite above happened to almost every book, every card copy went `positionIncompatible`.
 `CROSSINK_TAILNET_ORBIFY_COPY_REFRESH` (all three devices) finds and replaces them; the rules and
@@ -235,7 +235,7 @@ Not host-tested: the carry-over itself. It is the fork's `BookUpdateMigration`, 
 storage layer; the test covers the queue entry that records the old hash and the hash check that gates the
 swap.
 
-## Offline mirror, Full refresh and the catalog's ⟳ (patch 0035, 2026-11-22)
+## Offline mirror, Full refresh and the catalog's ⟳ (2026-11-22)
 
 Design: [write-through-cache](write-through-cache.md) ("Offline mirror", "Refresh and Full
 refresh", the Xteink section) and [local-first](local-first/DESIGN.md) decisions 36-37 (the
@@ -256,7 +256,13 @@ the walker in `orbify/Mirror`.
 | M8 | Not in this patch | Covers in the mirror (the Home sync keeps the Home covers); the automatic-Full-refresh setting (fixed at 7 days); opening the catalog offline without the network boot (decision 29's restart stays) | Smallest change that gives offline browsing; each is a follow-up if the device test asks for it. |
 | M9 | Flash | `x4-pro` +14.0 KB (96.0%); X3 unchanged | |
 
-## The rc3 device fixes: the sleep sync on a shared heap, copies, covers, refresh (patch 0037, 2026-11-23)
+## The sleep sync on a shared heap, copies, covers and refresh (2026-11-23)
+
+Shipped as one patch, now split by concern (same result): `0037a-orbify-sleep-sync-budget` (S5),
+`0037b-orbify-eob-card-while-reading` (S9), `0037c-orbify-sleep-sync-lends-session` (S2, S4, S7),
+`0037d-orbify-home-cover-heap-floor` (S3, S11), `0037e-orbify-copy-refresh-replace` (S8),
+`0037f-orbify-catalog-refresh-and-mirror-urls` (S10, S12 catalog), `0037g-orbify-home-sync-tile`
+(S12 Home), `0037h-orbify-sync-retry-after-tailscale` (S15), `0037i-orbify-settings-swipe` (S13).
 
 The rc3 test on an X4 Pro: a wake press was ignored for minutes, the mirror sent a 400, the copy
 refresh failed its match check, and the End-of-Book page showed no card, drew no rows on the
@@ -283,7 +289,11 @@ reader's Bitter font, and kept the Home swipe.
 | S16b | End page blank on an X4 Pro (photo, `.156`) | Every row's text was missing and the selected row was a plain black band: the rows use Lexend Deca, and an X4 builds a built-in family from outlines only when it is asked for: only the reader's own family (Bitter here) was loaded, so `GFX Font … not found` drew nothing and measured 0. The fonts now come from one table (`core/EndPageLayout` `fontSpec`); `EndPage.cpp` registers every family in it before drawing, and a font still missing is drawn with the UI font (`End page: font N not loaded; drawing with the UI font`). The host render loads its TTFs from the same table and checks, each row selected in turn on touch and buttons, that every row's text is non-empty and inks pixels against what is under it, and that no enabled row (Home included) falls off the page. | The language-partition line (`Unexpected language partition size: 81920`) does not touch these strings: English is built in. |
 | S17 | Flash | `default` (X3/X4) 6,510,769 of 6,553,600 bytes (99.35%, under the 99.5% gate by 10 KB; 99.27% before); `x4-pro` 96.20%; `x4-classic` 93.83% | |
 
-## The .167 X4 Pro test: wake, heap, Home tile, catalog stamp, cache-first, menu swipe (patch 0038, 2026-11-23)
+## Wake timing, TLS heap, Home touch and cache-first catalog (2026-11-23)
+
+The second device-fix bundle is split by concern: `0038a-orbify-wake-press-timing` (W1), `0038b-orbify-tls-heap-in-psram`
+(H1, H2, T2), `0038c-orbify-boot-trail` (D1, D2; it also calls the heap and wake hooks from
+`setup()`), `0038d-orbify-catalog-cache-first` (C1, C2), `0038e-orbify-home-tile-touch` (T1, M1).
 
 | # | Question | Cause (file) | Change |
 |---|---|---|---|
@@ -301,7 +311,7 @@ reader's Bitter font, and kept the Home swipe.
 | E1 | Series card log `#5 of 2`, and `#- of 0` for a book with no series | `seriesCount` is `seriesMembers`: how many of the series' books the library holds, not the series' length. The page line ("Book 5 of Starbreaker") uses the series name and was right; the log was misleading. With a card that named no series the page fell back to the EPUB's own series. | Log: `series 'X' #N (K of its books in the library)` or `no series`. The page takes the card's series when there is a card, so no series = no line (`orbify::pageSeries`, host test). |
 
 Simulator numbers (scripted internal heap `w0:21376/7156`, the .167 X4 Pro sleep sync), scenario
-`sleep_sync_device_heap`: before (0037 floors, the same scenario), the sync's first request is
+`sleep_sync_device_heap`: before (the original heap floors, the same scenario), the sync's first request is
 refused (`TLS floor: new session needs 35000 free and a 8192 block (largest now 7156)`, progress
 result 8) and nothing after it runs; after, the sync, the Home and its covers, the match check and the
 copy's download complete (`Copy refresh: replaced 1`). The 15 KB dip the .167 transfer starved at
@@ -314,7 +324,7 @@ should stay near its pre-handshake 30 KB), `ORB wolfSSL allocates from PSRAM` at
 N fetched` with no `deferred (heap`, `SLP Wake: N ms from press to screen`, and at every boot
 `BOOT Last run ended at: ...` / `Last run stopped at: ...` and `BOOT Crash record: ...`.
 
-## The sleep screen (patch 0039, 2026-11-24)
+## The sleep screen (2026-11-24)
 
 ROADMAP 11 on the X4 Pro and X4 ([lock-screen](lock-screen.md), Xteink rows R3, R4b, R6, R8, R10,
 S3, S4, X1-X7). Switch `CROSSINK_TAILNET_ORBIFY_SLEEP` (0, 1, 1): the X3 builds none of it.
@@ -351,7 +361,7 @@ after the sleep covers' decode ...`. Watch for `Sleep cover: decode waits for PS
 ... failed (http ...)` and `Sleep: cover <id> did not draw`. With Wi-Fi off the sleeps keep drawing
 covers from the card.
 
-## The .194 X4 Pro catalog crash (patch 0040, 2026-11-24)
+## The .194 X4 Pro catalog crash (2026-11-24)
 
 | # | Question | Cause (file) | Change |
 |---|---|---|---|
@@ -359,7 +369,7 @@ covers from the card.
 | K2 | `Last run stopped at: wake checked` at the USB reset (device idle on USB, after the crash) | Not decided: the run that stopped was the one after the panic (its boot had already reported the crash record), and the trail had no step between "wake checked" and "setup done", which spans the I2C sensors and clock, the SD card and the panic report, settings and state, and the first screen's paint. | Four more steps (`orbify/core/BootTrail.h`, after the sleep steps so older words keep their meaning): clock read, SD card ready, settings loaded, first screen started (its paint not done). The stopped run's own reset is kept beside them and logged: `Last run stopped at: <step> (it started after reset=4(PANIC))`. Host test `boot_trail_test`. |
 | K3 | Decoding a dump | Releases did not ship the ELF; a rebuild from the tag matches the release's code segments in layout (same IROM/IRAM sizes and addresses) but not its ELF SHA, so `esp-coredump` refuses it until the check is bypassed. | Every build uploads `<firmware>-v<version>.elf.gz` per reader with the image (artifact and release asset, in SHA256SUMS and the attestation): `gunzip`, then `esp-coredump --chip esp32s3 info_corefile -t raw -c <dump.bin> <elf>`. |
 
-## One progress number and the layout rulings (patch 0041, 2026-11-24)
+## One progress number and the layout rulings (2026-11-24)
 
 The user's rulings from Android (PR #58, [sqlite-cache](sqlite-cache.md) "Progress display" and
 "Xteink: the same rule"; the settings layout rules of 11-24) brought to the X4 Pro and X4. The X3
@@ -465,7 +475,7 @@ Expect `ORB Mirror: Full refresh started, 0/<n> requests, 0% (free=…, maxAlloc
 sections, <d> details, <n> requests (<f> failed) in <t> s`. The cache's own `Couldn't keep the reply`
 or evictions in that run mean the 150-request plan is too big for 2 MB.
 
-The sleep sync (patch 0037), X4 Pro, serial log: sleep with Wi-Fi in reach. Expect `Catalog requests
+The sleep sync, X4 Pro, serial log: sleep with Wi-Fi in reach. Expect `Catalog requests
 ride the sync's connection`, then the copy refresh and `ORB Mirror: due (...); a slice of 10 requests
 in this sleep`, and no `esp-aes: Failed to allocate memory`. `waiting for heap (free=…)` and
 `Transfer stopped: heap starved` say the floors in `orbify/HeapFloor.h` are met or not. A wake press

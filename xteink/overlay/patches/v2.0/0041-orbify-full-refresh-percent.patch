@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: full refresh percent
+
+Show one monotonic Full refresh percentage and fit Tailscale status rows.
+
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
 index 3114508..0c8a9e1 100644
 --- a/lib/I18n/translations/english.yaml

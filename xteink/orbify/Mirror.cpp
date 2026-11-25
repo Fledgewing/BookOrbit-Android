@@ -169,7 +169,7 @@ bool runStep(const orbify::mirror::Step& step, Plan& plan) {
     case Kind::Root: {
       std::vector<BookOrbitCatalogSection> sections;
       if (!BookOrbitCatalogClient::fetchRootSections(sections)) return false;
-      // Patch 0038: the root's counts too (the dashboard's want-to-read shelf and two totals), so a
+      // Save the root's counts too (the dashboard's want-to-read shelf and two totals), so a
       // cache-first catalog opens its root with no request at all. Optional, as on the root.
       // Behind the same heap floor as a step (the sleep sync's slice).
       BookOrbitCatalogCounts counts;

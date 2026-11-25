@@ -1,3 +1,7 @@
+Subject: [PATCH] Orbify: offline mirror refresh
+
+Save a catalog mirror for offline browsing and explicit Full refresh.
+
 diff --git a/include/CrossInkTailnetCuts.h b/include/CrossInkTailnetCuts.h
 index ecedf940..9ea55bd8 100644
 --- a/include/CrossInkTailnetCuts.h

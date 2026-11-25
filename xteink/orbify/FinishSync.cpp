@@ -261,12 +261,12 @@ bool writeCard(const orbify::SeriesCard& card) {
 namespace cover = orbify::cover;
 // The Home store's limits for a cover transfer and for the JPEG decoder (BookOrbitHomeStore.cpp).
 #if CROSSINK_TAILNET_TLS_PSRAM
-constexpr uint32_t MIN_FREE_HEAP_FOR_COVER = 20 * 1024;  // wolfSSL in PSRAM (patch 0038, HeapFloor.h)
+constexpr uint32_t MIN_FREE_HEAP_FOR_COVER = 20 * 1024;  // wolfSSL in PSRAM (HeapFloor.h)
 #else
 constexpr uint32_t MIN_FREE_HEAP_FOR_COVER = 42 * 1024;
 #endif
 #if CROSSINK_TAILNET_TLS_PSRAM
-constexpr uint32_t MIN_MAX_ALLOC_FOR_COVER = 4 * 1024;  // all of wolfSSL in PSRAM (patch 0038)
+constexpr uint32_t MIN_MAX_ALLOC_FOR_COVER = 4 * 1024;  // all of wolfSSL in PSRAM
 #else
 constexpr uint32_t MIN_MAX_ALLOC_FOR_COVER = 20 * 1024;
 #endif
@@ -593,7 +593,7 @@ void refreshCard(const std::string& bookPath, const float percentage) {
 #if CROSSINK_TAILNET_ORBIFY_EOB_COVER
       cover::addToFilter(filter);
 #endif
-      // Patch 0038: its nodes in PSRAM on the X4s, beside a fragmented internal heap (.167 parsed
+      // Keep JSON nodes in PSRAM on the X4s, beside a fragmented internal heap (.167 parsed
       // it at 21 KB free, 7 KB largest).
       JsonDocument doc(OrbifyHeap::jsonAllocator());
       size_t replyBytes = 0;
@@ -647,7 +647,7 @@ void fetchNextCover(const std::string& bookPath, bool (*stop)()) {
             home.c_str());
   } else if (step == cover::Step::Download || step == cover::Step::Conditional) {
     if (stop && stop()) return;
-    // On a connection already open (the sleep sync lends its own, patch 0037), only room beside it;
+    // On a connection already open (the sleep sync lends its own), only room beside it;
     // a new connection takes the Home store's floor.
     if (BookOrbitCatalogClient::keptConnection() != nullptr) {
       if (!OrbifyHeap::roomForRequest("Next cover")) return;
