@@ -13,6 +13,22 @@ CrossInk 2.x only; 1.6 is retired).
 | Withdraw broken releases through a signed Android feed and require reader opening flows before publication. | Android | building (W35 implementation requested) | [release safety](docs/design/release-safety.md) |
 | Caller-verified companion commands and one tested plugin–companion contract, with file operations confined to BookSync data. | Android | building (approved design; caller checks merged) | [security](docs/design/security.md), [contract](android/docs/INTERFACE.md) |
 
+## Next release (0.12): BookSync Home
+
+The release after 0.11.3 graduates from release candidates. Built in parallel on the
+`feature/0.12` branch while 0.11.3 stabilises on `main`; design and mockups need approval first
+([BookSync Home design](docs/design/booksync-home/DESIGN.md), in progress). This is the first step
+of [backend independence](#planned-backend-independence): BookSync owns the screens and BookOrbit
+becomes a data source.
+
+| Outcome | Platforms | Status |
+|---|---|---|
+| **BookSync Home** replaces the BookOrbit plugin's Home: every section rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android; X4 Pro, X4 after | designing |
+| **Tap to download** (Next 5) on Home, lists, series and detail. | Android; Xteink after | designing |
+| **Series view** (Next 6): every book in order, on device or server only, read state, download next. | Android; Xteink after | designing |
+| **Add-on mode and setup checklist** (Next 10, 10a). | Android | approved items carried over |
+| **Cleaner menus** (Later 8b) and **no visible app switches** (Later 9) where the new Home makes them small. | Android | stretch |
+
 ## Planned: backend independence
 
 BookSync's journey to backend independence: your reading works with the library server you
