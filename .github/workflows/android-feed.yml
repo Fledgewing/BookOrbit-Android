@@ -1,0 +1,36 @@
+name: Android release feed
+on:
+  workflow_dispatch:
+    inputs:
+      withdraw_tag:
+        description: "Android tag to withdraw permanently (empty: refresh feed)"
+        type: string
+        default: ""
+  workflow_call:
+    secrets:
+      RELEASE_SIGNING_KEY:
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: android-release-feed
+  cancel-in-progress: false
+jobs:
+  feed:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/releases
+            tools/feed-keys
+            shared
+      - name: Sign and atomically publish feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          WITHDRAW_TAG: ${{ inputs.withdraw_tag }}
+        run: python3 tools/releases/android-feed.py --withdraw "$WITHDRAW_TAG"

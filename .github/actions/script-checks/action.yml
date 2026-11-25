@@ -15,3 +15,4 @@ runs:
         bash tools/test/test-install-usb.sh </dev/null
         bash tools/test/test-sideload.sh </dev/null
         bash tools/test/test-feed-keys.sh </dev/null
+        python3 tools/releases/test_android_feed.py </dev/null

@@ -106,6 +106,30 @@ class ReleaseSignatureTest {
     }
 
     @Test
+    fun androidFeedAuthenticatesWithdrawalsAndReleaseSelectionTogether() {
+        val root = keyPair()
+        val rootHex = hex(raw(root))
+        val payload = """{"withdrawn":["v0.11.3-rc.11"],"releases":[{"tag_name":"v0.11.3-rc.11","prerelease":true},{"tag_name":"v0.11.3-rc.9","prerelease":true}]}"""
+        val sigs = signatures(root, keyPair(), 1, AndroidReleaseFeed.TAG, AndroidReleaseFeed.ASSET, sha(payload.toByteArray()))
+        fun envelope(body: String = payload, sig: String = sigs) = JSONObject()
+            .put("payload", body).put("signatures", sig).toString()
+        val feed = AndroidReleaseFeed.parse(envelope(), rootHex, 1)
+        assertEquals("v0.11.3-rc.9", UpdatePolicy.pick(feed.releases, true, feed.withdrawn)?.tag)
+        for ((body, signature, key, serial) in listOf(
+            listOf(payload.replace("v0.11.3-rc.11", "v0.11.3-rc.10"), sigs, rootHex, "1"),
+            listOf(payload.replace("rc.9", "rc.12"), sigs, rootHex, "1"),
+            listOf(payload, "", rootHex, "1"),
+            listOf(payload, sigs, hex(raw(keyPair())), "1"),
+            listOf(payload, sigs, rootHex, "2"),
+        )) {
+            try {
+                AndroidReleaseFeed.parse(envelope(body, signature), key, serial.toLong())
+                throw AssertionError("untrusted feed accepted")
+            } catch (_: IllegalArgumentException) { }
+        }
+    }
+
+    @Test
     fun pluginZipChecks() {
         val root = keyPair()
         val rootHex = hex(raw(root))

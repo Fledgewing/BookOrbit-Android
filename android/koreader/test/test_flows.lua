@@ -536,6 +536,7 @@ do
     function W.wall() ffi.C.gettimeofday(tv, nil); return tonumber(tv.tv_sec) + tonumber(tv.tv_usec) / 1e6 end
 end
 local passed, failed = 0, 0
+local executed = {}
 -- Each test gets TEST_LIMIT_S seconds (CPU or wall clock); past that it fails with a traceback
 -- instead of hanging the suite. The hook runs every 10000 VM instructions; LuaJIT skips hooks in
 -- compiled traces, so the JIT is off here (the suite is small; it runs in about a second).
@@ -556,6 +557,7 @@ local function withLimit(name, fn, limit)
 end
 local function test(name, fn)
     if os.getenv("ORBIT_TEST_ONLY") and not name:find(os.getenv("ORBIT_TEST_ONLY"), 1, true) then return end
+    executed[name] = true
     W.intent_window, W.intent_max = {}, 0
     local t0 = W.wall()
     local ok, err = withLimit(name, fn)
@@ -6945,8 +6947,101 @@ test("W32: selecting a book waits for its companion margin check before loading 
     ok(success, err)
 end)
 
+-- Home and History converge on the hooked showReader entry point. With the pinned
+-- checkout, History's selection and filemanagerutil.openFile are real upstream code.
+for _, origin in ipairs({ "Home", "history" }) do
+    test("startup: open from " .. origin .. " during Full refresh with margin repair pending", function()
+        local show, installed = ReaderUI.showReader, E.MarginRepair.installed
+        local send, problem, folder = E.Companion.send, E.Companion.workerProblem, E.OC._dir
+        local tmp = os.tmpname(); os.remove(tmp); sh("mkdir -p", tmp)
+        E.OC._dir = tmp
+        W.queue, W.shown = {}, {}
+        capsReset()
+        local home, module = newUI(false)
+        W.shown = { home }
+        local file = "/books/synthetic.epub"
+        W.files[file] = true
+        E.S.home_book = file
+        local reader, opened, quits = nil, 0, W.quits or 0
+        ReaderUI.showReader = function(_, selected)
+            eq(selected, file)
+            opened = opened + 1
+            local ui, m = osmBook(120, nil)
+            reader = ui
+            function ui.bookorbit:fetchRemoteProgress(_, cb)
+                UIManager:scheduleIn(0.125, function() cb(false) end)
+            end
+            local co = coroutine.create(function() m:onReaderReady(); UIManager:show(ui) end)
+            local resumed, err = coroutine.resume(co)
+            ok(resumed, err)
+            eq(coroutine.status(co), "dead", "ReaderUI construction must finish")
+        end
+        E.MarginRepair.installed = nil; E.MarginRepair.install()
+        E.Companion.workerProblem = function() return nil end
+        E.Companion.send = function(_, extras)
+            if extras.repair_book then
+                schedule(0.2, function()
+                    E.OC.writeFile(tmp .. "/repair-result.lua", E.Cache.encode({ token = extras.repair_token, result = "checked" }))
+                end)
+            end
+            return true
+        end
+        E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "full"
+        local success, err = pcall(function()
+            if origin == "Home" then
+                module:smartHome("resume", nil, "smart")
+                run(0.05)
+            else
+                local checkout = os.getenv("ORBIT_KOREADER_SOURCE")
+                if checkout then
+                    local function upstream(path, overrides)
+                        local chunk = assert(loadfile(checkout .. "/frontend/" .. path .. ".lua"))
+                        setfenv(chunk, setmetatable({ G_reader_settings = setmetatable({ isTrue = function() return false end }, { __index = G_reader_settings }), require = function(name)
+                            if overrides and overrides[name] then return overrides[name] end
+                            local success, result = pcall(require, name)
+                            return success and result or {}
+                        end }, { __index = _G }))
+                        return chunk()
+                    end
+                    local util = upstream("apps/filemanager/filemanagerutil")
+                    local history = upstream("apps/filemanager/filemanagerhistory", {
+                        ["apps/filemanager/filemanagerutil"] = util,
+                    })
+                    home.openFile = function(_, selected) ReaderUI:showReader(selected) end
+                    history.onMenuSelect({ ui = home, close_callback = function() end }, { file = file })
+                else
+                    ReaderUI:showReader(file)
+                end
+            end
+            eq(opened, 0, "repair must complete before settings load")
+            ok(E.MarginRepair.pending, "margin repair actually pending")
+            ok(E.Mirror.active and E.Mirror.busy, "Full refresh still running")
+            run(3)
+            eq(opened, 1, "selected book opened once")
+            eq(UIManager:getTopmostVisibleWidget(), reader, "ReaderUI shown")
+            eq(W.quits or 0, quits, "KOReader did not exit")
+            ok(not E.MarginRepair.pending, "repair finished")
+        end)
+        ReaderUI.showReader, E.MarginRepair.installed = show, installed
+        E.Companion.send, E.Companion.workerProblem, E.OC._dir = send, problem, folder
+        E.MarginRepair.pending, E.S.home_book = nil, nil
+        E.Mirror.active, E.Mirror.busy, E.Mirror.op = false, false, nil
+        sh("rm -rf", tmp)
+        ok(success, err)
+    end)
+end
+
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
 
+if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
+    for _, name in ipairs({
+        "startup smoke: last document remains the top reader through a yielding progress pull",
+        "startup: open from Home during Full refresh with margin repair pending",
+        "startup: open from history during Full refresh with margin repair pending",
+    }) do
+        assert(executed[name], "required reader flow did not run: " .. name)
+    end
+end
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

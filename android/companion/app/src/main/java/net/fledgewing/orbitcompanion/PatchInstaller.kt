@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import org.json.JSONObject
 import java.io.File
 import kotlin.concurrent.thread
 
@@ -261,19 +260,6 @@ object PatchInstaller {
         Updater.status(ctx, UpdateFlow.doneLine(want))
     }
 
-    /** This version's release: tagged v<v> (android-v<v> is read too, AGENTS.md "Releases"). */
-    private fun releaseText(v: String): String {
-        var last: Exception? = null
-        for (tag in ReleaseTags.forVersion(v)) {
-            try {
-                return Updater.httpText("${Updater.API}/releases/tags/$tag")
-            } catch (e: java.io.IOException) {
-                last = e
-            }
-        }
-        throw last ?: java.io.IOException("no release for v$v")
-    }
-
     /** Unpacks [zip] into [to] (emptied first); null when done, else the status text. */
     private fun unpack(zip: File, to: File): String? {
         to.deleteRecursively()
@@ -310,7 +296,12 @@ object PatchInstaller {
         if (TestBuild.isTest(v)) return "test build v$v: install its plugin with tools/sideload-android.sh; not installed"
         val dev = Version.parse(v) == null || v.contains("dev")
         log("fetching ${if (dev) "the latest release" else "release v$v"}")
-        val rel = Updater.release(JSONObject(if (dev) Updater.httpText("${Updater.API}/releases/latest") else releaseText(v)))
+        val feed = AndroidReleaseFeed.parse(Updater.httpText(AndroidReleaseFeed.URL),
+            BuildConfig.RELEASE_ROOT_KEY, BuildConfig.RELEASE_MIN_SERIAL)
+        if (Version.parse(v) in feed.withdrawn) return "this release is withdrawn; update BookSync Companion first"
+        val rel = if (dev) UpdatePolicy.pick(feed.releases, false, feed.withdrawn)
+            else feed.releases.firstOrNull { it.version == Version.parse(v) && it.version !in feed.withdrawn }
+        if (rel == null) return "no allowed BookSync plugin release found"
         val zipUrl = rel.assets[PatchFile.ZIP] ?: return "${rel.tag} has no BookSync plugin archive"
         val sumsUrl = rel.assets[UpdatePolicy.SUMS_NAME] ?: return "${rel.tag} has no ${UpdatePolicy.SUMS_NAME}"
         val expected = Checksums.parse(Updater.httpText(sumsUrl))[PatchFile.ZIP]
