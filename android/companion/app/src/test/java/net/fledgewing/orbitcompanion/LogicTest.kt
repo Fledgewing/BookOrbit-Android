@@ -206,6 +206,7 @@ class UpdatePolicyTest {
 
     /** shared/fixtures/github/orbify-releases.json: Android and firmware releases in one list. */
     private fun fixture(): List<ReleaseInfo> {
+        // @fixture github/orbify-releases.json
         val arr = org.json.JSONArray(java.io.File("../../../shared/fixtures/github/orbify-releases.json").readText())
         return (0 until arr.length()).map { ReleaseInfo.from(arr.getJSONObject(it)) }
     }

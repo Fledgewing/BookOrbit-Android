@@ -29,6 +29,7 @@ std::string keyOf(JsonObjectConst k) {
 }
 
 void keys(JsonObjectConst all) {
+  // @fixture cache/cases.json#keys
   for (JsonObjectConst c : all["keys"].as<JsonArrayConst>()) {
     const bool same = keyOf(c["a"]) == keyOf(c["b"]);
     CHECK_NAMED(c["name"].as<const char*>(), same == c["same"].as<bool>());
@@ -40,6 +41,7 @@ void keys(JsonObjectConst all) {
   CHECK(keyForUrl("reader", "GET", "https://books.example:8443/base/plugin/catalog/dashboard") !=
         keyForUrl("reader", "GET", "https://books.example/base/plugin/catalog/dashboard"));
   CHECK(keyHash("a") != keyHash("b"));
+  // @fixture cache/cases.json#cacheable
   for (JsonObjectConst c : all["cacheable"].as<JsonArrayConst>()) {
     const std::string name = c["method"].as<std::string>() + " " + c["path"].as<std::string>();
     CHECK_NAMED(name.c_str(), isCacheable(c["method"], c["path"]) == c["cached"].as<bool>());
@@ -54,6 +56,7 @@ Mode modeOf(const char* m) {
 }
 
 void reads(JsonObjectConst all) {
+  // @fixture cache/cases.json#reads
   for (JsonObjectConst c : all["reads"].as<JsonArrayConst>()) {
     const bool has = !c["entry"].isNull();
     // A write marks an entry stale by clearing its stamp (IndexEntry::validatedAt 0 = due).
@@ -72,6 +75,7 @@ void reads(JsonObjectConst all) {
   }
   CHECK(readStep(planRead(false, 0, 5000, Mode::Open, false)) == ReadStep::Request);
   CHECK(readStep(planRead(true, 4990, 5000, Mode::Open, false)) == ReadStep::Saved);
+  // @fixture cache/cases.json#revalidate
   for (JsonObjectConst c : all["revalidate"].as<JsonArrayConst>()) {
     const Revalidated r = revalidate(c["status"], true, canonicalHash(c["cached"]), canonicalHash(c["reply"]));
     CHECK_NAMED(c["name"].as<const char*>(),
@@ -90,6 +94,7 @@ void reads(JsonObjectConst all) {
 }
 
 void writes(JsonObjectConst all) {
+  // @fixture cache/cases.json#writes
   for (JsonObjectConst c : all["writes"].as<JsonArrayConst>()) {
     const char* name = c["name"];
     JsonObjectConst w = c["write"];
@@ -116,6 +121,7 @@ void writes(JsonObjectConst all) {
 // The shared cover cases, played against a simulated server: a conditional request is answered 304
 // when the ETag on the card is the server's, else 200 with the server's ETag.
 void covers(JsonObjectConst all) {
+  // @fixture cache/cases.json#covers
   for (JsonObjectConst c : all["covers"].as<JsonArrayConst>()) {
     const std::string name = c["name"].as<std::string>();
     const Mode mode = modeOf(c["mode"]);
@@ -175,6 +181,7 @@ void covers(JsonObjectConst all) {
 // The overlay stays on top of a Full refresh: the server's entry is stored as sent, and the
 // unsent local finish still takes the book out of Continue reading.
 void fullRefreshOverlay(JsonObjectConst all) {
+  // @fixture cache/cases.json#full_refresh_overlay
   for (JsonObjectConst c : all["full_refresh_overlay"].as<JsonArrayConst>()) {
     const char* name = c["name"];
     JsonDocument entry;
