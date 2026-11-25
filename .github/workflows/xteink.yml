@@ -456,7 +456,7 @@ jobs:
   # against what the run should have produced and publishes them. The only job with id-token.
   publish:
     needs: [resolve, build, e2e]
-    if: ${{ always() && needs.resolve.outputs.publish == 'true' && !inputs.test_build && needs.build.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.resolve.outputs.publish == 'true' && !inputs.test_build && needs.build.result == 'success' && (needs.e2e.result == 'success' || (needs.e2e.result == 'skipped' && needs.resolve.outputs.firmware_release_tests == 'false')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

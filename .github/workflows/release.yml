@@ -131,7 +131,7 @@ jobs:
   # Unsigned build: no secrets and a read-only token while Gradle and its dependencies run.
   build:
     needs: [plan, tests]
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.android_build == 'true' && (needs.tests.result == 'success' || needs.tests.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.android_build == 'true' && (needs.tests.result == 'success' || (needs.tests.result == 'skipped' && needs.plan.outputs.android_release_tests == 'false')) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -203,7 +203,7 @@ jobs:
 
   firmware:
     needs: [plan, sign, feed]
-    if: ${{ always() && needs.plan.result == 'success' && ((needs.sign.result == 'success' && needs.feed.result == 'success') || needs.plan.outputs.android_build == 'false') && (github.event_name != 'workflow_dispatch' || inputs.publish) }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && ((needs.sign.result == 'success' && needs.feed.result == 'success') || needs.plan.outputs.android_build == 'false') && (github.event_name != 'workflow_dispatch' || inputs.publish) }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -229,7 +229,7 @@ jobs:
   # signs the APK, checks the signing certificate and publishes.
   sign:
     needs: build
-    if: ${{ always() && needs.build.result == 'success' }}
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -379,7 +379,7 @@ jobs:
 
   feed:
     needs: sign
-    if: ${{ always() && needs.sign.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.publish) }}
+    if: ${{ !cancelled() && needs.sign.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.publish) }}
     uses: ./.github/workflows/android-feed.yml
     permissions:
       contents: write
