@@ -147,6 +147,11 @@ int main(int argc, char** argv) {
                        "0.12.0-preview.1+crossink.2.0.0.bookorbit.1-rc3",
                        "0.12.0-rc.1+crossink.2.0.0.bookorbit.1-rc3",
                        "0.12.0+crossink.2.0.0.bookorbit.1-rc3"};
+  // Before the bridge is installed, the old comparator must select it over both
+  // the installed 2.x/1.6 lines and every lower-numbered unified release.
+  CHECK(firmware_version::compare(tags[1], tags[0]) > 0);
+  CHECK(firmware_version::compare(tags[1], "1.6.1.114+bookorbit.9") > 0);
+  for (int i = 2; i < 5; ++i) CHECK(firmware_version::compare(tags[1], tags[i]) > 0);
   for (const char* device : {"firmware-x4-pro", "firmware-x4-classic", "firmware-x3-x4"}) {
     std::string releases = "[";
     for (int i = 0; i < 5; ++i) {
