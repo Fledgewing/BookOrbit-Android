@@ -274,11 +274,25 @@ static void progress() {
   // A version 2 plan (before the % was kept) still resumes, from its own done / total.
   Plan old;
   CHECK(old.parse("orbify-mirror 2\n1\nR\t\nB\tsort=title\n"));
-  CHECK(old.percent() == 0 && old.failures() == 0);
+  CHECK(old.percent() == 50 && old.failures() == 0);
   CHECK(!old.parse("orbify-mirror 3\n1\nR\t\n"));            // version 3 needs the % and failures
   CHECK(!old.parse("orbify-mirror 3\n1\t101\t0\nR\t\n"));   // no % over 100
   CHECK(!old.parse("orbify-mirror 3\n1\t10\t2\nR\t\n"));    // more failures than requests
   CHECK(old.parse("orbify-mirror 3\n1\t70\t1\nR\t\nB\tsort=title\n") && old.percent() == 70);
+  // Resume a pre-v4 walk that already fetched data before discovering every section.
+  CHECK(old.parse("orbify-mirror 3\n2\t60\t0\nR\t\nB\told\nD\t42\nS\tauthors\n"));
+  CHECK(old.next()->kind == Kind::Section && old.percent() == 60);
+  CHECK(old.add(Kind::Books, "new-author"));
+  old.advance();
+  CHECK(old.percent() == 60 && !old.add(Kind::Books, "too-late"));
+  const size_t migratedTotal = old.total();
+  Plan migrated;
+  CHECK(migrated.parse(old.serialize()) && migrated.percent() == 60);
+  while (!migrated.finished()) {
+    migrated.advance();
+    CHECK(migrated.percent() >= 60 && migrated.total() == migratedTotal);
+  }
+  CHECK(migrated.percent() == 100);
 }
 
 static void badge() {

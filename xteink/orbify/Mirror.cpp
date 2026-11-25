@@ -91,9 +91,7 @@ State loadState() {
 
 bool loadPlan(Plan& plan) {
   if (!Storage.exists(PLAN_PATH) && Storage.exists(PLAN_TMP)) Storage.rename(PLAN_TMP, PLAN_PATH);
-  const std::string text = readText(PLAN_PATH);
-  // Older walks interleaved discovery and data. Restart them once under the fixed-total rule.
-  return text.find("orbify-mirror 4\n") == 0 && plan.parse(text);
+  return plan.parse(readText(PLAN_PATH));
 }
 
 void savePlan(const Plan& plan) {

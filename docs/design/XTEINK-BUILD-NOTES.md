@@ -413,8 +413,8 @@ zero switches. No position sync, OTA verifier or TLS implementation changes.
 - **Discovery, then a fixed data total.** Root and facet enumeration is a first pass at 0%.
   Sections are queued ahead of data requests. Once the first data request finishes, `Plan::add`
   rejects additions, including after serialization. Book-detail requests deduplicate by book ID
-  across every source. A v4 plan retains the progress and failures; unfinished older plans start
-  over under this rule. The request budget and first-page scope stay unchanged.
+  across every source. A v4 plan retains the progress and failures. Older plans move pending
+  discovery ahead of remaining data and keep their highest displayed percentage during migration. The request budget and first-page scope stay unchanged.
 - **Protocol/storage limit on book-count parity:** Xteink stores whole JSON replies, rather
   than Android's normalized SQLite books and list membership. A book may appear in multiple
   cached list replies, though its detail is fetched only once. First-page list totals overlap
