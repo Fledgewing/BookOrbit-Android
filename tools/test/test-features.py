@@ -67,6 +67,8 @@ class FeatureMatrixTest(unittest.TestCase):
 
     def test_markdown_is_same_data(self):
         self.assertEqual((ROOT / "docs/FEATURES.md").read_text(), renderer.render(self.data))
+        readme = (ROOT / "README.md").read_text()
+        self.assertEqual(readme, renderer.render_readme(self.data, readme))
 
 
 if __name__ == "__main__":

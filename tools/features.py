@@ -17,6 +17,24 @@ def citations(items):
     )
 
 
+def support_counts(data):
+    rows = ["| Platform | ✅ | 🟡 | ❌ | ➖ |", "|---|---:|---:|---:|---:|"]
+    for p, meta in data["platforms"].items():
+        counts = Counter(f["platforms"][p]["status"] for f in data["features"])
+        rows.append("| " + meta["label"] + " | " + " | ".join(str(counts[s]) for s in SYMBOLS) + " |")
+    return rows
+
+
+def render_readme(data, readme):
+    start = "<!-- feature-counts:start -->"
+    end = "<!-- feature-counts:end -->"
+    before, rest = readme.split(start)
+    _, after = rest.split(end)
+    summary = ["", "Generated support counts (settings included): ✅ supported, 🟡 partial, ❌ missing, ➖ not applicable.",
+               "", *support_counts(data), ""]
+    return before + start + "\n".join(summary) + end + after
+
+
 def render(data):
     platforms = data["platforms"]
     out = ["# Orbify feature support matrix", "",
@@ -33,10 +51,7 @@ def render(data):
     for change in data.get("post_baseline_changes", []):
         out.append(f"- {change['note']} {citations(change['evidence'])}")
     out += ["", "## Counts", "", "Counts include settings exposure as separate rows; they are not feature quality scores.", "",
-            "| Platform | ✅ | 🟡 | ❌ | ➖ |", "|---|---:|---:|---:|---:|"]
-    for p, meta in platforms.items():
-        counts = Counter(f["platforms"][p]["status"] for f in data["features"])
-        out.append("| " + meta["label"] + " | " + " | ".join(str(counts[s]) for s in SYMBOLS) + " |")
+            *support_counts(data)]
     for category in dict.fromkeys(f["category"] for f in data["features"]):
         out += ["", "## " + category, ""]
         if category == "Settings exposure":
@@ -101,13 +116,16 @@ def main():
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     data = json.loads((ROOT / "shared/features.json").read_text())
-    output = render(data)
-    path = ROOT / "docs/FEATURES.md"
-    if args.check:
-        if path.read_text() != output:
-            raise SystemExit("docs/FEATURES.md is stale; run python3 tools/features.py")
-    else:
-        path.write_text(output)
+    outputs = {
+        ROOT / "docs/FEATURES.md": render(data),
+        ROOT / "README.md": render_readme(data, (ROOT / "README.md").read_text()),
+    }
+    for path, output in outputs.items():
+        if args.check:
+            if path.read_text() != output:
+                raise SystemExit(f"{path.name} is stale; run python3 tools/features.py")
+        else:
+            path.write_text(output)
 
 
 if __name__ == "__main__":

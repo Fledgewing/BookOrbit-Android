@@ -65,12 +65,19 @@ commit when a design or `docs/server-contract.md` relies on upstream behaviour; 
 
 ## Features and roadmap
 
+- Plan every feature across Android, X4 Pro, X4 and X3. The platform reference is
+  `shared/features.json`, rendered as `docs/FEATURES.md`. Every PR that adds or changes a
+  user-facing feature or setting updates all four platform cells, with a reason for every
+  partial, missing or not-applicable cell. Put "why not on this device" and maintainer rulings
+  in the cell's `reason`; put later ideas in `deferred` (and `ROADMAP.md`). Regenerate with
+  `python3 tools/features.py`; check with `python3 tools/test/test-features.py`.
 - Every new feature request goes into `ROADMAP.md` first, as a one-line outcome with its
   platforms and status (idea, designing, approved, building, shipped).
 - Its design doc (`docs/design/`) and mockups need the user's approval before the item moves to
   building.
 - `docs/FEATURES.md` lists what is shipped. When an item ships, move it from `ROADMAP.md` into
-  `docs/FEATURES.md` in the same change, so the two never disagree.
+  `shared/features.json` and regenerate `docs/FEATURES.md` in the same change, so the two never
+  disagree.
 - Both list only what **we** add, never features of KOReader, BookOrbit or CrossInk themselves.
   Where a feature only makes up for an upstream behaviour, give that behaviour one line, linked to
   its section in `docs/server-contract.md`.
