@@ -479,6 +479,14 @@
       "readers": [
         "py"
       ]
+    },
+    {
+      "file": "release-signing/xteink-feed.json",
+      "rule": "Signed firmware feed parsed by the OTA updater",
+      "owner": "release verifiers",
+      "readers": [
+        "cpp"
+      ]
     }
   ]
 }
