@@ -204,6 +204,9 @@ def partial_refresh_keeps_saved_pages(ctx: Context, tmp: Path) -> None:
     ctx.sim.run(card, "seed", script=f"3000:TAP:{sx},{sy}", timeout_s=30)
     library = ctx.sim.run(card, "library", script="3000:SWIPE:0.8,0.5,0.2,0.5,250;5000:QUIT", timeout_s=9)
     cx, cy = home_tile(library.output, "catalog")
+    # Save an actual browse page before the new atomic bulk run is interrupted.
+    # Home's snapshot alone is not a previously published catalog generation.
+    ctx.sim.run(card,"saved-before-partial",script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};6000:DOWN:100;6500:CONFIRM:100;12000:QUIT",timeout_s=18)
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
     (folder / "mirror.request").write_text("1\n")
@@ -231,7 +234,7 @@ def full_refresh_while_reading(ctx: Context, tmp: Path) -> None:
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
     (folder / "mirror.request").write_text("1\n")
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 5}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 150}])
     run = ctx.sim.run(card, "reading", script="3000:RIGHT:100;5000:RIGHT:100;90000:QUIT", timeout_s=105, wake=True)
     reader = after(run.output, "Entering activity: EpubReader")
     after(reader, "Full refresh: Done")

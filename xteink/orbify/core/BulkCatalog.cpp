@@ -193,13 +193,18 @@ bool Catalog::metadata() {
   }
   for(const char* entry:{"/root","/dashboard","/dashboard/discover","/dashboard/sections/want-to-read","/dashboard/sections/up-next-in-series"}) {
     const auto path=root()+"entries/"+encode(entry);if(fs.exists(path))continue;
-    JsonDocument doc(arena);if(!ask(BASE+entry,doc)||!save(path,doc.as<JsonVariantConst>()))return false;
+    JsonDocument doc(arena);if(!ask(BASE+entry,doc))return false;
+    if(!manualRun&&!previous.empty()) {
+      JsonDocument prior(arena);
+      if(load(root(previous)+"entries/"+encode(entry),prior)&&!prior["discover"].isNull())doc["discover"].set(prior["discover"]);
+    }
+    if(!save(path,doc.as<JsonVariantConst>()))return false;
   }
   return true;
 }
 bool Catalog::members(const std::string& key,int64_t id) {
   Ids values{IndexAllocator<int64_t>(arena)};const auto path=root()+"members/"+encode(key);
-  readIds(path,values);
+  if(fs.exists(path)&&!readIds(path,values)){error="SD read error";return false;}
   // Membership append is idempotent across interrupted page replay.
   auto at=std::lower_bound(values.begin(),values.end(),id);
   if(at==values.end()||*at!=id) {
@@ -369,15 +374,15 @@ bool Catalog::seriesNames() {
   return true;
 }
 bool Catalog::refresh(const std::string& owner,const Fetch& transport,const std::function<bool()>& cancel,
-                      const std::function<void(unsigned)>& notify,bool fresh) {
-  fetch=transport;cancelled=cancel;progress=notify;identity=owner;stats={};error.clear();shown=0;
+                      const std::function<void(unsigned)>& notify,bool fresh,bool manual) {
+  fetch=transport;cancelled=cancel;progress=notify;identity=owner;manualRun=manual;stats={};error.clear();shown=0;
   std::string stageOwner;fs.read("bulk/active",previous);fs.read("bulk/stage-owner",stageOwner);
   if(!fresh&&stageOwner==owner&&fs.read("bulk/stage",generation)) {
     fs.read("bulk/stage-previous",previous);
     std::string p;if(fs.read(root()+"percent",p))shown=strtoul(p.c_str(),nullptr,10);
   } else {
     generation=previous=="a"?"b":"a";
-    if(!fs.erase(root())||!fs.write("bulk/stage",generation)||!fs.write("bulk/stage-owner",owner)||!fs.write("bulk/stage-previous",previous))return false;
+    if(!fs.erase(root())||!fs.write("bulk/stage",generation)||!fs.write("bulk/stage-owner",owner)||!fs.write("bulk/stage-previous",previous)||!fs.write(root()+"at",std::to_string(fs.now())))return false;
   }
   auto run=[&] {
     if(!manifest())return false;tick(15);

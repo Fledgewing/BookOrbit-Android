@@ -18,6 +18,7 @@ struct Files {
   virtual bool erase(const std::string& path) = 0;
   virtual bool exists(const std::string& path) = 0;
   virtual bool room(size_t) { return true; }
+  virtual uint32_t now() const { return 0; }
   virtual bool readJson(const std::string& path, JsonDocument& out) {
     std::string body; return read(path,body) && !deserializeJson(out,body);
   }
@@ -59,7 +60,7 @@ class Catalog {
   // resumed only with this exact identity. The published pointer moves last.
   bool refresh(const std::string& identity, const Fetch& fetch,
                const std::function<bool()>& cancelled,
-               const std::function<void(unsigned)>& progress, bool fresh = false);
+               const std::function<void(unsigned)>& progress, bool fresh = false, bool manual = true);
   // False means outside the finite offline inventory or no complete generation.
   bool reply(const std::string& path, JsonDocument& out);
   static bool recognizes(const std::string& path);
@@ -75,6 +76,7 @@ class Catalog {
   std::function<bool()> cancelled;
   std::function<void(unsigned)> progress;
   unsigned shown = 0;
+  bool manualRun = true;
   Ids ids;
   bool ask(const std::string& path, JsonDocument& out);
   bool save(const std::string& path, JsonVariantConst value);

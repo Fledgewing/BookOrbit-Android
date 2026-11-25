@@ -43,6 +43,7 @@ class ScopedMode {
 orbify::cache::Mode currentMode();
 
 struct Lookup {
+  std::string bulkGeneration;
   bool bulk = false;  // derived window projected directly into the caller's JSON filter
   bool cacheable = false;
   bool hasEntry = false;

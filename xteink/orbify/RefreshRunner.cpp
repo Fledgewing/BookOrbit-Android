@@ -98,7 +98,7 @@ void runTask() {
     const bool ok = OrbifyBulk::refresh(reset,&stop,[](unsigned p) {
       std::lock_guard<std::mutex> lock(stateMutex);
       state.active = !quiet.load(); state.percent = std::max(state.percent,p); state.paused = false;
-    });
+    }, !quiet.load());
     if(ok) {
       if (!quiet.load()) {
       const auto now=time(nullptr);

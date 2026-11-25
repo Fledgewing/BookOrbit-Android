@@ -402,6 +402,7 @@ Lookup lookup(const std::string& url) {
     return l;
   }
   l.cacheable = true;
+  l.bulkGeneration = OrbifyBulk::generation();
   const std::string key = keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", url);
   l.hash = keyHash(key);
   l.path = entryPath(l.hash);
@@ -410,7 +411,7 @@ Lookup lookup(const std::string& url) {
   const IndexEntry* e = loadEntry(l.hash, entry) ? &entry : nullptr;
   l.hasEntry = e != nullptr && Storage.exists(l.path.c_str());
   if (l.hasEntry && !OrbifyBulk::detailCurrent(url,l.path)) l.hasEntry = false;
-  if (modeForTask() == Mode::Open && OrbifyBulk::available(url,l.hasEntry)) {
+  if (modeForTask() == Mode::Open && !(l.hasEntry&&OrbifyBulk::wasObserved(url,l.bulkGeneration)) && OrbifyBulk::available(url,l.hasEntry)) {
     l.bulk = true; l.hasEntry = true; l.serve = true; l.fetch = false; l.cacheable = false;
     return l;
   }
@@ -476,6 +477,7 @@ bool storeReply(const Lookup& l, const std::string& url, const char* tmpPath) {
   }
   sdBytes = sdBytes - std::min<uint64_t>(sdBytes, oldBytes) + bytes;
   saveUsage();
+  if(modeForTask()!=Mode::Full)OrbifyBulk::noteObserved(url,l.bulkGeneration);
 #ifdef SIMULATOR
   ++repliesSinceClear;
 #endif
@@ -562,6 +564,9 @@ Freshness freshness(const std::string& url) {
   IndexEntry entry;
   const IndexEntry* e =
       loadEntry(keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", url)), entry) ? &entry : nullptr;
+  if(OrbifyBulk::available(url,false)&&!(e&&OrbifyBulk::wasObserved(url,OrbifyBulk::generation()))) {
+    f.saved=true;f.validatedAt=OrbifyBulk::savedAt();return f;
+  }
   if (!e) return f;
   f.saved = true;
   f.validatedAt = e->validatedAt ? e->validatedAt : e->fetchedAt;

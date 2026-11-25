@@ -194,5 +194,13 @@ int main(int argc, char** argv) {
   },[]{return false;},[](unsigned){}));
   JsonDocument deleted;CHECK(catalog.reply("/plugin/catalog/books?sort=title&size=100",deleted));CHECK(deleted["items"].size()==7);
   CHECK(!catalog.reply("/plugin/catalog/books/8",deleted));
+  auto discover=[&](int64_t id) {return [&,id](const std::string& path,JsonDocument& out){
+    const bool ok=fetch(path,out);if(path.find("/dashboard")!=std::string::npos)out["discover"][0]["id"]=id;return ok;
+  };};
+  CHECK(catalog.refresh("account-device-variant",discover(1),[]{return false;},[](unsigned){},false,true));
+  CHECK(catalog.refresh("account-device-variant",discover(2),[]{return false;},[](unsigned){},false,false));
+  JsonDocument pick;CHECK(catalog.reply("/plugin/catalog/dashboard",pick));CHECK(pick["discover"][0]["id"]==1);
+  CHECK(catalog.refresh("account-device-variant",discover(3),[]{return false;},[](unsigned){},false,true));
+  CHECK(catalog.reply("/plugin/catalog/dashboard",pick));CHECK(pick["discover"][0]["id"]==3);
   return report("bulk-refresh");
 }

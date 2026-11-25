@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdio>
+#include <ctime>
 #include <mutex>
 #include "BookOrbitCredentialStore.h"
 #include "BookOrbitSyncClient.h"
@@ -58,6 +59,7 @@ std::string owner() {
 }
 class SdFiles final:public orbify::bulk::Files {
  public:
+  uint32_t now() const override {const auto t=std::time(nullptr);return t>1700000000?static_cast<uint32_t>(t):0;}
   bool room(size_t n) override {
     return heap_caps_get_free_size(MALLOC_CAP_SPIRAM)>n+1024*1024 &&
       heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM)>n+16*1024;
@@ -146,8 +148,14 @@ uint64_t bytes(){
   return diskBytes.load();
 }
 bool active(){std::string saved;return files.exists("bulk/active")&&files.read("bulk/owner",saved)&&saved==owner();}
+std::string generation(){std::string g;if(active())files.read("bulk/active",g);return g;}
+uint32_t savedAt(){const auto g=generation();std::string at;return !g.empty()&&files.read("bulk/"+g+"/at",at)?strtoul(at.c_str(),nullptr,10):0;}
+bool wasObserved(const std::string& url,const std::string& g){return !g.empty()&&files.exists("bulk/"+g+"/observed/"+std::to_string(orbify::cache::keyHash(url)));}
+void noteObserved(const std::string& url,const std::string& g){
+  if(!g.empty()&&g==generation())files.write("bulk/"+g+"/observed/"+std::to_string(orbify::cache::keyHash(url)),"1");
+}
 bool networkFetch(){return fetching.load()==xTaskGetCurrentTaskHandle();}
-bool refresh(bool fresh,bool (*cancelled)(),const std::function<void(unsigned)>& progress) {
+bool refresh(bool fresh,bool (*cancelled)(),const std::function<void(unsigned)>& progress,bool manual) {
 #ifdef SIMULATOR
   writesSinceClear=0;
 #endif
@@ -157,7 +165,7 @@ bool refresh(bool fresh,bool (*cancelled)(),const std::function<void(unsigned)>&
     fetching.store(xTaskGetCurrentTaskHandle());
     const bool result=BookOrbitCatalogClient::fetchBulk(path+(path.find("/manifest?")!=std::string::npos?"&deviceId="+orbify::bulk::encode(BookOrbitSyncClient::deviceId()):""),out);
     fetching.store(nullptr);return result;
-  },[&]{return cancelled()||heap_caps_get_free_size(MALLOC_CAP_SPIRAM)<1024*1024;},progress,fresh);
+  },[&]{return cancelled()||heap_caps_get_free_size(MALLOC_CAP_SPIRAM)<1024*1024;},progress,fresh,manual);
   LOG_INF("ORB","Bulk catalog: ok=%d requests=%llu secondaryRequests=%llu bytes=%llu elapsedMs=%lu rows=%llu psramPeakBytes=%u bytesOnSD=%llu result=%s",ok,
     static_cast<unsigned long long>(catalog.stats.requests),static_cast<unsigned long long>(catalog.stats.seriesRequests),
     static_cast<unsigned long long>(catalog.stats.bytes),millis()-start,static_cast<unsigned long long>(catalog.stats.rows),
