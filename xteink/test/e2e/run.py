@@ -120,7 +120,7 @@ def sync_through_proxy(ctx: Context, tmp: Path) -> None:
 
 @scenario(*X4S)
 def mirror_urls(ctx: Context, tmp: Path) -> None:
-    """W9: a persisted request runs on Home, saves all pages and every detail."""
+    """W30: a persisted request runs on Home; complete base lists, lazy details/covers."""
     card = ctx.card(tmp)
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
@@ -132,16 +132,21 @@ def mirror_urls(ctx: Context, tmp: Path) -> None:
     lists = ctx.requests("/plugin/catalog/books")
     bad = [e for e in lists if e["status"] != 200 or any(re.search(r"\s\w+=", str(v)) for v in e["query"].values())]
     assert not bad, f"server refused catalog requests: {bad[:3]}"
-    assert any(int(e["query"].get("page", ["1"])[0]) >= 3 for e in lists), "no last library page"
+    assert ctx.requests("/plugin/catalog/manifest"), "no bulk manifest"
+    assert all(e["query"].get("size") == "100" for e in lists if e["path"].endswith("/books"))
     details = [e for e in lists if re.search(r"/books/\d+$", e["path"])]
-    assert len(details) >= len(ctx.manifest["books"]), "not every book detail was saved"
+    assert not details, "Full refresh fetched eager details"
+    bulk = card.crosspoint / "orbify-catalog" / "bulk"
+    generation = (bulk / "active").read_text()
+    assert (bulk / generation / "complete").exists()
+    assert len(list((bulk / generation / "books").rglob("*.json"))) == len(ctx.manifest["books"])
     assert "open catalog to resume" not in run.output
 
 
 
 @scenario("x4-pro")
 def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
-    """Full refresh on Home; SD-only facet page 2, book page 3 and saved book details."""
+    """Full refresh on Home; SD-only facet page 2, book page 3 and lazy file information."""
     import shutil
     card = ctx.card(tmp)
     cx, cy, _, _ = open_catalog(ctx, card)
@@ -159,7 +164,9 @@ def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
     after(full.output, "Full refresh: Done")
     saved = []
     by_id = {b["id"]: b for b in ctx.manifest["books"]}
-    for file in (card.crosspoint / "bookorbit-cache").rglob("*.json"):
+    bulk = card.crosspoint / "orbify-catalog" / "bulk"
+    generation = (bulk / "active").read_text()
+    for file in (bulk / generation / "books").rglob("*.json"):
         body = json.loads(file.read_text())
         if not isinstance(body, dict) or body.get("id") not in by_id:
             continue
@@ -172,7 +179,7 @@ def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
             shutil.copy2(kit.STATE / "library" / by_id[body["id"]]["file"], dest)
             saved.append((body["id"], "/" + target))
             break
-    assert len(saved) == len(by_id), "a Full refresh left book details unsaved"
+    assert len(saved) == len(by_id), "a Full refresh left manifest files unsaved"
     card.download_index(saved)
     before = len(ctx.requests())
     ctx.faults("offline")

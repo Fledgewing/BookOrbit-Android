@@ -16,6 +16,7 @@
 
 #include "BookOrbitDownloadIndex.h"
 #include "CacheStore.h"
+#include "BulkCatalog.h"
 #include "CopyRefresh.h"
 #include "FinishSync.h"
 #include "HeapFloor.h"
@@ -132,6 +133,7 @@ bool runView(const orbify::mirror::Step& step, int pageNumber) {
 namespace OrbifyMirror {
 
 void refreshChanged(bool (*cancelled)()) {
+  if (OrbifyBulk::active()) { requestIncremental(); return; }
   if (requested() || WiFi.status() != WL_CONNECTED || (cancelled && cancelled()) ||
       !OrbifyHeap::roomForRequest("Catalog incremental"))
     return;

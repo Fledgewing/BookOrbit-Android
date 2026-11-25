@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "CacheStore.h"
+#include "BulkCatalog.h"
 
 #if CROSSINK_TAILNET_ORBIFY_CACHE
 #include <Arduino.h>
@@ -229,6 +230,7 @@ void eachEntry(Visit visit) {
   entriesIn(DIR, visit, true);
 }
 uint64_t directoryBytes(const char* directory) {
+  if(!Storage.exists(directory))return 0;
   uint64_t bytes = 0;
   HalFile dir = Storage.open(directory);
   while (HalFile file = dir.openNextFile())
@@ -264,7 +266,7 @@ void measureUsage() {
   saveUsage();
 }
 uint64_t extraBytes() {
-  return planBytes + directoryBytes("/.crosspoint/bookorbit_home") +
+  return planBytes + OrbifyBulk::bytes() + directoryBytes("/.crosspoint/bookorbit_home") +
          directoryBytes("/.crosspoint/orbify_sleep");
 }
 uint64_t freeBytes() {
@@ -394,6 +396,7 @@ Mode currentMode() {
 Lookup lookup(const std::string& url) {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
   Lookup l;
+  if (OrbifyBulk::networkFetch()) { l.fetch = true; return l; }
   if (!BOOKORBIT_STORE.hasCredentials() || !isCacheable("GET", pathOf(url))) {
     l.fetch = true;
     return l;
@@ -406,6 +409,11 @@ Lookup lookup(const std::string& url) {
   IndexEntry entry;
   const IndexEntry* e = loadEntry(l.hash, entry) ? &entry : nullptr;
   l.hasEntry = e != nullptr && Storage.exists(l.path.c_str());
+  if (l.hasEntry && !OrbifyBulk::detailCurrent(url,l.path)) l.hasEntry = false;
+  if (modeForTask() == Mode::Open && OrbifyBulk::available(url,l.hasEntry)) {
+    l.bulk = true; l.hasEntry = true; l.serve = true; l.fetch = false; l.cacheable = false;
+    return l;
+  }
   const bool offline = WiFi.status() != WL_CONNECTED;
   const uint32_t now = nowSeconds();
   const ReadPlan plan = planRead(l.hasEntry, l.hasEntry ? e->validatedAt : 0, now, modeForTask(), offline);
@@ -505,6 +513,7 @@ void afterWrite(const char* method, const std::string& url, const char* body, co
       }
     }
   }
+  if (effect.bookId > 0) OrbifyBulk::patch(effect.bookId,effect.fields.as<JsonObjectConst>());
   unsigned patched = 0;
   const auto patch = [&](IndexEntry& e) {
     // A write visits only replies which list this book. Hold the cache mutex for
@@ -649,6 +658,7 @@ orbify::mirror::Stop storageStop() {
   std::lock_guard<std::recursive_mutex> guard(s_lock);
   return stopReason;
 }
+void setStorageStop(orbify::mirror::Stop reason) {std::lock_guard<std::recursive_mutex> guard(s_lock);stopReason=reason;}
 void clearStorageStop() {
   std::lock_guard<std::recursive_mutex> guard(s_lock);
   stopReason = orbify::mirror::Stop::None;
@@ -669,6 +679,7 @@ void dropAll() {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
   s_loaded = true;
   wipe();
+  OrbifyBulk::dropAll();
   sdBytes = 0;
   saveUsage();
   save();

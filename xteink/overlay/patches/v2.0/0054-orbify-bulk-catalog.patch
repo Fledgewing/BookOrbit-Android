@@ -1,0 +1,62 @@
+Subject: [PATCH] Orbify: raw bulk catalog transport for the SD worker
+
+diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
+--- a/src/network/BookOrbitCatalogClient.h
++++ b/src/network/BookOrbitCatalogClient.h
+@@ -1,5 +1,7 @@
+ #pragma once
+ #include <cstdint>
++#include <CrossInkTailnetCuts.h>
++#include <ArduinoJson.h>
+ #include <atomic>
+ #include <string>
+ #include <vector>
+@@ -142,6 +144,9 @@
+ class BookOrbitCatalogClient {
+  public:
+   static constexpr int PAGE_SIZE = 20;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  static bool fetchBulk(const std::string& path, JsonDocument& out);
++#endif
+   // The dashboard shelf of books marked "want to read", which BookOrbit's KOReader plugin
+   // shows; the catalog lists it as a root section of the same id.
+   static constexpr char WANT_TO_READ_SHELF[] = "want-to-read";
+diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+--- a/src/network/BookOrbitCatalogClient.cpp
++++ b/src/network/BookOrbitCatalogClient.cpp
+@@ -29,6 +29,7 @@
+ #include "orbify/FinishSync.h"
+ #if CROSSINK_TAILNET_ORBIFY_CACHE
+ #include "orbify/CacheStore.h"
++#include "orbify/BulkCatalog.h"
+ #endif
+ #endif
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+@@ -173,6 +174,13 @@
+   // in the last minute or there is no network; else the request below, whose reply is kept, and
+   // the saved reply again if the request fails.
+   const OrbifyCache::Lookup cached = OrbifyCache::lookup(url);
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if(cached.bulk) {
++    JsonDocument filter;buildFilter(filter);
++    if(OrbifyBulk::read(url,filter.as<JsonVariantConst>(),outDoc))return true;
++    return false;
++  }
++#endif
+   OrbifyWifi::Hold miss(OrbifyWifi::Owner::OfflineMiss, !cached.hasEntry);
+   if (!cached.hasEntry) OrbifyWifi::simulatorIdleOffProbe();
+   // Patch 0040: offline with nothing saved, no request (orbify::cache::readStep). The cache-first
+@@ -432,6 +440,13 @@
+ #else
+ void BookOrbitCatalogClient::openBootSession() {}
+ void BookOrbitCatalogClient::closeBootSession(const char*) {}
++#endif
++
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++bool BookOrbitCatalogClient::fetchBulk(const std::string& path, JsonDocument& out) {
++  if (!BOOKORBIT_STORE.hasCredentials() || path.find("/plugin/catalog/") != 0) return false;
++  return fetchJson(BOOKORBIT_STORE.getBaseUrl()+path,[](JsonDocument& filter){filter.set(true);},out);
++}
+ #endif
+ 
+ bool BookOrbitCatalogClient::fetchRootSections(std::vector<BookOrbitCatalogSection>& outSections) {

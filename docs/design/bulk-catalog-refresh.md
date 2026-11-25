@@ -1,6 +1,6 @@
 # W26: Full refresh in minutes
 
-Status: Android implemented; Xteink building in a separate change; maintainer approved the shared design and UI ("I approve the fast
+Status: Android and X4 Pro/X4 implemented; X3 remains gated; maintainer approved the shared design and UI ("I approve the fast
 refresh design"). W30 coordinator approved the bounded secondary-series amendment below. Targets: Android under two minutes and X4 under ten minutes for 10,000
 books. These are acceptance targets, not measured results.
 
@@ -202,6 +202,17 @@ combinations in RAM. A size-200 manifest includes files and may be substantially
 larger than 200 list rows: measure peak heap and parser limits before enabling it.
 Keep the old published generation on cancellation, no network, SD failure or
 storage-limit exhaustion. The worker must not take focus during reading.
+
+The X4 implementation stores canonical and manifest records in 256 SD buckets,
+with separate numeric membership/rank files and compact durable source-page
+markers. JSON allocation is page/window bounded in PSRAM; numeric indexes use
+PSRAM buffers with allocation headroom checks. Catalog reads project requested
+windows directly through the client's existing JSON field filter, without
+materializing duplicate reply files. Fourteen global ordering sequences retain
+both directions for all supported book sorts; this costs more requests than the
+Android plan and is measured explicitly. Secondary/name feeds stay in the later
+phase and preserve contextual fields independently of primary records. The same
+engine runs in host tests and the SDL firmware against the synthetic HTTP server.
 
 X3: remain gated unless all required builds fit under the existing 99.5% gate and
 RAM/parser tests pass. The cited 98.7% is an input, not a fresh measurement.
