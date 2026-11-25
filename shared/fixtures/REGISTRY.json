@@ -450,6 +450,46 @@
       "readers": [
         "py"
       ]
+    },
+    {
+      "file": "release-signing/cases.json",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-firmware",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-plugin",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-plugin-other-root",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
+      "readers": [
+        "py"
+      ]
+    },
+    {
+      "file": "release-signing/SIGNATURES-plugin-rotated",
+      "rule": "Release-signing reference vectors and certificates",
+      "owner": "release verifiers",
+      "readers": [
+        "py"
+      ]
     }
   ]
 }

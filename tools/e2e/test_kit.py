@@ -12,6 +12,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -59,6 +60,51 @@ def get(url: str, timeout: float = 5, method: str = "GET", data: bytes | None = 
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
+
+
+class ReleaseSigningFixtureTest(unittest.TestCase):
+    """Check the shared vectors with OpenSSL, independently of either device verifier."""
+
+    def test_reference_signatures(self):
+        # @fixture release-signing/cases.json
+        # @fixture release-signing/SIGNATURES-firmware
+        # @fixture release-signing/SIGNATURES-plugin
+        # @fixture release-signing/SIGNATURES-plugin-other-root
+        # @fixture release-signing/SIGNATURES-plugin-rotated
+        root = kit.ROOT / "shared/fixtures/release-signing"
+        vectors = json.loads((root / "cases.json").read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+
+            def verify(key, message, signature):
+                (tmp / "key.der").write_bytes(bytes.fromhex("302a300506032b6570032100") + key)
+                (tmp / "message").write_bytes(message)
+                (tmp / "signature").write_bytes(signature)
+                return subprocess.run([
+                    "openssl", "pkeyutl", "-verify", "-pubin", "-keyform", "DER",
+                    "-inkey", str(tmp / "key.der"), "-rawin", "-in", str(tmp / "message"),
+                    "-sigfile", str(tmp / "signature"),
+                ], capture_output=True).returncode == 0
+
+            self.assertTrue(vectors["cases"])
+            for case in vectors["cases"]:
+                with self.subTest(case=case["name"]):
+                    lines = (root / case["signatures"]).read_text().splitlines()
+                    cert = bytes.fromhex(lines[0].split()[1])
+                    self.assertEqual(len(cert), 100)
+                    signatures = dict((name, bytes.fromhex(sig)) for sig, name in
+                                      (line.split() for line in lines[1:]))
+                    signature = signatures.get(case["asset"])
+                    accepted = (
+                        int.from_bytes(cert[:4], "big") >= case["min_serial"]
+                        and verify(bytes.fromhex(vectors["root_public_key"]),
+                                   b"orbify-release-key-v1\n" + cert[:36], cert[36:])
+                        and signature is not None
+                        and verify(cert[4:36], ("orbify-artifact-v1\n" + case["tag"] + "\n"
+                                              + case["asset"] + "\n" + case["sha256"] + "\n").encode(),
+                                   signature)
+                    )
+                    self.assertEqual(accepted, case["ok"])
 
 
 class ProxyTest(unittest.TestCase):
