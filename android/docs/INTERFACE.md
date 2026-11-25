@@ -443,3 +443,6 @@ Copy preparation uses the cached delivery preference without fetching it on the 
 calling catalog actions: upstream `bookorbit_catalog.lua:884` runs fetches synchronously
 when called outside Trapper. Partial MD5 sampling matches KOReader
 `9192014d8bd82a91dc1012473be0f238dedfdb54`, `frontend/util.lua:1111`.
+
+Statistics migration preserves KOReader Android's WAL journal mode (`frontend/device/generic/device.lua:131` and
+`plugins/statistics.koplugin/main.lua:455` at the KOReader pin above); the Orbify cache stays in TRUNCATE mode.

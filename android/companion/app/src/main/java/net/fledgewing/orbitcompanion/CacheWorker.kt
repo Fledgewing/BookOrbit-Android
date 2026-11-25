@@ -394,7 +394,8 @@ class CacheWorker(
             check(write(sidecar, LuaValue.encode(settings + ("partial_md5_checksum" to new))))
         }
         val stats = File(root.parentFile, "statistics.sqlite3")
-        if (stats.isFile) AndroidSql(stats).use { db -> db.exec("UPDATE OR IGNORE book SET md5=? WHERE md5=?", new, old) }
+        // KOReader Android statistics use WAL; do not reconfigure its live connection.
+        if (stats.isFile) AndroidSql(stats, wal = true).use { db -> db.exec("UPDATE OR IGNORE book SET md5=? WHERE md5=?", new, old) }
     }
 
     /** A bounded preparation result: all network, file sampling and JSON work stays here. */
