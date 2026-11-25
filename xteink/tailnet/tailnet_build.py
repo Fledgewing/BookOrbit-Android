@@ -15,6 +15,7 @@ same switches from the matching reader's column and compiles tailnet/sim instead
 the shim: Tailscale does not run on a host, so the test server is reached directly.
 """
 
+import json
 import os
 
 Import("env")  # noqa: F821  (SCons builtin)
@@ -256,6 +257,9 @@ SWITCHES = {
     # batch of covers on the card, and the text and battery extras. X4 Pro and X4 only: the X3 builds
     # none of it, its settings' strings included (ORBIFY_I18N_SKIP below).
     "CROSSINK_TAILNET_ORBIFY_SLEEP":      (0,      1,      1),
+    # Patch 0050, signed firmware updates (docs/design/release-signing.md): the updater checks the
+    # feed's release-key signature; shared/release-signing.json holds the key and whether it blocks.
+    "ORBIFY_OTA_SIGNATURE":               (1,      1,      1),
 }
 # Switches that stand for wolfSSL defines rather than a define of their own.
 WOLFSSL_SWITCH_DEFINES = {
@@ -498,6 +502,24 @@ ota_defines = {
     "CROSSINK_OTA_RELEASE_LIST_URL": OTA_FEED,
     "CROSSINK_OTA_TAG_PREFIX": OTA_TAG_PREFIX,
 }
+
+# Signed updates (patch 0050): the root public key, the lowest trusted release-key serial and the
+# enforce switch, from shared/release-signing.json (docs/design/release-signing.md).
+with open(os.path.join(os.path.dirname(overlay_root), "shared", "release-signing.json")) as _f:
+    _signing = json.load(_f)
+_root_key = _signing.get("root_public_key", "")
+if _root_key and (len(_root_key) != 64 or any(c not in "0123456789abcdef" for c in _root_key)):
+    raise RuntimeError(f"shared/release-signing.json: root_public_key is not 64 lowercase hex digits: {_root_key!r}")
+if _signing.get("enforce") and not _root_key:
+    raise RuntimeError("shared/release-signing.json: enforce is on but root_public_key is empty")
+ota_defines["ORBIFY_RELEASE_ROOT_KEY"] = _root_key
+env.Append(CPPDEFINES=[  # noqa: F821
+    ("ORBIFY_RELEASE_MIN_SERIAL", int(_signing.get("min_release_key_serial", 1))),
+    ("ORBIFY_RELEASE_SIG_ENFORCE", 1 if _signing.get("enforce") else 0),
+])
+print(f"Signed updates: root key {'set' if _root_key else 'not set'}, "
+      f"{'enforced' if _signing.get('enforce') else 'not enforced (unsigned updates are logged and installed)'}")
+
 flags = env.get("BUILD_FLAGS", [])  # noqa: F821
 flags = [f for f in flags if not any(f.startswith(f"-D{k}=") for k in ota_defines)]
 flags += [f'-D{k}=\\"{v}\\"' for k, v in ota_defines.items()]

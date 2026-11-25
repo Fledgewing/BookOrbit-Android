@@ -40,6 +40,12 @@ the newest pre-release `xteink-v…` release. Which one a build becomes is decid
 
 Every firmware release keeps `make_latest=false`: GitHub's "latest" stays an Android release.
 
+Each firmware image in the feed also carries `orbify_signature`: a release-key certificate from
+Orbify's offline root key and the release key's signature over the tag, the image name and its
+SHA-256 (`docs/design/release-signing.md`). Once the staged image matches its SHA-256, the updater
+checks the signature (overlay patch 0050). Until `shared/release-signing.json` sets `enforce`, a
+missing or bad signature is only logged (`unsigned`, `signature invalid`) and the update installs.
+
 ### When a release is made
 
 Releases are batched, so readers don't get a new build for every change:

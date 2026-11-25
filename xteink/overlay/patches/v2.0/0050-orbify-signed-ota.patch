@@ -1,0 +1,230 @@
+Orbify: signed firmware updates (docs/design/release-signing.md). The release parser reads each
+firmware asset's "orbify_signature" from the feed; once the staged image matches its SHA-256, the
+updater checks that a release key the root certified signed (tag, asset, SHA-256)
+(orbify/core/UpdateSignature). Until shared/release-signing.json enforces it, a missing or bad
+signature is logged and the update installs. Switch ORBIFY_OTA_SIGNATURE (tailnet_build.py).
+Host tests: xteink/test/update_signature_test.cpp, ota_signature_test.cpp.
+
+diff --git a/lib/JsonParser/ReleaseJsonParser.cpp b/lib/JsonParser/ReleaseJsonParser.cpp
+index 904d2773..c3e7c0cc 100644
+--- a/lib/JsonParser/ReleaseJsonParser.cpp
++++ b/lib/JsonParser/ReleaseJsonParser.cpp
+@@ -20,6 +20,18 @@ void copyGithubSha256Digest(char* dst, size_t dstSize, const char* value, size_t
+   safeCopy(dst, dstSize, value + kSha256PrefixLen, valueLen - kSha256PrefixLen);
+ }
+ 
++// Orbify: "orbify_signature" is exactly 2 * n hex digits; anything else leaves the asset unsigned.
++bool decodeSignatureHex(uint8_t* out, size_t n, const char* value, size_t valueLen) {
++  if (valueLen != 2 * n) return false;
++  for (size_t i = 0; i < valueLen; ++i) {
++    const char c = value[i];
++    const int v = (c >= '0' && c <= '9') ? c - '0' : (c >= 'a' && c <= 'f') ? c - 'a' + 10 : (c >= 'A' && c <= 'F') ? c - 'A' + 10 : -1;
++    if (v < 0) return false;
++    out[i / 2] = static_cast<uint8_t>((i % 2) ? (out[i / 2] | v) : (v << 4));
++  }
++  return true;
++}
++
+ }  // namespace
+ 
+ ReleaseJsonParser::ReleaseJsonParser(AssetMatcher assetMatcher, ReleaseVisitor releaseVisitor, void* releaseVisitorCtx)
+@@ -43,6 +55,7 @@ void ReleaseJsonParser::reset() {
+   currentAssetUrl[0] = '\0';
+   currentAssetSha256[0] = '\0';
+   currentAssetSize = 0;
++  currentAssetSigned = false;
+ }
+ 
+ void ReleaseJsonParser::feed(const char* data, size_t len) { parser.feed(data, len); }
+@@ -64,6 +77,7 @@ void ReleaseJsonParser::clearRelease() {
+   current.tagFound = false;
+   current.firmwareFound = false;
+   current.prerelease = false;
++  current.firmwareSigned = false;
+ }
+ 
+ void ReleaseJsonParser::commitRelease() {
+@@ -80,11 +94,14 @@ void ReleaseJsonParser::commitAsset() {
+     memcpy(current.firmwareSha256, currentAssetSha256, sizeof(current.firmwareSha256));
+     current.firmwareSize = currentAssetSize;
+     current.firmwareFound = true;
++    current.firmwareSigned = currentAssetSigned;
++    if (currentAssetSigned) memcpy(current.firmwareSignature, currentAssetSignature, sizeof(current.firmwareSignature));
+   }
+   currentAssetName[0] = '\0';
+   currentAssetUrl[0] = '\0';
+   currentAssetSha256[0] = '\0';
+   currentAssetSize = 0;
++  currentAssetSigned = false;
+ }
+ 
+ // -- SAX callbacks (static trampolines) -------------------------------------
+@@ -117,6 +134,8 @@ void ReleaseJsonParser::sOnKey(void* ctx, const char* key, size_t len) {
+           self->lastKey = LastKey::ASSET_SHA256;
+         else if (len == 6 && memcmp(key, "digest", 6) == 0)
+           self->lastKey = LastKey::ASSET_DIGEST;
++        else if (len == 16 && memcmp(key, "orbify_signature", 16) == 0)
++          self->lastKey = LastKey::ASSET_SIGNATURE;
+         else
+           self->lastKey = LastKey::NONE;
+       }
+@@ -152,6 +171,11 @@ void ReleaseJsonParser::sOnString(void* ctx, const char* value, size_t len) {
+       if (self->position == Position::IN_ASSET_OBJECT && self->assetDepth == 1)
+         copyGithubSha256Digest(self->currentAssetSha256, sizeof(self->currentAssetSha256), value, len);
+       break;
++    case LastKey::ASSET_SIGNATURE:
++      if (self->position == Position::IN_ASSET_OBJECT && self->assetDepth == 1)
++        self->currentAssetSigned =
++            decodeSignatureHex(self->currentAssetSignature, sizeof(self->currentAssetSignature), value, len);
++      break;
+     default:
+       break;
+   }
+diff --git a/lib/JsonParser/ReleaseJsonParser.h b/lib/JsonParser/ReleaseJsonParser.h
+index f9d869f3..5d621433 100644
+--- a/lib/JsonParser/ReleaseJsonParser.h
++++ b/lib/JsonParser/ReleaseJsonParser.h
+@@ -20,6 +20,11 @@ class ReleaseJsonParser {
+     bool tagFound;
+     bool firmwareFound;
+     bool prerelease;
++    // Orbify: the firmware asset's "orbify_signature" (release-key certificate, then the
++    // signature), decoded; firmwareSigned is false when the asset carries none.
++    static constexpr size_t kSignatureBytes = 164;
++    uint8_t firmwareSignature[kSignatureBytes];
++    bool firmwareSigned;
+   };
+ 
+   // GitHub's GET /releases answers with an array of releases rather than one. The parser
+@@ -65,6 +70,7 @@ class ReleaseJsonParser {
+     ASSET_SIZE,
+     ASSET_SHA256,
+     ASSET_DIGEST,
++    ASSET_SIGNATURE,
+   };
+ 
+   static void sOnKey(void* ctx, const char* key, size_t len);
+@@ -100,4 +106,6 @@ class ReleaseJsonParser {
+   char currentAssetUrl[512];
+   char currentAssetSha256[65];
+   size_t currentAssetSize;
++  uint8_t currentAssetSignature[Release::kSignatureBytes];
++  bool currentAssetSigned;
+ };
+diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
+index cd94dd10..f0d30173 100644
+--- a/src/network/OtaUpdater.cpp
++++ b/src/network/OtaUpdater.cpp
+@@ -11,6 +11,9 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback, void*, s
+ #ifndef CROSSINK_TAILNET_OTA_CHECK_RETRY  // Orbify patch 0030; on in tailnet_build.py
+ #define CROSSINK_TAILNET_OTA_CHECK_RETRY 0
+ #endif
++#ifndef ORBIFY_OTA_SIGNATURE  // Orbify patch 0050; on in tailnet_build.py
++#define ORBIFY_OTA_SIGNATURE 0
++#endif
+ #include <HalStorage.h>
+ #include <Logging.h>
+ #include <Memory.h>
+@@ -31,6 +34,20 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback, void*, s
+ #include "mbedtls/sha256.h"
+ #include "network/HttpDownloader.h"
+ #include "network/WifiPowerSaveGuard.h"
++#if ORBIFY_OTA_SIGNATURE
++#include "orbify/core/UpdateSignature.h"
++// From shared/release-signing.json (tailnet_build.py): the root public key ("" until it is set),
++// the lowest release-key serial still trusted, and whether a failed check blocks the update.
++#ifndef ORBIFY_RELEASE_ROOT_KEY
++#define ORBIFY_RELEASE_ROOT_KEY ""
++#endif
++#ifndef ORBIFY_RELEASE_MIN_SERIAL
++#define ORBIFY_RELEASE_MIN_SERIAL 1
++#endif
++#ifndef ORBIFY_RELEASE_SIG_ENFORCE
++#define ORBIFY_RELEASE_SIG_ENFORCE 0
++#endif
++#endif
+ 
+ namespace {
+ #ifndef CROSSINK_OTA_RELEASE_URL
+@@ -265,6 +282,29 @@ esp_err_t checkOnce(const esp_http_client_config_t& config) {
+ }
+ #endif
+ 
++#if ORBIFY_OTA_SIGNATURE
++// Orbify (patch 0050, docs/design/release-signing.md): the staged image matched sha256Hex; is that
++// image signed by a release key the root certified? Unsigned or badly signed updates are only
++// logged until the build enforces signatures.
++bool signatureAccepted(const std::string& tag, const std::string& url, const char* sha256Hex,
++                       const std::string& signature) {
++  namespace sig = orbify::update_signature;
++  const sig::Result result = sig::checkDownload(
++      ORBIFY_RELEASE_ROOT_KEY, ORBIFY_RELEASE_MIN_SERIAL, tag.c_str(), url.c_str(), sha256Hex,
++      signature.size() == sig::kSignatureBytes ? reinterpret_cast<const uint8_t*>(signature.data()) : nullptr);
++  if (result == sig::Result::Ok) {
++    LOG_INF("OTA", "Firmware signed by Orbify's release key");
++    return true;
++  }
++  if (sig::accepted(result, ORBIFY_RELEASE_SIG_ENFORCE)) {
++    LOG_ERR("OTA", "Firmware %s; installing (signatures not enforced)", sig::describe(result));
++    return true;
++  }
++  LOG_ERR("OTA", "Refusing firmware: %s", sig::describe(result));
++  return false;
++}
++#endif
++
+ }  // namespace
+ 
+ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+@@ -274,6 +314,10 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+   latestVersion.clear();
+   otaUrl.clear();
+   otaSha256.clear();
++#if ORBIFY_OTA_SIGNATURE
++  otaTag.clear();
++  otaSignature.clear();
++#endif
+   otaSize = 0;
+   processedSize = 0;
+   totalSize = 0;
+@@ -391,6 +435,11 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+ 
+   otaUrl = release->firmwareUrl;
+   otaSha256 = release->firmwareSha256;
++#if ORBIFY_OTA_SIGNATURE
++  otaTag = release->tagName;
++  if (release->firmwareSigned)
++    otaSignature.assign(reinterpret_cast<const char*>(release->firmwareSignature), sizeof(release->firmwareSignature));
++#endif
+   otaSize = release->firmwareSize;
+   totalSize = otaSize;
+   updateAvailable = true;
+@@ -527,6 +576,14 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
+     }
+     LOG_INF("OTA", "Firmware sha256 verified");
+   }
++#if ORBIFY_OTA_SIGNATURE
++  // Orbify (patch 0050): before anything is erased; an image without a manifest SHA-256 can't be checked.
++  if (!signatureAccepted(otaTag, otaUrl, hasManifestSha256 ? otaSha256.c_str() : nullptr, otaSignature)) {
++    stagedFile.close();
++    Storage.remove(OTA_STAGE_PATH);
++    return HASH_MISMATCH_ERROR;
++  }
++#endif
+ 
+   if (otaSize > 0 && stagedSize != otaSize) {
+     LOG_ERR("OTA", "Firmware size mismatch: got %zu, expected %zu", stagedSize, otaSize);
+diff --git a/src/network/OtaUpdater.h b/src/network/OtaUpdater.h
+index 1179e05e..6735c63c 100644
+--- a/src/network/OtaUpdater.h
++++ b/src/network/OtaUpdater.h
+@@ -9,6 +9,9 @@ class OtaUpdater {
+   std::string latestVersion;
+   std::string otaUrl;
+   std::string otaSha256;
++  // Orbify (patch 0050): the release's tag and its firmware asset's signature (empty: unsigned).
++  std::string otaTag;
++  std::string otaSignature;
+   size_t otaSize = 0;
+   size_t processedSize = 0;
+   size_t totalSize = 0;

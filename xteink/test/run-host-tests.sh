@@ -48,6 +48,17 @@ orbify_test() { # name [sources...]: the test reads its tables from shared/fixtu
     "$here/${name}_test.cpp" "$@" -o "$out/${name}_test"
   "$out/${name}_test" "$repo/shared/fixtures/bookorbit"
 }
+# Signed updates (docs/design/release-signing.md): the verifier against known answers and the
+# release-signing fixtures the companion checks too, then the OTA scenario through the updater's
+# own parser (overlay patch 0050).
+signing="$repo/shared/fixtures/release-signing"
+"${CXX:-c++}" -std=c++17 -Wall -Wextra -O1 -I"$ajson" -I"$core" -I"$here" \
+  "$here/update_signature_test.cpp" "$core/Ed25519Verify.cpp" "$core/UpdateSignature.cpp" -o "$out/update_signature_test"
+"$out/update_signature_test" "$signing"
+"${CXX:-c++}" -std=c++17 -Wall -Wextra -O1 -I"$ajson" -I"$core" -I"$here" -I"$up/lib/JsonParser" -I"$json_inc" \
+  "$here/ota_signature_test.cpp" "$up/lib/JsonParser/ReleaseJsonParser.cpp" "$json_src" \
+  "$core/Ed25519Verify.cpp" "$core/UpdateSignature.cpp" -o "$out/ota_signature_test"
+"$out/ota_signature_test" "$signing"
 orbify_test finish "$core/FinishQueue.cpp"
 orbify_test end_of_book "$core/SeriesCard.cpp" "$core/EndPagePlan.cpp" "$core/FinishQueue.cpp" "$core/NextCover.cpp" \
   "$core/CatalogCache.cpp" "$core/LocalFirst.cpp"
