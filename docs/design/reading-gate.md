@@ -15,8 +15,8 @@ In a book it is a few characters in the bottom-left corner, a toast that every t
 never taking focus and redrawn only in its own rectangle at most every 3 s. Its start popup and
 its full message still go through the gate.
 
-Another: OrbiSmart's Yes / No popup when another reader's place turns up after the page rendered
-(`ko/orbismart.lua`, [orbismart.md](orbismart.md) ruling 1): one draw, no animation, one at a time.
+Another: BookSync position sync's Yes / No popup when another reader's place turns up after the page rendered
+(`ko/orbismart.lua`, [position-sync.md](position-sync.md) ruling 1): one draw, no animation, one at a time.
 
 ## The gate
 
@@ -66,7 +66,7 @@ Every `UIManager:show`, BookOrbit toast, `Jni.startActivity` and restart in `ko/
 | `ko/endofbook.lua` next-sync downloads | "Downloaded: title" | `Gate.show` |
 | `ko/endofbook.lua` sheet and its notes | end-of-book sheet | exception: the reader reached the end |
 | `ko/badge.lua` Full refresh % badge | "37%", "Done" | exception: passive toast, the user's design |
-| `ko/orbismart.lua` OrbiSmart popup | "Continue from Boox, p. 214? Yes / No" | exception: the user's ruling ([orbismart](orbismart.md) ruling 1), one draw |
+| `ko/orbismart.lua` BookSync position sync popup | "Continue from Boox, p. 214? Yes / No" | exception: the user's ruling ([position sync](position-sync.md) ruling 1), one draw |
 | `ko/cache.lua` `OC.note` | BookOrbit toasts | `Gate.installToast` wraps `bookorbit_toast.show`/`error` |
 | `ko/cache.lua` offline miss | "This page isn't saved" ConfirmBox | user action (paging a list) |
 | `ko/localfirst.lua` Remove | "This book is open" | user action |

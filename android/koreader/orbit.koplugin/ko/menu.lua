@@ -234,11 +234,11 @@ function OrbitAndroid:menuItems()
         stoggle("eob_sheet"),
         stoggle("eob_auto"),
     })
-    -- Sync: OrbiSmart / Custom (docs/design/orbismart.md §6), the section's first row. OrbiSmart
+    -- Sync: OrbiSmart / Custom (docs/design/position-sync.md §6), the section's first row. OrbiSmart
     -- sets the rows below it and hides them; Custom shows them again, with their last values.
     local mode_items = {}
     local mode_def = SCHEMA.byKey.sync_mode
-    for _i, v in ipairs(mode_def and mode_def.values or { { id = "orbismart", label = "OrbiSmart (recommended)" }, { id = "custom", label = "Custom" } }) do
+    for _i, v in ipairs(mode_def and mode_def.values or { { id = "orbismart", label = "Furthest page wins" }, { id = "custom", label = "Custom" } }) do
         table.insert(mode_items, {
             text = _(v.label),
             radio = true,
@@ -253,7 +253,7 @@ function OrbitAndroid:menuItems()
     local custom = not (OSM and OSM.on())
     local sync = compact({
         {
-            text_func = function() return label("sync_mode", _("Sync")) .. ": " .. ((OSM and OSM.on()) and _("OrbiSmart") or _("Custom")) end,
+            text_func = function() return label("sync_mode", _("Reading position")) .. ": " .. ((OSM and OSM.on()) and _("Furthest page wins") or _("Custom")) end,
             help_text = _(mode_def and mode_def.line or ""),
             sub_item_table = mode_items,
             separator = true,
@@ -315,7 +315,7 @@ function OrbitAndroid:menuItems()
         { text = sectionTitle("sync", _("Sync and Wi-Fi")), sub_item_table = sync },
         { text = sectionTitle("library", _("Library and storage")), sub_item_table = library },
         { text = sectionTitle("updates", _("Updates and details")), sub_item_table = updates, separator = true },
-        -- OrbiSmart's override (docs/design/orbismart.md §3.5), in a book only.
+        -- OrbiSmart's override (docs/design/position-sync.md §3.5), in a book only.
         (OSM and OSM.on() and self.ui and self.ui.document) and { text = _("Read from here everywhere"),
           help_text = _("Sends this page to BookOrbit now, even if it is behind the place there. Your other readers move here at their next sync. Offline, it is sent first at the next sync."),
           callback = later(function() OSM.readFromHere("menu") end) } or false,
