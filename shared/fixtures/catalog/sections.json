@@ -1,0 +1,150 @@
+{
+  "schema": 1,
+  "source_sha256": {
+    "catalog": "44268faca149407f0a5bf5e37f733ded03af63d81669b3bef0e92e03458195ef",
+    "catalog_board": "9b15c2a8db85e0be7d68f95faf886dcb82eed8bbea1d4b1b5ae4c6911acd2470",
+    "catalog_lists": "06cba6b3e3ba56338f0ea899ab369f9efac428c4ef21b92527cb34c9558a45f1",
+    "catalog_dashboard": "721ecd6ed4553460e08a175a30c6053816a879b95a7064c14f69f636485cad10",
+    "catalog_util": "5842c592af18d716e3cadeb4d0d6ef11c47113e6edaf0cb5b432943c009aeb75",
+    "dashboard_sections": "90bbb02b9d99033b4fe9b55d2c9dc04a3f00626d4335c0fda6f008f98b8f58bf",
+    "api": "5055593ddaa37831c8cc8b696ef7c9f4cdaf127166540368aa6ecdd5d87acfe1"
+  },
+  "root_sections": [
+    "continue-reading",
+    "recent",
+    "libraries",
+    "collections",
+    "smart-scopes",
+    "authors",
+    "series",
+    "all-books"
+  ],
+  "root_books": {
+    "continue-reading": {
+      "sort": "recently_read",
+      "readStatus": "reading"
+    },
+    "recent": {
+      "sort": "recently_added"
+    },
+    "all-books": {
+      "sort": "title"
+    }
+  },
+  "sections": [
+    "libraries",
+    "collections",
+    "smart-scopes",
+    "authors",
+    "series"
+  ],
+  "selectors": {
+    "libraries": [
+      "libraryId"
+    ],
+    "collections": [
+      "collectionId"
+    ],
+    "smart-scopes": [
+      "smartScopeId"
+    ],
+    "authors": [
+      "author"
+    ],
+    "series": [
+      "seriesId",
+      "series"
+    ]
+  },
+  "home_books": {
+    "recently-added": {
+      "sort": "recently_added"
+    },
+    "pick-back-up": {
+      "readStatus": "reading",
+      "sort": "recently_read",
+      "order": "asc"
+    },
+    "finished": {
+      "readStatus": "finished",
+      "sort": "recently_read"
+    },
+    "in-progress": {
+      "sort": "recently_read",
+      "readStatus": "reading"
+    },
+    "random": {
+      "sort": "title"
+    }
+  },
+  "dashboard_sections": [
+    "want-to-read",
+    "up-next-in-series"
+  ],
+  "book_sorts": [
+    "title",
+    "author",
+    "recently_added",
+    "recently_updated",
+    "recently_read",
+    "series"
+  ],
+  "list_sorts": [
+    "title",
+    "author",
+    "series",
+    "recently_added",
+    "recently_read"
+  ],
+  "series_sorts": [
+    "series",
+    "published",
+    "title",
+    "recently_read",
+    "recently_added"
+  ],
+  "read_statuses": [
+    "unread",
+    "reading",
+    "finished"
+  ],
+  "formats": [
+    "epub",
+    "pdf",
+    "cbz",
+    "cbr",
+    "mobi",
+    "azw3",
+    "fb2",
+    "djvu",
+    "txt"
+  ],
+  "section_sorts": [
+    "name",
+    "books",
+    "name_desc"
+  ],
+  "section_filters": [
+    "reading",
+    "finished"
+  ],
+  "orders": [
+    "asc",
+    "desc"
+  ],
+  "local_limits": {
+    "on_device_max_ids": 200,
+    "not_on_device_max_ids": 200,
+    "not_on_device_scan_pages": 5,
+    "not_on_device_scan_size": 100
+  },
+  "local_lists": [
+    "on-device",
+    "not-on-device"
+  ],
+  "entries": [
+    "root",
+    "dashboard",
+    "dashboard/discover"
+  ]
+}

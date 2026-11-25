@@ -15,6 +15,7 @@ cp -R "$here/orbit.koplugin" "$stage/"
 cp "$here/LICENSE" "$stage/orbit.koplugin/LICENSE"
 # The settings shared with the companion (docs/design/companion-settings.md §4.1): one file for both.
 cp "$here/../../shared/settings/schema.json" "$stage/orbit.koplugin/settings_schema.json"
+cp "$here/../../shared/fixtures/catalog/sections.json" "$stage/orbit.koplugin/catalog_sections.json"
 main="$stage/orbit.koplugin/main.lua"
 sed -E "s/^local PATCH_VERSION = \"[^\"]*\"$/local PATCH_VERSION = \"$ver\"/" "$here/orbit.koplugin/main.lua" > "$main"
 grep -qx "local PATCH_VERSION = \"$ver\"" "$main" || { echo "package.sh: version stamp failed" >&2; exit 1; }

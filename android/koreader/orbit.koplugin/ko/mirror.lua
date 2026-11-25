@@ -25,7 +25,19 @@ local real_remove = os.remove
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
 -- Section indexes Full refresh saves, in order; each entry's book list follows its index.
-Mirror.SECTIONS = { "collections", "smart-scopes", "libraries", "series", "authors" }
+local function catalogInventory()
+    for _, path in ipairs({ SOURCE_DIR .. "/catalog_sections.json", SOURCE_DIR .. "/../../../shared/fixtures/catalog/sections.json" }) do
+        local f = io.open(path, "rb")
+        if f then
+            local text = f:read("*a"); f:close()
+            local value = SettingsSync.decodeJson(text)
+            if value then return value end
+        end
+    end
+    error("Orbit catalog_sections.json missing or unreadable")
+end
+Mirror.INVENTORY = catalogInventory()
+Mirror.SECTIONS = Mirror.INVENTORY.sections
 
 local function nowT() return OC.now() end
 
@@ -164,8 +176,36 @@ function Mirror.plan(cat, op, reason)
     local plan = { run = string.format("%d-%d", nowT(), Mirror.seq), op = op, reason = reason, owner = OC.owner(client),
         manual = Mirror.manual == true, lib_version = libraryVersion(), sentinel = SENT, templates = templates, detail_template = Mirror.detailPath(client, SENT),
         sections = sections, seed_lists = { Mirror.onDevicePath(cat) }, seed_details = seed_details,
+        catalog = Mirror.INVENTORY,
         all_books = client:query("/koreader/plugin/catalog/books", { sort = "title", order = "asc" }),
         cover_dir = cover_dir, covers_on = S.mirror_covers == true, limit = OC.limitBytes() }
+    plan.dynamic_lists, plan.browse_lists = {}, {}
+    local sources = {}
+    for _, rows in ipairs({ Mirror.INVENTORY.home_books, Mirror.INVENTORY.root_books }) do
+        for _, params in pairs(rows) do table.insert(sources, params) end
+    end
+    local seen = {}
+    for _, params in ipairs(sources) do
+        local q = {}
+        for k, v in pairs(params) do q[k] = v end
+        q.order = Compat.callable(cat.effectiveOrder) and cat:effectiveOrder(q) or q.order
+        if Compat.callable(cat.listDecorateBookQuery) then cat:listDecorateBookQuery(q) end
+        local path = client:query("/koreader/plugin/catalog/books", q)
+        if not seen[path] then
+            seen[path] = true
+            table.insert(plan.browse_lists, path)
+            if q.readStatus or q.sort == "recently_added" or q.sort == "recently_read" then
+                table.insert(plan.dynamic_lists, path)
+            end
+        end
+    end
+    plan.entries = {}
+    for _, path in ipairs(Mirror.INVENTORY.entries) do
+        table.insert(plan.entries, "/koreader/plugin/catalog/" .. path)
+    end
+    for _, kind in ipairs(Mirror.INVENTORY.dashboard_sections) do
+        table.insert(plan.entries, "/koreader/plugin/catalog/dashboard/sections/" .. kind)
+    end
     return plan
 end
 
