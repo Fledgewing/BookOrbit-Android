@@ -23,20 +23,18 @@
  #include "orbify/RefreshBadge.h"
  #include "orbify/core/LocalFirst.h"
  #endif
-@@ -573,10 +575,12 @@
- void BookOrbitCatalogBrowserActivity::onExit() {
-   Activity::onExit();
- #if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  if (catalogWifiHeld) { catalogWifiHeld = false; OrbifyWifi::release(OrbifyWifi::Owner::Catalog); }
-   if (mirrorWalk.active() && !mirrorWalk.finished()) {
-     LOG_INF("BookOrbit", "Catalog: Full refresh paused at %u%%; it carries on at the next sleep sync or catalog visit",
-             mirrorWalk.percent());
+@@ -579,13 +581,18 @@
    }
-+  mirrorWalk.end();
  #endif
    BookOrbitCatalogClient::closeBootSession("leaving the catalog");
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  // Close the socket before a final hold release can honor a deferred idle-off.
++  mirrorWalk.end();
++  if (catalogWifiHeld) { catalogWifiHeld = false; OrbifyWifi::release(OrbifyWifi::Owner::Catalog); }
++#endif
    listOptions.reset();
-@@ -585,7 +589,7 @@
+   entries.clear();
+   if (onDeviceListing) BookOrbitLocalBooks::clear();
    BookOrbitDownloadIndex::unload();
  
    if (WiFi.getMode() != WIFI_MODE_NULL) {
@@ -45,7 +43,7 @@
      delay(30);
      silentRestart();
    } else if (networkBoot) {
-@@ -608,6 +612,9 @@
+@@ -608,6 +615,9 @@
  }
  
  void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connected) {
@@ -55,7 +53,7 @@
    if (pendingDownload.fileId != 0) {
      runPendingDownload(connected);
      return;
-@@ -2649,104 +2656,12 @@
+@@ -2649,104 +2659,12 @@
  // docs/design/write-through-cache.md. Refresh asks the server for this view now and keeps what
  // changed; Full refresh first saves the offline mirror (OrbifyMirror), then reloads the view
  // with the cache bypassed. Offline, either connects first.
@@ -163,7 +161,7 @@
    cacheFirst = false;  // one try: offline, the view's error says so
    LOG_INF("BookOrbit", "Catalog: not in the cache; connecting");
    {
-@@ -2760,6 +2675,7 @@
+@@ -2760,6 +2678,7 @@
      return false;
    }
    offlineSession = false;
@@ -171,7 +169,7 @@
    sdFontSystem.releaseForNetwork(renderer);
    return true;
  }
-@@ -2773,6 +2689,8 @@
+@@ -2773,6 +2692,8 @@
  }
  
  std::string BookOrbitCatalogBrowserActivity::viewStamp() const {
@@ -180,7 +178,7 @@
    if (mirrorShown.active) {
      char badge[40];
      orbify::mirror::badgeText(mirrorShown.percent, mirrorShown.finished, mirrorShown.failures, badge, sizeof(badge));
-@@ -2789,63 +2707,7 @@
+@@ -2789,63 +2710,7 @@
  // Patch 0041: one progress number for a Full refresh (docs/design/sqlite-cache.md "Xteink: the same
  // rule"). The walk takes one request per loop() when the reader has left the buttons alone for a
  // second and a list is on screen; between requests the catalog answers as usual.
@@ -351,7 +349,7 @@
 +#if CROSSINK_TAILNET_ORBIFY_SLEEP
 +  if (WiFi.status() == WL_CONNECTED) {
 +    BookOrbitCatalogClient::Session session;
-+    OrbifySleep::topUp(APP_STATE.openEpubPath, nullptr);
++    OrbifySleep::topUp(APP_STATE.openEpubPath, nullptr, state == State::Mirroring ? 1500 : 40000);
 +  }
 +#endif
    SavedWifiConnect::disconnect();
@@ -444,7 +442,7 @@
    if (!sleepSync && !backgroundSync && OrbifyFinish::nextCoverPending()) OrbifyFinish::decodeNextCovers(nullptr);
 --- a/src/main.cpp
 +++ b/src/main.cpp
-@@ -1730,6 +1730,11 @@
+@@ -1736,6 +1736,11 @@
  #endif
  }
  static void logWakeToScreen() {
@@ -456,7 +454,7 @@
    if (wakePressClockMs == 0 || GfxRenderer::displaysSinceBoot() == 0) return;
    LOG_INF("SLP", "Wake: %lums from press to screen", static_cast<unsigned long>(wakeClockMs() - wakePressClockMs));
    wakePressClockMs = 0;
-@@ -1997,6 +2002,7 @@
+@@ -2003,6 +2008,7 @@
    // Power was pressed during the BookOrbit sleep sync: this boot is the wake it stands for.
    const bool isSleepSyncWake = (silentRebootMagic == SLEEP_SYNC_WAKE_MAGIC);
    takeWakePress(isSleepSyncWake);
