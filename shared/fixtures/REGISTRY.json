@@ -48,7 +48,8 @@
       "owner": "plugin, companion, xteink",
       "readers": [
         "kt",
-        "lua"
+        "lua",
+        "cpp"
       ],
       "note": "lua also checks the fake companion's copy of the patch (android/koreader/test/companion_rules.lua)"
     },
@@ -214,7 +215,8 @@
       "owner": "companion, plugin, xteink",
       "readers": [
         "kt",
-        "lua"
+        "lua",
+        "cpp"
       ]
     },
     {
@@ -545,7 +547,7 @@
     {
       "file": "catalog/bulk-refresh/catalog.json",
       "rule": "Bulk manifest, contextual secondary membership, server ranks and offline windows; shared benchmark shape",
-      "owner": "companion, xteink",
+      "owner": "companion, plugin",
       "readers": [
         "kt",
         "lua"
