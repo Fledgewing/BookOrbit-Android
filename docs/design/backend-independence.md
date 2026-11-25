@@ -1,12 +1,17 @@
-# BookSync server and owned clients
+# Backend independence
 
 Status: **proposed, awaiting approval** (24 November 2026). Deferred roadmap work;
 no implementation is authorized. Design and any reader-facing mockups need approval under
-AGENTS.md before building. The [roadmap](../../ROADMAP.md#planned-booksync-ownership)
+AGENTS.md before building. The [roadmap](../../ROADMAP.md#planned-backend-independence)
 records the order below.
 
-BookSync should preserve reading history independently of library backends and offer one
-stable device interface. The server stays optional: direct mode remains available.
+BookSync is on a journey to backend independence. Readers should work with whichever library
+server the user chooses (BookOrbit first, Grimmory as the second acceptance backend, others
+later), and the user's reading (positions, history, highlights, ratings and shelves) should
+move with them between servers. The steps: own the KOReader client and keep BookSync's own
+copy of read state; serve compact per-device packages from an optional BookSync server; move
+backend-specific code behind adapters; bring the Xteink readers along. The server stays
+optional: direct mode remains available.
 
 ## Phases
 
@@ -32,7 +37,7 @@ position/highlight conversion across editions or backend schemas.
 
 ### 2. Server first API: catalog packages
 
-Deploy BookSync as a container on the **maintainer's Kubernetes cluster from the start**.
+Deploy BookSync as a **self-hosted container from the start** (Kubernetes or Docker).
 Its first API serves authenticated **per-device catalog packages**: a scoped manifest,
 immutable/resumable catalog chunks and profile-sized covers, initially consumed by Android.
 Packaging and refresh scheduling belong inside the service; there is no separate cron or
