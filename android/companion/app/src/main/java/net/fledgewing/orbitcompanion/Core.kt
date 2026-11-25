@@ -597,6 +597,15 @@ object Koreader {
     /** INTERFACE COMMAND=restart: the patch saves, quits, and asks us to start KOReader again (RELAUNCH). */
     fun restart(ctx: Context, why: String): Boolean = start(ctx, why, HomeCommands.RESTART)
 
+    /** A delayed plugin relaunch may race with navigation into the companion. Never steal focus. */
+    fun relaunch(ctx: Context, why: String, command: String?, plugin: String? = Prefs(ctx).patchVersionSeen.ifEmpty { null }, fromCompanion: Boolean = false): Boolean {
+        if (fromCompanion || EinkActivity.companionPageInFront() || UpdateReturn.awaitingLanding()) {
+            OLog.i("koreader restart: companion page in front; plugin loads at the next user start ($why)")
+            return false
+        }
+        return start(ctx, why, command, plugin = plugin)
+    }
+
     /** A RESTART not yet read is never replaced by the next start's intent (RestartLatch). */
     private val latch = RestartLatch()
 
