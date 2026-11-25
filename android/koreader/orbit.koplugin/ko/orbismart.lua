@@ -3,7 +3,7 @@
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
--- OrbiSmart sync on Android (docs/design/orbismart.md §3.3): the "Sync: OrbiSmart" setting's
+-- OrbiSmart sync on Android (docs/design/position-sync.md §3.3): the "Sync: OrbiSmart" setting's
 -- runtime. The decision is logic/orbismart.lua (the shared table); this file feeds it and acts.
 --   * Every pull and push of the BookOrbit plugin goes through its API client
 --     (bookorbit_api.lua :578 getProgress, :582 updateProgress; the live push
@@ -39,7 +39,7 @@ local function once(key, ...)
 end
 
 -- The first run of a build with this setting: OrbiSmart, unless the reader changed a sync
--- setting it would override (docs/design/orbismart.md §6, the recommended-settings rule).
+-- setting it would override (docs/design/position-sync.md §6, the recommended-settings rule).
 -- S.sync_mode already holds the schema's default (ko/settings.lua); a value chosen on either side
 -- has a real time in S.settings_at (more than the 1 ms seed) and is left alone.
 function OSM.migrate()
@@ -294,7 +294,7 @@ function OSM.ask(p, ui, digest, R, i, decision)
         cancel_callback = function() answer(false) end,
     }
     OSM.popup = entry
-    UIManager:show(entry.widget) -- gate: OrbiSmart's Yes / No popup, shown while reading by the user's ruling (docs/design/orbismart.md ruling 1)
+    UIManager:show(entry.widget) -- gate: OrbiSmart's Yes / No popup, shown while reading by the user's ruling (docs/design/position-sync.md ruling 1)
 end
 
 ---------------------------------------------------------------- the plugin's API client
@@ -367,7 +367,7 @@ function OSM.installApi()
     if not oka or type(Api) ~= "table" then return false end
     local missing = Compat.missingOn(Api, Compat.ORBISMART_API)
     if #missing > 0 then
-        once("api", "compat: OrbiSmart's behind-hold and decisions off (plugin changed): missing api." .. table.concat(missing, ", api."))
+        once("api", "compat: BookSync's behind-hold and decisions off (plugin changed): missing api." .. table.concat(missing, ", api."))
         return false
     end
     OSM.api_hooked = true
@@ -388,7 +388,7 @@ function OSM.installApi()
                 pct, progress, ts = rec.override.pct, rec.override.progress, os.time()
             end
             local okh, held = pcall(OSM.holdPush, digest, pct, progress)
-            if not okh then return nil, "OrbiSmart could not check the server place" end
+            if not okh then return nil, "BookSync could not check the server place" end
             -- Answered as sent: the outbox entry completes, the server keeps its further place.
             if okh and held then return { document = digest, timestamp = ts, orbit_held = true } end
         end

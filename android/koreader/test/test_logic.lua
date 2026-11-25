@@ -1535,7 +1535,7 @@ test("settings visible: rows show only while their parent has the value", functi
     v.sync_on_sleep = false
     eq(SettingsSync.visible(SIDX, "sleep_cap", v), false)
     eq(SettingsSync.visible(SIDX, "wifi_idle_min", v), true)
-    -- OrbiSmart sets the sync rows and hides them (docs/design/orbismart.md §6); Custom shows them.
+    -- OrbiSmart sets the sync rows and hides them (docs/design/position-sync.md §6); Custom shows them.
     v.sync_on_sleep = true
     for _, k in ipairs({ "sync_on_sleep", "sleep_cap", "sync_on_wake", "reading_schedule" }) do
         eq(SettingsSync.visible(SIDX, k, v), true, k .. " under Custom")
@@ -1553,7 +1553,9 @@ test("settings schema: Sync (OrbiSmart / Custom) is the sync section's first row
     for _, d in ipairs(SIDX.settings) do if d.section == "sync" then first = d; break end end
     eq(first.key, "sync_mode")
     eq(first.default, "orbismart")
-    eq(first.values[1].label, "OrbiSmart (recommended)")
+    eq(first.label, "Reading position")
+    eq(first.values[1].label, "Furthest page wins")
+    eq(first.line, "BookSync keeps the furthest place you've read on any device, and asks before jumping.")
 end)
 
 test("settings schema: every key KOReader reads has a row in its menu", function()
@@ -1582,7 +1584,7 @@ test("recommended choices from the companion", function()
     eq(#c, 3); eq(c[1].id, "bo.auto_sync"); eq(c[2].what, "mine"); eq(c[3].id, "all")
 end)
 
--- OrbiSmart sync (docs/design/orbismart.md §3): every case of the shared table, which the Xteink's
+-- OrbiSmart sync (docs/design/position-sync.md §3): every case of the shared table, which the Xteink's
 -- xteink/test/orbismart_test.cpp reads too.
 local OrbiSmart = M.OrbiSmart
 local OSM = JSON.fixture(here, "orbismart/cases.json")

@@ -20,7 +20,7 @@ owner, changes its row in the same change.
 | `bookorbit/catalog-dashboard-section.want-to-read.json` | `GET …/catalog/dashboard/sections/want-to-read`, recorded from the e2e server (synthetic library) |
 | `bookorbit/catalog-sections.smart-scopes.json`, `bookorbit/catalog-sections.collections.json` | `GET …/catalog/sections/smart-scopes` and `/collections` in the server's shape (`{section, items}`, ids as strings, no `count` on scopes past the shelf-extras cap); made up: 12 scopes, 1 collection |
 | `status/format.json` | W17 shared page/progress and 12/24-hour clock format examples |
-| `orbismart/cases.json` | OrbiSmart shared decisions, application moments and behind-hold (`docs/design/orbismart.md` §3) |
+| `orbismart/cases.json` | BookSync position sync shared decisions, application moments and behind-hold (`docs/design/position-sync.md` §3) |
 | `sleep/cases.json` | Not a recording: the sleep screen's rotation rule and fallbacks (`docs/design/lock-screen.md` R4, F1, F4) |
 | `opds/recent-feed.xml` | `GET /api/v1/opds/recent` as BookOrbit v3.9.0 writes it (synthetic books, made-up cover token): one book without a cover, one with image links |
 | `e2e/library.json` | Not a recording: the synthetic library the emulated release tests seed into a real BookOrbit server (series, authors, standalones, a want-to-read shelf, books by role) |

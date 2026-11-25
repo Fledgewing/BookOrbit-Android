@@ -5733,7 +5733,7 @@ test("sqlite stress: the verdict line", function()
     ok(notes[1]:find("didn't answer") ~= nil)
 end)
 
----------------------------------------------------------------- OrbiSmart sync (docs/design/orbismart.md)
+---------------------------------------------------------------- OrbiSmart sync (docs/design/position-sync.md)
 -- A 300-page book; places are pages, xpointers "/p<page>". The BookOrbit plugin's API client is
 -- a fake bookorbit_api (getProgress answers W.osm_server; updateProgress stores it), wrapped by
 -- ko/orbismart.lua like the real one.
@@ -6146,7 +6146,7 @@ test("orbismart: menu: Sync first in its section; the rows it sets hidden; the o
     local ui, m = osmBook(50, nil)
     local sync
     for _, it in ipairs(m:menuItems()) do if it.text == "Sync and Wi-Fi" then sync = it.sub_item_table end end
-    ok(sync[1].text_func():find("Sync: OrbiSmart", 1, true), sync[1].text_func())
+    ok(sync[1].text_func():find("Reading position: Furthest page wins", 1, true), sync[1].text_func())
     local texts = {}
     for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts + 1] = it.text or (it.text_func and it.text_func()) or "" end
     local all = table.concat(texts, "|")

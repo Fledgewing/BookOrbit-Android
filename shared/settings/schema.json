@@ -476,7 +476,7 @@
    "values": [
     {
      "id": "orbismart",
-     "label": "OrbiSmart (recommended)"
+     "label": "Furthest page wins"
     },
     {
      "id": "custom",
@@ -484,8 +484,8 @@
     }
    ],
    "section": "sync",
-   "label": "Sync",
-   "line": "OrbiSmart: the furthest place wins, and moving to another reader's place is asked once. Custom: set each sync yourself.",
+   "label": "Reading position",
+   "line": "BookSync keeps the furthest place you've read on any device, and asks before jumping.",
    "reader": [
     "plugin"
    ],

@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """Guard product copy on both platforms without renaming durable identifiers.
 
-OrbiSmart is deliberately unchanged. Orbit identifiers (packages, settings, paths,
-logs and upstream BookOrbit names) are not product copy.
+Identifiers (packages, settings, paths, logs and upstream BookOrbit names)
+are not product copy. Position sync is part of BookSync.
 """
 from pathlib import Path
 import re
+import json
 import unittest
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
-OLD = re.compile(r'\bOrbit\b|Android sync')
+OLD = re.compile(r'\bOrbit\b|Android sync|\bOrbiSmart\b')
 LITERAL = re.compile(r'"(?:\\.|[^"\\])*"|\[\[.*?\]\]', re.S)
 
 
 def obsolete(text):
     # The picture is an existing file, including when a setup instruction shows it.
     text = text.replace('Pictures/Orbit/sleep.png', '')
+    # Existing source includes are implementation paths.
+    text = re.sub(r'[^\s"<>]*OrbiSmart\.(?:h|cpp)', '', text)
     return OLD.search(text)
 
 
@@ -73,14 +76,41 @@ class ProductNames(unittest.TestCase):
                 if '"Orbify"' in line:
                     self.fail(f'{path.relative_to(ROOT)}:{number}: old firmware label')
 
+    def test_shared_settings_copy(self):
+        schema = json.loads((ROOT / 'shared/settings/schema.json').read_text())
+        def check(value):
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if key in ('label', 'line', 'title') and isinstance(child, str):
+                        self.assertIsNone(obsolete(child), child)
+                    check(child)
+            elif isinstance(value, list):
+                for child in value:
+                    check(child)
+        check(schema)
+
+    def test_documentation_position_sync_name(self):
+        paths = [ROOT / 'README.md', ROOT / 'AGENTS.md', ROOT / 'ROADMAP.md']
+        paths += [p for folder in ('docs', 'android', 'xteink', 'shared')
+                  for p in (ROOT / folder).rglob('*.md')
+                  if 'third_party' not in p.parts and 'build' not in p.parts]
+        for path in paths:
+            text = path.read_text()
+            # Source symbols, filenames and diagnostic examples retain their names.
+            text = re.sub(r'`[^`]+`', '', text)
+            self.assertIsNone(re.search(r'\bOrbiSmart\b', text), str(path.relative_to(ROOT)))
+        self.assertTrue((ROOT / 'docs/design/position-sync.md').is_file())
+        self.assertFalse((ROOT / 'docs/design/orbismart.md').exists())
+
     def test_release_copy(self):
         text = (ROOT / ".github/workflows/release.yml").read_text()
         self.assertIsNone(obsolete(text))
 
     def test_guard_examples(self):
-        for text in ('Orbit', 'Orbit Companion', "Orbit's settings", 'Android sync'):
+        for text in ('Orbit', 'Orbit Companion', "Orbit's settings", 'Android sync', 'OrbiSmart',
+                     'OrbiSmart (recommended)', 'OrbiSmart Continue from reader, p. 2?'):
             self.assertIsNotNone(obsolete(text))
-        for text in ('BookSync', 'BookSync Companion', 'BookOrbit', 'OrbiSmart',
+        for text in ('BookSync', 'BookSync Companion', 'BookOrbit', 'BookSync position sync',
                      'orbit.koplugin', 'net.fledgewing.orbitcompanion', 'Pictures/Orbit/sleep.png'):
             self.assertIsNone(obsolete(text))
 

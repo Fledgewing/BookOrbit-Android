@@ -262,8 +262,8 @@ class SettingsActivity : SleepPickerPage() {
                 if (g("sleep_mode") == "recommended") " · ${label("sleep_from")} · every ${g("sleep_hours")} h" else ""
             "sync" -> listOfNotNull(
                 label("wifi_mode").takeIf { "wifi" in Mode.caps(this) },
-                // OrbiSmart sets the sync rows itself (docs/design/orbismart.md §6).
-                if (g("sync_mode") != "custom") "OrbiSmart"
+                // OrbiSmart sets the sync rows itself (docs/design/position-sync.md §6).
+                if (g("sync_mode") != "custom") "Reading position: Furthest page wins"
                 else listOfNotNull("sleep".takeIf { g("sync_on_sleep") == "1" }, "wake".takeIf { g("sync_on_wake") == "1" }).let { if (it.isEmpty()) "no automatic syncs" else "sync on " + it.joinToString(" and ") },
             ).joinToString(" · ")
             "library" -> "Limit ${label("storage_limit_mb")} · " + if (g("mirror_auto") == "1") "Full refresh every ${label("mirror_ttl_days")}" else "Full refresh by hand"
