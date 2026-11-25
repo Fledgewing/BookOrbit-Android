@@ -2,9 +2,9 @@ package net.fledgewing.orbitcompanion
 
 /**
  * The storage limit's rule (was the plugin's Cache.storagePlan; docs/design/companion-worker.md):
- * one limit on everything Orbit stores. Over it, the least recently used browsing entries and
- * covers go first, then the covers saved for offline; lists and books saved for offline and the
- * index ("kept") never go.
+ * one limit on everything Orbit stores. Eligible covers go first in last-shown order across
+ * both cover tiers, then browsing entries. Protected covers, offline lists/books and the index
+ * ("kept") never go.
  */
 object StorageLogic {
     /** [k]: "e:<cache key>", "c:<cover file name>", "index" or "mirror"; [kind]: cache, cover, mirror_cover or kept. */
@@ -19,7 +19,7 @@ object StorageLogic {
         if (limit == null || limit <= 0 || used <= limit) return Plan(emptyList(), used, used)
         val drop = ArrayList<String>()
         var after = used
-        for (tier in listOf(setOf("cache", "cover"), setOf("mirror_cover"))) {
+        for (tier in listOf(setOf("cover", "mirror_cover"), setOf("cache"))) {
             val list = items.filter { it.kind in tier }.sortedWith(compareBy<Item> { it.at }.thenBy { it.k })
             for (e in list) {
                 if (after <= limit) return Plan(drop, used, after)

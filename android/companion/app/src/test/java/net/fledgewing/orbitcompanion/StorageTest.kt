@@ -85,7 +85,7 @@ class StorageTest {
         assertFalse(File(root, "stress-writer.lua").exists())
     }
 
-    @Test fun countRemovesBrowsingEntriesAndCoversButNeverTheSavedOnes() {
+    @Test fun coversGoBeforeBrowsingDataAndKeptDataNeverGoes() {
         val root = Files.createTempDirectory("s").toFile()
         val covers = File(root, "covers").apply { mkdirs() }
         var t = 0L
@@ -103,19 +103,20 @@ class StorageTest {
         val before = w.storageItems(covers.path, true)
         val used = before.sumOf { it.bytes }
         val entry = before.first { it.k == "e:old" }.bytes
-        // Room for everything but one browsing entry and one cover.
+        // Need about two covers of room: even an older browsing entry wins.
         t = 500
         w.storage(CacheWorker.StorageAsk("start", used - entry - 1000, covers.path, mirrorCovers = true))
         assertFalse("the plain cover went", File(covers, "a.jpg").exists())
-        assertTrue(File(covers, "m1.jpg").exists() && File(covers, "m2.jpg").exists())
-        assertEquals("the oldest browsing entry went; Home never", null, st.read("old", "/koreader/plugin/catalog/collections", null))
+        assertFalse(File(covers, "m1.jpg").exists())
+        assertTrue(File(covers, "m2.jpg").exists())
+        assertTrue("browsing data wins over offline covers too", st.read("old", "/koreader/plugin/catalog/collections", null) != null)
         assertTrue(st.read("home", "/koreader/plugin/catalog/dashboard", null) != null && st.read("new", "/koreader/plugin/catalog/shelves", null) != null)
         val ev = File(root, "events").listFiles()!!.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
         assertEquals("storage", ev["kind"])
-        assertEquals(sortedMapOf("cache" to 1L, "cover" to 1L, "mirror_cover" to 0L), ev["removed"])
+        assertEquals(sortedMapOf("cache" to 0L, "cover" to 1L, "mirror_cover" to 1L), ev["removed"])
         val totals = ev["totals"] as Map<*, *>
-        assertEquals(4000L, totals["mirror_cover"])
-        assertEquals(used - entry - 2000, totals["used"])
+        assertEquals(2000L, totals["mirror_cover"])
+        assertEquals(used - 4000, totals["used"])
         // The totals for the plugin's next start, in the database.
         assertEquals(totals, (LuaValue.parse(st.meta("storage")!!.toByteArray(Charsets.ISO_8859_1)) as Map<*, *>)["totals"])
         root.deleteRecursively()

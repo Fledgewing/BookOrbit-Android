@@ -1137,7 +1137,7 @@
         "after": 8
       },
       {
-        "name": "browsing entries and plain covers first, least recently used first; the mirror's covers stay",
+        "name": "all eligible covers before browsing data, least recently shown first",
         "limit": 10,
         "items": [
           {
@@ -1172,14 +1172,14 @@
           }
         ],
         "drop": [
+          "m1",
           "c1",
-          "a",
-          "b"
+          "a"
         ],
         "after": 8
       },
       {
-        "name": "then the mirror's covers, least recently seen first, until under; never its lists or details",
+        "name": "offline covers share last-shown order with browsing covers; data wins",
         "limit": 10,
         "items": [
           {
@@ -1214,10 +1214,10 @@
           }
         ],
         "drop": [
-          "a",
-          "m2"
+          "m2",
+          "m1"
         ],
-        "after": 10
+        "after": 9
       },
       {
         "name": "kept alone over the limit: everything else goes, they stay",

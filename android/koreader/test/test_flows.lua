@@ -4616,7 +4616,7 @@ test("local-first: Home's first paint has the on-device marks; a changed tile na
     cacheTeardown()
 end)
 
-test("storage limit: Orbit Companion counts and removes; browsing pages and plain covers go first (least recently used), then covers saved for offline; never the saved lists", function()
+test("storage limit: Orbit Companion counts and removes; eligible covers go before browsing data, all in last-shown order; never the saved lists", function()
     local client, Cat = cacheSetup()
     local MB = 1048576
     local lfs = require("libs/libkoreader-lfs")
@@ -4658,24 +4658,24 @@ test("storage limit: Orbit Companion counts and removes; browsing pages and plai
     run(3)
     ok(FC.storage_asks == asks + 1, "the companion counted")
     ok(walks == 0, "the UI thread never walks the cover folder")
-    ok(not has("old") and not io.open(cdir .. "/a.jpg", "rb"), "the oldest page and the plain cover went first")
-    ok(has("new") and io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then it was under the limit")
-    ok(E.OC.storage.used == 100 * MB and E.OC.storageText() == "Using 100 MB", "Using: " .. E.OC.storageText())
-    ok(table.concat(W.logs, "\n"):find("storage: 150.0 MB of 100 MB (start); removed 1 browsing entries, 1 covers, 0 saved-for-offline covers -> 100.0 MB", 1, true), "logged: " .. table.concat(W.logs, " | "))
-    -- A lower limit: the last browsing page, then the least recently seen saved cover; Home stays.
+    ok(has("old") and has("new"), "browsing data wins over both cover tiers")
+    ok(not io.open(cdir .. "/a.jpg", "rb") and not io.open(cdir .. "/m1.jpg", "rb") and not io.open(cdir .. "/m2.jpg", "rb"), "eligible covers went first")
+    ok(E.OC.storage.used == 90 * MB and E.OC.storageText() == "Using 90 MB", "Using: " .. E.OC.storageText())
+    ok(table.concat(W.logs, "\n"):find("storage: 150.0 MB of 100 MB (start); removed 0 browsing entries, 1 covers, 2 saved-for-offline covers -> 90.0 MB", 1, true), "logged: " .. table.concat(W.logs, " | "))
+    -- Once every eligible cover is gone, expendable browsing pages can go; Home stays.
     E.S.storage_limit_mb = 55
     E.OC.storageCount("limit changed"); run(3)
-    ok(not has("new") and not io.open(cdir .. "/m1.jpg", "rb") and io.open(cdir .. "/m2.jpg", "rb"), "then saved covers, oldest first")
+    ok(not has("old") and not has("new"), "browsing pages go only after eligible covers")
     ok(has("list"), "Home stays")
     -- A write over the limit asks for a count.
     E.S.storage_limit_mb = 60
-    entry("big", 20 * MB, 99)
-    E.OC.storageAdd(20 * MB, "cache"); run(3)
-    ok(not has("big") and io.open(cdir .. "/m2.jpg", "rb") and E.OC.storage.used == 50 * MB, "checked on the write")
+    entry("big", 40 * MB, 99)
+    E.OC.storageAdd(40 * MB, "cache"); run(3)
+    ok(not has("big") and E.OC.storage.used == 30 * MB, "checked on the write")
     -- The totals are there at the next start (the database's meta).
     E.OC.storage = nil
     E.OC.client = function() return client end
-    ok(E.OC.storageTotals() and E.OC.storageTotals().used == 50 * MB, "read back from the database")
+    ok(E.OC.storageTotals() and E.OC.storageTotals().used == 30 * MB, "read back from the database")
     -- No limit: nothing goes.
     run(10) -- drain the startup count before changing its limit
     E.S.storage_limit_mb = 0

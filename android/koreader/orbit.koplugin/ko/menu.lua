@@ -268,7 +268,7 @@ function OrbitAndroid:menuItems()
                 return label("storage_limit_mb", _("Storage limit")) .. ": " .. (mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%d GB"), mb / 1024) or string.format(_("%d MB"), mb)))
                     .. (okt and (" · " .. used) or "")
             end,
-            help_text = _("One limit on everything Orbit stores: pages it saved, books saved for offline and covers. Book files and KOReader's own data don't count. Over it, the least recently used pages and covers go first, then covers saved for offline; the lists and book details saved for offline always stay."),
+            help_text = _("One limit on everything Orbit stores: pages it saved, books saved for offline and covers. Book files and KOReader's own data don't count. Over it, the least recently shown covers go first, including covers saved for offline. Browsing pages go only after eligible covers. Protected covers and lists and book details saved for offline always stay."),
             sub_item_table = limit_items,
         },
         toggle("keep_copies_current", label("keep_copies_current", _("Keep book copies current")),

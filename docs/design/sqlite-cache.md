@@ -381,7 +381,8 @@ not new cached data and cannot block replacement. SQLite page allocation can rou
 committed usage above the payload estimate; subsequent growth uses that committed
 size. This is a cache budget, not a promise of sufficient filesystem free space.
 
-Lists and book data win over covers. To admit growing data, evict eligible browsing
+Lists and book data win over covers. The initial storage sweep likewise removes
+eligible covers before expendable browsing entries. To admit growing data, evict eligible browsing
 and saved-for-offline covers together, least recently **shown** first (filename breaks
 ties). The plugin sends the bounded visible paths through STORAGE; the companion
 alone touches their timestamps and lazily checks image sizes. Fetching/revalidating
