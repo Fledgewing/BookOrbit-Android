@@ -1,5 +1,5 @@
 {
-  "_comment": "Write-through cache (docs/design/write-through-cache.md). Both platforms' tests read this. Times are epoch seconds; 'now' is the time of the step. A cover version is the book's updatedAt as the server lists it. Cover files: ok | missing | empty | corrupt. A disk entry may carry the etag stored with it; a listed book may carry server_etag (the thumbnail's current ETag). download = covers whose body was transferred (200); not_modified = conditional requests answered 304 (file kept, renamed to the listed version); conditional = requests sent with If-None-Match.",
+  "_comment": "Write-through cache (docs/design/write-through-cache.md). Both platforms' tests read this. Times are epoch seconds; 'now' is the time of the step. A cover version is the book's updatedAt as the server lists it. Cover files: ok | missing | empty | corrupt. A disk entry may carry the etag stored with it; a listed book may carry server_etag (the thumbnail's current ETag). download = covers whose body was transferred (200); not_modified = conditional requests answered 304 (file kept, renamed to the listed version); conditional = requests sent with If-None-Match. writes: effect is what the plugin sends the companion (Cache.writeEffect: the book id, the fields it sets, a null field is cleared, and whether Home goes stale; null when the write failed, so nothing is sent); the companion applies it to every cached reply (CacheStore.patched).",
   "keys": [
     {
       "name": "query order and empty values don't matter",
@@ -322,6 +322,13 @@
         },
         "status": 200
       },
+      "effect": {
+        "id": 7,
+        "fields": {
+          "readStatus": "read"
+        },
+        "stale_home": true
+      },
       "entries": {
         "dashboard": {
           "continueReading": [
@@ -408,6 +415,13 @@
         },
         "status": 200
       },
+      "effect": {
+        "id": 7,
+        "fields": {
+          "rating": 4
+        },
+        "stale_home": true
+      },
       "entries": {
         "detail7": {
           "id": 7,
@@ -434,6 +448,7 @@
         },
         "status": 503
       },
+      "effect": null,
       "entries": {
         "detail7": {
           "id": 7,
@@ -813,7 +828,7 @@
     }
   ],
   "mirror": {
-    "_comment": "The offline mirror (docs/design/write-through-cache.md 'Offline mirror'): lists are saved in 100-item pages (the server's largest, koreader-catalog-query.dto.ts:87 and :284) and any page size the reader asks for is cut from them. Search is never mirrored. evict: kept entries are outside the caps. retry: a mirror request with no answer (Cache.mirrorRetry). small_pages: a list saved in a smaller page size.",
+    "_comment": "The offline mirror (docs/design/write-through-cache.md 'Offline mirror'): lists are saved in 100-item pages (the server's largest, koreader-catalog-query.dto.ts:87 and :284) and any page size the reader asks for is cut from them. Search is never mirrored. retry: a mirror request with no answer (MirrorLogic.retry). small_pages: a list saved in a smaller page size.",
     "windows": [
       {
         "path": "/koreader/plugin/catalog/books?page=2&size=12&sort=title&buckets=1&order=asc",
@@ -1017,85 +1032,6 @@
         "due": "ttl"
       }
     ],
-    "evict": [
-      {
-        "name": "kept entries neither count toward the byte cap nor go",
-        "index": {
-          "home": {
-            "bytes": 50,
-            "used_at": 0,
-            "keep": true
-          },
-          "detail": {
-            "bytes": 50,
-            "used_at": 0,
-            "keep": true
-          },
-          "a": {
-            "bytes": 5,
-            "used_at": 1
-          },
-          "b": {
-            "bytes": 5,
-            "used_at": 2
-          }
-        },
-        "max_bytes": 10,
-        "max_entries": 10,
-        "drop": []
-      },
-      {
-        "name": "over the byte cap: the least recently used plain entry goes",
-        "index": {
-          "home": {
-            "bytes": 50,
-            "used_at": 0,
-            "keep": true
-          },
-          "a": {
-            "bytes": 6,
-            "used_at": 1
-          },
-          "b": {
-            "bytes": 6,
-            "used_at": 2
-          }
-        },
-        "max_bytes": 10,
-        "max_entries": 10,
-        "drop": [
-          "a"
-        ]
-      },
-      {
-        "name": "the entry cap counts plain entries only",
-        "index": {
-          "m1": {
-            "bytes": 1,
-            "used_at": 0,
-            "keep": true
-          },
-          "m2": {
-            "bytes": 1,
-            "used_at": 0,
-            "keep": true
-          },
-          "a": {
-            "bytes": 1,
-            "used_at": 1
-          },
-          "b": {
-            "bytes": 1,
-            "used_at": 2
-          }
-        },
-        "max_bytes": 100,
-        "max_entries": 1,
-        "drop": [
-          "a"
-        ]
-      }
-    ],
     "retry": [
       {
         "name": "a first page with no answer: again in 5 s, in pages of 50",
@@ -1178,7 +1114,7 @@
     ]
   },
   "storage": {
-    "_comment": "The storage limit (v0.11.2, docs/design/write-through-cache.md \"Storage limit\"): what goes, in order, when Orbit's storage is over the limit (Cache.storagePlan), whether the offline mirror may go on (Cache.storageRoom), and the note when it stops (Cache.limitText). Sizes in bytes.",
+    "_comment": "The storage limit (v0.11.2, docs/design/write-through-cache.md \"Storage limit\"): what goes, in order, when Orbit's storage is over the limit (StorageLogic.plan), and the note when the mirror stops (MirrorLogic.limitText). Sizes in bytes.",
     "plans": [
       {
         "name": "under the limit: nothing goes",
@@ -1318,48 +1254,6 @@
         ],
         "drop": [],
         "after": 99
-      }
-    ],
-    "room": [
-      {
-        "name": "covers: room while the mirror's own share is under the limit",
-        "totals": {
-          "kept": 2,
-          "mirror_cover": 5
-        },
-        "limit": 10,
-        "what": "covers",
-        "room": true
-      },
-      {
-        "name": "covers: the mirror's share reached it: the cover pass stops",
-        "totals": {
-          "kept": 2,
-          "mirror_cover": 8
-        },
-        "limit": 10,
-        "what": "covers",
-        "room": false
-      },
-      {
-        "name": "lists and details go on while they alone fit",
-        "totals": {
-          "kept": 2,
-          "mirror_cover": 8
-        },
-        "limit": 10,
-        "what": "lists",
-        "room": true
-      },
-      {
-        "name": "lists and details alone fill it: the mirror stops",
-        "totals": {
-          "kept": 10,
-          "mirror_cover": 0
-        },
-        "limit": 10,
-        "what": "lists",
-        "room": false
       }
     ],
     "notes": [

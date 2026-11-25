@@ -59,6 +59,8 @@ signing="$repo/shared/fixtures/release-signing"
   "$here/ota_signature_test.cpp" "$up/lib/JsonParser/ReleaseJsonParser.cpp" "$json_src" \
   "$core/Ed25519Verify.cpp" "$core/UpdateSignature.cpp" -o "$out/ota_signature_test"
 "$out/ota_signature_test" "$signing"
+# shared/fixtures/REGISTRY.json: these tests read every rule table that names "cpp" (registry_test.cpp).
+orbify_test registry
 orbify_test finish "$core/FinishQueue.cpp"
 orbify_test end_of_book "$core/SeriesCard.cpp" "$core/EndPagePlan.cpp" "$core/FinishQueue.cpp" "$core/NextCover.cpp" \
   "$core/CatalogCache.cpp" "$core/LocalFirst.cpp"
@@ -69,6 +71,8 @@ orbify_test copy_check "$core/CopyCheck.cpp"
 orbify_test copy_queue "$core/CopyQueue.cpp" "$core/CopyCheck.cpp"
 orbify_test mirror "$core/Mirror.cpp"
 orbify_test sleep_sync_deadline
+# Battery stats (orbify/core/BatteryStatsCore): CrossInk-style GoogleTest cases through GtestShim.h.
+orbify_test battery_stats "$core/BatteryStatsCore.cpp"
 orbify_test boot_trail
 # The sleep screen (ROADMAP 11): the rotation and the batch read shared/fixtures/sleep/cases.json, as Android does.
 orbify_test sleep_pick "$core/SleepPick.cpp" "$core/SleepLayout.cpp"

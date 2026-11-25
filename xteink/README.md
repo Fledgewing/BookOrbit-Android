@@ -369,6 +369,10 @@ CrossInk-Tailnet for its releases).
 
 - **Source in this repository** (the overlay): MIT, see [`LICENSE`](LICENSE). MicroLink, the
   submodule, is MIT too (`third_party/microlink/LICENSE`, with its WireGuard and X25519 notices).
+- **Firmware code moved out of the patches** (files under `orbify/` whose first line is
+  `SPDX-License-Identifier: GPL-3.0-or-later`): GPL-3.0-or-later. They were new files inside the
+  patch series, written to build into CrossInk-Bookorbit, and keep the firmware's license. Every
+  other file here without that line is MIT.
 - **Released firmware binaries** (`firmware-*.bin`): they combine CrossInk-Bookorbit, MicroLink,
   this overlay, the Arduino core, ESP-IDF and other third-party components, including
   [wolfSSL](https://github.com/wolfSSL/Arduino-wolfSSL), which is licensed GPL-2.0-or-later. The
