@@ -416,6 +416,22 @@ No other one-way doors: everything is test-only, behind its own workflow, and re
 | 1 | sim envs in `overlay/platformio.local.ini`; `tailnet_build.py` sim mode with `tailnet/sim/` (Tailnet stubs, `sim_package.py`); patch `0090-orbify-simulator-build`; `xteink/test/e2e/` (`run.py` scenarios, `sim.py` SD card and simulator driver) | job `xteink`, one per reader | build ~30 s per reader (cached packages), scenarios below |
 | 2 | `android/companion/.../UpdaterSessionTest.kt` (Robolectric 4.14.1, test-only) | `android.yml` on every push, and job `android` | ~15 s |
 
+Android also gates releases on `release-tests.yml`'s `reader-startup` job. It runs the
+plugin's `startup` flow cases with the pinned KOReader's real `Trapper` module, a yielding
+progress GET, and ReaderReady before showing ReaderUI. It asserts that construction completes,
+the reader stays on top, and no close or quit is requested; status layout initialization is
+checked for both CRE and paged documents. This is a coroutine/lifecycle smoke test, without a
+rendering engine or Android JNI; stage 3's desktop reader remains planned.
+
+The ordering is from KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`:
+`frontend/apps/reader/readerui.lua:517` sends ReaderReady during init and `:791` shows the reader
+only after construction; `frontend/ui/trapper.lua:66` treats any running coroutine as wrapped.
+BookOrbit `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`'s
+`koreader-plugin/bookorbit.koplugin/main.lua:276` reuses that coroutine, and
+`bookorbit_progress_sync.lua:521` fetches remote progress through it. Orbit must defer its
+open-time pull until the next UI tick, so a background GET cannot suspend reader construction
+with an empty window stack.
+
 Where it differs from §4-§6:
 - **Library.** `kit.py` generates its own EPUBs from `library.json` (three series, eight authors,
   48 standalones, a want-to-read shelf, covers on 9 in 10) rather than adapting upstream's

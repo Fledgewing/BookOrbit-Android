@@ -86,7 +86,7 @@ function OrbitAndroid:restartForCompanion(source, quit_only)
     -- Once: the quit ends this process (a second request in the meantime is the same restart).
     if state.restarting_at and now_s() - state.restarting_at < 5 then return end
     state.restarting_at = now_s()
-    log("restart:", quit_only and "KOReader is in the background; saving and quitting, the new plugin loads at the next start ("
+    log("orbit: closing reader because companion restart:", quit_only and "KOReader is in the background; saving and quitting, the new plugin loads at the next start ("
         .. tostring(source) .. ")" or ("requested (" .. tostring(source) .. "); saving, then quitting so the new patch loads"))
     local ui = liveUI()
     if ui and ui.document and ui.saveSettings then pcall(ui.saveSettings, ui) end
@@ -757,7 +757,10 @@ function OrbitAndroid:onOrbitGoHome()
     if ui and ui.document then
         log("home: closing book, then BookOrbit home (it stays the current book)")
         state.closing_for_home = ui.document.file
-        UIManager:nextTick(function() ui:onHome() end)
+        UIManager:nextTick(function()
+            log("orbit: closing reader because Home requested the file browser")
+            ui:onHome()
+        end)
     else
         self:finishHome()
     end
