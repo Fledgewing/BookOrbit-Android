@@ -569,6 +569,9 @@ def catalog_cache_first(ctx: Context, tmp: Path) -> None:
     card = ctx.card(tmp)
     card.theme(UI_THEME_BOOKORBIT)
     sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
+    # Full refresh only walks the catalog; an ordinary sync creates Home's snapshot and
+    # its Library page, as on a configured reader. Do not rely on the walk fetching Home.
+    ctx.sim.run(card, "seed", script=f"3000:TAP:{sx},{sy}", timeout_s=30)
     full = ctx.sim.run(card, "full", script=f"3000:TAP:{sx},{sy},1300", timeout_s=60)
     after(full.output, "Mirror: saved for offline")
     # Age and a different saved library version must never force a reconnect/full walk.
