@@ -226,3 +226,9 @@ per scheduled callback. Mirror template preparation yields between sections; the
 and writes the plan. Stall diagnostics remain enabled at 50 ms and exclude deliberate coroutine
 waits. Host guards exercise startup and reading with 7,000 cover files and an eight-file read budget;
 real-device startup and Home rendering still need measurement before release.
+
+Upstream basis for these worker moves: BookOrbit `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`,
+`koreader-plugin/bookorbit.koplugin/bookorbit_board_data.lua:165` (calendar merge) and
+`:628` (board assembly), and `bookorbit_catalog_thumbnails.lua:147` (legacy cleanup),
+`:480` (cover pruning). KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`,
+`datastorage.lua:75` and `frontend/docsettings.lua:120` define the hash sidecar location.

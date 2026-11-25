@@ -6379,7 +6379,7 @@ test("startup: 7000 cover files never cause a UI walk, bulk read or 50 ms callba
     for i=1,7000 do local f=assert(io.open(cdir .. "/" .. i .. ".jpg.etag", "wb")); f:write("etag"); f:close() end
     E.OC.cover_dir = cdir
     local dir, open = lfs.dir, io.open
-    local walks, reads, max_reads, max_ms = 0, 0, 0, 0
+    local walks, reads, max_reads, max_ms, checked = 0, 0, 0, 0, 0
     local items = FC.storageItems
     -- The fake worker walks the real directory; companion tests cover its actual cleanup/count.
     FC.storageItems = function(folder)
@@ -6401,6 +6401,7 @@ test("startup: 7000 cover files never cause a UI walk, bulk read or 50 ms callba
         local before=W.wall()
         fn(unpack(args))
         if getfenv(fn)==E then
+            checked=checked+1
             local ms=(W.wall()-before)*1000
             max_ms=math.max(max_ms,ms); max_reads=math.max(max_reads,reads)
             ok(ms < 50, "main-loop callback exceeded 50 ms")
@@ -6416,6 +6417,7 @@ test("startup: 7000 cover files never cause a UI walk, bulk read or 50 ms callba
         E.OC.cleanEtags(cdir); run(12)
         ReaderUI.instance=nil; W.shown={}
         eq(walks,0)
+        ok(checked > 0, "guard measured production callbacks")
         ok(max_ms < 50 and max_reads <= 8)
     end)
     W.main_loop_guard=nil; lfs.dir=dir; io.open=open; FC.storageItems=items
