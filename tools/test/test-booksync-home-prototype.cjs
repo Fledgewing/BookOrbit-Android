@@ -349,9 +349,225 @@ async function widgetChecks() {
   );
   await b.close();
 }
+async function readerChecks() {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({
+    viewport: { width: 1400, height: 1100 },
+  });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  const act = (a) => page.locator(`#screen [data-act="${a}"]`);
+  const route = (r) => page.locator(`#screen [data-route="${r}"]`);
+  const key = (k) => page.locator(`#virtual [data-key="${k}"]`).click();
+  for (const platform of ["android-tablet", "pro", "classic"]) {
+    await page.goto(prototypeUrl);
+    if (platform !== "android-tablet") {
+      await page.locator("#device").selectOption("x4");
+      await page.locator("#mode").selectOption(platform);
+    }
+    // Classic paths use virtual focus/Select for every reader action, including numeric steps.
+    const activate = async (locator) => {
+      if (platform !== "classic") return locator.click();
+      for (let i = 0; i < 50; i++) {
+        if (await locator.evaluate((n) => n.classList.contains("focused"))) {
+          await key("select");
+          return;
+        }
+        await key("next");
+      }
+      throw new Error(
+        "Classic focus could not reach " + (await locator.textContent()),
+      );
+    };
+    await activate(page.locator('[data-act="book"][data-book="b1"]'));
+    const menu = async () => {
+      if (platform === "android-tablet") await act("reader-menu").click();
+      else await key("more");
+    };
+    const go = async (r) => {
+      await menu();
+      if ((await route(r).count()) === 0) await activate(act("reader-paging"));
+      await activate(route(r));
+    };
+    const resume = async () => activate(act("reader-resume"));
+    const bounds = async () => {
+      const result = await page.locator(".reader-pane").evaluate((el) => {
+        const f = document
+            .querySelector("#screen .footer")
+            .getBoundingClientRect(),
+          r = el.getBoundingClientRect();
+        return {
+          bottom: r.bottom,
+          footer: f.top,
+          overflow: el.scrollHeight > el.clientHeight + 1,
+        };
+      });
+      assert.ok(
+        result.bottom <= result.footer + 1,
+        `${platform}: reader pane overlaps footer ${JSON.stringify(result)}`,
+      );
+      assert.equal(
+        result.overflow,
+        false,
+        `${platform}: reader pane needs unintended scrolling`,
+      );
+    };
+    await menu();
+    await bounds();
+    await activate(route("quick"));
+    await bounds();
+    for (const [i, n] of [
+      "Font",
+      "Size",
+      "Margins",
+      "Spacing",
+      "Contrast",
+      "Warmth",
+      "Frontlight",
+      "Status bar",
+    ].entries()) {
+      if (i === 4) await activate(act("reader-paging"));
+      await activate(page.locator(`[data-setting="${n}"]`));
+      const before = await page.locator("#setting-value").innerText();
+      await activate(page.locator('[data-act="reader-adjust"][data-dir="1"]'));
+      assert.notEqual(await page.locator("#setting-value").innerText(), before);
+      await bounds();
+      await activate(act("back").first());
+    }
+    await resume();
+    if (platform === "android-tablet") {
+      await act("reader-bottom").click();
+      await page
+        .getByRole("heading", { name: "Quick settings", exact: true })
+        .waitFor();
+      await activate(route("native"));
+      await bounds();
+      await act("reader-plugin").click();
+      assert.match(
+        await page.locator(".notice").innerText(),
+        /third-party plugin screen/,
+      );
+      await act("reader-native-settings").click();
+      assert.match(
+        await page.locator(".notice").innerText(),
+        /gesture manager/,
+      );
+      await resume();
+      await go("native");
+      await act("reader-note").click();
+      assert.match(
+        await page.locator(".notice").innerText(),
+        /Native annotation/,
+      );
+      await resume();
+    }
+    await go("toc");
+    await bounds();
+    await activate(
+      page.locator('[data-act="reader-turn"][data-page="96"]').first(),
+    );
+    assert.match(
+      await page.locator("#reading-position").innerText(),
+      /Page 96/,
+    );
+    await go("bookmarks");
+    await bounds();
+    await activate(act("reader-bookmark"));
+    assert.match(await page.locator(".reader-pane").innerText(), /no bookmark/);
+    await activate(act("reader-bookmark"));
+    await activate(page.locator('[data-act="reader-turn"][data-page="42"]'));
+    await go("highlights");
+    await bounds();
+    await activate(act("reader-highlight"));
+    await bounds();
+    await activate(act("reader-note"));
+    await resume();
+    await go("goto");
+    await bounds();
+    if (platform === "classic")
+      await activate(
+        page.locator(
+          '[data-act="reader-step"][data-target="page"][data-dir="1"]',
+        ),
+      );
+    else await page.locator("#reader-page").fill("123");
+    await activate(page.locator('[data-act="reader-go"][data-target="page"]'));
+    assert.match(
+      await page.locator("#reading-position").innerText(),
+      platform === "classic" ? /Page 43/ : /Page 123/,
+    );
+    await go("goto");
+    if (platform === "classic")
+      await activate(
+        page.locator(
+          '[data-act="reader-step"][data-target="percent"][data-dir="1"]',
+        ),
+      );
+    else await page.locator("#reader-percent").fill("50");
+    await activate(
+      page.locator('[data-act="reader-go"][data-target="percent"]'),
+    );
+    if (platform !== "classic")
+      assert.match(
+        await page.locator("#reading-position").innerText(),
+        /Page 170/,
+      );
+    await go("search");
+    await bounds();
+    if (platform === "classic") await activate(act("reader-example"));
+    else {
+      await page.locator("#reader-query").fill("lantern");
+      await activate(act("reader-find"));
+    }
+    await bounds();
+    await activate(act("reader-turn"));
+    assert.match(
+      await page.locator("#reading-position").innerText(),
+      /Page 42/,
+    );
+    for (const r of ["detail", "series"]) {
+      await go("info");
+      await bounds();
+      await activate(route(r));
+      await activate(act("back").first());
+      await resume();
+    }
+    await go("end");
+    await bounds();
+    await activate(act("reader-finish"));
+    assert.match(await page.locator("#finish-status").innerText(), /queued/);
+    await activate(act("reader-rating"));
+    await activate(act("reader-undo"));
+    assert.match(await page.locator(".notice").innerText(), /undone/);
+    await bounds();
+    await resume();
+    await go("sleep");
+    await bounds();
+    await activate(act("reader-resume").first());
+    await page.locator(".reader").waitFor();
+    // X4 More must open reading controls, rather than Home's More tab.
+    if (platform !== "android-tablet") {
+      await key("more");
+      await page.locator('[data-reader-view="reader-menu"]').waitFor();
+      await key("back");
+    }
+    await activate(act("back").first());
+    await page.locator(".tabs").waitFor();
+  }
+  assert.deepEqual(errors, []);
+  console.log(
+    "PASS: Android top/bottom/native-plugin escape; Pro touch and Classic button-only reader menus, all quick controls, TOC, bookmarks/highlights, page/percent, search, info/series, finish/undo/rating, sleep/wake, position return and screen bounds; zero console errors.",
+  );
+  await browser.close();
+}
+
 (async () => {
   await flowChecks();
   await widgetChecks();
+  await readerChecks();
 })().catch((error) => {
   console.error(error);
   process.exit(1);

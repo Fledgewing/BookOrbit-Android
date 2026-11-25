@@ -31,7 +31,8 @@ phase does not defer owned X4 Home; plain-base cutover follows adapter completen
 | **Owned Xteink adapter and firmware path**: Home reads our SD database through our adapter in 0.12, replacing other X3 Home implementations to fit; replace fork sync/download/login, then cut over to plain CrossInk + our layer after separate base-switch approval. | X4 Pro, X4, X3 | designing ([audit and stages](docs/design/booksync-home/DESIGN.md#82-what-currently-depends-on-crossink-bookorbit)) |
 | **One BookSync version** from 0.12 across companion, plugin and firmware; CrossInk version is base metadata, with an explicit legacy updater transition. | Android, X4 Pro, X4, X3 | designing ([version contract](docs/design/booksync-home/DESIGN.md#87-one-booksync-version-from-012)) |
 | **Add-on mode and setup checklist** (Next 10, 10a). | Android | approved items carried over |
-| **Cleaner menus** (Later 8b) and **no visible app switches** (Later 9) where the new Home makes them small. | Android | stretch |
+| **Unified in-book menus** (Later 8b): BookSync reader screens and quick settings match Home, with stock KOReader/plugin escape; TOC, annotations, go to, search, book info, End of book and cached sleep presentation. No KOReader core patches; capability and flash gates per screen. | Android, X4 Pro, X4, X3 | designing (maintainer direction decided; [audit and increments](docs/design/booksync-home/DESIGN.md#13-in-book-experience-revision-4-continued)) |
+| **No visible app switches** (Later 9) where the new Home makes them small. | Android | stretch |
 
 ## Planned: backend independence
 

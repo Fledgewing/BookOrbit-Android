@@ -553,6 +553,76 @@
           font-size: 14px;
         }
       }
+      .reader-tap {
+        display: block;
+        width: 100%;
+        border: 2px dashed #888;
+        text-align: center;
+        margin: 10px 0;
+        line-height: 1.4;
+      }
+      .reader-pane h2 {
+        margin: 12px 0;
+      }
+      .reader-list {
+        display: grid;
+        gap: 8px;
+      }
+      .reader-list button {
+        text-align: left;
+        width: 100%;
+        padding: 14px;
+      }
+      .reader-pane .notice {
+        border: 2px solid #777;
+        padding: 12px;
+        margin: 12px 0;
+      }
+      .reader-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .reader-controls input {
+        width: 7em;
+        font: inherit;
+      }
+      .native-menu {
+        font-family: system-ui, sans-serif;
+        border: 3px double #444;
+        padding: 18px;
+        background: #eee;
+      }
+      .native-menu h2 {
+        font-family: system-ui, sans-serif;
+      }
+      .x4 .reader {
+        line-height: 1.5;
+        font-size: 1em;
+      }
+      .x4 .reader-list button {
+        padding: 10px;
+      }
+      .x4 .reader-pane h2 {
+        font-size: 24px;
+      }
+      .x4 .reader-pane p {
+        margin: 12px 0;
+      }
+      .x4 .reader-pane .small {
+        font-size: 15px;
+      }
+      .reader-pane {
+        max-height: calc(100% - 210px);
+        overflow: auto;
+      }
+      .sleep-preview {
+        border: 3px solid #333;
+        text-align: center;
+        padding: 28px;
+        font-family: Georgia, serif;
+      }
     </style>
   </head>
   <body>
@@ -1263,12 +1333,14 @@
         let text = editing
           ? `Editing ${currentPage().id}. Selected tile ${selected + 1}. ${editTool === "focus" ? "Select grabs the focused tile." : `Active step: ${editTool}. Prev/Next changes it; More cycles the axis.`} Invalid moves leave the layout unchanged.`
           : view === "reader"
-            ? "This is a fake reader. Back returns to the initiating screen. No file was opened."
-            : view === "series"
-              ? "Every series member has independent reading and download state. Download next 3 previews exact eligible titles; bulk downloads never open a book."
-              : view === "detail"
-                ? "BookSync owns the details. The same download state appears here and on the tile through the central job model."
-                : `${tab}, page ${pageIndex + 1}. ${$("#offline").checked ? "Saved data works offline; an unsaved book asks before connecting." : "Tap a server-only book to simulate a download, then open."}`;
+            ? "Tap the top for the BookSync reading menu, or the bottom for quick settings. X4 More opens the same menu. All controls simulate local actions; no file was opened."
+            : view.startsWith("reader-")
+              ? "The same type, borders, focus outline and footer connect reading to Home. Return to book keeps the reading position. Android’s KOReader menu keeps stock settings and third-party plugins reachable. Light controls shown here are a capability preview."
+              : view === "series"
+                ? "Every series member has independent reading and download state. Download next 3 previews exact eligible titles; bulk downloads never open a book."
+                : view === "detail"
+                  ? "BookSync owns the details. The same download state appears here and on the tile through the central job model."
+                  : `${tab}, page ${pageIndex + 1}. ${$("#offline").checked ? "Saved data works offline; an unsaved book asks before connecting." : "Tap a server-only book to simulate a download, then open."}`;
         $("#explain").textContent = text;
         $("#explain-title").textContent = editing
           ? "Build this page one widget at a time"
@@ -1304,8 +1376,152 @@
       function browseHTML() {
         return `<div class="view"><h2>Saved library</h2><p class="small">All books · Libraries · Authors · Series · Collections · Smart scopes · Collection A · Scope A</p>${books.map((x) => `<div class="row">${bookButton(x.id)}</div>`).join("")}${action("View series", "series")}</div>`;
       }
+      let readerPage = 42,
+        readerSection = 0,
+        readerSetting = "Font",
+        readerMessage = "",
+        searchTerm = "",
+        readerBookmarks = [42, 96],
+        readerRating = 0;
+      const quickNames = [
+        "Font",
+        "Size",
+        "Margins",
+        "Spacing",
+        "Contrast",
+        "Warmth",
+        "Frontlight",
+        "Status bar",
+      ];
+      const quickValues = [
+        "Serif",
+        28,
+        18,
+        1.4,
+        2,
+        40,
+        60,
+        "Page · percent · time",
+      ];
+      const route = (label, name) =>
+        action(label, "reader-route", `data-route="${name}"`);
+      function resumeReader() {
+        const start = history.findIndex((h) => h.view === "reader");
+        if (start >= 0) history.splice(start);
+        view = "reader";
+        modal = null;
+        focus = 0;
+        render();
+      }
       function readerHTML() {
-        return `<div class="view reader"><h2>${esc(b(bookId).title)}</h2><p>The lantern stood beside the window. Outside, the sea was calm, and the first light of morning reached the harbor.</p><p>This synthetic reader demonstrates the result of opening a book. Nothing here reads or writes a real file.</p><div class="small">Page 42 / 340 · 12%</div>${action("Back to library", "back")}</div>`;
+        return `<div class="view reader">${action("Top tap area · BookSync menu", "reader-menu", 'aria-label="Open top reader menu"', "reader-tap")}<h2>${esc(b(bookId).title)}</h2><p>The lantern stood beside the window. Outside, the sea was calm, and the first light of morning reached the harbor.</p><p>This synthetic reader demonstrates the result of opening a book. Nothing here reads or writes a real file.</p><div class="small" id="reading-position">Page ${readerPage} / 340 · ${Math.round((readerPage / 340) * 100)}%</div>${action("Bottom tap area · Quick settings", "reader-bottom", 'aria-label="Open bottom reader menu"', "reader-tap")}${action("Back to library", "back")}</div>`;
+      }
+      function readerPaneHTML() {
+        let title = "Reading menu",
+          content = "";
+        const list = (items) =>
+          `<div class="reader-list">${items.join("")}</div>`;
+        const turn = (label, page) =>
+          action(label, "reader-turn", `data-page="${page}"`);
+        if (view === "reader-menu") {
+          const items = [
+            ["Quick settings", "quick"],
+            ["TOC and chapters", "toc"],
+            ["Bookmarks", "bookmarks"],
+            ["Highlights", "highlights"],
+            ["Go to page / percent", "goto"],
+            ["Search in book", "search"],
+            ["Book info and series", "info"],
+            ["End of book", "end"],
+            ["Sleep / lock preview", "sleep"],
+          ];
+          if (device !== "x4") items.push(["KOReader menu", "native"]);
+          const size = device === "x4" ? 5 : 10;
+          content =
+            list(
+              items
+                .slice(readerSection * size, (readerSection + 1) * size)
+                .map(([l, r]) => route(l, r)),
+            ) +
+            (items.length > size
+              ? action(
+                  readerSection ? "‹ Menu page 1" : "Menu page 2 ›",
+                  "reader-paging",
+                )
+              : "");
+        } else if (view === "reader-quick") {
+          title = "Quick settings";
+          content =
+            list(
+              quickNames
+                .slice(readerSection * 4, readerSection * 4 + 4)
+                .map((n, i) =>
+                  action(
+                    `${n}: ${quickValues[readerSection * 4 + i]}`,
+                    "reader-setting",
+                    `data-setting="${n}"`,
+                  ),
+                ),
+            ) +
+            action(
+              readerSection ? "‹ Type and spacing" : "Light and status ›",
+              "reader-paging",
+            ) +
+            `<p class="small">Changes apply to this book in the simulation. Light controls require device support.</p>` +
+            (device !== "x4" ? route("More KOReader settings…", "native") : "");
+        } else if (view === "reader-setting") {
+          title = readerSetting;
+          const i = quickNames.indexOf(readerSetting);
+          content = `<p id="setting-value">${esc(String(quickValues[i]))}</p><div class="reader-controls">${action("−", "reader-adjust", 'data-dir="-1"')}${action("+", "reader-adjust", 'data-dir="1"')}</div><p class="small">${readerSetting === "Status bar" ? "Paint within existing margins; no document reflow. Choose visible fields in the status layout." : "Preview only. Native control capability is checked before enabling."}</p>`;
+        } else if (view === "reader-toc") {
+          title = "TOC and chapters";
+          content =
+            list([
+              turn("1 · The window · p. 1", 1),
+              turn("2 · The harbor · p. 42", 42),
+              turn("3 · The crossing · p. 96", 96),
+            ]) +
+            action("Previous chapter", "reader-turn", 'data-page="1"') +
+            action("Next chapter", "reader-turn", 'data-page="96"');
+        } else if (view === "reader-bookmarks") {
+          title = "Bookmarks";
+          content =
+            list(readerBookmarks.map((p) => turn(`Bookmark · p. ${p}`, p))) +
+            action("Toggle bookmark here", "reader-bookmark") +
+            `<p class="small">${readerBookmarks.includes(readerPage) ? "Current page bookmarked" : "Current page has no bookmark"}</p>`;
+        } else if (view === "reader-highlights") {
+          title = "Highlights";
+          content =
+            list([
+              action(
+                "“The first light reached the harbor.” · p. 42",
+                "reader-highlight",
+              ),
+            ]) +
+            `<p class="small">Selection handles and dictionary tools stay native. This list links to saved annotations.</p>`;
+        } else if (view === "reader-highlight") {
+          title = "Highlight";
+          content = `<blockquote>The first light reached the harbor.</blockquote><p>Note: A new beginning.</p>${turn("Go to highlight · p. 42", 42)}${action("Edit note (native tools)", "reader-note")}`;
+        } else if (view === "reader-goto") {
+          title = "Go to";
+          content = `<label>Page <input id="reader-page" type="number" min="1" max="340" value="${readerPage}"></label><div class="reader-controls">${action("− page", "reader-step", 'data-target="page" data-dir="-1"')}${action("+ page", "reader-step", 'data-target="page" data-dir="1"')}${action("Go to page", "reader-go", 'data-target="page"')}</div><label>Percent <input id="reader-percent" type="number" min="0" max="100" value="${Math.round((readerPage / 340) * 100)}"></label><div class="reader-controls">${action("− %", "reader-step", 'data-target="percent" data-dir="-1"')}${action("+ %", "reader-step", 'data-target="percent" data-dir="1"')}${action("Go to percent", "reader-go", 'data-target="percent"')}</div><p class="small">EPUB pages depend on layout. Actual client uses native locators.</p>`;
+        } else if (view === "reader-search") {
+          title = "Search in book";
+          content = `<label>Find <input id="reader-query" value="${esc(searchTerm)}" placeholder="lantern"></label>${action("Find", "reader-find")}${device === "x4" ? action("Use example: lantern", "reader-example") : ""}<p class="small">${searchTerm ? `Results for “${esc(searchTerm)}” · synthetic match` : "Search the open book, offline."}</p>${searchTerm ? turn("…the lantern stood beside the window… · p. 42", 42) : ""}`;
+        } else if (view === "reader-info") {
+          title = "Book info";
+          content = `<h3>${esc(b(bookId).title)}</h3><p>EPUB · Lantern Cycle · ${b(bookId).series}<br>Reading · on device</p><p>A keeper follows a trail of lanterns beyond a quiet harbor.</p>${route("Full book details", "detail")}${route("View series", "series")}`;
+        } else if (view === "reader-end") {
+          title = "End of book";
+          content = `<h3>${esc(b(bookId).title)}</h3><p id="finish-status">${b(bookId).status === "read" ? "Finished · queued until you leave the book" : "You reached the end"}</p>${action("Mark finished", "reader-finish")}${action("Undo finish", "reader-undo")}<p>Rating: ${readerRating || "not set"}</p>${action("Change rating", "reader-rating")}<div class="row">Next in series · Glass Harbor</div>${route("Next in series →", "series")}<p class="small">Preview of the existing finish flow. No server writes.</p>`;
+        } else if (view === "reader-sleep") {
+          title = "Sleep / lock preview";
+          content = `<div class="sleep-preview"><h3>${esc(b(bookId).title)}</h3><p>Reading · ${Math.round((readerPage / 340) * 100)}%</p><p>BookSync</p><p>Sleeping</p></div>${action("Wake / unlock preview", "reader-resume")}<p class="small">Cached cover/status only. Android OS lock and power controls remain stock.</p>`;
+        } else if (view === "reader-native") {
+          title = "KOReader menu";
+          content = `<div class="native-menu"><p>Navigation　Typography　Tools　☰</p>${list([action("Example third-party plugin", "reader-plugin"), action("Native gestures and settings", "reader-native-settings"), action("Native selection / dictionary tools", "reader-note")])}</div><p class="small">Stock-style stand-in. Production calls the original KOReader menus with every registered plugin item.</p>`;
+        }
+        return `<div class="view reader-pane" data-reader-view="${view}"><h2>${title}</h2>${content}${readerMessage ? `<div class="notice" role="status">${esc(readerMessage)}</div>` : ""}<div class="actions">${action("Return to book", "reader-resume")}${view !== "reader-menu" ? route("Reading menu", "menu") : ""}</div></div>`;
       }
       // Reconcile only changed DOM regions; progress ticks update their own tile in place.
       function patchChildren(parent, next) {
@@ -1357,7 +1573,9 @@
                   ? detailHTML()
                   : view === "browse"
                     ? browseHTML()
-                    : readerHTML());
+                    : view === "reader"
+                      ? readerHTML()
+                      : readerPaneHTML());
         const markup =
           top +
           body +
@@ -1769,6 +1987,141 @@
           return;
         }
         switch (a) {
+          case "reader-menu":
+            readerSection = 0;
+            readerMessage = "";
+            push("reader-menu");
+            break;
+          case "reader-bottom":
+            readerSection = 0;
+            readerMessage = "";
+            push("reader-quick");
+            break;
+          case "reader-route":
+            readerSection = 0;
+            readerMessage = "";
+            push(
+              ["detail", "series"].includes(n.dataset.route)
+                ? n.dataset.route
+                : "reader-" + n.dataset.route,
+            );
+            break;
+          case "reader-paging":
+            readerSection = 1 - readerSection;
+            render();
+            break;
+          case "reader-setting":
+            readerSetting = n.dataset.setting;
+            readerMessage = "";
+            push("reader-setting");
+            break;
+          case "reader-adjust": {
+            const i = quickNames.indexOf(readerSetting),
+              d = Number(n.dataset.dir);
+            if (i === 0)
+              quickValues[i] = quickValues[i] === "Serif" ? "Sans" : "Serif";
+            else if (i === 7)
+              quickValues[i] = quickValues[i].includes("time")
+                ? "Page · percent"
+                : "Page · percent · time";
+            else {
+              const limits = [
+                [0, 0],
+                [12, 60],
+                [0, 60],
+                [1, 2.5],
+                [0, 5],
+                [0, 100],
+                [0, 100],
+              ];
+              quickValues[i] = Math.max(
+                limits[i][0],
+                Math.min(
+                  limits[i][1],
+                  Math.round((quickValues[i] + d * (i === 3 ? 0.1 : 1)) * 10) /
+                    10,
+                ),
+              );
+            }
+            render();
+            break;
+          }
+          case "reader-resume":
+            resumeReader();
+            break;
+          case "reader-turn":
+            readerPage = Number(n.dataset.page);
+            resumeReader();
+            break;
+          case "reader-bookmark":
+            readerBookmarks = readerBookmarks.includes(readerPage)
+              ? readerBookmarks.filter((p) => p !== readerPage)
+              : [...readerBookmarks, readerPage].sort((a, b) => a - b);
+            render();
+            break;
+          case "reader-highlight":
+            readerMessage = "";
+            push("reader-highlight");
+            break;
+          case "reader-note":
+            readerMessage =
+              "Native annotation / dictionary tools (simulated); BookSync does not replace text selection.";
+            render();
+            break;
+          case "reader-step": {
+            const t = n.dataset.target,
+              input = $("#reader-" + t),
+              max = t === "page" ? 340 : 100;
+            input.value = Math.max(
+              t === "page" ? 1 : 0,
+              Math.min(max, Number(input.value) + Number(n.dataset.dir)),
+            );
+            break;
+          }
+          case "reader-go": {
+            const t = n.dataset.target,
+              v = Number($("#reader-" + t).value);
+            if (!Number.isFinite(v)) break;
+            readerPage = Math.max(
+              1,
+              Math.min(340, Math.round(t === "percent" ? v * 3.4 : v)),
+            );
+            resumeReader();
+            break;
+          }
+          case "reader-find":
+            searchTerm = $("#reader-query").value.trim();
+            render();
+            break;
+          case "reader-example":
+            searchTerm = "lantern";
+            render();
+            break;
+          case "reader-finish":
+            b(bookId).status = "read";
+            readerMessage =
+              "Finished locally. Existing finish queue sends after leaving the book.";
+            render();
+            break;
+          case "reader-undo":
+            b(bookId).status = "reading";
+            readerMessage = "Finish undone; pending finish removed.";
+            render();
+            break;
+          case "reader-rating":
+            readerRating = (readerRating % 5) + 1;
+            render();
+            break;
+          case "reader-plugin":
+            readerMessage =
+              "Example third-party plugin screen (simulated). Its real UI stays stock and returns here.";
+            render();
+            break;
+          case "reader-native-settings":
+            readerMessage =
+              "Native gesture manager and all KOReader settings remain reachable (simulated).";
+            render();
+            break;
           case "tab":
             autoOpen = null;
             modal = null;
@@ -1968,6 +2321,12 @@
         }
       });
       function key(k) {
+        if (k === "more" && (view === "reader" || view.startsWith("reader-"))) {
+          readerSection = 0;
+          readerMessage = "";
+          push("reader-menu");
+          return;
+        }
         if (modal) {
           if (k === "back") {
             modal = null;
@@ -2084,6 +2443,24 @@
       function restart() {
         if (interval) clearInterval(interval);
         interval = null;
+        readerPage = 42;
+        readerSection = 0;
+        readerMessage = "";
+        searchTerm = "";
+        readerBookmarks = [42, 96];
+        readerRating = 0;
+        quickValues.splice(
+          0,
+          8,
+          "Serif",
+          28,
+          18,
+          1.4,
+          2,
+          40,
+          60,
+          "Page · percent · time",
+        );
         books = clone(initialBooks);
         layout = defaults();
         validate(layout);

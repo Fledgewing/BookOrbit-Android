@@ -5,7 +5,9 @@ Design, [static mockups](mockups.html) and the requested clickable prototype onl
 no native client implementation or release is authorized. This is the UI portion of
 [backend independence step 1](../backend-independence.md#1-owned-android-client-and-ledger),
 not approval of that document's ledger, export or server proposals.
-Revision 4 records the decided widget host, free-form editors and shared layout;
+Revision 4 records the decided widget host, free-form editors and shared layout,
+and the [unified in-book experience](#13-in-book-experience-revision-4-continued),
+with a pinned KOReader audit and stock-menu escape;
 [prototype.html](prototype.html) is the clickable synthetic preview. Revision 3 retains every reader-preset content type and makes X3 a full 0.12
 target by replacing all other Home paths. Revision 2 incorporated the maintainer's cross-platform ruling: owned X4 Home in
 0.12 alongside Android, eventual plain-firmware base, and unified product versions.
@@ -1014,9 +1016,192 @@ open the local file and exercise book open/download/cancel, offline consent,
 long press/menu/details/mark/remove-confirm, exact series next-three downloads,
 all tabs/pages, add/remove/move/resize/page operations/reset, starter availability,
 widget failure isolation, unknown layout retention and both X4 interaction modes.
-The Classic editor add/remove/move path is also tested using only its virtual
-buttons. Assert native dimensions and tile bounds, unchanged sibling DOM during
+The Classic editor add/remove/move path and the in-book menus in §13 are also
+tested using only its virtual buttons. Reader checks cover every quick control,
+Android top/bottom taps and stock/plugin escape, TOC, annotations, go to, search,
+info/series, finish/undo/rating, sleep/wake and return to the reading position. Assert native dimensions and tile bounds, unchanged sibling DOM during
 progress and zero console/page errors. Install Playwright/Chromium in a temporary
 directory, then run with that directory's `node_modules` on NODE_PATH; the script
 writes no screenshots/build artifacts. Native widget/flash estimates remain
 unmeasured and require the separate implementation acceptance in §3.6/§8.
+
+## 13. In-book experience (revision 4 continued)
+
+### 13.1 Decided product direction
+
+**Decided:** BookSync owns the normal reading menus as well as Home on Android,
+X4 Pro, X4 Classic and X3. Top/bottom tap menus, quick settings, TOC/chapters,
+bookmarks/highlights, go to page/percent, search, book info/series, End of book and
+our cached sleep presentation use the same design system. This is design scope,
+not permission to implement or a claim that native hooks have passed acceptance.
+No KOReader core patches. Every original KOReader menu remains reachable through
+**KOReader menu**, including third-party plugin items; **More KOReader settings…**
+also appears in quick settings. We do not remove registrations, remap saved user
+gestures, or make BookSync a prerequisite for opening stock menus.
+
+Shared screen/widget tokens: grayscale surfaces, serif reading headings and
+sans-serif control labels; native body/control sizes 32 px on M8C, 18 px on X4,
+18 px on X3 (accessibility scaling in native clients); title scale 1.35×, metadata
+0.85×; 1 px rules, 2 px card borders and 3 px black focus outlines at native
+resolution. A stable footer carries page/location and Back/Select hints. Controls
+are generously spaced for touch, and list focus never depends on gray shading
+alone. Reuse Home's tokens and screen primitives, not its editable page placements:
+reading controls cannot disappear because someone removed a Home widget. Screens
+have their own id/version, data needs, supported device classes and isolated
+loading/offline/empty/error states; the host owns navigation. They do not call
+other widgets. A failed screen offers Back and the native menu escape.
+
+Android top tap opens Reading menu; bottom tap opens Quick settings. Opening
+one closes the other. X4 More opens the paged Reading menu; Prev/Next focus,
+Select activates and Back returns without changing position. X3 uses the same
+operations in short, paged text lists. User-requested menus are permitted by the
+reading gate; refresh, sync and downloads never open them or take focus. User
+setting changes may request native repagination; the status layout itself remains
+paint-only inside existing margins (#105–#108, §5). No network or folder scan runs
+on KOReader's UI thread. The native reader still owns document rendering,
+selection, navigation history and persisted annotation/position state.
+
+### 13.2 Pinned KOReader audit: entry points, not a replacement API
+
+Audit at `koreader` v2026.07.1, commit
+`9192014d8bd82a91dc1012473be0f238dedfdb54` (`K = upstream/koreader`).
+These are feasibility findings from source; a native integration spike and
+compatibility checks are required before enabling the new menus.
+
+- `K/frontend/apps/reader/modules/readermenu.lua:96` registers menu tap/swipe
+  zones whose handlers call instance methods; `:390` builds the top menu, `:404`
+  instantiates TouchMenu, `:489` opens **both** the config menu and top menu.
+  `:499` handles the menu key, `:524` builds an invisible menu for menu search.
+  A plugin can reversibly wrap the active ReaderMenu instance's user-facing
+  tap/swipe/key entry points and show our screen. This is an internal method
+  seam, **not a supported general theme/replacement API**. Preserve originals,
+  their arguments, close lifecycle and invisible `do_not_show` behavior. Do not
+  globally replace TouchMenu or intercept every `onShowMenu` call.
+- `K/frontend/apps/reader/modules/readerconfig.lua:44` registers bottom gestures;
+  `:128` creates ConfigDialog, disables hinting and sets close callbacks;
+  `:148`/`:155` are tap/swipe entry points and `:170` restores hinting. Wrap those
+  user entry points for our quick screen, not ConfigDialog globally. In native
+  escape mode use the saved originals and their matching close paths; a scoped
+  bypass prevents wrappers recursively reopening BookSync. ReaderMenu's native
+  combined top/bottom path must use that bypass too.
+- `K/frontend/apps/reader/modules/readermenu.lua:340` invokes registered
+  `addToMainMenu` methods and `:529` registers widgets. This permits a normal
+  **BookSync reading menu** entry; it does not authorize rewriting other plugins'
+  entries. Stock escape calls the original menu builder so all registrations,
+  including future plugin entries, remain present. TouchMenu is a shared generic
+  widget (`K/frontend/ui/widget/touchmenu.lua:479`), not a reader skin extension.
+- Gesture registration/dispatch is independent:
+  `K/plugins/gestures.koplugin/main.lua:1287` registers zones, `:1308` dispatches
+  saved actions through Dispatcher (`:1327`). InputContainer supports zone
+  registration/unregistration (`K/frontend/ui/widget/container/inputcontainer.lua:137`,
+  `:176`), but same-id registration replaces prior zones. **Do not replace or
+  delete the user's gesture zones.** Offer an explicit BookSync menu action and
+  native-menu action; existing third-party gesture actions stay routed to their
+  original handlers. A conflicting custom gesture wins over the default taps.
+
+Install wrappers per ReaderUI lifetime, restore on disable/close, guard repeated
+installation and rotation/reopen, and preserve another plugin's wrapper chain.
+If a required method/signature is absent or conflicts, leave that surface stock
+and offer the registered BookSync entry instead. Add every new KOReader symbol
+to `android/koreader/test/koreader_compat.lua` during implementation. No
+compatibility fallback may invoke heavy work in the plugin.
+
+| Surface | Android ownership and replace / wrap / keep-stock boundary | Source evidence at the pin |
+|---|---|---|
+| Top and bottom menus | **Replace presentation through wrapped entry points.** Own screens; native original accessible through bypass. Retain native menu search/invisible construction. | `readermenu.lua:390`, `:478`, `:489`, `:499`, `:524`; `readerconfig.lua:128`, `:148` (all under `K/frontend/apps/reader/modules/`) |
+| Font, size, margins, spacing, contrast | **Own quick controls, wrap native operations.** Delegate EPUB font/line/gamma/margin events; do not copy the typesetting engine. Unsupported document format/settings open stock config instead. | `K/frontend/apps/reader/modules/readerfont.lua:203`, `:212`, `:269`, `:283`; `readertypeset.lua:477`, `:502` in same directory |
+| Warmth/frontlight | **Wrap capability-supported device controls; otherwise keep stock/OS.** Show unavailable with a reason and OS settings link, never claim every Android device supports these. | `K/frontend/ui/widget/frontlightwidget.lua:65`, `:475`, `:506`; Android capability `K/frontend/device/android/device.lua:84` |
+| Status bar | **Own settings presentation**, reuse the existing status layout and margin contract, do not install a second footer or reflow the document. More native footer options stay stock. | `K/frontend/apps/reader/modules/readerfooter.lua:2699`; local status design §5 and #105–#108 |
+| TOC/chapters | **Own list, wrap native data/navigation.** Preserve hierarchy, page labels, hidden flows and navigation history; advanced native TOC settings stay stock. | `K/frontend/apps/reader/modules/readertoc.lua:159`, `:806`; `readerrolling.lua:704`, `:725`, `:772` in same directory |
+| Bookmarks/highlights | **Own saved-item lists, wrap native annotation mutations. Keep stock selection handles, highlight editor, note keyboard and dictionary dialogs.** These have document-specific selection/plugin behavior; restyling the shared dialogs globally is outside a safe reader-only seam. | `K/frontend/apps/reader/modules/readerbookmark.lua:370`, `:675`; `readerhighlight.lua:264`, `:1365`, `:1480`, `:1492` in same directory |
+| Go to page/percent | **Own basic form, wrap native navigation**, preserving back history, page labels and percentage semantics. Advanced pinned-page/non-linear flow syntax uses native dialog. | `K/frontend/apps/reader/modules/readergoto.lua:33`; `readerrolling.lua:749`, `:756`; `readerpaging.lua:1147`, `:1182` in same directory |
+| Search | **Own query/result screen, wrap native search/index/navigation** for supported formats; native regex, advanced options, keyboard and error dialogs remain stock until separately adapted. Search/parse cost must be measured; if synchronous native search blocks too long, keep native search rather than add our own UI-thread work. | `K/frontend/apps/reader/modules/readersearch.lua:294`, `:614`, `:708`, `:873` |
+| Book info and series | **Replace** BookSync catalog presentation from saved read model; native document metadata remains reachable. Opening catalog screens preserves the reading session and Back position. | §4/§6 owned detail contract; native document menu construction `K/frontend/apps/reader/modules/readermenu.lua:390` |
+| End of book | **Restyle existing takeover**, not a second finish writer. Preserve Undo, rating order, deferred sends, explicit next-book download/open and offline behavior. | `android/koreader/orbit.koplugin/ko/endofbook.lua:171`, `:476`, `:630`, `:666` |
+| Sleep / lock | **Own cached sleep artwork/presentation where our existing sleep path runs; keep stock Android system lock, power/authentication UI and KOReader suspend lifecycle.** A plugin cannot promise control over the OS lock surface. Never patch KOReader core or fetch at sleep. | `K/frontend/ui/screensaver.lua:346`; `android/koreader/orbit.koplugin/ko/sleep.lua:141`, `:162`; existing sleep design §5 |
+| Other plugins, gestures, unadapted/core-coupled screens | **Keep stock**, with clear escape. No claim that the native UI is fully reskinned. If replacing a screen requires a core patch, stop at a wrapper/link. | Native registration `readermenu.lua:340`, `:529`; gesture dispatcher above |
+
+### 13.3 Xteink plan and cost
+
+Audit at CrossInk-Bookorbit v2.0.0+bookorbit.1-rc3, commit
+`87e2e1984481e8a3d996f12b34b50a383f9013b8` (`X = upstream/crossink-v2.0`).
+`X/src/activities/reader/EpubReaderActivity.cpp:3022` constructs the reader drawer
+with settings callbacks, bookmarks/clippings flags and position; the drawer takes
+these in `X/src/activities/reader/EpubReaderDrawerActivity.cpp:436` and renders at
+`:3063`. Chapter, percent/page and bookmark activities are invoked in
+`EpubReaderActivity.cpp:4462`, `:4506`, `:4530`, `:5072`. These are overlay patch
+seams, not KOReader APIs. Keep the reader/session engine and native file formats;
+replace presentation and route commands to the existing operation owners. This
+work stays inside Orbify's overlay and owned sources, never upstream patches.
+
+| Surface | X4 Pro / X4 Classic | X3 |
+|---|---|---|
+| Reading menu / quick settings | Replace/restyle drawer with shared tokens, touch or focus lists; reuse native settings callbacks. Font, size, margins, spacing, contrast and status use supported native controls. | Same operations in text pages; no live sample raster preview or animated sliders. |
+| Light / warmth | Capability-gated; unsupported hardware omits active sliders and explains availability. Prototype demonstrates interaction, not hardware capability. | Same capability rule. No invented frontlight hardware. |
+| TOC / bookmarks / go to | Restyle existing activities, retain document locators and navigation history. | Same in paged lists, bounded buffers. |
+| Highlights / search | Restyle saved clippings; retain selection/dictionary engine. A full-book search screen must use a bounded incremental worker and cancel. Where a native search operation is absent, this is **new estimated work**, not existing firmware parity. | Saved clippings list and bounded search planned; measure memory/time before acceptance. No RAM-wide text index. |
+| Book info / series / End of book | Owned cached screens and existing FinishSync/EndPage, with exactly one sync writer. | Same text actions; already excluded cover artwork remains excluded. |
+| Sleep / lock | Restyle existing cached SleepScreen; preserve wake/security and suspend operations. | Cached text/image assets that fit existing implementation; no new full-screen buffer. |
+
+All operations are capability- and format-aware (EPUB first); an unsupported
+operation says why or links to the existing native screen. XTC/TXT/PDF parity is
+not implied by an EPUB mockup. No menu action fetches remotely just to draw. Use
+the same synthetic reader cases across Android and firmware simulators, adding
+shared fixtures only with implementation.
+
+**Estimated incremental flash, not measured:** shared reader screen routing and
+tokens 2–4 KiB X3 / 3–6 KiB X4; menu + quick controls 3–6 / 4–8 KiB; navigation,
+annotation and search shells 5–10 / 6–12 KiB; End of book + sleep restyle 1–3 /
+2–4 KiB. Total **11–23 KiB X3 / 15–30 KiB X4** excludes any new search engine,
+font data, index/SD cache and native widgets not yet linked. Rough engineering
+estimate 3–5 developer-weeks Android, 3–5 X4/X3 plus 1–2 cross-platform QA after
+the host/editor foundation; no elapsed-time guarantee. Bounded full-book search
+where missing adds an estimated 1–2 weeks and 4–10 KiB, separately measured.
+Reuse existing native operation code; do not credit its removal as savings.
+
+These costs are **additional** to §3.6's Home engine/editor/widget budgets, not a
+second claim on the same headroom. Against the known X3 replacement envelope
+68,501 B (§8.4/flash audit), engine + Settings 7–14 KiB plus menu estimate
+11–23 KiB leaves **30,613–50,069 B before starter widgets, adapters, SD database
+and any new search engine**. The X4 Pro measured 29,799 B gate headroom can already
+be exceeded by its 16–32 KiB editor plus 15–30 KiB menus; removing old Homes/drawer
+must be measured per device. No new drawer savings are credited here. Build map
+A/B comparisons must show exclusive linked bytes for each removed Home and old
+menu, net new code, total image and margin under 99.5%; zero double counting.
+X3 remains a full 0.12 target with reduced text presentation. Keep existing native
+specialist dialogs as the fallback if an owned replacement cannot fit; no silent
+feature loss or second compiled Home. A failure to fit the shared required
+operations blocks acceptance and returns to maintainer review rather than quietly
+dropping X3. This design does not alter firmware or measure new compiled bytes.
+
+### 13.4 Incremental roadmap and acceptance
+
+Extend §8.5 without delaying the first three widgets: editor/host + Continue
+reading/Shelf/Browse first; then accept a reader-menu shell/stock escape slice,
+followed independently by quick controls/status, navigation (TOC/go), annotations,
+search, info/series and the existing End of book/sleep restyle. Home widget and
+reader slices can advance independently; none requires the full widget library.
+No backend/base-switch decision is reopened. Menu presentation is a reversible
+setting on Android with automatic stock fallback if compatibility fails; firmware
+rollback remains the signed previous image. Native settings and reading state
+are never destructively migrated by a visual-theme toggle.
+
+| Slice | Acceptance before enabling on each capable platform |
+|---|---|
+| Menu shell / escape | Top and bottom taps, key/gesture actions, rotation, reopen and disable tested; a real third-party registered item and its custom gesture still work. Escape uses original top/bottom menu paths without recursion; stock menu search still works; Back preserves exact position. Hook absence leaves stock usable. |
+| Quick settings / status | Change every supported control and reopen; native persistence agrees; unavailable warmth/light explained. Status controls preserve margins. Font change may repaginate; merely opening menus does not. |
+| TOC / go | Hierarchical/empty TOC, previous/next chapter, page and percent boundaries, labelled/non-linear pages and return history; no conversion of unrelated backend locators. |
+| Bookmarks / highlights | Add/remove/reopen a bookmark, open highlight location and edit note through native tools; no duplicate annotation writer, loss of plugin tools or changed selection gestures. |
+| Search | Empty/no-result/error and match navigation, cancellation and long EPUB responsiveness; X3 bounded memory. Advanced native fallback reachable on Android. |
+| Info / series | Cached description and primary/secondary memberships; return to the same book/position after viewing details or queued downloads. |
+| End of book / sleep | Existing finish queue ordering, Undo/rating/offline/next-book checks pass unchanged; cached sleep render never starts network or steals reading focus; OS lock remains accessible. |
+| Fit / fault isolation | Map delta and peak RAM measured separately on all firmware targets; no buffer from Home duplicated for menus. A screen failure preserves reading and native escape; no background job opens a screen. |
+
+Prototype additions demonstrate all of these navigation surfaces on Android and
+X4, including a stock-style KOReader menu with a synthetic third-party plugin.
+They are interaction previews, not proof of a native API/firmware implementation.
+`tools/test/test-booksync-home-prototype.cjs` adds both tap zones, every quick
+control, TOC/bookmarks/highlights, page/percent, search, info/series, finish/undo,
+sleep/wake, native plugin escape and X4 virtual-button menu checks. Static
+`mockups.html` includes Android/X4 surfaces and X3 text variants. No real files,
+accounts, light hardware or backend writes are accessed by either artifact.
