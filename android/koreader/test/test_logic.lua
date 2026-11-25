@@ -177,6 +177,16 @@ test("version: pre-releases sort before the release", function()
     eq(cmp("0.0.0-dev", "0.1.0"), -1)
 end)
 test("version: unparsable compares as nil", function() eq(cmp("x", "0.1.0"), nil) end)
+test("version: preview, candidate, stable and an installed rc.17", function()
+    local sequence = { "0.11.3-rc.17", "0.11.4-preview.1", "0.11.4-preview.2", "0.11.4-rc.1", "0.11.4" }
+    for i = 2, #sequence do
+        eq(cmp(sequence[i - 1], sequence[i]), -1)
+        eq(cmp(sequence[i], sequence[i - 1]), 1)
+    end
+    eq(cmp("0.11.4-preview.10", "0.11.4-preview.2"), 1)
+    eq(cmp("v0.11.4-preview.1", "0.11.3-rc.17"), 1)
+end)
+
 test("version: the repo copy is a dev version", function() eq(cmp(M.PATCH_VERSION, "0.0.1"), -1) end)
 
 test("version: a test build sorts before the next release", function()

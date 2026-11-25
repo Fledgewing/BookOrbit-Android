@@ -417,8 +417,21 @@ object NewIn {
         "reading_fonts" to "0.12.0",
     )
 
-    /** versionCode = MAJOR*10000 + MINOR*100 + PATCH (app/build.gradle.kts). */
-    fun versionOf(code: Int): Version? = if (code <= 0) null else Version(code / 10_000, code / 100 % 100, code % 100)
+    /** Decode both legacy base-only codes and the shared preview/RC/stable encoding. */
+    fun versionOf(code: Int): Version? {
+        if (code <= 0) return null
+        val modern = code >= AndroidVersionCode.OFFSET
+        val base = if (modern) (code - AndroidVersionCode.OFFSET) / AndroidVersionCode.SCALE else code
+        val stage = if (modern) (code - AndroidVersionCode.OFFSET) % AndroidVersionCode.SCALE else 9999
+        val pre = when (stage) {
+            9999 -> null
+            0 -> "dev"
+            in 1..3999 -> "preview.$stage"
+            in 4001..7999 -> "rc.${stage - 4000}"
+            else -> return null
+        }
+        return Version(base / 10_000, base / 100 % 100, base % 100, pre)
+    }
 
     /** [updatedFrom]: the version the last update came from (null: a fresh install, no tags). */
     fun tag(id: String, done: Boolean, updatedFrom: Version?, current: Version?, since: Map<String, String> = SINCE): String? {
