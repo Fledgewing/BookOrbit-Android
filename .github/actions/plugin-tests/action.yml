@@ -21,5 +21,6 @@ runs:
         unzip -p "$zip" orbit.koplugin/main.lua | grep -qx 'local PATCH_VERSION = "0.0.0-ci"'
         # The shared settings schema rides along (docs/design/companion-settings.md §4.1).
         unzip -p "$zip" orbit.koplugin/settings_schema.json | cmp - shared/settings/schema.json
+        unzip -p "$zip" orbit.koplugin/catalog_sections.json | cmp - shared/fixtures/catalog/sections.json
         if unzip -Z1 "$zip" | grep -v '^orbit\.koplugin/'; then exit 1; fi
         rm -rf "$(dirname "$zip")"

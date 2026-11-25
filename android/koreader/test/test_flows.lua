@@ -3895,6 +3895,10 @@ local function pluginCatalog(Cat, client)
         local params = { sort = section == "series" and "series" or "title" }
         if section == "series" then params.seriesId = tonumber(entry.seriesId) end
         if section == "authors" then params.author = entry.id end
+        if section == "libraries" then params.libraryId = tonumber(entry.id) end
+        if section == "collections" then params.collectionId = tonumber(entry.id) end
+        if section == "smart-scopes" then params.smartScopeId = tonumber(entry.id) end
+        if section == "series" and not entry.seriesId then params.series = entry.id end
         return params
     end
     function cat:effectiveOrder(q) return q.order or (q.sort == "recently_added" and "desc" or "asc") end
@@ -3930,6 +3934,42 @@ local function withHost(cat, fn)
     E.bookorbit = hosts
     if not okf then error(err, 0) end
 end
+
+-- @fixture catalog/sections.json
+test("mirror: every Home shelf and server index is planned before any browsing", function()
+    local client, Cat = cacheSetup()
+    local cat = pluginCatalog(Cat, client)
+    local plan = E.Mirror.plan(cat, "full", "coverage")
+    local inventory = E.Mirror.INVENTORY
+    local paths = {}
+    for _, path in ipairs(plan.browse_lists) do paths[path] = true end
+    for kind, params in pairs(inventory.home_books) do
+        local q = {}
+        for k, v in pairs(params) do q[k] = v end
+        q.order = cat:effectiveOrder(q); cat:listDecorateBookQuery(q)
+        ok(paths[client:query("/koreader/plugin/catalog/books", q)], "uncovered Home shelf: " .. kind)
+    end
+    for kind, params in pairs(inventory.root_books) do
+        local q = {}
+        for k, v in pairs(params) do q[k] = v end
+        q.order = cat:effectiveOrder(q); cat:listDecorateBookQuery(q)
+        ok(paths[client:query("/koreader/plugin/catalog/books", q)], "uncovered server book row: " .. kind)
+    end
+    eq(#plan.sections, #inventory.sections)
+    for _, section in ipairs(inventory.sections) do
+        local template = plan.templates[section]
+        ok(template and template.path, "uncovered selector " .. section)
+        for _, key in ipairs(inventory.selectors[section]) do
+            local path = key == "series" and template.series_name_path or template.path
+            ok(path:find(key .. "=" .. E.Mirror.SENTINEL, 1, true), "uncovered selector key " .. key)
+        end
+    end
+    eq(plan.catalog, inventory)
+    local incremental = E.Mirror.plan(cat, "incremental", "coverage")
+    eq(#incremental.dynamic_lists, #plan.dynamic_lists)
+    ok(#incremental.entries >= 5, "root, Home, Discover and composed shelves")
+    cacheTeardown()
+end)
 
 test("cache: after a Full refresh, offline paging through every page of a linked list never asks to connect", function()
     local client, Cat = cacheSetup()

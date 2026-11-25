@@ -360,7 +360,6 @@ class CacheWorker(
         val written = ArrayList<Map<String, Any?>>()
         var writtenMore = false
         var details = 0L
-        var lists = HashSet<String>()
     }
 
 
@@ -382,6 +381,8 @@ class CacheWorker(
         plan.allBooks?.let { addList(it) }
         plan.strings("seed_lists").forEach { addList(it) }
         plan.strings("sections").forEach { addList(it) }
+        plan.strings("browse_lists").forEach { addList(it) }
+        seedDynamic(plan, false)
         // Every list saved before (the plugin's browsing too): saved again.
         store.db().query("SELECT identity FROM lists") { LuaValue.str(it.text(0)!!) }.forEach { addList(it) }
         val ids = sortedSetOf<Long>()
@@ -397,6 +398,71 @@ class CacheWorker(
             addJob(Job("detail", id.toString()))
             if (plan.coversOn) addJob(Job("cover", id.toString()))
         }
+    }
+
+    /** Home replies and every page of volatile shelves, including lists never opened before. */
+    private fun seedDynamic(plan: Plan, recheck: Boolean) {
+        plan.strings("entries").forEach { addJob(Job("entry", it)) }
+        for (path in plan.strings("dynamic_lists")) {
+            val w = MirrorLogic.listWindow(path) ?: continue
+            val total = store.db().query("SELECT total FROM lists WHERE identity = ?", CacheStore.u(w.identity)) { it.long(0) }.firstOrNull() ?: 0L
+            for (page in 1..MirrorLogic.pageCount(total.toInt(), null)) addJob(pageJob(if (recheck) "recheck" else "page", w.identity, page))
+        }
+    }
+
+    /** Expand using fresh indexes, never on KOReader's UI thread. Jobs deduplicate identities.
+     * Recheck queues all existing pages, even when membership moves without changing the total. */
+    private fun seedCatalogVariants(r: Run, recheck: Boolean, yieldTo: () -> Unit): Boolean {
+        val plan = r.plan
+        if (plan.m["catalog"] !is Map<*, *>) return true
+        val catalog = CatalogPlan(plan)
+        val libraries = ArrayList<String>()
+        val bases = linkedSetOf<String>()
+        plan.allBooks?.let(bases::add)
+        bases.addAll(plan.strings("seed_lists"))
+        bases.addAll(plan.strings("browse_lists"))
+        val entries = store.db().query("SELECT DISTINCT l.section, li.item FROM lists l JOIN list_items li ON l.identity = li.identity WHERE l.kind = 'section'") {
+            it.text(0) to it.bytes(1)
+        }
+        for ((section, bytes) in entries) {
+            val entry = bytes?.let { LuaValue.parse(it) } as? Map<*, *> ?: continue
+            if (section == "libraries") entry["id"]?.let { libraries.add(LuaValue.text(it)) }
+            if (section != null) MirrorLogic.entryPath(plan.templates, plan.sentinel, section, entry)?.let(bases::add)
+        }
+        val device = plan.strings("seed_lists").map { MirrorLogic.parseQuery(MirrorLogic.splitPath(it).second)["ids"] }.firstOrNull { it != null }
+        // Not on device walks at most 500 recent items and takes the first 200 absent ids.
+        val deviceSet = plan.ids("seed_details").toSet()
+        val recentIdentity = plan.strings("dynamic_lists").firstOrNull {
+            val q = MirrorLogic.parseQuery(MirrorLogic.splitPath(it).second)
+            q["sort"] == "recently_added" && q["readStatus"] == null
+        }?.let { MirrorLogic.listWindow(it)?.identity }
+        val recentItems = recentIdentity?.let { store.window(it, 1, catalog.recentScanSize, null)?.get("items") as? List<*> }.orEmpty()
+        val recent = recentItems.mapNotNull { (it as? Map<*, *>)?.get("id") as? Long }.filter { it !in deviceSet }.take(catalog.absentLimit)
+        if (recent.isNotEmpty()) bases.add("/koreader/plugin/catalog/books?ids=${recent.joinToString(",")}&sort=recently_added&order=desc")
+        val batch = ArrayList<Job>()
+        var statusAt = clockMs()
+        fun flush() {
+            if (batch.isNotEmpty()) { store.transaction { batch.forEach(::addJob) }; batch.clear() }
+            if (clockMs() - statusAt >= STATUS_EVERY_MS) { recount(r, false); writeStatus(r, true); statusAt = clockMs() }
+            yieldTo()
+        }
+        fun queue(path: String) {
+            val w = MirrorLogic.listWindow(path) ?: return
+            val known = if (recheck) store.db().query("SELECT total FROM lists WHERE identity = ?", CacheStore.u(w.identity)) { it.long(0) }.firstOrNull() else null
+            if (recheck && known != null && !CatalogPlan.dynamic(w.identity)) return
+            val total = known ?: 0L
+            for (page in 1..MirrorLogic.pageCount(total.toInt(), null)) {
+                batch.add(pageJob(if (recheck) "recheck" else "page", w.identity, page))
+                if (batch.size >= 500) flush()
+            }
+        }
+        val paths = catalog.sectionPaths() + bases.asSequence().distinctBy(CatalogPlan::scope).flatMap { catalog.bookPaths(it, libraries.distinct(), device) }
+        for (path in paths) {
+            if (File(mirrorDir, "stop").isFile) { flush(); return false }
+            queue(path)
+        }
+        flush()
+        return true
     }
 
     /** Refresh's delta: every saved page of every list, rechecked. */
@@ -416,6 +482,8 @@ class CacheWorker(
 
     private fun seedIncremental(r: Run, creds: Creds): Long {
         val plan = r.plan
+        if (plan.m["catalog"] is Map<*, *>) plan.strings("sections").forEach { addList(it, "recheck") }
+        seedDynamic(plan, true)
         val newest = store.meta("incremental_watermark") ?: newestStamp() ?: return 0L
         var target = newest
         var page = 1
@@ -489,6 +557,7 @@ class CacheWorker(
     private fun fetch(r: Run, creds: Creds, job: Job): Landed {
         val plan = r.plan
         return when (job.kind) {
+            "entry" -> Landed(job, http.get(url(creds, job.ref), headers(creds), null, MAX_BODY), job.ref)
             "page", "recheck" -> {
                 val path = MirrorLogic.mirrorPage(job.identity, job.page, job.size.takeIf { it != MirrorLogic.PAGE })
                 Landed(job, http.get(url(creds, path), headers(creds), null, MAX_BODY), path)
@@ -535,6 +604,12 @@ class CacheWorker(
         val plan = r.plan
         val t = now()
         r.requests++
+        if (job.kind == "entry") {
+            val account = plan.owner
+            val server = plan.owner.substringAfter('|')
+            store.putEntry(MirrorLogic.key(account, server, path), path, body, t)
+            return
+        }
         if (job.kind == "detail") {
             store.putDetail(job.id, body, t)
             store.setMeta("incremental_dirty_${job.id}", null)
@@ -560,11 +635,10 @@ class CacheWorker(
             id.takeIf { !store.hasDetail(id) || LuaValue.changed(store.bookItem(id), item) }
         }.toSet() else emptySet()
         val changed = store.putWindow(w.identity, w.kind, w.section, (job.page - 1) * job.size, body, t)
-        r.lists.add(w.identity)
         val total = (body["total"] as? Number)?.toInt() ?: 0
         if (job.page == 1) {
             val pages = MirrorLogic.pageCount(total, job.size)
-            if (!recheck || oldTotal?.toInt() != total) for (n in 2..pages) addJob(pageJob(job.kind, w.identity, n, job.size))
+            for (n in 2..pages) addJob(pageJob(job.kind, w.identity, n, job.size))
             if (recheck && oldTotal != null && oldTotal.toInt() != total) log("mirror: ${shortPath(w.identity)} total $oldTotal -> $total; re-paged")
         }
         val items = body["items"] as? List<*> ?: emptyList<Any?>()
@@ -639,7 +713,8 @@ class CacheWorker(
         }
         val total = maxOf(r.total, r.estimate)
         val pct = if (finished) 100L else if (total == 0L) 0L else minOf(99L, r.done * 100 / total)
-        r.pct = maxOf(r.pct, pct)
+        val phasePct = if (!finished && r.plan.m["catalog"] is Map<*, *> && store.meta("catalog_expanded") == null) minOf(5L, pct) else pct
+        r.pct = maxOf(r.pct, phasePct)
         store.setMeta("run_pct", r.pct)
     }
 
@@ -659,14 +734,14 @@ class CacheWorker(
         when (plan.op) {
             "full" -> st.transaction {
                 st.db().exec("DELETE FROM jobs")
-                st.setMeta("run_op", "full"); st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null)
+                st.setMeta("run_op", "full"); st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null); st.setMeta("catalog_expanded", null)
                 seed(plan)
             }
             "incremental" -> {
                 if (pendingBefore == 0L) {
                     st.db().exec("DELETE FROM jobs")
                     st.setMeta("run_op", "incremental")
-                    st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null)
+                    st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null); st.setMeta("catalog_expanded", null)
                     st.setMeta("incremental_scan_complete", null)
                     try { r.requests += seedIncremental(r, creds) } catch (_: Exception) {
                         log("mirror: incremental probe unavailable; watermark kept")
@@ -684,8 +759,10 @@ class CacheWorker(
                 }
                 st.transaction {
                     st.db().exec("DELETE FROM jobs")
-                    st.setMeta("run_op", "revalidate"); st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null)
+                    st.setMeta("run_op", "revalidate"); st.setMeta("run_started", now()); st.setMeta("run_pct", 0L); st.setMeta("run_estimate", null); st.setMeta("catalog_expanded", null)
                     seedRecheck()
+                    plan.strings("sections").forEach { addList(it, "recheck") }
+                    seedDynamic(plan, true)
                 }
             }
             "covers" -> st.transaction {
@@ -699,7 +776,12 @@ class CacheWorker(
         recount(r, false)
         log("mirror: ${st.meta("run_op")} (${plan.reason}): ${r.total - r.done} jobs to go, $parallel requests at a time")
         writeStatus(r, true)
-        val why = pump(r, creds, baseCovers, yieldTo)
+        var why = pump(r, creds, baseCovers, yieldTo)
+        if (why == "finished" && st.meta("catalog_expanded") == null && st.meta("run_op") in setOf("full", "incremental", "revalidate")) {
+            if (seedCatalogVariants(r, st.meta("run_op") != "full", yieldTo)) st.setMeta("catalog_expanded", true)
+            recount(r, false)
+            why = pump(r, creds, baseCovers, yieldTo)
+        }
         val secs = (clockMs() - r.startedMs) / 1000.0
         recount(r, why == "finished")
         val rate = r.done / maxOf(0.001, secs)
@@ -716,6 +798,14 @@ class CacheWorker(
                     log(String.format(java.util.Locale.ROOT, "mirror: Full refresh done: %d books, %d lists, %d jobs in %.0f s (%.1f items/s), %d skipped; " +
                         "covers %d new, %d unchanged (304), %d failed; %.1f MB", books, lists, r.done, secs, rate, r.skipped,
                         r.covers[0], r.covers[1], r.covers[2], st.fileBytes() / MB))
+                    val kinds = sortedMapOf<String, Int>()
+                    // Collapse pages in SQL; do not retain a large run's paths in memory just to log counts.
+                    st.db().query("SELECT DISTINCT substr(tail, instr(tail, '|') + 1) FROM " +
+                        "(SELECT substr(ref, instr(ref, '|') + 1) AS tail FROM jobs WHERE state = 1 AND kind IN ('page', 'recheck'))") {
+                        val kind = CatalogPlan.kind(LuaValue.str(it.text(0)!!))
+                        kinds[kind] = (kinds[kind] ?: 0) + 1
+                    }
+                    log("mirror: lists saved by kind: " + kinds.entries.joinToString(", ") { "${it.key}=${it.value}" })
                     newestStamp()?.let { st.setMeta("incremental_watermark", it) }
                     saved = true
                 }
@@ -843,7 +933,7 @@ class CacheWorker(
                         val tries = (st.db().query("SELECT tries FROM jobs WHERE kind = ? AND ref = ?", j.kind, ref) { it.long(0) ?: 0L }.firstOrNull() ?: 0L) + 1
                         val p = l.path?.let { shortPath(it) } ?: j.ref
                         val whyFail = rep?.err ?: rep?.code?.takeIf { it != 0 }?.toString() ?: "no answer"
-                        val retry = if (status != null) MirrorLogic.Retry(true) else MirrorLogic.retry(tries.toInt(), if (j.kind == "page" || j.kind == "recheck") j.size else null, if (j.kind == "detail") null else j.page)
+                        val retry = if (status != null) MirrorLogic.Retry(true) else MirrorLogic.retry(tries.toInt(), if (j.kind == "page" || j.kind == "recheck") j.size else null, if (j.kind == "page" || j.kind == "recheck") j.page else null)
                         if (retry.skip) {
                             log("mirror: $p skipped after $tries tries ($whyFail); the rest continues")
                             r.skipped++
