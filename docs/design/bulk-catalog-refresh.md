@@ -1,6 +1,6 @@
 # W26: Full refresh in minutes
 
-Status: building; maintainer approved the shared design and UI ("I approve the fast
+Status: Android implemented; Xteink building in a separate change; maintainer approved the shared design and UI ("I approve the fast
 refresh design"). W30 coordinator approved the bounded secondary-series amendment below. Targets: Android under two minutes and X4 under ten minutes for 10,000
 books. These are acceptance targets, not measured results.
 

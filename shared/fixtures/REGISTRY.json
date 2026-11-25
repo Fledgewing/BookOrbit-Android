@@ -48,8 +48,7 @@
       "owner": "plugin, companion, xteink",
       "readers": [
         "kt",
-        "lua",
-        "cpp"
+        "lua"
       ],
       "note": "lua also checks the fake companion's copy of the patch (android/koreader/test/companion_rules.lua)"
     },
@@ -215,8 +214,7 @@
       "owner": "companion, plugin, xteink",
       "readers": [
         "kt",
-        "lua",
-        "cpp"
+        "lua"
       ]
     },
     {
@@ -550,8 +548,7 @@
       "owner": "companion, xteink",
       "readers": [
         "kt",
-        "lua",
-        "cpp"
+        "lua"
       ]
     },
     {
