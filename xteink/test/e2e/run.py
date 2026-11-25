@@ -125,7 +125,7 @@ def mirror_urls(ctx: Context, tmp: Path) -> None:
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
     (folder / "mirror.request").write_text("1\n")
-    run = ctx.sim.run(card, "full-home", script="45000:QUIT", timeout_s=55)
+    run = ctx.sim.run(card, "full-home", script="90000:QUIT", timeout_s=105)
     after(run.output, "Full refresh: Done")
     assert not (folder / "mirror.request").exists()
     assert (folder / "walk.result").read_text() == "Done"
@@ -155,7 +155,7 @@ def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
     (folder / "mirror.request").write_text("1\n")
-    full = ctx.sim.run(card, "full-home", script="15000:QUIT", timeout_s=22)
+    full = ctx.sim.run(card, "full-home", script="90000:QUIT", timeout_s=105)
     after(full.output, "Full refresh: Done")
     saved = []
     by_id = {b["id"]: b for b in ctx.manifest["books"]}
@@ -188,6 +188,32 @@ def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
     after(offline.output, "Entering activity: EpubReader")
 
 
+@scenario("x4-pro")
+def partial_refresh_keeps_saved_pages(ctx: Context, tmp: Path) -> None:
+    """Budget-stop before the first completed mirror still opens saved pages without Wi-Fi."""
+    card = ctx.card(tmp)
+    card.theme(UI_THEME_BOOKORBIT)
+    sx, sy = home_tile(ctx.sim.run(card, "home", script="2500:QUIT", timeout_s=8).output, "sync")
+    ctx.sim.run(card, "seed", script=f"3000:TAP:{sx},{sy}", timeout_s=30)
+    library = ctx.sim.run(card, "library", script="3000:SWIPE:0.8,0.5,0.2,0.5,250;5000:QUIT", timeout_s=9)
+    cx, cy = home_tile(library.output, "catalog")
+    folder = card.crosspoint / "orbify"
+    folder.mkdir(exist_ok=True)
+    (folder / "mirror.request").write_text("1\n")
+    stopped = ctx.sim.run(card, "partial", script="9000:QUIT", timeout_s=15,
+                          env={"ORBIFY_SIM_SD_FULL_AFTER": "6"})
+    after(stopped.output, "Stopped at SD card full")
+    assert not (folder / "mirror.state").exists(), "a partial run claimed a completed mirror"
+    assert not (folder / "mirror.request").exists()
+    before = len(ctx.requests())
+    ctx.faults("offline")
+    opened = ctx.sim.run(card, "saved-partial", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};"
+                          "6000:DOWN:100;6500:CONFIRM:100;10000:QUIT", timeout_s=16)
+    after(opened.output, "Catalog: opening from the cache, no Wi-Fi")
+    after(opened.output, "Listing page 1")
+    assert "Joining saved network" not in opened.output and not ctx.requests()[before:]
+
+
 @scenario(*X4S)
 def full_refresh_while_reading(ctx: Context, tmp: Path) -> None:
     """The worker completes beside reader page turns without notices or a 100 ms UI stall."""
@@ -198,8 +224,8 @@ def full_refresh_while_reading(ctx: Context, tmp: Path) -> None:
     folder = card.crosspoint / "orbify"
     folder.mkdir(exist_ok=True)
     (folder / "mirror.request").write_text("1\n")
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 80}])
-    run = ctx.sim.run(card, "reading", script="3000:RIGHT:100;5000:RIGHT:100;16000:QUIT", timeout_s=24, wake=True)
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 5}])
+    run = ctx.sim.run(card, "reading", script="3000:RIGHT:100;5000:RIGHT:100;90000:QUIT", timeout_s=105, wake=True)
     reader = after(run.output, "Entering activity: EpubReader")
     after(reader, "Full refresh: Done")
     renders = [int(t) for t in re.findall(r"Page render ms: .* total=(\d+)", reader)]
@@ -552,10 +578,10 @@ def catalog_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     card = ctx.card(tmp)
     cx, cy, rx, ry = open_catalog(ctx, card)
     # Each catalog request waits 400 ms at the proxy: the walk lasts long enough for the badge to move.
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 400}])
-    shots = {ms: f"x4-pro-full-{ms}" for ms in range(16000, 60001, 2000)}
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 25}])
+    shots = {ms: f"x4-pro-full-{ms}" for ms in range(16000, 120001, 3000)}
     run = ctx.sim.run(card, "full", script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};"
-                      f"14000:TAP:{rx},{ry},1300;90000:QUIT", timeout_s=110, screenshots=shots)
+                      f"14000:TAP:{rx},{ry},1300;140000:QUIT", timeout_s=155, screenshots=shots)
     full = after(run.output, "Catalog: Full refresh popup: about")
     assert run.output.count("Catalog: Full refresh popup: about") == 1, "the start popup was shown more than once"
     assert "saving for offline" not in run.output.lower(), "a per-step popup was shown"
@@ -593,9 +619,9 @@ def home_full_refresh_percent(ctx: Context, tmp: Path) -> None:
     card = ctx.card(tmp)
     card.theme(UI_THEME_BOOKORBIT)
     sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 500}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 15}])
     run = ctx.sim.run(card, "hold", script=f"3000:TAP:{sx},{sy},1300", after_reboot="8000:TAP:240,700",
-                      timeout_s=60)
+                      timeout_s=140)
     after(run.output, "Full refresh: reboot notice suppressed")
     walk = after(run.output, "Home refresh: Full refresh popup: about")
     assert "saving for offline" not in run.output.lower(), "a per-step N/M was shown"
@@ -653,7 +679,7 @@ def catalog_cache_first(ctx: Context, tmp: Path) -> None:
     # Full refresh only walks the catalog; an ordinary sync creates Home's snapshot and
     # its Library page, as on a configured reader. Do not rely on the walk fetching Home.
     ctx.sim.run(card, "seed", script=f"3000:TAP:{sx},{sy}", timeout_s=30)
-    full = ctx.sim.run(card, "full", script=f"3000:TAP:{sx},{sy},1300", timeout_s=60)
+    full = ctx.sim.run(card, "full", script=f"3000:TAP:{sx},{sy},1300", timeout_s=140)
     after(full.output, "Mirror: saved for offline")
     # Age and a different saved library version must never force a reconnect/full walk.
     (card.crosspoint / "orbify" / "mirror.state").write_text("1700000000\tolder-library\n")
@@ -883,10 +909,10 @@ def catalog_wifi_holds(ctx: Context, tmp: Path) -> None:
     """Full refresh, browsing and uncached requests share the radio, including an idle-off request."""
     card = ctx.card(tmp)
     cx, cy, rx, ry = open_catalog(ctx, card)
-    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 250}])
+    ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 15}])
     run = ctx.sim.run(card, "holds",
-        script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};8000:TAP:{rx},{ry},1300;13000:TAP:240,116;45000:BACK:100;47000:BACK:100;50000:QUIT",
-        timeout_s=75, env={"ORBIFY_SIM_IDLE_OFF_ON_MISS": "1"})
+        script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};8000:TAP:{rx},{ry},1300;13000:TAP:240,116;45000:BACK:100;47000:BACK:100;140000:QUIT",
+        timeout_s=155, env={"ORBIFY_SIM_IDLE_OFF_ON_MISS": "1"})
     walk = after(run.output, "Catalog: Full refresh of view")
     after(walk, "Wi-Fi hold + refresh")
     after(walk, "Wi-Fi hold + offline miss")

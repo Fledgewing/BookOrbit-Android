@@ -5,7 +5,8 @@
 namespace orbify::wifi {
 inline bool shouldConnect(const std::string&, const std::string& reason, bool saved) {
   // Android's three modes all allow a requested flow to acquire the radio. They
-  // change release/off behavior, never forbid sleep/open/wake or a genuine miss.
+  // change release/off behavior, never forbid sleep/open/wake or a genuine
+  // miss.
   return !saved && !reason.empty();
 }
 struct Policy {
@@ -15,16 +16,24 @@ struct Policy {
   bool releasePending = false, restoreOff = false, inBook = false, bookWasOn = false, forceOff = false;
   void acquire(bool on, unsigned heldBefore, uint32_t now) {
     if (!heldBefore) restoreOff = !on;
-    releasePending = false; activity = now;
+    releasePending = false;
+    activity = now;
   }
   void release(unsigned heldAfter, uint32_t now) {
     activity = now;
-    if (!heldAfter) { released = now + 3; releasePending = true; }
+    if (!heldAfter) {
+      released = now + 3;
+      releasePending = true;
+    }
   }
   bool book(bool reading, bool on) {
     if (reading == inBook) return false;
     inBook = reading;
-    if (reading) { bookWasOn = on; forceOff = mode == "off_reading" && on; return false; }
+    if (reading) {
+      bookWasOn = on;
+      forceOff = mode == "off_reading" && on;
+      return false;
+    }
     forceOff = false;
     return mode == "off_reading" && bookWasOn;
   }
@@ -36,6 +45,10 @@ struct Policy {
     if (ready && (restoreOff || (reading && mode != "always_on"))) return true;
     return mode == "jit" && now - activity >= idleSeconds;
   }
-  void wifiOff() { restoreOff = false; releasePending = false; forceOff = false; }
+  void wifiOff() {
+    restoreOff = false;
+    releasePending = false;
+    forceOff = false;
+  }
 };
-}
+}  // namespace orbify::wifi

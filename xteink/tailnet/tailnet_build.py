@@ -42,7 +42,7 @@ with open(settings_schema, encoding="utf-8") as settings_file:
     shared_settings = json.load(settings_file)["settings"]
 settings_dir = env.subst("$BUILD_DIR") + "/orbify-settings"  # noqa: F821
 os.makedirs(settings_dir, exist_ok=True)
-settings_lines = ["#pragma once", "namespace OrbifySettings {", "struct Choice { const char* key; const char* initial; const char* const* values; const char* const* labels; unsigned count; };"]
+settings_lines = ["#pragma once", "namespace OrbifySettings {", "struct Choice { const char* key; const char* title; const char* initial; const char* const* values; const char* const* labels; unsigned count; };"]
 settings_keys = ("storage_limit_mb", "wifi_mode", "wifi_idle_min")
 for setting in shared_settings:
     if setting["key"] not in settings_keys:
@@ -54,7 +54,7 @@ settings_lines.append("inline constexpr Choice choices[] = {")
 for setting in shared_settings:
     if setting["key"] in settings_keys:
         key = setting["key"]
-        settings_lines.append("{" + json.dumps(key) + "," + json.dumps(str(setting["default"])) + "," + key + "_values," + key + "_labels," + str(len(setting["values"])) + "},")
+        settings_lines.append("{" + json.dumps(key) + "," + json.dumps(setting["label"]) + "," + json.dumps(str(setting["default"])) + "," + key + "_values," + key + "_labels," + str(len(setting["values"])) + "},")
 settings_lines.extend(["};", "}"])
 with open(os.path.join(settings_dir, "OrbifySettingsChoices.h"), "w", encoding="utf-8") as settings_file:
     settings_file.write("\n".join(settings_lines) + "\n")

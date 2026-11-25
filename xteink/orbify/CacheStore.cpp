@@ -7,19 +7,19 @@
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_heap_caps.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
-#include <cstring>
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
+#include <map>
 #include <memory>
 #include <mutex>
 
 #include "BookOrbitCredentialStore.h"
 #include "Settings.h"
-#include <map>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 #include "core/LocalFirst.h"
 
 namespace OrbifyCache {
@@ -35,8 +35,9 @@ constexpr uint32_t MIN_PLAUSIBLE_EPOCH = 1700000000u;  // as BookOrbitHomeStore
 constexpr size_t MAX_INDEX_BYTES = 128 * 1024;
 constexpr size_t MAX_REPLY_BYTES = 512 * 1024;  // a reply larger than this is not parsed again here
 
-// Whole replies are parsed here (to hash or patch them), never only the view's fields: their
-// nodes go to PSRAM, so the TLS session and the UI keep the internal heap (X4s only).
+// Whole replies are parsed here (to hash or patch them), never only the view's
+// fields: their nodes go to PSRAM, so the TLS session and the UI keep the
+// internal heap (X4s only).
 class PsramAllocator final : public ArduinoJson::Allocator {
  public:
   void* allocate(size_t size) override { return heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); }
@@ -47,7 +48,8 @@ class PsramAllocator final : public ArduinoJson::Allocator {
 };
 PsramAllocator psram;
 
-// The sleep sync, the background sync (0022) and the catalog's revalidation run on their own tasks.
+// The sleep sync, the background sync (0022) and the catalog's revalidation run
+// on their own tasks.
 std::recursive_mutex s_lock;
 std::map<TaskHandle_t, Mode> modes;
 Mode modeForTask() {
@@ -56,6 +58,9 @@ Mode modeForTask() {
 }
 uint64_t sdBytes = 0, planBytes = 0;
 bool usageKnown = false;
+#ifdef SIMULATOR
+unsigned repliesSinceClear = 0;
+#endif
 orbify::mirror::Stop stopReason = orbify::mirror::Stop::None;
 bool s_loaded = false;
 Index s_index;
@@ -71,7 +76,8 @@ uint32_t currentOwner() {
 
 std::string entryPath(const uint32_t hash) {
   char path[64];
-  snprintf(path, sizeof(path), "%s/%02lx/%08lx.json", DIR, static_cast<unsigned long>(hash >> 24), static_cast<unsigned long>(hash));
+  snprintf(path, sizeof(path), "%s/%02lx/%08lx.json", DIR, static_cast<unsigned long>(hash >> 24),
+           static_cast<unsigned long>(hash));
   return path;
 }
 
@@ -85,7 +91,8 @@ std::string pathOf(const std::string& url) {
 
 bool readFile(const std::string& path, std::string& out, const size_t cap) {
   HalFile file;
-  if (!Storage.exists(path.c_str()) && Storage.exists((path + ".bak").c_str())) Storage.rename((path + ".bak").c_str(), path.c_str());
+  if (!Storage.exists(path.c_str()) && Storage.exists((path + ".bak").c_str()))
+    Storage.rename((path + ".bak").c_str(), path.c_str());
   if (!Storage.exists(path.c_str()) || !Storage.openFileForRead(TAG, path, file)) return false;
   const size_t size = file.fileSize();
   if (size > cap) {
@@ -110,10 +117,14 @@ bool writeFile(const char* path, const std::string& data) {
 bool replaceFile(const std::string& tmp, const std::string& path) {
   const auto backup = path + ".bak";
   // A reset between the two renames leaves the last good file recoverable.
-  if (!Storage.exists(path.c_str()) && Storage.exists(backup.c_str())) Storage.rename(backup.c_str(), path.c_str());
+  if (!Storage.exists(path.c_str()) && Storage.exists(backup.c_str()))
+    Storage.rename(backup.c_str(), path.c_str());
   Storage.remove(backup.c_str());
   if (Storage.exists(path.c_str()) && !Storage.rename(path.c_str(), backup.c_str())) return false;
-  if (!Storage.rename(tmp.c_str(), path.c_str())) { Storage.rename(backup.c_str(), path.c_str()); return false; }
+  if (!Storage.rename(tmp.c_str(), path.c_str())) {
+    Storage.rename(backup.c_str(), path.c_str());
+    return false;
+  }
   Storage.remove(backup.c_str());
   return true;
 }
@@ -124,7 +135,10 @@ bool readDocument(const std::string& path, JsonDocument& doc) {
   struct Reader {
     HalFile& file;
     int read() { return file.read(); }
-    size_t readBytes(char* out, size_t count) { const int n = file.read(out, count); return n > 0 ? n : 0; }
+    size_t readBytes(char* out, size_t count) {
+      const int n = file.read(out, count);
+      return n > 0 ? n : 0;
+    }
   } reader{file};
   return !deserializeJson(doc, reader);
 }
@@ -135,7 +149,10 @@ bool writeDocument(const std::string& path, JsonDocument& doc) {
   const size_t expected = measureJson(doc);
   const bool ok = serializeJson(doc, file) == expected && file.sync();
   file.close();
-  if (!ok) { Storage.remove(tmp.c_str()); return false; }
+  if (!ok) {
+    Storage.remove(tmp.c_str());
+    return false;
+  }
   return replaceFile(tmp, path);
 }
 
@@ -154,18 +171,21 @@ void wipe() {
   s_index.owner = currentOwner();
 }
 
-// Each reply has one small CRC-protected sidecar on SD. A library-sized index never
-// sits in internal RAM. The legacy index is migrated once; its covers remain bounded.
+// Each reply has one small CRC-protected sidecar on SD. A library-sized index
+// never sits in internal RAM. The legacy index is migrated once; its covers
+// remain bounded.
 std::string metaPath(uint32_t hash) { return entryPath(hash) + ".idx"; }
 bool loadEntry(uint32_t hash, IndexEntry& out) {
   std::string bytes;
   Index one;
   if (!readFile(metaPath(hash), bytes, 2048) ||
-      !deserializeIndex(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size(), one) || one.entries.size() != 1)
+      !deserializeIndex(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size(), one) ||
+      one.entries.size() != 1)
     return false;
   out = std::move(one.entries[0]);
   const auto path = entryPath(hash);
-  if (!Storage.exists(path.c_str()) && Storage.exists((path + ".bak").c_str())) Storage.rename((path + ".bak").c_str(), path.c_str());
+  if (!Storage.exists(path.c_str()) && Storage.exists((path + ".bak").c_str()))
+    Storage.rename((path + ".bak").c_str(), path.c_str());
   return out.hash == hash && Storage.exists(entryPath(hash).c_str());
 }
 uint64_t fileBytes(const std::string& path) {
@@ -184,10 +204,12 @@ bool saveEntry(const IndexEntry& entry) {
   if (ok) sdBytes = sdBytes - std::min(sdBytes, before) + bytes.size();
   return ok;
 }
-template<class Visit> void entriesIn(const char* directory, Visit& visit, bool root = false) {
+template <class Visit>
+void entriesIn(const char* directory, Visit& visit, bool root = false) {
   HalFile dir = Storage.open(directory);
   while (HalFile file = dir.openNextFile()) {
-    char name[80]{}; file.getName(name, sizeof(name));
+    char name[80]{};
+    file.getName(name, sizeof(name));
     const bool directoryEntry = file.isDirectory();
     file.close();
     if (root && directoryEntry && strlen(name) == 2) {
@@ -196,31 +218,40 @@ template<class Visit> void entriesIn(const char* directory, Visit& visit, bool r
       continue;
     }
     unsigned long hash;
-    if (strlen(name) != 17 || std::string(name + 8) != ".json.idx" || sscanf(name, "%8lx", &hash) != 1) continue;
+    if (strlen(name) != 17 || std::string(name + 8) != ".json.idx" || sscanf(name, "%8lx", &hash) != 1)
+      continue;
     IndexEntry entry;
     if (loadEntry(static_cast<uint32_t>(hash), entry)) visit(entry);
   }
 }
-template<class Visit> void eachEntry(Visit visit) { entriesIn(DIR, visit, true); }
+template <class Visit>
+void eachEntry(Visit visit) {
+  entriesIn(DIR, visit, true);
+}
 uint64_t directoryBytes(const char* directory) {
   uint64_t bytes = 0;
   HalFile dir = Storage.open(directory);
-  while (HalFile file = dir.openNextFile()) if (!file.isDirectory()) bytes += file.fileSize64();
+  while (HalFile file = dir.openNextFile())
+    if (!file.isDirectory()) bytes += file.fileSize64();
   return bytes;
 }
 void saveUsage() {
   constexpr const char* path = "/.crosspoint/bookorbit-cache/usage";
   constexpr const char* tmp = "/.crosspoint/bookorbit-cache/usage.tmp";
-  usageKnown = writeFile(tmp, std::to_string(sdBytes) + "\n" + std::to_string(~sdBytes) + "\n") && replaceFile(tmp, path);
+  usageKnown = writeFile(tmp, std::to_string(sdBytes) + "\n" + std::to_string(~sdBytes) + "\n") &&
+               replaceFile(tmp, path);
   if (!usageKnown) stopReason = orbify::mirror::Stop::Io;
 }
 uint64_t treeBytes(const char* directory) {
   uint64_t bytes = 0;
   HalFile dir = Storage.open(directory);
   while (HalFile file = dir.openNextFile()) {
-    if (!file.isDirectory()) bytes += file.fileSize64();
+    if (!file.isDirectory())
+      bytes += file.fileSize64();
     else {
-      char name[80]{}; file.getName(name, sizeof(name)); file.close();
+      char name[80]{};
+      file.getName(name, sizeof(name));
+      file.close();
       const auto path = std::string(directory) + "/" + name;
       bytes += treeBytes(path.c_str());
     }
@@ -233,15 +264,19 @@ void measureUsage() {
   saveUsage();
 }
 uint64_t extraBytes() {
-  return planBytes + directoryBytes("/.crosspoint/bookorbit_home") + directoryBytes("/.crosspoint/orbify_sleep");
+  return planBytes + directoryBytes("/.crosspoint/bookorbit_home") +
+         directoryBytes("/.crosspoint/orbify_sleep");
 }
 uint64_t freeBytes() {
 #ifdef SIMULATOR
+  if (const char* count = std::getenv("ORBIFY_SIM_SD_FULL_AFTER"))
+    if (repliesSinceClear >= strtoul(count, nullptr, 10)) return orbify::mirror::SD_MARGIN - 1;
   if (const char* value = std::getenv("ORBIFY_SIM_SD_FREE_BYTES")) return strtoull(value, nullptr, 10);
 #endif
   const auto total = Storage.totalBytes(), used = Storage.usedBytes();
   return total > used ? total - used : 0;
 }
+uint32_t hashReply(const std::string& path, uint32_t hash);
 Index& index() {
   if (!s_loaded) {
     s_loaded = true;
@@ -255,20 +290,26 @@ Index& index() {
     for (const auto& entry : s_index.entries) {
       const auto path = entryPath(entry.hash);
       Storage.mkdir(path.substr(0, path.find_last_of('/')).c_str());
-      char legacy[96]; snprintf(legacy, sizeof(legacy), "%s/%08lx.json", DIR, static_cast<unsigned long>(entry.hash));
+      char legacy[96];
+      snprintf(legacy, sizeof(legacy), "%s/%08lx.json", DIR, static_cast<unsigned long>(entry.hash));
       if (Storage.exists(legacy) && !Storage.exists(path.c_str())) Storage.rename(legacy, path.c_str());
       saveEntry(entry);
+      hashReply(path, entry.hash);  // one-time reverse references for the legacy cache
     }
     s_index.entries.clear();
     save();
     std::string usage;
     unsigned long long value = 0, inverse = 0;
     usageKnown = readFile("/.crosspoint/bookorbit-cache/usage", usage, 64) &&
-        sscanf(usage.c_str(), "%llu\n%llu", &value, &inverse) == 2 && (value ^ inverse) == UINT64_MAX;
+                 sscanf(usage.c_str(), "%llu\n%llu", &value, &inverse) == 2 &&
+                 (value ^ inverse) == UINT64_MAX;
     sdBytes = usageKnown ? value : 0;
   }
   if (s_index.owner != currentOwner()) {
-    wipe(); sdBytes = 0; saveUsage(); save();
+    wipe();
+    sdBytes = 0;
+    saveUsage();
+    save();
   }
   return s_index;
 }
@@ -276,7 +317,8 @@ bool isHome(const std::string& url) { return pathOf(url).find("/catalog/dashboar
 
 std::string refsPath(int64_t id) {
   char path[112];
-  snprintf(path, sizeof(path), "%s/refs/%02x/%lld", DIR, static_cast<unsigned>(id & 255), static_cast<long long>(id));
+  snprintf(path, sizeof(path), "%s/refs/%02x/%lld", DIR, static_cast<unsigned>(id & 255),
+           static_cast<long long>(id));
   return path;
 }
 void rememberBooks(JsonVariantConst value, uint32_t hash) {
@@ -286,16 +328,23 @@ void rememberBooks(JsonVariantConst value, uint32_t hash) {
     if (id > 0 && !object["authors"].isUnbound()) {
       const auto path = refsPath(id);
       Storage.mkdir(path.substr(0, path.find_last_of('/')).c_str());
-      char row[16]; snprintf(row, sizeof(row), "%08lx\n", static_cast<unsigned long>(hash));
+      char row[16];
+      snprintf(row, sizeof(row), "%08lx\n", static_cast<unsigned long>(hash));
       bool present = false;
       HalFile existing = Storage.open(path.c_str());
       char line[10]{};
-      while (existing && existing.read(line, 9) == 9) if (strncmp(line, row, 9) == 0) { present = true; break; }
+      while (existing && existing.read(line, 9) == 9)
+        if (strncmp(line, row, 9) == 0) {
+          present = true;
+          break;
+        }
       existing.close();
       if (!present) {
         HalFile refs = Storage.open(path.c_str(), O_WRONLY | O_CREAT | O_APPEND);
-        if (!refs || refs.write(row, 9) != 9 || !refs.sync()) stopReason = orbify::mirror::Stop::Io;
-        else sdBytes += 9;
+        if (!refs || refs.write(row, 9) != 9 || !refs.sync())
+          stopReason = orbify::mirror::Stop::Io;
+        else
+          sdBytes += 9;
       }
     }
     for (JsonPairConst field : object) rememberBooks(field.value(), hash);
@@ -305,7 +354,7 @@ void rememberBooks(JsonVariantConst value, uint32_t hash) {
 }
 
 // canonicalHash of the reply in `path` (0 when it does not parse).
-uint32_t hashReply(const std::string& path, uint32_t hash = 0) {
+uint32_t hashReply(const std::string& path, uint32_t hash) {
   HalFile file;
   if (!Storage.openFileForRead(TAG, path, file)) return 0;
   JsonDocument doc(&psram);
@@ -319,7 +368,7 @@ uint32_t hashReply(const std::string& path, uint32_t hash = 0) {
   } reader{file};
   const DeserializationError error = deserializeJson(doc, reader);
   file.close();
-  if (!error && hash) rememberBooks(doc.as<JsonVariantConst>(), hash);
+  if (!error) rememberBooks(doc.as<JsonVariantConst>(), hash);
   return error ? 0 : canonicalHash(doc.as<JsonVariantConst>());
 }
 
@@ -332,10 +381,15 @@ ScopedMode::ScopedMode(const Mode mode) {
 }
 ScopedMode::~ScopedMode() {
   std::lock_guard<std::recursive_mutex> guard(s_lock);
-  if (previous == Mode::Open) modes.erase(xTaskGetCurrentTaskHandle());
-  else modes[xTaskGetCurrentTaskHandle()] = previous;
+  if (previous == Mode::Open)
+    modes.erase(xTaskGetCurrentTaskHandle());
+  else
+    modes[xTaskGetCurrentTaskHandle()] = previous;
 }
-Mode currentMode() { std::lock_guard<std::recursive_mutex> guard(s_lock); return modeForTask(); }
+Mode currentMode() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  return modeForTask();
+}
 
 Lookup lookup(const std::string& url) {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
@@ -378,10 +432,16 @@ bool storeReply(const Lookup& l, const std::string& url, const char* tmpPath) {
   IndexEntry* e = hadEntry ? &entry : nullptr;
   measureUsage();
   stopReason = orbify::mirror::budget(sdBytes + extraBytes(), e ? e->bytes : 0, bytes + 4096ULL,
-      OrbifySettings::storageBytes(), freeBytes());
-  if (stopReason != orbify::mirror::Stop::None) { Storage.remove(tmpPath); return false; }
+                                      OrbifySettings::storageBytes(), freeBytes());
+  if (stopReason != orbify::mirror::Stop::None) {
+    Storage.remove(tmpPath);
+    return false;
+  }
   const uint32_t replyHash = bytes <= MAX_REPLY_BYTES ? hashReply(tmpPath, l.hash) : 0;
-  if (stopReason != orbify::mirror::Stop::None) { Storage.remove(tmpPath); return false; }
+  if (stopReason != orbify::mirror::Stop::None) {
+    Storage.remove(tmpPath);
+    return false;
+  }
   const uint32_t oldBytes = e ? e->bytes : 0;
   const Revalidated r = revalidate(200, e != nullptr, e ? e->replyHash : 0, replyHash);
   Storage.mkdir(l.path.substr(0, l.path.find_last_of('/')).c_str());
@@ -402,9 +462,15 @@ bool storeReply(const Lookup& l, const std::string& url, const char* tmpPath) {
   e->replyHash = replyHash;
   e->flags = 0;
   e->url = url.size() <= 255 ? url : std::string();
-  if (!saveEntry(*e)) { stopReason = orbify::mirror::Stop::Io; return false; }
+  if (!saveEntry(*e)) {
+    stopReason = orbify::mirror::Stop::Io;
+    return false;
+  }
   sdBytes = sdBytes - std::min<uint64_t>(sdBytes, oldBytes) + bytes;
   saveUsage();
+#ifdef SIMULATOR
+  ++repliesSinceClear;
+#endif
   if (r.changed) LOG_INF(TAG, "Changed on the server: %s", pathOf(url).c_str());
   return r.changed;
 }
@@ -412,35 +478,69 @@ bool storeReply(const Lookup& l, const std::string& url, const char* tmpPath) {
 void markNotUpdated(const Lookup& l) {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
   IndexEntry e;
-  if (l.cacheable && loadEntry(l.hash, e)) { e.flags |= FLAG_NOT_UPDATED; saveEntry(e); }
+  if (l.cacheable && loadEntry(l.hash, e)) {
+    e.flags |= FLAG_NOT_UPDATED;
+    saveEntry(e);
+  }
 }
-void markUsed(const Lookup&) {} // Opening a saved page makes no SD write and never revalidates it.
+void markUsed(const Lookup&) {}  // Opening a saved page makes no SD write and never revalidates it.
 
 void afterWrite(const char* method, const std::string& url, const char* body, const size_t bodyLength,
                 const int status) {
-  const std::lock_guard<std::recursive_mutex> guard(s_lock);
   if (!BOOKORBIT_STORE.hasCredentials()) return;
   JsonDocument payload;
   if (body && bodyLength) deserializeJson(payload, body, bodyLength);
   const WriteEffect effect = writeEffect(method, pathOf(url), status, payload.as<JsonVariantConst>());
   if (!effect.homeStale && effect.bookId <= 0) return;
-  Index& idx = index();
+  {
+    std::lock_guard<std::recursive_mutex> guard(s_lock);
+    index();
+    if (effect.homeStale) {
+      const auto homeUrl = BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/dashboard";
+      const auto homeHash = keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", homeUrl));
+      IndexEntry home;
+      if (loadEntry(homeHash, home)) {
+        home.validatedAt = 0;
+        saveEntry(home);
+      }
+    }
+  }
   unsigned patched = 0;
-  eachEntry([&](IndexEntry& e) {
-    if (effect.homeStale && isHome(e.url)) { e.validatedAt = 0; saveEntry(e); }
-    if (effect.bookId <= 0) return;
+  const auto patch = [&](IndexEntry& e) {
+    // A write visits only replies which list this book. Hold the cache mutex for
+    // one reply, never for a library scan beside foreground cached navigation.
+    std::lock_guard<std::recursive_mutex> guard(s_lock);
     const auto path = entryPath(e.hash);
     JsonDocument doc(&psram);
-    if (!readDocument(path, doc) || !patchBook(doc.as<JsonVariant>(), effect.bookId, effect.fields.as<JsonObjectConst>())) return;
+    if (!readDocument(path, doc) ||
+        !patchBook(doc.as<JsonVariant>(), effect.bookId, effect.fields.as<JsonObjectConst>()))
+      return;
     if (writeDocument(path, doc)) {
       const auto bytes = measureJson(doc);
       sdBytes = sdBytes - std::min<uint64_t>(sdBytes, e.bytes) + bytes;
       e.bytes = static_cast<uint32_t>(bytes);
       e.replyHash = canonicalHash(doc.as<JsonVariantConst>());
-      saveEntry(e); ++patched;
+      saveEntry(e);
+      ++patched;
     }
-  });
-  save(); saveUsage();
+  };
+  if (effect.bookId > 0) {
+    HalFile refs = Storage.open(refsPath(effect.bookId).c_str());
+    char row[10]{};
+    while (refs && refs.read(row, 9) == 9) {
+      IndexEntry entry;
+      {
+        std::lock_guard<std::recursive_mutex> guard(s_lock);
+        if (!loadEntry(static_cast<uint32_t>(strtoul(row, nullptr, 16)), entry)) continue;
+      }
+      patch(entry);
+      delay(1);
+    }
+  }
+  {
+    std::lock_guard<std::recursive_mutex> guard(s_lock);
+    saveUsage();
+  }
   LOG_INF(TAG, "%s %s -> %d: %u saved replies patched%s", method, pathOf(url).c_str(), status, patched,
           effect.homeStale ? ", Home due" : "");
 }
@@ -451,7 +551,8 @@ Freshness freshness(const std::string& url) {
   if (!BOOKORBIT_STORE.hasCredentials()) return f;
   index();
   IndexEntry entry;
-  const IndexEntry* e = loadEntry(keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", url)), entry) ? &entry : nullptr;
+  const IndexEntry* e =
+      loadEntry(keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", url)), entry) ? &entry : nullptr;
   if (!e) return f;
   f.saved = true;
   f.validatedAt = e->validatedAt ? e->validatedAt : e->fetchedAt;
@@ -485,15 +586,17 @@ std::vector<int64_t> mergeRecent() {
   const std::lock_guard<std::recursive_mutex> guard(s_lock);
   index();
   JsonDocument recent(&psram);
-  orbify::mirror::FacetQuery q; q.sort = "recently_updated";
+  orbify::mirror::FacetQuery q;
+  q.sort = "recently_updated";
   const auto url = BOOKORBIT_STORE.getBaseUrl() + orbify::mirror::booksPath(q, 1, 20, false);
   const uint32_t hash = keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(), "GET", url));
   readDocument(entryPath(hash), recent);
   const auto items = recent["items"].as<JsonArrayConst>();
   std::vector<int64_t> details;
   unsigned changed = 0;
-  // Reverse references are built as each reply lands. Only pages which contain a
-  // changed book are opened; the incremental pass never scans/parses the library.
+  // Reverse references are built as each reply lands. Only pages which contain
+  // a changed book are opened; the incremental pass never scans/parses the
+  // library.
   for (JsonObjectConst book : items) {
     const int64_t id = book["id"] | 0LL;
     if (id <= 0) continue;
@@ -505,37 +608,60 @@ std::vector<int64_t> mergeRecent() {
       const auto path = entryPath(e.hash);
       JsonDocument doc(&psram);
       if (!readDocument(path, doc)) continue;
-      if (e.url.find("/books/" + std::to_string(id) + "?") != std::string::npos) {
+      if (doc["id"].as<int64_t>() == id && doc["files"].is<JsonArray>()) {
         if (doc["updatedAt"] != book["updatedAt"] &&
-            std::find(details.begin(), details.end(), id) == details.end()) details.push_back(id);
-        continue; // details are fetched only when their version changed
+            std::find(details.begin(), details.end(), id) == details.end())
+          details.push_back(id);
+        continue;  // details are fetched only when their version changed
       }
       if (!mergeRecentBooks(doc.as<JsonVariant>(), items)) continue;
       const auto bytes = measureJson(doc);
       if (orbify::mirror::budget(sdBytes + extraBytes(), e.bytes, bytes + 4096ULL,
-          OrbifySettings::storageBytes(), freeBytes()) != orbify::mirror::Stop::None) continue;
+                                 OrbifySettings::storageBytes(), freeBytes()) != orbify::mirror::Stop::None)
+        continue;
       if (!writeDocument(path, doc)) continue;
       sdBytes = sdBytes - std::min<uint64_t>(sdBytes, e.bytes) + bytes;
       e.bytes = static_cast<uint32_t>(bytes);
       e.replyHash = canonicalHash(doc.as<JsonVariantConst>());
-      saveEntry(e); ++changed;
+      saveEntry(e);
+      ++changed;
     }
   }
   if (changed) saveUsage();
-  LOG_INF(TAG, "Catalog incremental: %u saved replies changed (one recent-items page), %u changed details",
+  LOG_INF(TAG,
+          "Catalog incremental: %u saved replies changed (one recent-items "
+          "page), %u changed details",
           changed, static_cast<unsigned>(details.size()));
   return details;
 }
 
-void setPlanBytes(uint64_t bytes) { std::lock_guard<std::recursive_mutex> guard(s_lock); planBytes = bytes; }
-uint64_t bytesOnSd() { std::lock_guard<std::recursive_mutex> guard(s_lock); index(); measureUsage(); return sdBytes + extraBytes(); }
-orbify::mirror::Stop storageStop() { std::lock_guard<std::recursive_mutex> guard(s_lock); return stopReason; }
-void clearStorageStop() { std::lock_guard<std::recursive_mutex> guard(s_lock); stopReason = orbify::mirror::Stop::None; }
+void setPlanBytes(uint64_t bytes) {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  planBytes = bytes;
+}
+uint64_t bytesOnSd() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  index();
+  measureUsage();
+  return sdBytes + extraBytes();
+}
+orbify::mirror::Stop storageStop() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  return stopReason;
+}
+void clearStorageStop() {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  stopReason = orbify::mirror::Stop::None;
+#ifdef SIMULATOR
+  repliesSinceClear = 0;
+#endif
+}
 bool roomForReply() {
   std::lock_guard<std::recursive_mutex> guard(s_lock);
   index();
   measureUsage();
-  stopReason = orbify::mirror::budget(sdBytes + extraBytes(), 0, 0, OrbifySettings::storageBytes(), freeBytes());
+  stopReason =
+      orbify::mirror::budget(sdBytes + extraBytes(), 0, 0, OrbifySettings::storageBytes(), freeBytes());
   return stopReason == orbify::mirror::Stop::None;
 }
 
@@ -551,8 +677,8 @@ void dropAll() {
 }  // namespace OrbifyCache
 
 // The hook sendBookOrbitRequest calls (lib/BookOrbitSync, declared weak there).
-void orbifyCacheAfterWrite(const char* method, const std::string& url, const char* body, const size_t bodyLength,
-                           const int status) {
+void orbifyCacheAfterWrite(const char* method, const std::string& url, const char* body,
+                           const size_t bodyLength, const int status) {
   OrbifyCache::afterWrite(method, url, body, bodyLength, status);
 }
 

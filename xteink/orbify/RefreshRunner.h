@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include <CrossInkTailnetCuts.h>
+
 #include <cstddef>
 #include <string>
 namespace OrbifyMirror {
@@ -13,14 +14,18 @@ struct Snapshot {
 #if CROSSINK_TAILNET_ORBIFY_MIRROR
 Snapshot snapshot();
 void freshRequest();
-// Main-loop scheduling only: no network, parsing, scans, or waiting on the UI task.
+// Main-loop scheduling only: no network, parsing, scans, or waiting on the UI
+// task.
 void service();
 void stopForSleep();
+void credentialsChanging();
 bool busy();
 void countCatalogRequest();
+bool cancelCatalogRequest();
+bool catalogTask();
 #else
 inline void service() {}
 inline void stopForSleep() {}
 inline bool busy() { return false; }
 #endif
-}
+}  // namespace OrbifyMirror

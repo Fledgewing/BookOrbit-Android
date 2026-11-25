@@ -19,7 +19,7 @@ void BookOrbitCatalogBrowserActivity::tickMirror() {
   }
   if (!mirrorWalk.active()) return;
   // Full refresh is owned by the main-loop worker, wherever navigation goes.
-  if (!regularRefresh) {
+  if (mirrorWalk.full()) {
     const auto status = OrbifyMirror::snapshot();
     const unsigned old = mirrorShown.percent;
     const bool wasFinished = mirrorShown.finished;
@@ -58,6 +58,7 @@ void BookOrbitCatalogBrowserActivity::tickMirror() {
   mirrorWalk.step();
   syncMirrorShown();
   if (mirrorWalk.finished()) {
+    const bool wasRegular = regularRefresh;
     if (regularRefresh) {
       regularRefresh = false;
       refreshing = false;
@@ -83,6 +84,11 @@ void BookOrbitCatalogBrowserActivity::tickMirror() {
         selectorIndex = std::max(windowStart, std::min(wantedSelector, loadedEnd() - 1));
         topIndex = std::max(windowStart, std::min(wantedTop, loadedEnd() - visibleRows));
       }
+    }
+    if (wasRegular) {
+      mirrorWalk.end(); syncMirrorShown(); mirrorDoneUntil = 0; mirrorPopupUntil = 0;
+      requestUpdate();
+      return;
     }
     mirrorDoneUntil = millis() + orbify::mirror::DONE_MS;
     {

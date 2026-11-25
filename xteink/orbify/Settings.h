@@ -5,7 +5,8 @@
 namespace OrbifySettings {
 std::string get(const char* key);
 std::string label(const char* key);
+const char* title(const char* key);
 void cycle(const char* key);
 uint64_t storageBytes();
 unsigned idleSeconds();
-}
+}  // namespace OrbifySettings

@@ -1,24 +1,43 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include <HalStorage.h>
 #include <Arduino.h>
+#include <HalStorage.h>
+
 #include "core/RefreshPlan.h"
 
 namespace OrbifyMirror {
-// Append-only queues on SD. Startup streams the journals to rebuild dedup markers after
-// an interrupted append. No library-sized RAM allocation, including when resuming.
+// Append-only queues on SD. Startup streams the journals to rebuild dedup
+// markers after an interrupted append. No library-sized RAM allocation,
+// including when resuming.
 class RefreshJournal final : public orbify::mirror::Journal {
  public:
-  explicit RefreshJournal(bool reset) {
-    if (reset) removeTree(DIR);
+  explicit RefreshJournal(bool reset, bool (*cancelled)() = nullptr) {
+    if (reset && Storage.exists(DIR)) {
+      // Rename generations before the run; delete their markers later in short,
+      // cancellable operations so SD reads and sleep preparation stay responsive.
+      unsigned long generation = millis();
+      std::string old;
+      do {
+        old = std::string(DIR) + ".old." + std::to_string(generation++);
+      } while (Storage.exists(old.c_str()));
+      if (!Storage.rename(DIR, old.c_str())) {
+        ok = false;
+        return;
+      }
+    }
     ok = Storage.exists(DIR) || Storage.mkdir(DIR);
     for (unsigned lane = 0; lane < 3 && ok; ++lane) {
       size_t offset = 0, next;
-      orbify::mirror::Step step; int page;
+      orbify::mirror::Step step;
+      int page;
       HalFile probe = Storage.open(path(lane).c_str());
       const size_t length = probe ? probe.fileSize() : 0;
       probe.close();
       while (offset < length && read(lane, offset, step, page, next)) {
+        if (cancelled && cancelled()) {
+          interrupted = true;
+          return;
+        }
         ++counts[lane];
         mark(lane, step, page);
         offset = next;
@@ -28,10 +47,11 @@ class RefreshJournal final : public orbify::mirror::Journal {
   }
   bool append(unsigned lane, const orbify::mirror::Step& step, int page) override {
     if (!ok) return false;
-    // Arguments are encoded queries with no newlines/tabs. A malformed row is terminal,
-    // never retried into an infinite walk.
+    // Arguments are encoded queries with no newlines/tabs. A malformed row is
+    // terminal, never retried into an infinite walk.
     if (step.arg.find_first_of("\r\n\t") != std::string::npos || step.arg.size() > 4096) return ok = false;
-    const std::string row = std::to_string(static_cast<unsigned>(step.kind)) + "\t" + std::to_string(page) + "\t" + step.arg + "\n";
+    const std::string row = std::to_string(static_cast<unsigned>(step.kind)) + "\t" + std::to_string(page) +
+                            "\t" + step.arg + "\n";
     HalFile file = Storage.open(path(lane).c_str(), O_WRONLY | O_CREAT | O_APPEND);
     if (!file || file.write(row.data(), row.size()) != row.size() || !file.sync()) return ok = false;
     file.close();
@@ -60,6 +80,7 @@ class RefreshJournal final : public orbify::mirror::Journal {
     return Storage.exists(marker(lane, step, page).c_str());
   }
   bool good() const override { return ok; }
+  bool wasInterrupted() const { return interrupted; }
   uint64_t bytes() const {
     uint64_t bytes = 0;
     for (unsigned lane = 0; lane < 3; ++lane) {
@@ -68,29 +89,56 @@ class RefreshJournal final : public orbify::mirror::Journal {
     }
     return bytes;
   }
+
+  static void cleanup(bool (*cancelled)()) {
+    constexpr const char* parent = "/.crosspoint/orbify";
+    HalFile dir = Storage.open(parent);
+    while (HalFile file = dir.openNextFile()) {
+      if (cancelled && cancelled()) return;
+      char name[80]{};
+      file.getName(name, sizeof(name));
+      const bool directory = file.isDirectory();
+      file.close();
+      if (!directory || std::string(name).find("walk.old.") != 0) continue;
+      const auto child = std::string(parent) + "/" + name;
+      if (!removeTree(child.c_str(), cancelled)) return;
+    }
+  }
+
  private:
-  static void removeTree(const char* path) {
+  static bool removeTree(const char* path, bool (*cancelled)()) {
     HalFile dir = Storage.open(path);
     while (HalFile file = dir.openNextFile()) {
-      char name[80]{}; file.getName(name, sizeof(name));
-      const bool directory = file.isDirectory(); file.close();
+      if (cancelled && cancelled()) return false;
+      char name[80]{};
+      file.getName(name, sizeof(name));
+      const bool directory = file.isDirectory();
+      file.close();
       const auto child = std::string(path) + "/" + name;
-      if (directory) removeTree(child.c_str());
-      else Storage.remove(child.c_str());
-      delay(1); // no library-sized SD lock while the user changes pages
+      if (directory) {
+        if (!removeTree(child.c_str(), cancelled)) return false;
+      } else if (!Storage.remove(child.c_str()))
+        return false;
+      delay(1);
     }
-    dir.close(); Storage.rmdir(path);
+    dir.close();
+    return Storage.rmdir(path);
   }
   static constexpr const char* DIR = "/.crosspoint/orbify/walk";
-  bool ok = true;
+  bool ok = true, interrupted = false;
   size_t counts[3]{};
   std::string path(unsigned lane) const { return std::string(DIR) + "/" + std::to_string(lane) + ".q"; }
   std::string marker(unsigned lane, const orbify::mirror::Step& step, int page) const {
-    const std::string key = std::to_string(lane) + ":" + std::to_string(static_cast<unsigned>(step.kind)) + ":" + std::to_string(page) + ":" + step.arg;
+    const std::string key = std::to_string(lane) + ":" + std::to_string(static_cast<unsigned>(step.kind)) +
+                            ":" + std::to_string(page) + ":" + step.arg;
     uint64_t hash = 14695981039346656037ULL;
-    for (unsigned char c : key) { hash ^= c; hash *= 1099511628211ULL; }
+    for (unsigned char c : key) {
+      hash ^= c;
+      hash *= 1099511628211ULL;
+    }
     char name[96];
-    snprintf(name, sizeof(name), "%s/%02x/%016llx.seen", DIR, static_cast<unsigned>(hash >> 56), static_cast<unsigned long long>(hash));
+    snprintf(name, sizeof(name), "%s/%02x/%016llx.seen", DIR, static_cast<unsigned>(hash >> 56),
+             static_cast<unsigned long long>(hash));
     return name;
   }
   void mark(unsigned lane, const orbify::mirror::Step& step, int page) {
@@ -101,4 +149,4 @@ class RefreshJournal final : public orbify::mirror::Journal {
     if (!file) ok = false;
   }
 };
-}
+}  // namespace OrbifyMirror

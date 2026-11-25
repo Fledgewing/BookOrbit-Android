@@ -116,7 +116,8 @@ bool runView(const orbify::mirror::Step& step, int pageNumber) {
     case Kind::Books: {
       orbify::mirror::FacetQuery f;
       BookOrbitBookPage page;
-      return orbify::mirror::decodeQuery(step.arg, f) && BookOrbitCatalogClient::fetchBooks(fromFacet(f), pageNumber, page);
+      return orbify::mirror::decodeQuery(step.arg, f) &&
+             BookOrbitCatalogClient::fetchBooks(fromFacet(f), pageNumber, page);
     }
     case Kind::Detail: {
       BookOrbitBookDetail detail;
@@ -132,8 +133,10 @@ namespace OrbifyMirror {
 
 void refreshChanged(bool (*cancelled)()) {
   if (requested() || WiFi.status() != WL_CONNECTED || (cancelled && cancelled()) ||
-      !OrbifyHeap::roomForRequest("Catalog incremental")) return;
-  // The pinned catalog has no delta endpoint. One bounded head page, never a full walk.
+      !OrbifyHeap::roomForRequest("Catalog incremental"))
+    return;
+  // The pinned catalog has no delta endpoint. One bounded head page, never a
+  // full walk.
   OrbifyCache::ScopedMode refresh(orbify::cache::Mode::Refresh);
   BookOrbitBookQuery query;
   query.sort = "recently_updated";
@@ -163,11 +166,13 @@ void request() {
 }
 
 Due dueNow() {
-  // Retain the cache indefinitely. Only request() (a user action) starts a Full refresh.
+  // Retain the cache indefinitely. Only request() (a user action) starts a Full
+  // refresh.
   return Due::None;
 }
 
-// Full refresh belongs to the global worker; sleep sync must never create another walker.
+// Full refresh belongs to the global worker; sleep sync must never create
+// another walker.
 bool run(bool (*)(), unsigned long, const Progress*, size_t, bool) { return false; }
 int pendingPercent() {
   const auto value = snapshot();
@@ -176,13 +181,17 @@ int pendingPercent() {
 void Walk::begin(const bool userStarted) {
   if (userStarted) request();
   if (!requested()) return;
-  viewOnly = false; started = true; connectionFailed = false;
+  viewOnly = false;
+  started = true;
+  connectionFailed = false;
 }
 bool Walk::finished() const {
   return started && (connectionFailed || (viewOnly ? plan.finished() : snapshot().finished));
 }
 unsigned Walk::percent() const { return viewOnly ? plan.percent() : snapshot().percent; }
-size_t Walk::failures() const { return viewOnly ? plan.failures() + (connectionFailed ? 1 : 0) : snapshot().failures; }
+size_t Walk::failures() const {
+  return viewOnly ? plan.failures() + (connectionFailed ? 1 : 0) : snapshot().failures;
+}
 
 void Walk::beginView(const orbify::mirror::Step& view, const int page) {
   viewPage = page > 0 ? page : 1;
@@ -200,7 +209,10 @@ void Walk::beginView(const orbify::mirror::Step& view, const int page) {
 
 void Walk::end() {
   started = false;
-  if (wifiHeld) { wifiHeld = false; OrbifyWifi::release(OrbifyWifi::Owner::Refresh); }
+  if (wifiHeld) {
+    wifiHeld = false;
+    OrbifyWifi::release(OrbifyWifi::Owner::Refresh);
+  }
 }
 
 void Walk::step() {
@@ -208,8 +220,13 @@ void Walk::step() {
   OrbifyCache::ScopedMode full(orbify::cache::Mode::Full);
   const bool ok = runView(*plan.next(), viewPage);
   plan.advance(!ok);
-  LOG_INF(TAG, "Refresh phase: kind=%u request=%u/%u ok=%d", static_cast<unsigned>(plan.count(Kind::Root) ? Kind::Root : Kind::Books), static_cast<unsigned>(plan.doneCount()), static_cast<unsigned>(plan.total()), ok);
-  if (plan.finished() && wifiHeld) { wifiHeld = false; OrbifyWifi::release(OrbifyWifi::Owner::Refresh); }
+  LOG_INF(TAG, "Refresh phase: kind=%u request=%u/%u ok=%d",
+          static_cast<unsigned>(plan.count(Kind::Root) ? Kind::Root : Kind::Books),
+          static_cast<unsigned>(plan.doneCount()), static_cast<unsigned>(plan.total()), ok);
+  if (plan.finished() && wifiHeld) {
+    wifiHeld = false;
+    OrbifyWifi::release(OrbifyWifi::Owner::Refresh);
+  }
 }
 
 std::string savedLine() {

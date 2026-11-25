@@ -38,8 +38,38 @@ struct FacetQuery {
   std::string sort, order, readStatus, shelf, query, author, seriesId, series, collectionId, smartScopeId,
       libraryId;
 };
+// The finite browse controls exposed by CrossInk's book list (not arbitrary search).
+// Visit one identity at a time: no vector of scopes or whole lists on the reader.
+template <class Visit>
+void browseQueries(const FacetQuery& base, Visit visit) {
+  if (!base.shelf.empty() || !base.query.empty()) {
+    visit(base);
+    return;
+  }
+  FacetQuery q = base;
+  const auto family = [&](const char* sort, bool descending) {
+    q.sort = sort;
+    for (unsigned order = 0; order < 2; ++order) {
+      q.order = order ? (descending ? "asc" : "desc") : "";
+      for (const char* status : {"", "unread", "reading", "finished"}) {
+        q.readStatus = status;
+        visit(q);
+      }
+    }
+  };
+  // Authors start with the server's default (recently added), spelled without
+  // sort. The sheet can retain that spelling while changing status/direction.
+  if (base.sort.empty()) family("", true);
+  family("recently_added", true);
+  family("title", false);
+  family("author", false);
+  family("recently_read", true);
+  family("series", false);
+}
+
 // The book list a facet row opens (BookOrbitCatalogBrowserActivity::activateSelected, FACET).
-FacetQuery facetQuery(const std::string& facetSectionId, const std::string& entryId, const std::string& seriesId);
+FacetQuery facetQuery(const std::string& facetSectionId, const std::string& entryId,
+                      const std::string& seriesId);
 // One tab- and newline-free field for the plan file, and back. Tabs and newlines in values become
 // spaces (the request is then the one the browser makes for that name, which has none).
 std::string encodeQuery(const FacetQuery& query);

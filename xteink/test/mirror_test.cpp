@@ -2,13 +2,15 @@
 // when it is due (the shared table shared/fixtures/cache/cases.json "mirror.due", which Android's
 // tests read too), the plan of requests a Full refresh saves, and the catalog browser's own
 // mapping from a facet row to its book list, so the mirror asks exactly what the browser will.
+#include "Mirror.h"
+
 #include <ArduinoJson.h>
 
 #include <cstring>
+#include <set>
 #include <string>
 #include <vector>
 
-#include "Mirror.h"
 #include "TestSupport.h"
 
 using namespace orbify::mirror;
@@ -41,7 +43,8 @@ static void dueCases(JsonObjectConst all) {
 
 static void facets() {
   // The browser's root: these five list facets, the rest list books.
-  for (const char* id : {"authors", "series", "collections", "libraries", "smart-scopes"}) CHECK(isFacetSection(id));
+  for (const char* id : {"authors", "series", "collections", "libraries", "smart-scopes"})
+    CHECK(isFacetSection(id));
   for (const char* id : {"recent", "want-to-read", "reading", ""}) CHECK(!isFacetSection(id));
   // A facet row's book list: BookOrbitCatalogBrowserActivity::activateSelected, EntryType::FACET.
   FacetQuery q = facetQuery("series", "Harbour Lights", "4");
@@ -90,7 +93,7 @@ static void plan() {
   CHECK(!bad.parse(""));
   CHECK(!bad.parse("something else\n0\n"));
   CHECK(!bad.parse("orbify-mirror 2\nx\n"));
-  CHECK(!bad.parse("orbify-mirror 2\n9\nR\t\n"));  // done past the end
+  CHECK(!bad.parse("orbify-mirror 2\n9\nR\t\n"));    // done past the end
   CHECK(!bad.parse("orbify-mirror 2\n0\nQ\tzz\n"));  // unknown kind
   // A version 1 plan joined a book list's fields with a space (a 400 on the device): not resumed.
   CHECK(!bad.parse("orbify-mirror 1\n0\nB\tsort=recently_read readStatus=reading\n"));
@@ -99,6 +102,33 @@ static void plan() {
   size_t added = 0;
   for (int i = 0; i < 400; i++) added += big.add(Kind::Detail, std::to_string(i)) ? 1 : 0;
   CHECK(added == 400 && big.total() == 400);
+}
+
+static void browseControls() {
+  for (const auto& section : {"series", "authors", "collections", "libraries", "smart-scopes"}) {
+    std::set<std::string> queries;
+    const auto base = facetQuery(section, "scope", "12");
+    browseQueries(base, [&](const FacetQuery& q) { queries.insert(encodeQuery(q)); });
+    CHECK(queries.size() == (std::string(section) == "authors" ? 48 : 40));
+    CHECK(queries.count(encodeQuery(base)) == 1);
+    for (const char* sort : {"recently_added", "title", "author", "recently_read", "series"}) {
+      for (const char* status : {"", "unread", "reading", "finished"}) {
+        auto q = base;
+        q.sort = sort;
+        q.readStatus = status;
+        q.order.clear();
+        CHECK(queries.count(encodeQuery(q)) == 1);
+        q.order =
+            std::string(sort) == "recently_added" || std::string(sort) == "recently_read" ? "asc" : "desc";
+        CHECK(queries.count(encodeQuery(q)) == 1);
+      }
+    }
+  }
+  FacetQuery shelf;
+  shelf.shelf = "want-to-read";
+  unsigned n = 0;
+  browseQueries(shelf, [&](const FacetQuery&) { ++n; });
+  CHECK(n == 1);
 }
 
 static void queries() {
@@ -182,7 +212,8 @@ static void requestKinds() {
   FacetQuery noShelf = every;
   noShelf.shelf.clear();
   CHECK(booksPath(noShelf, 2, 20, true) ==
-        "/plugin/catalog/books?page=2&size=20&format=epub&buckets=true&sort=s&order=o&readStatus=r&q=q%20w&author=a"
+        "/plugin/catalog/"
+        "books?page=2&size=20&format=epub&buckets=true&sort=s&order=o&readStatus=r&q=q%20w&author=a"
         "&seriesId=1&collectionId=2&smartScopeId=3&libraryId=4");
   FacetQuery seriesId;
   seriesId.sort = "series";
@@ -235,7 +266,7 @@ static void progress() {
   p.add(Kind::Root, "");
   p.add(Kind::Books, "a");
   CHECK(p.percent() == 0);
-  p.advance();  // 1 of 2
+  p.advance();              // 1 of 2
   CHECK(p.percent() == 0);  // enumeration is excluded from data progress
   for (int i = 0; i < 8; i++) p.add(Kind::Section, std::to_string(i));
   CHECK(p.total() == 10 && p.percent() == 0);
@@ -273,9 +304,9 @@ static void progress() {
   Plan old;
   CHECK(old.parse("orbify-mirror 2\n1\nR\t\nB\tsort=title\n"));
   CHECK(old.percent() == 50 && old.failures() == 0);
-  CHECK(!old.parse("orbify-mirror 3\n1\nR\t\n"));            // version 3 needs the % and failures
-  CHECK(!old.parse("orbify-mirror 3\n1\t101\t0\nR\t\n"));   // no % over 100
-  CHECK(!old.parse("orbify-mirror 3\n1\t10\t2\nR\t\n"));    // more failures than requests
+  CHECK(!old.parse("orbify-mirror 3\n1\nR\t\n"));          // version 3 needs the % and failures
+  CHECK(!old.parse("orbify-mirror 3\n1\t101\t0\nR\t\n"));  // no % over 100
+  CHECK(!old.parse("orbify-mirror 3\n1\t10\t2\nR\t\n"));   // more failures than requests
   CHECK(old.parse("orbify-mirror 3\n1\t70\t1\nR\t\nB\tsort=title\n") && old.percent() == 70);
   // Resume a pre-v4 walk that already fetched data before discovering every section.
   CHECK(old.parse("orbify-mirror 3\n2\t60\t0\nR\t\nB\told\nD\t42\nS\tauthors\n"));
@@ -325,6 +356,7 @@ int main(int argc, char** argv) {
   facets();
   plan();
   queries();
+  browseControls();
   requestKinds();
   progress();
   badge();
