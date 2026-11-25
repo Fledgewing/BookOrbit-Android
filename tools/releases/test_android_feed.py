@@ -14,7 +14,7 @@ spec.loader.exec_module(feed)
 
 
 class FeedTest(unittest.TestCase):
-    def publish(self, existing):
+    def publish(self, existing, withdraw="v0.11.3-rc.12"):
         previous = {'withdrawn': ['v0.11.3-rc.8'], 'releases': []}
         calls = []
         published = []
@@ -43,12 +43,15 @@ class FeedTest(unittest.TestCase):
         with patch.object(feed, 'gh', side_effect=gh), patch.object(feed.subprocess, 'run') as verify, \
              patch.object(feed.subprocess, 'check_output', return_value='new signature'), \
              patch.dict(os.environ, {'GITHUB_REPOSITORY': 'fixture/repo', 'GITHUB_SHA': 'commit'}):
-            feed.run('v0.11.3-rc.12')
+            feed.run(withdraw)
             self.assertEqual(2 if existing else 1, verify.call_count)
             self.assertTrue(all(c.kwargs['check'] for c in verify.call_args_list))
         payload = json.loads(published[0]['payload'])
         self.assertEqual(['v0.11.3-rc.9'], [r['tag_name'] for r in payload['releases']])
-        self.assertTrue({'v0.11.3-rc.10', 'v0.11.3-rc.11', 'v0.11.3-rc.12'} <= set(payload['withdrawn']))
+        expected = {'v0.11.3-rc.10', 'v0.11.3-rc.11', 'v0.11.3-rc.17'}
+        if withdraw:
+            expected.add(withdraw)
+        self.assertTrue(expected <= set(payload['withdrawn']))
         self.assertEqual(existing, 'v0.11.3-rc.8' in payload['withdrawn'])
 
     def test_bootstrap(self):
@@ -56,6 +59,9 @@ class FeedTest(unittest.TestCase):
 
     def test_preserves_previous_withdrawals(self):
         self.publish(True)
+
+    def test_refresh_includes_seed_without_dispatch_withdrawal(self):
+        self.publish(True, withdraw="")
 
     def test_rejects_non_android_tag(self):
         with self.assertRaises(ValueError):

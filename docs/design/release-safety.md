@@ -25,9 +25,12 @@ an older version, but cannot override Android's package installer.
 Existing companions must first receive this updater; already released clients cannot
 learn the new policy retroactively.
 
-After merge, run `gh workflow run android-feed.yml -f withdraw_tag=v0.11.3-rc.10`.
-The seed also withdraws rc.11. This publishes only feed metadata, never a tag or release.
+After merge, run `gh workflow run android-feed.yml -f withdraw_tag=v0.11.3-rc.17`.
+The seed also withdraws rc.10 and rc.11. This publishes only feed metadata, never a tag or release.
 Later withdrawals use the same input; ordinary Android publication republishes the feed.
+
+Maintainer ruling 2026-11-25: v0.11.3-rc.17 exits KOReader when a book is opened;
+v0.11.4-preview.1 fixes it. Withdraw rc.17 from the signed feed so it is no longer offered.
 
 The reusable release test workflow runs reader startup and Home/history opening flows
 on plugin PRs and main pushes. An unconditional result job rejects a skipped reader
