@@ -1,0 +1,57 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+-- Copyright (c) 2026 Fledgewing. Part of Orbify (see android/koreader/LICENSE).
+
+-- Keep diagnostics in release builds: only timed BookSync work is attributed here,
+-- never the input wait or another plugin's scheduled callback. No document data is logged.
+MainLoop = { wrapped = setmetatable({}, { __mode = "kv" }), pid = Db.pid() }
+local plugin_env = getfenv(1)
+function MainLoop.wrap(fn, where)
+    if MainLoop.wrapped[fn] then return MainLoop.wrapped[fn] end
+    local function timed(...)
+        local start = now_s()
+        local result = pack(pcall(fn, ...))
+        local ms = (now_s() - start) * 1000
+        if ms > 100 and Db.pid() == MainLoop.pid then
+            log(string.format("booksync: main-loop stall %d ms in %s", math.floor(ms + 0.5), where))
+        end
+        if not result[1] then error(result[2], 0) end
+        return unpack(result, 2, result.n)
+    end
+    MainLoop.wrapped[fn], MainLoop.wrapped[timed] = timed, timed
+    return timed
+end
+
+-- Include the entire scheduled callback, not just each individual operation inside it.
+-- Keep one wrapper per function so unschedule still cancels every registration of it.
+for _, name in ipairs({ "scheduleIn", "nextTick" }) do
+    local stock = UIManager[name]
+    UIManager[name] = function(self, ...)
+        local args = pack(...)
+        local index = name == "scheduleIn" and 2 or 1
+        local fn = args[index]
+        if type(fn) == "function" and getfenv(fn) == plugin_env then
+            local info = debug.getinfo(fn, "Sl")
+            local source = (info.source or ""):match("orbit%.koplugin/(.*)$") or "callback"
+            args[index] = MainLoop.wrap(fn, source .. ":" .. info.linedefined)
+        end
+        return stock(self, unpack(args, 1, args.n))
+    end
+end
+local stock_unschedule = UIManager.unschedule
+function UIManager:unschedule(fn, ...)
+    return stock_unschedule(self, MainLoop.wrapped[fn] or fn, ...)
+end
+
+-- Event handlers, repaint work and synchronous bridges also run outside scheduled tasks.
+for _, name in ipairs({ "OrbitAndroid", "ReadingStatus", "EOB", "OSM", "Store", "OC", "LF",
+    "Companion", "Jni", "Shared", "Clicks", "Channel", "Wifi", "Net", "Sync", "Mirror",
+    "Copies", "Sleep", "Stats" }) do
+    local t = plugin_env[name]
+    if type(t) == "table" then
+        for key, fn in pairs(t) do
+            if type(fn) == "function" and getfenv(fn) == plugin_env then
+                t[key] = MainLoop.wrap(fn, name .. "." .. key)
+            end
+        end
+    end
+end
