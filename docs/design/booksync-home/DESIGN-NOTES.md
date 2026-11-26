@@ -895,3 +895,10 @@ an empty Continue reading card says Open a book to start reading, without Retry.
 Version skew blocks Home before constructing the host, naming the companion or
 plugin that needs updating. X4 Pro, X4 and X3 cutover remains deferred by the
 maintainer's Android-first ruling; no firmware setting or migration changes.
+
+The upgrade sheet uses pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`
+`frontend/ui/widget/buttondialog.lua:339` (`onClose`) and `:68`'s
+`tap_close_callback`, which
+handles both Back and outside taps; Done acknowledges explicitly before closing.
+The regression double follows that native path rather than InfoMessage's separate
+`dismiss_callback`. The compatibility guard now requires the native callback field.

@@ -16,7 +16,13 @@ return function(test,eq,ok,E,W,Widget)
             if name=="ffi/blitbuffer" then return U.BB end
             if name=="ui/size" then return {padding={buttontable=0}} end
             if name=="ui/widget/buttondialog" then
-                return Widget:extend{moveFocusTo=function(self,x,y) self.focus={x,y} end,getButtonById=function() end}
+                return Widget:extend{moveFocusTo=function(self,x,y) self.focus={x,y} end,getButtonById=function() end,
+                    -- Pinned ButtonDialog:onClose uses tap_close_callback, not dismiss_callback.
+                    onClose=function(self)
+                        if self.tap_close_callback then self.tap_close_callback() end
+                        E.UIManager:close(self)
+                        return true
+                    end}
             end
             if name=="ui/widget/inputdialog" then
                 return Widget:extend{getInputText=function() return "Moon" end,onShowKeyboard=function() end}
@@ -85,6 +91,11 @@ return function(test,eq,ok,E,W,Widget)
             eq(E.S.news_012_pending,false); eq(saves,1)
             ok(E.HomeHost.show())
             eq(W.shown[#W.shown],E.HomeHost.active,"already seen")
+            E.S.news_012_pending=true
+            local dismissed=E.HomeHost.whatsNew()
+            eq(dismissed.dismiss_callback,nil,"ButtonDialog does not support InfoMessage's dismissal hook")
+            dismissed:onClose() -- native Back and outside taps take this same path
+            eq(E.S.news_012_pending,false); eq(saves,2)
             E.S.news_012_pending=false
             ok(E.HomeHost.show())
             eq(W.shown[#W.shown],E.HomeHost.active,"fresh install has no news")

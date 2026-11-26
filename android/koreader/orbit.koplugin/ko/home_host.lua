@@ -277,6 +277,12 @@ function HomeHost.whatsNew()
     local finish=Budgets.span("whats-new.paint",now_s,log)
     local budget=Budgets.get("screens","whats-new")
     local dialog
+    local function acknowledge()
+        if not S.news_012_pending then return end
+        S.news_012_pending=false
+        saveSettings()
+        G_reader_settings:flush()
+    end
     dialog=require("ui/widget/buttondialog"):new{
         title=_("What's new in 0.12"),
         buttons={
@@ -284,13 +290,9 @@ function HomeHost.whatsNew()
             {{text=_("Lists (your saved filters) on Home"),enabled=false}},
             {{text=_("BookSync settings on the reader"),enabled=false}},
             {{text=_("Battery: time left at your usual use"),enabled=false}},
-            {{text=_("Done"),callback=function() UIManager:close(dialog) end}},
+            {{text=_("Done"),callback=function() acknowledge(); UIManager:close(dialog) end}},
         },
-        dismiss_callback=function()
-            S.news_012_pending=false
-            saveSettings()
-            G_reader_settings:flush()
-        end,
+        tap_close_callback=acknowledge,
     }
     assert(Budgets.check(budget,{rows=#dialog.buttons,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}))
     UIManager:show(dialog) -- gate: explicit Home action, above the Home host

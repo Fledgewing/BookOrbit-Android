@@ -43,7 +43,7 @@ end
 -- Symbols: name (a function), or { name, kind }.
 local F, T = "field", "text"
 local NEEDS = {
-    { "frontend/ui/widget/buttondialog.lua", { "getButtonById", "onClose" } },
+    { "frontend/ui/widget/buttondialog.lua", { "getButtonById", "onClose", {"tap_close_callback", F} } },
     { "frontend/ui/widget/focusmanager.lua", { "moveFocusTo" } },
     { "frontend/ui/trapper.lua", { "wrap", "info" } },
     { "frontend/ui/uimanager.lua", { "show", "close", "scheduleIn", "nextTick", "unschedule", "setDirty",
