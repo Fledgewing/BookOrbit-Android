@@ -18,6 +18,7 @@ import tempfile
 import threading
 import time
 import unittest
+from types import SimpleNamespace
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -274,6 +275,37 @@ class LiveTest(unittest.TestCase):
         detail = self.device.call("GET", f"/plugin/catalog/books/{changed['id']}")
         self.assertEqual(detail["files"][0]["fileHash"], changed["new_hash"])
 
+
+
+class SimulatorStopMarkerTest(unittest.TestCase):
+    """A delayed worker decision must finish the run without a fixed-time QUIT race."""
+    def run_program(self, body, marker="worker decided"):
+        sys.path.insert(0, str(kit.ROOT / "xteink" / "test" / "e2e"))
+        from sim import Simulator
+        root = Path(self.temp.name)
+        program = root / "fake-simulator"
+        program.write_text("#!/usr/bin/env python3\nimport time\nfrom pathlib import Path\n" + body)
+        program.chmod(0o755)
+        return Simulator(program, root / "artifacts").run(
+            SimpleNamespace(root=root), "marker", timeout_s=3, stop_when=marker)
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+
+    def test_stops_on_delayed_worker_marker(self):
+        run = self.run_program("time.sleep(0.1)\nprint('worker decided', flush=True)\ntime.sleep(0.8)\nPath('too-late').touch()\ntime.sleep(4)\n")
+        self.assertEqual(run.returncode, 0)
+        self.assertIn("worker decided", run.output)
+        self.assertFalse((Path(self.temp.name) / "too-late").exists(), "marker, not timeout, ended the run")
+
+    def test_missing_marker_still_fails(self):
+        with self.assertRaisesRegex(AssertionError, "never reached stop marker"):
+            self.run_program("print('not the decision', flush=True)\n")
+
+    def test_immediate_crash_is_not_hidden_by_marker(self):
+        with self.assertRaisesRegex(AssertionError, "crash in the simulator output"):
+            self.run_program("print('worker decided', flush=True)\nprint('Segmentation fault', flush=True)\n")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

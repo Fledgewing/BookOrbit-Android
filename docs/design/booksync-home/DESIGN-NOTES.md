@@ -790,3 +790,12 @@ budget inherited by library calls: bounded rows/decoded bytes, zero subprocesses
 render-path network, ≤1 batch per Home paint and ≤16 KiB per widget. The companion owns
 heavy work. Account results redraw only a visible initiating form; cancellation drops stale
 results and clears transient password fields. X4 phone setup remains a labelled stub.
+
+
+CI integration exposed a pre-existing simulator-test race in `heap_floor_waits`:
+a fixed nine-second QUIT could stop the refresh worker after its delayed manifest
+reply and before its heap decision. The test now waits for the explicit heap-floor
+log marker with a bounded deadline; its request assertions are unchanged. The
+shared host harness tests marker stopping, missing markers and visible crashes.
+The repaired X4 Pro case passes against an isolated synthetic server. This is a
+test-harness fix only; no firmware product code is changed by F12-M.
