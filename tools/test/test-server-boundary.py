@@ -17,7 +17,10 @@ FIELDS = ("readStatus", "progressPercentage", "smartScopeId", "seriesName", "ser
           "seriesIndex", "lastReadAt", "addedAt", "updatedAt", "contentVersion", "hasCover",
           "seriesSummary", "libraryVersion", "generatedAt", "finishedThisYear", "readingGoal",
           "thumbnailUrl", "detailUrl", "downloadUrl", "userkey", "server_url")
-WIRE_PROTOCOL = re.compile(r'/api/v1|/?koreader/plugin\b|\bcatalog/(?:books|sections|dashboard)|\b(?:' + '|'.join(FIELDS) + r')\b')
+WIRE_PROTOCOL = re.compile(
+    r'/api/v1|/?koreader/plugin\b|\bcatalog/(?:books|sections|dashboard)|\b(?:' + '|'.join(FIELDS) +
+    r')\b|smart[ _-]?scopes?|x-auth-user|x-auth-key|/koreader/(?:users|syncs|credentials)|'
+    r'/auth/(?:login|refresh|logout)|/opds(?:[/?\"\']|$)', re.I)
 PROTOCOL = re.compile(WIRE_PROTOCOL.pattern + r'|bookorbit', re.I)
 IMPLEMENTATION = re.compile(r'(?:net\.fledgewing\.orbitcompanion\.server\.[a-z]+|(?:ko|logic)[/.]server[/.]|[\"\']bookorbit_)')
 # Reviewed legacy facade consumers: permissions to call the facade, never protocol exemptions.
@@ -77,7 +80,7 @@ def violations(path, source):
 class GuardTests(unittest.TestCase):
     def test_rejects_protocol_and_imports_even_with_suppression_comments(self):
         for path in (KOTLIN / 'Widget.kt', LUA / 'ko/widget.lua'):
-            for value in ('"/api/v1/books"', '"catalog/books"', '"/koreader/plugin/catalog/books"', '"readStatus"', '"BookOrbit"', '"bookorbit"', '"BOOKORBIT"', '"bookorbit_api"'):
+            for value in ('"/api/v1/books"', '"catalog/books"', '"/auth/login"', '"/opds/catalog"', '"x-auth-key"', '"Smart Scopes"', '"/koreader/plugin/catalog/books"', '"readStatus"', '"BookOrbit"', '"bookorbit"', '"BOOKORBIT"', '"bookorbit_api"'):
                 self.assertTrue(violations(path, '// skip boundary\n-- allow-server\n' + value), value)
         self.assertTrue(violations(KOTLIN / 'Widget.kt', 'import net.fledgewing.orbitcompanion.server.bookorbit.Hidden'))
         self.assertTrue(violations(COMPANION / 'debug/kotlin/Widget.kt', 'val path="/api/v1"'))

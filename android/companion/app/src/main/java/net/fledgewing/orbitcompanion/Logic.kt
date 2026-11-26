@@ -1142,7 +1142,7 @@ object WhatsNew {
             "Every companion page scrolls.",
         ),
         "0.6.0" to listOf(
-            "In library, any library, collection or smart scope can be shown by series or by author: Sort › By series / By author.",
+            "In library, any library, collection or list can be shown by series or by author: Sort › By series / By author.",
         ),
         "0.6.1" to listOf(
             "After any app update, KOReader restarts right away and your book reopens where you were.",

@@ -41,12 +41,14 @@ class ServerAdapterTest {
         override fun close() = sql.close()
     }
     @Test fun registryAndPublisherDoNotAssumeBackendOrIdentityShape() {
-        val registry = AdapterRegistry(listOf(FakeAdapter(), AcquisitionOnlyAdapter()))
+        val registry = AdapterRegistry(listOf(
+            "fake" to { _, _ -> FakeAdapter() }, "acquisition" to { _, _ -> AcquisitionOnlyAdapter() },
+        ))
         val root = Files.createTempDirectory("adapter-contract").toFile()
         try {
             Store(root).use { store ->
                 for (id in listOf("fake", "acquisition")) {
-                    val adapter = registry.get(id)
+                    val adapter = registry.create(id, store)
                     val model = LibraryReadModel(store, log = {}, adapter = adapter)
                     val request = String(LuaValue.encode(mapOf("op" to "window", "source" to "all", "limit" to 1)), Charsets.ISO_8859_1)
                     assertTrue(model.publish("fixture", listOf(request)))
@@ -57,9 +59,13 @@ class ServerAdapterTest {
                     assertTrue(bytes.size <= LibraryReadModel.MAX_BYTES)
                     assertFalse(model.publish("another-account", listOf(request)))
                 }
-                assertEquals(false, (registry.get("acquisition").capabilities("fixture")["lists"] as Map<*, *>)["read"])
-                assertEquals("unsupported", registry.get("acquisition").detail("fixture", "opaque")["error"])
-                assertEquals("transfer:opaque", registry.get("acquisition").download("fixture", "opaque", "epub", null)["job"])
+                assertThrows(IllegalArgumentException::class.java) { registry.create("missing", store) }
+                assertThrows(IllegalArgumentException::class.java) {
+                    AdapterRegistry(listOf("wrong" to { _, _ -> FakeAdapter() })).create("wrong", store)
+                }
+                assertEquals(false, (registry.create("acquisition", store).capabilities("fixture")["lists"] as Map<*, *>)["read"])
+                assertEquals("unsupported", registry.create("acquisition", store).detail("fixture", "opaque")["error"])
+                assertEquals("transfer:opaque", registry.create("acquisition", store).download("fixture", "opaque", "epub", null)["job"])
             }
         } finally { root.deleteRecursively() }
     }
@@ -79,8 +85,8 @@ class ServerAdapterTest {
         secret.fill('x')
         assertEquals("unsupported", fake.connectorCredentials("reader", "reader", secret)["error"])
         assertTrue(secret.all { it == '\u0000' })
-        assertThrows(IllegalArgumentException::class.java) { AdapterRegistry(listOf(fake, fake)) }
-        assertThrows(IllegalArgumentException::class.java) { AdapterRegistry(listOf(fake)).get("missing") }
+        val factory: AdapterFactory = { _, _ -> fake }
+        assertThrows(IllegalArgumentException::class.java) { AdapterRegistry(listOf("fake" to factory, "fake" to factory)) }
     }
     @Test fun oneBatchSharesOneLocalStatisticsAggregate() {
         val root = Files.createTempDirectory("adapter-stats").toFile()

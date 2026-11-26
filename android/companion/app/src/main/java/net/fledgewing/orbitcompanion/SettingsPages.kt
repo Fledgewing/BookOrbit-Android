@@ -668,18 +668,18 @@ class SettingChoiceActivity : SleepPickerPage() {
         d.values.filter { it.first != SleepPoolLogic.LIBRARY }.forEach { (id, label) -> tick(id, label) }
         val c = choices
         if (c == null) {
-            root.addView(note("Open KOReader once to load your smart scopes and collections."))
+            root.addView(note("Open KOReader once to load your lists and collections."))
         } else {
             if (c.libraries.isNotEmpty()) subhead(root, "Libraries")
             c.libraries.forEach { tick("library:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
-            if (c.scopes.isNotEmpty()) subhead(root, "Smart scopes")
+            if (c.scopes.isNotEmpty()) subhead(root, "Lists")
             c.scopes.forEach { tick("scope:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.collections.isNotEmpty()) subhead(root, "Collections")
             c.collections.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.at > 0) root.addView(note("Lists from library, ${Ui.clock(this, c.at)}"))
         }
         picked.filter { (it.startsWith("scope:") || it.startsWith("collection:") || it.startsWith("library:")) && c?.title(it) == null }.forEach { tick(it, c?.missingLabel(it) ?: SleepChoices.fallback(it), "Tap to drop this source") }
-        root.addView(note("For a custom field: make a smart scope with that condition in library, then pick it here."))
+        root.addView(note("For a custom field: make a list with that condition in library, then pick it here."))
     }
 }
 
@@ -714,16 +714,16 @@ class LeaveOutActivity : SleepPickerPage() {
         c?.tags?.forEach { t -> tick("tag:${t.tag}", t.label, "${t.count} books") }
         rules.filter { it.startsWith("tag:") && c?.tags?.none { t -> "tag:${t.tag}" == it } != false }
             .forEach { tick(it, c?.missingLabel(it) ?: SleepChoices.fallback(it), "Tap to drop this source") }
-        if (c == null) root.addView(note("Open KOReader once to load your tags, smart scopes and collections."))
+        if (c == null) root.addView(note("Open KOReader once to load your tags, lists and collections."))
         if (c?.libraries?.isNotEmpty() == true) subhead(root, "Libraries")
         c?.libraries?.forEach { tick("library:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
-        if (c?.scopes?.isNotEmpty() == true) subhead(root, "Smart scopes")
+        if (c?.scopes?.isNotEmpty() == true) subhead(root, "Lists")
         c?.scopes?.forEach { tick("scope:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
         if (c?.collections?.isNotEmpty() == true) subhead(root, "Collections")
         c?.collections?.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
         rules.filter { (it.startsWith("scope:") || it.startsWith("collection:") || it.startsWith("library:")) && c?.title(it) == null }
             .forEach { tick(it, c?.missingLabel(it) ?: SleepChoices.fallback(it), "Tap to drop this source") }
-        root.addView(note("For a custom field: make a smart scope with that condition in library, then leave it out here."))
+        root.addView(note("For a custom field: make a list with that condition in library, then leave it out here."))
     }
 
     private fun typeTag(done: (String) -> Unit) {

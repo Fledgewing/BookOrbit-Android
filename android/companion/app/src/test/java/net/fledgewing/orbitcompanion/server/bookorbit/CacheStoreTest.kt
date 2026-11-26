@@ -47,8 +47,8 @@ class CacheStoreTest {
             store.putWindow(path, "section", "smart-scopes", 0, body, 20L)
             val stale = SleepChoices.parse("""{"at":1,"scopes":[{"id":2,"title":"Old name"}]}""")
             val choices = SleepChoices.fromSql(store.db(), stale)!!
-            assertEquals("Cosy reads (smart scope)", choices.title("scope:2"))
-            assertEquals("Smart scope 3 (Removed on the server)", choices.missingLabel("scope:3"))
+            assertEquals("Cosy reads (list)", choices.title("scope:2"))
+            assertEquals("List 3 (Removed on the server)", choices.missingLabel("scope:3"))
             assertTrue(SleepChoices.fallback("scope:3").contains("Lists not loaded yet"))
         }
     }

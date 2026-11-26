@@ -115,7 +115,9 @@ result until their owner is implemented, avoiding a second sync writer.
 table and per-call timing. It depends on `ProjectionStore` and `ServerAdapter`, not a server
 implementation. The existing `CacheStore` implements that persistence seam within the
 adapter; the existing catalog, bulk/mirror worker and normalizer moved there without a
-second database or HTTP client. ReadingStats and LibraryFacets remain neutral/local.
+second database or HTTP client. ReadingStats and LibraryFacets remain neutral/local. `CachedListProjection` owns the legacy
+sleep picker's cached-section translation; shared picker code receives `SleepChoices` and
+uses the neutral label Lists. Backend terms and authentication headers are guarded too.
 `ServerAdapters.kt` is the sole Kotlin composition root. Worker command routing, connector
 installation and cover setup use neutral service contracts; their protocol implementations
 are under `net.fledgewing.orbitcompanion.server.bookorbit`.

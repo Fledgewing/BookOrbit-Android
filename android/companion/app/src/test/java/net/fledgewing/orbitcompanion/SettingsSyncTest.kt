@@ -158,9 +158,9 @@ class SettingsUiTest {
     fun pickerListsParse() {
         val c = SleepChoices.parse("""{"v":1,"at":5,"scopes":[{"id":3,"title":"Short reads","count":48},{"id":0}],"collections":[{"id":9,"title":"Book club"}],"tags":[{"tag":"a","label":"A","count":1},{"tag":"Age:18","count":14}]}""")!!
         assertEquals(1, c.scopes.size)
-        assertEquals("Short reads (smart scope)", c.title("scope:3"))
+        assertEquals("Short reads (list)", c.title("scope:3"))
         assertEquals("age:18", c.tags.first().tag)
-        assertEquals("Smart scope 4 (Removed on the server)", c.ruleLabel("scope:4"))
+        assertEquals("List 4 (Removed on the server)", c.ruleLabel("scope:4"))
         assertNull(SleepChoices.parse("nope"))
     }
 

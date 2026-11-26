@@ -2915,7 +2915,7 @@ test("lists: By series on a collection reads its books once and opens the plugin
     ok(#lists_server.urls == 3 and cat.current_context.orbit_group, "instant the second time")
 end)
 
-test("lists: By author on a smart scope; an author by series; Not in a series; the chips", function()
+test("lists: By author on a list; an author by series; Not in a series; the chips", function()
     lists_server.urls = {}
     local cat = newCatalog(LCat, LApi, { kind = "books", title = "Unread fantasy", params = { smartScopeId = 3 } })
     cat:listRun({ kind = "orbit-group", section = "authors" })
@@ -2934,7 +2934,7 @@ test("lists: By author on a smart scope; an author by series; Not in a series; t
     ok(h.title == "Brandon Sanderson" and h.sub == "2 books in Unread fantasy · by series", "header: " .. tostring(h.sub))
     local chips = cat:listToolbar("series", by)
     ok(#chips == 3 and chips[1].on and chips[1].label == "By series" and chips[3].label == "All by author", "chips")
-    -- A smart scope's series: by id (the server ignores other filters with smartScopeId).
+    -- A list's series: by id (the server ignores other filters with smartScopeId).
     cat:listRun({ kind = "open-series", entry = by.entries[1] })
     local p = cat.loaded.params
     ok(p.ids == "3" and p.smartScopeId == nil and p.series == "Skyward" and p.author == "Brandon Sanderson", "ids + series + author")
@@ -5566,7 +5566,7 @@ test("sleep screen: settings changed in the companion are applied; an older comp
     run(5)
 end)
 
-test("sleep screen: Pick from and Leave out list every smart scope and collection, all pages, with counts, saved for offline", function()
+test("sleep screen: Pick from and Leave out list every list and collection, all pages, with counts, saved for offline", function()
     local JSON = dofile(here .. "/json_mini.lua")
     local function fixture(name)
         local f = assert(io.open(here .. "/../../../shared/fixtures/bookorbit/" .. name, "rb"))
@@ -5590,7 +5590,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     S.sleep_mode = "recommended"
     local ui, m = newUI(false)
     RE.Shared.refresh("test")
-    -- Smart scopes come in two pages (hasNext), collections whole, as the server sends them.
+    -- Lists come in two pages (hasNext), collections whole, as the server sends them.
     local calls, down = {}, false
     local client = {}
     function client:query(path, q) return string.format("%s?page=%d&size=%d", path, q.page, q.size) end
@@ -5633,7 +5633,7 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     end
     local got = texts(picker.sub_item_table_func())
     ok(#got == 15, "2 headers, 12 scopes, 1 collection: " .. #got)
-    ok(got[1] == "Smart scopes" and got[2] == "Cosy Mysteries · 5" and got[13] == "Holiday Picks", "scopes with counts, the last without: " .. tostring(got[13]))
+    ok(got[1] == "Lists" and got[2] == "Cosy Mysteries · 5" and got[13] == "Holiday Picks", "scopes with counts, the last without: " .. tostring(got[13]))
     ok(got[14] == "Collections" and got[15] == "ToRead · 23", "the collection: " .. tostring(got[15]))
     -- Tapping one ticks it beside Up next (Pick from is a set, R1c), and both names show.
     local tapped = picker.sub_item_table_func()
@@ -5654,11 +5654,11 @@ test("sleep screen: Pick from and Leave out list every smart scope and collectio
     Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil
     local leave = rows[3].sub_item_table_func()
     local add
-    for _, r in ipairs(leave) do if r.text == "Add a rule: Library, smart scope or collection…" then add = r end end
+    for _, r in ipairs(leave) do if r.text == "Add a rule: Library, list or collection…" then add = r end end
     local lo = texts(add.sub_item_table_func())
     ok(#lo == 15 and lo[3] == "Space Opera · 8", "Leave out lists them offline: " .. #lo)
     add.sub_item_table_func()[4].callback()
-    ok(S.sleep_leave_out[1] == "scope:103" and Sleep.ruleLabel("scope:103") == "Short Reads (smart scope)", "rule added: " .. tostring(S.sleep_leave_out[1]))
+    ok(S.sleep_leave_out[1] == "scope:103" and Sleep.ruleLabel("scope:103") == "Short Reads (list)", "rule added: " .. tostring(S.sleep_leave_out[1]))
     RE.OC.client, jm.decode = oc_client, stub_decode
     fc.done()
     Sleep.base_dir, Sleep.scopes_cache, Sleep.scope_names, Sleep.scopes_at = nil, nil, nil, nil

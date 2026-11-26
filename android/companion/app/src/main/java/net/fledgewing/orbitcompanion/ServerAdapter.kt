@@ -45,3 +45,7 @@ interface ConnectorInstaller {
     fun needsInstall(installed: String?): Boolean
     fun install(): String
 }
+
+interface CachedListProjection {
+    fun read(sql: Sql, saved: SleepChoices?): SleepChoices?
+}
