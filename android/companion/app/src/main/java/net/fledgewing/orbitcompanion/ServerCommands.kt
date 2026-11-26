@@ -3,14 +3,14 @@ package net.fledgewing.orbitcompanion
 import android.content.Context
 import java.io.File
 
-/** Trusted-provider commands: inputs/results are neutral and bounded; credentials never cross IPC. */
+/** Trusted-provider commands: inputs/results are neutral and bounded; typed secrets are transient inputs, never results or retained jobs. */
 object ServerCommands {
     const val START = "${Contract.PACKAGE}.call.SERVER_COMMAND"
     const val RESULT = "${Contract.PACKAGE}.call.SERVER_RESULT"
     private class Pending(val at: Long, var body: Map<String,Any?>? = null)
     private val jobs = linkedMapOf<String,Pending>()
     @Synchronized fun start(ctx: Context, op: String, args: Map<*, *>): String {
-        require(op in setOf("sync.read","sync.write","catalog.window","downloads.start"))
+        require(op in setOf("sync.read","sync.write","catalog.window","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
         val now = System.currentTimeMillis()
         jobs.entries.removeAll { now - it.value.at > 120000 }
         require(jobs.size < 32)
@@ -20,7 +20,14 @@ object ServerCommands {
             val body = if (error != null) mapOf("error" to error) else result ?: mapOf("ok" to true)
             jobs[id]?.body = if (LuaValue.encode(body).size <= 16384) body else mapOf("error" to "budget")
         }
+        fun accountDone(error: String?) = finish(mapOf("state" to LibraryAccount.state()),error)
+        fun text(key: String) = LuaValue.utf8(args[key] as? String ?: throw IllegalArgumentException("missing"))
         try { when (op) {
+            "account.signIn" -> LibraryAccount.signIn(ctx,text("server"),text("username"),text("password").toCharArray(),::accountDone)
+            "account.signOut" -> LibraryAccount.signOut(ctx,::accountDone)
+            "login.save" -> LibraryAccount.setLogin(ctx,text("kind"),text("server"),text("username"),text("password").toCharArray(),false,::accountDone)
+            "login.remove" -> LibraryAccount.removeLogin(ctx,text("kind"),::accountDone)
+            "login.replace" -> LibraryAccount.useAccountLogin(ctx,text("kind"),::accountDone)
             "sync.read", "sync.write" -> {
                 val document = args["document"] as? String ?: throw IllegalArgumentException("document")
                 val update = if (op == "sync.write") mapOf("percentage" to args["percentage"], "position" to args["position"]) else null

@@ -193,12 +193,23 @@ function OrbitAndroid:menuItems()
         end}
     end
     local items = {
-        group("account", "Account & server", function() return {
-            action("Sign in to your server", function() Library.openAccount() end),
-        } end),
+        group("account", "Your server", function()
+            local a=AccountView.read()
+            local out={action(AccountPlan.summary(a),function() AccountView.open() end),
+                action(a.signedIn and "Sign in again…" or "Sign in to your server",function() AccountView.open("account") end)}
+            if a.signedIn then out[#out+1]=action("Sign out",function()
+                local v=AccountView.open(); v.page="signout"; v.focus="keep"; v:paint()
+            end) end
+            out[#out+1]={text="Logins",enabled=false}
+            for _,k in ipairs({"sync","opds"}) do
+                out[#out+1]=action(AccountPlan.names[k] .. " · " .. AccountPlan.status(AccountPlan.login(a,k)),function() AccountView.open(k) end)
+            end
+            return out
+        end),
         group("sync", "Sync, Wi-Fi & power", function()
             local paint = Library.paint("settings-sync")
             local estimates = paint:modeEstimates()
+            local account = paint:accountState()
             paint:flush()
             local modes = {}
             for _i, mode in ipairs(SettingsUI.modes) do
@@ -212,7 +223,9 @@ function OrbitAndroid:menuItems()
                     end}
             end
             local out = {{text_func=function() return _("Mode") .. ": " .. _(SettingsUI.modeLabel(S, Shared.mode())) end, sub_item_table=modes}}
-            table.insert(out, 1, action("Sync now", function() Library.syncNow(self) end))
+            local text,go,note=AccountView.syncAction(account)
+            table.insert(out, 1, action(text or "Sync now", text and go or function() Library.syncNow(self) end))
+            out[1].help_text=note
             if SettingsUI.mode(S, Shared.mode()) == "custom" then
                 local reset = action("Back to Balanced", modes[2].callback)
                 reset.enabled_func = modes[2].enabled_func

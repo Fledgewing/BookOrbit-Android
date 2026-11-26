@@ -743,3 +743,12 @@ the panel with Custom picked). Screens: `shots/*-r10-*.png`.
 **Rev 16 (critic approved round 10; four minors):** the margins, line spacing and contrast editors open with focus on +;
 the M8C Font Custom segment shows its value ("Baskerville +1"); contrast values read Lighter / Normal / Darker instead of
 "Dark ±"; §23 now says Custom margins are stored per device. `flows3.js` 338/338. The critic's r10 scripts join `r3/all.sh`.
+
+## Android F12-N implementation
+
+The approved §20–§22 forms now reuse the neutral library and companion account worker;
+see [F12-N implementation notes](F12-N-NOTES.md). Each screen/widget declares a strict
+budget inherited by library calls: bounded rows/decoded bytes, zero subprocesses and
+render-path network, ≤1 batch per Home paint and ≤16 KiB per widget. The companion owns
+heavy work. Account results redraw only a visible initiating form; cancellation drops stale
+results and clears transient password fields. X4 phone setup remains a labelled stub.

@@ -27,7 +27,8 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
     private fun number(v: Any?) = (v as? Number)?.toLong()
     private fun signedIn() = session != null && (number(session?.get("refreshExpiry")) ?: 0) > now()
     @Synchronized fun state(): Map<String, Any?> = mapOf("signedIn" to signedIn(),
-        "connector" to (session?.get("connectorState") ?: "not-configured"),
+        "username" to session?.get("username"), "server" to session?.get("server"),
+        "connectorOutcome" to session?.get("connectorOutcome"), "connector" to (session?.get("connectorState") ?: "not-configured"),
         "connectorRevision" to session?.get("revision"), "expiresAt" to session?.get("refreshExpiry"))
     @Synchronized internal fun identity(): String? = if (signedIn())
         "account:" + BookOrbitLibrary.namespace(session!!["server"].toString() + "|" + session!!["id"].toString()).removePrefix("bo:") else null
@@ -46,11 +47,11 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
             val base = normalizeServer(server)
             require(username.length in 1..100 && password.size in 1..1024)
             val r = http.request(base, "/auth/login", "POST", mapOf("username" to username, "password" to String(password), "clientKind" to "native", "deviceLabel" to "BookSync"), null)
-            if (r.code !in 200..299) throw Failure(if (r.code == 401) "unauthorized" else if (r.code == 403) "forbidden" else "unavailable")
+            if (r.code !in 200..299) throw Failure(if (r.code == 401) "unauthorized" else if (r.code == 403) "forbidden" else if (r.code == 404 || r.code == 426) "too-old" else "unavailable")
             val reply = r.value as? Map<*, *> ?: throw Failure("invalid-response")
             val user = reply["user"] as? Map<*, *> ?: throw Failure("invalid-response")
             val id = number(user["id"]) ?: throw Failure("invalid-response")
-            val next = mutableMapOf<String, Any?>("server" to base, "id" to id, "revision" to java.util.UUID.randomUUID().toString())
+            val next = mutableMapOf<String, Any?>("username" to LuaValue.str(username), "server" to base, "id" to id, "revision" to java.util.UUID.randomUUID().toString())
             credentials(next, reply)
             // Persist only after the complete response validates. Retire an older session best effort.
             val previous = session
@@ -117,7 +118,7 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
             }
             s["connectorUser"] = user; s.remove("connectorKey")
             if (known != null) {
-                s["connectorKey"] = known!!.key; s["connectorState"] = "ready"
+                s["connectorOutcome"] = "found"; s["connectorKey"] = known!!.key; s["connectorState"] = "ready"
             } else s["connectorState"] = "existing-login-needed"
             s.remove("pendingUser"); s.remove("pendingKey")
         } else if (r.value == null) {
@@ -129,7 +130,7 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
             s["pendingUser"] = user; s["pendingKey"] = key; persist()
             val created = http.request(server, "/koreader/credentials", "POST", mapOf("username" to user, "password" to random), s["access"] as String)
             if (created.code in 200..299) {
-                s["connectorUser"] = user; s["connectorKey"] = key; s["connectorState"] = "ready"
+                s["connectorOutcome"] = "created"; s["connectorUser"] = user; s["connectorKey"] = key; s["connectorState"] = "ready"
                 s.remove("pendingUser"); s.remove("pendingKey")
             } else {
                 s["connectorState"] = if (created.code == 409) "existing-login-needed" else if (created.code == 403) "forbidden" else "unavailable"

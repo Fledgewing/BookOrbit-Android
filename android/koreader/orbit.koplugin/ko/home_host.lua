@@ -42,6 +42,8 @@ function HomeHost.create()
         local ready,caps=pcall(paint.capabilities,paint)
         caps=ready and caps or {}
         self.caps=caps
+        local account=caps.account or {}
+        self.account=account
         local previous=self.signatures or {}
         self.signatures,self.changed_rects={},{}
         local registry=HomeHost.installed()
@@ -54,6 +56,12 @@ function HomeHost.create()
         local w,h=self.dimen.w,self.dimen.h
         local canvas=HomeWidgets.canvas(w,h)
         HomeWidgets.text(canvas,self.list_title or "BookSync",gap,gap,w-scale(120),24,false,true)
+        local status,kind=AccountPlan.sync(account,true)
+        if status~=self.account_status then
+            self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=top}
+            self.account_status=status
+        end
+        if status and caps.account and not self.list_layout then HomeWidgets.button(canvas,status,gap+scale(110),scale(54),w-2*gap-scale(110),scale(50),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
         HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(36),function() self:onClose() end)
         HomeWidgets.button(canvas,_("Search"),gap,scale(54),scale(100),scale(50),function() self:search() end)
         if self.list_layout then
@@ -156,6 +164,12 @@ function HomeHost.create()
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action == "battery" then BatteryUI.show()
         elseif action == "book" then
+            if self.caps.account and not row.local_path and not AccountPlan.login(self.account or {},"opds").available then
+                local prompt=require("ui/widget/buttondialog"):new{title="No OPDS login, so it can't download",buttons={{{text="Keep browsing",callback=function() UIManager:close(self.download_prompt) end},{text="Set up",callback=function() UIManager:close(self.download_prompt); AccountView.open("opds") end}}}}
+                self.download_prompt=prompt
+                UIManager:show(prompt) -- gate: user action (server-only book)
+                return
+            end
             if Library.open(row) then
                 if HomeHost.active==self then UIManager:close(self) end
             elseif not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then
