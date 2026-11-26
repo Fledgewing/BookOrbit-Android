@@ -791,6 +791,80 @@ The existing companion `BookOrbitLibrary` implementation now lives in
 read-model API stable. A package guard prevents moving this backend projection
 implementation outside the server adapter.
 
+
+### Android implementation of §23 (F12-M, 2026-11-26)
+
+The rev 16 editor builds on `ko/menu.lua:236` (Reading group),
+`logic/settings_ui.lua:21` (computed mode label), `ko/reader_panel.lua:30`
+(reader sheet and library paint), `ko/endsheet.lua:135` (measured rows),
+`logic/sheet_layout.lua:23` (bounded layout), `ko/settings.lua:61`
+(device-local settings), and `ko/library.lua:15` (caller budgets). No companion
+read-model or server operation is needed: these are user-selected native styles.
+
+`S.custom_reading` is one device-local record outside shared settings: pixel margins
+never travel to another device. Per-book choices use KOReader's in-memory document
+settings and normal flush. Editing Custom updates only changed, selected styles;
+native margin application owns its position update. Reopening a book using Custom
+reads the latest local record. Closing the reader discards the editor and its return callback.
+
+Each editor has a named budget in `logic/budgets.lua`: at most 12 display rows, one
+local record per read, zero decoded bytes, network, subprocesses and companion
+round-trips. Library calls inherit the caller's screen budget. Paints and style
+reads/apply/save/copy log info timing spans. Device targets remain unconfirmed;
+deterministic host checks are not an M8C timing result.
+
+Native behavior was checked at pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`:
+`frontend/apps/reader/modules/readerfont.lua:163` loads the face and configurable
+weight/spacing/gamma; `:212`, `:221` and `:269` notify, so the adapter uses their
+document setters quietly. `frontend/apps/reader/modules/readertypeset.lua:541`
+scales margins and reserves the footer; reuse preserves vertical margins and the
+BookSync strip hook. `frontend/ui/data/creoptions.lua:581` supplies the gamma table;
+Custom selects the nearest engine gamma to 1 + its displayed contrast value.
+`frontend/ui/widget/touchmenu.lua:658` returns to a row by ID without dismissing Reading.
+
+Font choices resolve preferred installed faces through the native adapter, with
+bundled Noto Serif / FreeSerif / Noto Sans fallbacks matching the prototype's fallback
+intent. No fonts are downloaded or installed. Copy retains any installed face name.
+The compact native-widget preview illustrates weight and contrast; the open EPUB
+receives the supported engine weight, spacing, margin and gamma values. PDFs retain
+the existing KOReader-menu escape. Android comes first under the 2026-11-25 approval;
+X4 Pro, X4 and X3 remain deferred, with their own device margin ranges.
+
+
+CI integration exposed a pre-existing simulator-test race in `heap_floor_waits`:
+a fixed nine-second QUIT could stop the refresh worker after its delayed manifest
+reply and before its heap decision. The test now waits for the explicit heap-floor
+log marker with a bounded deadline; its request assertions are unchanged. The
+shared host harness tests marker stopping, missing markers and visible crashes.
+The repaired X4 Pro case passes against an isolated synthetic server. This is a
+test-harness fix only; no firmware product code is changed by F12-M.
+
+
+KOReader's `scaleBySize` rounds upward (`koreader-base` pin
+`6e4bc81af4e04f78d81677a323a780a71b29702a`, `ffi/framebuffer.lua:414`).
+The native adapter calibrates its inverse at a large size rather than treating
+`scaleBySize(1)` as an exact factor. Fractional-scale tests verify that displayed
+physical pixel margins survive apply and one-time copy unchanged.
+
+
+Keep-open Custom editor and copy rows inherit the existing Settings PIN lock.
+Only explicitly read-only leaf navigation may bypass the read-only menu wrapper;
+keeping a menu open does not make its action safe to run while locked.
+
+
+Contrast-only changes use the native redraw event; font, spacing and margin changes
+use the layout update path. At the pinned KOReader commit, `frontend/apps/reader/modules/readerfont.lua:269`
+sends `RedrawCurrentView` for gamma; `frontend/apps/reader/modules/readerrolling.lua:993`
+updates layout/metadata, while `frontend/apps/reader/modules/readerrolling.lua:1088`
+redraws the current page. Mixed edits still batch
+one position update (or reuse the native margin update).
+
+
+Copy maps a known installed face back to its preset index. An imported face outside
+the four presets appears as the selected copied choice, drawn in that face. It adds
+at most one row, keeping the font editor within its 12-row budget; choosing a preset
+replaces the imported face, and Undo restores the previous index and face exactly.
+
 ## Android F12-N implementation
 
 The approved §20–§22 forms now reuse the neutral library and companion account worker;

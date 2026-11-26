@@ -1766,5 +1766,7 @@ dofile(here .. "/test_battery.lua")(test, eq, ok, here)
 
 dofile(here .. "/test_reading_stats.lua")(test, eq, ok, here, M.Cache)
 
+dofile(here .. "/test_reading_style.lua")(test, eq, ok, here, M)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

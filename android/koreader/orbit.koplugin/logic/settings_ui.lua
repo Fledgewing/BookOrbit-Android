@@ -24,7 +24,7 @@ end
 function SettingsUI.modeLabel(settings, effectiveWifi)
     local id = SettingsUI.mode(settings, effectiveWifi)
     for _, mode in ipairs(SettingsUI.modes) do if mode.id == id then return mode.label end end
-    return "Custom"
+    return "Your own settings"
 end
 function SettingsUI.words(text, home_screen)
     local words = (text:gsub("BookOrbit home", "Server plugin's Home"):gsub("Back to my book, then home", "Back to my book, then Server plugin's Home"):gsub("BookOrbit", "Server plugin")

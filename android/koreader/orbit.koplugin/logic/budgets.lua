@@ -78,6 +78,15 @@ Budgets.screens["booklist-config"] = budget(0, 0, 100)
 Budgets.screens["booklist-config"].roundTrips = 0
 Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
 
+
+-- Device-local style editors read one bounded record; no worker or decoded snapshots.
+for _, key in ipairs({"font", "margins", "spacing", "contrast"}) do
+    Budgets.screens["reading-custom-" .. key] = budget(12, 0, 50)
+    Budgets.screens["reading-custom-" .. key].roundTrips = 0
+end
+
+Budgets.screens["reading-copy"] = budget(3, 0, 50)
+Budgets.screens["reading-copy"].roundTrips = 0
 for _,id in ipairs({"summary","form","signout","remove","result"}) do
     Budgets.screens["account-" .. id] = Budgets.screens.account
 end

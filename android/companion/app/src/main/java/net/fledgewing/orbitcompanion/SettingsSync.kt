@@ -30,7 +30,7 @@ data class SettingDef(
     /** Read by the plugin: a change waits for KOReader (§4.5). */
     val pluginReads: Boolean get() = "plugin" in readers
 
-    fun valueLabel(wire: String): String = values.firstOrNull { it.first == wire }?.second ?: wire
+    fun valueLabel(wire: String): String = if (key == "sync_mode" && wire == "custom") "KOReader decides" else values.firstOrNull { it.first == wire }?.second ?: wire
 }
 
 data class SettingsSection(val id: String, val title: String)

@@ -13,6 +13,7 @@ import os
 import shutil
 import struct
 import subprocess
+import time
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -138,7 +139,7 @@ class Simulator:
 
     def run(self, card: SdCard, name: str, script: str = "", timeout_s: float = 30, after_reboot: str | None = None,
             wake: bool = False, screenshots: dict[int, str] | None = None, env: dict[str, str] | None = None,
-            choice: str = "none", quit_after_sync: bool = True) -> Run:
+            choice: str = "none", quit_after_sync: bool = True, stop_when: str | None = None) -> Run:
         """One simulator chain on `card`. Screenshots {ms: name} land in artifacts as PNG.
         Scenario hooks of upstream's sync activity: CROSSINK_SIM_BOOKORBIT_CHOICE answers its
         choice screens, ..._QUIT_AFTER_SYNC ends the process once the sync settles."""
@@ -166,7 +167,35 @@ class Simulator:
             proc = subprocess.Popen([str(self.program)], cwd=card.root, env=e, stdout=log, stderr=subprocess.STDOUT,
                                     stdin=subprocess.DEVNULL, start_new_session=True)
             try:
-                returncode = proc.wait(timeout=timeout_s)
+                if stop_when:
+                    # Synchronize with the worker's observed state, not a scripted QUIT
+                    # that can cut it off while it is still processing an HTTP reply.
+                    deadline = time.monotonic() + timeout_s
+                    window = ""
+                    with log_path.open(errors="replace") as monitor:
+                        while proc.poll() is None:
+                            window += monitor.read()
+                            if stop_when in window:
+                                try:
+                                    # Keep observing briefly so an immediate crash is retained.
+                                    returncode = proc.wait(timeout=0.25)
+                                except subprocess.TimeoutExpired:
+                                    os.killpg(proc.pid, 9)
+                                    proc.wait()
+                                    returncode = 0
+                                break
+                            window = window[-max(1, len(stop_when) - 1):]
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                raise subprocess.TimeoutExpired(proc.args, timeout_s)
+                            try:
+                                returncode = proc.wait(timeout=min(0.05, remaining))
+                            except subprocess.TimeoutExpired:
+                                pass
+                        else:
+                            returncode = proc.returncode
+                else:
+                    returncode = proc.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired:
                 # Its whole process group: re-exec'd successors and curl children included.
                 os.killpg(proc.pid, 9)
@@ -186,6 +215,8 @@ class Simulator:
         for pattern in CRASH_PATTERNS:
             if pattern in output:
                 raise AssertionError(f"crash in the simulator output: {pattern}")
+        if stop_when and stop_when not in output:
+            raise AssertionError(f"the simulator never reached stop marker: {stop_when!r}")
         return Run(output, returncode)
 
 

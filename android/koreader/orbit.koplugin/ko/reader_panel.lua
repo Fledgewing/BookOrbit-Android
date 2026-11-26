@@ -4,6 +4,14 @@ ReaderPanel = {}
 local ReaderSheet = EndSheet:extend{ name="booksync_reader_panel", min_button=50 }
 
 function ReaderSheet:rows() return self.display_rows end
+function ReaderSheet:rowWidget(block,w,h,mt)
+    if block.kind=="reading-choices" then
+        local cells=block.row.choices
+        for _,cell in ipairs(cells) do cell.height=mt.button; cell.text_font_size=14; cell.text_font_bold=false end
+        return require("ui/widget/buttontable"):new{width=w,buttons={cells},zero_sep=true}
+    end
+    return EndSheet.rowWidget(self,block,w,h,mt)
+end
 function ReaderSheet:onClose() ReaderPanel.close(); return true end
 function ReaderSheet:onTapAnywhere(_arg, ges)
     if ges and ges.pos and ges.pos.y > (self.sheet_h or 0) then return self:onClose() end
@@ -40,6 +48,11 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
     local function back() ReaderPanel.close() end
     if screen == "reader-top-panel" then
         table.insert(rows, {kind="label", text=m.battery})
+        if CustomReading then
+            for _, row in ipairs(CustomReading.panelRows(ui, function()
+                ReaderPanel.show(ui, screen, key, ReaderPanel.sheet)
+            end)) do table.insert(rows, row) end
+        end
         local text,go
         if caps.account then text,go=AccountView.syncAction(account) end
         if text then table.insert(rows,button(text,function() back(); go() end))
@@ -127,6 +140,14 @@ function OrbitAndroid:menuItems(...)
 end
 local baseClose = OrbitAndroid.onCloseWidget
 function OrbitAndroid:onCloseWidget(...)
+    if CustomReading and CustomReading.editor then
+        CustomReading.editor.return_to=nil
+        CustomReading.close()
+    end
+    if CustomReading and CustomReading.copy_toast then
+        UIManager:close(CustomReading.copy_toast)
+        CustomReading.copy_toast=nil
+    end
     ReaderPanel.close()
     return baseClose(self, ...)
 end

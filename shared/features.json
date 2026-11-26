@@ -5655,6 +5655,65 @@
       }
     },
     {
+      "id": "custom-reading-styles",
+      "feature": "Clear, editable Custom reading styles and apply-then-edit quick choices",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Font and weight, device-local margins, line spacing and contrast; editors, native-style copy with Undo, and clear sync labels. Device acceptance pending.",
+          "version": "0.12 (implemented; unreleased)",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/custom_reading.lua",
+              "line": 1
+            },
+            {
+              "path": "android/koreader/test/reader_panel_flows.lua",
+              "line": 170
+            }
+          ],
+          "reason": "deliberately deferred: unreleased Android implementation awaits device visual and performance acceptance; firmware follows separately"
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Custom style editors await the firmware slice; KOReader copy does not apply.",
+          "reason": "deliberately deferred: maintainer authorized Android first on 2026-11-25; firmware follows with device-specific margin ranges.",
+          "deferred": "Implement approved DESIGN-NOTES §23; omit KOReader-only copy.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 715
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Custom style editors await the firmware slice; KOReader copy does not apply.",
+          "reason": "deliberately deferred: maintainer authorized Android first on 2026-11-25; firmware follows with device-specific margin ranges.",
+          "deferred": "Implement approved DESIGN-NOTES §23; omit KOReader-only copy.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 715
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Custom style editors await the firmware slice; KOReader copy does not apply.",
+          "reason": "deliberately deferred: maintainer authorized Android first on 2026-11-25; firmware follows with device-specific margin ranges.",
+          "deferred": "Implement approved DESIGN-NOTES §23; omit KOReader-only copy.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 715
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "home-booklist-configuration",
       "feature": "Home editor Book list configuration (0.12 foundation; unreleased)",
       "category": "Behaviour",
