@@ -5,6 +5,17 @@ return function(test, eq, ok, here, Cache)
     local function source(path)
         local f=assert(io.open(path,"rb")); local s=f:read("*a"); f:close(); return s
     end
+    test("reader display: unknown values, clamp, and ready stats", function()
+        local e=setmetatable({}, {__index=_G})
+        setfenv(assert(loadfile(root .. "logic/reader_panel.lua")),e)()
+        local model=e.ReaderPanelPlan.model
+        eq(model({items={}},{}).progress,nil)
+        eq(model({items={{progress=-5}}},{}).progress,0)
+        eq(model({items={{progress=150}}},{}).progress,1)
+        eq(model({items={{progress=math.huge}}},{}).progress,nil)
+        eq(model({items={{progress=0}}},{}).progress_text,"0% read")
+        eq(model({items={{stats={reading_seconds=0,pages_read=0}}}},{}).time,"0 min reading time")
+    end)
     test("library: all screens and starter widgets declare strict budgets", function()
         local e = setmetatable({}, {__index=_G}); setfenv(assert(loadfile(root .. "logic/budgets.lua")), e)()
         for _, name in ipairs({"home","library","details","series","settings","battery","filter","editor","reader-top-panel"}) do

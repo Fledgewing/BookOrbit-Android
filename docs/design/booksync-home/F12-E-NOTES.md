@@ -115,3 +115,9 @@ Raw pruning can cut through a charging session. Its retained suffix updates the
 archived session without losing the original starting level/duration or adding a
 duplicate. Tests cover that boundary, an ongoing-session extension, and separate
 completed sessions whose timestamps overlap after a clock correction.
+
+F12-H's user-opened reader panel now receives the measured `hours_usual_use`
+through the same operation; its temporary stub is removed. Missing evidence keeps
+the unavailable line. Manual Sync, the `book-info` screen budget, and the existing
+reading/visibility gates are preserved. All four reader-progress platform cells
+record the Android model and continued firmware deferral.

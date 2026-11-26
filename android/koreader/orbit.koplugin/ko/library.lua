@@ -68,6 +68,18 @@ function Library:window(source, query, offset, limit)
 end
 function Library:book(key) return self:read("book", {key=key, limit=1}) end
 function Library:counts(source, query) return self:read("counts", {source=source or "library/all", query=query or {}}) end
+-- Reader identity stays opaque to the UI; the worker joins the local file ledger.
+function Library:reader(path)
+    local position = LibraryAdapter.readerPosition and LibraryAdapter.readerPosition(path)
+    return self:read("reader", {path=path, native_progress=position, limit=1})
+end
+-- An explicit user action, never invoked by paint/read.
+function Library.syncCurrent(done)
+    local finish = Budgets.span("library.progress.sync", now_s, log)
+    local result = LibraryAdapter.syncCurrent(done)
+    finish()
+    return result
+end
 function Library:facets(source, query, field, offset, limit)
     return self:read("facets", {source=source or "library/all", query=query or {}, field=field, offset=offset or 0, limit=limit})
 end
