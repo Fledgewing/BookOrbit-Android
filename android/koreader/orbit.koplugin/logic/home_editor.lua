@@ -79,12 +79,15 @@ function HomeEditorPlan:configure(cfg)
     local d=Layout.copy(self.document)
     for _,p in ipairs(d.pages[self.index].placements) do
         if p.instance==self.selected and p.widget=="booklist" then
+            local oldTitle=p.settings.title
             p.settings=Layout.copy(cfg)
             -- Remove only this class's old settings; other class overrides survive.
             local o=(d.overrides["android-tablet"] or {})[p.instance]
             if o then o.settings=nil end
             d.revision=d.revision+1
-            if not d.pages[self.index].named and d.pages[self.index].placements[1]==p then d.pages[self.index].name=cfg.title end
+            local page=d.pages[self.index]
+            if not page.named and page.placements[1]==p and
+                ((page.name or ""):match("^Page %d+$") or page.name=="Book list" or page.name==oldTitle) then page.name=cfg.title end
             return self:accept(d)
         end
     end
