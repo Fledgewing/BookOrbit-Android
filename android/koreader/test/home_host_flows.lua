@@ -118,7 +118,9 @@ return function(test,eq,ok,E,W,Widget)
             eq(cached.state,"ready")
             a.opds.available=true
             eq(E.HomeHostPlan.snapshot({items={},pending=true},a).state,"loading","own catalog login needs no account")
-            a.signedIn=true; a.opds.available=false
+            a.opds.available=false; a.sync={available=true}
+            eq(E.HomeHostPlan.snapshot({items={},pending=true},a).state,"loading","own sync login can still materialize local windows")
+            a.signedIn=true; a.sync.available=false
             eq(E.HomeHostPlan.snapshot({items={},pending=true},a).state,"loading","signed in projection can complete")
         end)
     end)

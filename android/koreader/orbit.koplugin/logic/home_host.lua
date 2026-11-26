@@ -50,8 +50,9 @@ function HomeHostPlan.snapshot(result, account)
         or #(result.items or {}) == 0 and "empty"
         or (result.offline or result.freshness and result.freshness.offline) and "offline-with-data" or "ready"
     -- Missing catalog windows cannot finish before setup. Cached rows still draw,
-    -- and a directly entered catalog login works without a server account.
-    if result.pending and account and not account.signedIn and not AccountPlan.login(account,"opds").available then
+    -- and a directly entered login works without a server account.
+    if result.pending and account and not account.signedIn
+        and not AccountPlan.login(account,"sync").available and not AccountPlan.login(account,"opds").available then
         state="signed-out"
     end
     local snapshot={state=state,items=result.items or {},count=#(result.items or {}),

@@ -889,8 +889,8 @@ zero-subprocess screen budget and log one info timing span. Other screens and
 widgets retain their caller budgets; host tests do not establish device timing.
 
 Missing catalog windows on a signed-out reader offer Sign in rather than an
-unfinishable Loading/Retry cycle. Cached rows still draw, and a directly entered
-OPDS login works without an account. Empty saved shelves say No books here yet;
+unfinishable Loading/Retry cycle. Cached rows still draw, and directly entered
+logins retain their normal loading behavior without an account. Empty saved shelves say No books here yet;
 an empty Continue reading card says Open a book to start reading, without Retry.
 Version skew blocks Home before constructing the host, naming the companion or
 plugin that needs updating. X4 Pro, X4 and X3 cutover remains deferred by the
