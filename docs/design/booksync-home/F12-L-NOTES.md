@@ -89,3 +89,9 @@ The final F12-O integration extends Home's canonical `logic/battery_widget.lua`
 contract, removes the earlier `logic/battery.lua` name, and consumes `snapshot.data`
 directly. Loading/error labels survive the shared snapshot conversion; Home owns the
 sole registration and all reads.
+
+F12-P adds `sources` in the existing Lua Library and companion projection. The adapter
+contains section translation, counted/paged source names and current-book exclusion before
+filter/sort/page; display labels are bounded without splitting UTF-8 code points. The neutral
+`ServerAdapter.sources` delegates through the same tested contract. Source pickers retain
+the six-row/16 KiB budget; configuration screens read no catalog.

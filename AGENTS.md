@@ -96,6 +96,8 @@ choice catalogs stay in the companion until the library exposes bounded windows.
 pages inherit the filter screen budget; facet counts and zero-value ordering stay in the companion.
 Home editor moves project only the current page and draw bounded geometry controls (no widget
 snapshots, JSON decode, file IO or library round-trip); atomic layout validation/save runs on Done.
+Book list settings use a zero-read budget; source picker pages read at most six companion-materialized
+source rows and 16 KiB in one batch. Presets share the Book list renderer and widget budget.
 Reader progress surfaces reuse a one-row widget budget, including Book info and
 Details; completion callbacks redraw only a still-visible user-opened panel.
 

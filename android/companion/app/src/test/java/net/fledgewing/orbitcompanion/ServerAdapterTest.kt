@@ -16,7 +16,7 @@ class ServerAdapterTest {
             return when (request["op"]) {
                 "capabilities" -> mapOf("catalog" to true, "detail" to true, "download" to false)
                 "window", "book" -> mapOf("items" to listOf(mapOf("key" to "$owner/urn:one", "title" to "Fixture", "status" to "unknown")))
-                "lists" -> mapOf("items" to emptyList<Any>())
+                "lists", "sources" -> mapOf("items" to emptyList<Any>())
                 "progress" -> mapOf("progress" to 20)
                 "status" -> mapOf("status" to "unknown")
                 else -> unsupported()
@@ -71,6 +71,8 @@ class ServerAdapterTest {
     }
     @Test fun optionalOperationsAreExplicitAndSecretsAreCleared() {
         val fake = FakeAdapter()
+        assertEquals(emptyList<Any>(), fake.sources("fixture", "builtin")["items"])
+        assertEquals("sources", fake.requests.last()["op"])
         assertEquals("unsupported", fake.manifest("fixture")["error"])
         assertEquals("unsupported", fake.cover("fixture", "opaque")["error"])
         assertEquals("unsupported", fake.setProgress("fixture", "opaque", emptyMap())["error"])

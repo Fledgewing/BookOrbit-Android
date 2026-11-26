@@ -116,7 +116,8 @@ capabilities; unavailable operations retain explicit errors, avoiding a second s
 table and per-call timing. It depends on `ProjectionStore` and `ServerAdapter`, not a server
 implementation. The existing `CacheStore` implements that persistence seam within the
 adapter; the existing catalog, bulk/mirror worker and normalizer moved there without a
-second database or HTTP client. ReadingStats aggregation/merging and LibraryFacets remain neutral. Cached server statistics
+second database or HTTP client. ReadingStats aggregation/merging and LibraryFacets remain neutral. The bounded `sources` operation returns at most six neutral names/counts; server-section
+translation and current-book exclusion stay in the adapter. Cached server statistics
 cross `ServerAdapter.cachedReadingStats` as `RemoteReadingStats`, never backend JSON; the
 publisher shares one lazy combined aggregate per batch. `CachedListProjection` owns the legacy
 sleep picker's cached-section translation; shared picker code receives `SleepChoices` and

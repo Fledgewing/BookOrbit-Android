@@ -27,6 +27,15 @@ object LuaValue {
     /** A Kotlin String as a model byte string. */
     fun str(s: String): String = if (s.all { it.code < 128 }) s else String(s.toByteArray(Charsets.UTF_8), L1)
 
+    /** Small display labels, bounded in UTF-8 bytes without cutting a code point. */
+    fun boundedText(text: String, maxBytes: Int): String {
+        require(maxBytes >= 0)
+        val bytes=text.toByteArray(Charsets.UTF_8)
+        var end=minOf(bytes.size,maxBytes)
+        while (end>0 && end<bytes.size && (bytes[end].toInt() and 0xc0)==0x80) end--
+        return String(bytes,0,end,L1)
+    }
+
     /** A model byte string as a Kotlin String. */
     fun utf8(s: String): String = String(s.toByteArray(L1), Charsets.UTF_8)
 

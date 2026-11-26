@@ -72,6 +72,20 @@ object BookOrbitLibrary {
         if (sort != null) { query["sort"] = sort; query["order"] = f["dir"]?.toString() ?: "asc"; residual.remove("sort"); residual.remove("dir") }
         return query to residual
     }
+    /** Paged backend section identities normalized before the editor can see them. */
+    fun sourceSections(store: CacheStore, owner: String, category: String, offset: Int, limit: Int): Map<String, Any?> {
+        val g=store.meta("bulk_active")?.toLongOrNull()
+        val saved=g != null && store.meta("bulk_complete")?.toLongOrNull()==g
+        if (!saved) return mapOf("items" to emptyList<Any>(), "freshness" to mapOf("saved" to false))
+        val section=if (category=="lists") "smart-scopes" else "series"
+        val kind=if (category=="lists") "list" else "series"
+        val total=store.db().query("SELECT count(*) FROM bulk_sections WHERE g=? AND section=?",g,section) { it.long(0)!! }.single()
+        val rows=store.db().query("SELECT id,name,n FROM bulk_sections WHERE g=? AND section=? ORDER BY pos,id LIMIT ? OFFSET ?",g,section,limit,offset) {
+            val id=it.text(0).orEmpty().removePrefix("series:")
+            mapOf("src" to "$kind:${key(owner,kind,id)}", "title" to LuaValue.boundedText(it.text(1).orEmpty(),80), "count" to it.long(2))
+        }
+        return mapOf("items" to rows,"total" to total,"next" to (offset+rows.size).takeIf { it<total },"freshness" to mapOf("saved" to true))
+    }
     fun summary(owner: String, raw: Map<*, *>, rank: Long, local: Boolean?): Map<String, Any?> {
         val id = (raw["id"] as? Number)?.toLong() ?: throw IllegalArgumentException("missing book identity")
         val status = raw["readStatus"]?.toString()

@@ -147,3 +147,10 @@ end
 function Library.accountCommand(op,args,done)
     return command(op,function() return LibraryAdapter.command(op,args,done) end)
 end
+
+-- Paged source names/counts, never a catalog delivered to the editor.
+function Library:sources(category, offset, limit, caps)
+    return self:read("sources", {category=category,offset=offset or 0,limit=limit or 6,
+        allow_lists=not (caps and caps.lists and caps.lists.read==false),
+        allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
+end

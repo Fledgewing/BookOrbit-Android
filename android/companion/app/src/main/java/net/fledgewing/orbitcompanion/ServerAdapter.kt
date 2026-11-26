@@ -15,6 +15,8 @@ interface ServerAdapter {
     fun progress(owner: String, key: String) = project(owner, mapOf("op" to "progress", "key" to key))
     fun status(owner: String, key: String) = project(owner, mapOf("op" to "status", "key" to key))
     fun lists(owner: String, limit: Int, offset: Int = 0) = project(owner, mapOf("op" to "lists", "limit" to limit, "offset" to offset))
+    fun sources(owner: String, category: String, limit: Int = 6, offset: Int = 0) =
+        project(owner, mapOf("op" to "sources", "category" to category, "limit" to limit, "offset" to offset))
     fun manifest(owner: String): Map<String, Any?> = unsupported()
     fun cover(owner: String, key: String): Map<String, Any?> = unsupported()
     fun download(owner: String, key: String, file: String, revision: String?): Map<String, Any?> = unsupported()

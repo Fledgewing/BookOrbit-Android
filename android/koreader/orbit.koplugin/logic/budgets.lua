@@ -87,3 +87,7 @@ end
 -- Battery tabs select bounded windows from one companion materialization.
 Budgets.screens.battery.rows = 1
 Budgets.screens.battery.bytes = 16384
+-- Book list settings draw small configuration; source pages read one companion window.
+Budgets.screens["booklist-config"] = budget(0, 0, 100)
+Budgets.screens["booklist-config"].roundTrips = 0
+Budgets.screens["booklist-sources"] = budget(6, 16384, 50)

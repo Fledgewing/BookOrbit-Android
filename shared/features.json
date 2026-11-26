@@ -5712,6 +5712,58 @@
           ]
         }
       }
+    },
+    {
+      "id": "home-booklist-configuration",
+      "feature": "Home editor Book list configuration (0.12 foundation; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "One Book list renderer with friendly presets, settings, paged counted sources and local Custom filters",
+          "reason": "deliberately deferred: real-device acceptance and release follow the Android 0.12 foundation",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/booklist_config.lua",
+              "line": 3
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Book list settings and sources follow Android; shared cfg and focus logic are ready for firmware integration",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 744
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Book list settings and sources follow Android; shared cfg and focus logic are ready for firmware integration",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 744
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Book list settings and sources follow Android; shared cfg and focus logic are ready for firmware integration",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 744
+            }
+          ]
+        }
+      },
+      "deferred": "Device acceptance, firmware renderers and configuration pages."
     }
   ],
   "release_evidence": {
