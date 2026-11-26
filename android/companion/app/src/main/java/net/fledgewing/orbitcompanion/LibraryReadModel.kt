@@ -2,7 +2,14 @@ package net.fledgewing.orbitcompanion
 
 /** Worker-owned projections in the existing cache DB. Plugin reads one small blob per operation.
  * Additive table: no schema reset, no second catalog, sync writer, credentials or network client. */
-class LibraryReadModel(private val store: CacheStore, private val clock: () -> Long = { System.currentTimeMillis() / 1000 }, private val log: (String) -> Unit = { OLog.i(it) }) {
+class LibraryReadModel(
+    private val store: CacheStore,
+    private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
+    private val log: (String) -> Unit = { OLog.i(it) },
+    private val readingStats: () -> Map<String, Any?> = {
+        mapOf("state" to "not-saved", "freshness" to mapOf("saved" to false))
+    },
+) {
     companion object {
         const val MAX_BYTES = 16384
         const val MAX_ROWS = 24
@@ -42,10 +49,11 @@ class LibraryReadModel(private val store: CacheStore, private val clock: () -> L
         if (op == "mode-estimates") return mapOf("items" to listOf("saver", "balanced", "current").take(((a["limit"] as? Number)?.toInt() ?: 3).coerceIn(1, 3)).map {
             mapOf("id" to it, "text" to "Estimate available after measured use", "measured" to false)
         })
+        if (op == "reading.stats") return readingStats()
         if (op == "capabilities") return mapOf("catalog" to true, "detail" to true, "download" to false,
             "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false),
             "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
-            "wantToRead" to true, "customFields" to false, "onDevice" to true,
+            "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
             "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
             "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
         if (op == "job") {
