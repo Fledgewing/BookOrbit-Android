@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BookSync layout draft v1 (internal design)",
+  "type": "object",
+  "required": ["schemaVersion", "revision", "grids", "pages", "overrides"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "grids": {
+      "type": "object",
+      "required": ["android-tablet", "x4", "x3"],
+      "additionalProperties": {
+        "$ref": "#/$defs/grid"
+      }
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/page"
+      }
+    },
+    "overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/$defs/override"
+        }
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "grid": {
+      "type": "object",
+      "required": ["cols", "rows"],
+      "properties": {
+        "cols": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["id", "tab", "placements"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "tab": {
+          "enum": ["Home", "Insights", "Library", "More"]
+        },
+        "placements": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/placement"
+          }
+        }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "required": [
+        "instance",
+        "widget",
+        "version",
+        "x",
+        "y",
+        "w",
+        "h",
+        "settings"
+      ],
+      "properties": {
+        "instance": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "widget": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "x": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "w": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "h": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "settings": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "override": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "w": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "h": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "settings": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

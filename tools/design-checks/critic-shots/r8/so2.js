@@ -1,0 +1,14 @@
+const {prototypeURL, OUT}=require('../../runtime.js');
+const {chromium}=require('playwright');const O=OUT+'critic-shots/r8/';
+(async()=>{const b=await chromium.launch({executablePath:process.env.PWX});const p=await b.newPage({viewport:{width:1500,height:1200},deviceScaleFactor:2});
+await p.addInitScript(()=>{window.__noscale=1});await p.goto(prototypeURL+'?dev=m8c');
+const A=a=>p.evaluate(a=>__proto.act(a),a);
+await p.evaluate(()=>{const e=document.getElementById('acct');e.value='0';e.dispatchEvent(new Event('change',{bubbles:true}));});
+await A('home');await A('hsync');await p.waitForTimeout(4000);
+console.log('after 4s:',await p.evaluate(()=>document.querySelector('#screen').innerText.split('\n').slice(0,3).join(' | ')));
+await p.locator('#screen').screenshot({path:O+'m8c-so-synced.png'});
+await A('hero-resume'.replace('hero-','')).catch(()=>{});
+const act=await p.evaluate(()=>document.querySelector('#screen [data-fk=hero-resume]')?.getAttribute('data-act'));await A(act);await A('rd:top');
+console.log('reader top text:',await p.evaluate(()=>document.querySelector('#screen').innerText.replace(/\s+/g,' ').slice(0,300)));
+await p.locator('#screen').screenshot({path:O+'m8c-so-readertop.png'});
+await b.close();})();
