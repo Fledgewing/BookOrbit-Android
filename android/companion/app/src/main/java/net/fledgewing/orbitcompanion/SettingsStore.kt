@@ -57,10 +57,17 @@ object SettingsStore {
             val values = sp(ctx, VALUES)
             // Independent of the older shared-settings migration: this also runs on upgrades.
             val old = sp(ctx, "orbit")
-            if (!values.contains("update_channel")) {
+            val legacyChannel = old.contains("include_prereleases") || values.contains("patch_update_prerelease")
+            if (!values.contains("update_channel") && legacyChannel) {
                 val preview = if (old.contains("include_prereleases")) old.getBoolean("include_prereleases", false)
                     else values.getString("patch_update_prerelease", "0") == "1"
                 if (!values.edit().putString("update_channel", if (preview) "preview" else "stable").commit()) return
+            }
+            val times = sp(ctx, AT)
+            if (!times.contains("update_channel") && (legacyChannel ||
+                    values.getString("update_channel", null)?.let { it != "stable" } == true)) {
+                val inherited = maxOf(2L, times.getLong("patch_update_prerelease", 0L))
+                if (!times.edit().putLong("update_channel", inherited).commit()) return
             }
             // Replacement is durable before either source is removed; later channel choices win.
             old.edit().remove("include_prereleases").commit()

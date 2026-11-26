@@ -66,6 +66,7 @@ class ContractTest {
         val k = c.getJSONObject("koreader_start")
         val extras = k.getJSONObject("extras")
         assertEquals(Contract.EXTRA_COMMAND, extras.getString("COMMAND"))
+        assertEquals(Contract.EXTRA_COMMAND_ID, extras.getString("COMMAND_ID"))
         assertEquals(Contract.EXTRA_FROM, extras.getString("FROM"))
         assertEquals(Contract.EXTRA_ROTATION, extras.getString("ROTATION"))
         assertEquals(HomeCommands.ALL, k.getJSONArray("commands").strings())

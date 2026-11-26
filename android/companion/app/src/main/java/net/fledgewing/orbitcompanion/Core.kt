@@ -38,6 +38,7 @@ object Contract {
     const val REPORT = "$PACKAGE.action.REPORT"
     const val EXTRA_FROM = "$PACKAGE.extra.FROM"
     const val EXTRA_COMMAND = "$PACKAGE.extra.COMMAND"
+    const val EXTRA_COMMAND_ID = "$PACKAGE.extra.COMMAND_ID"
     /** How the display is held when Home is pressed (HeldRotation); with home/home_smart. */
     const val EXTRA_ROTATION = "$PACKAGE.extra.ROTATION"
     const val PATCH_SENDER = "org.koreader.launcher"
@@ -203,6 +204,10 @@ class Prefs(ctx: Context) {
         get() = str("patch_restart_now")
         set(v) = setStr("patch_restart_now", v)
 
+    var restartUserStarted: Boolean
+        get() = bool("restart_user_started", false)
+        set(v) = setBool("restart_user_started", v)
+
     /** A restart was sent with a book open: the relaunch reopens it ("1"). */
     var restartReopen: String
         get() = str("restart_reopen")
@@ -300,7 +305,7 @@ class Prefs(ctx: Context) {
         set(v) = setBool("auto_update", v)
     var updateChannel: UpdateChannel
         get() = UpdateChannel.fromKey(SettingsStore.get(app, "update_channel"))
-        set(v) = SettingsStore.store(app, "update_channel", v.key)
+        set(v) { SettingsStore.set(app, "update_channel", v.key, "channel choice") }
     var updateCheckedAt by LongPref("update_checked_at")
     var updateStatusAt by LongPref("update_status_at")
     var updateStatus: String
@@ -601,11 +606,14 @@ object Koreader {
     fun goHome(ctx: Context, why: String): Boolean = start(ctx, why, HomeCommands.forPress(Prefs(ctx).homeButton), HomeCommands.FROM_OTHER_APP)
 
     /** INTERFACE COMMAND=restart: the patch saves, quits, and asks us to start KOReader again (RELAUNCH). */
-    fun restart(ctx: Context, why: String): Boolean = start(ctx, why, HomeCommands.RESTART)
+    fun restart(ctx: Context, why: String, userStarted: Boolean = true): Boolean {
+        Prefs(ctx).restartUserStarted = userStarted
+        return start(ctx, why, HomeCommands.RESTART)
+    }
 
-    /** A delayed plugin relaunch may race with navigation into the companion. Never steal focus. */
-    fun relaunch(ctx: Context, why: String, command: String?, plugin: String? = Prefs(ctx).patchVersionSeen.ifEmpty { null }, fromCompanion: Boolean = false): Boolean {
-        if (fromCompanion || EinkActivity.companionPageInFront() || UpdateReturn.awaitingLanding()) {
+    /** Automatic relaunches respect companion navigation; a user-started update finishes in KOReader. */
+    fun relaunch(ctx: Context, why: String, command: String?, plugin: String? = Prefs(ctx).patchVersionSeen.ifEmpty { null }, fromCompanion: Boolean = false, userStarted: Boolean = false): Boolean {
+        if (!userStarted && (fromCompanion || EinkActivity.companionPageInFront() || UpdateReturn.awaitingLanding())) {
             OLog.i("koreader restart: companion page in front; plugin loads at the next user start ($why)")
             return false
         }
@@ -614,10 +622,14 @@ object Koreader {
 
     /** A RESTART not yet read is never replaced by the next start's intent (RestartLatch). */
     private val latch = RestartLatch()
+    private var restartId: String? = null
 
-    /** RELAUNCH came: the plugin read the restart. */
+    /** TAKE_COMMAND acknowledged the restart, or an older plugin sent RELAUNCH. */
     @Synchronized
-    fun restartRead() = latch.clear()
+    fun restartRead() {
+        latch.clear()
+        restartId = null
+    }
 
     /**
      * Starts KOReader with [command], when the plugin that reads it ([plugin]: the running one
@@ -631,7 +643,10 @@ object Koreader {
         if (held != command) OLog.i("koreader start: command=${command ?: "-"} sent as restart: a restart sent ${RestartLatch.WINDOW_MS / 1000} s ago may not be read yet ($why)")
         val cmd = PluginCommands.allowed(held, plugin)
         if (held != null && cmd == null) OLog.i("koreader start: ${PluginCommands.droppedLine(held, plugin)}; starting with no command ($why)")
-        if (cmd == HomeCommands.RESTART) latch.sent(now, running)
+        if (cmd == HomeCommands.RESTART) {
+            if (restartId == null) restartId = java.util.UUID.randomUUID().toString()
+            latch.sent(now, running)
+        } else restartId = null
         return launch(ctx, why, cmd, if (held == command) from else null)
     }
 
@@ -652,12 +667,16 @@ object Koreader {
         val i = Intent(Intent.ACTION_MAIN)
             .setComponent(ComponentName(PKG, ACTIVITY))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-        if (command != null) i.putExtra(Contract.EXTRA_COMMAND, command)
+        val id = if (command == HomeCommands.RESTART) restartId else java.util.UUID.randomUUID().toString()
+        if (command != null) {
+            i.putExtra(Contract.EXTRA_COMMAND, command)
+            i.putExtra(Contract.EXTRA_COMMAND_ID, id)
+        }
         if (command != null && from != null) i.putExtra(Contract.EXTRA_FROM, from)
         val held = if (HeldRotation.sendsWith(command)) heldRotation(ctx) else null
         if (held != null) i.putExtra(Contract.EXTRA_ROTATION, held)
         return try {
-            if (command != null) SentCommands.shared.record(command, SystemClock.elapsedRealtime())
+            if (command != null) SentCommands.shared.record(command, SystemClock.elapsedRealtime(), requireNotNull(id))
             ctx.startActivity(i)
             OLog.i("koreader started command=${command ?: "-"}${if (from != null) " from=$from" else ""}${if (held != null) " held=$held" else ""} ($why) in ${OLog.since(t0)} ms")
             true

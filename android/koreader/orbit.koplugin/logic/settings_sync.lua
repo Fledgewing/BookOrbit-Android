@@ -144,6 +144,22 @@ function SettingsSync.seed(idx, at, legacy, legacy_at)
     return n
 end
 
+-- Run before defaults: an absent channel is not a choice. Migration never gets today's
+-- time; a real change on either side must beat it (defaults are seeded at 1 ms).
+function SettingsSync.migrateChannel(vals)
+    if type(vals.settings_at) ~= "table" then vals.settings_at = {} end
+    local old = vals.patch_update_prerelease
+    if old ~= nil and (vals.update_channel == nil or
+        (vals.update_channel == "stable" and (vals.settings_at.update_channel or 0) <= 1)) then
+        vals.update_channel = (old == true or old == "1") and "preview" or "stable"
+    end
+    if (vals.settings_at.update_channel or 0) <= 1
+        and (old ~= nil or (vals.update_channel ~= nil and vals.update_channel ~= "stable")) then
+        vals.settings_at.update_channel = math.max(2, tonumber(vals.settings_at.patch_update_prerelease) or 0)
+    end
+    vals.patch_update_prerelease = nil
+end
+
 -- A row's parent rule: shown only while the parent has (is) or hasn't (not) one of the values,
 -- and the parent itself is shown. vals: key -> stored value.
 function SettingsSync.visible(idx, key, vals, depth)

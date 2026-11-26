@@ -495,3 +495,12 @@ is reset, and turning the redesign back means drawing the old pages from the sam
   hidden child appears after its parent turns on with one render; search finds "screensaver".
 - Plugin `test_flows.lua`: a value changed in `/status` while KOReader was off applies at start before
   the start sync.
+
+### Update-channel migration on the 0.11 line
+
+Channel migration runs before plugin defaults. An old `patch_update_prerelease=true` on the
+plugin or `include_prereleases=true` in the companion becomes Preview. A migrated choice keeps
+the old key's per-key time, or gets 2 ms when no time exists; an unset plugin channel has only
+the 1 ms default seed. Previously migrated companion Preview/RC values missing a time are repaired
+at 2 ms. Migration never stamps the current clock: an actual user change on either side wins
+through the existing per-key merge, and a fresh plugin's Stable default cannot erase Preview.

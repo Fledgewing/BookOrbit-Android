@@ -68,6 +68,7 @@ Companion.ACTION = {
 }
 -- Extra the companion puts on the intent that starts KOReader ("home").
 Companion.EXTRA_COMMAND = Companion.PACKAGE .. ".extra.COMMAND"
+Companion.EXTRA_COMMAND_ID = Companion.PACKAGE .. ".extra.COMMAND_ID"
 -- With "home_smart": "other_app" when the companion knows Home came from outside KOReader.
 Companion.EXTRA_FROM = Companion.PACKAGE .. ".extra.FROM"
 -- The display orientation when Home was pressed: portrait, landscape,
@@ -311,9 +312,9 @@ end
 
 -- A command on KOReader's start counts only when the companion says it sent it (once): any app
 -- can start KOReader with that extra (docs/design/security.md).
-function Companion.confirmCommand(cmd)
+function Companion.confirmCommand(cmd, id, source)
     if Companion.state() ~= "ok" then return false end
-    local r = Jni.call(Companion.AUTHORITY, Companion.TAKE_COMMAND, { command = cmd })
+    local r = Jni.call(Companion.AUTHORITY, Companion.TAKE_COMMAND, { command = cmd, id = id, source = source })
     return r ~= nil and r.ok == "1"
 end
 

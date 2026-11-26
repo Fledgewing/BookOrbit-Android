@@ -9,9 +9,11 @@
 function OrbitAndroid:checkCommand(source)
     local cmd = Jni.takeIntentExtra(Companion.EXTRA_COMMAND)
     if not cmd or cmd == "" then return false end
+    local id = Jni.takeIntentExtra(Companion.EXTRA_COMMAND_ID)
+    if cmd == "restart" and id and id == S.restart_command_id then return false end
     local from = Jni.takeIntentExtra(Companion.EXTRA_FROM)
     local held = Jni.takeIntentExtra(Companion.EXTRA_ROTATION)
-    if not Companion.confirmCommand(cmd) then
+    if not Companion.confirmCommand(cmd, id, source) then
         log("command ignored:", cmd, "(" .. source .. "): not sent by Orbit Companion")
         return false
     end
@@ -22,6 +24,12 @@ function OrbitAndroid:checkCommand(source)
         return true
     end
     if cmd == "restart" then
+        -- Durable before the quit: Android may replay its launch intent in the new process.
+        S.restart_command_id = id
+        saveSettings()
+        pcall(function() G_reader_settings:flush() end)
+        -- A cold start already loaded the file on disk; let the normal startup restore the book.
+        if source == "start" then return false end
         self:restartForCompanion(source)
         return true
     end

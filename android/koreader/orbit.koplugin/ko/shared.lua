@@ -222,7 +222,10 @@ end
 
 function Shared.set(key, value)
     S[key] = value
-    S.shared_settings_at = os.time() * 1000
+    -- A companion change has millisecond precision; a later menu tap in the same
+    -- second must advance past it, even though Lua's clock rounds down.
+    S.shared_settings_at = math.max(os.time() * 1000, (S.settings_at[key] or 0) + 1,
+        (S.shared_settings_at or 0) + 1)
     if SCHEMA.byKey[key] then S.settings_at[key] = S.shared_settings_at end
     saveSettings()
     log("setting", key, "=", tostring(value), "(sent to the companion)")

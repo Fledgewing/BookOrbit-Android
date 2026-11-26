@@ -331,9 +331,11 @@ class OrbitService : Service() {
             prefs.restartReopen = ""
             OLog.i("koreader restart: checking whether relaunch is safe in 2.5 s (${intent.getStringExtra("reason") ?: "-"})${if (command != null) ", reopening the book" else ""}")
             // The plugin that reads the relaunch's command is the one on disk, not the one that quit.
+            val userStarted = prefs.restartUserStarted
+            prefs.restartUserStarted = false
             val fromCompanion = EinkActivity.companionPageInFront() || UpdateReturn.awaitingLanding()
             val next = PatchInstaller.installedVersionCached() ?: prefs.patchVersionSeen.ifEmpty { null }
-            main.postDelayed({ Koreader.relaunch(this, "restart after patch update", command, plugin = next, fromCompanion = fromCompanion) }, 2_500)
+            main.postDelayed({ Koreader.relaunch(this, "restart after patch update", command, plugin = next, fromCompanion = fromCompanion, userStarted = userStarted) }, 2_500)
             return
         }
         if (action == Contract.NET_UP || action == Contract.NET_DONE || action == Contract.SLEEP_NOW) {

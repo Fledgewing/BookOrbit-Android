@@ -621,7 +621,7 @@ object PluginCommands {
  * A restart command must not be replaced by the next start's intent before KOReader reads it
  * (M8C v0.11.0: `command=restart` at 21:11:24.559, a Home press 0.9 s later sent `command=home`,
  * which replaced the intent; the restart was lost). For [WINDOW_MS] after a RESTART, while the
- * running plugin still reports the version it had then and no RELAUNCH came back, any other start
+ * running plugin still reports the version it had then and no TAKE_COMMAND ack or RELAUNCH came back, any other start
  * sends RESTART again. Pure; Koreader.start holds one.
  */
 class RestartLatch {

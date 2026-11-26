@@ -49,6 +49,7 @@ for _i, d in ipairs(SCHEMA.settings) do
 end
 
 S = G_reader_settings:readSetting("orbit_android") or {}
+SettingsSync.migrateChannel(S)
 for k, v in pairs(DEFAULTS) do
     if S[k] == nil then S[k] = v end
 end

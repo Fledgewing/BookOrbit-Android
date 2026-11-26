@@ -196,9 +196,12 @@ class RelaunchActivity : Activity() {
         OLog.i("relaunch: KOReader is quitting; checking whether relaunch is safe in 2.5 s")
         // The plugin read the restart: this start is not a lost one (RestartLatch).
         Koreader.restartRead()
+        val p = Prefs(this)
+        val userStarted = p.restartUserStarted
+        p.restartUserStarted = false
         val fromCompanion = EinkActivity.companionPageInFront() || UpdateReturn.awaitingLanding()
         Handler(Looper.getMainLooper()).postDelayed({
-            Koreader.relaunch(this, "restart (add-on)", null, fromCompanion = fromCompanion)
+            Koreader.relaunch(this, "restart (add-on)", null, fromCompanion = fromCompanion, userStarted = userStarted)
             finish()
         }, 2_500)
     }

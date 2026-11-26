@@ -119,9 +119,9 @@ object PatchInstaller {
             val running = p.patchVersionSeen.ifEmpty { null }
             // The app replace was confirmed by the user (UpdateFlow.restartNowAfter): a manual restart.
             if (file != null && running != null && UpdateFlow.staleRestart(running, file, manual = true, screenOff = false, sent = emptySet()) == UpdateFlow.Restart.NOW) {
-                // Started from one of our pages: the user stays there; the new plugin loads on a safe start.
+                // A user-confirmed update completes in KOReader, including one started on our pages.
                 val now = UpdateReturn.restartNow(userConfirmed = true, fromPage = UpdateReturn.fromPage())
-                log("after the update: patch v$file on disk, KOReader runs v$running: ${if (now) "restarting now" else "started from our page: KOReader stays in the background; it loads v$file at its next start"}")
+                log("after the update: patch v$file on disk, KOReader runs v$running: ${if (now) "restarting now" else "waiting for a safe start"}")
                 p.patchAwaitVersion = file
                 p.patchRestartNow = if (now) file else ""
                 follow(ctx, "app updated")
@@ -137,13 +137,13 @@ object PatchInstaller {
         }
         val p = Prefs(ctx)
         // An app replace is always user-confirmed (UpdateFlow.restartNowAfter): restart at once.
-        // From one of our pages (UpdateReturn): the user stays there; KOReader is never brought forward.
+        // This includes updates started on a companion page.
         val user = UpdateReturn.restartNow(
             UpdateFlow.restartNowAfter(appReplaced = true, nowMs = System.currentTimeMillis(), markAtMs = p.userUpdateAt),
             fromPage = UpdateReturn.fromPage(),
         )
         p.userUpdateAt = 0
-        log("after the update: patch v$file is older than v$app; installing it (${if (user) "you confirmed the app update: KOReader restarts now, the book reopens" else "started from our page: KOReader stays in the background; it loads the new patch at its next start"})")
+        log("after the update: patch v$file is older than v$app; installing it (${if (user) "you confirmed the app update: KOReader restarts now, the book reopens" else "waiting for a safe start"})")
         afterUpdateBusy = true
         install(ctx, userStarted = user) { result ->
             afterUpdateBusy = false
@@ -194,9 +194,9 @@ object PatchInstaller {
                 false
             }
             UpdateFlow.Restart.NOW -> {
-                // A companion page is in front (M8C 11-24 15:56): KOReader never comes forward over
-                // it, even at screen-off. The new plugin loads when KOReader next starts.
-                if (EinkActivity.pageResumed() || UpdateReturn.awaitingLanding()) {
+                // Automatic updates wait behind a companion page, even at screen-off.
+                // A manual update brings KOReader forward to complete the install.
+                if (!manual && (EinkActivity.pageResumed() || UpdateReturn.awaitingLanding())) {
                     if (waitLogged != "page:$want") {
                         waitLogged = "page:$want"
                         log("v$want installed; a companion page is in front, so KOReader isn't brought forward: it loads v$want at its next start ($why)")
@@ -207,7 +207,7 @@ object PatchInstaller {
                 p.patchRestartSentFor = want
                 p.restartReopen = if (book == true) "1" else ""
                 log("v$want installed; restarting KOReader ($why)${if (manual) "; you started the update" else ""}${if (book == true) "; the book reopens where you were" else ""}")
-                Koreader.restart(ctx.applicationContext, "patch v$want installed ($why)")
+                Koreader.restart(ctx.applicationContext, "patch v$want installed ($why)", userStarted = manual)
                 true
             }
         }
@@ -247,7 +247,7 @@ object PatchInstaller {
         val file = installedVersionCached() ?: return false
         if (stale.decide(running, file, manual = false, screenOff = screenOff) { OLog.i("$it ($why)") } != UpdateFlow.Restart.NOW) return false
         if (p.koreaderBook == "1") p.restartReopen = "1"
-        Koreader.restart(ctx.applicationContext, "patch v$file on disk, v$running running ($why)")
+        Koreader.restart(ctx.applicationContext, "patch v$file on disk, v$running running ($why)", userStarted = false)
         return true
     }
 
