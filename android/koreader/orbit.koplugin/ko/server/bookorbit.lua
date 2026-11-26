@@ -104,3 +104,22 @@ function Server.credentials(client, extras)
     extras.server, extras.user, extras.userkey = client.server_url, client.username, client.userkey
     return extras
 end
+
+function Server.signedIn(p) return p ~= nil and p:isLoggedIn() end
+function Server.openLogin(p) return p:promptLogin() end
+function Server.drain(p, ...) return p:requestLifecycleOutboxDrain(...) end
+function Server.pull(p, reason) return p:requestProgressPull(false, false, reason) end
+function Server.snapshot(p) return pcall(p._onSuspend, p) end
+function Server.syncBusy(p)
+    local c = p:getSyncCoordinator()
+    if c:isBusy() or c:queuedCount() > 0 then return true end
+    return outboxPending(p:getLifecycleOutbox():diagnostics()) > 0
+end
+function Server.testReady(p)
+    return hasHandler(p, Server.events.sync) and Compat.callable(p.startSweep) and Compat.callable(p.errorLabel)
+end
+function Server.testError(p, err) return p:errorLabel(err) end
+function Server.testSync(p, reader, done)
+    if reader then pluginEvent(liveUI(), p, Server.events.sync, {quiet=true, on_done=done})
+    else p:startSweep({quiet=true, on_progress=function() end, on_done=done}) end
+end

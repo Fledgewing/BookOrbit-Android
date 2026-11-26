@@ -64,13 +64,13 @@ function OrbitAndroid:openSignIn(source)
         UIManager:show(InfoMessage:new{ text = _("The library plugin isn't loaded."), timeout = 3 }) -- gate: user action (Setup's sign-in)
         return
     end
-    if p:isLoggedIn() then
+    if Server.signedIn(p) then
         log("sign in (" .. tostring(source) .. "): already signed in")
         UIManager:show(InfoMessage:new{ text = _("Signed in to library."), timeout = 2 }) -- gate: user action (Setup's sign-in)
         pcall(Rec.report, "signin", true, self.ui)
         return
     end
-    local okc, err = pcall(function() p:promptLogin() end)
+    local okc, err = pcall(function() Server.openLogin(p) end)
     log("sign in (" .. tostring(source) .. "): library's sign-in", okc and "opened" or ("FAILED: " .. tostring(err)))
 end
 
@@ -781,7 +781,7 @@ function OrbitAndroid:onOrbitGoHome()
         closeWidget(p.catalog_browser)
         p.catalog_browser = nil
     end
-    if ui and ui.document and hasHandler(p, Server.events.home) and p:isLoggedIn() then
+    if ui and ui.document and hasHandler(p, Server.events.home) and Server.signedIn(p) then
         log("home: library home over the open book")
         -- The plugin's public action bookorbit_open_dashboard (event BookOrbitOpenDashboard,
         -- main.lua:987-988).

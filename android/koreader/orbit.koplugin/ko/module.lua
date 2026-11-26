@@ -69,32 +69,3 @@ function OrbitAndroid:onDispatcherRegisterActions()
     Dispatcher:registerAction("orbit_open_apps",
         { category = "none", event = "OrbitOpenApps", title = _("BookSync Companion: apps"), general = true, separator = true })
 end
-
--- "Sync while reading" replaces the plugin's every-few-pages push while it is on.
--- The plugin's every-few-pages push is its user setting "Push while reading"
--- (settings.pages_before_update, bookorbit_settings_page.lua:259-260; read by _onPageUpdate,
--- main.lua:1322-1324; 0 = off). While our Sync while reading is on we set it to 0 and keep the
--- reader's value; when it goes off we put that value back (unless they changed it meanwhile).
-function OrbitAndroid:hookPluginPagePush()
-    local p = serverPlugin(self.ui)
-    if not p or type(p.settings) ~= "table" then return end
-    local cur = p.settings.pages_before_update
-    -- OrbiSmart pushes at a pause instead (docs/design/position-sync.md §3.3).
-    if S.reading_schedule ~= "off" or (OSM and OSM.on()) then
-        if S.saved_pages_before_update == nil and (cur or 0) > 0 then
-            S.saved_pages_before_update = cur
-            p.settings.pages_before_update = 0
-            saveSettings()
-            log("page push: plugin's Push while reading", cur, "-> off while Sync while reading is on")
-        end
-    elseif S.saved_pages_before_update ~= nil then
-        if (cur or 0) == 0 then
-            p.settings.pages_before_update = S.saved_pages_before_update
-            log("page push: plugin's Push while reading restored to", S.saved_pages_before_update)
-        end
-        S.saved_pages_before_update = nil
-        saveSettings()
-    end
-end
-
----------------------------------------------------------------------------------------------

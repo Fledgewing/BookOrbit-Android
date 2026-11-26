@@ -47,7 +47,7 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   neutral objects that adapters translate, with local fallback on the cached catalog.
   The interface is introduced in 0.12 ([BookSync Home's owned-client design](docs/design/backend-independence.md#1-owned-android-client-and-ledger)).
 
-- **Server adapters own protocol.** Android endpoint paths, authentication, backend JSON and
+- **Server adapters own protocol.** Android endpoint paths, authentication, upstream transport primitives, backend JSON and
   backend terms live only in `server/bookorbit` (Kotlin) and `ko/server/bookorbit` /
   `logic/server/bookorbit` (Lua compatibility). Only `ServerAdapters.kt` and the plugin loader
   wire implementations. UI uses the neutral library/read model and capability flags. Run

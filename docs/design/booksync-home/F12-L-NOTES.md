@@ -36,7 +36,9 @@ server APIs, and stay shared. Local ReadingStats and LibraryFacets have no serve
 
 The full rule, registration instructions and the enumerated Lua transport follow-up are in
 [backend independence](../backend-independence.md#android-adapter-enforcement-f12-l).
-The old Lua frozen baseline is deleted. Guards run over all production source files and
+Legacy sync/reading/snapshot primitives are adapter-contained too; their API names are
+guarded in addition to paths and JSON fields. The reading-gate source check now recurses
+into all adapter submodules. The old Lua frozen baseline is deleted. Guards run over all production source files and
 self-test rejection of fields, routes, imports and attempted suppression comments.
 
 ## Budgets and checks

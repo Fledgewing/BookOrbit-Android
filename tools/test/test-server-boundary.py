@@ -27,8 +27,10 @@ IMPLEMENTATION = re.compile(r'(?:net\.fledgewing\.orbitcompanion\.server\.[a-z]+
 # main.lua is the only implementation loader; owned Home/Details/widget modules are absent.
 LUA_COMPAT_CONSUMERS = frozenset(LUA / 'ko' / name for name in (
     'home.lua', 'start.lua', 'notices.lua', 'test_sync_path.lua', 'sleepscreen.lua', 'store.lua',
-    'wifi.lua', 'sleep.lua', 'reading_sync.lua', 'module.lua', 'endsheet.lua', 'menu.lua',
+    'wifi.lua', 'sleep.lua', 'module.lua', 'endsheet.lua', 'menu.lua',
 ))
+
+LEGACY_API = re.compile(r'\b(?:requestLifecycleOutboxDrain|requestProgressPull|requestProgressPush|fetchRemoteProgress|getLifecycleOutbox|getSyncCoordinator|last_remote_progress|pull_timestamp|push_timestamp|promptLogin|startSweep|enqueueLifecycleSnapshot|catalogSetReadStatus|catalogSetRating|catalogBooks|catalogBook|newClient|getDocumentDigest|getLastPercent|getLastProgress|remoteProgressIsNewer|isSamePlace|pages_before_update)\b')
 
 
 
@@ -72,6 +74,7 @@ def violations(path, source):
             if WIRE_PROTOCOL.search(line):
                 errors.append(f'{path}:{n}: protocol in composition root: {line.strip()}')
             protocol_line = re.sub(r'BookOrbit\w*|bookorbit(?:[/._a-z]*)', 'adapter', line, flags=re.I)
+        if lua and LEGACY_API.search(line): errors.append(f'{path}:{n}: upstream sync/catalog primitive outside adapter: {line.strip()}')
         if PROTOCOL.search(protocol_line): errors.append(f'{path}:{n}: server protocol outside adapter: {line.strip()}')
         if not wiring and IMPLEMENTATION.search(line): errors.append(f'{path}:{n}: implementation import outside registry: {line.strip()}')
     return errors
@@ -95,6 +98,7 @@ class GuardTests(unittest.TestCase):
         self.assertTrue(violations(LUA / 'ko/widget.lua', 'require("ko.server.bookorbit")'))
         self.assertTrue(violations(LUA / 'ko/widget.lua', 'require("socket.http")'))
         self.assertTrue(violations(LUA / 'ko/widget.lua', 'http.request{}'))
+        self.assertTrue(violations(LUA / 'ko/home.lua', 'p:fetchRemoteProgress(digest, callback)'))
     def test_comments_are_the_only_ignored_syntax(self):
         self.assertFalse(violations(KOTLIN / 'Widget.kt', '// BookOrbit\n/* readStatus */\nval x="https://library.invalid"'))
         self.assertFalse(violations(LUA / 'ko/widget.lua', '-- BookOrbit\n--[[ readStatus ]]\nlocal x="https://library.invalid"'))

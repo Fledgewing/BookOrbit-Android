@@ -53,7 +53,7 @@ function OrbitAndroid:testSyncPath()
     else
         add(false, _("Companion answered"), nil, _("BookSync Companion is not installed: Wi-Fi stays as it is, Tailscale is woken directly."))
     end
-    if not p or not p:isLoggedIn() then
+    if not p or not Server.signedIn(p) then
         add(false, _("library plugin signed in"), nil, _("Sign in to library first."))
         return show()
     end
@@ -71,19 +71,15 @@ function OrbitAndroid:testSyncPath()
             if reported then return end
             reported = true
             add(err == nil, _("library plugin synced"), now_s() - s0,
-                err and (_("The plugin reported: ") .. tostring(p:errorLabel(err))) or nil)
+                err and (_("The plugin reported: ") .. tostring(Server.testError(p, err))) or nil)
             show()
         end
-        if not (hasHandler(p, Server.events.sync) and Compat.callable(p.startSweep) and Compat.callable(p.errorLabel)) then
+        if not (Server.testReady(p)) then
             add(true, _("library plugin step skipped: ") .. Compat.fallback("test_sync"), nil)
             return show()
         end
         -- The plugin's own Sync now: this book in a book, the library otherwise.
-        if inBook() then
-            pluginEvent(liveUI(), p, Server.events.sync, { quiet = true, on_done = plugin_done })
-        else
-            p:startSweep({ quiet = true, on_progress = function() end, on_done = plugin_done })
-        end
+        Server.testSync(p, inBook(), plugin_done)
         UIManager:scheduleIn(60, function() plugin_done("timeout") end)
     end)
 end

@@ -60,12 +60,7 @@ function Wifi.busy()
     end
     local p = serverPlugin()
     if p and can(p, "outbox") then
-        local okb, busy = pcall(function()
-            local c = p:getSyncCoordinator()
-            if c:isBusy() or c:queuedCount() > 0 then return true end
-            local d = p:getLifecycleOutbox():diagnostics()
-            return outboxPending(d) > 0
-        end)
+        local okb, busy = pcall(Server.syncBusy, p)
         if okb and busy then return true, "library plugin syncing" end
     end
     return false

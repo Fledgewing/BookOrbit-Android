@@ -46,7 +46,7 @@ function OrbitAndroid:wakeFlow(reason)
         return
     end
     local p = serverPlugin(self.ui)
-    if not p or not p:isLoggedIn() then
+    if not p or not Server.signedIn(p) then
         log(reason .. ": library plugin missing or signed out; nothing to do")
         return
     end
@@ -66,7 +66,7 @@ function OrbitAndroid:wakeFlow(reason)
                 UIManager:scheduleIn(1, function() Sync.waitOutbox(p, 20, function() Wifi.release(lease) end) end)
             end)
         end
-        if can(p, "outbox") then p:requestLifecycleOutboxDrain("orbit_" .. reason) end
+        if can(p, "outbox") then Server.drain(p, "orbit_" .. reason) end
         -- Hold Wi-Fi until the plugin's drain and pull are done, then restore.
         UIManager:scheduleIn(1, function()
             Sync.waitOutbox(p, 20, function() Wifi.release(lease) end)
@@ -75,7 +75,7 @@ function OrbitAndroid:wakeFlow(reason)
             -- The plugin debounces pulls for 25 s (bookorbit_progress_sync.lua:26, 383-387).
             -- Clear it for this one pull; on a fresh start skip it if a pull already ran.
             Sync.clearPullDebounce(p, reason)
-            p:requestProgressPull(false, false, "orbit_" .. reason)
+            Server.pull(p, "orbit_" .. reason)
             log(reason .. ": asked plugin to drain outbox and pull, network ready in", fmt(now_s() - t0))
         else
             log(reason .. ": asked plugin to drain outbox (no book open), network ready in", fmt(now_s() - t0))

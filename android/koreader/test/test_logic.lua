@@ -1395,12 +1395,13 @@ test("reading gate: every show, toast, activity start and restart names its gate
     local pat = { "UIManager:show%(", "bookorbit_toast\"%)%.show", "bookorbit_toast\"%)%.error", "Toast%.show%(",
         "Toast%.error%(", "Jni%.startActivity{", "restartKOReader%(%)", "UIManager:quit%(%)" }
     local missing = {}
-    local p = io.popen('ls "' .. dir .. '"')
-    for name in p:lines() do
+    local p = io.popen('find "' .. dir .. '" -type f -name "*.lua"')
+    for path in p:lines() do
+        local name = path:sub(#dir + 1)
         if name:match("%.lua$") and name ~= "jni.lua" then
             local prev = ""
             local n = 0
-            for line in io.lines(dir .. name) do
+            for line in io.lines(path) do
                 n = n + 1
                 local code = line:gsub("%-%-.*$", function(c) return c:find("gate:", 1, true) and c or "" end)
                 for _, q in ipairs(pat) do

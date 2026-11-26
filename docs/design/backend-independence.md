@@ -155,7 +155,7 @@ The reviewed facade callers are `ko/home.lua` (reading gate/Home), `ko/start.lua
 `ko/sleepscreen.lua` (credential handoff) and `ko/store.lua` (legacy cached query). Only
 `main.lua` loads implementation files. Guards forbid additional facade consumers and still
 check every reviewed caller for protocol fields/routes and direct imports. The remaining
-legacy lifecycle callers (`ko/wifi.lua`, `ko/sleep.lua`, `ko/reading_sync.lua`, `ko/module.lua`,
+legacy lifecycle callers (`ko/wifi.lua`, `ko/sleep.lua`, `ko/module.lua`,
 `ko/endsheet.lua`, `ko/menu.lua`) may obtain the compatibility plugin through `serverPlugin`;
 owned UI cannot. Historical Home wire values and cover-cache folder names stay in the adapter,
 so the guard rejects backend names in every casing without breaking installed settings.
@@ -176,6 +176,9 @@ in a later transport/sole-sync-owner slice, are:
   existing finish outbox. Preserve sole-writer ordering when moving these.
 - `ko/server/bookorbit/grouping.lua`: rollback catalog reads through the upstream client.
   Owned lists/filtering use companion projections; do not reuse this full-list path for Home.
+- `ko/server/bookorbit/sync.lua`, `reading_sync.lua` and `lifecycle.lua`: legacy outbox,
+  pull/push, remote-progress parsing and upstream snapshot/settings bindings. Root start/sleep/
+  Wi-Fi flows call the adapter facade; the guard also forbids upstream primitive API names.
 - `ko/server/bookorbit/orbismart.lua`: upstream progress client interception. Keep the approved
   one-draw position prompt and reading gate while moving sync ownership.
 

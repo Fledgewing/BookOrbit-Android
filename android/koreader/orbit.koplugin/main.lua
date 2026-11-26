@@ -38,9 +38,9 @@ local LOGIC = {
 }
 local KO = {
     "ko/base.lua", "ko/settings.lua", "ko/jni.lua", "ko/companion.lua", "ko/shared.lua",
-    "ko/server/bookorbit.lua", "ko/net.lua", "ko/sync.lua", "ko/wifi.lua", "ko/updater.lua",
+    "ko/server/bookorbit.lua", "ko/net.lua", "ko/server/bookorbit/sync.lua", "ko/wifi.lua", "ko/updater.lua",
     "ko/background.lua", "ko/runtime.lua", "ko/clicks_channel.lua", "ko/keys.lua",
-    "ko/module.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/reading_sync.lua",
+    "ko/module.lua", "ko/server/bookorbit/lifecycle.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/server/bookorbit/reading_sync.lua",
     "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/server/bookorbit/recommended.lua", "ko/menu.lua",
     "ko/wifi_backend.lua", "ko/server/bookorbit/grouping.lua", "ko/endsheet.lua", "ko/server/bookorbit/endofbook.lua",
     "ko/server/bookorbit/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/server/bookorbit/store.lua", "ko/badge.lua", "ko/cover_child.lua", "ko/server/bookorbit/cache.lua", "ko/server/bookorbit/mirror.lua", "ko/server/bookorbit/copies.lua", "ko/sleepscreen.lua",

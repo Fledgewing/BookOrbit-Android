@@ -874,7 +874,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/reading_sync.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/reading_sync.lua",
               "line": 139
             },
             {
@@ -933,7 +933,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/sync.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/sync.lua",
               "line": 14
             }
           ],
@@ -992,7 +992,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/sync.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/sync.lua",
               "line": 14
             }
           ],
