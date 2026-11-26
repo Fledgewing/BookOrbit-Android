@@ -12,6 +12,7 @@ class LibraryReadModel(
     private val readingStats: () -> Map<String, Any?> = {
         mapOf("state" to "not-saved", "freshness" to mapOf("saved" to false))
     },
+    private val battery: () -> Map<String, Any?> = { BatteryEstimate.snapshot(emptyMap(), emptyList(), null, emptyList(), clock()*1000, java.time.ZoneOffset.UTC) },
 ) {
     companion object {
         const val MAX_BYTES = 16384
@@ -53,13 +54,8 @@ class LibraryReadModel(
     private fun empty(saved: Boolean) = mapOf("items" to emptyList<Any>(), "total" to 0, "freshness" to freshness(saved), "empty" to if (saved) "No books" else "Not saved yet")
     private fun project(owner: String, a: Map<*, *>): Map<String, Any?> {
         val op = a["op"]
-        // Honest stub until the battery worker supplies measured, device-specific estimates.
-        // No sample durations: those would be mistaken for this reader's battery prediction.
-        if (op == "mode-estimates") return mapOf("items" to listOf("saver", "balanced", "current").take(((a["limit"] as? Number)?.toInt() ?: 3).coerceIn(1, 3)).map {
-            mapOf("id" to it, "text" to "Estimate available after measured use", "measured" to false)
-        })
-        // Local-only placeholder until the battery slice supplies its measured projection.
-        if (op == "battery") return mapOf("available" to false, "freshness" to freshness(false))
+        if (op == "mode-estimates") return BatteryEstimate.modeRows(battery(), (a["limit"] as? Number)?.toInt() ?: 3)
+        if (op == "battery") return battery()
         if (op == "reader") {
             val path = a["path"] as? String ?: return empty(false)
             val entry = BookOrbitLibrary.localEntries(store, owner)?.firstOrNull { it["path"] == path }
@@ -79,7 +75,7 @@ class LibraryReadModel(
             val managed = server["owner"] == owner
             val opds = (server["opds"] as? Map<*, *>)?.get("available") == true
             val sync = (server["sync"] as? Map<*, *>)?.get("available") == true
-            return mapOf("catalog" to (!managed || opds), "detail" to !managed, "download" to opds,
+            return mapOf("battery" to true, "catalog" to (!managed || opds), "detail" to !managed, "download" to opds,
                 "lists" to mapOf("read" to !managed, "save" to false), "progress" to mapOf("read" to (!managed || sync), "write" to sync, "syncCurrent" to !managed),
                 "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
                 "account" to server,

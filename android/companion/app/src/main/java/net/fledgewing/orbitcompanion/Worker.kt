@@ -123,9 +123,17 @@ object Worker {
             val owner = i.getStringExtra("owner") ?: return
             synchronized(lock) { patches.addLast {
                 val requests = LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? List<*> ?: return@addLast
-                val model = LibraryReadModel(worker().store, fallbackReadingStats = { scope -> LibraryAccount.fallbackReadingStats(scope) ?: BookOrbitLibrary.readingStats(worker().store) }, accountState = LibraryAccount::state, accountStats = LibraryAccount::stats, readingStats = {
-                    ReadingStats.read(File(root().parentFile, "statistics.sqlite3"), System.currentTimeMillis() / 1000, AccountStats.zone(LibraryAccount.stats(LuaValue.str(owner))))
-                })
+                val model = LibraryReadModel(
+                    worker().store,
+                    fallbackReadingStats = { scope -> LibraryAccount.fallbackReadingStats(scope) ?: BookOrbitLibrary.readingStats(worker().store) },
+                    accountState = LibraryAccount::state,
+                    accountStats = LibraryAccount::stats,
+                    readingStats = {
+                        ReadingStats.read(File(root().parentFile, "statistics.sqlite3"), System.currentTimeMillis() / 1000,
+                            AccountStats.zone(LibraryAccount.stats(LuaValue.str(owner))))
+                    },
+                    battery = { StatsStore.get(ctx).batterySnapshot(System.currentTimeMillis(), java.time.ZoneId.systemDefault()) },
+                )
                 if (requests.size <= LibraryReadModel.MAX_BATCH && model.publish(LuaValue.str(owner), requests))
                     worker().event(mapOf("kind" to "library", "owner" to LuaValue.str(owner)))
             }; lock.notifyAll() }

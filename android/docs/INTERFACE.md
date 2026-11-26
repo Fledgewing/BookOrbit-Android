@@ -453,13 +453,17 @@ and a stable `token` for the backup-based global `reader_footer_mode` repair. Th
 plugin changes only a matching native global setting in memory, never the loaded
 footer or document, and persists the token to ignore replay after later user changes.
 
+F12-E extends that same library batch with `{op="battery",limit=1}`. It returns one local-device snapshot: `level`, `charging`, `screen_on`/`standby`/`charging_rate` (`pct_per_hour`, `standard_error`, `hours_measured`, `missing`), `usual_use` (`screen_on_percent`, `window_days`, `hours_observed`), `hours_usual_use`, `hours_reading_nonstop`, `hours_standby_only`, up to 14 `pct_used_per_day` entries, five `recent_charges` and three `modes` (`id`, `wifi_pattern`, `estimated`, `reason`, `hours_usual_use`). Unmeasured values are absent. Times in charges/freshness are epoch milliseconds; durations are hours. Rates, standard errors and blends are computed only in the companion; caller budgets, the existing batch, cache ownership and 16 KiB ceiling apply. See [F12-E notes](../../docs/design/booksync-home/F12-E-NOTES.md).
+
+The existing Settings projection is also available as `Library:modeEstimates()` / `{op="mode-estimates",limit=3}`. It draws from the same model, returning up to three `items` with the existing IDs `saver`, `balanced`, `current`, ready-to-draw UTF-8 `text`, `measured`, `estimated`, `hours_usual_use` and `reason`. It respects a smaller caller row limit. No-history rows retain the honest unavailable line; unmeasured Wi-Fi patterns carry an explicit estimate marker in the text.
+
 ### 0.12 reader progress projections (F12-H)
 
 The existing `library_batch` command also accepts `reader` (local `path`, one
 normalized book row; optional `native_progress` is the native reader's cached
 0–1 fraction, validated and projected by the companion without changing the
-saved catalog position) and `battery` (one local snapshot, unavailable until the
-battery model is installed). The `book` and `reader` rows include `stats` with
+saved catalog position) and `battery` (the measured local snapshot described above;
+time-left fields remain absent until its evidence thresholds are met). The `book` and `reader` rows include `stats` with
 `available`, optional `pages_read`, `reading_seconds`, and inclusive
 `days_start_to_finish`. Joins and SQLite aggregation run in the companion;
 no metadata file or statistics database is parsed by the reader UI. The
