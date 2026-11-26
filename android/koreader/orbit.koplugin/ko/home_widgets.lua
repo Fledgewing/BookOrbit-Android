@@ -52,7 +52,7 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
     elseif hero or p.widget == "lists" then HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad,18,hero,true)
     else HomeWidgets.button(canvas,_(title).."  ›",pad,pad,w-2*pad,scale(52),function() dispatch("all") end) end
     if not ready then
-        local labels={loading="Loading…",empty=p.widget == "continue-reading" and "Open a book to start reading" or "No books here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
+        local labels={loading="Loading…",empty=p.widget == "continue-reading" and "Open a book to start reading" or p.widget == "lists" and "No lists yet" or "No books here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
         if not compact then HomeWidgets.text(canvas,_(snapshot.setup and "Sign in to load your library" or labels[snapshot.state] or "Unavailable"),pad,pad+scale(58),w-2*pad,16) end
         local rx=compact and math.floor((w+pad)/2) or pad
         local rw=compact and math.floor((w-3*pad)/2) or w-2*pad
@@ -62,7 +62,7 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         elseif snapshot.state ~= "empty" then
             HomeWidgets.button(canvas,_(compact and (labels[snapshot.state] or "Unavailable") or "Retry"),rx,ry,rw,scale(50),function() dispatch("retry") end)
         elseif compact then
-            HomeWidgets.text(canvas,_("No books yet"),rx,math.floor((h-scale(20))/2),rw,16)
+            HomeWidgets.text(canvas,_(p.widget == "lists" and "No lists yet" or "No books yet"),rx,math.floor((h-scale(20))/2),rw,16)
         end
     elseif compact then
         local b=snapshot.items[1]

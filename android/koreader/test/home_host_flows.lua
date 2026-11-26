@@ -109,13 +109,13 @@ return function(test,eq,ok,E,W,Widget)
     end)
     test("First run: empty reading and shelves give guidance without a dead Retry",function()
         withHost(function()
-            for _,widget in ipairs({"continue-reading","booklist"}) do
+            for _,widget in ipairs({"continue-reading","booklist","lists"}) do
                 local p={widget=widget,settings={title="Want to read"}}
                 local card=E.HomeWidgets.card(p,E.HomeHostPlan.snapshot({items={},freshness={saved=true}}),function() error("no action") end,{w=400,h=300})[1]
                 local guidance=false
                 for _,child in ipairs(card) do
                     ok(child.text~="Retry")
-                    if child.text=="Open a book to start reading" or child.text=="No books here yet" then guidance=true end
+                    if child.text==(widget=="continue-reading" and "Open a book to start reading" or widget=="lists" and "No lists yet" or "No books here yet") then guidance=true end
                 end
                 ok(guidance)
             end
