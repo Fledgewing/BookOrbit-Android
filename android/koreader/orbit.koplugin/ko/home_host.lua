@@ -318,6 +318,7 @@ function HomeHost.create()
     return Host:new{}
 end
 function HomeHost.show()
+    if FinishUI then FinishUI.leaveForHome(liveUI()) end
     local problem=Companion.workerProblem(_("for BookSync Home"))
     if problem then
         UIManager:show(InfoMessage:new{text=problem}) -- gate: user action (Home)

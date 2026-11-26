@@ -2,13 +2,13 @@
 return function(t)
 local E,W,test,eq,ok=t.E,t.W,t.test,t.eq,t.ok
 local function isolated(fn)
-    local action,native,position,reading=E.Library.catalogAction,E.Library.nativeReader,E.Library.syncCurrent,E.reading
-    E.Library.syncCurrent=function(done) done(true) end
+    local action,native,position,reading=E.Library.catalogAction,E.Library.nativeReader,E.Library.finishCurrent,E.reading
+    E.Library.finishCurrent=function(done) done(true) end
     local oldsheet=E.FinishUI.sheet
     E.FinishUI.sheet=nil
     local success,why=pcall(fn)
     E.FinishUI.closeSheet();E.FinishUI.sheet=oldsheet
-    E.Library.catalogAction,E.Library.nativeReader,E.Library.syncCurrent,E.reading=action,native,position,reading
+    E.Library.catalogAction,E.Library.nativeReader,E.Library.finishCurrent,E.reading=action,native,position,reading
     if not success then error(why) end
 end
 local function fixture()
@@ -72,10 +72,22 @@ test("catalog actions: failed or departed download never reopens a book",functio
     E.FinishUI.sheet=nil;pending({local_path="/books/next.epub"});eq(opened,0)
     E.Library.open=open
 end) end)
+test("catalog actions: recommendation observation unwraps the saved native value and checks compatibility",function()
+    local ui,m=t.newUI(false);local p=ui.bookorbit
+    local saved=E.OSM.savedPluginSetting
+    p.default_settings={sync_forward=1}
+    E.OSM.savedPluginSetting=function() return {value=3} end
+    local success,why=pcall(function()
+        local obs=E.Library.observeSetting({key="sync_forward"});eq(obs.available,true);eq(obs.current,3)
+        p.default_settings=nil;eq(E.Library.observeSetting({key="sync_forward"}).available,false)
+    end)
+    E.OSM.savedPluginSetting=saved
+    if not success then error(why) end
+end)
 test("catalog actions: finish leaves and drains the existing writer before a remote download",function() isolated(function()
     local ui,m,b=fixture();local order={}
     E.Library.catalogAction=function(op,args,done) order[#order+1]=op;if done then done({error="offline"}) end end
-    E.Library.syncCurrent=function(done) order[#order+1]="existing-writer";done(true) end
+    E.Library.finishCurrent=function(done) order[#order+1]="existing-writer";done(true) end
     E.FinishUI.sheet={ui=ui,book=b,update=function() end}
     E.FinishUI.actions.book(ui,b,"opaque","Synthetic")
     eq(order[1],"finish.leave");eq(order[2],"existing-writer");eq(order[3],"finish.download")
@@ -83,7 +95,7 @@ end) end)
 test("catalog actions: a saved next book opens offline without a network command",function() isolated(function()
     local ui,m,b=fixture();local opened;local open=E.Library.open
     E.Library.open=function(row) opened=row.local_path;return true end
-    E.Library.syncCurrent=function() error("local book requested sync") end
+    E.Library.finishCurrent=function() error("local book requested sync") end
     E.Library.catalogAction=function(op) eq(op,"finish.leave") end
     E.FinishUI.actions.book(ui,b,"opaque","Synthetic","/books/local.epub")
     eq(opened,"/books/local.epub");E.Library.open=open

@@ -23,7 +23,14 @@ function FinishUI.onLeave(ui)
 end
 function FinishUI.leaveForHome(ui)
     local had=FinishUI.sheet~=nil;FinishUI.closeSheet()
-    FinishUI.onLeave(ui or liveUI());return had
+    ui=ui or liveUI()
+    FinishUI.onLeave(ui)
+    local b=book(ui)
+    if b and FinishUI.jobs[b.digest] and not FinishUI.sending then
+        FinishUI.sending=true
+        Library.finishCurrent(function() FinishUI.sending=nil end)
+    end
+    return had
 end
 function FinishUI.hold(digest,fraction,status)
     if status~="complete" or type(fraction)~="number" then return false end
@@ -77,7 +84,7 @@ function FinishUI.actions.book(ui,b,key,title,local_path)
     FinishUI.card_state={book_id=key,text="Connecting…"};FinishUI.refreshSheet(ui,b)
     -- The existing sole position/lifecycle writer drains before the companion sends the finish.
     -- Downloads follow its completion; no new writer or transport is installed here.
-    Library.syncCurrent(function(ok)
+    Library.finishCurrent(function(ok)
         if FinishUI.sheet~=sheet or not sheet then return end
         if not ok then FinishUI.card_state={book_id=key,failure="failed"};FinishUI.refreshSheet(ui,b);return end
         dispatch("finish.download",b,{key=key},function(result)

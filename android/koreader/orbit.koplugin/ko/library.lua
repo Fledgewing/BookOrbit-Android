@@ -528,3 +528,9 @@ function Library.copiesTick(why)
 end
 
 function Library.cachedAccountState() return LibraryAdapter.account_snapshot or {} end
+
+-- Finish follows the existing sole position writer and its outbox; no replacement writer.
+function Library.finishCurrent(done)
+    if not LibraryAdapter.finishCurrent then done(false,"Sync unavailable");return false end
+    return command("finish-current",function() return LibraryAdapter.finishCurrent(done) end)
+end

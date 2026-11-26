@@ -440,7 +440,7 @@ end
 
 
 -- Compatibility shapes are assembled from BookSync display records, never HTTP/JSON. The
--- remaining copies/EOB slice still uses native identifiers; catalog queries are worker-owned.
+-- native compatibility shapes use identifiers only here; catalog queries are worker-owned.
 function Server.installCatalogApi(Api,Catalog)
     if not Library or type(Api)~="table" then return false end
     if #Compat.missingOn(Api,{request="function",requestBlocking="function",runInSubprocess="function",query="function"})>0 then return false end
@@ -655,9 +655,13 @@ function Server.bindCatalogActions()
     Library.observeSetting=function(item)
         local p=serverPlugin(liveUI())
         if not p then return {available=false,reason="Connector unavailable"} end
-        local defaults=p.default_settings or {}
+        local defaults=p.default_settings
+        if type(defaults)~="table" then return {available=false,reason="Connector defaults unavailable"} end
+        if item.key=="catalog_auto_open" and not Compat.settable(p.settings,item.key,item.ours) then return {available=false,reason="Connector home setting unavailable"} end
+        if item.key=="auto_sync" and not hasHandler(p,Server.events.auto) then return {available=false,reason="Connector sync action unavailable"} end
         local current=p.settings[item.key]
-        if OSM and OSM.savedPluginSetting then current=OSM.savedPluginSetting(item.key,current) end
+        local saved=OSM and OSM.savedPluginSetting and OSM.savedPluginSetting(item.key)
+        if saved~=nil then current=saved.value end
         return {available=true,current=current,default=defaults[item.key]}
     end
     Library.writeSetting=function(item,value)
@@ -684,6 +688,14 @@ function Server.bindCatalogActions()
                 return stock(self,...)
             end end,"finish") end
         end
+    end
+    LibraryAdapter.finishCurrent=function(done)
+        return Server.syncCurrent(function(ok,why)
+            if not ok then return done(false,why) end
+            local p=serverPlugin(liveUI())
+            if not p then return done(false,"Book closed") end
+            Sync.waitOutbox(p,20,function(drained,reason) done(drained,reason) end)
+        end)
     end
     local stock=Sync.waitOutbox
     if not Server.finish_wait_bound then
