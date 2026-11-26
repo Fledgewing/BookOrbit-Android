@@ -15,6 +15,36 @@ class BatteryEstimateTest {
         val segs = BatteryStats.segments(rows)
         return BatteryEstimate.snapshot(BatteryStats.totals(BatteryStats.rollup(segs,zone)),days,rows.lastOrNull(),segs,rows.lastOrNull()?.t ?: t,zone)
     }
+    @Test fun presentationIsBoundedAndKeepsLearningAndClockBoundaries() {
+        val future = row(10,78)
+        val learning = BatteryEstimate.snapshot(emptyMap(),emptyList(),future,emptyList(),t,zone)
+        val d = learning["display"] as Map<*, *>
+        fun text(key: String) = LuaValue.utf8(d[key] as String)
+        assertEquals("—",text("level"))
+        assertTrue(text("estimate").contains("Learning"))
+        assertFalse(text("estimate").contains("78"))
+        assertTrue(text("used_week").contains("Needs measured"))
+        assertTrue(LuaValue.utf8((d["overview"] as List<*>)[2] as String).contains("24 h"))
+        val ready = BatteryEstimate.display(mapOf("level" to 78,"hours_usual_use" to 54.0,
+            "hours_reading_nonstop" to 19.0,"hours_standby_only" to 142.0,
+            "recent_charges" to List(5) { mapOf("start" to t,"hours" to 2.0,"from_pct" to 12,"to_pct" to 100) },
+            "pct_used_per_day" to List(14) { mapOf("day" to 19000L+it,"used_pct" to 5.0,"screen_on_minutes" to 60.0,"charges" to 1) }),zone,t)
+        val shown = ready["display"] as Map<*, *>
+        assertTrue(LuaValue.utf8(shown["estimate"] as String).endsWith("at your usual use"))
+        assertTrue(LuaValue.utf8(shown["narrow_estimate"] as String).endsWith("· usual use"))
+        assertTrue(LuaValue.utf8(shown["page_estimate"] as String).contains("left at your usual use"))
+        assertEquals(14,shown["daily_count"]); assertEquals(5,shown["charges_count"])
+        assertTrue(LuaValue.encode(ready).size <= 16384)
+        assertTrue(LuaValue.utf8((shown["charges"] as List<*>)[0] as String).contains("12% → 100%"))
+        val today = BatteryStats.day(t,zone)
+        val sparse = BatteryEstimate.display(mapOf("pct_used_per_day" to listOf(
+            mapOf("day" to today-10,"used_pct" to 90),mapOf("day" to today,"used_pct" to 4))),zone,t)
+        assertEquals("4.0% used this week",LuaValue.utf8((sparse["display"] as Map<*,*>)["used_week"] as String))
+        val bounded = BatteryEstimate.snapshot(emptyMap(),List(14) { DayTotals(today-it,usedPct=5) },row(0,78),
+            emptyList(),t,zone,recentCharges=List(5) { mapOf("start" to t,"from_pct" to 12,"to_pct" to 100,"hours" to 2.0) })
+        assertTrue(LuaValue.encode(bounded).size<=16384)
+
+    }
     @Test fun usualUseClipsExactlySevenDaysAndIgnoresChargingAndGaps() {
         val rows=listOf(row(0,100,true),row(100,90),row(200,80),row(201,90,charging=true),row(202,100),row(210,80).copy(kind=Snap.START))
         val day=BatteryEstimate.usualDays(rows,t+210*h).single()

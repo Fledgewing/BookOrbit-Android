@@ -71,3 +71,7 @@ for _, id in ipairs({"reader-top-panel", "book-info", "details"}) do
 end
 
 Budgets.widgets["reader-progress"] = budget(1, 16384, 50)
+
+-- Battery tabs select bounded windows from one companion materialization.
+Budgets.screens.battery.rows = 1
+Budgets.screens.battery.bytes = 16384

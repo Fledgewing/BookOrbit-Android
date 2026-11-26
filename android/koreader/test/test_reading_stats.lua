@@ -75,25 +75,10 @@ return function(test,eq,ok,here,Cache)
         eq(e.ReadingStatsPlan.build('year-in-reading',data,600,300,2).message,'Reading days unavailable')
     end)
 
-    test('battery widget: measured scalars format with the existing reader duration helper',function()
-        local d={level=78,hours_usual_use=54,hours_reading_nonstop=12.5,hours_standby_only=240,
-            screen_on={pct_per_hour=4.1},standby={pct_per_hour=.6},recent_charges={{from_pct=12,to_pct=100}}}
-        local before=Cache.encode(d)
-        local p=e.BatteryWidgetPlan.model(d)
-        eq(p.level_text,'78%'); eq(p.fraction,.78)
-        eq(p.usual,'≈ 2 d 6 h at your usual use'); eq(p.narrow_usual,'≈ 2 d 6 h · usual use')
-        eq(p.screen_on,'Screen on 4.1 %/h'); eq(p.standby,'Standby 0.6 %/h')
-        eq(p.charge,'Last charge 12% → 100%'); eq(Cache.encode(d),before)
+    -- Battery presentation regressions live in test_battery.lua after the F12-O display projection.
+    test('reader duration helper: measured and unavailable values',function()
         eq(e.ReaderPanelPlan.duration(.5,true),'30 min')
         eq(e.ReaderPanelPlan.duration(54),'2 d 6 h')
-    end)
-    test('battery widget: absent evidence and invalid values never become a sample estimate',function()
-        local p=e.BatteryWidgetPlan.model({level=101,hours_usual_use=0/0,
-            pct_used_per_day=setmetatable({}, {__index=function() error('history scan') end})})
-        eq(p.level,nil); eq(p.level_text,'—'); eq(p.fraction,nil)
-        eq(p.usual,'More measured use needed'); eq(p.screen_on,'Screen on —')
-        eq(e.BatteryWidgetPlan.model({level=0,hours_usual_use=0}).level_text,'0%')
         eq(e.ReaderPanelPlan.duration(-1),nil); eq(e.ReaderPanelPlan.duration(math.huge),nil)
     end)
-
 end
