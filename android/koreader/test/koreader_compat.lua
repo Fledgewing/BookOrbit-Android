@@ -45,6 +45,8 @@ local F, T = "field", "text"
 local NEEDS = {
     -- Library's native reader-control adapter (pin documented in G-READER-NOTES.md).
     { "frontend/apps/reader/modules/readertoc.lua", { "onShowToc", {"toc", F} } },
+    { "frontend/apps/reader/modules/readerannotation.lua", { {"annotations", F} } },
+    { "frontend/apps/reader/modules/readerview.lua", { {"dogear_visible", F} } },
     { "frontend/apps/reader/modules/readerbookmark.lua", { "onShowBookmark", "onToggleBookmark", "getBookmarkPageNumber" } },
     { "frontend/apps/reader/modules/readergoto.lua", { "onShowGotoDialog" } },
     { "frontend/apps/reader/modules/readersearch.lua", { "onShowFulltextSearchInput" } },
@@ -83,7 +85,7 @@ local NEEDS = {
     { "frontend/apps/filemanager/filemanager.lua", { { "instance", F }, "setRotationMode", "onSetRotationMode",
         { "lock_rotation", T } } },
     { "frontend/ui/widget/eventlistener.lua", { "handleEvent" } },
-    { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu", "onShowMenu",
+    { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu", "onShowMenu", "onTapShowMenu", "onSwipeShowMenu",
         { "menu_container", F } } },
     { "frontend/ui/widget/progresswidget.lua", { {"percentage", F}, {"ticks", F}, {"bordersize", F}, {"margin_h", F}, {"margin_v", F}, {"radius", F} } },
     { "frontend/ui/widget/container/topcontainer.lua", { {"TopContainer", T} } },
