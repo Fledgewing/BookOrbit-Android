@@ -181,12 +181,9 @@ function RS.enable(ui)
         end end)
     end
     RS.relayout(ui)
-    -- Suppress native painting only when an overlay fits. All native state and
-    -- refresh/layout machinery keep running untouched, including disabled footers.
-    hook(s, s.footer, "paintTo", function(stock) return function(self, ...)
-        RS.refreshGeometry(s)
-        if s.bottom.height == 0 or s.width <= 0 then return stock(self, ...) end
-    end end)
+    -- Native widgets must not reappear at their old height when a fixed-size
+    -- strip has no safe PDF/scroll surround. Their refresh controller still runs.
+    hook(s, s.footer, "paintTo", function() return function() end end)
     -- The overlay consumes footer taps without invoking native settings writers.
     hook(s, s.footer, "onToggleFooterMode", function() return function()
         s.bottom_visible = not s.bottom_visible

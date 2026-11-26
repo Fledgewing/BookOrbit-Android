@@ -266,6 +266,8 @@ return function(here, test, ok, eq)
             w.E.S.status_orbit_add_space=true
             R.enable(w.ui); local s=R.session
             eq(s.top.height,0); eq(s.bottom.height,0)
+            w.v.footer:paintTo()
+            eq(w.native_paint,nil,"no native bar fallback at the old height")
             eq(w.v.dimen.h,800)
             R.paint(s,{paintRect=function() error("no safe margin") end},0,0)
             if paged then
