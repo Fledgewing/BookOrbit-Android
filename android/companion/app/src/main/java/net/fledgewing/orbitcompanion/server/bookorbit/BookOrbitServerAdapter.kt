@@ -40,7 +40,7 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             "username" to accountState["username"], "server" to accountState["server"],
             "account" to mapOf("set" to (accountState["signedIn"] == true), "origin" to "user".takeIf { accountState["signedIn"] == true }),
             "sync" to status("sync"), "opds" to status("opds"), "owner" to sourceOwner,
-            "catalog" to mapOf("cachedDetail" to (legacy!=null),"canRefresh" to (legacy!=null || credentials.login("sync")?.owner()==sourceOwner)))
+            "catalog" to mapOf("cachedDetail" to (legacy!=null || credentials.login("sync")?.let { it.adopted && it.owner()==sourceOwner }==true),"canRefresh" to (legacy!=null || credentials.login("sync")?.owner()==sourceOwner)))
     }
     override fun signIn(server: String, username: String, password: CharArray) {
         try {

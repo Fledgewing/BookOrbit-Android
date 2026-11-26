@@ -4,8 +4,8 @@ Android implementation authorised 2026-11-25; X4 Pro, X4 and X3 follow later by
 explicit maintainer ruling. The approved design sources were read with `git show
 origin/design/booksync-home:docs/design/booksync-home/<file>`: DESIGN.md §3.5,
 §6 and §8.5, DESIGN-NOTES.md revision 10, layout.schema.json and prototype.html.
-Rev 10 still has two M8C pages. This task explicitly requests three: Home,
-Library (Library 2×2, On device, Finished), then Stats. The four-column M8C
+The approved §4 M8C default has two pages, Home and Stats. Library, On device
+and Finished remain available as widgets and Book list presets. The four-column M8C
 Stats layout retains the approved Year 4×3, Battery, weekly/hourly and Records
 placements. Defaults change only for readers without a saved valid layout.
 
@@ -77,7 +77,7 @@ Info spans cover library calls, host paints and each widget's drawing. Targets
 remain unconfirmed: Home <500 ms, widget <50 ms, cached window <30 ms, editor
 <100 ms; host tests establish deterministic limits, not device performance.
 
-Flow tests draw all three pages with real stats renderers, verify one stats read
+Flow tests draw the default pages with real stats renderers, verify one stats read
 and one batch per paint, drive list Filter → Show picker → Unread → Save → Go to
 Home → reopen, and drive Search with its filter button. Pure placement tests
 exercise new-page naming without changing the prior document. Device acceptance, cached covers and richer details/actions remain later work.

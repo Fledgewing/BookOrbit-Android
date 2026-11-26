@@ -4915,6 +4915,41 @@ local function withStore(dir, fn)
     if not okf then error(err, 0) end
 end
 
+test("library device owner: local SQLite rows survive sign-out without adopting the catalog", function()
+    local dir, st = fixtureStore()
+    st:run("CREATE TABLE library_views(owner TEXT,request TEXT,body BLOB,at INTEGER,PRIMARY KEY(owner,request))")
+    local request="device-owner-regression"
+    local body=RE.Cache.encode({items={{key="device:book:fixture",title="On this device"}}})
+    st:run("INSERT INTO library_views VALUES(?,?,?,1)","device-local",request,body)
+    st:run("INSERT INTO library_views VALUES(?,?,?,1)",DBFX.owner,request,RE.Cache.encode({items={{title="Account catalog"}}}))
+    local decode,reading,conn=RE.Cache.decode,RE.reading,RE.Db.conn
+    local success,err=pcall(function() withStore(dir,function()
+        RE.reading=function() return false end
+        local localRow,bytes=RE.Store.library("device-local",request)
+        eq(localRow.items[1].title,"On this device"); eq(bytes,#body)
+        eq(RE.Store.meta(st.conn,"owner"),DBFX.owner,"local reads never reassign catalog ownership")
+        eq(RE.Store.library(DBFX.owner,request).items[1].title,"Account catalog")
+        eq(RE.Store.library("wrong-account",request),nil,"remote owners retain their guard")
+        st:run("DELETE FROM meta WHERE k='owner'")
+        eq(RE.Store.library("device-local",request).items[1].title,"On this device")
+        eq(RE.Store.meta(st.conn,"owner"),nil,"a never-signed-in reader stays unowned")
+        eq(RE.Store.library(DBFX.owner,request),nil,"device access cannot expose an old account")
+        local decoded=0
+        RE.Cache.decode=function(raw) decoded=decoded+#raw; return decode(raw) end
+        st:run("UPDATE library_views SET body=? WHERE owner=?",string.rep("x",16385),"device-local")
+        eq(RE.Store.library("device-local",request),nil); eq(decoded,0,"SQL rejects oversized local snapshots before decoding")
+        st:run("UPDATE library_views SET body=? WHERE owner=?",body,"device-local")
+        local warm=RE.Store.library("device-local",request)
+        RE.reading=function() return true end
+        RE.Db.conn=function() error("reading must use the already decoded device row") end
+        eq(RE.Store.library("device-local",request),warm)
+        eq(RE.Store.library("device-local","cold-device-row"),nil)
+    end) end)
+    RE.Cache.decode,RE.reading,RE.Db.conn=decode,reading,conn
+    st:close(); os.execute("rm -rf '" .. dir .. "'")
+    ok(success,err)
+end)
+
 -- @fixture catalog/bulk-refresh/catalog.json @fixture catalog/bulk-refresh/schema.sql
 
 
