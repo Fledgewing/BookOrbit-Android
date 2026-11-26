@@ -6756,8 +6756,16 @@ test("settings: Sync now uses the existing snapshot/drain without sleeping", fun
     local ui, m = newUI(true)
     run(30)
     W.broadcasts = {}; ui.bookorbit.calls = {}
+    local release, handled = RE.Wifi.release, nil
+    RE.Wifi.release = function(name, flag)
+        if name == "sync_and_sleep" then handled = flag end
+        return release(name, flag)
+    end
     RE.Library.syncNow(m)
     run(5)
+    RE.Wifi.release = release
+    eq(handled, false, "normal Wi-Fi lease restoration")
+    eq(lastBroadcast(".NET_DONE").extras.reason, "menu_sync")
     ok(has(ui.bookorbit.calls, "onSuspend"), "current position snapshotted")
     ok(not lastBroadcast(".SLEEP_NOW"), "screen stays awake")
 end)
@@ -6770,6 +6778,7 @@ test("settings: failed Sync now leaves the screen awake", function()
     RE.Library.syncNow(m)
     run(40)
     ok(not lastBroadcast(".SLEEP_NOW"), "failed sync also stays awake")
+    eq(lastBroadcast(".NET_DONE").extras.reason, "menu_sync")
     W.server_code = 200
 end)
 

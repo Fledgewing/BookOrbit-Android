@@ -161,6 +161,7 @@ end
 
 function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
     stay_awake = stay_awake == true -- explicit Sync now; dispatcher events retain Sync and sleep
+    local flow = stay_awake and "menu_sync" or "sync_and_sleep"
     if self.sas_running then return true end
     self.sas_running = true
     local cancelled, closing = false, false
@@ -184,15 +185,15 @@ function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
         closing = true
         UIManager:close(msg)
         local seconds = now_s() - t0
-        S.last_sleep_sync = { at = os.time(), ok = ok, seconds = seconds, reason = "sync_and_sleep", detail = detail }
+        S.last_sleep_sync = { at = os.time(), ok = ok, seconds = seconds, reason = flow, detail = detail }
         saveSettings()
         local restore = self.sas_held and Wifi.state().restore_off and Wifi.state().n == 1 and "off" or ""
         log("sync and sleep:", ok and "synced" or "FAILED", "in", fmt(seconds), detail or "",
             restore == "off" and "| Wi-Fi was off before: companion restores off" or "")
-        Companion.netDone("sync_and_sleep", ok, seconds, detail, restore)
+        Companion.netDone(flow, ok, seconds, detail, restore)
         if self.sas_held then
             self.sas_held = false
-            Wifi.release("sync_and_sleep", true)
+            Wifi.release("sync_and_sleep", not stay_awake)
         end
         if cancelled then return end
         if stay_awake then
@@ -225,7 +226,7 @@ function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
     end
     Wifi.acquire("sync_and_sleep")
     self.sas_held = true
-    Net.up(p, { reason = "sync_and_sleep", cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
+    Net.up(p, { reason = flow, cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
         if cancelled then return finish(false, "cancelled") end
         if not ok then return finish(false, res.detail) end
         if inBook() and can(p, "sleep_snapshot") then
