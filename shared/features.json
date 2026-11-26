@@ -5431,6 +5431,62 @@
       }
     },
     {
+      "id": "owned-series",
+      "feature": "Owned Series page and grouped Library/Search progress",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Implemented on feature/0.12: ordered primary/secondary Series members, read/reading/device status, progress dots, next-book preview, grouped Library and Search cover rows, and Back to the originating filters/page",
+          "reason": "deliberately deferred: bulk next-series download jobs, cached covers and device acceptance remain with the staged Android owners",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/series.lua",
+              "line": 1
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SeriesPresentation.kt",
+              "line": 1
+            }
+          ],
+          "deferred": "Enable next-series download after the transport owner supplies a capability-backed bulk job; real cached covers and device typography/latency acceptance"
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned Series and grouped progress presentation follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned Series and grouped progress presentation follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned Series and grouped progress presentation follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware comes later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 1
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "reader-book-progress",
       "feature": "Owned reader top panel, Book info and Details progress (0.12 implementation)",
       "category": "Behaviour",
