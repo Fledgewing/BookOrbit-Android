@@ -176,7 +176,9 @@ owner, offline restart, override, stale consent and account isolation.
 
 Cover acquisition and refresh now use neutral companion commands; the plugin reads
 bounded local references. The former cover downloader and thumbnail child scanner
-are removed. The parallel F12-Q2 slice owns remaining catalog/grouping, mirror,
+are removed. Mirror planning and catalog refresh now run in the companion; the neutral library reads
+bounded snapshots and dispatches `catalog.control`. The Lua mirror, catalog interpreter
+and old library binding are deleted. The parallel F12-Q2 slice owns remaining grouping,
 copies, recommendations and end-of-book transport. Until that slice lands, the **whole
 plugin** is not yet server-free. Its cached catalog display helpers are extracted into
 `ko/server/bookorbit/local_view.lua`; existing non-sync jobs receive neutral lifecycle

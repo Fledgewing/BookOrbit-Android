@@ -459,5 +459,46 @@ class FastCatalogTest {
             assertEquals(published,store.meta("bulk_active"))
         }
         root.deleteRecursively()
+    }    @Test fun neutralPlanUsesTheExistingBulkRunnerAndLeavesOfflineDisplayWindows() {
+        val root=Files.createTempDirectory("neutral-catalog-run").toFile()
+        val owner="login:opaque-catalog"
+        val server="https://library.example/api/v1"
+        var requests=0;var online=true
+        val worker=CacheWorker(root,{url,_,_,_->
+            check(online) { "render attempted HTTP" };requests++
+            CacheWorker.Reply(200,JSONObject(reply(url.removePrefix(server))).toString().toByteArray())
+        },log={},openSql=::JdbcSql)
+        try {
+            val plan=CatalogPlan.create(owner,"full",emptyList(),false,File(root,"covers").path,null,true,server=server)
+            assertEquals("finished",worker.run(plan,CacheWorker.Creds(server,"fixture","fixture-key")))
+            assertEquals(owner,worker.store.meta("owner"));assertEquals(server,worker.store.meta("catalog_server"))
+            online=false;val before=requests
+            val request=String(LuaValue.encode(mapOf("op" to "connector.catalog","view" to "books","selection" to mapOf("sort" to "title","direction" to "asc"),"offset" to 0L,"limit" to 2L,"bytes" to 16384L)),Charsets.ISO_8859_1)
+            LibraryReadModel(worker.store,log={}).publish(owner,listOf(request))
+            val encoded=worker.store.db().query("SELECT body FROM library_views WHERE owner=? AND request=?",owner,LuaValue.utf8(request)) { it.bytes(0)!! }.single()
+            val snapshot=LuaValue.parse(encoded) as Map<*,*>
+            assertEquals(2,(snapshot["items"] as List<*>).size);assertTrue(encoded.size<=16384)
+            assertEquals(before,requests)
+            assertEquals(false,CatalogPlan.status(worker.store)["running"]==true)
+        } finally { worker.store.close();root.deleteRecursively() }
     }
+    @Test fun changingOwnerAtABulkBoundaryCannotLandOldRowsInTheNewAccount() {
+        val root=Files.createTempDirectory("catalog-owner-boundary").toFile()
+        var requests=0;var switched=false;var requestsAtSwitch=0
+        val worker=CacheWorker(root,{url,_,_,_->
+            requests++;CacheWorker.Reply(200,JSONObject(reply(url.substringAfter("/api/v1"))).toString().toByteArray())
+        },log={},openSql=::JdbcSql)
+        try {
+            assertEquals("stopped",worker.run(plan(),CacheWorker.Creds("https://library.example/api/v1","fixture","fixture-key")) {
+                if(!switched && worker.store.meta("bulk_active")!=null) {
+                    switched=true;requestsAtSwitch=requests;worker.store.own("later-account")
+                }
+            })
+            assertTrue(switched);assertEquals(requestsAtSwitch,requests)
+            assertEquals("later-account",worker.store.meta("owner"))
+            assertEquals(0L,worker.store.db().query("SELECT count(*) FROM bulk_books") { it.long(0)!! }.single())
+            assertNull(CatalogPlan.status(worker.store)["done"])
+        } finally { worker.store.close();root.deleteRecursively() }
+    }
+
 }

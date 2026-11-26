@@ -36,8 +36,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/store.lua",
-              "line": 202
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/BookOrbitProjection.kt",
+              "line": 20
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -370,8 +370,8 @@
               "line": 62
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/store.lua",
-              "line": 202
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/BookOrbitProjection.kt",
+              "line": 20
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -6238,8 +6238,8 @@
           "line": 271
         },
         {
-          "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/mirror.lua",
-          "line": 71
+          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/BookOrbitProjection.kt",
+          "line": 20
         },
         {
           "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",

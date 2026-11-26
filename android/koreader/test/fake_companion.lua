@@ -611,7 +611,7 @@ function F.storageNow(extras)
     F.storage_asks = F.storage_asks + 1
     local st = F.db()
     local limit = tonumber(extras.limit)
-    local cover_dir = extras.cover_dir ~= "" and extras.cover_dir or nil
+    local cover_dir = extras.cover_dir ~= "" and extras.cover_dir or F.coverDirectory
     local items = F.storageItems(cover_dir, extras.mirror_covers == "1")
     local plan = F.storagePlan(items, limit)
     local by = {}

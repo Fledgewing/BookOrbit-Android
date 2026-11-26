@@ -12,6 +12,9 @@
 -- book at a time, from a queue kept on disk.
 
 Copies = {}
+-- Transitional detail template is private to the remaining copies command (step 4).
+function Copies.detailPath(client,id) return client:query("/koreader/plugin/catalog/books/"..tostring(id),{}) end
+
 
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
@@ -71,7 +74,7 @@ function Copies.ask(why)
     local ask = { books = list, eob = eob, sentinel = Mirror.SENTINEL }
     local client = OC.client()
     -- How the mirror names a book's detail (its saved details count too).
-    local okp, path = pcall(function() return client and Mirror.detailPath(client, Mirror.SENTINEL) end)
+    local okp, path = pcall(function() return client and Copies.detailPath(client, Mirror.SENTINEL) end)
     if okp and path then ask.owner, ask.server, ask.detail_template = OC.owner(client), client.server_url, path end
     Copies.asked, Copies.asked_seq = OC.now(), Copies.seq
     Companion.send(Companion.ACTION.COPIES, { reason = tostring(why), ask = ServerCache.encode(ask) })

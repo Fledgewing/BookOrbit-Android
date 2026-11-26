@@ -54,6 +54,14 @@ object LibraryAccount {
             finally { main.post(done) }
         }
     }
+    fun refreshIdentity(ctx: Context) {
+        val app=ctx.applicationContext
+        loaded=false
+        queue.execute {
+            try { publish(adapter(app)); loaded=true }
+            catch(_: Exception) { published=Published(); loaded=true }
+        }
+    }
     private fun publish(a: ServerAdapter) {
         val state = a.state(); val owner = a.owner()
         require(LuaValue.encode(state).size <= 16384)
@@ -92,6 +100,14 @@ object LibraryAccount {
     fun catalog(ctx: Context, page: Int = 1, limit: Int = 24, done: (Map<String,Any?>?,String?) -> Unit) {
         var result: Map<String,Any?>? = null
         command(ctx, { result = it.catalog(page,limit) }, { done(result,it) }, invalidate = false)
+    }
+    fun catalogControl(ctx: Context, owner: String, action: String, manual: Boolean, done: (Map<String,Any?>?,String?) -> Unit) {
+        val app=ctx.applicationContext
+        queue.execute {
+            try { adapter(app).catalogControl(owner,action,manual) { value,error -> main.post { done(value,error) } } }
+            catch(e: ServerFailure) { main.post { done(null,e.kind) } }
+            catch(_: Exception) { main.post { done(null,"unavailable") } }
+        }
     }
     fun acquireCover(ctx: Context, key: String, done: (Map<String, Any?>?, String?) -> Unit) {
         val app = ctx.applicationContext

@@ -160,7 +160,7 @@ function bundleString(env, jni, b, key)
 end
 
 -- What a call's answer may carry (android/docs/INTERFACE.md).
-CALL_ANSWER = { "ok", "why", "status", "key", "proof" }
+CALL_ANSWER = { "ok", "why", "status", "key", "proof", "id", "body", "owner", "pending" }
 
 -- ContentResolver.call(content://<authority>, method, null, extras) (android/docs/INTERFACE.md):
 -- the companion checks who called before it acts. Returns the answer's CALL_ANSWER fields

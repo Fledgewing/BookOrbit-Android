@@ -271,7 +271,7 @@ return function(here, test, ok, eq)
         local ui={document={file="fixture.epub"},view={footer={percent_finished=0.73}}}
         local called,reply,done,message
         local E={liveUI=function() return ui end,ReadingSync={run=function(moment,callback) called=moment; reply=callback; return true end}}
-        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/server/bookorbit/library_bookorbit.lua")),setmetatable(E,{__index=_G}))()
+        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/library.lua")),setmetatable(E,{__index=_G}))()
         eq(E.LibraryAdapter.readerPosition("fixture.epub"),0.73)
         eq(E.LibraryAdapter.readerPosition("other.epub"),nil)
         ui.view.footer.percent_finished=0/0; eq(E.LibraryAdapter.readerPosition("fixture.epub"),nil)
