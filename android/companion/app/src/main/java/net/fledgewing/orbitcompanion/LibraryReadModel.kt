@@ -75,7 +75,7 @@ class LibraryReadModel(
                 else -> mapOf("items" to listOf(summary), "freshness" to freshness(true), "detail_at" to detail?.second)
             }
         }
-        require(op == "window" || op == "counts")
+        require(op == "window" || op == "counts" || op == "facets")
         val f = a["query"] as? Map<*, *> ?: emptyMap<Any, Any>()
         BookOrbitLibrary.translate(f) // validates; same plan is available to future remote checks
         val source = a["source"]
@@ -86,7 +86,7 @@ class LibraryReadModel(
         // Secondary contexts are not complete at base publication; never turn an unknown source into an empty list.
         if (kind in setOf("series", "list") && store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
         val local = BookOrbitLibrary.localBooks(store, owner)
-        if ((kind == "on-device" || f["where"] in setOf("on-device", "server-only")) && local == null) return empty(false)
+        if ((a["field"] == "where" || kind == "on-device" || f["where"] in setOf("on-device", "server-only")) && local == null) return empty(false)
         val membership = when (kind) {
             "list", "series" -> {
                 val id = BookOrbitLibrary.id(owner, kind, sourceKey) ?: return mapOf("error" to "missing")
@@ -111,6 +111,7 @@ class LibraryReadModel(
             "series" -> if (filter["sort"] == null) filter["sort"] = "series"
             "search" -> if (filter["sort"] == null) filter["sort"] = "match"
         }
+        val facet = if (op == "facets" && a["field"] != null) LibraryFacets(a["field"].toString(), filter, clock()) else null
         val selected = ArrayList<Map<String, Any?>>()
         // Bounded DB chunks; parsing, filter fallback, joins, sort and counts stay off KOReader.
         var after = -1L
@@ -125,11 +126,19 @@ class LibraryReadModel(
                 val q = f["q"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 val title = b["title"]?.toString()?.let(LuaValue::utf8)?.lowercase(java.util.Locale.ROOT).orEmpty()
                 b["match"] = when { title == q -> 0; title.startsWith(q) -> 1; q in title -> 2; else -> 3 }
-                if ((membership == null || id in membership) && LibraryFilter.matches(b, sourceFilter) && LibraryFilter.matches(b, filter)) selected.add(b)
+                if ((membership == null || id in membership) && LibraryFilter.matches(b, sourceFilter)) {
+                    facet?.include(b)
+                    if (LibraryFilter.matches(b, filter)) selected.add(b)
+                }
             }
             after = batch.last().first
         }
         val total = selected.size
+        if (op == "facets") {
+            val offset = ((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+            val limit = ((a["limit"] as? Number)?.toInt() ?: MAX_ROWS).coerceIn(1, MAX_ROWS)
+            return (facet?.page(offset, limit) ?: mapOf("items" to emptyList<Any>())) + mapOf("total" to total, "freshness" to freshness(true))
+        }
         val counts = selected.groupingBy { it["status"].toString() }.eachCount()
         if (op == "counts") return mapOf("total" to total, "statuses" to counts, "freshness" to freshness(true))
         selected.sortWith(LibraryFilter.comparator(filter))
