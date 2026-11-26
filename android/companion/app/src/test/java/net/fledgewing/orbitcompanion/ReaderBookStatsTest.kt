@@ -54,6 +54,13 @@ class ReaderBookStatsTest {
                 val book=(read(mapOf("op" to "reader","path" to "/books/fixture.epub"))["items"] as List<*>).single() as Map<*,*>
                 assertEquals(BookOrbitLibrary.key(owner,"book",7),book["key"])
                 assertEquals(62L,book["progress"])
+                val current=(read(mapOf("op" to "reader","path" to "/books/fixture.epub","native_progress" to 0.8))["items"] as List<*>).single() as Map<*,*>
+                assertEquals(80L,current["progress"])
+                assertEquals("local-reader",current["progress_origin"])
+                val invalid=(read(mapOf("op" to "reader","path" to "/books/fixture.epub","native_progress" to 1.2))["items"] as List<*>).single() as Map<*,*>
+                assertEquals(62L,invalid["progress"])
+                assertEquals(62L,(st.bookItem(7) as Map<*,*>)["progressPercentage"])
+
                 assertEquals(false,(book["stats"] as Map<*,*>)["available"])
                 assertEquals(false,read(mapOf("op" to "battery"))["available"])
                 assertTrue((read(mapOf("op" to "reader","path" to "/books/other.epub"))["items"] as List<*>).isEmpty())

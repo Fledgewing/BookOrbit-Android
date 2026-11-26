@@ -19,8 +19,9 @@ return function(here, test, ok, eq)
         W.battery={hours_usual_use=54}
         local E=setmetatable({now_s=function() return 1 end, log=function(s) W.logs[#W.logs+1]=s end,
             state={}, OrbitAndroid={menuItems=function() return {} end,onCloseWidget=function() end},
-            LibraryAdapter={read=function(request)
+            LibraryAdapter={readerPosition=function() return W.native end,read=function(request)
                 local a=W.E.Cache.decode(request); W.reads[#W.reads+1]=a.op
+                if a.op=="reader" then W.native_input=a.native_progress end
                 if W.oversize then return {items={{},{}}},100 end
                 if W.missing then return nil end
                 return a.op=="capabilities" and W.caps or a.op=="battery" and W.battery or W.book,256
@@ -52,7 +53,9 @@ return function(here, test, ok, eq)
     end
     test("reader panel: bounded cached data, plain bar and one companion batch",function()
         local W,E=world()
+        W.native=0.73
         eq(W.ui.menu:onShowMenu(),true)
+        eq(W.native_input,0.73,"cached native position goes through the library request")
         eq(W.trips,1); eq(#W.batch,3); eq(W.syncs,0)
         eq(table.concat(W.reads,","),"reader,battery,capabilities")
         ok(row(E,"≈ 2 d 6 h left at your usual use"))
@@ -69,7 +72,7 @@ return function(here, test, ok, eq)
         ok(#W.logs>=5,"call, paint and draw timing spans")
         row(E,"Book info").action()
         ok(row(E,"3 days start to finish")); ok(row(E,"61 min reading time")); ok(row(E,"120 pages read"))
-        row(E,"Details").action(); eq(E.ReaderPanel.sheet.screen,"details")
+        row(E,"Details").action(); eq(E.ReaderPanel.sheet.screen,"details"); eq(W.reads[#W.reads-1],"reader","in-book Details keeps the native reader context")
         row(E,"Back to book").action(); eq(E.ReaderPanel.sheet,nil); eq(W.ui.document.file,"/books/fixture.epub")
     end)
     test("reader panel: capabilities, missing data and asynchronous Sync never reopen a dismissed panel",function()
@@ -113,7 +116,7 @@ return function(here, test, ok, eq)
         eq(E.ReaderPanelPlan.model({items={{progress=0/0}}},{}).progress,nil)
     end)
     test("reader Sync adapter: existing writer, offline, document change and late timeout",function()
-        local ui={document={file="fixture.epub"}}
+        local ui={document={file="fixture.epub"},view={footer={percent_finished=0.73}}}
         local up, reply, timeout, done, message, sent, released
         sent,released=0,0
         local E={liveUI=function() return ui end, bookorbit=function() return {} end,
@@ -126,6 +129,12 @@ return function(here, test, ok, eq)
                 sent=sent+1; reply=options.on_done
             end}
         setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/library_bookorbit.lua")),setmetatable(E,{__index=_G}))()
+        eq(E.LibraryAdapter.readerPosition("fixture.epub"),0.73)
+        eq(E.LibraryAdapter.readerPosition("other.epub"),nil)
+        ui.view.footer.percent_finished=0/0
+        eq(E.LibraryAdapter.readerPosition("fixture.epub"),nil)
+        ui.view.footer.percent_finished=0
+        eq(E.LibraryAdapter.readerPosition("fixture.epub"),0)
         local function complete(ok,text) done,message=ok,text end
         E.LibraryAdapter.syncCurrent(complete); up(false)
         eq(sent,0); eq(released,1); eq(done,false); eq(message,"Offline · will sync when connected")

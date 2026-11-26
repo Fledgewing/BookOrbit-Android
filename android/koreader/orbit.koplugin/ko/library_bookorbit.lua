@@ -77,3 +77,15 @@ function LibraryAdapter.syncCurrent(done)
     end)
     return true
 end
+
+-- KOReader already computes this on page/position updates, even with its footer hidden.
+-- No document scan, sidecar read or second progress writer on a panel paint.
+function LibraryAdapter.readerPosition(path)
+    local ui = liveUI()
+    if not (ui and ui.document and ui.document.file == path) then return nil end
+    local footer = ui.view and ui.view.footer
+    local fraction = footer and footer.percent_finished
+    if type(fraction) == "number" and fraction == fraction and fraction >= 0 and fraction <= 1 then
+        return fraction
+    end
+end

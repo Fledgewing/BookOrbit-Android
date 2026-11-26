@@ -30,7 +30,7 @@ can call `ReaderPanel.details(key, ui)` with an opaque library key.
   end sheet. Home still uses `onOrbitGoHome`; this slice adds no finish writer.
 - `ko/home.lua:651`: existing plugin event dispatch, reused privately by the
   library adapter's explicit Sync action, with the existing Net/Wifi lifecycle.
-- `ko/library.lua:7`, `:21`, `:66`, `ko/store.lua:107`: existing paint contexts,
+- `ko/library.lua:7`, `:21`, `:74`, `ko/store.lua:107`: existing paint contexts,
   budget enforcement and bounded SQLite projection reads. No new Lua cache,
   database connection or transport. `ko/cache.lua:105` remains adapter-only.
 - Companion `LibraryReadModel.kt:5`, `CacheStore.kt:210`,
@@ -62,8 +62,11 @@ sums use KOReader's page_stat view; days start to finish use the first saved
 session date and the actual completed summary.modified date, inclusive. Missing
 statistics, unfinished summaries, absent per-file sidecars and hashed-sidecar-only
 metadata leave the relevant values unavailable. Only ledger-tracked copies are
-covered; server-only books can lack local stats. Progress is the saved library
-percentage, not a second live position/sync implementation.
+covered; server-only books can lack local stats. For in-book surfaces, the library adapter includes KOReader's already-computed
+footer percentage as one bounded scalar input to `reader`. The companion validates
+and projects it with `progress_origin=local-reader`; saved catalog progress is
+unchanged. No sidecar read, progress calculation or second sync writer runs in Lua.
+Catalog Details without a reader context keep their saved library percentage.
 
 Upstream behavior was checked at pinned KOReader commit
 `9192014d8bd82a91dc1012473be0f238dedfdb54`:
@@ -103,3 +106,8 @@ Integration with F12-F preserves its `reading.stats` operation, worker provider,
 Stats widgets and fixture tests. That operation aggregates the whole history;
 reader book stats remain a single hash-scoped SQL aggregate over the same native
 database, including distinct-page and completion-date semantics needed here.
+
+Native progress source at the same pinned KOReader commit:
+`frontend/apps/reader/modules/readerfooter.lua:2368` and `:2390` update the cached
+`percent_finished` scalar on page/position changes. All three in-book surfaces
+request this reader context through Library, including after opening Details.

@@ -456,7 +456,9 @@ footer or document, and persists the token to ignore replay after later user cha
 ### 0.12 reader progress projections (F12-H)
 
 The existing `library_batch` command also accepts `reader` (local `path`, one
-normalized book row) and `battery` (one local snapshot, unavailable until the
+normalized book row; optional `native_progress` is the native reader's cached
+0–1 fraction, validated and projected by the companion without changing the
+saved catalog position) and `battery` (one local snapshot, unavailable until the
 battery model is installed). The `book` and `reader` rows include `stats` with
 `available`, optional `pages_read`, `reading_seconds`, and inclusive
 `days_start_to_finish`. Joins and SQLite aggregation run in the companion;

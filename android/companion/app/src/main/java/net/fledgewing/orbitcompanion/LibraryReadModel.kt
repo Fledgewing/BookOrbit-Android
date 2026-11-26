@@ -51,7 +51,11 @@ class LibraryReadModel(
             val entry = BookOrbitLibrary.localEntries(store, owner)?.firstOrNull { it["path"] == path }
                 ?: return empty(false)
             val id = (entry["book_id"] as? Number)?.toLong() ?: return empty(false)
-            return project(owner, a + mapOf("op" to "book", "key" to BookOrbitLibrary.key(owner, "book", id)))
+            val result = project(owner, a + mapOf("op" to "book", "key" to BookOrbitLibrary.key(owner, "book", id)))
+            val current = (a["native_progress"] as? Number)?.toDouble()?.takeIf { it.isFinite() && it in 0.0..1.0 }
+            val book = (result["items"] as? List<*>)?.singleOrNull() as? Map<*, *>
+            return if (current != null && book != null) result + mapOf("items" to listOf(book +
+                mapOf("progress" to current * 100, "progress_origin" to "local-reader"))) else result
         }
         if (op == "reading.stats") return readingStats()
         if (op == "capabilities") return mapOf("catalog" to true, "detail" to true, "download" to false,

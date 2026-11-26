@@ -60,7 +60,7 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
             end
             table.insert(rows, sync)
         end
-        table.insert(rows, button("Book info", function() ReaderPanel.show(ui, "book-info", m.key) end))
+        table.insert(rows, button("Book info", function() ReaderPanel.show(ui, "book-info") end))
         table.insert(rows, {kind="footer", text="Home", action=function()
             back(); if state.module then state.module:onOrbitGoHome() end
         end})
@@ -72,7 +72,7 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
         table.insert(rows, {kind="label", text=m.time})
         table.insert(rows, {kind="label", text=m.pages})
         if screen == "book-info" and m.key then
-            table.insert(rows, button("Details", function() ReaderPanel.show(ui, "details", m.key) end))
+            table.insert(rows, button("Details", function() ReaderPanel.show(ui, "details") end))
         end
     end
     table.insert(rows, {kind="footer", text="Back to book", action=back})
