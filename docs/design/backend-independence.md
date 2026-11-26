@@ -105,11 +105,12 @@ changes are created by this documentation change.
 
 `ServerAdapter` is the worker-facing contract. It covers capabilities, bounded catalog
 windows, manifest, detail/covers, download jobs, progress/status, lists, statistics, account
-and connector credentials. Unsupported operations return `error=unsupported`; capability
-flags determine UI availability. Do not advertise an operation just because the interface
-has a method. The current owned client still has read-only detail/progress/status and no
-owned download or list-write action. Those operations retain their explicit unsupported
-result until their owner is implemented, avoiding a second sync writer.
+and connector credentials. Unsupported projection operations return `error=unsupported`;
+unsupported account commands raise neutral `ServerFailure("unsupported")` and clear secret
+inputs. Capability flags determine UI availability. Do not advertise an operation just because the interface
+has a method. The cached catalog projection retains read-only detail/status and no list-write action.
+Native sync and OPDS commands use the account session and advertise their actual connector
+capabilities; unavailable operations retain explicit errors, avoiding a second sync writer.
 
 `LibraryReadModel` owns bounded publishing, owner checks, the existing `library_views`
 table and per-call timing. It depends on `ProjectionStore` and `ServerAdapter`, not a server
