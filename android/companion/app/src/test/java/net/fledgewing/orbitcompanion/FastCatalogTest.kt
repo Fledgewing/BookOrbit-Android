@@ -57,6 +57,95 @@ class FastCatalogTest {
     private fun run(store: CacheStore, op: String = "full", request: (String) -> Map<*, *> = ::reply, progress: (Int)->Unit = {}) =
         FastCatalogRefresh(store, plan(op), request, {}, {false}, {1000}, progress, { println(it) }).run()
 
+    @Test fun resumedManifestWithNoRowsAndAnEndlessCursorFailsCleanly() {
+        val root = Files.createTempDirectory("bulk-stalled-resume").toFile()
+        try {
+            CacheStore(root, {}, ::JdbcSql).use { store ->
+                var calls = 0
+                assertEquals("incomplete coverage", run(store, request = { request ->
+                    if (++calls == 1) mapOf("items" to books.take(1), "hasNext" to true, "nextCursor" to "saved")
+                    else throw CatalogFailure()
+                }))
+                assertEquals("saved", store.meta("bulk_stage_cursor"))
+                val logs = arrayListOf<String>()
+                calls = 0
+                assertEquals("incomplete coverage", FastCatalogRefresh(store, plan("resume"), {
+                    calls++
+                    mapOf("items" to emptyList<Any>(), "hasNext" to true, "nextCursor" to "endless-$calls")
+                }, {}, { false }, { 1000 }, {}, logs::add).run())
+                assertEquals(1, calls)
+                assertNull(store.meta("bulk_active"))
+                assertNull(store.meta("bulk_stage_identity"))
+                assertTrue(logs.any { "no-progress watchdog" in it })
+            }
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun resumedPagingRejectsTheSamePageInsteadOfCountingItAsProgress() {
+        val root = Files.createTempDirectory("bulk-repeated-page").toFile()
+        try {
+            CacheStore(root, {}, ::JdbcSql).use { store ->
+                val first = reply("$base/sections/libraries?page=1&size=100") + mapOf("total" to 200L)
+                var pages = 0
+                assertEquals("incomplete coverage", run(store, request = { request ->
+                    if (request.contains("/sections/libraries")) {
+                        if (++pages > 1) throw CatalogFailure()
+                        first
+                    } else reply(request)
+                }))
+                val logs = arrayListOf<String>()
+                pages = 0
+                assertEquals("incomplete coverage", FastCatalogRefresh(store, plan("resume"), { request ->
+                    if (request.contains("/sections/libraries")) { pages++; first } else reply(request)
+                }, {}, { false }, { 1000 }, {}, logs::add).run())
+                assertEquals("the saved first page is skipped, the repeated second page stops", 1, pages)
+                assertTrue(logs.any { "no-progress watchdog" in it })
+                assertNull(store.meta("bulk_active"))
+                assertNull(store.meta("bulk_stage_identity"))
+            }
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun checkStorageRecheckAndMirrorAdmissionAnswerDuringBlockedBulkPage() {
+        val root = Files.createTempDirectory("bulk-commands").toFile()
+        val fetching = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val runs = MirrorRuns { root }
+        val creds = CacheWorker.Creds("https://books.example/api/v1", "reader", "key")
+        val p = plan()
+        var commands = false
+        val worker = CacheWorker(root, { url, _, _, _ ->
+            val request = url.substringAfter("https://books.example/api/v1")
+            if (request.contains("/manifest")) {
+                fetching.countDown()
+                check(release.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            }
+            CacheWorker.Reply(200, JSONObject(reply(request)).toString().toByteArray())
+        }, log = {}, openSql = ::JdbcSql, onRunState = runs::progress)
+        try {
+            assertTrue(runs.admit(p.run, "full", 0, 100))
+            runs.started(p.run)
+            assertEquals("finished", worker.run(p, creds) {
+                if (!commands && fetching.count == 0L) {
+                    commands = true
+                    worker.check(CacheWorker.Check("dashboard", "$base/dashboard", "open", creds, p.owner))
+                    worker.storage(CacheWorker.StorageAsk("test", null, null, false))
+                    worker.recheckCovers("test", creds, emptyList())
+                    assertFalse(runs.admit("joined", "full", 0, 100))
+                    val state = LuaValue.parse(File(root, "mirror/run.lua").readBytes()) as Map<*, *>
+                    assertEquals(p.run, state["run"])
+                    assertEquals("joined", state["query_for"])
+                    val events = File(root, "events").listFiles()!!.mapNotNull { LuaValue.parse(it.readBytes()) as? Map<*, *> }
+                    assertTrue(events.any { it["kind"] == "checked" })
+                    assertTrue(events.any { it["kind"] == "storage" })
+                    assertTrue(events.any { it["kind"] == "covers_rechecked" })
+                    release.countDown()
+                }
+            })
+            assertTrue(commands)
+        } finally { release.countDown(); worker.store.close(); root.deleteRecursively() }
+    }
+
     @Test fun refreshLogsStartEachPhaseAndFinish() {
         val root = Files.createTempDirectory("bulk-observable").toFile()
         try {

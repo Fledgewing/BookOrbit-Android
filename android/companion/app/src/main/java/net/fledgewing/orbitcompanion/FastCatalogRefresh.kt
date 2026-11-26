@@ -136,6 +136,10 @@ class FastCatalogRefresh(
             outcome = "finished"
             return outcome
         } catch (e: Exception) {
+            if (e.message?.contains("watchdog") == true || e.message == "page total changed during enumeration") {
+                log("bulk: no-progress watchdog; staged cursor discarded")
+                set("identity", null)
+            }
             set("pct", percent)
             log("bulk: paused (${e.message?.takeIf { it in setOf("stopped", "storage limit") } ?: "incomplete coverage"}); published generation retained")
             outcome = if (stopped()) "stopped" else if (e.message == "storage limit") "storage limit" else "incomplete coverage"
@@ -163,9 +167,10 @@ class FastCatalogRefresh(
                 }
                 cursor = null; continue
             }
+            log("bulk: manifest page=$requests rows=${items(body).size}")
             val next = body["nextCursor"] as? String
             val more = body["hasNext"] == true
-            check(!more || (!next.isNullOrEmpty() && next != cursor && !done("cursor:$next"))) { "manifest cursor did not advance" }
+            check(!more || (items(body).isNotEmpty() && !next.isNullOrEmpty() && next != cursor && !done("cursor:$next"))) { "manifest no-progress watchdog" }
             store.transaction {
                 for (book in items(body)) {
                     val id = (book["id"] as? Number)?.toLong() ?: error("manifest id missing")
@@ -189,19 +194,29 @@ class FastCatalogRefresh(
     private fun pages(endpoint: String, query: Map<String, String>, tag: String, g: Long = generation, onPage: (Map<*, *>) -> Unit = {}, consume: (Map<*, *>, Int) -> Unit) {
         var page = 1
         var total = meta("total:$tag")?.toIntOrNull() ?: 0
+        var previousPage = meta("fingerprint:$tag")
+        var expectedTotal: Int? = meta("total:$tag")?.toIntOrNull()
         do {
+            boundary() // Even a durable page hit must yield and honour cancellation.
+            check(page <= 100_000) { "page watchdog: no completion" }
             val request = path(endpoint, query + mapOf("page" to page.toString(), "size" to "100"))
             if (!done(request, g)) {
                 val body = ask(request)
                 val rows = items(body)
+                val signature = java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(LuaValue.encode(rows)))
+                check(rows.isEmpty() || previousPage != signature) { "page no-progress watchdog" }
+                previousPage = signature
                 total = (body["total"] as? Number)?.toInt() ?: rows.size
+                check(expectedTotal == null || expectedTotal == total) { "page total changed during enumeration" }
+                expectedTotal = total
                 check(total >= 0 && (rows.isNotEmpty() || (page-1)*100 >= total)) { "incomplete page" }
                 store.transaction {
                     onPage(body)
                     rows.forEachIndexed { i, row -> consume(row, (page-1)*100+i) }
-                    mark(request, g); set("total:$tag", total)
+                    mark(request, g); set("total:$tag", total); set("fingerprint:$tag", signature)
                 }
             }
+            log("bulk: page page=$page total=$total")
             tick(minOf(phaseLimit, percent + 1))
             page++
         } while ((page-1)*100 < total)

@@ -270,6 +270,7 @@ function Mirror.poll()
         local s = load("status.lua")
         if s and s.run == Mirror.run_id then Mirror._status = s end
         if state and state.run == Mirror.run_id then
+            Mirror.acknowledged = true
             if state.state == "stopped" then
                 -- The summary can arrive between our reads above; check once more.
                 local ended = load("summary.lua")
@@ -283,9 +284,14 @@ function Mirror.poll()
                 Mirror._status = current
             end
         end
-        -- A stale heartbeat is a reason to ask, never evidence that work stopped.
-        if not Mirror.queried_at or nowT() - Mirror.queried_at >= Mirror.POLL_S then
+        if not Mirror.acknowledged and not Mirror.no_ack and nowT() - (Mirror.sent_at or nowT()) >= 6 then
+            Mirror.no_ack = true
+            if Mirror.manual then orbitNote(_("BookSync's companion isn't responding · Retry"), 6, true) end
+        end
+        -- Back off unanswered liveness queries; local status still polls every three seconds.
+        if not Mirror.queried_at or nowT() - Mirror.queried_at >= (Mirror.query_wait or Mirror.POLL_S) then
             Mirror.queried_at = nowT()
+            Mirror.query_wait = math.min(60, (Mirror.query_wait or Mirror.POLL_S) * 2)
             Companion.send(Companion.ACTION.MIRROR, { query_run = Mirror.run_id })
         end
         Badge.update(Mirror._status)
@@ -349,6 +355,7 @@ function Mirror.launch(op, reason)
         if coroutine.status(co) ~= "dead" then return UIManager:scheduleIn(0.01, advance) end
         Mirror.preparing = nil
         Mirror.run_id, Mirror.queried_at = plan.run, nil
+        Mirror.sent_at, Mirror.acknowledged, Mirror.no_ack, Mirror.query_wait = nowT(), nil, nil, nil
         if op == "full" then
             Mirror._status.run = plan.run
             OC.writeFile(Mirror.dir() .. "/status.lua", Cache.encode(Mirror._status))
@@ -361,7 +368,7 @@ function Mirror.launch(op, reason)
     UIManager:nextTick(advance)
     -- The progress: a Full refresh (or its run resumed) shows the badge; a Refresh's recheck doesn't.
     if Mirror.manual and op == "full" then Badge.start(true, Mirror._status)
-    elseif Mirror.manual and op == "resume" and Mirror.status().op == "full" and not Badge.running then Badge.start(false, Mirror.status()) end
+    elseif Mirror.manual and op == "resume" and Mirror.status().op == "full" and not Badge.running then Badge.start(true, Mirror.status()) end
     return true
 end
 

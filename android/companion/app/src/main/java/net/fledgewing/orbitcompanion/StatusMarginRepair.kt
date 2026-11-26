@@ -8,6 +8,8 @@ import java.security.MessageDigest
  * Never execute Lua, infer a default, restore horizontal margins, or replace whole settings tables.
  */
 object StatusMarginRepair {
+    // A settings scan must never own the catalog/command executor.
+    internal val maintenance = java.util.concurrent.Executors.newSingleThreadExecutor { BulkWork.thread("orbit-repair", it) }
     private val queued = java.util.concurrent.atomic.AtomicBoolean()
     @Volatile private var closedReported = false
     @Volatile private var finished = false
@@ -22,7 +24,7 @@ object StatusMarginRepair {
         if (finished || !queued.compareAndSet(false, true)) return
         val app = ctx.applicationContext
         val epoch = bookEpoch
-        BulkWork.executor.execute {
+        maintenance.execute {
             try {
                 val prefs = Prefs(app)
                 val complete = run(android.os.Environment.getExternalStorageDirectory(),
@@ -39,7 +41,6 @@ object StatusMarginRepair {
     internal val bookKeys = setOf("copt_t_page_margin", "copt_b_page_margin", "copt_sync_t_b_page_margins")
     // The only global key written by the old status controller (onToggleFooterMode).
     internal val footerKeys = setOf("reader_footer_mode")
-    private val longOpen = Regex("\\[(=*)\\[")
     private data class Token(val text: String, val start: Int, val end: Int)
     private data class Entry(val start: Int, val end: Int, val value: String)
     private data class Table(val entries: Map<String, Entry>, val end: Int)
@@ -49,12 +50,17 @@ object StatusMarginRepair {
         val out = ArrayList<Token>()
         var i = 0
         fun longEnd(at: Int): Int? {
-            val m = longOpen.matchAt(s, at) ?: return null
-            val end = s.indexOf("]${m.groupValues[1]}]", m.range.last + 1)
+            if (s.getOrNull(at) != '[') return null
+            var open = at + 1
+            while (s.getOrNull(open) == '=') open++
+            if (s.getOrNull(open) != '[') return null
+            val close = "]" + "=".repeat(open - at - 1) + "]"
+            val end = s.indexOf(close, open + 1)
             require(end >= 0)
-            return end + m.groupValues[1].length + 2
+            return end + close.length
         }
         while (i < s.length) {
+            require(out.size < 250_000) { "settings token budget exceeded" }
             val start = i
             when {
                 s[i].isWhitespace() -> { i++; continue }
@@ -124,17 +130,22 @@ object StatusMarginRepair {
         return result
     }
 
-    fun run(root: File, checkpoint: () -> Unit, log: (String) -> Unit, target: File? = null, globalRepair: (String, String, String) -> Unit = { _, _, _ -> }, canApply: () -> Boolean = { true }): Boolean {
+    fun run(root: File, checkpoint: () -> Unit, log: (String) -> Unit, target: File? = null, globalRepair: (String, String, String) -> Unit = { _, _, _ -> }, clock: () -> Long = { System.nanoTime() / 1_000_000 }, canApply: () -> Boolean = { true }): Boolean {
         val base = root.canonicalFile
         val done = File(base, "koreader/settings/booksync-w31-repair.done")
+        val started = clock()
+        var visited = 0
         var deferred = false
         val seen = HashSet<String>()
         fun walk(dir: File) {
             checkpoint()
+            check(clock() - started < 30_000L) { "status repair scan watchdog" }
             if (dir.canonicalFile != dir.absoluteFile || !seen.add(dir.path)) return
             val files = target?.let { arrayOf(it.canonicalFile) } ?: dir.listFiles() ?: error("repair folder unavailable")
             for (file in files) {
                 checkpoint()
+                check(clock() - started < 30_000L) { "status repair scan watchdog" }
+                if (++visited % 100 == 0) log("status repair: scanned $visited entries")
                 if (file.canonicalFile != file.absoluteFile) continue
                 if (file.isDirectory) {
                     // Android app-private trees cannot contain KOReader's external sidecars.
@@ -160,6 +171,7 @@ object StatusMarginRepair {
                 val keys = if (global) footerKeys else bookKeys + footerKeys
                 val oldBytes = old.readBytes()
                 val oldText = String(oldBytes, Charsets.ISO_8859_1)
+                log("status repair: parsing settings bytes=${bytes.size} backupBytes=${oldBytes.size}")
                 val repaired = restore(text, oldText, keys)
                 val id = MessageDigest.getInstance("SHA-256").digest(file.path.toByteArray()).take(6).joinToString("") { "%02x".format(it) }
                 fun notifyGlobal() {

@@ -38,6 +38,24 @@ object BulkWork {
     internal fun awaitIdle(blocked: () -> Boolean, wait: () -> Unit) {
         while (blocked()) { if (Thread.currentThread().isInterrupted) throw InterruptedException(); wait() }
     }
+    /** Keep the sole cache writer available to commands while a bulk HTTP page is in flight. */
+    internal fun <T> awaitReply(factory: (String, Runnable) -> Thread, commands: () -> Unit, fetch: () -> T): T {
+        val future = java.util.concurrent.FutureTask(java.util.concurrent.Callable { fetch() })
+        val thread = factory("orbit-bulk-page", future)
+        thread.start()
+        val started = System.nanoTime()
+        try {
+            while (true) {
+                try { return future.get(100, java.util.concurrent.TimeUnit.MILLISECONDS) }
+                catch (_: java.util.concurrent.TimeoutException) {
+                    check(System.nanoTime() - started < 90_000_000_000L) { "network no-progress watchdog" }
+                    commands()
+                } catch (e: java.util.concurrent.ExecutionException) {
+                    throw (e.cause as? Exception ?: e)
+                }
+            }
+        } finally { if (!future.isDone) { future.cancel(true); thread.interrupt() } }
+    }
     fun <T> phase(name: String, job: () -> T): T {
         val cpu = SystemClock.currentThreadTimeMillis()
         try { return job() } finally { OLog.i("bulk: $name CPU ${SystemClock.currentThreadTimeMillis() - cpu} ms") }
