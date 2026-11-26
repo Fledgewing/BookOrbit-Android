@@ -1191,6 +1191,37 @@ test("restart command: save, ask the companion to relaunch, then quit (Android c
     run(10)
 end)
 
+test("restart id is saved before quitting and a replay in a new process is ignored", function()
+    W.clock = W.clock + 10
+    local _, m = newUI(false)
+    run(5)
+    local env = getfenv(Orbit.onSuspend)
+    local old_flush = G_reader_settings.flush
+    local flushed = false
+    G_reader_settings.flush = function()
+        eq(store.orbit_android.restart_command_id, "update-once", "id durable before restart")
+        flushed = true
+    end
+    W.intent_extras[env.Companion.EXTRA_COMMAND] = "restart"
+    W.intent_extras[env.Companion.EXTRA_COMMAND_ID] = "update-once"
+    ok(m:checkCommand("resume"), "first delivery consumed")
+    ok(flushed, "ack saved before quit")
+    G_reader_settings.flush = old_flush
+    run(2)
+    local quits = W.quits
+    env.state.restarting_at = nil -- simulate new process: its memory guard is gone
+    W.intent_extras[env.Companion.EXTRA_COMMAND] = "restart"
+    W.intent_extras[env.Companion.EXTRA_COMMAND_ID] = "update-once"
+    ok(not m:checkCommand("start"), "replayed intent ignored")
+    run(2)
+    eq(W.quits, quits, "no second quit")
+    W.intent_extras[env.Companion.EXTRA_COMMAND] = "restart"
+    W.intent_extras[env.Companion.EXTRA_COMMAND_ID] = "cold-start"
+    ok(not m:checkCommand("start"), "a cold start already loaded the new plugin")
+    run(2)
+    eq(W.quits, quits, "cold start does not restart again")
+end)
+
 test("restart with a book open (an update you started): the next start reopens that book", function()
     W.broadcasts = {}
     W.clock = W.clock + 10 -- past the last restart's once-guard
@@ -1291,6 +1322,32 @@ test("settings defaults: every shared setting starts at the schema's default", f
     end
     eq(RE.Shared.defaultMode(), RE.Companion.has("wifi") and "jit" or "always_on", "wifi_mode: jit where the companion switches Wi-Fi")
     eq(RE.SCHEMA.byKey.wifi_mode.default, "jit", "the schema's wifi_mode")
+end)
+
+test("channel migration before defaults preserves opt-in and real changes beat seeds", function()
+    local function loadSettings(vals)
+        local env = setmetatable({ G_reader_settings = {
+            readSetting = function() return vals end, saveSetting = function() end,
+        } }, { __index = RE })
+        local chunk = assert(loadfile(here .. "/../orbit.koplugin/ko/settings.lua"))
+        setfenv(chunk, env)()
+        return env.S
+    end
+    local fresh = loadSettings({})
+    eq(fresh.update_channel, "stable", "display default")
+    eq(fresh.settings_at.update_channel, 1, "default is only a seed")
+    local migrated = loadSettings({ patch_update_prerelease = true })
+    eq(migrated.update_channel, "preview", "old opt-in migrates before stable default")
+    eq(migrated.patch_update_prerelease, nil, "legacy removed")
+    eq(migrated.settings_at.update_channel, 2, "migration beats defaults, not user choices")
+    local taken = RE.SettingsSync.merge(RE.SCHEMA, migrated, migrated.settings_at,
+        { update_channel = { v = "stable", at = 10 } }, 100, true)
+    eq(taken[1].value, "stable", "new companion choice wins")
+    migrated.update_channel = "rc"; migrated.settings_at.update_channel = 20
+    eq(#RE.SettingsSync.merge(RE.SCHEMA, migrated, migrated.settings_at,
+        { update_channel = { v = "stable", at = 10 } }, 100, true), 0, "new plugin choice wins")
+    eq(loadSettings({ update_channel = "rc", patch_update_prerelease = true,
+        settings_at = { update_channel = 30 } }).update_channel, "rc", "migration preserves a channel choice")
 end)
 
 ---------------------------------------------------------------- the contract (shared/contract/companion.json)

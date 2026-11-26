@@ -2144,7 +2144,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Reopen book/Home after KOReader restart",
+          "note": "User-started updates finish in KOReader with book/Home restored; restart deliveries are acknowledged once",
           "reason": null,
           "evidence": [
             {
@@ -2156,7 +2156,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "OTA screen return marker",
+          "note": "OTA screen return marker; Android companion restart acknowledgements do not apply to standalone firmware",
           "reason": null,
           "evidence": [
             {
@@ -2172,7 +2172,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "OTA screen return marker",
+          "note": "OTA screen return marker; Android companion restart acknowledgements do not apply to standalone firmware",
           "reason": null,
           "evidence": [
             {
@@ -2188,7 +2188,7 @@
         },
         "x3": {
           "status": "supported",
-          "note": "OTA screen return marker",
+          "note": "OTA screen return marker; Android companion restart acknowledgements do not apply to standalone firmware",
           "reason": null,
           "evidence": [
             {
@@ -4919,7 +4919,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Plugin delegates update checks to the companion.",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview with a per-key time so seeded defaults cannot replace it. Plugin delegates update checks to the companion.",
           "reason": null,
           "evidence": [
             {
@@ -4931,7 +4931,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility.",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility. Firmware owns its setting directly; no companion/plugin settings merge applies.",
           "reason": null,
           "evidence": [
             {
@@ -4943,7 +4943,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility.",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility. Firmware owns its setting directly; no companion/plugin settings merge applies.",
           "reason": null,
           "evidence": [
             {
@@ -4955,7 +4955,7 @@
         },
         "x3": {
           "status": "supported",
-          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility.",
+          "note": "Stable only; RC adds release candidates; Preview adds previews. BookSync version decides; stored opt-in migrates to Preview. Buttons cycle the setting; booksync_version decides eligibility. Firmware owns its setting directly; no companion/plugin settings merge applies.",
           "reason": null,
           "evidence": [
             {

@@ -57,6 +57,31 @@ class SettingsStoreTest {
         assertEquals("preview", SettingsStore.get(ctx, "update_channel"))
     }
 
+    @Test
+    fun migratedPreviewSurvivesAFreshPluginsSeededStableAndNewerChoicesWin() {
+        ctx.getSharedPreferences("orbit", Context.MODE_PRIVATE).edit()
+            .putBoolean("include_prereleases", true).commit()
+        assertEquals(UpdateChannel.PREVIEW, Prefs(ctx).updateChannel)
+        val migratedAt = SettingsStore.at(ctx, "update_channel")!!
+        assertTrue(migratedAt > 1)
+        SettingsStore.fromPlugin(ctx, echo("update_channel" to ("stable" to 1)), "SETTINGS start")
+        assertEquals(UpdateChannel.PREVIEW, Prefs(ctx).updateChannel)
+        SettingsStore.fromPlugin(ctx, echo("update_channel" to ("rc" to migratedAt + 10)), "user in plugin")
+        assertEquals(UpdateChannel.RC, Prefs(ctx).updateChannel)
+        SettingsStore.set(ctx, "update_channel", "stable", "user in companion")
+        SettingsStore.fromPlugin(ctx, echo("update_channel" to ("rc" to migratedAt + 10)), "stale echo")
+        assertEquals(UpdateChannel.STABLE, Prefs(ctx).updateChannel)
+    }
+
+    @Test
+    fun previewAlreadyMigratedByAnOlderCompanionGetsATimeWithoutBecomingANewChange() {
+        ctx.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit()
+            .putString("update_channel", "preview").commit()
+        SettingsStore.fromPlugin(ctx, echo("update_channel" to ("stable" to 1)), "SETTINGS start")
+        assertEquals(UpdateChannel.PREVIEW, Prefs(ctx).updateChannel)
+        assertEquals(2L, SettingsStore.at(ctx, "update_channel"))
+    }
+
     private fun echo(vararg kv: Pair<String, Pair<String, Long>>): String =
         SettingsSync.valuesJson(kv.associate { (k, e) -> k to SettingEntry(e.first, e.second) })
 

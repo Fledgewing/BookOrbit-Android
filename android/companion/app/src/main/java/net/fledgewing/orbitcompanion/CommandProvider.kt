@@ -69,7 +69,12 @@ class CommandProvider : ContentProvider() {
             if (!KoreaderTrust.check(ctx, uid)) return answer(false, "caller")
             if (method == TAKE_COMMAND) {
                 val c = extras?.getString("command")
-                val ok = SentCommands.shared.take(c, SystemClock.elapsedRealtime())
+                val ok = SentCommands.shared.take(c, SystemClock.elapsedRealtime(), extras?.getString("id"))
+                // Ack before returning to the plugin, before it quits or another start races it.
+                if (ok && c == HomeCommands.RESTART) {
+                    Koreader.restartRead()
+                    if (extras?.getString("source") == "start") Prefs(ctx).restartUserStarted = false
+                }
                 if (!ok) OLog.w("command ${c ?: "-"} on KOReader's start was not sent by the companion")
                 return answer(ok)
             }

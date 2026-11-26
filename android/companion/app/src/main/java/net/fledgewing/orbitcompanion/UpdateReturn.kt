@@ -17,10 +17,8 @@ import android.os.SystemClock
  * and Back from it fell out to KOReader). It lands once: after the reopened page has shown, a
  * Home press is an ordinary Home press ([forHome]).
  *
- * From a page, KOReader's restart for the new patch never brings it to the front ([restartNow]):
- * the plugin quits it in the background and the new patch loads at its next start. An update
- * started outside our pages (the update-ready notification, shown over KOReader) keeps the
- * restart at once and returns to KOReader as before.
+ * The pages reopen to show installation progress. A user-confirmed update then finishes in
+ * KOReader with the new plugin loaded ([restartNow]), including updates started on our pages.
  * Kept in its own preferences file: the mark must outlive the process that wrote it.
  */
 object UpdateReturn {
@@ -64,8 +62,9 @@ object UpdateReturn {
     fun pages(from: String?, atMs: Long, nowMs: Long, pkg: String): List<Intent> =
         if (atMs > 0 && nowMs - atMs in 0..UpdateFlow.USER_UPDATE_MS) decode(from, pkg) else emptyList()
 
-    /** Pure: KOReader restarts at once after the patch install only when the user confirmed it away from our pages. */
-    fun restartNow(userConfirmed: Boolean, fromPage: Boolean): Boolean = userConfirmed && !fromPage
+    /** Pure: a user-confirmed update restarts KOReader regardless of where it began. */
+    @Suppress("UNUSED_PARAMETER")
+    fun restartNow(userConfirmed: Boolean, fromPage: Boolean): Boolean = userConfirmed
 
     /** The user started an update from [from] (one of our pages), or from elsewhere (null). */
     fun mark(ctx: Context, from: Activity?) = mark(ctx, from?.let { encode(it) })

@@ -266,6 +266,15 @@ Android lacks (`canRestart = no`, frontend/device/android/device.lua:86), so the
 starts it again. An older running patch ignores the command; the companion then says "close
 KOReader from recent apps and reopen it" instead of showing the button.
 
+Restart deliveries carry `net.fledgewing.orbitcompanion.extra.COMMAND_ID`. The plugin includes
+`id` and `source` in `TAKE_COMMAND`; its successful reply consumes that delivery and clears the
+restart latch before KOReader quits. Duplicate starts reuse the pending restart's id. The plugin
+also flushes its last consumed restart id before quitting, so a replayed launch intent cannot
+restart the new process. A cold `start` consumes the request without quitting: it already loaded
+the plugin from disk and normal startup restores the saved book. User-confirmed updates,
+including those started on companion pages, finish with KOReader in front; automatic relaunches
+still wait behind companion pages.
+
 From 0.5.5 the patch also keeps the open book as `restart_book` (the quit closes the reader,
 which clears `open_book_at_exit`), and the next start reopens it at its saved place.
 

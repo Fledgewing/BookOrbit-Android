@@ -136,21 +136,25 @@ object KoreaderTrust {
  * with a command extra; the plugin obeys only one the companion confirms here, once.
  */
 class SentCommands(private val keepMs: Long = KEEP_MS, private val max: Int = 8) {
-    private val sent = ArrayDeque<Pair<String, Long>>()
+    private data class Sent(val command: String, val at: Long, val id: String)
+    private val sent = ArrayDeque<Sent>()
 
     @Synchronized
-    fun record(command: String, nowMs: Long) {
-        sent.addLast(command to nowMs)
+    fun record(command: String, nowMs: Long, id: String = java.util.UUID.randomUUID().toString()) {
+        if (sent.any { it.id == id }) return
+        sent.addLast(Sent(command, nowMs, id))
         while (sent.size > max) sent.removeFirst()
     }
 
     /** True once for a command sent within [keepMs]; it is then used up. */
     @Synchronized
-    fun take(command: String?, nowMs: Long): Boolean {
-        sent.removeAll { nowMs - it.second > keepMs || it.second > nowMs }
-        val i = sent.indexOfFirst { it.first == command }
+    fun take(command: String?, nowMs: Long, id: String? = null): Boolean {
+        sent.removeAll { nowMs - it.at > keepMs || it.at > nowMs }
+        val i = sent.indexOfFirst { it.command == command && (id == null || it.id == id) }
         if (i < 0) return false
         sent.removeAt(i)
+        // Older plugins have no id: one acknowledgement consumes all duplicate deliveries.
+        if (id == null) sent.removeAll { it.command == command }
         return true
     }
 

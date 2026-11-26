@@ -20,7 +20,7 @@ import org.robolectric.annotation.Config
 /**
  * M8C 11-23 22:47: Update tapped on the Status page, and after the replace the user was in
  * KOReader (the patch install's COMMAND=restart brought it to the front). An update started
- * from one of our pages ends on that page; one started elsewhere returns to KOReader as before.
+ * from one of our pages restores its progress page, then completes the plugin update in KOReader.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -66,7 +66,7 @@ class UpdateReturnTest {
         assertTrue("KOReader is not brought to the front", started.none { it.component?.packageName == Koreader.PKG })
         assertTrue("the page shows the result", Prefs(app).updateStatus.startsWith("updated to v"))
         assertTrue(UpdateReturn.fromPage())
-        assertFalse("the patch loads at the next safe start", UpdateReturn.restartNow(userConfirmed = true, fromPage = UpdateReturn.fromPage()))
+        assertTrue("a companion-started update restarts KOReader too", UpdateReturn.restartNow(userConfirmed = true, fromPage = UpdateReturn.fromPage()))
 
         // A second MY_PACKAGE_REPLACED delivery (service and Add-on paths) opens nothing more.
         Updater.onReplaced(app)
@@ -190,25 +190,27 @@ class UpdateReturnTest {
 
     /** M8C 11-24 15:56: the patch installed after the update while the user was on a companion page. */
     @Test
-    fun aPatchInstallWhileAPageIsInFrontNeverBringsKoreaderForward() {
+    fun aManualPatchInstallWhileAPageIsInFrontBringsKoreaderForward() {
         val p = Prefs(app)
         try {
             p.patchVersionSeen = "0.11.3-rc.6"
             p.patchAwaitVersion = "0.11.3-rc.8"
-            p.patchRestartNow = "0.11.3-rc.8" // even a restart the user asked for
+            p.patchRestartNow = "0.11.3-rc.8" // a restart the user asked for
             p.patchRestartSentFor = ""
             val page = Robolectric.buildActivity(SettingsSectionActivity::class.java, SettingsPage.section(app, "updates")).setup()
             drain()
 
             assertTrue("a page is resumed", EinkActivity.pageResumed())
-            assertFalse("no restart over the page", PatchInstaller.follow(app, "patch installed"))
-            assertTrue("KOReader is not started", drain().none { it.component?.packageName == Koreader.PKG })
-            assertEquals("the restart is still owed", "", p.patchRestartSentFor)
-
-            // The user leaves the page (a Home press): now the owed restart may go.
-            page.pause()
-            assertFalse("no page is resumed", EinkActivity.pageResumed())
-            assertTrue("the owed restart goes", PatchInstaller.follow(app, "home press"))
+            assertTrue("a manual update completes over its page", PatchInstaller.follow(app, "patch installed"))
+            assertTrue(drain().any { it.component?.packageName == Koreader.PKG })
+            assertEquals("0.11.3-rc.8", p.patchRestartSentFor)
+            assertTrue(p.restartUserStarted)
+            // RELAUNCH must finish the same manual update even while the page is still visible.
+            Koreader.restartRead()
+            assertTrue(Koreader.relaunch(app, "manual update", HomeCommands.REOPEN_BOOK,
+                plugin = "0.11.3-rc.8", fromCompanion = true, userStarted = p.restartUserStarted))
+            assertEquals(HomeCommands.REOPEN_BOOK, drain().last().getStringExtra(Contract.EXTRA_COMMAND))
+            page.pause().stop().destroy()
         } finally {
             p.patchVersionSeen = ""
             p.patchAwaitVersion = ""
