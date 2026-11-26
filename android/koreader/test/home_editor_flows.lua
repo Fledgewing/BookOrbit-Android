@@ -66,7 +66,7 @@ return function(test,eq,ok,E,W,Widget,withHost)
             ok(described>=3)
             -- Default Home is full: all allowed spans are tried before a new page is added.
             local n=#m.document.pages
-            click(e,"Add",2) -- second picker entry is Continue reading
+            click(e,"Add",3) -- installed Battery and Book list precede Continue reading
             eq(#m.document.pages,n+1); eq(m:page().name,"Reading")
             eq(m.index,n+1); ok(m.selected)
             e.picker=nil; e:rebuild(); e:turn(-1); e:turn(1)
@@ -78,7 +78,7 @@ return function(test,eq,ok,E,W,Widget,withHost)
     test("Home editor: pages, keyboard rename, manual name retention, reset",function()
         withHost(function()
             local e=editor(); local m=e.model
-            click(e,"+ Page"); eq(m.index,2); eq(m:page().name,"Page 3")
+            click(e,"+ Page"); eq(m.index,2); eq(m:page().name,"Page 4")
             local id=m:page().id
             local Input=require("ui/widget/inputdialog")
             local keyboard=Input.onShowKeyboard; Input.onShowKeyboard=function() end
@@ -92,10 +92,10 @@ return function(test,eq,ok,E,W,Widget,withHost)
             ok(m:add("booklist")); eq(m:page().name,"My shelves")
             click(e,"Move ›"); eq(m.index,3); eq(m:page().id,id)
             click(e,"Move ‹"); eq(m.index,2)
-            click(e,"Delete page"); W.shown[#W.shown].ok_callback(); eq(#m.document.pages,2)
+            click(e,"Delete page"); W.shown[#W.shown].ok_callback(); eq(#m.document.pages,3)
             click(e,"Reset"); W.shown[#W.shown].ok_callback(); eq(m.index,1); eq(m:page().name,"Home")
             eq(#m:page().placements,6)
-            ok(m:pageAction("remove")); local before=m.document
+            while #m.document.pages>1 do ok(m:pageAction("remove")) end; local before=m.document
             eq(m:pageAction("remove"),nil); eq(m.document,before)
         end)
     end)

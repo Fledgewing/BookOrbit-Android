@@ -1,6 +1,17 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- One screen owner; widgets receive only an immutable snapshot and a dispatch handle.
 HomeHost = {}
+-- Reuse the central visible stack: owned dialogs remain above Home, and a reader
+-- placed above Home restores the reading gate. No separate dialog-specific gate.
+function HomeHost.foreground()
+    if not HomeHost.active then return false end
+    local reader=liveUI()
+    for _,widget in ipairs(visibleStack()) do
+        if reader and widget==reader then return false end
+        if widget==HomeHost.active then return true end
+    end
+    return false
+end
 function HomeHost.document()
     -- Layout editor publishes the same validated layout-as-data in reader settings.
     HomeEditor.load()
@@ -27,7 +38,7 @@ function HomeHost.create()
         self:rebuild()
     end
     function Host:rebuild()
-        local paint=Library.paint("home")
+        local paint=Library.paint(self.list_layout and (self.filter.model.source=="search" and "search" or "library") or "home")
         local ready,caps=pcall(paint.capabilities,paint)
         caps=ready and caps or {}
         self.caps=caps
@@ -41,17 +52,29 @@ function HomeHost.create()
         self.index=HomeHostPlan.page(self.index,0,#resolved.pages)
         local page=resolved.pages[self.index]
         local scale=function(n) return Device.screen:scaleBySize(n) end
-        local gap,top,bottom=scale(12),scale(96),scale(#resolved.pages>1 and 52 or 12)
+        local gap,top,bottom=scale(12),scale(self.list_layout and 158 or 108),scale((self.list_layout or #resolved.pages>1) and 52 or 12)
         local w,h=self.dimen.w,self.dimen.h
         local canvas=HomeWidgets.canvas(w,h)
-        HomeWidgets.text(canvas,"BookSync",gap,gap,w/2,24,false,true)
+        HomeWidgets.text(canvas,self.list_title or "BookSync",gap,gap,w-scale(120),24,false,true)
         local status,kind=AccountPlan.sync(account,true)
         if status~=self.account_status then
             self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=top}
             self.account_status=status
         end
-        if status and caps.account then HomeWidgets.button(canvas,status,gap,scale(48),w-2*gap,scale(36),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
+        if status and caps.account and not self.list_layout then HomeWidgets.button(canvas,status,gap+scale(110),scale(54),w-2*gap-scale(110),scale(50),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
         HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(36),function() self:onClose() end)
+        HomeWidgets.button(canvas,_("Search"),gap,scale(54),scale(100),scale(50),function() self:search() end)
+        if self.list_layout then
+            local header=self.filter:header(self.list_result and self.list_result.total)
+            HomeWidgets.button(canvas,header.active and _("Filter ●") or _("Filter"),gap+scale(110),scale(54),scale(100),scale(50),header.callback)
+            local x=gap
+            for _,chip in ipairs(header.chips) do
+                if x+scale(140)>w-gap then break end
+                HomeWidgets.button(canvas,chip.label.." ×",x,scale(106),scale(136),scale(46),chip.callback)
+                x=x+scale(140)
+            end
+        end
+        local sharedStats
         if not self.list_layout then
             HomeWidgets.button(canvas,_("Edit"),w-scale(190),gap,scale(80),scale(36),function() HomeEditor.show(self) end)
         end
@@ -62,14 +85,21 @@ function HomeHost.create()
             local ok,result=pcall(function()
                 local need=(HomeWidgets.needs[p.widget] or HomeHostPlan.need)(p)
                 if p.widget ~= "continue-reading" and need.limit then
-                    need.limit=math.min(need.limit,math.max(1,math.floor((rect.h-scale(58))/scale(48))))
+                    local pad=scale(rect.h-2<scale(120) and 8 or 14)
+                    need.limit=math.min(need.limit,math.max(1,math.floor((rect.h-2-2*pad-scale(30))/scale(48))))
                 end
+                if HomeWidgets.stats[p.widget] then
+                    if not sharedStats then sharedStats=context:read(need.op,need) end
+                    return sharedStats
+                end
+                if self.list_layout then self.list_limit=need.limit end
                 return context:read(need.op,need)
             end)
             result=ok and result or {error="Unavailable"}
             local signature=Cache.encode(result)
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
+            if self.list_layout then self.list_result=result end
             local snapshot=HomeHostPlan.snapshot(result)
             local dispatch=function(action,row) self:dispatch(action,row,p) end
             local rendered,card=pcall(HomeWidgets.renderers[p.widget],HomeHostPlan.immutable(p),snapshot,dispatch,rect)
@@ -89,7 +119,12 @@ function HomeHost.create()
             end
             HomeWidgets.put(canvas,boundary,rect.x,rect.y)
         end
-        if #resolved.pages>1 then
+        if self.list_layout then
+            local result=self.list_result or {}
+            HomeWidgets.button(canvas,"‹",gap,h-bottom,scale(80),bottom,function() self:listPage(-1) end)
+            HomeWidgets.text(canvas,result.pending and _("Loading…") or (tostring(result.total or "—").._(" books")),scale(110),h-bottom+gap,w-scale(220),16)
+            if result.next then HomeWidgets.button(canvas,"›",w-gap-scale(80),h-bottom,scale(80),bottom,function() self:listPage(1) end) end
+        elseif #resolved.pages>1 then
             HomeWidgets.text(canvas,(page.name or page.tab).."  ·  "..self.index.." / "..#resolved.pages,scale(110),h-bottom+gap,w-scale(220),16)
             HomeWidgets.button(canvas,"‹",gap,h-bottom,scale(80),bottom,function() self:turn(-1) end)
             HomeWidgets.button(canvas,"›",w-gap-scale(80),h-bottom,scale(80),bottom,function() self:turn(1) end)
@@ -100,6 +135,7 @@ function HomeHost.create()
         if old then old:free() end
     end
     function Host:turn(delta)
+        if self.list_layout then return self:listPage(delta) end
         local resolved=HomeHostPlan.resolve((self.list_layout or HomeHost.document()),HomeHost.installed(),self.caps)
         local index=HomeHostPlan.page(self.index,delta,#resolved.pages)
         if index ~= self.index then self.index=index; self:rebuild(); UIManager:setDirty(self,"ui") end
@@ -133,26 +169,81 @@ function HomeHost.create()
                 UIManager:show(prompt) -- gate: user action (server-only book)
                 return
             end
-            UIManager:close(self)
-            if not Library.open(row) and not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then
+            if Library.open(row) then
+                if HomeHost.active==self then UIManager:close(self) end
+            elseif not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then
                 UIManager:show(TextViewer:new{title=row.title or _("Book details"),text=_("This book is not saved on this reader.")}) -- gate: user action (widget book)
             end
-        elseif action == "list" then
-            -- A Lists card opens a bounded Shelf in the same host, never a backend UI.
-            self.list_layout=Layout.default()
-            self.list_layout.pages={{id="list",tab="Library",name=row.title,placements={{instance="list-books",widget="booklist",version=1,
-                x=0,y=0,w=4,h=3,settings={title=row.title,source={kind="list",key=row.key},limit=8}}}}}
-            self.index=1; self:rebuild(); UIManager:setDirty(self,"ui")
+        elseif action == "list" then self:showList(row.title,{kind="list",key=row.key})
+        elseif action == "all" or action == "device" or action == "group" then
+            local need=HomeHostPlan.need(p)
+            self:showList((p.settings or {}).title or (action=="device" and "On device" or "Library"),
+                action=="device" and "on-device" or p.widget=="library" and "library/all" or need.source,
+                action=="group" and {group=row.group} or need.query)
         end
+    end
+    function Host:showList(title,source,query)
+        self.list_title=title or "Library"
+        self.list_layout=Layout.default()
+        self.list_layout.grids["android-tablet"].rows=3
+        self.list_layout.pages={{id="list",tab="Library",name=self.list_title,placements={{instance="list-books",widget="booklist",version=1,
+            x=0,y=0,w=4,h=3,settings={title=self.list_title,source=source,query=query or {},offset=0,limit=8,style=1}}}}}
+        local settings=self.list_layout.pages[1].placements[1].settings
+        self.filter=FilterView.new{title=self.list_title,source=source,query=query,
+            onChange=function(q) settings.query=q; settings.offset=0; self:rebuild(); UIManager:setDirty(self,"ui") end,
+            onApply=function(q) settings.query=q; settings.offset=0; self:rebuild(); UIManager:setDirty(self,"ui") end,
+            onSave=function(saved) self:saveFilter(saved) end}
+        self.index=1; self:rebuild(); UIManager:setDirty(self,"ui")
+    end
+    function Host:listPage(delta)
+        local settings=self.list_layout.pages[1].placements[1].settings
+        local result=self.list_result or {}
+        if delta>0 and not result.next then return true end
+        settings.offset=delta>0 and result.next or math.max(0,settings.offset-(self.list_limit or 8))
+        self:rebuild(); UIManager:setDirty(self,"ui"); return true
+    end
+    function Host:search()
+        local dialog
+        dialog=require("ui/widget/inputdialog"):new{title=_("Search library"),input="",buttons={{
+            {text=_("Cancel"),callback=function() UIManager:close(dialog) end},
+            {text=_("Search"),callback=function()
+                local q=dialog:getInputText()
+                UIManager:close(dialog)
+                self:showList(_("Search"),"search",{q=q,sort="match"})
+            end}}}}
+        UIManager:show(dialog) -- gate: user action (owned Home search)
+        dialog:onShowKeyboard()
+    end
+    function Host:saveFilter(saved)
+        local document,page=HomeHostPlan.saveFilter(HomeHost.document(),saved,self.list_title)
+        if not document then
+            UIManager:show(InfoMessage:new{text=_("No room on Home")}) -- gate: user action (save filter)
+            return false
+        end
+        local saved,err=HomeEditor.save(document)
+        if not saved then
+            UIManager:show(InfoMessage:new{text=err or _("Could not save Home")}) -- gate: user action (save filter)
+            return false
+        end
+        -- gate: user action (save filter)
+        UIManager:show(require("ui/widget/buttondialog"):new{title=_("Book list saved on Home"),buttons={{{text=_("Go to Home"),callback=function()
+            -- Close this toast before rebuilding the initiating host.
+            local toast=topWidget(); UIManager:close(toast)
+            self.list_layout=nil; self.list_title=nil; self.filter=nil
+            for i,p in ipairs(document.pages) do if p.id==page then self.index=i end end
+            self:rebuild(); UIManager:setDirty(self,"ui")
+        end}}}}) -- gate: user action (save filter)
+        return true
     end
     function Host:onClose()
         if self.list_layout then
-            self.list_layout=nil; self.index=1; self:rebuild(); UIManager:setDirty(self,"ui"); return true
+            self.list_layout=nil; self.list_title=nil; self.filter=nil; self.index=1; self:rebuild(); UIManager:setDirty(self,"ui"); return true
         end
         UIManager:close(self)
         return true
     end
     function Host:onCloseWidget()
+        if self.filter then self.filter:close(false); self.filter=nil end
         if self.unsubscribe then self.unsubscribe(); self.unsubscribe=nil end
         if self.redraw then UIManager:unschedule(self.redraw); self.redraw=nil end
         if HomeHost.active == self then HomeHost.active=nil end
