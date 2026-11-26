@@ -243,7 +243,7 @@ index 5f694df2..e84de504 100644
 +          static_cast<unsigned>(channel));
    for (int attempt = 1;; attempt++) {
      esp_err = checkOnce(client_config);
-     // Before the repository rename, the new default feed does not exist yet.
+     // Prefer the canonical feed; any transport or manifest failure tries the stub.
 @@ -393,8 +393,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
  #else
  
