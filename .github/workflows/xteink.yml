@@ -465,7 +465,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          pattern: firmware-*
+          # Exclude firmware-plan: only versioned build artifacts belong in firmware/.
+          pattern: firmware-*-${{ needs.resolve.outputs.asset_version }}
           merge-multiple: true
           path: firmware
 
@@ -485,6 +486,7 @@ jobs:
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: firmware-plan
+          path: plan
 
       - name: Check the built files
         working-directory: firmware
@@ -537,7 +539,7 @@ jobs:
           SHA: ${{ needs.resolve.outputs.sha }}
         run: |
           set -euo pipefail
-          python3 orbify/tools/releases/inputs.py published --plan release-plan.json --platforms x4-pro,x4-classic,default \
+          python3 orbify/tools/releases/inputs.py published --plan plan/release-plan.json --platforms x4-pro,x4-classic,default \
             --tag 'xteink-v${{ needs.resolve.outputs.version }}' > firmware/FIRMWARE-INPUTS.json
           cp orbify/xteink/THIRD_PARTY_LICENSES.md firmware/
           (cd orbify/xteink && zip -qr ../../firmware/licenses.zip licenses LICENSE THIRD_PARTY_LICENSES.md)
@@ -559,7 +561,7 @@ jobs:
               echo "OTA bridge: install this build before BookSync 0.12."
             fi
           } > notes.md
-          python3 orbify/tools/releases/inputs.py notes --plan release-plan.json >> notes.md
+          python3 orbify/tools/releases/inputs.py notes --plan plan/release-plan.json >> notes.md
           cat notes.md
 
       - name: Attest build provenance
@@ -602,7 +604,7 @@ jobs:
           if [ "$(python3 orbify/tools/booksync-version.py unified)" != true ]; then exit 0; fi
           # Firmware-only previews have no empty Android release to edit.
           if gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/android-notes.md"; then
-            python3 orbify/tools/releases/inputs.py refresh-notes --plan release-plan.json \
+            python3 orbify/tools/releases/inputs.py refresh-notes --plan plan/release-plan.json \
               --notes "$RUNNER_TEMP/android-notes.md" > "$RUNNER_TEMP/current-notes.md"
             gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/current-notes.md"
           fi

@@ -14,11 +14,12 @@ name: release-tests
 on:
   push:
     branches: [main]
-    paths: ["android/koreader/**", "xteink/overlay/**", "xteink/scripts/**", "tools/upstreams.lock", ".github/workflows/release-tests.yml", ".github/workflows/release.yml"]
+    paths: ["android/koreader/**", "xteink/overlay/**", "xteink/scripts/**", "tools/upstreams.lock", ".github/workflows/release-tests.yml", ".github/workflows/release.yml", ".github/workflows/xteink.yml"]
   pull_request:
     paths:
       - "android/koreader/**"
       - ".github/workflows/release.yml"
+      - ".github/workflows/xteink.yml"
       - "tools/e2e/**"
       - "shared/fixtures/e2e/**"
       - "xteink/test/e2e/**"

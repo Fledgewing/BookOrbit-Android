@@ -10,6 +10,13 @@
 Plain text checks, no YAML library, so it runs anywhere: python3 tools/test/test-workflows.py
 """
 import pathlib
+import fnmatch
+import hashlib
+import json
+import os
+import subprocess
+import tempfile
+import textwrap
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -122,6 +129,64 @@ for name, job in [("Android sign", release_jobs["sign"]), ("firmware dispatch", 
                   ("Android feed", release_jobs["feed"]), ("firmware publish", xteink_jobs["publish"])]:
     if "!cancelled()" not in job:
         errors.append(name + ": cancellation must prevent publication")
+
+
+# Reproduce dispatch publication with the plan artifact present. Apply the workflow's
+# actual download selectors/paths, then execute its actual asset validation shell.
+def check_firmware_publish_downloads():
+    publish = xteink_jobs["publish"]
+    version = "2.0.0.532-bookorbit.1-rc3"
+    readers = {"x4-pro": "firmware-x4-pro", "x4-classic": "firmware-x4-classic",
+               "default": "firmware-x3-x4"}
+    artifacts = {"firmware-plan": {"release-plan.json": b'{}'},
+                 "source-archive": {"source-test.tar.gz": b'source'}}
+    for reader, firmware in readers.items():
+        stem = f"{firmware}-v{version}"
+        data = b"synthetic firmware"
+        artifacts[f"firmware-{reader}-{version}"] = {
+            stem + ".bin": data,
+            stem + ".bin.sha256": f"{hashlib.sha256(data).hexdigest()}  {stem}.bin\n".encode(),
+            stem + ".elf.gz": b"symbols", stem + ".parttable": b"partitions"}
+    with tempfile.TemporaryDirectory() as temp:
+        workspace = pathlib.Path(temp)
+        for step in re.split(r"^      - ", publish, flags=re.M):
+            if not step.startswith("uses: actions/download-artifact@"):
+                continue
+            fields = dict(re.findall(r"^          ([\w-]+): (.+)$", step, re.M))
+            destination = workspace / fields.get("path", ".")
+            selector = fields.get("pattern", fields.get("name"))
+            selector = selector.replace("${{ needs.resolve.outputs.asset_version }}", version)
+            for name, files in artifacts.items():
+                if not fnmatch.fnmatchcase(name, selector):
+                    continue
+                target = destination
+                if "pattern" in fields and fields.get("merge-multiple") != "true":
+                    target /= name
+                target.mkdir(parents=True, exist_ok=True)
+                for name, data in files.items():
+                    (target / name).write_bytes(data)
+        plan = workspace / "plan/release-plan.json"
+        assert plan.is_file(), "firmware plan must download separately for the notes steps"
+        assert not (workspace / "firmware/release-plan.json").exists(), "plan leaked into firmware assets"
+        for line in publish.splitlines():
+            if "--plan " in line:
+                assert "--plan plan/release-plan.json" in line, "plan consumer uses the wrong path"
+        block = publish.split("      - name: Check the built files\n", 1)[1].split("\n      - ", 1)[0]
+        script = textwrap.dedent(block.split("        run: |\n", 1)[1])
+        environment = dict(os.environ, ASSET_VERSION=version,
+                           MATRIX=json.dumps([{"firmware": fw} for fw in readers.values()]))
+        def check():
+            return subprocess.run(["bash", "-c", script], cwd=workspace / "firmware",
+                                  env=environment, text=True, capture_output=True)
+        result = check()
+        assert result.returncode == 0, result.stdout + result.stderr
+        # Keep the strict asset boundary: unrelated files still fail validation.
+        (workspace / "firmware/unexpected.json").write_text("{}")
+        result = check()
+        assert result.returncode != 0 and "unexpected files:" in result.stdout, result.stdout + result.stderr
+
+
+check_firmware_publish_downloads()
 
 if errors:
     print("\n".join(errors), file=sys.stderr)
