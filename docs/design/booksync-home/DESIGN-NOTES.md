@@ -1,4 +1,4 @@
-# BookSync 0.12 · Home, in-book menus and settings · design notes (revision 14, round 9 sign-off)
+# BookSync 0.12 · Home, in-book menus and settings · design notes (revision 16, round 10 sign-off)
 
 Prototype: `prototype.html` (one file, no network). Screens: `shots/` (M8C at device scale factor 2, its native 1404×1872; X4 at 480×800).
 All books, authors, numbers, battery and storage figures are invented.
@@ -208,8 +208,9 @@ Fuzz on these defaults: 400 random edit actions per device, no overlaps, no erro
   - Scrubber with chapter ticks and bookmark flags. On the Classic, Select on the scrubber grabs it; Prev/Next then move one
     chapter, Select or Back lets go.
   - **Quick-settings presets.** Font, Margins, Line spacing and Contrast each show three choices: two presets plus Custom.
-    Font: Book's own (the publisher's embedded font) · your chosen font · Custom. Custom applies your own values, so
-    fine-grained values set in KOReader still apply. The presets and the custom values live in Settings → Reading. Size
+    Font: Book's own (the publisher's embedded font) · your chosen font · Custom. Custom applies your own saved values
+    (it shows them, e.g. "Custom · 46 px") and never opens KOReader. Once Custom is picked it shows a pencil: tap it again
+    to edit it (§23). The presets and the custom values live in Settings → Reading. Size
     stays a stepper. Every font specimen is named.
   - **All steppers wrap** (X4 Font/Size/Margins/Spacing/Contrast rows, the M8C Size stepper, the Settings steppers):
     past the last option goes to the first and back. No arrow is ever greyed. Sliders (front light, warmth) and the Classic
@@ -236,7 +237,7 @@ and visible current values. No scrolling. Every row is one focus stop: Select st
 | **Your server** (section 20) | Signed in: Signed in as · Your server · Connection · What BookSync set up ("Sync login: found · OPDS: created · stats from all your devices") · Sign in again… · Sign out (asks first). Signed out: Sign in to your server · Until you sign in (stats from this reader only) |
 | **Sync, Wi-Fi & power** | Sync now · **Mode** card · (Back to Balanced, only when Custom) · What the mode does: Wi-Fi, Off after idle, Sync while reading, Sync when the reader sleeps, Sleep sync limit, Sync when it wakes · Android only: Let BookSync switch Wi-Fi for syncs, Wake VPN for syncs · Reading position · Power: Sleep after, Battery › |
 | Library & downloads | Storage › · Download folder · Keep downloaded copies current · Offline catalog storage · Mirror covers · Full refresh |
-| Reading | **Font choices** (one merged row; its subtitle shows what the panel offers: Book's own · your font · Custom with its value) · Margin, Line spacing and Contrast presets (custom presets show their value, e.g. "Custom · 14 px") · Custom (from KOReader) · Status bar · Status bar shows · Status bar size · End of book sheet |
+| Reading | **Font choices** (one merged row; its subtitle shows what the panel offers: Book's own · your font · Custom with its value) · Margin, Line spacing and Contrast presets (custom presets show their value, e.g. "Custom · 14 px") · Custom font / margins / line spacing / contrast, each opening its editor · Use KOReader's current values (M8C) · Status bar · Status bar shows · Status bar size · End of book sheet |
 | Home | Edit layout · Reset layout · Home screen (BookSync / Server plugin's Home; the summary reads "BookSync Home · 2 pages") · **Page names ›** |
 | Sleep screen | Cover shown · Never show · Text · Battery level · Text placement |
 | Updates | **Update channel** (one row: "Update channel · RC" with the channel's one-line description; it opens a picker) · Check now · **Installed: BookSync 0.12.0-rc.2 · RC** · What's new. Summary: "RC channel · 0.12.0-rc.2" |
@@ -253,7 +254,7 @@ build you have.
 - **One mode on top, every setting visible below.** The Mode card (Battery saver / Balanced / Always up to date) shows the
   battery impact at your usual use: ≈ 2 d 11 h / ≈ 2 d 6 h / ≈ 1 d 8 h (estimated: Wi-Fi-on reading is not measured yet). Under it,
   "What Balanced does" lists the rows it sets, with their values. Classic: Select on the card steps to the next mode.
-- **Changing any row makes the mode Custom**: the card says "Custom · your settings" and a **Back to Balanced** row appears.
+- **Changing any row makes the mode Your own settings**: the card says "Your own settings" and a **Back to Balanced** row appears.
   Nothing is locked: a row that has no effect in the current mix stays changeable and says why ("Only used when Wi-Fi is
   Just in time"), with an info glyph.
 - **Real settings** (`shared/settings/schema.json`):
@@ -266,11 +267,12 @@ build you have.
 | Sync when the reader sleeps | `sync_on_sleep` | on/off | on | — |
 | Sleep sync limit | `sleep_cap` | 10 / 15 / 20 s | 20 s | Sync when the reader sleeps |
 | Sync when it wakes | `sync_on_wake` | on/off | on | — |
-| Reading position | `sync_mode` | Furthest page wins / Custom | Furthest page wins | — |
+| Reading position | `sync_mode` | Furthest page wins / KOReader decides (M8C) | Furthest page wins | X4: shown as info, no choice |
 | Let BookSync switch Wi-Fi / Wake VPN for syncs | `wifi_via_companion`, `wake_tailscale` | on/off | — | **Android only: hidden on the X4 and X3** (not applicable in the schema) |
 
 - **The reading-position rule** is its own row: *Furthest page wins*: BookSync keeps the furthest place you have read on any
-  device and asks before jumping. Custom shows the sheet every time. (position-sync.md §6 hides sleep and wake rows under this
+  device and asks before jumping. *KOReader decides* (M8C only) leaves it to KOReader's own progress-sync rules; the X4 shows
+  the rule as information, since there is nothing else to pick. (position-sync.md §6 hides sleep and wake rows under this
   preset on the companion; we keep them visible so nothing is hidden.)
 - **X4:** `sleep_cap` and `sync_on_wake` are partial on the X4 firmware (it sleeps hard): they are shown and work as
   best effort there; this is a notes-only caveat, not on screen. "Wi-Fi off while reading" is a Wi-Fi choice, not a standby rate: the Battery page's standby rates are by
@@ -699,3 +701,45 @@ Critic approved round 9 and the maintainer signed off. Five minors from `critic-
 Also: a "Set by you" form shows that login's own user name (reader-sync / reader-opds in the demo), not the account's; §21
 now places "Enter it from your phone" where the form shows it (first row under the fields).
 Checks: `flows3.js` 303/303 (adds each minor); full `r3/all.sh` plus the critic's r9 scripts.
+
+## 23. Round 10: what "Custom" means, and editing it
+
+Maintainer: "if I select 'custom' does it open the KOReader settings? … how would I edit those custom items? I'd expect to be
+able to click on them". "Custom" had three meanings; each is now explicit.
+
+**1. Quick settings (Font, Margins, Line spacing, Contrast), the third choice.** It is your own saved value and always says
+it: on the M8C the segment reads "Custom" over its value ("46 px", "1.42", "Darker 0.2"; Font: "Custom" and "Baskerville +1" under its Aa); on the X4
+the stepper reads "Custom · 26 px". Picking it applies the value straight away; nothing opens KOReader. Once it is picked, a
+pencil appears on it, and tapping it again (Select on the Classic, where the value becomes its own stop between ‹ and ›)
+opens its editor over the panel; Done or Back returns to that choice with the panel still open. Decision (two-way door, the
+coordinator's lean): keep "Custom · value" rather than rename to "Yours": the value is what makes it clear, and "Yours"
+collides with "Your own settings" in Sync. Long press was not used: not discoverable, and the Classic has none.
+
+**2. Settings › Reading: every choice in one place.** Rows in the panel's order: Font choices (the middle font) · **Custom
+font** · Margin choices (the preset pair) · **Custom margins** · Line spacing choices · **Custom line spacing** · Contrast
+choices · **Custom contrast** · (M8C) **Use KOReader's current values**, then the status bar rows. Each Custom row shows its
+value and opens its editor:
+- **Custom font:** radio list of fonts, each in its own face (Baskerville, Literary, Classic, Clean), plus a Weight stepper
+  (−1 … +2), with a preview line.
+- **Custom margins / line spacing / contrast:** one stepper (− value +, focus starts on +; margins 10–80 px on the M8C,
+  6–48 on the X4, step 2, **stored per device** since the screens differ; spacing 1.00–2.00, step 0.02; contrast reads
+  "Lighter 0.5" … "Normal" … "Darker 0.5", step 0.1) with a live preview line (margins drawn as shaded gutters at
+  page scale). "Changes apply straight away"; if the book is on Custom it updates behind.
+- **Use KOReader's current values** copies what you last set in KOReader's style menu into Custom, once ("Later changes
+  there don't follow"); the toast has Undo. M8C only (the X4 has no KOReader).
+- The "From KOReader" wording is gone.
+
+**3. The other two meanings, renamed.** The sync mode card's computed state is now **Your own settings** ("You changed a
+setting below. Each one keeps your choice.") with Back to Balanced as before. Reading position's second choice is **KOReader
+decides** on the M8C; on the X4 the row is information only ("Furthest page wins"), since there is nothing to choose.
+
+**Checks:** `flows3.js` 335/335 (round 10 adds, per device: no "From KOReader"; each of the four editors opens from its row,
+has a live preview, its stepper changes the value, Done returns to the row, targets ≥ 50 px; panel Custom applies first,
+then edits live and returns to the panel; the KOReader copy is one-time with Undo (M8C) and absent on the X4; "Your own
+settings" with no "Custom"; Reading position wording per device; Classic: Select opens the stepper, Prev/Next reach − and +,
+Select steps, Back returns to the row). `focus.js` 214 steps, 27 dark, 0 fails (adds Settings › Reading, the four editors and
+the panel with Custom picked). Screens: `shots/*-r10-*.png`.
+
+**Rev 16 (critic approved round 10; four minors):** the margins, line spacing and contrast editors open with focus on +;
+the M8C Font Custom segment shows its value ("Baskerville +1"); contrast values read Lighter / Normal / Darker instead of
+"Dark ±"; §23 now says Custom margins are stored per device. `flows3.js` 338/338. The critic's r10 scripts join `r3/all.sh`.

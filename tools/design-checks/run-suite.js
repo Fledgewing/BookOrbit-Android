@@ -17,6 +17,8 @@ const checks = [
   'critic-shots/r8/si.js', 'critic-shots/r8/form.js',
   'critic-shots/r8/lab.js', 'critic-shots/r8/so.js', 'critic-shots/r8/so2.js',
   'critic-shots/r9/r9.js', 'critic-shots/r9/ph.js',
+  'critic-shots/r10/c10.js', 'critic-shots/r10/w10.js',
+  'critic-shots/r10/w11.js', 'critic-shots/r10/w12.js',
 ];
 let failures = 0;
 for (const script of checks) {
@@ -36,7 +38,7 @@ for (const script of checks) {
   if (bad) { failures++; console.error(log || result.error?.message); }
 }
 // Repeat device-selected login probes on Android; their default is Classic.
-for (const script of ['critic-shots/r8/si.js','critic-shots/r8/form.js','critic-shots/r9/r9.js']) {
+for (const script of ['critic-shots/r8/si.js','critic-shots/r8/form.js','critic-shots/r9/r9.js','critic-shots/r10/c10.js']) {
   const result=spawnSync(process.execPath,[join(__dirname,script),process.argv[2],
     join(OUT,'m8c-'+script.replaceAll('/','-'))],{encoding:'utf8',timeout:180000,
     env:{...process.env,DEV:'m8c'}});
