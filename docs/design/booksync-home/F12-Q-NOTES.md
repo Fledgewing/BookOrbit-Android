@@ -47,7 +47,7 @@ The remaining cutover must:
   Commit an import checkpoint before acknowledging or retiring source files. Test crashes
   at both boundaries. The position queue does not consume these files.
 - Move the position policy and durable per-book marker/override/decline state behind the
-  sole companion sync owner. Preserve every shared OrbiSmart fixture, including rereads,
+  sole companion sync owner. Preserve every shared BookSync position sync fixture, including rereads,
   resets and behind-hold; keep the one-draw consent UI in the reader.
 - Move cover acquisition and the remaining catalog, mirror, copies, recommendations
   and end-of-book operations onto neutral commands/snapshots using the existing workers.
