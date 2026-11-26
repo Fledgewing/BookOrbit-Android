@@ -99,7 +99,7 @@ object ReadingStats {
             "pending_today_seconds" to pendingToday.takeIf { includedThrough != null },
             "pending_included_through" to includedThrough,
             "year" to mapOf("start" to first.toString(), "weekday" to first.dayOfWeek.value - 1, "seconds" to seconds, "intensity" to intensity, "days_read" to seconds.count { it > 0 }),
-            "week" to mapOf("start" to monday.toString(), "seconds" to week, "total_seconds" to week.sum(), "levels" to week.map { it.toDouble() / maxOf(1, week.maxOrNull() ?: 0) }),
+            "week" to mapOf("start" to monday.toString(), "seconds" to week, "total_seconds" to week.sum(), "previous_seconds" to (1L..7L).sumOf { daily[monday.minusDays(it)] ?: 0 }, "levels" to week.map { it.toDouble() / maxOf(1, week.maxOrNull() ?: 0) }),
             "hours" to hours.toList(), "hour_levels" to hours.map { it.toDouble() / maxOf(1, hours.maxOrNull() ?: 0) },
             "hour_intensity" to hours.map { v -> when { v == 0L -> 0; v * 4 < (hours.maxOrNull() ?: 0) -> 1; v * 2 < (hours.maxOrNull() ?: 0) -> 2; v * 5 < (hours.maxOrNull() ?: 0) * 4 -> 3; else -> 4 } }, "peak_hour" to peak,
             "after_18_percent" to if (total > 0) (hours.drop(18).sum() * 100 / total).toInt() else null,
@@ -136,7 +136,7 @@ object ReadingStats {
                 val week = (0L..6L).map { days[monday.plusDays(it)] ?: 0L }
                 out["year"] = mapOf("start" to first.toString(), "weekday" to first.dayOfWeek.value - 1,
                     "seconds" to seconds, "intensity" to intensity(seconds), "days_read" to seconds.count { it > 0 })
-                out["week"] = mapOf("start" to monday.toString(), "seconds" to week, "total_seconds" to week.sum(),
+                out["week"] = mapOf("start" to monday.toString(), "seconds" to week, "total_seconds" to week.sum(), "previous_seconds" to (1L..7L).sumOf { days[monday.minusDays(it)] ?: 0 },
                     "levels" to week.map { it.toDouble() / maxOf(1, week.maxOrNull() ?: 0) })
                 goal["today_seconds"] = days[today] ?: 0L; goal["week_seconds"] = week.sum()
                 sources["days"] = "all your devices"; sources["today"] = "all your devices"
@@ -170,6 +170,42 @@ object ReadingStats {
         out["sources"] = sources; out["records"] = records; out["goal"] = goal
         out["capabilities"] = (remote?.capabilities() ?: RemoteReadingStats().capabilities()).mapValues { (k, v) -> v && k in enabled }
         return out
+    }
+    /** Display labels are projected after per-field precedence, never on the UI thread. */
+    fun display(data: Map<String, Any?>, now: Long, zone: ZoneId = ZoneId.systemDefault()): Map<String, Any?> {
+        val today = Instant.ofEpochSecond(now).atZone(zone).toLocalDate()
+        fun duration(value: Any?): String {
+            val minutes = ((value as? Number)?.toLong() ?: 0) / 60
+            return if (minutes >= 60) "${minutes / 60} h ${minutes % 60} m" else "$minutes m"
+        }
+        val week = data["week"] as? Map<*, *>
+        val seconds = (week?.get("seconds") as? List<*>)?.map { (it as Number).toLong() }
+        val best = seconds?.maxOrNull()?.takeIf { it > 0 }?.let { seconds.indexOf(it) }
+        val previous = (week?.get("previous_seconds") as? Number)?.toLong()?.takeIf { it > 0 }
+        val total = (week?.get("total_seconds") as? Number)?.toLong()
+        val comparison = if (previous != null && total != null) {
+            val percent = kotlin.math.round((total.toDouble() / previous - 1) * 100).toInt()
+            "${if (percent >= 0) "+" else ""}$percent% on last week"
+        } else null
+        val year = data["year"] as? Map<*, *>
+        val start = (year?.get("start") as? String)?.let { LocalDate.parse(it) }
+        val months = if (start == null) emptyList() else (0L..364L).mapNotNull { offset ->
+            val day = start.plusDays(offset)
+            if ((offset == 0L && day.dayOfMonth <= 15) || day.dayOfMonth == 1) mapOf("day" to offset.toInt(), "label" to LuaValue.str(day.format(java.time.format.DateTimeFormatter.ofPattern("MMM")))) else null
+        }
+        val records = data["records"] as? Map<*, *>
+        val peak = (data["peak_hour"] as? Number)?.toInt()
+        val period = peak?.let { when (it) { in 0..5 -> "Nights"; in 6..11 -> "Mornings"; in 12..17 -> "Afternoons"; else -> "Evenings" } }
+        return data + ("display" to mapOf(
+            "week_total" to duration(week?.get("total_seconds")), "week_comparison" to comparison, "today_index" to today.dayOfWeek.value,
+            "best_index" to best?.plus(1), "best_duration" to best?.let { duration(seconds!![it]) },
+            "best_day" to best?.let { LuaValue.str(java.time.DayOfWeek.of(it+1).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())) },
+            "months" to months, "period" to period, "peak" to peak?.let { "$it:00" },
+            "record_day" to (records?.get("best_day") as? String)?.let { LuaValue.str(LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))) },
+            "pages" to (records?.get("recorded_pages") as? Number)?.let { LuaValue.str(java.text.NumberFormat.getIntegerInstance().format(it)) },
+            "longest" to records?.get("longest_session_seconds")?.let { duration(it) },
+            "local_today" to data["local_today_seconds"]?.let { LuaValue.str("${duration(it)} today · this reader (separate)") }
+        ))
     }
     private fun intensity(values: List<Long>): List<Int> {
         val max = values.maxOrNull() ?: 0
