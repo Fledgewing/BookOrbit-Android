@@ -100,6 +100,15 @@ if '"android/koreader/**"' not in release_tests.split("  workflow_call:")[0]:
     errors.append("release-tests: plugin PRs must run reader flows")
 if "grep -q ORBIT_REQUIRE_READER_FLOWS" not in reader_jobs.get("reader-startup", ""):
     errors.append("release-tests: old tags must not silently ignore the required-scenario flag")
+# Overlay patches form one ordered stack: changing 0055 can break 0056 even when
+# CrossInk's pin is unchanged. Exercise the whole stack for every overlay PR.
+pr_trigger = release_tests.split("  pull_request:\n", 1)[1].split("  workflow_call:", 1)[0]
+for path in ["xteink/overlay/**", "xteink/scripts/**", "tools/upstreams.lock"]:
+    if f'"{path}"' not in pr_trigger:
+        errors.append(f"release-tests: PRs touching {path} must exercise the overlay stack")
+simulator = reader_jobs.get("xteink", "")
+if "run: orbify/xteink/scripts/apply.sh upstream" not in simulator or "inputs.platform || 'all'" not in simulator:
+    errors.append("release-tests: simulator PR jobs must apply the complete overlay")
 release_jobs = jobs_of((root / ".github/workflows/release.yml").read_text())
 if not re.search(r"needs:\s*(?:tests\b|\[[^\]\n]*\btests\b)", release_jobs["build"]) or "platform: android" not in release_jobs["tests"]:
     errors.append("release: Android build must depend on the reusable reader gate")
