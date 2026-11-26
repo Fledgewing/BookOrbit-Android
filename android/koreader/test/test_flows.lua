@@ -5034,6 +5034,48 @@ test("mirror: pressing Full refresh after a failed bulk run resumes saved progre
     cacheTeardown()
 end)
 
+test("mirror: Full refresh joins a stalled incremental job and warns even after a silent background timeout", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local cat = pluginCatalog(Cat, client)
+    local note, send = E.orbitNote, E.Companion.send
+    local notices, launches = {}, 0
+    E.orbitNote = function(text) notices[#notices + 1] = text end
+    E.Companion.send = function(action, extras)
+        if action == E.Companion.ACTION.MIRROR and not extras.query_run then launches = launches + 1 end
+        return true
+    end
+    local success, err = pcall(function()
+        withHost(cat, function()
+            E.Mirror.cat = cat
+            E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "incremental"
+            E.Mirror.preparing, E.Mirror.manual = nil, nil
+            E.Mirror._status_dir = E.Mirror.dir()
+            E.Mirror._status = { engine = "bulk", op = "incremental", done = 37, total = 100, left = 63, pct = 37 }
+            E.Mirror.run_id, E.Mirror.sent_at = "background", W.clock
+            E.Mirror.acknowledged, E.Mirror.no_ack = nil, nil
+            E.Badge.close(); E.Badge.running = nil
+            E.Mirror.poll(); run(9)
+            eq(#notices, 0, "automatic work is silent")
+            E.OC.fullRefresh(cat)
+            eq(notices[1], "Full refresh starting…", "joining responds immediately")
+            eq(E.Badge.pct, 37, "the active job's real progress is shown")
+            ok(not E.Mirror.next and not E.OC.readFile(E.Mirror.stopFile()), "joining never stops the job")
+            ok(E.Mirror.fullRunning(), "a joined bulk run owns subsequent taps")
+            run(9)
+            eq(notices[2], "BookSync's companion isn't responding · Retry", "the background timeout cannot swallow manual feedback")
+            E.OC.writeFile(E.Mirror.dir() .. "/run.lua", E.Cache.encode({run="background", state="progress"}))
+            E.OC.writeFile(E.Mirror.dir() .. "/status.lua", E.Cache.encode({run="background", engine="bulk", op="incremental", pct=60, done=60, total=100, left=40}))
+            run(3)
+            eq(E.Badge.pct, 60, "live progress replaces the starting state")
+            eq(launches, 0, "no duplicate bulk request")
+        end)
+    end)
+    E.orbitNote, E.Companion.send = note, send
+    cacheTeardown()
+    ok(success, err)
+end)
+
 test("mirror: an explicit resumed Full refresh shows immediate startup feedback before acknowledgement", function()
     local client, Cat = cacheSetup()
     W.wifi = true

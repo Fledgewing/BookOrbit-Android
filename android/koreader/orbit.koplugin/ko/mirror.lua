@@ -236,15 +236,17 @@ end
 function Mirror.fullRunning()
     local s = Mirror.status()
     return Mirror.active == true and Mirror.busy == true
-        and (Mirror.op == "full" or Mirror.op == "resume" and s.op == "full" and s.engine == "bulk")
+        and (Mirror.op == "full" or Mirror.op == "resume" and s.op == "full" and s.engine == "bulk"
+            or Mirror.manual and s.engine == "bulk")
 end
 
 -- A Full refresh pressed while one is saving: keep that run and show where it is.
 function Mirror.showProgress(why)
     local s = Mirror.status()
     Mirror.manual = true
+    Mirror.no_ack, Mirror.sent_at, Mirror.queried_at = nil, nowT(), nil
     log("mirror: Full refresh already running (" .. tostring(why) .. "); kept,", s.done or 0, "of", s.total or 0, "saved")
-    if not Badge.running then Badge.start(false, s) else Badge.update(s) end
+    if not Badge.running then Badge.start(true, s) else Badge.update(s) end
     Badge.expand()
 end
 
@@ -470,9 +472,9 @@ function Mirror.start(reason, manual)
     end
     Mirror.manual = manual
     if Mirror.busy and not Mirror.preparing and Mirror.status().engine == "bulk" then
-        -- Finish stopping the owned run before admitting an explicit replacement.
-        Mirror.next = { op = "full", reason = reason }
-        OC.writeFile(Mirror.stopFile(), "stop")
+        -- The companion's bulk catalog already saves the whole catalog. Join its
+        -- admission instead of waiting silently for a queued incremental run to stop.
+        if manual then Mirror.showProgress(reason) end
         return true
     end
     if manual and Mirror.preparing then

@@ -197,7 +197,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Refresh tap always refreshes normally; hold offers Full refresh; companion owns queued/active progress and completion stamps without timer-only failure; explicit resumes show immediate startup feedback, missing acknowledgements warn once, and liveness queries back off",
+          "note": "Refresh tap always refreshes normally; hold offers Full refresh; companion owns queued/active progress and completion stamps without timer-only failure; explicit resumes show immediate startup feedback, missing acknowledgements warn once, and liveness queries back off; Full refresh joins an active incremental bulk run and displays its progress",
           "reason": null,
           "evidence": [
             {
