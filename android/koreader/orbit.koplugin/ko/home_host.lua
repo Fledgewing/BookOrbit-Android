@@ -162,6 +162,7 @@ function HomeHost.create()
     end
     function Host:dispatch(action,row,p)
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
+        elseif action == "battery" then BatteryUI.show()
         elseif action == "book" then
             if self.caps.account and not row.local_path and not AccountPlan.login(self.account or {},"opds").available then
                 local prompt=require("ui/widget/buttondialog"):new{title="No OPDS login, so it can't download",buttons={{{text="Keep browsing",callback=function() UIManager:close(self.download_prompt) end},{text="Set up",callback=function() UIManager:close(self.download_prompt); AccountView.open("opds") end}}}}
