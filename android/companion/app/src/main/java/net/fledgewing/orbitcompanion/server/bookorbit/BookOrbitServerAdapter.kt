@@ -86,6 +86,9 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         }
     }
     override fun owner(): String? = (credentials.login("opds") ?: credentials.login("sync"))?.owner() ?: account.identity()
+    override fun positionOwner(): String? = credentials.login("sync")?.takeIf {
+        it.origin == "user" || account.state()["signedIn"] == true
+    }?.owner()
     override fun stats(owner: String): Map<*, *>? = if (owner == owner()) account.normalizedStats() else null
     private fun headers(login: ServerCredentials.Login, kind: String): Map<String, String> = if (kind == "sync")
         mapOf("Accept" to "application/json", "x-auth-user" to login.user, "x-auth-key" to login.secret)
@@ -99,7 +102,10 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             require(percentage.isFinite() && percentage in 0.0..1.0)
             val position = it["position"] as? String
             require(position == null || position.length <= 4096)
-            mapOf("document" to document, "percentage" to percentage, "progress" to position?.let(LuaValue::utf8), "device" to "BookSync")
+            val capturedAt = (it["capturedAt"] as? Number)?.toLong()
+            require(capturedAt == null || capturedAt > 0)
+            mapOf("document" to document, "percentage" to percentage, "progress" to position?.let(LuaValue::utf8), "device" to "BookSync") +
+                (if (capturedAt != null) mapOf("timestamp" to capturedAt) else emptyMap())
         }
         val reply = transport.request(c.server, path, if (body == null) "GET" else "PUT", body, headers(c,"sync"))
         check(reply)
