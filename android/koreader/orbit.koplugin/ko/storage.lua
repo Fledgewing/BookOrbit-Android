@@ -101,7 +101,7 @@ function StorageUI.create(mode,onCollection,onReturn)
         local y=s(62)
         if self.mode=="collections" then
             if self.data.pending or self.data.error or #(self.data.items or {})==0 then
-                button(self.data.pending and "Loading…" or self.data.error and "Couldn't load collections · Retry" or "No collections",y,function() Library.retry(); self:rebuild() end)
+                button(self.data.pending and "Loading…" or self.data.error and "Couldn't load collections · Retry" or not (self.data.freshness and self.data.freshness.saved) and "Not saved yet" or "No collections",y,function() Library.retry(); self:rebuild() end)
             end
             for _,row in ipairs(self.data.items or {}) do
                 button(row.title.." · "..tostring(row.count or "—").." ›",y,function() self:onClose(); if onCollection then onCollection(row) end end); y=y+s(56)

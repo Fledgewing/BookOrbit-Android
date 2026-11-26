@@ -72,6 +72,17 @@ return function(test,eq,ok,E,W,withHost)
             callback({folder='BookSync',freshness={saved=true}}); eq(page[1],before); eq(E.StorageUI.active,nil)
         end)
     end)
+    test('collections: loading, error, unsaved and complete-empty remain distinct',function()
+        withHost(function()
+            for _,case in ipairs({{{pending=true},'Loading…'},{{error='offline'},"Couldn't load collections · Retry"},
+                {{items={},freshness={saved=false}},'Not saved yet'},{{items={},freshness={saved=true}},'No collections'}}) do
+                E.LibraryAdapter.read=function() return case[1],200 end
+                local page=E.StorageUI.show('collections')
+                eq(page.controls[1].text,case[2]); eq(page.metrics.roundTrips,1)
+                page:onClose()
+            end
+        end)
+    end)
     test('collections: bounded pages open opaque source and Back restores Home',function()
         withHost(function()
             local read=E.LibraryAdapter.read
