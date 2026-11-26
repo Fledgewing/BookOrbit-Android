@@ -37,12 +37,12 @@ internal class LibraryFacets(val field: String, private val query: Map<String, A
         if (value == null) return current == null || current == "all" || current == "anywhere" || (current is Map<*, *> && current.isEmpty())
         return LuaValue.encode(value).contentEquals(LuaValue.encode(current)) || (field == "show" && value == "want-to-read" && query["wtr"] == true)
     }
-    fun include(book: Map<String, Any?>) {
+    fun include(book: Map<String, Any?>, delta: Int = 1) {
         val values = if (multi) (book[if (field == "author") "authors" else field] as? List<*>).orEmpty().filterIsInstance<String>().distinct() else emptyList()
         for (v in values) { val id = fold(v); if (id !in options) { options[id] = v; labels[id] = v } }
         if (!LibraryFilter.matches(book, others)) return
-        if (multi) for (id in values.map(::fold).distinct()) counts[id] = (counts[id] ?: 0) + 1
-        else for ((id, value) in options) if (LibraryFilter.matches(book, if (value == null) emptyMap<String, Any?>() else mapOf(field to value))) counts[id] = (counts[id] ?: 0) + 1
+        if (multi) for (id in values.map(::fold).distinct()) counts[id] = (counts[id] ?: 0) + delta
+        else for ((id, value) in options) if (LibraryFilter.matches(book, if (value == null) emptyMap<String, Any?>() else mapOf(field to value))) counts[id] = (counts[id] ?: 0) + delta
     }
     fun page(offset: Int, limit: Int): Map<String, Any?> {
         val rows = options.map { (id, value) -> mapOf("id" to id, "label" to labels[id], "value" to value, "count" to (counts[id] ?: 0), "selected" to chosen(value), "selected_values" to if (multi) selectedValues(value) else null) }

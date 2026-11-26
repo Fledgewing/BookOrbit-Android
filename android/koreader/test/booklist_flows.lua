@@ -59,6 +59,23 @@ return function(test,eq,ok,E,W,Widget,withHost)
             eq(E.S.home_layout.pages[1].placements[2].settings.src,"reading","unpublished until editor Done")
         end)
     end)
+    test("Book list Reading now keeps list, filter counts and saved context consistent",function()
+        withHost(function(batches,reads)
+            E.S.home_layout=E.Layout.default()
+            local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+            local p=E.Layout.default().pages[1].placements[2]
+            h:dispatch("all",nil,p)
+            eq(h.list_layout.pages[1].placements[1].settings.exclude_current,true)
+            eq(h.filter.exclude_current,true)
+            h.filter:show()
+            eq(reads[#reads].op,"facets"); eq(reads[#reads].exclude_current,true)
+            local out,page=E.HomeHostPlan.saveFilter(E.S.home_layout,{base_source="reading",query={},exclude_current=true})
+            for _,pg in ipairs(out.pages) do if pg.id==page then
+                eq(pg.placements[#pg.placements].settings.exclude_current,true)
+            end end
+            h.filter:close(false)
+        end)
+    end)
     test("Book list Classic: More, title suggestions, focused source, Back and Cancel",function()
         withHost(function()
             sources(); E.S.home_layout=E.Layout.default()

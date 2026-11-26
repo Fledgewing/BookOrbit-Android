@@ -21,7 +21,7 @@ function BookListConfig:choose(option)
 end
 function BookListConfig:filterSheet()
     if self.dialog then UIManager:close(self.dialog); self.dialog=nil end
-    self.filter=FilterView.new{source=BookList.source(self.cfg),query=self.cfg.query,title=self.cfg.title,
+    self.filter=FilterView.new{source=BookList.source(self.cfg),query=self.cfg.query,title=self.cfg.title,exclude_current=self.cfg.exclude_current,
         onApply=function(q)
             self.cfg.query=q; self.filter=nil
             if self.alive then self:paint() end

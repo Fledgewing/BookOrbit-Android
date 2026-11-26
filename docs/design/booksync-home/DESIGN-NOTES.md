@@ -818,6 +818,8 @@ materializes names, opaque source keys and counts; the plugin reads six rows and
 at most 16 KiB through `Library:sources` in one paint/batch. Empty or unavailable
 counts remain unknown. Reading now excludes the Continue reading book in the
 companion before filtering, sorting and paging, including after a sort change.
+The owned list, filter-sheet facets and saved Custom filter context carry the
+same exclusion, keeping their book counts consistent.
 
 Settings use a zero-read `booklist-config` budget; source pages have the bounded
 `booklist-sources` budget. Both log one draw span, and source reads also log the

@@ -178,7 +178,10 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             }
             after = batch.last().first
         }
-        if (a["exclude_current"]==true && kind=="reading" && current!=null) selected.removeAll { it["key"]==current!!["key"] }
+        if (a["exclude_current"]==true && kind=="reading" && current!=null) {
+            selected.removeAll { it["key"]==current!!["key"] }
+            facet?.include(current!!,-1)
+        }
         val total = selected.size
         if (op == "facets") {
             val offset = ((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)

@@ -193,6 +193,12 @@ class LibraryTest {
             }
             val filtered=read(st,mapOf("op" to "window","source" to "reading","exclude_current" to true,"query" to mapOf("q" to "hero")))
             assertEquals(0L,filtered["total"])
+            val facet=read(st,mapOf("op" to "facets","source" to "reading","exclude_current" to true,"field" to "author"))
+            assertEquals(2L,facet["total"])
+            assertEquals(2L,((facet["items"] as List<*>).single() as Map<*,*>)["count"])
+            val shows=read(st,mapOf("op" to "facets","source" to "reading","exclude_current" to true,"field" to "show"))
+            val reading=(shows["items"] as List<*>).map { it as Map<*,*> }.single { it["value"]=="reading" }
+            assertEquals(2L,reading["count"])
         }
     }
     private fun store() = CacheStore(Files.createTempDirectory("library-test").toFile(), {}) { JdbcSql(it) }.also { it.own(owner) }
