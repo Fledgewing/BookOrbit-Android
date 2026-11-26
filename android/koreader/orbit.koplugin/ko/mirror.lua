@@ -244,7 +244,7 @@ function Mirror.showProgress(why)
     local s = Mirror.status()
     Mirror.manual = true
     log("mirror: Full refresh already running (" .. tostring(why) .. "); kept,", s.done or 0, "of", s.total or 0, "saved")
-    if not Badge.running then Badge.start(false, s) end
+    if not Badge.running then Badge.start(false, s) else Badge.update(s) end
     Badge.expand()
 end
 

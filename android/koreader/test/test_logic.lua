@@ -1662,8 +1662,8 @@ test("status layout: default off, sizes, compact strips and proportional battery
     eq(indexed.byKey.status_orbit_layout.default, false)
     eq(indexed.byKey.status_orbit_size.default, "small")
     local L = M.StatusLayout
-    eq(L.fontSize("small"), 48); eq(L.fontSize("medium"), 18); eq(L.fontSize("large"), 22)
-    eq(L.fontSize("unknown"), 48)
+    eq(L.fontSize("small"), 14); eq(L.fontSize("medium"), 18); eq(L.fontSize("large"), 22)
+    eq(L.fontSize("unknown"), 14)
     for _, h in ipairs({12, 16, 24, 40}) do eq(L.stripHeight(h, 1), h+2) end
     eq(indexed.byKey.status_orbit_add_space, nil)
     local program=M.SettingsSync.decodeJson(readFile(here.."/../../../shared/ui/battery.json"))

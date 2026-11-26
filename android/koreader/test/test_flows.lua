@@ -3913,6 +3913,19 @@ test("cache: Refresh checks now; Full refresh goes to the server; neither evicts
     cacheTeardown()
 end)
 
+test("cache: Refresh tap during Full refresh expands progress without starting another job", function()
+    local client, Cat = cacheSetup()
+    local cat = setmetatable({client=client}, Cat)
+    local mirror = E.Mirror
+    local shown
+    E.Mirror={fullRunning=function() return true end, showProgress=function(why) shown=why end}
+    W.wifi=false -- progress is local even if connectivity was lost
+    E.OC.refresh(cat)
+    eq(shown,"Refresh tapped"); eq(#cache.calls,0)
+    E.Mirror=mirror
+    cacheTeardown()
+end)
+
 test("cache: a write patches the cached book and marks Home stale; accounts never mix", function()
     local client = cacheSetup()
     W.wifi = true
@@ -4716,7 +4729,11 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
         notes = {}
         W.logs = {}
         E.OC.fullRefresh(cat)
-        E.OC.fullRefresh(cat)
+        E.Badge.expanded = nil
+        local run_id = E.Mirror.run_id
+        E.OC.refresh(cat)
+        eq(E.Mirror.run_id, run_id, "tap keeps the running Full refresh")
+        ok(E.Badge.expanded, "tap immediately expands visible progress")
         m = E.Mirror.status()
         ok(m.done >= done and m.total >= total and m.left > 0, "the run is kept, not restarted")
         local h = E.Badge.history or {}

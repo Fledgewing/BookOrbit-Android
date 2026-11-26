@@ -44,9 +44,9 @@ function StatusLayout.layout(width, inset, gap, battery, icon, chapter, progress
         cx = (width - measure(title))/2, rx = right }
 end
 
--- Small uses the largest face fitting the margin (up to 48 pt); explicit sizes cap it.
-StatusLayout.SIZES = { small = 48, medium = 18, large = 22 }
-function StatusLayout.fontSize(choice) return StatusLayout.SIZES[choice] or 48 end
+-- Fixed unscaled text sizes; neither page margins nor the native footer choose a face.
+StatusLayout.SIZES = { small = 14, medium = 18, large = 22 }
+function StatusLayout.fontSize(choice) return StatusLayout.SIZES[choice] or 14 end
 function StatusLayout.stripHeight(text_height, padding) return math.ceil(text_height) + 2 * padding end
 -- Fit actual font metrics to each margin independently; the configured size is a maximum.
 function StatusLayout.fit(margin, maximum, padding, measureHeight)
