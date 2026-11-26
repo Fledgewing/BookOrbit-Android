@@ -37,6 +37,20 @@ return function(test,eq,ok,E,W,UIManager,run,newUI,ReaderUI,FileManager)
         E.ReadingSync.running=0; E.ReadingSync.busy=false
         ok(success,err)
     end
+    test("sync retirement: legacy class and API are disarmed before instance init",function()
+        local writes=0
+        local function writer() writes=writes+1 end
+        local legacy={name="bookorbit",requestProgressPull=writer,enqueueLifecycleSnapshot=writer}
+        local api={updateProgress=writer,request=writer}
+        local loader={enabled_plugins={legacy},loaded_plugins={},createPluginInstance=function(_,plugin)
+            plugin:requestProgressPull(); plugin:enqueueLifecycleSnapshot(); api:updateProgress(); return plugin
+        end}
+        local env=setmetatable({PluginLoader=loader,package={loaded={bookorbit_api=api}}},{__index=_G})
+        local chunk=assert(loadfile(E.SOURCE_DIR.."/ko/server/bookorbit/quiesce.lua")); setfenv(chunk,env); chunk()
+        ok(env.SyncRetirement.safe); loader:createPluginInstance(legacy); eq(writes,0)
+        loader.loaded_plugins.bookorbit=legacy
+        chunk(); eq(env.SyncRetirement.safe,false,"late activation retains source and refuses a second writer")
+    end)
     test("startup smoke: last document remains the top reader through a yielding progress pull",function() world(function(x)
         x.delay=true
         E.ReadingSync.run("open")

@@ -47,14 +47,14 @@ class ProgressOutboxTest {
         val toy = Toy().also { it.offline = true }
         val locator = LuaValue.str("opaque:位置/one")
         val id = JdbcSql(file).use { sql ->
-            val queue = Queue(sql,file.parentFile) { 100L }
+            val queue = Queue(sql,file.parentFile!!) { 100L }
             val id = queue.enqueue(toy.id,toy.positionOwner()!!,"urn:book:one",write(locator))
             assertEquals(Drain(0,1,"unavailable"),queue.drain(toy))
             assertTrue(queue.contains(id))
             id
         }
         JdbcSql(file).use { sql ->
-            val queue = Queue(sql,file.parentFile) { 900L }
+            val queue = Queue(sql,file.parentFile!!) { 900L }
             assertTrue(queue.contains(id))
             toy.offline = false
             assertEquals(Drain(1,0,null),queue.drain(toy))
@@ -67,7 +67,7 @@ class ProgressOutboxTest {
     }
     @Test fun accountsAdaptersAndCatalogOwnershipCannotCrossDeliver() = database { file ->
         JdbcSql(file).use { sql ->
-            val queue = Queue(sql,file.parentFile) { 100L }
+            val queue = Queue(sql,file.parentFile!!) { 100L }
             val toy = Toy()
             queue.enqueue("other","sync:one","book:other-adapter",write())
             queue.enqueue("toy","sync:two","book:other-account",write())
@@ -86,7 +86,7 @@ class ProgressOutboxTest {
     }
     @Test fun fifoStopsAtFailureAndDrainReadsOnlyOneBoundedWindow() = database { file ->
         JdbcSql(file).use { sql ->
-            val queue = Queue(sql,file.parentFile) { 100L }
+            val queue = Queue(sql,file.parentFile!!) { 100L }
             val toy = Toy().also { it.offline = true }
             repeat(ProgressOutbox.MAX_BATCH+1) { queue.enqueue("toy","sync:one","book:$it",write()) }
             assertEquals(Drain(0,25,"unavailable"),queue.drain(toy))
@@ -98,7 +98,7 @@ class ProgressOutboxTest {
     }
     @Test fun unsuccessfulRepliesAreNeverAcknowledged() = database { file ->
         JdbcSql(file).use { sql ->
-            val queue = Queue(sql,file.parentFile) { 100L }
+            val queue = Queue(sql,file.parentFile!!) { 100L }
             val adapter = object : ServerAdapter { override val id = "unsupported"; override fun owner() = "account" }
             queue.enqueue(adapter.id,adapter.owner(),"book",write())
             assertEquals(Drain(0,1,"unsupported"),queue.drain(adapter))
@@ -107,7 +107,7 @@ class ProgressOutboxTest {
     }
     @Test fun validationAndCapacityFailureLeaveEarlierWritesIntact() = database { file ->
         JdbcSql(file).use { sql ->
-            val queue = Queue(sql,file.parentFile) { 100L }
+            val queue = Queue(sql,file.parentFile!!) { 100L }
             for (bad in listOf(write("x".repeat(4097)),write("位置"),mapOf("percentage" to Double.NaN),mapOf("percentage" to -1),mapOf("percentage" to 2))) {
                 assertThrows(IllegalArgumentException::class.java) { queue.enqueue("toy","sync:one","book",bad) }
             }
@@ -119,7 +119,7 @@ class ProgressOutboxTest {
     }
     @Test fun queuePersistsOnlyReviewedFields() = database { file ->
         JdbcSql(file).use { sql ->
-            val queue = Queue(sql,file.parentFile) { 100L }
+            val queue = Queue(sql,file.parentFile!!) { 100L }
             queue.enqueue("toy","sync:one","book",write()+mapOf("password" to "fixture-secret","unrelated" to listOf(1,2)))
             val body = LuaValue.parse(sql.query("SELECT payload FROM lifecycle_jobs") { it.bytes(0)!! }.single()) as Map<*, *>
             assertEquals(setOf("percentage","position","capturedAt"),body.keys)
@@ -134,13 +134,13 @@ class ProgressOutboxTest {
                     database.exec(sql,*args)
                 }
             }
-            val queue = Queue(failing,file.parentFile) { 100L }
+            val queue = Queue(failing,file.parentFile!!) { 100L }
             queue.enqueue("toy","sync:one","book",write())
             assertEquals(Drain(0,1,"unavailable"),queue.drain(toy))
             assertEquals(1,toy.delivered.size)
         }
         JdbcSql(file).use { sql ->
-            val queue = Queue(sql,file.parentFile) { 900L }
+            val queue = Queue(sql,file.parentFile!!) { 900L }
             assertEquals(Drain(1,0,null),queue.drain(toy))
             assertEquals(2,toy.delivered.size)
             assertEquals(toy.delivered[0],toy.delivered[1])
