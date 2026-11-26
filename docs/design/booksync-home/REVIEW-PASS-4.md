@@ -22,11 +22,14 @@ References in this table are at the baseline commit, under
 | P2 | `ko/battery.lua:23`, `:62`, `:65`, `:78`: widget link, Close, tabs and daily paging are too small. | Increase targets to 50 px, reserve the title band, and check screen controls alongside the existing six-size/tab flows. |
 | P2 | `ko/home_editor.lua:145`: Configure is 40 px high. | 50 px, with a separate toolbar band; regression checks it cannot overlap move/remove or page controls. |
 | P2 | `ko/home_host.lua:58`, `:79`: every page says BookSync, and the owned Home has no settings destination. | Show the actual page name, add the Home menu and use the existing Settings rows/PIN policy. The flow drives the menu and tests locked/unlocked native tab contents. Close/Edit/chips now meet the touch minimum too. |
-| P2 | `ko/home_host.lua:242`: Back from a list on Library or Stats resets to page 1. | Remember the originating Home page until leaving the list; regression opens a list from Library and returns there. |
+| P2 | `ko/home_host.lua:242`: Back from a list on Library or Stats resets to page 1. | Remember the originating Home page until leaving the list; regression opens a list from Stats and returns there. |
 | P2 | `ko/reader_panel.lua:50`, `logic/reader_panel.lua:19`: the battery estimate is inert and reformatted from hours in Lua. | Consume the companion's `display.page_estimate`, make it a Battery action even while learning, and verify no additional render read. |
 | P2 | `ko/reader_panel.lua:36`: no BookSync Settings destination in the reader panel. | Add an action using the same Settings owner; dismiss the initiating panel first. Test the dispatch and dismissal. |
 | P3 | `ko/menu.lua:282`: Settings has a ninth root companion shortcut despite already having Advanced under About. | Keep the eight approved groups; regression checks the root count. |
 | P2 | `ko/home_widgets.lua:70`: short Continue reading cards omit the percentage. | Show it at every supported hero size, including offline-with-data; size/state regression checks the label. |
+
+| P2 | `logic/layout.lua:194`: new M8C layouts include the extra Library page from the X4 default. | New/reset layouts use the approved Home + Stats pages. Exact placement regression covers both pages; existing saved layouts are not migrated. |
+| P2 | `ko/home_host.lua:87`: cover shelves use the text-row capacity, collapsing wide shelves to fewer than three covers despite enough columns. | Bound shelf windows by columns; keep list windows bounded by 52 px rows. Regression verifies a 4×2 shelf requests four books within the same batch. |
 
 ## Screen and widget comparison ledger
 
@@ -35,7 +38,7 @@ The latter remains on ROADMAP; this review does not label it shipped.
 
 | Surface | Comparison and disposition |
 |---|---|
-| Home / Library / Stats pages | Page names, navigation, Back, account setup targets and one batched read tested in `test/home_host_flows.lua`. Retain the installed three-page foundation (`logic/layout.lua:181`); revision 16's two-page M8C default is a remaining layout difference. |
+| Home / Stats pages | Page names, navigation, Back, account setup targets and one batched read tested in `test/home_host_flows.lua`. New/reset M8C layouts match the two-page revision-16 default (`logic/layout.lua:181`); saved layouts remain intact. Larger Library widgets remain available in the editor. |
 | Continue reading | One plain bar, Resume/Details routing and percentage retained. `ko/home_widgets.lua:64` still uses a typographic cover placeholder and lacks the companion-projected time-left/finish forecast, series and overflow actions. These require further owned read-model/widget work. |
 | Book list / presets / Lists | Existing source/style/sort/caption and Cancel/Done draft semantics retained (`test/booklist_flows.lua`). Counts and exclusion stay in the companion. Touch geometry fixed. Real covers, richer row composition and full-height narrow Lists treatment remain presentation work. |
 | Library widget / Storage | Group and device links tested. Compact Library uses one combined count/link band so its targets fit. `ko/home_widgets.lua:126` still lacks storage figures/bar and Collections. There is no owned Storage page/removal workflow; do not draw fabricated capacity figures. |

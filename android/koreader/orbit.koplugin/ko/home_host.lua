@@ -55,7 +55,7 @@ function HomeHost.create()
         local gap,top,bottom=scale(12),scale(self.list_layout and 178 or 120),scale((self.list_layout or #resolved.pages>1) and 52 or 12)
         local w,h=self.dimen.w,self.dimen.h
         local canvas=HomeWidgets.canvas(w,h)
-        HomeWidgets.text(canvas,self.list_title or page.name or page.tab or "Home",gap,gap,w-scale(120),24,false,true)
+        HomeWidgets.text(canvas,self.list_title or page.name or page.tab or "Home",gap,gap,w-scale(self.list_layout and 120 or 220),24,false,true)
         local status,kind=AccountPlan.sync(account,true)
         if status~=self.account_status then
             self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=top}
@@ -87,9 +87,12 @@ function HomeHost.create()
             local context=paint:widget(p.widget,p.instance)
             local ok,result=pcall(function()
                 local need=(HomeWidgets.needs[p.widget] or HomeHostPlan.need)(p)
-                if p.widget ~= "continue-reading" and need.limit then
-                    local pad=scale(rect.h-2<scale(120) and 8 or 14)
+                if p.widget == "lists" or p.widget == "booklist" and (p.settings.style or 0) == 1 then
+                    local pad=scale(rect.h-2<scale(132) and 8 or 14)
                     need.limit=math.min(need.limit,math.max(1,math.floor((rect.h-2-2*pad-scale(52))/scale(52))))
+                elseif p.widget == "booklist" then
+                    -- Cover shelves are columns, so a row-height limit must not collapse them.
+                    need.limit=math.min(need.limit,rect.h-2<scale(132) and 1 or p.w>=4 and 4 or 3)
                 end
                 if HomeWidgets.stats[p.widget] then
                     if not sharedStats then sharedStats=context:read(need.op,need) end

@@ -90,7 +90,7 @@ return function(test,eq,ok,E,W,Widget,withHost)
     test("Home editor: pages, keyboard rename, manual name retention, reset",function()
         withHost(function()
             local e=editor(); local m=e.model
-            click(e,"+ Page"); eq(m.index,2); eq(m:page().name,"Page 4")
+            click(e,"+ Page"); eq(m.index,2); eq(m:page().name,"Page 3")
             local id=m:page().id
             local Input=require("ui/widget/inputdialog")
             local keyboard=Input.onShowKeyboard; Input.onShowKeyboard=function() end
@@ -104,7 +104,7 @@ return function(test,eq,ok,E,W,Widget,withHost)
             ok(m:add("booklist")); eq(m:page().name,"My shelves")
             click(e,"Move ›"); eq(m.index,3); eq(m:page().id,id)
             click(e,"Move ‹"); eq(m.index,2)
-            click(e,"Delete page"); W.shown[#W.shown].ok_callback(); eq(#m.document.pages,3)
+            click(e,"Delete page"); W.shown[#W.shown].ok_callback(); eq(#m.document.pages,2)
             click(e,"Reset"); W.shown[#W.shown].ok_callback(); eq(m.index,1); eq(m:page().name,"Home")
             eq(#m:page().placements,6)
             while #m.document.pages>1 do ok(m:pageAction("remove")) end; local before=m.document

@@ -92,9 +92,10 @@ return function(test,eq,ok,E,W,Widget)
         withHost(function()
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             h:turn(1); local index=h.index
-            eq(h[1][1][1].text,"Library")
+            eq(h[1][1][1].text,"Stats")
+            ok(h[1][1][1].max_width<=h.dimen.w-220,"page title leaves room for Edit and Close")
             h:showList("Want to read","want-to-read")
-            h:onClose(); eq(h.index,index); eq(h[1][1][1].text,"Library")
+            h:onClose(); eq(h.index,index); eq(h[1][1][1].text,"Stats")
             local old=E.state.module
             local opened=0
             E.state.module={showSettings=function() opened=opened+1 end}
@@ -167,6 +168,17 @@ return function(test,eq,ok,E,W,Widget)
             eq(menu.tab_item_table[1][1].text,"Locked"); eq(normal,1); eq(locked,1)
         end)
     end)
+    test("Home design: wide cover shelves read columns rather than a text-row limit",function()
+        withHost(function(_,reads)
+            local layout=E.Layout.default()
+            layout.pages={{id="shelf",tab="Home",placements={{instance="wide",widget="booklist",version=1,
+                x=0,y=0,w=4,h=2,settings={title="Recently added",src="recent",style=0}}}}}
+            E.S.home_layout=layout
+            local h=E.HomeHost.create(); E.HomeHost.active=h
+            eq(reads[#reads].op,"window"); eq(reads[#reads].limit,4)
+            eq(h.metrics.roundTrips,1); eq(h.metrics.spawns,0); eq(h.metrics.network,0)
+        end)
+    end)
     test("Home host: immutable snapshots isolate query and renderer errors",function()
         withHost(function(batches,reads,U)
             local render=E.HomeWidgets.renderers.booklist
@@ -223,22 +235,22 @@ return function(test,eq,ok,E,W,Widget)
             h:onCloseWidget(); eq(E.Library.listener,nil)
         end)
     end)
-    test("Home wiring: all three default pages draw and Stats shares one bounded row",function()
+    test("Home wiring: both approved default pages draw and Stats shares one bounded row",function()
         withHost(function(batches,reads)
             E.S.home_layout=nil
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             local rectangles=0
             local bb={paintRect=function(_,x,y,w,h,color) ok(w>=0 and h>=0); ok(color~=nil); rectangles=rectangles+1 end}
-            for page=1,3 do
+            for page=1,2 do
                 eq(h.index,page)
                 h[1]:paintTo(bb,0,0)
                 ok(E.Budgets.check(E.Budgets.screens.home,h.metrics))
                 eq(h.metrics.spawns,0); eq(h.metrics.network,0); eq(h.metrics.roundTrips,1)
-                if page<3 then h:onNext() end
+                if page<2 then h:onNext() end
             end
             local stats=0
             for _,a in ipairs(reads) do if a.op=="reading.stats" then stats=stats+1 end end
-            eq(stats,1); eq(#batches,3)
+            eq(stats,1); eq(#batches,2)
             ok(rectangles>=400,"real Year, weekly and hourly renderers painted")
         end)
     end)
@@ -277,9 +289,10 @@ return function(test,eq,ok,E,W,Widget)
             end
         end)
     end)
-    test("Home wiring: default Library tile exposes bounded device and group links",function()
+    test("Home wiring: configured Library tile exposes bounded device and group links",function()
         withHost(function()
-            E.S.home_layout=nil
+            E.S.home_layout=E.Layout.default()
+            E.S.home_layout.pages[2].placements={{instance="summary",widget="library",version=1,x=0,y=0,w=2,h=2,settings={}}}
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             h:onNext()
             local tile=h[1][1][6][1][1]
@@ -453,7 +466,7 @@ return function(test,eq,ok,E,W,Widget)
         eq(E.HomeHostPlan.snapshot({items={}}).state,"offline-without-data")
         eq(E.HomeHostPlan.snapshot({items={{key="b"}},freshness={saved=true,offline=true}}).state,"offline-with-data")
         local registry=E.HomeHost.installed()
-        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,3)
+        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,2)
         local projected=E.HomeHostPlan.resolve(E.Layout.default(),registry,{wantToRead=false,lists={read=false},battery=false})
         for _,p in ipairs(projected.pages[1].placements) do ok(p.widget ~= "lists" and p.instance ~= "want") end
     end)
