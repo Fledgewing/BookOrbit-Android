@@ -17,16 +17,16 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
     private var sql: Sql? = null
 
     /** The open database: created on first use; a file of another schema version is replaced. */
-    fun db(): Sql {
+    @Synchronized fun db(): Sql {
         sql?.let { return it }
         NoMedia.directory(root)
         runCatching { File(root, ".nomedia").let { if (!it.exists()) it.createNewFile() } }
-        var s = open(file)
+        var s: Sql = CacheSql(open(file))
         val v = s.pragma("user_version")?.toIntOrNull() ?: 0
         if (v != VERSION && v != 0) {
             s.close()
             listOf(FILE, "$FILE-journal").forEach { File(root, it).delete() }
-            s = open(file)
+            s = CacheSql(open(file))
         }
         if (v != VERSION) {
             s.transaction { SCHEMA.forEach { s.exec(it) } }
@@ -37,7 +37,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
         return s
     }
 
-    override fun close() {
+    @Synchronized override fun close() {
         sql?.close()
         sql = null
     }

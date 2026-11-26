@@ -28,6 +28,36 @@ interface Sql : AutoCloseable {
     }
 }
 
+/** One connection owner for cache operations. Nested helpers join the caller's transaction;
+ * another thread waits until the whole transaction ends, including reads and direct writes.
+ * A failed nested scope poisons the outer transaction even if its caller catches the error. */
+class CacheSql(private val delegate: Sql) : Sql {
+    private var depth = 0
+    private var failed = false
+
+    @Synchronized override fun exec(sql: String, vararg args: Any?) = delegate.exec(sql, *args)
+    @Synchronized override fun <T> query(sql: String, vararg args: Any?, row: (Sql.Row) -> T): List<T> =
+        delegate.query(sql, *args, row = row)
+    @Synchronized override fun close() = delegate.close()
+
+    @Synchronized override fun <T> transaction(block: () -> T): T {
+        if (depth > 0) {
+            depth++
+            try { return block() } catch (e: Throwable) { failed = true; throw e }
+            finally { depth-- }
+        }
+        return delegate.transaction {
+            depth = 1
+            failed = false
+            try {
+                val result = block()
+                check(!failed) { "nested cache transaction failed" }
+                result
+            } finally { depth = 0; failed = false }
+        }
+    }
+}
+
 /** Cache databases use TRUNCATE on FUSE. Only borrowed KOReader statistics keep their native WAL mode. */
 class AndroidSql(file: File, readOnly: Boolean = false, wal: Boolean = false) : Sql {
     private val db: SQLiteDatabase

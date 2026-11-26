@@ -28,7 +28,11 @@ class FastCatalogRefresh(
     private fun key(s: String) = "bulk_stage_$s"
     private fun meta(s: String) = store.meta(key(s))
     private fun set(s: String, v: Any?) = store.setMeta(key(s), v)
-    private fun tick(p: Int) { percent = maxOf(percent, p.coerceAtMost(99)); progress(percent) }
+    private fun tick(p: Int) {
+        percent = maxOf(percent, p.coerceAtMost(99))
+        set("pct", percent)
+        progress(percent)
+    }
     private fun boundary() {
         check(!stopped()) { "stopped" }
         idle()

@@ -4737,6 +4737,29 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
     cacheTeardown()
 end)
 
+test("mirror: pressing Full refresh after a failed bulk run resumes saved progress", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        E.Mirror.cat = cat
+        E.Mirror.active, E.Mirror.busy = nil, nil
+        E.Mirror._status_dir = E.Mirror.dir()
+        E.Mirror._status = { v = 4, engine = "bulk", op = "full", done = 15, total = 100, left = 85, pct = 15 }
+        local launch, op = E.Mirror.launch
+        E.Mirror.launch = function(next_op) op = next_op; return true end
+        E.Mirror.start("Full refresh", true)
+        local resumed, done = op, E.Mirror.status().done
+        E.Mirror._status.left = 0
+        E.Mirror.start("Full refresh", true)
+        E.Mirror.launch = launch
+        eq(resumed, "resume", "paused bulk pages are kept on a second press")
+        eq(done, 15, "saved count is kept")
+        eq(op, "full", "a completed run can be refreshed from scratch")
+    end)
+    cacheTeardown()
+end)
+
 test("mirror: background full runs and resumes never display a badge", function()
     local client, Cat = cacheSetup()
     W.wifi = true
