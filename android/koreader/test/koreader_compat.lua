@@ -60,7 +60,7 @@ local NEEDS = {
     { "frontend/ui/widget/buttontable.lua", { {"buttons_layout", F} } },
     { "frontend/ui/widget/button.lua", { "onFocus", "onUnfocus" } },
     { "frontend/ui/widget/touchmenu.lua", { "init", {"tab_item_table", F} } },
-    { "frontend/ui/widget/buttondialog.lua", { "getButtonById", "onClose" } },
+    { "frontend/ui/widget/buttondialog.lua", { "getButtonById", "onClose", {"tap_close_callback", F} } },
     { "frontend/ui/widget/focusmanager.lua", { "moveFocusTo" } },
     { "frontend/ui/trapper.lua", { "wrap", "info" } },
     { "frontend/ui/uimanager.lua", { "show", "close", "scheduleIn", "nextTick", "unschedule", "setDirty",

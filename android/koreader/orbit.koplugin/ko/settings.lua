@@ -49,6 +49,7 @@ for _i, d in ipairs(SCHEMA.settings) do
 end
 
 S = G_reader_settings:readSetting("orbit_android") or {}
+local first_run_changed = HomePlan.migrate012(S)
 for k, v in pairs(DEFAULTS) do
     if S[k] == nil then S[k] = v end
 end
@@ -61,6 +62,9 @@ if type(S.settings_at) ~= "table" then S.settings_at = {} end
 -- First run with per-key times: the old whole-set time for the keys shared before, 1 ms for the rest.
 SETTINGS_SEEDED = SettingsSync.seed(SCHEMA, S.settings_at, SettingsSync.LEGACY, S.shared_settings_at)
 saveSettings()
+-- Persist cutover and pending news together before any later startup work. A crash
+-- before this flush reruns the additive migration; after it, it cannot reset a layout.
+if first_run_changed then G_reader_settings:flush() end
 
 -- The book that was open when the previous KOReader process ended without a close (killed,
 -- e.g. by a firmware after sleep). Read once per process, before this run's ReaderReady.

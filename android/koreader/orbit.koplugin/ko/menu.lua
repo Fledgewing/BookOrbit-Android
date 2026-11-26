@@ -333,7 +333,6 @@ function OrbitAndroid:menuItems()
             local out = {}
             out[#out+1] = action("Edit layout", function() HomeEditor.open("edit") end)
             out[#out+1] = action("Reset layout", function() HomeEditor.open("reset") end)
-            out[#out+1] = self:settingRow("home_screen")
             out[#out+1] = action("Page names", function() HomeEditor.open("rename") end)
             out[#out+1] = self:settingRow("home_button")
             return out

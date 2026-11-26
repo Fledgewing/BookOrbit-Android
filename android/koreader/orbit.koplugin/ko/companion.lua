@@ -230,6 +230,9 @@ function Companion.workerProblem(purpose)
     end
     local v = Companion.version
     if v ~= PATCH_VERSION then
+        if Update.compare(v, PATCH_VERSION) == 1 then
+            return string.format(_("Update BookSync plugin to %s %s (it is %s). Restart KOReader after updating."), v, purpose, PATCH_VERSION)
+        end
         return string.format(_("Update BookSync Companion to %s %s (it is %s)"), PATCH_VERSION, purpose, tostring(v or "older"))
     end
     return nil

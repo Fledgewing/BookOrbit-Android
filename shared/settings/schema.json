@@ -92,32 +92,6 @@
    "applies": "now"
   },
   {
-   "key": "home_screen",
-   "type": "choice",
-   "default": "server",
-   "values": [
-    {
-     "id": "server",
-     "label": "Server plugin’s Home"
-    },
-    {
-     "id": "booksync",
-     "label": "BookSync Home"
-    }
-   ],
-   "section": "reading",
-   "label": "Home screen",
-   "line": "Choose the Home shown inside KOReader.",
-   "reader": [
-    "plugin"
-   ],
-   "search": [
-    "home",
-    "widgets"
-   ],
-   "applies": "now"
-  },
-  {
    "key": "home_button",
    "type": "choice",
    "default": "smart",

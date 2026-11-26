@@ -10,6 +10,9 @@ for _, id in ipairs({"home", "library", "details", "series", "settings", "batter
         id == "home" and 500 or id == "editor" and 100 or 50)
 end
 Budgets.screens["account"] = budget(3, 16384, 50)
+-- Upgrade news is five static rows, with no read-model or worker access.
+Budgets.screens["whats-new"] = budget(5, 0, 50)
+Budgets.screens["whats-new"].roundTrips = 0
 -- Owned Search inherits the Library screen family; Home pages inherit home.
 Budgets.screens.search = Budgets.screens.library
 Budgets.screens.account.displayRows=12

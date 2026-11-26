@@ -745,6 +745,61 @@ the M8C Font Custom segment shows its value ("Baskerville +1"); contrast values 
 "Dark ±"; §23 now says Custom margins are stored per device. `flows3.js` 338/338. The critic's r10 scripts join `r3/all.sh`.
 
 
+### Android first run and upgrade review (pass 3, 2026-11-26)
+
+Owned Home is the Android 0.12 default on both fresh installs and upgrades. The
+legacy Home selector is retired from the shared settings schema and Settings;
+old internal navigation remains only for compatibility while transport moves.
+The existing `logic/layout.lua:181` defaults provide Home, Library and Stats,
+including Also reading, Recently added, Want to read, On device and Finished.
+A saved layout (including class overrides) remains authoritative; this cutover
+never resets it or copies catalogs, logins, outbox or reading intents.
+
+Reuse: `ko/settings.lua:52` owns the existing settings record;
+`logic/home_plan.lua:81` owns the additive Home migration; `ko/home_host.lua:15` reads layouts
+through `ko/home_editor.lua:14`; `ko/store.lua:1` remains the file boundary.
+`ko/library.lua:15` owns paint budgets, and `logic/home_host.lua:46` projects
+small immutable snapshots. The companion's `SettingsStore.kt:51` already
+persists replacements before removing old setting keys; no parallel migration
+or persistence store was added.
+
+Before applying defaults, an additive migration records whether a settings
+record already exists, selects owned Home, and saves the pending-news bit with
+its completion marker in one reader-settings flush. A crash before that flush
+reruns the same operation; later starts preserve acknowledgement. Existing 0.11
+`sync_mode=custom` and its timestamp are untouched. Upgrade news opens above the
+next explicit Home opening, never on plugin load or over foreground reading;
+Done or dismissal marks it seen and flushes. Fresh installs have no pending news.
+The five static rows inherit a named zero-byte, zero-worker, zero-network and
+zero-subprocess screen budget and log one info timing span. Other screens and
+widgets retain their caller budgets; host tests do not establish device timing.
+
+Missing catalog windows on a signed-out reader offer Sign in rather than an
+unfinishable Loading/Retry cycle. Cached rows still draw, and directly entered
+logins retain their normal loading behavior without an account. Empty saved shelves say No books here yet;
+an empty Continue reading card says Open a book to start reading, without Retry.
+Version skew blocks Home before constructing the host, naming the companion or
+plugin that needs updating. X4 Pro, X4 and X3 cutover remains deferred by the
+maintainer's Android-first ruling; no firmware setting or migration changes.
+
+The upgrade sheet uses pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`
+`frontend/ui/widget/buttondialog.lua:339` (`onClose`) and `:68`'s
+`tap_close_callback`, which
+handles both Back and outside taps; Done acknowledges explicitly before closing.
+The regression double follows that native path rather than InfoMessage's separate
+`dismiss_callback`. The compatibility guard now requires the native callback field.
+
+Pass 3 integration ruling: the first-run task explicitly requires three Android
+default pages. Keep Home, Library and Stats and the existing starter shelves,
+while retaining pass 4's navigation and touch fixes. This explicit task requirement
+supersedes pass 4's two-page default adjustment; saved layouts remain untouched.
+
+The upgrade sheet's Done action declares a 50 px content height, in addition to
+native padding/borders. Pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`
+`frontend/ui/widget/buttontable.lua:88` forwards an explicit height; without it,
+`frontend/ui/widget/button.lua:111` derives height from the font. The regression
+checks the action's minimum target as well as its acknowledgement lifecycle.
+
 ### Android implementation of §23 (F12-M, 2026-11-26)
 
 The rev 16 editor builds on `ko/menu.lua:236` (Reading group),
@@ -858,6 +913,7 @@ The companion `BookOrbitLibrary` implementation lives in
 and owned read-model publisher. There is no root-package backend alias. Package
 and protocol guards enforce that boundary across production source variants.
 
+
 ### Android design review pass 4 (2026-11-26)
 
 [The comparison ledger](REVIEW-PASS-4.md) records baseline file/line findings,
@@ -868,6 +924,7 @@ Every screen/widget retains its strict inherited budget: companion-owned heavy
 work, bounded ready-to-draw rows/bytes, zero render network/subprocesses, one Home
 batch and at most 16 KiB per widget. Flow geometry is not device typography or
 latency acceptance; the complete revision-16 prototype remains the target.
+
 
 ### Android Storage implementation (2026-11-26, g-storage)
 
