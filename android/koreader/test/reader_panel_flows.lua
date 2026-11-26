@@ -300,6 +300,27 @@ return function(here, test, ok, eq)
         ui.document.default_font="Book Face"
         return ui
     end
+    test("reader scaled geometry: header targets and panels fit M8C native scaling",function()
+        for _,factor in ipairs({1,1.5,2.34}) do
+            local W,E=world(); W.scale=factor; styleReader(W)
+            E.AccountView={syncAction=function() return "Sign in to sync",function() end end}
+            W.caps={account={signedIn=false}}
+            E.ReaderPanel.show(W.ui,"reader-top-panel")
+            local sheet=E.ReaderPanel.sheet
+            local header=sheet:rows()[1]; local width=0
+            for _,cell in ipairs(header.choices) do
+                local target=cell.width or sheet.metrics.button
+                ok(target>=math.ceil(50*factor)); width=width+target
+            end
+            ok(width<sheet.plan.inner,"header leaves room for title and author")
+            ok(sheet.plan.h<=sheet.screen_h)
+            E.ReaderPanel.show(W.ui,"reader-bottom-panel")
+            sheet=E.ReaderPanel.sheet; ok(sheet.plan.h<=sheet.screen_h)
+            for _,item in ipairs(sheet.plan.items) do
+                if item.kind=="scrubber" or item.kind=="reader-actions" then ok(item.h>=math.ceil(50*factor)) end
+            end
+        end
+    end)
     test("reader quick controls: hardware sliders, preset destination, size units and native bookmark",function()
         local W,E=world(); local ui=styleReader(W)
         W.hardware=true; W.warmth_supported=true

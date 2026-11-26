@@ -73,7 +73,7 @@ function ReaderSheet:rowWidget(block,w,h,mt)
                 dimen=Geom:new{w=width,h=h},
                 require("ui/widget/container/centercontainer"):new{dimen=Geom:new{w=width,h=h},
                     require("ui/widget/verticalgroup"):new{align="center",
-                        require("ui/widget/iconwidget"):new{icon=cell.icon,width=24,height=24},
+                        require("ui/widget/iconwidget"):new{icon=cell.icon,width=math.floor(mt.button*.48),height=math.floor(mt.button*.48)},
                         require("ui/widget/textboxwidget"):new{text=cell.text,width=width-8,
                             face=require("ui/font"):getFace("cfont",14),alignment="center"}}}}
             area.ges_events={Tap={require("ui/gesturerange"):new{ges="tap",range=function() return area.dimen end}}}
@@ -128,15 +128,16 @@ function ReaderSheet:rowWidget(block,w,h,mt)
         local group=require("ui/widget/horizontalgroup"):new{}
         for _,r in ipairs(block.row.controls) do
             local width=math.floor(w/#block.row.controls)
+            local inset=math.floor(mt.button*.24)
             local Geom=require("ui/geometry")
             local area=require("ui/widget/container/inputcontainer"):new{dimen=Geom:new{w=width,h=h},
                 require("ui/widget/verticalgroup"):new{align="center",
                     require("ui/widget/textwidget"):new{text=r.text,face=require("ui/font"):getFace("cfont",14)},
-                    require("ui/widget/progresswidget"):new{width=width-24,height=10,percentage=r.value/100,
+                    require("ui/widget/progresswidget"):new{width=width-2*inset,height=math.max(4,math.floor(mt.button*.2)),percentage=r.value/100,
                         ticks={},bordersize=0,radius=0,margin_h=0,margin_v=0}}}
             area.ges_events={Tap={require("ui/gesturerange"):new{ges="tap",range=function() return area.dimen end}}}
             area.onTap=function(_,_,ges)
-                if ges and ges.pos then r.set(math.floor(math.max(0,math.min(1,(ges.pos.x-area.dimen.x-12)/(width-24)))*100+.5)) end
+                if ges and ges.pos then r.set(math.floor(math.max(0,math.min(1,(ges.pos.x-area.dimen.x-inset)/(width-2*inset)))*100+.5)) end
                 return true
             end
             self:touchControl(area,function() r.set(math.min(100,r.value+10)) end)
@@ -150,18 +151,22 @@ function ReaderSheet:rowWidget(block,w,h,mt)
         local area=require("ui/widget/container/inputcontainer"):new{
             dimen=Geom:new{w=w,h=mt.button},
             require("ui/widget/container/centercontainer"):new{dimen=Geom:new{w=w,h=mt.button},
-                require("ui/widget/progresswidget"):new{width=w,height=10,percentage=r.value or 0,
+                require("ui/widget/progresswidget"):new{width=w,height=math.max(4,math.floor(mt.button*.2)),percentage=r.value or 0,
                     ticks=r.chapters,last=1,bordersize=0,radius=0,margin_h=0,margin_v=0}}}
         -- Bookmarks use a second, separate marker track so they remain distinguishable.
         area.bookmarks=r.bookmarks
         local paint=area.paintTo
         function area:paintTo(bb,x,y)
             if paint then paint(self,bb,x,y) end
+            local thumbWidth,thumbHeight=math.floor(mt.button*.16),math.floor(mt.button*.36)
+            local markWidth,markHeight=math.floor(mt.button*.08),math.floor(mt.button*.2)
             if r.value then
-                bb:paintRect(x+math.floor(r.value*(w-8)),y+mt.button/2-9,8,18,require("ffi/blitbuffer").COLOR_BLACK)
+                bb:paintRect(x+math.floor(r.value*(w-thumbWidth)),y+math.floor((mt.button-thumbHeight)/2),
+                    thumbWidth,thumbHeight,require("ffi/blitbuffer").COLOR_BLACK)
             end
             for _,fraction in ipairs(self.bookmarks or {}) do
-                bb:paintRect(x+math.floor(fraction*(w-4)),y+mt.button/2-15,4,10,require("ffi/blitbuffer").COLOR_BLACK)
+                bb:paintRect(x+math.floor(fraction*(w-markWidth)),y+math.floor(mt.button*.2),
+                    markWidth,markHeight,require("ffi/blitbuffer").COLOR_BLACK)
             end
         end
         area.ges_events={Tap={require("ui/gesturerange"):new{ges="tap",range=function() return area.dimen end}}}
@@ -200,7 +205,7 @@ function ReaderSheet:onTapAnywhere(_arg, ges)
 end
 function ReaderSheet:build()
     local finish = Budgets.span(self.screen .. ".draw", now_s, log)
-    if self.screen=="reader-bottom-panel" then self.metrics.gap=4; self.metrics.pad=12 end
+    if self.screen=="reader-bottom-panel" then self.metrics.gap=math.floor(self.metrics.button*.08); self.metrics.pad=math.floor(self.metrics.button*.24) end
     self.focus_controls={}
     EndSheet.build(self)
     if self.keyboard_focus then
@@ -333,8 +338,8 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
         header[#header+1]=cell(settings,"appbar.settings")
         header[#header+1]={text=native.marked and "Remove bookmark" or "Add bookmark",
             icon="bookmark",marked=native.marked,callback=action("bookmark",nil,true)}
-        header[1].width=80; header[1].text="Home"; header[1].icon=nil
-        if sync and sync.text~="Sync" then header[2].width=140 end
+        header[1].width=math.floor(1.6*require("device").screen:scaleBySize(50)); header[1].text="Home"; header[1].icon=nil
+        if sync and sync.text~="Sync" then header[2].width=math.floor(2.8*require("device").screen:scaleBySize(50)) end
         rows={
             {kind="reader-header",text=m.title,author=m.author,choices=header},
             {kind="reader-tiles",choices={
