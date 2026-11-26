@@ -23,6 +23,10 @@ return function(M,test,ok,eq)
         local next=B.choose(renamed,{src="author:A",title="A"}); eq(next.title,"Up next"); eq(next.query,nil)
         eq(cfg.query.show,"unread"); eq(B.title(cfg,"  ").title,"Custom filter")
         eq(B.suggest(cfg).title,"Up next")
+        local saved={title="My reading",src="custom",source="reading",query={q="Moon"},exclude_current=true}
+        local same=B.choose(saved,{src="custom",title="Custom filter"})
+        eq(same.source,"reading"); eq(same.exclude_current,true); eq(same.query.q,"Moon")
+        same.query.q="Changed"; eq(saved.query.q,"Moon")
         local m=M.HomeEditorPlan.new(L.default()); m.selected="also"
         local original=m.document
         eq(m:configure({title="A",src="invalid"}),nil); eq(m.document,original)
