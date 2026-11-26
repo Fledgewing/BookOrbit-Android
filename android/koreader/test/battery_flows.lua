@@ -69,6 +69,10 @@ return function(test,eq,ok,E,W,withHost)
     test('battery: cold and oversized snapshots remain bounded and late callbacks never reopen a page',function()
         withHost(function()
             E.LibraryAdapter.read=function() return nil end
+            local card=E.HomeWidgets.renderers.battery({w=2,h=2},E.HomeHostPlan.snapshot({items={},pending=true}),function() end,{w=280,h=220})
+            local loading=false
+            for _,child in ipairs(card[1]) do if child.text=='Loading battery…' then loading=true end end
+            ok(loading,'host loading state remains distinct from learning')
             local page=E.BatteryUI.show()
             eq(page.metrics.rows,0); eq(page.metrics.spawns,0); eq(page.metrics.network,0)
             eq(E.reading(),false); local refresh=page.refresh; ok(refresh)

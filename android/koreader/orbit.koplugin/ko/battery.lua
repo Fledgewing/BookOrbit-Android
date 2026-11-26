@@ -9,6 +9,8 @@ end
 function BatteryUI.widget(p,snapshot,dispatch,rect)
     local finish=Budgets.span("battery.widget",now_s,log)
     local data=snapshot.data
+    if snapshot.state=="loading" then data={pending=true}
+    elseif snapshot.state=="error" then data={error=snapshot.error or "Unavailable"} end
     local plan=BatteryWidgetPlan.widget(data,p.w,p.h)
     local s=function(n) return Device.screen:scaleBySize(n) end
     local w,h=rect.w-2,rect.h-2
