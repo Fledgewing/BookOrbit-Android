@@ -38,8 +38,8 @@ end
 function OrbitAndroid:wakeFlow(reason)
     -- OrbiSmart: a short nap rarely follows reading elsewhere; its sleep sync already ran
     -- (docs/design/position-sync.md §3.3, wake check after >= 5 min asleep).
-    if OSM and OSM.on() and reason == "wake" and state.paused_for and state.paused_for < OSM.WAKE_MIN_S then
-        log("orbismart: woke after " .. fmt(state.paused_for) .. "; no wake check under " .. OSM.WAKE_MIN_S .. " s")
+    if Server.positionOn() and reason == "wake" and state.paused_for and state.paused_for < Server.positionWakeMinimum() then
+        log("orbismart: woke after " .. fmt(state.paused_for) .. "; no wake check under " .. Server.positionWakeMinimum() .. " s")
         return
     end
     if not S.sync_on_wake then
@@ -61,21 +61,21 @@ function OrbitAndroid:wakeFlow(reason)
             return
         end
         -- OrbiSmart: pull and decide first, then the outbox under the behind-hold.
-        if OSM and OSM.on() and inBook() and can(p, "reading_sync") then
+        if Server.positionOn() and inBook() and can(p, "reading_sync") then
             log(reason .. ": OrbiSmart pull, then the outbox; network ready in", fmt(now_s() - t0))
-            return OSM.pullThenDrain(p, "wake", "orbit_" .. reason, function()
-                UIManager:scheduleIn(1, function() Sync.waitOutbox(p, 20, function() Wifi.release(lease) end) end)
+            return Server.pullThenDrain(p, "wake", "orbit_" .. reason, function()
+                UIManager:scheduleIn(1, function() Server.waitOutbox(p, 20, function() Wifi.release(lease) end) end)
             end)
         end
         if can(p, "outbox") then Server.drain(p, "orbit_" .. reason) end
         -- Hold Wi-Fi until the plugin's drain and pull are done, then restore.
         UIManager:scheduleIn(1, function()
-            Sync.waitOutbox(p, 20, function() Wifi.release(lease) end)
+            Server.waitOutbox(p, 20, function() Wifi.release(lease) end)
         end)
         if inBook() and can(p, "wake_pull") then
             -- The plugin debounces pulls for 25 s (bookorbit_progress_sync.lua:26, 383-387).
             -- Clear it for this one pull; on a fresh start skip it if a pull already ran.
-            Sync.clearPullDebounce(p, reason)
+            Server.clearPullDebounce(p, reason)
             Server.pull(p, "orbit_" .. reason)
             log(reason .. ": asked plugin to drain outbox and pull, network ready in", fmt(now_s() - t0))
         else

@@ -2,7 +2,7 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.OC.readFile,writeFile=E.OC.writeFile}
+            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
         E.Companion.workerProblem=function() end
@@ -52,8 +52,8 @@ return function(test,eq,ok,E,W,Widget)
         E.HomeEditor.codec=function() return {encode=function(d)
             seq=seq+1; records[tostring(seq)]=E.Layout.copy(d); return tostring(seq)
         end,decode=function(raw) return E.Layout.copy(records[raw]) end} end
-        E.OC.readFile=function(path) return files[path] end
-        E.OC.writeFile=function(path,raw) files[path]=raw; return true end
+        E.Store.readFile=function(path) return files[path] end
+        E.Store.writeFile=function(path,raw) files[path]=raw; return true end
         W.shown={}
         local success,err=pcall(fn,batches,reads,U)
         if E.HomeHost.active then E.HomeHost.active:onCloseWidget() end
@@ -63,7 +63,7 @@ return function(test,eq,ok,E,W,Widget)
         E.Library.open,E.ReaderPanel=saved.open,saved.panel
         E.HomeEditor.save=saved.save
         E.liveUI,E.Wifi.state,E.EOB.sheet=saved.liveUI,saved.wifiState,saved.eobSheet
-        E.OC.readFile,E.OC.writeFile=saved.readFile,saved.writeFile
+        E.Store.readFile,E.Store.writeFile=saved.readFile,saved.writeFile
         E.Companion.workerProblem=saved.problem
         ok(success,err)
     end

@@ -123,3 +123,45 @@ function Server.testSync(p, reader, done)
     if reader then pluginEvent(liveUI(), p, Server.events.sync, {quiet=true, on_done=done})
     else p:startSweep({quiet=true, on_progress=function() end, on_done=done}) end
 end
+
+-- Legacy service bridge. Only reviewed lifecycle/sheet modules use this facade.
+function Server.cacheClient() return OC.client() end
+function Server.watchCache() return OC.watchChecks() end
+function Server.cacheBusy() if OC and OC.busy then return OC.busy() end end
+function Server.refreshLibrary(...) return OC.menuFullRefresh(...) end
+function Server.resumeCache(...) if Mirror and Mirror.kick then return Mirror.kick(...) end end
+function Server.fullRefreshNotice() return Mirror and (Mirror.notices or Mirror.fullRunning()) end
+function Server.installGrouping(...) return Grouping.install(...) end
+function Server.positionOn() return OSM and OSM.on() end
+function Server.positionWakeMinimum() return OSM.WAKE_MIN_S end
+function Server.pullThenDrain(...) return OSM.pullThenDrain(...) end
+function Server.readFromHere(...) return OSM.readFromHere(...) end
+function Server.waitOutbox(...) return Sync.waitOutbox(...) end
+function Server.clearPullDebounce(...) return Sync.clearPullDebounce(...) end
+function Server.countStorage(...) if OC and OC.storageCount then return OC.storageCount(...) end end
+function Server.refreshCovers(...) if Mirror and Mirror.coverPass then return Mirror.coverPass(...) end end
+function Server.positionModeChanged(...) if OSM and OSM.modeChanged then return OSM.modeChanged(...) end end
+function Server.reportRecommended(...) if Rec then return Rec.report(...) end end
+function Server.applyRecommended(...) if Rec then return Rec.applyChoices(...) end end
+function Server.capabilitiesLost(...) if Rec then return Rec.capsLost(...) end end
+function Server.capabilitiesGained(...) if Rec then return Rec.pass(...) end end
+function Server.endSheetOpen() return EOB and EOB.sheet~=nil end
+function Server.leaveEndSheet(...) return EOB and EOB.leaveForHome(...) end
+function Server.endAction(name,...) return EOB.actions[name](...) end
+function Server.localBookId(path)
+    local cat=Mirror and Mirror.catalog and Mirror.catalog()
+    if not (path and cat and type(cat.on_device)=="table") then return nil end
+    for id,p in pairs(cat.on_device) do if p==path then return tonumber(id) end end
+end
+function Server.quietLegacy(quiet)
+    quiet(Copies,{"ask","tick","pump","found","prepared"})
+    quiet(OC,{"watchChecks","applyEvents","landed","redraw_soon","redraw","storageCount","storageCounted","rechecked"})
+    quiet(Mirror,{"tick","kick","poll","ran","finish","coverPass"})
+    quiet(LF,{"quiet","paintTiles","quietSwitch"})
+    quiet(OSM,{"pause","pullThenDrain"})
+end
+function Server.timeLegacy(wrap)
+    for _,name in ipairs({"EOB","OSM","OC","LF","Sync","Mirror","Copies"}) do
+        wrap(getfenv(1)[name],name)
+    end
+end

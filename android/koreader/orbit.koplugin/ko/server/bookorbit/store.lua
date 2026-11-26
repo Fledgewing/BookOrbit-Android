@@ -109,3 +109,84 @@ function Server.bulkList(conn, w)
         validated_at=tonumber(Store.meta(conn, "bulk_at")) or 0, table="lists"}
 end
 
+
+-- Original legacy lookup/search; owned renderers only consume Store.library.
+local within,rows=Store.within,Store.rows
+-- Bulk-generation windows: SQL filters/ranks use bound values and decode only this window.
+-- Network, JSON parsing and index construction belong to the companion.
+-- A list window. -> entry { body, validated_at } or nil when a position isn't saved.
+local function list(conn, w)
+    if Store.meta(conn, "bulk_active") then return Server.bulkList(conn, w) end
+    local l = rows(conn, "SELECT kind, total, head, validated_at FROM lists WHERE identity = ?", w.identity)[1]
+    if not l then return nil end
+    local total = tonumber(l[2]) or 0
+    local start, stop, size = Cache.window(l[1] or w.kind, total, w.page, w.size, w.offset)
+    local got = rows(conn, "SELECT li.pos, COALESCE(b.item, li.item) FROM list_items li LEFT JOIN books b ON b.id = li.book_id "
+        .. "WHERE li.identity = ? AND li.pos >= ? AND li.pos < ? ORDER BY li.pos", w.identity, start, stop)
+    if #got ~= stop - start then return nil end
+    local items = {}
+    for i, r in ipairs(got) do
+        local item = Cache.decode(r[2] or "")
+        if type(item) ~= "table" then return nil end
+        items[i] = item
+    end
+    return { body = Cache.assemble(Cache.decode(l[3] or ""), items, total, start, stop, size, w.offset),
+        validated_at = tonumber(l[4]) or 0, table = "lists" }
+end
+
+-- What the cache holds for a read (OC.lookup): { key, body, validated_at, stale, path } or nil.
+-- template: the plugin's detail request with Mirror.SENTINEL for the id (Mirror.detailPath).
+function Store.read(owner, key, path, template)
+    return within(owner, "read:" .. key, function(conn)
+        local w = Cache.listWindow(path)
+        local e
+        if w then
+            e = list(conn, w)
+        else
+            local id = Cache.detailId(path, template, Mirror.SENTINEL)
+            if id then
+                local r = rows(conn, "SELECT detail, detail_at FROM books WHERE id = ? AND detail IS NOT NULL", id)[1]
+                local body = r and Cache.decode(r[1] or "")
+                if type(body) == "table" then e = { body = body, validated_at = tonumber(r[2]) or 0, table = "books" }
+                elseif Store.meta(conn, "bulk_active") then
+                    local stub = rows(conn, "SELECT item FROM bulk_books WHERE g = ? AND id = ?", tonumber(Store.meta(conn, "bulk_active")), id)[1]
+                    local item = stub and Cache.decode(stub[1] or "")
+                    if type(item) == "table" then e = {body=item, validated_at=0, stale=true, table="books", partial=true} end
+                end
+            else
+                local r = rows(conn, "SELECT body, validated_at, stale FROM entries WHERE key = ?", key)[1]
+                local body = r and Cache.decode(r[1] or "")
+                if type(body) == "table" then e = { body = body, validated_at = tonumber(r[2]) or 0, stale = tonumber(r[3]) == 1 or nil, table = "entries" } end
+            end
+        end
+        if e then e.key, e.path = key, path end
+        return e
+    end)
+end
+
+-- An offline search over the saved books (title, authors, series): the server's list shape.
+function Store.search(owner, path)
+    local q = Cache.parseQuery((tostring(path):match("%?(.*)$")) or "")
+    local words = Cache.searchWords(q.q)
+    if #words == 0 then return nil end
+    return within(owner, "search:" .. path, function(conn)
+        local where = {}
+        for _ in ipairs(words) do table.insert(where, "search LIKE ? ESCAPE '\\'") end
+        local bulk = tonumber(Store.meta(conn, "bulk_active"))
+        local source = bulk and "books b JOIN bulk_books c ON c.id=b.id AND c.g=" .. bulk or "books"
+        local item = bulk and "c.item" or "item"
+        local cond = item .. " IS NOT NULL AND " .. table.concat(where, " AND ")
+        local total = tonumber(rows(conn, "SELECT count(*) FROM " .. source .. " WHERE " .. cond, unpack(words))[1][1]) or 0
+        local start, stop, size = Cache.window("books", total, q.page, q.size, q.offset)
+        local args = { unpack(words) }
+        table.insert(args, stop - start)
+        table.insert(args, start)
+        local items = {}
+        for _, r in ipairs(rows(conn, "SELECT " .. item .. " FROM " .. source .. " WHERE " .. cond .. " ORDER BY search LIMIT ? OFFSET ?", unpack(args))) do
+            local item = Cache.decode(r[1] or "")
+            if type(item) == "table" then table.insert(items, item) end
+        end
+        return Cache.assemble({ query = q.q }, items, total, start, stop, size, q.offset)
+    end)
+end
+

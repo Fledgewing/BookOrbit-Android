@@ -28,9 +28,13 @@ IMPLEMENTATION = re.compile(r'(?:net\.fledgewing\.orbitcompanion\.server\.[a-z]+
 # Reviewed legacy facade consumers: permissions to call the facade, never protocol exemptions.
 # main.lua is the only implementation loader; owned Home/Details/widget modules are absent.
 LUA_COMPAT_CONSUMERS = frozenset(LUA / 'ko' / name for name in (
-    'home.lua', 'start.lua', 'notices.lua', 'test_sync_path.lua', 'sleepscreen.lua', 'store.lua',
+    'home.lua', 'start.lua', 'notices.lua', 'test_sync_path.lua', 'sleepscreen.lua',
     'wifi.lua', 'sleep.lua', 'module.lua', 'endsheet.lua', 'menu.lua',
+    'net.lua', 'shared.lua', 'main_loop.lua',
 ))
+
+LEGACY_GLOBALS = r'OC|Mirror|OSM|Copies|LF|Grouping|Rec|EOB|Sync'
+LUA_STRINGS = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\[(=*)\[.*?\]\1\]', re.S)
 
 LEGACY_API = re.compile(r'\b(?:requestLifecycleOutboxDrain|requestProgressPull|requestProgressPush|fetchRemoteProgress|getLifecycleOutbox|getSyncCoordinator|last_remote_progress|pull_timestamp|push_timestamp|promptLogin|startSweep|enqueueLifecycleSnapshot|catalogSetReadStatus|catalogSetRating|catalogBooks|catalogBook|newClient|getDocumentDigest|getLastPercent|getLastProgress|remoteProgressIsNewer|isSamePlace|pages_before_update|isLoggedIn|_onSuspend)\b')
 
@@ -65,6 +69,17 @@ def violations(path, source):
         errors.append(f'{path}: only the library interface may call its adapter binding')
     if lua and re.search(r'\bServer[.:]|\b(?:serverPlugin|serverOverBook|serverScreen)\s*\(', code) and path not in LUA_COMPAT_CONSUMERS:
         errors.append(f'{path}: unreviewed legacy adapter facade consumer; owned UI must use Library')
+    if lua:
+        # These are implementation objects exported by old shared-environment modules,
+        # not neutral services. Quoted UI labels such as "Sync" are still ordinary data.
+        identifiers = LUA_STRINGS.sub(lambda m: re.sub(r'[^\n]', ' ', m[0]), code)
+        if re.search(r'\b(?:' + LEGACY_GLOBALS + r')\b', identifiers) or re.search(
+                r'\[\s*["\'](?:' + LEGACY_GLOBALS + r')["\']\s*\]', code):
+            errors.append(f'{path}: shared backend implementation outside adapter; use Library or reviewed Server facade')
+        if re.search(r'\bStore[.:](?:read|search)\b', identifiers):
+            errors.append(f'{path}: legacy protocol lookup outside adapter')
+        if path != LUA / 'ko/store.lua' and re.search(r'\bStore[.:](?:library|conn|rows|within|meta)\b', identifiers):
+            errors.append(f'{path}: owned UI must read through Library, not persistence internals')
     for n, line in enumerate(code.splitlines(), 1):
         # About's shared credits are data, not a protocol call. The literal credit is the sole
         # permitted brand use, not an exception for the About source file.
@@ -101,6 +116,14 @@ class GuardTests(unittest.TestCase):
         self.assertTrue(violations(LUA / 'ko/widget.lua', 'require("socket.http")'))
         self.assertTrue(violations(LUA / 'ko/widget.lua', 'http.request{}'))
         self.assertTrue(violations(LUA / 'ko/home.lua', 'p:fetchRemoteProgress(digest, callback)'))
+    def test_shared_environment_cannot_bypass_adapter_import_guards(self):
+        for value in ('OC.client()', 'Mirror.catalog()', 'OSM.pullThenDrain()', 'Sync.waitOutbox()',
+                      'EOB.actions.book()', 'Rec.report()', 'quiet(Copies)', 'env["OC"].request()',
+                      'Store.read(owner,key,path)', 'Store.search(owner,path)', 'Store.library(owner,key)'):
+            self.assertTrue(violations(LUA / 'ko/home_widgets.lua', value), value)
+            self.assertTrue(violations(LUA / 'ko/home.lua', value), value)
+        self.assertFalse(violations(LUA / 'ko/home_editor.lua', 'Store.readFile(path)'))
+        self.assertFalse(violations(LUA / 'ko/menu.lua', 'local label="Sync"'))
     def test_comments_are_the_only_ignored_syntax(self):
         self.assertFalse(violations(KOTLIN / 'Widget.kt', '// BookOrbit\n/* readStatus */\nval x="https://library.invalid"'))
         self.assertFalse(violations(LUA / 'ko/widget.lua', '-- BookOrbit\n--[[ readStatus ]]\nlocal x="https://library.invalid"'))

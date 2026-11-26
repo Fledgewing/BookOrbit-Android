@@ -149,6 +149,28 @@ return function(test, eq, ok, here, Cache)
         eq(e.LibraryAdapter.read("bounded"),nil); eq(reads,1)
 
     end)
+    test("storage: local IO and directory providers work without a backend", function()
+        local mkdirs=0
+        local e=setmetatable({Db={pid=function() return 1 end},require=function(name)
+            if name=="libs/libkoreader-lfs" then return {mkdir=function() mkdirs=mkdirs+1 end} end
+            if name=="datastorage" then return {getSettingsDir=function() return "/fixture/settings" end} end
+            error(name)
+        end}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/store.lua")),e)()
+        eq(e.OC,nil); eq(e.Store.directoryReady(),false); eq(e.Store.inChild(),false)
+        eq(e.Store.dir(),"/fixture/settings/orbit-cache"); eq(e.Store.dir(),"/fixture/settings/orbit-cache")
+        eq(mkdirs,2); eq(e.Store.directoryReady(),true)
+        e.Store.directory=function() return "/alternate" end
+        eq(e.Store.path(),"/alternate/orbit.db")
+        local path=os.tmpname()
+        local success,err=pcall(function()
+            eq(e.Store.writeFile(path,"a\0b"),true)
+            eq(e.Store.readFile(path,2),"a\0")
+            eq(e.Store.readFile(path),"a\0b")
+        end)
+        os.remove(path)
+        ok(success,err)
+    end)
     test("library: server boundary has no baselines or suppressions", function()
         local result = os.execute('python3 "' .. here .. '/../../../tools/test/test-server-boundary.py"')
         eq(result, 0, "server boundary guard")

@@ -50,7 +50,9 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
 - **Server adapters own protocol.** Android endpoint paths, authentication, upstream transport primitives, backend JSON and
   backend terms live only in `server/bookorbit` (Kotlin) and `ko/server/bookorbit` /
   `logic/server/bookorbit` (Lua compatibility). Only `ServerAdapters.kt` and the plugin loader
-  wire implementations. UI uses the neutral library/read model and capability flags. Run
+  wire implementations. Direct legacy Lua globals are not an interface: use Library or the
+  reviewed Server facade; local file IO belongs to generic Store. UI uses the neutral
+  library/read model and capability flags. Run
   `python3 tools/test/test-server-boundary.py`; no baseline, suppression or skip list is allowed.
   See `docs/design/backend-independence.md` for adapter registration and legacy follow-ups.
 

@@ -26,37 +26,15 @@ local function nowT() return OC.now() end
 function OC.on() return S.offline_cache ~= false end
 
 function OC.dir()
-    if OC._dir then return OC._dir end
-    local okd, DataStorage = pcall(require, "datastorage")
-    local base = okd and DataStorage:getSettingsDir() or "."
-    OC._dir = base .. "/orbit-cache"
-    if lfs_ok then
-        lfs.mkdir(OC._dir)
-        lfs.mkdir(OC._dir .. "/events")
-    end
+    if not OC._dir then OC._dir=Store.defaultDirectory() end
     return OC._dir
 end
-
-local function readFile(path, max)
-    local f = io.open(path, "rb")
-    if not f then return nil end
-    local s = f:read(max or "*a")
-    f:close()
-    return s
-end
-
--- Atomic: a temp file renamed over the target.
-local function writeFile(path, s)
-    local tmp = path .. ".tmp" .. tostring(math.random(1, 1e9))
-    local f = io.open(tmp, "wb")
-    if not f then return false end
-    local okw = f:write(s)
-    f:close()
-    if not okw then os.remove(tmp); return false end
-    if not os.rename(tmp, path) then os.remove(tmp); return false end
-    return true
-end
-
+Store.directory=OC.dir
+Store.directoryReady=function() return OC._dir~=nil end
+Store.inChild=function() return OC.child end
+Store.now=function() return OC.now() end
+local function readFile(...) return Store.readFile(...) end
+local function writeFile(...) return Store.writeFile(...) end
 OC.readFile, OC.writeFile = readFile, writeFile
 
 -- The entry's file name (Cache.hash; the key is stored inside and checked).

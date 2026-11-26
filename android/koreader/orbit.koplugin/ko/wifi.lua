@@ -54,8 +54,8 @@ function Wifi.busy()
     if Wifi.inflight_http > 0 then return true, "download in progress" end
     -- The cache's background checks and the offline mirror run in child processes, which this
     -- process's request counter never sees.
-    if OC and OC.busy then
-        local okc, why = pcall(OC.busy)
+    if Server.cacheBusy then
+        local okc, why = pcall(Server.cacheBusy)
         if okc and why then return true, why end
     end
     local p = serverPlugin()

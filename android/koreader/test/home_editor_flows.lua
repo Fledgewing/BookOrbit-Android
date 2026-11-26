@@ -132,13 +132,13 @@ return function(test,eq,ok,E,W,Widget,withHost)
             eq(e:done(),false); eq(E.S.home_layout,old); eq(e.message,"layout write failed")
             E.HomeEditor.save=originalSave
             -- Exercise Layout.save via the host boundary, with a typed fixture codec and atomic in-memory writes.
-            local codec,read,write,path=E.HomeEditor.codec,E.OC.readFile,E.OC.writeFile,E.HomeEditor.path
+            local codec,read,write,path=E.HomeEditor.codec,E.Store.readFile,E.Store.writeFile,E.HomeEditor.path
             local records,files={},{}; local seq=0; local fail
             E.HomeEditor.codec=function() return {encode=function(d) seq=seq+1; records[tostring(seq)]=E.Layout.copy(d); return tostring(seq) end,
                 decode=function(raw) return E.Layout.copy(records[raw]) end} end
             E.HomeEditor.path=function() return "layout-fixture" end
-            E.OC.readFile=function(p) return files[p] end
-            E.OC.writeFile=function(p,raw) if p==fail then return false end; files[p]=raw; return true end
+            E.Store.readFile=function(p) return files[p] end
+            E.Store.writeFile=function(p,raw) if p==fail then return false end; files[p]=raw; return true end
             local success,err=pcall(function()
                 ok(E.HomeEditor.save(old)); local previous=files["layout-fixture"]
                 fail="layout-fixture"; eq(E.HomeEditor.save(m.document),nil)
@@ -146,7 +146,7 @@ return function(test,eq,ok,E,W,Widget,withHost)
                 fail=nil; ok(e:done()); eq(E.S.home_layout.pages[1].name,"Edited")
                 eq(records[files["layout-fixture.bak"]].pages[1].name,"Home")
             end)
-            E.HomeEditor.codec,E.OC.readFile,E.OC.writeFile,E.HomeEditor.path=codec,read,write,path
+            E.HomeEditor.codec,E.Store.readFile,E.Store.writeFile,E.HomeEditor.path=codec,read,write,path
             ok(success,err)
         end)
     end)

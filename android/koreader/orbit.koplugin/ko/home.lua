@@ -42,7 +42,7 @@ function OrbitAndroid:checkCommand(source)
     -- The companion's Settings buttons (docs/design/companion-settings.md §3.2, A2, A4, A5): the work
     -- happens here in KOReader, which the command brought to the front.
     if cmd == "full_refresh" then
-        UIManager:scheduleIn(0.5, function() OC.menuFullRefresh() end)
+        UIManager:scheduleIn(0.5, function() Server.refreshLibrary() end)
         return true
     end
     if cmd == "sync_sleep" then
@@ -67,7 +67,7 @@ function OrbitAndroid:openSignIn(source)
     if Server.signedIn(p) then
         log("sign in (" .. tostring(source) .. "): already signed in")
         UIManager:show(InfoMessage:new{ text = _("Signed in to library."), timeout = 2 }) -- gate: user action (Setup's sign-in)
-        pcall(Rec.report, "signin", true, self.ui)
+        pcall(Server.reportRecommended, "signin", true, self.ui)
         return
     end
     local okc, err = pcall(function() Server.openLogin(p) end)
@@ -201,14 +201,14 @@ function reading()
     if Wifi and Wifi.state and Wifi.state().foreground == false then return false end
     if serverOverBook(serverPlugin(ui)) then return false end
     if ui.menu and ui.menu.menu_container then return false end -- a menu the reader opened
-    if EOB and EOB.sheet then return false end                -- the reader reached the end
+    if Server.endSheetOpen() then return false end                -- the reader reached the end
     return true
 end
 
 Gate = { queue = {}, MAX_AGE_S = 600 }
 
 function Gate.refreshNotice(what)
-    local full = Mirror and (Mirror.notices or Mirror.fullRunning())
+    local full = Server.fullRefreshNotice()
     log((full and "Full refresh" or "background") .. ": suppressed notice: " .. tostring(what))
     if full and Badge and Badge.notice then Badge.notice(what) end
 end
@@ -231,7 +231,7 @@ function Gate.show(what, fn, max_age_s)
 end
 
 function Gate.drain(why)
-    if Gate.inBackground() and not (Mirror and (Mirror.notices or Mirror.fullRunning())) then return end
+    if Gate.inBackground() and not (Server.fullRefreshNotice()) then return end
     if Gate.silent() then
         for _, q in ipairs(Gate.queue) do Gate.refreshNotice(q.what) end
         Gate.queue = {}
@@ -569,7 +569,7 @@ function OrbitAndroid:smartHome(source, from_extra, mode, held)
     end
     mode = mode or "smart"
     -- Orbit's own sheets close first: they are not BookOrbit, and they'd cover whatever Home opens.
-    if EOB and EOB.leaveForHome(liveUI()) then log("home: closed the end-of-book sheet") end
+    if Server.leaveEndSheet(liveUI()) then log("home: closed the end-of-book sheet") end
     local ui = liveUI()
     local in_reader = ui ~= nil and ui.document ~= nil
     local p = serverPlugin(ui)
@@ -683,7 +683,7 @@ function checkDashboardOpened(p, why)
         if catalogOnTop(q) then
             log("home: library home is on top (" .. why .. ")")
             Gate.drain("library Home")
-            if Mirror and Mirror.kick then Mirror.kick("Home") end
+            Server.resumeCache("Home")
         else
             log("home: library home did NOT open (" .. why .. "); top:", widgetName(topWidget(), q))
         end
@@ -770,7 +770,7 @@ end
 
 function OrbitAndroid:onOrbitGoHome()
     if S.home_screen == "booksync" then return HomeHost.show() end
-    if EOB and EOB.leaveForHome(liveUI()) then log("home: closed the end-of-book sheet") end
+    if Server.leaveEndSheet(liveUI()) then log("home: closed the end-of-book sheet") end
     local ui = liveUI()
     local p = serverPlugin(ui)
     -- BookOrbit home already open: bring it up ourselves. The plugin's open action on an open

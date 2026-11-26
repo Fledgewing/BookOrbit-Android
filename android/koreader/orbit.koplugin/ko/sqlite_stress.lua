@@ -29,7 +29,7 @@ local function nap()
     if ffi_ok then pcall(function() ffi.C.usleep(1000) end) end
 end
 
-function SqliteStress.file() return OC.dir() .. "/stress.db" end
+function SqliteStress.file() return Store.dir() .. "/stress.db" end
 
 -- The writer's row text length for (gen, pos) (SqliteStress.value in the companion).
 function SqliteStress.len(gen, pos) return 40 + (gen * 7 + pos * 13) % 160 end
@@ -122,15 +122,15 @@ end
 -- The menu item: the companion writes, a child of KOReader reads, then the verdict.
 function SqliteStress.start(seconds)
     seconds = seconds or SqliteStress.SECONDS
-    if SqliteStress.running then return OC.note(_("SQLite stress test already running"), 3) end
+    if SqliteStress.running then return orbitNote(_("SQLite stress test already running"), 3) end
     local problem = Companion.workerProblem()
-    if problem then return OC.note(problem, 4) end
+    if problem then return orbitNote(problem, 4) end
     SqliteStress.running = true
-    local result = OC.dir() .. "/stress-writer.lua"
+    local result = Store.dir() .. "/stress-writer.lua"
     os.remove(result)
     Companion.send(Companion.ACTION.SQLITE_STRESS, { reason = "stress test", seconds = tostring(seconds) })
     log("sqlite-stress: started for", seconds, "s")
-    OC.note(string.format(_("SQLite stress test: %d s. Keep KOReader open."), seconds), 4) -- user action (menu)
+    orbitNote(string.format(_("SQLite stress test: %d s. Keep KOReader open."), seconds), 4) -- user action (menu)
     local path = SqliteStress.file()
     UIManager:scheduleIn(2, function()
         Background.run("sqlite-stress", function()
@@ -139,7 +139,7 @@ function SqliteStress.start(seconds)
             local r = Cache.decode(out or "") or { errors = 1, first_error = tostring(err or "the reader stopped") }
             local waited = 0
             local function finish()
-                local w = Cache.decode(OC.readFile(result) or "")
+                local w = Cache.decode(Store.readFile(result) or "")
                 if type(w) ~= "table" and waited < SqliteStress.RESULT_WAIT_S then
                     waited = waited + 1
                     return UIManager:scheduleIn(1, finish)

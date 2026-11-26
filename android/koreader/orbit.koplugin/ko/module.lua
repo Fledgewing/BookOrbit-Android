@@ -11,7 +11,7 @@ OrbitAndroid = WidgetContainer:extend{
 
 function OrbitAndroid:init()
     state.module = self
-    Grouping.install("init")
+    Server.installGrouping("init")
     Clicks.install("init")
     keepRotationOnFileBrowser("init")
     if not state.start_patch_checked then

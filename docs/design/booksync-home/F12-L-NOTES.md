@@ -93,3 +93,11 @@ contains section translation, counted/paged source names and current-book exclus
 filter/sort/page; display labels are bounded without splitting UTF-8 code points. The neutral
 `ServerAdapter.sources` delegates through the same tested contract. Source pickers retain
 the six-row/16 KiB budget; configuration screens read no catalog.
+
+Final Lua audit closes shared-environment side channels as well as imports. Legacy cache,
+position, recommendation, sheet and profiling operations now pass through the one Server
+facade; implementation globals are forbidden everywhere outside adapters. Local IO helpers
+move from the old cache into the existing `ko/store.lua`, with injected directory/clock/child
+providers and a backend-free storage test. Legacy lookup/search move into the existing private
+store module and keep the same read transaction/gate. New guard probes reject direct globals,
+indexed global access and persistence reads from UI.

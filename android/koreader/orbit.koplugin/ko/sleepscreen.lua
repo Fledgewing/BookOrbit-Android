@@ -122,14 +122,7 @@ local function readJson(path)
 end
 
 -- The BookOrbit id of a book file on this reader (the plugin's on-device map), or nil.
-function Sleep.bookId(path)
-    local cat = Mirror and Mirror.catalog and Mirror.catalog()
-    if not (path and cat and type(cat.on_device) == "table") then return nil end
-    for id, p in pairs(cat.on_device) do
-        if p == path then return tonumber(id) end
-    end
-    return nil
-end
+function Sleep.bookId(path) return Server.localBookId(path) end
 
 ---------------------------------------------------------------- Current book (R9)
 
@@ -191,7 +184,7 @@ end
 local function ask(client, extras)
     Server.credentials(client, extras)
     Companion.send(Companion.ACTION.SLEEP_REFRESH, extras)
-    OC.watchChecks()
+    Server.watchCache()
 end
 
 function Sleep.refresh(why)
@@ -206,12 +199,12 @@ function Sleep.refresh(why)
         return false
     end
     Sleep.problem = nil
-    local client = OC.client()
+    local client = Server.cacheClient()
     if not (client and Sleep.dir()) then
         log("sleep screen: no library client yet; the pool waits (" .. tostring(why) .. ")")
         return false
     end
-    Sleep.asked, Sleep.refreshed_at = OC.now(), t
+    Sleep.asked, Sleep.refreshed_at = Store.now(), t
     Wifi.acquire("sleep screen")
     log("sleep screen: the companion refreshes the pool from", s.sleep_from, "(" .. tostring(why) .. ")")
     ask(client, { reason = tostring(why), from = s.sleep_from, rules = SleepPool.encodeRules(s.sleep_leave_out),
@@ -298,14 +291,14 @@ end
 
 -- The companion lists both again when online; done(v or nil) after.
 function Sleep.refreshScopes(why, done)
-    local client = OC.client()
+    local client = Server.cacheClient()
     local t = os.time()
     if Sleep.scopes_asked or not client or not NetworkMgr:isConnected() or Companion.workerProblem()
         or (Sleep.scopes_at and t >= Sleep.scopes_at and t - Sleep.scopes_at < Sleep.SCOPES_EVERY_S) then
         if done then done(nil) end
         return false
     end
-    Sleep.scopes_asked, Sleep.scopes_at, Sleep.scopes_done = OC.now(), t, done
+    Sleep.scopes_asked, Sleep.scopes_at, Sleep.scopes_done = Store.now(), t, done
     ask(client, { reason = tostring(why), scopes_only = "1" })
     return true
 end

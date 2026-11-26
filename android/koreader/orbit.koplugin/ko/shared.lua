@@ -38,7 +38,7 @@ function Shared.refresh(why)
     local st = Companion.status(1)
     Shared.capsChanged(why, Companion.updateCaps(st, why))
     -- Signed in to BookOrbit changed since the last report (a sign-in on BookOrbit's page).
-    if why ~= "start" and Rec then pcall(Rec.report, "refresh " .. why) end
+    if why ~= "start" then pcall(Server.reportRecommended, "refresh " .. why) end
     -- Clicker buttons: the companion's key map (an empty map turns ours off).
     if st then
         local m = Clicks.parse(st.keymap)
@@ -156,13 +156,13 @@ function Shared.onChange(key, why)
     elseif key == "sleep_mode" or key == "sleep_from" or key == "sleep_leave_out" then
         try(Sleep and Sleep.changed, "companion settings")
     elseif key == "storage_limit_mb" then
-        try(OC and OC.storageCount, "limit changed")
+        try(Server.countStorage, "limit changed")
     elseif key == "mirror_covers" then
-        if S.mirror_covers then try(Mirror and Mirror.coverPass, "turned on") end
+        if S.mirror_covers then try(Server.refreshCovers, "turned on") end
     elseif key == "sync_mode" then
-        try(OSM and OSM.modeChanged, "companion")
+        try(Server.positionModeChanged, "companion")
     elseif key == "recommended_choice" then
-        try(Rec and Rec.applyChoices, why)
+        try(Server.applyRecommended, why)
     end
 end
 
@@ -196,8 +196,8 @@ function Shared.capsChanged(why, before, after, real)
     local lost, gained = Caps.diff(before, after)
     if #lost == 0 and #gained == 0 then return end
     log("companion: caps changed (" .. why .. "): lost", table.concat(lost, ","), "| gained", table.concat(gained, ","))
-    if #lost > 0 and Rec then pcall(Rec.capsLost, why) end
-    if #gained > 0 and Rec then pcall(Rec.pass, "caps " .. why) end
+    if #lost > 0 then pcall(Server.capabilitiesLost, why) end
+    if #gained > 0 then pcall(Server.capabilitiesGained, "caps " .. why) end
 end
 
 function Shared.push(why)

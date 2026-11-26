@@ -1649,7 +1649,7 @@ test("main loop: directory iterators are confined to the guarded thumbnail child
         local source = readFile(here .. "/../orbit.koplugin/" .. module)
         if module == "ko/cover_child.lua" then
             ok(source:find("Db.pid() ~= Store.ui_pid",1,true), "child PID guard")
-            ok(source:find("if not lfs_ok or not (OC.child",1,true), "guard precedes iterator")
+            ok(source:find("if not lfs_ok or not (Store.inChild()",1,true), "guard precedes iterator")
         else
             ok(not source:find("lfs.dir",1,true), module .. " must not enumerate a directory")
             ok(not source:find("lfs%.attributes[^\n]*for "), module .. " file scans belong to companion")

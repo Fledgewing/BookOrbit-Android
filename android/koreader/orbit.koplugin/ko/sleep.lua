@@ -87,15 +87,15 @@ function OrbitAndroid:sleepSync(reason)
     Net.up(p, { reason = reason, cap = cap, need_server = true, wake_lock_s = cap + 5 }, function(ok, res)
         if not ok then return done(false, res.detail) end
         -- OrbiSmart: pull first, so the behind-hold judges the snapshot against the server's place.
-        if OSM and OSM.on() and inBook() and can(p, "reading_sync") then
-            return OSM.pullThenDrain(p, "sleep", "orbit_" .. reason, function()
-                Sync.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why) done(synced, why) end)
+        if Server.positionOn() and inBook() and can(p, "reading_sync") then
+            return Server.pullThenDrain(p, "sleep", "orbit_" .. reason, function()
+                Server.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why) done(synced, why) end)
             end)
         end
         -- The plugin queued its snapshot in its own _onSuspend (main.lua:1340-1351) but drains
         -- only when already connected (main.lua:411-419). Now we are: drain and wait.
         if can(p, "outbox") then Server.drain(p, "orbit_" .. reason) end
-        Sync.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why)
+        Server.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why)
             done(synced, why)
         end)
     end)
@@ -205,7 +205,7 @@ function OrbitAndroid:onOrbitSyncAndSleep(stay_awake)
         elseif can(p, "outbox") then
             Server.drain(p, "orbit_sync_and_sleep", true)
         end
-        Sync.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why)
+        Server.waitOutbox(p, math.max(1, cap - (now_s() - t0)), function(synced, why)
             if cancelled then return finish(false, "cancelled") end
             finish(synced, why)
         end)
