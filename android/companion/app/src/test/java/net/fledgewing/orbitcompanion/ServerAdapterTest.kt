@@ -122,6 +122,7 @@ class ServerAdapterTest {
     @Test fun accountRefillReusesItsKnownKeyAndExplicitAdoptionUsesTheCurrentUserKey() {
         val k = Kit(); k.account()
         val known = k.credentials.login("sync")!!
+        k.provision = SyncProvisionTest.archive(known.user,known.secret)
         k.adapter.removeLogin("sync"); k.account()
         assertEquals(known.secret,k.credentials.login("sync")!!.secret)
         val direct = "f".repeat(32)
@@ -182,6 +183,14 @@ class ServerAdapterTest {
         val first = key()
         k.selection = "second"; assertEquals(first,key())
         k.adapter.signOut(); k.account(); assertEquals(first,key())
+    }
+
+    @Test fun removingSyncDeletesItsSecretWithoutRemovingAccountOrOpds() {
+        val k = Kit(); k.account()
+        val secret = k.credentials.login("sync")!!.secret
+        k.adapter.removeLogin("sync")
+        assertFalse(k.vault.value.toString().contains(secret))
+        assertEquals(true,k.adapter.state()["signedIn"]); assertEquals(true,k.set("opds"))
     }
 
 }

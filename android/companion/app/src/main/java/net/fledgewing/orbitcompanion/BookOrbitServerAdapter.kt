@@ -49,11 +49,11 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             val candidate = ServerCredentials.Login(BookOrbitAccount.normalizeServer(server), username, value, "user")
             check(transport.request(candidate.server, if (kind == "sync") "/koreader/users/auth" else "/opds", "GET", null, headers(candidate,kind)))
             credentials.set(kind, candidate)
-            if (kind == "sync") dashboardUnavailableOwner = null
+            if (kind == "sync") { dashboardUnavailableOwner = null; account.forgetConnectorCandidate() }
             if (kind == "opds") artifacts.clear()
         } finally { secret.fill('\u0000') }
     }
-    override fun removeLogin(kind: String) { credentials.remove(kind); if (kind == "opds") artifacts.clear() }
+    override fun removeLogin(kind: String) { credentials.remove(kind); if (kind == "sync") account.forgetConnectorCandidate(); if (kind == "opds") artifacts.clear() }
     override fun useAccountLogin(kind: String) { require(kind in ServerCredentials.KINDS); if (!fill(kind, true)) throw BookOrbitAccount.Failure("unavailable") }
     private fun fill(kind: String, replace: Boolean): Boolean {
         if (!replace && credentials.login(kind) != null) return true
@@ -61,7 +61,7 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             account.setupConnector(credentials.login("sync")?.let { CacheWorker.Creds(it.server, it.user, it.secret) })
             account.connector()?.let { ServerCredentials.Login(it.server, it.user, it.key, "account", account.identity()) }
         } else account.setupOpds()?.let { ServerCredentials.Login(it.first, it.second.first, it.second.second, "account", account.identity()) }
-        if (candidate != null) { credentials.set(kind, candidate, onlyIfUnset = !replace); if (kind == "opds") artifacts.clear() }
+        if (candidate != null) { credentials.set(kind, candidate, onlyIfUnset = !replace); if (kind == "sync") account.forgetConnectorCandidate(); if (kind == "opds") artifacts.clear() }
         return candidate != null
     }
     override fun fallbackReadingStats(): RemoteReadingStats? {

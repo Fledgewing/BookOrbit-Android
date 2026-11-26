@@ -138,6 +138,14 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
         } else throw Failure("invalid-response")
         persist()
     }
+    /** A promoted connector lives only in its independent encrypted login slot. */
+    @Synchronized internal fun forgetConnectorCandidate() {
+        val s = session ?: return
+        val fields = setOf("connectorUser","connectorKey","connectorState","pendingUser","pendingKey")
+        if (fields.none { it in s }) return
+        fields.forEach(s::remove)
+        persist()
+    }
     /** Dedicated OPDS identity: existing passwords are never returned or reset by the server. */
     @Synchronized internal fun setupOpds(): Pair<String, Pair<String, String>>? {
         val listed = get("/opds-users", "opds")
