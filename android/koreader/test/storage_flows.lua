@@ -101,6 +101,20 @@ return function(test,eq,ok,E,W,withHost)
             view.onBack=nil; view:close()
         end)
     end)
+    test('storage: Catalog cache limit reaches every shared choice with a Back target',function()
+        withHost(function()
+            E.LibraryAdapter.read=function() return data(),700 end
+            local page=E.StorageUI.show()
+            ok(click(page,'Catalog cache limit ›'))
+            local dialog=W.shown[#W.shown]
+            eq(dialog.title,'Catalog cache limit')
+            eq(#dialog.buttons,#E.Cache.STORAGE_LIMITS_MB+1)
+            for _,line in ipairs(dialog.buttons) do ok(line[1].height>=50); ok(line[1].callback) end
+            dialog.buttons[#dialog.buttons][1].callback()
+            eq(W.shown[#W.shown],page)
+            page:onClose()
+        end)
+    end)
     test('collections: loading, error, unsaved and complete-empty remain distinct',function()
         withHost(function()
             for _,case in ipairs({{{pending=true},'Loading…'},{{error='offline'},"Couldn't load collections · Retry"},
