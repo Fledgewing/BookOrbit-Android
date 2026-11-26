@@ -231,7 +231,8 @@ function HomeHost.create()
             -- Close this toast before rebuilding the initiating host.
             local toast=topWidget(); UIManager:close(toast)
             self.list_layout=nil; self.list_title=nil; self.filter=nil
-            for i,p in ipairs(document.pages) do if p.id==page then self.index=i end end
+            local visible=HomeHostPlan.resolve(document,HomeHost.installed(),self.caps)
+            for i,p in ipairs(visible.pages) do if p.id==page then self.index=i end end
             self:rebuild(); UIManager:setDirty(self,"ui")
         end}}}}) -- gate: user action (save filter)
         return true
