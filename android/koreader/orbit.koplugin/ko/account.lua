@@ -32,7 +32,7 @@ function AccountView:back()
     self.generation=self.generation+1; self.busy=false; self.password=nil; self.error=nil
     if self.page=="summary" then self:close(); return end
     if self.page=="signout" then self.focus="signout"
-    elseif self.page=="remove" then self.page="form"; self.focus="remove"; self:paint(); return
+
     else self.focus=self.kind or "account" end
     self.page="summary"; self:paint()
 end
