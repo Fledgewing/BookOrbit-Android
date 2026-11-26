@@ -74,6 +74,33 @@ return function(test,eq,ok,E,W,withHost)
             callback({folder='BookSync',freshness={saved=true}}); eq(page[1],before); eq(E.StorageUI.active,nil)
         end)
     end)
+    test('storage: Settings rows inherit owned targets and Back preserves the initiating focus',function()
+        withHost(function()
+            local read=E.LibraryAdapter.read
+            E.LibraryAdapter.read=function(raw) if E.Cache.decode(raw).op=='storage.summary' then return data(),700 end; return read(raw) end
+            local m=setmetatable({},{__index=E.OrbitAndroid})
+            local group
+            for _,row in ipairs(m:settingsPresentation(m:menuItems())) do if row.settings_group=='library' then group=row end end
+            ok(group.callback); eq(group.sub_item_table_func,nil)
+            group.callback()
+            local view=E.SettingsView.active
+            eq(view.screen,'settings-library'); eq(#view.make(),6)
+            local rows=view.dialog.buttons
+            ok(rows[1][1].text:find('Storage',1,true)); ok(rows[2][1].text:find('Download folder',1,true))
+            for _,line in ipairs(rows) do for _,button in ipairs(line) do ok(button.height>=50) end end
+            local manager=E.require("ui/uimanager")
+            local schedule=manager.scheduleIn
+            local pending
+            manager.scheduleIn=function(_,_,fn) pending=fn end
+            local success,err=pcall(rows[2][1].callback)
+            manager.scheduleIn=schedule
+            ok(success,err); ok(pending); pending()
+            local page=E.StorageUI.active; ok(page); eq(page.mode,'folder')
+            page:onClose(); eq(E.SettingsView.active,view); eq(view.focus,2)
+            eq(W.shown[#W.shown],view.dialog)
+            view.onBack=nil; view:close()
+        end)
+    end)
     test('collections: loading, error, unsaved and complete-empty remain distinct',function()
         withHost(function()
             for _,case in ipairs({{{pending=true},'Loading…'},{{error='offline'},"Couldn't load collections · Retry"},

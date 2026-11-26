@@ -312,9 +312,16 @@ function OrbitAndroid:menuItems()
         group("library", "Library & downloads", function()
             local paint=Library.paint("settings-library")
             local storage=paint:storage(); paint:flush()
-            local out = {action("Storage · "..(storage.free_label or "Space unavailable").." ›",function() StorageUI.show(nil,nil,function() self:showSettings("library") end) end),
-                action("Download folder · "..(storage.folder_label or "Not selected").." ›",function() StorageUI.show("folder",nil,function() self:showSettings("library") end) end)}
-            for _,row in ipairs(rows({"keep_copies_current", "offline_cache", "mirror_covers", "storage_limit_mb"})) do out[#out+1]=row end
+            local function openStorage(mode)
+                local parent=SettingsView.active
+                StorageUI.show(mode,nil,function()
+                    if parent and parent.alive and UIManager:getTopmostVisibleWidget()==parent.dialog then parent:paint()
+                    else self:showSettings("library") end
+                end)
+            end
+            local out = {action("Storage · "..(storage.free_label or "Space unavailable").." ›",function() openStorage() end),
+                action("Download folder · "..(storage.folder_label or "Not selected").." ›",function() openStorage("folder") end)}
+            for _,row in ipairs(rows({"keep_copies_current", "offline_cache", "mirror_covers"})) do out[#out+1]=row end
             out[#out+1] = action("Full refresh", function() Library.fullRefresh() end)
             return out
         end),
@@ -410,7 +417,7 @@ function OrbitAndroid:settingsPresentation(items)
     local out={}
     for _,item in ipairs(items) do
         local row={}; for k,v in pairs(item) do row[k]=v end
-        if ({sync=true,home=true,sleep=true,updates=true,about=true})[row.settings_group] then
+        if ({sync=true,library=true,home=true,sleep=true,updates=true,about=true})[row.settings_group] then
             local make=row.sub_item_table_func
             row.sub_item_table_func=nil
             row.settings_rows=make
@@ -440,7 +447,13 @@ function OrbitAndroid:showSettings(groupId)
     local items={}
     for _,row in ipairs(self:menuItems()) do
         if row.settings_group then
-            if groupId==row.settings_group then items=row.sub_item_table_func(); break end
+            if groupId==row.settings_group then
+                local make=row.sub_item_table_func
+                return SettingsView.open(row.text,function()
+                    local rows=make()
+                    return Shared.pin_locked and OrbitAndroid.readOnly(rows) or rows
+                end,"settings-"..groupId,function() self:showSettings() end)
+            end
             items[#items+1]=row
         end
     end
