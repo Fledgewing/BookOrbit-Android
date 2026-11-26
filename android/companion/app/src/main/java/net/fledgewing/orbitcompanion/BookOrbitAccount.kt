@@ -82,9 +82,9 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
     }
     /** Exact allowlist: never probe an attested route. 403 disables just this feature. */
     @Synchronized internal fun get(path: String, feature: String): Reply {
-        require(path in READS || path == "/koreader/credentials" || path == "/opds-users")
-        if (feature in blocked) return Reply(403)
         val s = session ?: throw Failure("unauthorized")
+        require(path in READS || path == "/koreader/credentials" || path == "/opds-users" || path == provisionPath(s["server"] as String))
+        if (feature in blocked) return Reply(403)
         if (!signedIn()) { clear(); throw Failure("expired") }
         if ((number(s["accessExpiry"]) ?: 0) <= now() + 30) refresh()
         fun request() = http.request(session!!["server"] as String, path, "GET", null, session!!["access"] as String)
@@ -95,7 +95,7 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
     }
     @Synchronized internal fun setupConnector(legacy: CacheWorker.Creds?) {
         val r = get("/koreader/credentials", "connector")
-        val s = session ?: return
+        var s = session ?: return
         if (r.code !in 200..299) { s["connectorState"] = if (r.code == 403) "forbidden" else "unavailable"; persist(); return }
         val server = s["server"] as String
         val existing = r.value as? Map<*, *>
@@ -103,12 +103,21 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
             val user = (existing["username"] as? String) ?: throw Failure("invalid-response")
             val pending = (s["pendingUser"] as? String)?.let { u -> (s["pendingKey"] as? String)?.let { CacheWorker.Creds(server, LuaValue.utf8(u), it) } }
             val stored = (s["connectorUser"] as? String)?.let { u -> (s["connectorKey"] as? String)?.let { CacheWorker.Creds(server, LuaValue.utf8(u), it) } }
-            val known = listOfNotNull(legacy, pending, stored).firstOrNull {
+            var known = listOfNotNull(legacy, pending, stored).firstOrNull {
                 it.user == LuaValue.utf8(user) && normalizeServer(it.server) == server
+            }
+            if (known == null) {
+                val provision = get(provisionPath(server), "connectorProvision")
+                s = session ?: return
+                val bytes = provision.value as? ByteArray
+                if (provision.code in 200..299 && bytes != null) {
+                    try { SyncProvision.key(bytes,user)?.let { known = CacheWorker.Creds(server,LuaValue.utf8(user),it) } }
+                    finally { bytes.fill(0) }
+                }
             }
             s["connectorUser"] = user; s.remove("connectorKey")
             if (known != null) {
-                s["connectorKey"] = known.key; s["connectorState"] = "ready"
+                s["connectorKey"] = known!!.key; s["connectorState"] = "ready"
             } else s["connectorState"] = "existing-login-needed"
             s.remove("pendingUser"); s.remove("pendingKey")
         } else if (r.value == null) {
@@ -176,6 +185,11 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
     companion object {
         val READS = linkedMapOf("/auth/me" to "goal", "/user-statistics/daily-reading?days=365" to "days", "/user-statistics/peak-hours?days=365" to "hours",
             "/user-statistics/session-timeline" to "sessions", "/user-statistics/completion-timeline?days=365" to "finished")
+        private fun provisionPath(server: String): String {
+            val uri = URI(server)
+            val origin = uri.scheme + "://" + uri.rawAuthority
+            return "/koreader/plugin-package?origin=" + java.net.URLEncoder.encode(origin,"UTF-8")
+        }
         fun normalizeServer(raw: String): String {
             val uri = URI(raw.trim())
             require(uri.scheme in setOf("https", "http") && uri.host != null && uri.userInfo == null && uri.rawQuery == null && uri.fragment == null)

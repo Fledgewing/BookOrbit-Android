@@ -13,7 +13,7 @@ object LibraryAccount {
     private val queue = Executors.newSingleThreadExecutor { r -> Thread(r, "booksync-server").apply { isDaemon = true } }
     private val main = Handler(Looper.getMainLooper())
     private var adapter: ServerAdapter? = null
-    private class Published(val state: Map<String, Any?> = emptyMap(), val owner: String? = null, val stats: Map<*, *>? = null)
+    private class Published(val state: Map<String, Any?> = emptyMap(), val owner: String? = null, val stats: Map<*, *>? = null, val fallback: RemoteReadingStats? = null)
     @Volatile private var published = Published()
     @Volatile private var loaded = false
     private var nextRefreshAt = 0L
@@ -25,6 +25,7 @@ object LibraryAccount {
     fun state(): Map<String, Any?> = published.state
     fun owner(): String? = published.owner
     fun stats(owner: String): Map<*, *>? = published.let { if (owner == it.owner) it.stats else null }
+    fun fallbackReadingStats(owner: String): RemoteReadingStats? = published.let { if (owner == it.owner) it.fallback else null }
     fun ready() = loaded
     fun initialize(ctx: Context, done: () -> Unit = {}) {
         if (loaded) { main.post(done); return }
@@ -38,7 +39,7 @@ object LibraryAccount {
     private fun publish(a: ServerAdapter) {
         val state = a.state(); val owner = a.owner()
         require(LuaValue.encode(state).size <= 16384)
-        published = Published(state, owner, owner?.let(a::stats))
+        published = Published(state, owner, owner?.let(a::stats),a.fallbackReadingStats())
     }
     private fun command(ctx: Context, work: (ServerAdapter) -> Unit, done: (String?) -> Unit, cleanup: () -> Unit = {}, invalidate: Boolean = true) {
         val app = ctx.applicationContext

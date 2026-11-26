@@ -10,6 +10,7 @@ interface ServerAdapter {
     fun setLogin(kind: String, server: String, username: String, secret: CharArray, derivedKey: Boolean = false)
     fun removeLogin(kind: String)
     fun useAccountLogin(kind: String)
+    fun fallbackReadingStats(): RemoteReadingStats?
     fun refreshStats()
     fun owner(): String?
     fun stats(owner: String): Map<*, *>?

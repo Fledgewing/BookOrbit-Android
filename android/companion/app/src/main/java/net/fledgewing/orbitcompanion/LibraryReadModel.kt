@@ -6,6 +6,7 @@ class LibraryReadModel(
     private val store: CacheStore,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
     private val log: (String) -> Unit = { OLog.i(it) },
+    private val fallbackReadingStats: (String) -> RemoteReadingStats? = { BookOrbitLibrary.readingStats(store) },
     private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
     private val accountStats: (String) -> Map<*, *>? = { null },
     private val readingStats: () -> Map<String, Any?> = {
@@ -25,7 +26,7 @@ class LibraryReadModel(
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
         // Different widget byte budgets can encode distinct requests for the same paint.
-        val stats by lazy { AccountStats.combine(readingStats(), BookOrbitLibrary.readingStats(store), accountStats(owner), clock()) }
+        val stats by lazy { AccountStats.combine(readingStats(), fallbackReadingStats(owner), accountStats(owner), clock()) }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
@@ -67,7 +68,7 @@ class LibraryReadModel(
         }
         if (op == "account.state") return accountState()
         if (op == "capabilities") {
-            val remote = BookOrbitLibrary.readingStats(store)
+            val remote = fallbackReadingStats(owner)
             val a = accountStats(owner).orEmpty()
             val server = accountState()
             val managed = server["owner"] == owner

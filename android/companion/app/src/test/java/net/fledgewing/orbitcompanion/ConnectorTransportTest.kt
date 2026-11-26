@@ -42,7 +42,7 @@ class ConnectorTransportTest {
                         path.endsWith("/download") -> "fixture-book"
                         else -> """{"percentage":0.5,"progress":"position","userkey":"must-not-escape"}"""
                     }
-                    val body = text.toByteArray()
+                    val body = if (path.endsWith("/plugin-package")) SyncProvisionTest.archive("fixture","a".repeat(32)) else text.toByteArray()
                     socket.getOutputStream().apply {
                         write("HTTP/1.1 200 OK\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
                         write(body); flush()
@@ -52,6 +52,9 @@ class ConnectorTransportTest {
         }.apply { isDaemon = true; start() }
         try {
             val base = URI("http",null,server.inetAddress.hostAddress,server.localPort,"/api/v1",null,null).toString()
+            val provision = AccountHttp.request(base,"/koreader/plugin-package?origin=fixture","GET",null,"fixture-bearer")
+            assertEquals(200,provision.code)
+            assertEquals("a".repeat(32),SyncProvision.key(provision.value as ByteArray,"fixture"))
             val credentials = ServerCredentials(object : AccountVault {
                 var v: Map<String,Any?>? = null
                 override fun load() = v

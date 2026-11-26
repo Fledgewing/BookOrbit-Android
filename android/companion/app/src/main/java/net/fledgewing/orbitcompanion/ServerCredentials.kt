@@ -2,10 +2,10 @@ package net.fledgewing.orbitcompanion
 
 /** Three independent optional logins in one encrypted document. No secret-bearing toString. */
 class ServerCredentials(private val vault: AccountVault) {
-    internal class Login(val server: String, val user: String, val secret: String, val origin: String) {
+    internal class Login(val server: String, val user: String, val secret: String, val origin: String, private val accountOwner: String? = null) {
         override fun toString() = "ServerLogin(redacted)"
-        fun owner() = "login:" + BookOrbitLibrary.namespace(user + "|" + server).removePrefix("bo:")
-        fun encoded() = mapOf("server" to server, "user" to LuaValue.str(user), "secret" to LuaValue.str(secret), "origin" to origin)
+        fun owner() = accountOwner ?: ("login:" + BookOrbitLibrary.namespace(user + "|" + server).removePrefix("bo:"))
+        fun encoded() = mapOf("server" to server, "user" to LuaValue.str(user), "secret" to LuaValue.str(secret), "origin" to origin, "accountOwner" to accountOwner)
     }
     private var data = vault.load().orEmpty().toMutableMap()
     private fun mutate(block: () -> Unit) {
@@ -30,7 +30,7 @@ class ServerCredentials(private val vault: AccountVault) {
     @Synchronized internal fun login(kind: String): Login? {
         require(kind in KINDS)
         val raw = data[kind] as? Map<*, *> ?: return null
-        return Login(raw["server"] as String, LuaValue.utf8(raw["user"] as String), LuaValue.utf8(raw["secret"] as String), raw["origin"] as String)
+        return Login(raw["server"] as String, LuaValue.utf8(raw["user"] as String), LuaValue.utf8(raw["secret"] as String), raw["origin"] as String, raw["accountOwner"] as? String)
     }
     @Synchronized fun status(kind: String): Map<String, Any?> {
         val login = login(kind)

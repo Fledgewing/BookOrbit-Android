@@ -162,8 +162,12 @@ otherwise username and preferences, never a password or sync key
 stores bcrypt plus the kosync MD5 key (`:104`). BookSync generates a random
 connector password only when absent and stores its derived key privately.
 The independent sync row accepts a password (derived immediately) or a derived
-key. An existing connector with no known key needs this direct sync login;
-account login cannot recover an existing secret from the server. Explicitly
+key. Account sign-in reuses the server's supported preconfiguration route,
+`GET koreader/plugin-package?origin=…` (`modules/koreader/koreader.controller.ts:247`,
+`modules/koreader/koreader-package.service.ts:51`, `:189`), under `KoreaderSync`.
+The companion reads only its bounded connection data and never executes or installs
+archive contents. If compatible provisioning is unavailable (including the server's
+legacy-credential case at `:59`), the direct sync login remains available. Explicitly
 replacing a direct sync login with the account login may adopt a matching known
 key, and changes its provenance to account. No existing server credential is reset.
 
@@ -224,7 +228,7 @@ without one, show local today separately rather than double-counting it.
 
 F12-K extends the F12-F connector projection (`BookOrbitLibrary.kt:8`) and
 `ReadingStats.combine` rather than introducing another reading-statistics store.
-Account fetches are normalized to ≤366 daily input rows, 24 hourly rows, ≤3000
+Account JSON fetches are normalized to ≤366 daily input rows, 24 hourly rows, ≤3000
 weekly sessions (server cap: `modules/user-statistics/user-statistics.service.ts:71`)
 and ≤14 completion-month rows before private persistence. Session IDs deduplicate;
 only weekly count, longest duration and completeness enter the snapshot. A capped
@@ -258,3 +262,21 @@ transport reuse `Worker.UrlHttp` for streamed downloads, with bounded parser and
 result limits in `OpdsCatalog` and `ServerCommands`. `LibraryAccount` is the UI
 facade; `BookOrbitServerAdapter` alone accesses connector secrets. This adds
 no plugin credential export or second periodic progress uploader.
+
+
+Approved sync preconfiguration is bounded independently of display snapshots:
+8 MiB compressed, 32 MiB expanded, 2,048 entries and 8 KiB connection data. The
+parser reads quoted scalar data through `LuaValue`, checks the expected connection,
+and performs no extraction or execution. Existing sync connections adopted this
+way have account provenance and are removed on account sign-out, just like newly
+created connections. The archive is never exposed through IPC or retained on disk.
+
+
+The independent sync login can refresh connector statistics without the account
+session. The adapter reuses `BookOrbitLibrary.dashboardStats`; a typed, owner-bound
+fallback snapshot feeds the existing read model. Unsupported/forbidden connector
+statistics disable that feature without disabling position sync or repeatedly
+probing it. User-entered sync and its statistics remain available after account
+sign-out. Catalog keys reuse `BookOrbitLibrary.key` with stable remote book identity;
+account-supplied logins retain their account namespace across re-sign-in, and
+expiring delivery locators stay private to the adapter.

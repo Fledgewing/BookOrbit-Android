@@ -22,12 +22,16 @@ class ServerAdapterTest {
         val logs = mutableListOf<String>()
         val calls = mutableListOf<Pair<String,Map<String,String>>>()
         var existing: Any? = null
+        var provision: ByteArray? = null
         var syncCreates = 0; var opdsCreates = 0
+        var selection = "first"
+        var dashboardCode = 200
         var lastBody: Map<String,Any?>? = null
         var lastDownload = false
         val now = Instant.parse("2026-11-25T12:00:00Z").epochSecond
         val account = BookOrbitAccount(credentials.accountVault, object : BookOrbitAccount.Http {
             override fun request(server: String, path: String, method: String, body: Map<String, Any?>?, bearer: String?): BookOrbitAccount.Reply = when {
+                path.startsWith("/koreader/plugin-package?") -> BookOrbitAccount.Reply(200,provision?.copyOf())
                 path == "/auth/login" -> BookOrbitAccount.Reply(200,mapOf("accessToken" to "private-access", "refreshToken" to "private-refresh", "accessTokenExpiresAt" to Instant.ofEpochSecond(now+900).toString(), "refreshTokenExpiresAt" to Instant.ofEpochSecond(now+604800).toString(), "user" to mapOf("id" to 7)))
                 path == "/koreader/credentials" && method == "GET" -> BookOrbitAccount.Reply(200,existing)
                 path == "/koreader/credentials" && method == "POST" -> { syncCreates++; existing = mapOf("username" to body!!["username"]); BookOrbitAccount.Reply(201) }
@@ -38,8 +42,11 @@ class ServerAdapterTest {
         val adapter = BookOrbitServerAdapter(credentials,account,object : BookOrbitServerAdapter.ConnectorTransport {
             override fun request(server: String, path: String, method: String, body: Map<String, Any?>?, headers: Map<String, String>): BookOrbitAccount.Reply {
                 calls.add(path to headers); lastBody = body
+                if (path == "/koreader/plugin/catalog/dashboard" && dashboardCode != 200) return BookOrbitAccount.Reply(dashboardCode)
                 return BookOrbitAccount.Reply(200, when {
-                    path.startsWith("/opds/catalog") -> """<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Moon</title><author><name>Fixture</name></author><link rel="http://opds-spec.org/acquisition" href="/api/v1/opds/1/download?fileId=1" type="application/epub+zip"/></entry></feed>"""
+                    path == "/koreader/plugin/catalog/dashboard" -> mapOf("readingYear" to mapOf("startDate" to "2026-11-25","minutes" to listOf(3)),
+                        "readingGoal" to mapOf("year" to 2026,"goalBooks" to 12,"completedBooks" to 2))
+                    path.startsWith("/opds/catalog") -> """<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Moon</title><author><name>Fixture</name></author><link rel="http://opds-spec.org/acquisition" href="/api/v1/opds/1/download?fileId=1&amp;selection=$selection" type="application/epub+zip"/></entry></feed>"""
                     else -> mapOf("progress" to "position", "percentage" to 0.5, "userkey" to "must-not-escape")
                 })
             }
@@ -140,6 +147,41 @@ class ServerAdapterTest {
         try { k.adapter.useAccountLogin("sync"); fail() }
         catch (e: BookOrbitAccount.Failure) { assertEquals("unavailable",e.kind) }
         assertEquals("user",k.origin("sync")); assertEquals(key,k.credentials.login("sync")!!.secret); k.canSync()
+    }
+
+    @Test fun existingServerSyncProvisionIsAdoptedAsAccountOriginAndRemovedOnSignOut() {
+        val k = Kit(); k.existing = mapOf("username" to "existing-sync")
+        k.provision = SyncProvisionTest.archive("existing-sync","c".repeat(32))
+        k.account()
+        assertEquals(0,k.syncCreates); assertEquals("account",k.origin("sync"))
+        assertEquals("c".repeat(32),k.credentials.login("sync")!!.secret)
+        k.canSync(); k.adapter.signOut()
+        assertEquals(false,k.set("sync")); assertEquals(false,k.set("opds"))
+        try { k.canSync(); fail() } catch (e: BookOrbitAccount.Failure) { assertEquals("unauthorized",e.kind) }
+    }
+
+    @Test fun directSyncProvidesConnectorStatisticsAfterAccountSignOut() {
+        val k = Kit(); k.user("sync"); k.account(); k.adapter.refreshStats()
+        assertEquals(12L,k.adapter.fallbackReadingStats()!!.target)
+        k.adapter.signOut()
+        assertEquals(2L,k.adapter.fallbackReadingStats()!!.finished)
+        k.adapter.refreshStats(); assertEquals(12L,k.adapter.fallbackReadingStats()!!.target)
+        k.adapter.removeLogin("sync"); assertNull(k.adapter.fallbackReadingStats())
+    }
+
+    @Test fun unsupportedConnectorStatisticsDisableOnlyThatFeatureWithoutRetries() {
+        val k = Kit(); k.user("sync"); k.dashboardCode = 403
+        k.adapter.refreshStats(); k.adapter.refreshStats()
+        assertEquals(1,k.calls.count { it.first == "/koreader/plugin/catalog/dashboard" })
+        assertNull(k.adapter.fallbackReadingStats()); k.canSync()
+    }
+
+    @Test fun accountCatalogIdentitySurvivesDeliveryLocatorChangesAndRelogin() {
+        val k = Kit(); k.account()
+        fun key() = ((k.adapter.catalog()["items"] as List<*>).single() as Map<*,*>)["key"]
+        val first = key()
+        k.selection = "second"; assertEquals(first,key())
+        k.adapter.signOut(); k.account(); assertEquals(first,key())
     }
 
 }

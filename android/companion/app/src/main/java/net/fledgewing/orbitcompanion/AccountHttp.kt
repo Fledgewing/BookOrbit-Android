@@ -9,12 +9,14 @@ object AccountHttp : BookOrbitAccount.Http {
     const val MAX_REPLY = 1048576
     override fun request(server: String, path: String, method: String, body: Map<String, Any?>?, bearer: String?): BookOrbitAccount.Reply {
         val start = System.nanoTime()
+        val provision = path.startsWith("/koreader/plugin-package?origin=")
+        val maxBytes = if (provision) SyncProvision.MAX_COMPRESSED else MAX_REPLY
         val connection = URL(server + path).openConnection() as HttpURLConnection
         return try {
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 15000; connection.readTimeout = 20000
             connection.requestMethod = method
-            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("Accept", if (provision) "application/zip" else "application/json")
             bearer?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
             if (body != null) {
                 connection.doOutput = true
@@ -25,9 +27,9 @@ object AccountHttp : BookOrbitAccount.Http {
             }
             val code = connection.responseCode
             if (code !in 200..299) return BookOrbitAccount.Reply(code)
-            if (connection.contentLengthLong > MAX_REPLY) return BookOrbitAccount.Reply(0)
-            val bytes = connection.inputStream.use { it.readBytesBounded(MAX_REPLY) } ?: return BookOrbitAccount.Reply(0)
-            try { BookOrbitAccount.Reply(code, if (bytes.isEmpty()) null else LuaValue.fromJson(String(bytes, Charsets.UTF_8))) }
+            if (connection.contentLengthLong > maxBytes) return BookOrbitAccount.Reply(0)
+            val bytes = connection.inputStream.use { it.readBytesBounded(maxBytes) } ?: return BookOrbitAccount.Reply(0)
+            try { BookOrbitAccount.Reply(code, if (provision) bytes.copyOf() else if (bytes.isEmpty()) null else LuaValue.fromJson(String(bytes, Charsets.UTF_8))) }
             finally { bytes.fill(0) }
         } catch (_: Exception) { BookOrbitAccount.Reply(0) }
         finally { connection.disconnect(); OLog.i("account.http ms=${(System.nanoTime()-start)/1_000_000}") }

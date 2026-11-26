@@ -5421,7 +5421,7 @@
         "android": {
           "status": "partial",
           "note": "Three encrypted optional logins, provenance-aware sign-out, private sync/OPDS operations and account stats",
-          "reason": "deliberately deferred: plain interim screen; final owned client integration, browser/OIDC sign-in and device acceptance follow. Existing server connector secrets cannot be recovered; direct login remains available.",
+          "reason": "deliberately deferred: plain interim screen; final owned client integration, browser/OIDC sign-in and device acceptance follow. Server-supported sync provisioning is reused; direct login remains available when it is unavailable.",
           "evidence": [
             {
               "path": "docs/design/bookorbit-account.md",

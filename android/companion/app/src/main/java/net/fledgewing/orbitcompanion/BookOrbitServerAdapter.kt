@@ -10,6 +10,8 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         fun request(server: String, path: String, method: String, body: Map<String, Any?>?, headers: Map<String, String>): BookOrbitAccount.Reply
         fun download(server: String, path: String, headers: Map<String, String>, destination: File): Boolean
     }
+    private var dashboardUnavailableOwner: String? = null
+    private var dashboard: Pair<String,RemoteReadingStats>? = null
     private val artifacts = linkedMapOf<String, String>()
     private fun login(kind: String): ServerCredentials.Login {
         val c = credentials.login(kind) ?: throw BookOrbitAccount.Failure("unauthorized")
@@ -47,6 +49,7 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             val candidate = ServerCredentials.Login(BookOrbitAccount.normalizeServer(server), username, value, "user")
             check(transport.request(candidate.server, if (kind == "sync") "/koreader/users/auth" else "/opds", "GET", null, headers(candidate,kind)))
             credentials.set(kind, candidate)
+            if (kind == "sync") dashboardUnavailableOwner = null
             if (kind == "opds") artifacts.clear()
         } finally { secret.fill('\u0000') }
     }
@@ -56,12 +59,27 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         if (!replace && credentials.login(kind) != null) return true
         val candidate = if (kind == "sync") {
             account.setupConnector(credentials.login("sync")?.let { CacheWorker.Creds(it.server, it.user, it.secret) })
-            account.connector()?.let { ServerCredentials.Login(it.server, it.user, it.key, "account") }
-        } else account.setupOpds()?.let { ServerCredentials.Login(it.first, it.second.first, it.second.second, "account") }
+            account.connector()?.let { ServerCredentials.Login(it.server, it.user, it.key, "account", account.identity()) }
+        } else account.setupOpds()?.let { ServerCredentials.Login(it.first, it.second.first, it.second.second, "account", account.identity()) }
         if (candidate != null) { credentials.set(kind, candidate, onlyIfUnset = !replace); if (kind == "opds") artifacts.clear() }
         return candidate != null
     }
-    override fun refreshStats() = account.refreshStats()
+    override fun fallbackReadingStats(): RemoteReadingStats? {
+        val c = credentials.login("sync") ?: return null
+        if (c.origin == "account" && account.state()["signedIn"] != true) return null
+        return dashboard?.takeIf { it.first == c.owner() }?.second
+    }
+    override fun refreshStats() {
+        try { account.refreshStats() } finally {
+            val c = credentials.login("sync")
+            if (c != null && dashboardUnavailableOwner != c.owner() && (c.origin == "user" || account.state()["signedIn"] == true)) {
+                val reply = transport.request(c.server,"/koreader/plugin/catalog/dashboard","GET",null,headers(c,"sync"))
+                if (reply.code in 200..299 && reply.value is Map<*, *>)
+                    dashboard = c.owner() to BookOrbitLibrary.dashboardStats(reply.value)
+                else if (reply.code in setOf(401,403,404)) { dashboard = null; dashboardUnavailableOwner = c.owner() }
+            }
+        }
+    }
     override fun owner(): String? = (credentials.login("opds") ?: credentials.login("sync"))?.owner() ?: account.identity()
     override fun stats(owner: String): Map<*, *>? = if (owner == owner()) account.normalizedStats() else null
     private fun headers(login: ServerCredentials.Login, kind: String): Map<String, String> = if (kind == "sync")
@@ -92,7 +110,8 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         check(reply)
         val parsed = OpdsCatalog.parse(reply.value as? String ?: throw BookOrbitAccount.Failure("invalid-response"), c.server, limit)
         val rows = parsed.items.map { book ->
-            val key = c.owner() + ":book:" + BookOrbitLibrary.namespace(book.href).removePrefix("bo:")
+            val id = java.net.URI(book.href).path.split('/')[2].toLong().also { require(it > 0) }
+            val key = BookOrbitLibrary.key(c.owner(),"book",id)
             artifacts[key] = book.href
             while (artifacts.size > 200) artifacts.remove(artifacts.keys.first())
             mapOf("key" to key, "title" to LuaValue.str(book.title), "authors" to book.authors.map(LuaValue::str), "formats" to listOf(book.format), "downloadable" to true)
@@ -103,7 +122,7 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
     }
     override fun download(key: String, destination: File): Boolean {
         val c = login("opds")
-        require(key.startsWith(c.owner() + ":book:"))
+        require(BookOrbitLibrary.id(c.owner(),"book",key) != null)
         val path = artifacts[key] ?: throw BookOrbitAccount.Failure("missing")
         require(!destination.exists())
         return transport.download(c.server, path, headers(c,"opds") + ("Accept" to "application/octet-stream"), destination)
