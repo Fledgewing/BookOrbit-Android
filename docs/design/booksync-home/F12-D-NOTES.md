@@ -28,6 +28,8 @@ The design branch is read without merging its unapproved implementation restrict
 
 Account & server, Sync, Wi-Fi & power, Library & downloads, Reading, Home, Sleep
 screen, Updates and About & help are available from the existing Tools entry.
+Unavailable Wi-Fi controls and presets remain visible but disabled with a reason;
+mode matching uses the effective device Wi-Fi policy.
 Every shared sleep value stays visible, including values owned by the companion.
 Source choices use the shared schema; advanced saved lists and exclusions open
 its existing sleep page. Device power management remains in the companion/OS.

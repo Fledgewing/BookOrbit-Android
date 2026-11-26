@@ -14,7 +14,7 @@ function SettingsUI.mode(settings, effectiveWifi)
         local match = true
         for _, key in ipairs(SettingsUI.modeKeys) do
             local value = settings[key]
-            if key == "wifi_mode" and value == nil then value = effectiveWifi end
+            if key == "wifi_mode" and effectiveWifi ~= nil then value = effectiveWifi end
             if value ~= mode.values[key] then match = false end
         end
         if match then return mode.id end

@@ -147,7 +147,7 @@ function OrbitAndroid:settingRow(key)
         end
     else
         row.text_func = function()
-            return _(SettingsUI.words(d.label)) .. ": " .. _(SettingsUI.value(d, S[key]))
+            return _(SettingsUI.words(d.label)) .. ": " .. _(SettingsUI.value(d, key == "wifi_mode" and Shared.mode() or S[key]))
         end
         row.sub_item_table = {}
         for _i, v in ipairs(d.values or {}) do
@@ -155,6 +155,12 @@ function OrbitAndroid:settingRow(key)
             table.insert(row.sub_item_table, {text=_(SettingsUI.words(v.label)), radio=true,
                 checked_func=function() return SettingsSync.toWire(d, S[key]) == tostring(v.id) end,
                 callback=function() set(value) end})
+        end
+    end
+    if key == "wifi_mode" or key == "wifi_idle_min" or key == "wifi_via_companion" then
+        row.enabled_func = function() return Companion.has("wifi") end
+        if not Companion.has("wifi") then
+            row.help_text = row.help_text .. " " .. _("Wi-Fi switching is unavailable in this setup. Wi-Fi stays as you leave it.")
         end
     end
     return row
@@ -193,16 +199,22 @@ function OrbitAndroid:menuItems()
             paint:flush()
             local modes = {}
             for _i, mode in ipairs(SettingsUI.modes) do
-                modes[#modes+1] = {text=_(mode.label) .. " · " .. SettingsUI.estimate(estimates, mode.id), help_text=_(mode.help), radio=true,
+                modes[#modes+1] = {text=_(mode.label) .. " · " .. SettingsUI.estimate(estimates, mode.id), help_text=_(mode.help) .. (Companion.has("wifi") and "" or (" " .. _("Wi-Fi switching is unavailable in this setup."))), radio=true,
+                    enabled_func=function() return Companion.has("wifi") end,
                     checked_func=function() return SettingsUI.mode(S, Shared.mode()) == mode.id end,
                     callback=function()
+                        if not Companion.has("wifi") then return end
                         for _i, key in ipairs(SettingsUI.modeKeys) do Shared.set(key, mode.values[key]) end
                         for _i, key in ipairs(SettingsUI.modeKeys) do Shared.onChange(key, "mode") end
                     end}
             end
             local out = {{text_func=function() return _("Mode") .. ": " .. _(SettingsUI.modeLabel(S, Shared.mode())) end, sub_item_table=modes}}
             table.insert(out, 1, action("Sync now", function() Library.syncNow(self) end))
-            if SettingsUI.mode(S, Shared.mode()) == "custom" then out[#out+1] = action("Back to Balanced", modes[2].callback) end
+            if SettingsUI.mode(S, Shared.mode()) == "custom" then
+                local reset = action("Back to Balanced", modes[2].callback)
+                reset.enabled_func = modes[2].enabled_func
+                out[#out+1] = reset
+            end
             for _i, row in ipairs(rows(SettingsUI.syncKeys)) do out[#out+1] = row end
             -- Device sleep is owned by Android, reachable even when the companion cannot switch Wi-Fi.
             out[#out+1] = action("Sleep & power: open companion…", function() self:onOrbitOpenCompanion() end)

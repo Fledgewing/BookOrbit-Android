@@ -1750,6 +1750,7 @@ test("settings modes: approved presets use shared wire values and Balanced match
     local unset = {}
     for _, key in ipairs(UI.modeKeys) do if key ~= "wifi_mode" then unset[key] = balanced[key] end end
     eq(UI.mode(unset, "jit"), "balanced", "effective device Wi-Fi default")
+    eq(UI.mode(balanced, "always_on"), "custom", "effective capability policy beats stored Wi-Fi preference")
     eq(UI.words("BookOrbit home"), "Server plugin's Home")
     eq(UI.words("Wake Tailscale for syncs"), "Wake VPN for syncs")
 end)

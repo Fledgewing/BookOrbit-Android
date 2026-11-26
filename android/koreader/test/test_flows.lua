@@ -1582,7 +1582,7 @@ test("caps: Add-on degrades: Sync and sleep asks for the power button, Other app
     ok(m:openCompanionHome() == true and #W.activities == 0, "Home at BookOrbit home stays")
     local hasWifiRow, hasHelperLine, hasApps = false, false, false
     for _, it in ipairs(menuAll(m:menuItems())) do
-        if it.text == "Let BookSync switch Wi-Fi for syncs" then hasWifiRow = true end
+        if it.text == "Let BookSync switch Wi-Fi for syncs" then hasWifiRow = true; eq(it.enabled_func(), false, "unavailable control is visible and disabled") end
         if it.text == "Wi-Fi switching and sleep sync: in BookSync Companion ›" then hasHelperLine = true end
         if it.text == "Open another app…" then hasApps = true end
     end
@@ -6834,6 +6834,8 @@ test("settings: mode estimates come from one bounded library read; presets and C
     RE.LibraryAdapter.read, RE.LibraryAdapter.request = oldRead, oldRequest
     eq(requests, 1); eq(trips, 1)
     ok(row.sub_item_table[1].text:find("≈ 4 days at your usual use", 1, true))
+    local has = RE.Companion.has
+    RE.Companion.has = function(cap) return cap == "wifi" or has(cap) end
     local saved = {}
     for _, key in ipairs(RE.SettingsUI.modeKeys) do saved[key] = RE.S[key] end
     for i, mode in ipairs(RE.SettingsUI.modes) do
@@ -6844,6 +6846,7 @@ test("settings: mode estimates come from one bounded library read; presets and C
     RE.Shared.set("wifi_idle_min", 10)
     eq(RE.SettingsUI.mode(RE.S), "custom")
     for _, key in ipairs(RE.SettingsUI.modeKeys) do RE.Shared.set(key, saved[key]) end
+    RE.Companion.has = has
 end)
 
 test("About: the locked menu shows every shared credit paragraph and the project URL", function()
