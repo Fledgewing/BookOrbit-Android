@@ -1,15 +1,14 @@
 Subject: [PATCH] BookSync: Stable / RC / Preview update channels
 
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml
-index 5cc53f5d..c5daa150 100644
+index 5cc53f5d..069c9493 100644
 --- a/lib/I18n/translations/english.yaml
 +++ b/lib/I18n/translations/english.yaml
-@@ -259,7 +259,10 @@ STR_SYNC_SERVER: "Sync Server"
- STR_BOOKORBIT_SYNC: "BookOrbit Sync"
+@@ -260,6 +260,10 @@ STR_BOOKORBIT_SYNC: "BookOrbit Sync"
  STR_BOOKORBIT: "BookOrbit"
  STR_CHECK_UPDATES: "Check for Updates"
--STR_OTA_INCLUDE_PRERELEASES: "Include pre-releases"
-+STR_OTA_INCLUDE_PRERELEASES: "Update channel"
+ STR_OTA_INCLUDE_PRERELEASES: "Include pre-releases"
++STR_BOOKSYNC_UPDATE_CHANNEL: "Update channel"
 +STR_BOOKSYNC_STABLE: "Stable"
 +STR_BOOKSYNC_RC: "RC"
 +STR_BOOKSYNC_PREVIEW: "Preview"
@@ -49,7 +48,7 @@ index 48228609..3d4db0a7 100644
    // Resetting to 0 (e.g. via the web UI) forces a re-sync on next WiFi connect.
    uint8_t clockHasBeenSynced = 0;
 diff --git a/src/SettingsList.cpp b/src/SettingsList.cpp
-index 06c660a6..8b57e8bd 100644
+index 06c660a6..4dc8f100 100644
 --- a/src/SettingsList.cpp
 +++ b/src/SettingsList.cpp
 @@ -342,8 +342,9 @@ void forEachBaseSetting(SettingVisitor visitor, void* context) {
@@ -58,12 +57,25 @@ index 06c660a6..8b57e8bd 100644
                            StrId::STR_CAT_SYSTEM));
 -  add(SettingInfo::Toggle(StrId::STR_OTA_INCLUDE_PRERELEASES, &CrossPointSettings::otaIncludePrereleases,
 -                          "otaIncludePrereleases", StrId::STR_CAT_SYSTEM));
-+  add(SettingInfo::Enum(StrId::STR_OTA_INCLUDE_PRERELEASES, &CrossPointSettings::otaChannel,
++  add(SettingInfo::Enum(StrId::STR_BOOKSYNC_UPDATE_CHANNEL, &CrossPointSettings::otaChannel,
 +                        {StrId::STR_BOOKSYNC_STABLE, StrId::STR_BOOKSYNC_RC, StrId::STR_BOOKSYNC_PREVIEW},
 +                        "otaChannel", StrId::STR_CAT_SYSTEM));
  
    // Frontlight quick-panel state: persisted + web-exposed, category-less so
    // it stays off the Settings screen (edited from the swipe-down panel).
+diff --git a/src/SettingsList.h b/src/SettingsList.h
+index 536414fb..7e1d26ce 100644
+--- a/src/SettingsList.h
++++ b/src/SettingsList.h
+@@ -1213,7 +1213,7 @@ inline std::vector<SettingInfo> buildSystemSettingsParentList(const std::vector<
+ #if !FREEINK_DEVICE_PICCO
+   // Picco retains the vendor recovery slot and has no spare application slot.
+   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
+-  addSettingByName(systemSettings, allSettings, StrId::STR_OTA_INCLUDE_PRERELEASES);
++  addSettingByName(systemSettings, allSettings, StrId::STR_BOOKSYNC_UPDATE_CHANNEL);
+   systemSettings.push_back(SettingInfo::Action(StrId::STR_SD_FIRMWARE_UPDATE, SettingAction::SdFirmwareUpdate));
+ #endif
+   systemSettings.push_back(SettingInfo::Action(StrId::STR_RELEASE_NOTES, SettingAction::ReleaseNotes));
 diff --git a/src/activities/settings/OtaUpdateActivity.cpp b/src/activities/settings/OtaUpdateActivity.cpp
 index 22618a83..cab08086 100644
 --- a/src/activities/settings/OtaUpdateActivity.cpp
