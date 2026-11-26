@@ -185,13 +185,46 @@ test("layout: deterministic fuzz moves/resizes retain invariants and validate on
     ok(calls > 400)
 end)
 
+test("layout: save codec receives typed empty maps without changing input",function()
+    local d=L.default()
+    eq(getmetatable(d.pages[1].placements[1].settings),nil)
+    local saw=false
+    local strict={decode=codec.decode,encode=function(value)
+        eq(getmetatable(value.pages[1].placements[1].settings).__jsontype,"object")
+        eq(getmetatable(value.overrides.x3).__jsontype,"object")
+        eq(getmetatable(value.pages).__jsontype,"array")
+        saw=true; return codec.encode(value)
+    end}
+    ok(L.serialize(d,strict)); ok(saw)
+    eq(getmetatable(d.pages[1].placements[1].settings),nil)
+end)
+
+test("editor session: pure page naming, bounded limits and unpublished failures",function()
+    local d=empty(); local before=codec.encode(d)
+    local session=M.HomeEditorPlan.new(d)
+    ok(session:add("booklist",1,2)); eq(codec.encode(d),before)
+    eq(session:page().name,"Book list"); eq(session:page().placements[1].x,1)
+    ok(session:pageAction("rename","Chosen")); ok(session:remove())
+    ok(session:add("continue-reading")); eq(session:page().name,"Chosen")
+    ok(session:pageAction("add")); eq(session.index,2)
+    ok(session:add("lists")); eq(session:page().name,"Lists")
+    for i=3,L.MAX_PAGES do ok(session:pageAction("add")) end
+    local full=session.document
+    eq(session:pageAction("add"),nil); eq(session.document,full)
+    eq(session:pageAction("reorder",17),nil); eq(session.document,full)
+    eq(session:add("not-installed"),nil); eq(session.document,full)
+    valid(session.document)
+    ok(session:reset()); eq(session.index,1); eq(session.selected,nil)
+end)
+
 test("budgets: every screen/widget/query declares and enforces deterministic limits",function()
     local zero={rows=0,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}
     local function check(b,widget)
-        ok(B.check(b,zero)); ok(b.targetMs > 0); ok(b.bytes <= (widget and 16384 or 131072)); ok(b.rows <= (widget and 12 or 128))
+        local baseline=L.copy(zero); if b.drawNodes then baseline.drawNodes=0 end
+        ok(B.check(b,baseline)); ok(b.targetMs > 0); ok(b.bytes <= (widget and 16384 or 131072)); ok(b.rows <= (widget and 12 or 128))
         for k,limit in pairs(zero) do
-            local counts=L.copy(zero); counts[k]=b[k]+1; eq(B.check(b,counts),nil,"exceeded "..k)
-            counts=L.copy(zero); counts[k]=nil; eq(B.check(b,counts),nil,"missing "..k)
+            local counts=L.copy(baseline); counts[k]=b[k]+1; eq(B.check(b,counts),nil,"exceeded "..k)
+            counts=L.copy(baseline); counts[k]=nil; eq(B.check(b,counts),nil,"missing "..k)
         end
     end
     for _,id in ipairs({"home","library","details","series","settings","filter","editor","reader-top-panel"}) do check(B.screens[id]) end
