@@ -12,6 +12,8 @@ KOTLIN = COMPANION / 'main/java'
 LUA = Path('android/koreader/orbit.koplugin')
 REGISTRY = KOTLIN / 'net/fledgewing/orbitcompanion/ServerAdapters.kt'
 LUA_REGISTRY = LUA / 'main.lua'
+ABOUT_CREDIT = Path('shared/about/credits.json')
+RESOURCE_ROOTS = (Path('shared/settings'), Path('shared/ui'), Path('shared/about'))
 # Protocol inventory, not a file baseline. Every consumer is checked for every token.
 FIELDS = ("readStatus", "progressPercentage", "smartScopeId", "seriesName", "seriesId",
           "seriesIndex", "lastReadAt", "addedAt", "updatedAt", "contentVersion", "hasCover",
@@ -55,12 +57,14 @@ def violations(path, source):
     kotlin_adapter = source_root is not None and path.is_relative_to(source_root / 'net/fledgewing/orbitcompanion/server')
     lua_adapter = any(path.is_relative_to(LUA / family / 'server') for family in ('ko', 'logic'))
     if kotlin_adapter or lua_adapter:
-        if kotlin_adapter:
+        if kotlin_adapter and path.suffix in ('.kt', '.java'):
             expected = '.'.join(path.relative_to(source_root).parent.parts)
             if not re.search(r'^package ' + re.escape(expected) + r'\s*$', source, re.M):
                 return [f'{path}: adapter package must match its source directory']
         return []
     lua = path.suffix == '.lua'
+    if path.suffix in ('.xml', '.html'):
+        source = re.sub(r'<!--.*?-->', lambda m: re.sub(r'[^\n]', ' ', m[0]), source, flags=re.S)
     code = code_only(source, lua)
     wiring = path in (REGISTRY, LUA_REGISTRY)
     errors = []
@@ -95,7 +99,9 @@ def violations(path, source):
                 errors.append(f'{path}:{n}: protocol in composition root: {line.strip()}')
             protocol_line = re.sub(r'BookOrbit\w*|bookorbit(?:[/._a-z]*)', 'adapter', line, flags=re.I)
         if lua and LEGACY_API.search(line): errors.append(f'{path}:{n}: upstream sync/catalog primitive outside adapter: {line.strip()}')
-        if PROTOCOL.search(protocol_line): errors.append(f'{path}:{n}: server protocol outside adapter: {line.strip()}')
+        # About credit prose may name its credited project; routes and fields remain forbidden.
+        protocol = WIRE_PROTOCOL if path == ABOUT_CREDIT else PROTOCOL
+        if protocol.search(protocol_line): errors.append(f'{path}:{n}: server protocol outside adapter: {line.strip()}')
         if not wiring and IMPLEMENTATION.search(line): errors.append(f'{path}:{n}: implementation import outside registry: {line.strip()}')
     return errors
 
@@ -137,15 +143,23 @@ class GuardTests(unittest.TestCase):
         self.assertTrue(violations(REGISTRY, 'val path="bookorbit/api/v1"'))
         self.assertTrue(violations(LUA_REGISTRY, 'local field="readStatus"'))
         self.assertTrue(violations(LUA_REGISTRY, 'ServerCache.normalize(reply)'))
+    def test_resources_cannot_hide_protocol(self):
+        for path in (Path('shared/settings/schema.json'), COMPANION / 'main/res/values/strings.xml',
+                     COMPANION / 'debug/assets/settings.json', LUA / 'settings_schema.json'):
+            for value in ('BookOrbit', '/api/v1', 'smart scope', 'readStatus'):
+                self.assertTrue(violations(path, value), (path, value))
+        self.assertFalse(violations(COMPANION / 'main/AndroidManifest.xml', '<!-- BookOrbit https://library.invalid -->'))
+        self.assertFalse(violations(ABOUT_CREDIT, '{"paragraphs":["BookOrbit credit"]}'))
+        self.assertTrue(violations(ABOUT_CREDIT, '{"url":"/api/v1"}'))
     def test_entire_production_tree(self):
         errors = []
-        for root in (COMPANION, LUA):
+        for root in (COMPANION, LUA, *RESOURCE_ROOTS):
             for path in sorted((ROOT / root).rglob('*')):
                 # Test source sets hold deliberate protocol fixtures, not app code. All production
                 # variants and both supported JVM source folders are scanned, not just main/java.
                 if root == COMPANION and path.relative_to(ROOT / COMPANION).parts[0].lower().startswith(('test', 'androidtest')):
                     continue
-                if path.suffix in ('.kt', '.java', '.lua'):
+                if path.suffix in ('.kt', '.java', '.lua', '.json', '.xml', '.html', '.properties'):
                     errors.extend(violations(path.relative_to(ROOT), path.read_text()))
         self.assertFalse(errors, '\n' + '\n'.join(errors))
 

@@ -127,7 +127,7 @@
      "label": "Back to my book, then home"
     },
     {
-     "id": "bookorbit",
+     "id": "server-home",
      "label": "Server plugin's Home"
     }
    ],
@@ -264,7 +264,7 @@
     ]
    },
    "search": [
-    "smart scope",
+    "saved list",
     "collection",
     "list",
     "cover",

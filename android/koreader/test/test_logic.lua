@@ -1458,7 +1458,15 @@ end)
 local SettingsSync = M.SettingsSync
 local function readFile(path) local f = assert(io.open(path, "rb")); local t = f:read("*a"); f:close(); return t end
 local schemaText = readFile(here .. "/../../../shared/settings/schema.json")
-local SIDX = SettingsSync.index(SettingsSync.decodeJson(schemaText))
+local SIDX = SettingsSync.index(SettingsSync.decodeJson(schemaText), {["server-home"] = M.HomePlan.SERVER_HOME})
+
+test("settings schema: neutral choices bind opaque adapter keys without changing source data", function()
+    local raw = SettingsSync.decodeJson(schemaText)
+    local bound = SettingsSync.index(raw, {["server-home"] = "alternate:home"})
+    eq(bound.byKey.home_button.values[2].id, "alternate:home")
+    eq(SettingsSync.fromWire(SIDX.byKey.home_button, M.HomePlan.SERVER_HOME), M.HomePlan.SERVER_HOME)
+    eq(SettingsSync.index(raw).byKey.home_button.values[2].id, "server-home")
+end)
 
 test("settings schema: the plugin's own JSON reader loads it", function()
     ok(#SIDX.settings >= 30, "settings: " .. #SIDX.settings)

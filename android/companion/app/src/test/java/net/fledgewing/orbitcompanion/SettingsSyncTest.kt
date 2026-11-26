@@ -18,6 +18,16 @@ class SettingsSyncTest {
     private val schema = SettingsSchema.parse(schemaFile.readText())
 
     @Test
+    fun neutralHomeChoiceBindsTheExistingAdapterWireKey() {
+        val raw = JSONObject(schemaFile.readText()).getJSONArray("settings")
+        val home = (0 until raw.length()).map { raw.getJSONObject(it) }.single { it.getString("key") == "home_button" }
+        assertEquals("server-home", home.getJSONArray("values").getJSONObject(1).getString("id"))
+        val bound = schema.byKey.getValue("home_button")
+        assertEquals(HomeButton.LIBRARY.key, bound.values[1].first)
+        assertEquals(HomeButton.LIBRARY.key, SettingsSync.fromWire(bound, HomeButton.LIBRARY.key))
+    }
+
+    @Test
     fun schemaLoads() {
         assertEquals(8, schema.sections.size)
         assertTrue(schema.settings.size >= 30)

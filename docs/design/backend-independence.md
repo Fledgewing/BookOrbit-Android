@@ -146,6 +146,11 @@ To add an adapter:
    rejection behavior. There are no frozen baselines or suppression annotations. The CI
    plugin-test action runs it explicitly; the existing Lua harness invokes it too.
 
+The same guard scans production resources and shared Settings/UI definitions. About credit
+prose may name the credited project; routes and protocol fields remain forbidden there.
+The Settings schema uses a neutral `server-home` choice. Each client binds that choice through
+the existing adapter Home key when loading the schema, preserving installed wire values.
+
 Every screen/widget keeps its declared budget in `logic/budgets.lua` / the registry.
 Adapter calls inherit those limits: at most 24 rows and 16 KiB per widget snapshot, no
 render-path network/subprocesses, one batched companion round-trip per Home paint. Counts,

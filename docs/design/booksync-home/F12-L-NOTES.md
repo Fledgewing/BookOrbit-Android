@@ -112,3 +112,10 @@ generic codec has no protocol methods.
 The companion mirrors this split: response ID traversal and legacy paging move from
 `LuaValue` into the existing private `CacheRules`; the generic serializer no longer
 interprets server response fields. Paging field names are covered by the guard inventory.
+
+The resource audit removes the historical Home choice ID and backend search term from the
+shared Settings schema. A neutral `server-home` choice binds through the existing adapter
+Home key in both clients, preserving installed values without a wire migration. Tests cover
+opaque alternative keys, immutable source schema data and existing-setting round trips.
+The recursive guard also checks production JSON/XML resources and shared Settings/UI data;
+About credit prose has a brand-only exception, with protocol rejection still enforced.

@@ -54,6 +54,7 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   reviewed Server facade; local file IO belongs to generic Store. UI uses the neutral
   library/read model and capability flags. Run
   `python3 tools/test/test-server-boundary.py`; no baseline, suppression or skip list is allowed.
+  The guard scans production resources and shared Settings/UI data too; About credit prose may name its credited project.
   See `docs/design/backend-independence.md` for adapter registration and legacy follow-ups.
 
 - **Nothing interrupts reading.** While a book is open in the foreground, nothing from BookSync,

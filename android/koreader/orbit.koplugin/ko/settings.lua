@@ -15,7 +15,7 @@ function loadSchema()
             local text = f:read("*a")
             f:close()
             local v = SettingsSync.decodeJson(text)
-            if v then return SettingsSync.index(v) end
+            if v then return SettingsSync.index(v, {["server-home"] = HomePlan.SERVER_HOME}) end
         end
     end
     logger.err("Orbit: settings_schema.json is missing or unreadable; shared settings have no defaults")
