@@ -92,6 +92,9 @@ Budgets.screens["booklist-config"] = budget(0, 0, 100)
 Budgets.screens["booklist-config"].roundTrips = 0
 Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
 
+-- Series/grouped windows charge summary, preview books and one capability row.
+Budgets.screens.series.rows = Budgets.MAX_ROWS + 1
+
 -- Sleep picker pages inherit six companion-materialized names/counts, never a choice catalog.
 Budgets.screens["settings-sleep-choices"] = budget(6,16384,50)
 Budgets.screens["settings-device"] = budget(1,16384,50)

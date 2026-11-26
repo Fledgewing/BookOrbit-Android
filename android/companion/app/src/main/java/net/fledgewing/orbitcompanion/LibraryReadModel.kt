@@ -47,9 +47,15 @@ class LibraryReadModel(
                     "capabilities" -> adapter.capabilities(owner) + mapOf("battery" to true)
                     else -> adapter.project(owner, args)
                 } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
-                var body = LuaValue.encode(result)
+                val items = result["items"] as? List<*>
+                val measuredRows = items.orEmpty().size + items.orEmpty().sumOf {
+                    ((it as? Map<*, *>)?.get("books") as? List<*>)?.size ?: 0
+                } + ((result["next_books"] as? List<*>)?.size ?: 0) +
+                    (if (args["op"] == "series" && result.containsKey("subtitle")) 1 else 0)
+                val rows = maxOf(measuredRows, (result["row_count"] as? Number)?.toInt() ?: 0)
+                val boundedResult = if (result.containsKey("row_count")) result + mapOf("row_count" to rows) else result
+                var body = LuaValue.encode(boundedResult)
                 val budget = ((args["bytes"] as? Number)?.toInt() ?: MAX_BYTES).coerceIn(256, MAX_BYTES)
-                val rows = (result["items"] as? List<*>)?.size ?: 0
                 val rowBudget = ((args["limit"] as? Number)?.toInt() ?: MAX_ROWS).coerceIn(1, MAX_ROWS)
                 if (body.size > budget || rows > rowBudget) body = LuaValue.encode(mapOf(
                     "error" to "budget", "items" to emptyList<Any>(), "freshness" to mapOf("saved" to false)))
