@@ -3,8 +3,12 @@
 -- Worker BookOrbitLibrary owns projection and query semantics.
 LibraryAdapter = { sent={}, order={}, ready={} }
 function LibraryAdapter.owner()
-    local client = OC.client()
-    return client and OC.owner(client) or nil
+    -- newClient/apiOpts may initialize the upstream reading ledger on account change.
+    -- Ownership needs only the plugin's already-loaded account scalars.
+    local plugin = bookorbit()
+    local settings = plugin and plugin.settings
+    if type(settings) ~= "table" or not settings.username or not settings.server_url then return nil end
+    return OC.owner(settings)
 end
 function LibraryAdapter.read(request)
     local owner = LibraryAdapter.owner()

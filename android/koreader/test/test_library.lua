@@ -79,6 +79,20 @@ return function(test, eq, ok, here, Cache)
         local r=e.Library.paint("home"):widget("library")
         r:counts(); eq(r.usage.rows,1,"summary is a materialized row")
     end)
+    test("library: ownership lookup never constructs a client or loads its ledger", function()
+        local plugin={settings={username="fixture",server_url="https://library.invalid"},
+            newClient=function() error("render constructed a backend client") end}
+        local reads=0
+        local e=setmetatable({bookorbit=function() return plugin end, OC={
+            client=function() error("render called the legacy client factory") end,
+            owner=function(settings) eq(settings,plugin.settings); return "fixture-owner" end},
+            Store={library=function(owner, request) reads=reads+1; eq(owner,"fixture-owner"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        eq(e.LibraryAdapter.owner(),"fixture-owner")
+        local r,bytes=e.LibraryAdapter.read("bounded"); eq(#r.items,0); eq(bytes,32); eq(reads,1)
+        plugin.settings=nil; eq(e.LibraryAdapter.owner(),nil)
+        eq(e.LibraryAdapter.read("bounded"),nil); eq(reads,1)
+    end)
     test("library: backend references cannot spread beyond adapters and frozen legacy seam", function()
         local baseline={}
         for line in io.lines(here .. "/library-legacy-boundary.txt") do baseline[line]=(baseline[line] or 0)+1 end
