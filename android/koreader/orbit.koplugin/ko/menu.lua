@@ -279,7 +279,6 @@ function OrbitAndroid:menuItems()
             action("Help and guides", function() self:onOrbitOpenCompanion() end),
             action("Advanced: open companion app", function() self:onOrbitOpenCompanion() end),
         } end),
-        action("Open BookSync Companion", function() self:onOrbitOpenCompanion() end),
     }
     assert(#items <= Budgets.get("screens", "settings").rows, "Settings row budget exceeded")
     finish()
@@ -323,6 +322,16 @@ function OrbitAndroid:lockedMenuItems()
             self:showPinKeypad("tap")
         end })
     return items
+end
+
+-- The owned Home and reader gear share the existing Settings rows and PIN policy.
+function OrbitAndroid:showSettings()
+    Shared.refresh("menu")
+    local items=Shared.pin_locked and self:lockedMenuItems() or self:menuItems()
+    items.icon="appbar.settings"
+    local menu=require("ui/widget/touchmenu"):new{width=Device.screen:getWidth(),tab_item_table={items}}
+    UIManager:show(menu) -- gate: user action (BookSync settings)
+    return menu
 end
 
 function OrbitAndroid:addToMainMenu(menu_items)
