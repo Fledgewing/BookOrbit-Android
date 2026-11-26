@@ -196,6 +196,80 @@ class LibraryTest {
             assertEquals(listOf("Secondary"),((read(st,mapOf("op" to "window","source" to series))["items"] as List<*>).single() as Map<*,*>)["series"])
         }
     }
+    @Test fun facetCountsExcludeOnlyTheOpenPickerAndKeepSelectedZeroValues() {
+        store().use { st ->
+            seed(st)
+            fun put(id: Long, author: String, pages: Int, tags: List<String>) {
+                st.db().exec("INSERT OR REPLACE INTO bulk_books(g,id,item) VALUES(1,?,?)",id,LuaValue.encode(mapOf("id" to id,"title" to "Book $id","authors" to listOf(author),"pageCount" to pages,"seriesName" to author,"tags" to tags,"rating" to 4,"readStatus" to "unread")))
+            }
+            put(1,"A",200,listOf("Space","Space")); put(2,"B",300,listOf("Space")); put(3,"C",220,listOf("Other"))
+            val query=mapOf("len" to mapOf("max" to 249),"author" to listOf("B","Gone"))
+            val r=read(st,mapOf("op" to "facets","field" to "author","source" to "all","query" to query))
+            assertEquals(0L,r["total"])
+            val rows=(r["items"] as List<*>).map { it as Map<*,*> }
+            assertEquals(listOf("A","C","B","Gone"),rows.map { it["value"] })
+            assertEquals(listOf(1L,1L,0L,0L),rows.map { it["count"] })
+            assertEquals(listOf(false,false,true,true),rows.map { it["selected"] })
+            assertEquals(r["total"],read(st,mapOf("op" to "counts","source" to "all","query" to query))["total"])
+            for ((field, value) in mapOf("series" to "B","tags" to "Space")) {
+                val f=mapOf(field to listOf(value),"len" to mapOf("max" to 249))
+                val facets=read(st,mapOf("op" to "facets","field" to field,"source" to "all","query" to f))
+                val options=(facets["items"] as List<*>).map { it as Map<*,*> }
+                assertEquals(1L,options.first { it["value"] == if (field=="series") "A" else "Space" }["count"])
+            }
+            val lengths=read(st,mapOf("op" to "facets","field" to "len","source" to "all","query" to query))
+            val options=(lengths["items"] as List<*>).map { it as Map<*,*> }
+            assertEquals(1L,options.first { it["id"]=="medium" }["count"])
+            assertEquals(0L,options.first { it["id"]=="short" }["count"])
+            val scoped=read(st,mapOf("op" to "facets","field" to "author","source" to mapOf("kind" to "author","key" to "B")))
+            assertEquals(listOf("B"),(scoped["items"] as List<*>).map { (it as Map<*,*>)["value"] })
+        }
+    }
+    @Test fun facetCountsAndTicksUseTheSameUnicodeCaseFoldingAsResults() {
+        val first=LuaValue.str("Étoiles"); val second=LuaValue.str("ÉTOILES")
+        val facets=LibraryFacets("author",mapOf("author" to listOf(second)),0)
+        for (author in listOf(first,second)) facets.include(book + ("authors" to listOf(author)))
+        val rows=facets.page(0,8)["items"] as List<*>
+        assertEquals(1,rows.size)
+        val row=rows.single() as Map<*,*>
+        assertEquals(2,row["count"]); assertEquals(true,row["selected"])
+        assertEquals(listOf(second),row["selected_values"])
+        val label=LibraryFacets("rating",emptyMap(),0).page(0,8)["items"] as List<*>
+        assertTrue(label.map { LuaValue.utf8((it as Map<*,*>)["label"].toString()) }.contains("3★ and up"))
+    }
+    @Test fun everyRadioFacetUsesTheOtherFiltersAndReturnsTheSameResultTotal() {
+        val now=java.time.Instant.parse("2026-11-25T00:00:00Z").epochSecond
+        val books=listOf(book,book + mapOf("pages" to 450,"rating" to 5,"on_device" to false,"added" to "2026-01-01"))
+        for ((field, choice) in mapOf("show" to "finished","where" to "server-only","len" to mapOf("max" to 249),"rating" to mapOf("min" to 5),"added" to mapOf("min" to "2026-11-01"))) {
+            val facets=LibraryFacets(field,mapOf(field to choice,"tags" to listOf("Space")),now)
+            books.forEach(facets::include)
+            val options=(facets.page(0,24)["items"] as List<*>).map { it as Map<*,*> }
+            assertEquals(field,2,options.first { it["id"]=="any" }["count"])
+            assertTrue(options.any { (it["count"] as Int)>0 })
+            assertTrue(options.dropWhile { (it["count"] as Int)>0 }.all { it["count"]==0 })
+        }
+        val dates=LibraryFacets("added",emptyMap(),now)
+        dates.include(book + ("added" to "2026-11-24")); dates.include(book + ("added" to "2026-10-30"))
+        assertEquals(listOf(2,1,2,2),(dates.page(0,24)["items"] as List<*>).map { (it as Map<*,*>)["count"] })
+        assertTrue(LibraryFilter.matches(book,mapOf("show" to "want-to-read")))
+        assertFalse(LibraryFilter.matches(book + ("want_to_read" to false),mapOf("show" to "want-to-read")))
+    }
+    @Test fun facetPaginationCapsRowsBytesAndTreatsUnknownDeviceCoverageAsUnavailable() {
+        store().use { st ->
+            seed(st)
+            for (i in 1L..40L) st.db().exec("INSERT OR REPLACE INTO bulk_books(g,id,item) VALUES(1,?,?)",i,LuaValue.encode(mapOf("id" to i,"authors" to listOf("Author %02d".format(i)))))
+            val args=mapOf("op" to "facets","field" to "author","source" to "all","limit" to 999)
+            val first=read(st,args)
+            assertEquals(24,(first["items"] as List<*>).size); assertEquals(40L,first["total"]); assertEquals(24L,first["next"])
+            assertEquals(16,(read(st,args + ("offset" to 24))["items"] as List<*>).size)
+            assertEquals("budget",read(st,args + ("bytes" to 256))["error"])
+            assertEquals("unsupported",read(st,args + ("field" to "unsupported"))["error"])
+            assertEquals(false,(read(st,args + ("field" to "where"))["freshness"] as Map<*,*>)["saved"])
+            val ledger=File(st.root,"copies/ask.lua"); ledger.parentFile!!.mkdirs()
+            ledger.writeBytes(LuaValue.encode(mapOf("owner" to owner,"books" to emptyList<Any>())))
+            assertEquals(40L,((read(st,args + ("field" to "where"))["items"] as List<*>).map { it as Map<*,*> }.first { it["id"]=="server-only" })["count"])
+        }
+    }
     @Test fun materializationEnforcesRowAndByteLimitsAndRejectsMalformedFilters() {
         store().use { st ->
             seed(st)

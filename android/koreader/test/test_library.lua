@@ -48,6 +48,18 @@ return function(test, eq, ok, here, Cache)
         page:widget("booklist"):window("reading")
         eq(pcall(function() page:widget("booklist"):counts() end),false,"combined widget snapshot is bounded")
     end)
+    test("library: facet request inherits the picker budget in one batch", function()
+        local request, sends
+        local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end,
+            LibraryAdapter={read=function(r) request=Cache.decode(r); return {items={{label="A",count=2}},total=3},128 end,
+                request=function(batch) sends=#batch; return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "logic/budgets.lua")),e)(); setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
+        local p=e.Library.paint("filter-picker")
+        local r=p:facets("search",{q="stars",len={max=249}},"author",8,8)
+        eq(r.total,3); eq(request.op,"facets"); eq(request.field,"author"); eq(request.offset,8)
+        eq(request.query.q,"stars"); eq(request.query.len.max,249); eq(request.limit,8); eq(request.bytes,16384)
+        local metrics=p:flush(); eq(sends,1); eq(metrics.roundTrips,1); eq(metrics.rows,1); eq(metrics.spawns,0); eq(metrics.network,0)
+    end)
     test("library: registry row budgets aggregate per instance and across Home", function()
         local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end,
             LibraryAdapter={read=function()
@@ -78,6 +90,21 @@ return function(test, eq, ok, here, Cache)
         a.changed({kind="checked",owner="other"}); eq(a.sent.materialized,10)
         a.changed({kind="checked",owner="fixture"}); eq(next(a.sent),nil)
         a.watch(false); eq(a.watching,false)
+    end)
+    test("library: ownership lookup never constructs a client or loads its ledger", function()
+        local plugin={settings={username="fixture",server_url="https://library.invalid"},
+            newClient=function() error("render constructed a backend client") end}
+        local reads=0
+        local e=setmetatable({bookorbit=function() return plugin end, OC={
+            client=function() error("render called the legacy client factory") end,
+            owner=function(settings) eq(settings,plugin.settings); return "fixture-owner" end},
+            Store={library=function(owner, request) reads=reads+1; eq(owner,"fixture-owner"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        eq(e.LibraryAdapter.owner(),"fixture-owner")
+        local r,bytes=e.LibraryAdapter.read("bounded"); eq(#r.items,0); eq(bytes,32); eq(reads,1)
+        plugin.settings=nil; eq(e.LibraryAdapter.owner(),nil)
+        eq(e.LibraryAdapter.read("bounded"),nil); eq(reads,1)
+
     end)
     test("library: backend references cannot spread beyond adapters and frozen legacy seam", function()
         local baseline={}

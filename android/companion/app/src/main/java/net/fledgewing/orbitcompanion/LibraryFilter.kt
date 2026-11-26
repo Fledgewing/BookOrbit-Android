@@ -8,7 +8,7 @@ object LibraryFilter {
     fun validate(f: Map<*, *>) {
         require(f.keys.all { it in fields }) { "unsupported filter" }
         fun choice(k: String, values: Set<String>) { require(f[k] == null || f[k] in values) { "invalid $k" } }
-        choice("show", setOf("all", "unread", "reading", "finished", "rereading", "on-hold", "abandoned", "unknown"))
+        choice("show", setOf("all", "want-to-read", "unread", "reading", "finished", "rereading", "on-hold", "abandoned", "unknown"))
         choice("where", setOf("anywhere", "on-device", "server-only"))
         choice("group", setOf("none", "author", "series"))
         choice("sort", setOf("order", "match", "title", "author", "last", "added", "rating", "series"))
@@ -33,7 +33,8 @@ object LibraryFilter {
     }
     fun matches(b: Map<String, Any?>, f: Map<*, *>): Boolean {
         val show = f["show"] ?: "all"
-        if (show != "all" && b["status"] != show && !(show == "reading" && b["status"] == "rereading")) return false
+        if (show == "want-to-read" && b["want_to_read"] != true) return false
+        if (show != "all" && show != "want-to-read" && b["status"] != show && !(show == "reading" && b["status"] == "rereading")) return false
         if (f["wtr"] == true && b["want_to_read"] != true) return false
         if (f["where"] == "on-device" && b["on_device"] != true) return false
         if (f["where"] == "server-only" && b["on_device"] != false) return false // unknown is not server-only

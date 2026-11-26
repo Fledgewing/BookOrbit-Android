@@ -78,7 +78,8 @@ Stats widgets share one materialized `reading.stats` row per paint; aggregate in
 Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library window
 <30 ms, editor move <100 ms. Owned Home widgets receive immutable snapshots and a dispatch handle; only their host owns
 the batched read and read-model invalidation. Layout moves validate only their changed page, bounded by
-the placement count. Home pages and Settings groups inherit their screen-family budget.
+the placement count. Home pages and Settings groups inherit their screen-family budget. Filter picker pages inherit
+the filter screen budget; facet counts and zero-value ordering stay in the companion.
 
 ## Read the source, not memory
 
