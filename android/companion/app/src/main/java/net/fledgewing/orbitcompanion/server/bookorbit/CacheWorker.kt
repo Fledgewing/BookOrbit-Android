@@ -824,8 +824,11 @@ class CacheWorker(
         val part = allowed("$path.part${Thread.currentThread().id}") ?: return Landed(job, null, null, "none")
         part.parentFile?.let(NoMedia::directory)
         part.delete()
-        val route=if (book["author_photo"]==true) "/koreader/plugin/catalog/authors/${job.id}/photo" else "/koreader/plugin/catalog/books/${job.id}/thumbnail"
-        val rep = try { http.get(creds.server + route, h, part, MAX_COVER) }
+        val rep = try {
+            if (book["author_photo"]==true)
+                http.get(creds.server + "/koreader/plugin/catalog/authors/${job.id}/photo",h,part,MAX_COVER)
+            else http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail",h,part,MAX_COVER)
+        }
             catch (_: Exception) { part.delete(); Reply(0,err="transport") }
         if (Thread.currentThread().isInterrupted) { part.delete(); return Landed(job, rep, null, "transport") }
         return when {
