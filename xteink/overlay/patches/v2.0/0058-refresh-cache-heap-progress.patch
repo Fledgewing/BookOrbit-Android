@@ -425,20 +425,32 @@ diff --git a/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp b/src/com
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
-@@ -143,6 +143,12 @@
+@@ -35,6 +35,8 @@
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+ #include "orbify/core/Mirror.h"
+ #include "orbify/RefreshRunner.h"
++#include <freertos/FreeRTOS.h>
++#include <freertos/task.h>
+ #endif
+ #if CROSSINK_TAILNET_CATALOG_KEEPALIVE && defined(FREEINK_NET_WOLFSSL)
+ #include <Memory.h>
+@@ -143,6 +145,15 @@
  }
  
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
++// The SDK HTTP simulator has no wolfSSL pointer, but the same scoped lending
++// contract and budget. Identify the lending task so a concurrent bulk worker
++// cannot accidentally use the sync's smaller floor.
++std::atomic<TaskHandle_t> s_lendingTask{nullptr};
 +bool catalogHeapReady(bool transfer = false) {
-+#if defined(FREEINK_NET_WOLFSSL)
-+  if (s_lentConnection) return transfer ? !OrbifyHeap::starved() : OrbifyHeap::roomForRequest("Lent catalog");
-+#endif
++  if (s_lendingTask.load() == xTaskGetCurrentTaskHandle())
++    return transfer ? !OrbifyHeap::starved() : OrbifyHeap::roomForRequest("Lent catalog");
 +  return OrbifyHeap::roomForCatalog();
 +}
  using CatalogMutex = std::recursive_mutex;
  #else
  struct CatalogMutex { void lock() {} void unlock() {} bool try_lock() { return true; } };
-@@ -176,7 +182,7 @@
+@@ -176,7 +187,7 @@
    const OrbifyCache::Lookup cached = OrbifyCache::lookup(url);
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
    if(cached.bulk) {
@@ -447,7 +459,7 @@ diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatal
      if(OrbifyBulk::read(url,filter.as<JsonVariantConst>(),outDoc))return true;
      return false;
    }
-@@ -199,7 +205,7 @@
+@@ -199,7 +210,7 @@
    // on a transient allocation race; a fresh connection usually succeeds.
    HttpDownloader::DownloadOptions options;
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
@@ -456,7 +468,7 @@ diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatal
  #endif
    // wolfSSL rather than mbedTLS: the latter needs more heap than this chip has to spare
    // while parsing a modern certificate chain, which is what makes catalog fetches fail with
-@@ -212,13 +218,19 @@
+@@ -212,13 +223,19 @@
    options.wolfSslClient = catalogConnection();
  #endif
  #if !CROSSINK_TAILNET_FILTER_AFTER_TLS
@@ -477,7 +489,7 @@ diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatal
      if (!OrbifyCache::roomForReply()) return false;
  #endif
    HttpDownloader::DownloadError err = HttpDownloader::HTTP_ERROR;
-@@ -290,7 +302,7 @@
+@@ -290,7 +307,7 @@
  #if CROSSINK_TAILNET_FILTER_AFTER_TLS
    // Built only now: the request's TLS session is gone, so the filter's nodes never share
    // the heap with its handshake.
@@ -486,6 +498,38 @@ diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatal
    buildFilter(filter);
  #endif
    FileJsonReader reader{file};
+@@ -396,12 +413,28 @@
+ BookOrbitCatalogClient::LentConnection::LentConnection(freeink::SecureHttpClient* connection) {
+   CatalogGuard lock(catalogNetworkMutex);
+   s_lentConnection = connection;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (connection) s_lendingTask.store(xTaskGetCurrentTaskHandle());
++#endif
+   if (connection) LOG_INF("BookOrbit", "Catalog requests ride the sync's connection");
+ }
+-BookOrbitCatalogClient::LentConnection::~LentConnection() { CatalogGuard lock(catalogNetworkMutex); s_lentConnection = nullptr; }
++BookOrbitCatalogClient::LentConnection::~LentConnection() {
++  CatalogGuard lock(catalogNetworkMutex);s_lentConnection=nullptr;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  s_lendingTask.store(nullptr);
++#endif
++}
+ #else
+-BookOrbitCatalogClient::LentConnection::LentConnection(freeink::SecureHttpClient*) {}
+-BookOrbitCatalogClient::LentConnection::~LentConnection() {}
++BookOrbitCatalogClient::LentConnection::LentConnection(freeink::SecureHttpClient*) {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  s_lendingTask.store(xTaskGetCurrentTaskHandle());
++#endif
++}
++BookOrbitCatalogClient::LentConnection::~LentConnection() {
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  s_lendingTask.store(nullptr);
++#endif
++}
+ #endif
+ 
+ freeink::SecureHttpClient* BookOrbitCatalogClient::keptConnection() { CatalogGuard lock(catalogNetworkMutex); return catalogConnection(); }
 diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
 --- a/src/network/BookOrbitCatalogClient.h
 +++ b/src/network/BookOrbitCatalogClient.h
