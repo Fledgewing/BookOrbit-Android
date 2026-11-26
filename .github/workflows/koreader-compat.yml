@@ -64,7 +64,7 @@ jobs:
           git clone -q --depth 1 --branch "$KOREADER_REF" https://github.com/koreader/koreader "$RUNNER_TEMP/koreader"
           base_sha=$(git -C "$RUNNER_TEMP/koreader" ls-tree HEAD base | awk '{print $3}')
           git clone -q --filter=blob:none --no-checkout https://github.com/koreader/koreader-base "$RUNNER_TEMP/koreader-base"
-          git -C "$RUNNER_TEMP/koreader-base" sparse-checkout set ffi thirdparty/lua-ljsqlite3
+          git -C "$RUNNER_TEMP/koreader-base" sparse-checkout set ffi thirdparty/lua-ljsqlite3 thirdparty/dkjson
           git -C "$RUNNER_TEMP/koreader-base" -c advice.detachedHead=false checkout -q "$base_sha"
           echo "koreader-base $base_sha"
 

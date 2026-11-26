@@ -236,7 +236,13 @@ function OrbitAndroid:menuItems()
         group("reading", "Reading", function()
             return rows({"status_orbit_layout", "status_orbit_size", "local_first", "eob_sheet", "eob_auto"})
         end),
-        group("home", "Home", function() return rows({"home_screen", "home_button"}) end),
+        group("home", "Home", function()
+            local out = rows({"home_screen", "home_button"})
+            out[#out+1] = action("Edit layout", function() HomeEditor.open("edit") end)
+            out[#out+1] = action("Reset layout", function() HomeEditor.open("reset") end)
+            out[#out+1] = action("Page names", function() HomeEditor.open("rename") end)
+            return out
+        end),
         group("sleep", "Sleep screen", function()
             -- Only shared values here: named-list/tag browsing stays in the companion until
             -- the library supplies bounded choice windows. Never decode scopes.json on paint.

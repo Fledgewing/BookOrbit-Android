@@ -26,7 +26,7 @@ return function(test, eq, ok, here, Cache)
     test("library: all screens and starter widgets declare strict budgets", function()
         local e = setmetatable({}, {__index=_G}); setfenv(assert(loadfile(root .. "logic/budgets.lua")), e)()
         for _, name in ipairs({"home","library","details","series","settings","filter","editor","reader-top-panel"}) do
-            local b=e.Budgets.get("screens",name); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,1); ok(b.snapshotBytes<=16384)
+            local b=e.Budgets.get("screens",name); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,name == "editor" and 0 or 1); ok(b.snapshotBytes<=16384)
         end
         for _, name in ipairs({"continue-reading","booklist","library"}) do ok(e.Budgets.get("widgets",name)) end
         eq(pcall(e.Budgets.get,"widgets","undeclared"), false)

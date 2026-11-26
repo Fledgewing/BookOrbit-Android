@@ -6782,6 +6782,22 @@ test("settings: failed Sync now leaves the screen awake", function()
     W.server_code = 200
 end)
 
+test("settings: Home layout actions enter the existing editor in the requested mode", function()
+    local _, m = newUI(false)
+    local open, calls = RE.HomeEditor.open, {}
+    RE.HomeEditor.open = function(mode) calls[#calls+1] = mode end
+    local modes = {["Edit layout"]="edit", ["Reset layout"]="reset", ["Page names"]="rename"}
+    for _, group in ipairs(m:menuItems()) do
+        if group.settings_group == "home" then
+            for _, row in ipairs(group.sub_item_table_func()) do
+                if modes[row.text] then row.callback(); run(1); eq(calls[#calls], modes[row.text]) end
+            end
+        end
+    end
+    RE.HomeEditor.open = open
+    eq(#calls, 3)
+end)
+
 test("settings: Home selector uses the host's shared setting and labels its button policy", function()
     local _, m = newUI(false)
     local home

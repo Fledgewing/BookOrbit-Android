@@ -24,6 +24,10 @@ The approved design documentation now lives on `feature/0.12`; Android authorisa
   scan a catalog on paint. Existing legacy picker tests remain as compatibility
   tests of `Sleep.menuItem`, independently of the new Settings group.
 
+- `ko/home_editor.lua:213` opens the existing editor; `:221` retains a visible
+  Home/current page or opens the owned host. Settings reuses its rename, reset
+  confirmation, draft and Done/save boundary, with no second layout store.
+
 ## Behavior
 
 Account & server, Sync, Wi-Fi & power, Library & downloads, Reading, Home, Sleep
@@ -35,7 +39,9 @@ Source choices use the shared schema; advanced saved lists and exclusions open
 its existing sleep page. Device power management remains in the companion/OS.
 Home exposes the owned host's shared `home_screen` selector
 (`shared/settings/schema.json:95`) and the existing
-Home-button policy. Layout editing/reset/renaming and reading presets need their owning slices' APIs;
+Home-button policy. Edit layout, Reset layout and Page names enter the existing
+Home editor; reset and rename operate on its draft and Done publishes it.
+Reading presets still need their owning slice's APIs;
 this change does not add inert controls or a parallel layout store.
 
 Battery saver, Balanced and Always up to date set the six approved sync/power
