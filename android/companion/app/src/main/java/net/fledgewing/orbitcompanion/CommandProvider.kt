@@ -84,6 +84,7 @@ class CommandProvider : ContentProvider() {
                 return answer(true).apply {
                     putString("pending", if (LibraryAccount.ready()) "0" else "1")
                     putString("owner", LibraryAccount.owner())
+                    putString("body",String(LuaValue.encode(LibraryAccount.state()),Charsets.ISO_8859_1))
                 }
             }
             if (method == LibraryAccount.OPEN) {

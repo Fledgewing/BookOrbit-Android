@@ -790,3 +790,12 @@ The existing companion `BookOrbitLibrary` implementation now lives in
 `server/bookorbit/BookOrbitLibrary.kt`; the root-package type alias keeps its
 read-model API stable. A package guard prevents moving this backend projection
 implementation outside the server adapter.
+
+## Android F12-N implementation
+
+The approved §20–§22 forms now reuse the neutral library and companion account worker;
+see [F12-N implementation notes](F12-N-NOTES.md). Each screen/widget declares a strict
+budget inherited by library calls: bounded rows/decoded bytes, zero subprocesses and
+render-path network, ≤1 batch per Home paint and ≤16 KiB per widget. The companion owns
+heavy work. Account results redraw only a visible initiating form; cancellation drops stale
+results and clears transient password fields. X4 phone setup remains a labelled stub.

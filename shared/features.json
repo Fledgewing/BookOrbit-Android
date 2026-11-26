@@ -5542,26 +5542,30 @@
     },
     {
       "id": "server-account",
-      "feature": "Independent account, sync and OPDS logins (0.12 Android foundation)",
+      "feature": "Independent account, sync and OPDS logins (0.12 Android screens)",
       "category": "Behaviour",
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Three encrypted optional logins, provenance-aware sign-out, private sync/OPDS operations and account stats",
-          "reason": "deliberately deferred: plain interim screen; final owned client integration, browser/OIDC sign-in and device acceptance follow. Server-supported sync provisioning is reused; direct login remains available when it is unavailable.",
+          "note": "Owned plugin forms, independent encrypted logins, provenance-aware sign-out, provisioning result and sync setup actions",
+          "reason": "deliberately deferred: browser/OIDC sign-in, firmware phone pairing and real-device acceptance follow; Android-first implementation authorised 2026-11-25.",
           "evidence": [
             {
               "path": "docs/design/bookorbit-account.md",
               "line": 1
+            },
+            {
+              "path": "android/koreader/orbit.koplugin/ko/account.lua",
+              "line": 4
             }
           ],
           "version": null,
-          "deferred": "Browser/OIDC sign-in and final account screen"
+          "deferred": "Browser/OIDC sign-in, device acceptance and X4 phone pairing"
         },
         "x4_pro": {
           "status": "missing",
           "note": "Account login and token storage follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware account integration follows.",
+          "reason": "deliberately deferred: maintainer authorised Android-first account screens on 2026-11-25; firmware account adapter, credential storage and phone pairing follow.",
           "evidence": [
             {
               "path": "docs/design/bookorbit-account.md",
@@ -5574,7 +5578,7 @@
         "x4": {
           "status": "missing",
           "note": "Account login and token storage follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware account integration follows.",
+          "reason": "deliberately deferred: maintainer authorised Android-first account screens on 2026-11-25; firmware account adapter, credential storage and phone pairing follow.",
           "evidence": [
             {
               "path": "docs/design/bookorbit-account.md",
@@ -5587,7 +5591,7 @@
         "x3": {
           "status": "missing",
           "note": "Account login and token storage follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware account integration follows.",
+          "reason": "deliberately deferred: maintainer authorised Android-first account screens on 2026-11-25; firmware account adapter, credential storage and phone pairing follow.",
           "evidence": [
             {
               "path": "docs/design/bookorbit-account.md",
@@ -5673,7 +5677,7 @@
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
-              "line": 744
+              "line": 747
             }
           ]
         },
@@ -5684,7 +5688,7 @@
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
-              "line": 744
+              "line": 747
             }
           ]
         },
@@ -5695,7 +5699,7 @@
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
-              "line": 744
+              "line": 747
             }
           ]
         }

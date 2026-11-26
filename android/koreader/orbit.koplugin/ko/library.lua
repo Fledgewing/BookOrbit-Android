@@ -41,7 +41,7 @@ function Library:read(op, args)
     assert(self.metrics.bytes + args.bytes <= self.screen_budget.bytes, "Library page byte budget exhausted")
     assert(self.metrics.rows + args.limit <= self.screen_budget.rows, "Library page row budget exhausted")
     assert(self.seen[request] or #self.pending < Budgets.MAX_BATCH, "Library paint request budget exceeded")
-    local result, decoded = LibraryAdapter.read(request)
+    local result, decoded = LibraryAdapter.read(request,op)
     if result then
         rows, bytes = result.items and #result.items or 1, decoded or 0
         assert(rows <= args.limit and bytes <= args.bytes, "Library call budget exceeded")
@@ -148,4 +148,9 @@ function Library:sources(category, offset, limit, caps)
     return self:read("sources", {category=category,offset=offset or 0,limit=limit or 6,
         allow_lists=not (caps and caps.lists and caps.lists.read==false),
         allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
+end
+
+-- Explicit account actions only; credentials are dispatched and immediately released.
+function Library.accountCommand(op,args,done)
+    return command(op,function() return LibraryAdapter.command(op,args,done) end)
 end

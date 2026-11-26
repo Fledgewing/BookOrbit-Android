@@ -12,6 +12,7 @@ end
 -- Owned Search inherits the Library screen family; Home pages inherit home.
 Budgets.screens.search = Budgets.screens.library
 Budgets.screens["account"] = budget(3, 16384, 50)
+Budgets.screens.account.displayRows=12
 -- Editor draws only its current page; it never reads a catalog or widget snapshot.
 Budgets.screens.editor.drawNodes = 208
 Budgets.screens.editor.rows = 128
@@ -76,6 +77,10 @@ Budgets.widgets["reader-progress"] = budget(1, 16384, 50)
 Budgets.screens["booklist-config"] = budget(0, 0, 100)
 Budgets.screens["booklist-config"].roundTrips = 0
 Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
+
+for _,id in ipairs({"summary","form","signout","remove","result"}) do
+    Budgets.screens["account-" .. id] = Budgets.screens.account
+end
 -- Battery tabs select bounded windows from one companion materialization.
 Budgets.screens.battery.rows = 1
 Budgets.screens.battery.bytes = 16384
