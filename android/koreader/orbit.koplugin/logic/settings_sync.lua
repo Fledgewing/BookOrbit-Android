@@ -149,7 +149,8 @@ end
 function SettingsSync.migrateChannel(vals)
     if type(vals.settings_at) ~= "table" then vals.settings_at = {} end
     local old = vals.patch_update_prerelease
-    if vals.update_channel == nil and old ~= nil then
+    if old ~= nil and (vals.update_channel == nil or
+        (vals.update_channel == "stable" and (vals.settings_at.update_channel or 0) <= 1)) then
         vals.update_channel = (old == true or old == "1") and "preview" or "stable"
     end
     if (vals.settings_at.update_channel or 0) <= 1

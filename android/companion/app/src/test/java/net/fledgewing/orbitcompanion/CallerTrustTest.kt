@@ -146,6 +146,10 @@ class CallerTrustTest {
         assertTrue(Koreader.restart(app, "test update"))
         val intent = shadowOf(app).nextStartedActivity!!
         val id = intent.getStringExtra(Contract.EXTRA_COMMAND_ID)!!
+        assertTrue(Koreader.start(app, "Home before ack", HomeCommands.HOME, plugin = "0.11.4-preview.2"))
+        val repeated = shadowOf(app).nextStartedActivity!!
+        assertEquals("restart", repeated.getStringExtra(Contract.EXTRA_COMMAND))
+        assertEquals("same pending request", id, repeated.getStringExtra(Contract.EXTRA_COMMAND_ID))
         val ask = Bundle().apply { putString("command", "restart"); putString("id", id) }
         assertEquals("1", call(koUid, CommandProvider.TAKE_COMMAND, ask)?.getString("ok"))
         assertEquals("0", call(koUid, CommandProvider.TAKE_COMMAND, ask)?.getString("ok"))

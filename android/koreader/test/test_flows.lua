@@ -1340,6 +1340,8 @@ test("channel migration before defaults preserves opt-in and real changes beat s
     eq(migrated.update_channel, "preview", "old opt-in migrates before stable default")
     eq(migrated.patch_update_prerelease, nil, "legacy removed")
     eq(migrated.settings_at.update_channel, 2, "migration beats defaults, not user choices")
+    eq(loadSettings({ update_channel = "stable", patch_update_prerelease = true,
+        settings_at = { update_channel = 1 } }).update_channel, "preview", "repair a previously saved default over old opt-in")
     local taken = RE.SettingsSync.merge(RE.SCHEMA, migrated, migrated.settings_at,
         { update_channel = { v = "stable", at = 10 } }, 100, true)
     eq(taken[1].value, "stable", "new companion choice wins")
