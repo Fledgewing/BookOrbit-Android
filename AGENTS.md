@@ -80,6 +80,10 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
 
 ## Screen and widget performance budgets
 
+Nested group covers and Series next-book previews count as rows in the caller budget;
+never hide multiple display records behind a single summary row. Companion materialization
+owns their ordering, counts and status labels.
+
 Maintainer rule 2026-11-25: every screen and widget declares a strict budget; library
 interface calls inherit the caller's budget; adapter projections preserve the same row/byte limits. Keep filtering, sorting, grouping, counts,
 search, stats, battery estimates and catalog joins in the companion; Lua only reads small,

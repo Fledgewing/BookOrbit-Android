@@ -69,6 +69,7 @@ return function(test,eq,ok,E,W,Widget)
         E.Companion.workerProblem=saved.problem
         ok(success,err)
     end
+    dofile((arg[0]:match("^(.*)/") or ".").."/series_flows.lua")(test,eq,ok,E,W,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/booklist_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/battery_flows.lua")(test,eq,ok,E,W,withHost)

@@ -43,7 +43,7 @@ function Library:read(op, args)
     assert(self.seen[request] or #self.pending < Budgets.MAX_BATCH, "Library paint request budget exceeded")
     local result, decoded = LibraryAdapter.read(request,op)
     if result then
-        rows, bytes = result.items and #result.items or 1, decoded or 0
+        rows, bytes = result.row_count or (result.items and #result.items or 1), decoded or 0
         assert(rows <= args.limit and bytes <= args.bytes, "Library call budget exceeded")
         local call = counts(); call.rows, call.bytes, call.snapshotBytes = rows, bytes, bytes
         assert(Budgets.check(Budgets.libraryWindow, call))
@@ -191,6 +191,14 @@ function Library.backgroundBusy()
     local finish=Budgets.span("library.background.busy",now_s,log)
     local busy=LibraryAdapter.backgroundBusy and LibraryAdapter.backgroundBusy()
     finish(); return busy
+end
+
+-- Companion-materialized Series and grouped catalog windows, including preview row charges.
+function Library:series(key, offset, limit)
+    return self:read("series", {key=key,offset=offset or 0,limit=limit or 12})
+end
+function Library:groups(source, query, offset, limit, exclude_current, preview, group_limit)
+    return self:read("groups", {source=source,query=query,offset=offset or 0,limit=limit or 8,exclude_current=exclude_current,preview=preview,group_limit=group_limit})
 end
 
 -- Settings projections reuse the companion's sleep choices and device settings owners.

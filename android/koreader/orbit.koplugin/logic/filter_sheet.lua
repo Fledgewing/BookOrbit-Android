@@ -39,7 +39,7 @@ function FilterSheet:value(k)
         if k=="rating" then return v.min==5 and "5★ only" or tostring(v.min or 0) .. "★ and up" end
         if k=="added" then return "Since " .. tostring(v.min or "…") end
     end
-    return labels[v] or ({len="Any length",rating="Any rating",added="Any time"})[k] or tostring(v or "Any")
+    return labels[v] or ({len="Any length",rating="Any rating",added="Any time"})[k] or (k=="without_series" and "Not in a series") or tostring(v or "Any")
 end
 function FilterSheet:rows()
     local rows={}
@@ -74,7 +74,7 @@ function FilterSheet:clear(field, value)
 end
 function FilterSheet:chips()
     local chips={}
-    for _,k in ipairs({"show","where","author","series","tags","len","rating","added","group","sort"}) do
+    for _,k in ipairs({"show","where","author","series","tags","len","rating","added","group","sort","without_series"}) do
         if self:changed(k) or k=="sort" and self:changed("dir") then
             if self.MULTI[k] then
                 for _,v in ipairs(self.query[k] or {}) do chips[#chips+1]={key=k,value=v,label=v} end
