@@ -96,15 +96,54 @@ class SettingsPagesTest {
     }
 
     @Test
-    fun updateChannelRowsShowDescriptionsAndSetTheUpdaterPreference() {
+    fun dropdownShowsCurrentValueAndAppliesAndClosesEachChoice() {
+        SettingsStore.set(RuntimeEnvironment.getApplication(), "update_channel", "preview", "test")
         val a = section("updates")
-        assertTrue(texts(a).containsAll(listOf("Stable", "RC", "Preview", "tested releases only",
-            "also release candidates, about to become stable", "every test build")))
-        for (channel in UpdateChannel.values()) {
-            tagged(a, "channel:${channel.key}")!!.performClick()
+        val d = schema.byKey.getValue("update_channel")
+        assertEquals("dropdown", d.display)
+        assertTrue(texts(a).contains("Preview  ▾"))
+        assertFalse(texts(a).contains("Stable"))
+        assertNull(tagged(a, "channel:preview"))
+        tagged(a, "key:update_channel")!!.performClick()
+        val cancelled = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+        cancelled.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).performClick()
+        ShadowLooper.idleMainLooper()
+        assertFalse(cancelled.isShowing)
+        assertEquals("preview", SettingsStore.get(a, d.key))
+        for ((index, channel) in UpdateChannel.values().withIndex()) {
+            tagged(a, "key:update_channel")!!.performClick()
+            val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+            assertTrue(dialog.isShowing)
+            val list = dialog.listView
+            assertEquals(3, list.count)
+            assertEquals(d.values.indexOfFirst { it.first == SettingsStore.get(a, d.key) }, list.checkedItemPosition)
+            d.values.forEachIndexed { i, (id, label) ->
+                assertEquals("$label — ${d.valueDescriptions[id]}", list.adapter.getItem(i).toString())
+            }
+            list.performItemClick(list.adapter.getView(index, null, list), index, index.toLong())
+            assertFalse(dialog.isShowing)
             assertEquals(channel, Prefs(a).updateChannel)
-            assertEquals(channel.key, SettingsStore.get(a, "update_channel"))
+            assertEquals(channel.key, SettingsStore.get(a, d.key))
+            assertTrue(texts(a).contains("${d.valueLabel(channel.key)}  ▾"))
         }
+    }
+
+    @Test
+    fun dropdownIsReusableAndReadOnlyBehindThePin() {
+        // Rename the key to prove presentation follows schema metadata, not updater identity.
+        val renamed = SettingsSchema.parse(File("../../../shared/settings/schema.json").readText()
+            .replace("update_channel", "test_dropdown"))
+        SettingsStore.useSchema(renamed)
+        val a = section("updates")
+        tagged(a, "key:test_dropdown")!!.performClick()
+        val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+        dialog.listView.performItemClick(null, 2, 2)
+        assertEquals("preview", SettingsStore.get(a, "test_dropdown"))
+        assertFalse(dialog.isShowing)
+        SettingsPage.forceLocked = true
+        val locked = section("updates")
+        assertFalse(tagged(locked, "key:test_dropdown")!!.hasOnClickListeners())
+        assertTrue(texts(locked).contains("Preview  ▾"))
     }
 
     @Test

@@ -359,7 +359,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
         }
     }
 
-    /** A shared key's row, by its type (§5.5): toggles, segmented up to four values, else a page. */
+    /** Shared rows: toggles, schema dropdowns, small segmented choices, or a choice page (§5.5). */
     private fun drawShared(root: LinearLayout, d: SettingDef) {
         if (d.hidden) return
         if (d.cap != null && d.cap !in Mode.caps(this)) return
@@ -371,19 +371,18 @@ open class SettingsSectionActivity : SleepPickerPage() {
         // The page's title already names it (Sleep screen's own choice): shown once.
         val label = d.label.takeIf { it != schema.section(sectionId)?.title }
         when {
-            d.key == "update_channel" -> {
-                root.addView(Ui.text(this, d.label, 21f))
-                val descriptions = listOf("tested releases only", "also release candidates, about to become stable", "every test build")
-                val channels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; tag = "key:${d.key}" }
-                root.addView(channels)
-                d.values.forEachIndexed { i, (key, title) ->
-                    Ui.row(this, title, descriptions[i], Ui.value(this, if (v == key) "●" else "○"),
-                        onClick = if (locked) null else ({ setShared(d.key, key) })).also {
-                        it.tag = "channel:$key"
-                        channels.addView(it)
-                    }
-                }
-            }
+            d.type == "choice" && d.display == "dropdown" -> Ui.row(this, d.label, line, Ui.value(this, d.valueLabel(v) + "  ▾"),
+                onClick = if (locked) null else ({
+                    val options = d.values.map { (id, title) ->
+                        d.valueDescriptions[id]?.takeIf { it.isNotEmpty() }?.let { "$title — $it" } ?: title
+                    }.toTypedArray()
+                    AlertDialog.Builder(this).setTitle(d.label)
+                        .setSingleChoiceItems(options, d.values.indexOfFirst { it.first == v }) { dialog, index ->
+                            dialog.dismiss()
+                            setShared(d.key, d.values[index].first)
+                        }
+                        .setNegativeButton("Cancel", null).show()
+            })).also { it.tag = "key:${d.key}"; root.addView(it) }
             d.type == "bool" -> toggleRow(root, d.label, line, v == "1") { on ->
                 // Merged rows (§5.2): one switch sets the companion's half too.
                 when (d.key) {
