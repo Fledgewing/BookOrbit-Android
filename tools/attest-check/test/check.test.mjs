@@ -146,3 +146,10 @@ test('the repo against the pinned server (when tools/upstreams has fetched it)',
   assert.deepEqual(errors, []);
   assert.deepEqual(unmatched.map((u) => u.path), []);
 });
+
+// Account adapter operations are subject to the same pinned-server policy gate.
+test('account auth and statistics routes participate in the manifest', () => {
+  const calls = manifest(extractFromSource('val reads = listOf("/auth/me", "/user-statistics/daily-reading?days=365")', 'kotlin', 'Account.kt'));
+  assert.ok(calls.some(r => r.path === '/auth/me'));
+  assert.ok(calls.some(r => r.path === '/user-statistics/daily-reading'));
+});

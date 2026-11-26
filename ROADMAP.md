@@ -18,6 +18,7 @@ CrossInk 2.x only; 1.6 is retired).
 | Outcome | Platforms | Status |
 |---|---|---|
 | Clear, editable Custom reading values, apply-then-edit quick choices, device-local margins and one-time KOReader copy with Undo. | Android building (approved rev 16); X4 Pro, X4, X3 deferred to firmware implementation | building (F12-M; implemented, device acceptance pending) |
+| Independent optional account, sync and OPDS logins, encrypted credentials, origin-aware sign-out and account-wide reading statistics through the library interface. | Android; X4 Pro, X4, X3 later | building (maintainer-authorised Android F12-K; device acceptance pending) |
 | On-device Home editor: add/remove/move/resize widgets, manage and name pages, reset and atomically save layouts. | Android building (authorised 2026-11-25); X4 Pro, X4, X3 deferred to firmware implementation | building (device acceptance pending) |
 | Opt-in owned Home host with paged placements, isolated Continue reading, Shelf and Lists widgets, and one budgeted batch per paint. | Android; X4 Pro, X4, X3 later | building (authorised 2026-11-25; device acceptance pending) |
 

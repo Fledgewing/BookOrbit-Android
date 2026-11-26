@@ -3,6 +3,7 @@
 -- Worker BookOrbitLibrary owns projection and query semantics.
 LibraryAdapter = { sent={}, order={}, ready={} }
 function LibraryAdapter.owner()
+    if LibraryAdapter.managed_owner then return LibraryAdapter.managed_owner end
     -- newClient/apiOpts may initialize the upstream reading ledger on account change.
     -- Ownership needs only the plugin's already-loaded account scalars.
     local plugin = bookorbit()
@@ -104,3 +105,50 @@ function LibraryAdapter.changed(ev)
 end
 
 function LibraryAdapter.reset() LibraryAdapter.sent, LibraryAdapter.ready, LibraryAdapter.order = {}, {}, {} end
+
+-- User-invoked only: the trusted provider opens the companion's private sign-in screen.
+function LibraryAdapter.openAccount()
+    if Companion.workerProblem() then return false end
+    local p = bookorbit()
+    local settings = p and p.settings or {}
+    local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.ACCOUNT_OPEN", {
+        server=settings.server_url or "",
+    })
+    return result and result.ok == "1"
+end
+-- A lifecycle refresh imports only an opaque namespace, never a login or key.
+function LibraryAdapter.accountReturned(attempt)
+    if Companion.workerProblem() then return false end
+    local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_STATE", {})
+    if result and result.pending == "1" and (attempt or 0) < 3 then
+        UIManager:scheduleIn(1, function() LibraryAdapter.accountReturned((attempt or 0)+1) end)
+        return false
+    end
+    if not result or result.ok ~= "1" then return false end
+    local changed = LibraryAdapter.managed_owner ~= result.owner
+    LibraryAdapter.managed_owner = result.owner
+    if changed then LibraryAdapter.reset() end
+    return changed
+end
+
+-- Explicit dispatched commands only; paint reads continue to use the owned SQLite windows.
+function LibraryAdapter.command(op, args, callback)
+    if Companion.workerProblem() then callback({error="unavailable"}); return false end
+    local encoded = Cache.encode(args or {})
+    assert(#encoded <= Budgets.MAX_REQUEST, "Server command exceeds budget")
+    local sent = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_COMMAND", {op=op,args=encoded})
+    if not sent or sent.ok ~= "1" or not sent.id then callback({error="unavailable"}); return false end
+    local deadline = now_s()+120
+    local function poll()
+        local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_RESULT", {id=sent.id})
+        local body = result and result.body
+        if type(body) ~= "string" or #body > Budgets.MAX_SNAPSHOT then callback({error="unavailable"}); return end
+        local decoded = Cache.decode(body)
+        if type(decoded) ~= "table" then callback({error="invalid"}); return end
+        if not decoded.pending then callback(decoded); return end
+        if now_s() >= deadline then callback({error="unavailable"}); return end
+        UIManager:scheduleIn(0.2,poll)
+    end
+    UIManager:scheduleIn(0.2,poll)
+    return true
+end

@@ -195,7 +195,7 @@ function OrbitAndroid:menuItems()
     end
     local items = {
         group("account", "Account & server", function() return {
-            action("Connection and sign-in…", function() self:onOrbitOpenCompanion() end),
+            action("Sign in to your server", function() Library.openAccount() end),
         } end),
         group("sync", "Sync, Wi-Fi & power", function()
             local paint = Library.paint("settings-sync")
