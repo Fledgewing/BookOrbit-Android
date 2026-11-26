@@ -1,29 +1,39 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Display measured scalars only; no history scans, model fitting or estimates here.
-BatteryWidgetPlan = {}
-function BatteryWidgetPlan.model(data)
-    data=data or {}
-    local function finite(value)
-        return type(value)=="number" and value==value and value>=0 and value<math.huge and value or nil
+-- Presentation selection only; all values and evidence labels are companion-owned.
+BatteryWidgetPlan = {tabs={"Overview","Rates","Daily","Charges"}}
+function BatteryWidgetPlan.display(data)
+    if data and (data.error or data.pending or data.state=="error") then
+        local message=(data.error or data.state=="error") and "Battery unavailable · try again" or "Loading battery…"
+        return {level="—",estimate=message,narrow_estimate=message,page_estimate=message,
+            reading="reading non-stop · —",standby="standby only · —"}
     end
-    local level=finite(data.level)
-    if level and level>100 then level=nil end
-    local function duration(value) return ReaderPanelPlan.duration(value,true) or "—" end
-    local usual=ReaderPanelPlan.duration(data.hours_usual_use,true)
-    local function rate(value)
-        local n=value and finite(value.pct_per_hour)
-        return n and string.format("%.1f %%/h",n) or "—"
+    return data and data.display or {level="—",estimate="Learning · needs measured use",
+        narrow_estimate="Learning · usual use",page_estimate="Learning · estimate available after measured use",
+        reading="— Needs measured reading",standby="— Needs measured standby"}
+end
+function BatteryWidgetPlan.widget(data,w,h)
+    local d=BatteryWidgetPlan.display(data)
+    local lines={w == 1 and d.narrow_estimate or d.estimate,d.reading,d.standby}
+    if w>1 and h>1 then
+        lines[#lines+1]=d.reading_rate or "— Needs measured reading"
+        lines[#lines+1]=d.standby_rate or "— Needs measured standby"
+        lines[#lines+1]=d.used_week or "— Needs measured daily use"
+        if h>=3 or w>=4 then
+            lines[#lines+1]="Per 100 pages · — Needs tracked page measurements"
+            lines[#lines+1]=d.charging_rate or "— Needs measured charging"
+        end
+        lines[#lines+1]=d.last_charge or "— No charges recorded"
     end
-    local charge=data.recent_charges and data.recent_charges[1]
-    local last="Charge history not recorded"
-    if charge and finite(charge.from_pct) and finite(charge.to_pct) then
-        last=string.format("Last charge %d%% → %d%%",charge.from_pct,charge.to_pct)
-    end
-    return {level=level,level_text=level and string.format("%d%%",level) or "—",
-        fraction=level and level/100,charging=data.charging==true,
-        usual=usual and ("≈ "..usual.." at your usual use") or ((data.usual_use or {}).missing or "More measured use needed"),
-        narrow_usual=usual and ("≈ "..usual.." · usual use") or "More measured use needed",
-        screen_on="Screen on "..rate(data.screen_on),standby="Standby "..rate(data.standby),
-        reading="Reading non-stop "..duration(data.hours_reading_nonstop),
-        asleep="Standby only "..duration(data.hours_standby_only),charge=last}
+    return {level=d.level or "—",lines=lines,level_fraction=data and data.level and data.level/100 or 0}
+end
+function BatteryWidgetPlan.page(data,tab,page)
+    local d=BatteryWidgetPlan.display(data)
+    local key=({"overview","rates","daily","charges"})[tab] or "overview"
+    local count=math.min(d[key.."_count"] or 0,key == "daily" and 14 or key == "charges" and 5 or 9)
+    local rows={}
+    local first=key == "daily" and page == 2 and 8 or 1
+    local last=key == "daily" and math.min(count,first+6) or count
+    for i=first,last do rows[#rows+1]=d[key][i] end
+    if #rows==0 then rows[1]=key == "charges" and "— No charges recorded" or "— Needs measured use" end
+    return {level=d.level or "—",estimate=d.page_estimate,rows=rows,daily=key == "daily",pages=key == "daily" and 2 or 1}
 end

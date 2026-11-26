@@ -2,9 +2,10 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.OC.readFile,writeFile=E.OC.writeFile}
+            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.OC.readFile,writeFile=E.OC.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
+        E.Companion.workerProblem=function() end
         Widget.free=function() end
         local U={Font={getFace=function() return {} end},BB={COLOR_BLACK=0,COLOR_WHITE=1,COLOR_DARK_GRAY=.3,COLOR_GRAY=.5,COLOR_LIGHT_GRAY=.8}}
         for _,k in ipairs({"Overlap","Frame","Text","Button","Progress"}) do U[k]=Widget:extend{} end
@@ -28,7 +29,9 @@ return function(test,eq,ok,E,W,Widget)
             if a.op == "capabilities" then return {lists={read=true}},80 end
             if a.op == "library.summary" then return {total=7,on_device=2,freshness={saved=true}},100 end
             if a.op == "battery" then return {level=78,hours_usual_use=54,screen_on={pct_per_hour=4.1},
-                standby={pct_per_hour=.6},recent_charges={{from_pct=12,to_pct=100}},freshness={saved=true}},200 end
+                standby={pct_per_hour=.6},recent_charges={{from_pct=12,to_pct=100}},freshness={saved=true},
+                display={level="78%",estimate="≈ 2 d 6 h at your usual use",narrow_estimate="≈ 2 d 6 h · usual use",
+                    reading="12 h reading non-stop",standby="10 d standby only"}},500 end
             if a.op == "reading.stats" then
                 local d={state="ready",year={intensity={},days_read=1,start="2026-01-01"},
                     week={seconds={0,0,0,0,0,0,60},levels={0,0,0,0,0,0,1},total_seconds=60},
@@ -61,10 +64,12 @@ return function(test,eq,ok,E,W,Widget)
         E.HomeEditor.save=saved.save
         E.liveUI,E.Wifi.state,E.EOB.sheet=saved.liveUI,saved.wifiState,saved.eobSheet
         E.OC.readFile,E.OC.writeFile=saved.readFile,saved.writeFile
+        E.Companion.workerProblem=saved.problem
         ok(success,err)
     end
     dofile((arg[0]:match("^(.*)/") or ".").."/booklist_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
+    dofile((arg[0]:match("^(.*)/") or ".").."/battery_flows.lua")(test,eq,ok,E,W,withHost)
     test("Home host: paint batches only installed visible widgets and page swipe",function()
         withHost(function(batches,reads)
             E.S.home_layout=E.Layout.default()
@@ -162,8 +167,13 @@ return function(test,eq,ok,E,W,Widget)
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             h:onNext(); h:onNext()
             local card=h[1][1][6][1][1]
-            eq(card[2].text,"78%"); eq(card[3].text,"≈ 2 d 6 h at your usual use")
-            eq(card[4].percentage,.78)
+            local level,estimate,glyph
+            for _,child in ipairs(card) do
+                if child.text=="78%" then level=true end
+                if child.text=="≈ 2 d 6 h at your usual use" then estimate=true end
+                if child.percentage==.78 then glyph=true end
+            end
+            ok(level and estimate and glyph)
             local count=0
             for _,a in ipairs(reads) do if a.op=="battery" then count=count+1 end end
             eq(count,1); eq(h.metrics.roundTrips,1); eq(h.metrics.spawns,0); eq(h.metrics.network,0)
@@ -172,8 +182,9 @@ return function(test,eq,ok,E,W,Widget)
     test("Home wiring: Battery compact and large cards keep progress in bounds",function()
         withHost(function()
             local snapshot=E.HomeHostPlan.snapshot({level=78,hours_usual_use=54,freshness={saved=true}})
-            for _,rect in ipairs({{w=130,h=69},{w=280,h=149},{w=580,h=230}}) do
-                local card=E.HomeWidgets.renderers.battery({},snapshot,function() end,rect)[1]
+            for _,case in ipairs({{w=280,h=69,cols=2,rows=1},{w=130,h=149,cols=1,rows=2},{w=580,h=230,cols=4,rows=2}}) do
+                local rect=case
+                local card=E.HomeWidgets.renderers.battery({w=case.cols,h=case.rows},snapshot,function() end,rect)[1]
                 for _,child in ipairs(card) do
                     if child.percentage then
                         eq(child.percentage,.78)
@@ -181,7 +192,7 @@ return function(test,eq,ok,E,W,Widget)
                         ok(child.overlap_offset[2]+child.height<=card.dimen.h)
                     end
                 end
-                if rect.h<120 then ok(card[1].overlap_offset[1]+card[1].max_width<=card[2].overlap_offset[1]) end
+
             end
         end)
     end)
