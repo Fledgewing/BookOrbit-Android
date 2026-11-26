@@ -7112,6 +7112,8 @@ test("library ready model: real SQLite reads stay bounded and batch once", funct
     ok(success,err)
 end)
 
+dofile(here .. "/home_host_flows.lua")(test,eq,ok,RE,W,Widget)
+
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
 
 if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then

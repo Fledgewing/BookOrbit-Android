@@ -215,6 +215,13 @@ function OrbitAndroid:menuItems()
     -- The companion's eight sections (docs/design/companion-settings.md §5.7): five submenus here
     -- with the same labels; Buttons, Kids and PIN and Setup live in the companion.
     local reading = compact({
+        { text_func=function() return _("Home screen") .. ": " .. (S.home_screen == "booksync" and _("BookSync Home") or _("Server plugin’s Home")) end,
+          sub_item_table={
+            {text=_("Server plugin’s Home"),radio=true,checked_func=function() return S.home_screen ~= "booksync" end,
+                callback=function() Shared.set("home_screen","server") end},
+            {text=_("BookSync Home"),radio=true,checked_func=function() return S.home_screen == "booksync" end,
+                callback=function() Shared.set("home_screen","booksync") end},
+          } },
         {
             text_func = function()
                 local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))

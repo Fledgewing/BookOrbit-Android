@@ -20,10 +20,10 @@ Counts include settings exposure as separate rows; they are not feature quality 
 
 | Platform | ✅ | 🟡 | ❌ | ➖ |
 |---|---:|---:|---:|---:|
-| Android (M8C / Boox) | 75 | 3 | 1 | 3 |
-| X4 Pro | 55 | 12 | 3 | 12 |
-| X4 classic | 54 | 12 | 3 | 13 |
-| X3 | 20 | 16 | 33 | 13 |
+| Android (M8C / Boox) | 75 | 4 | 1 | 3 |
+| X4 Pro | 55 | 12 | 4 | 12 |
+| X4 classic | 54 | 12 | 4 | 13 |
+| X3 | 20 | 16 | 34 | 13 |
 
 ## Behaviour
 
@@ -78,6 +78,7 @@ Counts include settings exposure as separate rows; they are not feature quality 
 | In-product project credit and licence notices | ✅ (v0.11.3-rc.17) Public About ships notice asset. [android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AboutActivity.kt:9](../android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AboutActivity.kt#L9) | ✅ (xteink-v2.0.0.373+bookorbit.1-rc3) About credit enabled. [xteink/tailnet/tailnet_build.py:270](../xteink/tailnet/tailnet_build.py#L270) | ✅ (xteink-v2.0.0.373+bookorbit.1-rc3) About credit enabled. [xteink/tailnet/tailnet_build.py:270](../xteink/tailnet/tailnet_build.py#L270) | ❌ In-product BookSync About credit omitted; **hardware: About strings excluded for flash; distribution licences still shipped**. [xteink/tailnet/tailnet_build.py:270](../xteink/tailnet/tailnet_build.py#L270) |
 | Local Year, This week, hourly reading and Records widgets (0.12 foundation) | 🟡 0.12 local aggregates and standalone renderers; **deliberately deferred: Android build authorised 2026-11-25; Home host wiring, finish ledger and goal settings remain pending.**. [docs/design/booksync-home/F12-F-NOTES.md:3](../docs/design/booksync-home/F12-F-NOTES.md#L3) | ❌ Firmware implementation deferred; **deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.**. [docs/design/booksync-home/F12-F-NOTES.md:3](../docs/design/booksync-home/F12-F-NOTES.md#L3) | ❌ Firmware implementation deferred; **deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.**. [docs/design/booksync-home/F12-F-NOTES.md:3](../docs/design/booksync-home/F12-F-NOTES.md#L3) | ❌ Firmware implementation deferred; **deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.**. [docs/design/booksync-home/F12-F-NOTES.md:3](../docs/design/booksync-home/F12-F-NOTES.md#L3) |
 | Owned reusable filter sheet (0.12 foundation; unreleased) | 🟡 Nine-row component, bounded companion facets, chips/reset and Home save callback; owned host wiring follows; **deliberately deferred: owned list/search and Home hosts integrate the component in their 0.12 slices**. [android/koreader/orbit.koplugin/ko/filter_sheet.lua:3](../android/koreader/orbit.koplugin/ko/filter_sheet.lua#L3) | ❌ Planned after Android; same neutral filter and counting contract; **deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows**. [ROADMAP.md:36](../ROADMAP.md#L36) | ❌ Planned after Android; same neutral filter and counting contract; **deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows**. [ROADMAP.md:36](../ROADMAP.md#L36) | ❌ Planned after Android; same neutral filter and counting contract; **deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows**. [ROADMAP.md:36](../ROADMAP.md#L36) |
+| Opt-in BookSync Home with Continue reading, Shelf and Lists | 🟡 Implemented on feature/0.12 behind Home screen; legacy Home remains the default; **deliberately deferred: device acceptance and remaining Home widgets follow the staged Android build**. [android/koreader/orbit.koplugin/ko/home_host.lua:1](../android/koreader/orbit.koplugin/ko/home_host.lua#L1) | ❌ Owned Home host follows the Android build; **deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later**. [docs/design/booksync-home/F12-C-NOTES.md:3](../docs/design/booksync-home/F12-C-NOTES.md#L3) | ❌ Owned Home host follows the Android build; **deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later**. [docs/design/booksync-home/F12-C-NOTES.md:3](../docs/design/booksync-home/F12-C-NOTES.md#L3) | ❌ Owned Home host follows the Android build; **deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later**. [docs/design/booksync-home/F12-C-NOTES.md:3](../docs/design/booksync-home/F12-C-NOTES.md#L3) |
 
 ## Settings exposure
 

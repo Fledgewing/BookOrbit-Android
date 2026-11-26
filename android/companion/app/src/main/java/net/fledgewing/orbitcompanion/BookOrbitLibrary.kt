@@ -5,15 +5,16 @@ import java.security.MessageDigest
 /** Backend normalization and query plans for the companion's 0.12 projection worker. No network on reads. */
 object BookOrbitLibrary {
     /** Reuse Copies' account-scoped file ledger. Existence checks stay on the worker. */
-    fun localBooks(store: CacheStore, owner: String): Set<Long>? {
+    fun localBooks(store: CacheStore, owner: String): Set<Long>? = localPaths(store, owner)?.keys
+    fun localPaths(store: CacheStore, owner: String): Map<Long, String>? {
         val file = java.io.File(store.root, "copies/ask.lua")
         val ask = if (file.isFile) LuaValue.parse(file.readBytes()) as? Map<*, *> else null
         if (ask?.get("owner") != owner) return null
         return (ask["books"] as? List<*>).orEmpty().mapNotNull { value ->
             val b = value as? Map<*, *> ?: return@mapNotNull null
             val path = b["path"] as? String ?: return@mapNotNull null
-            (b["book_id"] as? Number)?.toLong()?.takeIf { java.io.File(LuaValue.utf8(path)).isFile }
-        }.toSet()
+            (b["book_id"] as? Number)?.toLong()?.takeIf { java.io.File(LuaValue.utf8(path)).isFile }?.let { it to path }
+        }.toMap()
     }
     fun namespace(owner: String): String = "bo:" + MessageDigest.getInstance("SHA-256").digest(owner.toByteArray()).take(12).joinToString("") { "%02x".format(it) }
     fun key(owner: String, kind: String, id: Any) = "${namespace(owner)}:$kind:$id"
