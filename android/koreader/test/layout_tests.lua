@@ -31,17 +31,20 @@ local function projected(d,page)
     local resolved=assert(L.resolve(d,"android-tablet",R)); return resolved.pages[page or 1]
 end
 
-test("layout: approved M8C Home, Library and Stats defaults are exact, independent copies",function()
-    local d=valid(L.default()); eq(#d.pages,3); eq(d.grids["android-tablet"].cols,4); eq(d.grids["android-tablet"].rows,8)
-    eq(d.pages[1].name,"Home"); eq(d.pages[2].name,"Library"); eq(d.pages[3].name,"Stats")
+test("layout: approved M8C Home and Stats defaults are exact, independent copies",function()
+    local d=valid(L.default()); eq(#d.pages,2); eq(d.grids["android-tablet"].cols,4); eq(d.grids["android-tablet"].rows,8)
+    eq(d.pages[1].name,"Home"); eq(d.pages[2].name,"Stats")
     local expected={{"continue-reading",0,0,4,3},{"booklist",0,3,2,2},{"lists",2,3,2,3},{"library",0,5,2,1},{"booklist",0,6,2,2},{"booklist",2,6,2,2}}
     for i,e in ipairs(expected) do local p=d.pages[1].placements[i]
         eq(p.widget,e[1]); eq(p.x,e[2]); eq(p.y,e[3]); eq(p.w,e[4]); eq(p.h,e[5])
     end
     eq(d.pages[1].placements[2].settings.sort,3); eq(d.pages[1].placements[2].settings.title,"Also reading"); eq(d.pages[1].placements[6].settings.src,"wtr")
-    eq(d.pages[2].placements[1].w,2); eq(d.pages[2].placements[1].h,2)
-    eq(d.pages[2].placements[2].settings.src,"device"); eq(d.pages[2].placements[3].settings.src,"finished")
-    eq(d.pages[3].placements[1].w,4); eq(d.pages[3].placements[1].h,3)
+    eq(d.pages[2].placements[1].w,4); eq(d.pages[2].placements[1].h,3)
+    local stats={{"year-in-reading",0,0,4,3},{"battery",0,3,2,2},{"when-you-read",2,3,2,2},
+        {"this-week",0,5,2,3},{"reading-records",2,5,2,3}}
+    for i,e in ipairs(stats) do local p=d.pages[2].placements[i]
+        eq(p.widget,e[1]); eq(p.x,e[2]); eq(p.y,e[3]); eq(p.w,e[4]); eq(p.h,e[5])
+    end
     d.pages[1].placements[1].x=9; eq(L.default().pages[1].placements[1].x,0)
     valid(round(L.default()))
 end)
