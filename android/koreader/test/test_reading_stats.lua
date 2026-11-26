@@ -4,6 +4,20 @@ return function(test,eq,ok,here,Cache)
     for _,p in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','logic/reader_panel.lua','ko/reading_stats.lua'}) do
         setfenv(assert(loadfile(root..p)),e)()
     end
+    test('clock: library operation inherits one row and batches the host request',function()
+        local env=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end},{__index=_G})
+        local calls,batches=0,0
+        env.LibraryAdapter={read=function(request)
+            local args=Cache.decode(request); eq(args.op,'device.clock'); eq(args.limit,1); eq(args.twelve_hour,true)
+            calls=calls+1; return {state='ready',time='9:42 PM'},128
+        end,request=function(batch) eq(#batch,1); batches=batches+1; return true end}
+        setfenv(assert(loadfile(root..'logic/budgets.lua')),env)()
+        setfenv(assert(loadfile(root..'ko/library.lua')),env)()
+        local host=env.Library.paint('home')
+        eq(host:widget('clock'):clock(true).time,'9:42 PM'); eq(calls,1); eq(batches,0)
+        local usage=host:flush(); eq(usage.rows,1); eq(usage.bytes,128)
+        eq(usage.spawns,0); eq(usage.network,0); eq(usage.roundTrips,1); eq(batches,1)
+    end)
     local data={state='ready',year={intensity={},days_read=7,start='2025-11-26'},
         week={seconds={1,2,3,4,5,6,7},levels={.1,.2,.3,.4,.5,.6,1},total_seconds=28},
         hour_levels={},hour_intensity={},peak_hour=19,after_18_percent=71,
