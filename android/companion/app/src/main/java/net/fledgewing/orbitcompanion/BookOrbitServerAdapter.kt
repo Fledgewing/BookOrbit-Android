@@ -51,14 +51,15 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         } finally { secret.fill('\u0000') }
     }
     override fun removeLogin(kind: String) { credentials.remove(kind); if (kind == "opds") artifacts.clear() }
-    override fun useAccountLogin(kind: String) { require(kind in ServerCredentials.KINDS); fill(kind, true) }
-    private fun fill(kind: String, replace: Boolean) {
-        if (!replace && credentials.login(kind) != null) return
+    override fun useAccountLogin(kind: String) { require(kind in ServerCredentials.KINDS); if (!fill(kind, true)) throw BookOrbitAccount.Failure("unavailable") }
+    private fun fill(kind: String, replace: Boolean): Boolean {
+        if (!replace && credentials.login(kind) != null) return true
         val candidate = if (kind == "sync") {
             account.setupConnector(credentials.login("sync")?.let { CacheWorker.Creds(it.server, it.user, it.secret) })
             account.connector()?.let { ServerCredentials.Login(it.server, it.user, it.key, "account") }
         } else account.setupOpds()?.let { ServerCredentials.Login(it.first, it.second.first, it.second.second, "account") }
         if (candidate != null) { credentials.set(kind, candidate, onlyIfUnset = !replace); if (kind == "opds") artifacts.clear() }
+        return candidate != null
     }
     override fun refreshStats() = account.refreshStats()
     override fun owner(): String? = (credentials.login("opds") ?: credentials.login("sync"))?.owner() ?: account.identity()

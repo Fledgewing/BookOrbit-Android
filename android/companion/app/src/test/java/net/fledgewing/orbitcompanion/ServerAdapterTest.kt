@@ -134,4 +134,12 @@ class ServerAdapterTest {
         assertEquals(count,k.calls.size)
     }
 
+    @Test fun failedExplicitAccountReplacementKeepsTheDirectLoginAndReportsFailure() {
+        val k = Kit(); k.user("sync"); k.existing = mapOf("username" to "other-sync"); k.account()
+        val key = k.credentials.login("sync")!!.secret
+        try { k.adapter.useAccountLogin("sync"); fail() }
+        catch (e: BookOrbitAccount.Failure) { assertEquals("unavailable",e.kind) }
+        assertEquals("user",k.origin("sync")); assertEquals(key,k.credentials.login("sync")!!.secret); k.canSync()
+    }
+
 }
