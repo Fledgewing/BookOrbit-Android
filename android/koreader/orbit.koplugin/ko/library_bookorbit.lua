@@ -39,3 +39,5 @@ function LibraryAdapter.request(requests)
     Companion.send(Companion.ACTION.PATCH, {library_batch=batch, owner=owner})
     return true
 end
+
+function LibraryAdapter.fullRefresh() return OC.menuFullRefresh() end

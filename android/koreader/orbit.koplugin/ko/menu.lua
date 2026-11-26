@@ -49,7 +49,7 @@ end
 -- Tiny bundled notice, loaded only for this explicit menu action.
 function OrbitAndroid:showAbout()
     local credits
-    for _, path in ipairs({ SOURCE_DIR .. "/about_credits.json", SOURCE_DIR .. "/../../../shared/about/credits.json" }) do
+    for _i, path in ipairs({ SOURCE_DIR .. "/about_credits.json", SOURCE_DIR .. "/../../../shared/about/credits.json" }) do
         local f = io.open(path, "rb")
         if f then
             local text = f:read("*a")
@@ -101,244 +101,151 @@ function OrbitAndroid:checkPatchUpdate()
     UIManager:show(InfoMessage:new{ text = Updater.check("menu"), timeout = 6 }) -- gate: user action (menu Update)
 end
 
+-- All values and choices come from the shared schema; wire IDs stay unchanged.
+function OrbitAndroid:settingRow(key)
+    local d = assert(SCHEMA.byKey[key], "Missing shared setting: " .. key)
+    local function set(value)
+        Shared.set(key, value)
+        Shared.onChange(key, "settings")
+    end
+    local row = { help_text = _(SettingsUI.words(d.line or "")) }
+    if d.type == "bool" then
+        row.text = _(SettingsUI.words(d.label))
+        row.checked_func = function() return S[key] == true end
+        row.callback = function() set(not S[key]) end
+    elseif d.type == "source" then
+        row.text = _(SettingsUI.words(d.label))
+        row.sub_item_table = {}
+        for _i, choice in ipairs(d.values) do
+            row.sub_item_table[#row.sub_item_table+1] = {text=_(choice.label),
+                checked_func=function()
+                    for _j, id in ipairs(SleepPool.sources(S[key])) do if id == choice.id then return true end end
+                    return false
+                end,
+                callback=function() set(SleepPool.togglePick(S[key], choice.id)) end}
+        end
+        row.sub_item_table[#row.sub_item_table+1] = {text=_("Choose saved lists…"), callback=function() Sleep.openCompanion() end}
+    elseif d.type == "rules" then
+        row.text_func = function() return _(d.label) .. ": " .. SettingsUI.value(d, S[key]) end
+        row.callback = function() Sleep.openCompanion() end
+    elseif d.type == "text" then
+        row.text_func = function() return _(SettingsUI.words(d.label)) .. ": " .. SettingsUI.value(d, S[key]) end
+        row.callback = function()
+            local InputDialog = require("ui/widget/inputdialog")
+            local dialog
+            dialog = InputDialog:new{title=_(SettingsUI.words(d.label)), input=SettingsSync.toWire(d, S[key]),
+                buttons={{
+                    {text=_("Cancel"), callback=function() UIManager:close(dialog) end},
+                    {text=_("Save"), callback=function()
+                        local value = SettingsSync.fromWire(d, dialog:getInputText())
+                        UIManager:close(dialog)
+                        if value ~= nil then set(value) end
+                    end},
+                }}}
+            UIManager:show(dialog) -- gate: user action (settings input)
+            pcall(dialog.onShowKeyboard, dialog)
+        end
+    else
+        row.text_func = function()
+            return _(SettingsUI.words(d.label)) .. ": " .. _(SettingsUI.value(d, S[key]))
+        end
+        row.sub_item_table = {}
+        for _i, v in ipairs(d.values or {}) do
+            local value = SettingsSync.fromWire(d, v.id)
+            table.insert(row.sub_item_table, {text=_(SettingsUI.words(v.label)), radio=true,
+                checked_func=function() return SettingsSync.toWire(d, S[key]) == tostring(v.id) end,
+                callback=function() set(value) end})
+        end
+    end
+    return row
+end
+
 function OrbitAndroid:menuItems()
-    local schedule_items = {}
-    for _i, o in ipairs(Schedule.OPTIONS) do
-        table.insert(schedule_items, {
-            text = _(o.label),
-            radio = true,
-            checked_func = function() return S.reading_schedule == o.id end,
-            callback = function()
-                Shared.set("reading_schedule", o.id)
-                self.schedule = Schedule.new(o.id, now_s())
-                self:hookPluginPagePush()
-            end,
-        })
-    end
-    -- Storage limit (v0.11.2): one limit on everything Orbit stores (OC.storageCount, counted by Orbit Companion).
-    local limit_items = {}
-    for _i, mb in ipairs(Cache.STORAGE_LIMITS_MB) do
-        table.insert(limit_items, {
-            text = mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%g GB"), mb / 1024) or string.format(_("%d MB"), mb)),
-            radio = true,
-            checked_func = function() return (tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB) == mb end,
-            callback = function()
-                Shared.set("storage_limit_mb", mb)
-                log("storage: limit set to", mb == 0 and "none" or (mb .. " MB"))
-                pcall(OC.storageCount, "limit changed")
-            end,
-        })
-    end
-    local cap_items = {}
-    for _i, c in ipairs({ 10, 15, 20 }) do
-        table.insert(cap_items, {
-            text = string.format("%d s", c),
-            radio = true,
-            checked_func = function() return S.sleep_cap == c end,
-            callback = function() Shared.set("sleep_cap", c) end,
-        })
-    end
+    local finish = Budgets.span("settings.paint", now_s, log)
     local function later(fn)
         return function(touchmenu)
             if touchmenu and touchmenu.closeMenu then touchmenu:closeMenu() end
             UIManager:scheduleIn(0.2, fn)
         end
     end
-    local wifi_items = {}
-    for _i, o in ipairs(WifiPlan.MODES) do
-        table.insert(wifi_items, {
-            text = _(o.label),
-            radio = true,
-            enabled_func = function() return Companion.installed() end,
-            checked_func = function() return Shared.mode() == o.id end,
-            callback = function()
-                Shared.set("wifi_mode", o.id)
-                Wifi.applySettings("menu")
-            end,
-        })
+    local function action(text, fn) return {text=_(text), callback=later(fn)} end
+    local function rows(keys)
+        local out = {}
+        for _i, key in ipairs(keys) do out[#out+1] = self:settingRow(key) end
+        return out
     end
-    local idle_items = {}
-    for _i, m in ipairs(WifiPlan.IDLE_MINUTES) do
-        table.insert(idle_items, {
-            text = string.format(_("%d min"), m),
-            radio = true,
-            checked_func = function() return (S.wifi_idle_min or 2) == m end,
-            callback = function()
-                Shared.set("wifi_idle_min", m)
-                Wifi.applySettings("menu")
-            end,
-        })
-    end
-    table.insert(wifi_items, {
-        text_func = function() return string.format(_("Just in time: off after %d min idle"), S.wifi_idle_min or 2) end,
-        enabled_func = function() return Shared.mode() == "jit" end,
-        sub_item_table = idle_items,
-        separator = true,
-    })
-    table.insert(wifi_items, {
-        text_func = function()
-            return Companion.problem() or _("Only BookSync Companion switches Wi-Fi. It never turns off Wi-Fi you turned on by hand in just in time, and never while another app is in front.")
-        end,
-        keep_menu_open = true,
-        callback = function() end,
-    })
-    local home_items = {
-        {
-            text = _("Back to my book, then BookOrbit home"),
-            radio = true,
-            checked_func = function() return S.home_button ~= "bookorbit" end,
-            callback = function() Shared.set("home_button", "smart") end,
-        },
-        {
-            text = _("BookOrbit home"),
-            radio = true,
-            checked_func = function() return S.home_button == "bookorbit" end,
-            callback = function() Shared.set("home_button", "bookorbit") end,
-        },
-    }
-    -- A feature the companion doesn't offer here: its rows are hidden, with one line saying
-    -- where it lives (docs/design/addon-mode.md §6.4).
-    local wifi_rows
-    if Companion.has("wifi") then
-        wifi_rows = {
-            { text_func = function() return label("wifi_mode", _("Wi-Fi")) .. ": " .. _(WifiPlan.modeLabel(Shared.mode())) end, sub_item_table = wifi_items },
-            stoggle("wifi_via_companion"),
-        }
-    elseif Companion.installed() then
-        wifi_rows = { { text = _("Wi-Fi switching and sleep sync: in BookSync Companion ›"),
-            callback = later(function() self:onOrbitOpenCompanion() end) } }
-    else
-        wifi_rows = { { text_func = function()
-            return (Companion.problem() or "") .. " " .. _("Wi-Fi stays as you leave it: switching it needs BookSync Companion.")
-        end, keep_menu_open = true, callback = function() end } }
-    end
-    -- The companion's eight sections (docs/design/companion-settings.md §5.7): five submenus here
-    -- with the same labels; Buttons, Kids and PIN and Setup live in the companion.
-    local reading = compact({
-        {
-            text_func = function()
-                local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
-                -- The companion's "Home opens": this applies only with KOReader.
-                if Shared.home_opens == "launcher" then t = t .. _(" (Home opens the BookSync launcher page)")
-                elseif Shared.home_opens == "app" then t = t .. _(" (Home opens another app)") end
-                return t
-            end,
-            help_text = _(SCHEMA.byKey.home_button and SCHEMA.byKey.home_button.line or ""),
-            sub_item_table = home_items,
-            separator = true,
-        },
-        { text = _("Status bar: BookSync layout (matches Xteink)"),
-            checked_func = function() return S.status_orbit_layout == true end,
-            callback = function() Shared.set("status_orbit_layout", not S.status_orbit_layout); ReadingStatus.changed() end },
-        { text = _("Status bar size"), sub_item_table = (function()
-            local items = {}
-            for _i, choice in ipairs(SCHEMA.byKey.status_orbit_size.values) do
-                local id = choice.id
-                items[#items+1] = { text = _(choice.label),
-                    checked_func = function() return (S.status_orbit_size or "small") == id end,
-                    callback = function() Shared.set("status_orbit_size", id); ReadingStatus.changed() end }
-            end
+    local function group(id, title, make)
+        return {text=_(title), settings_group=id, sub_item_table_func=function()
+            local span = Budgets.span("settings." .. id .. ".paint", now_s, log)
+            local items = make()
+            assert(#items <= Budgets.get("screens", "settings-" .. id).rows, "Settings row budget exceeded")
+            span()
             return items
-        end)() },
-        stoggle("local_first"),
-        stoggle("eob_sheet"),
-        stoggle("eob_auto"),
-    })
-    -- Sync: OrbiSmart / Custom (docs/design/position-sync.md §6), the section's first row. OrbiSmart
-    -- sets the rows below it and hides them; Custom shows them again, with their last values.
-    local mode_items = {}
-    local mode_def = SCHEMA.byKey.sync_mode
-    for _i, v in ipairs(mode_def and mode_def.values or { { id = "orbismart", label = "Furthest page wins" }, { id = "custom", label = "Custom" } }) do
-        table.insert(mode_items, {
-            text = _(v.label),
-            radio = true,
-            checked_func = function() return (S.sync_mode or "orbismart") == v.id end,
-            callback = function()
-                if (S.sync_mode or "orbismart") == v.id then return end
-                Shared.set("sync_mode", v.id)
-                OSM.modeChanged("menu")
-            end,
-        })
+        end}
     end
-    local custom = not (OSM and OSM.on())
-    local sync = compact({
-        {
-            text_func = function() return label("sync_mode", _("Reading position")) .. ": " .. ((OSM and OSM.on()) and _("Furthest page wins") or _("Custom")) end,
-            help_text = _(mode_def and mode_def.line or ""),
-            sub_item_table = mode_items,
-            separator = true,
-        },
-        wifi_rows[1],
-        custom and stoggle("sync_on_sleep"),
-        custom and {
-            text_func = function() return string.format(label("sleep_cap", _("Sleep sync limit")) .. ": %d s", S.sleep_cap or 20) end,
-            enabled_func = function() return S.sync_on_sleep ~= false end,
-            sub_item_table = cap_items,
-        },
-        custom and stoggle("sync_on_wake"),
-        custom and {
-            text_func = function() return label("reading_schedule", _("Sync while reading")) .. ": " .. _(Schedule.option(S.reading_schedule).label) end,
-            sub_item_table = schedule_items,
-        },
-        stoggle("wake_tailscale"),
-        { text = _("Test sync path"), callback = later(function() self:testSyncPath() end) },
-    })
-    local library = compact({
-        stoggle("offline_cache"),
-        {
-            text = label("mirror_covers", _("Save every cover for offline")),
-            checked_func = function() return S.mirror_covers == true end,
-            help_text = _("A Full refresh also saves the cover of every book it saves, and keeps them. Off: covers are saved as you see books, and the oldest go when there are many. Turning it off deletes nothing."),
-            callback = function()
-                Shared.set("mirror_covers", not S.mirror_covers)
-                log("mirror: every cover for offline", S.mirror_covers and "on" or "off")
-                if S.mirror_covers then pcall(Mirror.coverPass, "turned on") end
-            end,
-        },
-        {
-            text_func = function()
-                local mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB
-                local okt, used = pcall(OC.storageText)
-                return label("storage_limit_mb", _("Storage limit")) .. ": " .. (mb == 0 and _("No limit") or (mb >= 1024 and string.format(_("%g GB"), mb / 1024) or string.format(_("%d MB"), mb)))
-                    .. (okt and (" · " .. used) or "")
-            end,
-            help_text = _("One limit on everything BookSync stores: pages it saved, books saved for offline and covers. Book files and KOReader's own data don't count. Over it, the least recently shown covers go first, including covers saved for offline. Browsing pages go only after eligible covers. Protected covers and lists and book details saved for offline always stay."),
-            sub_item_table = limit_items,
-        },
-        toggle("keep_copies_current", label("keep_copies_current", _("Keep book copies current")),
-            _("When a book's file changes in the library (BookOrbit writes tags into it), the copy on this reader is downloaded again in the background, never while you read. Position, highlights and bookmarks stay.")),
-        { text_func = function() return Mirror.savedText() end, keep_menu_open = true, callback = function() end },
-    })
-    local updates = compact({
-        -- Updates come with Orbit Companion, which updates the plugin with it (its own switches).
-        { text = _("Check for updates (BookSync Companion)"), callback = later(function() self:checkPatchUpdate() end) },
-        { text_func = function() return self:updateStatusText() end, keep_menu_open = true, callback = function() end, separator = true },
-        stoggle("key_log"),
-        wifi_rows[2] or false,
-        -- Debug: SQLite on shared storage (docs/design/sqlite-cache.md "Stress test").
-        S.key_log and { text = _("SQLite stress test (2 min)"), callback = later(function() SqliteStress.start() end) } or false,
-    })
     local items = {
-        { text = _("About"), read_only = true, callback = later(function() self:showAbout() end) },
-        { text = sectionTitle("reading", _("Reading and Home")), sub_item_table = reading },
-        Sleep.menuItem(self, later),
-        { text = sectionTitle("sync", _("Sync and Wi-Fi")), sub_item_table = sync },
-        { text = sectionTitle("library", _("Library and storage")), sub_item_table = library },
-        { text = sectionTitle("updates", _("Updates and details")), sub_item_table = updates, separator = true },
-        -- OrbiSmart's override (docs/design/position-sync.md §3.5), in a book only.
-        (OSM and OSM.on() and self.ui and self.ui.document) and { text = _("Read from here everywhere"),
-          help_text = _("Sends this page to BookOrbit now, even if it is behind the place there. Your other readers move here at their next sync. Offline, it is sent first at the next sync."),
-          callback = later(function() OSM.readFromHere("menu") end) } or false,
-        { text = _("Sync and sleep now"), callback = later(function() self:onOrbitSyncAndSleep() end) },
-        { text = _("Full refresh of BookOrbit"), callback = later(function() OC.menuFullRefresh() end),
-          help_text = _("Gets this view and Home fresh from the server, re-checks the covers, then saves everything reachable from Home for reading offline. Tap ⟳ for a normal refresh; hold ⟳ for this.") },
-        { text_func = function() return self:recommendedMenuText() end, callback = later(function() self:showRecommended("menu") end), separator = true },
-        { text = _("Open BookSync Companion"), callback = later(function() self:onOrbitOpenCompanion() end) },
-        Companion.has("apps") and { text = _("Open another app…"), callback = later(function() self:onOrbitOpenApps() end) } or false,
-        Companion.installed() and { text = _("Buttons, PIN and setup: in BookSync Companion ›"), callback = later(function() self:onOrbitOpenCompanion() end), separator = true } or false,
-        { text_func = function() return self:statusText() end, keep_menu_open = true, callback = function() end },
+        group("account", "Account & server", function() return {
+            action("Connection and sign-in…", function() self:onOrbitOpenCompanion() end),
+        } end),
+        group("sync", "Sync, Wi-Fi & power", function()
+            local paint = Library.paint("settings-sync")
+            local estimates = paint:modeEstimates()
+            paint:flush()
+            local modes = {}
+            for _i, mode in ipairs(SettingsUI.modes) do
+                modes[#modes+1] = {text=_(mode.label) .. " · " .. SettingsUI.estimate(estimates, mode.id), help_text=_(mode.help), radio=true,
+                    checked_func=function() return SettingsUI.mode(S, Shared.mode()) == mode.id end,
+                    callback=function()
+                        for _i, key in ipairs(SettingsUI.modeKeys) do Shared.set(key, mode.values[key]) end
+                        for _i, key in ipairs(SettingsUI.modeKeys) do Shared.onChange(key, "mode") end
+                    end}
+            end
+            local out = {{text_func=function() return _("Mode") .. ": " .. _(SettingsUI.modeLabel(S, Shared.mode())) end, sub_item_table=modes}}
+            if SettingsUI.mode(S, Shared.mode()) == "custom" then out[#out+1] = action("Back to Balanced", modes[2].callback) end
+            for _i, row in ipairs(rows(SettingsUI.syncKeys)) do out[#out+1] = row end
+            -- Device sleep is owned by Android, reachable even when the companion cannot switch Wi-Fi.
+            out[#out+1] = action("Sleep & power: open companion…", function() self:onOrbitOpenCompanion() end)
+            out[#out+1] = {text=_("Battery · estimates need measured use"), enabled_func=function() return false end}
+            out[#out+1] = action("Sync and sleep now", function() self:onOrbitSyncAndSleep() end)
+            if OSM and OSM.on() and self.ui and self.ui.document then
+                out[#out+1] = action("Read from here everywhere", function() OSM.readFromHere("menu") end)
+            end
+            return out
+        end),
+        group("library", "Library & downloads", function()
+            local out = rows({"offline_cache", "mirror_covers", "storage_limit_mb", "keep_copies_current"})
+            out[#out+1] = action("Full refresh", function() Library.fullRefresh() end)
+            return out
+        end),
+        group("reading", "Reading", function()
+            return rows({"status_orbit_layout", "status_orbit_size", "local_first", "eob_sheet", "eob_auto"})
+        end),
+        group("home", "Home", function() return rows({"home_button"}) end),
+        group("sleep", "Sleep screen", function()
+            -- Only shared values here: named-list/tag browsing stays in the companion until
+            -- the library supplies bounded choice windows. Never decode scopes.json on paint.
+            local keys = {}
+            for _i, d in ipairs(SCHEMA.settings) do if d.section == "sleep" and not d.hidden then keys[#keys+1] = d.key end end
+            local out = rows(keys)
+            out[#out+1] = action("Choose lists and exclusions…", function() Sleep.openCompanion() end)
+            return out
+        end),
+        group("updates", "Updates", function()
+            local out = rows({"auto_update_patch", "update_channel", "key_log"})
+            table.insert(out, 1, {text="BookSync " .. PATCH_VERSION, enabled_func=function() return false end})
+            out[#out+1] = action("Check now", function() self:checkPatchUpdate() end)
+            return out
+        end),
+        group("about", "About & help", function() return {
+            (function() local row = action("About", function() self:showAbout() end); row.read_only=true; return row end)(),
+            action("Help and guides", function() self:onOrbitOpenCompanion() end),
+            action("Advanced: open companion app", function() self:onOrbitOpenCompanion() end),
+        } end),
+        action("Open BookSync Companion", function() self:onOrbitOpenCompanion() end),
     }
-    return compact(items)
+    assert(#items <= Budgets.get("screens", "settings").rows, "Settings row budget exceeded")
+    finish()
+    return items
 end
 
 -- Settings PIN set and locked: the companion's keypad, then open the menu again.

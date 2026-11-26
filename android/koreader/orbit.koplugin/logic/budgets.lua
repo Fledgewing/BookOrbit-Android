@@ -46,3 +46,8 @@ function Budgets.get(kind, id)
     assert(Budgets.check(b, {rows=0,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}))
     return b
 end
+
+-- Settings groups inherit the Settings family limits.
+for _, id in ipairs({"account", "sync", "library", "reading", "home", "sleep", "updates", "about"}) do
+    Budgets.screens["settings-" .. id] = Budgets.screens.settings
+end

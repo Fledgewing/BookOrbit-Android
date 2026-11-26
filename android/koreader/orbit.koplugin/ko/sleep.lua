@@ -37,7 +37,7 @@ function OrbitAndroid:onSuspend()
             end
         end)
     end
-    if not S.sync_on_sleep and not (OSM and OSM.on()) then return end
+    if not S.sync_on_sleep then return end
     if now_s() - state.sas_done_at < 15 then
         log("suspend: just synced by Sync and sleep; skip")
         return

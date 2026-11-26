@@ -5,6 +5,12 @@ return function(test, eq, ok, here, Cache)
     local function source(path)
         local f=assert(io.open(path,"rb")); local s=f:read("*a"); f:close(); return s
     end
+    test("library: explicit refresh reuses the adapter command", function()
+        local calls = 0
+        local e = setmetatable({LibraryAdapter={fullRefresh=function() calls=calls+1; return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
+        eq(e.Library.fullRefresh(), true); eq(calls, 1)
+    end)
     test("library: all screens and starter widgets declare strict budgets", function()
         local e = setmetatable({}, {__index=_G}); setfenv(assert(loadfile(root .. "logic/budgets.lua")), e)()
         for _, name in ipairs({"home","library","details","series","settings","filter","editor","reader-top-panel"}) do

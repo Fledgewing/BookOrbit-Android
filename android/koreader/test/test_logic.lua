@@ -1576,7 +1576,7 @@ test("settings schema: Sync (OrbiSmart / Custom) is the sync section's first row
 end)
 
 test("settings schema: every key KOReader reads has a row in its menu", function()
-    local menu = readFile(here .. "/../orbit.koplugin/ko/menu.lua") .. readFile(here .. "/../orbit.koplugin/ko/sleepscreen.lua")
+    local menu = readFile(here .. "/../orbit.koplugin/logic/settings_ui.lua") .. readFile(here .. "/../orbit.koplugin/ko/menu.lua") .. readFile(here .. "/../orbit.koplugin/ko/sleepscreen.lua")
     local missing = {}
     for _, d in ipairs(SIDX.settings) do
         -- Keys KOReader reads need a row; the companion's own (the clearing flash, its updates) may not.
@@ -1732,6 +1732,27 @@ test("fixture registry: the plugin reads every table it is named for, and every 
 end)
 
 dofile(here .. "/layout_tests.lua")(M, test, ok, eq, JSON)
+
+test("settings modes: approved presets use shared wire values and Balanced matches defaults", function()
+    local e = setmetatable({}, {__index=_G}); setfenv(assert(loadfile(here .. "/../orbit.koplugin/logic/settings_ui.lua")), e)()
+    local UI = e.SettingsUI
+    local balanced = UI.modes[2].values
+    for _, key in ipairs(UI.modeKeys) do
+        eq(balanced[key], SIDX.byKey[key].default, key)
+    end
+    for _, mode in ipairs(UI.modes) do
+        for _, key in ipairs(UI.modeKeys) do
+            local d = SIDX.byKey[key]
+            eq(SettingsSync.fromWire(d, SettingsSync.toWire(d, mode.values[key])), mode.values[key])
+        end
+        eq(UI.mode(mode.values), mode.id)
+    end
+    local unset = {}
+    for _, key in ipairs(UI.modeKeys) do if key ~= "wifi_mode" then unset[key] = balanced[key] end end
+    eq(UI.mode(unset, "jit"), "balanced", "effective device Wi-Fi default")
+    eq(UI.words("BookOrbit home"), "Server plugin's Home")
+    eq(UI.words("Wake Tailscale for syncs"), "Wake VPN for syncs")
+end)
 
 dofile(here .. "/test_library.lua")(test, eq, ok, here, M.Cache)
 
