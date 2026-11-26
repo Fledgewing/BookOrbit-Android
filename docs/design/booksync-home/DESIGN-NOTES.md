@@ -782,3 +782,12 @@ The compact native-widget preview illustrates weight and contrast; the open EPUB
 receives the supported engine weight, spacing, margin and gamma values. PDFs retain
 the existing KOReader-menu escape. Android comes first under the 2026-11-25 approval;
 X4 Pro, X4 and X3 remain deferred, with their own device margin ranges.
+
+
+CI integration exposed a pre-existing simulator-test race in `heap_floor_waits`:
+a fixed nine-second QUIT could stop the refresh worker after its delayed manifest
+reply and before its heap decision. The test now waits for the explicit heap-floor
+log marker with a bounded deadline; its request assertions are unchanged. The
+shared host harness tests marker stopping, missing markers and visible crashes.
+The repaired X4 Pro case passes against an isolated synthetic server. This is a
+test-harness fix only; no firmware product code is changed by F12-M.
