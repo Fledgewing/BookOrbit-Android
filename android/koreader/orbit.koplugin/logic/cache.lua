@@ -130,18 +130,6 @@ end
 Cache.STORAGE_LIMITS_MB = { 100, 250, 500, 1024, 2560, 5120, 10240, 0 } -- 0: no limit
 Cache.STORAGE_DEFAULT_MB = 250
 
----------------------------------------------------------------- cover files
-
--- A cover file's bytes look like an image (JPEG, PNG, WebP or GIF), from its first bytes.
-function Cache.imageHeader(head)
-    if type(head) ~= "string" or #head < 4 then return false end
-    if head:sub(1, 3) == "\255\216\255" then return true end
-    if head:sub(1, 4) == "\137PNG" then return true end
-    if head:sub(1, 4) == "GIF8" then return true end
-    if head:sub(1, 4) == "RIFF" and head:sub(9, 12) == "WEBP" then return true end
-    return false
-end
-
 -- Generic URL helpers reused by the compatibility adapter.
 Cache.splitPath, Cache.encQuery = splitPath, encQuery
 

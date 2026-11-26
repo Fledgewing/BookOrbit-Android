@@ -1032,7 +1032,6 @@ test("cache: encode is canonical and round-trips", function()
     local v = { b = { 1, 2, { z = "x\n" } }, a = 1.5, c = true, [10] = "ten" }
     eq(C.encode(C.decode(C.encode(v))), C.encode(v))
     eq(C.encode({ a = 1, b = 2 }), C.encode({ b = 2, a = 1 }))
-    ok(C.imageHeader("\255\216\255\224xxxx") and C.imageHeader("\137PNG\r\n") and not C.imageHeader("<html>"), "headers")
 end)
 
 test("companion rules: the mirror's stop note (shared cases; the eviction order is StorageLogic's)", function()

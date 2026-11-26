@@ -54,6 +54,13 @@ class CoverReferenceTest {
             assertTrue(body.size<=16384)
             assertEquals(result["local_path"],(LuaValue.parse(body) as Map<*,*>)["local_path"])
             assertTrue(k.requests.isEmpty())
+            for ((id,head) in listOf(8 to "\u0089PNG",9 to "GIF8",10 to "RIFF0000WEBP")) {
+                File(k.ref("${id}_100.jpg")).writeBytes(head.toByteArray(Charsets.ISO_8859_1))
+                assertTrue(k.path(k.acquire("${id}_100.jpg")).isFile)
+            }
+            File(k.ref("11_100.jpg")).writeText("<html>not an image</html>")
+            try { k.acquire("11_100.jpg"); fail("HTML must not be imported as a cover") }
+            catch (e: ServerFailure) { assertEquals("unavailable",e.kind) }
         }
     }
     @Test fun missingCoversFetchOnlyInCompanionAndForcedRefreshUsesEtag() {
