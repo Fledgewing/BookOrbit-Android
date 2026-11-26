@@ -55,6 +55,10 @@ class BatteryEstimateTest {
         assertEquals(21,BatteryStats.daily(rows,zone).values.sumOf { it.usedPct })
         assertTrue(BatteryStats.segments(rows).filter { it.key.state != PowerState.CHARGING }.all { it.sums.change >= 0 })
     }
+    @Test fun liveDailyTailKeepsMonotonicTimeConsistent() {
+        val rows=listOf(row(0,90),row(2,88))
+        assertEquals(3*60.0,BatteryStats.daily(rows,zone,t+3*h).values.sumOf { it.standbyMin },1e-9)
+    }
     @Test fun clockChangesInEitherDirectionAndRebootBreakTheInterval() {
         for (delta in listOf(-20*h,20*h)) {
             val rows = listOf(row(0,90),row(2,88),row(3,40).copy(t=t+3*h+delta),row(4,39).copy(t=t+4*h+delta))

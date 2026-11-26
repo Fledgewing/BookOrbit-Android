@@ -296,7 +296,8 @@ object BatteryStats {
         fun upd(d: Long, f: (DayTotals) -> DayTotals) {
             out[d] = f(out[d] ?: DayTotals(d))
         }
-        val all = if (now != null && rows.isNotEmpty() && now > rows.last().t) rows + rows.last().copy(t = now, kind = "now", pages = 0, full = 0, partial = 0) else rows
+        val all = if (now != null && rows.isNotEmpty() && now > rows.last().t) rows + rows.last().copy(t = now, kind = "now", pages = 0, full = 0, partial = 0,
+            elapsed = rows.last().elapsed?.plus(now-rows.last().t)) else rows
         for (i in all.indices) {
             val b = all[i]
             if (b.pages + b.full + b.partial > 0) upd(day(b.t, zone)) { it.copy(pages = it.pages + b.pages, full = it.full + b.full, partial = it.partial + b.partial) }
