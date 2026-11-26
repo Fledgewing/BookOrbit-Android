@@ -92,6 +92,19 @@ class LibraryTest {
         LibraryReadModel(st, {99}, {}).publish(owner,listOf(request))
         return st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?", owner,request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
     }
+    @Test fun homeSummaryAndBatteryDoNotInventMissingLocalHistory() {
+        store().use { st ->
+            assertEquals(false,(read(st,mapOf("op" to "library.summary"))["freshness"] as Map<*,*>)["saved"])
+            seed(st)
+            val summary=read(st,mapOf("op" to "library.summary"))
+            assertEquals(5L,summary["total"])
+            assertNull(summary["on_device"])
+            val battery=read(st,mapOf("op" to "battery.stats"))
+            assertEquals("not-saved",battery["state"])
+            assertFalse(battery.containsKey("level"))
+            assertTrue(LuaValue.encode(battery).size<=LibraryReadModel.MAX_BYTES)
+        }
+    }
     @Test fun homeListsAreBoundedNeutralAndNotEmptyUntilMembershipIsSaved() {
         store().use { st ->
             assertEquals("Not saved yet",read(st,mapOf("op" to "lists"))["empty"])
@@ -153,6 +166,7 @@ class LibraryTest {
             val ask=File(st.root,"copies/ask.lua").apply { parentFile!!.mkdirs() }
             fun ledger(o: String) = ask.writeBytes(LuaValue.encode(mapOf("owner" to o,"books" to listOf(mapOf("book_id" to 1,"path" to file.path)))))
             ledger(owner)
+            assertEquals(1L,read(st,mapOf("op" to "library.summary"))["on_device"])
             assertEquals(1L,read(st,mapOf("op" to "counts","source" to "on-device"))["total"])
             val row=(read(st,mapOf("op" to "window","source" to "on-device"))["items"] as List<*>).single() as Map<*,*>
             assertEquals(file.path,row["local_path"])

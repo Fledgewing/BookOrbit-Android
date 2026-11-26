@@ -181,6 +181,10 @@ function Layout.default()
             placement("resume","continue-reading",0,0,4,3),books("also","Also reading","reading",0,3),
             placement("lists","lists",2,3,2,3),placement("library","library",0,5,2,1),
             books("recent","Recently added","recent",0,6),books("want","Want to read","wtr",2,6)})},
+        {id="library",tab="Library",name="Library",placements=arr({
+            placement("library-overview","library",0,0,2,2),
+            placement("device","booklist",2,0,2,3,{title="On device",src="device",style=1}),
+            books("finished","Finished","finished",0,2)})},
         {id="stats",tab="Insights",name="Stats",placements=arr({
             placement("year","year-in-reading",0,0,4,3),placement("battery","battery",0,3,2,2),
             placement("hours","when-you-read",2,3,2,2),placement("week","this-week",0,5,2,3),

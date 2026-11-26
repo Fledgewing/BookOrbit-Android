@@ -59,6 +59,8 @@ function Library:read(op, args)
     if not ok then error(result,0) end
     return result
 end
+function Library:summary() return self:read("library.summary", {limit=1}) end
+function Library:batteryStats() return self:read("battery.stats", {limit=1}) end
 function Library:readingStats() return self:read("reading.stats", {limit=1}) end
 function Library:capabilities() return self:read("capabilities") end
 function Library:window(source, query, offset, limit)

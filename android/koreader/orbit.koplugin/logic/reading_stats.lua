@@ -14,7 +14,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
     local function rect(x,y,rw,rh,level) p.rects[#p.rects+1]={x=x,y=y,w=rw,h=rh,level=level} end
     local function label(x,y,text) p.labels[#p.labels+1]={x=x,y=y,text=text} end
     if id == 'year-in-reading' then
-        assert(#data.year.intensity == 365)
+        assert(data.year.intensity[365] ~= nil and data.year.intensity[366] == nil)
         local size = math.max(1, math.floor(math.min((w-16)/53,(h-66)/7)))
         local offset=data.year.weekday or 0
         for i=1,365 do
@@ -25,7 +25,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
         end
         label(8,h-20,tostring(data.year.days_read)..' days read · '..data.year.start)
     elseif id == 'this-week' then
-        assert(#data.week.seconds == 7 and #data.week.levels == 7)
+        assert(data.week.seconds[7] ~= nil and data.week.levels[7] ~= nil)
         local width=(w-16)/7; local height=math.max(1,h-92)
         for i=1,7 do
             rect(8+(i-1)*width,h-40-height*data.week.levels[i],width-4,height*data.week.levels[i],4)
@@ -34,7 +34,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
         end
         label(8,28,tostring(math.floor(data.week.total_seconds/60))..' min this week')
     elseif id == 'when-you-read' then
-        assert(#data.hour_levels == 24 and #data.hour_intensity == 24)
+        assert(data.hour_levels[24] ~= nil and data.hour_intensity[24] ~= nil)
         local strip=rows == 1; local height=math.max(1,h-100); local width=(w-16)/24
         for i=1,24 do
             local bh=strip and math.min(22,height) or height*data.hour_levels[i]

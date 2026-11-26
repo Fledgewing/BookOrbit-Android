@@ -5255,8 +5255,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Nine-row component, bounded companion facets, chips/reset and Home save callback; owned host wiring follows",
-          "reason": "deliberately deferred: owned list/search and Home hosts integrate the component in their 0.12 slices",
+          "note": "Reusable filter sheet wired into owned lists and Search, with Save as a Book list on Home (feature/0.12; unreleased)",
+          "reason": "deliberately deferred: device acceptance and richer grouped-list presentation follow the Android foundation",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/filter_sheet.lua",
@@ -5266,7 +5266,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Planned after Android; same neutral filter and counting contract",
+          "note": "Shared filter sheet and Save to Home wiring follow Android; same neutral filter and counting contract",
           "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
           "evidence": [
             {
@@ -5277,7 +5277,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Planned after Android; same neutral filter and counting contract",
+          "note": "Shared filter sheet and Save to Home wiring follow Android; same neutral filter and counting contract",
           "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
           "evidence": [
             {
@@ -5288,7 +5288,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Planned after Android; same neutral filter and counting contract",
+          "note": "Shared filter sheet and Save to Home wiring follow Android; same neutral filter and counting contract",
           "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
           "evidence": [
             {
@@ -5301,7 +5301,7 @@
     },
     {
       "id": "owned-home",
-      "feature": "Opt-in BookSync Home with Continue reading, Shelf and Lists",
+      "feature": "Opt-in BookSync Home with three pages, starter shelves, Library and Stats",
       "category": "Behaviour",
       "settings_keys": [
         "home_screen"
@@ -5309,45 +5309,45 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12 behind Home screen; legacy Home remains the default",
-          "reason": "deliberately deferred: device acceptance and remaining Home widgets follow the staged Android build",
+          "note": "Implemented on feature/0.12: Home, Library and Stats pages; shared filtered lists/search and local Save to Home; legacy Home remains the default",
+          "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/home_host.lua",
               "line": 1
             }
           ],
-          "deferred": "Full widget library, cached covers and richer book actions"
+          "deferred": "Battery history, full widget library, cached covers and richer book actions"
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Owned Home host follows the Android build",
+          "note": "Three-page Home wiring and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
-              "path": "docs/design/booksync-home/F12-C-NOTES.md",
+              "path": "docs/design/booksync-home/F12-J-NOTES.md",
               "line": 3
             }
           ]
         },
         "x4": {
           "status": "missing",
-          "note": "Owned Home host follows the Android build",
+          "note": "Three-page Home wiring and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
-              "path": "docs/design/booksync-home/F12-C-NOTES.md",
+              "path": "docs/design/booksync-home/F12-J-NOTES.md",
               "line": 3
             }
           ]
         },
         "x3": {
           "status": "missing",
-          "note": "Owned Home host follows the Android build",
+          "note": "Three-page Home wiring and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
-              "path": "docs/design/booksync-home/F12-C-NOTES.md",
+              "path": "docs/design/booksync-home/F12-J-NOTES.md",
               "line": 3
             }
           ]
