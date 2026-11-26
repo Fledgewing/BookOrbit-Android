@@ -5194,13 +5194,13 @@
     },
     {
       "id": "reading-insights",
-      "feature": "Local Year, This week, hourly reading and Records widgets (0.12 foundation)",
+      "feature": "Server-first Year, This week, hourly reading and Records widgets (0.12 foundation)",
       "category": "Behaviour",
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "0.12 local aggregates and standalone renderers",
-          "reason": "deliberately deferred: Android build authorised 2026-11-25; Home host wiring, finish ledger and goal settings remain pending.",
+          "note": "0.12 server-first stats with per-field provenance and local hourly/session fallback",
+          "reason": "deliberately deferred: Android build authorised 2026-11-25; Home integration and local finish/goal settings remain pending. Dashboard has no inclusion watermark, so local today stays separate.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-F-NOTES.md",
@@ -5211,7 +5211,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Firmware implementation deferred",
+          "note": "Server-first stats firmware implementation deferred",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
           "evidence": [
             {
@@ -5223,7 +5223,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Firmware implementation deferred",
+          "note": "Server-first stats firmware implementation deferred",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
           "evidence": [
             {
@@ -5235,7 +5235,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Firmware implementation deferred",
+          "note": "Server-first stats firmware implementation deferred",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
           "evidence": [
             {

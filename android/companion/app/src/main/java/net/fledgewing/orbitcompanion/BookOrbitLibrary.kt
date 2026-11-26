@@ -4,6 +4,32 @@ import java.security.MessageDigest
 
 /** Backend normalization and query plans for the companion's 0.12 projection worker. No network on reads. */
 object BookOrbitLibrary {
+    /** Cached connector response only. fetched/generated time is NOT an inclusion watermark. */
+    fun readingStats(store: CacheStore): RemoteReadingStats? {
+        val dashboardCachePath = "/koreader/plugin/catalog/dashboard"
+        val raw = store.db().query("SELECT body FROM entries WHERE path=? ORDER BY fetched_at DESC LIMIT 1", dashboardCachePath) {
+            it.bytes(0)?.let(LuaValue::parse) as? Map<*, *>
+        }.firstOrNull() ?: return null
+        return dashboardStats(raw)
+    }
+    fun dashboardStats(raw: Map<*, *>): RemoteReadingStats {
+        fun count(value: Any?) = (value as? Number)?.toDouble()?.takeIf { it.isFinite() && it >= 0 && it <= Int.MAX_VALUE && it % 1.0 == 0.0 }?.toLong()
+        val year = raw["readingYear"] as? Map<*, *>
+        val start = (year?.get("startDate") as? String)?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+        val minutes = year?.get("minutes") as? List<*>
+        val days = if (start != null && minutes != null && minutes.size in 1..371 && minutes.all { count(it) != null })
+            minutes.mapIndexed { i, m -> start.plusDays(i.toLong()) to count(m)!! * 60 }.toMap() else null
+        val streak = raw["readingStreak"] as? Map<*, *>
+        val current = count(streak?.get("currentStreak")); val best = count(streak?.get("longestStreak"))
+        val goal = raw["readingGoal"] as? Map<*, *>
+        val goalYear = count(goal?.get("year"))
+        // finishedThisYear is a capped shelf, never a total (pinned connector service:332).
+        return RemoteReadingStats(days = days, streak = current.takeIf { best != null }, bestStreak = best,
+            target = count(goal?.get("goalBooks")), goalAvailable = goalYear != null && goal?.containsKey("goalBooks") == true &&
+                (goal["goalBooks"] == null || count(goal["goalBooks"]) != null),
+            finished = count(goal?.get("completedBooks")).takeIf { goalYear != null }, year = goalYear,
+            at = (raw["generatedAt"] as? String)?.takeIf { runCatching { java.time.Instant.parse(it) }.isSuccess })
+    }
     /** Reuse Copies' account-scoped file ledger. Existence checks stay on the worker. */
     fun localBooks(store: CacheStore, owner: String): Set<Long>? = localPaths(store, owner)?.keys
     fun localPaths(store: CacheStore, owner: String): Map<Long, String>? {
