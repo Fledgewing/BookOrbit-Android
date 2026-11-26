@@ -643,8 +643,14 @@ object Setup {
             },
         )
 
+        list.add(Check("Sign in to your server", LibraryAccount.state()["signedIn"] == true,
+            if (LibraryAccount.state()["signedIn"] == true) "Signed in" else "Account-wide reading statistics",
+            action = "Open", id = "server_account", short = "Server account", optional = true) { a ->
+            a.startActivity(Intent(a, AccountActivity::class.java))
+        })
         // From the Orbit plugin's REPORT (docs/design/addon-mode.md §4.2, §7.3).
         // Pending ("Checking…") while the running plugin is older than REPORT or none came yet.
+        LibraryAccount.initialize(ctx)
         val signed = PluginReport.signedInRow(prefs.reportSignedIn, runningV)
         list.add(Check("BookOrbit account", signed.done && !signed.pending,
             when { signed.pending -> "Checking… open KOReader once"; signed.done -> "Signed in"; else -> "Not signed in" },

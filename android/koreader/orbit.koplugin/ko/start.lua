@@ -23,6 +23,7 @@ function OrbitAndroid:onResume()
     -- Back in front and not in a book (file browser, BookOrbit Home): what waited shows now.
     UIManager:scheduleIn(2, function() Gate.drain("resume") end)
     UIManager:scheduleIn(0.3, function()
+        if Library then Library.accountReturned() end
         Shared.refresh("resume")
         Wifi.applySettings("resume")
         self:checkCommand("resume")

@@ -97,6 +97,8 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false" />
 
+        <activity android:name=".AccountActivity" android:exported="false" />
+
         <activity
             android:name=".SetupActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
