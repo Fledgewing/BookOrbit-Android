@@ -1,5 +1,12 @@
 # BookSync Home, tap to download and series
 
+**Current visual review:** [revision-8 notes](DESIGN-NOTES.md),
+[clickable prototype](prototype.html) and [screenshot gallery](mockups.html)
+replace the earlier visual/interaction examples below. The adversarial critic
+approved the supplied design after four rounds; maintainer sign-off is pending.
+Native integration, backend, licensing and measured-fit gates below still apply.
+Implementation and merge are not authorized by critic approval.
+
 Status: **designing — awaiting maintainer approval**, W36, 25 November 2026.
 Design, [static mockups](mockups.html) and the requested clickable prototype only;
 no native client implementation or release is authorized. This is the UI portion of
@@ -1003,7 +1010,7 @@ organization), offline prompt, series ordering, detail/actions and Android/X4/X3
 mockups before changing status from designing. Draft PR acceptance alone does
 not authorize implementation or a default flip.
 
-## 12. Prototype verification (revision 4 artifact only)
+## 12. Historical prototype verification (revision 4 artifact only)
 
 `prototype.html` is a standalone inline CSS/JS simulation using synthetic books,
 not native client code. Its layout schema is embedded, so no schema/resource

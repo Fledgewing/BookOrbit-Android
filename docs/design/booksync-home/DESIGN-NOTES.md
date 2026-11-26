@@ -1,0 +1,501 @@
+# BookSync 0.12 · Home, in-book menus and settings · design notes (revision 8, round 4)
+
+Prototype: `prototype.html` (one file, no network). Screens: `shots/` (M8C at device scale factor 2, its native 1404×1872; X4 at 480×800).
+All books, authors, numbers, battery and storage figures are invented.
+
+**Design goal (maintainer, round 2):** with BookSync settings on the reader, you should rarely if ever need the companion
+app. The companion stays for first-time setup on the M8C and for the few things only Android can do (section 8).
+
+**Round 3 in one paragraph.** The hero is one plain bar. Stats has a big Year and a small Battery. "Sync, Wi-Fi & power" is
+one group with a mode chooser built on the real settings schema. There is one filter sheet behind every filter button, and it
+can save a Book list on Home. Pages can be renamed and name themselves after their first widget. Lists gains a 1×3 size,
+the X4 default. The Classic focus ring is visible on black. And there is a BookSync library interface (section 12) so the UI
+never names a server. Findings and checks are in sections 14 and 15; round 4 is section 16.
+
+## 1. Design system
+
+### Two render profiles
+| | M8C (Carta, 16 grays) | X4 (black and white + 2 grays) |
+|---|---|---|
+| Ink | `#000` | `#000` |
+| Grays | g1 `#555` meta text · g2 `#8c8c8c` bars, outlines · g3 `#cfcfcf` hairlines · g4 `#ececec` wells | `#808080` bars only · `#c0c0c0` hairlines only |
+| Meta text | g1 gray | black at weight 400, never gray |
+| Text on the black hero | `#cfcfcf` / `#8c8c8c` | white only |
+| Heatmap levels | 5 grays + today ring | 5 levels: white with outline, `#c0c0c0`, `#808080`, black, and a today ring; patterns are added only when cells are ≥ 12 px (X4 Year 2×4 cells are about 17 px) |
+| Storage bar | patterns (the same on both) | patterns |
+| Behind a panel | optional white wash | no scrim at all: a 2 px border and a 6 px white gutter carry the separation |
+
+Dimming behind panels is optional on both devices. On Carta every panel open is a full-screen redraw anyway, and the panel's
+2 px black border is what separates it from the page, so the wash is a nicety, not a requirement.
+Nothing animates: downloads and syncs advance in steps, panels appear in place.
+
+### Type
+UI sans (Avenir Next in the prototype, Noto Sans on device); book titles and reading text in a serif. Tabular figures.
+
+| Role | M8C (logical px) | X4 (px) |
+|---|---|---|
+| Caption / meta | 12 | 12 |
+| Small / list | 14 | 14 |
+| Body / buttons | 16 | 16 |
+| Sheet titles | 19 | 18 |
+| Page title | 25 | 21 |
+| Hero book title (serif) | 31 | 24 |
+| Big numbers | 36–52 | 28–46 |
+
+### Spacing, shape, touch
+- Home grid: M8C 4 × 8, 12 px gutters, 18 px side margins, 58 px page bar. X4 2 × 7, 8 px gutters, 10 px margins, 56 px page bar.
+- **Touch targets: at least 50 logical px on both M8C and X4 Pro** (M8C 50 px = 100 physical px ≈ 8.5 mm). Round 1's
+  "44 px" claim was wrong; it is now enforced and measured (section 9). How: whole header rows are the "All ›" target;
+  rows are 52 px; switches and segmented controls sit in 52 px rows that are the target; stars are 52 px cells;
+  steppers and segments are tap + 3 px; the page indicator is a 52 px bar; hero ⋯ is a 52 px circle; the download
+  Cancel is a full-width band under the cover.
+- Tiles: 1 px g2 outline (black on X4). The hero is the one solid black tile. Panels and sheets: 2 px black border, inset, no shadow.
+
+### Icons
+24-unit grid, 2 px stroke, outline. Every widget has its own glyph (Lists = funnel, Book list sources each have one,
+Battery = battery, Library = books, Year = grid, This week = chart, filter = funnel, outlined, filled when a filter is active, …). The bookmark toggle in the top panel is
+bookmark-plus; the Bookmarks tile is a bookmark list, so they no longer share a glyph. Font and Size use different glyphs.
+Header icons (search, ⋯, sync) are all 50 px **outlined** circles; nothing turns solid black while syncing (the label says
+"Syncing…" and the glyph steps). Sync (two arrows) and Updates (arrow into a tray) are different glyphs.
+The battery glyph is filled to the actual level everywhere (widget, top panel, status bar, mode card, charges).
+
+### Focus (X4 buttons)
+One treatment, chosen by what the focused thing sits on, applied by `focusKind()` in the prototype:
+- **On white** (rows, white pills, covers on white): a 3 px black ring, a 2 px white gap and an outer ring.
+- **A black control** (Resume on white, black pills, the selected TOC row, the hint strip, the toast action): it **inverts**,
+  white with black content, inside a 2 px white gap and a 3 px black ring. The fill change alone is visible across the room.
+- **On ink** (anything inside the black hero: Resume, the hero ⋯, covers): white fill with black content, a 4 px black gap
+  and a 5 px white ring, so the ring separates from the black around it.
+- **Whole tiles** (the 1×2 hero that is all Resume, edit-mode tiles): the ring is **inset on the tile's own edge** (4 px black,
+  then 3 px white inside it), so it never collides with a neighbour; an ink tile inverts its content too.
+- **Segmented controls (round 4):** the same treatment as Apply and the hero: the focused segment turns white with bold
+  black text inside a 2 px white gap and a 3 px black ring that sits outside the control. A selected segment keeps a ✓
+  while focused, so you can still tell which one is chosen.
+Black, white only: no grays, so it is identical on the X4. Prev/Next move it in reading order; running off a Home page turns
+the page and lands on that page's **first widget** (never the header, never the page dots, which are not focus stops).
+Starting points: Resume on Home page 1, the first widget on other pages and in Edit Home, the current chapter in Contents,
+the value in Go to, the first choice in the filter sheet.
+Verified by `r3/focus.js`: 136 steps over every Home page, a page with the hero at every size, both reader panels, Contents,
+End of book and both pages of the filter sheet. It counts as dark anything on ink, any black control, **selected segments**
+and **covers whose art is mostly dark**. Each dark step must turn white or invert and carry a black ring (a thin inset alone
+fails), and every step must differ from its unfocused self. 19 dark steps, 0 fails; shots in `shots/focus/`, inspected.
+
+### Covers
+Synthetic grayscale SVG covers with a 2 px white mat on the black hero. A server-only book has a cloud badge that hangs off
+the cover's bottom-right corner, so it never covers the author line.
+
+## 2. Widgets
+
+Every widget lays itself out for its box and lists its sizes; edit mode offers only those. The **X3 fallback** column is the
+text-only line each widget becomes on the X3.
+
+| Widget | Ships | M8C sizes | X4 sizes | Rendering | X3 text fallback |
+|---|---|---|---|---|---|
+| Continue reading | 0.12 | 4×3, 4×2, 2×3, 2×2 | 1×2, 2×3, 2×2 | **One plain solid bar** (maintainer ruling): no chapter ticks, no bracket, no chapter words. The line is "**62%** · 3 h 22 m left" at every size. 4×3: eyebrow, serif title, author, series, big "62%" with "3 h 22 m left", the bar, Resume, and "Done by Saturday" beside Resume. 4×2 and 2×3: the short line over the bar. 2×2: eyebrow "READING". **1×2 (X4 default):** biggest cover, 3-line title, the bar, "62% · 3 h 22 m left"; the whole tile is Resume (one focus stop). Details and Reading now use the same bar. Picker description: "Your current book, big: cover, progress, time left and when you'll finish." | The Lantern Room · 62% · 3 h 22 m left |
+| **Book list** | 0.12 | 2×2, 4×2, 2×3, 4×3, 2×1 | 2×2, **1×3**, 1×2, 2×3, 2×4, 2×1 | One widget configured by title, source, style, sort and caption (section 3). Cover shelf: one or two rows of covers that fill the height; a narrow, tall shelf (X4 1×3) is a centred **2×2 mini-grid** that starts right under the header and uses the full height (no gap); a wide shelf shows at least 3 covers. Rows with progress: thumbnails twice round 1's size, title, bar, %, last read; 4-wide becomes a cover strip with bars. | Want to read · 37 · Glasswater, Under a Ninth Moon, … |
+| Lists | 0.12 | 2×3, **1×3**, 2×2, 4×2 | **1×3**, 1×2, 2×2, 2×3 | Your saved lists with live counts. Rows ≥ 52 px fill the tile evenly. **1×3 (narrow):** no icon wells, no chevrons, about 4 lists; on the X4 one line with the count on the right; on the M8C (171 px wide) the name takes two lines with "N books" under it. | Lists · Short reads 84 · Unread SF 132 · … |
+| Library | 0.12 | 2×1, 2×2, 1×1 | 2×3, 1×2, 2×1, 1×1, 2×2 | Library count on the left. **On device, right-aligned, no divider**, with a thin storage bar and "4.2 GB free of 32" under it (the extra number the maintainer asked about: free space, because space is the constraint people act on). Low space: warning glyph + "Low space · 1.2 GB free". 1×1: count + free figure only. 2×2+: Authors / Series / Collections rows, which open the Library list grouped by author or series. | 2,418 books · 312 on device · 4.2 GB free |
+| **Battery** | 0.12 | **2×2** (default), 1×2, 2×1, 4×3, 2×3, 4×2 | **1×2** (default), 1×1, 2×2, 2×3, 2×1 | Small: glyph at the actual level + big level + "≈ 2 d 6 h left"; 2×1 no longer clips (measured in the sweep). Medium (2×2): adds reading 4.1 %/h and standby 0.6 %/h (one decimal), "76% used this week" and the last charge. **No daily bars**, so Stats never has two near-identical bar charts. Large: adds reading ± and standby ± %/h, % per 100 pages, charging rate ±, and the last charge ("Sun 21:10 · 12% → 100% in 2 h 20 m"). Hidden values follow the "—" + what's needed rule. | 78% · ≈ 2 d 6 h left · reading 4.1 %/h |
+| This week | 0.13 | 2×2, 2×3, 2×1, 1×2 | 1×2, 2×2, 2×1 | Every column is the same height; the best-day label floats above its bar, so Saturday (112 min) is now taller than Sunday (95). "Best day" is computed, not typed. | 7 h 8 m this week · best Sat 1 h 52 m |
+| Year in reading | 0.13 | **4×3** (default), 4×2 | **2×4** (default), 2×3 | Dot grid, 52 × 7. M8C: 5 grays. X4: five levels (section 1), patterns only when cells are ≥ 12 px. Legend: Less ▢▢▢■ More · ◎ Today. Always the largest tile on Stats. | 257 days read · 41 books · streak 12 |
+| When you read | 0.13 (restored on Stats) | 2×2, 2×3, 2×1, 4×1 | 2×1, 2×2, 1×2 | **M8C 2×2 and larger: 24 hourly bars** that touch (no gaps, one gray), the peak hour black with a ▼ "22:00" marker above it, and an hour axis. That makes it unlike This week, which has separate, labelled day columns. **2×1, 4×1 and the X4:** a shaded 24-hour strip, peak ringed. "Evenings · most at 22:00". | Mostly evenings · peak 22:00 |
+| Reading records | Later | 3×2, 2×3, 2×2, 4×1 | 2×2, 2×3 | Pages turned as the hero number, a hairline, then four stats; the streak line fills the foot. No empty left column. | 48,210 pages · longest 3 h 12 m · streak 12 |
+| Clock | Optional | 1×2, 2×1, 2×2 | 2×2, 1×1, 2×1 | Time and date. Its battery is now only a small link ("▭ 78% ›") into the Battery page. 1×2 fills the column (bigger time, sync line, battery link). | 21:42 · Tue 25 Nov |
+| Recommended, Highlight, Buddy, Discover, Year ago, Word, Light | Later | — | — | Picker only. | — |
+
+## 3. Book list: one widget, many lists
+
+- **Configuration:** `{title, src, style, sort, cap}`.
+  - source: **Custom filter** (any filter sheet result, section 11) · Recently added · Want to read · Reading now (without the Continue reading book) · Finished · On device · any of your Lists · a series · an author;
+  - style: Cover shelf or Rows with progress;
+  - sort: List order, Title, Author, Last read;
+  - caption under each book: none, date added, progress, author.
+- **The picker keeps friendly names.** "Also reading", "Recently added", "Want to read" and "Finished" are presets: each adds
+  a Book list already configured. "Book list (choose a list…)" adds one and opens its configuration at once. In code
+  (`W.booklist`) there is one render function; the presets are configurations, and the layouts store `{w:'booklist', cfg}`.
+- **Configuration sheet:** in Edit Home a selected Book list has **Configure** in the toolbar. On the X4 Classic, More on a
+  widget opens its options (Pick up to move, Configure, Next size, Remove). The sheet is five rows (Title, Source, Style, Sort,
+  Caption, plus **Filter** when the source is Custom filter, which opens the filter sheet) and Cancel/Done; Source opens a second, paged page (Built in, Your lists, Series, Authors) with counts. No scrolling;
+  every row is one focus stop. The Classic has no keyboard, so Select on Title steps through suggestions.
+- **The shared List screen** is every "All ›": Book lists, Lists rows, Library and On device. Its header has the **filter
+  button** (section 11), which holds grouping (None / Author / Series) and sort; active parts show as chips, and there is paging. Grouped by series it shows series headers in name order, books in reading order, and
+  the Series page's progress dots; a header opens the Series page. Grouped by author it shows author headers. This is where the
+  old Authors and Series organisation lives. A group that shows only some of its books says "All N ›" ("Not in a series" shows
+  "All 17 ›"); a group that already shows every book says "N books" with no link (round 4). A series header still opens its
+  Series page. Reading now, ungrouped, keeps its Active / Put down sections and pages them.
+
+## 4. Default layout
+
+**M8C, page 1 "Home"**:
+```
+┌──────────── Continue reading 4×3 ────────────┐
+├────────────────────┬─────────────────────────┤
+│ Also reading 2×2   │ Lists 2×3               │
+├────────────────────┤                         │
+│ Library 2×1        │                         │
+├────────────────────┼─────────────────────────┤
+│ Recently added 2×2 │ Want to read 2×2        │
+└────────────────────┴─────────────────────────┘
+Header: Home · [✓ Synced 12 min ago · Sync] · Search · ⋯
+```
+**Lists 1×3 on the M8C (tried, not the default).** It reads well (two-line names, count beneath), but page 1 would then need
+a 3-wide partner beside it, and every Book list is 2 or 4 wide. A 1-wide Lists leaves a 1-column hole or forces Library and
+Also reading into odd shapes, so page 1 would no longer be filled. The default stays 2×3; 1×3 is offered in Size.
+
+**M8C, page 2 "Stats":** Year in reading **4×3** · Battery **2×2** + When you read 2×2 · This week 2×3 + Reading records 2×3.
+One bar chart (This week); Battery shows rates, not bars.
+
+**X4, page 1 "Home":**
+```
+┌ Continue reading 1×2 ┬ Also reading 1×2 ┐
+├ Lists 1×3            ┼ Want to read 1×3 ┤   (narrow Lists ≈ 4 rows; Want to read a 2×2 mini-grid)
+├──────── Recently added 2×2 ─────────────┤
+```
+**X4, page 2 "Library"** (renamed for its contents: the library at a glance): Library **2×2** (count, on card, storage bar,
+Authors) · On device 2×3 (books on this reader with progress) · Finished 2×2.
+**X4, page 3 "Stats":** Year in reading **2×4** (largest; cells about 17 px, patterns allowed) · Battery **1×2** + This week 1×2 ·
+When you read 2×1. Reading records and Clock are in the picker.
+Fuzz on these defaults: 400 random edit actions per device, no overlaps, no errors (section 15).
+
+## 5. Edit Home
+
+- Edit mode dims each widget with a dashed outline and a name·size tag in the **bottom-right** corner (never over a header).
+- Selected widget: the header shows its name, Configure (Book list), Remove and Done. The **footer becomes the move bar**:
+  ← ↑ ↓ → and **Size "4×2 → 2×3"** (current size, then the next one; "no room" if nothing else fits).
+- **Move rule.** An arrow moves the widget one cell if the cells are free. If they are not, the widget swaps with the minimal
+  band of widgets it must pass: the band is every widget that overlaps its columns (or rows) from its edge onwards, grown until
+  no widget crosses the band's far edge. The band shifts back into the space the widget left, keeping its order, and the
+  widget lands just past it. Example (maintainer's screenshot): Reading records 4×1 under the hero, Down → Also reading,
+  Library and Lists each move up one row, and Records lands directly above Recently added. Arrows are greyed only at the page
+  edge. If no valid swap exists (a 1-wide widget under a 2-wide band would overlap its neighbour), the arrow offers
+  "Move to page 2" (or "a new page") in a toast with one action. After every move the whole page is checked for overlaps.
+- **X4 Classic:** focus starts on the first widget; only the toolbar, widgets, + slots and page controls are focus stops.
+  Select picks a widget up; Prev/Next carry it with the same move rule (right, then down at the edge); More steps its
+  size; Select drops it; Back cancels and restores the original position and size. A black hint strip in the footer says so.
+  "Move to page 2" is taken by pressing Next again. More on an unselected widget opens its options.
+
+- **Edit tips** (side panel and Classic hint strip) state the move rule in one line and say Configure is for Book lists:
+  source, title, style, sort, caption.
+- **Edit tags** straddle the tile's bottom edge, so they never cover a caption or a cover's title.
+
+### Page names
+- **New pages name themselves** from their first widget: Year in reading, Battery, This week, When you read or Records →
+  "Stats"; a Book list → its title; Lists → "Lists"; Library → "Library". Until then the page is "Page N". A name you set by
+  hand is never overwritten (`named: true`).
+- **Rename:** in Edit Home the page name in the header is a button with a pencil (≥ 50 px), and **Rename** sits next to
+  **+ Page** in the footer. Both are Classic focus stops. Settings › Home › Page names opens Edit Home with Rename ready.
+- **M8C:** a text field typed with **KOReader's own keyboard** (the prototype draws a stand-in), plus suggestion chips.
+- **X4 (no keyboard):** a paged list of names: Home, Reading, Library, Lists, Want to read, Stats, Shelves, Series,
+  Favourites, Page N. On the Classic, Select on the Name row cycles through them; Prev/Next and Select also work on the list.
+- **X3:** the same list as text: `Page 3: Stats  [Select: next name]`.
+
+## 6. In-book
+
+- **Reading page:** the text, the optional clock, and the status line, which now starts with the battery:
+  **battery % · chapter title · pages left in chapter · page / total**. Settings → Reading → Status bar shows a live preview.
+- **Top panel:** Home · title/author · **Sync** · settings gear · bookmark-plus. Sync is a 50 px icon button in the header
+  row (not a sixth tile: the tiles are the book's contents, sync is about the book's state, like the bookmark). Tapping it
+  says "Syncing…", then "Synced · p. 211 saved". If the server has a further position: "Your other device is at p. 240 ·
+  Jump there / Stay here". Offline: "Offline · will sync when connected". The summary line adds the battery estimate:
+  "Chapter 14 of 22 · 62% · 3 h 22 m left in book  ▭ ≈ 2 d 6 h" (the estimate is a link to Battery).
+  The "other device is further" sheet names the device and when: "Your Phone is further · Phone · 2 h ago: p. 240 · This reader: p. 211" (the device name the server reports), with
+  Jump there / Stay here, and says which rule decided it (Reading position: Furthest page wins).
+  **Why Sync stays here:** the maintainer's round-2 comment asked for manual sync in the in-book top panel; the round-3 ruling
+  ("Sync placement: keep header sync; remove Sync now from the ⋯ menu") removed only the duplicate from Home's ⋯ menu, so the
+  top panel and the Home header are the two places, one per context.
+- **Bottom panel:**
+  - Scrubber with chapter ticks and bookmark flags. On the Classic, Select on the scrubber grabs it; Prev/Next then move one
+    chapter, Select or Back lets go.
+  - **Quick-settings presets.** Font, Margins, Line spacing and Contrast each show three choices: two presets plus Custom.
+    Font: Book's own (the publisher's embedded font) · your chosen font · Custom. Custom applies your own values, so
+    fine-grained values set in KOReader still apply. The presets and the custom values live in Settings → Reading. Size
+    stays a stepper. Every font specimen is named.
+  - **All steppers wrap** (X4 Font/Size/Margins/Spacing/Contrast rows, the M8C Size stepper, the Settings steppers):
+    past the last option goes to the first and back. No arrow is ever greyed. Sliders (front light, warmth) and the Classic
+    Go to stepper stay bounded.
+  - "More reading settings… KOReader's style menu" and "Edit presets" (to Settings → Reading) close the M8C panel.
+  - X4: the "no front light" line is gone; Status bar and Clock are 52 px switch rows.
+- **Contents** pages by whole rows (a section header never ends a page; `pagedSpan`). The scrubber's grab hint sits 14 px
+  below the track, clear of the focus ring.
+- **Sheets:** Contents focuses the current chapter; Go to focuses the value. Classic Go to is a ‹ value › stepper:
+  Prev/Next step, More cycles the step (1, 10, a chapter), Select goes.
+- **End of book:** rating (52 px stars), next in the series, "Add *next title* to Want to read" (a checkbox row), Home and a
+  "Back to book" text button.
+- **Series page:** rows show status only (Read ★★★★ / 45% reading / On device / On server); the Back button has room to
+  breathe on the Classic.
+
+## 7. BookSync settings
+
+Reachable from Home ⋯ › BookSync settings and from the gear in the top panel. On the X4 these are the device's own settings
+for the same items. One page of **eight** groups (icon, name, current value); each group is a paged list of rows with plain labels
+and visible current values. No scrolling. Every row is one focus stop: Select steps a choice (wrapping), flips a switch, or opens.
+
+| Group | Rows |
+|---|---|
+| Account & server | Connection, Server, Signed in as (read-only) · Sign in again… · Sign out |
+| **Sync, Wi-Fi & power** | Sync now · **Mode** card · (Back to Balanced, only when Custom) · What the mode does: Wi-Fi, Off after idle, Sync while reading, Sync when the reader sleeps, Sleep sync limit, Sync when it wakes · Android only: Let BookSync switch Wi-Fi for syncs, Wake VPN for syncs · Reading position · Power: Sleep after, Battery › |
+| Library & downloads | Storage › · Download folder · Keep downloaded copies current · Offline catalog storage · Mirror covers · Full refresh |
+| Reading | **Font choices** (one merged row; its subtitle shows what the panel offers: Book's own · your font · Custom with its value) · Margin, Line spacing and Contrast presets (custom presets show their value, e.g. "Custom · 14 px") · Custom (from KOReader) · Status bar · Status bar shows · Status bar size · End of book sheet |
+| Home | Edit layout · Reset layout · Home screen (BookSync / Server plugin's Home; the summary reads "BookSync Home · 2 pages") · **Page names ›** |
+| Sleep screen | Cover shown · Never show · Text · Battery level · Text placement |
+| Updates | **Update channel: Stable / RC / Preview**, each with a description · Check now · **Installed: BookSync 0.12.0-rc.2 · RC** · What's new. Summary: "RC channel · 0.12.0-rc.2" |
+| About & help | Version (**BookSync 0.12.0-rc.2 · RC**, the same string as Updates › Installed; summary the same) · This reader · Help and guides · Advanced: open companion app (Android only) |
+
+Update channels: **Stable**, the releases most people should run; **RC**, the builds about to become Stable, for people who
+want fixes a week early; **Preview**, every test build, which may break. The installed row always names the channel of the
+build you have.
+
+### How Sync, Wi-Fi & power works
+- **One mode on top, every setting visible below.** The Mode card (Battery saver / Balanced / Always up to date) shows the
+  battery impact at your pace: ≈ 2 d 11 h / ≈ 2 d 6 h / ≈ 1 d 8 h (estimated: Wi-Fi-on reading is not measured yet). Under it,
+  "What Balanced does" lists the rows it sets, with their values. Classic: Select on the card steps to the next mode.
+- **Changing any row makes the mode Custom**: the card says "Custom · your settings" and a **Back to Balanced** row appears.
+  Nothing is locked: a row that has no effect in the current mix stays changeable and says why ("Only used when Wi-Fi is
+  Just in time"), with an info glyph.
+- **Real settings** (`shared/settings/schema.json`):
+
+| Row | Setting | Choices | Balanced (= schema default) | Depends on |
+|---|---|---|---|---|
+| Wi-Fi | `wifi_mode` | Always on / Off while reading / Just in time | Just in time | — |
+| Off after idle | `wifi_idle_min` | 1, 2, 5, 10 min | 2 min | Wi-Fi = Just in time |
+| Sync while reading | `reading_schedule` | Off · every 10/15/30/60 min · every 25/50/100 pages · each chapter / 2 chapters | Off | Off while reading: syncs wait until you close the book (said inline) |
+| Sync when the reader sleeps | `sync_on_sleep` | on/off | on | — |
+| Sleep sync limit | `sleep_cap` | 10 / 15 / 20 s | 20 s | Sync when the reader sleeps |
+| Sync when it wakes | `sync_on_wake` | on/off | on | — |
+| Reading position | `sync_mode` | Furthest page wins / Custom | Furthest page wins | — |
+| Let BookSync switch Wi-Fi / Wake VPN for syncs | `wifi_via_companion`, `wake_tailscale` | on/off | — | **Android only: hidden on the X4 and X3** (not applicable in the schema) |
+
+- **The reading-position rule** is its own row: *Furthest page wins*: BookSync keeps the furthest place you have read on any
+  device and asks before jumping. Custom shows the sheet every time. (position-sync.md §6 hides sleep and wake rows under this
+  preset on the companion; we keep them visible so nothing is hidden.)
+- **X4:** `sleep_cap` and `sync_on_wake` are partial on the X4 firmware (it sleeps hard): they are shown and work as
+  best effort there; this is a notes-only caveat, not on screen. "Wi-Fi off while reading" is a Wi-Fi choice, not a standby rate: the Battery page's standby rates are by
+  Wi-Fi mode, one decimal.
+- **Paged**, Select cycles on the Classic, swipe turns the page.
+
+### Battery page
+From the Battery widget, the top-panel estimate, the Clock's battery link, and Settings → Wi-Fi & power. Four tabs:
+- **Overview:** level and "≈ 2 d 6 h left at your pace", how the estimate is made (reading non-stop 19 h = 78 % ÷ 4.1 %/h;
+  standby only 5 d 22 h; screen-on share 25 % over 7 days), per 100 pages, per 100 full refreshes (X4: "— 64 of 100
+  refreshes needed"), charging rate. Export (both); Compare with another reader (Android only, imports an export).
+- **Rates:** reading by content, Wi-Fi mode and front light (M8C); standby by Wi-Fi mode; each ± its standard error, hidden
+  values as "— 0.4 h of 1 h needed".
+- **Daily:** 14 days, 7 per page: % used as a bar, screen-on time, pages, full refreshes, a bolt on charge days.
+- **Charges:** the last five charges as glyph + from → to + duration, and the charging rate.
+Definitions follow STATS-DESIGN.md "Statistics (exact definitions)" (time left = level ÷ (f·R_reading + (1−f)·R_standby)).
+
+### Storage page
+From the Library widget's storage bar and Settings → Library & downloads. One stacked bar of the device (M8C) or SD card
+(X4): Books (solid), Covers and offline catalog (hatched), Apps and system / Other files on the card (dotted), Free (white).
+Patterns, not grays, so it reads on the X4. Under it, each action says **what it frees**: Remove books not opened in 6
+months (2.4 GB · 41 books), Remove finished books (84 MB · 9 books), Clear cover cache (40 MB), Catalog cache limit. Every
+removal says server copies and progress are kept, and once done the row disappears and the figures update everywhere
+(widget, page, bar).
+**Low space only warns.** Below 10 % free the Library widget and Storage page say "Low space: 1.2 GB free. Downloads still
+work. Free 2 GB more to get back above 10 % (3.2 GB)". **A download is blocked only when it would leave less than 200 MB**:
+then Download next 3 says "Not enough space · free 180 MB" and its sheet gives **needed vs freed**: "This needs 8 MB, and
+BookSync always leaves 200 MB free so the reader keeps working. Only 180 MB is free. Removing books you haven't opened in 6
+months frees 2.4 GB." The shell's Space control has Normal / Nearly full / Below the floor, and the demo numbers agree on
+every screen.
+
+### Home header sync
+"✓ Synced 12 min ago · Sync" is the button: "Syncing…", then "Synced just now". Offline it is the Offline chip and not
+tappable. It is its own focus stop on the Classic. **"Sync now" is no longer in the ⋯ menu** (the header is the one place).
+
+## 8. Companion is rarely needed
+
+Day to day, everything is on the reader: account, sync, downloads, storage, reading presets, status bar, Home, sleep screen,
+Wi-Fi and power, battery, updates.
+
+**First-time setup differs by device** (this replaces round 2's contradictory row):
+- **M8C (Android):** the companion app does first-time setup (server, sign-in, KOReader install and defaults), because
+  BookSync isn't configured yet. After that, Sign in again… is on the reader with KOReader's keyboard.
+- **X4 (no companion, no Android):** setup reuses what the firmware already has. **Sign in** rows open the firmware's own
+  on-device keyboard (`KeyboardEntryActivity`, the one the BookOrbit sync sign-in already uses). Or choose **"Type it on a
+  phone or computer instead"**: the reader starts its **File Transfer** web server and shows a QR code and
+  `http://<reader-ip>/settings` (shown as an address because mDNS is missing on some builds). The `/settings` page takes the
+  server, user and password and asks for the settings PIN first if one is set. Tailscale sign-in stays a QR in Settings ›
+  Tailscale. First boot uses the same two paths.
+- **X3:** the same File Transfer address as text: `Sign in: open http://192.0.2.10/settings on a phone`.
+
+The companion is still needed (M8C only) for:
+| Task | Why only the companion |
+|---|---|
+| First-time setup on the M8C | BookSync isn't configured yet, so there is no reader UI to do it in |
+| Set the Android Home app | Android only lets a regular app request the Home role through system settings |
+| Battery optimisation exemption | An Android system permission |
+| VPN / Tailscale | Android VPN service, outside KOReader |
+| Compare battery with another reader | Imports another device's export file; Android-only by design |
+| Anything KOReader can't do | Outside KOReader's process |
+
+## 9. Why we page, not scroll
+E-ink redraws are slow and ghost; a scroll is dozens of partial refreshes that smear and drain battery, while a page turn is
+one clean refresh you can predict. Paging also gives the Classic's buttons a natural unit (Prev/Next page) and makes
+positions stable ("Page 2 of 3"). So **every** list and sheet pages: Home, settings groups, lists, Contents, the filter
+sheet and its pickers, Rename. **A horizontal swipe turns the page** on every one of them (the same as the ‹ › buttons), and
+paging never splits a row or leaves a section header alone at the bottom of a page.
+
+## 10. X3 text fallbacks
+The X3 has text only. Each item becomes a line; the cursor is `>`.
+- **Widgets:** the X3 column in section 2.
+- **Battery tabs:** `Battery 78% ~2d6h | [Overview] Rates Daily Charges`, then lines such as `Reading 4.1 %/h ±0.3`,
+  `Standby 0.6 %/h ±0.1`, `Mon 9%  2h10m  212p`, `Sun 21:10 12%→100% 2h20m`.
+- **Storage bar:** `Books 6.8G | Cache 0.25G | System 23.8G | Free 1.2G` then `Low space: 1.2 GB free (warn only)`.
+- **Settings rows:** `Wi-Fi: Just in time  [Select: next]`, `Sleep sync limit: 20 s (only with sleep sync)`,
+  `Mode: Balanced ~2d6h`.
+- **Filter sheet:** see section 11.
+- **Rename:** section 5.
+- **Sign in:** section 8.
+
+## 11. The filter sheet (a reusable building block)
+One component, `filterView`, behind **every** filter button: List screens (any "All ›"), Search, a List's own view,
+Reading now, and the library grouped by Series or Authors. It is also a Book list's **Custom filter** source.
+- **Sections, always in this order** (hidden when they don't apply to the context):
+  1. **Show:** All / Unread / Reading / Finished, plus *Want to read only*.
+  2. **Where:** Anywhere / On this device / Server only.
+  3. **Refine:** Author, Series, Tags (paged pickers with counts), Length (page ranges), Rating, Added, and Language and
+     Format only when the library has more than one.
+  4. **Group:** None / Author / Series.
+  5. **Sort:** depends on the context (List order, Title, Author, Last read, Date added; Search adds **Best match**, its
+     default) with a direction.
+- **Live count** on the apply button: "Show 23 books". **Reset** returns to the context's defaults, not to blank.
+- **Active filters** appear as removable chips in one row under the header; no row at all when nothing is active. The
+  filter icon is filled when active, and the subtitle summarises it: "2 books · Unread · on device · by author".
+- **Save as a Book list on Home** adds a device-local Book list with source *Custom filter* (in the first space that fits,
+  otherwise on a new page that auto-names after it), with a toast to go there. There is no "Save to server lists" row in 0.12
+  (section 12).
+- **Paged**, every target ≥ 50 px. **Classic:** focus starts on the first choice; Prev/Next move; Select picks a segment,
+  toggles, or opens a picker; pickers page with Prev/Next and Select toggles; **Back closes and applies** (Back in a picker
+  returns to the sheet).
+- **Output:** a neutral filter object, `{show, wtr, where, author[], series[], tags[], len, rating, added, group, sort, dir, q}`,
+  which is handed to `books.query` (section 12).
+- **X3:** `Filter: Show[Unread] Where[Device] Group[Author] Sort[Last read ↓] -> 23 books`, one field per line, Select cycles,
+  Back applies.
+
+## 12. BookSync library interface (what the UI needs)
+**The UI never names a server API.** Every screen talks to one BookSync library interface; a **BookOrbit adapter** and a
+**Grimmory adapter** implement it. Each operation is marked local (device only), server (via the adapter) or both (cached
+locally, refreshed from the server).
+
+| Operation | Where | Used by |
+|---|---|---|
+| `library.summary()` | both | Library widget, header counts |
+| `books.query(filter, group, sort, page)` | both | every list, Search, Book lists, the filter sheet's live count |
+| `books.get(id)` | both | Details, Series rows |
+| `lists.list()` / `lists.query(id, …)` | both | Lists widget, a List's view |
+| `lists.save(filter)` | server, **capability-gated** | (not in 0.12, see below) |
+| `series.get(id)` | both | Series page, Download next 3 |
+| `downloads.start / cancel / remove` | local (fetch from server) | covers, Details, Series, Storage |
+| `progress.sync(book)` / `progress.remote(book)` | server | header sync, top-panel sync, the "other device" sheet |
+| `reading.stats()` | local | Year, This week, When you read, Records |
+| `battery.stats()` | local | Battery widget and page, mode estimates |
+| `storage.summary()` / `storage.free(action)` | local | Storage page, low-space sheets |
+| `account.status()` / `account.signIn()` | server | Account & server, sign-in sheets |
+| `updates.check(channel)` | server (release feed) | Updates |
+
+- **Capabilities, not server names:** the adapter reports `lists.save`, `ratings`, `wantToRead`, `customFields`, …. A missing
+  capability **hides** its row rather than greying it, unless seeing it is worth teaching (none in 0.12).
+- **Filters:** the filter sheet builds the neutral filter object; the adapter translates what its server can express, and
+  anything it cannot (always *On this device* and *Group*) runs locally on the cached catalog. Results are identical either
+  way; only the speed differs.
+- The UI says **Lists** everywhere. Adapter note: *BookOrbit: Smart Scopes.*
+
+### Saving lists to the server (researched, off in 0.12)
+The BookOrbit adapter could implement `lists.save / update / delete` (name, icon, filter, sort; no group-by). Most filter
+fields map to server fields; *On this device* and *Group* always stay local; lists are always saved **private**. It is **off
+in 0.12**: the KOReader sync credential BookSync uses cannot write lists, and no write key is added in this release. So 0.12
+offers only "Save as a Book list on Home" (device-local, source Custom filter); "Save to server lists" is hidden behind
+`lists.save` (no disabled row).
+**Later:** an optional "Allow BookSync to save lists to your server" grant in Account & server would create a revocable write
+key on the server; lists saved through it are always private, and *On this device* and *Group* stay on the device.
+
+## 13. Critic round-1 findings: what changed
+
+| # | Finding | Change |
+|---|---|---|
+| 1 | Classic edit mode focused Resume; Select opened the book | Edit mode focus stops are only toolbar, widgets, + slots and page bar; focus starts on the first widget; carry mode with a hint strip (section 5). |
+| 2 | Targets under 50 px | Everything ≥ 50 px on M8C and X4 Pro; measured: 0 undersized targets on every screen (section 10). |
+| 3 | This week bars wrong; "Saturday" hard-coded | Equal-height columns, floating label; best day computed. |
+| 4 | Page names didn't match content | Want to read on M8C page 1; X4 pages Home / Library / Stats. |
+| 5 | Barcode progress bar; poor contrast | Round 2: one solid bar with chapter ticks. Round 3 (ruling): one plain bar, no ticks or chapter words; white mat on the cover. |
+| 6 | Classic Contents/Go to focused Close | Current chapter and the value get focus; Go to stepper; scrubber grab. |
+| 7 | X4 render profile | Black/white + 2 grays, heatmap patterns, black meta text, no gray on black, no wash, X3 fallbacks (section 2). |
+| 8 | Edit tags over headers; shared icons | Tags bottom-right; unique icons. |
+| 9 | Size label read as current | "Size 4×2 → 2×3" (current, then next). |
+| 10 | Hero eyebrow truncation; X4 forecast wrap | "READING" at 2×2; "3 h 22 m · by Sat". |
+| 11 | Badges over author lines | Badge hangs off the cover corner. |
+| 12 | Also reading stamps | Rows ≥ 64 px: two books with covers twice as large. |
+| 13 | Dead space | Lists rows fill evenly; Records reflowed; Clock 1×2 filled; list grids 5 (M8C) / 4 (X4) columns = 3 rows. |
+| 14 | M8C bottom panel | Named specimens; "More reading settings…" link; bookmark-plus vs bookmark-list. |
+| 15 | X4 bottom panel | Light copy removed; Font and Size glyphs differ; Today legend swatch. |
+| 16 | End of book | "Add *next* to Want to read"; "Back to book". |
+| 17 | Series page | Status-only rows; Back spacing. |
+| 18 | Notes on dimming | Section 1. |
+
+## 14. Critic round-2 findings: what changed
+
+| # | Finding | Change (round 3) |
+|---|---|---|
+| 1 | Low space blocked too early | Below 10 % it only warns; it blocks only below the 200 MB floor; the sheet shows needed vs freed; demo figures agree on every screen (section 7, Storage). |
+| 2 | X4 sign-in; section 8 contradicted itself | X4 reuses the firmware keyboard and File Transfer (QR + `/settings`, settings PIN); section 8 rewritten per device. |
+| 3 | X4 heatmap | Five levels (white with outline, `#c0c0c0`, `#808080`, black, today ring); patterns only at ≥ 12 px cells. |
+| 4 | Classic pages 2 and 3 | Focus starts on the first widget; header rings drawn inside the header; page dots are not focus stops. Cover focus keys are now scoped per tile, so the same book on two shelves no longer traps focus (found by c2.js). |
+| 5 | When you read gone | Back on Stats as a shaded strip (M8C 2×2, X4 2×1). |
+| 6 | Battery 2×1 clipping; glyph | Fixed and in the sweep; the glyph is filled to the real level everywhere. |
+| 7 | Rates | "Wi-Fi off while reading" moved out of Standby (it is a Wi-Fi choice); one decimal. |
+| 8 | Header icons | All 50 px outlined; no solid black while syncing; separate Sync and Updates glyphs. |
+| 9 | Presets; fonts | Custom presets show their value; "Font choices" and "Your font" merged into one Font choices row. |
+| 10 | Bar on Details and Reading now | The same plain bar as the hero. |
+| 11 | Small targets | 0 under 50 px on every measured screen (section 15). |
+| 12 | Edit tags over captions | Tags straddle the tile's bottom edge. |
+| 13 | X4 Contents; grab hint; Library dead band | Contents pages whole rows; the grab hint sits 14 px clear of the ring; Library no longer 2×3 on the X4 (2×2, filled). |
+| 14 | "Other device" sheet | Names the device and when ("Your Phone is further · Phone · 2 h ago: p. 240") and the rule. |
+| 15 | X3 fallbacks | Section 10. |
+| 16 | "Not in a series" | Shows its count and "All 17 ›". |
+| 17 | Leftover toasts | `shoot.js` clears toasts before every shot. |
+| 18 | Stale side-panel text | `explain()` rewritten: no server names, no chapter ticks or "greyed out"; covers the filter sheet, Rename, the plain bar, the sign-in and Sync modes. |
+| 19 | Edit tips | State the move rule and what Configure does. |
+
+Maintainer additions this round: Lists 1×3 (section 2 and 4), X4 defaults (section 4), page rename (section 5), Classic focus
+on dark (section 1), the filter sheet (section 11), the library interface (section 12), server lists (section 12).
+
+## 15. Verification
+
+Headless Chromium with Playwright on M8C, X4 Pro and X4 Classic. **No console errors anywhere.**
+
+| Check | Result |
+|---|---|
+| `critic-shots/measure.js` (M8C: home, top, bottom, TOC, marks, end, edit) | 0 targets under 50 px on every screen |
+| `critic-shots/classic.js` | edit focus on tile-0; Select picks up, Back cancels; Contents on the current chapter; Go to on the value; ERR [] |
+| `critic-shots/r2/m2.js` (DEV=m8c and x4pro) | 0 small, 0 overflow on every screen; ERR [] |
+| `critic-shots/r2/c2.js` | page 1 → 2 → 3 walk starts on each page's first widget; sign-in sheet reachable; ERR [] |
+| `critic-shots/r2/c3.js` | sign-in focus stops and reader settings; ERR [] |
+| `critic-shots/r3/dark.js`, `filt.js`, `filt2.js` and `r2/c4.js` | run clean, ERR []; c4: no duplicate focus keys, Next walks pages 1 → 2 → 3 |
+| `critic-shots/r2/fuzz.js` | m8c 136 moves / 264 no-ops, x4pro 143 / 257: 0 overlaps, ERR [] |
+| `pwtools/verify.js` | all round-1 flows pass; no errors |
+| `pwtools/sweep.js` | every widget at every size on both screens: no overflow, no clipped text |
+| `pwtools/r2/move.js` | 14/14 |
+| `pwtools/r2/bl.js` | 35/35 (grouping through the filter sheet; headers counted as rows, since complete groups have no link) |
+| `pwtools/r2/flows.js` | 63/63 (8 settings groups; low space blocks only below the floor) |
+| `pwtools/r2/sync.js` | 45/45 |
+| `r3/flows3.js` | 77/77 (round 4 adds: a complete author group has no "All N"; no BookOrbit / Tailscale / Grimmory / tailnet text on any page of any settings group; About, Updates › Installed and the Updates summary show one version). Earlier: add a page → "Page 4" → add Year → "Stats" → rename → pager; Settings › Page names; filter on Recently added (count, chips, subtitle, filled icon, chip removal, save to Home); Search (Best match, chip, save); Source › Custom filter; Classic Next/Select/Back |
+| `r3/focus.js` | 136 steps, 19 dark (ink, black controls, selected segments, dark covers), 0 fails; shots in `shots/focus/` |
+
+Test fixtures updated for deliberate round-3 changes (not to hide failures): `move.js` builds the 2-wide-band layout it
+tests (the X4 default changed); `bl.js` groups via the filter sheet; `flows.js` expects 8 groups, enters a password before
+Sign in, and uses the below-floor space state.
+
+## 16. Critic round-3 findings (REVISE): what changed in round 4
+
+| # | Finding | Change |
+|---|---|---|
+| 1 | Focused selected segment too weak on the Classic (thin white inset) | White fill, bold black text, 2 px white gap and 3 px black ring outside the control, ✓ kept on the chosen one; `focus.js` now counts selected segments and dark covers as dark and fails any weak treatment. |
+| 2 | Server and vendor names on screen | Home screen: "BookSync / Server plugin's Home" (summary to match); "Wake VPN for syncs"; About sub line "VPN" only. `flows3.js` scans every settings page. |
+| 3 | Sync in the top panel | Kept; section 6 cites both maintainer comments. |
+| 4 | Hero picker text | "Your current book, big: cover, progress, time left and when you'll finish." |
+| 5 | Versions disagreed | One string, BookSync 0.12.0-rc.2 · RC, on About and Updates › Installed; Updates summary "RC channel · 0.12.0-rc.2". |
+| 6 | M8C screenshots at 1x | All M8C shots at scale factor 2 (1404×1872), including the new flow shots. |
+| 7 | "All N ›" on complete author groups | Hidden when the group shows every book; it shows "N books". |
+| 8 | Gap under X4 Want to read 1×3 | The mini-grid is top-aligned and uses the full height, so the covers are bigger. |
+| 9 | When you read vs This week | M8C 2×2+ uses gap-free hourly bars with a peak marker; strip kept for 2×1, 4×1 and the X4; This week stays labelled day columns. |
+| 10 | Real-looking LAN address | 192.0.2.10 (documentation range) in the notes and the prototype. |
