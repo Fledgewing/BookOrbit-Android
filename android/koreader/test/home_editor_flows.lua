@@ -39,6 +39,16 @@ return function(test,eq,ok,E,W,Widget,withHost)
             e:rebuild()
             local calls=#reads; local trips=#batches
             click(e,"Also reading · 2×2"); eq(m.selected,"also")
+            local configure
+            for _,control in ipairs(e[1][1]) do if control.text=="Configure" then configure=control end end
+            ok(configure and configure.height>=50 and configure.width>=50,"Configure touch minimum")
+            for _,control in ipairs(e[1][1]) do
+                if control.callback and control~=configure and control.width then
+                    local a,b=control.overlap_offset,configure.overlap_offset
+                    ok(not (a[1]<b[1]+configure.width and b[1]<a[1]+control.width and a[2]<b[2]+configure.height and b[2]<a[2]+control.height),
+                        "Configure overlaps "..control.text)
+                end
+            end
             local revision=m.document.revision
             click(e,"→"); eq(m.document.revision,revision+1)
             local p=E.Layout.editorPage(m.document,1)

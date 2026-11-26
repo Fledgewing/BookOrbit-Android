@@ -114,7 +114,7 @@ function HomeEditor.create(host)
             button("Done",w-scale(140),gap,scale(130),function() self:done() end)
             local pg=Layout.editorPage(m.document,m.index)
             local grid=m.document.grids["android-tablet"]
-            local top,bottom=scale(74),scale(250)
+            local top,bottom=scale(74),scale(280)
             local occupied={}
             for _i,p in ipairs(pg.placements) do
                 count=count+1
@@ -139,10 +139,10 @@ function HomeEditor.create(host)
             local function move(dx,dy) self:action(function() return m:move(dx,dy) end) end
             bar({{"←",function() move(-1,0) end},{"↑",function() move(0,-1) end},{"↓",function() move(0,1) end},
                 {"→",function() move(1,0) end},{"Size",function() self:sizes() end},
-                {"Remove",function() self:action(function() return m:remove() end) end}},h-scale(235))
+                {"Remove",function() self:action(function() return m:remove() end) end}},h-scale(265))
             if m.selected then
                 for _i,p in ipairs(pg.placements) do if p.instance==m.selected and p.widget=="booklist" then
-                    HomeWidgets.button(canvas,_("Configure"),w-scale(140),h-scale(192),scale(130),scale(40),function() self:configure() end)
+                    HomeWidgets.button(canvas,_("Configure"),w-scale(140),h-scale(210),scale(130),scale(50),function() self:configure() end)
                 end end
             end
             HomeWidgets.text(canvas,(self.message or (m:page().name or "Page").." · "..m.index.." / "..#m.document.pages),gap,h-scale(180),w-scale(170),15)

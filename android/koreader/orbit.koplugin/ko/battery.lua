@@ -18,12 +18,12 @@ function BatteryUI.widget(p,snapshot,dispatch,rect)
     local narrow=p.w==1
     local short=p.h==1
     local x=short and math.floor(w*.30) or s(12)
-    local y=short and s(8) or s(62)
+    local y=short and s(8) or s(84)
     -- The title is also the navigation target; the glyph tracks the actual level.
-    HomeWidgets.button(c,"Battery ›",s(8),s(4),short and x-s(12) or w-s(16),s(30),function() dispatch("battery") end)
+    HomeWidgets.button(c,"Battery ›",s(8),s(4),short and x-s(12) or w-s(16),s(50),function() dispatch("battery") end)
     if not short then
-        BatteryUI.glyph(c,plan.level_fraction,s(12),s(40),s(36),s(16))
-        HomeWidgets.text(c,plan.level,s(56),s(32),w-s(68),24,false,true)
+        BatteryUI.glyph(c,plan.level_fraction,s(12),s(58),s(36),s(16))
+        HomeWidgets.text(c,plan.level,s(56),s(54),w-s(68),24,false,true)
     else
         HomeWidgets.text(c,plan.level,s(8),s(34),x-s(12),18,false,true)
         BatteryUI.glyph(c,plan.level_fraction,s(8),h-s(12),math.min(s(36),x-s(16)),s(6))
@@ -59,10 +59,10 @@ function BatteryUI.create()
         local c=HomeWidgets.canvas(w,h)
         HomeWidgets.text(c,"Battery · "..plan.level,s(16),s(12),w-s(180),24,false,true)
         BatteryUI.glyph(c,(result.level or 0)/100,w-s(164),s(22),s(44),s(18))
-        HomeWidgets.button(c,"Close",w-s(100),s(8),s(90),s(36),function() self:onClose() end)
+        HomeWidgets.button(c,"Close",w-s(100),s(8),s(90),s(50),function() self:onClose() end)
         HomeWidgets.text(c,plan.estimate,s(16),s(52),w-s(32),16,false,true)
         for i,title in ipairs(BatteryWidgetPlan.tabs) do
-            HomeWidgets.button(c,(self.tab==i and "• " or "")..title,(i-1)*w/4,s(84),w/4,s(40),function()
+            HomeWidgets.button(c,(self.tab==i and "• " or "")..title,(i-1)*w/4,s(84),w/4,s(50),function()
                 self.tab,self.page=i,1; self:rebuild(); UIManager:setDirty(self,"ui")
             end)
         end
@@ -75,8 +75,8 @@ function BatteryUI.create()
             if type(row)=="table" then BatteryUI.glyph(c,row.fraction,s(16),y+step-s(12),w-s(32),s(6)) end
         end
         if plan.pages>1 then
-            HomeWidgets.button(c,"‹",s(16),h-s(52),s(80),s(40),function() self:turn(1) end)
-            HomeWidgets.button(c,"›",w-s(96),h-s(52),s(80),s(40),function() self:turn(2) end)
+            HomeWidgets.button(c,"‹",s(16),h-s(52),s(80),s(50),function() self:turn(1) end)
+            HomeWidgets.button(c,"›",w-s(96),h-s(52),s(80),s(50),function() self:turn(2) end)
             HomeWidgets.text(c,self.page.." / 2",w/2-s(20),h-s(42),s(80),16)
         end
         local old=self[1]
