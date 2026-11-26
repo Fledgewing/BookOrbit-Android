@@ -62,7 +62,17 @@ function ReaderSheet:touchControl(area,callback)
         end
     end
 end
-function ReaderSheet:rows() return self.display_rows end
+function ReaderSheet:rows()
+    if not self.scrub_focus then return self.display_rows end
+    local rows={}
+    for _,row in ipairs(self.display_rows) do
+        rows[#rows+1]=row
+        if row.kind=="scrubber" then
+            rows[#rows+1]={kind="label",text="Prev/Next: one chapter · Select or Back: done"}
+        end
+    end
+    return rows
+end
 function ReaderSheet:rowWidget(block,w,h,mt)
     if block.kind=="reader-tiles" then
         local group=require("ui/widget/horizontalgroup"):new{}
@@ -163,6 +173,7 @@ function ReaderSheet:rowWidget(block,w,h,mt)
         return group
     elseif block.kind=="scrubber" then
         local r=block.row
+        local owner=self
         w=w-2*mt.button
         local Geom=require("ui/geometry")
         local area=require("ui/widget/container/inputcontainer"):new{
@@ -178,8 +189,14 @@ function ReaderSheet:rowWidget(block,w,h,mt)
             local thumbWidth,thumbHeight=math.floor(mt.button*.16),math.floor(mt.button*.36)
             local markWidth,markHeight=math.floor(mt.button*.08),math.floor(mt.button*.2)
             if r.value then
-                bb:paintRect(x+math.floor(r.value*(w-thumbWidth)),y+math.floor((mt.button-thumbHeight)/2),
-                    thumbWidth,thumbHeight,require("ffi/blitbuffer").COLOR_BLACK)
+                local px=x+math.floor(r.value*(w-thumbWidth))
+                local py=y+math.floor((mt.button-thumbHeight)/2)
+                if owner.scrub_focus then
+                    local border=math.max(2,math.floor(mt.button*.04))
+                    bb:paintRect(px-2*border,py-2*border,thumbWidth+4*border,thumbHeight+4*border,require("ffi/blitbuffer").COLOR_BLACK)
+                    bb:paintRect(px-border,py-border,thumbWidth+2*border,thumbHeight+2*border,require("ffi/blitbuffer").COLOR_WHITE)
+                end
+                bb:paintRect(px,py,thumbWidth,thumbHeight,require("ffi/blitbuffer").COLOR_BLACK)
             end
             for _,fraction in ipairs(self.bookmarks or {}) do
                 bb:paintRect(x+math.floor(fraction*(w-markWidth)),y+math.floor(mt.button*.2),
@@ -195,7 +212,10 @@ function ReaderSheet:rowWidget(block,w,h,mt)
         if r.previous then
             previous=self:control(require("ui/widget/button"):new{icon="chevron.first",width=mt.button,height=mt.button,callback=r.previous})
         end
-        self:touchControl(area,function() self.scrub_focus=not self.scrub_focus end)
+        self:touchControl(area,function()
+            self.scrub_focus=not self.scrub_focus; self.keyboard_focus=true
+            self:build(); UIManager:setDirty(self,"ui")
+        end)
         if not self.focus_index then self.focus_index=#self.focus_controls end
         if previous then
             return require("ui/widget/horizontalgroup"):new{
@@ -213,11 +233,18 @@ function ReaderSheet:rowWidget(block,w,h,mt)
     if block.kind=="button" then self:control(widget) end
     return widget
 end
-function ReaderSheet:onClose() if self.scrub_focus then self.scrub_focus=false else ReaderPanel.close() end; return true end
+function ReaderSheet:onClose()
+    if self.scrub_focus then
+        self.scrub_focus=false; self:build(); UIManager:setDirty(self,"ui")
+    else ReaderPanel.close() end
+    return true
+end
 function ReaderSheet:onTapAnywhere(_arg, ges)
     if ges and ges.pos and (self.screen=="reader-bottom-panel"
         and ges.pos.y < self.screen_h-(self.sheet_h or 0)
-        or self.screen~="reader-bottom-panel" and ges.pos.y > (self.sheet_h or 0)) then return self:onClose() end
+        or self.screen~="reader-bottom-panel" and ges.pos.y > (self.sheet_h or 0)) then
+        ReaderPanel.close(); return true
+    end
     return false
 end
 function ReaderSheet:build()

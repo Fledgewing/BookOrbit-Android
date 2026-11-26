@@ -201,11 +201,18 @@ return function(here, test, ok, eq)
         area.dimen.x=10; area.onTap(area,nil,{pos={x=260}}); eq(moves[1],50)
         area.onTap(area,nil,{pos={x=-20}}); eq(moves[2],0)
         area.onTap(area,nil,{pos={x=999}}); eq(moves[3],100)
+        local trips=W.trips
         sheet:onSelect(); eq(sheet.scrub_focus,true)
+        eq(W.trips,trips,"grab feedback is geometry-only, without a library read")
+        ok(row(E,"Prev/Next: one chapter · Select or Back: done"))
         sheet:onStepMore(); eq(W.next,true); sheet:onStepLess(); eq(W.previous,true)
+        trips=W.trips
         sheet:onClose(); eq(sheet.scrub_focus,false); eq(E.ReaderPanel.sheet,sheet)
+        eq(W.trips,trips,"releasing the scrubber does not request a snapshot")
+        for _,r in ipairs(sheet:rows()) do ok(r.text~="Prev/Next: one chapter · Select or Back: done") end
         sheet:onClose(); eq(E.ReaderPanel.sheet,nil)
         E.ReaderPanel.show(W.ui,"reader-bottom-panel"); sheet=E.ReaderPanel.sheet
+        sheet:onSelect(); eq(sheet.scrub_focus,true)
         eq(sheet:onTapAnywhere(nil,{pos={y=0}}),true); eq(E.ReaderPanel.sheet,nil)
         E.ReaderPanel.show(W.ui,"reader-top-panel"); sheet=E.ReaderPanel.sheet
         eq(sheet:onTapAnywhere(nil,{pos={y=799}}),true); eq(E.ReaderPanel.sheet,nil)
