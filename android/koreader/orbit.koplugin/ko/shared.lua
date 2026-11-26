@@ -100,7 +100,7 @@ function Shared.refresh(why)
         end
         local idle = tonumber(remote.wifi_idle_min)
         if idle and idle ~= S.wifi_idle_min then S.wifi_idle_min = idle; table.insert(changed, "wifi_idle_min=" .. idle) end
-        if (remote.home_button == "smart" or remote.home_button == "bookorbit") and remote.home_button ~= S.home_button then
+        if (remote.home_button == "smart" or remote.home_button == HomePlan.SERVER_HOME) and remote.home_button ~= S.home_button then
             S.home_button = remote.home_button; table.insert(changed, "home_button=" .. remote.home_button)
         end
         local sleep_changed = Shared.applySleep(remote, changed)

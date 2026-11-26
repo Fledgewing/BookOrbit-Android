@@ -82,18 +82,39 @@ class ServerAdapterTest {
         assertThrows(IllegalArgumentException::class.java) { AdapterRegistry(listOf(fake, fake)) }
         assertThrows(IllegalArgumentException::class.java) { AdapterRegistry(listOf(fake)).get("missing") }
     }
+    @Test fun oneBatchSharesOneLocalStatisticsAggregate() {
+        val root = Files.createTempDirectory("adapter-stats").toFile()
+        try { Store(root).use { store ->
+            val fake = FakeAdapter()
+            var reads = 0
+            val model = LibraryReadModel(store, log = {}, adapter = fake,
+                readingStats = { reads++; mapOf("state" to "ready") })
+            val requests = listOf(512, 1024).map { budget -> String(LuaValue.encode(
+                mapOf("op" to "reading.stats", "bytes" to budget)), Charsets.ISO_8859_1) }
+            assertTrue(model.publish("fixture", requests))
+            assertEquals(1, reads)
+            assertTrue(fake.requests.isEmpty())
+            assertEquals(2, store.db().query("SELECT body FROM library_views") { it.bytes(0) }.size)
+        } } finally { root.deleteRecursively() }
+    }
     @Test fun publisherEnforcesCallerBudgetAgainstAnOversizedAdapter() {
         val root = Files.createTempDirectory("adapter-budget").toFile()
         try { Store(root).use { store ->
+            var payload: List<Map<String, String>> = emptyList()
             val adapter = object : ServerAdapter {
                 override val id = "oversize"
-                override fun project(owner: String, request: Map<*, *>) = mapOf<String, Any?>("items" to List(25) { mapOf("key" to "$it", "title" to "x".repeat(1000)) })
+                override fun project(owner: String, request: Map<*, *>) = mapOf<String, Any?>("items" to payload)
             }
-            val request = String(LuaValue.encode(mapOf("op" to "window", "limit" to 1, "bytes" to 256)), Charsets.ISO_8859_1)
-            LibraryReadModel(store, log = {}, adapter = adapter).publish("fixture", listOf(request))
-            val bytes = store.db().query("SELECT body FROM library_views") { it.bytes(0)!! }.single()
-            assertEquals("budget", (LuaValue.parse(bytes) as Map<*, *>)["error"])
-            assertTrue(bytes.size <= 256)
+            val request = String(LuaValue.encode(mapOf("op" to "window", "limit" to 1, "bytes" to 512)), Charsets.ISO_8859_1)
+            // Separate failures: too many bytes in one row; too many rows within the byte cap.
+            for (items in listOf(listOf(mapOf("key" to "one", "title" to "x".repeat(1000))),
+                    listOf(mapOf("key" to "one"), mapOf("key" to "two")))) {
+                payload = items
+                LibraryReadModel(store, log = {}, adapter = adapter).publish("fixture", listOf(request))
+                val bytes = store.db().query("SELECT body FROM library_views") { it.bytes(0)!! }.single()
+                assertEquals("budget", (LuaValue.parse(bytes) as Map<*, *>)["error"])
+                assertTrue(bytes.size <= 512)
+            }
         } } finally { root.deleteRecursively() }
     }
 }

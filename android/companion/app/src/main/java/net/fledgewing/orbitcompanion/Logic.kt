@@ -463,7 +463,7 @@ enum class WifiMode(val key: String, val label: String) {
 /** The shared "Home button" setting. */
 enum class HomeButton(val key: String, val label: String) {
     SMART("smart", "Back to my book, then library home"),
-    BOOKORBIT("bookorbit", "library home");
+    LIBRARY(ServerAdapters.connector.homeModeKey, "library home");
 
     companion object {
         val DEFAULT = SMART

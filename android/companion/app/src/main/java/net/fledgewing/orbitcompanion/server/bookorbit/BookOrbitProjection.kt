@@ -11,6 +11,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         "generation" to store.meta("bulk_active"), "origin" to "cached-remote", "at" to if (saved) store.meta("bulk_at")?.toLongOrNull() else null)
     private fun empty(saved: Boolean) = mapOf("items" to emptyList<Any>(), "total" to 0, "freshness" to freshness(saved), "empty" to if (saved) "No books" else "Not saved yet")
     override fun project(owner: String, a: Map<*, *>): Map<String, Any?> {
+        if (store.meta("owner") != owner) return mapOf("error" to "unauthorized", "items" to emptyList<Any>())
         val op = a["op"]
         if (op == "reader") {
             val path = a["path"] as? String ?: return empty(false)

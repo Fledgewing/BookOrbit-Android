@@ -80,7 +80,7 @@ function Mirror.stopFile() return Mirror.dir() .. "/stop" end
 -- The catalog whose methods build the plugin's own requests (paramsForEntry, effectiveOrder,
 -- listDecorateBookQuery, listSectionParams): the open one, else the last one seen.
 function Mirror.catalog()
-    local p = bookorbit(liveUI())
+    local p = serverPlugin(liveUI())
     local cat = p and p.catalog_browser
     if cat and cat.client then Mirror.cat = cat end
     return Mirror.cat
@@ -475,7 +475,7 @@ end
 
 -- A mirror page changed under a list on screen: that view reloads from the cache.
 function Mirror.changedOnScreen(identity)
-    local p = bookorbit(liveUI())
+    local p = serverPlugin(liveUI())
     local cat = p and p.catalog_browser
     if not cat or cat.catalog_closed or not cat._orbit_view_keys then return end
     local want = Cache.key({ path = identity })

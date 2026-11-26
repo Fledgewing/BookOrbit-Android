@@ -272,6 +272,16 @@ class LibraryTest {
             assertEquals(40L,((read(st,args + ("field" to "where"))["items"] as List<*>).map { it as Map<*,*> }.first { it["id"]=="server-only" })["count"])
         }
     }
+    @Test fun adapterReadsAlsoRejectAnOldOwnerOutsideThePublisher() {
+        store().use { st ->
+            seed(st)
+            val adapter: ServerAdapter = BookOrbitProjection(st)
+            assertEquals(1, (adapter.catalog(owner, emptyMap(), 1)["items"] as List<*>).size)
+            assertEquals("unauthorized", adapter.catalog("another-account", emptyMap(), 1)["error"])
+            st.own("another-account")
+            assertEquals("unauthorized", adapter.capabilities(owner)["error"])
+        }
+    }
     @Test fun materializationEnforcesRowAndByteLimitsAndRejectsMalformedFilters() {
         store().use { st ->
             seed(st)

@@ -48,7 +48,7 @@ function can(p, id)
     return p ~= nil and compatOf(p)[id] == nil
 end
 
-function bookorbit(ui)
+function serverPlugin(ui)
     ui = liveUI() or ui
     local p = ui and ui.bookorbit
     if not p then
@@ -98,6 +98,7 @@ Server = {}
 Server.events = { home = "BookOrbitOpenDashboard", sync = "BookOrbitSyncBook", auto = "BookOrbitToggleAutoSync" }
 function Server.loaded(name) return package.loaded["bookorbit_" .. name] end
 function Server.require(name) return require("bookorbit_" .. name) end
+function Server.ownsView(name) return type(name) == "string" and name:find("^bookorbit") ~= nil end
 function Server.notice(w) return w and w.name == "bookorbit_toast" end
 function Server.credentials(client, extras)
     extras.server, extras.user, extras.userkey = client.server_url, client.username, client.userkey

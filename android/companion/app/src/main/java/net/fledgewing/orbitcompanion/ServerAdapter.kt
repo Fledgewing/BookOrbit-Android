@@ -37,6 +37,8 @@ interface ProjectionStore : AutoCloseable {
 }
 
 interface ConnectorInstaller {
+    val homeModeKey: String
+    fun coverCacheDir(root: File): File
     fun setupId(label: String): String?
     fun pluginDir(): File
     fun version(main: String?): String?

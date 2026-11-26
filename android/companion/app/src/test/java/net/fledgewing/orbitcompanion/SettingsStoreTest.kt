@@ -132,7 +132,7 @@ class SettingsStoreTest {
 
         assertEquals(WifiMode.OFF_READING, Prefs(ctx).wifiMode)
         assertEquals(5, Prefs(ctx).wifiIdleMin)
-        assertEquals(HomeButton.BOOKORBIT, Prefs(ctx).homeButton)
+        assertEquals(HomeButton.LIBRARY, Prefs(ctx).homeButton)
         val s = SleepScreen.settings(ctx)
         assertEquals(SleepMode.RECOMMENDED, s.mode)
         assertEquals(12, s.hours)

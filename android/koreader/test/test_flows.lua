@@ -3856,8 +3856,8 @@ test("cache: a read is answered from the cache at once, checked after 60 s, redr
     W.clock = W.clock + 61
     cache.server[DASH] = { continueReading = { { id = 8, title = "B" } } }
     E.OC.client = function() return client end
-    local hosts = E.bookorbit
-    E.bookorbit = function() return { catalog_browser = cat } end
+    local hosts = E.serverPlugin
+    E.serverPlugin = function() return { catalog_browser = cat } end
     b = client:request("GET", DASH)
     ok(b.continueReading[1].id == 7 and #cache.calls == 0, "served at once from the cache")
     run(5)
@@ -3875,7 +3875,7 @@ test("cache: a read is answered from the cache at once, checked after 60 s, redr
     W.clock = W.clock + 600
     b = client:request("GET", DASH); run(5)
     ok(b.continueReading[1].id == 8 and #cache.calls == 0, "offline: the cache")
-    E.bookorbit = hosts
+    E.serverPlugin = hosts
     cacheTeardown()
 end)
 
@@ -4174,10 +4174,10 @@ local function offlineRead(cat, client, path)
 end
 
 local function withHost(cat, fn)
-    local hosts = E.bookorbit
-    E.bookorbit = function() return { catalog_browser = cat } end
+    local hosts = E.serverPlugin
+    E.serverPlugin = function() return { catalog_browser = cat } end
     local okf, err = pcall(fn)
-    E.bookorbit = hosts
+    E.serverPlugin = hosts
     if not okf then error(err, 0) end
 end
 
@@ -4542,8 +4542,8 @@ test("suspend: a Home press (app switch) with the book unmoved skips BookOrbit's
     function p:_onSuspend() snaps = snaps + 1 end
     p.onSuspend = p._onSuspend
     local ui = { annotation = { annotations = {} }, doc_settings = { readSetting = function() return { status = "reading" } end } }
-    local hosts, inter = E.bookorbit, E.Jni.isInteractive
-    E.bookorbit = function() return p end
+    local hosts, inter = E.serverPlugin, E.Jni.isInteractive
+    E.serverPlugin = function() return p end
     E.Jni.isInteractive = function() return true end
     E.state.last_snapshot_key = nil
     local self = setmetatable({ ui = ui }, { __index = E.OrbitAndroid })
@@ -4555,7 +4555,7 @@ test("suspend: a Home press (app switch) with the book unmoved skips BookOrbit's
     ok(snaps == 2, "a page turned: snapshot")
     E.state.force_snapshot = true; p:_onSuspend(); E.state.force_snapshot = nil
     ok(snaps == 3, "Sync and sleep: always")
-    E.bookorbit, E.Jni.isInteractive = hosts, inter
+    E.serverPlugin, E.Jni.isInteractive = hosts, inter
 end)
 
 test("remove: with a book open (no file browser) BookOrbit's remove asks through KOReader's delete; the open book stays", function()
@@ -4663,14 +4663,14 @@ test("reading gate: BookOrbit over the book is not reading, whatever floats on t
     ok(RE.reading(), "the book over the catalog: reading")
     -- The Wi-Fi plan's "browsing" is the same test: no "done in a book" off with Home over it.
     W.shown = { ui, cat, { name = "bookorbit_toast" } }
-    local hosts = RE.bookorbit
-    RE.bookorbit = function() return ui.bookorbit end
-    ok(RE.bookorbitOverBook(RE.bookorbit()), "browsing for the Wi-Fi plan")
+    local hosts = RE.serverPlugin
+    RE.serverPlugin = function() return ui.bookorbit end
+    ok(RE.serverOverBook(RE.serverPlugin()), "browsing for the Wi-Fi plan")
     local st = RE.WifiPlan.new("jit", 2, 0)
     st.in_book, st.last_flow, st.release_at, st.last_activity = true, "wake", W.clock - 1, W.clock
-    local a = RE.WifiPlan.decide(st, { now = W.clock, wifi_on = true, browsing = RE.bookorbitOverBook(RE.bookorbit()) })
+    local a = RE.WifiPlan.decide(st, { now = W.clock, wifi_on = true, browsing = RE.serverOverBook(RE.serverPlugin()) })
     ok(a == nil, "kept on while paging BookOrbit lists over the book")
-    RE.bookorbit = hosts
+    RE.serverPlugin = hosts
     W.shown = {}
 end)
 

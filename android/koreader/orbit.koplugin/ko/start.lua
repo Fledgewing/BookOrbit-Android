@@ -45,7 +45,7 @@ function OrbitAndroid:wakeFlow(reason)
         log(reason .. ": sync on wake is off")
         return
     end
-    local p = bookorbit(self.ui)
+    local p = serverPlugin(self.ui)
     if not p or not p:isLoggedIn() then
         log(reason .. ": library plugin missing or signed out; nothing to do")
         return

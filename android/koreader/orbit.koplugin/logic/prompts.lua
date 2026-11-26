@@ -10,7 +10,7 @@
 
 SetupPrompt = {}
 
--- where: "reader" (a book on screen), "browser", "bookorbit" or "menu". Returns show, why.
+-- where: "reader" (a book on screen), "browser", HomePlan.SERVER_HOME or "menu". Returns show, why.
 function SetupPrompt.decide(prompt, where, shown_key)
     if type(prompt) ~= "table" or type(prompt.key) ~= "string" or prompt.key == "" then return false, "nothing needed" end
     if where == "reader" then return false, "in a book" end

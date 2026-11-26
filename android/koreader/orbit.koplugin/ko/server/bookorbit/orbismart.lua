@@ -195,7 +195,7 @@ function OSM.mark(rec, R) rec.m = { at = R.at, pct = R.pct, progress = R.progres
 function OSM.decide(moment, R)
     if not OSM.on() then return nil end
     local ui = liveUI and liveUI() or nil
-    local p = bookorbit(ui)
+    local p = serverPlugin(ui)
     if not p or not ui or not ui.document then return nil end
     local digest = openDigest(p)
     local rec = OSM.rec(digest, true)
@@ -277,7 +277,7 @@ function OSM.ask(p, ui, digest, R, i, decision)
         log(string.format("orbismart: popup %s->%s %s after %d s", tostring(i["local"]), tostring(i.server),
             yes and "yes" or "no", math.floor(now_s() - t0)))
         if yes then
-            local live = bookorbit(liveUI and liveUI() or ui)
+            local live = serverPlugin(liveUI and liveUI() or ui)
             if live and openDigest(live) == digest then OSM.jump(live, digest, R, rec, i) end
         else
             rec.pending = nil
@@ -309,7 +309,7 @@ function OSM.onPulled(digest, body)
     if body.device_id ~= RESET_DEVICE_ID or body.percentage ~= 0 then rec.declined_reset = nil end
     saveSettings()
     local ui = liveUI and liveUI() or nil
-    local p = bookorbit(ui)
+    local p = serverPlugin(ui)
     if not p or not ui or not ui.document or openDigest(p) ~= digest then return end
     -- The This book sheet shows BookOrbit's place itself, with its own Jump / Stay.
     if p.book_sheet then return end
@@ -317,7 +317,7 @@ function OSM.onPulled(digest, body)
     local remote = rec.server
     UIManager:nextTick(function()
         local current = liveUI and liveUI() or nil
-        local live = bookorbit(current)
+        local live = serverPlugin(current)
         if OSM.on() and current == ui and live == p and openDigest(live) == digest and rec.server == remote then
             OSM.decide(moment, remote)
         end
@@ -331,7 +331,7 @@ function OSM.holdPush(digest, pct, progress)
     if not rec or not rec.server or type(pct) ~= "number" then return false end
     if rec.override or (rec.reread_at ~= nil and rec.reread_at == (tonumber(rec.server.at) or 0)) then return false end
     local ui = liveUI and liveUI() or nil
-    local p = bookorbit(ui)
+    local p = serverPlugin(ui)
     local L, R, tol
     if ui and ui.document and p and openDigest(p) == digest then
         local pct_only
@@ -450,7 +450,7 @@ function OSM.modeChanged(why)
     if not OSM.on() then OSM.closePopup() end
     log("orbismart: Sync =", OSM.on() and "OrbiSmart" or "Custom", "(" .. tostring(why) .. ")")
     local ui = liveUI and liveUI() or nil
-    local p = bookorbit(ui)
+    local p = serverPlugin(ui)
     if p then OSM.preset(p) end
     local m = state.module
     if m and m.ui and m.ui.document then pcall(m.hookPluginPagePush, m) end
@@ -461,7 +461,7 @@ end
 -- ReaderReady runs before the first paint (ReaderUI:init ends with it; showReader paints after),
 -- so a further place already known opens straight there (ruling 1: silent before render).
 function OSM.onReaderReady(m)
-    local p = bookorbit(m.ui)
+    local p = serverPlugin(m.ui)
     if not p then return end
     OSM.installApi()
     OSM.installSheet()
@@ -484,7 +484,7 @@ end
 function OSM.onResume()
     if not OSM.on() or not inBook() then return end
     local ui = liveUI()
-    local p = bookorbit(ui)
+    local p = serverPlugin(ui)
     local rec = p and OSM.rec(openDigest(p))
     OSM.setMoment("wake")
     if rec and rec.pending and rec.server then OSM.decide("wake", rec.server) end
@@ -518,7 +518,7 @@ end
 function OSM.pause(m)
     if not OSM.on() or not inBook() or OSM.pausing then return end
     local ui = liveUI()
-    local p = bookorbit(ui)
+    local p = serverPlugin(ui)
     if not p or not p:isLoggedIn() or not can(p, "reading_sync") then return end
     local digest = openDigest(p)
     local rec = OSM.rec(digest, true)
@@ -545,7 +545,7 @@ end
 -- the next sync when offline (design §3.5). On a finished book it starts a reread (ruling 2).
 function OSM.readFromHere(why)
     local ui = liveUI()
-    local p = bookorbit(ui)
+    local p = serverPlugin(ui)
     if not p or not ui or not ui.document then return end
     local digest = openDigest(p)
     local rec = OSM.rec(digest, true)

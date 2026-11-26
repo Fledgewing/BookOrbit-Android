@@ -153,7 +153,7 @@ function Copies.pump()
         table.remove(c.queue, 1); table.insert(c.queue, job)
         return UIManager:nextTick(Copies.pump)
     end
-    local p = bookorbit(liveUI())
+    local p = serverPlugin(liveUI())
     local cat = p and EOB.headlessCatalog(p)
     if not cat then return Copies.stop("no BookOrbit plugin") end
     if not Copies.active then
@@ -178,7 +178,7 @@ function Copies.prepared(ev)
     Copies.preparing, Copies.prepare_at = nil, nil
     local c = index()
     if c.queue[1] ~= job then Copies.busy = nil; return end
-    local p = bookorbit(liveUI())
+    local p = serverPlugin(liveUI())
     local cat = p and EOB.headlessCatalog(p)
     local detail = ev.detail
     if not cat or reading() or openFile() == job.path then

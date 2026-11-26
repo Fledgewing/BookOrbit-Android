@@ -86,7 +86,7 @@ function OrbitAndroid:bookOpenFlow()
     self.book_tracked = true
     log("wifi: book opened (Wi-Fi", on == false and "off" or "on", ") mode", st.mode)
     if st.mode == "always_on" then return end
-    local p = bookorbit(self.ui)
+    local p = serverPlugin(self.ui)
     if not p or not p:isLoggedIn() then return Wifi.kick() end
     Wifi.acquire("open")
     Net.up(p, { reason = "open", cap = 20, need_server = true }, function(ok)
@@ -138,7 +138,7 @@ end
 
 function OrbitAndroid:readingSync()
     if self.reading_running then return end
-    local p = bookorbit(self.ui)
+    local p = serverPlugin(self.ui)
     if not p or not p:isLoggedIn() or not inBook() then return end
     if not can(p, "reading_sync") then return end
     self.reading_running = true

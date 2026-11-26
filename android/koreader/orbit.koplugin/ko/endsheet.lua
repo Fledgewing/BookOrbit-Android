@@ -124,7 +124,7 @@ end
 
 -- The cover for a card: the plugin's cached thumbnail when the catalog has one, else nil.
 local function coverPath(book)
-    local p = bookorbit(liveUI())
+    local p = serverPlugin(liveUI())
     local cat = p and p.catalog_browser
     if not (cat and book and Compat.callable(cat.thumbnailDisplay)) then return nil end
     local okc, path = pcall(cat.thumbnailDisplay, cat, book)

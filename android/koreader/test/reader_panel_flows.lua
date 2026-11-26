@@ -121,7 +121,7 @@ return function(here, test, ok, eq)
         local ui={document={file="fixture.epub"},view={footer={percent_finished=0.73}}}
         local up, reply, timeout, done, message, sent, released
         sent,released=0,0
-        local E={liveUI=function() return ui end, bookorbit=function() return {} end,
+        local E={liveUI=function() return ui end, serverPlugin=function() return {} end,
             hasHandler=function() return true end,
             Wifi={acquire=function() end,release=function() released=released+1 end},
             Net={up=function(_,_,cb) up=cb end},

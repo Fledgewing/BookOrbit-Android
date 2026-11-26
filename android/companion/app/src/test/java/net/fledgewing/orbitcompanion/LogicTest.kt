@@ -448,9 +448,9 @@ class HomeCommandsTest {
     @Test
     fun commandFollowsTheSetting() {
         assertEquals("home_smart", HomeCommands.forPress(HomeButton.SMART))
-        assertEquals("home", HomeCommands.forPress(HomeButton.BOOKORBIT))
+        assertEquals("home", HomeCommands.forPress(HomeButton.LIBRARY))
         assertEquals("home_smart", HomeCommands.forUncovered(HomeButton.SMART))
-        assertNull(HomeCommands.forUncovered(HomeButton.BOOKORBIT))
+        assertNull(HomeCommands.forUncovered(HomeButton.LIBRARY))
     }
 
     @Test
@@ -787,7 +787,7 @@ class HomeAppTest {
             assertNull(l.pkg)
             assertEquals(HomeCommands.HOME_SMART, l.command)
         }
-        assertEquals(HomeCommands.HOME, HomeApp.launch("", true, HomeButton.BOOKORBIT, false).command)
+        assertEquals(HomeCommands.HOME, HomeApp.launch("", true, HomeButton.LIBRARY, false).command)
     }
 
     @Test

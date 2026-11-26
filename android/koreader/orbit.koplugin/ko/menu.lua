@@ -85,7 +85,7 @@ function OrbitAndroid:statusText()
     end
     local need = Shared.setupNeededText()
     if need then table.insert(parts, need) end
-    for _i, l in ipairs(compatLines(bookorbit(self.ui))) do table.insert(parts, l) end
+    for _i, l in ipairs(compatLines(serverPlugin(self.ui))) do table.insert(parts, l) end
     return _("Status: ") .. table.concat(parts, " · ")
 end
 
@@ -186,14 +186,14 @@ function OrbitAndroid:menuItems()
         {
             text = _("Back to my book, then library home"),
             radio = true,
-            checked_func = function() return S.home_button ~= "bookorbit" end,
+            checked_func = function() return S.home_button ~= HomePlan.SERVER_HOME end,
             callback = function() Shared.set("home_button", "smart") end,
         },
         {
             text = _("library home"),
             radio = true,
-            checked_func = function() return S.home_button == "bookorbit" end,
-            callback = function() Shared.set("home_button", "bookorbit") end,
+            checked_func = function() return S.home_button == HomePlan.SERVER_HOME end,
+            callback = function() Shared.set("home_button", HomePlan.SERVER_HOME) end,
         },
     }
     -- A feature the companion doesn't offer here: its rows are hidden, with one line saying
@@ -224,7 +224,7 @@ function OrbitAndroid:menuItems()
           } },
         {
             text_func = function()
-                local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == "bookorbit" and _("library home") or _("Back to my book, then library home"))
+                local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == HomePlan.SERVER_HOME and _("library home") or _("Back to my book, then library home"))
                 -- The companion's "Home opens": this applies only with KOReader.
                 if Shared.home_opens == "launcher" then t = t .. _(" (Home opens the BookSync launcher page)")
                 elseif Shared.home_opens == "app" then t = t .. _(" (Home opens another app)") end

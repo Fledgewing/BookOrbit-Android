@@ -628,7 +628,7 @@ function LF.holdable(icon)
         local area = InputContainer:new{ icon }
         area.ges_events = { OrbitHold = { GestureRange:new{ ges = "hold", range = function() return area.dimen end } } }
         area.onOrbitHold = function()
-            local p = bookorbit(liveUI())
+            local p = serverPlugin(liveUI())
             local cat = p and p.catalog_browser
             if cat then log("local-first: ⟳ on Home (held)"); LF.refreshHold(cat) end
             return true
@@ -711,7 +711,7 @@ do
         if S.local_first ~= false then pcall(LF.install, "init") end
         pcall(LF.installRemove)
         pcall(Gate.installToast)
-        local p = bookorbit(self.ui)
+        local p = serverPlugin(self.ui)
         if p then
             pcall(LocalState.fromOutbox, p)
             pcall(EOB.installPluginHooks, p)
@@ -720,7 +720,7 @@ do
     end
     local base_resume = OrbitAndroid.onResume
     function OrbitAndroid:onResume(...)
-        local p = bookorbit(self.ui)
+        local p = serverPlugin(self.ui)
         if p then pcall(LocalState.fromOutbox, p) end
         local cat = p and p.catalog_browser
         if cat and cat.current_context and cat.current_context.kind == "dashboard" then

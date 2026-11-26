@@ -25,7 +25,7 @@ function OrbitAndroid:init()
     if in_reader then
         -- The BookOrbit plugin's instance comes first when both sit in one plugins folder
         -- (PluginLoader sorts by path); elsewhere it may come later: hook it once it exists.
-        if self.ui.bookorbit then self:hookPluginPagePush()
+        if serverPlugin(self.ui) then self:hookPluginPagePush()
         else UIManager:nextTick(function() self:hookPluginPagePush() end) end
     end
     -- A Sync while reading change from the companion (Shared.refresh) restarts this counter.
@@ -76,7 +76,7 @@ end
 -- main.lua:1322-1324; 0 = off). While our Sync while reading is on we set it to 0 and keep the
 -- reader's value; when it goes off we put that value back (unless they changed it meanwhile).
 function OrbitAndroid:hookPluginPagePush()
-    local p = bookorbit(self.ui)
+    local p = serverPlugin(self.ui)
     if not p or type(p.settings) ~= "table" then return end
     local cur = p.settings.pages_before_update
     -- OrbiSmart pushes at a pause instead (docs/design/position-sync.md §3.3).

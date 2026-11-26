@@ -13,7 +13,7 @@ Rec = { session_applied = 0, line_pending = false }
 -- What a pass reads: the BookOrbit plugin, KOReader's Gestures plugin (it may be off).
 function Rec.context(ui)
     ui = liveUI() or ui
-    return { p = bookorbit(ui), gestures = ui and ui.gestures or nil }
+    return { p = serverPlugin(ui), gestures = ui and ui.gestures or nil }
 end
 
 -- KOReader's stock gesture defaults in books: the Gestures plugin keeps defaults.lua as
@@ -398,7 +398,7 @@ end
 -- whenever the answer changed (checked on each refresh: start, resume, menu). force: send even
 -- when unchanged.
 function Rec.reportFields(ui)
-    local p = bookorbit(liveUI() or ui)
+    local p = serverPlugin(liveUI() or ui)
     local signed = nil
     if p then
         local okl, v = pcall(p.isLoggedIn, p)

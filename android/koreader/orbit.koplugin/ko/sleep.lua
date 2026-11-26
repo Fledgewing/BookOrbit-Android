@@ -74,7 +74,7 @@ function snapshotKey(p, ui)
 end
 
 function OrbitAndroid:hookSuspendSnapshot()
-    local p = bookorbit(self.ui)
+    local p = serverPlugin(self.ui)
     if not p or type(p._onSuspend) ~= "function" or rawget(p, "_orbit_snapshot_hooked") then return end
     local orig = p._onSuspend
     p._orbit_snapshot_hooked = true
@@ -93,7 +93,7 @@ end
 function OrbitAndroid:sleepSync(reason)
     local cap = S.sleep_cap or 20
     local t0 = now_s()
-    local p = bookorbit(self.ui)
+    local p = serverPlugin(self.ui)
     log(reason .. ": sleep sync start, cap", cap .. "s")
     local held = false
     state.sleep_syncing = true
@@ -210,7 +210,7 @@ function OrbitAndroid:onOrbitSyncAndSleep()
         end
     end
 
-    local p = bookorbit(self.ui)
+    local p = serverPlugin(self.ui)
     if not p or not p:isLoggedIn() then
         finish(false, "library plugin missing or signed out")
         return true

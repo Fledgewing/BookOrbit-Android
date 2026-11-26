@@ -177,7 +177,7 @@ class ChecklistLogicTest {
     fun collapsedLinesWhenFine() {
         val g = Checklist.groups(items(full())).associateBy { it.group }
         assertEquals("KOReader 2025.10, BookOrbit plugin, BookSync plugin 0.11.2", g.getValue(Group.APPS).line)
-        assertEquals("Signed in · recommended settings on", g.getValue(Group.BOOKORBIT).line)
+        assertEquals("Signed in · recommended settings on", g.getValue(Group.LIBRARY).line)
         assertEquals("5 of 5 allowed", g.getValue(Group.PERMISSIONS).line)
         assertEquals("Tailscale connected · Wi-Fi test passed 17:02", g.getValue(Group.CONNECTION).line)
         assertTrue(g.values.all { it.state == State.DONE })
@@ -188,8 +188,8 @@ class ChecklistLogicTest {
     fun groupLinesWithOpenSkippedAndSetByReaderRows() {
         val rows = full("signed_in", "notifications", "keyboard") + Row("battery", "Battery", true, setByReader = true)
         val g = Checklist.groups(items(rows, ignored = setOf("keyboard"))).associateBy { it.group }
-        assertEquals("1 needs you · recommended settings on", g.getValue(Group.BOOKORBIT).line)
-        assertEquals(State.NEEDS_YOU, g.getValue(Group.BOOKORBIT).state)
+        assertEquals("1 needs you · recommended settings on", g.getValue(Group.LIBRARY).line)
+        assertEquals(State.NEEDS_YOU, g.getValue(Group.LIBRARY).state)
         assertEquals("1 needs you · 4 of 6 · BookSync keyboard skipped · set by the reader: Battery", g.getValue(Group.PERMISSIONS).line)
     }
 

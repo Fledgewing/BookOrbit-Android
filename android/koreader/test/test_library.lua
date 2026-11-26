@@ -106,7 +106,7 @@ return function(test, eq, ok, here, Cache)
         local plugin={settings={username="fixture",server_url="https://library.invalid"},
             newClient=function() error("render constructed a backend client") end}
         local reads=0
-        local e=setmetatable({bookorbit=function() return plugin end, OC={
+        local e=setmetatable({serverPlugin=function() return plugin end, OC={
             client=function() error("render called the legacy client factory") end,
             owner=function(settings) eq(settings,plugin.settings); return "fixture-owner" end},
             Store={library=function(owner, request) reads=reads+1; eq(owner,"fixture-owner"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})

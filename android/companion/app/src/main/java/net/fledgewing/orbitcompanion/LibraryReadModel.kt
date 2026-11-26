@@ -23,6 +23,7 @@ class LibraryReadModel(
         require(requests.size <= MAX_BATCH)
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
+        val stats by lazy { readingStats() }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
@@ -31,7 +32,7 @@ class LibraryReadModel(
             store.transaction {
                 if (store.meta("owner") != owner) return@transaction
                 val result = try { when (args["op"]) {
-                    "reading.stats" -> readingStats()
+                    "reading.stats" -> stats
                     "battery" -> mapOf("available" to false, "freshness" to mapOf("saved" to false))
                     else -> adapter.project(owner, args)
                 } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }

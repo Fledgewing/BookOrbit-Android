@@ -6,6 +6,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object ConnectorPlugin : ConnectorInstaller {
+    override val homeModeKey = "bookorbit"
+    override fun coverCacheDir(root: File) = File(root, "koreader/cache/bookorbit")
     override fun setupId(label: String): String? = when {
         label.startsWith("BookOrbit plugin") -> "plugin"
         label.startsWith("Signed in to BookOrbit") -> "signed_in"

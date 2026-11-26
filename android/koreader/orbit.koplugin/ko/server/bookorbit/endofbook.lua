@@ -384,7 +384,7 @@ end
 
 -- The catalog screen for the author page: the plugin's own catalog (opened if needed).
 function EOB.withCatalog(ui, fn)
-    local p = bookorbit(ui)
+    local p = serverPlugin(ui)
     if not p then return end
     local cat = p.catalog_browser
     if cat then return fn(cat) end
@@ -705,7 +705,7 @@ do
     end
     local base_ready = OrbitAndroid.onReaderReady
     function OrbitAndroid:onReaderReady(...)
-        local p = bookorbit(self.ui)
+        local p = serverPlugin(self.ui)
         if p then pcall(EOB.installPluginHooks, p) end
         pcall(EOB.bookOf, self.ui) -- prime the digest once; page turns never read plugin state
         return base_ready(self, ...)

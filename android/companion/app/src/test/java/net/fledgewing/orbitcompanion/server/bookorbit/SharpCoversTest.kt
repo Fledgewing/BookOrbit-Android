@@ -127,7 +127,7 @@ class SharpCoversTest {
         assertEquals("Sign in again", check.action)
         val item = Checklist.items(listOf(check.row())).single()
         assertEquals(Checklist.State.NEEDS_YOU, item.state)
-        assertEquals(Checklist.Group.BOOKORBIT, item.group)
+        assertEquals(Checklist.Group.LIBRARY, item.group)
         assertEquals("Until then: sleep-screen covers come from the small thumbnail and look soft.", item.loss)
         // The token is dropped, not kept sealed.
         assertFalse(stored().any { String(it.readBytes(), Charsets.ISO_8859_1).contains("sealed:") })

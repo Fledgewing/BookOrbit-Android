@@ -5,7 +5,7 @@ LibraryAdapter = { sent={}, order={}, ready={} }
 function LibraryAdapter.owner()
     -- newClient/apiOpts may initialize the upstream reading ledger on account change.
     -- Ownership needs only the plugin's already-loaded account scalars.
-    local plugin = bookorbit()
+    local plugin = serverPlugin()
     local settings = plugin and plugin.settings
     if type(settings) ~= "table" or not settings.username or not settings.server_url then return nil end
     return OC.owner(settings)
@@ -47,7 +47,7 @@ end
 -- Keep the existing sync writer and Wi-Fi lifecycle behind the adapter. No second outbox.
 function LibraryAdapter.syncCurrent(done)
     local ui = liveUI()
-    local p = bookorbit(ui)
+    local p = serverPlugin(ui)
     if not (p and ui and ui.document and hasHandler(p, "BookOrbitSyncBook")) then
         done(false, "Sync unavailable")
         return false

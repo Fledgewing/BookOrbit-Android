@@ -146,6 +146,15 @@ record real device milliseconds. Moving protocol ownership adds no new screen or
 
 The owned UI still calls `ko/library.lua`; it receives normalized bounded projections.
 `ko/server/bookorbit.lua` binds the existing plugin account and compatibility operations.
+The reviewed facade callers are `ko/home.lua` (reading gate/Home), `ko/start.lua` (toast),
+`ko/notices.lua` (catalog lifecycle), `ko/test_sync_path.lua` (explicit test action),
+`ko/sleepscreen.lua` (credential handoff) and `ko/store.lua` (legacy cached query). Only
+`main.lua` loads implementation files. Guards forbid additional facade consumers and still
+check every reviewed caller for protocol fields/routes and direct imports. The remaining
+legacy lifecycle callers (`ko/wifi.lua`, `ko/sleep.lua`, `ko/reading_sync.lua`, `ko/module.lua`,
+`ko/endsheet.lua`, `ko/menu.lua`) may obtain the compatibility plugin through `serverPlugin`;
+owned UI cannot. Historical Home wire values and cover-cache folder names stay in the adapter,
+so the guard rejects backend names in every casing without breaking installed settings.
 Its adapter package owns the old cache/mirror/copies, finish, grouping, local-first and
 position-sync hooks; pure protocol helpers live in `logic/server/bookorbit`. Generic cache
 encoding remains `logic/cache.lua`; `ko/store.lua` keeps the small owned projection read.

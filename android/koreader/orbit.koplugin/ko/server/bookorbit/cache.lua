@@ -380,7 +380,7 @@ function OC.watchChecks()
 end
 
 function OC.client()
-    local p = bookorbit(liveUI())
+    local p = serverPlugin(liveUI())
     if not p then return nil end
     if p.catalog_browser and p.catalog_browser.client then return p.catalog_browser.client end
     if Compat.callable(p.newClient) then
@@ -411,7 +411,7 @@ function OC.landed(client, job, r)
 end
 
 function OC.onScreen(key)
-    local p = bookorbit(liveUI())
+    local p = serverPlugin(liveUI())
     local cat = p and p.catalog_browser
     return cat ~= nil and not cat.catalog_closed and cat._orbit_view_keys ~= nil and cat._orbit_view_keys[key] == true
 end
@@ -440,7 +440,7 @@ end
 
 -- A changed entry that is on screen: the view reloads from the cache (no request, no spinner).
 function OC.redraw(key)
-    local p = bookorbit(liveUI())
+    local p = serverPlugin(liveUI())
     local cat = p and p.catalog_browser
     if not cat or cat.catalog_closed or not cat._orbit_view_keys or not cat._orbit_view_keys[key] then return end
     local ctx = cat.current_context or {}
@@ -787,7 +787,7 @@ end
 
 -- Refresh or Full refresh from the menu: the open catalog's view, else Home next time it opens.
 function OC.menuFullRefresh()
-    local p = bookorbit(liveUI())
+    local p = serverPlugin(liveUI())
     local cat = p and p.catalog_browser
     if not cat and p and EOB then cat = EOB.headlessCatalog(p) end
     if cat then return OC.fullRefresh(cat) end

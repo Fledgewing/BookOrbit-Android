@@ -138,3 +138,6 @@ function Compat.lines(missing, version)
 end
 
 ---------------------------------------------------------------------------------------------
+
+-- Preserve the historical shared-setting wire value behind the compatibility adapter.
+HomePlan.SERVER_HOME = "bookorbit"
