@@ -21,6 +21,24 @@ return function(test,eq,ok,E,W,withHost)
             host:onClose(); host:onCloseWidget(); eq(E.Library.listener,nil)
         end)
     end)
+    test('local widgets: signed-out pending snapshots keep local loading, not account setup',function()
+        withHost(function()
+            E.LibraryAdapter.read=function(raw)
+                if E.Cache.decode(raw).op=='capabilities' then return {account={signedIn=false}},60 end
+                return nil
+            end
+            E.S.home_layout=E.Layout.default()
+            E.S.home_layout.pages={{id='local',tab='Home',name='Local',placements={{instance='word',widget='word',version=1,x=0,y=0,w=2,h=2,settings={}}}}}
+            local host=E.HomeHost.create(); E.HomeHost.active=host; W.shown={host}
+            local loading=false
+            local function scan(node)
+                if node.text=='Loading…' then loading=true end
+                ok(node.text~="Couldn't load this widget",'no account dependency on local widgets')
+                for _,child in ipairs(node) do if type(child)=='table' then scan(child) end end
+            end
+            scan(host); ok(loading)
+        end)
+    end)
     test('local widgets: every size/state paints immutable data without reads; 50px actions',function()
         withHost(function()
             for _,id in ipairs({'word','light','buddy'}) do

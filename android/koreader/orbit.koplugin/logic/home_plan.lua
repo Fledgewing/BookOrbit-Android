@@ -76,3 +76,13 @@ function disabledText(app, disabler, hint)
     end
     return app .. " is disabled by the system: re-enable it in Settings › Apps."
 end
+
+-- One additive Android 0.12 cutover; all other settings and ledgers stay untouched.
+function HomePlan.migrate012(settings)
+    if settings.home_012_migrated then return false end
+    local upgrade = next(settings) ~= nil
+    settings.home_screen = "booksync"
+    settings.news_012_pending = upgrade
+    settings.home_012_migrated = true
+    return true
+end

@@ -20,6 +20,7 @@ widget("reading-records", "reading.stats", {{3,2},{2,3},{2,2},{4,1}}, {{2,2},{2,
 widget("clock", "device.clock", {{1,2},{2,1},{2,2}}, {{2,2},{1,1},{2,1}})
 for _,id in ipairs({"word","light","buddy"}) do
     widget(id, "local."..id, {{2,1},{2,2}}, {{2,1}})
+    WidgetRegistry[id].localOnly=true
 end
 WidgetRegistry.word.refreshSeconds = 60 -- daily selection is companion-owned
 WidgetRegistry.clock.refreshSeconds = 60 -- host-owned refresh, only while visible

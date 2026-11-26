@@ -32,7 +32,8 @@ Each widget has a one-row/16 KiB budget, a timing span, and no render network,
 subprocess, history scan or separate companion round-trip. Home keeps one batch.
 Word's host-owned minute heartbeat permits daily rollover without widget timers.
 Light unsupported/error/loading and Word/Buddy missing/empty/loading/error/offline
-states keep the named card. Compact retry messages are 50 px targets. The picker
+states keep the named card. Local-only registry contracts also keep a pending
+projection in Loading while signed out; catalog setup guidance does not apply to them. Compact retry messages are 50 px targets. The picker
 uses installed registrations; cancelling preserves the existing editor draft rule.
 
 Logic, native-tree flows, companion projection and pinned native-symbol checks
