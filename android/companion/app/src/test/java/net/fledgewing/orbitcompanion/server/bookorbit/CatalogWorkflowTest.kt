@@ -45,6 +45,16 @@ class CatalogWorkflowTest {
         fun mark()=run("finish.mark",mapOf("path" to old.path,"document" to CatalogWorkflow.partial(old),"complete" to true,"percentage" to 1.0))
         override fun close() { worker.store.close();external.deleteRecursively() }
     }
+    @Test fun activeCatalogCommandKeepsAutomaticWifiOffWaitingAfterDequeue() {
+        assertFalse(AdapterWorker.busy())
+        AdapterWorker.catalogActionWork { assertTrue(AdapterWorker.busy()) }
+        assertFalse(AdapterWorker.busy())
+    }
+    @Test fun failedCatalogCommandAlwaysReleasesTheAutomaticWifiHold() {
+        try { AdapterWorker.catalogActionWork { assertTrue(AdapterWorker.busy());error("synthetic failure") };fail("expected failure") }
+        catch(_:IllegalStateException) { }
+        assertFalse(AdapterWorker.busy())
+    }
     // @fixture bookorbit/catalog-book.delivery-variants.json
     @Test fun preparedDeliveryFixtureSelectsReadableVariantAndArtifactHash() {
         val fixture=LuaValue.fromJson(File("../../../shared/fixtures/bookorbit/catalog-book.delivery-variants.json").readText()) as Map<*,*>

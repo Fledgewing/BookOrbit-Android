@@ -44,7 +44,7 @@ object AdapterWorker : ServerRuntime {
         private set
 
     /** Work in hand: an automatic Wi-Fi off waits for it. */
-    override fun busy(): Boolean = mirrorRunning || synchronized(lock) { patches.isNotEmpty() || pending != null || storage != null || sleep != null || pickers != null }
+    override fun busy(): Boolean = mirrorRunning || catalogActionRunning || synchronized(lock) { patches.isNotEmpty() || pending != null || storage != null || sleep != null || pickers != null }
 
     private var worker: CacheWorker? = null
 
@@ -149,11 +149,18 @@ object AdapterWorker : ServerRuntime {
         start()
     }
 
+    @Volatile private var catalogActionRunning=false
+    /** Auto Wi-Fi off must include an executing command after it leaves the pending queue. */
+    internal fun <T> catalogActionWork(work: () -> T): T {
+        catalogActionRunning=true
+        return try { work() } finally { catalogActionRunning=false }
+    }
+
     fun catalogAction(ctx: Context, credentials: CacheWorker.Creds, owner: String, action: String, args: Map<*,*>,
         done: (Map<String,Any?>?,String?) -> Unit) {
         app=ctx.applicationContext
         BulkWork.attach(ctx)
-        synchronized(lock) { patches.addLast {
+        synchronized(lock) { patches.addLast { catalogActionWork {
             val start=System.nanoTime()
             val result=runCatching {
                 if(owner!=LibraryAccount.owner() || worker().store.meta("owner")!=owner) throw ServerFailure("canceled")
@@ -162,7 +169,7 @@ object AdapterWorker : ServerRuntime {
             }
             OLog.i("library.catalog.action ms=${(System.nanoTime()-start)/1_000_000}")
             result.fold({ done(it,null) },{ done(null,(it as? ServerFailure)?.kind ?: "unavailable") })
-        }; lock.notifyAll() }
+        } }; lock.notifyAll() }
         start()
     }
 
