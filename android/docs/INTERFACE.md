@@ -453,6 +453,20 @@ and a stable `token` for the backup-based global `reader_footer_mode` repair. Th
 plugin changes only a matching native global setting in memory, never the loaded
 footer or document, and persists the token to ignore replay after later user changes.
 
+### 0.12 reader progress projections (F12-H)
+
+The existing `library_batch` command also accepts `reader` (local `path`, one
+normalized book row; optional `native_progress` is the native reader's cached
+0–1 fraction, validated and projected by the companion without changing the
+saved catalog position) and `battery` (one local snapshot, unavailable until the
+battery model is installed). The `book` and `reader` rows include `stats` with
+`available`, optional `pages_read`, `reading_seconds`, and inclusive
+`days_start_to_finish`. Joins and SQLite aggregation run in the companion;
+no metadata file or statistics database is parsed by the reader UI. The
+`progress.syncCurrent` capability advertises the existing explicit Sync action
+behind the library adapter, with no new sync writer. See
+[reader progress notes](../../docs/design/booksync-home/F12-H-NOTES.md).
+
 The owned Home host also uses `lists(limit)` on the library context. Its materialized
 rows contain opaque `key`, display `title` and cached `count`; incomplete membership
 is “Not saved yet”. Book windows may include `local_path` from the owner-scoped,
