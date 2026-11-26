@@ -43,6 +43,20 @@ end
 -- Symbols: name (a function), or { name, kind }.
 local F, T = "field", "text"
 local NEEDS = {
+    -- Library's native reader-control adapter (pin documented in G-READER-NOTES.md).
+    { "frontend/apps/reader/modules/readertoc.lua", { "onShowToc", {"toc", F} } },
+    { "frontend/apps/reader/modules/readerbookmark.lua", { "onShowBookmark", "onToggleBookmark", "getBookmarkPageNumber" } },
+    { "frontend/apps/reader/modules/readergoto.lua", { "onShowGotoDialog" } },
+    { "frontend/apps/reader/modules/readersearch.lua", { "onShowFulltextSearchInput" } },
+    { "frontend/apps/reader/modules/readerconfig.lua", { "onShowConfigMenu", "onCloseConfigMenu" } },
+    { "frontend/apps/reader/modules/readerrolling.lua", { "onGotoPercent", "onGotoNextChapter", "onGotoPrevChapter", "onSetStatusLine", {"current_page", F} } },
+    { "frontend/apps/reader/modules/readerpaging.lua", { "onGotoPercentage", "onGotoNextChapter", "onGotoPrevChapter" } },
+    { "frontend/apps/reader/modules/readerfont.lua", { "onSetFontSize" } },
+    { "frontend/apps/reader/modules/readerfooter.lua", { "applyFooterMode", "onUpdateFooter" } },
+    { "frontend/device/generic/device.lua", { "hasFrontlight", "hasNaturalLight", "getPowerDevice" } },
+    { "frontend/device/generic/powerd.lua", { "frontlightIntensity", "frontlightWarmth", "setIntensity", "setWarmth" } },
+    { "frontend/ui/widget/buttontable.lua", { {"buttons_layout", F} } },
+    { "frontend/ui/widget/button.lua", { "onFocus", "onUnfocus" } },
     { "frontend/ui/widget/touchmenu.lua", { "init", {"tab_item_table", F} } },
     { "frontend/ui/widget/buttondialog.lua", { "getButtonById", "onClose" } },
     { "frontend/ui/widget/focusmanager.lua", { "moveFocusTo" } },

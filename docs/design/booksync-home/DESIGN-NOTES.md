@@ -868,3 +868,14 @@ Every screen/widget retains its strict inherited budget: companion-owned heavy
 work, bounded ready-to-draw rows/bytes, zero render network/subprocesses, one Home
 batch and at most 16 KiB per widget. Flow geometry is not device typography or
 latency acceptance; the complete revision-16 prototype remains the target.
+
+## Android reader-panel implementation
+
+The reader slice extends the existing panel, Library, Custom and status-strip
+owners with the header action arrangement and a separate bottom scrubber/quick
+settings panel. Native actions stay behind Library; the companion projects the
+bounded marker/position snapshot. Every screen and widget keeps its named
+budget, zero render network/subprocesses and ≤16 KiB widget snapshots. Native
+capture copies at most 64 cached entries per marker kind, never a full TOC or
+sidecar. See [implementation and pinned native citations](G-READER-NOTES.md).
+Host flow tests do not establish physical font fit or device latency.

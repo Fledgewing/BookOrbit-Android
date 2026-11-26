@@ -159,7 +159,8 @@ function C.settingsRows(ui)
         callback=function(menu) C.copy(ui,menu) end,keep_menu_open=true}
     return rows
 end
-function C.panelRows(ui,refresh)
+function C.panelRows(ui,refresh,screen)
+    screen=screen or "reader-bottom-panel"
     if not Library.readingSupported(ui) then return {} end
     local rows={}
     local selected=Library.readingChoices(ui)
@@ -168,11 +169,11 @@ function C.panelRows(ui,refresh)
         local cells={}
         for _,choice in ipairs({pair[1],pair[2],"custom"}) do
             local custom=choice=="custom"
-            local label=custom and ("Custom · " .. ReadingStyle.label(Library.readingCustom("reader-top-panel"),key)) or ReadingStyle.presets[key][choice][1]
+            local label=custom and ("Custom · " .. ReadingStyle.label(Library.readingCustom(screen),key)) or ReadingStyle.presets[key][choice][1]
             cells[#cells+1]={text=(selected[key]==choice and "✓ " or "") .. ReadingStyle.names[key] .. "\n" .. label .. (custom and selected[key]==choice and " ✎" or ""),
                 callback=function()
                     if ReadingStyle.tap(selected[key],choice)=="edit" then C.open(key,ui,refresh)
-                    else Library.readingApply(ui,key,choice); refresh() end
+                    else Library.readingApply(ui,key,choice,nil,screen); refresh() end
                 end}
         end
         rows[#rows+1]={kind="reading-choices",choices=cells}

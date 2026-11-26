@@ -5424,7 +5424,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Plain progress bar, cached reading stats, measured usual-use battery line and manual Sync in the top panel; battery line links to the owned Battery page and uses its companion-formatted label; shared Settings action",
+          "note": "Plain progress bar, cached reading stats, measured usual-use battery line and manual Sync in the top panel; battery line links to the owned Battery page and uses its companion-formatted label; shared Settings action; header action icons, separate bottom scrubber with bounded chapter/bookmark ticks, native Contents/annotations/Go to/search/bookmark dispatch and two-column quick settings with merged Custom editors",
           "reason": "deliberately deferred: 0.12 Android implementation is building, not released or device validated; battery estimates need measured rates and 24 h of observed use, while reading stats require saved KOReader records plus the tracked-file ledger.",
           "evidence": [
             {
@@ -5443,8 +5443,8 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Owned reader progress and library battery projection follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling",
+          "note": "Owned reader top/bottom panels, native action controls and progress follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling; reader-panel parity remains deferred to that platform’s firmware slice under Android-first authorization",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5458,8 +5458,8 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Owned reader progress and library battery projection follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling",
+          "note": "Owned reader top/bottom panels, native action controls and progress follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling; reader-panel parity remains deferred to that platform’s firmware slice under Android-first authorization",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5473,8 +5473,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Owned reader progress and library battery projection follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. X3 also requires measured flash fit. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling",
+          "note": "Owned reader top/bottom panels, native action controls and progress follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. X3 also requires measured flash fit. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling; reader-panel parity remains deferred to that platform’s firmware slice under Android-first authorization",
           "evidence": [
             {
               "path": "ROADMAP.md",

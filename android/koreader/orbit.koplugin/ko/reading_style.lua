@@ -137,3 +137,111 @@ if baseReady then
         return result
     end
 end
+
+-- Native reader controls stay behind Library, like the existing style adapter above.
+-- Only bounded, already-loaded native state is copied; no TOC load or sidecar read.
+function Library.readerInput(ui)
+    local finish=span("controls-input")
+    local view=ui.view or {}
+    local total=ui.document.info and ui.document.info.number_of_pages
+    local page=view.state and view.state.page or ui.rolling and ui.rolling.current_page
+    local input={page=page,total=total,marked=view.dogear_visible==true,chapters={},bookmarks={}}
+    local toc=ui.toc and ui.toc.toc or {}
+    local annotations=ui.annotation and ui.annotation.annotations or {}
+    input.chapter_total=#toc
+    -- Cached TOC is ordered by native page. A bounded binary lookup identifies
+    -- the current chapter without a full-table walk, even for very large books.
+    local low,high,index=1,#toc,0
+    for _=1,Budgets.readerControls.tocComparisons do
+        if low>high or type(page)~="number" then break end
+        local middle=math.floor((low+high)/2)
+        local at=toc[middle].page
+        if type(at)~="number" then break end
+        if at<=page then index=middle; low=middle+1 else high=middle-1 end
+    end
+    if index>0 then
+        input.chapter_index=index
+        input.chapter_title=type(toc[index].title)=="string" and toc[index].title:sub(1,256) or nil
+    end
+    -- The companion owns marker projection. Copy at most 64 cached scalar entries
+    -- per kind, sampled across long books rather than scanning the document.
+    for i=1,math.min(Budgets.readerControls.markersPerKind,#toc) do
+        local item=toc[math.floor((i-1)*#toc/math.min(Budgets.readerControls.markersPerKind,#toc))+1]
+        input.chapters[i]=item.page
+    end
+    for i=1,math.min(Budgets.readerControls.markersPerKind,#annotations) do
+        local item=annotations[math.floor((i-1)*#annotations/math.min(Budgets.readerControls.markersPerKind,#annotations))+1]
+        if not item.drawer then
+            local pageNumber=type(item.page)=="number" and item.page
+                or ui.bookmark and ui.bookmark:getBookmarkPageNumber(item)
+            input.bookmarks[#input.bookmarks+1]=pageNumber
+        end
+    end
+    finish(); return input
+end
+function Library:readerControls(ui)
+    return self:read("reader.controls",{limit=1,native=Library.readerInput(ui)})
+end
+function Library.readerAction(ui,action,value)
+    local finish=span(action)
+    if not (ui and ui.document) then finish(); return false end
+    local target,method
+    if action=="native-menu" then
+        finish(); return ReaderPanel.stockMenu(ui.menu)
+    elseif action=="more-settings" then
+        finish()
+        if ReaderPanel.stockConfig and ui.config then return ReaderPanel.stockConfig(ui.config) end
+        return ReaderPanel.stockMenu(ui.menu)
+    elseif action=="contents" then target,method=ui.toc,"onShowToc"
+    elseif action=="annotations" then target,method=ui.bookmark,"onShowBookmark"
+    elseif action=="bookmark" then target,method=ui.bookmark,"onToggleBookmark"
+    elseif action=="goto" then target,method=ui["goto"],"onShowGotoDialog"
+    elseif action=="search" then target,method=ui.search,"onShowFulltextSearchInput"
+    elseif action=="previous-chapter" then target,method=ui.rolling or ui.paging,"onGotoPrevChapter"
+    elseif action=="next-chapter" then target,method=ui.rolling or ui.paging,"onGotoNextChapter"
+    elseif action=="seek" then target,method=ui.rolling or ui.paging,"onGotoPercentage"; value=math.max(0,math.min(100,value))
+        if ui.rolling then method="onGotoPercent" else value=value/100 end
+    elseif action=="size" then target,method=ui.font,"onSetFontSize"
+    elseif (action=="status" or action=="clock") and ReadingStatus and ReadingStatus.session and ReadingStatus.session.ui==ui then
+        local session=ReadingStatus.session
+        if action=="status" then session.bottom_visible=not session.bottom_visible
+        else session.top_visible=session.top_visible==false; session.geometry_key=nil end
+        ReadingStatus.relayout(ui)
+        UIManager:setDirty(ui,"ui")
+        finish(); return true
+    elseif action=="status" then
+        local footer=ui.view and ui.view.footer
+        if footer then
+            footer:applyFooterMode(footer.mode==0 and footer.mode_list.page_progress or 0)
+            G_reader_settings:saveSetting("reader_footer_mode",footer.mode)
+            footer:onUpdateFooter(true)
+        end
+        finish(); return footer~=nil
+    elseif action=="clock" and ui.rolling then
+        local enabled=not ui.rolling.cre_top_bar_enabled
+        ui.rolling:onSetStatusLine(enabled and 0 or 1)
+        finish(); return true
+    elseif action=="light" or action=="warmth" then
+        local device=require("device")
+        if device:hasFrontlight() and (action=="light" or device:hasNaturalLight()) then
+            local power=device:getPowerDevice()
+            if action=="light" then power:setIntensity(value) else power:setWarmth(value) end
+            finish(); return true
+        end
+    end
+    local result=target and target[method] and target[method](target,value)
+    finish(); return result~=nil and result~=false
+end
+function Library.readerSettings(ui)
+    local finish=span("controls-state")
+    local device=require("device")
+    local power=device.hasFrontlight and device:hasFrontlight() and device:getPowerDevice()
+    local footer=ui.view and ui.view.footer
+    local session=ReadingStatus and ReadingStatus.session
+    local owned=session and session.ui==ui
+    local result={size=ui.font and ui.font.configurable.font_size or 22,status=owned and session.bottom_visible or not owned and footer and footer.mode~=0,
+        clock=owned and session.top_visible~=false or not owned and ui.rolling and ui.rolling.cre_top_bar_enabled,
+        light=power and power:frontlightIntensity(),
+        warmth=power and device:hasNaturalLight() and power:frontlightWarmth()}
+    finish(); return result
+end

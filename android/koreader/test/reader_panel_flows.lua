@@ -11,11 +11,17 @@ return function(here, test, ok, eq)
         end
         local Widget=class()
         W.face={hash="fixture",ftsize={getEmboldenHalfStrength=function(_,factor) return factor end}}
-        local ui={document={file="/books/fixture.epub"},menu={}}
-        local Menu={onShowMenu=function() W.stock=(W.stock or 0)+1; return "native" end}
+        local ui={document={file="/books/fixture.epub",info={number_of_pages=200}},view={state={page=124}},menu={}}
+        local Menu={onShowMenu=function() W.stock=(W.stock or 0)+1; return "native" end,
+            onTapShowMenu=function() error("compound native menu must not run") end,
+            onSwipeShowMenu=function() error("compound native swipe must not run") end}
+        local Config={onShowConfigMenu=function() W.stock_config=true end}
+        ui.config=setmetatable({ui=ui},{__index=Config})
         ui.menu=setmetatable({ui=ui},{__index=Menu})
         W.book={items={{key="opaque",title="The Moon",authors={"A"},progress=62,
             stats={days_start_to_finish=3,reading_seconds=3660,pages_read=120}}}}
+        W.controls={items={{progress=.62,chapter="Chapter 3 of 6",position="p. 124 of 200 · 62%",
+            chapters={.1,.3,.6,.7,.8,.9},bookmarks={.2,.5},marked=false}}}
         W.caps={progress={syncCurrent=true}}
         W.battery={hours_usual_use=54,display={page_estimate="≈ 2 d 6 h left at your usual use"}}
         local E=setmetatable({now_s=function() return 1 end, log=function(s) W.logs[#W.logs+1]=s end,
@@ -27,7 +33,7 @@ return function(here, test, ok, eq)
                 if a.op=="reader" then W.native_input=a.native_progress end
                 if W.oversize then return {items={{},{}}},100 end
                 if W.missing then return nil end
-                return a.op=="capabilities" and W.caps or a.op=="battery" and W.battery or W.book,256
+                return a.op=="reader.controls" and W.controls or a.op=="capabilities" and W.caps or a.op=="battery" and W.battery or W.book,256
             end,request=function(batch) W.trips=W.trips+1; W.batch=batch; return true end,
                 syncCurrent=function(done) W.syncs=W.syncs+1; W.done=done; return true end}}, {__index=_G})
         W.E=E
@@ -40,10 +46,12 @@ return function(here, test, ok, eq)
             getTopmostVisibleWidget=function() return W.top end}
         E.wrap=function(t,k,f) t[k]=f(t[k]) end
         E.require=function(name)
-            if name=="device" then return {screen={getWidth=function() return 600 end,getHeight=function() return 800 end,scaleBySize=function(_,n) return math.ceil(n*(W.scale or 1)) end}} end
+            if name=="device" then return {hasFrontlight=function() return W.hardware end,hasNaturalLight=function() return W.warmth_supported end,
+                getPowerDevice=function() return W.power end,screen={getWidth=function() return 600*(W.scale or 1) end,getHeight=function() return 800*(W.scale or 1) end,scaleBySize=function(_,n) return math.ceil(n*(W.scale or 1)) end}} end
             if name=="document/credocument" then return {engineInit=function() return {getFontFaceFilenameAndFaceIndex=function(face) return face .. ".ttf",0 end} end} end
             if name=="ui/event" then return {new=function(_,name) return {name=name} end} end
             if name=="apps/reader/modules/readermenu" then return Menu end
+            if name=="apps/reader/modules/readerconfig" then return Config end
             if name=="ui/geometry" or name=="ui/gesturerange" then return {new=function(_,t) return t end} end
             if name=="ui/font" then return {getFace=function() return W.face end} end
             if name=="ffi/blitbuffer" then return {COLOR_BLACK=0,COLOR_WHITE=1,COLOR_LIGHT_GRAY=2,Color8=function(n) return n end} end
@@ -56,7 +64,12 @@ return function(here, test, ok, eq)
         return W,E
     end
     local function row(E,text)
-        for _,r in ipairs(E.ReaderPanel.sheet:rows()) do if r.text==text then return r end end
+        for _,r in ipairs(E.ReaderPanel.sheet:rows()) do if r.text==text or r.position==text then return r end end
+        for _,r in ipairs(E.ReaderPanel.sheet:rows()) do
+            for _,cell in ipairs(r.choices or {}) do
+                if cell.text==text then return {text=cell.text,action=cell.callback} end
+            end
+        end
         error("missing reader row "..text)
     end
     test("reader panel: bounded cached data, plain bar and one companion batch",function()
@@ -64,8 +77,8 @@ return function(here, test, ok, eq)
         W.native=0.73
         eq(W.ui.menu:onShowMenu(),true)
         eq(W.native_input,0.73,"cached native position goes through the library request")
-        eq(W.trips,1); eq(#W.batch,3); eq(W.syncs,0)
-        eq(table.concat(W.reads,","),"reader,battery,capabilities")
+        eq(W.trips,1); eq(#W.batch,4); eq(W.syncs,0)
+        eq(table.concat(W.reads,","),"reader,battery,reader.controls,capabilities")
         ok(row(E,"≈ 2 d 6 h left at your usual use"))
         eq(E.ReaderPanel.sheet.metrics.button,50)
         local bars=0
@@ -135,13 +148,95 @@ return function(here, test, ok, eq)
         row(E,"KOReader menu").action(); eq(W.stock,2); eq(E.ReaderPanel.sheet,nil)
         E.ReaderPanel.show(W.ui,"reader-top-panel"); E.OrbitAndroid:onCloseWidget(); eq(E.ReaderPanel.sheet,nil)
         for _,s in ipairs({"reader-top-panel","book-info","details"}) do
-            local b=E.Budgets.get("screens",s); eq(b.rows,3); eq(b.bytes,3*16384); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,1)
+            local b=E.Budgets.get("screens",s); eq(b.rows,s=="reader-top-panel" and 4 or 3); eq(b.bytes,(s=="reader-top-panel" and 4 or 3)*16384); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,1)
         end
         eq(E.Budgets.get("widgets","reader-progress").snapshotBytes,16384)
         W.oversize=true
         eq(pcall(E.ReaderPanel.show,W.ui,"reader-top-panel"),false)
         local m=E.ReaderPanelPlan.model({items={{progress=200}}},{}); eq(m.progress,1)
         eq(E.ReaderPanelPlan.model({items={{progress=0/0}}},{}).progress,nil)
+    end)
+    test("reader controls: native menus dispatch after dismissal; top header and tiles keep approved order",function()
+        local W,E=world()
+        local function target(key,method)
+            W.ui[key]={[method]=function()
+                eq(E.ReaderPanel.sheet,nil,"native dialog owns the screen after dismissal")
+                W.action=key
+                return true
+            end}
+        end
+        target("toc","onShowToc"); target("bookmark","onShowBookmark")
+        target("search","onShowFulltextSearchInput"); target("goto","onShowGotoDialog")
+        for _,pair in ipairs({{"Contents","toc"},{"Bookmarks","bookmark"},{"Search","search"},{"Go to","goto"}}) do
+            W.ui.menu:onTapShowMenu()
+            local rows=E.ReaderPanel.sheet:rows()
+            eq(rows[1].kind,"reader-header"); eq(rows[1].choices[1].text,"Home")
+            eq(rows[1].choices[2].text,"Sync"); eq(rows[1].choices[3].text,"BookSync settings")
+            eq(rows[1].choices[4].text,"Add bookmark")
+            local names={}; for _,cell in ipairs(rows[2].choices) do names[#names+1]=cell.text end
+            eq(table.concat(names,","),"Contents,Bookmarks,Search,Go to,Book info,KOReader menu")
+            row(E,pair[1]).action(); eq(W.action,pair[2])
+        end
+        W.ui.menu:onSwipeShowMenu({direction="south"}); eq(E.ReaderPanel.sheet.screen,"reader-top-panel")
+        W.ui.config:onShowConfigMenu(); eq(E.ReaderPanel.sheet.screen,"reader-bottom-panel")
+        row(E,"More reading settings…").action(); eq(W.stock_config,true); eq(E.ReaderPanel.sheet,nil)
+    end)
+    test("reader bottom: separate anchor, bounded ticks, scrub touch, chapter keys and Back release",function()
+        local W,E=world()
+        local moves={}
+        W.ui.rolling={onGotoPercent=function(_,value) moves[#moves+1]=value; return true end,
+            onGotoNextChapter=function() W.next=true; return true end,
+            onGotoPrevChapter=function() W.previous=true; return true end}
+        E.ReaderPanel.show(W.ui,"reader-bottom-panel")
+        local sheet=E.ReaderPanel.sheet
+        eq(W.trips,1); eq(#W.batch,2)
+        local scrub
+        for _,r in ipairs(sheet:rows()) do if r.kind=="scrubber" then scrub=r end end
+        eq(#scrub.chapters,6); eq(#scrub.bookmarks,2); eq(scrub.value,.62)
+        local copy={}; for k,v in pairs(scrub) do copy[k]=v end; copy.previous=nil
+        local area=sheet:rowWidget({kind="scrubber",row=copy},600,50,sheet.metrics)
+        area.dimen.x=10; area.onTap(area,nil,{pos={x=260}}); eq(moves[1],50)
+        area.onTap(area,nil,{pos={x=-20}}); eq(moves[2],0)
+        area.onTap(area,nil,{pos={x=999}}); eq(moves[3],100)
+        sheet:onSelect(); eq(sheet.scrub_focus,true)
+        sheet:onStepMore(); eq(W.next,true); sheet:onStepLess(); eq(W.previous,true)
+        sheet:onClose(); eq(sheet.scrub_focus,false); eq(E.ReaderPanel.sheet,sheet)
+        sheet:onClose(); eq(E.ReaderPanel.sheet,nil)
+        E.ReaderPanel.show(W.ui,"reader-bottom-panel"); sheet=E.ReaderPanel.sheet
+        eq(sheet:onTapAnywhere(nil,{pos={y=0}}),true); eq(E.ReaderPanel.sheet,nil)
+        E.ReaderPanel.show(W.ui,"reader-top-panel"); sheet=E.ReaderPanel.sheet
+        eq(sheet:onTapAnywhere(nil,{pos={y=799}}),true); eq(E.ReaderPanel.sheet,nil)
+        W.ui.rolling=nil; W.ui.paging={onGotoPercentage=function(_,value) W.fraction=value; return true end}
+        E.Library.readerAction(W.ui,"seek",50); eq(W.fraction,.5,"paging expects a fraction; rolling expects percent")
+    end)
+    test("reader controls: native inputs bounded, missing/pending snapshots and marked state",function()
+        local W,E=world()
+        W.ui.toc={toc={}}; W.ui.annotation={annotations={}}
+        for i=1,10000 do W.ui.toc.toc[i]={page=i}; W.ui.annotation.annotations[i]={page=i} end
+        local input=E.Library.readerInput(W.ui)
+        eq(#input.chapters,64); eq(#input.bookmarks,64); eq(input.total,200); eq(input.page,124)
+        W.controls={items={{marked=true}}}; E.ReaderPanel.show(W.ui,"reader-top-panel")
+        ok(row(E,"Remove bookmark"))
+        W.controls={items={},pending=true}; E.ReaderPanel.show(W.ui,"reader-bottom-panel")
+        ok(row(E,"Position not available yet")); ok(row(E,"Chapters not available yet"))
+        local poll=W.poll; E.ReaderPanel.close(); local before=#W.shown; poll(); eq(#W.shown,before)
+        E.ReaderPanel.show(W.ui,"reader-bottom-panel"); local sheet=E.ReaderPanel.sheet
+        W.controls={items={{position="p. 1 of 200 · 0%",chapter="Chapter 1 of 6"}}}; W.poll()
+        eq(E.ReaderPanel.sheet,sheet); ok(row(E,"p. 1 of 200 · 0%"))
+        local b=E.Budgets.get("screens","reader-bottom-panel")
+        eq(b.rows,2); eq(b.bytes,32768); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,1)
+        eq(E.ReaderPanelPlan.fontSize(27,1),16); eq(E.ReaderPanelPlan.fontSize(16,-1),27)
+        eq(E.ReaderPanelPlan.fontSize(23,1),24)
+    end)
+    test("reader controls: owned strip toggles use existing status session",function()
+        local W,E=world()
+        local session={ui=W.ui,bottom_visible=true}
+        E.ReadingStatus={session=session,relayout=function(ui) eq(ui,W.ui); W.relayout=(W.relayout or 0)+1 end}
+        E.Library.readerAction(W.ui,"clock"); eq(session.top_visible,false)
+        E.Library.readerAction(W.ui,"status"); eq(session.bottom_visible,false)
+        local values=E.Library.readerSettings(W.ui); eq(values.clock,false); eq(values.status,false)
+        E.Library.readerAction(W.ui,"clock"); E.Library.readerAction(W.ui,"status")
+        eq(session.top_visible,true); eq(session.bottom_visible,true); eq(W.relayout,4)
     end)
     test("reader Sync adapter: existing writer, offline, document change and late timeout",function()
         local ui={document={file="fixture.epub"},view={footer={percent_finished=0.73}}}
@@ -187,13 +282,36 @@ return function(here, test, ok, eq)
         ui.document.default_font="Book Face"
         return ui
     end
+    test("reader quick controls: hardware sliders, preset destination, size units and native bookmark",function()
+        local W,E=world(); local ui=styleReader(W)
+        W.hardware=true; W.warmth_supported=true
+        W.power={frontlightIntensity=function() return 30 end,frontlightWarmth=function() return 40 end,
+            setIntensity=function(_,n) W.light=n end,setWarmth=function(_,n) W.warmth=n end}
+        local settings=E.Library.readerSettings(ui); eq(settings.light,30); eq(settings.warmth,40)
+        E.ReaderPanel.show(ui,"reader-bottom-panel")
+        local sheet=E.ReaderPanel.sheet
+        local controls
+        for _,r in ipairs(sheet:rows()) do if r.kind=="reader-lights" then controls=r.controls end end
+        eq(#controls,2); controls[1].set(60); eq(W.light,60); controls[2].set(70); eq(W.warmth,70)
+        E.state.module={showSettings=function(_,group) W.settings_group=group end}
+        row(E,"Edit presets").action(); eq(W.settings_group,"reading"); eq(E.ReaderPanel.sheet,nil)
+        ui.font.onSetFontSize=function(_,n) W.size=n; return true end
+        E.Library.readerAction(ui,"size",24); eq(W.size,24)
+        ui.bookmark={onToggleBookmark=function() W.marked=true; return true end}
+        E.ReaderPanel.show(ui,"reader-top-panel"); row(E,"Add bookmark").action(); eq(W.marked,true)
+        W.hardware=false; W.warmth_supported=false
+        E.ReaderPanel.show(ui,"reader-bottom-panel")
+        for _,r in ipairs(E.ReaderPanel.sheet:rows()) do ok(r.kind~="reader-lights") end
+    end)
     test("Custom panel: every Custom choice applies first, edits second and returns with panel open",function()
         local W,E=world(); local ui=styleReader(W)
-        E.ReaderPanel.show(ui,"reader-top-panel")
+        E.ReaderPanel.show(ui,"reader-bottom-panel")
         for _,key in ipairs(E.ReadingStyle.keys) do
             local function cell()
-                for _,r in ipairs(E.ReaderPanel.sheet:rows()) do
-                    if r.choices and r.choices[3].text:find(E.ReadingStyle.names[key] .. "\n",1,true) then return r.choices[3] end
+                for _,row in ipairs(E.ReaderPanel.sheet:rows()) do
+                    for _,r in ipairs(row.groups or {}) do
+                        if r.choices and r.choices[3] and r.choices[3].text:find(E.ReadingStyle.names[key] .. "\n",1,true) then return r.choices[3] end
+                    end
                 end
             end
             local old=E.ReaderPanel.sheet

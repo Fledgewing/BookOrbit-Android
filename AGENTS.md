@@ -107,6 +107,10 @@ source rows and 16 KiB in one batch. Presets share the Book list renderer and wi
 Reader progress surfaces reuse a one-row widget budget, including Book info and
 Details; completion callbacks redraw only a still-visible user-opened panel.
 
+Reader controls copy at most 64 already-loaded native chapter and annotation entries per kind;
+the companion projects their marker/position snapshot. Never load a TOC, scan a sidecar or
+construct a full bookmark index on a panel paint. Native actions stay behind Library.
+
 Custom reading editors inherit a named screen budget through the library interface: one small
 device-local record, no catalog work, decoded JSON, network, subprocess or companion round-trip.
 Each editor paint and style operation logs one info-level timing span; host timings are not device acceptance.
