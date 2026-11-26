@@ -51,11 +51,11 @@ function HomeHostPlan.snapshot(result, account)
         or (result.offline or result.freshness and result.freshness.offline) and "offline-with-data" or "ready"
     -- Missing catalog windows cannot finish before setup. Cached rows still draw,
     -- and a directly entered login works without a server account.
-    if result.pending and account and not account.signedIn
-        and not AccountPlan.login(account,"sync").available and not AccountPlan.login(account,"opds").available then
-        state="signed-out"
-    end
-    local snapshot={state=state,items=result.items or {},count=#(result.items or {}),
+    local setup=result.pending and account and not account.signedIn
+        and not AccountPlan.login(account,"sync").available and not AccountPlan.login(account,"opds").available
+    -- Setup is an actionable error within the registry's existing six-state contract.
+    if setup then state="error" end
+    local snapshot={state=state,setup=setup or nil,items=result.items or {},count=#(result.items or {}),
         total=result.total, next=result.next, error=result.error, freshness=result.freshness,
         data=not result.items and result or nil, bytes=#Cache.encode(result)}
     if #Cache.encode(snapshot)>Budgets.MAX_SNAPSHOT then

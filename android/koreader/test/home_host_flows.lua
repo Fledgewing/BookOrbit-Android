@@ -110,7 +110,10 @@ return function(test,eq,ok,E,W,Widget)
         withHost(function()
             local a={signedIn=false,opds={available=false}}
             local missing=E.HomeHostPlan.snapshot({items={},pending=true},a)
-            eq(missing.state,"signed-out")
+            eq(missing.state,"error"); eq(missing.setup,true)
+            local declared=false
+            for _,state in ipairs(E.WidgetRegistry.booklist.states) do if state==missing.state then declared=true end end
+            ok(declared,"setup cards retain the declared widget state contract")
             local action
             local card=E.HomeWidgets.card({widget="booklist",settings={}},missing,function(id) action=id end,{w=400,h=300})[1]
             eq(card[#card].text,"Sign in"); card[#card].callback(); eq(action,"setup")
