@@ -29,6 +29,9 @@ object ServerAdapters {
         val credentials = ServerCredentials(EncryptedAccountVault.android(ctx))
         val account = BookOrbitAccount(credentials.accountVault, AccountHttp, setupOnSignIn = { false })
         return BookOrbitServerAdapter(credentials, account, ConnectorHttp,
+            legacyAccount = { net.fledgewing.orbitcompanion.server.bookorbit.LegacyCoverSource.read(
+                java.io.File(android.os.Environment.getExternalStorageDirectory(),"koreader/settings.reader.lua")) },
+            catalogJob = { creds,owner,action,manual,done -> AdapterWorker.catalogControl(ctx,creds,owner,action,manual,done) },
             coverReferenceJob = { creds, owner, reference, refresh, done ->
                 AdapterWorker.acquireCoverReference(ctx,creds,owner,reference,refresh,done)
             }, coverJob = { creds, owner, key, done -> AdapterWorker.acquireCover(ctx,creds,owner,key,done) })

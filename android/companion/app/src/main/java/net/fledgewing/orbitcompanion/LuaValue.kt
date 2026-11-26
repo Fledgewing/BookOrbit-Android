@@ -39,6 +39,19 @@ object LuaValue {
     /** A model byte string as a Kotlin String. */
     fun utf8(s: String): String = String(s.toByteArray(L1), Charsets.UTF_8)
 
+    /** JNI/Bundle text is Unicode, unlike the ISO-8859-1 model byte strings in local files.
+     * Convert exactly once so non-ASCII owners, queries and paths survive the provider boundary. */
+    fun transportText(value: Any?): String {
+        val bytes=encode(value)
+        require(bytes.size<=16384)
+        return String(bytes,Charsets.UTF_8)
+    }
+    fun parseTransport(text: String): Any? {
+        val bytes=text.toByteArray(Charsets.UTF_8)
+        require(bytes.size<=8192)
+        return parse(bytes)
+    }
+
     // ------------------------------------------------------------------ JSON
 
     /** A server reply as the model (rapidjson's nulls dropped from objects, as `Cache.encode` drops them). */

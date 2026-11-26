@@ -256,6 +256,27 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
         }.firstOrNull()
     }
 
+    /** Cached offline search reuses books.search and the active bulk generation. Only the
+     * bounded display window is decoded; query values always bind. */
+    fun search(query: String, offset: Int, limit: Int): Map<String,Any?> {
+        require(query.length<=512 && offset>=0 && limit in 1..24)
+        val words=LuaValue.utf8(query).trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(32)
+        if(words.isEmpty()) return mapOf("items" to emptyList<Any>(),"total" to 0L)
+        val generation=meta("bulk_active")?.toLongOrNull()
+        val source=if(generation!=null) "books b JOIN bulk_books c ON c.id=b.id AND c.g=?" else "books b"
+        val item=if(generation!=null) "c.item" else "b.item"
+        val args=mutableListOf<Any?>()
+        if(generation!=null) args.add(generation)
+        val condition=words.joinToString(" AND ") { "b.search LIKE ? ESCAPE '\\'" }
+        args.addAll(words.map { "%"+it.replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%" })
+        val from="$source WHERE $item IS NOT NULL AND $condition"
+        val total=db().query("SELECT count(*) FROM $from",*args.toTypedArray()) { it.long(0)!! }.single()
+        val items=db().query("SELECT $item FROM $from ORDER BY b.search,b.id LIMIT ? OFFSET ?",*(args+listOf(limit,offset)).toTypedArray()) {
+            it.bytes(0)?.let(LuaValue::parse)
+        }.filterNotNull()
+        return mapOf("items" to items,"total" to total)
+    }
+
     /**
      * Saves a reply where [read] finds it again. mode "full" takes the reply as it is; otherwise
      * the saved random pick is kept (LuaValue.settle). -> the stored body.

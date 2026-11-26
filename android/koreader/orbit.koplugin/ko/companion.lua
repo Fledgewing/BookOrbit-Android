@@ -24,8 +24,6 @@ Companion = {
 -- which test_flows.lua "contract" checks this table against.
 Companion.ACTION = {
     -- The cache worker (docs/design/companion-worker.md): a mirror run, a cache check.
-    MIRROR = Companion.PACKAGE .. ".action.MIRROR",
-    CHECK = Companion.PACKAGE .. ".action.CHECK",
     -- The storage limit: the companion counts and removes (OC.storageCount).
     STORAGE = Companion.PACKAGE .. ".action.STORAGE",
     -- Keep copies current: the companion finds the changed copies (Copies.ask).

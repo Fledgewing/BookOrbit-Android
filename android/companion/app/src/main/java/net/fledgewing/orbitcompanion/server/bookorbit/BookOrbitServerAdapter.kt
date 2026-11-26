@@ -10,6 +10,8 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
     private val transport: ConnectorTransport,
     private val coverReferenceJob: (CacheWorker.Creds?, String, String, Boolean, (Map<String, Any?>?, String?) -> Unit) -> Unit =
         { _, _, _, _, done -> done(null,"unsupported") },
+    private val legacyAccount: () -> LegacyCoverSource.Account? = { null },
+    private val catalogJob: (CacheWorker.Creds, String, String, Boolean, (Map<String,Any?>?,String?) -> Unit) -> Unit = { _,_,_,_,done -> done(null,"unsupported") },
     private val coverJob: (CacheWorker.Creds, String, Long, (Map<String, Any?>?, String?) -> Unit) -> Unit =
         { _, _, _, done -> done(null,"unsupported") }) : ServerAdapter {
     override val id = "bookorbit"
@@ -27,6 +29,8 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
     }
     override fun state(): Map<String,Any?> {
         val accountState = account.state()
+        val legacy=if(credentials.login("sync")==null && credentials.login("opds")==null) legacyAccount() else null
+        val sourceOwner=owner()
         fun status(kind: String): Map<String,Any?> {
             val c = credentials.login(kind)
             return credentials.status(kind) + mapOf("server" to c?.server, "username" to c?.user?.let(LuaValue::str),
@@ -35,7 +39,8 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         return mapOf("signedIn" to accountState["signedIn"], "expiresAt" to accountState["expiresAt"],
             "username" to accountState["username"], "server" to accountState["server"],
             "account" to mapOf("set" to (accountState["signedIn"] == true), "origin" to "user".takeIf { accountState["signedIn"] == true }),
-            "sync" to status("sync"), "opds" to status("opds"), "owner" to owner())
+            "sync" to status("sync"), "opds" to status("opds"), "owner" to sourceOwner,
+            "catalog" to mapOf("cachedDetail" to (legacy!=null),"canRefresh" to (legacy!=null || credentials.login("sync")?.owner()==sourceOwner)))
     }
     override fun signIn(server: String, username: String, password: CharArray) {
         try {
@@ -89,7 +94,7 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             }
         }
     }
-    override fun owner(): String? = (credentials.login("opds") ?: credentials.login("sync"))?.owner() ?: account.identity()
+    override fun owner(): String? = (credentials.login("opds") ?: credentials.login("sync"))?.owner() ?: account.identity() ?: legacyAccount()?.owner
     override fun positionOwner(): String? = credentials.login("sync")?.takeIf {
         it.origin == "user" || account.state()["signedIn"] == true
     }?.owner()
@@ -134,6 +139,14 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         val result = mapOf("items" to rows, "next" to (page + 1).takeIf { parsed.hasNext }, "freshness" to mapOf("saved" to true, "origin" to "cached-remote"))
         require(LuaValue.encode(result).size <= 16384)
         return result
+    }
+    override fun catalogControl(owner: String, action: String, manual: Boolean, done: (Map<String,Any?>?,String?) -> Unit) {
+        require(owner.length in 1..4096)
+        require(action in setOf("full","resume","refresh","incremental","covers","stop"))
+        val saved=credentials.login("sync")?.takeIf { it.owner()==owner }?.let { login("sync") }
+        val c=saved?.let { CacheWorker.Creds(it.server,it.user,it.secret) }
+            ?: legacyAccount()?.takeIf { it.owner==owner }?.credentials ?: throw ServerFailure("canceled")
+        catalogJob(c,owner,action,manual,done)
     }
     override fun acquireCoverReference(reference: String, refresh: Boolean, owner: String, done: (Map<String, Any?>?, String?) -> Unit) {
         require(reference.length in 1..4096)
