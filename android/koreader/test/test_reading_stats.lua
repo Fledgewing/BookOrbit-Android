@@ -52,4 +52,27 @@ return function(test,eq,ok,here,Cache)
         eq(e.Budgets.check(b,{rows=1,bytes=16385,snapshotBytes=16385,spawns=0,network=0,roundTrips=0}),nil)
         eq(pcall(e.ReadingStatsWidgets.render,'this-week',{padding=string.rep('x',17000)},{w=400,h=300,rows=2}),false)
     end)
+    test('stats: per-field sources label only reader data and keep overlapping today separate',function()
+        data.sources={days='all your devices',hours='this reader',records='this reader',streak='all your devices'}
+        data.local_today_seconds=600
+        local year=e.ReadingStatsPlan.build('year-in-reading',data,600,300,2)
+        eq(year.source,nil)
+        local week=e.ReadingStatsPlan.build('this-week',data,600,300,2)
+        eq(week.source,nil); eq(week.labels[#week.labels].text,'10m today · this reader (separate)')
+        eq(e.ReadingStatsPlan.build('when-you-read',data,600,300,2).source,'This reader')
+        local records=e.ReadingStatsPlan.build('reading-records',data,600,300,2)
+        eq(records.source,'Pages and sessions · this reader')
+        ok(not records.labels[3].text:find('this reader',1,true))
+        data.sources.streak='this reader'
+        ok(e.ReadingStatsPlan.build('reading-records',data,600,300,2).labels[3].text:find('this reader',1,true))
+        data.hours_available=false
+        eq(e.ReadingStatsPlan.build('when-you-read',data,600,300,2).message,'Enable KOReader statistics')
+        data.records_available=false
+        data.records.books_this_year=17
+        local only=e.ReadingStatsPlan.build('reading-records',data,600,300,2)
+        eq(only.labels[1].text,'Local records unavailable'); eq(only.labels[3].text,'17 books this year')
+        data.year=nil
+        eq(e.ReadingStatsPlan.build('year-in-reading',data,600,300,2).message,'Reading days unavailable')
+    end)
+
 end
