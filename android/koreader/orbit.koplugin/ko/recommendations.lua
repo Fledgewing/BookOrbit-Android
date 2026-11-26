@@ -45,6 +45,7 @@ function Recommendations.pass(why,choices,lost,done)
     end
     local observations={}
     for i,item in ipairs(Recommendations.items) do if i<=8 then observations[item.id]=observe(item) end end
+    local unseen=S.recommended and S.recommended.unseen or 0
     Recommendations.pending=true
     return Library.recommendations({observations=observations,record=S.recommended,backup=S.recommended_backup,choices=choices,lost=lost,wifi=S.wifi_via_companion and Companion.has("wifi")},function(result)
         Recommendations.pending=nil;if result.error then return end
@@ -72,10 +73,11 @@ function Recommendations.pass(why,choices,lost,done)
         S.recommended,S.recommended_backup=result.record,result.backup;saveSettings()
         local actual={}
         for _,item in ipairs(Recommendations.items) do actual[item.id]=observe(item) end
-        Library.recommendations({ack=true,observations=actual,record=result.record,backup=result.backup,wifi=S.wifi_via_companion and Companion.has("wifi")},function(snapshot)
+        Library.recommendations({ack=true,failed=failed,observations=actual,record=result.record,backup=result.backup,wifi=S.wifi_via_companion and Companion.has("wifi")},function(snapshot)
             Recommendations.pending=nil;if snapshot.error then return end
             Recommendations.snapshot=snapshot
-            if snapshot.line then Recommendations.line_pending=true end
+            S.recommended=snapshot.record;saveSettings()
+            if (snapshot.record.unseen or 0)>unseen then Recommendations.line_pending=true;Recommendations.reviewed=false end
             Recommendations.report(why,true)
             if Recommendations.onSnapshot then Recommendations.onSnapshot() end
             if done then done(snapshot) end
@@ -101,6 +103,7 @@ function OrbitAndroid:maybeRecommendedLine(where)
 end
 function OrbitAndroid:recommendedMenuText()
     local line=Recommendations.snapshot.line
+    if Recommendations.reviewed then line=Recommendations.snapshot.seen_line end
     return line and ("Recommended settings: "..line) or "Recommended settings"
 end
 function OrbitAndroid:showRecommended(why)
@@ -151,6 +154,7 @@ function OrbitAndroid:showRecommended(why)
     end
     if snapshot.undo_all then items[#items+1]={text="Undo all",callback=function() choice("all","undo") end} end
     if #items==0 then items[1]={text="Preparing recommended settings…"};Recommendations.pass(why) end
+    Recommendations.reviewed=true;Recommendations.line_pending=false
     if S.recommended then S.recommended.unseen=0;saveSettings() end
     items[#items+1]={text="Done",callback=function() if self.rec_menu then UIManager:close(self.rec_menu);self.rec_menu=nil end end}
     self.rec_menu=require("ui/widget/menu"):new{title="Recommended settings",item_table=items,is_borderless=true,covers_fullscreen=true}

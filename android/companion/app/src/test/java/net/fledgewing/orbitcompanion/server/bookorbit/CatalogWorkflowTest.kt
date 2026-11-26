@@ -45,6 +45,14 @@ class CatalogWorkflowTest {
         fun mark()=run("finish.mark",mapOf("path" to old.path,"document" to CatalogWorkflow.partial(old),"complete" to true,"percentage" to 1.0))
         override fun close() { worker.store.close();external.deleteRecursively() }
     }
+    @Test fun nativeRecommendationLabelsAreProjectedAndAllEightRowsFitTheBudget() {
+        val definitions=RecommendedSettings.items
+        val observations=definitions.associate { it["id"] as String to mapOf("available" to true,"current" to it["ours"]) }
+        val result=RecommendationPlan.evaluate(definitions,mapOf("observations" to observations))
+        assertEquals(8,(result["items"] as List<*>).size);assertTrue(LuaValue.encode(result).size<=16384)
+        val row=(result["items"] as List<*>).map { it as Map<*,*> }.single { it["id"]=="g.sync_all" }
+        assertEquals("BookSync: Sync all books",row["orbit"])
+    }
     @Test fun activeCatalogCommandKeepsAutomaticWifiOffWaitingAfterDequeue() {
         assertFalse(AdapterWorker.busy())
         AdapterWorker.catalogActionWork { assertTrue(AdapterWorker.busy()) }

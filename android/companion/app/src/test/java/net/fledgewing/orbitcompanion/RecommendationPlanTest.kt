@@ -33,6 +33,20 @@ class RecommendationPlanTest {
         assertEquals(1,(second["writes"] as List<*>).size)
         assertEquals("kept",((second["record"] as Map<*,*>)["items"] as Map<*,*>)["gesture"])
     }
+    @Test fun bulkUseLeavesPreviouslyKeptItemsAloneButExplicitUseCanChangeThem() {
+        val first=plan(mapOf("local" to obs("ignore"),"gesture" to obs(mapOf("mine" to true))))
+        val kept=plan(mapOf("local" to obs("ignore"),"gesture" to obs(mapOf("mine" to true))),first["record"],first["backup"],mapOf("all" to "mine"))
+        val bulk=plan(mapOf("local" to obs("ignore"),"gesture" to obs(mapOf("mine" to true))),kept["record"],kept["backup"],mapOf("all" to "ours"))
+        assertTrue((bulk["writes"] as List<*>).isEmpty())
+        val explicit=plan(mapOf("local" to obs("ignore"),"gesture" to obs(mapOf("mine" to true))),kept["record"],kept["backup"],mapOf("local" to "ours"))
+        assertEquals(1,(explicit["writes"] as List<*>).size)
+    }
+    @Test fun failedNativeWritesAreNotCountedAsAppliedDuringAcknowledgement() {
+        val first=plan(mapOf("local" to obs(),"gesture" to obs()))
+        val ack=RecommendationPlan.evaluate(items,mapOf("ack" to true,"failed" to listOf("local","gesture"),
+            "record" to first["record"],"backup" to first["backup"]))
+        assertEquals(0,((ack["record"] as Map<*,*>)["unseen"] as Number).toInt())
+    }
     @Test fun undoRestoresOnlyWhileCurrentValueIsOurs() {
         val first=plan(mapOf("local" to obs("prompt"),"gesture" to obs()))
         val second=plan(mapOf("local" to obs("turn_on"),"gesture" to obs(mapOf("user" to true))),first["record"],first["backup"],mapOf("all" to "undo"))

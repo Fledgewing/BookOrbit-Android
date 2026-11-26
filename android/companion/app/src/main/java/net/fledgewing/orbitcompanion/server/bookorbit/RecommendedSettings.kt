@@ -12,5 +12,15 @@ internal object RecommendedSettings {
         mapOf("id" to "g.sync_all","kind" to "gesture","key" to "hold_top_left_corner","ours" to mapOf("bookorbit_sync_now" to true),"label" to "Gesture: hold top-left corner"),
         mapOf("id" to "g.this_book","kind" to "gesture","key" to "one_finger_swipe_bottom_edge_right","ours" to mapOf("bookorbit_this_book" to true),"label" to "Gesture: swipe right along the bottom edge"),
         mapOf("id" to "g.apps","kind" to "gesture","key" to "two_finger_swipe_north","ours" to mapOf("orbit_open_apps" to true),"needs" to "apps","label" to "Gesture: two-finger swipe up")
-    )
+    ).map { item ->
+        val labels=when(item["key"]) {
+            "sync_forward" -> mapOf("1" to "Ask","2" to "Silent","3" to "Don't sync")
+            "catalog_auto_open" -> mapOf("off" to "Off","filemanager" to "File browser","home" to "Library home")
+            "wifi_enable_action" -> mapOf("turn_on" to "Turn on","prompt" to "Ask","ignore" to "Ignore")
+            else -> mapOf("orbit_sync_and_sleep" to "BookSync: Sync and sleep","bookorbit_sync_now" to "BookSync: Sync all books",
+                "bookorbit_this_book" to "BookSync: This book","orbit_open_apps" to "BookSync: Other apps",
+                "increase_frontlight" to "Brighter frontlight","toggle_page_flipping" to "Page flipping")
+        }
+        item+mapOf("value_labels" to labels)
+    }
 }
