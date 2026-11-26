@@ -98,3 +98,8 @@ Next slices can supply the battery projection, enrich the existing normalized
 book/stat row, use `ReaderPanel.details` from catalog cards, and add the remaining
 reader controls to the shared row renderer. Preserve the single existing sync
 writer and guard completion/repaint against the still-visible user-opened panel.
+
+Integration with F12-F preserves its `reading.stats` operation, worker provider,
+Stats widgets and fixture tests. That operation aggregates the whole history;
+reader book stats remain a single hash-scoped SQL aggregate over the same native
+database, including distinct-page and completion-date semantics needed here.
