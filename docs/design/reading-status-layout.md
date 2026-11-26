@@ -66,8 +66,9 @@ use KOReader's document pagination. Missing/unknown totals show no progress grou
 
 ## W31 correction (maintainer brief approved)
 
-The preview.1 regression is corrected: Small/Medium/Large select fixed 14/18/22
-point faces. Each strip measures one bold text line and adds one scaled pixel of
+The preview.1 regression is corrected: Small/Medium/Large select fixed 12/18/22
+point faces. Small uses regular weight on both strips; Medium and Large remain
+bold. Each strip measures its selected text line and adds one scaled pixel of
 padding per edge. Neither native footer height nor page margins enlarge the text
 or battery. Horizontal anchors follow scaled book margins or rendered PDF bounds;
 the battery group retains its four scaled pixel inset and gaps.
@@ -105,7 +106,13 @@ visibility. Native settings and refresh timers retain their own controller.
 The shared sleep/reading battery program retains a black outline and terminal,
 white inner gap, and black proportional fill at 0–100%. A wider gap prevents the
 outline merging into the fill at full capacity; the reading glyph's scale uses
-the program's actual height. Both canvases retain the same black/white polarity.
+the capital H ink height of the selected face, rounded down to whole pixels,
+rather than the line box. This applies at every size and display scale; the
+charging mark shares that height. At pinned KOReader commit
+`9192014d8bd82a91dc1012473be0f238dedfdb54`,
+`frontend/ui/widget/textwidget.lua:97-114` selects the adjusted weight and measures
+the font line box; `frontend/ui/rendertext.lua:158-190` exposes capital ink above
+the baseline as `sizeUtf8Text(...).y_top`. Both canvases retain the same black/white polarity.
 
 ### One-time repair
 

@@ -83,6 +83,7 @@ local NEEDS = {
     { "datastorage.lua", { "getSettingsDir", "getDocSettingsHashDir" } },
     { "frontend/ui/event.lua", { "new" } },
     { "frontend/ui/time.lua", { "now", "to_s" } },
+    { "frontend/ui/rendertext.lua", { "sizeUtf8Text" } },
     { "frontend/ui/font.lua", { { "smallinfofont", F }, "getFace", { "xx_smallinfofont", F } } },
     -- The Full refresh badge (ko/badge.lua): a toast (taps go on through it) that redraws only its rectangle.
     { "frontend/ui/uimanager.lua", { { "widget.toast", T } } },
