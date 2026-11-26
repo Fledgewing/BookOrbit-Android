@@ -119,7 +119,7 @@ object PatchInstaller {
             val running = p.patchVersionSeen.ifEmpty { null }
             // The app replace was confirmed by the user (UpdateFlow.restartNowAfter): a manual restart.
             if (file != null && running != null && UpdateFlow.staleRestart(running, file, manual = true, screenOff = false, sent = emptySet()) == UpdateFlow.Restart.NOW) {
-                // A user-confirmed update completes in KOReader, including one started on our pages.
+                // Restart now; UpdateReturn restores the origin once the new plugin loads.
                 val now = UpdateReturn.restartNow(userConfirmed = true, fromPage = UpdateReturn.fromPage())
                 log("after the update: patch v$file on disk, KOReader runs v$running: ${if (now) "restarting now" else "waiting for a safe start"}")
                 p.patchAwaitVersion = file
@@ -195,7 +195,7 @@ object PatchInstaller {
             }
             UpdateFlow.Restart.NOW -> {
                 // Automatic updates wait behind a companion page, even at screen-off.
-                // A manual update brings KOReader forward to complete the install.
+                // A manual update restarts now; app updates return to their origin when loaded.
                 if (!manual && (EinkActivity.pageResumed() || UpdateReturn.awaitingLanding())) {
                     if (waitLogged != "page:$want") {
                         waitLogged = "page:$want"
@@ -260,6 +260,7 @@ object PatchInstaller {
         p.patchRestartNow = ""
         log("KOReader runs patch v$running now")
         Updater.status(ctx, UpdateFlow.doneLine(want))
+        UpdateReturn.onPluginLoaded(ctx)
     }
 
     /** This version's release: tagged v<v> (android-v<v> is read too, AGENTS.md "Releases"). */
