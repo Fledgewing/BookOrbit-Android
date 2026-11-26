@@ -25,27 +25,29 @@ return function(test, eq, ok, here, Cache)
     end)
     test("library: all screens and starter widgets declare strict budgets", function()
         local e = setmetatable({}, {__index=_G}); setfenv(assert(loadfile(root .. "logic/budgets.lua")), e)()
-        for _, name in ipairs({"home","library","search","details","series","settings","filter","editor","reader-top-panel","account"}) do
+        for _, name in ipairs({"home","library","search","details","series","settings","battery","filter","editor","reader-top-panel","account"}) do
             local b=e.Budgets.get("screens",name); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,name == "editor" and 0 or 1); ok(b.snapshotBytes<=16384)
         end
-        for _, name in ipairs({"continue-reading","booklist","library"}) do ok(e.Budgets.get("widgets",name)) end
+        for _, name in ipairs({"continue-reading","booklist","library","battery"}) do ok(e.Budgets.get("widgets",name)) end
         eq(pcall(e.Budgets.get,"widgets","undeclared"), false)
     end)
     test("library: bounded ready rows, one batch for a Home paint, no network/fork", function()
         local sends, reads, logs = 0, 0, 0
         local e = setmetatable({Cache=Cache, now_s=function() return 1 end, log=function() logs=logs+1 end,
             LibraryAdapter={ read=function() reads=reads+1; return {items={{key="opaque"}},freshness={saved=true}},128 end,
-                request=function(batch) sends=sends+1; eq(#batch,3); return true end}}, {__index=_G})
+                request=function(batch) sends=sends+1; eq(#batch,5); return true end}}, {__index=_G})
         setfenv(assert(loadfile(root .. "logic/budgets.lua")),e)()
         setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
         local paint=e.Library.paint("home")
         local shelf=paint:widget("booklist")
         eq(shelf:window("reading",{},0,4).items[1].key,"opaque")
         paint:widget("continue-reading"):book("opaque")
+        paint:widget("library"):counts()
         paint:widget("year-in-reading"):readingStats()
-        eq(sends,0); eq(reads,3)
+        paint:widget("battery"):battery()
+        eq(sends,0); eq(reads,5)
         local m=paint:flush(); eq(sends,1); eq(m.roundTrips,1); eq(m.spawns,0); eq(m.network,0)
-        eq(m.bytes,384); eq(m.rows,3); eq(logs,4)
+        eq(m.bytes,640); eq(m.rows,5); eq(logs,6)
         eq(pcall(paint.flush,paint),false)
         eq(pcall(shelf.window,shelf,"all"),false)
     end)
@@ -96,6 +98,29 @@ return function(test, eq, ok, here, Cache)
         e.LibraryAdapter.read=function() return {total=2},128 end
         local r=e.Library.paint("home"):widget("library")
         r:counts(); eq(r.usage.rows,1,"summary is a materialized row")
+    end)
+    test("library: battery widget uses one bounded local row and inherited timing", function()
+        local logs=0
+        local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() logs=logs+1 end,
+            LibraryAdapter={read=function(request)
+                local args=Cache.decode(request); eq(args.op,"battery"); eq(args.limit,1)
+                return {level=78,hours_usual_use=54},1024
+            end,request=function(batch) eq(#batch,1); return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "logic/budgets.lua")),e)(); setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
+        local p=e.Library.paint("home"); eq(p:widget("battery"):battery().level,78)
+        local m=p:flush(); eq(m.rows,1); eq(m.roundTrips,1); eq(m.spawns,0); eq(m.network,0); eq(logs,2)
+        e.LibraryAdapter.read=function() return {level=78},16385 end
+        eq(pcall(function() e.Library.paint("battery"):battery() end),false)
+    end)
+    test("library: settings mode lines inherit the caller's three-row budget", function()
+        local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end,
+            LibraryAdapter={read=function(request)
+                local args=Cache.decode(request); eq(args.op,"mode-estimates"); eq(args.limit,3)
+                return {items={{id="saver"},{id="balanced"},{id="current"}}},512
+            end,request=function(batch) eq(#batch,1); return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "logic/budgets.lua")),e)(); setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
+        local p=e.Library.paint("settings"); eq(#p:modeEstimates().items,3)
+        local m=p:flush(); eq(m.rows,3); eq(m.roundTrips,1); eq(m.spawns,0); eq(m.network,0)
     end)
     test("library: reopening and source events refresh the worker, publications do not loop", function()
         local e=setmetatable({Cache=Cache, now_s=function() return 10 end, log=function() end,

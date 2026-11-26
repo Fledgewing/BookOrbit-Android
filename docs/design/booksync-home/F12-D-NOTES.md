@@ -59,9 +59,9 @@ refresh without exposing a backend client to Settings.
 
 The only new read operation is `Library:modeEstimates()` / `mode-estimates`, a
 three-row worker snapshot keyed by `saver`, `balanced`, `current`. Each row has
-`id`, display `text`, and `measured`. The battery slice can replace the honest
-unmeasured placeholder with “≈ … at your usual use”; Lua performs no estimate
-calculation. Missing snapshots display Estimate pending. No sample duration is
+`id`, display `text`, and `measured`. F12-E supplies measured mode lines from the
+companion battery model, labelled “≈ … at your usual use” with an estimate marker
+when that Wi-Fi pattern lacks evidence. Lua performs no estimate calculation. Missing snapshots display Estimate pending. No sample duration is
 presented as a real device prediction.
 
 ## Performance contract

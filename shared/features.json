@@ -5199,19 +5199,23 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Android 0.12 source implementation",
-          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; measured estimates await the battery slice, reading presets await their slice, and advanced list/exclusion pickers use the companion.",
+          "note": "Android 0.12 grouped settings with measured battery mode lines",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; this source build is not released or device validated. Battery lines need measured rates and 24 h of observed use; reading presets await their slice, and advanced list/exclusion pickers use the companion.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-D-NOTES.md",
               "line": 1
+            },
+            {
+              "path": "docs/design/booksync-home/F12-E-NOTES.md",
+              "line": 3
             }
           ]
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Later platform slice",
-          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; Xteink implementation follows Android.",
+          "note": "Grouped settings and measured power-mode estimates follow Android",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; the companion battery model and Settings integration are Android-only in this increment. Xteink implementation follows Android.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-D-NOTES.md",
@@ -5221,8 +5225,8 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Later platform slice",
-          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; Xteink implementation follows Android.",
+          "note": "Grouped settings and measured power-mode estimates follow Android",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; the companion battery model and Settings integration are Android-only in this increment. Xteink implementation follows Android.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-D-NOTES.md",
@@ -5232,8 +5236,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Later platform slice",
-          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; Xteink implementation follows Android.",
+          "note": "Grouped settings and measured power-mode estimates follow Android",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; the companion battery model and Settings integration are Android-only in this increment. Xteink implementation follows Android. X3 also requires measured flash fit.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-D-NOTES.md",
@@ -5368,19 +5372,19 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: Home, Library and Stats pages; shared filtered lists/search and local Save to Home; legacy Home remains the default",
-          "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
+          "note": "Home, Library and Stats pages with measured Battery, shared filtered lists/search and atomic Save to Home (0.12; unreleased); legacy Home remains the default",
+          "reason": "deliberately deferred: device acceptance, the full Battery page, cached covers and richer book actions follow the staged Android build",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/home_host.lua",
               "line": 1
             }
           ],
-          "deferred": "Battery history, full widget library, cached covers and richer book actions"
+          "deferred": "Full Battery page, full widget library, cached covers and richer book actions"
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Three-page Home wiring and filtered lists follow the Android build",
+          "note": "Three-page Home, measured Battery and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5391,7 +5395,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Three-page Home wiring and filtered lists follow the Android build",
+          "note": "Three-page Home, measured Battery and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5402,7 +5406,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Three-page Home wiring and filtered lists follow the Android build",
+          "note": "Three-page Home, measured Battery and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5420,8 +5424,8 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Plain progress bar and cached reading stats; manual Sync in the top panel",
-          "reason": "deliberately deferred: 0.12 Android implementation is building, not released or device validated; battery projection remains a stub and stats require saved KOReader records plus the tracked-file ledger.",
+          "note": "Plain progress bar, cached reading stats, measured usual-use battery line and manual Sync in the top panel",
+          "reason": "deliberately deferred: 0.12 Android implementation is building, not released or device validated; battery estimates need measured rates and 24 h of observed use, while reading stats require saved KOReader records plus the tracked-file ledger.",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/reader_panel.lua",
@@ -5430,39 +5434,55 @@
             {
               "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ReaderBookStats.kt",
               "line": 1
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/BatteryEstimate.kt",
+              "line": 10
             }
           ]
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Owned reader progress pages planned after Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice.",
+          "note": "Owned reader progress and library battery projection follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.",
           "evidence": [
             {
               "path": "ROADMAP.md",
               "line": 36
+            },
+            {
+              "path": "docs/design/booksync-home/F12-E-NOTES.md",
+              "line": 3
             }
           ]
         },
         "x4": {
           "status": "missing",
-          "note": "Owned reader progress pages planned after Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice.",
+          "note": "Owned reader progress and library battery projection follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.",
           "evidence": [
             {
               "path": "ROADMAP.md",
               "line": 36
+            },
+            {
+              "path": "docs/design/booksync-home/F12-E-NOTES.md",
+              "line": 3
             }
           ]
         },
         "x3": {
           "status": "missing",
-          "note": "Owned reader progress pages planned after Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. X3 also requires measured flash fit.",
+          "note": "Owned reader progress and library battery projection follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. X3 also requires measured flash fit. The companion-backed battery model is Android-only in this increment.",
           "evidence": [
             {
               "path": "ROADMAP.md",
               "line": 36
+            },
+            {
+              "path": "docs/design/booksync-home/F12-E-NOTES.md",
+              "line": 3
             }
           ]
         }
