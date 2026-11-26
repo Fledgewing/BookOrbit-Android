@@ -53,6 +53,12 @@ Open-book flow tests cover sheet, picker and foreground-reader transitions.
 Nonlocal Details retain Home beneath them, so cached detail refreshes work and
 Back returns to Home; local Resume closes Home and restores foreground reading.
 
+F12-F's later server/local projection (`0077684c`) is also integrated: the same
+reading.stats operation supplies per-field provenance and separate local-today
+values when the server has no inclusion watermark. Home retains these labels and
+uses indexed checks on immutable arrays; all four Stats renderers still share
+one host read per paint.
+
 ## Inherited performance rule
 
 AGENTS.md already contains the maintainer's screen/widget performance section.

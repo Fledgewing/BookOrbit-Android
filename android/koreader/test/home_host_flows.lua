@@ -29,7 +29,8 @@ return function(test,eq,ok,E,W,Widget)
                 local d={state="ready",year={intensity={},days_read=1,start="2026-01-01"},
                     week={seconds={0,0,0,0,0,0,60},levels={0,0,0,0,0,0,1},total_seconds=60},
                     hour_levels={},hour_intensity={},peak_hour=22,after_18_percent=100,
-                    records={recorded_pages=3,longest_session_seconds=60,streak=1,best_streak=1}}
+                    records={recorded_pages=3,longest_session_seconds=60,streak=1,best_streak=1},
+                    sources={days="server",hours="this reader",records="this reader",streak="server"},local_today_seconds=60}
                 for i=1,365 do d.year.intensity[i]=0 end
                 for i=1,24 do d.hour_levels[i]=0; d.hour_intensity[i]=0 end
                 return d,#E.Cache.encode(d)

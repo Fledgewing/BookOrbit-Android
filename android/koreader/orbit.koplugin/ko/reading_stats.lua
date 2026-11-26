@@ -20,7 +20,8 @@ function ReadingStatsWidgets.render(id, snapshot, placement)
             bold=bold, max_width=math.max(1,placement.w-x-8)}}
     end
     text(8,4,plan.title,true)
-    if plan.message then text(8,32,plan.message) end
+    if plan.source then text(8,24,plan.source) end
+    if plan.message then text(8,plan.source and 44 or 32,plan.message) end
     for _,v in ipairs(plan.labels) do text(v.x,v.y,v.text) end
     local colors={BB.COLOR_WHITE,BB.COLOR_LIGHT_GRAY,BB.COLOR_GRAY,BB.COLOR_DARK_GRAY,BB.COLOR_BLACK}
     function widget:paintTo(bb,x,y)

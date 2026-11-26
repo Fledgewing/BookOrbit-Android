@@ -5194,13 +5194,13 @@
     },
     {
       "id": "reading-insights",
-      "feature": "Local Year, This week, hourly reading and Records widgets (0.12 foundation)",
+      "feature": "Server-first Year, This week, hourly reading and Records widgets (0.12 foundation)",
       "category": "Behaviour",
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Local aggregates and Home widgets share one reading.stats snapshot per paint (feature/0.12; unreleased)",
-          "reason": "deliberately deferred: device acceptance, local finish ledger and goal settings remain pending after Android Home integration.",
+          "note": "Server-first Stats with per-field provenance and local hourly/session fallback, integrated into Home with one shared snapshot per paint (0.12; unreleased)",
+          "reason": "deliberately deferred: device acceptance and local finish/goal settings remain pending. Dashboard has no inclusion watermark, so local today stays separate.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-F-NOTES.md",
@@ -5215,7 +5215,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Home-integrated reading widgets follow Android; firmware implementation deferred",
+          "note": "Home-integrated server-first Stats follow Android; firmware implementation deferred",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
           "evidence": [
             {
@@ -5227,7 +5227,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Home-integrated reading widgets follow Android; firmware implementation deferred",
+          "note": "Home-integrated server-first Stats follow Android; firmware implementation deferred",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
           "evidence": [
             {
@@ -5239,7 +5239,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Home-integrated reading widgets follow Android; firmware implementation deferred",
+          "note": "Home-integrated server-first Stats follow Android; firmware implementation deferred",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
           "evidence": [
             {
