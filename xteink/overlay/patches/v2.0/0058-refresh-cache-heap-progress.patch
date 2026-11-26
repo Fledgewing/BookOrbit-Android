@@ -404,6 +404,34 @@ diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.h b/src/activit
    void setScanSummary(const BookOrbitDeviceScan::Summary& summary);
    // After the refresh (and the Full refresh, if one ran): Wi-Fi off, covers, back to Home.
    void finishRefresh(bool refreshed);
+diff --git a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+--- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
++++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
+@@ -433,8 +433,13 @@
+       }
+     }
+ #endif
+-  }
+-  if (SLEEP_SYNC_LENDS && extras && !sleepSyncWakeRequested()) OrbiSmartSync::prefetch(epubPath, &sleepSyncWakeRequested);
++    if (SLEEP_SYNC_LENDS && extras && !sleepSyncWakeRequested()) OrbiSmartSync::prefetch(epubPath, &sleepSyncWakeRequested);
++    // The scan resolves naming templates through catalog detail. Keep it on the
++    // lent TLS session too, before releasing the sync's connection; opening a
++    // fresh connection here competes with the PHY at the end of a tight sync.
++    if (SLEEP_SYNC_LENDS && bookOrbitHome && refreshHome && !sleepSyncWakeRequested())
++      BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
++  }
+   syncSession.reset();
+   if (!SLEEP_SYNC_LENDS && refreshHome && !sleepSyncWakeRequested()) {
+     BookOrbitHomeStore::refresh(&sleepSyncWakeRequested, homeCoverSizes);
+@@ -443,7 +448,7 @@
+     // X3: Home's session has closed; its three progress GETs share a fresh sync session.
+     OrbiSmartSync::prefetch(epubPath, &sleepSyncWakeRequested);
+   }
+-  if (bookOrbitHome && refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
++  if (!SLEEP_SYNC_LENDS && bookOrbitHome && refreshHome && !sleepSyncWakeRequested()) BookOrbitDeviceScan::run(&sleepSyncWakeRequested);
+   sleepRadio.reset();
+   SavedWifiConnect::disconnect();
+   if (refreshHome && !sleepSyncWakeRequested()) {
 diff --git a/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp b/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp
 --- a/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp
 +++ b/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp
