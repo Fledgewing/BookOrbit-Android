@@ -60,6 +60,13 @@ CrossInk-Bookorbit `v2.0.0+bookorbit.1-rc3` `87e2e19`; KOReader `v2026.07.1` `91
     `CROSSPOINT_SIM_INPUT_SCRIPT='900:DOWN;…;3000:QUIT'`, with buttons, `POWER`, `SLEEP`, `HOME`,
     X4 Pro `TAP`/`SWIPE`, and `…_AFTER_WAKE` / `…_AFTER_REBOOT` scripts for the processes it
     re-execs. Screenshots are BMPs (`CROSSPOINT_SIM_SCREENSHOTS`).
+    BookSync's shared sleep-sync helper opts into `ORBIFY_SIM_INPUT_FROM_POLL`: its short
+    Power press is timed from the first input poll. Absolute scripts can lose both button
+    edges when settings setup takes longer than the scheduled press (observed: setup at
+    3877 ms, press at 2500–2620 ms). The package's `src/HalGPIO.cpp:392-400` at simulator
+    `e9879b6d9c5f98f9db57c8c4c2dfee573f1585e8` processes all expired events in one poll.
+    The opt-in shim and host regression preserve the press duration after a late boot;
+    absolute input/screenshot clocks and scenario deadlines remain unchanged. No retries.
   - **Network.** Host-backed HTTP goes through `curl`, or with `CROSSPOINT_SIM_USE_SDK_HTTP=1`
     the SDK's real HTTP and resumable download run over OpenSSL. `CROSSINK_SIM_HTTP_MOCK_ROOT`
     serves fixtures.

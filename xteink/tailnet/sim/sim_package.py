@@ -20,6 +20,50 @@ a re-pinned simulator that changed the code shows.
 
 from pathlib import Path
 
+INPUT_CLOCK_HEADER = "orbify_sim_input.h"
+INPUT_CLOCK = """\
+// SPDX-License-Identifier: MIT
+// BookSync: opt-in script time from the first input poll, after boot setup.
+#pragma once
+#include <cstdlib>
+namespace orbify_sim_input {
+struct Clock {
+  bool started = false;
+  unsigned long origin = 0;
+  unsigned long elapsed(unsigned long processMs, bool relative) {
+    if (!relative) return processMs;
+    if (!started) { origin = processMs; started = true; }
+    return processMs - origin;
+  }
+};
+inline unsigned long now(unsigned long processMs) {
+  static Clock clock;
+  static const bool relative = std::getenv("ORBIFY_SIM_INPUT_FROM_POLL") != nullptr;
+  return clock.elapsed(processMs, relative);
+}
+} // namespace orbify_sim_input
+"""
+
+
+def patch_input(src_dir):
+    """Opt-in input epoch; absolute scripts/screenshots keep their existing clock."""
+    changed = []
+    header = Path(src_dir) / INPUT_CLOCK_HEADER
+    if not header.exists() or header.read_text() != INPUT_CLOCK:
+        header.write_text(INPUT_CLOCK)
+        changed.append(INPUT_CLOCK_HEADER)
+    include = '#include "SimulatorInput.h"\n'
+    clock = "  const unsigned long now = millis();\n"
+
+    def transform(text):
+        if include not in text or clock not in text:
+            return text
+        return text.replace(include, include + '#include "orbify_sim_input.h"\n', 1).replace(
+            clock, "  const unsigned long now = orbify_sim_input::now(millis());\n", 1)
+
+    _edit(Path(src_dir) / "HalGPIO.cpp", "orbify_sim_input::now", transform, changed, "input poll clock")
+    return changed
+
 MIN_FREE = """\
 inline size_t heap_caps_get_minimum_free_size(const uint32_t caps) {
   simulator_heap::initialize();
@@ -158,7 +202,7 @@ def _edit(path, marker, transform, changed, what):
 def patch(src_dir):
     """Patch the package sources in src_dir (.pio/libdeps/<env>/simulator/src). Returns what changed."""
     heap = Path(src_dir) / "esp_heap_caps.h"
-    changed = []
+    changed = patch_input(src_dir)
     clock = Path(src_dir) / WIFI_CLOCK_HEADER
     if not clock.exists() or clock.read_text() != WIFI_CLOCK:
         clock.write_text(WIFI_CLOCK)

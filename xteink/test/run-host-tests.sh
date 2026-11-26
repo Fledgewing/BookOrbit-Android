@@ -17,6 +17,32 @@ fi
 
 python3 "$repo/tools/test/test-product-names.py"
 
+# Exercise the generated simulator clock and its guarded/idempotent package edit.
+python3 - "$repo/xteink/tailnet/sim/sim_package.py" "$out" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+sys.dont_write_bytecode = True
+spec = importlib.util.spec_from_file_location("sim_package", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+out = Path(sys.argv[2])
+gpio = out / "HalGPIO.cpp"
+gpio.write_text('#include "SimulatorInput.h"\nvoid processSyntheticEvents() {\n  const unsigned long now = millis();\n}\n')
+assert module.patch_input(out)
+assert not module.patch_input(out), "input patch must be idempotent"
+assert gpio.read_text().count("orbify_sim_input::now(millis())") == 1
+gpio.write_text("// changed upstream anchor\n")
+try:
+    module.patch_input(out)
+except RuntimeError:
+    pass
+else:
+    raise AssertionError("a changed simulator anchor must stop the build")
+PY
+"${CXX:-c++}" -std=c++17 -Wall -Wextra -I"$out" "$here/sim_input_clock_test.cpp" -o "$out/sim_input_clock_test"
+"$out/sim_input_clock_test"
+
 # The streaming JSON parser moved into the FreeInk SDK in CrossInk 2.x.
 "$here/upstream_line_test.sh"
 
