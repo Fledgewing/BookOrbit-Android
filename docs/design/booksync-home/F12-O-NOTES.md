@@ -13,7 +13,7 @@ X4 and X3 follow Android under the maintainer's explicit Android-first ruling.
 - `android/koreader/orbit.koplugin/ko/home_widgets.lua:4` registers the renderer;
   `:18` supplies the existing canvas/text/button helpers. No parallel widget host.
 - `android/koreader/orbit.koplugin/ko/home_host.lua:27` owns a Home paint's batched
-  reads and `:67` its widget failure boundary. Battery adds one need and dispatch.
+  reads and its widget failure boundary. Battery reuses the existing need and adds dispatch.
 - `android/koreader/orbit.koplugin/ko/library.lua:72` supplies mode estimates;
   `:73` already supplies the one-row battery operation. No new library operation.
 - `android/koreader/orbit.koplugin/logic/widget_registry.lua:15` already declares
@@ -28,9 +28,16 @@ X4 and X3 follow Android under the maintainer's explicit Android-first ruling.
 - `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/StatsStore.kt:188`
   remains the sole worker-side snapshot provider and preserves clock boundaries.
 
+F12-J merged during integration (`6434d007`). Its existing
+`logic/battery_widget.lua:1` and `ko/home_widgets.lua:130` interim Battery registration
+are extended here; no parallel scalar formatter or second Battery registration remains.
+The renderer consumes F12-J's immutable `snapshot.data` contract and keeps the shared
+Stats batching, Home navigation, saved filters and foreground-stack gate. Compact
+geometry tests retain the gauge bounds at short and narrow approved spans.
+
 ## UI and snapshot contract
 
-`logic/battery.lua` only selects display rows and geometry. `ko/battery.lua`
+`logic/battery_widget.lua` only selects display rows and geometry. `ko/battery.lua`
 registers 2×2, 1×2, 2×1, 4×3, 2×3 and 4×2 through the existing registry. Estimates
 say “at your usual use” (“· usual use” on one-column tiles); the other figures
 say “reading non-stop” and “standby only”. Medium/large tiles add rates, recorded

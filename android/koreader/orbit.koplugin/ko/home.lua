@@ -195,7 +195,7 @@ end
 -- menus they open, the end-of-book sheet.
 function reading()
     if BatteryUI and (BatteryUI.opening or BatteryUI.active and topWidget() == BatteryUI.active) then return false end
-    if HomeHost and (HomeHost.opening or HomeHost.active and topWidget() == HomeHost.active) then return false end
+    if HomeHost and (HomeHost.opening or HomeHost.foreground()) then return false end
     local ui = liveUI()
     if not (ui and ui.document) then return false end
     if Wifi and Wifi.state and Wifi.state().foreground == false then return false end
