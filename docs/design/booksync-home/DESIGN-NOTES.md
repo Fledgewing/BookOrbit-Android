@@ -868,3 +868,13 @@ Every screen/widget retains its strict inherited budget: companion-owned heavy
 work, bounded ready-to-draw rows/bytes, zero render network/subprocesses, one Home
 batch and at most 16 KiB per widget. Flow geometry is not device typography or
 latency acceptance; the complete revision-16 prototype remains the target.
+
+### Android Settings presentation follow-through (g-settings)
+
+The approved revision-16 Settings card, row order, installed-channel/reader summaries
+and bounded sleep choices now reuse the existing group/library/sleep owners.
+See [implementation and acceptance limits](F12-G-SETTINGS.md). Every screen/widget
+keeps a declared budget inherited by Library: six sleep choices and 16 KiB per
+page, zero render network/subprocesses; device settings are a lifecycle-cached row.
+Counts and choice decoding stay in the companion; paints/calls log info timing
+spans. Device latency and Android power-policy acceptance remain pending.

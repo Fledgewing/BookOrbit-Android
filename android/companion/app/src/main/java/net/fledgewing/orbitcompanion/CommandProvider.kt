@@ -53,7 +53,10 @@ class CommandProvider : ContentProvider() {
 
     private val main by lazy { Handler(Looper.getMainLooper()) }
 
-    override fun onCreate(): Boolean = true
+    override fun onCreate(): Boolean {
+        context?.let(DeviceSettings::initialize)
+        return true
+    }
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         val ctx = context ?: return null
@@ -67,6 +70,10 @@ class CommandProvider : ContentProvider() {
                 return answer(true)
             }
             if (!KoreaderTrust.check(ctx, uid)) return answer(false, "caller")
+            if (method == "${Contract.PACKAGE}.call.DEVICE_SETTINGS") {
+                DeviceSettings.refreshAsync()
+                return answer(true).apply { putString("body",String(LuaValue.encode(DeviceSettings.snapshot()),Charsets.ISO_8859_1)) }
+            }
             if (method == ServerCommands.START) {
                 val encoded = extras?.getString("args")?.takeIf { it.length <= 8192 } ?: return answer(false,"budget")
                 val op = extras.getString("op") ?: return answer(false,"missing")
