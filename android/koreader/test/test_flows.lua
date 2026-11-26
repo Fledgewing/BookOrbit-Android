@@ -2102,10 +2102,8 @@ end)
 test("storage menu: all sizes and fractional GB labels", function()
     local E = getfenv(Orbit.onSuspend)
     local _, m = newUI(false)
-    local row
-    for _, it in ipairs(menuAll(m:menuItems())) do
-        if it.text_func and it.text_func():find("Storage limit:", 1, true) == 1 then row = it; break end
-    end
+    -- The Storage page reuses this shared owner; the Library group no longer duplicates it.
+    local row=m:settingRow("storage_limit_mb")
     ok(row ~= nil, "storage menu exists")
     local labels = { "100 MB", "250 MB", "500 MB", "1 GB", "2.5 GB", "5 GB", "10 GB", "No limit" }
     ok(#row.sub_item_table == #labels, "all choices")

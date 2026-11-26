@@ -302,12 +302,29 @@ function Library:sources(category, offset, limit, caps)
         allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
 end
 
+local function storagePath()
+    local ui=liveUI and liveUI()
+    return ui and ui.document and ui.document.file or nil
+end
+function Library:storage() return self:read("storage.summary",{limit=1,exclude_path=storagePath(),current_folder=G_reader_settings:readSetting("download_dir") or G_reader_settings:readSetting("home_dir")}) end
+function Library:collections(offset,limit) return self:read("collections",{offset=offset or 0,limit=limit or 6}) end
+function Library.storageCommand(op,args,done)
+    args.exclude_path=storagePath()
+    return command(op,function() return LibraryAdapter.command(op,args,function(result)
+        if op=="storage.folder" and result and not result.error and result.download_path then
+            G_reader_settings:saveSetting("download_dir",result.download_path)
+        end
+        done(result)
+    end) end)
+end
+
 -- Companion-materialized Series and grouped catalog windows, including preview row charges.
 function Library:series(key, offset, limit)
     return self:read("series", {key=key,offset=offset or 0,limit=limit or 12})
 end
 function Library:groups(source, query, offset, limit, exclude_current, preview, group_limit)
     return self:read("groups", {source=source,query=query,offset=offset or 0,limit=limit or 8,exclude_current=exclude_current,preview=preview,group_limit=group_limit})
+
 end
 
 -- Settings projections reuse the companion's sleep choices and device settings owners.

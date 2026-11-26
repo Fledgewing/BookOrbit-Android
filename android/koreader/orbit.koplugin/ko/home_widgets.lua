@@ -26,9 +26,9 @@ function HomeWidgets.text(canvas, text, x,y,w,size,ink,bold)
     return HomeWidgets.put(canvas,u.Text:new{text=tostring(text or ""),face=u.Font:getFace(bold and "tfont" or "cfont",size),
         max_width=w,fgcolor=ink and u.BB.COLOR_WHITE or u.BB.COLOR_BLACK},x,y)
 end
-function HomeWidgets.button(canvas,text,x,y,w,h,callback)
+function HomeWidgets.button(canvas,text,x,y,w,h,callback,enabled)
     return HomeWidgets.put(canvas,HomeWidgets.ui().Button:new{text=text,width=w,height=h,padding=0,bordersize=0,
-        text_font_size=16,avoid_text_truncation=false,callback=callback},x,y)
+        text_font_size=16,avoid_text_truncation=false,callback=callback,enabled=enabled~=false},x,y)
 end
 function HomeWidgets.caption(settings, book)
     local cap=settings.cap or 0
@@ -130,28 +130,7 @@ for _,id in ipairs({"year-in-reading","this-week","when-you-read","reading-recor
     end,function() return {op="reading.stats",limit=1} end)
 end
 HomeWidgets.register("library",function(p,snapshot,dispatch,rect)
-    local c=HomeWidgets.canvas(rect.w-2,rect.h-2)
-    local scale=function(n) return Device.screen:scaleBySize(n) end
-    local d=snapshot.data or {}
-    local saved=d.freshness and d.freshness.saved
-    local wide=rect.h>=scale(144)
-    local half=math.floor((rect.w-scale(16))/2)
-    if not wide then
-        HomeWidgets.button(c,_("Library").." · "..(saved and tostring(d.total or 0) or "—").." ›",scale(8),
-            math.max(0,math.floor((rect.h-2-scale(50))/2)),rect.w-scale(18),scale(50),function() dispatch("all") end)
-        return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
-    end
-    HomeWidgets.button(c,_("Library").."  ›",scale(8),0,rect.w-scale(18),scale(50),function() dispatch("all") end)
-    HomeWidgets.text(c,saved and tostring(d.total or 0).." books" or _("Not saved yet"),scale(8),scale(62),wide and half or rect.w-scale(16),20,false,true)
-    if wide then
-        HomeWidgets.button(c,(d.on_device~=nil and tostring(d.on_device) or "—").._(" on device").." ›",
-            scale(8)+half,scale(50),half,scale(50),function() dispatch("device") end)
-        for i,group in ipairs({"author","series"}) do
-            HomeWidgets.button(c,group=="author" and _("Authors ›") or _("Series ›"),scale(8)+(i-1)*half,
-                rect.h-scale(52),half,scale(50),function() dispatch("group",{group=group}) end)
-        end
-    end
-    return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
+    return StorageUI.widget(p,snapshot,dispatch,rect)
 end,function() return {op="library.summary",limit=1} end)
 -- F12-O extends the existing Battery registration with the snapshot-only page renderer.
 HomeWidgets.register("battery",function(p,snapshot,dispatch,rect)

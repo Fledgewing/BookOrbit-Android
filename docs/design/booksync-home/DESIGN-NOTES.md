@@ -926,6 +926,37 @@ batch and at most 16 KiB per widget. Flow geometry is not device typography or
 latency acceptance; the complete revision-16 prototype remains the target.
 
 
+### Android Storage implementation (2026-11-26, g-storage)
+
+The Library widget now consumes `library.summary` plus one `storage.summary`
+row in the existing Home batch. Known local storage figures remain visible before
+the remote catalog is saved. Storage, its confirmation and folder chooser
+share a one-row/16 KiB screen budget; Collections pages contain at most six
+companion-projected rows/16 KiB. All paints and library calls log timing spans.
+No render network, subprocess, catalog scan or capacity calculation runs in Lua.
+The <500/<50/<30 ms device targets remain unconfirmed by host tests.
+
+`ko/home_widgets.lua:126`, `ko/home_host.lua:41`, `ko/library.lua:16` and
+`ko/menu.lua:243` retain their existing owners. `LibraryReadModel.kt:5` publishes
+local storage through the existing cache database, and `BookOrbitLibrary.kt:36`
+normalizes its existing account-scoped Copies ledger through `ServerAdapter`.
+The companion measures volume capacity/free bytes with StatFs and actual file
+sizes; an unavailable measurement has no capacity bar. Books count only tracked
+files; untracked files belong to the unmanaged remainder. A missing reading
+history is not proof that a book was unopened for six months. Old-book removal
+therefore requires a recorded last-open time older than six calendar months.
+The foreground book is excluded from removal candidates. Confirmations bind to
+an exact file preview and preserve sidecars, server copies and progress.
+Busy actions stay disabled; a covered page adopts a completed snapshot on its next
+visible paint, with no additional library read. Closed pages discard results.
+
+Android supports the owned Storage page, patterned bar, warning, removal,
+Collections index and folder chooser. Firmware follows the authorized later
+pass. Small Library cards retain only the links that fit 50 px targets; M8C
+2×2 cards expose Authors, Series and Collections. The folder chooser persists
+its selection in the companion and sets KOReader's download directory through
+the library interface after success. This is unreleased foundation work;
+real-device typography, touch and timing acceptance still follow.
 ## Android reader-panel implementation
 
 The reader slice extends the existing panel, Library, Custom and status-strip
@@ -936,6 +967,7 @@ budget, zero render network/subprocesses and ≤16 KiB widget snapshots. Native
 capture copies at most 64 cached entries per marker kind, never a full TOC or
 sidecar. See [implementation and pinned native citations](G-READER-NOTES.md).
 Host flow tests do not establish physical font fit or device latency.
+
 
 ### Android Series and grouped catalog presentation (2026-11-26)
 
@@ -981,6 +1013,7 @@ owns bounded reads, `logic/filter_sheet.lua:15` owns neutral context,
 `server/bookorbit/BookOrbitProjection.kt:155` already owns worker filtering/joins.
 Plugin-relative paths are under `android/koreader/orbit.koplugin/`; companion paths
 are under `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/`.
+
 
 ### Android Settings presentation follow-through (g-settings)
 

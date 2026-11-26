@@ -194,6 +194,7 @@ end
 -- and drops it when it has gone stale. Exceptions are only what the reader does in the book:
 -- menus they open, the end-of-book sheet.
 function reading()
+    if StorageUI and (StorageUI.opening or StorageUI.active and topWidget() == StorageUI.active) then return false end
     if BatteryUI and (BatteryUI.opening or BatteryUI.active and topWidget() == BatteryUI.active) then return false end
     if HomeHost and (HomeHost.opening or HomeHost.foreground()) then return false end
     local ui = liveUI()
