@@ -10,6 +10,8 @@ return function(test, eq, ok, here, M)
         eq(#F.new{source="on-device"}:rows(),8)
         eq(F.new{source="search"}.query.sort,"match")
         eq(#F.new{source="reading"}:rows(),8)
+        eq(F.new{source="reading"}.query.sort,"last"); eq(F.new{source="reading"}.query.dir,"desc")
+        eq(F.new{source="recently-added"}.query.sort,"added")
     end)
     test("filter: chips remove one tick, sort resets order, reset preserves search",function()
         local m=F.new{source="search",query={q="stars",author={"A","B"},show="unread",dir="desc"}}
@@ -19,6 +21,8 @@ return function(test, eq, ok, here, M)
         m:clear("sort"); eq(m.query.dir,"asc"); eq(m.query.sort,"match")
         m:choose("show",{id="any"}); eq(m.query.show,"all")
         m:reset(); eq(m.query.q,"stars"); eq(#m:chips(),0); eq(m:presentation(0).active,false)
+        local searchedList=F.new{source="all",query={q="stars",show="unread"}}
+        searchedList:reset(); eq(searchedList.query.q,"stars")
         local custom=F.new{defaults={show="unread"}}
         custom:choose("show",{}); eq(custom.query.show,"all"); custom:reset(); eq(custom.query.show,"unread")
     end)

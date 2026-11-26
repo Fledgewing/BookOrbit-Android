@@ -29,7 +29,8 @@ it; `:header(total)` returns the shared active icon ID, subtitle, removable chip
 and callbacks. The host gives the same query to its library window and takes the
 subtitle total from that window. `onChange(query)` invalidates/reloads the host;
 `onApply(query)` closes/applies. All callbacks receive copies. Search defaults
-preserve its search text and Best match order on reset. On device hides Where;
+preserve its search text and Best match order on reset. List searches also retain
+their query; Reading now and Recently added inherit the library's default ordering. On device hides Where;
 Reading now hides Show. Context defaults can supply source-specific grouping/order.
 
 Home's layout owner supplies `onSave{source="custom-filter",query=...}` and owns

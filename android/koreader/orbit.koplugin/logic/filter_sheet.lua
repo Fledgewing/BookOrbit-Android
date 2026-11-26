@@ -11,13 +11,15 @@ function FilterSheet.new(context)
     context=context or {}
     local source=context.source or "library/all"
     local kind=type(source)=="table" and source.kind or source
-    local defaults={show="all",where="anywhere",group="none",sort=kind=="search" and "match" or "order",dir="asc"}
+    local defaults={show="all",where="anywhere",group="none",
+        sort=({search="match",reading="last",["recently-added"]="added",series="series"})[kind] or "order",
+        dir=(kind=="reading" or kind=="recently-added") and "desc" or "asc"}
     for k,v in pairs(context.defaults or {}) do defaults[k]=Layout.copy(v) end
     local query=Layout.copy(defaults)
     for k,v in pairs(context.query or {}) do query[k]=Layout.copy(v) end
     if query.length then query.len=query.length; query.length=nil end
     if query.wtr then query.show="want-to-read"; query.wtr=nil end
-    if kind=="search" then defaults.q=query.q end
+    if defaults.q==nil then defaults.q=query.q end
     return setmetatable({source=source,defaults=defaults,query=query,
         hideShow=kind=="reading",hideWhere=kind=="on-device",offset=0}, {__index=FilterSheet})
 end
@@ -34,7 +36,7 @@ function FilterSheet:value(k)
     if FilterSheet.MULTI[k] then return (not v or #v==0) and "Any" or (#v==1 and v[1] or #v .. " chosen") end
     if type(v)=="table" then
         if k=="len" then return v.max==249 and "Short" or v.min==250 and v.max==450 and "Medium" or v.min==451 and "Long" or "Custom length" end
-        if k=="rating" then return tostring(v.min or 0) .. "★ and up" end
+        if k=="rating" then return v.min==5 and "5★ only" or tostring(v.min or 0) .. "★ and up" end
         if k=="added" then return "Since " .. tostring(v.min or "…") end
     end
     return labels[v] or ({len="Any length",rating="Any rating",added="Any time"})[k] or tostring(v or "Any")
@@ -76,7 +78,7 @@ function FilterSheet:chips()
         if self:changed(k) or k=="sort" and self:changed("dir") then
             if self.MULTI[k] then
                 for _,v in ipairs(self.query[k] or {}) do chips[#chips+1]={key=k,value=v,label=v} end
-            else chips[#chips+1]={key=k,label=k=="group" and ("By " .. tostring(self.query[k])) or self:value(k)} end
+            else chips[#chips+1]={key=k,label=k=="group" and (self.query[k]=="none" and "Not grouped" or "By " .. tostring(self.query[k])) or self:value(k)} end
         end
     end
     return chips
