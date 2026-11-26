@@ -326,7 +326,7 @@ diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activ
  }
  
  void BookOrbitHomeRefreshActivity::setScanSummary(const BookOrbitDeviceScan::Summary& summary) {
-@@ -152,8 +168,17 @@
+@@ -152,8 +168,23 @@
    WallClock::checkpoint();
  
    const auto sizes = BookOrbitHomeLayout::coverSizes(renderer);
@@ -336,16 +336,22 @@ diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activ
 +    OrbifyCache::ScopedMode refresh(orbify::cache::Mode::Refresh);
 +    BookOrbitCatalogClient::Session homeSession;
 +    std::vector<BookOrbitCatalogSection> root;
++    onRefreshProgress(this,0,BookOrbitHomeSnapshot::SHELVES+3,0,0);
 +    BookOrbitCatalogClient::fetchRootSections(root);
-+#endif
++    return BookOrbitHomeStore::refresh(nullptr, sizes,
++      [](void* ctx,size_t done,size_t total,size_t books,size_t covers) {
++        BookOrbitHomeRefreshActivity::onRefreshProgress(ctx,done+1,total+1,books,covers);
++      }, this);
++#else
 +    return BookOrbitHomeStore::refresh(nullptr, sizes, &BookOrbitHomeRefreshActivity::onRefreshProgress, this);
++#endif
 +  }();
    if (refreshed) {
 +    BookOrbitCatalogClient::Session scanSession;  // every scanned book shares one TLS connection
      const BookOrbitDeviceScan::Progress progress{this, &BookOrbitHomeRefreshActivity::onScanProgress};
      setScanSummary(BookOrbitDeviceScan::run(nullptr, &progress));
  #if CROSSINK_TAILNET_ORBIFY_COPY_REFRESH
-@@ -191,8 +216,12 @@
+@@ -191,8 +222,12 @@
    const auto sizes = BookOrbitHomeLayout::coverSizes(renderer);
  #if CROSSINK_TAILNET_ORBIFY_SLEEP
    if (WiFi.status() == WL_CONNECTED) {
@@ -360,7 +366,7 @@ diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activ
    }
  #endif
    SavedWifiConnect::disconnect();
-@@ -204,8 +233,19 @@
+@@ -204,8 +239,19 @@
      showStep(State::DecodingCovers);
      BookOrbitHomeStore::decodePendingCovers(nullptr, sizes);
    }
@@ -380,7 +386,7 @@ diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activ
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
    if (userFullRefresh) {
      silentRestart();
-@@ -246,6 +286,10 @@
+@@ -246,6 +292,10 @@
      return;
    }
    if (done) return;
@@ -391,7 +397,7 @@ diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activ
    if (mirrorPopupUntil != 0 && now >= mirrorPopupUntil) {
      {
        RenderLock lock(*this);
-@@ -378,9 +422,16 @@
+@@ -378,9 +428,16 @@
    const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
    renderer.clearScreen();
    GUI.drawHeader(renderer, Rect{screen.x, screen.y + metrics.topPadding, screen.width, metrics.headerHeight},
@@ -409,7 +415,7 @@ diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activ
    if (total > 0) {
      snprintf(line, sizeof(line), "%u / %u", static_cast<unsigned>(done), static_cast<unsigned>(total));
      UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, y, line);
-@@ -421,5 +472,5 @@
+@@ -421,5 +478,5 @@
      }
    }
  #endif

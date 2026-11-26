@@ -441,20 +441,21 @@ bool readWindow(const std::string& url, JsonVariantConst filter, JsonDocument& o
   IndexEntry exact;
   const auto account=BOOKORBIT_STORE.getUsername();
   const bool hadExact=loadEntry(keyHash(keyForUrl(account,"GET",url)),exact);
-  uint32_t oldest=UINT32_MAX,validated=UINT32_MAX;bool notUpdated=false;
+  std::pair<uint32_t,uint32_t> oldest{UINT32_MAX,UINT32_MAX};
+  uint32_t validated=UINT32_MAX;bool notUpdated=false;
   JsonDocument window(&psram);
   const bool ok=orbify::catalog::readCachedWindow(url,[&](const std::string& source,JsonDocument& doc) {
     IndexEntry entry;
     if(!loadEntry(keyHash(keyForUrl(account,"GET",source)),entry) ||
        !readDocument(entryPath(entry.hash),doc) || !doc["items"].is<JsonArray>() ||
        (doc["size"]|size_t(100))!=orbify::catalog::FETCH_SIZE) return false;
-    oldest=std::min(oldest,entry.usedAt);
+    oldest=std::min(oldest,std::make_pair(entry.fetchedAt,entry.usedAt));
     validated=std::min(validated,entry.validatedAt?entry.validatedAt:entry.fetchedAt);
     notUpdated|=(entry.flags&FLAG_NOT_UPDATED)!=0;
     return true;
   },window,&psram);
   // A later explicit 20-row refresh wins over an older 100-row source.
-  if(!ok || (hadExact && exact.usedAt>=oldest)) return false;
+  if(!ok || (hadExact && std::make_pair(exact.fetchedAt,exact.usedAt)>=oldest)) return false;
   out.clear();orbify::bulk::project(window.as<JsonVariantConst>(),filter,out.to<JsonVariant>());
   if(!out.overflowed())windowStamps[nextWindowStamp++%3]={keyHash(keyForUrl(account,"GET",url)),{true,validated,notUpdated}};
   OrbifyHeap::logHeap("after saved catalog window");
