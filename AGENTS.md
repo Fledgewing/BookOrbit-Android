@@ -39,6 +39,14 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
 
 ## Product principles
 
+- **UI calls BookSync's library interface.** Binding on the KOReader plugin, Android companion
+  and Xteink overlay. Maintainer rule 2026-11-26, verbatim:
+  "all API calls the UI makes should be to our own interface so that we can plumb BookOrbit / Grimmory separately."
+  UI code calls only BookSync's library interface; BookOrbit and Grimmory are adapters behind it.
+  Gate server-dependent features on adapter capabilities, never server identity. Filters are
+  neutral objects that adapters translate, with local fallback on the cached catalog.
+  The interface is introduced in 0.12 ([BookSync Home's owned-client design](docs/design/backend-independence.md#1-owned-android-client-and-ledger)).
+
 - **Nothing interrupts reading.** While a book is open in the foreground, nothing from BookSync,
   the companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader
   or takes focus. It waits for the next moment nobody is reading, or is dropped when stale. The
