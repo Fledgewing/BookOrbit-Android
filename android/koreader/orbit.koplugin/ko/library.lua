@@ -21,6 +21,7 @@ function Library:read(op, args)
     assert(not self.metrics.flushed, "Library paint already flushed")
     local rows, bytes = 0, 0
     local finish = Budgets.span("library." .. op, now_s, function(line) log(line, "rows", rows, "bytes", bytes) end)
+    local function read()
     args = args or {}
     args.op = op
     args.limit = math.max(1, math.min(self.budget.rows, Budgets.MAX_ROWS, Budgets.libraryWindow.rows,
@@ -28,15 +29,20 @@ function Library:read(op, args)
     args.bytes = math.min(self.budget.bytes, Budgets.libraryWindow.bytes, Budgets.MAX_SNAPSHOT)
     local request = Cache.encode(args)
     assert(#request <= Budgets.MAX_REQUEST, "Library request exceeds budget")
+    assert(self.metrics.bytes + args.bytes <= self.screen_budget.bytes, "Library page byte budget exhausted")
+    assert(self.metrics.rows + args.limit <= self.screen_budget.rows, "Library page row budget exhausted")
+    assert(self.seen[request] or #self.pending < Budgets.MAX_BATCH, "Library paint request budget exceeded")
     local result, decoded = LibraryAdapter.read(request)
     if result then
         rows, bytes = result.items and #result.items or 1, decoded or 0
         assert(rows <= args.limit and bytes <= args.bytes, "Library call budget exceeded")
         local call = counts(); call.rows, call.bytes, call.snapshotBytes = rows, bytes, bytes
         assert(Budgets.check(Budgets.libraryWindow, call))
-        self.usage.rows, self.usage.bytes = self.usage.rows + rows, self.usage.bytes + bytes
-        self.usage.snapshotBytes = self.is_widget and self.usage.bytes or math.max(self.usage.snapshotBytes, bytes)
-        assert(Budgets.check(self.budget, self.usage))
+        local usage = counts()
+        usage.rows, usage.bytes = self.usage.rows + rows, self.usage.bytes + bytes
+        usage.snapshotBytes = self.is_widget and usage.bytes or math.max(self.usage.snapshotBytes, bytes)
+        assert(Budgets.check(self.budget, usage))
+        for k,v in pairs(usage) do self.usage[k]=v end
         self.metrics.rows, self.metrics.bytes = self.metrics.rows + rows, self.metrics.bytes + bytes
         self.metrics.snapshotBytes = math.max(self.metrics.snapshotBytes, self.usage.snapshotBytes)
         assert(Budgets.check(self.screen_budget, self.metrics))
@@ -46,8 +52,12 @@ function Library:read(op, args)
         self.seen[request] = true
         table.insert(self.pending, request)
     end
-    finish()
     return result or {items={}, freshness={saved=false}, pending=true}
+    end
+    local ok,result=pcall(read)
+    finish()
+    if not ok then error(result,0) end
+    return result
 end
 function Library:capabilities() return self:read("capabilities") end
 function Library:window(source, query, offset, limit)
@@ -67,3 +77,23 @@ function Library:flush()
     self.pending = {}
     return self.metrics
 end
+
+-- Owned read-model notifications. The adapter uses the existing companion event poll.
+function Library:lists(limit) return self:read("lists", {limit=limit}) end
+function Library.subscribe(callback)
+    Library.listener = callback
+    LibraryAdapter.watch(true)
+    return function()
+        if Library.listener == callback then Library.listener=nil; LibraryAdapter.watch(false) end
+    end
+end
+function Library.changed(event)
+    if Library.listener then Library.listener(event) end
+end
+function Library.open(row)
+    if type(row.local_path) ~= "string" then return false end
+    require("apps/reader/readerui"):showReader(row.local_path)
+    return true
+end
+
+function Library.retry() LibraryAdapter.reset() end

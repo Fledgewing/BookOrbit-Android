@@ -452,3 +452,11 @@ Statistics migration preserves KOReader Android's WAL journal mode (`frontend/de
 and a stable `token` for the backup-based global `reader_footer_mode` repair. The
 plugin changes only a matching native global setting in memory, never the loaded
 footer or document, and persists the token to ignore replay after later user changes.
+
+The owned Home host also uses `lists(limit)` on the library context. Its materialized
+rows contain opaque `key`, display `title` and cached `count`; incomplete membership
+is “Not saved yet”. Book windows may include `local_path` from the owner-scoped,
+worker-checked file ledger. The plugin opens only that local file through
+`Library.open`; no widget resolves identities or performs a download. A changed
+publication emits `library`; catalog publication emits `library_source`. These reuse
+the acknowledged event queue. They invalidate an already visible Home, never show it.

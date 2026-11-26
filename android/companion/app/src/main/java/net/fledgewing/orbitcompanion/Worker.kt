@@ -110,7 +110,8 @@ object Worker {
             val owner = i.getStringExtra("owner") ?: return
             synchronized(lock) { patches.addLast {
                 val requests = LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? List<*> ?: return@addLast
-                if (requests.size <= LibraryReadModel.MAX_BATCH) LibraryReadModel(worker().store).publish(LuaValue.str(owner), requests)
+                if (requests.size <= LibraryReadModel.MAX_BATCH && LibraryReadModel(worker().store).publish(LuaValue.str(owner), requests))
+                    worker().event(mapOf("kind" to "library", "owner" to LuaValue.str(owner)))
             }; lock.notifyAll() }
             return start()
         }
