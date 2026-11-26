@@ -29,6 +29,13 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             return if (current != null && book != null) result + mapOf("items" to listOf(book +
                 mapOf("progress" to current * 100, "progress_origin" to "local-reader"))) else result
         }
+        if (op == "cover") {
+            val id = BookOrbitLibrary.id(owner,"book",a["key"]) ?: return mapOf("error" to "missing")
+            val path = store.meta("cover_file_$id")?.let(LuaValue::utf8)
+            val file = path?.let { java.io.File(it) }
+            return mapOf("local_path" to file?.takeIf { it.isFile }?.path?.let(LuaValue::str),
+                "stale" to (store.meta("cover_stale_$id") != null), "freshness" to freshness(file?.isFile == true))
+        }
         if (op == "account.state") return accountState()
         if (op == "capabilities") {
             val remote = fallbackReadingStats(owner)
