@@ -150,9 +150,12 @@ class CallerTrustTest {
         val repeated = shadowOf(app).nextStartedActivity!!
         assertEquals("restart", repeated.getStringExtra(Contract.EXTRA_COMMAND))
         assertEquals("same pending request", id, repeated.getStringExtra(Contract.EXTRA_COMMAND_ID))
-        val ask = Bundle().apply { putString("command", "restart"); putString("id", id) }
+        Prefs(app).restartReopen = "1"
+        val ask = Bundle().apply { putString("command", "restart"); putString("id", id); putString("source", "start") }
         assertEquals("1", call(koUid, CommandProvider.TAKE_COMMAND, ask)?.getString("ok"))
         assertEquals("0", call(koUid, CommandProvider.TAKE_COMMAND, ask)?.getString("ok"))
+        assertFalse("cold start already completed the restart", Prefs(app).restartUserStarted)
+        assertEquals("", Prefs(app).restartReopen)
         assertTrue(Koreader.start(app, "before RELAUNCH", HomeCommands.HOME, plugin = "0.11.4-preview.2"))
         assertEquals(HomeCommands.HOME, shadowOf(app).nextStartedActivity!!.getStringExtra(Contract.EXTRA_COMMAND))
     }
