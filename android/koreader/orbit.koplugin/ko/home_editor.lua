@@ -116,7 +116,7 @@ function HomeEditor.create(host)
                     local rect=HomeHostPlan.rect(p,grid,w-2*gap,h-top-bottom,gap)
                     local contract=WidgetRegistry[p.widget]
                     local title=(p.settings or {}).title
-                    if type(title) ~= "string" then title=contract and contract.name or p.widget end
+                    if type(title) ~= "string" or #title>80 then title=contract and contract.name or p.widget end
                     local label=(m.selected==p.instance and "✓ " or "")..title.." · "..p.w.."×"..p.h
                     HomeWidgets.put(canvas,HomeWidgets.ui().Button:new{text=label,width=rect.w,height=rect.h,
                         bordersize=m.selected==p.instance and 3 or 1,text_font_size=16,avoid_text_truncation=false,

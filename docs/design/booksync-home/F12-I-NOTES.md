@@ -64,6 +64,7 @@ joins remain companion work. The editor draws geometry only, never widget snapsh
 `logic/budgets.lua` declares editor and picker limits: current-page placements
 at most 128, at most 208 draw controls, picker at most three rows/24 controls,
 zero decoded bytes, subprocesses, render network and companion round-trips.
+Displayed widget titles are bounded to 80 bytes (oversized imported titles use the widget name).
 Move tests poison unrelated pages and assert every deterministic ceiling; encoding,
 full-document validation and IO happen on Done, never on arrow presses.
 

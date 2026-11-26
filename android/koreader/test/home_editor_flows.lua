@@ -80,10 +80,12 @@ return function(test,eq,ok,E,W,Widget,withHost)
             local e=editor(); local m=e.model
             -- If a move projects/validates another page, accessing it fails.
             m.document.pages[2]=setmetatable({}, {__index=function() error("unrelated page touched") end})
+            m.document.pages[1].placements[2].settings.title=string.rep("x",100000)
             m.selected="also"
             local calls=#reads
             click(e,"→"); eq(#reads,calls)
             ok(e.metrics.rows<=128); ok(e.metrics.drawNodes<=208)
+            for _,control in ipairs(e[1][1]) do if control.text then ok(#control.text<=160,"bounded displayed labels") end end
             local b=E.Budgets.get("screens","editor")
             ok(E.Budgets.check(b,e.metrics)); eq(b.targetMs,100)
             for _,field in ipairs({"rows","bytes","spawns","roundTrips","network","snapshotBytes","drawNodes"}) do
