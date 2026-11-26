@@ -92,3 +92,8 @@ The latest feature branch's F12-F reading-statistics integration is retained: bo
 worker providers share the existing `LibraryReadModel` and one Home batch. Merge
 coverage exercises battery and reading-statistics operations together; neither
 operation replaces the other's capability, registration or projection provider.
+
+The updated library prerequisite also keeps ownership reads on the plugin's
+already-loaded account settings: no legacy client construction or lazy reading
+ledger initialization on the render path. Its regression is retained alongside
+the battery snapshot budget tests (see F12-A-NOTES.md's pinned source evidence).

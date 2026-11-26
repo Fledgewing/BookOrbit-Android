@@ -34,7 +34,8 @@ References below identify the reused code at baseline `bfb2930`:
 
 - `ko/db.lua:64`: existing read-only connection and 20 ms busy timeout.
 - `ko/store.lua:38`: owner, reading and busy/memo gates; `:92` prepared reads.
-- `ko/cache.lua:105`, `:379`: current owner/client bridge, private to the adapter binding.
+- `ko/cache.lua:105` and `ko/bookorbit.lua:51`: current owner normalization and
+  already-loaded account settings, private to the adapter binding.
 - `ko/copies.lua:57`, `:75`: account-scoped tracked-file ledger, checked by the worker.
 - Companion `CacheStore.kt:20`, `:209`, `:216`: same database, canonical books and lazy details.
 - `BulkCatalog.kt:6`, `FastCatalogRefresh.kt:291`: existing generation tables and atomic publication.
@@ -134,3 +135,11 @@ Initial PR validation exposed a pre-existing patch-application failure in Xteink
 patch 0056. The prerequisite was subsequently repaired in main PR #138 and merged
 into `feature/0.12`. This slice rebases onto that prerequisite; it contains no
 firmware changes. Existing cross-platform CI coverage remains in force.
+
+The read path deliberately avoids `OC.client()`/upstream `newClient()`. At pinned
+BookOrbit `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`,
+`koreader-plugin/bookorbit.koplugin/main.lua:259` calls `setAccount` from `apiOpts`;
+`bookorbit_state_manager.lua:232` can call `ensure` on an account change, and
+`:113` opens the legacy state. The adapter reads the plugin's already-loaded
+`settings` scalars and reuses `OC.owner`; a regression rejects client construction
+on ownership/window reads. This keeps even the cold/account-change path light.
