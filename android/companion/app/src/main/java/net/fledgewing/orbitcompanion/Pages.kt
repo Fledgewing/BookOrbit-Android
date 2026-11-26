@@ -587,7 +587,7 @@ object Setup {
                     !plNeeds -> "Version $plV · it updates itself from your library server"
                     prefs.pluginInstallStatus.isNotEmpty() -> "Not installed: ${prefs.pluginInstallStatus}"
                     plV == null -> "Not installed"
-                    else -> "Older than the BookSync plugin needs"
+                    else -> "Older than the BookSync plugin needs (v${ServerAdapters.connector.minimumVersion})"
                 },
                 action = if (!plNeeds) null else if (plV == null) "Install" else "Update",
                 id = "plugin",
