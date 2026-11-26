@@ -41,6 +41,8 @@ class AccountAdapterTest {
                 else -> BookOrbitAccount.Reply(200,emptyList<Any>())
             }
         }, {now}, logs::add, setupOnSignIn = { false })
+        var coverOwner: String? = null
+        var coverId: Long? = null
         val adapter = BookOrbitServerAdapter(credentials,account,object : BookOrbitServerAdapter.ConnectorTransport {
             override fun request(server: String, path: String, method: String, body: Map<String, Any?>?, headers: Map<String, String>): BookOrbitAccount.Reply {
                 calls.add(path to headers); lastBody = body
@@ -53,12 +55,33 @@ class AccountAdapterTest {
                 })
             }
             override fun download(server: String,path: String,headers: Map<String,String>,destination: File): Boolean { calls.add(path to headers); lastDownload = true; return true }
-        })
+        }) { _, owner, id, done ->
+            coverOwner=owner; coverId=id; done(mapOf("local_path" to "/fixture/cover.jpg"),null)
+        }
         fun user(kind: String) = adapter.setLogin(kind,"https://library.invalid","direct-$kind","separate-secret".toCharArray())
         fun account() = adapter.signIn("https://library.invalid","fixture","account-password".toCharArray())
         fun set(kind: String) = (adapter.state()[kind] as Map<*,*>)["set"]
         fun origin(kind: String) = (adapter.state()[kind] as Map<*,*>)["origin"]
         fun canSync() = adapter.position("a".repeat(32))
+    }
+    @Test fun coverCommandResolvesOnlyCurrentAccountKeysInsideAdapter() {
+        val k=Kit(); k.user("sync")
+        val owner=k.credentials.login("sync")!!.owner()
+        var result: Map<String,Any?>? = null
+        k.adapter.acquireCover(BookOrbitLibrary.key(owner,"book",7)) { value,error ->
+            assertNull(error); result=value
+        }
+        assertEquals(owner,k.coverOwner); assertEquals(7L,k.coverId)
+        assertEquals("/fixture/cover.jpg",result!!["local_path"])
+        k.coverId=null
+        try {
+            k.adapter.acquireCover(BookOrbitLibrary.key("another-account","book",7)) { _,_ -> fail() }
+            fail()
+        } catch (e: ServerFailure) { assertEquals("missing",e.kind) }
+        assertNull(k.coverId)
+        k.adapter.removeLogin("sync")
+        try { k.adapter.acquireCover(BookOrbitLibrary.key(owner,"book",7)) { _,_ -> fail() }; fail() }
+        catch (e: ServerFailure) { assertEquals("unauthorized",e.kind) }
     }
     @Test fun syncAndOpdsWorkIndividuallyWithoutAccountAndNeverReturnSecrets() {
         val sync = Kit(); sync.user("sync")
