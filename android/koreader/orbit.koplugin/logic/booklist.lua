@@ -36,9 +36,10 @@ function BookList.choose(cfg, option)
     local next=Layout.copy(cfg)
     local automatic=not cfg.renamed and (cfg.title==BookList.name(cfg) or cfg.title=="Book list" or cfg.title=="Also reading" or cfg.title=="On device")
     next.src=option.src; next.source_title=option.title
-    next.source=nil; next.offset=nil; next.exclude_current=nil
+    next.offset=nil
+    if cfg.src~=option.src then next.source=nil; next.exclude_current=nil end
     if automatic then next.title=option.title end
-    if next.src~="custom" then next.query=nil end
+    if cfg.src~=option.src and next.src~="custom" then next.query=nil end
     return next
 end
 function BookList.title(cfg, title)
