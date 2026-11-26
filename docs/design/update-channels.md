@@ -9,14 +9,18 @@ and packaged KOReader plugin), X4 Pro, X4 and X3.
 | RC | X.Y.Z and X.Y.Z-rc.N | also release candidates, about to become stable |
 | Preview | X.Y.Z, X.Y.Z-rc.N and X.Y.Z-preview.N | every test build |
 
-Android's Updates page displays three selectable rows, each with the description above:
+Android's Updates page shows one row in both the companion and KOReader:
 
 ```text
-Update channel
-● Stable    tested releases only
-○ RC        also release candidates, about to become stable
-○ Preview   every test build
+Update channel                     Preview ▾
 ```
+
+Tapping opens Android's standard single-choice dialog or KOReader's checked choice
+submenu, listing Stable / RC / Preview with the descriptions above. The current
+choice is marked; choosing applies immediately and closes the list. The shared schema's
+`display: "dropdown"` selects this reusable choice renderer; each value's `line`
+supplies its description. The settings PIN keeps the row read-only.
+Maintainer correction for the 0.11 line: replace the three inline radio rows.
 
 Xteink's System settings row reads `Update channel: Stable`; Confirm cycles
 Stable → RC → Preview → Stable using the native enum cycle handler. The selection

@@ -29,6 +29,30 @@ function stoggle(key)
     return toggle(key, _(d.label), _(d.line) .. (d.applies == "restart" and (" " .. _("Applies when KOReader restarts.")) or ""))
 end
 
+-- Schema-driven dropdown: KOReader's standard checked choice submenu, as for storage limits.
+local function sharedChoice(key)
+    local d = SCHEMA.byKey[key]
+    assert(d and d.type == "choice" and d.display == "dropdown")
+    local items = {}
+    for _i, value in ipairs(d.values) do
+        local id = value.id
+        items[#items+1] = {
+            text = _(value.label) .. (value.line and (" — " .. _(value.line)) or ""),
+            checked_func = function() return S[key] == id end,
+            callback = function() Shared.set(key, id) end,
+        }
+    end
+    return {
+        text_func = function()
+            for _i, value in ipairs(d.values) do
+                if value.id == S[key] then return _(d.label) .. ": " .. _(value.label) end
+            end
+            return _(d.label) .. ": " .. tostring(S[key])
+        end,
+        sub_item_table = items,
+    }
+end
+
 local function label(key, fallback)
     local d = SCHEMA.byKey[key]
     return d and _(d.label) or fallback
@@ -313,6 +337,7 @@ function OrbitAndroid:menuItems()
         -- Updates come with Orbit Companion, which updates the plugin with it (its own switches).
         { text = _("Check for updates (BookSync Companion)"), callback = later(function() self:checkPatchUpdate() end) },
         { text_func = function() return self:updateStatusText() end, keep_menu_open = true, callback = function() end, separator = true },
+        sharedChoice("update_channel"),
         stoggle("key_log"),
         wifi_rows[2] or false,
         -- Debug: SQLite on shared storage (docs/design/sqlite-cache.md "Stress test").

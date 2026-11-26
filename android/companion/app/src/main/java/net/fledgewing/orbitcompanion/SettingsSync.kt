@@ -26,6 +26,8 @@ data class SettingDef(
     val cap: String?,
     val hidden: Boolean,
     val search: List<String>,
+    val display: String = "",
+    val valueDescriptions: Map<String, String> = emptyMap(),
 ) {
     /** Read by the plugin: a change waits for KOReader (§4.5). */
     val pluginReads: Boolean get() = "plugin" in readers
@@ -67,6 +69,11 @@ class SettingsSchema(val sections: List<SettingsSection>, val settings: List<Set
                     parentNot = parent?.optJSONArray("not")?.let { strings(it) },
                     cap = d.optString("cap").takeIf { it.isNotEmpty() }, hidden = d.optBoolean("hidden", false),
                     search = strings(d.optJSONArray("search")),
+                    display = d.optString("display"),
+                    valueDescriptions = d.optJSONArray("values")?.let { a ->
+                        (0 until a.length()).map { a.getJSONObject(it) }
+                            .associate { it.get("id").toString() to it.optString("line") }
+                    }.orEmpty(),
                 )
             }
             return SettingsSchema(sections, settings)

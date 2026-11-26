@@ -910,11 +910,16 @@
   {
    "key": "update_channel",
    "type": "choice",
+   "display": "dropdown",
    "default": "stable",
    "section": "updates",
    "label": "Update channel",
-   "line": "Stable: tested releases only. RC: also release candidates, about to become stable. Preview: every test build.",
-   "values": [{"id": "stable", "label": "Stable"}, {"id": "rc", "label": "RC"}, {"id": "preview", "label": "Preview"}],
+   "line": "Choose which BookSync releases to receive.",
+   "values": [
+    {"id": "stable", "label": "Stable", "line": "tested releases only"},
+    {"id": "rc", "label": "RC", "line": "also release candidates, about to become stable"},
+    {"id": "preview", "label": "Preview", "line": "every test build"}
+   ],
    "reader": ["companion"],
    "search": ["stable", "rc", "preview", "pre-release", "update"],
    "applies": "now"

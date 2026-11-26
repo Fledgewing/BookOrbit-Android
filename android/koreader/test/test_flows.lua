@@ -2174,6 +2174,33 @@ test("storage menu: all sizes and fractional GB labels", function()
     E.S.storage_limit_mb = was
 end)
 
+test("shared dropdown: current channel, described choices, save and close", function()
+    local E = getfenv(Orbit.onSuspend)
+    local _, m = newUI(false)
+    local d = E.SCHEMA.byKey.update_channel
+    eq(d.display, "dropdown")
+    local row
+    for _, it in ipairs(menuAll(m:menuItems())) do
+        if it.text_func and it.text_func():find("Update channel:", 1, true) == 1 then row = it; break end
+    end
+    ok(row, "one channel row")
+    eq(#row.sub_item_table, 3)
+    local was = E.S.update_channel
+    for i, value in ipairs(d.values) do
+        local choice = row.sub_item_table[i]
+        eq(choice.text, value.label .. " — " .. value.line)
+        choice.callback()
+        eq(E.S.update_channel, value.id)
+        eq(store.orbit_android.update_channel, value.id, "saved")
+        eq(row.text_func(), "Update channel: " .. value.label)
+        for j, other in ipairs(row.sub_item_table) do eq(other.checked_func(), i == j) end
+        ok(not choice.keep_menu_open, "standard menu closes after choice")
+    end
+    local locked = Orbit.readOnly({ row })[1]
+    for _, choice in ipairs(locked.sub_item_table) do ok(not choice.enabled_func(), "PIN protects choices") end
+    E.Shared.set("update_channel", was)
+end)
+
 local function scheduleMenu(m)
     for _, it in ipairs(menuAll(m:menuItems())) do
         local sub = it.sub_item_table
