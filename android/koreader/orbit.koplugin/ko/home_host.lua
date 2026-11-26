@@ -98,6 +98,9 @@ function HomeHost.create()
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
             if self.list_layout then self.list_result=result end
+            if p.widget == "battery" then
+                result={items={result},freshness={saved=not result.pending},pending=result.pending,error=result.error}
+            end
             local snapshot=HomeHostPlan.snapshot(result)
             local dispatch=function(action,row) self:dispatch(action,row,p) end
             local rendered,card=pcall(HomeWidgets.renderers[p.widget],HomeHostPlan.immutable(p),snapshot,dispatch,rect)
@@ -160,6 +163,7 @@ function HomeHost.create()
     end
     function Host:dispatch(action,row,p)
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
+        elseif action == "battery" then BatteryUI.show()
         elseif action == "book" then
             if self.caps.account and not row.local_path and not AccountPlan.login(self.account or {},"opds").available then
                 local prompt=require("ui/widget/buttondialog"):new{title="No OPDS login, so it can't download",buttons={{{text="Keep browsing",callback=function() UIManager:close(self.download_prompt) end},{text="Set up",callback=function() UIManager:close(self.download_prompt); AccountView.open("opds") end}}}}

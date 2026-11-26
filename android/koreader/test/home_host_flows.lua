@@ -2,9 +2,10 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.OC.readFile,writeFile=E.OC.writeFile}
+            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.OC.readFile,writeFile=E.OC.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
+        E.Companion.workerProblem=function() end
         Widget.free=function() end
         local U={Font={getFace=function() return {} end},BB={COLOR_BLACK=0,COLOR_WHITE=1,COLOR_DARK_GRAY=.3,COLOR_GRAY=.5,COLOR_LIGHT_GRAY=.8}}
         for _,k in ipairs({"Overlap","Frame","Text","Button","Progress"}) do U[k]=Widget:extend{} end
@@ -57,9 +58,11 @@ return function(test,eq,ok,E,W,Widget)
         E.HomeEditor.save=saved.save
         E.liveUI,E.Wifi.state,E.EOB.sheet=saved.liveUI,saved.wifiState,saved.eobSheet
         E.OC.readFile,E.OC.writeFile=saved.readFile,saved.writeFile
+        E.Companion.workerProblem=saved.problem
         ok(success,err)
     end
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
+    dofile((arg[0]:match("^(.*)/") or ".").."/battery_flows.lua")(test,eq,ok,E,W,withHost)
     test("Home host: paint batches only installed visible widgets and page swipe",function()
         withHost(function(batches,reads)
             E.S.home_layout=E.Layout.default()

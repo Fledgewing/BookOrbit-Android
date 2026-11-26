@@ -74,3 +74,8 @@ metadata and provisioning outcomes normalize in `server/bookorbit`; the private 
 caches the bounded lifecycle snapshot, so signed-out forms work without a catalog owner and
 Home still performs at most one batched worker read. Combined Home search/filter controls
 reserve space below the account status row; Custom editor and sign-in panel actions coexist.
+
+F12-O replaces the temporary Battery renderer with the snapshot widget/page. Its existing
+`battery` operation remains local; all display labels, rates, dates and totals are companion
+projections. The Home integration wraps that one row for the immutable widget contract and
+keeps the shared reading gate, including dialogs opened above Home.

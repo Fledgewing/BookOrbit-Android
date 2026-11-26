@@ -84,3 +84,6 @@ Budgets.screens["reading-copy"].roundTrips = 0
 for _,id in ipairs({"summary","form","signout","remove","result"}) do
     Budgets.screens["account-" .. id] = Budgets.screens.account
 end
+-- Battery tabs select bounded windows from one companion materialization.
+Budgets.screens.battery.rows = 1
+Budgets.screens.battery.bytes = 16384

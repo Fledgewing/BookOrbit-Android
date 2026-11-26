@@ -127,10 +127,3 @@ HomeWidgets.register("library",function(p,snapshot,dispatch,rect)
     end
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end,function() return {op="library.summary",limit=1} end)
--- Battery history is a library-owned not-saved state until the battery slice lands.
-HomeWidgets.register("battery",function(p,snapshot,dispatch,rect)
-    local c=HomeWidgets.canvas(rect.w-2,rect.h-2)
-    HomeWidgets.text(c,_("Battery"),8,8,rect.w-16,18,false,true)
-    HomeWidgets.text(c,_(snapshot.data and snapshot.data.message or "Battery history not recorded yet"),8,44,rect.w-16,14)
-    return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
-end,function() return {op="battery",limit=1} end)

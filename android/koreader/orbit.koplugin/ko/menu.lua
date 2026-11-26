@@ -235,7 +235,7 @@ function OrbitAndroid:menuItems()
             for _i, row in ipairs(rows(SettingsUI.syncKeys)) do out[#out+1] = row end
             -- Device sleep is owned by Android, reachable even when the companion cannot switch Wi-Fi.
             out[#out+1] = action("Sleep & power: open companion…", function() self:onOrbitOpenCompanion() end)
-            out[#out+1] = {text=_("Battery · estimates need measured use"), enabled_func=function() return false end}
+            out[#out+1] = action("Battery ›", function() BatteryUI.show() end)
             out[#out+1] = action("Sync and sleep now", function() self:onOrbitSyncAndSleep() end)
             if OSM and OSM.on() and self.ui and self.ui.document then
                 out[#out+1] = action("Read from here everywhere", function() OSM.readFromHere("menu") end)

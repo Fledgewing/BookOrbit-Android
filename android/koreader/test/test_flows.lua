@@ -6898,6 +6898,24 @@ test("settings: mode estimates come from one bounded library read; presets and C
     RE.Companion.has = has
 end)
 
+test("settings: Battery navigation opens the owned snapshot screen", function()
+    local _, m = newUI(false)
+    local show = RE.BatteryUI.show
+    local opened = 0
+    RE.BatteryUI.show = function() opened=opened+1 end
+    local success,err=pcall(function()
+        local battery
+        for _,group in ipairs(m:menuItems()) do
+            if group.settings_group == "sync" then
+                for _,row in ipairs(group.sub_item_table_func()) do if row.text == "Battery ›" then battery=row end end
+            end
+        end
+        ok(battery and battery.callback); battery.callback(); run(1); eq(opened,1)
+    end)
+    RE.BatteryUI.show = show
+    ok(success,err)
+end)
+
 test("About: the locked menu shows every shared credit paragraph and the project URL", function()
     local _, m = newUI(false)
     local items = m.readOnly(m:menuItems())
