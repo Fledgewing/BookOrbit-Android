@@ -33,7 +33,7 @@ outside the mirror and never fall back to public feeds.
 | Old URL (query variants share the same endpoint) | Consumers and source evidence | Stub coverage |
 |---|---|---|
 | `https://raw.githubusercontent.com/Fledgewing/Orbify/xteink-feed/xteink/releases.json` | Retired stable `xteink-v1.6.1.114+bookorbit.9:xteink/tailnet/tailnet_build.py:24-27,395-396`; current `xteink/tailnet/tailnet_build.py:31-35,564-570`. Used from 1.6.1.111 and 2.0.0.110 onward; earlier API users are listed below. | `xteink-feed` branch, `xteink/releases.json`, exact bytes. |
-| `https://raw.githubusercontent.com/Fledgewing/Orbify/xteink-feed/xteink/releases.json.sig` | Publisher `.github/workflows/xteink.yml:603,626`; detached feed signature, not a separate client manifest. | Same branch, `xteink/releases.json.sig`, exact bytes, committed with the JSON. |
+| `https://raw.githubusercontent.com/Fledgewing/Orbify/xteink-feed/xteink/releases.json.sig` | Publisher `.github/workflows/xteink.yml:667,690`; detached feed signature, not a separate client manifest. | Same branch, `xteink/releases.json.sig`, exact bytes, committed with the JSON. |
 | `https://raw.githubusercontent.com/Fledgewing/Orbify/android-feed/android/releases.json` | Signed-feed companion on main: `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AndroidReleaseFeed.kt:9-10`; no separate plugin feed. | `android-feed` branch, `android/releases.json`, exact signed envelope bytes. |
 | `https://api.github.com/repos/Fledgewing/Orbify/releases/latest` and `/releases?per_page=N` | Shipped `v0.7.0:android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:40-41,144-147`; `v0.11.3-rc.17:android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:40-41,207-210`; Lua `v0.7.0:android/koreader-patch/2-orbit-android.lua:2312,2368` (`N=30` in that patch). | **Not covered. Blocking.** GitHub generates this API from releases, not raw branch files. |
 | `https://api.github.com/repos/Fledgewing/Orbify/releases?per_page=25` | Earliest firmware `xteink-v1.6.1.104+bookorbit.8:xteink/tailnet/tailnet_build.py:23-25,392-393` and `xteink-v2.0.0.106+bookorbit.1-rc2:xteink/tailnet/tailnet_build.py:23-25,392-393`. | **Not covered. Blocking.** These readers need the release-list API too. |
@@ -111,7 +111,7 @@ response (`components/esp_http_client/esp_http_client.c:306`, `:331` at v5.5.3),
 
 Shipped Xteink firmware verifies per-asset signatures from the feed, rather than its detached
 whole-feed sidecar. The publisher also signs the exact JSON bytes as asset `releases.json`
-under tag `xteink-feed` (`.github/workflows/xteink.yml:603`); that sidecar does not include
+under tag `xteink-feed` (`.github/workflows/xteink.yml:667`); that sidecar does not include
 the fetch location. Mirroring both files byte-for-byte preserves it as well.
 `tools/feed-keys/feed-keys:73` signs the domain, tag, asset filename and SHA-256.
 `xteink/orbify/core/UpdateSignature.cpp:60` reconstructs those inputs; `:75` takes only the
