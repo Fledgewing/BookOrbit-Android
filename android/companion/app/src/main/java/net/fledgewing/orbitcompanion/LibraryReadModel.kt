@@ -29,7 +29,8 @@ class LibraryReadModel(
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
         val power by lazy { battery() }
-        val stats by lazy { AccountStats.combine(readingStats(), adapter.cachedReadingStats(owner), accountStats(owner), clock()) }
+        val account by lazy { accountStats(owner) }
+        val stats by lazy { ReadingStats.display(AccountStats.combine(readingStats(), adapter.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
@@ -40,6 +41,7 @@ class LibraryReadModel(
                 val result = try { when (args["op"]) {
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
                     "reading.stats" -> stats
+                    "device.clock" -> ClockWidget.snapshot(clock(), power, twelve = args["twelve_hour"] == true)
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power
                     "sleep.choices" -> SleepChoiceWindow.project(SleepChoices.read(SleepScreen.dir()), args)
