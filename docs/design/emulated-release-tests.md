@@ -369,7 +369,13 @@ logcat line to look for (the build notes' "Measurements needed on a device" alre
 ### 6.3 How it slots into releases
 
 One reusable workflow, `.github/workflows/release-tests.yml` (`workflow_call` + `workflow_dispatch`,
-input `platform: android | xteink | both`, and `ref`):
+input `platform: android | xteink | all`, `ref`, and optional simulator `profiles`):
+
+From 0.12 the [source fingerprint policy](unified-version.md#selective-previews-and-promotion)
+selects preview builds and allows matching passing receipts to satisfy this gate.
+Component-test evidence alone never replaces the emulated gate. RC/stable always
+rebuild with the new version, even when the gate is reused; cheap artifact checks
+remain mandatory. Legacy releases and ordinary PR/push builds retain full checks.
 
 - **Android** (`release.yml`): a `release-tests` job runs stages 3 and 4 on the tag, and
   `release` `needs` it.

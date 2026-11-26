@@ -26,6 +26,7 @@ def build_feed(releases):
     releases = sorted((r for r in releases if not r.get("draft") and
                        r["tag_name"].startswith("xteink-v")), key=lambda r: r["created_at"], reverse=True)
     selected = []
+    stems = ("firmware-x4-pro", "firmware-x4-classic", "firmware-x3-x4")
     for pre in (False, True):
         channel = [r for r in releases if r["prerelease"] == pre]
         # Keep legacy channel heads indefinitely. Old firmware compares numeric tags and
@@ -34,8 +35,14 @@ def build_feed(releases):
         product = sorted((r for r in channel if r not in legacy and identity(r)),
                          key=product_key, reverse=True)
         for group in (product, legacy):
-            if group and group[0] not in selected:
-                selected.append(group[0])
+            # Select a head for each device: a preview may contain just one reader.
+            # Keep original releases/assets so tags, versions and signatures stay bound.
+            for stem in stems:
+                head = next((r for r in group if any(
+                    a["name"].startswith(stem + "-v") and a["name"].endswith(".bin")
+                    for a in r["assets"])), None)
+                if head is not None and head not in selected:
+                    selected.append(head)
     result = []
     for release in selected:
         entry = {key: release[key] for key in ("tag_name", "name", "draft", "prerelease", "created_at")}

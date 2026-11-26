@@ -64,7 +64,11 @@ BookSync licences: BookSync Companion is MIT. The Xteink overlay source is MIT, 
 plugin and all Xteink readers, from shared/version.json. The release order is
 preview.N → rc.N → stable. Android keeps v<version> tags; firmware uses
 xteink-v<version>+crossink.<base> and shows both BookSync and CrossInk in About.
-Publishing Android dispatches firmware from that same release commit.
+The release workflow dispatches firmware from that same release commit. Previews
+publish only changed platforms; release notes show each platform's current build,
+including unchanged earlier previews. Companion and plugin stay together. RC and
+stable stamp all platforms with the same version. Passing tests are reused when
+source fingerprints match; artifact, version and signature checks still run.
 
 Before 0.12, install the firmware bridge released during 0.11 stabilization. It keeps
 the old 2.0.0.<run> tag so existing devices can install it, then understands BookSync

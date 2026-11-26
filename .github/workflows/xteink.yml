@@ -42,9 +42,9 @@ name: Xteink
 on:
   push:
     branches: [main]
-    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", "tools/booksync-version.py", "tools/xteink-feed.py", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
+    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", "tools/booksync-version.py", "tools/releases/**", "tools/xteink-feed.py", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
   pull_request:
-    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", "tools/booksync-version.py", "tools/xteink-feed.py", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
+    paths: ["xteink/**", "shared/**", "tools/upstreams.lock", "tools/booksync-version.py", "tools/releases/**", "tools/xteink-feed.py", ".github/workflows/xteink.yml", ".github/actions/pio-setup/**"]
   schedule:
     - cron: "17 11 * * *"
   workflow_dispatch:
@@ -160,6 +160,9 @@ jobs:
 
   resolve:
     needs: lock
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ needs.lock.outputs.sha }}
@@ -171,15 +174,16 @@ jobs:
       publish: ${{ steps.r.outputs.publish }}
       prerelease: ${{ steps.r.outputs.prerelease }}
       lines: ${{ steps.r.outputs.lines }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      firmware_build: ${{ steps.plan.outputs.firmware_build }}
+      firmware_release_tests: ${{ steps.plan.outputs.firmware_release_tests }}
+      profiles: ${{ steps.plan.outputs.profiles }}
+      archive_env: ${{ steps.plan.outputs.archive_env }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.lock.outputs.sha }}
           persist-credentials: false
-          sparse-checkout: |
-            xteink
-            tools
-            shared
 
       - id: r
         env:
@@ -240,26 +244,50 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "upstream $tag ($commit) -> $version (publish=$publish, $channel)"
 
+      - name: Plan each reader from source inputs
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH: ${{ steps.r.outputs.publish }}
+          LINES: ${{ steps.r.outputs.lines }}
+        run: |
+          set -euo pipefail
+          force=()
+          if [ "$PUBLISH" != true ] || [ "$(python3 tools/booksync-version.py unified)" != true ]; then
+            force+=(--force)
+            echo '{}' > "$RUNNER_TEMP/history.json"
+          else
+            python3 tools/releases/inputs.py collect > "$RUNNER_TEMP/history.json"
+          fi
+          python3 tools/releases/inputs.py plan --version "$(python3 tools/booksync-version.py version)" \
+            --history "$RUNNER_TEMP/history.json" "${force[@]}" > release-plan.json
+          if [ "$PUBLISH" = true ] && [ "$(python3 tools/booksync-version.py unified)" = true ]; then
+            python3 tools/releases/inputs.py require-android --plan release-plan.json
+          fi
+          python3 tools/releases/inputs.py outputs --plan release-plan.json >> "$GITHUB_OUTPUT"
+          matrix="$(python3 tools/releases/inputs.py matrix --plan release-plan.json | jq -c --argjson lines "$LINES" 'map(. + {line: $lines[0]})')"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "archive_env=$(jq -r '.[0].environment // empty' <<< "$matrix")" >> "$GITHUB_OUTPUT"
+          python3 tools/releases/inputs.py notes --plan release-plan.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: firmware-plan
+          path: release-plan.json
+          if-no-files-found: error
+
   # Runs upstream's build scripts: read-only token, no credentials left in either checkout, no
   # secrets and no token in the environment.
   build:
     name: build ${{ matrix.line.upstream_tag }} ${{ matrix.environment }}
     needs: resolve
+    if: needs.resolve.outputs.firmware_build == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        line: ${{ fromJSON(needs.resolve.outputs.lines) }}
-        environment: [x4-pro, x4-classic, default]
-        include:
-          - environment: x4-pro
-            firmware: firmware-x4-pro
-          - environment: x4-classic
-            firmware: firmware-x4-classic
-          - environment: default
-            firmware: firmware-x3-x4
+        include: ${{ fromJSON(needs.resolve.outputs.matrix) }}
     steps:
       - name: Check out BookSync
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -334,6 +362,7 @@ jobs:
 
       # After the build: BookSync's tests compile against the ArduinoJson the build fetched.
       - name: Host tests
+        if: matrix.component_tests
         env:
           ORBIFY_REQUIRE_RENDER: "1"
           ORBIFY_TEST_OUT: ${{ runner.temp }}/orbify-host
@@ -344,7 +373,7 @@ jobs:
 
       # The End-of-Book page as the host test drew it (X4 Pro online, offline, not finished; X4).
       - name: End-of-Book page images
-        if: matrix.environment == 'x4-pro'
+        if: matrix.environment == 'x4-pro' && matrix.component_tests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eob-page-${{ matrix.line.asset_version }}
@@ -355,18 +384,18 @@ jobs:
       # overlay, the FreeInk SDK, every env's library sources and the Arduino core. Packed once,
       # by one leg, only for a release; nothing extra is built.
       - name: Pack the source archive
-        if: matrix.environment == 'x4-pro' && needs.resolve.outputs.publish == 'true'
+        if: matrix.environment == needs.resolve.outputs.archive_env && needs.resolve.outputs.publish == 'true'
         working-directory: upstream
         run: |
           set -euo pipefail
-          pio pkg install -e default -e x4-classic </dev/null
+          pio pkg install -e default -e x4-classic -e x4-pro </dev/null
           ../orbify/xteink/scripts/source-archive.sh --upstream . \
             --version "${{ needs.resolve.outputs.version }}" \
             --core ~/.platformio/packages/framework-arduinoespressif32 \
             --out "../source/source-${{ needs.resolve.outputs.asset_version }}.tar.gz"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: matrix.environment == 'x4-pro' && needs.resolve.outputs.publish == 'true'
+        if: matrix.environment == needs.resolve.outputs.archive_env && needs.resolve.outputs.publish == 'true'
         with:
           name: source-archive
           path: source/*.tar.gz
@@ -383,6 +412,9 @@ jobs:
         run: |
           set -euo pipefail
           bin="${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.bin"
+          # The stamp must be present in the newly built image even when tests were reused.
+          stamp='${{ matrix.line.version }}'
+          strings "$bin" | grep -F -- "${stamp//+/-}" > /dev/null
           sha256sum -- "$bin" > "$bin.sha256"
           cp partitions.bin "${bin%.bin}.parttable"
           gzip -6 -c firmware.elf > "${bin%.bin}.elf.gz"
@@ -397,23 +429,34 @@ jobs:
             upstream/.pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ matrix.line.asset_version }}.elf.gz
           if-no-files-found: error
 
+      - name: Record passing component inputs
+        working-directory: orbify
+        run: python3 tools/releases/inputs.py receipt --platforms '${{ matrix.environment }}' > passed-inputs.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: passed-inputs-${{ matrix.environment }}
+          path: orbify/passed-inputs.json
+          if-no-files-found: error
+          retention-days: 90
+
   # The emulated release tests (release-tests.yml) on the commit and CrossInk commit about to be
   # published: only when this run publishes (upstream-line.sh decides), so pushes and the daily
   # run with nothing new stay as they were. The release waits for them.
   e2e:
     needs: [resolve, build]
-    if: needs.resolve.outputs.publish == 'true' && !inputs.test_build
+    if: needs.resolve.outputs.publish == 'true' && !inputs.test_build && needs.resolve.outputs.firmware_release_tests == 'true'
     uses: ./.github/workflows/release-tests.yml
     with:
       platform: xteink
       ref: ${{ needs.resolve.outputs.sha }}
       upstream_ref: ${{ needs.resolve.outputs.upstream_commit }}
+      profiles: ${{ needs.resolve.outputs.profiles }}
 
   # Never checks out or runs upstream code: it downloads the build jobs' files, checks them
   # against what the run should have produced and publishes them. The only job with id-token.
   publish:
     needs: [resolve, build, e2e]
-    if: needs.resolve.outputs.publish == 'true' && !inputs.test_build
+    if: ${{ !cancelled() && needs.resolve.outputs.publish == 'true' && !inputs.test_build && needs.build.result == 'success' && (needs.e2e.result == 'success' || (needs.e2e.result == 'skipped' && needs.resolve.outputs.firmware_release_tests == 'false')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -439,20 +482,25 @@ jobs:
           path: orbify
           persist-credentials: false
 
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: firmware-plan
+
       - name: Check the built files
         working-directory: firmware
         env:
           ASSET_VERSION: ${{ needs.resolve.outputs.asset_version }}
+          MATRIX: ${{ needs.resolve.outputs.matrix }}
         run: |
           set -euo pipefail
           # Exactly one image per reader, each matching the checksum its build wrote beside it.
-          for fw in firmware-x4-pro firmware-x4-classic firmware-x3-x4; do
+          for fw in $(jq -r '.[].firmware' <<< "$MATRIX"); do
             bin="$fw-v$ASSET_VERSION.bin"
             test -s "$bin" || { echo "::error::missing $bin"; exit 1; }
             sha256sum -c "$bin.sha256"
             test -s "${bin%.bin}.elf.gz" && test -s "${bin%.bin}.parttable"
           done
-          test "$(find . -maxdepth 1 -name '*.bin' | wc -l)" -eq 3
+          test "$(find . -maxdepth 1 -name '*.bin' | wc -l)" -eq "$(jq length <<< "$MATRIX")"
           test "$(find . -maxdepth 1 -name 'source-*.tar.gz' | wc -l)" -eq 1
           # Anything else is not ours to publish.
           extra="$(find . -maxdepth 1 -type f ! -name 'firmware-*' ! -name 'source-*.tar.gz' | sort)"
@@ -489,9 +537,11 @@ jobs:
           SHA: ${{ needs.resolve.outputs.sha }}
         run: |
           set -euo pipefail
+          python3 orbify/tools/releases/inputs.py published --plan release-plan.json --platforms x4-pro,x4-classic,default \
+            --tag 'xteink-v${{ needs.resolve.outputs.version }}' > firmware/FIRMWARE-INPUTS.json
           cp orbify/xteink/THIRD_PARTY_LICENSES.md firmware/
           (cd orbify/xteink && zip -qr ../../firmware/licenses.zip licenses LICENSE THIRD_PARTY_LICENSES.md)
-          (cd firmware && sha256sum -- *.bin *.elf.gz *.tar.gz THIRD_PARTY_LICENSES.md licenses.zip > SHA256SUMS)
+          (cd firmware && sha256sum -- *.bin *.elf.gz *.tar.gz THIRD_PARTY_LICENSES.md licenses.zip FIRMWARE-INPUTS.json > SHA256SUMS)
           {
             echo "CrossInk-Bookorbit $TAG with Tailscale (MicroLink): BookSync's Xteink firmware."
             echo
@@ -509,6 +559,7 @@ jobs:
               echo "OTA bridge: install this build before BookSync 0.12."
             fi
           } > notes.md
+          python3 orbify/tools/releases/inputs.py notes --plan release-plan.json >> notes.md
           cat notes.md
 
       - name: Attest build provenance
@@ -521,6 +572,7 @@ jobs:
             firmware/THIRD_PARTY_LICENSES.md
             firmware/licenses.zip
             firmware/SHA256SUMS
+            firmware/FIRMWARE-INPUTS.json
 
       # "latest" stays an Android release (AGENTS.md "Releases"). An upstream rc or beta stays a
       # pre-release here too: only readers with Include pre-releases on are offered it. A
@@ -537,10 +589,23 @@ jobs:
           flags=(--latest=false)
           [ "$PRERELEASE" = true ] && flags+=(--prerelease)
           files=(firmware/*.bin firmware/*.elf.gz firmware/THIRD_PARTY_LICENSES.md firmware/licenses.zip
-            firmware/source-*.tar.gz firmware/SHA256SUMS)
+            firmware/source-*.tar.gz firmware/SHA256SUMS firmware/FIRMWARE-INPUTS.json)
           [ -f firmware/SIGNATURES ] && files+=(firmware/SIGNATURES)
           gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$SHA" --title "$TAG" --notes-file notes.md "${flags[@]}" \
             "${files[@]}"
+
+      - name: Refresh Android's platform table after firmware publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$(python3 orbify/tools/booksync-version.py unified)" != true ]; then exit 0; fi
+          # Firmware-only previews have no empty Android release to edit.
+          if gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/android-notes.md"; then
+            python3 orbify/tools/releases/inputs.py refresh-notes --plan release-plan.json \
+              --notes "$RUNNER_TEMP/android-notes.md" > "$RUNNER_TEMP/current-notes.md"
+            gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/current-notes.md"
+          fi
 
   # The readers' update feed: the newest stable and the newest pre-release xteink-v release,
   # reduced to what the updater reads (tag, pre-release flag, assets with size and digest).
@@ -556,8 +621,7 @@ jobs:
         with:
           persist-credentials: false
           sparse-checkout: |
-            tools/feed-keys
-            tools/xteink-feed.py
+            tools
             shared
 
       - name: Write the feed

@@ -86,7 +86,11 @@ commit when a design or `docs/server-contract.md` relies on upstream behaviour; 
 
 One repo releases both platforms; the tag prefix says which. From 0.12, the product
 version comes from shared/version.json on the release commit, shared by the companion,
-packaged plugin and every firmware build. The ordering is -preview.N, then -rc.N, then stable. release.yml dispatches firmware at the same immutable tag.
+packaged plugin and every firmware build. The ordering is -preview.N, then -rc.N, then stable. release.yml dispatches firmware at the same immutable tag. Previews may retain older
+unchanged platform builds; RC/stable stamp every platform with the same version.
+Source fingerprints select preview builds and permit reuse of passing component/release
+tests at the same scope; cheap artifact/version/signature checks still run. Android
+companion and plugin remain one publication unit with matching installed versions.
 See [the rollout and bridge](docs/design/unified-version.md). Main stays on 0.11 until its
 bridge has reached devices; 0.12 is prepared on feature/0.12.
 
@@ -120,8 +124,10 @@ commit's pin and publish only at the matching Android tag.
   branch (current stable/prerelease plus retained legacy bridges, written by the xteink workflow), never the list. The
   Android pieces also read `android-v` tags and skip `xteink-v` ones.
 - A tag is never moved: fix forward with the next version.
-- Both release workflows first run the emulated release tests (`release-tests.yml`, below) on the
-  release commit; nothing publishes unless they pass.
+- Both release workflows require passing emulated release tests (`release-tests.yml`, below).
+  From 0.12, identical source fingerprints may reuse passing evidence; version-only promotion
+  still rebuilds and checks artifacts. Missing evidence runs the full gate. See the
+  [selective release policy](docs/design/unified-version.md#selective-previews-and-promotion).
 
 ## Test builds: sideload first, release after
 
@@ -161,7 +167,7 @@ ask before changing it (`--yes` skips the question). Agents never run them again
   then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the
   CrossInk pinned as `crossink-v2.0` in `tools/upstreams.lock`; daily runs first move that pin to
   upstream's newest 2.x tag, rc included, and always build the commit the lock records).
-- Workflows: `python3 tools/test/test-workflows.py` and actionlint (CI: `.github/workflows/workflow-lint.yml`):
+- Workflows: `python3 tools/test/test-workflows.py`, `python3 tools/test/test-release-inputs.py` and actionlint (CI: `.github/workflows/workflow-lint.yml`):
   actions pinned by SHA, no stored checkout credentials, and no write permission, secret or token
   in a job that runs a build tool. Steps shared by several workflows live in `.github/actions/`.
 - BookOrbit app attestation: `tools/upstreams check` (CI: the app-attest job in
