@@ -1,8 +1,9 @@
 # F12-Q2 catalog transport migration
 
 Status: **cover-command prerequisite only; catalog cutover incomplete**. The legacy
-Lua catalog adapter and its callers are still present. This change must not be
-merged or described as the completed server-free plugin slice.
+Lua catalog adapter and its callers are still present. The maintainer authorised
+merging this prerequisite as step 1 of 5; it does not complete the server-free
+plugin slice.
 
 The library now exposes an explicit `acquireCover(key, callback)` command and a
 one-row `cover(key)` snapshot. `ServerAdapter.acquireCover` resolves an opaque key
