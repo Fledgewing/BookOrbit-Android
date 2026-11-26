@@ -425,7 +425,20 @@ diff --git a/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp b/src/com
 diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
 --- a/src/network/BookOrbitCatalogClient.cpp
 +++ b/src/network/BookOrbitCatalogClient.cpp
-@@ -176,7 +176,7 @@
+@@ -143,6 +143,12 @@
+ }
+ 
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
++bool catalogHeapReady(bool transfer = false) {
++#if defined(FREEINK_NET_WOLFSSL)
++  if (s_lentConnection) return transfer ? !OrbifyHeap::starved() : OrbifyHeap::roomForRequest("Lent catalog");
++#endif
++  return OrbifyHeap::roomForCatalog();
++}
+ using CatalogMutex = std::recursive_mutex;
+ #else
+ struct CatalogMutex { void lock() {} void unlock() {} bool try_lock() { return true; } };
+@@ -176,7 +182,7 @@
    const OrbifyCache::Lookup cached = OrbifyCache::lookup(url);
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
    if(cached.bulk) {
@@ -434,16 +447,16 @@ diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatal
      if(OrbifyBulk::read(url,filter.as<JsonVariantConst>(),outDoc))return true;
      return false;
    }
-@@ -199,7 +199,7 @@
+@@ -199,7 +205,7 @@
    // on a transient allocation race; a fresh connection usually succeeds.
    HttpDownloader::DownloadOptions options;
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
 -  options.shouldCancel = OrbifyMirror::cancelCatalogRequest;
-+  options.shouldCancel = [] { return (s_lentConnection ? OrbifyHeap::starved() : !OrbifyHeap::roomForCatalog()) || OrbifyMirror::cancelCatalogRequest(); };
++  options.shouldCancel = [] { return !catalogHeapReady(true) || OrbifyMirror::cancelCatalogRequest(); };
  #endif
    // wolfSSL rather than mbedTLS: the latter needs more heap than this chip has to spare
    // while parsing a modern certificate chain, which is what makes catalog fetches fail with
-@@ -212,13 +212,19 @@
+@@ -212,13 +218,19 @@
    options.wolfSslClient = catalogConnection();
  #endif
  #if !CROSSINK_TAILNET_FILTER_AFTER_TLS
@@ -456,7 +469,7 @@ diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatal
      networkLock.lock();
      options.wolfSslClient = catalogConnection();
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+    if (!(s_lentConnection ? OrbifyHeap::roomForRequest("Lent catalog") : OrbifyHeap::roomForCatalog())) {
++    if (!catalogHeapReady()) {
 +      BookOrbitCatalogClient::closeBootSession("low heap");
 +      return false;
 +    }
@@ -464,7 +477,7 @@ diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatal
      if (!OrbifyCache::roomForReply()) return false;
  #endif
    HttpDownloader::DownloadError err = HttpDownloader::HTTP_ERROR;
-@@ -290,7 +296,7 @@
+@@ -290,7 +302,7 @@
  #if CROSSINK_TAILNET_FILTER_AFTER_TLS
    // Built only now: the request's TLS session is gone, so the filter's nodes never share
    // the heap with its handshake.
