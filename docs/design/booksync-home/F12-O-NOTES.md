@@ -72,7 +72,7 @@ spans log actual device milliseconds. Host tests do not establish the pending
 <500 ms Home, <50 ms widget, <30 ms cached window or <100 ms editor device targets.
 AGENTS.md retains this rule for later slices.
 
-Logic tests cover labels, learning/ready, absent clock-boundary evidence and daily
+Logic tests cover labels, distinct loading/error/learning/ready states, absent clock-boundary evidence and daily
 pagination. Flow tests exercise all sizes through the real Home host, widget/page
 navigation, tabs, pagination, Settings, cold/closed-page callbacks and oversize
 rejection. Companion tests cover bounded display labels, missing/future samples,

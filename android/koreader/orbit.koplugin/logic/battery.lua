@@ -2,6 +2,11 @@
 -- Presentation selection only; all values and evidence labels are companion-owned.
 BatteryPlan = {tabs={"Overview","Rates","Daily","Charges"}}
 function BatteryPlan.display(data)
+    if data and (data.error or data.pending) then
+        local message=data.error and "Battery unavailable · try again" or "Loading battery…"
+        return {level="—",estimate=message,narrow_estimate=message,page_estimate=message,
+            reading="reading non-stop · —",standby="standby only · —"}
+    end
     return data and data.display or {level="—",estimate="Learning · needs measured use",
         narrow_estimate="Learning · usual use",page_estimate="Learning · estimate available after measured use",
         reading="— Needs measured reading",standby="— Needs measured standby"}

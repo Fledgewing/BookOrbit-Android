@@ -12,6 +12,12 @@ return function(test,eq,ok,here)
             eq(ready.level_fraction,.78); eq(ready.lines[2],'19 h reading non-stop')
         end
     end)
+    test('battery: failed and pending reads are distinct from learning evidence',function()
+        eq(e.BatteryPlan.widget({error='budget'},2,2).lines[1],'Battery unavailable · try again')
+        eq(e.BatteryPlan.widget({pending=true},1,2).lines[1],'Loading battery…')
+        eq(e.BatteryPlan.page({error='unavailable'},1,1).estimate,'Battery unavailable · try again')
+        eq(e.BatteryPlan.page({pending=true},1,1).estimate,'Loading battery…')
+    end)
     test('battery: clock corrections and unavailable measurements are never filled from UI time',function()
         local d={level='—',page_estimate='Learning · estimate available after measured use',
             overview={'Your usual use: — Needs 24 h of observed use'},overview_count=1,
