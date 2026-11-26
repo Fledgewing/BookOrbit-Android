@@ -81,3 +81,7 @@ construction). The compatibility symbol guard now covers that constructor.
 
 Server transport, `ko/net.lua`, adapters and sync/outbox code were not changed.
 No hypothetical edge-case machinery, firmware changes, device actions or releases.
+
+Integration note: pass 3 explicitly requires three default pages for Android.
+That task requirement restores the Library page in new/reset layouts, with saved
+layouts preserved. Pass 4's navigation, touch geometry and other fixes remain.

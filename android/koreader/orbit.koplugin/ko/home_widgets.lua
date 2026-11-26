@@ -52,12 +52,18 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
     elseif hero or p.widget == "lists" then HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad,18,hero,true)
     else HomeWidgets.button(canvas,_(title).."  ›",pad,pad,w-2*pad,scale(52),function() dispatch("all") end) end
     if not ready then
-        local labels={loading="Loading…",empty="Nothing here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
-        if not compact then HomeWidgets.text(canvas,_(labels[snapshot.state] or "Unavailable"),pad,pad+scale(58),w-2*pad,16) end
+        local labels={loading="Loading…",empty=p.widget == "continue-reading" and "Open a book to start reading" or p.widget == "lists" and "No lists yet" or "No books here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
+        if not compact then HomeWidgets.text(canvas,_(snapshot.setup and "Sign in to load your library" or labels[snapshot.state] or "Unavailable"),pad,pad+scale(58),w-2*pad,16) end
         local rx=compact and math.floor((w+pad)/2) or pad
         local rw=compact and math.floor((w-3*pad)/2) or w-2*pad
-        HomeWidgets.button(canvas,_(compact and (labels[snapshot.state] or "Unavailable") or "Retry"),rx,
-            compact and math.floor((h-scale(50))/2) or h-pad-scale(50),rw,scale(50),function() dispatch("retry") end)
+        local ry=compact and math.floor((h-scale(50))/2) or h-pad-scale(50)
+        if snapshot.setup then
+            HomeWidgets.button(canvas,_("Sign in"),rx,ry,rw,scale(50),function() dispatch("setup") end)
+        elseif snapshot.state ~= "empty" then
+            HomeWidgets.button(canvas,_(compact and (labels[snapshot.state] or "Unavailable") or "Retry"),rx,ry,rw,scale(50),function() dispatch("retry") end)
+        elseif compact then
+            HomeWidgets.text(canvas,_(p.widget == "lists" and "No lists yet" or "No books yet"),rx,math.floor((h-scale(20))/2),rw,16)
+        end
     elseif compact then
         local b=snapshot.items[1]
         HomeWidgets.button(canvas,b.title or _("Untitled"),math.floor((w+pad)/2),math.floor((h-scale(50))/2),math.floor((w-3*pad)/2),scale(50),function() dispatch(p.widget == "lists" and "list" or "book",b) end)

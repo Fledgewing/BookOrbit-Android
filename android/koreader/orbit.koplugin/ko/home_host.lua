@@ -119,7 +119,7 @@ function HomeHost.create()
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
             if self.list_layout then self.list_result=result end
-            local snapshot=HomeHostPlan.snapshot(result)
+            local snapshot=HomeHostPlan.snapshot(result,caps.account)
             local interval=WidgetRegistry[p.widget].refreshSeconds
             if interval then refreshDelay=math.min(refreshDelay or interval,interval) end
             local dispatch=function(action,row) self:dispatch(action,row,p) end
@@ -205,7 +205,8 @@ function HomeHost.create()
         UIManager:nextTick(self.redraw)
     end
     function Host:dispatch(action,row,p)
-        if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
+        if action == "setup" then AccountView.open()
+        elseif action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action == "battery" then BatteryUI.show()
         elseif action == "storage" then StorageUI.show()
         elseif action == "collections" then StorageUI.show("collections",function(row)
@@ -346,5 +347,34 @@ function HomeHost.show()
     if not ok then error(host) end
     HomeHost.active=host
     UIManager:show(host) -- gate: user action (Home command or menu)
+    if S.news_012_pending then HomeHost.whatsNew() end
     return true
+end
+
+-- Only opened after the explicit Home action has left the reading foreground.
+function HomeHost.whatsNew()
+    local finish=Budgets.span("whats-new.paint",now_s,log)
+    local budget=Budgets.get("screens","whats-new")
+    local dialog
+    local function acknowledge()
+        if not S.news_012_pending then return end
+        S.news_012_pending=false
+        saveSettings()
+        G_reader_settings:flush()
+    end
+    dialog=require("ui/widget/buttondialog"):new{
+        title=_("What's new in 0.12"),
+        buttons={
+            {{text=_("Home is a widget grid you can edit"),enabled=false}},
+            {{text=_("Lists (your saved filters) on Home"),enabled=false}},
+            {{text=_("BookSync settings on the reader"),enabled=false}},
+            {{text=_("Battery: time left at your usual use"),enabled=false}},
+            {{text=_("Done"),height=Device.screen:scaleBySize(50),callback=function() acknowledge(); UIManager:close(dialog) end}},
+        },
+        tap_close_callback=acknowledge,
+    }
+    assert(Budgets.check(budget,{rows=#dialog.buttons,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}))
+    UIManager:show(dialog) -- gate: explicit Home action, above the Home host
+    finish()
+    return dialog
 end
