@@ -5,7 +5,7 @@ local function budget(rows, bytes, ms)
     return { rows=rows, bytes=bytes, spawns=0, roundTrips=1, network=0,
         snapshotBytes=16384, targetMs=ms }
 end
-for _, id in ipairs({"home", "library", "details", "series", "settings", "filter", "editor", "reader-top-panel"}) do
+for _, id in ipairs({"home", "library", "details", "series", "settings", "filter", "editor", "reader-top-panel", "book-info"}) do
     Budgets.screens[id] = budget(id == "home" and 128 or 32, id == "home" and 131072 or 32768,
         id == "home" and 500 or id == "editor" and 100 or 50)
 end
@@ -48,3 +48,10 @@ function Budgets.get(kind, id)
     assert(Budgets.check(b, {rows=0,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}))
     return b
 end
+
+-- Reader surfaces consume one book, capability row and optional battery row, in one batch.
+for _, id in ipairs({"reader-top-panel", "book-info", "details"}) do
+    Budgets.screens[id] = budget(3, 3 * 16384, 50)
+end
+
+Budgets.widgets["reader-progress"] = budget(1, 16384, 50)
