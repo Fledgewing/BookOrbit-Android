@@ -56,3 +56,9 @@ additive interface extension, not a second account implementation. The pinned se
 native two-step challenge; the UI accepts the neutral two-step error for adapters that do,
 and labels the deferred phone path honestly. HTTP 404/426 at sign-in maps to server-too-old.
 Browser/OIDC and firmware phone pairing remain later work.
+
+The F12-J integration keeps Search and the setup subtitle on one header row. It preserves
+Home's existing widget area and Library links; filtered-list controls keep their own row.
+The setup action has a 50 px logical touch height and a non-overlap regression check.
+The cancellation paths follow the prototype: Keep it and Back from Remove return directly
+to that login's settings row. Returned worker provenance decides Kept even on a cold read.

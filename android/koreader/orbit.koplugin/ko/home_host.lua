@@ -52,30 +52,25 @@ function HomeHost.create()
         self.index=HomeHostPlan.page(self.index,0,#resolved.pages)
         local page=resolved.pages[self.index]
         local scale=function(n) return Device.screen:scaleBySize(n) end
-        local status,kind=AccountPlan.sync(account,true)
-        local accountHeight=status and caps.account and scale(44) or 0
         local gap,top,bottom=scale(12),scale(self.list_layout and 158 or 108),scale((self.list_layout or #resolved.pages>1) and 52 or 12)
-        top=top+accountHeight
         local w,h=self.dimen.w,self.dimen.h
         local canvas=HomeWidgets.canvas(w,h)
-        if self.account_height~=nil and self.account_height~=accountHeight then
-            -- The status row changes widget geometry; redraw its previous positions too.
-            self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=h}
-        elseif status~=self.account_status then
-            self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=top}
-        end
-        self.account_height,self.account_status=accountHeight,status
         HomeWidgets.text(canvas,self.list_title or "BookSync",gap,gap,w-scale(120),24,false,true)
-        if accountHeight>0 then HomeWidgets.button(canvas,status,gap,scale(48),w-2*gap,scale(36),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
+        local status,kind=AccountPlan.sync(account,true)
+        if status~=self.account_status then
+            self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=top}
+            self.account_status=status
+        end
+        if status and caps.account and not self.list_layout then HomeWidgets.button(canvas,status,gap+scale(110),scale(54),w-2*gap-scale(110),scale(50),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
         HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(36),function() self:onClose() end)
-        HomeWidgets.button(canvas,_("Search"),gap,scale(54)+accountHeight,scale(100),scale(50),function() self:search() end)
+        HomeWidgets.button(canvas,_("Search"),gap,scale(54),scale(100),scale(50),function() self:search() end)
         if self.list_layout then
             local header=self.filter:header(self.list_result and self.list_result.total)
-            HomeWidgets.button(canvas,header.active and _("Filter ●") or _("Filter"),gap+scale(110),scale(54)+accountHeight,scale(100),scale(50),header.callback)
+            HomeWidgets.button(canvas,header.active and _("Filter ●") or _("Filter"),gap+scale(110),scale(54),scale(100),scale(50),header.callback)
             local x=gap
             for _,chip in ipairs(header.chips) do
                 if x+scale(140)>w-gap then break end
-                HomeWidgets.button(canvas,chip.label.." ×",x,scale(106)+accountHeight,scale(136),scale(46),chip.callback)
+                HomeWidgets.button(canvas,chip.label.." ×",x,scale(106),scale(136),scale(46),chip.callback)
                 x=x+scale(140)
             end
         end

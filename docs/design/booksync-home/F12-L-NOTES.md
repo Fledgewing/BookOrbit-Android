@@ -72,8 +72,7 @@ server projection. No renderer receives raw catalog fields or performs that aggr
 F12-N adds only neutral account/login commands to the shared provider port. Account display
 metadata and provisioning outcomes normalize in `server/bookorbit`; the private Lua binding
 caches the bounded lifecycle snapshot, so signed-out forms work without a catalog owner and
-Home still performs at most one batched worker read. Combined Home search/filter controls
-reserve space below the account status row; Custom editor and sign-in panel actions coexist.
+Home still performs at most one batched worker read. The Home setup action shares its row with Search and stays out of list filters; Custom editor and sign-in panel actions coexist.
 
 F12-O replaces the temporary Battery renderer with the snapshot widget/page. Its existing
 `battery` operation remains local; all display labels, rates, dates and totals are companion
@@ -82,8 +81,7 @@ keeps the shared reading gate, including dialogs opened above Home.
 
 The landed F12-J Home integration's interim scalar Battery renderer is superseded by
 F12-O's companion-formatted widget/page. Its capability gate and absent-history checks
-remain, without a parallel renderer or display model. Account status-row height changes
-now invalidate moved Home widgets as well as the subtitle region.
+remain, without a parallel renderer or display model. Account subtitle changes invalidate its header region without moving widgets.
 
 The final F12-O integration extends Home's canonical `logic/battery_widget.lua`
 contract, removes the earlier `logic/battery.lua` name, and consumes `snapshot.data`

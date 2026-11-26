@@ -406,6 +406,9 @@ return function(test,eq,ok,E,W,Widget)
                 local h=E.HomeHost.create(); E.HomeHost.active=h
                 local canvas=h[1][1]
                 eq(canvas[2].text,"Not signed in · Sign in"); canvas[2].callback(); eq(kind,"summary")
+                for _,control in ipairs(canvas) do if control.text=="Search" then
+                    ok(canvas[2].overlap_offset[1]>=control.overlap_offset[1]+control.width,"setup subtitle does not overlap Search")
+                end end
                 state={signedIn=true,sync={available=false},opds={available=false}}
                 h:rebuild(); canvas=h[1][1]
                 eq(canvas[2].text,"No sync login · Set up"); canvas[2].callback(); eq(kind,"sync")
@@ -415,8 +418,8 @@ return function(test,eq,ok,E,W,Widget)
                 h.download_prompt.buttons[1][2].callback(); eq(kind,"opds")
                 state={signedIn=true,sync={available=true},opds={available=true}}
                 h:rebuild()
-                eq(h.account_height,0)
-                eq(h.changed_rects[1].h,h.dimen.h,"removing setup row invalidates all moved widgets")
+                eq(h.account_status,nil)
+                ok(h.changed_rects[1].h>=104 and h.changed_rects[1].h<h.dimen.h,"removing setup action invalidates its header region")
             end)
             E.LibraryAdapter.read,E.AccountView.open=read,open
             ok(success,err)
