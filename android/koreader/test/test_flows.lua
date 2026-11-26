@@ -3951,6 +3951,70 @@ test("cache: a write patches the cached book and marks Home stale; accounts neve
     cacheTeardown()
 end)
 
+test("cache: bounded list opens paint under 500 ms without a subprocess or companion reply", function()
+    local forks = 0
+    local client, Cat = cacheSetup(function(Cat)
+        -- Model upstream fetch, rather than the harness's ordinary inline fake.
+        function Cat:fetch(_, fn)
+            forks = forks + 1
+            local done, r = self.client:runInSubprocess(fn)
+            if not done then return nil, "cancelled" end
+            return r.body, r.err, r.errbody
+        end
+    end)
+    local cat = setmetatable({client=client}, Cat)
+    W.logs = {}
+    local paths = {
+        "/koreader/plugin/catalog/books?buckets=1&order=asc&page=1&size=12&sort=title",
+        "/koreader/plugin/catalog/books?sort=recently_added&order=desc&size=12&page=1",
+        "/koreader/plugin/catalog/books?collectionId=4&sort=title&size=12&page=1",
+    }
+    for _, path in ipairs(paths) do
+        cache.server[path] = {items={{id=7,title="Saved book"}},total=1,page=1,size=12}
+        client:request("GET", path)
+    end
+    -- The stored catalog is large; opening it must decode only a 12-book window.
+    local books = {}
+    for i=1,7000 do books[i]={id=i,title="Saved book " .. i} end
+    cache.server[paths[1]] = {items=books,total=7000,page=1,size=7000}
+    client:request("GET", paths[1])
+    run(1) -- companion stores the server replies
+    W.clock = W.clock + 61 -- stale hits must also paint before asking for revalidation
+    cache.calls = {}
+    local send = E.Companion.send
+    local sends = 0
+    E.Companion.send = function(...) sends=sends+1; return send(...) end
+    for _, path in ipairs(paths) do
+        local before, virtual = os.clock(), W.clock
+        local body = cat:fetch("Opening", function() return client:request("GET", path) end)
+        cat:switchTo("Books", {}, {kind="books",books=body.items})
+        ok(os.clock()-before < 0.5 and W.clock-virtual < 0.5, "cache-hit render budget")
+        eq(body.items[1].id,path == paths[1] and 1 or 7)
+        if path == paths[1] then eq(#body.items,12,"only the visible window is decoded") end
+        eq(forks,0,"cache hit never enters subprocess")
+        eq(sends,0,"cache hit never asks/waits for companion before render")
+    end
+    eq(#cache.calls,0,"no network before paint")
+    local spans = 0
+    for _, line in ipairs(W.logs) do
+        if line:find("source=cache-inline",1,true) then
+            spans = spans + 1
+            ok(line:find("spawn=-1.0 spawned=-1.0",1,true),"span distinguishes skipped fork")
+        end
+    end
+    eq(spans,3,"one timing line per cache-hit open")
+    run(0.1)
+    ok(sends > 0,"stale checks resume after render without waiting for their replies")
+    -- Cache miss still uses exactly one child; errors cannot leave probe mode set.
+    local missing = "/koreader/plugin/catalog/books?collectionId=99&size=12"
+    cache.server[missing] = {items={},total=0}
+    ok(cat:fetch("Opening", function() return client:request("GET",missing) end))
+    eq(forks,1,"miss uses the asynchronous path")
+    eq(E.OC.probing,nil,"probe restored after miss")
+    E.Companion.send = send
+    cacheTeardown()
+end)
+
 test("cache: a read made in the catalog's child process is saved by the companion", function()
     local client = cacheSetup()
     W.wifi = true

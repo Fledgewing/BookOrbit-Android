@@ -15,11 +15,19 @@ Store = { ui_pid = Db.pid(), VERSION = 1, FILE = "orbit.db", memo = {}, memo_ord
 
 function Store.path() return OC.dir() .. "/" .. Store.FILE end
 
+-- Decode only the returned window; account for it separately from SQLite time.
+local function decode(s)
+    local start = now_s()
+    local value = Cache.decode(s)
+    if OC.open_span then OC.open_span.decode = (OC.open_span.decode or 0) + (now_s() - start) * 1000 end
+    return value
+end
+
 local function txt(v) return Db.value(v) end
 local function val(v)
     local s = Db.value(v)
     if type(s) ~= "string" then return nil end
-    return Cache.decode(s)
+    return decode(s)
 end
 
 -- The connection, when the file is there, of our schema and owned by owner.
@@ -178,7 +186,7 @@ local function bulk_list(conn, w)
     local total = tonumber(rows(conn, "SELECT count(*) FROM " .. from, unpack(args))[1][1]) or 0
     local start, stop, size = Cache.window(w.kind, total, w.page, w.size, w.offset)
     local h = rows(conn, "SELECT head FROM bulk_heads WHERE g=? AND identity=?",g,w.identity)[1]
-    local head = h and Cache.decode(h[1] or "") or {}
+    local head = h and decode(h[1] or "") or {}
     if not w.section and q.buckets == "1" and (q.sort == "title" or q.sort == "author") then
         head.buckets = {}
         for _, b in ipairs(rows(conn, "SELECT r.letter,min(r.pos),count(*) FROM " .. from .. " GROUP BY r.letter ORDER BY min(r.pos)", unpack(args))) do
@@ -209,9 +217,9 @@ local function bulk_list(conn, w)
         .. " FROM " .. from .. " ORDER BY " .. order .. " LIMIT ? OFFSET ?", unpack(args))
     local items = {}
     for _, row in ipairs(got) do
-        local book = Cache.decode(row[1] or "")
+        local book = decode(row[1] or "")
         if type(book) ~= "table" then return nil end
-        if context then for k, v in pairs(Cache.decode(row[2] or "") or {}) do book[k] = v end end
+        if context then for k, v in pairs(decode(row[2] or "") or {}) do book[k] = v end end
         table.insert(items, book)
     end
     return {body=Cache.assemble(head, items, total, start, stop, size, w.offset),
@@ -230,18 +238,19 @@ local function list(conn, w)
     if #got ~= stop - start then return nil end
     local items = {}
     for i, r in ipairs(got) do
-        local item = Cache.decode(r[2] or "")
+        local item = decode(r[2] or "")
         if type(item) ~= "table" then return nil end
         items[i] = item
     end
-    return { body = Cache.assemble(Cache.decode(l[3] or ""), items, total, start, stop, size, w.offset),
+    return { body = Cache.assemble(decode(l[3] or ""), items, total, start, stop, size, w.offset),
         validated_at = tonumber(l[4]) or 0, table = "lists" }
 end
 
 -- What the cache holds for a read (OC.lookup): { key, body, validated_at, stale, path } or nil.
 -- template: the plugin's detail request with Mirror.SENTINEL for the id (Mirror.detailPath).
 function Store.read(owner, key, path, template)
-    return within(owner, "read:" .. key, function(conn)
+    local start = now_s()
+    local entry = within(owner, "read:" .. key, function(conn)
         local w = Cache.listWindow(path)
         local e
         if w then
@@ -250,22 +259,24 @@ function Store.read(owner, key, path, template)
             local id = Cache.detailId(path, template, Mirror.SENTINEL)
             if id then
                 local r = rows(conn, "SELECT detail, detail_at FROM books WHERE id = ? AND detail IS NOT NULL", id)[1]
-                local body = r and Cache.decode(r[1] or "")
+                local body = r and decode(r[1] or "")
                 if type(body) == "table" then e = { body = body, validated_at = tonumber(r[2]) or 0, table = "books" }
                 elseif Store.meta(conn, "bulk_active") then
                     local stub = rows(conn, "SELECT item FROM bulk_books WHERE g = ? AND id = ?", tonumber(Store.meta(conn, "bulk_active")), id)[1]
-                    local item = stub and Cache.decode(stub[1] or "")
+                    local item = stub and decode(stub[1] or "")
                     if type(item) == "table" then e = {body=item, validated_at=0, stale=true, table="books", partial=true} end
                 end
             else
                 local r = rows(conn, "SELECT body, validated_at, stale FROM entries WHERE key = ?", key)[1]
-                local body = r and Cache.decode(r[1] or "")
+                local body = r and decode(r[1] or "")
                 if type(body) == "table" then e = { body = body, validated_at = tonumber(r[2]) or 0, stale = tonumber(r[3]) == 1 or nil, table = "entries" } end
             end
         end
         if e then e.key, e.path = key, path end
         return e
     end)
+    if OC.open_span then OC.open_span.store = (OC.open_span.store or 0) + (now_s() - start) * 1000 end
+    return entry
 end
 
 -- An offline search over the saved books (title, authors, series): the server's list shape.
@@ -287,7 +298,7 @@ function Store.search(owner, path)
         table.insert(args, start)
         local items = {}
         for _, r in ipairs(rows(conn, "SELECT " .. item .. " FROM " .. source .. " WHERE " .. cond .. " ORDER BY search LIMIT ? OFFSET ?", unpack(args))) do
-            local item = Cache.decode(r[1] or "")
+            local item = decode(r[1] or "")
             if type(item) == "table" then table.insert(items, item) end
         end
         return Cache.assemble({ query = q.q }, items, total, start, stop, size, q.offset)
@@ -298,7 +309,7 @@ end
 function Store.storage(owner)
     return within(owner, "storage", function(conn)
         local v = Store.meta(conn, "storage")
-        local t = v and Cache.decode(v)
+        local t = v and decode(v)
         return type(t) == "table" and t or nil
     end)
 end
