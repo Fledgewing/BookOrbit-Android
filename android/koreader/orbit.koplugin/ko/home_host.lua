@@ -142,9 +142,11 @@ function HomeHost.create()
         self.metrics=paint:flush()
         if refreshDelay then
             self.widgetRefresh=function()
-                if HomeHost.foreground() and topWidget()==self and not reading() then
-                    self.widgetRefresh=nil; self:invalidate()
-                elseif HomeHost.active==self then UIManager:scheduleIn(refreshDelay,self.widgetRefresh) end
+                if HomeHost.active~=self then self.widgetRefresh=nil; return end
+                -- Keep the heartbeat until rebuild replaces it: a panel may cover Home
+                -- between this check and the queued redraw. Back must still refresh Clock.
+                UIManager:scheduleIn(refreshDelay,self.widgetRefresh)
+                if HomeHost.foreground() and topWidget()==self and not reading() then self:invalidate() end
             end
             UIManager:scheduleIn(refreshDelay,self.widgetRefresh)
         end

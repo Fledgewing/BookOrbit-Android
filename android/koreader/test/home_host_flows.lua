@@ -560,6 +560,10 @@ return function(test,eq,ok,E,W,Widget)
                 ok(h.widgetRefresh); eq(#batches,1); eq(h.metrics.roundTrips,1)
                 local refresh=h.widgetRefresh
                 refresh(); ok(h.redraw); h.redraw(); eq(#batches,2)
+                -- Cover Home after the timer queues its redraw, then return with Back.
+                h.widgetRefresh(); ok(h.redraw); W.shown={}; h.redraw(); eq(#batches,2)
+                ok(h.widgetRefresh,"a suppressed redraw retains the host heartbeat")
+                W.shown={h}; h.widgetRefresh(); ok(h.redraw); h.redraw(); eq(#batches,3)
                 W.shown={}; local count=#batches; h.widgetRefresh(); eq(#batches,count)
                 ok(not h.redraw,"hidden Home never paints")
                 h:onClose(); h:onCloseWidget(); eq(h.widgetRefresh,nil)
