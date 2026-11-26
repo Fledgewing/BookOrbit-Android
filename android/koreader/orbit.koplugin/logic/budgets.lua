@@ -95,3 +95,10 @@ Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
 -- Upgrade news is five static rows, with no read-model or worker access.
 Budgets.screens["whats-new"] = budget(5, 0, 50)
 Budgets.screens["whats-new"].roundTrips = 0
+
+-- Sleep picker pages inherit six companion-materialized names/counts, never a choice catalog.
+Budgets.screens["settings-sleep-choices"] = budget(6,16384,50)
+Budgets.screens["settings-device"] = budget(1,16384,50)
+
+
+Budgets.screens["settings-sleep-choices"].displayRows = 10

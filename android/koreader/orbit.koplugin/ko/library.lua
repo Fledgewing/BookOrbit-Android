@@ -78,6 +78,7 @@ function Library:window(source, query, offset, limit)
     return self:read("window", {source=source or "library/all", query=query or {}, offset=offset or 0, limit=limit})
 end
 function Library:book(key) return self:read("book", {key=key, limit=1}) end
+function Library:cover(key) return self:read("cover", {key=key, limit=1}) end
 function Library:counts(source, query) return self:read("counts", {source=source or "library/all", query=query or {}}) end
 -- Reader identity stays opaque to the UI; the worker joins the local file ledger.
 function Library:reader(path)
@@ -153,4 +154,45 @@ function Library:sources(category, offset, limit, caps)
     return self:read("sources", {category=category,offset=offset or 0,limit=limit or 6,
         allow_lists=not (caps and caps.lists and caps.lists.read==false),
         allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
+end
+
+-- Settings projections reuse the companion's sleep choices and device settings owners.
+function Library.refreshDevice(attempt)
+    local finish=Budgets.span("library.settings-device.refresh",now_s,log)
+    local result=Jni.call(Companion.AUTHORITY,Companion.PACKAGE..".call.DEVICE_SETTINGS",{})
+    local body=result and result.ok=="1" and result.body
+    Library.device_snapshot=type(body)=="string" and #body<=16384 and Cache.decode(body) or nil
+    assert(Budgets.check(Budgets.get("screens","settings-device"),{rows=1,bytes=type(body)=="string" and #body or 0,
+        spawns=0,roundTrips=1,network=0,snapshotBytes=type(body)=="string" and #body or 0}))
+    if Library.device_snapshot and Library.device_snapshot.pending and (attempt or 0)<3 then
+        UIManager:scheduleIn(.5,function() Library.refreshDevice((attempt or 0)+1) end)
+    end
+    finish()
+end
+function Library:deviceSettings()
+    local finish=Budgets.span("library.settings-device",now_s,log)
+    local device=Library.device_snapshot or {reader="Not available",sleep_label="Not available",unavailable=true}
+    self.usage.rows=self.usage.rows+1; self.metrics.rows=self.metrics.rows+1
+    assert(Budgets.check(self.budget,self.usage))
+    assert(Budgets.check(self.screen_budget,self.metrics))
+    finish(); return device
+end
+function Library:sleepChoices(category, offset)
+    return self:read("sleep.choices", {category=category,offset=offset or 0,limit=6})
+end
+function Library.sleepAfter(ms, done)
+    return command("device.sleep",function() return LibraryAdapter.command("device.sleep",{ms=ms},function(result)
+        if result.device then Library.device_snapshot=result.device end
+        done(result)
+    end) end)
+end
+
+-- Explicit background acquisition; paints consume local references from their snapshots.
+function Library.acquireCover(key,done)
+    return command("covers.acquire",function()
+        return LibraryAdapter.command("covers.acquire",{key=key},function(result)
+            if result.local_path then LibraryAdapter.reset(); Library.changed({kind="cover"}) end
+            if done then done(result) end
+        end)
+    end)
 end
