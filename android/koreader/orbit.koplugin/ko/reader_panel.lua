@@ -106,8 +106,22 @@ function ReaderSheet:rowWidget(block,w,h,mt)
                 table.insert(group,require("ui/widget/container/centercontainer"):new{
                     dimen=require("ui/geometry"):new{w=titleWidth,h=mt.button},title})
             end
-            table.insert(group,self:control(Button:new{text=not cell.icon and cell.text or nil,icon=cell.icon,tooltip=cell.text,callback=cell.callback,
-                width=cell.width or mt.button,height=mt.button,bordersize=cell.marked and 2 or 0,text_font_size=14}))
+            if cell.keep_label then
+                local Geom=require("ui/geometry")
+                local width=cell.width or mt.button
+                local home=require("ui/widget/container/inputcontainer"):new{text=cell.text,dimen=Geom:new{w=width,h=mt.button},
+                    require("ui/widget/container/centercontainer"):new{dimen=Geom:new{w=width,h=mt.button},
+                        require("ui/widget/horizontalgroup"):new{
+                            require("ui/widget/iconwidget"):new{icon=cell.icon,width=math.floor(mt.button*.36),height=math.floor(mt.button*.36)},
+                            require("ui/widget/horizontalspan"):new{width=math.floor(mt.button*.08)},
+                            require("ui/widget/textwidget"):new{text=cell.text,face=require("ui/font"):getFace("cfont",14)}}}}
+                home.ges_events={Tap={require("ui/gesturerange"):new{ges="tap",range=function() return home.dimen end}}}
+                home.onTap=function() cell.callback(); return true end
+                self:touchControl(home,cell.callback); table.insert(group,home)
+            else
+                table.insert(group,self:control(Button:new{text=not cell.icon and cell.text or nil,icon=cell.icon,tooltip=cell.text,callback=cell.callback,
+                    width=cell.width or mt.button,height=mt.button,bordersize=cell.marked and 2 or 0,text_font_size=14}))
+            end
         end
         return group
     elseif block.kind=="reader-grid" then
@@ -119,9 +133,12 @@ function ReaderSheet:rowWidget(block,w,h,mt)
         return group
     elseif block.kind=="reader-position" then
         local group=require("ui/widget/horizontalgroup"):new{}
-        for _,text in ipairs({block.row.text,block.row.position}) do
-            table.insert(group,require("ui/widget/textwidget"):new{text=text,
-                face=require("ui/font"):getFace("cfont",14),max_width=math.floor(w/2)})
+        for i,text in ipairs({block.row.text,block.row.position}) do
+            local width=i==1 and math.floor(w/2) or w-math.floor(w/2)
+            table.insert(group,require(i==1 and "ui/widget/container/leftcontainer" or "ui/widget/container/rightcontainer"):new{
+                dimen=require("ui/geometry"):new{w=width,h=h},
+                require("ui/widget/textwidget"):new{text=text,
+                    face=require("ui/font"):getFace("cfont",14),max_width=width}})
         end
         return group
     elseif block.kind=="reader-lights" then
@@ -338,7 +355,7 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
         header[#header+1]=cell(settings,"appbar.settings")
         header[#header+1]={text=native.marked and "Remove bookmark" or "Add bookmark",
             icon="bookmark",marked=native.marked,callback=action("bookmark",nil,true)}
-        header[1].width=math.floor(1.6*require("device").screen:scaleBySize(50)); header[1].text="Home"; header[1].icon=nil
+        header[1].width=math.floor(1.6*require("device").screen:scaleBySize(50)); header[1].text="Home"; header[1].keep_label=true
         if sync and sync.text~="Sync" then header[2].width=math.floor(2.8*require("device").screen:scaleBySize(50)) end
         rows={
             {kind="reader-header",text=m.title,author=m.author,choices=header},

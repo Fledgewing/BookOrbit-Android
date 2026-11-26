@@ -58,6 +58,11 @@ class ReaderControlsTest {
         assertEquals(listOf(.005,1.0),item["bookmarks"])
         assertEquals(true,item["marked"])
     }
+    @Test fun pagePercentagesUseTheSameHalfUpRoundingAsTheReaderHeader() {
+        assertEquals("p. 1 of 200 · 1%",row(mapOf("page" to 1,"total" to 200))["position"])
+        assertEquals("p. 199 of 200 · 100%",row(mapOf("page" to 199,"total" to 200))["position"])
+        assertEquals("p. 1 of 300 · 0%",row(mapOf("page" to 1,"total" to 300))["position"])
+    }
     @Test fun nativeChapterIdentityDoesNotBecomeTheSampleCount() {
         val item=row(mapOf("page" to 8000,"total" to 10000,"chapters" to (1..64).toList(),
             "chapter_total" to 1000,"chapter_index" to 800,"chapter_title" to "A chapter"))

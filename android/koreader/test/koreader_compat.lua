@@ -88,6 +88,7 @@ local NEEDS = {
     { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu", "onShowMenu", "onTapShowMenu", "onSwipeShowMenu",
         { "menu_container", F } } },
     { "frontend/ui/widget/progresswidget.lua", { {"percentage", F}, {"ticks", F}, {"bordersize", F}, {"margin_h", F}, {"margin_v", F}, {"radius", F} } },
+    { "frontend/ui/widget/container/rightcontainer.lua", { {"RightContainer", T} } },
     { "frontend/ui/widget/container/topcontainer.lua", { {"TopContainer", T} } },
     { "frontend/apps/reader/modules/readertoc.lua", { "isChapterStart", "getPreviousChapter" } },
     { "frontend/apps/reader/modules/readerstatus.lua", { "onEndOfBook", "markBook", "onShowBookStatus",

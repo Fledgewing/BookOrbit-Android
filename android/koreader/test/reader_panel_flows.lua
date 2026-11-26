@@ -170,7 +170,7 @@ return function(here, test, ok, eq)
         for _,pair in ipairs({{"Contents","toc"},{"Bookmarks","bookmark"},{"Search","search"},{"Go to","goto"}}) do
             W.ui.menu:onTapShowMenu()
             local rows=E.ReaderPanel.sheet:rows()
-            eq(rows[1].kind,"reader-header"); eq(rows[1].choices[1].text,"Home")
+            eq(rows[1].kind,"reader-header"); eq(rows[1].choices[1].text,"Home"); eq(rows[1].choices[1].icon,"home"); eq(rows[1].choices[1].keep_label,true)
             eq(rows[1].choices[2].text,"Sync"); eq(rows[1].choices[3].text,"BookSync settings")
             eq(rows[1].choices[4].text,"Add bookmark")
             local names={}; for _,cell in ipairs(rows[2].choices) do names[#names+1]=cell.text end
@@ -239,8 +239,8 @@ return function(here, test, ok, eq)
         ok(row(E,"Position not available yet")); ok(row(E,"Chapters not available yet"))
         local poll=W.poll; E.ReaderPanel.close(); local before=#W.shown; poll(); eq(#W.shown,before)
         E.ReaderPanel.show(W.ui,"reader-bottom-panel"); local sheet=E.ReaderPanel.sheet
-        W.controls={items={{position="p. 1 of 200 · 0%",chapter="Chapter 1 of 6"}}}; W.poll()
-        eq(E.ReaderPanel.sheet,sheet); ok(row(E,"p. 1 of 200 · 0%"))
+        W.controls={items={{position="p. 1 of 200 · 1%",chapter="Chapter 1 of 6"}}}; W.poll()
+        eq(E.ReaderPanel.sheet,sheet); ok(row(E,"p. 1 of 200 · 1%"))
         local b=E.Budgets.get("screens","reader-bottom-panel")
         eq(b.rows,2); eq(b.bytes,32768); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,1)
         eq(E.ReaderPanelPlan.fontSize(27,1),16); eq(E.ReaderPanelPlan.fontSize(16,-1),27)
@@ -314,6 +314,8 @@ return function(here, test, ok, eq)
             end
             ok(width<sheet.plan.inner,"header leaves room for title and author")
             ok(sheet.plan.h<=sheet.screen_h)
+            local position=sheet:rowWidget({kind="reader-position",row={text="Chapter",position="p. 1 of 200 · 1%"}},501,24,sheet.metrics)
+            eq(position[1].dimen.w+position[2].dimen.w,501,"chapter and page bands fill the row without overlap")
             E.ReaderPanel.show(W.ui,"reader-bottom-panel")
             sheet=E.ReaderPanel.sheet; ok(sheet.plan.h<=sheet.screen_h)
             for _,item in ipairs(sheet.plan.items) do
