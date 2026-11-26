@@ -6863,6 +6863,25 @@ test("0.11.4 upgrade: settings cutover is durable, additive and retryable",funct
     eq(env.S.news_012_pending,true)
 end)
 
+test("version skew: both directions identify the component, and Home does no work",function()
+    local C=RE.Companion
+    local state,read,version,at,patch=C.state,C.readFile,C.version,C.version_at,RE.PATCH_VERSION
+    local adapter,active=RE.LibraryAdapter,RE.HomeHost.active
+    C.state=function() return "ok" end
+    RE.PATCH_VERSION="0.12.0"
+    local v="0.11.4-preview.3"
+    C.readFile=function() return {version=v} end
+    RE.LibraryAdapter={read=function() error("no reads with incompatible worker") end}
+    C.version_at=nil
+    ok(C.workerProblem():find("Update BookSync Companion to 0.12.0",1,true))
+    eq(RE.HomeHost.show(),false)
+    v="0.13.0"; C.version_at=nil
+    ok(C.workerProblem():find("Update BookSync plugin to 0.13.0",1,true))
+    eq(RE.HomeHost.show(),false); eq(RE.HomeHost.active,active)
+    C.state,C.readFile,C.version,C.version_at,RE.PATCH_VERSION=state,read,version,at,patch
+    RE.LibraryAdapter=adapter
+end)
+
 test("settings: Home has editor controls and no legacy selector", function()
     local _, m = newUI(false)
     local home
