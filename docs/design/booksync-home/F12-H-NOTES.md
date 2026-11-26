@@ -45,9 +45,9 @@ can call `ReaderPanel.details(key, ui)` with an opaque library key.
 
 `Library:reader(path)` resolves the active owner's existing tracked-file ledger
 on the companion and returns one normalized book row with stats. `:book(key)`
-also includes the same stats. `Library:battery()` is an explicit unavailable
-placeholder until the battery slice publishes `hours_usual_use` (the measured estimate,
-formatted as days/hours by the display logic). The renderer adds
+also includes the same stats. `Library:battery()` uses the companion battery model ([F12-E notes](F12-E-NOTES.md));
+it supplies `hours_usual_use` once enough observed history exists, formatted as
+days/hours by the display logic. The renderer adds
 “≈ N left at your usual use”. Missing data never becomes an invented estimate.
 `Library.syncCurrent(done)` is an explicit user action through the adapter to
 the existing quiet SyncBook writer; it is never invoked by render or read.
@@ -95,9 +95,10 @@ The existing plugin logic harness tests display normalization and budget guards.
 menu hook, library batching, progress widget options, capability gate, navigation,
 manual Sync, cold completion and dismissal. Companion ReaderBookStatsTest covers
 real SQLite aggregates, actual completion dates, owner isolation, missing records
-and the battery placeholder. Existing end-of-book flows remain unchanged.
+and unavailable battery history. F12-E validates the measured model and persistence.
+Existing end-of-book flows remain unchanged.
 
-Next slices can supply the battery projection, enrich the existing normalized
+Next slices can consume the measured battery projection, enrich the existing normalized
 book/stat row, use `ReaderPanel.details` from catalog cards, and add the remaining
 reader controls to the shared row renderer. Preserve the single existing sync
 writer and guard completion/repaint against the still-visible user-opened panel.

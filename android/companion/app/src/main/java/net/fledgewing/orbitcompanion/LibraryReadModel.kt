@@ -9,6 +9,7 @@ class LibraryReadModel(
     private val readingStats: () -> Map<String, Any?> = {
         mapOf("state" to "not-saved", "freshness" to mapOf("saved" to false))
     },
+    private val battery: () -> Map<String, Any?> = { BatteryEstimate.snapshot(emptyMap(), emptyList(), null, emptyList(), clock()*1000, java.time.ZoneOffset.UTC) },
     private val fallbackReadingStats: ((String) -> RemoteReadingStats?)? = null,
     private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
     private val accountStats: (String) -> Map<*, *>? = { null },
@@ -27,6 +28,7 @@ class LibraryReadModel(
         require(requests.size <= MAX_BATCH)
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
+        val power by lazy { battery() }
         val stats by lazy { AccountStats.combine(readingStats(), adapter.cachedReadingStats(owner), accountStats(owner), clock()) }
         for (encoded in requests) {
             val start = System.nanoTime()
@@ -37,11 +39,9 @@ class LibraryReadModel(
                 if (store.meta("owner") != owner) return@transaction
                 val result = try { when (args["op"]) {
                     "reading.stats" -> stats
-                    "mode-estimates" -> mapOf("items" to listOf("saver", "balanced", "current")
-                        .take(((args["limit"] as? Number)?.toInt() ?: 3).coerceIn(1, 3)).map {
-                            mapOf("id" to it, "text" to "Estimate available after measured use", "measured" to false)
-                        })
-                    "battery" -> mapOf("available" to false, "freshness" to mapOf("saved" to false))
+                    "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
+                    "battery" -> power
+                    "capabilities" -> adapter.capabilities(owner) + mapOf("battery" to true)
                     else -> adapter.project(owner, args)
                 } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
                 var body = LuaValue.encode(result)
