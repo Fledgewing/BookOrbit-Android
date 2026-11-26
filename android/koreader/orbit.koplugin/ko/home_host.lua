@@ -52,31 +52,34 @@ function HomeHost.create()
         self.index=HomeHostPlan.page(self.index,0,#resolved.pages)
         local page=resolved.pages[self.index]
         local scale=function(n) return Device.screen:scaleBySize(n) end
-        local gap,top,bottom=scale(12),scale(self.list_layout and 158 or 108),scale((self.list_layout or #resolved.pages>1) and 52 or 12)
+        local gap,top,bottom=scale(12),scale(self.list_layout and 178 or 120),scale((self.list_layout or #resolved.pages>1) and 52 or 12)
         local w,h=self.dimen.w,self.dimen.h
         local canvas=HomeWidgets.canvas(w,h)
-        HomeWidgets.text(canvas,self.list_title or "BookSync",gap,gap,w-scale(120),24,false,true)
+        HomeWidgets.text(canvas,self.list_title or page.name or page.tab or "Home",gap,gap,w-scale(self.list_layout and 120 or 220),24,false,true)
         local status,kind=AccountPlan.sync(account,true)
         if status~=self.account_status then
             self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=top}
             self.account_status=status
         end
-        if status and caps.account and not self.list_layout then HomeWidgets.button(canvas,status,gap+scale(110),scale(54),w-2*gap-scale(110),scale(50),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
-        HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(36),function() self:onClose() end)
-        HomeWidgets.button(canvas,_("Search"),gap,scale(54),scale(100),scale(50),function() self:search() end)
+        if status and caps.account and not self.list_layout then HomeWidgets.button(canvas,status,gap+scale(220),scale(66),w-2*gap-scale(220),scale(50),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
+        HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(50),function() self:onClose() end)
+        HomeWidgets.button(canvas,_("Search"),gap,scale(66),scale(100),scale(50),function() self:search() end)
         if self.list_layout then
             local header=self.filter:header(self.list_result and self.list_result.total)
-            HomeWidgets.button(canvas,header.active and _("Filter ●") or _("Filter"),gap+scale(110),scale(54),scale(100),scale(50),header.callback)
+            HomeWidgets.button(canvas,header.active and _("Filter ●") or _("Filter"),gap+scale(110),scale(66),scale(100),scale(50),header.callback)
             local x=gap
             for _,chip in ipairs(header.chips) do
                 if x+scale(140)>w-gap then break end
-                HomeWidgets.button(canvas,chip.label.." ×",x,scale(106),scale(136),scale(46),chip.callback)
+                HomeWidgets.button(canvas,chip.label.." ×",x,scale(118),scale(136),scale(50),chip.callback)
                 x=x+scale(140)
             end
         end
         local sharedStats
         if not self.list_layout then
-            HomeWidgets.button(canvas,_("Edit"),w-scale(190),gap,scale(80),scale(36),function() HomeEditor.show(self) end)
+            HomeWidgets.button(canvas,"⋯",gap+scale(110),scale(66),scale(100),scale(50),function() self:menu() end)
+        end
+        if not self.list_layout then
+            HomeWidgets.button(canvas,_("Edit"),w-scale(190),gap,scale(80),scale(50),function() HomeEditor.show(self) end)
         end
         for _,p in ipairs(page.placements) do
             local rect=HomeHostPlan.rect(p,resolved.grid,w-2*gap,h-top-bottom,gap)
@@ -84,9 +87,12 @@ function HomeHost.create()
             local context=paint:widget(p.widget,p.instance)
             local ok,result=pcall(function()
                 local need=(HomeWidgets.needs[p.widget] or HomeHostPlan.need)(p)
-                if p.widget ~= "continue-reading" and need.limit then
-                    local pad=scale(rect.h-2<scale(120) and 8 or 14)
-                    need.limit=math.min(need.limit,math.max(1,math.floor((rect.h-2-2*pad-scale(30))/scale(48))))
+                if p.widget == "lists" or p.widget == "booklist" and (p.settings.style or 0) == 1 then
+                    local pad=scale(rect.h-2<scale(132) and 8 or 14)
+                    need.limit=math.min(need.limit,math.max(1,math.floor((rect.h-2-2*pad-scale(52))/scale(52))))
+                elseif p.widget == "booklist" then
+                    -- Cover shelves are columns, so a row-height limit must not collapse them.
+                    need.limit=math.min(need.limit,rect.h-2<scale(132) and 1 or p.w>=4 and 4 or 3)
                 end
                 if HomeWidgets.stats[p.widget] then
                     if not sharedStats then sharedStats=context:read(need.op,need) end
@@ -133,6 +139,18 @@ function HomeHost.create()
         local old=self[1]
         self[1]=HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=0,background=HomeWidgets.ui().BB.COLOR_WHITE,canvas}
         if old then old:free() end
+    end
+    function Host:menu()
+        local menu
+        menu=require("ui/widget/buttondialog"):new{title=_("Home"),buttons={
+            {{text=_("Edit Home"),callback=function() UIManager:close(menu); HomeEditor.show(self) end}},
+            {{text=_("BookSync settings"),callback=function()
+                UIManager:close(menu)
+                assert(state.module,"BookSync module unavailable"):showSettings()
+            end}},
+            {{text=_("Cancel"),callback=function() UIManager:close(menu) end}},
+        }}
+        UIManager:show(menu) -- gate: user action (Home menu)
     end
     function Host:turn(delta)
         if self.list_layout then return self:listPage(delta) end
@@ -184,6 +202,7 @@ function HomeHost.create()
         end
     end
     function Host:showList(title,source,query,exclude_current)
+        if not self.list_layout then self.home_index=self.index end
         self.list_title=title or "Library"
         self.list_layout=Layout.default()
         self.list_layout.grids["android-tablet"].rows=3
@@ -239,7 +258,7 @@ function HomeHost.create()
     end
     function Host:onClose()
         if self.list_layout then
-            self.list_layout=nil; self.list_title=nil; self.filter=nil; self.index=1; self:rebuild(); UIManager:setDirty(self,"ui"); return true
+            self.list_layout=nil; self.list_title=nil; self.filter=nil; self.index=self.home_index or 1; self.home_index=nil; self:rebuild(); UIManager:setDirty(self,"ui"); return true
         end
         UIManager:close(self)
         return true

@@ -40,21 +40,27 @@ end
 function HomeWidgets.card(p, snapshot, dispatch, rect)
     local u=HomeWidgets.ui(); local scale=function(n) return Device.screen:scaleBySize(n) end
     local w,h=rect.w-2,rect.h-2
-    local compact=h<scale(120)
+    local compact=h<scale(132)
     local pad=scale(compact and 8 or 14)
     local canvas=HomeWidgets.canvas(w,h)
     local ready=snapshot.state == "ready" or snapshot.state == "offline-with-data"
     local hero=p.widget == "continue-reading" and ready
     local title=type((p.settings or {}).title) == "string" and p.settings.title or (p.widget == "continue-reading" and "Continue reading" or p.widget == "lists" and "Lists" or "Shelf")
-    if hero or p.widget == "lists" then HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad,18,hero,true)
-    else HomeWidgets.button(canvas,_(title).."  ›",pad,pad,w-2*pad,scale(30),function() dispatch("all") end) end
+    if compact then
+        -- One horizontal band keeps both actions large in a one-row tile.
+        HomeWidgets.button(canvas,_(title).." ›",pad,math.floor((h-scale(50))/2),math.floor((w-3*pad)/2),scale(50),function() dispatch("all") end)
+    elseif hero or p.widget == "lists" then HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad,18,hero,true)
+    else HomeWidgets.button(canvas,_(title).."  ›",pad,pad,w-2*pad,scale(52),function() dispatch("all") end) end
     if not ready then
         local labels={loading="Loading…",empty="Nothing here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
-        if not compact then HomeWidgets.text(canvas,_(labels[snapshot.state] or "Unavailable"),pad,pad+scale(38),w-2*pad,16) end
-        HomeWidgets.button(canvas,_("Retry"),pad,h-scale(compact and 34 or 48),w-2*pad,scale(compact and 28 or 38),function() dispatch("retry") end)
+        if not compact then HomeWidgets.text(canvas,_(labels[snapshot.state] or "Unavailable"),pad,pad+scale(58),w-2*pad,16) end
+        local rx=compact and math.floor((w+pad)/2) or pad
+        local rw=compact and math.floor((w-3*pad)/2) or w-2*pad
+        HomeWidgets.button(canvas,_(compact and (labels[snapshot.state] or "Unavailable") or "Retry"),rx,
+            compact and math.floor((h-scale(50))/2) or h-pad-scale(50),rw,scale(50),function() dispatch("retry") end)
     elseif compact then
         local b=snapshot.items[1]
-        HomeWidgets.button(canvas,b.title or _("Untitled"),pad,h-scale(34),w-2*pad,scale(28),function() dispatch(p.widget == "lists" and "list" or "book",b) end)
+        HomeWidgets.button(canvas,b.title or _("Untitled"),math.floor((w+pad)/2),math.floor((h-scale(50))/2),math.floor((w-3*pad)/2),scale(50),function() dispatch(p.widget == "lists" and "list" or "book",b) end)
     elseif hero then
         local b=snapshot.items[1]; local coverW=math.min(scale(110),math.floor(w*.23))
         local tx=pad+coverW+scale(18); local tw=w-tx-pad
@@ -67,40 +73,40 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         HomeWidgets.text(canvas,b.title or _("Untitled"),tx,pad+scale(35),tw,short and 18 or 25,true,true)
         if not short then HomeWidgets.text(canvas,b.authors and b.authors[1] or "",tx,pad+scale(73),tw,16,true) end
         local pct=math.max(0,math.min(100,tonumber(b.progress) or 0))
-        if not short then HomeWidgets.text(canvas,string.format("%d%%",pct),tx,h-scale(102),tw,26,true,true) end
+        HomeWidgets.text(canvas,string.format("%d%%",pct),tx,h-scale(short and 105 or 128),tw,short and 16 or 26,true,true)
         HomeWidgets.put(canvas,u.Progress:new{width=tw,height=scale(9),percentage=pct/100,radius=0,margin_h=0,margin_v=0,
-            bordercolor=u.BB.COLOR_WHITE,bgcolor=u.BB.COLOR_DARK_GRAY,fillcolor=u.BB.COLOR_WHITE},tx,h-scale(65))
-        HomeWidgets.button(canvas,b.local_path and _("Resume") or _("Book details"),tx,h-scale(47),tw,scale(34),function() dispatch("book",b) end)
+            bordercolor=u.BB.COLOR_WHITE,bgcolor=u.BB.COLOR_DARK_GRAY,fillcolor=u.BB.COLOR_WHITE},tx,h-scale(78))
+        HomeWidgets.button(canvas,b.local_path and _("Resume") or _("Book details"),tx,h-pad-scale(50),tw,scale(50),function() dispatch("book",b) end)
     elseif p.widget == "booklist" and (p.settings.style or 0) == 0 then
         local count=math.min(snapshot.count,p.w >= 4 and 4 or 3)
         local cw=math.floor((w-2*pad)/math.max(1,count))
-        local coverH=math.max(scale(30),h-2*pad-scale(70))
+        local coverH=math.max(scale(30),h-2*pad-scale(94))
         for i=1,count do
             local b=snapshot.items[i]; local x=pad+(i-1)*cw
             local cover=HomeWidgets.canvas(cw-scale(8),coverH)
             HomeWidgets.text(cover,"BOOK",scale(6),scale(8),cw-scale(20),12)
-            HomeWidgets.button(cover,_("Open"),0,math.max(0,coverH-scale(32)),cw-scale(8),scale(32),function() dispatch("book",b) end)
-            HomeWidgets.put(canvas,u.Frame:new{padding=0,margin=0,bordersize=1,cover},x,pad+scale(30))
+            HomeWidgets.button(cover,_("Open"),0,0,cw-scale(8),math.max(scale(50),coverH),function() dispatch("book",b) end)
+            HomeWidgets.put(canvas,u.Frame:new{padding=0,margin=0,bordersize=1,cover},x,pad+scale(56))
             HomeWidgets.text(canvas,b.title or _("Untitled"),x,h-pad-scale(30),cw-scale(8),14,false,true)
             HomeWidgets.text(canvas,HomeWidgets.caption(p.settings,b),x,h-pad-scale(12),cw-scale(8),11)
         end
     else
-        local rowH=scale(48); local count=math.min(snapshot.count,math.max(0,math.floor((h-2*pad-scale(30))/rowH)))
+        local rowH=scale(52); local count=math.min(snapshot.count,math.max(0,math.floor((h-2*pad-scale(52))/rowH)))
         for i=1,count do
             local b=snapshot.items[i]
             local label=b.title or b.name or _("Untitled")
             if b.group and b.group ~= "" then label=b.group.." · "..label end
             if p.widget == "lists" and b.count ~= nil then label=label.."  ·  "..tostring(b.count) end
-            local y=pad+scale(30)+(i-1)*rowH
+            local y=pad+scale(52)+(i-1)*rowH
             local progress=p.widget == "booklist" and tonumber(b.progress)
             if progress then label=label.."  ·  "..string.format("%d%%",math.max(0,math.min(100,progress))) end
             local caption=p.widget=="booklist" and HomeWidgets.caption(p.settings,b) or ""
             if caption~="" and (p.settings.cap~=2 or not progress) then label=label.." · "..caption end
-            HomeWidgets.button(canvas,label,pad,y,w-2*pad,progress and rowH-scale(8) or rowH,function()
+            HomeWidgets.button(canvas,label,pad,y,w-2*pad,rowH,function()
                 dispatch(p.widget == "lists" and "list" or "book",b)
             end)
             if progress then HomeWidgets.put(canvas,u.Progress:new{width=w-2*pad,height=scale(3),radius=0,margin_h=0,margin_v=0,
-                percentage=math.max(0,math.min(100,progress))/100},pad,y+rowH-scale(6)) end
+                percentage=math.max(0,math.min(100,progress))/100},pad,y+rowH-scale(3)) end
         end
     end
     return u.Frame:new{padding=0,margin=0,bordersize=1,radius=scale(10),background=hero and u.BB.COLOR_BLACK or u.BB.COLOR_WHITE,canvas}
@@ -120,15 +126,20 @@ end
 HomeWidgets.register("library",function(p,snapshot,dispatch,rect)
     local c=HomeWidgets.canvas(rect.w-2,rect.h-2)
     local scale=function(n) return Device.screen:scaleBySize(n) end
-    HomeWidgets.button(c,_("Library").."  ›",scale(8),scale(8),rect.w-scale(16),scale(30),function() dispatch("all") end)
     local d=snapshot.data or {}
     local saved=d.freshness and d.freshness.saved
     local wide=rect.h>=scale(144)
     local half=math.floor((rect.w-scale(16))/2)
-    HomeWidgets.text(c,saved and tostring(d.total or 0).." books" or _("Not saved yet"),scale(8),scale(44),wide and half or rect.w-scale(16),20,false,true)
+    if not wide then
+        HomeWidgets.button(c,_("Library").." · "..(saved and tostring(d.total or 0) or "—").." ›",scale(8),
+            math.max(0,math.floor((rect.h-2-scale(50))/2)),rect.w-scale(18),scale(50),function() dispatch("all") end)
+        return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
+    end
+    HomeWidgets.button(c,_("Library").."  ›",scale(8),0,rect.w-scale(18),scale(50),function() dispatch("all") end)
+    HomeWidgets.text(c,saved and tostring(d.total or 0).." books" or _("Not saved yet"),scale(8),scale(62),wide and half or rect.w-scale(16),20,false,true)
     if wide then
         HomeWidgets.button(c,(d.on_device~=nil and tostring(d.on_device) or "—").._(" on device").." ›",
-            scale(8)+half,scale(40),half,scale(50),function() dispatch("device") end)
+            scale(8)+half,scale(50),half,scale(50),function() dispatch("device") end)
         for i,group in ipairs({"author","series"}) do
             HomeWidgets.button(c,group=="author" and _("Authors ›") or _("Series ›"),scale(8)+(i-1)*half,
                 rect.h-scale(52),half,scale(50),function() dispatch("group",{group=group}) end)

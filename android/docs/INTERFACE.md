@@ -505,3 +505,16 @@ neutral binding. Home paint does not trigger sync. Consent/verification use the 
 budgets in `logic/budgets.lua`; commands and drains emit info-level timing spans.
 Migration journal details and crash guarantees are in
 [F12-Q notes](../../docs/design/booksync-home/F12-Q-NOTES.md).
+
+### Owned cover acquisition (0.12 catalog prerequisite)
+
+The trusted `SERVER_COMMAND` operation `covers.acquire` accepts one opaque `key`.
+It returns a small result with `local_path` and `stale`, or a neutral error. The
+companion resolves account identity and performs acquisition on its existing cache
+writer. No destination, credentials, HTTP options or server locator is accepted.
+The library `cover` read-model operation returns one saved local reference within
+the caller's screen/widget budget. Reading it performs no network or subprocess
+work; the normal host batch publishes the snapshot.
+
+Legacy catalog callers have not yet switched to this operation. See
+`docs/design/booksync-home/F12-Q2-NOTES.md` for the remaining cutover work.

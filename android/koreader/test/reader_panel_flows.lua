@@ -17,9 +17,10 @@ return function(here, test, ok, eq)
         W.book={items={{key="opaque",title="The Moon",authors={"A"},progress=62,
             stats={days_start_to_finish=3,reading_seconds=3660,pages_read=120}}}}
         W.caps={progress={syncCurrent=true}}
-        W.battery={hours_usual_use=54}
+        W.battery={hours_usual_use=54,display={page_estimate="≈ 2 d 6 h left at your usual use"}}
         local E=setmetatable({now_s=function() return 1 end, log=function(s) W.logs[#W.logs+1]=s end,
             S={}, G_reader_settings={readSetting=function() return nil end}, saveSettings=function() end,
+            BatteryUI={show=function() W.battery_opened=true end},
             state={}, OrbitAndroid={menuItems=function() return {} end,onCloseWidget=function() end},
             LibraryAdapter={readerPosition=function() return W.native end,read=function(request)
                 local a=W.E.Cache.decode(request); W.reads[#W.reads+1]=a.op
@@ -83,6 +84,24 @@ return function(here, test, ok, eq)
         row(E,"Back to book").action(); eq(E.ReaderPanel.sheet,nil); eq(W.ui.document.file,"/books/fixture.epub")
         E.ReaderPanel.details("opaque"); eq(W.reads[#W.reads-1],"book")
         row(E,"Back").action(); eq(E.ReaderPanel.sheet,nil)
+    end)
+    test("reader panel: battery link uses the companion label and opens Battery",function()
+        local W,E=world()
+        W.battery={hours_usual_use=999,display={page_estimate="≈ 1 d 7 h left at your usual use"}}
+        E.ReaderPanel.show(W.ui,"reader-top-panel")
+        row(E,"≈ 1 d 7 h left at your usual use").action()
+        eq(W.battery_opened,true); eq(W.trips,1,"link dispatch adds no render reads")
+        eq(E.ReaderPanel.sheet.screen,"reader-top-panel","Battery returns to the user-opened panel")
+        W.battery={hours_usual_use=999}
+        E.ReaderPanel.show(W.ui,"reader-top-panel")
+        ok(row(E,"Battery estimate not available yet").action,"learning still opens Battery")
+    end)
+    test("reader panel: Settings closes the panel and dispatches to the shared Settings owner",function()
+        local W,E=world()
+        E.state.module={showSettings=function() W.settings_opened=true end}
+        E.ReaderPanel.show(W.ui,"reader-top-panel")
+        row(E,"BookSync settings").action()
+        eq(W.settings_opened,true); eq(E.ReaderPanel.sheet,nil)
     end)
     test("reader panel: capabilities, missing data and asynchronous Sync never reopen a dismissed panel",function()
         local W,E=world(); W.caps={}; W.battery={}

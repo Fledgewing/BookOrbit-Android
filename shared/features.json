@@ -5364,7 +5364,7 @@
     },
     {
       "id": "owned-home",
-      "feature": "Opt-in BookSync Home with three pages, starter shelves, Library and Stats",
+      "feature": "Opt-in BookSync Home with device defaults, starter shelves, Library and Stats",
       "category": "Behaviour",
       "settings_keys": [
         "home_screen"
@@ -5372,7 +5372,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: Home, Library and Stats pages; shared filtered lists/search and local Save to Home; legacy Home remains the default",
+          "note": "Implemented on feature/0.12: approved M8C Home and Stats pages with Library widgets; shared filtered lists/search and local Save to Home; legacy Home remains the default; design review restores Settings/Battery destinations, Home page titles/Back and minimum touch targets; new/reset layouts use the two-page M8C default, saved layouts stay intact",
           "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
           "evidence": [
             {
@@ -5384,8 +5384,8 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Three-page Home wiring and filtered lists follow the Android build",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "note": "Device-specific Home defaults and filtered lists follow the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this design review changes Android only under the same ruling",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-J-NOTES.md",
@@ -5395,8 +5395,8 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Three-page Home wiring and filtered lists follow the Android build",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "note": "Device-specific Home defaults and filtered lists follow the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this design review changes Android only under the same ruling",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-J-NOTES.md",
@@ -5406,8 +5406,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Three-page Home wiring and filtered lists follow the Android build",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "note": "Device-specific Home defaults and filtered lists follow the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this design review changes Android only under the same ruling",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-J-NOTES.md",
@@ -5424,7 +5424,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Plain progress bar, cached reading stats, measured usual-use battery line and manual Sync in the top panel",
+          "note": "Plain progress bar, cached reading stats, measured usual-use battery line and manual Sync in the top panel; battery line links to the owned Battery page and uses its companion-formatted label; shared Settings action",
           "reason": "deliberately deferred: 0.12 Android implementation is building, not released or device validated; battery estimates need measured rates and 24 h of observed use, while reading stats require saved KOReader records plus the tracked-file ledger.",
           "evidence": [
             {
@@ -5444,7 +5444,7 @@
         "x4_pro": {
           "status": "missing",
           "note": "Owned reader progress and library battery projection follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5459,7 +5459,7 @@
         "x4": {
           "status": "missing",
           "note": "Owned reader progress and library battery projection follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling",
           "evidence": [
             {
               "path": "ROADMAP.md",
@@ -5474,7 +5474,7 @@
         "x3": {
           "status": "missing",
           "note": "Owned reader progress and library battery projection follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. X3 also requires measured flash fit. The companion-backed battery model is Android-only in this increment.",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. X3 also requires measured flash fit. The companion-backed battery model is Android-only in this increment.; this design review changes Android only under the same ruling",
           "evidence": [
             {
               "path": "ROADMAP.md",

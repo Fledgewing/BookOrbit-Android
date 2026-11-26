@@ -857,3 +857,14 @@ The companion `BookOrbitLibrary` implementation lives in
 `server/bookorbit/BookOrbitLibrary.kt`, accessed through the neutral server adapter
 and owned read-model publisher. There is no root-package backend alias. Package
 and protocol guards enforce that boundary across production source variants.
+
+### Android design review pass 4 (2026-11-26)
+
+[The comparison ledger](REVIEW-PASS-4.md) records baseline file/line findings,
+regressions, retained native behavior and unfinished staged prototype surfaces.
+Home/reader Settings and Battery destinations, list Back, page titles, hero
+percentages and touch targets are repaired using the existing host and library.
+Every screen/widget retains its strict inherited budget: companion-owned heavy
+work, bounded ready-to-draw rows/bytes, zero render network/subprocesses, one Home
+batch and at most 16 KiB per widget. Flow geometry is not device typography or
+latency acceptance; the complete revision-16 prototype remains the target.

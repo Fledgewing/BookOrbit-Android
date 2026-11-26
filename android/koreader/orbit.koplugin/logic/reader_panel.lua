@@ -16,8 +16,8 @@ function ReaderPanelPlan.model(result, battery)
     if pct and (pct ~= pct or pct == math.huge or pct == -math.huge) then pct = nil end
     if pct then pct = math.max(0, math.min(100, pct)) end
     local stats = b.stats or {}
-    local duration=ReaderPanelPlan.duration(battery and battery.hours_usual_use)
-    local battery_text=duration and ("≈ "..duration.." left at your usual use") or "Battery estimate not available yet"
+    local battery_text=battery and battery.display and battery.display.page_estimate
+        or "Battery estimate not available yet"
     return { key=b.key, title=b.title or "Book info not saved yet",
         author=table.concat(b.authors or {}, ", "), progress=pct and pct/100,
         progress_text=pct and (string.format("%d%% read", math.floor(pct+0.5))) or "Progress not saved yet",

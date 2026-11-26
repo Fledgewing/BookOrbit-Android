@@ -2,7 +2,7 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
+            problem=E.Companion.workerProblem,scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,pin=E.Shared.pin_locked,refresh=E.Shared.refresh,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.Store.readFile,writeFile=E.Store.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
         E.Companion.workerProblem=function() end
@@ -15,6 +15,7 @@ return function(test,eq,ok,E,W,Widget)
         E.require=function(name)
             if name=="ffi/blitbuffer" then return U.BB end
             if name=="ui/size" then return {padding={buttontable=0}} end
+            if name=="ui/widget/touchmenu" then return Widget:extend{} end
             if name=="ui/widget/buttondialog" then
                 return Widget:extend{moveFocusTo=function(self,x,y) self.focus={x,y} end,getButtonById=function() end}
             end
@@ -63,6 +64,7 @@ return function(test,eq,ok,E,W,Widget)
         E.Library.open,E.ReaderPanel=saved.open,saved.panel
         E.HomeEditor.save=saved.save
         E.liveUI,E.Wifi.state,E.EOB.sheet=saved.liveUI,saved.wifiState,saved.eobSheet
+        E.Shared.pin_locked,E.Shared.refresh=saved.pin,saved.refresh
         E.Store.readFile,E.Store.writeFile=saved.readFile,saved.writeFile
         E.Companion.workerProblem=saved.problem
         ok(success,err)
@@ -84,6 +86,97 @@ return function(test,eq,ok,E,W,Widget)
             h:onHomeSwipe(nil,{direction="east"}); eq(h.index,1)
             h:onPrevious(); eq(h.index,1)
             h:onClose(); h:onCloseWidget(); eq(E.Library.listener,nil)
+        end)
+    end)
+    test("Home design: page title, menu settings and Back restore the originating page",function()
+        withHost(function()
+            local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+            h:turn(1); local index=h.index
+            eq(h[1][1][1].text,"Stats")
+            ok(h[1][1][1].max_width<=h.dimen.w-220,"page title leaves room for Edit and Close")
+            h:showList("Want to read","want-to-read")
+            h:onClose(); eq(h.index,index); eq(h[1][1][1].text,"Stats")
+            local old=E.state.module
+            local opened=0
+            E.state.module={showSettings=function() opened=opened+1 end}
+            local success,err=pcall(function()
+                h:menu(); local menu=W.shown[#W.shown]
+                eq(menu.buttons[2][1].text,"BookSync settings")
+                menu.buttons[2][1].callback(); eq(opened,1); eq(W.shown[#W.shown],h)
+            end)
+            E.state.module=old
+            ok(success,err)
+        end)
+    end)
+    test("Home design: all installed widget sizes keep touch controls at least 50 logical pixels",function()
+        withHost(function()
+            local data={items={{key="a",title="The Moon",authors={"A"},progress=25,local_path="book.epub"},
+                {key="b",title="Glasswater",progress=62},{key="c",title="Lantern"},{key="d",title="Sea"}},freshness={saved=true}}
+            local function controls(node,ox,oy,bounds,found)
+                ox,oy=ox or 0,oy or 0
+                local at=node.overlap_offset or {0,0}; ox,oy=ox+at[1],oy+at[2]
+                if node.callback and node.width and node.height then
+                    ok(node.width>=50 and node.height>=50,"small target: "..tostring(node.text).." "..node.width.."×"..node.height)
+                    ok(ox>=0 and oy>=0 and ox+node.width<=bounds.w and oy+node.height<=bounds.h,
+                        "target outside card: "..tostring(node.text))
+                    for _,r in ipairs(found) do
+                        ok(not (ox<r.x+r.w and r.x<ox+node.width and oy<r.y+r.h and r.y<oy+node.height),
+                            "overlapping targets: "..tostring(node.text).." / "..r.text)
+                    end
+                    found[#found+1]={x=ox,y=oy,w=node.width,h=node.height,text=node.text}
+                end
+                for _,child in ipairs(node) do controls(child,ox,oy,bounds,found) end
+            end
+            for _,id in ipairs({"continue-reading","booklist","lists","library","battery"}) do
+                for _,size in ipairs(E.WidgetRegistry[id].sizes["android-tablet"]) do
+                    local rect=E.HomeHostPlan.rect({x=0,y=0,w=size[1],h=size[2]},{cols=4,rows=8},678,764,12)
+                    local p={widget=id,w=size[1],h=size[2],settings={style=1}}
+                    for _,state in ipairs({"ready","empty","loading","error","offline-without-data","offline-with-data"}) do
+                        local snap=E.HomeHostPlan.snapshot(data)
+                        if id=="library" then snap=E.HomeHostPlan.snapshot({total=7,on_device=2,freshness={saved=true}}) end
+                        if id=="battery" then snap=E.HomeHostPlan.snapshot({level=78,display={level="78%"},freshness={saved=true}}) end
+                        local plain={state=state,items=snap.items,count=snap.count,data=snap.data,bytes=snap.bytes}
+                        local card=E.HomeWidgets.renderers[id](p,plain,function() end,rect)
+                        controls(card,0,0,{w=rect.w,h=rect.h},{})
+                        if id=="continue-reading" and (state=="ready" or state=="offline-with-data") then
+                            local percent=false
+                            for _,child in ipairs(card[1]) do if child.text=="25%" then percent=true end end
+                            ok(percent,"every hero size retains the percentage label")
+                        end
+                        if id=="booklist" then
+                            p.settings.style=0
+                            controls(E.HomeWidgets.renderers[id](p,plain,function() end,rect),0,0,{w=rect.w,h=rect.h},{})
+                            p.settings.style=1
+                        end
+                    end
+                end
+            end
+        end)
+    end)
+    test("Home Settings: standalone menu uses native tab rows and the current PIN policy",function()
+        withHost(function()
+            local owner=setmetatable({}, {__index=E.OrbitAndroid})
+            local normal,locked=0,0
+            owner.menuItems=function() normal=normal+1; return {{text="Book info"},{text="Your server",settings_group="account"}} end
+            owner.lockedMenuItems=function(_,items) locked=locked+1; eq(#items,1); eq(items[1].settings_group,"account"); return {{text="Locked"}} end
+            E.Shared.refresh=function() end
+            E.Shared.pin_locked=false
+            local menu=owner:showSettings()
+            eq(menu.tab_item_table[1][1].text,"Your server"); eq(#menu.tab_item_table[1],1); eq(normal,1); eq(locked,0)
+            E.Shared.pin_locked=true
+            menu=owner:showSettings()
+            eq(menu.tab_item_table[1][1].text,"Locked"); eq(normal,2); eq(locked,1)
+        end)
+    end)
+    test("Home design: wide cover shelves read columns rather than a text-row limit",function()
+        withHost(function(_,reads)
+            local layout=E.Layout.default()
+            layout.pages={{id="shelf",tab="Home",placements={{instance="wide",widget="booklist",version=1,
+                x=0,y=0,w=4,h=2,settings={title="Recently added",src="recent",style=0}}}}}
+            E.S.home_layout=layout
+            local h=E.HomeHost.create(); E.HomeHost.active=h
+            eq(reads[#reads].op,"window"); eq(reads[#reads].limit,4)
+            eq(h.metrics.roundTrips,1); eq(h.metrics.spawns,0); eq(h.metrics.network,0)
         end)
     end)
     test("Home host: immutable snapshots isolate query and renderer errors",function()
@@ -120,7 +213,7 @@ return function(test,eq,ok,E,W,Widget)
             local success,err=pcall(function()
                 local h=E.HomeHost.create(); E.HomeHost.active=h
                 local canvas=h[1][1]
-                local boundary=canvas[5] -- header, Close, Search, Edit, first widget
+                local boundary=canvas[6] -- header, Close, Search, menu, Edit, first widget
                 local failed=boundary[1]
                 local Frame=E.HomeWidgets.ui().Frame
                 Frame.paintTo=function() end
@@ -142,22 +235,22 @@ return function(test,eq,ok,E,W,Widget)
             h:onCloseWidget(); eq(E.Library.listener,nil)
         end)
     end)
-    test("Home wiring: all three default pages draw and Stats shares one bounded row",function()
+    test("Home wiring: both approved default pages draw and Stats shares one bounded row",function()
         withHost(function(batches,reads)
             E.S.home_layout=nil
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             local rectangles=0
             local bb={paintRect=function(_,x,y,w,h,color) ok(w>=0 and h>=0); ok(color~=nil); rectangles=rectangles+1 end}
-            for page=1,3 do
+            for page=1,2 do
                 eq(h.index,page)
                 h[1]:paintTo(bb,0,0)
                 ok(E.Budgets.check(E.Budgets.screens.home,h.metrics))
                 eq(h.metrics.spawns,0); eq(h.metrics.network,0); eq(h.metrics.roundTrips,1)
-                if page<3 then h:onNext() end
+                if page<2 then h:onNext() end
             end
             local stats=0
             for _,a in ipairs(reads) do if a.op=="reading.stats" then stats=stats+1 end end
-            eq(stats,1); eq(#batches,3)
+            eq(stats,1); eq(#batches,2)
             ok(rectangles>=400,"real Year, weekly and hourly renderers painted")
         end)
     end)
@@ -166,7 +259,7 @@ return function(test,eq,ok,E,W,Widget)
             E.S.home_layout=nil
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             h:onNext(); h:onNext()
-            local card=h[1][1][6][1][1]
+            local card=h[1][1][7][1][1]
             local level,estimate,glyph
             for _,child in ipairs(card) do
                 if child.text=="78%" then level=true end
@@ -196,12 +289,13 @@ return function(test,eq,ok,E,W,Widget)
             end
         end)
     end)
-    test("Home wiring: default Library tile exposes bounded device and group links",function()
+    test("Home wiring: configured Library tile exposes bounded device and group links",function()
         withHost(function()
-            E.S.home_layout=nil
+            E.S.home_layout=E.Layout.default()
+            E.S.home_layout.pages[2].placements={{instance="summary",widget="library",version=1,x=0,y=0,w=2,h=2,settings={}}}
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             h:onNext()
-            local tile=h[1][1][5][1][1]
+            local tile=h[1][1][6][1][1]
             eq(tile[3].text,"2 on device ›")
             eq(tile[4].text,"Authors ›"); eq(tile[5].text,"Series ›")
             for _,child in ipairs(tile) do if child.height then
@@ -372,7 +466,7 @@ return function(test,eq,ok,E,W,Widget)
         eq(E.HomeHostPlan.snapshot({items={}}).state,"offline-without-data")
         eq(E.HomeHostPlan.snapshot({items={{key="b"}},freshness={saved=true,offline=true}}).state,"offline-with-data")
         local registry=E.HomeHost.installed()
-        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,3)
+        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,2)
         local projected=E.HomeHostPlan.resolve(E.Layout.default(),registry,{wantToRead=false,lists={read=false},battery=false})
         for _,p in ipairs(projected.pages[1].placements) do ok(p.widget ~= "lists" and p.instance ~= "want") end
     end)

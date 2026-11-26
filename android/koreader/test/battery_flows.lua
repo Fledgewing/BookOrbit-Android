@@ -34,6 +34,10 @@ return function(test,eq,ok,E,W,withHost)
                 ok(click(h,'Battery ›'),'registered battery renderer must succeed')
                 local page=W.shown[#W.shown]
                 eq(page.name,'booksync_battery'); eq(page.metrics.rows,1); eq(page.metrics.roundTrips,1)
+                for _,control in ipairs(page[1][1]) do if control.callback then
+                    ok(control.width>=50 and control.height>=50,'Battery touch minimum: '..control.text)
+                    ok(control.overlap_offset[2]+control.height<=page.dimen.h,'Battery control in bounds')
+                end end
                 ok(click(page,'Daily')); eq(page.tab,3)
                 ok(click(page,'›')); eq(page.page,2)
                 ok(click(page,'Charges')); eq(page.tab,4)

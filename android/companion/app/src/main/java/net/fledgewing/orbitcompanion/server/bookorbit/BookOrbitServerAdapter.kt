@@ -7,7 +7,9 @@ import java.security.MessageDigest
 
 /** BookOrbit authentication is private to this adapter; sync and OPDS also work on their own. */
 internal class BookOrbitServerAdapter(private val credentials: ServerCredentials, private val account: BookOrbitAccount,
-    private val transport: ConnectorTransport) : ServerAdapter {
+    private val transport: ConnectorTransport,
+    private val coverJob: (CacheWorker.Creds, String, Long, (Map<String, Any?>?, String?) -> Unit) -> Unit =
+        { _, _, _, done -> done(null,"unsupported") }) : ServerAdapter {
     override val id = "bookorbit"
     internal interface ConnectorTransport {
         fun request(server: String, path: String, method: String, body: Map<String, Any?>?, headers: Map<String, String>): BookOrbitAccount.Reply
@@ -235,6 +237,12 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         val result = mapOf("items" to rows, "next" to (page + 1).takeIf { parsed.hasNext }, "freshness" to mapOf("saved" to true, "origin" to "cached-remote"))
         require(LuaValue.encode(result).size <= 16384)
         return result
+    }
+    override fun acquireCover(key: String, done: (Map<String, Any?>?, String?) -> Unit) {
+        val c = login("sync")
+        val owner = c.owner()
+        val id = BookOrbitLibrary.id(owner,"book",key) ?: throw BookOrbitAccount.Failure("missing")
+        coverJob(CacheWorker.Creds(c.server,c.user,c.secret),owner,id,done)
     }
     override fun download(key: String, destination: File): Boolean {
         val c = login("opds")

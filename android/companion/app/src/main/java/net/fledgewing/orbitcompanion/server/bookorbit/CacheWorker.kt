@@ -209,13 +209,20 @@ class CacheWorker(
         if (dir != null && dir.isDirectory) {
             val protected = protectedIds()
             val keep = if (mirrorCovers) st.coversKept() else emptySet()
-            for (f in dir.listFiles() ?: emptyArray()) {
+            val files = dir.listFiles().orEmpty().flatMap { entry ->
+                if (entry.isDirectory && entry.name.matches(Regex("bo:[0-9a-f]{24}")) && allowed(entry.path) != null)
+                    entry.listFiles().orEmpty().toList()
+                else listOf(entry)
+            }
+            for (f in files) {
                 checkpoint()
                 if (f.name.endsWith(".etag") && !File(f.path.removeSuffix(".etag")).isFile) { f.delete(); continue }
                 if (!f.name.endsWith(".jpg") || !f.isFile || allowed(f.path) == null) continue
-                val etag = File(dir, f.name + ".etag")
-                items.add(StorageLogic.Item("c:${f.name}", f.length() + (if (etag.isFile) etag.length() else 0L), f.lastModified() / 1000,
-                    if (f.name.substringBefore('_').toLongOrNull() in protected) "kept" else if (f.name in keep) "mirror_cover" else "cover"))
+                val etag = File(f.path + ".etag")
+                val relative = f.relativeTo(dir).path
+                val currentAccount = f.parentFile == dir || f.parentFile.name == store.meta("owner")?.let(BookOrbitLibrary::namespace)
+                items.add(StorageLogic.Item("c:$relative", f.length() + (if (etag.isFile) etag.length() else 0L), f.lastModified() / 1000,
+                    if (currentAccount && f.name.substringBefore('_').toLongOrNull() in protected) "kept" else if (relative in keep) "mirror_cover" else "cover"))
             }
         }
         return items
@@ -480,6 +487,58 @@ class CacheWorker(
         val dir = allowed(plan.coverDir)?.path ?: return null
         if (book["hasCover"] != true) return null
         return coverName(book)?.let { "$dir/$it" }
+    }
+
+    /** Explicit acquisition on the writer queue. Hits need no network. An older revision
+     * stays available when conditional acquisition fails or the server is offline. */
+    fun acquireCover(owner: String, id: Long, creds: Creds, directory: File): Map<String, Any?> {
+        val start = clockMs()
+        try {
+            checkpoint()
+            if (store.meta("owner") != owner)
+                throw ServerFailure("unauthorized")
+            val book = store.bookItem(id) as? Map<*, *> ?: throw ServerFailure("missing")
+            val plan = Plan(mapOf("cover_dir" to directory.path))
+            val path = coverPath(plan,book) ?: throw ServerFailure("missing")
+            val target = allowed(path) ?: throw ServerFailure("forbidden")
+            fun published(file: File, stale: Boolean = false): Map<String, Any?> {
+                store.setMeta("cover_file_$id",LuaValue.str(file.path))
+                store.setMeta("cover_stale_$id",true.takeIf { stale })
+                return mapOf("local_path" to LuaValue.str(file.path),"stale" to stale)
+            }
+            if (target.isFile && target.length() > 0) return published(target)
+            val previous = directory.listFiles().orEmpty().filter {
+                it.name != target.name && it.name.matches(Regex("${id}_[0-9]+\\.jpg")) && it.isFile && it.length() in 1..MAX_COVER && allowed(it.path) != null
+            }.maxByOrNull { it.lastModified() }
+            val tag = allowed(target.path + ".etag") ?: throw ServerFailure("forbidden")
+            val oldTag = previous?.let { allowed(it.path + ".etag") }
+            if (previous != null && oldTag?.isFile == true && oldTag.length() <= 1024) {
+                val copy = allowed(target.path + ".copy") ?: throw ServerFailure("forbidden")
+                copy.parentFile?.let(NoMedia::directory)
+                try {
+                    previous.copyTo(copy,overwrite=true)
+                    if (!copy.renameTo(target)) throw ServerFailure("space")
+                } finally { copy.delete() }
+                write(tag,oldTag.readBytes())
+            }
+            coverItems[id] = book
+            val fetched = try { fetchCover(plan,creds,Job("cover",id.toString())) }
+                finally { coverItems.remove(id) }
+            val part = fetched.part
+            try {
+                if (part != null) {
+                    if (!part.renameTo(target)) throw ServerFailure("space")
+                    fetched.reply?.etag?.let { write(tag,it.toByteArray()) } ?: tag.delete()
+                }
+            } finally { part?.delete() }
+            if (fetched.cover !in setOf("ok","not_modified")) {
+                target.delete(); tag.delete()
+                if (previous != null) return published(previous,true)
+                throw ServerFailure("unavailable")
+            }
+            if (!target.isFile || target.length() == 0L) throw ServerFailure("unavailable")
+            return published(target)
+        } finally { log("library.cover.acquire ms=${clockMs()-start}") }
     }
 
     // ------------------------------------------------------------------ the run
@@ -751,7 +810,8 @@ class CacheWorker(
         val part = allowed("$path.part${Thread.currentThread().id}") ?: return Landed(job, null, null, "none")
         part.parentFile?.let(NoMedia::directory)
         part.delete()
-        val rep = http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail", h, part, MAX_COVER)
+        val rep = try { http.get(creds.server + "/koreader/plugin/catalog/books/${job.id}/thumbnail", h, part, MAX_COVER) }
+            catch (_: Exception) { part.delete(); Reply(0,err="transport") }
         if (Thread.currentThread().isInterrupted) { part.delete(); return Landed(job, rep, null, "transport") }
         return when {
             rep.code == 304 && exists -> { part.delete(); Landed(job, rep, null, "not_modified", target = f) }

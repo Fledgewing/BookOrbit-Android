@@ -47,7 +47,7 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
     }
     local function back() ReaderPanel.close() end
     if screen == "reader-top-panel" then
-        table.insert(rows, {kind="label", text=m.battery})
+        table.insert(rows, button(m.battery, function() BatteryUI.show() end))
         if CustomReading then
             for _, row in ipairs(CustomReading.panelRows(ui, function()
                 ReaderPanel.show(ui, screen, key, ReaderPanel.sheet)
@@ -77,6 +77,9 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
             end
             table.insert(rows, sync)
         end
+        table.insert(rows, button("BookSync settings", function()
+            back(); if state.module then state.module:showSettings() end
+        end))
         table.insert(rows, button("Book info", function() ReaderPanel.show(ui, "book-info") end))
         table.insert(rows, {kind="footer", text="Home", action=function()
             back(); if state.module then state.module:onOrbitGoHome() end
