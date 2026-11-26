@@ -22,7 +22,6 @@ object AdapterWorker : ServerRuntime {
     const val ACTION_STORAGE = "${Contract.PACKAGE}.action.STORAGE"
     const val ACTION_COPIES = "${Contract.PACKAGE}.action.COPIES"
     const val ACTION_SLEEP_REFRESH = "${Contract.PACKAGE}.action.SLEEP_REFRESH"
-    const val ACTION_RECHECK = "${Contract.PACKAGE}.action.RECHECK"
     /** The shared-storage stress test's writer (docs/design/sqlite-cache.md "Stress test"); no login. */
     const val ACTION_SQLITE_STRESS = "${Contract.PACKAGE}.action.SQLITE_STRESS"
     /** A write the plugin made, to patch into the saved replies (or a wipe); no login. */
@@ -40,7 +39,6 @@ object AdapterWorker : ServerRuntime {
     private var storage: CacheWorker.StorageAsk? = null
     private var sleep: Pair<String, SleepPoolBuilder.Ask>? = null
     private var pickers: Pair<String, CacheWorker.Creds>? = null
-    private var recheck: Triple<String, CacheWorker.Creds, List<Pair<Long, String>>>? = null
     @Volatile private var app: Context? = null
     private var running = false
 
@@ -49,7 +47,7 @@ object AdapterWorker : ServerRuntime {
         private set
 
     /** Work in hand: an automatic Wi-Fi off waits for it. */
-    override fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || patches.isNotEmpty() || pending != null || storage != null || sleep != null || pickers != null || recheck != null }
+    override fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || patches.isNotEmpty() || pending != null || storage != null || sleep != null || pickers != null }
 
     private var worker: CacheWorker? = null
 
@@ -105,6 +103,44 @@ object AdapterWorker : ServerRuntime {
         start()
     }
 
+    fun acquireCoverReference(ctx: Context, credentials: CacheWorker.Creds?, owner: String?, reference: String,
+        refresh: Boolean, done: (Map<String, Any?>?, String?) -> Unit) {
+        app=ctx.applicationContext
+        BulkWork.attach(ctx)
+        synchronized(lock) {
+            patches.addLast {
+                val start=System.nanoTime()
+                val result=runCatching {
+                    BulkWork.checkpoint()
+                    val external=Environment.getExternalStorageDirectory()
+                    val current=worker().store.meta("owner")
+                    val managed=credentials!=null && owner==current
+                    val legacy=if (!managed) LegacyCoverSource.read(File(external,"koreader/settings.reader.lua")) else null
+                    val account=if (managed) owner!! else legacy?.owner ?: throw ServerFailure("unauthorized")
+                    val login=if (managed) credentials!! else legacy?.credentials ?: throw ServerFailure("unauthorized")
+                    val directory=ConnectorPlugin.coverCacheDir(external)
+                    var growth=0L
+                    val value=worker().acquireCoverReference(account,reference,login,directory,refresh) { growth=it }
+                    if (growth>0) {
+                        val limit=SettingsStore.get(ctx,"storage_limit_mb").toLongOrNull()?.takeIf { it>0 }?.times(1048576)
+                        worker().storage(CacheWorker.StorageAsk("cover acquisition",limit,directory.path,SettingsStore.get(ctx,"mirror_covers")=="1"))
+                        val local=value["local_path"] as? String ?: throw ServerFailure("missing")
+                        if (!File(LuaValue.utf8(local)).isFile) throw ServerFailure("space")
+                    }
+                    // Publish the bounded local reference on the same sole writer.
+                    val request=mapOf("op" to "cover.reference","reference" to LuaValue.str(reference),"limit" to 1L,"bytes" to 16384L)
+                    LibraryReadModel(worker().store).publish(account,listOf(String(LuaValue.encode(request),Charsets.ISO_8859_1)))
+                    worker().event(mapOf("kind" to "library","owner" to account))
+                    value
+                }
+                OLog.i("library.cover.reference ms=${(System.nanoTime()-start)/1_000_000}")
+                result.fold({ done(it,null) },{ done(null,(it as? ServerFailure)?.kind ?: "unavailable") })
+            }
+            lock.notifyAll()
+        }
+        start()
+    }
+
     private fun creds(i: Intent): CacheWorker.Creds? {
         val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
         val user = i.getStringExtra("user") ?: return null
@@ -116,7 +152,7 @@ object AdapterWorker : ServerRuntime {
         app = ctx.applicationContext
         BulkWork.attach(ctx)
         LibraryAccount.initialize(ctx)
-        if (i.action in setOf(ACTION_MIRROR, ACTION_CHECK, ACTION_RECHECK)) LibraryAccount.refresh(ctx)
+        if (i.action in setOf(ACTION_MIRROR, ACTION_CHECK)) LibraryAccount.refresh(ctx)
         if (i.action == ACTION_SQLITE_STRESS) {
             val secs = i.getStringExtra("seconds")?.toIntOrNull()?.coerceIn(5, 600) ?: SqliteStress.SECONDS
             return SqliteStress.start(root(), secs)
@@ -249,12 +285,6 @@ object AdapterWorker : ServerRuntime {
                     i.getStringExtra("open_id")?.toLongOrNull(), i.getStringExtra("every") == "1", i.getStringExtra("storage_limit_mb")?.toLongOrNull(), creds)
                 synchronized(lock) { sleep = (i.getStringExtra("reason") ?: "plugin") to a; lock.notifyAll() }
             }
-            ACTION_RECHECK -> {
-                val ids = (i.getStringExtra("ids") ?: "").split('\n')
-                val paths = (i.getStringExtra("paths") ?: "").split('\n')
-                val items = ids.zip(paths).mapNotNull { (id, p) -> id.toLongOrNull()?.takeIf { p.isNotEmpty() }?.let { it to p } }
-                synchronized(lock) { recheck = Triple(i.getStringExtra("reason") ?: "plugin", creds, items); lock.notifyAll() }
-            }
             ACTION_MIRROR -> {
                 val encoded = i.getStringExtra("plan") ?: return
                 synchronized(lock) {
@@ -295,11 +325,6 @@ object AdapterWorker : ServerRuntime {
     private fun drainChecks() {
         val a = synchronized(lock) { storage.also { storage = null } }
         if (a != null) try { BulkWork.phase("storage") { worker().storage(a) } } catch (e: Exception) { OLog.w("worker: storage count failed", e) }
-        val rc = synchronized(lock) { recheck.also { recheck = null } }
-        if (rc != null) try { worker().recheckCovers(rc.first, rc.second, rc.third) } catch (e: Exception) {
-            OLog.w("worker: cover recheck failed", e)
-            worker().event(sortedMapOf("kind" to "covers_rechecked", "why" to rc.first, "err" to e.javaClass.simpleName))
-        }
         val sp = synchronized(lock) { sleep.also { sleep = null } }
         if (sp != null) sleepPool(sp.first, sp.second)
         val pk = synchronized(lock) { pickers.also { pickers = null } }
@@ -350,7 +375,7 @@ object AdapterWorker : ServerRuntime {
         while (true) {
             drainChecks()
             val p = synchronized(lock) {
-                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && sleep == null && pickers == null && recheck == null) { return }
+                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && sleep == null && pickers == null) { return }
                 pending.also { pending = null }
             } ?: continue
             File(root(), "mirror/stop").delete()

@@ -107,6 +107,9 @@ source rows and 16 KiB in one batch. Presets share the Book list renderer and wi
 Reader progress surfaces reuse a one-row widget budget, including Book info and
 Details; completion callbacks redraw only a still-visible user-opened panel.
 
+Cover lookups use a one-row, 16 KiB local-only budget with zero round-trips; post-paint
+cover batches are limited to four and only the companion fetches or writes images.
+
 Custom reading editors inherit a named screen budget through the library interface: one small
 device-local record, no catalog work, decoded JSON, network, subprocess or companion round-trip.
 Each editor paint and style operation logs one info-level timing span; host timings are not device acceptance.

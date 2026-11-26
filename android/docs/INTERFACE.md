@@ -47,7 +47,6 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `RELAUNCH` | `reason` (`restart`) | The patch is quitting for a restart (COMMAND `restart`, or from 0.5.0 by itself for a newer patch file on disk, DESIGN "One update"): start KOReader again after 2.5 s. Patch 0.3.1+. |
 | `REPORT` | `signed_in` (`"1"`/`"0"`), `recommended` (`none`/`partial`/`reviewed`/`applied`), `conflicts` (a count), `reason` | Companion 0.11.0+: one yes/no about the BookOrbit login and the recommended settings' state, for its Setup rows "Signed in to BookOrbit" and "Recommended settings". Never the server, the account or the key (those go only with `MIRROR` and `CHECK`); other extras are ignored. Sent at start, after a recommended pass and when either value changes. Needs no service. |
 | `SLEEP_REFRESH` | `reason`, `from`, `rules`, `open_id`, `every`, `storage_limit_mb`, `server`, `user`, `userkey`; or `reason`, `scopes_only=1` and the login | Cap `cache_worker`: refresh the sleep screen's pool on the worker thread (`SleepPoolBuilder`): Leave out's member lists once a day, the shuffle bag, the books checked and their covers fetched by ETag, then `pool.json`, `covers/`, `bag.lua`, `leave_out.lua` and `scopes.json` written and the picture redrawn. With `scopes_only` it writes the pickers' files only (`scopes.json`, `tags.json`), never a pool. Each refresh counts the tags again. Answers with a `sleep_pool` event. Needs no service. The login is never written or logged. |
-| `RECHECK` | `reason`, `ids`, `paths` (one per line, the same order), `server`, `user`, `userkey` | Cap `cache_worker`: a Full refresh's covers on screen, each with its `.etag`, asked again If-None-Match; a changed one replaces the file. Answers with a `covers_rechecked` event `{why, checked, changed = {ids}, failed}`. Needs no service. |
 | `SQLITE_STRESS` | `seconds` (default 120) | Debug (docs/design/sqlite-cache.md "Stress test"): writes `orbit-cache/stress.db` nonstop for that long, one 100-row page per transaction, then logs `sqlite-stress writer: …` and writes `orbit-cache/stress-writer.lua` `{writes, errors, max_wait_ms, integrity, first_error, at}`. No login, no service. |
 | `SLEEP_POOL` | `reason`, `wake` | Companion cap `sleep_screen`: the files in `koreader/settings/orbit-sleep/` changed (below). The picture sink redraws `Pictures/Orbit/sleep.png`; the screen saver reads them at the next sleep. With `wake` = `"1"` (reason `wake`): KOReader resumed after a real sleep (the screen went off, not an app switch); with Every sleep the picture moves on for the next sleep, once per wake (the service's screen-on counts as the same wake). Needs no service. |
 | `MIRROR` | `reason`, `server`, `user`, `userkey`, `plan` (Lua literal) | Cap `cache_worker` (docs/design/companion-worker.md): parse and atomically save `plan` as `koreader/settings/orbit-cache/mirror/plan.lua`, remove the old stop marker, then run the offline mirror on the cache worker thread (below). The login is used only as `x-auth-user`/`x-auth-key` on requests to `server`, held in memory, never written or logged. A new `MIRROR` replaces a waiting one. Needs no service. |
@@ -481,7 +480,10 @@ the acknowledged event queue. They invalidate an already visible Home, never sho
 
 ### Owned cover acquisition (0.12 catalog prerequisite)
 
-The trusted `SERVER_COMMAND` operation `covers.acquire` accepts one opaque `key`.
+The trusted `SERVER_COMMAND` operation `covers.acquire` accepts either one opaque
+`key` or one `reference` naming an installed local cover-cache entry, with optional
+`refresh=true` for explicit revalidation. A reference is validated and translated
+only inside the companion adapter; it never carries a server locator or login.
 It returns a small result with `local_path` and `stale`, or a neutral error. The
 companion resolves account identity and performs acquisition on its existing cache
 writer. No destination, credentials, HTTP options or server locator is accepted.
@@ -489,5 +491,10 @@ The library `cover` read-model operation returns one saved local reference withi
 the caller's screen/widget budget. Reading it performs no network or subprocess
 work; the normal host batch publishes the snapshot.
 
-Legacy catalog callers have not yet switched to this operation. See
-`docs/design/booksync-home/F12-Q2-NOTES.md` for the remaining cutover work.
+Legacy thumbnail batches, author portraits and forced refresh now use this operation
+from the parent process. `Library.cachedCover(reference)` reads the one-row
+`cover.reference` projection with zero companion round-trips; acquisition publishes
+that row on the existing writer. Existing cache hits are imported by the companion
+without a network request. The old credential-bearing `RECHECK` broadcast is removed.
+Callbacks reject departed generations/accounts and never redraw during reading.
+See `docs/design/booksync-home/F12-Q2-NOTES.md` for the remaining catalog cutover.

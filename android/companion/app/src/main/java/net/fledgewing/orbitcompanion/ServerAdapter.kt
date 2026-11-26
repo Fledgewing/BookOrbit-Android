@@ -20,6 +20,7 @@ interface ServerAdapter {
     fun manifest(owner: String): Map<String, Any?> = unsupported()
     fun cover(owner: String, key: String): Map<String, Any?> = unsupported()
     /** Explicit acquisition off the render path; the result is a local file reference. */
+    fun acquireCoverReference(reference: String, refresh: Boolean, done: (Map<String, Any?>?, String?) -> Unit) = done(null,"unsupported")
     fun acquireCover(key: String, done: (Map<String, Any?>?, String?) -> Unit) = done(null,"unsupported")
     fun download(owner: String, key: String, file: String, revision: String?): Map<String, Any?> = unsupported()
     fun setProgress(owner: String, key: String, position: Map<String, Any?>): Map<String, Any?> = unsupported()

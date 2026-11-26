@@ -56,18 +56,23 @@ def violations(path, source):
     source_root = COMPANION / relative.parts[0] / relative.parts[1] if relative and len(relative.parts) > 2 and relative.parts[1] in ('java', 'kotlin') else None
     kotlin_adapter = source_root is not None and path.is_relative_to(source_root / 'net/fledgewing/orbitcompanion/server')
     lua_adapter = any(path.is_relative_to(LUA / family / 'server') for family in ('ko', 'logic'))
+    cover_errors = []
+    if path.is_relative_to(LUA) and path.suffix == '.lua':
+        code = code_only(source, True)
+        if re.search(r'\b(?:httpCover|coverDownload|CoverChild)\b|[:.]downloadCatalog(?:Thumbnail|AuthorPhoto)\s*\(|[\"\']/(?:thumbnail|photo)[\"\']|/catalog/(?:books|authors)/[^\s\"\']+/(?:thumbnail|photo)', code):
+            cover_errors.append(f'{path}: plugin cover transport is companion-owned; use the neutral library command')
     if kotlin_adapter or lua_adapter:
         if kotlin_adapter and path.suffix in ('.kt', '.java'):
             expected = '.'.join(path.relative_to(source_root).parent.parts)
             if not re.search(r'^package ' + re.escape(expected) + r'\s*$', source, re.M):
                 return [f'{path}: adapter package must match its source directory']
-        return []
+        return cover_errors
     lua = path.suffix == '.lua'
     if path.suffix in ('.xml', '.html'):
         source = re.sub(r'<!--.*?-->', lambda m: re.sub(r'[^\n]', ' ', m[0]), source, flags=re.S)
     code = code_only(source, lua)
     wiring = path in (REGISTRY, LUA_REGISTRY)
-    errors = []
+    errors = list(cover_errors)
     if lua and re.search(r'(?:require\s*\(?|pcall\s*\(\s*require\s*,)\s*["\'](?:socket\.http|bookorbit)["\']|\bhttp\.request\s*[({]', code):
         errors.append(f'{path}: direct server transport/import outside the adapter')
     if lua and re.search(r'\bLibraryAdapter[.:]', code) and path != LUA / 'ko/library.lua':
@@ -151,6 +156,16 @@ class GuardTests(unittest.TestCase):
         self.assertFalse(violations(COMPANION / 'main/AndroidManifest.xml', '<!-- BookOrbit https://library.invalid -->'))
         self.assertFalse(violations(ABOUT_CREDIT, '{"paragraphs":["BookOrbit credit"]}'))
         self.assertTrue(violations(ABOUT_CREDIT, '{"url":"/api/v1"}'))
+    def test_cover_transport_cannot_hide_inside_a_lua_adapter(self):
+        for path in (LUA / 'ko/covers.lua', LUA / 'ko/server/bookorbit/hidden.lua', LUA / 'logic/server/bookorbit/hidden.lua'):
+            for source in ('OC.httpCover(client,path)', 'OC.coverDownload(client,stock,id,path)',
+                           'client:downloadCatalogThumbnail(id,path)', 'client:downloadCatalogAuthorPhoto(id,path)',
+                           'local route="/catalog/books/" .. id .. "/thumbnail"',
+                           'local route="/catalog/books/7/thumbnail"', 'local route="/catalog/authors/7/photo"'):
+                self.assertTrue(violations(path,source), (path,source))
+        self.assertFalse((ROOT / LUA / 'ko/server/bookorbit/cache.lua').exists())
+        self.assertFalse((ROOT / LUA / 'ko/cover_child.lua').exists())
+
     def test_entire_production_tree(self):
         errors = []
         for root in (COMPANION, LUA, *RESOURCE_ROOTS):

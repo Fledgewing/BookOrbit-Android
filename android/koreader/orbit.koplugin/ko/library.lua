@@ -98,10 +98,10 @@ end
 function Library:progress(key) return self:read("progress", {key=key, limit=1}) end
 function Library:status(key) return self:read("status", {key=key, limit=1}) end
 function Library:job(key) return self:read("job", {key=key, limit=1}) end
-function Library:flush()
+function Library:flush(local_only)
     assert(not self.is_widget and not self.metrics.flushed, "Library host paint already flushed or missing")
     self.metrics.flushed = true
-    if #self.pending > 0 and LibraryAdapter.request(self.pending) then self.metrics.roundTrips = 1 end
+    if not local_only and #self.pending > 0 and LibraryAdapter.request(self.pending) then self.metrics.roundTrips = 1 end
     assert(Budgets.check(self.screen_budget, self.metrics))
     self.finish()
     self.pending = {}
@@ -160,6 +160,29 @@ end
 function Library.acquireCover(key,done)
     return command("covers.acquire",function()
         return LibraryAdapter.command("covers.acquire",{key=key},function(result)
+            if result.local_path then LibraryAdapter.reset(); Library.changed({kind="cover"}) end
+            if done then done(result) end
+        end)
+    end)
+end
+
+-- Cover lookup never schedules work on a paint. The thumbnail host explicitly acquires misses
+-- after paint; the companion publishes the exact one-row reference on its existing writer.
+function Library.cachedCover(reference)
+    local paint=Library.paint("cover-cache")
+    local result=paint:read("cover.reference",{reference=reference,limit=1})
+    paint:flush(true)
+    local path=result.local_path
+    return type(path)=="string" and Store.readFile(path,1) and path or nil
+end
+function Library.acquireCoverReference(reference,refresh,done)
+    local owner=LibraryAdapter.owner()
+    return command("covers.acquire",function()
+        return LibraryAdapter.command("covers.acquire",{reference=reference,refresh=refresh==true},function(result)
+            if LibraryAdapter.owner()~=owner then
+                if done then done({error="canceled"}) end
+                return
+            end
             if result.local_path then LibraryAdapter.reset(); Library.changed({kind="cover"}) end
             if done then done(result) end
         end)

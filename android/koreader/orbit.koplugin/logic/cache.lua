@@ -144,3 +144,15 @@ end
 
 -- Generic URL helpers reused by the compatibility adapter.
 Cache.splitPath, Cache.encQuery = splitPath, encQuery
+
+-- Consume only one caller-bounded local work window.
+function Cache.takeWindow(queue,limit)
+    assert(type(limit)=="number" and limit>=1 and limit<=24 and limit==math.floor(limit),"Queue window exceeds budget")
+    local rows={}
+    while #rows<limit and queue and queue.head<=queue.tail do
+        rows[#rows+1]=queue[queue.head]
+        queue[queue.head]=nil; queue.head=queue.head+1
+    end
+    if queue and queue.head>queue.tail then queue.head,queue.tail,queue.seen=1,0,{} end
+    return rows
+end

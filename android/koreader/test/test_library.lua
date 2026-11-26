@@ -32,6 +32,35 @@ return function(test, eq, ok, here, Cache)
         eq(e.Library.acquireCover("opaque",function(r) result=r end),true)
         eq(commands,1); eq(result.local_path,"/fixture/cover.jpg")
     end)
+    test("covers: cached references have zero round-trips and retain the one-row budget", function()
+        local reads,exists,commands=0,true,0
+        local e=setmetatable({Cache=Cache,now_s=function() return 1 end,log=function() end,
+            Store={readFile=function(_,limit) eq(limit,1); return exists and "x" or nil end},
+            LibraryAdapter={owner=function() return "fixture" end,reset=function() end,
+                read=function(request) local q=Cache.decode(request); eq(q.op,"cover.reference"); eq(q.limit,1); reads=reads+1
+                    return {local_path="/fixture/local.jpg"},100 end,
+                request=function() error("paint must not dispatch") end,
+                command=function(op,args,done) commands=commands+1; eq(op,"covers.acquire"); eq(args.reference,"/fixture/ref.jpg"); eq(args.refresh,true); done({error="offline"}); return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root.."logic/budgets.lua")),e)(); setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        eq(e.Library.cachedCover("/fixture/ref.jpg"),"/fixture/local.jpg"); eq(commands,0); eq(reads,1)
+        exists=false; eq(e.Library.cachedCover("/fixture/ref.jpg"),nil)
+        local result; e.Library.acquireCoverReference("/fixture/ref.jpg",true,function(r) result=r end)
+        eq(commands,1); eq(result.error,"offline")
+        local owner,complete="fixture"
+        e.LibraryAdapter.owner=function() return owner end
+        e.LibraryAdapter.command=function(_,_,done) complete=done; return true end
+        e.Library.acquireCoverReference("/fixture/ref.jpg",false,function(r) result=r end)
+        owner="changed"; complete({local_path="/fixture/old-account.jpg"})
+        eq(result.error,"canceled"); eq(result.local_path,nil)
+        eq(e.Budgets.screens["cover-cache"].rows,1); eq(e.Budgets.screens["cover-cache"].roundTrips,0)
+    end)
+    test("covers: parent work windows are bounded and preserve remaining jobs", function()
+        local q={head=1,tail=6,1,2,3,4,5,6,seen={kept=true}}
+        local rows=Cache.takeWindow(q,4); eq(#rows,4); eq(rows[4],4); eq(q.head,5); eq(q.tail,6)
+        eq(q.seen.kept,true)
+        rows=Cache.takeWindow(q,4); eq(#rows,2); eq(rows[1],5); eq(q.head,1); eq(q.tail,0); eq(next(q.seen),nil)
+        eq(pcall(Cache.takeWindow,q,25),false)
+    end)
     test("reader display: unknown values, clamp, and ready stats", function()
         local e=setmetatable({}, {__index=_G})
         setfenv(assert(loadfile(root .. "logic/reader_panel.lua")),e)()
