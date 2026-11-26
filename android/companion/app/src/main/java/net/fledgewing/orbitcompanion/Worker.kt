@@ -16,8 +16,6 @@ interface ServerRuntime {
 
 /** Command routing only. The selected adapter owns transport and all legacy protocol state. */
 object Worker {
-    const val ACTION_MIRROR = "${Contract.PACKAGE}.action.MIRROR"
-    const val ACTION_CHECK = "${Contract.PACKAGE}.action.CHECK"
     const val ACTION_STORAGE = "${Contract.PACKAGE}.action.STORAGE"
     const val ACTION_COPIES = "${Contract.PACKAGE}.action.COPIES"
     const val ACTION_SLEEP_REFRESH = "${Contract.PACKAGE}.action.SLEEP_REFRESH"

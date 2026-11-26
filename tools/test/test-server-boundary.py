@@ -61,6 +61,8 @@ def violations(path, source):
         code = code_only(source, True)
         if re.search(r'\b(?:httpCover|coverDownload|CoverChild)\b|[:.]downloadCatalog(?:Thumbnail|AuthorPhoto)\s*\(|[\"\']/(?:thumbnail|photo)[\"\']|/catalog/(?:books|authors)/[^\s\"\']+/(?:thumbnail|photo)', code):
             cover_errors.append(f'{path}: plugin cover transport is companion-owned; use the neutral library command')
+        if re.search(r'\b(?:Store[.:](?:read|search)|Server[.:]bulkList)\s*\(|\bCompanion\.ACTION\.(?:MIRROR|CHECK)\b|\b(?:FROM|JOIN)\s+(?:bulk_\w+|list_items|books)\b', code, re.I):
+            cover_errors.append(f'{path}: catalog interpretation/transport is companion-owned; consume a bounded library snapshot')
     if kotlin_adapter or lua_adapter:
         if kotlin_adapter and path.suffix in ('.kt', '.java'):
             expected = '.'.join(path.relative_to(source_root).parent.parts)
@@ -90,7 +92,7 @@ def violations(path, source):
             errors.append(f'{path}: shared backend implementation outside adapter; use Library or reviewed Server facade')
         if re.search(r'\bStore[.:](?:read|search)\b', identifiers):
             errors.append(f'{path}: legacy protocol lookup outside adapter')
-        if path != LUA / 'ko/store.lua' and re.search(r'\bStore[.:](?:library|conn|rows|within|meta)\b', identifiers):
+        if path != LUA / 'ko/store.lua' and re.search(r'\bStore[.:](?:conn|rows|within|meta)\b', identifiers) or path not in (LUA / 'ko/store.lua', LUA / 'ko/library.lua') and re.search(r'\bStore[.:]library\b', identifiers):
             errors.append(f'{path}: owned UI must read through Library, not persistence internals')
     for n, line in enumerate(code.splitlines(), 1):
         # About's shared credits are data, not a protocol call. The literal credit is the sole
@@ -165,6 +167,19 @@ class GuardTests(unittest.TestCase):
                 self.assertTrue(violations(path,source), (path,source))
         self.assertFalse((ROOT / LUA / 'ko/server/bookorbit/cache.lua').exists())
         self.assertFalse((ROOT / LUA / 'ko/cover_child.lua').exists())
+
+    def test_catalog_interpreter_cannot_be_reintroduced_in_any_lua_adapter(self):
+        for path in (LUA / 'ko/library.lua', LUA / 'ko/server/bookorbit/other.lua'):
+            for source in ('Store.read(owner,key,path)', 'Store.search(owner,path)', 'Server.bulkList(conn,window)',
+                           'Companion.send(Companion.ACTION.MIRROR,{})', 'Companion.send(Companion.ACTION.CHECK,{})',
+                           'local sql="SELECT item FROM bulk_books"'):
+                self.assertTrue(violations(path,source), (path,source))
+        for name in ('mirror','store','library_bookorbit'):
+            retired=LUA / 'ko/server/bookorbit' / (name+'.lua')
+            self.assertFalse((ROOT / retired).exists())
+            self.assertNotIn(str(retired.relative_to(LUA)),(ROOT / LUA_REGISTRY).read_text())
+        self.assertFalse(violations(LUA / 'ko/library.lua','Store.library(owner,request)'))
+        self.assertTrue(violations(LUA / 'ko/library.lua','Store.rows(conn,sql)'))
 
     def test_entire_production_tree(self):
         errors = []

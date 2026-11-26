@@ -45,12 +45,10 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `STATS` | `seq`, `period_s`, `pages`, `full`, `partial`, `content` (`text`/`comic`/`webtoon`/`pdf`/`none`), `open` (`1`/`0`), `reading_min`, `wifi_mode`, `reading_schedule`, `reason`; plugin 0.11.1+: `reading` (`1` = a book open in front, not BookOrbit Home or a list over it; `0` on `close`/`suspend`) | Battery stats batch: store the counts with the current state; a book is "in front" while `open=1` (at most 6 min). `reading` drives the companion's reading gate (docs/design/reading-gate.md); without it, `open` and `resume`/`suspend` do. Sent every 5 min with a book open, on open/Resume/Suspend/close, never per page (docs/design/STATS-DESIGN.md). |
 | `SETUP_LATER` | none | The setup box's "Later" in KOReader: the companion's own Later (quiet until an update or a step stops working). Companion 0.4.1+. |
 | `RELAUNCH` | `reason` (`restart`) | The patch is quitting for a restart (COMMAND `restart`, or from 0.5.0 by itself for a newer patch file on disk, DESIGN "One update"): start KOReader again after 2.5 s. Patch 0.3.1+. |
-| `REPORT` | `signed_in` (`"1"`/`"0"`), `recommended` (`none`/`partial`/`reviewed`/`applied`), `conflicts` (a count), `reason` | Companion 0.11.0+: one yes/no about the BookOrbit login and the recommended settings' state, for its Setup rows "Signed in to BookOrbit" and "Recommended settings". Never the server, the account or the key (those go only with `MIRROR` and `CHECK`); other extras are ignored. Sent at start, after a recommended pass and when either value changes. Needs no service. |
+| `REPORT` | `signed_in` (`"1"`/`"0"`), `recommended` (`none`/`partial`/`reviewed`/`applied`), `conflicts` (a count), `reason` | Companion 0.11.0+: one yes/no about the BookOrbit login and the recommended settings' state, for its Setup rows "Signed in to BookOrbit" and "Recommended settings". Never the server, the account or the key (catalog commands resolve credentials privately in the companion); other extras are ignored. Sent at start, after a recommended pass and when either value changes. Needs no service. |
 | `SLEEP_REFRESH` | `reason`, `from`, `rules`, `open_id`, `every`, `storage_limit_mb`, `server`, `user`, `userkey`; or `reason`, `scopes_only=1` and the login | Cap `cache_worker`: refresh the sleep screen's pool on the worker thread (`SleepPoolBuilder`): Leave out's member lists once a day, the shuffle bag, the books checked and their covers fetched by ETag, then `pool.json`, `covers/`, `bag.lua`, `leave_out.lua` and `scopes.json` written and the picture redrawn. With `scopes_only` it writes the pickers' files only (`scopes.json`, `tags.json`), never a pool. Each refresh counts the tags again. Answers with a `sleep_pool` event. Needs no service. The login is never written or logged. |
 | `SQLITE_STRESS` | `seconds` (default 120) | Debug (docs/design/sqlite-cache.md "Stress test"): writes `orbit-cache/stress.db` nonstop for that long, one 100-row page per transaction, then logs `sqlite-stress writer: …` and writes `orbit-cache/stress-writer.lua` `{writes, errors, max_wait_ms, integrity, first_error, at}`. No login, no service. |
 | `SLEEP_POOL` | `reason`, `wake` | Companion cap `sleep_screen`: the files in `koreader/settings/orbit-sleep/` changed (below). The picture sink redraws `Pictures/Orbit/sleep.png`; the screen saver reads them at the next sleep. With `wake` = `"1"` (reason `wake`): KOReader resumed after a real sleep (the screen went off, not an app switch); with Every sleep the picture moves on for the next sleep, once per wake (the service's screen-on counts as the same wake). Needs no service. |
-| `MIRROR` | `reason`, `server`, `user`, `userkey`, `plan` (Lua literal) | Cap `cache_worker` (docs/design/companion-worker.md): parse and atomically save `plan` as `koreader/settings/orbit-cache/mirror/plan.lua`, remove the old stop marker, then run the offline mirror on the cache worker thread (below). The login is used only as `x-auth-user`/`x-auth-key` on requests to `server`, held in memory, never written or logged. A new `MIRROR` replaces a waiting one. Needs no service. |
-| `CHECK` | `reason`, `cache_key`, `path`, `mode` (`open`/`refresh`/`full`, or `store`: the plugin read it from the server), `owner`, `template` (the plugin's detail request with the sentinel id), `server`, `user`, `userkey` | Cap `cache_worker`: ask `server` for `path`, compare with what the plugin would serve from `orbit.db`, save a changed reply there and answer with an event (below). Checks go before Full refresh jobs. Needs no service. |
 | `PATCH` | `reason`, `id` (a book id, or empty), `fields` (a Lua literal of the changed fields, or empty), `stale_home` (`"1"`/`"0"`); or `wipe` = `"1"`; `remember_id`, `plugin_state`; `old_hash`, `new_hash`, `copy_path` | Cap `cache_worker`: a write the plugin made (`Cache.writeEffect`), patched into the saved book, the lists that name it and other saved replies; Home marked stale. `wipe` empties the database. In order with the checks. `plugin_state` atomically persists the in-memory plugin state; `remember_id` persists the saved detail for the end-of-book sheet; copy identity migration updates sidecar/statistics in the worker. No login. Needs no service. |
 | `STORAGE` | `reason`, `limit` (bytes, empty: none), `cover_dir`, `mirror_covers` (`"1"`/`"0"`) | Cap `cache_worker`: count everything BookSync stores (`orbit.db` and the cover folder) and, over `limit`, remove what StorageLogic says: the oldest browsing replies and plain covers first, then covers saved for offline, never lists and books saved for offline nor Home. The companion removes them itself and answers with a `storage` event. No login. Needs no service. |
 | `PATCH` (0.12 library) | `library_batch` (Lua literal array of encoded neutral requests, ≤16 entries, ≤128 KiB), `owner` | Same caller-checked worker queue. No login or network. Materializes bounded results in `library_views` in the existing owned SQLite database, with owner checks before and inside publication. The plugin reads ready results through `Library`; filtering, grouping, sorting, counts and joins stay in Kotlin. See [F12-A notes](../../docs/design/booksync-home/F12-A-NOTES.md) for operations, budgets and pending/empty states. |
@@ -118,10 +116,6 @@ read-only. The small files beside it are Lua literals in the cache's format (`Ca
 | `plugin-state.lua` | companion, from `PATCH.plugin_state` | the detail variant it reads and the copies queue |
 | `events/<n>.lua` | companion (private spool; never enumerated by the plugin) | a check's answer: `{kind = "checked", key, changed, at}`, `{…, unchanged, saved}` or `{…, err}`; a sleep pool refresh: `{kind = "sleep_pool", why, items, kept, probed, left_out, unknown, skipped, carried, retired, every, fallback, listed, scopes}` (or `scopes_only`, or `err`); a copies lookup: `{kind = "copies", why, checked, found = {{md5, path, book_id, file_id, why}}, gone}`; a storage count: `{kind = "storage", why, totals, removed = {cache, cover, mirror_cover}, used, after, limit}` |
 | `copies/ask.lua` | companion, from each `COPIES.ask` | `books` (`md5`, `path`, `book_id`, `file_id`, `incompatible`), `eob` (book id -> `files`, `saved_at`), `owner`, `server`, `detail_template`, `sentinel` |
-| `mirror/plan.lua` | companion, from the `MIRROR.plan` extra | `run`, `op` (`full`/`resume`/`revalidate`/`covers`), `reason`, `owner`, `lib_version`, `sentinel`, `templates` (per section: `path`, `series_name_path`), `detail_template`, `all_books`, `sections`, `seed_lists`, `seed_details`, `cover_dir`, `covers_on`, `limit` |
-| `mirror/status.lua` | companion, every 2 s and at the end | `{v = 4, runner, run, running, beat, op, at, lib_version, done, total, left, pct, rate, eta_s, skipped, errors, covers, cover_total, limit_note, revalidating, bytes, started_at}`; `pct` never goes down within a run |
-| `mirror/summary.lua` | companion, at the end of a run | `{run, why (finished/stopped/no answer/busy), jobs, status, changed, written, written_more, saved, revalidated}` |
-| `mirror/stop` | plugin | stop the run after the batch in hand |
 | covers, in the plugin's thumbnail folder | companion | `<memoKey>.jpg` and `.etag`, as the plugin names them |
 
 W27 startup maintenance uses `PATCH` variants on the same required worker:
@@ -498,3 +492,35 @@ that row on the existing writer. Existing cache hits are imported by the compani
 without a network request. The old credential-bearing `RECHECK` broadcast is removed.
 Callbacks reject departed generations/accounts and never redraw during reading.
 See `docs/design/booksync-home/F12-Q2-NOTES.md` for the remaining catalog cutover.
+
+
+### Companion-owned catalog control (0.12, F12-Q2 step 3)
+
+`SERVER_COMMAND` operation `catalog.control` accepts `{owner, action, manual}`. `owner`
+is the opaque originating namespace; actions are `full`, `refresh`, `resume`,
+`incremental`, `covers`, and `stop`. The selected server adapter resolves the captured
+account and queues work on the existing cache writer. No endpoint, protocol query,
+server locator, credentials or serialized plan crosses from Lua. The command returns
+a bounded neutral acknowledgement/status, or a neutral error. A second Full refresh
+keeps a running full run; paused bulk work resumes its cursor. Incremental probes
+are throttled and storage-blocked runs wait for a larger limit or an explicit action.
+Refresh bootstraps an unsaved catalog; otherwise it revalidates the saved generation.
+
+`catalog.state` is a one-row, at most 16 KiB `LibraryReadModel` snapshot. Progress is
+published by the writer; plugin progress polling performs **zero** companion
+round-trips, network calls or subprocess spawns. Checkpoint/summary/stop files under
+`mirror/` are private companion implementation details, never a plugin IPC channel.
+An existing checkpoint is retained only with its matching private plan owner.
+Ownership transfer waits for an active refresh to stop; lifecycle/position and
+copy/finish queues are retained. The old `MIRROR` and `CHECK` broadcasts are removed.
+
+The native connector's catalog/root/Home renderers use neutral `connector.catalog`,
+`connector.root` and `connector.home` display snapshots through `ko/library.lua`.
+The existing companion `CacheStore`/`BulkCatalog` performs selection, sorting,
+counts and offline search. Each window returns at most 24 rows and 16 KiB; Home
+counts nested books/names and its stats row, and materializes one batched request.
+The Lua connector translates display records into its existing widget inputs;
+it never receives backend response JSON. Cached windows open offline without asking
+to connect. New materializations redraw only their still-visible initiating view.
+Remaining grouping, copies, recommendations and end-of-book transport are separate
+follow-up slices. No replacement sync/lifecycle writer is enabled here.

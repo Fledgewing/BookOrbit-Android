@@ -104,3 +104,6 @@ Budgets.screens["settings-device"] = budget(1,16384,50)
 
 
 Budgets.screens["settings-sleep-choices"].displayRows = 10
+
+Budgets.screens["catalog-refresh"] = budget(1,16384,50)
+Budgets.screens["catalog-refresh"].roundTrips = 0

@@ -156,7 +156,10 @@ return function(here, test, ok, eq)
                 eq(event,"BookOrbitSyncBook"); eq(options.quiet,true)
                 sent=sent+1; reply=options.on_done
             end}
-        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/server/bookorbit/library_bookorbit.lua")),setmetatable(E,{__index=_G}))()
+        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/server/bookorbit.lua")),setmetatable(E,{__index=_G}))()
+        E.serverPlugin=function() return {} end
+        E.liveUI=function() return ui end
+        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/library.lua")),setmetatable(E,{__index=_G}))()
         eq(E.LibraryAdapter.readerPosition("fixture.epub"),0.73)
         eq(E.LibraryAdapter.readerPosition("other.epub"),nil)
         ui.view.footer.percent_finished=0/0
@@ -164,14 +167,14 @@ return function(here, test, ok, eq)
         ui.view.footer.percent_finished=0
         eq(E.LibraryAdapter.readerPosition("fixture.epub"),0)
         local function complete(ok,text) done,message=ok,text end
-        E.LibraryAdapter.syncCurrent(complete); up(false)
+        E.Server.syncCurrent(complete); up(false)
         eq(sent,0); eq(released,1); eq(done,false); eq(message,"Offline · will sync when connected")
-        E.LibraryAdapter.syncCurrent(complete); ui.document={file="other.epub"}; up(true)
+        E.Server.syncCurrent(complete); ui.document={file="other.epub"}; up(true)
         eq(sent,0); eq(released,2); eq(done,false)
-        E.LibraryAdapter.syncCurrent(complete); up(true)
+        E.Server.syncCurrent(complete); up(true)
         eq(sent,1); reply(nil); eq(done,true); eq(message,"Synced"); eq(released,3)
         timeout(); eq(released,3,"late timer cannot complete twice")
-        E.LibraryAdapter.syncCurrent(complete); up(true); timeout()
+        E.Server.syncCurrent(complete); up(true); timeout()
         eq(done,false); eq(released,4); reply(nil); eq(released,4)
     end)
 

@@ -113,6 +113,10 @@ Details; completion callbacks redraw only a still-visible user-opened panel.
 
 Cover lookups use a one-row, 16 KiB local-only budget with zero round-trips; post-paint
 cover batches are limited to four and only the companion fetches or writes images.
+Catalog progress is one companion-published row (16 KiB) with zero polling round-trips.
+Catalog/root windows decode at most 24 display rows; native Home batches count every nested
+book/name plus their stats row. Plans, query interpretation, refresh policy and search stay
+on the companion; preserve outstanding copy/finish/lifecycle queues during later cutovers.
 
 Custom reading editors inherit a named screen budget through the library interface: one small
 device-local record, no catalog work, decoded JSON, network, subprocess or companion round-trip.

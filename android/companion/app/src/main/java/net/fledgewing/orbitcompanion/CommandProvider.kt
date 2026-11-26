@@ -41,7 +41,7 @@ class CommandProvider : ContentProvider() {
         val COMMANDS = setOf(
             Contract.NET_UP, Contract.NET_DONE, Contract.WIFI_OFF, Contract.SLEEP_NOW, Contract.SETTINGS, Contract.STATS,
             Contract.RELAUNCH, Contract.SETUP_LATER, Contract.REPORT, SleepScreen.ACTION_POOL,
-            Worker.ACTION_MIRROR, Worker.ACTION_CHECK, Worker.ACTION_STORAGE, Worker.ACTION_COPIES, Worker.ACTION_SLEEP_REFRESH,
+            Worker.ACTION_STORAGE, Worker.ACTION_COPIES, Worker.ACTION_SLEEP_REFRESH,
             Worker.ACTION_SQLITE_STRESS, Worker.ACTION_PATCH, Updater.ACTION_UPDATE,
         )
 
@@ -87,7 +87,7 @@ class CommandProvider : ContentProvider() {
                 return answer(true).apply { putString("body",String(LuaValue.encode(ServerCommands.result(id)),Charsets.ISO_8859_1)) }
             }
             if (method == LibraryAccount.STATE) {
-                LibraryAccount.initialize(ctx)
+                if(extras?.getString("reload")=="1") LibraryAccount.refreshIdentity(ctx) else LibraryAccount.initialize(ctx)
                 return answer(true).apply {
                     putString("pending", if (LibraryAccount.ready()) "0" else "1")
                     putString("owner", LibraryAccount.owner())

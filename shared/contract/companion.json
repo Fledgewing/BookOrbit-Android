@@ -122,42 +122,11 @@
       "does": "the sleep screen's files changed, or KOReader woke from a real sleep"
     },
     {
-      "name": "MIRROR",
-      "method": "net.fledgewing.orbitcompanion.action.MIRROR",
-      "extras": [
-        "reason",
-        "server",
-        "user",
-        "userkey",
-        "plan"
-      ],
-      "does": "run the offline mirror; the worker parses and atomically persists the plan extra",
-      "login": true
-    },
-    {
-      "name": "CHECK",
-      "method": "net.fledgewing.orbitcompanion.action.CHECK",
-      "extras": [
-        "reason",
-        "cache_key",
-        "path",
-        "mode",
-        "owner",
-        "template",
-        "server",
-        "user",
-        "userkey"
-      ],
-      "does": "check one reply against the server and save a changed one",
-      "login": true
-    },
-    {
       "name": "STORAGE",
       "method": "net.fledgewing.orbitcompanion.action.STORAGE",
       "extras": [
         "reason",
         "limit",
-        "cover_dir",
         "mirror_covers"
       ],
       "does": "count what BookSync stores and remove the oldest over the limit"
@@ -207,10 +176,6 @@
       "method": "net.fledgewing.orbitcompanion.action.PATCH",
       "extras": [
         "reason",
-        "id",
-        "fields",
-        "stale_home",
-        "wipe",
         "drain_events",
         "events_ack",
         "old_hash",
@@ -379,34 +344,6 @@
       "reader": "companion",
       "format": "json",
       "what": "the recommended settings' rows"
-    },
-    {
-      "path": "koreader/settings/orbit-cache/mirror/plan.lua",
-      "writer": "companion",
-      "reader": "companion",
-      "format": "lua",
-      "what": "what a Full refresh saves; no login"
-    },
-    {
-      "path": "koreader/settings/orbit-cache/mirror/stop",
-      "writer": "plugin",
-      "reader": "companion",
-      "format": "empty",
-      "what": "stop the run"
-    },
-    {
-      "path": "koreader/settings/orbit-cache/mirror/status.lua",
-      "writer": "companion",
-      "reader": "plugin",
-      "format": "lua",
-      "what": "the run's progress, every 2 s"
-    },
-    {
-      "path": "koreader/settings/orbit-cache/mirror/summary.lua",
-      "writer": "companion",
-      "reader": "plugin",
-      "format": "lua",
-      "what": "how the run ended"
     },
     {
       "path": "koreader/settings/orbit-cache/events/",

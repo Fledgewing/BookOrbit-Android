@@ -1,6 +1,151 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Thin 0.12 UI boundary. One host-owned context per paint; finish with :flush().
-Library = {}
+-- Neutral companion transport. Only lifecycle calls import the opaque owner; paints never
+-- inspect a server plugin, credentials or protocol records. Tests may inject this interface.
+if not rawget(getfenv(1),"LibraryAdapter") then
+LibraryAdapter={sent={},order={},ready={}}
+function LibraryAdapter.owner() return LibraryAdapter.managed_owner end
+function LibraryAdapter.read(request,op)
+    if op=="account.state" and LibraryAdapter.account_snapshot then
+        return LibraryAdapter.account_snapshot, LibraryAdapter.account_bytes
+    end
+    local owner = LibraryAdapter.owner()
+    if not owner then
+        if op=="capabilities" and LibraryAdapter.account_snapshot then
+            local result={account=LibraryAdapter.account_snapshot}
+            return result,#Cache.encode(result)
+        end
+        return nil
+    end
+    local result, bytes = Store.library(owner, request)
+    if op=="capabilities" and LibraryAdapter.account_snapshot then
+        local merged={}
+        for k,v in pairs(result or {}) do merged[k]=v end
+        merged.account=LibraryAdapter.account_snapshot
+        bytes=#Cache.encode(merged)
+        if bytes>Budgets.MAX_SNAPSHOT then return nil end
+        result=merged
+    end
+    LibraryAdapter.ready[owner .. request] = result ~= nil
+    return result, bytes
+end
+function LibraryAdapter.request(requests)
+    local owner = LibraryAdapter.owner()
+    local problem=Companion.workerProblem()
+    if not owner or problem then
+        if manual and not reading() then
+            UIManager:show(require("ui/widget/infomessage"):new{text=problem or _("Connect to the server and sign in to refresh the catalog.")}) -- gate: user action (explicit refresh)
+        end
+        return false
+    end
+    -- Coalesce repeat paints; misses retry sooner than already materialized windows.
+    local due, now = {}, now_s()
+    for _, request in ipairs(requests) do
+        local key = owner .. request
+        local last = LibraryAdapter.sent[key]
+        if not last or now-last >= (request:find("catalog.state",1,true) and 3 or LibraryAdapter.ready[key] and 30 or 2) then
+            table.insert(due, request)
+            if not last then
+                table.insert(LibraryAdapter.order, key)
+                if #LibraryAdapter.order > 64 then
+                    local old = table.remove(LibraryAdapter.order, 1)
+                    LibraryAdapter.sent[old], LibraryAdapter.ready[old] = nil, nil
+                end
+            end
+            LibraryAdapter.sent[key] = now
+        end
+    end
+    if #due == 0 then return false end
+    local batch = Cache.encode(due)
+    assert(#batch <= 131072, "Library batch byte budget exceeded")
+    Companion.send(Companion.ACTION.PATCH, {library_batch=batch, owner=owner})
+    return true
+end
+
+function LibraryAdapter.fullRefresh() return Library.refreshCatalog("full",true) end
+function LibraryAdapter.syncNow(reader) return reader:onOrbitSyncAndSleep(true) end
+function LibraryAdapter.syncCurrent(done) done(false,"Sync unavailable"); return false end
+-- KOReader already computes this on page/position updates, even with its footer hidden.
+-- No document scan, sidecar read or second progress writer on a panel paint.
+function LibraryAdapter.readerPosition(path)
+    local ui = liveUI()
+    if not (ui and ui.document and ui.document.file == path) then return nil end
+    local footer = ui.view and ui.view.footer
+    local fraction = footer and footer.percent_finished
+    if type(fraction) == "number" and fraction == fraction and fraction >= 0 and fraction <= 1 then
+        return fraction
+    end
+end
+
+function LibraryAdapter.watch(enabled)
+    LibraryAdapter.watching = enabled
+    if enabled then LibraryAdapter.reset(); Library.watchEvents() end
+end
+function LibraryAdapter.changed(ev)
+    if ev.owner and ev.owner ~= LibraryAdapter.owner() then return end
+    if ev.kind ~= "library" then LibraryAdapter.reset() end
+    Library.changed(ev)
+end
+
+function LibraryAdapter.reset() LibraryAdapter.sent, LibraryAdapter.ready, LibraryAdapter.order = {}, {}, {} end
+
+function LibraryAdapter.openAccount()
+    if Companion.workerProblem() then return false end
+    local result=Jni.call(Companion.AUTHORITY,Companion.PACKAGE..".call.ACCOUNT_OPEN",{})
+    return result and result.ok=="1"
+end
+function LibraryAdapter.accountReturned(attempt)
+    if Companion.workerProblem() then return false end
+    local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_STATE", {reload=attempt==nil and "1" or "0"})
+    if result and result.pending == "1" and (attempt or 0) < 3 then
+        UIManager:scheduleIn(1, function() LibraryAdapter.accountReturned((attempt or 0)+1) end)
+        return false
+    end
+    if not result or result.ok ~= "1" then return false end
+    local body=result.body
+    if type(body)=="string" and #body<=Budgets.MAX_SNAPSHOT then
+        LibraryAdapter.account_snapshot=Cache.decode(body)
+        LibraryAdapter.account_bytes=#body
+    end
+    local changed = LibraryAdapter.managed_owner ~= result.owner
+    LibraryAdapter.managed_owner = result.owner
+    if changed then LibraryAdapter.reset() end
+    return changed
+end
+
+-- Explicit dispatched commands only; paint reads continue to use the owned SQLite windows.
+function LibraryAdapter.command(op, args, callback)
+    if Companion.workerProblem() then callback({error="unavailable"}); return false end
+    local encoded = Cache.encode(args or {})
+    assert(#encoded <= Budgets.MAX_REQUEST, "Server command exceeds budget")
+    local sent = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_COMMAND", {op=op,args=encoded})
+    if not sent or sent.ok ~= "1" or not sent.id then callback({error="unavailable"}); return false end
+    local deadline = now_s()+120
+    local function poll()
+        local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_RESULT", {id=sent.id})
+        local body = result and result.body
+        if type(body) ~= "string" or #body > Budgets.MAX_SNAPSHOT then callback({error="unavailable"}); return end
+        local decoded = Cache.decode(body)
+        if type(decoded) ~= "table" then callback({error="invalid"}); return end
+        if not decoded.pending then
+            if decoded.state then
+                LibraryAdapter.account_snapshot=decoded.state
+                LibraryAdapter.account_bytes=#Cache.encode(decoded.state)
+                LibraryAdapter.managed_owner=decoded.state.owner
+                LibraryAdapter.reset()
+            end
+            callback(decoded); return
+        end
+        if now_s() >= deadline then callback({error="unavailable"}); return end
+        UIManager:scheduleIn(0.2,poll)
+    end
+    UIManager:scheduleIn(0.2,poll)
+    return true
+end
+
+end
+
+Library = rawget(getfenv(1),"Library") or {}
 -- Explicit user command; the existing adapter/worker owns the full-refresh job.
 local function command(id, run)
     local finish = Budgets.span("library." .. id .. ".enqueue", now_s, log)
@@ -226,4 +371,125 @@ function Library.acquireCoverReference(reference,refresh,done)
             if done then done(result) end
         end)
     end)
+end
+
+-- One shared durable event reader, retained across catalog and sync cutovers. Acknowledgement
+-- follows dispatch, and an unchanged durable batch never creates a second timer chain.
+Library.events={}
+function Library.watchEvents()
+    if Library.events.watching then return end
+    Library.events.watching=true
+    UIManager:scheduleIn(.5,Library.pollEvents)
+end
+function Library.pollEvents()
+    local state=Library.events
+    UIManager:unschedule(Library.pollEvents)
+    UIManager:scheduleIn(.5,Library.pollEvents)
+    if Companion.workerProblem() or reading() then return end
+    if Library.compatTick then Library.compatTick(Store.now()) end
+    local encoded=Store.readFile(Store.dir().."/events-batch.lua",65537)
+    if not encoded or #encoded>65536 then return end
+    local batch=Cache.decode(encoded)
+    if type(batch)~="table" or not batch.id then return end
+    if batch.id~=state.ack then
+        state.ack,state.sent_at=batch.id,nil
+        local applied,err=pcall(Library.applyEvents,batch.events or {})
+        if not applied then state.ack=nil;log("library events: dispatch deferred",tostring(err));return end
+    end
+    if not state.sent_at or now_s()-state.sent_at>=10 then
+        state.sent_at=now_s()
+        Companion.send(Companion.ACTION.PATCH,{reason="events",drain_events="1",events_ack=batch.id})
+    end
+end
+function Library.applyEvents(events)
+    for _,event in ipairs(events) do
+        if type(event)=="table" then
+            if event.kind=="library" or event.kind=="library_source" or event.kind=="account" or event.kind=="checked" or event.kind=="copies" then
+                LibraryAdapter.changed(event)
+            end
+            if Library.compatEvent then Library.compatEvent(event) end
+        end
+    end
+end
+function Library:catalogState() return self:read("catalog.state",{limit=1}) end
+function Library.catalogSnapshot()
+    local paint=Library.paint("catalog-refresh")
+    local result=paint:catalogState(); paint:flush(true)
+    return result
+end
+function Library.refreshCatalog(action,manual)
+    local owner=LibraryAdapter.owner()
+    local problem=Companion.workerProblem()
+    if not owner or problem then
+        if manual and not reading() then
+            UIManager:show(require("ui/widget/infomessage"):new{text=problem or _("Connect to the server and sign in to refresh the catalog.")}) -- gate: user action (explicit refresh)
+        end
+        return false
+    end
+    local generation={}
+    if Library.catalog_active and Library.catalog_owner==owner and (not manual or Library.catalog_requested=="full" and (action=="full" or action=="refresh")) then
+        if manual and Badge.running then Badge.expand() end
+        return true
+    end
+    Library.catalog_owner=owner
+    Library.catalog_requested=action
+    Library.catalog_generation=generation
+    Library.catalog_active=true
+    Wifi.acquire("mirror")
+    local finished=false
+    local deadline=now_s()+120
+    local function finish()
+        if finished then return end
+        finished=true
+        Library.catalog_active=nil
+        Wifi.release("mirror")
+    end
+    local function accept(result)
+        if Library.catalog_generation~=generation then return end
+        if LibraryAdapter.owner()~=owner or result.error then finish(); return end
+        Library.catalog_status=result
+        if manual and action=="full" and Library.catalogStarted then Library.catalogStarted() end
+        if manual and action=="full" and not Badge.running and not reading() then Badge.start(true,result) end
+        local function poll()
+            if Library.catalog_generation~=generation then return end
+            if LibraryAdapter.owner()~=owner then finish(); return end
+            local status=Library.catalogSnapshot()
+            if now_s()>=deadline and (status.pending or result.run and status.run~=result.run) then
+                finish()
+                if Badge.running and not reading() then Badge.finish(_("Paused · it goes on when the server answers")) end
+                return
+            end
+            if not status.pending and (not result.run or status.run==result.run) then
+                Library.catalog_status=status
+                if Badge.running and not reading() then Badge.update(status) end
+                local stale=status.beat and Store.now()-status.beat>=90
+                if status.running~=true or stale then
+                    finish()
+                    if Badge.running and not reading() then Badge.finish((stale or status.why and status.why~="finished") and _("Paused · it goes on when the server answers") or nil,status) end
+                    LibraryAdapter.reset()
+                    Library.changed({kind="catalog",owner=owner})
+                    if Library.catalogFinished then Library.catalogFinished(status) end
+                    return
+                end
+            end
+            UIManager:scheduleIn(3,poll)
+        end
+        UIManager:scheduleIn(3,poll)
+    end
+    local started=command("catalog.control",function()
+        return LibraryAdapter.command("catalog.control",{owner=owner,action=action,manual=manual==true},accept)
+    end)
+    if not started then finish() end
+    return started
+end
+
+if OrbitAndroid then
+    local init=OrbitAndroid.init
+    function OrbitAndroid:init(...)
+        local result=init(self,...)
+        if Library.connectorReady then Library.connectorReady() end
+        Library.accountReturned()
+        Library.watchEvents()
+        return result
+    end
 end

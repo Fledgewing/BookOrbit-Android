@@ -186,8 +186,8 @@ return function(test, eq, ok, here, Cache)
     end)
     test("library: reopening and source events refresh the worker, publications do not loop", function()
         local e=setmetatable({Cache=Cache, now_s=function() return 10 end, log=function() end,
-            OC={watchChecks=function() end},Library={changed=function() end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
+            UIManager={scheduleIn=function() end},Library={changed=function() end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
         local a=e.LibraryAdapter
         a.owner=function() return "fixture" end
         a.sent={stale=1}; a.watch(true); eq(next(a.sent),nil)
@@ -197,18 +197,16 @@ return function(test, eq, ok, here, Cache)
         a.watch(false); eq(a.watching,false)
     end)
     test("library: ownership lookup never constructs a client or loads its ledger", function()
-        local plugin={settings={username="fixture",server_url="https://library.invalid"},
-            newClient=function() error("render constructed a backend client") end}
         local reads=0
-        local e=setmetatable({serverPlugin=function() return plugin end, OC={
-            client=function() error("render called the legacy client factory") end,
-            owner=function(settings) eq(settings,plugin.settings); return "fixture-owner" end},
-            Store={library=function(owner, request) reads=reads+1; eq(owner,"fixture-owner"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
-        eq(e.LibraryAdapter.owner(),"fixture-owner")
-        local r,bytes=e.LibraryAdapter.read("bounded"); eq(#r.items,0); eq(bytes,32); eq(reads,1)
-        plugin.settings=nil; eq(e.LibraryAdapter.owner(),nil)
-        eq(e.LibraryAdapter.read("bounded"),nil); eq(reads,1)
+        local e=setmetatable({Cache=Cache,Library={},
+            serverPlugin=function() error("render accessed a server plugin") end,
+            Store={library=function(owner,request) reads=reads+1; eq(owner,"opaque-owner"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        e.LibraryAdapter.managed_owner="opaque-owner"
+        eq(e.LibraryAdapter.owner(),"opaque-owner")
+        local r,bytes=e.LibraryAdapter.read("bounded"); eq(#r.items,0);eq(bytes,32);eq(reads,1)
+        e.LibraryAdapter.managed_owner=nil
+        eq(e.LibraryAdapter.read("bounded"),nil);eq(reads,1)
 
     end)
     test("storage: local IO and directory providers work without a backend", function()
@@ -238,27 +236,27 @@ return function(test, eq, ok, here, Cache)
         local result = os.execute('python3 "' .. here .. '/../../../tools/test/test-server-boundary.py"')
         eq(result, 0, "server boundary guard")
     end)
-    test("library: account launch gets the server only inside its adapter", function()
+    test("library: account launch sends no server login from the plugin", function()
         local calls=0
         local e=setmetatable({Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
             serverPlugin=function() return {settings={server_url="https://library.invalid"}} end,
             Jni={call=function(_,method,args)
-                eq(method,"companion.call.ACCOUNT_OPEN"); eq(args.server,"https://library.invalid")
+                eq(method,"companion.call.ACCOUNT_OPEN"); eq(next(args),nil)
                 calls=calls+1; return {ok="1"}
             end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
+        setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
         eq(e.LibraryAdapter.openAccount(),true); eq(calls,1)
     end)
     test("library: server lifecycle imports only an opaque owner, never credentials", function()
         local result={ok="1",owner="opaque-login"}
         local e=setmetatable({Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
-            Jni={call=function(_,method,args) eq(method,"companion.call.SERVER_STATE"); eq(next(args),nil); return result end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
+            Jni={call=function(_,method,args) eq(method,"companion.call.SERVER_STATE"); eq(args.reload,"1"); return result end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
         eq(e.LibraryAdapter.accountReturned(),true); eq(e.LibraryAdapter.owner(),"opaque-login")
         eq(e.LibraryAdapter.accountReturned(),false)
         result.owner=nil
         eq(e.LibraryAdapter.accountReturned(),true); eq(e.LibraryAdapter.managed_owner,nil)
-        local code=source(root .. "ko/server/bookorbit/library_bookorbit.lua")
+        local code=source(root .. "ko/library.lua")
         eq(code:find('result.userkey',1,true),nil)
         eq(code:find('result.secret',1,true),nil)
     end)
@@ -269,12 +267,104 @@ return function(test, eq, ok, here, Cache)
         local e=setmetatable({Cache=Cache,ServerCache={encode=Cache.encode,decode=Cache.decode},Budgets={MAX_SNAPSHOT=16384},Companion={workerProblem=function() end,AUTHORITY="fixture",PACKAGE="fixture"},
             Jni={call=function() return {ok="1",body=body} end},serverPlugin=function() return nil end,
             Store={library=function() error("no catalog should be read") end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
+        setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
         e.LibraryAdapter.accountReturned()
         local a,n=e.LibraryAdapter.read("opaque","account.state")
         eq(a.signedIn,false); eq(a.sync.origin,"user"); eq(n,#body)
         local caps,bytes=e.LibraryAdapter.read("opaque","capabilities")
         eq(caps.account.sync.available,true); ok(bytes<=16384)
+    end)
+    test("catalog: progress reads one local row with zero companion round-trips",function()
+        local reads,trips=0,0
+        local e=setmetatable({Cache=Cache,now_s=function() return 1 end,log=function() end,
+            LibraryAdapter={read=function(request)
+                local q=Cache.decode(request);eq(q.op,"catalog.state");eq(q.limit,1)
+                reads=reads+1;return {row_count=1,pct=42,running=true},96
+            end,request=function() trips=trips+1;error("progress is already materialized") end}}, {__index=_G})
+        setfenv(assert(loadfile(root.."logic/budgets.lua")),e)()
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        eq(e.Library.catalogSnapshot().pct,42);eq(reads,1);eq(trips,0)
+        eq(e.Budgets.screens["catalog-refresh"].roundTrips,0)
+    end)
+    test("catalog: full refresh dispatches only an action and owner and keeps a running run",function()
+        local commands,expanded,started,finished,released=0,0,0,0,0
+        local nextPoll,owner,status
+        owner="opaque";status={row_count=1,running=true,pct=0,beat=1}
+        local e=setmetatable({Cache=Cache,now_s=function() return 1 end,log=function() end,reading=function() return false end,
+            Store={now=function() return 1 end},Wifi={acquire=function() end,release=function() released=released+1 end},
+            UIManager={scheduleIn=function(_,delay,fn) eq(delay,3);nextPoll=fn end},
+            Badge={start=function() started=started+1 end,expand=function() expanded=expanded+1 end,update=function() end,finish=function() finished=finished+1 end},
+            Companion={workerProblem=function() end},
+            LibraryAdapter={owner=function() return owner end,fullRefresh=function() return true end,reset=function() end,
+                request=function() error("progress must stay local") end,read=function() return status,96 end,
+                command=function(op,args,done)
+                    eq(op,"catalog.control");eq(args.owner,"opaque");eq(args.action,"full");eq(args.manual,true)
+                    local n=0;for _ in pairs(args) do n=n+1 end;eq(n,3)
+                    commands=commands+1;done(status);return true
+                end}}, {__index=_G})
+        setfenv(assert(loadfile(root.."logic/budgets.lua")),e)()
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        eq(e.Library.refreshCatalog("full",true),true);eq(commands,1);eq(started,1)
+        e.Badge.running=true
+        e.Library.refreshCatalog("full",true);eq(commands,1);eq(expanded,1)
+        status={row_count=1,running=false,pct=100,beat=1}
+        nextPoll();eq(released,1);eq(finished,1);eq(e.Library.catalog_active,nil)
+    end)
+    test("catalog: a departed account cannot apply a queued refresh result",function()
+        local callback,owner,released,starts
+        owner="first";released=0;starts=0
+        local e=setmetatable({Cache=Cache,now_s=function() return 1 end,log=function() end,
+            Wifi={acquire=function() end,release=function() released=released+1 end},
+            Badge={start=function() starts=starts+1 end},Companion={workerProblem=function() end},
+            LibraryAdapter={owner=function() return owner end,command=function(_,_,done) callback=done;return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root.."logic/budgets.lua")),e)()
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        e.Library.refreshCatalog("full",true);owner="second";callback({running=true})
+        eq(released,1);eq(starts,0);eq(e.Library.catalog_active,nil)
+    end)
+    test("catalog: durable event batches dispatch once and retry a lost acknowledgement",function()
+        local now,reads,acks,changes,reading=1,0,0,0,false
+        local body=Cache.encode({id="durable",events={{kind="library",owner="opaque"}}})
+        local e=setmetatable({Cache=Cache,now_s=function() return now end,log=function() end,
+            reading=function() return reading end,Store={dir=function() return "/fixture" end,readFile=function(_,limit) eq(limit,65537);reads=reads+1;return body end},
+            UIManager={unschedule=function() end,scheduleIn=function() end},
+            Companion={ACTION={PATCH="patch"},workerProblem=function() end,send=function(_,args) eq(args.events_ack,"durable");acks=acks+1 end},
+            LibraryAdapter={changed=function() changes=changes+1 end}}, {__index=_G})
+        setfenv(assert(loadfile(root.."ko/library.lua")),e)()
+        e.Library.pollEvents();e.Library.pollEvents();eq(reads,2);eq(acks,1);eq(changes,1)
+        now=12;e.Library.pollEvents();eq(acks,2);eq(changes,1)
+        reading=true;e.Library.pollEvents();eq(reads,3)
+        reading=false;body=string.rep("x",65537);e.Library.pollEvents();eq(acks,2);eq(changes,1)
+    end)
+    test("catalog: native getters use neutral windows and fetch never forks or calls HTTP",function()
+        local calls,flushes,stock=0,0,0
+        local last
+        local e=setmetatable({Compat={callable=function(v) return type(v)=="function" end,missingOn=function(obj,required)
+            local missing={};for k,v in pairs(required) do if type(obj[k])~=v then missing[#missing+1]=k end end;return missing
+        end},wrap=function(obj,key,factory) obj[key]=factory(obj[key]) end}, {__index=_G})
+        setfenv(assert(loadfile(root.."ko/server/bookorbit.lua")),e)()
+        e.Library={compatEvent=function() end,paint=function(screen)
+            return {read=function(_,op,args)
+                calls=calls+1;last=args
+                if op=="connector.home" then return {shelves={reading={{reference=7,title="Ready",authors={}}}},row_count=2} end
+                eq(op,"connector.catalog");eq(screen,"library")
+                return {items={{reference=7,title="Ready",authors={"Fixture"},cover_available=true}},total=100,more=true}
+            end,flush=function() flushes=flushes+1 end}
+        end}
+        local Api={request=function() stock=stock+1;error("HTTP called") end,requestBlocking=function() error("HTTP called") end,
+            runInSubprocess=function() error("fork called") end,query=function() error("route constructed") end}
+        local Catalog={fetch=function() error("stock fetch called") end,dashboardRootFetch=function() error("stock dashboard called") end,
+            dashboardContext=function(_,body) return body end}
+        eq(e.Server.installCatalogApi(Api,Catalog),true)
+        local client=setmetatable({},{__index=Api})
+        local cat=setmetatable({boardSources=function() return {reading={source="in-progress"}},{} end},{__index=Catalog})
+        local body=cat:fetch("Catalog",function() return client:catalogBooks({size=999,page=2,author="Fixture"}) end)
+        eq(calls,1);eq(flushes,1);eq(last.limit,24);eq(last.offset,24);eq(last.selection.author,"Fixture")
+        eq(body.items[1].id,7);eq(body.items[1].title,"Ready");eq(body.size,24);eq(stock,0)
+        local value,err=cat:fetch("Catalog",function() return client:request("GET","forbidden") end)
+        eq(value,nil);eq(err,"cancelled");eq(stock,0);eq(e.Server.catalog_paint,nil)
+        local home=cat:dashboardRootFetch();eq(home.boardShelves.reading[1].id,7)
+        eq(calls,2);eq(flushes,2,"one batched Home read")
     end)
 
 end

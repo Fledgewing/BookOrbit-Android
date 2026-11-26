@@ -16,7 +16,6 @@ cp -R "$here/orbit.koplugin" "$stage/"
 cp "$here/LICENSE" "$stage/orbit.koplugin/LICENSE"
 # The settings shared with the companion (docs/design/companion-settings.md §4.1): one file for both.
 cp "$here/../../shared/settings/schema.json" "$stage/orbit.koplugin/settings_schema.json"
-cp "$here/../../shared/fixtures/catalog/sections.json" "$stage/orbit.koplugin/catalog_sections.json"
 cp "$here/../../shared/about/credits.json" "$stage/orbit.koplugin/about_credits.json"
 cp "$here/../../shared/ui/battery.json" "$stage/orbit.koplugin/battery.json"
 main="$stage/orbit.koplugin/main.lua"
