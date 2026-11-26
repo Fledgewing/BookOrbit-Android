@@ -6,8 +6,8 @@ import java.security.MessageDigest
 object BookOrbitLibrary {
     /** Cached connector response only. fetched/generated time is NOT an inclusion watermark. */
     fun readingStats(store: CacheStore): RemoteReadingStats? {
-        val path = "/koreader/plugin/catalog/dashboard"
-        val raw = store.db().query("SELECT body FROM entries WHERE path=? ORDER BY fetched_at DESC LIMIT 1", path) {
+        val dashboardCachePath = "/koreader/plugin/catalog/dashboard"
+        val raw = store.db().query("SELECT body FROM entries WHERE path=? ORDER BY fetched_at DESC LIMIT 1", dashboardCachePath) {
             it.bytes(0)?.let(LuaValue::parse) as? Map<*, *>
         }.firstOrNull() ?: return null
         return dashboardStats(raw)
