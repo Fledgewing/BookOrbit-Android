@@ -122,7 +122,7 @@ local NEEDS = {
     -- Owned Home: absolute grid placements, ordinary buttons and a plain progress bar.
     { "frontend/ui/widget/overlapgroup.lua", { "paintTo", {"overlap_offset", T}, {"allow_mirroring", F} } },
     { "frontend/ui/widget/progresswidget.lua", { "paintTo", {"percentage", F} } },
-    { "frontend/ui/widget/button.lua", { {"height", F}, {"text_font_size", F}, {"avoid_text_truncation", F} } },
+    { "frontend/ui/widget/button.lua", { "onFocus", "onUnfocus", {"height", F}, {"text_font_size", F}, {"avoid_text_truncation", F} } },
     { "frontend/ui/widget/container/framecontainer.lua", { {"radius", F}, {"background", F} } },
     -- Device-local Custom reading styles: quiet native setters and in-place Settings return.
     { "frontend/apps/reader/modules/readerfont.lua", { {"font_face", F}, {"font_base_weight", T}, {"line_spacing", T}, {"font_gamma", T} } },

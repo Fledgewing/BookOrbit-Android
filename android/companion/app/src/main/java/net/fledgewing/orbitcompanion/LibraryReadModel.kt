@@ -30,6 +30,7 @@ class LibraryReadModel(
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
         val localStats by lazy { readingStats() }
+        val storage by lazy { DeviceStorage(store, adapter) }
         val power by lazy { battery() }
         val account by lazy { accountStats(owner) }
         val stats by lazy { ReadingStats.display(AccountStats.combine(localStats, adapter.cachedReadingStats(owner), account, clock()), clock(), AccountStats.zone(account)) }
@@ -41,7 +42,9 @@ class LibraryReadModel(
             store.transaction {
                 if (store.meta("owner") != owner) return@transaction
                 val result = try { when (args["op"]) {
+                    "storage.summary" -> storage.summary(owner,(args["exclude_path"] as? String)?.let(LuaValue::utf8),(args["current_folder"] as? String)?.let(LuaValue::utf8))
                     "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
+
                     "reading.stats" -> stats
                     "local.word" -> LocalWidgets.word(vocabulary(), clock())
                     "local.buddy" -> LocalWidgets.buddy(localStats)
@@ -75,4 +78,16 @@ class LibraryReadModel(
         }
         return changed
     }
+    /** Local removal changes every cached file join, including grouped/Series previews.
+     * Keep unrelated account, reading and battery materializations intact. */
+    fun refreshLocalFiles(owner: String): Boolean {
+        val operations=setOf("storage.summary","library.summary","window","book","reader","cover","cover.reference",
+            "groups","series","counts","facets","sources")
+        val requests=store.db().query("SELECT request FROM library_views WHERE owner=?",LuaValue.utf8(owner)) { it.text(0)!! }
+            .filter { raw -> (LuaValue.parse(raw.toByteArray(Charsets.ISO_8859_1)) as? Map<*,*>)?.get("op") in operations }
+        var changed=false
+        requests.chunked(MAX_BATCH).forEach { if(publish(owner,it)) changed=true }
+        return changed
+    }
+
 }

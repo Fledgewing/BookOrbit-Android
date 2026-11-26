@@ -5838,6 +5838,62 @@
       "deferred": "Device acceptance, firmware renderers and configuration pages."
     },
     {
+      "id": "home-storage",
+      "feature": "Owned Storage, Library storage figures, Collections and download folder (0.12 foundation; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Real StatFs capacity, tracked file/cache figures, patterned bar, confirmed local removal, Collections paging and folder selection",
+          "reason": "deliberately deferred: real-device acceptance and release follow the Android 0.12 foundation",
+          "evidence": [
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/DeviceStorage.kt",
+              "line": 12
+            },
+            {
+              "path": "android/koreader/orbit.koplugin/ko/storage.lua",
+              "line": 3
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned storage and Collections screens follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 293
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned storage and Collections screens follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 293
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned storage and Collections screens follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/DESIGN-NOTES.md",
+              "line": 293
+            }
+          ]
+        }
+      },
+      "deferred": "Device acceptance and firmware integration; untracked files remain unmanaged."
+    },
+    {
       "id": "home-local-widgets",
       "feature": "Word of the day, Reading buddy and Light picker widgets (0.12; unreleased)",
       "category": "Behaviour",

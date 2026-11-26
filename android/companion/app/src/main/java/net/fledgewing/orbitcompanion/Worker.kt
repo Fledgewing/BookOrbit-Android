@@ -6,6 +6,7 @@ import android.os.Environment
 import java.io.File
 
 interface ServerRuntime {
+    fun localCommand(ctx: Context, op: String, args: Map<*, *>, done: (Map<String, Any?>?, String?) -> Unit) { done(null,"unsupported") }
     fun accountChanged(ctx: Context)
     fun busy(): Boolean
     val mirrorRunning: Boolean
@@ -22,6 +23,7 @@ object Worker {
     const val ACTION_SQLITE_STRESS = "${Contract.PACKAGE}.action.SQLITE_STRESS"
     const val ACTION_PATCH = "${Contract.PACKAGE}.action.PATCH"
     const val CAP = "cache_worker"
+    fun localCommand(ctx: Context, op: String, args: Map<*, *>, done: (Map<String, Any?>?, String?) -> Unit) = ServerAdapters.runtime.localCommand(ctx,op,args,done)
     internal fun accountChanged(ctx: Context) = ServerAdapters.runtime.accountChanged(ctx)
     fun root() = File(Environment.getExternalStorageDirectory(), "koreader/settings/orbit-cache")
     fun busy() = ServerAdapters.runtime.busy()

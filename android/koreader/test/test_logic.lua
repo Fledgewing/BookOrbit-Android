@@ -1584,7 +1584,15 @@ test("settings schema: Sync (OrbiSmart / Custom) is the sync section's first row
 end)
 
 test("settings schema: every key KOReader reads has a row in its menu", function()
-    local menu = readFile(here .. "/../orbit.koplugin/logic/settings_ui.lua") .. readFile(here .. "/../orbit.koplugin/ko/menu.lua") .. readFile(here .. "/../orbit.koplugin/ko/sleepscreen.lua")
+    local root=here .. "/../orbit.koplugin/"
+    local menu = readFile(root .. "logic/settings_ui.lua") .. readFile(root .. "ko/menu.lua") .. readFile(root .. "ko/sleepscreen.lua")
+    -- Owned pages may reuse settingRow outside the root menu. Only installed owners count.
+    local modules=assert(readFile(root .. "main.lua"):match("local KO = (%b{})"))
+    for path in modules:gmatch('"([^"%s]+%.lua)"') do
+        for key in readFile(root .. path):gmatch(':settingRow%("([^"]+)"%)') do
+            menu=menu .. '"' .. key .. '"'
+        end
+    end
     local missing = {}
     for _, d in ipairs(SIDX.settings) do
         -- Keys KOReader reads need a row; the companion's own (the clearing flash, its updates) may not.
@@ -1774,6 +1782,7 @@ dofile(here .. "/test_series.lua")(test,eq,ok,M)
 dofile(here .. "/test_filter_sheet.lua")(test, eq, ok, here, M)
 dofile(here .. "/test_library.lua")(test, eq, ok, here, M.Cache)
 
+dofile(here .. "/test_storage.lua")(test, eq, ok, here)
 dofile(here .. "/test_battery.lua")(test, eq, ok, here)
 
 dofile(here .. "/test_reading_stats.lua")(test, eq, ok, here, M.Cache)

@@ -298,3 +298,8 @@ Account forms inherit the account screen budget (three state rows, ≤16 KiB), i
 confirmations and result sheets. Read the lifecycle-cached neutral state before catalog
 ownership exists; typed secrets live only until dispatch or cancellation. Async account
 results may redraw only their still-visible initiating form and must reject cancelled attempts.
+
+Storage and folder screens inherit a one-row, 16 KiB local snapshot budget;
+Collections uses six projected rows. Capacity, file eligibility and removal
+previews belong to the companion; render paths never scan folders. Preserve
+reading sidecars and exclude the foreground book from removal previews.

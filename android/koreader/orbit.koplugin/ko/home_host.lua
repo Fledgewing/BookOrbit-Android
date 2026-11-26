@@ -103,7 +103,16 @@ function HomeHost.create()
                     return sharedStats
                 end
                 if self.list_layout then self.list_limit=need.limit end
-                return context:read(need.op,need)
+                local data=context:read(need.op,need)
+                if p.widget=="library" then
+                    local merged={}; for k,v in pairs(data) do merged[k]=v end
+                    -- This widget owns a summary record, including when the catalog is unsaved.
+                    merged.items=nil
+                    merged.storage=context:storage()
+                    merged.collections_available=caps.collections==true
+                    return merged
+                end
+                return data
             end)
             result=ok and result or {error="Unavailable"}
             local signature=Cache.encode(result)
@@ -201,6 +210,10 @@ function HomeHost.create()
             Library.localWidgetAction(action,row)
             if action~="word-lookup" then self:rebuild(); UIManager:setDirty(self,"ui") end
         elseif action == "battery" then BatteryUI.show()
+        elseif action == "storage" then StorageUI.show()
+        elseif action == "collections" then StorageUI.show("collections",function(row)
+            self:showList(row.title,{kind="collection",key=row.key})
+        end)
         elseif action == "book" then
             if self.caps.account and not row.local_path and not AccountPlan.login(self.account or {},"opds").available then
                 local prompt=require("ui/widget/buttondialog"):new{title="No OPDS login, so it can't download",buttons={{{text="Keep browsing",callback=function() UIManager:close(self.download_prompt) end},{text="Set up",callback=function() UIManager:close(self.download_prompt); AccountView.open("opds") end}}}}
