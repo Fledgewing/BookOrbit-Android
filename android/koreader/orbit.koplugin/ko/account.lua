@@ -115,7 +115,10 @@ function AccountView:paint()
         title=title .. "\nEach row opens the keyboard."
         for _,f in ipairs({"server","username","password"}) do
             local label=({server="Server",username="User name",password="Password"})[f]
-            row(f,label .. ": " .. (f=="password" and (self.password and "••••••" or "Enter password") or self[f]~="" and self[f] or "Your server address"),function() self:edit(f) end,not self.busy)
+            local value=self[f]
+            if f=="password" then value=value and value~="" and "••••••" or "Enter password"
+            elseif value=="" then value=f=="server" and "Your server address" or "Your user name" end
+            row(f,label .. ": " .. value,function() self:edit(f) end,not self.busy)
         end
         if self.kind~="account" and not self.busy then
             local l=AccountPlan.login(a,self.kind)
