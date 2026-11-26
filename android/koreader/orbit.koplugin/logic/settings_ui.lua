@@ -28,7 +28,7 @@ function SettingsUI.modeLabel(settings, effectiveWifi)
 end
 function SettingsUI.words(text)
     return (text:gsub("BookOrbit home", "Server plugin's Home"):gsub("Back to my book, then home", "Back to my book, then Server plugin's Home"):gsub("BookOrbit", "Server plugin")
-        :gsub("Tailscale", "VPN"):gsub(" %(matches Xteink%)", ""))
+        :gsub("Tailscale", "VPN"):gsub("tailnet", "VPN"):gsub(" %(matches Xteink%)", ""))
 end
 function SettingsUI.value(d, value)
     if value == nil then value = d.default end

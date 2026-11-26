@@ -6768,7 +6768,7 @@ test("settings: every group has a budget and neutral screen text; one channel ro
     for _, row in ipairs(menuAll(m:menuItems())) do
         for _, text in ipairs({row.text or "", row.text_func and row.text_func() or "", row.help_text or ""}) do
             local lower = text:lower()
-            for _, name in ipairs({"bookorbit", "grimmory", "tailscale", "boox", "xteink"}) do
+            for _, name in ipairs({"bookorbit", "grimmory", "tailscale", "tailnet", "boox", "xteink"}) do
                 ok(not lower:find(name, 1, true), "vendor in screen text: " .. text)
             end
         end
