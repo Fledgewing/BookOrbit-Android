@@ -197,7 +197,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Refresh tap always refreshes normally; hold offers Full refresh; companion reports queued and active progress without timer-only failure",
+          "note": "Refresh tap always refreshes normally; hold offers Full refresh; companion owns queued/active progress and completion stamps without timer-only failure",
           "reason": null,
           "evidence": [
             {
