@@ -37,6 +37,10 @@ on:
         description: "BookSync commit to test (default: the caller's)"
         type: string
         default: ""
+      profiles:
+        description: 'Simulator profiles as a JSON array'
+        type: string
+        default: '["x4-pro","x4-classic","x3"]'
       upstream_ref:
         description: "CrossInk tag or commit for stage 1 (default: tools/upstreams.lock's commit)"
         type: string
@@ -52,6 +56,10 @@ on:
         description: "BookSync commit to test (default: this run's)"
         type: string
         default: ""
+      profiles:
+        description: 'Simulator profiles as a JSON array'
+        type: string
+        default: '["x4-pro","x4-classic","x3"]'
       upstream_ref:
         description: "CrossInk tag or commit for stage 1 (default: tools/upstreams.lock)"
         type: string
@@ -101,14 +109,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [x4-pro, x4-classic, x3]
-        include:
-          - profile: x4-pro
-            env: x4-pro-simulator
-          - profile: x4-classic
-            env: x4-classic-simulator
-          - profile: x3
-            env: simulator-X3
+        profile: ${{ fromJSON(inputs.profiles || '["x4-pro","x4-classic","x3"]') }}
     steps:
       - name: Check out BookSync
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -148,7 +149,7 @@ jobs:
 
       - name: Build the ${{ matrix.profile }} simulator
         working-directory: upstream
-        run: pio run -e "${{ matrix.env }}" </dev/null
+        run: pio run -e "${{ (matrix.profile == 'x3' && 'simulator-X3' || format('{0}-simulator', matrix.profile)) }}" </dev/null
 
       - name: BookOrbit up and seeded
         run: python3 orbify/tools/e2e/kit.py up </dev/null
@@ -157,6 +158,22 @@ jobs:
         run: |
           python3 orbify/xteink/test/e2e/run.py --checkout upstream --profile "${{ matrix.profile }}" \
             --out "$RUNNER_TEMP/e2e" </dev/null
+
+      - name: Record passing release inputs
+        working-directory: orbify
+        run: |
+          # An ad-hoc upstream override is useful for diagnosis but proves no pinned build.
+          if [ "$(git -C ../upstream rev-parse HEAD)" = "$(awk '$1 == "crossink-v2.0" {print $4}' tools/upstreams.lock)" ]; then
+            python3 tools/releases/inputs.py receipt --platforms ${{ matrix.profile == 'x3' && 'default' || matrix.profile }} --scope release > passed-inputs.json
+          else
+            echo '[]' > passed-inputs.json
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: passed-inputs-release-${{ matrix.profile }}
+          path: orbify/passed-inputs.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Results
         if: always()
@@ -229,6 +246,23 @@ jobs:
         working-directory: android/companion
         run: ./gradlew --no-daemon testDebugUnitTest </dev/null
 
+  android-receipt:
+    needs: [kit, android, reader-required]
+    if: (inputs.platform || 'all') != 'xteink'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - name: Record passing release inputs
+        run: python3 tools/releases/inputs.py receipt --platforms app,plugin --scope release > passed-inputs.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: passed-inputs-release-android
+          path: passed-inputs.json
+          if-no-files-found: error
+          retention-days: 90
   reader-required:
     name: Required KOReader release gate
     needs: reader-startup

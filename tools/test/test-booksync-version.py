@@ -56,7 +56,7 @@ class Versions(unittest.TestCase):
         def release(tag, pre, date, book=None):
             return dict(tag_name="xteink-v" + tag, name=tag, draft=False, prerelease=pre,
                         created_at=date, body=f"booksync_version={book}\n" if book else "",
-                        assets=[dict(name="firmware.bin", size=10, digest="sha256:abc",
+                        assets=[dict(name="firmware-x4-pro-v-test.bin", size=10, digest="sha256:abc",
                                      browser_download_url="https://example.invalid/fw.bin")])
         old = release("2.0.0.373+bookorbit.1-rc3", True, "1")
         bridge = release("2.0.0.400+bookorbit.1-rc3", True, "2", "0.11.3-rc.17")

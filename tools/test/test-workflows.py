@@ -100,8 +100,19 @@ if '"android/koreader/**"' not in release_tests.split("  workflow_call:")[0]:
 if "grep -q ORBIT_REQUIRE_READER_FLOWS" not in reader_jobs.get("reader-startup", ""):
     errors.append("release-tests: old tags must not silently ignore the required-scenario flag")
 release_jobs = jobs_of((root / ".github/workflows/release.yml").read_text())
-if "needs: tests" not in release_jobs["build"] or "platform: android" not in release_jobs["tests"]:
+if not re.search(r"needs:\s*(?:tests\b|\[[^\]\n]*\btests\b)", release_jobs["build"]) or "platform: android" not in release_jobs["tests"]:
     errors.append("release: Android build must depend on the reusable reader gate")
+
+# Cache reuse permits an intentional skip, never cancellation or a missing gate.
+if "needs.plan.outputs.android_release_tests == 'false'" not in release_jobs["build"]:
+    errors.append("release: skipped tests require matching source evidence")
+xteink_jobs = jobs_of((root / ".github/workflows/xteink.yml").read_text())
+if "needs.resolve.outputs.firmware_release_tests == 'false'" not in xteink_jobs["publish"]:
+    errors.append("xteink: skipped emulated tests require matching source evidence")
+for name, job in [("Android sign", release_jobs["sign"]), ("firmware dispatch", release_jobs["firmware"]),
+                  ("Android feed", release_jobs["feed"]), ("firmware publish", xteink_jobs["publish"])]:
+    if "!cancelled()" not in job:
+        errors.append(name + ": cancellation must prevent publication")
 
 if errors:
     print("\n".join(errors), file=sys.stderr)

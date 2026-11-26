@@ -18,10 +18,11 @@ Unified firmware test identities use MAJOR.MINOR.PATCH-0.test.<run>, below every
 preview, so the next real release installs over a sideloaded test. Feed selection
 rejects test identities even when prereleases are enabled.
 From 0.12, release.yml dispatches xteink.yml at the same immutable Android tag
-after publishing Android. Both build the same commit and read the same manifest.
+after publishing Android, or directly when Android is unchanged. New builds use
+the same commit and manifest; selective previews retain older installed builds.
 Firmware publishing accepts only that matching tag; daily runs build the pinned
 CrossInk base without publishing another product version. A failed firmware run
-can be rerun at the tag; no tag moves. Each platform retains its release test gate.
+can be rerun at the tag; no tag moves. Each platform must have passing release-test evidence for its source inputs.
 
 Firmware tags are xteink-v<version>+crossink.<upstream tag without v>, replacing
 the upstream metadata "+" with ".". CrossInk metadata never affects BookSync
@@ -34,6 +35,83 @@ About's existing version row reads, for example:
 
 The full fork base and pinned commit remain in release notes and the source archive.
 No new screen, prompt or reading interruption is introduced.
+
+## Selective previews and promotion
+
+Maintainer-approved follow-up to W39: unchanged platforms need no preview rebuild,
+and passing tests can be reused when their inputs are identical. This relaxation
+starts with unified releases from 0.12. Legacy bridge, test-artifact and ordinary
+push/PR builds keep their existing full build/test coverage.
+
+`tools/releases/inputs.py` hashes Git-tracked input paths, modes, contents and
+submodule pins with SHA-256. The app and plugin have separate input sets; each
+firmware environment has an identity including the overlay, CrossInk lock,
+shared inputs, build actions and test tooling. The shared version stamp
+`shared/version.json` is excluded, as is the publication catalog
+`shared/withdrawn-android.json`: withdrawals change eligibility, not binary inputs.
+The verified withdrawal set is still applied before selecting a current build.
+Common firmware source changes conservatively
+invalidate every reader; this avoids guessing which conditional code is compiled.
+Documentation outside build inputs does not invalidate them. New inputs must be
+added to the declared sets when introducing another build dependency.
+
+A preview builds only fingerprints changed since each platform's last published
+build. Companion and plugin publish together when either changes: their installed
+versions must match, and the companion installs its matching plugin release.
+They retain separate fingerprints and test evidence. Firmware readers are selected
+individually. No empty Android release is created when Android is unchanged:
+existing Android updaters expect every plain `v` release to contain the APK and
+plugin. Firmware still dispatches at the immutable product tag in that case.
+If every platform is unchanged, the workflow summary records the no-op without
+publishing another release.
+
+Android's release page marks scheduled firmware builds pending until firmware
+publication refreshes its table. Manual firmware publication requires the matching
+Android fingerprints first, and matching versions for RC/stable.
+Release notes list every platform's current version, marking retained builds
+"unchanged". The firmware feed selects a channel head **per reader**, plus legacy
+bridges per reader. A retained entry keeps its original tag, asset URL, digest,
+BookSync version and signature. An updater sees the same installed identity and
+has nothing to install. Missing assets in a newer release never erase another
+reader's head. RC and stable always rebuild and stamp every platform with the
+manifest version, so installed versions converge.
+
+Successful jobs upload `passed-inputs-*` receipts for 90 days; published releases
+retain `RELEASE-INPUTS.json` (Android) or `FIRMWARE-INPUTS.json` (firmware) as
+checksummed, attested assets. Receipts record the platform, fingerprint, passed
+scope, immutable tag/commit and Actions run. Component evidence (unit/host tests
+and a build) cannot replace the emulated release gate. Release evidence includes
+the server kit and the platform's release scenarios; the Android receipt also
+requires KOReader startup. Diagnostic simulator runs against an upstream override
+cannot prove the pinned firmware's inputs.
+
+Before selecting builds, the planner verifies W35's signed Android feed and unions
+its monotonic withdrawals with the committed list. Withdrawn releases cannot
+supply the current Android build or authorize test reuse by their tags. Firmware
+dispatch waits for Android's signed feed when the Android pair publishes; an
+unchanged Android pair retains its existing feed entry.
+
+The read-only planner collects published receipts and receipts from successful
+same-repository Actions runs. PR receipts authorize reuse only after the exact
+tested head has merged in this repository. Unmerged, superseded or fork PR heads
+cannot authorize a release's test bypass. It scans the latest 100 releases and 100 artifacts;
+missing, expired or unmatched evidence runs the full tests. API/download failure
+fails planning, never silently authorizes reuse. Evidence is an optimization,
+not an alternative release channel. No credentials or write permissions reach
+Gradle or PlatformIO.
+
+Each selected platform skips component/release tests only for matching passed
+fingerprints at that scope. Release notes say `tests: reused from <tag/commit>`
+with scope details. Otherwise that scope runs fully. Stamp-only RC/stable builds
+still check the actual APK version, plugin package stamp, firmware version string,
+flash budget, checksums and signatures. Full simulator boot scenarios require a
+build and server startup; they belong to the reusable gate rather than a seconds-long
+artifact smoke test. Tags and existing assets never move to implement promotion.
+
+Validation: `python3 tools/test/test-release-inputs.py` exercises hashing, source
+isolation, version-only edits, modes, additions/deletions/renames, submodule pins,
+preview dependency selection, RC/stable convergence, scope separation and partial
+feed retention. The host OTA tests check partial previews with the real parser.
 
 ## Bridge rollout
 
