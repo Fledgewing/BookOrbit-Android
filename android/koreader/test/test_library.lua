@@ -198,4 +198,18 @@ return function(test, eq, ok, here, Cache)
         eq(code:find('result.secret',1,true),nil)
     end)
 
+    test("account snapshot: signed-out UI reads one bounded lifecycle row without a catalog owner", function()
+        local state={signedIn=false,sync={set=true,available=true,origin="user"},opds={set=false}}
+        local body=Cache.encode(state)
+        local e=setmetatable({Cache=Cache,Budgets={MAX_SNAPSHOT=16384},Companion={workerProblem=function() end,AUTHORITY="fixture",PACKAGE="fixture"},
+            Jni={call=function() return {ok="1",body=body} end},bookorbit=function() return nil end,
+            Store={library=function() error("no catalog should be read") end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        e.LibraryAdapter.accountReturned()
+        local a,n=e.LibraryAdapter.read("opaque","account.state")
+        eq(a.signedIn,false); eq(a.sync.origin,"user"); eq(n,#body)
+        local caps,bytes=e.LibraryAdapter.read("opaque","capabilities")
+        eq(caps.account.sync.available,true); ok(bytes<=16384)
+    end)
+
 end

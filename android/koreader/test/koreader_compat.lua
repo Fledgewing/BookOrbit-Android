@@ -132,7 +132,7 @@ local NEEDS = {
     -- The sleep screen (ko/sleepscreen.lua): the open book's cover and title, and the text input.
     { "frontend/apps/filemanager/filemanagerbookinfo.lua", { "getCoverImage" } },
     { "frontend/apps/reader/readerui.lua", { { "doc_props", F } } },
-    { "frontend/ui/widget/inputdialog.lua", { "getInputText", "onShowKeyboard" } },
+    { "frontend/ui/widget/inputdialog.lua", { "getInputText", "setInputText", "onShowKeyboard" } },
 }
 -- Widgets the plugin builds with: each module must still exist.
 for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "container/bottomcontainer",

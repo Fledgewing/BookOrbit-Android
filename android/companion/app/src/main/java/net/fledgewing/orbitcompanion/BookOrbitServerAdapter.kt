@@ -22,9 +22,11 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         val accountState = account.state()
         fun status(kind: String): Map<String,Any?> {
             val c = credentials.login(kind)
-            return credentials.status(kind) + ("available" to (c != null && (c.origin == "user" || accountState["signedIn"] == true)))
+            return credentials.status(kind) + mapOf("server" to c?.server, "username" to c?.user?.let(LuaValue::str),
+                "outcome" to if (kind == "sync") accountState["connectorOutcome"] else "created") + ("available" to (c != null && (c.origin == "user" || accountState["signedIn"] == true)))
         }
         return mapOf("signedIn" to accountState["signedIn"], "expiresAt" to accountState["expiresAt"],
+            "username" to accountState["username"], "server" to accountState["server"],
             "account" to mapOf("set" to (accountState["signedIn"] == true), "origin" to "user".takeIf { accountState["signedIn"] == true }),
             "sync" to status("sync"), "opds" to status("opds"), "owner" to owner())
     }

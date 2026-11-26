@@ -817,3 +817,12 @@ Copy maps a known installed face back to its preset index. An imported face outs
 the four presets appears as the selected copied choice, drawn in that face. It adds
 at most one row, keeping the font editor within its 12-row budget; choosing a preset
 replaces the imported face, and Undo restores the previous index and face exactly.
+
+## Android F12-N implementation
+
+The approved §20–§22 forms now reuse the neutral library and companion account worker;
+see [F12-N implementation notes](F12-N-NOTES.md). Each screen/widget declares a strict
+budget inherited by library calls: bounded rows/decoded bytes, zero subprocesses and
+render-path network, ≤1 batch per Home paint and ≤16 KiB per widget. The companion owns
+heavy work. Account results redraw only a visible initiating form; cancellation drops stale
+results and clears transient password fields. X4 phone setup remains a labelled stub.

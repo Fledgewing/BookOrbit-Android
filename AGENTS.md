@@ -260,3 +260,8 @@ with `./gradlew --write-verification-metadata sha256 testDebugUnitTest assembleD
 review the changed coordinates and checksums against their publishing repositories, and run
 again without the generation flag. Include Linux's aapt2 artifact as well as the local platform's.
 Never disable verification or add broad trust exceptions to make CI pass.
+
+Account forms inherit the account screen budget (three state rows, ≤16 KiB), including
+confirmations and result sheets. Read the lifecycle-cached neutral state before catalog
+ownership exists; typed secrets live only until dispatch or cancellation. Async account
+results may redraw only their still-visible initiating form and must reject cancelled attempts.
