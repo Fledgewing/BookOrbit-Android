@@ -102,12 +102,13 @@ class LibraryTest {
             assertEquals("budget",(LuaValue.parse(st.db().query("SELECT body FROM library_views WHERE request=?",tiny) { it.bytes(0)!! }.single()) as Map<*,*>)["error"])
         }
     }
-    @Test fun batteryAndReadingStatsShareTheExistingBatch() {
+    @Test fun batteryReadingStatsAndClockShareTheExistingBatch() {
         store().use { st ->
-            val requests=listOf("battery","reading.stats").map { op -> String(LuaValue.encode(mapOf("op" to op,"limit" to 1)),Charsets.ISO_8859_1) }
+            val requests=listOf("battery","reading.stats","device.clock").map { op -> String(LuaValue.encode(mapOf("op" to op,"limit" to 1)),Charsets.ISO_8859_1) }
             LibraryReadModel(st,{99},{},readingStats={ mapOf("hours" to listOf(1,2)) },battery={ mapOf("level" to 78) }).publish(owner,requests)
             val results=st.db().query("SELECT body FROM library_views") { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }
-            assertEquals(2,results.size)
+            assertEquals(3,results.size)
+            assertTrue(results.any { it["state"] == "ready" && it["time"] is String })
             assertTrue(results.any { it["level"] == 78L }); assertTrue(results.any { it["hours"] == listOf(1L,2L) })
         }
     }
