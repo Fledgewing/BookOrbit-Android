@@ -1,10 +1,10 @@
 # BookSync Home design checks
 
-These are the revision-14 (critic rounds 2–9) browser probes and screenshot tools.
+These are the revision-16 (critic rounds 2–10) browser probes and screenshot tools.
 They test the HTML simulation, not native firmware, real accounts or backend APIs.
 The approved presentation is `docs/design/booksync-home/prototype.html` and its
 companion `DESIGN-NOTES.md`. The existing `DESIGN.md` retains native integration,
-adapter and flash evidence; revision 14 supersedes its earlier visual prototype.
+adapter and flash evidence; revision 16 supersedes its earlier visual prototype.
 The maintainer signed off on 2026-11-25 and authorized Android-first
 implementation on `feature/0.12`; this bundle remains design artifacts.
 
@@ -60,7 +60,7 @@ checks supplied alongside `pwtools`. Only path/dependency/output portability
 changes were made to the imported probes; the suite runner and compatibility
 test entry point are new.
 
-All 182 supplied PNG screenshots are retained as lossless WebP (about 5.7 MiB)
+All 204 supplied PNG screenshots are retained as lossless WebP (about 6.4 MiB)
 in `docs/design/booksync-home/shots/`; none was omitted. `mockups.html` is the
 browseable gallery. Pixel equivalence and absence of copied metadata were
 checked against the supplied PNGs. Scripts regenerate PNG; convert those to
@@ -108,3 +108,17 @@ exploratory traces, not failed assertions; `flows3.js` tests the current behavio
 The supplied updated baseline browser probes are ported for the new controls.
 Fictional reader-derived usernames in origin tests distinguish independently
 set login credentials; they identify no person or real account.
+
+## Round 10: clear, editable Custom settings (revision 16)
+
+Custom always shows its saved value and applies when picked; the selected value
+has a pencil/edit action. Settings → Reading exposes all four Custom editors
+with live previews. The M8C-only one-time KOReader-values copy has Undo. The sync
+card says “Your own settings”, and Reading position says “KOReader decides” on
+M8C (the X4 row remains informational). These are prototype behaviors only.
+
+The updated `r3/flows3.js` checks 338 assertions and `r3/focus.js` covers the added
+editor focus paths. `critic-shots/r10/{c10,w10,w11,w12}.js` preserves the new
+critic probes; the suite runs them with the same prototype/output arguments.
+The approved source update is in the sibling `r3` directory. Use the existing
+portable `r3/all.sh` entry point to run the updated acceptance suite.

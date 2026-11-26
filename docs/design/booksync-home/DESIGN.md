@@ -1,13 +1,15 @@
 # BookSync Home, tap to download and series
 
-**Approved presentation:** [revision-14 notes](DESIGN-NOTES.md),
+**Approved presentation:** [revision-16 notes](DESIGN-NOTES.md),
 [clickable prototype](prototype.html) and [screenshot gallery](mockups.html)
 replace the earlier visual/interaction examples below. The adversarial critic
-approved the supplied design in round 9. The maintainer signed off on
+approved the original design in round 9 and the clear, editable Custom update
+in round 10 (revision 16). The maintainer originally signed off on
 2026-11-25: “This looks good from my perspective”.
 Native integration, backend, licensing and measured-fit gates below still apply.
 Implementation is authorized on `feature/0.12`, Android first (2026-11-25).
-This PR records the signed-off design and prototype; native code follows there.
+The round-10 design update was requested for merge on 2026-11-26; this PR
+updates the design and prototype, with native code following on that branch.
 
 Status: **design approved by the maintainer 2026-11-25**, W36.
 Implementation: **authorized 2026-11-25 on `feature/0.12`, Android first**.
