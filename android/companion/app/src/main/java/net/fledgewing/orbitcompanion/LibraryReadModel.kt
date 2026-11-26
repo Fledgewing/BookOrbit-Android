@@ -23,6 +23,8 @@ class LibraryReadModel(
         require(requests.size <= MAX_BATCH)
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
+        // Different widget byte budgets can encode distinct requests for the same paint.
+        val stats by lazy { ReadingStats.combine(readingStats(), BookOrbitLibrary.readingStats(store), clock()) }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
@@ -30,7 +32,7 @@ class LibraryReadModel(
             val args = LuaValue.parse(request.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: continue
             store.transaction {
                 if (store.meta("owner") != owner) return@transaction
-                val result = try { project(owner, args) } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
+                val result = try { if (args["op"] == "reading.stats") stats else project(owner, args) } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }
                 var body = LuaValue.encode(result)
                 val budget = ((args["bytes"] as? Number)?.toInt() ?: MAX_BYTES).coerceIn(256, MAX_BYTES)
                 if (body.size > budget) body = LuaValue.encode(mapOf("error" to "budget", "items" to emptyList<Any>(), "freshness" to freshness(false)))
@@ -62,10 +64,10 @@ class LibraryReadModel(
             return if (current != null && book != null) result + mapOf("items" to listOf(book +
                 mapOf("progress" to current * 100, "progress_origin" to "local-reader"))) else result
         }
-        if (op == "reading.stats") return readingStats()
         if (op == "capabilities") return mapOf("battery" to true, "catalog" to true, "detail" to true, "download" to false,
             "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false, "syncCurrent" to true),
             "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
+            "stats" to (BookOrbitLibrary.readingStats(store)?.capabilities() ?: mapOf("days" to false, "streak" to false, "goal" to false, "finished" to false)),
             "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
             "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
             "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
