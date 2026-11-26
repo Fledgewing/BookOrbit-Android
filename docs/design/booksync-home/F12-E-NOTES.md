@@ -110,3 +110,8 @@ The last-five archive survives database reopen even when all of its raw sessions
 have aged out. It reuses the existing stats `meta` table, adds no timer/schema
 reset, updates an observed open session without duplicating it, and retains only
 five summaries. Retention tests cover six infrequent charges over 250 days.
+
+Raw pruning can cut through a charging session. Its retained suffix updates the
+archived session without losing the original starting level/duration or adding a
+duplicate. Tests cover that boundary, an ongoing-session extension, and separate
+completed sessions whose timestamps overlap after a clock correction.

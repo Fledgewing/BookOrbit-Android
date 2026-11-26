@@ -15,6 +15,27 @@ class BatteryStoreTest {
     private fun reset(store: StatsStore) {
         for (table in listOf("snap","daily","daily_cat","meta")) store.writableDatabase.delete(table,null,null)
     }
+    @Test fun pruningInsideAChargeDoesNotArchiveTheRemainingSuffixAsAnotherCharge() {
+        val store=StatsStore.get(RuntimeEnvironment.getApplication())
+        reset(store)
+        val t=1_700_000_000_000L
+        val h=3_600_000L
+        store.insert(Snap(t,Snap.START,20,false,false))
+        store.insert(Snap(t+h,"battery",20,true,false))
+        store.insert(Snap(t+2*h,"battery",60,true,false))
+        store.insert(Snap(t+3*h,"battery",100,false,false))
+        val now=t+90*24*h+h+h/2
+        store.insert(Snap(now,Snap.START,80,false,false))
+        store.rollup(now,ZoneOffset.UTC)
+        assertEquals(t+2*h,store.snapsSince(t).first().t)
+        store.rollup(now+60_000,ZoneOffset.UTC)
+        val charges=store.batterySnapshot(now+60_000,ZoneOffset.UTC)["recent_charges"] as List<*>
+        assertEquals(1,charges.size)
+        val charge=charges.single() as Map<*,*>
+        assertEquals(20,(charge["from_pct"] as Number).toInt())
+        assertEquals(t+h,(charge["start"] as Number).toLong())
+        assertEquals(2.0,(charge["hours"] as Number).toDouble(),1e-9)
+    }
     @Test fun lastFiveChargesSurviveRawPruningAndDatabaseReopen() {
         val store=StatsStore.get(RuntimeEnvironment.getApplication())
         reset(store)

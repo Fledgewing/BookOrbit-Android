@@ -68,18 +68,40 @@ object BatteryEstimate {
         return charges.takeLast(5).reversed()
     }
 
-    /** Keep five sessions across raw-history pruning; a fresh observation updates its session. */
+    /** Keep five sessions across pruning, including a raw suffix of an already archived charge. */
     fun retainCharges(saved: List<Map<String, Any?>>, recent: List<Map<String, Any?>>): List<Map<String, Any?>> {
-        val retained = linkedMapOf<Pair<Long,Int>, Map<String,Any?>>()
-        val old = saved.map { it + ("ongoing" to false) }
-        for (row in old.asReversed() + recent.asReversed()) {
-            val start = (row["start"] as? Number)?.toLong() ?: continue
-            val from = (row["from_pct"] as? Number)?.toInt() ?: continue
-            val key = start to from
-            retained.remove(key)
-            retained[key] = row
+        fun number(row: Map<String,Any?>, field: String) = (row[field] as? Number)?.toLong()
+        fun identity(row: Map<String,Any?>): Pair<Long,Int>? {
+            val start = number(row,"start") ?: return null
+            val from = number(row,"from_pct") ?: return null
+            return start to from.toInt()
         }
-        return retained.values.toList().takeLast(5).reversed()
+        val retained = linkedMapOf<Pair<Long,Int>, Map<String,Any?>>()
+        val observed = mutableSetOf<Pair<Long,Int>>()
+        for (row in saved.asReversed()) identity(row)?.let { retained[it] = row }
+        for (row in recent.asReversed()) {
+            val rawKey = identity(row) ?: continue
+            val end = number(row,"end")
+            val previous = if (rawKey in retained) null else retained.entries.firstOrNull { (key, old) ->
+                val oldEnd = number(old,"end")
+                val oldTo = number(old,"to_pct")
+                val from = rawKey.second.toLong()
+                key.first < rawKey.first && oldEnd != null && end != null && rawKey.first <= oldEnd &&
+                    from >= key.second && ((end == oldEnd && number(row,"to_pct") == oldTo) ||
+                    (old["ongoing"] == true && end >= oldEnd && oldTo != null && from <= oldTo))
+            }
+            val key = previous?.key ?: rawKey
+            val value = if (previous == null) row else row + mapOf(
+                "start" to key.first, "from_pct" to previous.value["from_pct"],
+                "hours" to (number(row,"end")!!-key.first)/3_600_000.0,
+                "ongoing" to (previous.value["ongoing"] == true && row["ongoing"] == true))
+            retained.remove(key)
+            retained[key] = value
+            observed += key
+        }
+        return retained.entries.toList().takeLast(5).reversed().map { (key,row) ->
+            if (key in observed) row else row + ("ongoing" to false)
+        }
     }
 
     fun snapshot(totals: Map<String, Sums>, days: List<DayTotals>, last: Snap?, segments: List<Segment>,

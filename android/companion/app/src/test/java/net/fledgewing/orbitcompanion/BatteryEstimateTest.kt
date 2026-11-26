@@ -45,6 +45,20 @@ class BatteryEstimateTest {
         assertEquals(false,rows.single()["ongoing"])
         assertEquals(false,BatteryEstimate.retainCharges(old,emptyList()).single()["ongoing"])
     }
+    @Test fun pruningAChargePrefixKeepsItsOriginalLevelAndDuration() {
+        fun charge(start:Long,end:Long,from:Int,to:Int,ongoing:Boolean) = mapOf<String,Any?>(
+            "start" to start,"end" to end,"from_pct" to from,"to_pct" to to,"hours" to (end-start)/h.toDouble(),"ongoing" to ongoing)
+        val complete=charge(0,2*h,20,100,false)
+        val suffix=charge(h,2*h,60,100,false)
+        val kept=BatteryEstimate.retainCharges(listOf(complete),listOf(suffix))
+        assertEquals(1,kept.size); assertEquals(20,kept.single()["from_pct"])
+        assertEquals(2.0,kept.single()["hours"] as Double,1e-9)
+        val extended=BatteryEstimate.retainCharges(listOf(charge(0,h,20,60,true)),listOf(charge(h/2,2*h,40,100,false)))
+        assertEquals(1,extended.size); assertEquals(0L,extended.single()["start"])
+        assertEquals(2.0,extended.single()["hours"] as Double,1e-9)
+        val clockOverlap=BatteryEstimate.retainCharges(listOf(complete),listOf(charge(h,3*h,20,100,false)))
+        assertEquals("Separate completed sessions may overlap after a clock correction",2,clockOverlap.size)
+    }
     @Test fun newDeviceHasExplicitMissingEvidenceAndNoInventedLifetime() {
         val s = snapshot(emptyList())
         assertNull(s["level"]); assertNull(s["hours_usual_use"])
