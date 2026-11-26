@@ -1,13 +1,18 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Presentation selection only; all values and evidence labels are companion-owned.
-BatteryPlan = {tabs={"Overview","Rates","Daily","Charges"}}
-function BatteryPlan.display(data)
+BatteryWidgetPlan = {tabs={"Overview","Rates","Daily","Charges"}}
+function BatteryWidgetPlan.display(data)
+    if data and (data.error or data.pending or data.state=="error") then
+        local message=(data.error or data.state=="error") and "Battery unavailable · try again" or "Loading battery…"
+        return {level="—",estimate=message,narrow_estimate=message,page_estimate=message,
+            reading="reading non-stop · —",standby="standby only · —"}
+    end
     return data and data.display or {level="—",estimate="Learning · needs measured use",
         narrow_estimate="Learning · usual use",page_estimate="Learning · estimate available after measured use",
         reading="— Needs measured reading",standby="— Needs measured standby"}
 end
-function BatteryPlan.widget(data,w,h)
-    local d=BatteryPlan.display(data)
+function BatteryWidgetPlan.widget(data,w,h)
+    local d=BatteryWidgetPlan.display(data)
     local lines={w == 1 and d.narrow_estimate or d.estimate,d.reading,d.standby}
     if w>1 and h>1 then
         lines[#lines+1]=d.reading_rate or "— Needs measured reading"
@@ -21,8 +26,8 @@ function BatteryPlan.widget(data,w,h)
     end
     return {level=d.level or "—",lines=lines,level_fraction=data and data.level and data.level/100 or 0}
 end
-function BatteryPlan.page(data,tab,page)
-    local d=BatteryPlan.display(data)
+function BatteryWidgetPlan.page(data,tab,page)
+    local d=BatteryWidgetPlan.display(data)
     local key=({"overview","rates","daily","charges"})[tab] or "overview"
     local count=math.min(d[key.."_count"] or 0,key == "daily" and 14 or key == "charges" and 5 or 9)
     local rows={}

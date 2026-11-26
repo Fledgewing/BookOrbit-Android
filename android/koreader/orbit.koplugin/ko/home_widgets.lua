@@ -127,3 +127,9 @@ HomeWidgets.register("library",function(p,snapshot,dispatch,rect)
     end
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end,function() return {op="library.summary",limit=1} end)
+-- F12-O extends the existing Battery registration with the snapshot-only page renderer.
+HomeWidgets.register("battery",function(p,snapshot,dispatch,rect)
+    assert(Budgets.check(Budgets.get("widgets","battery"),{rows=1,bytes=snapshot.bytes,
+        snapshotBytes=snapshot.bytes,spawns=0,network=0,roundTrips=0}))
+    return BatteryUI.widget(p,snapshot,dispatch,rect)
+end,function() return {op="battery",limit=1} end)

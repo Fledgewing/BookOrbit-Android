@@ -1,7 +1,7 @@
 return function(test,eq,ok,here,Cache)
     local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end},{__index=_G})
     local root=here..'/../orbit.koplugin/'
-    for _,p in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','ko/reading_stats.lua'}) do
+    for _,p in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','logic/reader_panel.lua','ko/reading_stats.lua'}) do
         setfenv(assert(loadfile(root..p)),e)()
     end
     local data={state='ready',year={intensity={},days_read=7,start='2025-11-26'},
@@ -75,4 +75,10 @@ return function(test,eq,ok,here,Cache)
         eq(e.ReadingStatsPlan.build('year-in-reading',data,600,300,2).message,'Reading days unavailable')
     end)
 
+    -- Battery presentation regressions live in test_battery.lua after the F12-O display projection.
+    test('reader duration helper: measured and unavailable values',function()
+        eq(e.ReaderPanelPlan.duration(.5,true),'30 min')
+        eq(e.ReaderPanelPlan.duration(54),'2 d 6 h')
+        eq(e.ReaderPanelPlan.duration(-1),nil); eq(e.ReaderPanelPlan.duration(math.huge),nil)
+    end)
 end

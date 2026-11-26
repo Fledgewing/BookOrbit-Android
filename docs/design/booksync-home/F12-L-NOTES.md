@@ -84,3 +84,8 @@ The landed F12-J Home integration's interim scalar Battery renderer is supersede
 F12-O's companion-formatted widget/page. Its capability gate and absent-history checks
 remain, without a parallel renderer or display model. Account status-row height changes
 now invalidate moved Home widgets as well as the subtitle region.
+
+The final F12-O integration extends Home's canonical `logic/battery_widget.lua`
+contract, removes the earlier `logic/battery.lua` name, and consumes `snapshot.data`
+directly. Loading/error labels survive the shared snapshot conversion; Home owns the
+sole registration and all reads.

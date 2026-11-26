@@ -8,8 +8,10 @@ function BatteryUI.glyph(canvas,fraction,x,y,w,h)
 end
 function BatteryUI.widget(p,snapshot,dispatch,rect)
     local finish=Budgets.span("battery.widget",now_s,log)
-    local data=snapshot.items and snapshot.items[1]
-    local plan=BatteryPlan.widget(data,p.w,p.h)
+    local data=snapshot.data
+    if snapshot.state=="loading" then data={pending=true}
+    elseif snapshot.state=="error" then data={error=snapshot.error or "Unavailable"} end
+    local plan=BatteryWidgetPlan.widget(data,p.w,p.h)
     local s=function(n) return Device.screen:scaleBySize(n) end
     local w,h=rect.w-2,rect.h-2
     local c=HomeWidgets.canvas(w,h)
@@ -23,17 +25,18 @@ function BatteryUI.widget(p,snapshot,dispatch,rect)
         BatteryUI.glyph(c,plan.level_fraction,s(12),s(40),s(36),s(16))
         HomeWidgets.text(c,plan.level,s(56),s(32),w-s(68),24,false,true)
     else
-        HomeWidgets.text(c,plan.level,s(12),s(37),x-s(16),22,false,true)
+        HomeWidgets.text(c,plan.level,s(8),s(34),x-s(12),18,false,true)
+        BatteryUI.glyph(c,plan.level_fraction,s(8),h-s(12),math.min(s(36),x-s(16)),s(6))
     end
     local size=narrow and 11 or short and 12 or 13
-    local step=s(narrow and 19 or short and 17 or 23)
+    local step=math.min(s(narrow and 19 or short and 17 or 23),math.max(1,math.floor((h-y-s(8))/#plan.lines)))
+    size=math.min(size,math.max(8,math.floor(step/s(1))-2))
     for i,line in ipairs(plan.lines) do
         HomeWidgets.text(c,line,x,y+(i-1)*step,w-x-s(8),size,false,i==1)
     end
     finish()
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end
-HomeWidgets.register("battery",BatteryUI.widget,function() return {op="battery",limit=1} end)
 function BatteryUI.create()
     local Input=require("ui/widget/container/inputcontainer")
     local Geom=require("ui/geometry")
@@ -50,14 +53,15 @@ function BatteryUI.create()
         local paint=Library.paint("battery")
         local result=paint:battery()
         self.metrics=paint:flush()
-        local plan=BatteryPlan.page(result,self.tab,self.page)
+        local plan=BatteryWidgetPlan.page(result,self.tab,self.page)
         local s=function(n) return Device.screen:scaleBySize(n) end
         local w,h=self.dimen.w,self.dimen.h
         local c=HomeWidgets.canvas(w,h)
-        HomeWidgets.text(c,"Battery · "..plan.level,s(16),s(12),w-s(120),24,false,true)
+        HomeWidgets.text(c,"Battery · "..plan.level,s(16),s(12),w-s(180),24,false,true)
+        BatteryUI.glyph(c,(result.level or 0)/100,w-s(164),s(22),s(44),s(18))
         HomeWidgets.button(c,"Close",w-s(100),s(8),s(90),s(36),function() self:onClose() end)
         HomeWidgets.text(c,plan.estimate,s(16),s(52),w-s(32),16,false,true)
-        for i,title in ipairs(BatteryPlan.tabs) do
+        for i,title in ipairs(BatteryWidgetPlan.tabs) do
             HomeWidgets.button(c,(self.tab==i and "• " or "")..title,(i-1)*w/4,s(84),w/4,s(40),function()
                 self.tab,self.page=i,1; self:rebuild(); UIManager:setDirty(self,"ui")
             end)

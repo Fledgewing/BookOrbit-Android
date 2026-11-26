@@ -105,9 +105,6 @@ function HomeHost.create()
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
             if self.list_layout then self.list_result=result end
-            if p.widget == "battery" then
-                result={items={result},freshness={saved=not result.pending},pending=result.pending,error=result.error}
-            end
             local snapshot=HomeHostPlan.snapshot(result)
             local dispatch=function(action,row) self:dispatch(action,row,p) end
             local rendered,card=pcall(HomeWidgets.renderers[p.widget],HomeHostPlan.immutable(p),snapshot,dispatch,rect)

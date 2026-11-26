@@ -25,7 +25,10 @@ return function(test,eq,ok,E,W,Widget)
             local a=E.Cache.decode(raw); reads[#reads+1]=a
             if a.op == "capabilities" then return {lists={read=true}},80 end
             if a.op == "library.summary" then return {total=7,on_device=2,freshness={saved=true}},100 end
-            if a.op == "battery" then return {state="not-saved",message="Battery history not recorded yet"},100 end
+            if a.op == "battery" then return {level=78,hours_usual_use=54,screen_on={pct_per_hour=4.1},
+                standby={pct_per_hour=.6},recent_charges={{from_pct=12,to_pct=100}},freshness={saved=true},
+                display={level="78%",estimate="≈ 2 d 6 h at your usual use",narrow_estimate="≈ 2 d 6 h · usual use",
+                    reading="12 h reading non-stop",standby="10 d standby only"}},500 end
             if a.op == "reading.stats" then
                 local d={state="ready",year={intensity={},days_read=1,start="2026-01-01"},
                     week={seconds={0,0,0,0,0,0,60},levels={0,0,0,0,0,0,1},total_seconds=60},
@@ -152,6 +155,41 @@ return function(test,eq,ok,E,W,Widget)
             for _,a in ipairs(reads) do if a.op=="reading.stats" then stats=stats+1 end end
             eq(stats,1); eq(#batches,3)
             ok(rectangles>=400,"real Year, weekly and hourly renderers painted")
+        end)
+    end)
+    test("Home wiring: measured Battery paints its true level in the shared batch",function()
+        withHost(function(batches,reads)
+            E.S.home_layout=nil
+            local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+            h:onNext(); h:onNext()
+            local card=h[1][1][6][1][1]
+            local level,estimate,glyph
+            for _,child in ipairs(card) do
+                if child.text=="78%" then level=true end
+                if child.text=="≈ 2 d 6 h at your usual use" then estimate=true end
+                if child.percentage==.78 then glyph=true end
+            end
+            ok(level and estimate and glyph)
+            local count=0
+            for _,a in ipairs(reads) do if a.op=="battery" then count=count+1 end end
+            eq(count,1); eq(h.metrics.roundTrips,1); eq(h.metrics.spawns,0); eq(h.metrics.network,0)
+        end)
+    end)
+    test("Home wiring: Battery compact and large cards keep progress in bounds",function()
+        withHost(function()
+            local snapshot=E.HomeHostPlan.snapshot({level=78,hours_usual_use=54,freshness={saved=true}})
+            for _,case in ipairs({{w=280,h=69,cols=2,rows=1},{w=130,h=149,cols=1,rows=2},{w=580,h=230,cols=4,rows=2}}) do
+                local rect=case
+                local card=E.HomeWidgets.renderers.battery({w=case.cols,h=case.rows},snapshot,function() end,rect)[1]
+                for _,child in ipairs(card) do
+                    if child.percentage then
+                        eq(child.percentage,.78)
+                        ok(child.overlap_offset[1]+child.width<=card.dimen.w)
+                        ok(child.overlap_offset[2]+child.height<=card.dimen.h)
+                    end
+                end
+
+            end
         end)
     end)
     test("Home wiring: default Library tile exposes bounded device and group links",function()

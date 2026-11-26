@@ -32,7 +32,7 @@ returning total and an optional on-device count. Unknown local coverage stays
 unknown. Battery reuses F12-E's measured `Library:battery()` projection
 (`bb6f081f`, `BatteryEstimate.kt:100`), replacing the initial stub. The interim
 Home scalar renderer is superseded by F12-O's complete companion-formatted
-widget/page (`ko/battery.lua`, `logic/battery.lua`); no parallel Battery renderer
+widget/page (`ko/battery.lua`, `logic/battery_widget.lua`); no parallel Battery renderer
 or Lua formatter remains. Missing measurements remain absent. Summary and
 battery have companion projection tests. Home book actions now inherit
 F12-H’s owned Details flow. All UI queries use Library, opaque list keys and
