@@ -1,6 +1,15 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Thin 0.12 UI boundary. One host-owned context per paint; finish with :flush().
 Library = {}
+-- Explicit user command; the existing adapter/worker owns the full-refresh job.
+local function command(id, run)
+    local finish = Budgets.span("library." .. id .. ".enqueue", now_s, log)
+    local result = run()
+    finish()
+    return result
+end
+function Library.fullRefresh() return command("full-refresh", LibraryAdapter.fullRefresh) end
+function Library.syncNow(reader) return command("sync-now", function() return LibraryAdapter.syncNow(reader) end) end
 local function counts()
     return {rows=0,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}
 end
@@ -59,6 +68,7 @@ function Library:read(op, args)
     if not ok then error(result,0) end
     return result
 end
+function Library:modeEstimates() return self:read("mode-estimates", {limit=3}) end
 function Library:battery() return self:read("battery", {limit=1}) end
 function Library:readingStats() return self:read("reading.stats", {limit=1}) end
 function Library:capabilities() return self:read("capabilities") end
