@@ -40,7 +40,7 @@ return function(test, eq, ok, here, Cache)
                 read=function(request) local q=Cache.decode(request); eq(q.op,"cover.reference"); eq(q.limit,1); reads=reads+1
                     return {local_path="/fixture/local.jpg"},100 end,
                 request=function() error("paint must not dispatch") end,
-                command=function(op,args,done) commands=commands+1; eq(op,"covers.acquire"); eq(args.reference,"/fixture/ref.jpg"); eq(args.refresh,true); done({error="offline"}); return true end}}, {__index=_G})
+                command=function(op,args,done) commands=commands+1; eq(op,"covers.acquire"); eq(args.reference,"/fixture/ref.jpg"); eq(args.refresh,true); eq(args.owner,"fixture"); done({error="offline"}); return true end}}, {__index=_G})
         setfenv(assert(loadfile(root.."logic/budgets.lua")),e)(); setfenv(assert(loadfile(root.."ko/library.lua")),e)()
         eq(e.Library.cachedCover("/fixture/ref.jpg"),"/fixture/local.jpg"); eq(commands,0); eq(reads,1)
         exists=false; eq(e.Library.cachedCover("/fixture/ref.jpg"),nil)

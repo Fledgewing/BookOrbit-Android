@@ -103,7 +103,7 @@ object AdapterWorker : ServerRuntime {
         start()
     }
 
-    fun acquireCoverReference(ctx: Context, credentials: CacheWorker.Creds?, owner: String?, reference: String,
+    fun acquireCoverReference(ctx: Context, credentials: CacheWorker.Creds?, owner: String, reference: String,
         refresh: Boolean, done: (Map<String, Any?>?, String?) -> Unit) {
         app=ctx.applicationContext
         BulkWork.attach(ctx)
@@ -114,10 +114,11 @@ object AdapterWorker : ServerRuntime {
                     BulkWork.checkpoint()
                     val external=Environment.getExternalStorageDirectory()
                     val current=worker().store.meta("owner")
-                    val managed=credentials!=null && (current==null || owner==current)
-                    val legacy=if (!managed) LegacyCoverSource.read(File(external,"koreader/settings.reader.lua")) else null
-                    val account=if (managed) owner!! else legacy?.owner ?: throw ServerFailure("unauthorized")
-                    val login=if (managed) credentials!! else legacy?.credentials ?: throw ServerFailure("unauthorized")
+                    // Managed credentials are immutable captures from the originating account.
+                    // A legacy lookup must match that same namespace before any transport.
+                    val legacy=if (credentials==null) LegacyCoverSource.read(File(external,"koreader/settings.reader.lua"),owner) else null
+                    val account=owner
+                    val login=credentials ?: legacy?.credentials ?: throw ServerFailure("canceled")
                     if (current!=null && current!=account) throw ServerFailure("retryable")
                     val directory=ConnectorPlugin.coverCacheDir(external)
                     var growth=0L

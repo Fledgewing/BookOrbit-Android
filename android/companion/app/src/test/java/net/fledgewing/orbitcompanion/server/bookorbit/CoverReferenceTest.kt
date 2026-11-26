@@ -155,6 +155,8 @@ class CoverReferenceTest {
             file.writeBytes(bytes)
             val account=LegacyCoverSource.read(file)!!
             assertEquals(k.owner,account.owner); assertEquals(k.creds.key,account.credentials.key)
+            assertNotNull(LegacyCoverSource.read(file,k.owner))
+            assertNull(LegacyCoverSource.read(file,"different-originating-account"))
             assertFalse(account.toString().contains(k.creds.key)); assertArrayEquals(bytes,file.readBytes())
             file.writeText(String(bytes,Charsets.ISO_8859_1).replace(k.creds.server,"https://library.example/api/v1/koreader/"))
             assertEquals(k.creds.server,LegacyCoverSource.read(file)!!.credentials.server)
@@ -163,6 +165,12 @@ class CoverReferenceTest {
             assertNotNull(LegacyCoverSource.read(file))
             file.writeText("return { [\"bookorbit\"] = require(\"unsafe\") }")
             assertNull(LegacyCoverSource.read(file))
+            val user=LuaValue.str("lecteur-é")
+            val expected=user+"|"+k.creds.server
+            file.writeBytes(("return "+String(LuaValue.encode(mapOf("bookorbit" to mapOf("server_url" to k.creds.server,"username" to user,"userkey" to k.creds.key))),Charsets.ISO_8859_1)).toByteArray(Charsets.ISO_8859_1))
+            val dispatched=LuaValue.parse(LuaValue.encode(mapOf("owner" to expected))) as Map<*,*>
+            assertNotNull(LegacyCoverSource.read(file,dispatched["owner"] as String))
+            assertNull(LegacyCoverSource.read(file,LuaValue.utf8(expected)))
         }
     }
 }

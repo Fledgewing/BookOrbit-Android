@@ -8,7 +8,7 @@ import java.security.MessageDigest
 /** BookOrbit authentication is private to this adapter; sync and OPDS also work on their own. */
 internal class BookOrbitServerAdapter(private val credentials: ServerCredentials, private val account: BookOrbitAccount,
     private val transport: ConnectorTransport,
-    private val coverReferenceJob: (CacheWorker.Creds?, String?, String, Boolean, (Map<String, Any?>?, String?) -> Unit) -> Unit =
+    private val coverReferenceJob: (CacheWorker.Creds?, String, String, Boolean, (Map<String, Any?>?, String?) -> Unit) -> Unit =
         { _, _, _, _, done -> done(null,"unsupported") },
     private val coverJob: (CacheWorker.Creds, String, Long, (Map<String, Any?>?, String?) -> Unit) -> Unit =
         { _, _, _, done -> done(null,"unsupported") }) : ServerAdapter {
@@ -135,10 +135,11 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         require(LuaValue.encode(result).size <= 16384)
         return result
     }
-    override fun acquireCoverReference(reference: String, refresh: Boolean, done: (Map<String, Any?>?, String?) -> Unit) {
+    override fun acquireCoverReference(reference: String, refresh: Boolean, owner: String, done: (Map<String, Any?>?, String?) -> Unit) {
         require(reference.length in 1..4096)
-        val c=credentials.login("sync")?.let { login("sync") }
-        coverReferenceJob(c?.let { CacheWorker.Creds(it.server,it.user,it.secret) },c?.owner(),reference,refresh,done)
+        require(owner.length in 1..4096)
+        val c=credentials.login("sync")?.takeIf { it.owner()==owner }?.let { login("sync") }
+        coverReferenceJob(c?.let { CacheWorker.Creds(it.server,it.user,it.secret) },owner,reference,refresh,done)
     }
     override fun acquireCover(key: String, done: (Map<String, Any?>?, String?) -> Unit) {
         val c = login("sync")

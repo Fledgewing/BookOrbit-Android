@@ -81,10 +81,10 @@ object LibraryAccount {
             catch (_: Exception) { complete(null,"unavailable") }
         }
     }
-    fun acquireCoverReference(ctx: Context, reference: String, refresh: Boolean, done: (Map<String, Any?>?, String?) -> Unit) {
+    fun acquireCoverReference(ctx: Context, reference: String, refresh: Boolean, owner: String, done: (Map<String, Any?>?, String?) -> Unit) {
         val app=ctx.applicationContext
         queue.execute {
-            try { adapter(app).acquireCoverReference(reference,refresh) { result,error -> main.post { done(result,error) } } }
+            try { adapter(app).acquireCoverReference(reference,refresh,owner) { result,error -> main.post { done(result,error) } } }
             catch (e: ServerFailure) { main.post { done(null,e.kind) } }
             catch (_: Exception) { main.post { done(null,"unavailable") } }
         }

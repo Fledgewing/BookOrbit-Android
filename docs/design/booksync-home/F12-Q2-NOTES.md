@@ -36,7 +36,10 @@ establish device acceptance.
 Cache hits need no network. A revision change conditionally validates an older
 file without removing it. Offline failure returns the older local reference;
 failed revisions remain eligible for retry. Results contain no credentials or
-server locators. Account mismatch is rejected before transport.
+server locators. Every reference command carries its originating opaque owner. Managed credentials
+are captured for that owner; the legacy settings lookup must match it exactly.
+A queued command cannot adopt a later account's credentials. Account mismatch is
+rejected before transport.
 
 Remaining required work:
 

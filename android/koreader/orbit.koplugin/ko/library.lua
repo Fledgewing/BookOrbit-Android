@@ -178,7 +178,7 @@ end
 function Library.acquireCoverReference(reference,refresh,done)
     local owner=LibraryAdapter.owner()
     return command("covers.acquire",function()
-        return LibraryAdapter.command("covers.acquire",{reference=reference,refresh=refresh==true},function(result)
+        return LibraryAdapter.command("covers.acquire",{reference=reference,refresh=refresh==true,owner=owner},function(result)
             if LibraryAdapter.owner()~=owner then
                 if done then done({error="canceled"}) end
                 return

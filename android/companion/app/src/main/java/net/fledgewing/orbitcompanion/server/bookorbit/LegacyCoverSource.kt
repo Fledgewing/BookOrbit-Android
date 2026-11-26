@@ -10,7 +10,7 @@ internal object LegacyCoverSource {
     class Account(val owner: String,val credentials: CacheWorker.Creds) {
         override fun toString() = "CoverAccount(redacted)"
     }
-    fun read(file: File): Account? = runCatching {
+    fun read(file: File, expectedOwner: String? = null): Account? = runCatching {
         require(file.canonicalFile.parentFile==file.parentFile?.canonicalFile && file.length() in 1..4194304)
         val text=file.readText(Charsets.ISO_8859_1)
         val literal=StatusMarginRepair.literalTable(text,"bookorbit") ?: return null
@@ -20,6 +20,8 @@ internal object LegacyCoverSource {
         val server=CoverProtocol.apiBase(value("server_url")) ?: return null
         val user=value("username"); val key=value("userkey")
         require(server.startsWith("https://") || server.startsWith("http://"))
-        Account(LuaValue.str(user)+"|"+LuaValue.str(server.lowercase(java.util.Locale.ROOT)),CacheWorker.Creds(server,user,key))
+        val owner=LuaValue.str(user)+"|"+LuaValue.str(server.lowercase(java.util.Locale.ROOT))
+        require(expectedOwner==null || owner==expectedOwner)
+        Account(owner,CacheWorker.Creds(server,user,key))
     }.getOrNull()
 }

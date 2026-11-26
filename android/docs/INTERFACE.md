@@ -481,8 +481,8 @@ the acknowledged event queue. They invalidate an already visible Home, never sho
 ### Owned cover acquisition (0.12 catalog prerequisite)
 
 The trusted `SERVER_COMMAND` operation `covers.acquire` accepts either one opaque
-`key` or one `reference` naming an installed local cover-cache entry, with optional
-`refresh=true` for explicit revalidation. A reference is validated and translated
+`key` or one `reference` naming an installed local cover-cache entry together with
+its opaque originating `owner`, with optional `refresh=true` for explicit revalidation. A reference is validated and translated
 only inside the companion adapter; it never carries a server locator or login.
 It returns a small result with `local_path` and `stale`, or a neutral error. The
 companion resolves account identity and performs acquisition on its existing cache
