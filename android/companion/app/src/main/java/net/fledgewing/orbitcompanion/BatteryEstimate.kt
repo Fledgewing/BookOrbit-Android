@@ -22,6 +22,29 @@ object BatteryEstimate {
         return listOf(DayTotals(0,screenMin=on,standbyMin=off))
     }
 
+    /** Existing Settings consumer contract: three ready-to-draw preset rows, no Lua math. */
+    fun modeRows(snapshot: Map<String, Any?>, limit: Int = 3): Map<String, Any?> {
+        val ids = mapOf("battery-saver" to "saver", "balanced" to "balanced", "always-up-to-date" to "current")
+        val modes = (snapshot["modes"] as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }
+        val rows = modes.take(limit.coerceIn(1,3)).map { mode ->
+            val hours = (mode["hours_usual_use"] as? Number)?.toDouble()
+            val estimated = mode["estimated"] == true
+            val duration = hours?.let {
+                val whole = it.toLong()
+                when {
+                    it < 1 -> "${(it*60).toInt()} min"
+                    whole < 24 -> "$whole h"
+                    else -> "${whole/24} d ${whole%24} h"
+                }
+            }
+            val text = if (duration == null) "Estimate available after measured use" else
+                "≈ $duration at your usual use" + if (estimated) " (estimate: Wi-Fi pattern not measured yet)" else ""
+            mapOf("id" to ids[mode["id"]], "text" to LuaValue.str(text), "hours_usual_use" to hours,
+                "measured" to (hours != null && !estimated), "estimated" to estimated, "reason" to mode["reason"])
+        }
+        return mapOf("items" to rows, "freshness" to snapshot["freshness"])
+    }
+
     fun snapshot(totals: Map<String, Sums>, days: List<DayTotals>, last: Snap?, segments: List<Segment>,
                  now: Long, zone: ZoneId, usualDays: List<DayTotals>? = null): Map<String, Any?> {
         fun sums(vararg cats: String): Sums? = cats.mapNotNull { totals[it] }.reduceOrNull { a, b -> a+b }

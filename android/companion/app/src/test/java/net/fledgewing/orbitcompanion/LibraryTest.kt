@@ -33,6 +33,14 @@ class LibraryTest {
             assertTrue(results.any { it["level"] == 78L }); assertTrue(results.any { it["hours"] == listOf(1L,2L) })
         }
     }
+    @Test fun settingsModeEstimatesInheritCallerRowsAndNeverInventNewDeviceHours() {
+        store().use { st ->
+            val rows=read(st,mapOf("op" to "mode-estimates","limit" to 3))["items"] as List<*>
+            assertEquals(3,rows.size)
+            assertTrue(rows.all { val r=it as Map<*,*>; r["measured"]==false && r["hours_usual_use"]==null })
+            assertEquals(1,(read(st,mapOf("op" to "mode-estimates","limit" to 1))["items"] as List<*>).size)
+        }
+    }
     @Test fun everyNeutralFieldHasLocalSemanticsAndAnExplicitTranslationPlan() {
         val cases = mapOf<String, Any>("show" to "reading", "wtr" to true, "where" to "on-device", "author" to listOf("B"), "series" to listOf("Orbit"), "tags" to listOf("space"),
             "length" to mapOf("min" to 100, "max" to 200), "len" to mapOf("max" to 200), "rating" to mapOf("min" to 4), "added" to mapOf("min" to "2026-01-01"),

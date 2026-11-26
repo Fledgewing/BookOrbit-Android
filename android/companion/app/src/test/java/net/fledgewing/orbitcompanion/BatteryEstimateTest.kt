@@ -21,6 +21,20 @@ class BatteryEstimateTest {
         assertEquals(58*60.0,day.screenMin,1e-9)
         assertEquals(101*60.0,day.standbyMin,1e-9)
     }
+    @Test fun settingsModeLinesUseMeasuredHoursAndExplicitPatternEstimates() {
+        val model=mapOf<String,Any?>("modes" to listOf(
+            mapOf("id" to "battery-saver","hours_usual_use" to 60.5,"estimated" to false),
+            mapOf("id" to "balanced","hours_usual_use" to 10.0,"estimated" to false),
+            mapOf("id" to "always-up-to-date","hours_usual_use" to 20.0,"estimated" to true)))
+        val rows=BatteryEstimate.modeRows(model)["items"] as List<*>
+        assertEquals(listOf("saver","balanced","current"),rows.map { (it as Map<*,*>)["id"] })
+        assertEquals("≈ 2 d 12 h at your usual use",LuaValue.utf8((rows[0] as Map<*,*>)["text"] as String))
+        assertEquals(true,(rows[0] as Map<*,*>)["measured"])
+        assertTrue(LuaValue.utf8((rows[2] as Map<*,*>)["text"] as String).contains("estimate:"))
+        assertEquals(false,(rows[2] as Map<*,*>)["measured"])
+        assertEquals(1,(BatteryEstimate.modeRows(model,1)["items"] as List<*>).size)
+        assertTrue(LuaValue.encode(BatteryEstimate.modeRows(model)).size<=16384)
+    }
     @Test fun newDeviceHasExplicitMissingEvidenceAndNoInventedLifetime() {
         val s = snapshot(emptyList())
         assertNull(s["level"]); assertNull(s["hours_usual_use"])

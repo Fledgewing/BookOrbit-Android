@@ -45,6 +45,7 @@ class LibraryReadModel(
     private fun empty(saved: Boolean) = mapOf("items" to emptyList<Any>(), "total" to 0, "freshness" to freshness(saved), "empty" to if (saved) "No books" else "Not saved yet")
     private fun project(owner: String, a: Map<*, *>): Map<String, Any?> {
         val op = a["op"]
+        if (op == "mode-estimates") return BatteryEstimate.modeRows(battery(), (a["limit"] as? Number)?.toInt() ?: 3)
         if (op == "battery") return battery()
         if (op == "reading.stats") return readingStats()
         if (op == "capabilities") return mapOf("battery" to true, "catalog" to true, "detail" to true, "download" to false,

@@ -97,3 +97,11 @@ The updated library prerequisite also keeps ownership reads on the plugin's
 already-loaded account settings: no legacy client construction or lazy reading
 ledger initialization on the render path. Its regression is retained alongside
 the battery snapshot budget tests (see F12-A-NOTES.md's pinned source evidence).
+
+Settings' existing `Library:modeEstimates()` / `op="mode-estimates"` contract is
+backed by the same battery model. It returns at most three ready-to-draw rows
+(`saver`, `balanced`, `current`) with `text`, `measured`, `estimated`,
+`hours_usual_use` and the evidence reason. Duration formatting and the explicit
+“at your usual use” / unmeasured-pattern suffix are computed in the companion.
+A caller requesting one row gets one row. Missing history retains the existing
+“Estimate available after measured use” line rather than a sample duration.

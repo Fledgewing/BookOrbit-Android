@@ -49,6 +49,7 @@ function Library:read(op, args)
     finish()
     return result or {items={}, freshness={saved=false}, pending=true}
 end
+function Library:modeEstimates() return self:read("mode-estimates", {limit=3}) end
 function Library:battery() return self:read("battery", {limit=1}) end
 function Library:readingStats() return self:read("reading.stats", {limit=1}) end
 function Library:capabilities() return self:read("capabilities") end

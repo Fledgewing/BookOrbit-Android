@@ -82,6 +82,16 @@ return function(test, eq, ok, here, Cache)
         e.LibraryAdapter.read=function() return {level=78},16385 end
         eq(pcall(function() e.Library.paint("battery"):battery() end),false)
     end)
+    test("library: settings mode lines inherit the caller's three-row budget", function()
+        local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end,
+            LibraryAdapter={read=function(request)
+                local args=Cache.decode(request); eq(args.op,"mode-estimates"); eq(args.limit,3)
+                return {items={{id="saver"},{id="balanced"},{id="current"}}},512
+            end,request=function(batch) eq(#batch,1); return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "logic/budgets.lua")),e)(); setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
+        local p=e.Library.paint("settings"); eq(#p:modeEstimates().items,3)
+        local m=p:flush(); eq(m.rows,3); eq(m.roundTrips,1); eq(m.spawns,0); eq(m.network,0)
+    end)
     test("library: ownership lookup never constructs a client or loads its ledger", function()
         local plugin={settings={username="fixture",server_url="https://library.invalid"},
             newClient=function() error("render constructed a backend client") end}
