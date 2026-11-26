@@ -46,7 +46,7 @@ return function(test,eq,ok,here)
     e.UIManager={show=function(_,d) current=d; shown[#shown+1]=d end,close=function(_,d) if current==d then current=nil end end,
         getTopmostVisibleWidget=function() return current end,scheduleIn=function() end}
     e.Library={paint=function() return {accountState=function() return {signedIn=true,sync=login("user"),opds=login("account")} end,flush=function() end} end,
-        accountReturned=function() end,retry=function() end,accountCommand=function(op,args,done)
+        accountReturned=function() end,retry=function() end,changed=function() end,accountCommand=function(op,args,done)
             commands[#commands+1]={op=op,kind=args.kind,password=args.password}; completion=done
         end}
     setfenv(assert(loadfile(root .. "ko/account.lua")),e)()
@@ -96,6 +96,13 @@ return function(test,eq,ok,here)
         for _,forbidden in ipairs({"Jni.","Companion.","/auth/","/opds/","bookorbit","BookOrbit","saveSettings","io.open","os.execute","io.popen"}) do
             ok(not text:find(forbidden,1,true),forbidden)
         end
+    end)
+
+    test("account flows: hidden error results cannot repaint over reading; Close invalidates Home",function()
+        local v=e.AccountView.open("account"); v:command("account.signIn",{}); current={name="reader"}
+        local count=#shown; completion({error="unauthorized"}); eq(#shown,count)
+        local invalidations=0; e.Library.changed=function(ev) eq(ev.kind,"account"); invalidations=invalidations+1 end
+        v:close(); eq(invalidations,1); e.Library.changed=function() end
     end)
 
 end

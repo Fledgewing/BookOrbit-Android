@@ -58,6 +58,13 @@ function HomeHost.create()
         top=top+accountHeight
         local w,h=self.dimen.w,self.dimen.h
         local canvas=HomeWidgets.canvas(w,h)
+        if self.account_height~=nil and self.account_height~=accountHeight then
+            -- The status row changes widget geometry; redraw its previous positions too.
+            self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=h}
+        elseif status~=self.account_status then
+            self.changed_rects[#self.changed_rects+1]={x=0,y=0,w=w,h=top}
+        end
+        self.account_height,self.account_status=accountHeight,status
         HomeWidgets.text(canvas,self.list_title or "BookSync",gap,gap,w-scale(120),24,false,true)
         if accountHeight>0 then HomeWidgets.button(canvas,status,gap,scale(48),w-2*gap,scale(36),function() AccountView.open(kind=="sync" and "sync" or nil) end) end
         HomeWidgets.button(canvas,_("Close"),w-scale(100),gap,scale(88),scale(36),function() self:onClose() end)

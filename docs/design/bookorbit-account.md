@@ -185,7 +185,8 @@ using HTTP Basic auth under its OPDS guard (`:41`). Sync uses
 `PUT koreader/syncs/progress` (`modules/koreader/koreader.controller.ts:54`, `:67`, `:74`).
 These operations work without an account session. The plugin receives opaque
 book identities, bounded display rows, normalized positions and local paths.
-It receives no newly stored usernames, sync keys, OPDS passwords or tokens.
+The F12-N forms receive only bounded display names/addresses and login provenance;
+sync keys, OPDS passwords and account tokens never leave the companion.
 
 ## Three logins and sign-out
 
