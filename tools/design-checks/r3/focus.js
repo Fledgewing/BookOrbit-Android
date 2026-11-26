@@ -48,4 +48,7 @@ await p.evaluate(()=>{const P=window.__proto;P.S.acct.in=true;P.S.acct.opds={st:
 await p.evaluate(()=>{const P=window.__proto;P.S.modal={k:'lremove',w:'opds'};P.S.fk=null;P.render();});await H('prev');await H('next');await walk('login-remove',6);
 await p.evaluate(()=>{const P=window.__proto;P.S.modal={k:'sicode',w:'sync'};P.S.fk=null;P.render();});await H('prev');await H('next');await walk('login-phone',8);
 await p.evaluate(()=>{const P=window.__proto;P.S.modal={k:'sicode',err:'old'};P.S.fk=null;P.render();});await H('prev');await H('next');await walk('phone-too-old',4);
+await p.evaluate(()=>{const P=window.__proto;P.restart('x4c');P.act('nav:settings');P.act('setg:reading');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('settings-reading',20);
+for(const k of ['font','margins','spacing','contrast']){await p.evaluate(k=>{const P=window.__proto;P.S.modal={k:'cedit',ce:k,ret:null};P.S.fk=null;P.render();},k);await H('prev');await H('next');await walk('custom-'+k,10);}
+await p.evaluate(()=>{const P=window.__proto;P.S.modal=null;P.openBook('b1');P.act('rd:bottom');P.act('set:margins:2');P.S.fk=null;P.render();});await walk('panel-custom',30);
 console.log(out.join('\n'));console.log('FOCUS steps',n,'dark',darkN,'fails',fails,'ERR',errs);await b.close();})();
