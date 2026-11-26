@@ -102,4 +102,13 @@ class ServerAdapterTest {
         assertEquals(true,k.set("sync")); assertEquals(false,k.set("opds")); k.canSync()
         k.adapter.removeLogin("sync"); assertEquals(false,k.set("sync"))
     }
+    @Test fun accountRemainsUsableWhenBothOptionalConnectorsAreRemoved() {
+        val k = Kit(); k.account()
+        k.adapter.removeLogin("sync"); k.adapter.removeLogin("opds")
+        assertEquals(true,k.adapter.state()["signedIn"])
+        val owner = k.adapter.owner()!!
+        assertTrue(owner.startsWith("account:")); assertNotNull(k.adapter.stats(owner))
+        assertEquals(false,k.set("sync")); assertEquals(false,k.set("opds"))
+    }
+
 }

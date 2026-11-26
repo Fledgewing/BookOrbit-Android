@@ -60,7 +60,7 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         if (candidate != null) { credentials.set(kind, candidate, onlyIfUnset = !replace); if (kind == "opds") artifacts.clear() }
     }
     override fun refreshStats() = account.refreshStats()
-    override fun owner(): String? = (credentials.login("opds") ?: credentials.login("sync"))?.owner()
+    override fun owner(): String? = (credentials.login("opds") ?: credentials.login("sync"))?.owner() ?: account.identity()
     override fun stats(owner: String): Map<*, *>? = if (owner == owner()) account.normalizedStats() else null
     private fun headers(login: ServerCredentials.Login, kind: String): Map<String, String> = if (kind == "sync")
         mapOf("Accept" to "application/json", "x-auth-user" to login.user, "x-auth-key" to login.secret)

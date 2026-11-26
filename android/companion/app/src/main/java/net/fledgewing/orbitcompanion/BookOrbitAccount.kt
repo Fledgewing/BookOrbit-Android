@@ -29,6 +29,8 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
     @Synchronized fun state(): Map<String, Any?> = mapOf("signedIn" to signedIn(),
         "connector" to (session?.get("connectorState") ?: "not-configured"),
         "connectorRevision" to session?.get("revision"), "expiresAt" to session?.get("refreshExpiry"))
+    @Synchronized internal fun identity(): String? = if (signedIn())
+        "account:" + BookOrbitLibrary.namespace(session!!["server"].toString() + "|" + session!!["id"].toString()).removePrefix("bo:") else null
     @Synchronized fun owner(): String? = if (signedIn()) (session?.get("connectorUser") as? String)?.let { it + "|" + (session!!["server"] as String).lowercase(java.util.Locale.ROOT) } else null
     @Synchronized fun connector(): CacheWorker.Creds? {
         val s = session ?: return null
