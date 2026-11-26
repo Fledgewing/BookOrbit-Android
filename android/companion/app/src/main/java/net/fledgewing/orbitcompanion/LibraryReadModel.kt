@@ -69,10 +69,14 @@ class LibraryReadModel(
         if (op == "capabilities") {
             val remote = BookOrbitLibrary.readingStats(store)
             val a = accountStats(owner).orEmpty()
-            return mapOf("catalog" to true, "detail" to true, "download" to ((accountState()["opds"] as? Map<*, *>)?.get("set") == true),
-                "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false, "syncCurrent" to true),
+            val server = accountState()
+            val managed = server["owner"] == owner
+            val opds = (server["opds"] as? Map<*, *>)?.get("available") == true
+            val sync = (server["sync"] as? Map<*, *>)?.get("available") == true
+            return mapOf("catalog" to (!managed || opds), "detail" to !managed, "download" to opds,
+                "lists" to mapOf("read" to !managed, "save" to false), "progress" to mapOf("read" to (!managed || sync), "write" to sync, "syncCurrent" to !managed),
                 "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
-                "account" to accountState(),
+                "account" to server,
                 "stats" to mapOf("days" to (a["days"] != null || remote?.days != null), "streak" to (remote?.streak != null),
                     "hours" to (a["hours"] != null), "sessions" to (a["sessions"] != null),
                     "goal" to (a["goal"] != null || remote?.goalAvailable == true),

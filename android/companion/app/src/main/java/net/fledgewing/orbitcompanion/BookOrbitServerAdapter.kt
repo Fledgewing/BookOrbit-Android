@@ -16,8 +16,15 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         if (c.origin == "account" && account.state()["signedIn"] != true) throw BookOrbitAccount.Failure("unauthorized")
         return c
     }
-    override fun state() = account.state() + mapOf("account" to mapOf("set" to (account.state()["signedIn"] == true), "origin" to "user".takeIf { account.state()["signedIn"] == true }),
-        "sync" to credentials.status("sync"), "opds" to credentials.status("opds"))
+    override fun state(): Map<String,Any?> {
+        val accountState = account.state()
+        fun status(kind: String): Map<String,Any?> {
+            val c = credentials.login(kind)
+            return credentials.status(kind) + ("available" to (c != null && (c.origin == "user" || accountState["signedIn"] == true)))
+        }
+        return accountState + mapOf("account" to mapOf("set" to (accountState["signedIn"] == true), "origin" to "user".takeIf { accountState["signedIn"] == true }),
+            "sync" to status("sync"), "opds" to status("opds"), "owner" to owner())
+    }
     override fun signIn(server: String, username: String, password: CharArray) {
         try {
             account.signIn(server, username, password)

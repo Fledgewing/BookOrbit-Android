@@ -303,4 +303,26 @@ class LibraryTest {
         }
     }
 
+    @Test fun independentLoginCapabilitiesDescribeOnlyTheirAvailableOperations() {
+        store().use { st ->
+            var opds = true
+            var sync = false
+            val model = LibraryReadModel(st,{99},{},accountState = {
+                mapOf("owner" to owner,"opds" to mapOf("available" to opds),"sync" to mapOf("available" to sync))
+            })
+            val request = "{op=\"capabilities\"}"
+            fun caps(): Map<*,*> {
+                model.publish(owner,listOf(request))
+                return st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?",owner,request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
+            }
+            val catalog = caps()
+            assertEquals(true,catalog["catalog"]); assertEquals(true,catalog["download"])
+            assertEquals(false,(catalog["progress"] as Map<*,*>)["write"])
+            opds = false; sync = true
+            val positions = caps()
+            assertEquals(false,positions["catalog"]); assertEquals(false,positions["download"])
+            assertEquals(true,(positions["progress"] as Map<*,*>)["write"])
+        }
+    }
+
 }
