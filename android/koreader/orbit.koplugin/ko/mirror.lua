@@ -459,7 +459,11 @@ function Mirror.start(reason, manual)
         Mirror.busy, Mirror.run_id, Mirror.polling = nil, nil, nil
         Mirror.next = nil
     end
-    return Mirror.launch("full", reason)
+    local s = Mirror.status()
+    -- A failed/paused bulk Full refresh still owns its durable pages and cursor.
+    -- Pressing again resumes it just like network up or wake.
+    local resume = s.engine == "bulk" and s.op == "full" and (s.left or 0) > 0
+    return Mirror.launch(resume and "resume" or "full", reason)
 end
 
 -- Refresh's delta: every saved page of every mirrored list, rechecked by the companion.
