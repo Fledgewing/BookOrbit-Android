@@ -83,7 +83,7 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
             val document=capture?.first ?: args["document"] as? String ?: throw IllegalArgumentException("document")
             var rec=record(a,document).toMutableMap()
             if (path!=null) rec["path"]=path
-            val local=mapOf("percentage" to args["percentage"],"position" to args["position"],"at" to now(),"page" to args["page"],"turnAt" to args["turn_at"],"finished" to args["finished"],"released" to args["released"])
+            val local=mapOf("percentage" to args["percentage"],"position" to args["position"],"at" to time(args["captured_at"]).takeIf { it>0 }.let { it ?: now() },"page" to args["page"],"turnAt" to args["turn_at"],"finished" to args["finished"],"released" to args["released"])
             when (op) {
                 "sync.verify.next" -> return a.nextSyncVerification(owner,document)
                 "sync.verify.result" -> {

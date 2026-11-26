@@ -88,6 +88,7 @@ function OrbitAndroid:onReaderReady()
     end
     self.schedule = Schedule.new(S.reading_schedule, now_s())
     ReadingSync.forward=0
+    ReadingSync.turn_at=0; ReadingSync.last_page=nil
     ReadingSync.preview(self.ui)
     Stats.send("open", contentOfUI(self.ui), true)
     self:bookOpenFlow()

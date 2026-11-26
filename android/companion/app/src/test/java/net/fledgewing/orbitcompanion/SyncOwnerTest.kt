@@ -95,10 +95,13 @@ class SyncOwnerTest {
         owner.command(a,"sync.drain",emptyMap<Any,Any>())
         assertEquals(1,a.writes.size)
     }
-    @Test fun newerRemoteMovementDropsAnOfflineOverrideInsteadOfReplayingIt() = fixture { _,q,owner,a ->
+    @Test fun newerRemoteMovementDropsAnOfflineOverrideInsteadOfReplayingIt() = fixture { root,q,owner,a ->
         a.remote=mapOf("percentage" to .8,"position" to "remote:240","timestamp" to 900L)
         owner.command(a,"sync.pull",args())
-        owner.command(a,"sync.override",args(.1,1000,online=false))
+        // A busy worker must retain the time the reader chose, not its later dispatch time.
+        val delayed=SyncOwner(q,root,{}, {9000L})
+        delayed.activate(a,true)
+        delayed.command(a,"sync.override",args(.1,1000,online=false))
         a.remote=a.remote+("timestamp" to 1200L)
         owner.command(a,"sync.drain",emptyMap<Any,Any>())
         assertTrue(a.writes.isEmpty()); assertNull(q.record(a.id,a.account,"urn:toy:book")["override"])
