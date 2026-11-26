@@ -12,6 +12,9 @@ return function(test,eq,ok,here,Cache)
                 eq(p.ready,state=='ready' or state=='offline-with-data'); ok(#p.message>0)
                 eq(p.word,p.ready and 'lantern' or false)
             end
+            if id=='light' then
+                eq(e.LocalWidgetPlan.build(id,{state='empty'}).message,'Frontlight unavailable on this reader')
+            end
             local b=e.Budgets.get('widgets',id)
             ok(e.Budgets.check(b,{rows=1,bytes=16384,snapshotBytes=16384,network=0,spawns=0,roundTrips=0}))
             ok(not e.Budgets.check(b,{rows=2,bytes=1,snapshotBytes=1,network=0,spawns=0,roundTrips=0}))
