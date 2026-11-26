@@ -51,9 +51,10 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
         local b=snapshot.items[1]; local coverW=math.min(scale(110),math.floor(w*.23))
         local tx=pad+coverW+scale(18); local tw=w-tx-pad
         -- A typographic cover placeholder until the adapter advertises cached covers.
-        local cover=HomeWidgets.canvas(coverW,h-2*pad-scale(32))
+        local coverH=math.min(h-2*pad-scale(32),math.floor(coverW*1.5))
+        local cover=HomeWidgets.canvas(coverW,coverH)
         HomeWidgets.text(cover,"BOOK",scale(8),scale(12),coverW-scale(16),14,true,true)
-        HomeWidgets.put(canvas,u.Frame:new{padding=0,margin=0,bordersize=1,color=u.BB.COLOR_WHITE,cover},pad,pad+scale(32))
+        HomeWidgets.put(canvas,u.Frame:new{padding=0,margin=0,bordersize=1,color=u.BB.COLOR_WHITE,cover},pad,math.floor((h-coverH)/2))
         local short=h<scale(220)
         HomeWidgets.text(canvas,b.title or _("Untitled"),tx,pad+scale(35),tw,short and 18 or 25,true,true)
         if not short then HomeWidgets.text(canvas,b.authors and b.authors[1] or "",tx,pad+scale(73),tw,16,true) end
@@ -81,9 +82,14 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
             local b=snapshot.items[i]
             local label=b.title or b.name or _("Untitled")
             if p.widget == "lists" and b.count ~= nil then label=label.."  ·  "..tostring(b.count) end
-            HomeWidgets.button(canvas,label,pad,pad+scale(30)+(i-1)*rowH,w-2*pad,rowH,function()
+            local y=pad+scale(30)+(i-1)*rowH
+            local progress=p.widget == "booklist" and tonumber(b.progress)
+            if progress then label=label.."  ·  "..string.format("%d%%",math.max(0,math.min(100,progress))) end
+            HomeWidgets.button(canvas,label,pad,y,w-2*pad,progress and rowH-scale(8) or rowH,function()
                 dispatch(p.widget == "lists" and "list" or "book",b)
             end)
+            if progress then HomeWidgets.put(canvas,u.Progress:new{width=w-2*pad,height=scale(3),radius=0,margin_h=0,margin_v=0,
+                percentage=math.max(0,math.min(100,progress))/100},pad,y+rowH-scale(6)) end
         end
     end
     return u.Frame:new{padding=0,margin=0,bordersize=1,radius=scale(10),background=hero and u.BB.COLOR_BLACK or u.BB.COLOR_WHITE,canvas}

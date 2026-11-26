@@ -105,6 +105,8 @@ return function(test,eq,ok,E,W,Widget)
         end
         eq(E.HomeHostPlan.need({widget="booklist",settings={src="wtr"}}).source,"want-to-read")
         eq(E.HomeHostPlan.need({widget="booklist",settings={src="recent"}}).source,"recently-added")
+        local also=E.HomeHostPlan.need({widget="booklist",settings={src="reading",sort=3}})
+        eq(also.offset,1); eq(also.query.sort,"last"); eq(also.query.dir,"desc")
         eq(E.HomeHostPlan.snapshot({items={},freshness={saved=true}}).state,"empty")
         eq(E.HomeHostPlan.snapshot({items={},pending=true}).state,"loading")
         eq(E.HomeHostPlan.snapshot({items={}}).state,"offline-without-data")

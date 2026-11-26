@@ -28,8 +28,15 @@ function HomeHostPlan.need(p)
     assert(s.limit == nil or type(s.limit) == "number" and s.limit >= 1, "Invalid widget limit")
     local query=Layout.copy(s.query or {})
     local sorts={[1]="title",[2]="author",[3]="last",[4]="added"}
-    if sorts[s.sort] and not query.sort then query.sort=sorts[s.sort] end
-    return {op="window",source=source,query=query,offset=s.offset or 0,limit=s.limit or 4}
+    if sorts[s.sort] and not query.sort then
+        query.sort=sorts[s.sort]
+        query.dir=(s.sort == 3 or s.sort == 4) and "desc" or "asc"
+    end
+    local offset=s.offset or 0
+    -- The default Also reading source has the same rank as the one-row hero.
+    -- Advance its companion window; never fetch and filter a catalog in Lua.
+    if s.src == "reading" and s.query == nil and (s.sort == nil or s.sort == 0 or s.sort == 3) and s.offset == nil then offset=1 end
+    return {op="window",source=source,query=query,offset=offset,limit=s.limit or 4}
 end
 function HomeHostPlan.snapshot(result)
     result=result or {error="Unavailable"}
