@@ -26,24 +26,26 @@ internal class LibraryFacets(val field: String, private val query: Map<String, A
                 for ((days, label) in listOf(7L to "This week", 31L to "This month", 365L to "This year")) add("$days", label, mapOf("min" to today.minusDays(days - 1).toString()))
             }
         }
-        if (multi) for (v in (query[field] as? List<*>).orEmpty().filterIsInstance<String>()) add(v, v, v)
+        if (multi) for (v in (query[field] as? List<*>).orEmpty().filterIsInstance<String>()) add(fold(v), v, v)
     }
+    private fun fold(value: String) = LuaValue.str(LuaValue.utf8(value).lowercase(Locale.ROOT))
+    private fun selectedValues(value: Any?) = (query[field] as? List<*>).orEmpty().filterIsInstance<String>().filter { fold(it) == fold(value.toString()) }
     private fun chosen(value: Any?): Boolean {
         val current = query[field] ?: if (field == "len") query["length"] else null
-        if (multi) return value in (current as? List<*>).orEmpty()
+        if (multi) return selectedValues(value).isNotEmpty()
         if (value == null && field == "show" && query["wtr"] == true) return false
         if (value == null) return current == null || current == "all" || current == "anywhere" || (current is Map<*, *> && current.isEmpty())
         return LuaValue.encode(value).contentEquals(LuaValue.encode(current)) || (field == "show" && value == "want-to-read" && query["wtr"] == true)
     }
     fun include(book: Map<String, Any?>) {
         val values = if (multi) (book[if (field == "author") "authors" else field] as? List<*>).orEmpty().filterIsInstance<String>().distinct() else emptyList()
-        for (v in values) { options[v] = v; labels[v] = v }
+        for (v in values) { val id = fold(v); if (id !in options) { options[id] = v; labels[id] = v } }
         if (!LibraryFilter.matches(book, others)) return
-        if (multi) for (v in values) counts[v] = (counts[v] ?: 0) + 1
+        if (multi) for (id in values.map(::fold).distinct()) counts[id] = (counts[id] ?: 0) + 1
         else for ((id, value) in options) if (LibraryFilter.matches(book, if (value == null) emptyMap<String, Any?>() else mapOf(field to value))) counts[id] = (counts[id] ?: 0) + 1
     }
     fun page(offset: Int, limit: Int): Map<String, Any?> {
-        val rows = options.map { (id, value) -> mapOf("id" to id, "label" to labels[id], "value" to value, "count" to (counts[id] ?: 0), "selected" to chosen(value)) }
+        val rows = options.map { (id, value) -> mapOf("id" to id, "label" to labels[id], "value" to value, "count" to (counts[id] ?: 0), "selected" to chosen(value), "selected_values" to if (multi) selectedValues(value) else null) }
             .sortedWith(compareBy<Map<String, Any?>> { (it["count"] as Int) == 0 }.thenBy { if (multi) LuaValue.utf8(it["label"].toString()).lowercase(Locale.ROOT) else "" }.thenBy { if (multi) it["id"].toString() else "" })
         val page = rows.drop(offset).take(limit)
         return mapOf("items" to page, "option_total" to rows.size, "offset" to offset, "next" to (offset + page.size).takeIf { it < rows.size }, "multi" to multi)

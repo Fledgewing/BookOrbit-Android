@@ -184,6 +184,18 @@ class LibraryTest {
             assertEquals(listOf("B"),(scoped["items"] as List<*>).map { (it as Map<*,*>)["value"] })
         }
     }
+    @Test fun facetCountsAndTicksUseTheSameUnicodeCaseFoldingAsResults() {
+        val first=LuaValue.str("Étoiles"); val second=LuaValue.str("ÉTOILES")
+        val facets=LibraryFacets("author",mapOf("author" to listOf(second)),0)
+        for (author in listOf(first,second)) facets.include(book + ("authors" to listOf(author)))
+        val rows=facets.page(0,8)["items"] as List<*>
+        assertEquals(1,rows.size)
+        val row=rows.single() as Map<*,*>
+        assertEquals(2,row["count"]); assertEquals(true,row["selected"])
+        assertEquals(listOf(second),row["selected_values"])
+        val label=LibraryFacets("rating",emptyMap(),0).page(0,8)["items"] as List<*>
+        assertTrue(label.map { LuaValue.utf8((it as Map<*,*>)["label"].toString()) }.contains("3★ and up"))
+    }
     @Test fun everyRadioFacetUsesTheOtherFiltersAndReturnsTheSameResultTotal() {
         val now=java.time.Instant.parse("2026-11-25T00:00:00Z").epochSecond
         val books=listOf(book,book + mapOf("pages" to 450,"rating" to 5,"on_device" to false,"added" to "2026-01-01"))

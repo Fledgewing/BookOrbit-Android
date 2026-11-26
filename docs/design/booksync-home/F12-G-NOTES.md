@@ -50,7 +50,8 @@ values absent from the catalog. A cache miss says Counting, never a fabricated 0
 `paint:facets(source, query, field, offset, limit)` returns `total`, `items`,
 `option_total`, `offset`, `next`, `multi` and `freshness`. Without `field`, it returns
 just the result count and an empty bounded items array. With a picker field, each
-item has `id`, `label`, neutral `value`, `selected` and `count`. An omitted value
+item has `id`, `label`, neutral `value`, `selected` and `count`. Multi-values
+also carry `selected_values` so removal uses the worker's Unicode case folding. An omitted value
 means Any. The total applies every filter; option counts apply all other filters
 with this picker's own selection removed. Source constraints remain in force.
 The companion returns positive counts first, zero values last; multi-values sort

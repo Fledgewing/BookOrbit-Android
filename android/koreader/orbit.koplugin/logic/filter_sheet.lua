@@ -51,7 +51,9 @@ end
 function FilterSheet:choose(field, option)
     if self.MULTI[field] then
         local values=Layout.copy(self.query[field] or {}); local found
-        for i,v in ipairs(values) do if v==option.value then table.remove(values,i); found=true; break end end
+        local selected={}
+        for _,v in ipairs(option.selected_values or {option.value}) do selected[v]=true end
+        for i=#values,1,-1 do if selected[values[i]] then table.remove(values,i); found=true end end
         if not found then assert(#values<100,"Too many selections"); values[#values+1]=option.value end
         self.query[field]=#values>0 and values or nil
     else
