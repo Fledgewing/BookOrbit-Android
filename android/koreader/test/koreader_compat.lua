@@ -87,7 +87,7 @@ local NEEDS = {
     { "datastorage.lua", { "getSettingsDir", "getDocSettingsHashDir" } },
     { "frontend/ui/event.lua", { "new" } },
     { "frontend/ui/time.lua", { "now", "to_s" } },
-    { "frontend/ui/font.lua", { { "smallinfofont", F }, "getFace", { "xx_smallinfofont", F } } },
+    { "frontend/ui/font.lua", { { "smallinfofont", F }, "getFace", { "xx_smallinfofont", F }, {"hash", F}, {"ftsize", F}, {"embolden_half_strength", F}, {"is_real_bold", F}, {"getFallbackFont", T} } },
     -- The Full refresh badge (ko/badge.lua): a toast (taps go on through it) that redraws only its rectangle.
     { "frontend/ui/uimanager.lua", { { "widget.toast", T } } },
     { "frontend/ui/size.lua", { { "padding", F }, { "radius", F }, { "line", F }, { "border", F } } },
@@ -98,19 +98,25 @@ local NEEDS = {
     { "frontend/socketutil.lua", { "set_timeout", "reset_timeout" } },
     { "frontend/logger.lua", { { "info", T }, { "warn", T } } },
     { "frontend/gettext.lua", { { "GetText", T } } },
-    { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T }, "paintTo" } },
+    { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T }, "paintTo", "free" } },
     { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T }, "paintTo" } },
     -- Owned Home: absolute grid placements, ordinary buttons and a plain progress bar.
     { "frontend/ui/widget/overlapgroup.lua", { "paintTo", {"overlap_offset", T}, {"allow_mirroring", F} } },
     { "frontend/ui/widget/progresswidget.lua", { "paintTo", {"percentage", F} } },
     { "frontend/ui/widget/button.lua", { {"height", F}, {"text_font_size", F}, {"avoid_text_truncation", F} } },
     { "frontend/ui/widget/container/framecontainer.lua", { {"radius", F}, {"background", F} } },
+    -- Device-local Custom reading styles: quiet native setters and in-place Settings return.
+    { "frontend/apps/reader/modules/readerfont.lua", { {"font_face", F}, {"font_base_weight", T}, {"line_spacing", T}, {"font_gamma", T} } },
+    { "frontend/document/credocument.lua", { "setFontFace", "setFontBaseWeight", "setEmbeddedFonts", "setInterlineSpacePercent", "setGammaIndex", "engineInit" } },
+    { "frontend/ui/widget/touchmenu.lua", { "updateItems", {"keep_menu_open", T} } },
+    { "frontend/ui/widget/textboxwidget.lua", { {"line_height", F}, {"fgcolor", F}, {"face", F}, {"_face_adjusted", T} } },
+    { "frontend/ui/widget/button.lua", { {"text_font_face", F} } },
     -- Reading strips: temporary effective margins and native hidden-footer release.
     { "frontend/apps/reader/modules/readerfooter.lua", { "getHeight", "onToggleFooterMode",
         { "reclaim_height", F }, { "pageno", F }, { "pages", F }, { "percent_finished", F } } },
     { "frontend/apps/reader/modules/readerview.lua", { "paintTo" } },
     { "frontend/apps/reader/modules/readertypeset.lua", { "onSetPageMargins", { "unscaled_margins", F } } },
-    { "frontend/apps/reader/modules/readerrolling.lua", { { "cre_top_bar_enabled", F } } },
+    { "frontend/apps/reader/modules/readerrolling.lua", { "onUpdatePos", "onRedrawCurrentView", { "cre_top_bar_enabled", F } } },
     { "frontend/apps/reader/modules/readertoc.lua", { "getTocTitleByPage" } },
     { "frontend/document/document.lua", { "getPageCount" } },
     { "frontend/ui/widget/widget.lua", { "getSize" } },
@@ -137,12 +143,14 @@ for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "conta
 end
 -- koreader-base (the base/ submodule): ffi modules the plugin requires.
 local BASE = {
+    { "ffi/freetype.lua", { "getEmboldenHalfStrength" } },
+    { "cre.cpp", { {"getFontFaceFilenameAndFaceIndex", T} } },
     -- Home editor: dkjson preserves array/object tags and nulls for Layout.save/load.
     { "thirdparty/dkjson/CMakeLists.txt", { { "dkjson.lua", T } } },
     { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
         "terminateSubProcess" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
-    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRect", "writeToFile", "free" } },
+    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRect", "writeToFile", "free", {"Color8", T} } },
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
     -- The offline cache's database (ko/db.lua; docs/design/sqlite-cache.md), as KOReader's statistics plugin uses it.
     { "thirdparty/lua-ljsqlite3/init.lua", { "open", "set_busy_timeout", "prepare", "exec", "rowexec", "step", "bind",

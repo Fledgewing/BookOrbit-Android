@@ -398,7 +398,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
             }.tag = "key:${d.key}"
             d.type == "choice" && d.values.size <= 4 -> {
                 val before = root.childCount
-                segmented(root, label, line, d.values, v) { setShared(d.key, it) }
+                segmented(root, label, line, d.values.map { (id, _) -> id to d.valueLabel(id) }, v) { setShared(d.key, it) }
                 root.getChildAt(before)?.tag = "key:${d.key}"
             }
             d.type == "choice" || d.type == "source" -> linkRow(root, d.label, line, SettingsUi.valueLabel(d, v, choices) + "  ›") {

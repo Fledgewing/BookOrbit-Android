@@ -356,7 +356,9 @@ def heap_floor_waits(ctx: Context, tmp: Path) -> None:
     (card.crosspoint / "orbify").mkdir(exist_ok=True)
     (card.crosspoint / "orbify" / "mirror.request").write_text("1\n")  # resume a user-started walk
     ctx.faults([{"match": {"path": "/plugin/catalog/manifest$"}, "action": "delay", "ms": 4000, "times": 1}])
-    run = ctx.sim.run(card, "home-low-heap", script="9000:QUIT", timeout_s=15, env={"ORBIFY_SIM_HEAP": "w2000:10000/6000"})
+    # The delayed reply still has to be parsed/checkpointed before the worker reaches
+    # its next request. Wait for that decision; a nine-second QUIT raced SD work on CI.
+    run = ctx.sim.run(card, "home-low-heap", timeout_s=120, stop_when="waiting for heap", env={"ORBIFY_SIM_HEAP": "w2000:10000/6000"})
     tail = after(run.output, "ORBIFY_SIM_HEAP t=w2000")
     after(tail, "waiting for heap")
     root = ctx.requests("/plugin/catalog/manifest")
