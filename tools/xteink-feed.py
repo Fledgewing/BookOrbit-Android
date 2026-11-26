@@ -21,8 +21,7 @@ def product_key(release):
     return (*map(int, match.group(1, 2, 3)),
             {None: 2, "rc": 1, "preview": 0}[match[4]], int(match[5] or 0))
 
-def build_feed(releases):
-    repo = os.environ.get("GITHUB_REPOSITORY")
+def build_feed(releases, repo=None):
     releases = sorted((r for r in releases if not r.get("draft") and
                        r["tag_name"].startswith("xteink-v")), key=lambda r: r["created_at"], reverse=True)
     selected = []
@@ -59,5 +58,5 @@ def build_feed(releases):
     return result
 
 if __name__ == "__main__":
-    json.dump(build_feed(json.load(sys.stdin)), sys.stdout, indent=2)
+    json.dump(build_feed(json.load(sys.stdin), os.environ["GITHUB_REPOSITORY"]), sys.stdout, indent=2)
     print()

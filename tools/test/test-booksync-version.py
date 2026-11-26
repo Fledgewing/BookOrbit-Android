@@ -75,7 +75,9 @@ class Versions(unittest.TestCase):
             self.assertEqual(next(r["booksync_version"] for r in feed if r["tag_name"] == bridge["tag_name"]),
                              "0.11.3-rc.17")
         with patch.dict(os.environ, {'GITHUB_REPOSITORY': 'fixture/canonical'}):
-            canonical = F.build_feed([classic])[0]
+            canonical = json.loads(subprocess.check_output(
+                ['python3', str(ROOT / 'tools/xteink-feed.py')],
+                input=json.dumps([classic]), text=True))[0]
         self.assertEqual('https://github.com/fixture/canonical/releases/download/xteink-v1.6.1.114/firmware-x4-pro-v-test.bin',
                          canonical['assets'][0]['browser_download_url'])
         self.assertIsNone(F.identity(classic))
