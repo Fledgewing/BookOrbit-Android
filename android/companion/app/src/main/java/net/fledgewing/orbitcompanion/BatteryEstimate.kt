@@ -45,8 +45,46 @@ object BatteryEstimate {
         return mapOf("items" to rows, "freshness" to snapshot["freshness"])
     }
 
+    /** Observed charge sessions, newest first. No extrapolation across service/clock gaps. */
+    fun charges(segments: List<Segment>, last: Snap?): List<Map<String, Any?>> {
+        // Merge contiguous charging segments split by a radio/settings change; never bridge gaps.
+        val charges = mutableListOf<Map<String, Any?>>()
+        var start: Segment? = null
+        var end: Segment? = null
+        fun finish() {
+            val a = start ?: return
+            val b = end!!
+            if (a.startPct >= 0 && b.endPct >= a.startPct && b.end > a.start)
+                charges += mapOf("start" to a.start, "end" to b.end, "from_pct" to a.startPct,
+                    "to_pct" to b.endPct, "hours" to (b.end-a.start)/3_600_000.0,
+                    "ongoing" to (last?.charging == true && b.end == segments.lastOrNull()?.end))
+            start = null; end = null
+        }
+        for (s in segments) {
+            if (s.key.state != PowerState.CHARGING || (end != null && end!!.end != s.start)) finish()
+            if (s.key.state == PowerState.CHARGING) { if (start == null) start = s; end = s }
+        }
+        finish()
+        return charges.takeLast(5).reversed()
+    }
+
+    /** Keep five sessions across raw-history pruning; a fresh observation updates its session. */
+    fun retainCharges(saved: List<Map<String, Any?>>, recent: List<Map<String, Any?>>): List<Map<String, Any?>> {
+        val retained = linkedMapOf<Pair<Long,Int>, Map<String,Any?>>()
+        val old = saved.map { it + ("ongoing" to false) }
+        for (row in old.asReversed() + recent.asReversed()) {
+            val start = (row["start"] as? Number)?.toLong() ?: continue
+            val from = (row["from_pct"] as? Number)?.toInt() ?: continue
+            val key = start to from
+            retained.remove(key)
+            retained[key] = row
+        }
+        return retained.values.toList().takeLast(5).reversed()
+    }
+
     fun snapshot(totals: Map<String, Sums>, days: List<DayTotals>, last: Snap?, segments: List<Segment>,
-                 now: Long, zone: ZoneId, usualDays: List<DayTotals>? = null): Map<String, Any?> {
+                 now: Long, zone: ZoneId, usualDays: List<DayTotals>? = null,
+                 recentCharges: List<Map<String, Any?>>? = null): Map<String, Any?> {
         fun sums(vararg cats: String): Sums? = cats.mapNotNull { totals[it] }.reduceOrNull { a, b -> a+b }
         fun on(pattern: String? = null): Rate? {
             // Historical screen-on includes both a foreground book and other interactive time.
@@ -72,24 +110,6 @@ object BatteryEstimate {
                 "reason" to if (estimated) "Wi-Fi pattern not measured; pooled rates used" else null,
                 "hours_usual_use" to BatteryStats.hoursLeft(level ?: -1, share, measuredOn ?: screenOn, measuredOff ?: asleep))
         }
-        // Merge contiguous charging segments split by a radio/settings change; never bridge gaps.
-        val charges = mutableListOf<Map<String, Any?>>()
-        var start: Segment? = null
-        var end: Segment? = null
-        fun finish() {
-            val a = start ?: return
-            val b = end!!
-            if (a.startPct >= 0 && b.endPct >= a.startPct && b.end > a.start)
-                charges += mapOf("start" to a.start, "end" to b.end, "from_pct" to a.startPct,
-                    "to_pct" to b.endPct, "hours" to (b.end-a.start)/3_600_000.0,
-                    "ongoing" to (last?.charging == true && b.end == segments.lastOrNull()?.end))
-            start = null; end = null
-        }
-        for (s in segments) {
-            if (s.key.state != PowerState.CHARGING || (end != null && end!!.end != s.start)) finish()
-            if (s.key.state == PowerState.CHARGING) { if (start == null) start = s; end = s }
-        }
-        finish()
         return mapOf("level" to level, "charging" to last?.charging, "screen_on" to rate(screenOn),
             "standby" to rate(asleep), "charging_rate" to rate(BatteryStats.rate("charging", totals["charging"])),
             "usual_use" to mapOf("screen_on_percent" to share?.times(100), "window_days" to 7,
@@ -99,7 +119,7 @@ object BatteryEstimate {
             "hours_standby_only" to BatteryStats.hoursLeftAt(level ?: -1, asleep),
             "pct_used_per_day" to days.filter { it.day in (today-13)..today }.sortedBy { it.day }.map {
                 mapOf("day" to it.day, "used_pct" to it.usedPct, "screen_on_minutes" to it.screenMin, "charges" to it.charges)
-            }, "recent_charges" to charges.takeLast(5).reversed(), "modes" to modes,
+            }, "recent_charges" to (recentCharges ?: charges(segments,last)).take(5), "modes" to modes,
             "freshness" to mapOf("saved" to (last != null), "origin" to "local-device", "at" to last?.t))
     }
 }

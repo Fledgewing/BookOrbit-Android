@@ -20,6 +20,8 @@ class BatteryEstimateTest {
         val day=BatteryEstimate.usualDays(rows,t+210*h).single()
         assertEquals(58*60.0,day.screenMin,1e-9)
         assertEquals(101*60.0,day.standbyMin,1e-9)
+        val sparse=BatteryEstimate.usualDays(listOf(row(0,90,true),row(1,86,true)),t+100*h)
+        assertNull("Waiting without observations must not create 24 h of evidence",BatteryStats.onShare(sparse))
     }
     @Test fun settingsModeLinesUseMeasuredHoursAndExplicitPatternEstimates() {
         val model=mapOf<String,Any?>("modes" to listOf(
@@ -34,6 +36,14 @@ class BatteryEstimateTest {
         assertEquals(false,(rows[2] as Map<*,*>)["measured"])
         assertEquals(1,(BatteryEstimate.modeRows(model,1)["items"] as List<*>).size)
         assertTrue(LuaValue.encode(BatteryEstimate.modeRows(model)).size<=16384)
+    }
+    @Test fun retainedChargeUpdatesReplaceAnOpenSessionWithoutDuplicates() {
+        val old=listOf(mapOf<String,Any?>("start" to 1L,"from_pct" to 20,"to_pct" to 60,"ongoing" to true))
+        val done=listOf(mapOf<String,Any?>("start" to 1L,"from_pct" to 20,"to_pct" to 100,"ongoing" to false))
+        val rows=BatteryEstimate.retainCharges(old,done)
+        assertEquals(1,rows.size); assertEquals(100,rows.single()["to_pct"])
+        assertEquals(false,rows.single()["ongoing"])
+        assertEquals(false,BatteryEstimate.retainCharges(old,emptyList()).single()["ongoing"])
     }
     @Test fun newDeviceHasExplicitMissingEvidenceAndNoInventedLifetime() {
         val s = snapshot(emptyList())

@@ -44,8 +44,8 @@ Usual use is the screen-on fraction of observed non-charging intervals clipped t
 exactly the trailing 168 hours. It needs 24 hours of evidence. Unknown service gaps
 are excluded, not counted as standby. Time left is level divided by the weighted
 screen-on/standby rates. Daily values are measured percentage drops, not net drops
-after charging. Fourteen local dates and the latest five raw-window charges are
-included; charges are retained in the existing 90-day raw history and contiguous
+after charging. Fourteen local dates and the latest five charge summaries are
+included; they are retained in existing stats metadata before 90-day raw pruning, and contiguous
 charging segments are joined across radio/settings changes.
 
 Saver and Balanced both use the existing `jit` Wi-Fi pattern. Until richer mode
@@ -105,3 +105,8 @@ backed by the same battery model. It returns at most three ready-to-draw rows
 “at your usual use” / unmeasured-pattern suffix are computed in the companion.
 A caller requesting one row gets one row. Missing history retains the existing
 “Estimate available after measured use” line rather than a sample duration.
+
+The last-five archive survives database reopen even when all of its raw sessions
+have aged out. It reuses the existing stats `meta` table, adds no timer/schema
+reset, updates an observed open session without duplicating it, and retains only
+five summaries. Retention tests cover six infrequent charges over 250 days.

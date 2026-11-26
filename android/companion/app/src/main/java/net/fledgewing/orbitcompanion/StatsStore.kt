@@ -97,6 +97,20 @@ class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applic
         db.insertWithOnConflict("meta", null, ContentValues().apply { put("k", k); put("v", v) }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
+    private fun savedCharges(): List<Map<String, Any?>> {
+        val bytes = meta("battery_recent_charges")?.toByteArray(Charsets.ISO_8859_1) ?: return emptyList()
+        return (LuaValue.parse(bytes) as? List<*>).orEmpty().take(5).mapNotNull { it as? Map<*,*> }
+            .map { row -> row.entries.associate { it.key.toString() to it.value } }
+    }
+
+    private fun retainCharges(db: SQLiteDatabase) {
+        val rows = snapsSince(Long.MIN_VALUE)
+        val recent = BatteryEstimate.charges(BatteryStats.segments(rows), rows.lastOrNull())
+        val retained = BatteryEstimate.retainCharges(savedCharges(), recent)
+        val encoded = String(LuaValue.encode(retained), Charsets.ISO_8859_1)
+        if (meta("battery_recent_charges") != encoded) setMeta(db, "battery_recent_charges", encoded)
+    }
+
     private fun dayStart(day: Long, zone: ZoneId) = LocalDate.ofEpochDay(day).atStartOfDay(zone).toInstant().toEpochMilli()
 
     /** Days up to yesterday go into the rollups; raw rows past 90 days (and already rolled) are deleted. */
@@ -133,6 +147,8 @@ class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applic
             }
             OLog.i("stats: rolled up ${range.last - range.first + 1} day(s), ${cells.size} cells")
         }
+        // Preserve the latest five session details before deleting their raw evidence.
+        retainCharges(db)
         val keepFrom = minOf(now - BatteryStats.RAW_DAYS * DAY_MS, dayStart(today, zone) - LOOKBACK_DAYS * DAY_MS)
         val n = db.delete("snap", "t < ?", arrayOf(keepFrom.toString()))
         if (n > 0) OLog.i("stats: deleted $n raw rows older than ${BatteryStats.RAW_DAYS} days")
@@ -172,8 +188,8 @@ class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applic
     fun batterySnapshot(now: Long, zone: ZoneId): Map<String, Any?> {
         val v = view(now, zone, 14)
         val raw = snapsSince(now - BatteryStats.RAW_DAYS * DAY_MS)
-        return BatteryEstimate.snapshot(v.totals, v.days, v.last, BatteryStats.segments(raw, now), now, zone,
-            BatteryEstimate.usualDays(raw, now))
+        return BatteryEstimate.snapshot(v.totals, v.days, v.last, emptyList(), now, zone,
+            BatteryEstimate.usualDays(raw, now), recentCharges = savedCharges())
     }
 
     /** Segments over the raw window, for the export. */
