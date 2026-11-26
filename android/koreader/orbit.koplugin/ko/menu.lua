@@ -293,7 +293,7 @@ function OrbitAndroid.readOnly(items)
         elseif it.sub_item_table_func then
             local f = it.sub_item_table_func
             c.sub_item_table_func = function(...) return OrbitAndroid.readOnly(f(...) or {}) end
-        elseif not it.keep_menu_open and not it.read_only then
+        elseif not it.read_only then
             c.enabled_func = function() return false end
             c.callback = function() end
         end

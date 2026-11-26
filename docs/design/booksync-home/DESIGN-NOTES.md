@@ -798,3 +798,8 @@ KOReader's `scaleBySize` rounds upward (`koreader-base` pin
 The native adapter calibrates its inverse at a large size rather than treating
 `scaleBySize(1)` as an exact factor. Fractional-scale tests verify that displayed
 physical pixel margins survive apply and one-time copy unchanged.
+
+
+Keep-open Custom editor and copy rows inherit the existing Settings PIN lock.
+Only explicitly read-only leaf navigation may bypass the read-only menu wrapper;
+keeping a menu open does not make its action safe to run while locked.
