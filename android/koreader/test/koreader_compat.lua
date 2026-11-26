@@ -43,6 +43,8 @@ end
 -- Symbols: name (a function), or { name, kind }.
 local F, T = "field", "text"
 local NEEDS = {
+    { "frontend/ui/widget/buttondialog.lua", { "getButtonById", "onClose" } },
+    { "frontend/ui/widget/focusmanager.lua", { "moveFocusTo" } },
     { "frontend/ui/trapper.lua", { "wrap", "info" } },
     { "frontend/ui/uimanager.lua", { "show", "close", "scheduleIn", "nextTick", "unschedule", "setDirty",
         "forceRePaint", "getElapsedTimeSinceBoot", "getTopmostVisibleWidget", "quit", "restartKOReader",
@@ -66,8 +68,10 @@ local NEEDS = {
     { "frontend/apps/filemanager/filemanager.lua", { { "instance", F }, "setRotationMode", "onSetRotationMode",
         { "lock_rotation", T } } },
     { "frontend/ui/widget/eventlistener.lua", { "handleEvent" } },
-    { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu",
+    { "frontend/apps/reader/modules/readermenu.lua", { "registerToMainMenu", "onCloseReaderMenu", "onShowMenu",
         { "menu_container", F } } },
+    { "frontend/ui/widget/progresswidget.lua", { {"percentage", F}, {"ticks", F}, {"bordersize", F}, {"margin_h", F}, {"margin_v", F}, {"radius", F} } },
+    { "frontend/ui/widget/container/topcontainer.lua", { {"TopContainer", T} } },
     { "frontend/apps/reader/modules/readertoc.lua", { "isChapterStart", "getPreviousChapter" } },
     { "frontend/apps/reader/modules/readerstatus.lua", { "onEndOfBook", "markBook", "onShowBookStatus",
         { "end_document_action", T } } },
@@ -96,6 +100,11 @@ local NEEDS = {
     { "frontend/gettext.lua", { { "GetText", T } } },
     { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T }, "paintTo" } },
     { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T } } },
+    -- Owned Home: absolute grid placements, ordinary buttons and a plain progress bar.
+    { "frontend/ui/widget/overlapgroup.lua", { "paintTo", {"overlap_offset", T}, {"allow_mirroring", F} } },
+    { "frontend/ui/widget/progresswidget.lua", { "paintTo", {"percentage", F} } },
+    { "frontend/ui/widget/button.lua", { {"height", F}, {"text_font_size", F}, {"avoid_text_truncation", F} } },
+    { "frontend/ui/widget/container/framecontainer.lua", { {"radius", F}, {"background", F} } },
     -- Reading strips: temporary effective margins and native hidden-footer release.
     { "frontend/apps/reader/modules/readerfooter.lua", { "getHeight", "onToggleFooterMode",
         { "reclaim_height", F }, { "pageno", F }, { "pages", F }, { "percent_finished", F } } },
@@ -104,6 +113,7 @@ local NEEDS = {
     { "frontend/apps/reader/modules/readerrolling.lua", { { "cre_top_bar_enabled", F } } },
     { "frontend/apps/reader/modules/readertoc.lua", { "getTocTitleByPage" } },
     { "frontend/document/document.lua", { "getPageCount" } },
+    { "frontend/ui/widget/widget.lua", { "getSize" } },
     { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free" } },
     { "frontend/device/generic/device.lua", { "getPowerDevice" } },
     { "frontend/device/generic/powerd.lua", { "getCapacity", "isCharging" } },
@@ -130,7 +140,7 @@ local BASE = {
     { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
         "terminateSubProcess" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
-    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, "writeToFile", "free" } },
+    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRect", "writeToFile", "free" } },
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
     -- The offline cache's database (ko/db.lua; docs/design/sqlite-cache.md), as KOReader's statistics plugin uses it.
     { "thirdparty/lua-ljsqlite3/init.lua", { "open", "set_busy_timeout", "prepare", "exec", "rowexec", "step", "bind",

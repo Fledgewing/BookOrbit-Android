@@ -15,6 +15,10 @@ CrossInk 2.x only; 1.6 is retired).
 
 ## Next release (0.12): BookSync Home
 
+| Outcome | Platforms | Status |
+|---|---|---|
+| Opt-in owned Home host with paged placements, isolated Continue reading, Shelf and Lists widgets, and one budgeted batch per paint. | Android; X4 Pro, X4, X3 later | building (authorised 2026-11-25; device acceptance pending) |
+
 The release after 0.11.4 graduates from previews and release candidates. Built in parallel on the
 `feature/0.12` branch while 0.11.4 stabilises on `main`; design and mockups need approval first
 ([BookSync Home design](docs/design/booksync-home/DESIGN.md), in progress). This is the first step
@@ -22,6 +26,11 @@ of [backend independence](#planned-backend-independence): BookSync owns the scre
 becomes a data source. X3 is a full 0.12 target: BookSync replaces the other compiled Home variants;
 flash/heap fit remains a release acceptance gate. The later server-package
 phase does not defer owned X4 Home; plain-base cutover follows adapter completeness.
+
+**Widget layout engine and budgeted host contracts:** versioned layouts, immutable class
+projections, M8C defaults, pure editing and previous-valid recovery — Android building
+(maintainer-approved 2026-11-25); X4 Pro, X4 and X3 deferred to the firmware implementation.
+The layout editor and further widgets build on this engine.
 
 All four remaining parity gaps below ship in 0.12 (maintainer ruling 2026-11-25);
 design and mockup approval still apply.
@@ -34,7 +43,10 @@ design and mockup approval still apply.
 | **Series view** (Next 6): every book in order, on device or server only, read state, download next. | Android, X4 Pro, X4, X3 | approved (W36; maintainer 2026-11-25; Android first) |
 | **Owned Xteink adapter and firmware path**: Home reads our SD database through our adapter in 0.12, replacing other X3 Home implementations to fit; replace fork sync/download/login, then cut over to plain CrossInk + our layer after separate base-switch approval. | X4 Pro, X4, X3 | designing ([audit and stages](docs/design/booksync-home/DESIGN.md#82-what-currently-depends-on-crossink-bookorbit)) |
 | **Stable / RC / Preview update channels** selected from the BookSync version, with stored opt-in migration and no channel-switch downgrade. | Android, X4 Pro, X4, X3 | building (0.12, maintainer-approved W42) |
-| **BookSync library interface**: all platform UIs use one interface with BookOrbit/Grimmory adapters, capability-gated features and neutral filters with cached-catalog fallback ([BookSync Home owned-client design](docs/design/backend-independence.md#1-owned-android-client-and-ledger)); maintainer rule 2026-11-26. | Android (KOReader plugin + companion), X4 Pro, X4, X3 | planned (0.12) |
+| **In-book progress**: one plain bar in the top panel, Book info and Details, cached reading stats and manual Sync through the library interface; battery estimate waits for its operation. | Android building; X4 Pro, X4, X3 later (maintainer ruling 2026-11-25) | building (F12-H; unreleased, device validation pending) |
+| **Reusable filter sheet**: nine picker rows, companion-counted facets, removable chips and a local Home Book list action. | Android building; X4 Pro, X4, X3 after | building (maintainer-authorised Android F12-G) |
+| **Reading statistics and Stats widgets**: companion aggregates local reading history into bounded Year, This week, hourly and Records snapshots; host integration and completion/goal settings follow. | Android building (approved 2026-11-25); X4 Pro, X4, X3 deferred to firmware implementation | building |
+| **BookSync library interface**: all platform UIs use one interface with BookOrbit/Grimmory adapters, capability-gated features and neutral filters with cached-catalog fallback ([BookSync Home owned-client design](docs/design/backend-independence.md#1-owned-android-client-and-ledger)); maintainer rule 2026-11-26. | Android (KOReader plugin + companion), X4 Pro, X4, X3 | building (Android F12-A foundation; X4 Pro, X4, X3 planned) |
 | **Equivalent settings controls**: expose the [parity gap 1](docs/FEATURES.md#prioritised-parity-bugs) controls, including a sleep sync budget aligned with Android's 10/15/20 s choices. | X4 Pro, X4 | planned (0.12) |
 | **BookSync status-bar preset**: add one preset over the existing native controls ([parity gap 2](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |
 | **Discoverable settings**: make equivalent settings easy to find while retaining button navigation ([parity gap 3](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |

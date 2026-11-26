@@ -7078,7 +7078,44 @@ end
     ok(success, err)
 end)
 
+test("library ready model: real SQLite reads stay bounded and batch once", function()
+    local dir, st = fixtureStore()
+    st:run("CREATE TABLE library_views(owner TEXT,request TEXT,body BLOB,at INTEGER,PRIMARY KEY(owner,request))")
+    local owner, send, problem = RE.LibraryAdapter.owner, RE.Companion.send, RE.Companion.workerProblem
+    local trips, batch = 0
+    RE.LibraryAdapter.owner = function() return DBFX.owner end
+    RE.Companion.workerProblem = function() end
+    RE.Companion.send = function(action, extras)
+        eq(action, RE.Companion.ACTION.PATCH)
+        trips=trips+1; batch=RE.Cache.decode(extras.library_batch)
+    end
+    local success, err=pcall(function() withStore(dir,function()
+        local p=RE.Library.paint("home")
+        eq(p:widget("booklist"):window("reading",{},0,2).pending,true)
+        p:widget("library"):counts(); p:flush(); eq(trips,1); eq(#batch,2)
+        local body=RE.Cache.encode({items={{key="opaque",title="Ready"}},freshness={saved=true}})
+        st:run("INSERT INTO library_views VALUES(?,?,?,1)",DBFX.owner,batch[1],body)
+        local decoded, decode=0,RE.Cache.decode
+        RE.Cache.decode=function(value) decoded=decoded+#value; return decode(value) end
+        local q=RE.Library.paint("home")
+        eq(q:widget("booklist"):window("reading",{},0,2).items[1].title,"Ready")
+        eq(decoded,#body); q:flush(); eq(trips,1,"repeat paint is coalesced")
+        st:run("UPDATE library_views SET body=?",string.rep("x",16385))
+        decoded=0
+        local r=RE.Library.paint("home")
+        eq(r:widget("booklist"):window("reading",{},0,2).pending,true)
+        eq(decoded,0,"oversized snapshot never decoded")
+        RE.Cache.decode=decode
+    end) end)
+    RE.LibraryAdapter.owner,RE.Companion.send,RE.Companion.workerProblem=owner,send,problem
+    st.conn:close(); os.execute("rm -rf '" .. dir .. "'")
+    ok(success,err)
+end)
+
+dofile(here .. "/home_host_flows.lua")(test,eq,ok,RE,W,Widget)
+
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
+dofile(here .. "/reader_panel_flows.lua")(here, test, ok, eq)
 
 if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
     for _, name in ipairs({

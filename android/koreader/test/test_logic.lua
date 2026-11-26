@@ -1731,5 +1731,12 @@ test("fixture registry: the plugin reads every table it is named for, and every 
     eq(table.concat(problems, "\n"), "", "REGISTRY.json")
 end)
 
+dofile(here .. "/layout_tests.lua")(M, test, ok, eq, JSON)
+
+dofile(here .. "/test_filter_sheet.lua")(test, eq, ok, here, M)
+dofile(here .. "/test_library.lua")(test, eq, ok, here, M.Cache)
+
+dofile(here .. "/test_reading_stats.lua")(test, eq, ok, here, M.Cache)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

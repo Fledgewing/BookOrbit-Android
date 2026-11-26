@@ -54,6 +54,7 @@ companion's "KOReader patch installed" row uses it when it can't read the file).
 | `CHECK` | `reason`, `cache_key`, `path`, `mode` (`open`/`refresh`/`full`, or `store`: the plugin read it from the server), `owner`, `template` (the plugin's detail request with the sentinel id), `server`, `user`, `userkey` | Cap `cache_worker`: ask `server` for `path`, compare with what the plugin would serve from `orbit.db`, save a changed reply there and answer with an event (below). Checks go before Full refresh jobs. Needs no service. |
 | `PATCH` | `reason`, `id` (a book id, or empty), `fields` (a Lua literal of the changed fields, or empty), `stale_home` (`"1"`/`"0"`); or `wipe` = `"1"`; `remember_id`, `plugin_state`; `old_hash`, `new_hash`, `copy_path` | Cap `cache_worker`: a write the plugin made (`Cache.writeEffect`), patched into the saved book, the lists that name it and other saved replies; Home marked stale. `wipe` empties the database. In order with the checks. `plugin_state` atomically persists the in-memory plugin state; `remember_id` persists the saved detail for the end-of-book sheet; copy identity migration updates sidecar/statistics in the worker. No login. Needs no service. |
 | `STORAGE` | `reason`, `limit` (bytes, empty: none), `cover_dir`, `mirror_covers` (`"1"`/`"0"`) | Cap `cache_worker`: count everything BookSync stores (`orbit.db` and the cover folder) and, over `limit`, remove what StorageLogic says: the oldest browsing replies and plain covers first, then covers saved for offline, never lists and books saved for offline nor Home. The companion removes them itself and answers with a `storage` event. No login. Needs no service. |
+| `PATCH` (0.12 library) | `library_batch` (Lua literal array of encoded neutral requests, ≤16 entries, ≤128 KiB), `owner` | Same caller-checked worker queue. No login or network. Materializes bounded results in `library_views` in the existing owned SQLite database, with owner checks before and inside publication. The plugin reads ready results through `Library`; filtering, grouping, sorting, counts and joins stay in Kotlin. See [F12-A notes](../../docs/design/booksync-home/F12-A-NOTES.md) for operations, budgets and pending/empty states. |
 | `COPIES` | `reason`, `ask` (Lua literal); or `prepare` (one queued copy), `template`, `server`, `user`, `userkey` | Cap `cache_worker`: which copies on the reader changed in the library (docs/design/keep-copies-current.md), from the in-memory `ask`, persisted by the companion in `koreader/settings/orbit-cache/copies/ask.lua` (below): the newer of the end-of-book cache's, the cache's and the database's saved details per book, compared with each copy's hash, and only copies whose file is on the reader. Answers with a `copies` event; the plugin queues and downloads them. `prepare` fetches the delivery detail using the supplied template and samples the existing file hash, answering with `copy_prepared` (`path`, `detail`, `md5`, or `err`). Only preparation needs a login. Needs no service. |
 | `UPDATE` | `reason` | The plugin's "Check for updates" (it downloads nothing itself: the plugin and the companion ship together). A check by hand, as from the companion's Update page: a newer release installs the companion and then the plugin of that release; an up-to-date companion installs the plugin of its own release when the one on disk is older (PatchInstaller). Every mode; needs no service. |
 | `SLEEP_NOW` | `reason` (`sync_and_sleep` or `sync_and_sleep_failed`) | `DevicePolicyManager.lockNow()` when the device-admin approval (`force-lock` only) is granted; otherwise logged and the screen stays on. At most one per 5 s. (The accessibility `GLOBAL_ACTION_LOCK_SCREEN` fallback is not in companion v1; add it only if the firmware blocks device admin.) |
@@ -451,3 +452,25 @@ Statistics migration preserves KOReader Android's WAL journal mode (`frontend/de
 and a stable `token` for the backup-based global `reader_footer_mode` repair. The
 plugin changes only a matching native global setting in memory, never the loaded
 footer or document, and persists the token to ignore replay after later user changes.
+
+### 0.12 reader progress projections (F12-H)
+
+The existing `library_batch` command also accepts `reader` (local `path`, one
+normalized book row; optional `native_progress` is the native reader's cached
+0–1 fraction, validated and projected by the companion without changing the
+saved catalog position) and `battery` (one local snapshot, unavailable until the
+battery model is installed). The `book` and `reader` rows include `stats` with
+`available`, optional `pages_read`, `reading_seconds`, and inclusive
+`days_start_to_finish`. Joins and SQLite aggregation run in the companion;
+no metadata file or statistics database is parsed by the reader UI. The
+`progress.syncCurrent` capability advertises the existing explicit Sync action
+behind the library adapter, with no new sync writer. See
+[reader progress notes](../../docs/design/booksync-home/F12-H-NOTES.md).
+
+The owned Home host also uses `lists(limit)` on the library context. Its materialized
+rows contain opaque `key`, display `title` and cached `count`; incomplete membership
+is “Not saved yet”. Book windows may include `local_path` from the owner-scoped,
+worker-checked file ledger. The plugin opens only that local file through
+`Library.open`; no widget resolves identities or performs a download. A changed
+publication emits `library`; catalog publication emits `library_source`. These reuse
+the acknowledged event queue. They invalidate an already visible Home, never show it.

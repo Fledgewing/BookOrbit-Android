@@ -5191,6 +5191,223 @@
       "settings_keys": [
         "recommended_choice"
       ]
+    },
+    {
+      "id": "reading-insights",
+      "feature": "Local Year, This week, hourly reading and Records widgets (0.12 foundation)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "0.12 local aggregates and standalone renderers",
+          "reason": "deliberately deferred: Android build authorised 2026-11-25; Home host wiring, finish ledger and goal settings remain pending.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-F-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Firmware implementation deferred",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-F-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Firmware implementation deferred",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-F-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Firmware implementation deferred",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-F-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        }
+      },
+      "deferred": "Home host integration, local finish ledger and goal settings; firmware renderers."
+    },
+    {
+      "id": "filter-sheet",
+      "feature": "Owned reusable filter sheet (0.12 foundation; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Nine-row component, bounded companion facets, chips/reset and Home save callback; owned host wiring follows",
+          "reason": "deliberately deferred: owned list/search and Home hosts integrate the component in their 0.12 slices",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/filter_sheet.lua",
+              "line": 3
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Planned after Android; same neutral filter and counting contract",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Planned after Android; same neutral filter and counting contract",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Planned after Android; same neutral filter and counting contract",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "owned-home",
+      "feature": "Opt-in BookSync Home with Continue reading, Shelf and Lists",
+      "category": "Behaviour",
+      "settings_keys": [
+        "home_screen"
+      ],
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Implemented on feature/0.12 behind Home screen; legacy Home remains the default",
+          "reason": "deliberately deferred: device acceptance and remaining Home widgets follow the staged Android build",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/home_host.lua",
+              "line": 1
+            }
+          ],
+          "deferred": "Full widget library, cached covers and richer book actions"
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned Home host follows the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-C-NOTES.md",
+              "line": 3
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned Home host follows the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-C-NOTES.md",
+              "line": 3
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned Home host follows the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-C-NOTES.md",
+              "line": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "reader-book-progress",
+      "feature": "Owned reader top panel, Book info and Details progress (0.12 implementation)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Plain progress bar and cached reading stats; manual Sync in the top panel",
+          "reason": "deliberately deferred: 0.12 Android implementation is building, not released or device validated; battery projection remains a stub and stats require saved KOReader records plus the tracked-file ledger.",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/reader_panel.lua",
+              "line": 1
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ReaderBookStats.kt",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned reader progress pages planned after Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice.",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned reader progress pages planned after Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice.",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned reader progress pages planned after Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. X3 also requires measured flash fit.",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        }
+      }
     }
   ],
   "release_evidence": {

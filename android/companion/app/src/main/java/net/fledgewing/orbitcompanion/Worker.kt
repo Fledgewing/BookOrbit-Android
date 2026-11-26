@@ -105,6 +105,19 @@ object Worker {
             synchronized(lock) { patches.addLast { worker().savePluginState(LuaValue.str(state)) }; lock.notifyAll() }
             return start()
         }
+        if (i.action == ACTION_PATCH && i.hasExtra("library_batch")) {
+            val encoded = i.getStringExtra("library_batch")?.takeIf { it.length <= 131072 } ?: return
+            val owner = i.getStringExtra("owner") ?: return
+            synchronized(lock) { patches.addLast {
+                val requests = LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? List<*> ?: return@addLast
+                val model = LibraryReadModel(worker().store, readingStats = {
+                    ReadingStats.read(File(root().parentFile, "statistics.sqlite3"), System.currentTimeMillis() / 1000)
+                })
+                if (requests.size <= LibraryReadModel.MAX_BATCH && model.publish(LuaValue.str(owner), requests))
+                    worker().event(mapOf("kind" to "library", "owner" to LuaValue.str(owner)))
+            }; lock.notifyAll() }
+            return start()
+        }
         if (i.action == ACTION_PATCH && i.hasExtra("remember_id")) {
             val id = i.getStringExtra("remember_id")?.toLongOrNull() ?: return
             synchronized(lock) { patches.addLast { worker().rememberDetail(id) }; lock.notifyAll() }

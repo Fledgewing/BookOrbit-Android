@@ -81,6 +81,9 @@ class FastCatalogRefresh(
         for (field in listOf("seriesId", "progressPercentage", "lastReadAt", "readStatus", "addedAt", "updatedAt", "hasCover", "thumbnailUrl", "detailUrl")) {
             if(canonical[field]!=row[field]){canonical[field]=row[field];changed=true}
         }
+        for (field in listOf("rating", "pageCount", "tags")) if (row.containsKey(field) && canonical[field] != row[field]) {
+            canonical[field] = row[field]; changed = true
+        }
         if(manifest.second&&!changed)return
         db.exec("UPDATE bulk_books SET item=?,status=?,added=?,updated=? WHERE g=? AND id=?", LuaValue.encode(canonical),
             BulkCatalog.status(row["readStatus"]), row["addedAt"], row["updatedAt"], generation, id)
@@ -223,8 +226,8 @@ class FastCatalogRefresh(
         for ((section, selector) in listOf("libraries" to "libraryId", "collections" to "collectionId", "smart-scopes" to "smartScopeId"))
             for (entry in entries(section)) {
                 val value = entry["id"].toString()
-                pages("$base/books", mapOf(selector to value), "$selector:$value") { row, _ ->
-                    val id = (row["id"] as Number).toLong(); member(selector, value, id); rich(row)
+                pages("$base/books", mapOf(selector to value), "$selector:$value") { row, pos ->
+                    val id = (row["id"] as Number).toLong(); member(selector, value, id, mapOf("_booksyncRank" to pos)); rich(row)
                 }
             }
     }

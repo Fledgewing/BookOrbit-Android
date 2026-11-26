@@ -102,6 +102,18 @@ local function rows(conn, sql, ...)
 end
 Store.rows = rows
 
+-- Ready-to-draw 0.12 results: one row, size checked by SQLite before decoding.
+-- Reuse the same owner/reading/busy gate as all existing cache reads.
+function Store.library(owner, request)
+    return within(owner, "library:" .. request, function(conn)
+        local r = rows(conn, "SELECT body FROM library_views WHERE owner=? AND request=? AND length(body)<=16384",
+            owner, request)[1]
+        local body = r and r[1]
+        if type(body) ~= "string" then return nil end
+        return Cache.decode(body), #body
+    end)
+end
+
 function Store.meta(conn, k)
     local r = rows(conn, "SELECT v FROM meta WHERE k = ?", k)[1]
     return r and r[1] or nil

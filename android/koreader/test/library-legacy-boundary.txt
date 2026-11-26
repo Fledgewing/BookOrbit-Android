@@ -1,0 +1,247 @@
+cache.lua	function OC.owner(client)
+cache.lua	return tostring(client.username or "") .. "|" .. tostring(client.server_url or ""):lower()
+cache.lua	return Store.read(OC.owner(client), key, path, OC.detailTemplate(client))
+cache.lua	local owner = OC.owner(client)
+cache.lua	local key = Cache.key({ account = owner, server = client.server_url, method = method, path = path })
+cache.lua	local short = tostring(path):gsub("^/koreader/plugin/catalog", "")
+cache.lua	local found = Store.search(OC.owner(client), path)
+cache.lua	client = client or OC.client()
+cache.lua	owner = OC.owner(client), server = client.server_url, user = client.username, userkey = client.userkey,
+cache.lua	function OC.client()
+cache.lua	local p = bookorbit(liveUI())
+cache.lua	local short = tostring(job.path):gsub("^/koreader/plugin/catalog", "")
+cache.lua	local p = bookorbit(liveUI())
+cache.lua	if next(OC.inflight) ~= nil then return "the BookSync cache checking BookOrbit" end
+cache.lua	if Mirror and Mirror.active then return "saving BookOrbit for offline" end
+cache.lua	local p = bookorbit(liveUI())
+cache.lua	log("cache: a write to", (tostring(path):gsub("^/koreader/plugin/catalog", "")), "sent to the companion to patch")
+cache.lua	local url = tostring(client.server_url) .. path
+cache.lua	["x-auth-user"] = client.username, ["x-auth-key"] = client.userkey }
+cache.lua	local code, got = OC.httpCover(client, "/koreader/plugin/catalog/books/" .. tostring(book_id) .. "/thumbnail",
+cache.lua	return okd and okp and d and (d .. "/cache/bookorbit") or nil
+cache.lua	pcall(function() require("bookorbit_toast").show(text, { timeout = timeout or 2 }) end)
+cache.lua	server = client.server_url, user = client.username, userkey = client.userkey })
+cache.lua	local p = bookorbit(liveUI())
+cache.lua	OC.note(_("Open BookOrbit and sign in to refresh the catalog."), 4)
+cache.lua	local Api = package.loaded["bookorbit_api"]
+cache.lua	local Catalog = package.loaded["bookorbit_catalog"]
+companion.lua	purpose = purpose or _("to save BookOrbit for offline")
+companion_ui.lua	log("home: the companion isn't Home here; staying on BookOrbit home")
+copies.lua	local sm = package.loaded["bookorbit_state_manager"]
+copies.lua	local client = OC.client()
+copies.lua	if okp and path then ask.owner, ask.server, ask.detail_template = OC.owner(client), client.server_url, path end
+copies.lua	local p = bookorbit(liveUI())
+copies.lua	if not cat then return Copies.stop("no BookOrbit plugin") end
+copies.lua	local Delivery = require("bookorbit_delivery")
+copies.lua	local template = client:query("/koreader/plugin/catalog/books/" .. Mirror.SENTINEL,
+copies.lua	template = template, server = client.server_url, user = client.username, userkey = client.userkey })
+copies.lua	local p = bookorbit(liveUI())
+endofbook.lua	api = package.loaded["bookorbit_api"],
+endofbook.lua	state = package.loaded["bookorbit_state_manager"],
+endofbook.lua	sidecar = package.loaded["bookorbit_sidecar"],
+endofbook.lua	local keep = { id = detail.id, title = detail.title, authors = detail.authors, seriesId = detail.seriesId,
+endofbook.lua	seriesName = detail.seriesName, seriesIndex = detail.seriesIndex, readStatus = detail.readStatus,
+endofbook.lua	local p = ui and ui.bookorbit
+endofbook.lua	pcall(function() pct = ui.bookorbit:getLastPercent() end)
+endofbook.lua	status_seen = EOB.cache()[tostring(b.book_id)] and EOB.cache()[tostring(b.book_id)].readStatus or nil,
+endofbook.lua	local Catalog = package.loaded["bookorbit_catalog"]
+endofbook.lua	local p = bookorbit(ui)
+endofbook.lua	pluginEvent(ui, p, "BookOrbitOpenDashboard")
+endofbook.lua	if not cat then return done(false, "the BookOrbit plugin changed") end
+endofbook.lua	UIManager:show(require("ui/widget/infomessage"):new{ text = "Sign in to BookOrbit to send", timeout = 3 })
+endofbook.lua	local plan = Finish.plan(job, detail.readStatus)
+endofbook.lua	local p = bookorbit(self.ui)
+endsheet.lua	local p = bookorbit(liveUI())
+grouping.lua	local whole = { sort = "series", seriesId = params.seriesId, series = params.series }
+grouping.lua	local Catalog = package.loaded["bookorbit_catalog"]
+grouping.lua	local Api = package.loaded["bookorbit_api"]
+home.lua	self:smartHome(source, from or nil, cmd == "home" and "bookorbit" or "smart", held or nil)
+home.lua	local p = bookorbit(self.ui)
+home.lua	UIManager:show(InfoMessage:new{ text = _("The BookOrbit plugin isn't loaded."), timeout = 3 })
+home.lua	UIManager:show(InfoMessage:new{ text = _("Signed in to BookOrbit."), timeout = 2 })
+home.lua	log("sign in (" .. tostring(source) .. "): BookOrbit's sign-in", okc and "opened" or ("FAILED: " .. tostring(err)))
+home.lua	S.restart_screen = catalogOnTop(bookorbit(ui)) and "bookorbit" or nil
+home.lua	if bookorbitOverBook(bookorbit(ui)) then return false end
+home.lua	local notice = w and (w.name == "bookorbit_toast" or w.is_infomessage or w.orbit_note)
+home.lua	Gate.installPlugin(bookorbit(liveUI()))
+home.lua	local okt, Toast = pcall(require, "bookorbit_toast")
+home.lua	Gate.refreshNotice("BookOrbit " .. name .. ": " .. tostring(args[1]))
+home.lua	log("notice: shown: BookOrbit loading: " .. tostring(args[1]))
+home.lua	return Gate.show("BookOrbit " .. name .. ": " .. tostring(args[1]), function() return stock(unpack(args, 1, args.n)) end, 120)
+home.lua	function bookorbitOverBook(p)
+home.lua	if type(name) == "string" and name:find("^bookorbit") and name ~= "bookorbit_toast" then return true end
+home.lua	if p and w == p.catalog_browser then return "BookOrbit catalog" end
+home.lua	function bookorbitScreen(p)
+home.lua	if cb == nil then return nil, {}, "no BookOrbit view" end
+home.lua	if not Compat.callable(cb.dashboardMode) then return nil, {}, "BookOrbit catalog without dashboardMode" end
+home.lua	return nil, {}, "BookOrbit covered by " .. widgetName(w, p)
+home.lua	if not found then return nil, {}, "BookOrbit view not in the window stack" end
+home.lua	if #above == 0 and dash then return "main", above, "BookOrbit main page" end
+home.lua	local desc = "BookOrbit " .. tostring(kind or "?") .. " view"
+home.lua	log("compat: catalog unavailable (plugin " .. pluginVersion(p) .. "): missing dashboardMode -> Home on BookOrbit home goes back to the book")
+home.lua	local p = bookorbit(ui)
+home.lua	local screen, over, screen_desc = bookorbitScreen(p)
+home.lua	bookorbit_sub = screen == "sub", page_above_1 = page ~= nil,
+home.lua	log("home (" .. mode .. "):", action, "| in reader", tostring(in_reader), "menu", tostring(menu_open), "BookOrbit view",
+home.lua	log("home: BookOrbit " .. page_what .. " page " .. page .. " -> page 1")
+home.lua	if action == "bookorbit_main" then return self:bookorbitMain(p, over, screen_desc) end
+home.lua	log("home (smart): closed the BookOrbit view", okc and "" or tostring(err))
+home.lua	local q = bookorbit(liveUI()) or p
+home.lua	log("home: BookOrbit home is on top (" .. why .. ")")
+home.lua	Gate.drain("BookOrbit Home")
+home.lua	log("home: BookOrbit home did NOT open (" .. why .. "); top:", widgetName(topWidget(), q))
+home.lua	local p = bookorbit(ui)
+home.lua	if screen == "bookorbit" then
+home.lua	log("restart: back to BookOrbit Home, where the reader was")
+home.lua	pcall(self.smartHome, self, "restart", nil, "bookorbit")
+home.lua	function OrbitAndroid:bookorbitMain(p, over, desc)
+home.lua	log("home: on", desc, "-> BookOrbit main page")
+home.lua	local screen = bookorbitScreen(p)
+home.lua	log("home: BookOrbit catalog back to its main page (goDashboard)")
+home.lua	log("home: BookOrbit main page showing")
+home.lua	log("home: reopening BookOrbit home fresh (top:", widgetName(topWidget(), p) .. ")")
+home.lua	pluginEvent(liveUI(), p, "BookOrbitOpenDashboard")
+home.lua	local p = bookorbit(ui)
+home.lua	local screen, over, desc = bookorbitScreen(p)
+home.lua	if screen ~= nil then return self:bookorbitMain(p, over, desc) end
+home.lua	log("home: BookOrbit home is open but not showing (" .. tostring(desc) .. "); reopening it")
+home.lua	if ui and ui.document and hasHandler(p, "BookOrbitOpenDashboard") and p:isLoggedIn() then
+home.lua	log("home: BookOrbit home over the open book")
+home.lua	pluginEvent(ui, p, "BookOrbitOpenDashboard")
+home.lua	log("home: closing book, then BookOrbit home (it stays the current book)")
+home.lua	local p = bookorbit(self.ui)
+home.lua	log("home: BookOrbit plugin missing; staying in the file browser")
+home.lua	log("home: BookOrbit home already showing")
+home.lua	if not hasHandler(p, "BookOrbitOpenDashboard") then
+home.lua	log("home: this plugin instance shows no BookOrbit home handler; sending the event anyway")
+home.lua	log("home: BookOrbit home is open but not showing (top: " .. widgetName(topWidget(), p) .. "); bringing it to the top")
+home.lua	if not okc then log("home: closing the covered BookOrbit view failed:", tostring(err)) end
+home.lua	log("home: opening BookOrbit home")
+home.lua	pluginEvent(liveUI() or self.ui, p, "BookOrbitOpenDashboard")
+home.lua	local p = bookorbit(ui)
+home.lua	if catalogOnTop(p) then return "bookorbit" end
+home.lua	local directBookorbitMain = OrbitAndroid.bookorbitMain
+home.lua	function OrbitAndroid:bookorbitMain(...)
+localfirst.lua	local sm = package.loaded["bookorbit_state_manager"]
+localfirst.lua	local sc = package.loaded["bookorbit_sidecar"]
+localfirst.lua	local sm = package.loaded["bookorbit_state_manager"]
+localfirst.lua	local BoardData = package.loaded["bookorbit_board_data"]
+localfirst.lua	local sm = package.loaded["bookorbit_state_manager"]
+localfirst.lua	log("local-first: first paint with BookOrbit's on-device marks for", n, "book(s)")
+localfirst.lua	local Catalog = package.loaded["bookorbit_catalog"]
+localfirst.lua	local BoardData = package.loaded["bookorbit_board_data"]
+localfirst.lua	local ListView = package.loaded["bookorbit_list_view"]
+localfirst.lua	local BoardUI = package.loaded["bookorbit_board_ui"]
+localfirst.lua	local okm, px = pcall(function() return require("bookorbit_board_metrics").px end)
+localfirst.lua	return c and (tostring(c.server_url) .. "|" .. tostring(c.username)) or nil
+localfirst.lua	if n > 0 then log("local-first: on-device marks from the last start for", n, "book(s) while BookOrbit rebuilds its own") end
+localfirst.lua	local p = bookorbit(liveUI())
+localfirst.lua	return table.concat({ tostring(context.kind), tostring(context.section or ""), tostring(p.libraryId or p.collectionId
+localfirst.lua	or p.smartScopeId or p.author or p.seriesId or ""), tostring(p.sort or "") }, "|")
+localfirst.lua	local BoardData = package.loaded["bookorbit_board_data"]
+localfirst.lua	local p = bookorbit(self.ui)
+localfirst.lua	local p = bookorbit(self.ui)
+localfirst.lua	pcall(function() require("bookorbit_toast").error(_("This book is open. Close it, then remove it.")) end)
+localfirst.lua	local Catalog = package.loaded["bookorbit_catalog"]
+localfirst.lua	local okp, Peek = pcall(require, "bookorbit_book_peek")
+menu.lua	for _i, l in ipairs(compatLines(bookorbit(self.ui))) do table.insert(parts, l) end
+menu.lua	text = _("Back to my book, then BookOrbit home"),
+menu.lua	checked_func = function() return S.home_button ~= "bookorbit" end,
+menu.lua	text = _("BookOrbit home"),
+menu.lua	checked_func = function() return S.home_button == "bookorbit" end,
+menu.lua	callback = function() Shared.set("home_button", "bookorbit") end,
+menu.lua	local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
+menu.lua	_("When a book's file changes in the library (BookOrbit writes tags into it), the copy on this reader is downloaded again in the background, never while you read. Position, highlights and bookmarks stay.")),
+menu.lua	help_text = _("Sends this page to BookOrbit now, even if it is behind the place there. Your other readers move here at their next sync. Offline, it is sent first at the next sync."),
+menu.lua	{ text = _("Full refresh of BookOrbit"), callback = later(function() OC.menuFullRefresh() end),
+mirror.lua	local p = bookorbit(liveUI())
+mirror.lua	local sm = package.loaded["bookorbit_state_manager"]
+mirror.lua	local sm = package.loaded["bookorbit_state_manager"]
+mirror.lua	return cat.client:query("/koreader/plugin/catalog/books", q)
+mirror.lua	return cat.client:query("/koreader/plugin/catalog/sections/" .. section, params)
+mirror.lua	return cat.client:query("/koreader/plugin/catalog/books", q)
+mirror.lua	return client:query("/koreader/plugin/catalog/books/" .. tostring(id), { deviceId = client.device_id, variant = variant })
+mirror.lua	local okp, p = pcall(Mirror.entryPath, cat, section, section == "series" and { seriesId = tonumber(SENT), id = "x" } or { id = SENT })
+mirror.lua	local okc, p = pcall(cat.thumbnailPath, cat, { id = 1, updatedAt = "1", hasCover = true })
+mirror.lua	local plan = { run = string.format("%d-%d", nowT(), Mirror.seq), op = op, reason = reason, owner = OC.owner(client),
+mirror.lua	all_books = client:query("/koreader/plugin/catalog/books", { sort = "title", order = "asc" }),
+mirror.lua	local path = client:query("/koreader/plugin/catalog/books", q)
+mirror.lua	if q.readStatus or q.sort == "recently_added" or q.sort == "recently_read" then
+mirror.lua	table.insert(plan.entries, "/koreader/plugin/catalog/" .. path)
+mirror.lua	table.insert(plan.entries, "/koreader/plugin/catalog/dashboard/sections/" .. kind)
+mirror.lua	if not client then Mirror.stop("no BookOrbit catalog"); return false end
+mirror.lua	Companion.send(Companion.ACTION.MIRROR, { reason = op .. ": " .. tostring(reason), server = client.server_url,
+mirror.lua	user = client.username, userkey = client.userkey, plan = Cache.encode(plan) })
+mirror.lua	for _, w in ipairs(r.written) do pcall(cat.invalidateThumbnail, cat, { id = w.id, updatedAt = w.updatedAt, hasCover = true }, true) end
+mirror.lua	Badge.finish(_("Paused · it goes on when BookOrbit answers"))
+mirror.lua	log("mirror: no BookOrbit catalog yet; the Full refresh waits until BookOrbit opens")
+mirror.lua	local p = bookorbit(liveUI())
+module.lua	if self.ui.bookorbit then self:hookPluginPagePush()
+module.lua	{ category = "none", event = "OrbitGoHome", title = _("BookSync: go to BookOrbit home"), general = true })
+module.lua	local p = bookorbit(self.ui)
+notices.lua	local Catalog = package.loaded["bookorbit_catalog"]
+orbismart.lua	local RESET_DEVICE_ID = "bookorbit-web"
+orbismart.lua	local bo = G_reader_settings:readSetting("bookorbit")
+orbismart.lua	local p = bookorbit(ui)
+orbismart.lua	local okn, Names = pcall(require, "bookorbit_device_names")
+orbismart.lua	local live = bookorbit(liveUI and liveUI() or ui)
+orbismart.lua	local p = bookorbit(ui)
+orbismart.lua	local live = bookorbit(current)
+orbismart.lua	local p = bookorbit(ui)
+orbismart.lua	local oka, Api = pcall(require, "bookorbit_api")
+orbismart.lua	if st.auto_sync ~= true then pluginEvent(liveUI(), p, "BookOrbitToggleAutoSync", true, true, true) end
+orbismart.lua	pluginEvent(liveUI(), p, "BookOrbitToggleAutoSync", false, true, true)
+orbismart.lua	local p = bookorbit(ui)
+orbismart.lua	local p = bookorbit(m.ui)
+orbismart.lua	local p = bookorbit(ui)
+orbismart.lua	local p = bookorbit(ui)
+orbismart.lua	local p = bookorbit(ui)
+orbismart.lua	local oku, MenuUI = pcall(require, "bookorbit_menu_ui")
+orbismart.lua	local okp, MenuPage = pcall(require, "bookorbit_menu_page")
+orbismart.lua	local okb, BoardUI = pcall(require, "bookorbit_board_ui")
+reading_sync.lua	local p = bookorbit(self.ui)
+reading_sync.lua	local p = bookorbit(self.ui)
+reading_sync.lua	log("reading: plugin could not read BookOrbit's position")
+recommended.lua	return { p = bookorbit(ui), gestures = ui and ui.gestures or nil }
+recommended.lua	if not p or type(p.settings) ~= "table" then return { available = false, reason = _("needs the BookOrbit plugin") } end
+recommended.lua	if type(defaults) ~= "table" then return { available = false, reason = _("BookOrbit changed: its defaults can't be read") } end
+recommended.lua	return { available = false, reason = _("BookOrbit changed: Make BookOrbit home") }
+recommended.lua	if it.key == "auto_sync" and not hasHandler(p, "BookOrbitToggleAutoSync") then
+recommended.lua	return { available = false, reason = _("BookOrbit changed: Auto-sync can't be turned on") }
+recommended.lua	pluginEvent(liveUI(), p, "BookOrbitToggleAutoSync", value == true, true, true)
+recommended.lua	local p = bookorbit(liveUI() or ui)
+shared.lua	if (remote.home_button == "smart" or remote.home_button == "bookorbit") and remote.home_button ~= S.home_button then
+sleep.lua	local p = bookorbit(self.ui)
+sleep.lua	log("suspend: app switch and the book hasn't moved since its last snapshot; BookOrbit's snapshot skipped")
+sleep.lua	local p = bookorbit(self.ui)
+sleep.lua	return done(false, "BookOrbit plugin missing or signed out")
+sleep.lua	text = _("Syncing…") .. "\n" .. _("BookOrbit · then sleep"),
+sleep.lua	text = _("Couldn't reach BookOrbit — saved on this device.") .. "\n"
+sleep.lua	local p = bookorbit(self.ui)
+sleep.lua	finish(false, "BookOrbit plugin missing or signed out")
+sleepscreen.lua	extras.server, extras.user, extras.userkey = client.server_url, client.username, client.userkey
+sleepscreen.lua	local client = OC.client()
+sleepscreen.lua	log("sleep screen: no BookOrbit client yet; the pool waits (" .. tostring(why) .. ")")
+sleepscreen.lua	local client = OC.client()
+sleepscreen.lua	return _("For a custom field: make a smart scope with that condition in BookOrbit, then add it here.")
+start.lua	local p = bookorbit(self.ui)
+start.lua	log(reason .. ": BookOrbit plugin missing or signed out; nothing to do")
+start.lua	local text = _("Can't reach BookOrbit. Reading from this device's place.") .. "\n" .. (res.detail or "")
+start.lua	local okt, Toast = pcall(require, "bookorbit_toast")
+store.lua	local sid = q.seriesId or (q.series and q.series:match("^series:(%d+)$"))
+store.lua	context = not q.smartScopeId and (sid ~= nil or q.series ~= nil)
+store.lua	table.insert(args, 1, sid and "seriesId" or "series")
+store.lua	local selectors = q.smartScopeId and {"smartScopeId"} or {"libraryId", "collectionId", "author", "format"}
+store.lua	if not q.smartScopeId then
+store.lua	if q.readStatus then table.insert(cond, "b.status=?"); table.insert(args, q.readStatus); statusarg = #args end
+test_sync_path.lua	local p = bookorbit(self.ui)
+test_sync_path.lua	local cl = compatLines(bookorbit(self.ui))
+test_sync_path.lua	add(false, _("BookOrbit plugin signed in"), nil, _("Sign in to BookOrbit first."))
+test_sync_path.lua	add(res.server_s ~= nil, _("BookOrbit server answered"), res.server_s, _("No answer from the server: check Tailscale and the server address in BookOrbit settings."))
+test_sync_path.lua	add(err == nil, _("BookOrbit plugin synced"), now_s() - s0,
+test_sync_path.lua	if not (hasHandler(p, "BookOrbitSyncBook") and Compat.callable(p.startSweep) and Compat.callable(p.errorLabel)) then
+test_sync_path.lua	add(true, _("BookOrbit plugin step skipped: ") .. Compat.fallback("test_sync"), nil)
+test_sync_path.lua	pluginEvent(liveUI(), p, "BookOrbitSyncBook", { quiet = true, on_done = plugin_done })
+wifi.lua	local p = bookorbit()
+wifi.lua	if okb and busy then return true, "BookOrbit plugin syncing" end
+wifi.lua	local okb, browsing = pcall(function() return bookorbitOverBook(bookorbit()) end)
