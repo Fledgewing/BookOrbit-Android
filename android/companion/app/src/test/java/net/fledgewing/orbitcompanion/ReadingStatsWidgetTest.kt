@@ -20,7 +20,7 @@ class ReadingStatsWidgetTest {
         assertEquals(2,d["best_index"]); assertEquals("2 m",d["best_duration"])
         assertEquals("Evenings",d["period"]); assertEquals("22:00",d["peak"])
         assertEquals("2 h 0 m",d["longest"])
-        assertEquals("10 m today · this reader (separate)",d["local_today"])
+        assertEquals("10 m today · this reader (separate)",LuaValue.utf8(d["local_today"] as String))
         assertEquals(local["sources"],out["sources"])
         assertEquals(12,(d["months"] as List<*>).size)
         assertFalse((out["records"] as Map<*, *>).containsKey("books_this_year"))
@@ -33,12 +33,14 @@ class ReadingStatsWidgetTest {
         assertEquals("21:42",v["time"]); assertEquals("25 November",v["date"])
         val days=v["days"] as List<*>
         assertEquals(7,days.size); assertEquals(true,(days[2] as Map<*, *>)["today"])
-        assertEquals("▭ 78% ›",v["battery"])
+        assertEquals("▭ 78% ›",LuaValue.utf8(v["battery"] as String))
         assertEquals("9:42 PM",ClockWidget.snapshot(now,emptyMap(),zone,true)["time"])
-        assertEquals("Battery ›",ClockWidget.snapshot(now,emptyMap(),zone)["battery"])
+        assertEquals("Battery ›",LuaValue.utf8(ClockWidget.snapshot(now,emptyMap(),zone)["battery"] as String))
         assertEquals("not-saved",ClockWidget.snapshot(0,emptyMap(),zone)["state"])
         val rollover=ClockWidget.snapshot(Instant.parse("2027-01-01T00:01:00Z").epochSecond,emptyMap(),zone)
         assertEquals("1 January",rollover["date"])
+        val saved=LuaValue.parse(LuaValue.encode(v)) as Map<*, *>
+        assertEquals("▭ 78% ›",LuaValue.utf8(saved["battery"] as String))
         assertTrue(LuaValue.encode(v).size<=16384)
     }
 }

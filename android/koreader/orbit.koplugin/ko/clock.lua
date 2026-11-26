@@ -12,7 +12,10 @@ function ClockWidgets.render(p,snapshot,dispatch,rect)
     local d=snapshot.data or {}
     if d.state~='ready' then
         HomeWidgets.text(canvas,'Clock',pad,pad,w-2*pad,18,false,true)
-        HomeWidgets.text(canvas,d.state=='not-saved' and 'Time unavailable' or snapshot.state=='error' and 'Clock unavailable' or 'Loading clock',pad,pad+scale(30),w-2*pad,14)
+        local state=d.state or snapshot.state
+        local message=(state=='not-saved' or state=='empty' or state=='offline-without-data') and 'Time unavailable'
+            or state=='error' and 'Clock unavailable' or 'Loading clock'
+        HomeWidgets.text(canvas,message,pad,pad+scale(30),w-2*pad,14)
     else
         local short=p.h==1
         local timeSize=short and 34 or p.w==1 and 44 or 34

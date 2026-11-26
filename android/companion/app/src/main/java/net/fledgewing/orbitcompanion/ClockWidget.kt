@@ -12,11 +12,11 @@ object ClockWidget {
         val monday = time.toLocalDate().minusDays((time.dayOfWeek.value-1).toLong())
         val level = (power["level"] as? Number)?.toInt()?.takeIf { it in 0..100 }
         return mapOf("state" to "ready", "freshness" to mapOf("saved" to true),
-            "time" to time.format(DateTimeFormatter.ofPattern(if (twelve) "h:mm a" else "HH:mm")),
-            "weekday" to time.format(DateTimeFormatter.ofPattern("EEEE")),
-            "date" to time.format(DateTimeFormatter.ofPattern("d MMMM")),
+            "time" to LuaValue.str(time.format(DateTimeFormatter.ofPattern(if (twelve) "h:mm a" else "HH:mm"))),
+            "weekday" to LuaValue.str(time.format(DateTimeFormatter.ofPattern("EEEE"))),
+            "date" to LuaValue.str(time.format(DateTimeFormatter.ofPattern("d MMMM"))),
             "days" to (0L..6L).map { val day = monday.plusDays(it)
-                mapOf("label" to day.format(DateTimeFormatter.ofPattern("EEEEE")), "date" to day.dayOfMonth.toString(), "today" to (day == time.toLocalDate())) },
-            "battery" to (level?.let { "▭ $it% ›" } ?: "Battery ›"))
+                mapOf("label" to LuaValue.str(day.format(DateTimeFormatter.ofPattern("EEEEE"))), "date" to day.dayOfMonth.toString(), "today" to (day == time.toLocalDate())) },
+            "battery" to LuaValue.str(level?.let { "▭ $it% ›" } ?: "Battery ›"))
     }
 }
