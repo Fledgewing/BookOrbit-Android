@@ -89,6 +89,7 @@ class SettingsSyncTest {
         val v = mutableMapOf("sync_on_sleep" to "1")
         val get = { k: String -> v[k] ?: schema.byKey.getValue(k).default }
         assertEquals("sync_mode", schema.settings.first { it.section == "sync" }.key)
+        assertEquals("KOReader decides", schema.byKey.getValue("sync_mode").valueLabel("custom"))
         for (k in listOf("sync_on_sleep", "sleep_cap", "sync_on_wake", "reading_schedule")) assertFalse(k, SettingsSync.visible(schema, k, get))
         assertTrue(SettingsSync.visible(schema, "wifi_mode", get))
         v["sync_mode"] = "custom"

@@ -98,6 +98,10 @@ snapshots, JSON decode, file IO or library round-trip); atomic layout validation
 Reader progress surfaces reuse a one-row widget budget, including Book info and
 Details; completion callbacks redraw only a still-visible user-opened panel.
 
+Custom reading editors inherit a named screen budget through the library interface: one small
+device-local record, no catalog work, decoded JSON, network, subprocess or companion round-trip.
+Each editor paint and style operation logs one info-level timing span; host timings are not device acceptance.
+
 ## Read the source, not memory
 
 `tools/upstreams` checks out BookOrbit (server, web app, `koreader-plugin/`), CrossInk-Bookorbit
