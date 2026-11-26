@@ -21,12 +21,12 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
         sql?.let { return it }
         NoMedia.directory(root)
         runCatching { File(root, ".nomedia").let { if (!it.exists()) it.createNewFile() } }
-        var s: Sql = CacheSql(open(file))
+        var s: Sql = CacheSql(open(file), this)
         val v = s.pragma("user_version")?.toIntOrNull() ?: 0
         if (v != VERSION && v != 0) {
             s.close()
             listOf(FILE, "$FILE-journal").forEach { File(root, it).delete() }
-            s = CacheSql(open(file))
+            s = CacheSql(open(file), this)
         }
         if (v != VERSION) {
             s.transaction { SCHEMA.forEach { s.exec(it) } }
