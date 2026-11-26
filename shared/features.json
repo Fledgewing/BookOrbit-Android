@@ -5193,6 +5193,57 @@
       ]
     },
     {
+      "id": "reader-settings-groups",
+      "feature": "Grouped BookSync settings and sync/power mode presets",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Android 0.12 source implementation",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; measured estimates await the battery slice, reading presets await their slice, and advanced list/exclusion pickers use the companion.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-D-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Later platform slice",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; Xteink implementation follows Android.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-D-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Later platform slice",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; Xteink implementation follows Android.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-D-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Later platform slice",
+          "reason": "deliberately deferred: Android-first implementation authorised 2026-11-25; Xteink implementation follows Android.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-D-NOTES.md",
+              "line": 1
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "reading-insights",
       "feature": "Server-first Year, This week, hourly reading and Records widgets (0.12 foundation)",
       "category": "Behaviour",

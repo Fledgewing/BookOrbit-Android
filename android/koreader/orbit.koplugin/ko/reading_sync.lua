@@ -121,8 +121,8 @@ end
 
 function OrbitAndroid:onPageUpdate(page)
     if self.ui and self.ui.document then Stats.page(stats_acc) end
-    -- OrbiSmart replaces Sync while reading with its pause sync (ko/orbismart.lua).
-    if S.reading_schedule == "off" or (OSM and OSM.on()) or not (self.ui and self.ui.document) then return end
+    -- The power settings choose cadence; the position rule chooses safe pull/push behavior.
+    if S.reading_schedule == "off" or not (self.ui and self.ui.document) then return end
     local t = now_s()
     Schedule.onPage(self.schedule, self:chapterKey(page), t)
     if Schedule.isDue(self.schedule, t) then
@@ -152,6 +152,12 @@ function OrbitAndroid:readingSync()
             self.reading_running = false
             log("reading: network not ready; try again at the next interval:", res.detail or "")
             return
+        end
+        if OSM and OSM.on() then
+            return OSM.pullThenDrain(p, "pause", "orbit_reading", function()
+                self.reading_running = false
+                UIManager:scheduleIn(1, function() Sync.waitOutbox(p, 20, function() Wifi.release("reading") end) end)
+            end)
         end
         p:requestLifecycleOutboxDrain("orbit_reading")
         local digest = p:getDocumentDigest()

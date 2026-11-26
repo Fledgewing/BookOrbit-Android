@@ -138,7 +138,7 @@ function HomeEditor.create(host)
                 {"›",function() self:turn(1) end},{"+ Page",function() self:action(function() return m:pageAction("add") end) end}},h-scale(150))
             bar({{"Move ‹",function() self:reorder(-1) end},{"Move ›",function() self:reorder(1) end},
                 {"Delete page",function() self:confirm("Delete this page and its widgets?",function() return m:pageAction("remove") end) end},
-                {"Reset",function() self:confirm("Reset all Home pages to default?",function() return m:reset() end) end}},h-scale(85))
+                {"Reset",function() self:reset() end}},h-scale(85))
         end
         self.metrics={drawNodes=#canvas,rows=count,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}
         assert(Budgets.check(Budgets.get("screens",self.picker and "editor-picker" or "editor"),self.metrics))
@@ -188,6 +188,9 @@ function HomeEditor.create(host)
         dialog=require("ui/widget/buttondialog"):new{title=_("Widget size"),buttons=buttons}
         UIManager:show(dialog) -- gate: user action (editor size)
     end
+    function Editor:reset()
+        self:confirm("Reset all Home pages to default?",function() return self.model:reset() end)
+    end
     function Editor:confirm(text,fn)
         UIManager:show(ConfirmBox:new{text=_(text),ok_callback=function() self:action(fn) end}) -- gate: user action (editor destructive edit)
     end
@@ -207,6 +210,19 @@ function HomeEditor.create(host)
     end
     return Editor:new{}
 end
-function HomeEditor.show(host)
-    UIManager:show(HomeEditor.create(host)) -- gate: user action (Home Edit button)
+function HomeEditor.show(host, action)
+    local editor=HomeEditor.create(host)
+    UIManager:show(editor) -- gate: user action (Home editor or Settings)
+    if action == "rename" then editor:rename()
+    elseif action == "reset" then editor:reset() end
+    return editor
+end
+-- Settings uses the same host, draft and save boundary as Home's Edit button.
+function HomeEditor.open(action)
+    local host=HomeHost.active
+    if not (host and topWidget()==host) then
+        if not HomeHost.show() then return false end
+        host=HomeHost.active
+    end
+    return HomeEditor.show(host, action)
 end

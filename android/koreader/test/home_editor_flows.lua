@@ -14,6 +14,23 @@ return function(test,eq,ok,E,W,Widget,withHost)
         click(host,"Edit")
         return W.shown[#W.shown],host
     end
+    test("Home editor: Settings shortcuts reuse rename and reset confirmation",function()
+        withHost(function()
+            E.S.home_layout=E.Layout.default()
+            table.insert(E.S.home_layout.pages,2,{id="settings-page",tab="Home",name="More",placements={{instance="settings-list",widget="booklist",version=1,x=0,y=0,w=4,h=2,settings={src="reading"}}}})
+            local host=E.HomeHost.create(); E.HomeHost.active=host; W.shown={host}
+            host.index=2
+            local Input=require("ui/widget/inputdialog")
+            local keyboard=Input.onShowKeyboard; Input.onShowKeyboard=function() end
+            local editor=E.HomeEditor.open("rename")
+            Input.onShowKeyboard=keyboard
+            eq(editor.model.index,2,"keeps the visible Home page")
+            local dialog=W.shown[#W.shown]; eq(dialog.title,"Rename page")
+            dialog.buttons[1][1].callback(); eq(W.shown[#W.shown],editor)
+            E.HomeEditor.show(host,"reset")
+            ok(W.shown[#W.shown].text:find("Reset all Home pages",1,true))
+        end)
+    end)
     test("Home editor: select, band move, resize and remove use pure operations",function()
         withHost(function(batches,reads)
             local e=editor(); local m=e.model
