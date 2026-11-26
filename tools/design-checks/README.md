@@ -1,10 +1,10 @@
 # BookSync Home design checks
 
-These are the revision-8 (critic rounds 2–4) browser probes and screenshot tools.
+These are the revision-10 (critic rounds 2–6) browser probes and screenshot tools.
 They test the HTML simulation, not native firmware, real accounts or backend APIs.
 The approved presentation is `docs/design/booksync-home/prototype.html` and its
 companion `DESIGN-NOTES.md`. The existing `DESIGN.md` retains native integration,
-adapter and flash evidence; revision 8 supersedes its earlier visual prototype.
+adapter and flash evidence; revision 10 supersedes its earlier visual prototype.
 Maintainer sign-off is still required before implementation or merge.
 
 Install Playwright in an isolated directory outside the checkout, then install its
@@ -59,10 +59,28 @@ checks supplied alongside `pwtools`. Only path/dependency/output portability
 changes were made to the imported probes; the suite runner and compatibility
 test entry point are new.
 
-All 138 supplied PNG screenshots are retained as lossless WebP (about 4.6 MiB)
+All 137 supplied PNG screenshots are retained as lossless WebP (about 4.6 MiB)
 in `docs/design/booksync-home/shots/`; none was omitted. `mockups.html` is the
 browseable gallery. Pixel equivalence and absence of copied metadata were
 checked against the supplied PNGs. Scripts regenerate PNG; convert those to
 lossless WebP for publishing. These captures cover M8C, X4 Pro and X4 Classic;
 X3's text fallbacks are specified in the notes rather than simulated as a fourth
 device. The prior native integration audit remains a design constraint.
+
+## Rounds 5–6
+
+The current filter is one screen of nine rows, with separate picker screens.
+`r3/flows3.js` now has 137 assertions covering picker navigation, counts from the
+other filters, zero-count ordering, retained ticked values, matching footer/list
+totals, and absent one-page navigation. `r3/focus.js` checks 137 steps, including
+15 dark controls. `critic-shots/r5/*.js` adds the supplied picker, count, battery
+and Classic traversal diagnostics; `pwtools/sweep.js` now checks “at your usual
+use” at every battery-widget size. All are included in the suite.
+
+The earlier `critic-shots/r3/{dark,filt,filt2}.js` probes are retained as historical
+review evidence, but exercise the superseded inline/paged filter controls and
+are no longer current acceptance checks. Their coverage is replaced by the
+updated assertion-based flow/focus checks and the round-5/6 picker probes; the
+other earlier checks still run. The suite also rejects missing sheets, clipped
+or out-of-bounds picker diagnostics. The imported `r3` update was supplied beside
+`pwtools`, rather than inside the design artifact directory.

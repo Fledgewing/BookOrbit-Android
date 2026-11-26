@@ -1,4 +1,4 @@
-# BookSync 0.12 · Home, in-book menus and settings · design notes (revision 8, round 4)
+# BookSync 0.12 · Home, in-book menus and settings · design notes (revision 10, round 6)
 
 Prototype: `prototype.html` (one file, no network). Screens: `shots/` (M8C at device scale factor 2, its native 1404×1872; X4 at 480×800).
 All books, authors, numbers, battery and storage figures are invented.
@@ -10,7 +10,7 @@ app. The companion stays for first-time setup on the M8C and for the few things 
 one group with a mode chooser built on the real settings schema. There is one filter sheet behind every filter button, and it
 can save a Book list on Home. Pages can be renamed and name themselves after their first widget. Lists gains a 1×3 size,
 the X4 default. The Classic focus ring is visible on black. And there is a BookSync library interface (section 12) so the UI
-never names a server. Findings and checks are in sections 14 and 15; round 4 is section 16.
+never names a server. Findings and checks are in sections 14 and 15; round 4 is section 16, round 5 section 17, round 6 section 18.
 
 ## 1. Design system
 
@@ -68,17 +68,17 @@ One treatment, chosen by what the focused thing sits on, applied by `focusKind()
   and a 5 px white ring, so the ring separates from the black around it.
 - **Whole tiles** (the 1×2 hero that is all Resume, edit-mode tiles): the ring is **inset on the tile's own edge** (4 px black,
   then 3 px white inside it), so it never collides with a neighbour; an ink tile inverts its content too.
-- **Segmented controls (round 4):** the same treatment as Apply and the hero: the focused segment turns white with bold
-  black text inside a 2 px white gap and a 3 px black ring that sits outside the control. A selected segment keeps a ✓
-  while focused, so you can still tell which one is chosen.
+- **Segmented controls** (still used in settings and the reader panels): the same treatment as Apply and the hero: white
+  fill, bold black text, a 2 px white gap and a 3 px black ring outside the control; a selected segment keeps a ✓ while
+  focused. The filter sheet no longer has segments (round 5).
 Black, white only: no grays, so it is identical on the X4. Prev/Next move it in reading order; running off a Home page turns
 the page and lands on that page's **first widget** (never the header, never the page dots, which are not focus stops).
 Starting points: Resume on Home page 1, the first widget on other pages and in Edit Home, the current chapter in Contents,
 the value in Go to, the first choice in the filter sheet.
-Verified by `r3/focus.js`: 136 steps over every Home page, a page with the hero at every size, both reader panels, Contents,
-End of book and both pages of the filter sheet. It counts as dark anything on ink, any black control, **selected segments**
+Verified by `r3/focus.js`: 137 steps over every Home page, a page with the hero at every size, both reader panels, Contents,
+End of book, the filter sheet and its Group & sort and Show pickers. It counts as dark anything on ink, any black control, **selected segments**
 and **covers whose art is mostly dark**. Each dark step must turn white or invert and carry a black ring (a thin inset alone
-fails), and every step must differ from its unfocused self. 19 dark steps, 0 fails; shots in `shots/focus/`, inspected.
+fails), and every step must differ from its unfocused self. 15 dark steps, 0 fails; shots in `shots/focus/`, inspected.
 
 ### Covers
 Synthetic grayscale SVG covers with a 2 px white mat on the black hero. A server-only book has a cloud badge that hangs off
@@ -95,7 +95,7 @@ text-only line each widget becomes on the X3.
 | **Book list** | 0.12 | 2×2, 4×2, 2×3, 4×3, 2×1 | 2×2, **1×3**, 1×2, 2×3, 2×4, 2×1 | One widget configured by title, source, style, sort and caption (section 3). Cover shelf: one or two rows of covers that fill the height; a narrow, tall shelf (X4 1×3) is a centred **2×2 mini-grid** that starts right under the header and uses the full height (no gap); a wide shelf shows at least 3 covers. Rows with progress: thumbnails twice round 1's size, title, bar, %, last read; 4-wide becomes a cover strip with bars. | Want to read · 37 · Glasswater, Under a Ninth Moon, … |
 | Lists | 0.12 | 2×3, **1×3**, 2×2, 4×2 | **1×3**, 1×2, 2×2, 2×3 | Your saved lists with live counts. Rows ≥ 52 px fill the tile evenly. **1×3 (narrow):** no icon wells, no chevrons, about 4 lists; on the X4 one line with the count on the right; on the M8C (171 px wide) the name takes two lines with "N books" under it. | Lists · Short reads 84 · Unread SF 132 · … |
 | Library | 0.12 | 2×1, 2×2, 1×1 | 2×3, 1×2, 2×1, 1×1, 2×2 | Library count on the left. **On device, right-aligned, no divider**, with a thin storage bar and "4.2 GB free of 32" under it (the extra number the maintainer asked about: free space, because space is the constraint people act on). Low space: warning glyph + "Low space · 1.2 GB free". 1×1: count + free figure only. 2×2+: Authors / Series / Collections rows, which open the Library list grouped by author or series. | 2,418 books · 312 on device · 4.2 GB free |
-| **Battery** | 0.12 | **2×2** (default), 1×2, 2×1, 4×3, 2×3, 4×2 | **1×2** (default), 1×1, 2×2, 2×3, 2×1 | Small: glyph at the actual level + big level + "≈ 2 d 6 h left"; 2×1 no longer clips (measured in the sweep). Medium (2×2): adds reading 4.1 %/h and standby 0.6 %/h (one decimal), "76% used this week" and the last charge. **No daily bars**, so Stats never has two near-identical bar charts. Large: adds reading ± and standby ± %/h, % per 100 pages, charging rate ±, and the last charge ("Sun 21:10 · 12% → 100% in 2 h 20 m"). Hidden values follow the "—" + what's needed rule. | 78% · ≈ 2 d 6 h left · reading 4.1 %/h |
+| **Battery** | 0.12 | **2×2** (default), 1×2, 2×1, 4×3, 2×3, 4×2 | **1×2** (default), 1×1, 2×2, 2×3, 2×1 | Small: glyph at the actual level + big level + "**≈ 2 d 6 h at your usual use**" (1-wide sizes: "≈ 2 d 6 h · usual use"); the two other figures are always labelled "reading non-stop" and "standby only"; 2×1 no longer clips (measured in the sweep). Medium (2×2): adds reading 4.1 %/h and standby 0.6 %/h (one decimal), "76% used this week" and the last charge. **No daily bars**, so Stats never has two near-identical bar charts. Large: adds reading ± and standby ± %/h, % per 100 pages, charging rate ±, and the last charge ("Sun 21:10 · 12% → 100% in 2 h 20 m"). Hidden values follow the "—" + what's needed rule. | 78% · ≈ 2 d 6 h at your usual use · reading 4.1 %/h |
 | This week | 0.13 | 2×2, 2×3, 2×1, 1×2 | 1×2, 2×2, 2×1 | Every column is the same height; the best-day label floats above its bar, so Saturday (112 min) is now taller than Sunday (95). "Best day" is computed, not typed. | 7 h 8 m this week · best Sat 1 h 52 m |
 | Year in reading | 0.13 | **4×3** (default), 4×2 | **2×4** (default), 2×3 | Dot grid, 52 × 7. M8C: 5 grays. X4: five levels (section 1), patterns only when cells are ≥ 12 px. Legend: Less ▢▢▢■ More · ◎ Today. Always the largest tile on Stats. | 257 days read · 41 books · streak 12 |
 | When you read | 0.13 (restored on Stats) | 2×2, 2×3, 2×1, 4×1 | 2×1, 2×2, 1×2 | **M8C 2×2 and larger: 24 hourly bars** that touch (no gaps, one gray), the peak hour black with a ▼ "22:00" marker above it, and an hour axis. That makes it unlike This week, which has separate, labelled day columns. **2×1, 4×1 and the X4:** a shaded 24-hour strip, peak ringed. "Evenings · most at 22:00". | Mostly evenings · peak 22:00 |
@@ -197,7 +197,8 @@ Fuzz on these defaults: 400 random edit actions per device, no overlaps, no erro
   row (not a sixth tile: the tiles are the book's contents, sync is about the book's state, like the bookmark). Tapping it
   says "Syncing…", then "Synced · p. 211 saved". If the server has a further position: "Your other device is at p. 240 ·
   Jump there / Stay here". Offline: "Offline · will sync when connected". The summary line adds the battery estimate:
-  "Chapter 14 of 22 · 62% · 3 h 22 m left in book  ▭ ≈ 2 d 6 h" (the estimate is a link to Battery).
+  "Chapter 14 of 22 · 62% · 3 h 22 m left in book  ▭ ≈ 2 d 6 h left at your usual use" (the estimate is a link to
+  Battery; on the X4 the two parts wrap as whole phrases onto two centred lines).
   The "other device is further" sheet names the device and when: "Your Phone is further · Phone · 2 h ago: p. 240 · This reader: p. 211" (the device name the server reports), with
   Jump there / Stay here, and says which rule decided it (Reading position: Furthest page wins).
   **Why Sync stays here:** the maintainer's round-2 comment asked for manual sync in the in-book top panel; the round-3 ruling
@@ -247,7 +248,7 @@ build you have.
 
 ### How Sync, Wi-Fi & power works
 - **One mode on top, every setting visible below.** The Mode card (Battery saver / Balanced / Always up to date) shows the
-  battery impact at your pace: ≈ 2 d 11 h / ≈ 2 d 6 h / ≈ 1 d 8 h (estimated: Wi-Fi-on reading is not measured yet). Under it,
+  battery impact at your usual use: ≈ 2 d 11 h / ≈ 2 d 6 h / ≈ 1 d 8 h (estimated: Wi-Fi-on reading is not measured yet). Under it,
   "What Balanced does" lists the rows it sets, with their values. Classic: Select on the card steps to the next mode.
 - **Changing any row makes the mode Custom**: the card says "Custom · your settings" and a **Back to Balanced** row appears.
   Nothing is locked: a row that has no effect in the current mix stays changeable and says why ("Only used when Wi-Fi is
@@ -275,8 +276,8 @@ build you have.
 
 ### Battery page
 From the Battery widget, the top-panel estimate, the Clock's battery link, and Settings → Wi-Fi & power. Four tabs:
-- **Overview:** level and "≈ 2 d 6 h left at your pace", how the estimate is made (reading non-stop 19 h = 78 % ÷ 4.1 %/h;
-  standby only 5 d 22 h; screen-on share 25 % over 7 days), per 100 pages, per 100 full refreshes (X4: "— 64 of 100
+- **Overview:** level and "≈ 2 d 6 h left at your usual use", then how the estimate is made: reading non-stop 19 h = 78 % ÷
+  4.1 %/h; standby only 5 d 22 h; "Your usual use: screen on 25% of the time, last 7 days" (the share that blends the two). Then per 100 pages, per 100 full refreshes (X4: "— 64 of 100
   refreshes needed"), charging rate. Export (both); Compare with another reader (Android only, imports an export).
 - **Rates:** reading by content, Wi-Fi mode and front light (M8C); standby by Wi-Fi mode; each ± its standard error, hidden
   values as "— 0.4 h of 1 h needed".
@@ -350,27 +351,54 @@ The X3 has text only. Each item becomes a line; the cursor is `>`.
 ## 11. The filter sheet (a reusable building block)
 One component, `filterView`, behind **every** filter button: List screens (any "All ›"), Search, a List's own view,
 Reading now, and the library grouped by Series or Authors. It is also a Book list's **Custom filter** source.
-- **Sections, always in this order** (hidden when they don't apply to the context):
-  1. **Show:** All / Unread / Reading / Finished, plus *Want to read only*.
-  2. **Where:** Anywhere / On this device / Server only.
-  3. **Refine:** Author, Series, Tags (paged pickers with counts), Length (page ranges), Rating, Added, and Language and
-     Format only when the library has more than one.
-  4. **Group:** None / Author / Series.
-  5. **Sort:** depends on the context (List order, Title, Author, Last read, Date added; Search adds **Best match**, its
-     default) with a direction.
-- **Live count** on the apply button: "Show 23 books". **Reset** returns to the context's defaults, not to blank.
-- **Active filters** appear as removable chips in one row under the header; no row at all when nothing is active. The
-  filter icon is filled when active, and the subtitle summarises it: "2 books · Unread · on device · by author".
+
+**One screen, no paging, on every device (round 5).** Every part of the filter is one row that shows its current value and
+opens a picker page. Rows, in this order (a row a context doesn't use is hidden):
+
+| Row | Picker | Default |
+|---|---|---|
+| Show | radio: All / Unread / Reading / Finished / Want to read (this absorbs the old "Want to read only" switch) | All |
+| Where | radio: Anywhere / On this device / Server only (hidden in On device, where it can't change anything) | Anywhere |
+| Author | checkboxes with counts, paged only when it doesn't fit one page, Clear N | Any |
+| Series | checkboxes with counts | Any |
+| Tags | checkboxes with counts | Any |
+| Length | radio: Any / Short (under 250 pages) / Medium (250 to 450) / Long (over 450) | Any length |
+| Rating | radio: Any / 3★ and up / 4★ and up / 5★ only | Any rating |
+| Added | radio: Any time / This week / This month / This year | Any time |
+| Group & sort | Group (Not grouped / By author / By series), then Sort by (context-dependent; Search adds Best match, its default), then Order; one page | "Not grouped · List order" |
+
+- **Every row works the same way:** tap or Select opens its picker; Back returns. No row cycles in place. Multi-value
+  pickers keep checkboxes; single-value pickers use radio rows.
+- **One counting rule for every picker (round 6):** each option's count is the number of books you would get with **every
+  other filter applied and this picker's own choice left out** (`fApply(books, {...filter, [this]: none})`, then match the
+  option). So with Length = Short, Author shows only the short books per author, and "Short · under 250 pages · 3" is
+  three books under the other filters. Values with no books under the other filters sort **last, in gray, with no number**;
+  a value that is already ticked always stays in the list.
+- **One source for every number on a list screen:** the list's subtitle, the footer's "Show N books" and every picker count
+  all come from the same query (`books.query`; `fApply` in the prototype), so they always agree. The prototype's browsable
+  sample is 30 books; the Home widgets' headline totals (2,418 in the library, 312 on the device) are illustrative scale
+  and are not wired to the sample. In the real build both come from the library interface (`library.summary()` and
+  `books.query`).
+- Pickers show a page bar only when they have more than one page (no "Page 1 of 1" with dead arrows). Choosing a radio option returns to the sheet at once; the Group &
+  sort picker stays open until Back, since it holds three choices.
+- **At a glance:** a row at its default shows its value in normal weight; a changed row shows it **bold with a small dot**.
+  One thin black divider separates the filters from Group & sort; no section headers.
+- **Footer:** "+ Save as a Book list on Home" as a small secondary action, then **Reset** and **Show N books** (live count).
+  Reset returns to the context's defaults.
+- **Fits:** 9 rows of 58 px (X4) or 64 px (M8C), plus header and footer, inside the 460×740 card on the X4's 480×800 screen,
+  measured by `flows3.js` (every row ends above the footer; none is under 50 px).
+- **Active filters** appear as removable chips in one row under the list's header; no row at all when nothing is active.
+  The filter icon is filled when active, and the subtitle summarises it: "2 books · Unread · on device · by author".
 - **Save as a Book list on Home** adds a device-local Book list with source *Custom filter* (in the first space that fits,
   otherwise on a new page that auto-names after it), with a toast to go there. There is no "Save to server lists" row in 0.12
   (section 12).
-- **Paged**, every target ≥ 50 px. **Classic:** focus starts on the first choice; Prev/Next move; Select picks a segment,
-  toggles, or opens a picker; pickers page with Prev/Next and Select toggles; **Back closes and applies** (Back in a picker
-  returns to the sheet).
-- **Output:** a neutral filter object, `{show, wtr, where, author[], series[], tags[], len, rating, added, group, sort, dir, q}`,
+- **Classic:** focus starts on Show; Prev/Next move across the rows and the footer; Select opens a picker (focus on the
+  current choice); in a picker Select chooses (radio, which returns) or toggles (checkbox); **Back closes the picker, then the
+  sheet, and applies.**
+- **Output:** a neutral filter object, `{show, where, author[], series[], tags[], len, rating, added, group, sort, dir, q}`,
   which is handed to `books.query` (section 12).
-- **X3:** `Filter: Show[Unread] Where[Device] Group[Author] Sort[Last read ↓] -> 23 books`, one field per line, Select cycles,
-  Back applies.
+- **X3:** the same nine lines as text, `Show: Unread*`, `Where: Anywhere`, … `Group & sort: By author · Title A–Z*` (`*` =
+  changed), Select opens a numbered list, Back applies.
 
 ## 12. BookSync library interface (what the UI needs)
 **The UI never names a server API.** Every screen talks to one BookSync library interface; a **BookOrbit adapter** and a
@@ -470,16 +498,17 @@ Headless Chromium with Playwright on M8C, X4 Pro and X4 Classic. **No console er
 | `critic-shots/r2/m2.js` (DEV=m8c and x4pro) | 0 small, 0 overflow on every screen; ERR [] |
 | `critic-shots/r2/c2.js` | page 1 → 2 → 3 walk starts on each page's first widget; sign-in sheet reachable; ERR [] |
 | `critic-shots/r2/c3.js` | sign-in focus stops and reader settings; ERR [] |
-| `critic-shots/r3/dark.js`, `filt.js`, `filt2.js` and `r2/c4.js` | run clean, ERR []; c4: no duplicate focus keys, Next walks pages 1 → 2 → 3 |
+| `critic-shots/r5/f5.js`, `p5.js` (also with Q=1, on x4c and m8c), `cl5.js`, `ser.js`, `bat.js` (run with SP set to the scratchpad) | f5: no clipped or out-of-card rows, no pager in any sheet; p5: no row out of the card, no "Page 1 of 1"; cl5: Classic walk, pickers and Back work, errs []; ser: Series walk has no dead arrows; bat: the estimate fits every tile (overR −12 and −27 px) |
+| `critic-shots/r3/dark.js`, `filt.js`, `filt2.js` and `r2/c4.js` | run clean, ERR []; filt and filt2 now assert one page, 9 rows, every row opens a picker, no cycling rows, and that Length, Rating, Added and Group & sort open pickers; c4: no duplicate focus keys, Next walks pages 1 → 2 → 3 |
 | `critic-shots/r2/fuzz.js` | m8c 136 moves / 264 no-ops, x4pro 143 / 257: 0 overlaps, ERR [] |
 | `pwtools/verify.js` | all round-1 flows pass; no errors |
-| `pwtools/sweep.js` | every widget at every size on both screens: no overflow, no clipped text |
+| `pwtools/sweep.js` | every widget at every size on both screens: no overflow, no clipped text; and the Battery estimate at every size says "at your usual use" (or "· usual use" only on narrow tiles) and is not clipped |
 | `pwtools/r2/move.js` | 14/14 |
 | `pwtools/r2/bl.js` | 35/35 (grouping through the filter sheet; headers counted as rows, since complete groups have no link) |
 | `pwtools/r2/flows.js` | 63/63 (8 settings groups; low space blocks only below the floor) |
 | `pwtools/r2/sync.js` | 45/45 |
-| `r3/flows3.js` | 77/77 (round 4 adds: a complete author group has no "All N"; no BookOrbit / Tailscale / Grimmory / tailnet text on any page of any settings group; About, Updates › Installed and the Updates summary show one version). Earlier: add a page → "Page 4" → add Year → "Stats" → rename → pager; Settings › Page names; filter on Recently added (count, chips, subtitle, filled icon, chip removal, save to Home); Search (Best match, chip, save); Source › Custom filter; Classic Next/Select/Back |
-| `r3/focus.js` | 136 steps, 19 dark (ink, black controls, selected segments, dark covers), 0 fails; shots in `shots/focus/` |
+| `r3/flows3.js` | 137/137 (round 6 adds: footer = list subtitle; author counts equal the other-filters rule with Length = Short; zero-count authors last with no number; a ticked zero-count author stays; page bar only with more than one page; Series has none; no Where row in On device. Round 5 added: the sheet is one page of 9 rows ≥ 50 px that all end above the footer, every row opens a picker, no cycling rows or segments, changed rows are marked; Show, Where, Length, Rating and Added pickers are radio rows with counts; Author, Series and Tags are checkbox rows; Group & sort is one page with Group, Sort by, Order; Classic: Select opens the picker on the current choice, choosing returns, Back closes the picker and then the sheet. Round 4 added: a complete author group has no "All N"; no BookOrbit / Tailscale / Grimmory / tailnet text on any page of any settings group; About, Updates › Installed and the Updates summary show one version). Earlier: add a page → "Page 4" → add Year → "Stats" → rename → pager; Settings › Page names; filter on Recently added (count, chips, subtitle, filled icon, chip removal, save to Home); Search (Best match, chip, save); Source › Custom filter; Classic Next/Select/Back |
+| `r3/focus.js` | 137 steps, 15 dark (ink, black controls, selected segments, dark covers), 0 fails; walks the filter sheet and its pickers |
 
 Test fixtures updated for deliberate round-3 changes (not to hide failures): `move.js` builds the 2-wide-band layout it
 tests (the X4 default changed); `bl.js` groups via the filter sheet; `flows.js` expects 8 groups, enters a password before
@@ -499,3 +528,21 @@ Sign in, and uses the below-floor space state.
 | 8 | Gap under X4 Want to read 1×3 | The mini-grid is top-aligned and uses the full height, so the covers are bigger. |
 | 9 | When you read vs This week | M8C 2×2+ uses gap-free hourly bars with a peak marker; strip kept for 2×1, 4×1 and the X4; This week stays labelled day columns. |
 | 10 | Real-looking LAN address | 192.0.2.10 (documentation range) in the notes and the prototype. |
+
+## 17. Round 5: what changed
+
+| Ask | Change |
+|---|---|
+| "Why is length, rating, and added not like author or series?" | Every Refine row opens a picker page in one style; single-value pickers are radio rows with counts; no row cycles in place. |
+| "Can we get it slimmed down to one screen somehow?" | Nine rows (Show, Where, Author, Series, Tags, Length, Rating, Added, Group & sort) on one screen on every device; Show absorbs Want to read; Group, Sort and Order share one picker; Save is a small footer action; changed rows are bold with a dot. |
+| Battery estimate says what it assumes | "≈ 2 d 6 h at your usual use" on every widget size ("· usual use" on 1-wide tiles), "left at your usual use" in the top panel and on the Battery page, "at your usual use" on the mode card and settings row. The Battery page row reads "Your usual use: screen on 25% of the time, last 7 days", and the other two figures are "reading non-stop" and "standby only". The sweep checks the phrase at every size. |
+
+## 18. Round 6: what changed (critic REVISE on round 5)
+
+| # | Finding | Change |
+|---|---|---|
+| 1 (major) | Author, Series and Tags counts ignored the other filters | One rule for all pickers: count with every other filter applied, this picker's own choice left out; zero values last, gray, no number; ticked values kept (section 11). |
+| 2 | Footer total and picker counts disagreed (2,418 vs 30) | The list subtitle, the footer and the picker counts all come from one `fApply` path; Home headline totals are noted as illustrative. |
+| 3 | "Page 1 of 1" with dead arrows in checkbox pickers | The page bar appears only when there are 2+ pages, so the Classic never stops on dead arrows. |
+| 4 | Where can't change anything inside On device | Hidden there. Reading now keeps it: books in progress can be on the server only. |
+| — | "1 books" in the list subtitle | "1 book". |

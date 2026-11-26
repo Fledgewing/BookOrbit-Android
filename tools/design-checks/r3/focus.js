@@ -36,6 +36,7 @@ await p.evaluate(()=>{const P=window.__proto;P.restart('x4c');P.openBook('b1');}
 await H('back');await H('select');await walk('bottompanel',30);
 await H('back');await H('more');await A('sheet:toc');await walk('toc',20);
 await p.evaluate(()=>{const P=window.__proto;P.restart('x4c');P.openBook('b1');P.act('jump:341')});await walk('endofbook',20);
-await p.evaluate(()=>{const P=window.__proto;P.restart('x4c');P.act('nav:recent');P.act('filter');P.act('fset:show:1');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('filtersheet',30);
-await p.evaluate(()=>{const P=window.__proto;P.act('lp:fsheet:1');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('filtersheet2',30);
+await p.evaluate(()=>{const P=window.__proto;P.restart('x4c');P.act('nav:recent');P.act('filter');P.act('fset:show:1');P.act('fset:group:1');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('filtersheet',30);
+await p.evaluate(()=>{const P=window.__proto;P.act('fpickopen:gs');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('filter-groupsort',30);
+await p.evaluate(()=>{const P=window.__proto;P.act('fpickdone');P.act('fpickopen:show');P.S.fk=null;P.render();});await H('prev');await H('next');await walk('filter-show',20);
 console.log(out.join('\n'));console.log('FOCUS steps',n,'dark',darkN,'fails',fails,'ERR',errs);await b.close();})();

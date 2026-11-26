@@ -181,6 +181,10 @@ inset 0 0 0 4px #fff,inset 0 0 0 7px #000 !important}
 /* chips + segmented */
 .chip{display:inline-flex;align-items:center;gap:6px;height:var(--tap);padding:0 12px;border:1.5px solid #000;border-radius:999px;font-size:var(--fs);font-weight:600;white-space:nowrap}
 .chip.on{background:#000;color:#fff}
+/* a picker value with no books under the other filters: gray (X4: its lighter gray, on white only), no number */
+.fsheet .fzero, .fsheet .fzero *{color:var(--g1) !important}
+.x4 .fsheet .fzero, .x4 .fsheet .fzero *{color:#808080 !important}
+.fsheet .fzero span[style*="border:2px"]{border-color:currentColor !important}
 .fsheet .sf{display:flex;align-items:center;justify-content:space-between;padding:4px 16px;font-size:var(--fc);font-weight:600;border-top:1px solid var(--g3)}
 .sg{display:flex;
 border:1.5px solid #000;border-radius:12px;overflow:hidden;height:calc(var(--tap) + 3px)}
@@ -701,10 +705,13 @@ function blcfgView(m, g){
 // and by a Book list's "Custom filter" source. Same sections, same order, same behaviour; a section that doesn't apply is hidden.
 // It edits a neutral filter object. The UI hands that object to the BookSync library interface (books.query); each server
 // adapter translates what it can, and anything it can't express (On this device, Group) runs locally on the cached catalog.
-const F_SHOW = ['All', 'Unread', 'Reading', 'Finished'];
+const F_SHOW = ['All', 'Unread', 'Reading', 'Finished', 'Want to read'];
 const F_WHERE = ['Anywhere', 'On this device', 'Server only'];
 const F_LEN = [{n:'Any length'}, {n:'Short', d:'under 250 pages', a:0, b:249}, {n:'Medium', d:'250 to 450 pages', a:250, b:450}, {n:'Long', d:'over 450 pages', a:451, b:1e9}];
 const F_RATE = ['Any rating', '3★ and up', '4★ and up', '5★ only'];
+const F_WHERE_D = ['On this reader or the server', 'Downloaded to this reader', 'Not downloaded yet'];
+const F_SHOW_D = ['Every book', 'Not started', 'Started, not finished', 'Read to the end', 'Marked to read next'];
+const F_ADDED_D = ['', 'Last 7 days', 'Last 31 days', 'Last 365 days'];
 const F_ADDED = ['Any time', 'This week', 'This month', 'This year'];
 const F_SORT = {order:'List order', match:'Best match', title:'Title', author:'Author', last:'Last read', added:'Added', rating:'Rating'};
 const F_DIR = {order:['As listed', 'Reversed'], match:['Best first', 'Reversed'], title:['A to Z', 'Z to A'], author:['A to Z', 'Z to A'], last:['Most recent first', 'Oldest first'], added:['Newest first', 'Oldest first'], rating:['Highest first', 'Lowest first']};
@@ -715,7 +722,8 @@ function fctx(c){
   if (c.n === 'search') return {name:'Search', sorts:['match', 'title', 'author', 'added', 'rating'], show:true, group:true, sort:true, save:true};
   if (c.n === 'cfg') return {name:'Book list', sorts:[], show:true, group:false, sort:false, save:false};
   if (c.src === 'reading') return {name:'Reading now', sorts:['last', 'title', 'author', 'added'], show:false, group:true, sort:true, save:true};
-  return {name:c.title || srcName(c.src), sorts:['order', 'title', 'author', 'last', 'added', 'rating'], show:true, group:true, sort:true, save:true};
+  // Inside On device every book is already on the device, so Where could not change anything: hide it.
+  return {name:c.title || srcName(c.src), sorts:['order', 'title', 'author', 'last', 'added', 'rating'], show:true, where:c.src !== 'device', group:true, sort:true, save:true};
 }
 const fdef = c => ({show:0, wtr:false, where:0, authors:[], series:[], tags:[], len:0, rate:0, added:0, group:c.group || 0, sort:(fctx(c).sorts[0] || 'order'), dir:0});
 const fOf = c => c.f || (c.f = fdef(c));
@@ -730,7 +738,7 @@ function fparts(f, c){ const d = fdef(c); const out = [];
   return out; }
 const fNarrows = (f, c) => fparts(f, c).some(([k]) => k !== 'group' && k !== 'sort');
 function fApply(list, f){ return list.filter(b => {
-    if (f.show === 1 && (b.prog != null || b.read)) return false; if (f.show === 2 && (b.prog == null || b.read)) return false; if (f.show === 3 && !b.read) return false;
+    if (f.show === 1 && (b.prog != null || b.read)) return false; if (f.show === 2 && (b.prog == null || b.read)) return false; if (f.show === 3 && !b.read) return false; if (f.show === 4 && !b.wtr) return false;
     if (f.wtr && !b.wtr) return false; if (f.where === 1 && !b.dev) return false; if (f.where === 2 && b.dev) return false;
     if (f.authors.length && !f.authors.includes(b.a)) return false; if (f.series.length && !f.series.includes(b.series)) return false;
     if (f.tags.length && !(b.tags || []).some(t => f.tags.includes(t))) return false;
@@ -748,7 +756,9 @@ function fBase(c){ if (c.n === 'list' && c.src === 'reading') return IN_PROGRESS
   if (c.n === 'search'){ const q = (c.q || '').toLowerCase(); return q ? Object.values(B).filter(b => (b.t + ' ' + b.a + ' ' + b.tags.join(' ')).toLowerCase().includes(q)) : Object.values(B); }
   if (c.n === 'cfg') return Object.values(B); return srcBooks(c.src); }
 const fResult = c => fSort(fApply(fBase(c), fOf(c)), fOf(c));
-const fCount = c => c.n !== 'search' && c.n !== 'cfg' && !fNarrows(fOf(c), c) ? srcCount(c.src) : fApply(fBase(c), fOf(c)).length;
+// One source: the list's subtitle, the sheet's footer and every picker count all come from fApply over the same books
+// (books.query in the real build), so they always agree.
+const fCount = c => fApply(fBase(c), fOf(c)).length;
 const fSummary = c => fparts(fOf(c), c).map(p => p[1]).map((s, i) => i ? s.charAt(0).toLowerCase() + s.slice(1) : s).join(' · ');
 // The header button: filled when anything differs from this context's defaults.
 const fBtn = c => { const on = fparts(fOf(c), c).length; return `<div class="iconbtn${on ? '' : ' flat'}" data-act="filter" data-fk="s-filter" title="Filter, group and sort">${ic(on ? 'filterf' : 'filter', 22, 2.2)}</div>`; };
@@ -760,42 +770,60 @@ function fChips(c, P){ const ps = fparts(fOf(c), c); if (!ps.length) return ''; 
 // Which screen or Book list the open sheet is editing.
 function fTarget(){ const m = S.modal; if (m && m.ret) return {n:'cfg', f:FSAVED[m.ret.cfg.fid]}; return cur(); }
 function filterView(m, g){
-  const x4 = dk() === 'x4'; const c = fTarget(); const f = fOf(c); const cx = fctx(c); const W2 = x4 ? 460 : 640; const H2 = x4 ? 740 : 860; const U = x4 ? 54 : 58;
-  const lib = fBase(c);
-  if (m.pick){ // Author / Series / Tags: a paged list with counts; Select toggles
-    const k = m.pick; const vals = k === 'series' ? Object.keys(SERIES) : [...new Set(lib.flatMap(b => k === 'authors' ? [b.a] : b.tags || []))].sort();
-    const cnt = v => lib.filter(b => k === 'series' ? b.series === v : k === 'authors' ? b.a === v : (b.tags || []).includes(v)).length;
-    const pp = paged(vals, U, H2 - 200, 'fpick' + k);
-    const rows = pp.slice.map((v, vi) => { const on = f[k].includes(v); return `<div class="lrow" data-act="fpick:${esc(v)}" data-fk="fp-${String(v).replace(/[^a-z0-9]/gi, '')}"${vi ? '' : ' data-here="1"'}
- style="height:${U}px;border-bottom:1px solid var(--g3);gap:12px"><span style="width:22px;height:22px;border:2px solid #000;border-radius:5px;display:grid;place-items:center;flex:none;${on ? 'background:#000;color:#fff' : ''}">${on ? ic('check', 15, 3) : ''}</span><span style="flex:1;font-size:var(--fb);font-weight:${on ? 800 : 500}" class="ell">${esc(k === 'series' ? SERIES[v].name : v)}</span><span class="num meta" style="font-size:var(--fs)">${cnt(v)}</span></div>`; }).join('');
-    return `<div class="scrim" data-act="fpickdone"></div><div class="card fsheet" style="left:50%;top:50%;transform:translate(-50%,-50%);width:${W2}px;height:${H2}px;padding:0;border-radius:18px;display:flex;flex-direction:column">
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px 8px 8px;border-bottom:1px solid var(--g3)"><div class="backbtn" data-act="fpickdone" data-fk="fp-back">${ic('chevL', 22, 2.6)}Filter</div><b style="font-size:var(--fm);flex:1">${({authors:'Author', series:'Series', tags:'Tags'})[k]}</b>${f[k].length ? `<span class="chip" data-act="fpickclear" data-fk="fp-clear">Clear ${f[k].length}</span>` : ''}</div>
-      <div style="flex:1;padding:0 ${x4 ? 16 : 22}px">${rows}</div>${pageFoot(pp.p, pp.pages, 'fpick' + k)}</div>`;
+  // One screen on every device: each part of the filter is one row that shows its value and opens a picker page.
+  const x4 = dk() === 'x4'; const c = fTarget(); const f = fOf(c); const cx = fctx(c); const d = fdef(c); const W2 = x4 ? 460 : 640; const H2 = x4 ? 740 : 860; const U0 = x4 ? 58 : 64; let U = U0;
+  const lib = fBase(c); const PX = x4 ? 16 : 22;
+  const countWith = (k, v) => fApply(lib, {...f, [k]:v}).length;
+  const shell = (title, scrimAct, body, foot, clear) => `<div class="scrim" data-act="${scrimAct}"></div><div class="card fsheet" style="left:50%;top:50%;transform:translate(-50%,-50%);width:${W2}px;height:${H2}px;padding:0;border-radius:18px;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px 8px 8px;border-bottom:1px solid var(--g3)"><div class="backbtn" data-act="fpickdone" data-fk="fp-back">${ic('chevL', 22, 2.6)}Filter</div><b style="font-size:var(--fm);flex:1" class="ell">${title}</b>${clear || ''}</div>
+      <div style="flex:1;min-height:0;padding:0 ${PX}px">${body}</div>${foot || ''}</div>`;
+  const box = (on, round) => `<span style="width:22px;height:22px;border:2px solid #000;border-radius:${round ? 11 : 5}px;display:grid;place-items:center;flex:none;${on && !round ? 'background:#000;color:#fff' : ''}">${on ? (round ? '<i style="width:10px;height:10px;border-radius:5px;background:#000;display:block"></i>' : ic('check', 15, 3)) : ''}</span>`;
+  const opt = (act, fk, on, round, label, sub, n, here) => `<div class="lrow" data-act="${act}" data-fk="${fk}"${here ? ' data-here="1"' : ''} style="height:${U}px;border-bottom:1px solid var(--g3);gap:12px">${box(on, round)}<div style="flex:1;min-width:0"><div style="font-size:var(--fb);font-weight:${on ? 800 : 500}" class="ell">${label}</div>${sub ? `<div class="meta ell" style="font-size:var(--fc)">${sub}</div>` : ''}</div>${n == null ? '' : `<span class="num meta" style="font-size:var(--fs)">${fmtN(n)}</span>`}</div>`;
+  if (m.pick){ const k = m.pick;
+    if (k === 'authors' || k === 'series' || k === 'tags'){ // several values: checkboxes with counts; Select toggles, Back returns
+      const vals = k === 'series' ? Object.keys(SERIES) : [...new Set(lib.flatMap(b => k === 'authors' ? [b.a] : b.tags || []))].sort();
+      // Same rule as the radio pickers: each count is what you would get with every other filter applied (this picker's own
+      // ticks left out). Values with no books sort last, in gray, without a number; ticked values always stay.
+      const others = fApply(lib, {...f, [k]:[]});
+      const cnt = v => others.filter(b => k === 'series' ? b.series === v : k === 'authors' ? b.a === v : (b.tags || []).includes(v)).length;
+      const ordered = [...vals.filter(v => cnt(v) > 0), ...vals.filter(v => cnt(v) === 0)];
+      const pp = paged(ordered, U, H2 - 200, 'fpick' + k);
+      const rows = pp.slice.map((v, vi) => { const n = cnt(v); const r = opt(`fpick:${esc(v)}`, `fp-${String(v).replace(/[^a-z0-9]/gi, '')}`, f[k].includes(v), false, esc(k === 'series' ? SERIES[v].name : v), '', n || null, !vi); return n ? r : r.replace('class="lrow"', 'class="lrow fzero"'); }).join('');
+      return shell(({authors:'Author', series:'Series', tags:'Tags'})[k], 'fpickdone', rows, pp.pages > 1 ? pageFoot(pp.p, pp.pages, 'fpick' + k) : '', f[k].length ? `<span class="chip" data-act="fpickclear" data-fk="fp-clear">Clear ${f[k].length}</span>` : '');
+    }
+    if (k === 'gs'){ // Group, then Sort by, then Order: radio rows, Select picks, Back returns. Fits one page at 50 px rows.
+      U = 50;
+      const cap = t => ({span:.56, h:`<div class="cap" style="padding:8px 0 2px;height:28px;box-sizing:border-box">${t}</div>`});
+      const items = [];
+      if (cx.group){ items.push(cap('Group')); F_GROUP.forEach((o, i) => items.push({span:1, h:opt(`fset:group:${i}`, `fp-group-${i}`, f.group === i, true, i ? 'By ' + o.toLowerCase() : 'Not grouped', '', null, f.group === i)})); }
+      if (cx.sort){ items.push(cap('Sort by')); cx.sorts.forEach(so => items.push({span:1, h:opt(`fsortset:${so}`, `fp-sort-${so}`, f.sort === so, true, F_SORT[so], '', null, !cx.group && f.sort === so)}));
+        items.push(cap('Order')); F_DIR[f.sort].forEach((o, i) => items.push({span:1, h:opt(`fset:dir:${i}`, `fp-dir-${i}`, f.dir === i, true, o, '', null)})); }
+      const pp = pagedSpan(items, x => x.span, U, H2 - 70, 'fpickgs');
+      return shell(cx.group ? 'Group & sort' : 'Sort', 'fpickdone', pp.slice.map(x => x.h).join(''), pp.pages > 1 ? pageFoot(pp.p, pp.pages, 'fpickgs') : '');
+    }
+    // one value (Show, Where, Length, Rating, Added): radio rows with the count each would give; choosing returns to the sheet
+    const O = {show:[F_SHOW, F_SHOW_D, 'Show'], where:[F_WHERE, F_WHERE_D, 'Where'], len:[F_LEN.map(x => x.n), F_LEN.map(x => x.d || 'Every book'), 'Length'], rate:[F_RATE, F_RATE.map(() => ''), 'Rating'], added:[F_ADDED, F_ADDED_D, 'Added']}[k];
+    const rows = O[0].map((o, i) => opt(`fone:${k}:${i}`, `fp-${k}-${i}`, f[k] === i, true, esc(o), O[1][i], countWith(k, i), f[k] === i)).join('');
+    return shell(O[2], 'fpickdone', rows, '');
   }
-  // The first section's chosen option is where button focus starts (data-here).
-  let first = true; const seg = (k, opts, fkp) => { const h = first; first = false; return `<div class="sg" style="margin:${Math.round(U * .08)}px 0">${opts.map((o, i) => `<div class="${f[k] === i ? 'on' : ''}" data-act="fset:${k}:${i}" data-fk="${fkp}-${i}"${h && f[k] === i ? ' data-here="1"' : ''}>${o}</div>`).join('')}</div>`; };
-
-  const row = (l, v, act, fk, sub) => `<div class="lrow" data-act="${act}" data-fk="${fk}" style="height:${U}px;border-bottom:1px solid var(--g3);gap:12px"><div style="flex:1;min-width:0"><div style="font-size:var(--fb);font-weight:600">${l}</div>${sub ? `<div class="meta" style="font-size:var(--fc)">${sub}</div>` : ''}</div><span style="font-size:var(--fs);font-weight:700;text-align:right;max-width:55%" class="ell">${v}</span>${ic('chevR', 16, 2.6)}</div>`;
-  const tog = (l, k, fk) => `<div class="lrow" data-act="ftog:${k}" data-fk="${fk}" style="height:${U}px;border-bottom:1px solid var(--g3);gap:12px"><span style="flex:1;font-size:var(--fb);font-weight:600">${l}</span><span class="sw${f[k] ? ' on' : ''}"><i></i></span></div>`;
+  // Main sheet: up to 9 rows, one screen. A row at its default shows its value in normal weight; a changed row is bold with a dot.
   const many = (k, none) => f[k].length === 0 ? none : f[k].length === 1 ? esc(k === 'series' ? SERIES[f[k][0]].name : f[k][0]) : f[k].length + ' chosen';
-  const sec = t => ({kind:'sec', span:.62, h:`<div class="cap" style="padding:${x4 ? 10 : 12}px 0 2px">${t}</div>`});
-  const it = (h, span = 1) => ({span, h});
-  const items = [];
-  if (cx.show){ items.push(sec('Show'), it(seg('show', x4 ? ['All', 'Unread', 'Reading', 'Done'] : F_SHOW, 'f-show'), 1.16), it(tog('Want to read only', 'wtr', 'f-wtr'))); }
-  items.push(sec('Where'), it(seg('where', x4 ? ['Anywhere', 'On device', 'Server'] : F_WHERE, 'f-where'), 1.16));
-  items.push(sec('Refine'), it(row('Author', many('authors', 'Any'), 'fpickopen:authors', 'f-authors')), it(row('Series', many('series', 'Any'), 'fpickopen:series', 'f-series')), it(row('Tags', many('tags', 'Any'), 'fpickopen:tags', 'f-tags')),
-    it(row('Length', F_LEN[f.len].n + (f.len ? ` <span class="meta" style="font-weight:500">${F_LEN[f.len].d}</span>` : ''), 'fcyc:len:4', 'f-len')), it(row('Rating', F_RATE[f.rate], 'fcyc:rate:4', 'f-rate')), it(row('Added', F_ADDED[f.added], 'fcyc:added:4', 'f-added')));
+  const row = (l, v, k, changed, first) => `<div class="lrow" data-act="fpickopen:${k}" data-fk="f-${k}"${first ? ' data-here="1"' : ''} style="height:${U}px;border-bottom:1px solid var(--g3);gap:12px"><span style="flex:1;min-width:0;font-size:var(--fb);font-weight:600">${l}</span>${changed ? '<i class="fdot" style="width:8px;height:8px;border-radius:4px;background:#000;display:block;flex:none"></i>' : ''}<span style="font-size:var(--fs);font-weight:${changed ? 800 : 400};text-align:right;max-width:62%" class="ell">${v}</span>${ic('chevR', 16, 2.6)}</div>`;
+  const rows = [];
+  if (cx.show) rows.push(row('Show', F_SHOW[f.show], 'show', f.show !== d.show));
+  if (cx.where !== false) rows.push(row('Where', F_WHERE[f.where], 'where', f.where !== d.where));
+  rows.push(row('Author', many('authors', 'Any'), 'authors', f.authors.length > 0), row('Series', many('series', 'Any'), 'series', f.series.length > 0), row('Tags', many('tags', 'Any'), 'tags', f.tags.length > 0));
+  rows.push(row('Length', F_LEN[f.len].n + (f.len ? ` · ${F_LEN[f.len].d}` : ''), 'len', !!f.len), row('Rating', F_RATE[f.rate], 'rate', !!f.rate), row('Added', F_ADDED[f.added], 'added', !!f.added));
   // Language and Format rows appear only when the library has more than one of each; this synthetic library has one of each.
-  if (cx.group) items.push(sec('Group'), it(seg('group', F_GROUP, 'f-group'), 1.16));
-  if (cx.sort) items.push(sec('Sort'), it(row('Sort by', F_SORT[f.sort], 'fsort', 'f-sort')), it(row('Order', F_DIR[f.sort][f.dir], 'fdir', 'f-dir')));
-  if (cx.save) items.push(sec('Keep it'), it(`<div class="lrow" data-act="fsave" data-fk="f-save" style="height:${U}px;gap:12px;font-size:var(--fb);font-weight:700">${ic('plus', 20, 2.6)}<span style="flex:1">Save as a Book list on Home</span>${ic('chevR', 16, 2.6)}</div>`));
-  const pp = pagedSpan(items, x => x.span, U, H2 - (x4 ? 196 : 206), 'fsheet');
-  const n = c.n === 'cfg' ? fApply(fBase(c), f).length : fCount(c);
+  if (cx.group || cx.sort){ const gsv = (cx.group ? (f.group ? 'By ' + F_GROUP[f.group].toLowerCase() : 'Not grouped') + ' · ' : '') + F_SORT[f.sort] + (f.sort === 'title' || f.sort === 'author' ? ' ' + ['A–Z', 'Z–A'][f.dir] : f.dir ? ' · ' + F_DIR[f.sort][1].toLowerCase() : '');
+    rows.push(`<div style="height:8px;border-bottom:1.5px solid #000;margin-bottom:0"></div>` + row(cx.group ? 'Group & sort' : 'Sort', gsv, 'gs', f.group !== d.group || f.sort !== d.sort || !!f.dir)); }
+  rows[0] = rows[0].replace('data-fk=', 'data-here="1" data-fk=');
+  const n = c.n === 'cfg' ? fApply(lib, f).length : fCount(c);
+  const save = cx.save ? `<div class="lrow" data-act="fsave" data-fk="f-save" style="height:50px;gap:8px;justify-content:center;font-size:var(--fs);font-weight:700;padding:0 ${PX}px">${ic('plus', 18, 2.6)}Save as a Book list on Home</div>` : '';
   return `<div class="scrim" data-act="fdone"></div><div class="card fsheet" style="left:50%;top:50%;transform:translate(-50%,-50%);width:${W2}px;height:${H2}px;padding:0;border-radius:18px;display:flex;flex-direction:column">
-    <div style="display:flex;align-items:center;gap:10px;padding:12px 10px 10px ${x4 ? 16 : 22}px;border-bottom:1px solid var(--g3)">${ic('filter', 22, 2.2)}<div style="flex:1;min-width:0"><div style="font-size:var(--fm);font-weight:800">Filter</div><div class="meta ell" style="font-size:var(--fc)">${esc(cx.name)}</div></div><div class="iconbtn flat" data-act="fdone" data-fk="f-close" title="Close and apply">${ic('x', 22, 2.4)}</div></div>
-    <div style="flex:1;min-height:0;padding:0 ${x4 ? 16 : 22}px">${pp.slice.map(x => x.h).join('')}</div>
-    ${pp.pages > 1 ? pageFoot(pp.p, pp.pages, 'fsheet') : ''}
-    <div style="display:flex;gap:10px;padding:10px ${x4 ? 16 : 22}px 14px;border-top:1px solid var(--g3)"><div class="pill wh${fparts(f, c).length ? '' : ' dis'}" data-act="freset" data-fk="f-reset" style="flex:none;padding:0 18px">Reset</div><div class="pill" data-act="fdone" data-fk="f-apply" style="flex:1">${n === 0 ? 'No books match' : `Show ${fmtN(n)} book${n === 1 ? '' : 's'}`}</div></div></div>`;
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 10px 10px ${PX}px;border-bottom:1px solid var(--g3)">${ic('filter', 22, 2.2)}<div style="flex:1;min-width:0"><div style="font-size:var(--fm);font-weight:800">Filter</div><div class="meta ell" style="font-size:var(--fc)">${esc(cx.name)}</div></div><div class="iconbtn flat" data-act="fdone" data-fk="f-close" title="Close and apply">${ic('x', 22, 2.4)}</div></div>
+    <div style="flex:1;min-height:0;padding:0 ${PX}px">${rows.join('')}</div>
+    <div style="border-top:1px solid var(--g3)">${save}<div style="display:flex;gap:10px;padding:${save ? 0 : 10}px ${PX}px 14px"><div class="pill wh${fparts(f, c).length ? '' : ' dis'}" data-act="freset" data-fk="f-reset" style="flex:none;padding:0 18px">Reset</div><div class="pill" data-act="fdone" data-fk="f-apply" style="flex:1">${n === 0 ? 'No books match' : `Show ${fmtN(n)} book${n === 1 ? '' : 's'}`}</div></div></div></div>`;
 }
 function listView(c, g){
   const x4 = dk() === 'x4'; const P = g.padx + 6; const shh = x4 ? 54 : 64; const f = fOf(c); const grp = f.group;
@@ -829,7 +857,7 @@ function listView(c, g){
     const cg = coverGrid(books, g, avail + 20, key); body = cg.html + `<div style="position:absolute;left:0;right:0;bottom:8px">${pagerRow(cg.pp, key)}</div>`;
   }
   const sum = fSummary(c);
-  const sub = sum ? `${fmtN(fCount(c))} books · ${sum}` : `${fmtN(srcCount(c.src))} books${c.src.startsWith('list:') ? ' · ' + SCOPES.find(x => 'list:' + x.id === c.src).d : ''}`;
+  const nb = fCount(c); const nbs = `${fmtN(nb)} book${nb === 1 ? '' : 's'}`; const sub = sum ? `${nbs} · ${sum}` : `${nbs}${c.src.startsWith('list:') ? ' · ' + SCOPES.find(x => 'list:' + x.id === c.src).d : ''}`;
   return shdr(title, sub, `<div style="display:flex;gap:2px;flex:none">${fbtn}${searchBtn()}</div>`) + chips + `<div style="height:${x4 ? 6 : 10}px"></div>` + (grp ? `<div style="padding:4px ${P}px 0">${body}</div>` : body);
 }
 
@@ -1036,21 +1064,22 @@ function batBars(days, hgt, labels){
   return `<div style="display:flex;gap:6px;align-items:flex-end;height:${hgt}px;border-bottom:1.5px solid #000;padding-top:14px">${days.map((d, i) => `<div style="flex:1;height:100%;position:relative"><div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:22px;height:${Math.round(d[0] / max * 100)}%;background:${i === days.length - 1 ? '#000' : 'var(--g2)'};border-radius:3px 3px 0 0"></div>${d[0] === max ? `<span class="num" style="position:absolute;left:50%;transform:translateX(-50%);bottom:calc(${Math.round(d[0] / max * 100)}% + 2px);font-size:10px;font-weight:700">${d[0]}%</span>` : ''}</div>`).join('')}</div>
   ${labels ? `<div style="display:flex;gap:6px;margin-top:4px">${days.map((d, i) => `<span style="flex:1;text-align:center;font-size:11px;font-weight:${i === days.length - 1 ? 800 : 500}">${di[i]}</span>`).join('')}</div>` : ''}`;
 }
-W.battery = {name:'Battery', icon:'battery', rel:'now', desc:'Battery level and how long it will last at your pace, with the split between reading and standby, % used per day and the measured rates.',
+W.battery = {name:'Battery', icon:'battery', rel:'now', desc:'Battery level and how long it will last at your usual use, with the split between reading and standby, % used per day and the measured rates.',
   sizes:{m8c:[[2,2],[1,2],[2,1],[4,3],[2,3],[4,2]], x4:[[1,2],[1,1],[2,2],[2,3],[2,1]]},
   render(t){
     const x4 = t.dev === 'x4'; const wk = BAT.days.slice(-7); const used7 = wk.reduce((s, d) => s + d[0], 0);
     const lvl = (big) => `<div style="display:flex;align-items:center;gap:${big ? 12 : 9}px">${batGlyph(big ? 52 : 40, BAT.level)}<span class="num" style="font-size:${big ? 36 : 28}px;font-weight:700;letter-spacing:-.02em;line-height:1">${BAT.level}<span style="font-size:.55em">%</span></span></div>`;
-    const left = (sz) => `<div style="font-size:${sz || 'var(--fs)'};font-weight:700;margin-top:5px;white-space:nowrap">≈ ${fmtDH(BAT_LEFT())} left</div>`;
-    const split = `<div style="font-size:var(--fc);margin-top:3px;white-space:nowrap" class="meta"><b>${fmtDH(BAT_READ())}</b> reading · <b>${fmtDH(BAT_STBY())}</b> standby</div>`;
+    // The estimate always says what it assumes: your usual use (the screen-on share of the last 7 days). Narrow sizes shorten it.
+    const left = (sz, narrow = t.w < 260) => `<div style="font-size:${narrow ? '13px' : sz || 'var(--fs)'};letter-spacing:${narrow ? '-.01em' : 0};font-weight:700;margin-top:5px;white-space:nowrap" class="batleft">≈ ${fmtDH(BAT_LEFT())}${narrow ? '<span style="font-weight:500"> · usual use</span>' : '<span style="font-weight:500"> at your usual use</span>'}</div>`;
+    const split = `<div style="font-size:var(--fc);margin-top:3px;white-space:nowrap;line-height:1.35" class="meta">${t.w > 600 ? `<b>${fmtDH(BAT_READ())}</b> reading non-stop · <b>${fmtDH(BAT_STBY())}</b> standby only` : `<b>${fmtDH(BAT_READ())}</b> reading non-stop<br><b>${fmtDH(BAT_STBY())}</b> standby only`}</div>`;
     const wrap = (inner, extra = '') => `<div class="tin" data-act="nav:battery" data-fk="bat-open" ${extra}>${inner}</div>`;
     if (t.h < 130){ // small
-      if (t.w < 260) return wrap(`<div style="flex:1"></div>${lvl()}${left()}<div style="flex:1"></div>`);
-      return wrap(`<div style="flex:1;display:flex;align-items:center;gap:12px">${lvl()}<div style="min-width:0">${left().replace('margin-top:5px', 'margin-top:0')}<div style="font-size:var(--fc);margin-top:3px;line-height:1.3" class="meta"><b>${fmtDH(BAT_READ())}</b> reading<br><b>${fmtDH(BAT_STBY())}</b> standby</div></div></div>`);
+      if (t.w < 260) return wrap(`<div style="flex:1"></div>${lvl()}${left(null, true)}<div style="flex:1"></div>`);
+      return wrap(`<div style="flex:1;display:flex;align-items:center;gap:12px">${lvl()}<div style="min-width:0">${left().replace('margin-top:5px', 'margin-top:0')}<div style="font-size:var(--fc);margin-top:3px;line-height:1.3;white-space:nowrap" class="meta"><b>${fmtDH(BAT_READ())}</b> reading non-stop<br><b>${fmtDH(BAT_STBY())}</b> standby only</div></div></div>`);
     }
     const hd = `<div class="th"><span class="lab">Battery</span><span class="more" style="margin-left:auto">${ic('chevR', 14, 2.6)}</span></div>`;
     if (t.w < 260){ // tall narrow
-      return wrap(`${hd}<div style="margin-top:10px">${lvl()}</div>${left()}<div style="font-size:var(--fc);margin-top:6px;line-height:1.4" class="meta"><b>${fmtDH(BAT_READ())}</b> reading<br><b>${fmtDH(BAT_STBY())}</b> standby</div><div style="flex:1;min-height:8px"></div>${t.h > 250 ? batBars(wk, 70, true) : ''}`);
+      return wrap(`${hd}<div style="margin-top:10px">${lvl()}</div>${left()}<div style="font-size:${t.w < 260 ? 11 : 12}px;margin-top:6px;line-height:1.4;white-space:nowrap" class="meta"><b>${fmtDH(BAT_READ())}</b> reading non-stop<br><b>${fmtDH(BAT_STBY())}</b> standby only</div><div style="flex:1;min-height:8px"></div>${t.h > 250 ? batBars(wk, 70, true) : ''}`);
     }
     const large = t.w > 420 && t.h > 250;
     if (!large){ // medium
@@ -1078,11 +1107,11 @@ function batteryView(c, g){
   const row = (l, v, sub) => `<div style="display:flex;align-items:center;gap:12px;min-height:${x4 ? 40 : 48}px;border-bottom:1px solid var(--g3)"><div style="flex:1;min-width:0"><div style="font-size:var(--fs);font-weight:600">${l}</div>${sub ? `<div class="meta" style="font-size:var(--fc)">${sub}</div>` : ''}</div><div class="num" style="font-size:var(--fs);font-weight:700;text-align:right">${v}</div></div>`;
   let body = '';
   if (tab === 0){
-    body = `<div style="display:flex;align-items:center;gap:20px;margin-top:${x4 ? 16 : 22}px">${batGlyph(x4 ? 76 : 96, BAT.level)}<div><div class="num" style="font-size:${x4 ? 40 : 52}px;font-weight:700;letter-spacing:-.02em;line-height:1">${BAT.level}%</div><div style="font-size:var(--fb);font-weight:700;margin-top:6px">≈ ${fmtDH(BAT_LEFT())} left at your pace</div></div></div>
+    body = `<div style="display:flex;align-items:center;gap:20px;margin-top:${x4 ? 16 : 22}px">${batGlyph(x4 ? 76 : 96, BAT.level)}<div><div class="num" style="font-size:${x4 ? 40 : 52}px;font-weight:700;letter-spacing:-.02em;line-height:1">${BAT.level}%</div><div style="font-size:var(--fb);font-weight:700;margin-top:6px">≈ ${fmtDH(BAT_LEFT())} left at your usual use</div></div></div>
       ${sec('How the estimate is made')}
       ${row('If you read text non-stop', fmtDH(BAT_READ()), `78% ÷ reading ${d1(BAT.rR[0])} %/h`)}
       ${row('In standby only', fmtDH(BAT_STBY()), `78% ÷ standby ${d1(BAT.rS[0])} %/h`)}
-      ${row('Screen on, last 7 days', Math.round(BAT.f * 100) + '%', 'the share used to blend the two')}
+      ${row('Your usual use', 'screen on ' + Math.round(BAT.f * 100) + '% of the time', 'last 7 days: the share used to blend the two')}
       ${sec('Per amount of reading')}
       ${row('Per 100 pages', d1(BAT.per100p) + '%', 'reading text')}
       ${row('Per 100 full refreshes', x4 ? NEED('64 of 100 refreshes needed') : '3.4%', x4 ? '' : 'all content')}
@@ -1106,7 +1135,7 @@ function batteryView(c, g){
         <div style="display:flex;align-items:center;gap:6px;font-size:var(--fs);font-weight:700" class="num">${ch[1]}<span style="display:inline-block;width:${x4 ? 40 : 70}px;height:8px;border:1.5px solid #000;border-radius:4px;background:linear-gradient(90deg,#fff ${parseInt(ch[1])}%,#000 ${parseInt(ch[1])}%,#000 ${parseInt(ch[2])}%,#fff ${parseInt(ch[2])}%)"></span>${ch[2]}</div></div>`).join('')}
       ${row('Charging rate', pm(BAT.chg) + ' %/h', 'needs 0.5 h and more than 2% of charging')}`;
   }
-  return shdr('Battery', `${BAT.level}% · ≈ ${fmtDH(BAT_LEFT())} left`) + tabs + `<div style="padding:0 ${P}px">${body}</div>`;
+  return shdr('Battery', `${BAT.level}% · ≈ ${fmtDH(BAT_LEFT())} left at your usual use`) + tabs + `<div style="padding:0 ${P}px">${body}</div>`;
 }
 
 W.recommend = {name:'Recommended for you', icon:'sparkle', rel:'later', placeholder:true, desc:'Coming later: picks based on what you\'ve read, rated and liked, using authors, tags and series. Not random.',
@@ -1472,7 +1501,7 @@ const MODES = [
 const modeOf = () => { const i = MODES.findIndex(m => MODE_KEYS.every(k => SETV[k] === m.v[k])); return i < 0 ? 3 : i; };
 const modeName = i => i === 3 ? 'Custom' : MODES[i].n;
 const modeLeft = i => { const m = MODES[i]; if (!m || !m.r) return BAT_LEFT(); return BAT.level / (BAT.f * m.r[0] + (1 - BAT.f) * m.r[1]); };
-const modeBat = i => i === 3 ? 'Battery depends on your mix' : `≈ ${fmtDH(modeLeft(i))} at your pace${MODES[i].est ? ' (estimate: Wi-Fi always on while reading is not measured yet)' : ''}`;
+const modeBat = i => i === 3 ? 'Battery depends on your mix' : `≈ ${fmtDH(modeLeft(i))} at your usual use${MODES[i].est ? ' (estimate: Wi-Fi always on while reading is not measured yet)' : ''}`;
 function setMode(i){ for (const k of MODE_KEYS) SETV[k] = MODES[i].v[k]; }
 const CHAN = [{n:'Stable', d:'Tested releases only'}, {n:'RC', d:'Release candidates as well: the builds about to become stable'}, {n:'Preview', d:'Every test build, the earliest and roughest'}];
 const INSTALLED = {v:'0.12.0-rc.2', ch:'RC'};
@@ -1521,7 +1550,7 @@ function SETTINGS(){
 
       R('sec3', 'Power', 'sec', {span:.6}),
       R('dsleep', 'Sleep after', 'cyc', {opts:['5 min idle','10 min idle','15 min idle','30 min idle','Never'], sub:'The reader sleeps after this long untouched'}),
-      R('bat', 'Battery', 'nav', {act:'nav:battery', v:() => `${BAT.level}% · ≈ ${fmtDH(BAT_LEFT())}`}),
+      R('bat', 'Battery', 'nav', {act:'nav:battery', v:() => `${BAT.level}% · ≈ ${fmtDH(BAT_LEFT())} at your usual use`}),
     ]},
     {id:'library', n:'Library & downloads', i:'download', sum:() => `${CAT_OPTS[SETV.cat]} catalog · ${['/Books','/BookSync','/Download'][SETV.folder]}`, rows:[
       R('storage', 'Storage', 'nav', {act:'nav:storage', v:() => `${fmtGB(STORE().free)} free`, sub:'What uses space, and quick ways to free it'}),
@@ -1684,7 +1713,7 @@ function topPanel(b, c, g, cc, cs, p){
     </div>
     <div class="hair" style="margin:${x4 ? 12 : 14}px -4px ${x4 ? 6 : 8}px"></div>
     <div style="display:${x4 ? 'grid;grid-template-columns:repeat(3,1fr);gap:4px' : 'flex;justify-content:space-between'}">${x4 ? tiles : tiles.replace(/class="ptile"/g, 'class="ptile" style="flex:1"') + kor.replace('class="ptile k"', 'class="ptile k" style="flex:1.1"')}</div>
-    <div style="display:flex;justify-content:center;gap:8px;margin-top:${x4 ? 8 : 10}px;font-size:var(--fc);color:var(--g1);font-weight:600" class="num">${S.bsync ? '<b style="color:#000">Syncing…</b> · ' : ''}Chapter ${cc.i + 1} of ${cs.length} · ${Math.round(p / b.pages * 100)}% · ${fmtDur(f.left)} left in book<span style="width:10px"></span><span data-act="nav:battery" data-fk="tp-bat" style="display:inline-flex;align-items:center;gap:5px;color:#000;font-weight:700;margin:-16px 0;height:var(--tap)">${batGlyph(20, BAT.level)}≈ ${fmtDH(BAT_LEFT())}</span></div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;column-gap:8px;margin-top:${x4 ? 8 : 10}px;font-size:var(--fc);color:var(--g1);font-weight:600" class="num"><span style="white-space:nowrap">${S.bsync ? '<b style="color:#000">Syncing…</b> · ' : ''}Chapter ${cc.i + 1} of ${cs.length} · ${Math.round(p / b.pages * 100)}% · ${fmtDur(f.left)} left in book</span><span data-act="nav:battery" data-fk="tp-bat" style="white-space:nowrap;display:inline-flex;align-items:center;gap:5px;color:#000;font-weight:700;margin:-16px 0;height:var(--tap)">${batGlyph(20, BAT.level)}≈ ${fmtDH(BAT_LEFT())} left at your usual use</span></div>
   </div>`;
 }
 function bottomPanel(b, c, g, cc, cs, p){
@@ -1793,7 +1822,7 @@ function endView(b, g){
      <div class="pill${!nx.dev && S.offline ? ' dis' : ''}" data-act="book:${nx.id}" data-fk="e-next" style="${x4 ? 'padding:0 14px;font-size:14px' : ''}">${ic(nx.dev ? 'play' : 'download', 17, 2.4)}${nx.dev ? 'Start' : x4 ? 'Get' : 'Download & start'}</div></div>` : '';
   return `<div class="panel" style="bottom:var(--inset);padding:${x4 ? 16 : 22}px ${x4 ? 16 : 24}px ${x4 ? 16 : 20}px">
     <div style="display:flex;gap:${x4 ? 14 : 20}px;align-items:flex-end">${coverEl(b, cw, Math.round(cw*1.5), {noact:true})}<div style="flex:1;min-width:0"><div class="ser" style="font-style:italic;font-size:${x4 ? 30 : 38}px;line-height:1">The End</div><div style="font-size:var(--fb);margin-top:8px">You finished <b>${esc(b.t)}</b></div><div style="font-size:var(--fc);color:var(--g1);margin-top:3px">Marked as read · synced to your library</div></div></div>
-    <div style="display:flex;border-top:1px solid var(--g3);border-bottom:1px solid var(--g3);padding:12px 0;margin-top:${x4 ? 14 : 18}px">${stat('9 days', 'start to finish')}${stat('8 h 50 m', 'reading time')}${stat(b.pages, 'pages')}${x4 ? '' : stat('38 pp/h', 'your pace')}</div>
+    <div style="display:flex;border-top:1px solid var(--g3);border-bottom:1px solid var(--g3);padding:12px 0;margin-top:${x4 ? 14 : 18}px">${stat('9 days', 'start to finish')}${stat('8 h 50 m', 'reading time')}${stat(b.pages, 'pages')}${x4 ? '' : stat('38 pp/h', 'your usual use')}</div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:${x4 ? 10 : 14}px"><span style="font-size:var(--fs);font-weight:700;flex:1">${rate ? 'Thanks. Your rating' : 'How was it?'}</span>${stars(rate, x4 ? 24 : 28, 'rate')}</div>
     ${nextCard}
     ${nx ? `<div class="swrow" data-act="wtr:${nx.id}" data-fk="e-wtr" style="margin-top:${x4 ? 6 : 8}px;font-size:var(--fs);font-weight:600"><span style="width:24px;height:24px;border:2px solid #000;border-radius:6px;display:grid;place-items:center;flex:none;${nx.wtr ? 'background:#000;color:#fff' : ''}">${nx.wtr ? ic('check', 16, 3) : ''}</span><span class="ell">Add <b>${esc(nx.t)}</b> to Want to read</span></div>` : ''}
@@ -1879,7 +1908,7 @@ function modalView(){
       <div class="meta" style="font-size:var(--fc);margin-top:8px;line-height:1.4">${x4 ? 'Each row opens the reader\'s own keyboard (Prev/Next move, Select types).' : 'Each row opens the reader\'s own keyboard (KOReader\'s).'}</div>
       ${x4 ? `<div class="lrow" data-act="modal:siweb" data-fk="si-web" style="height:var(--tap);gap:10px;font-size:var(--fs);font-weight:700;margin-top:6px">${ic('device', 18, 2.2)}<span style="flex:1">Type it on a phone or computer instead</span>${ic('chevR', 16, 2.6)}</div>` : ''}
       <div style="display:flex;gap:10px;margin-top:14px"><div class="pill wh" data-act="closeModal" data-fk="si-cancel" style="flex:1">Cancel</div><div class="pill${m.pw ? '' : ' dis'}" data-act="signin" data-fk="si-ok" style="flex:1">Sign in</div></div>`
-      : `<div class="ser" style="font-size:var(--fm);font-weight:700">What's new in 0.12</div><div style="font-size:var(--fs);line-height:1.5;margin-top:10px">${['Home is a widget grid you can edit','Lists (your saved filters) on Home','BookSync settings on the reader: the companion is rarely needed','Battery widget with time left at your pace'].map(x => `<div style="display:flex;gap:10px;padding:6px 0">${ic('check', 18, 2.6)}<span>${x}</span></div>`).join('')}</div><div class="pill" data-act="closeModal" data-fk="wn-ok" style="margin-top:14px">Done</div>`;
+      : `<div class="ser" style="font-size:var(--fm);font-weight:700">What's new in 0.12</div><div style="font-size:var(--fs);line-height:1.5;margin-top:10px">${['Home is a widget grid you can edit','Lists (your saved filters) on Home','BookSync settings on the reader: the companion is rarely needed','Battery widget with time left at your usual use'].map(x => `<div style="display:flex;gap:10px;padding:6px 0">${ic('check', 18, 2.6)}<span>${x}</span></div>`).join('')}</div><div class="pill" data-act="closeModal" data-fk="wn-ok" style="margin-top:14px">Done</div>`;
     return `<div class="scrim" data-act="closeModal"></div><div class="card" style="left:50%;top:50%;transform:translate(-50%,-50%);width:${w}px;padding:${x4 ? 18 : 24}px;border-radius:18px">${body}</div>`;
   }
   return '';
@@ -1934,12 +1963,13 @@ function act(a, el, ev){
     case 'grp': fOf(fTarget()).group = +r[0]; S.fk = 'f-group-' + r[0]; break;
     // ---- the filter sheet ----
     case 'filter': S.modal = {k:'filter'}; S.pg_fsheet = 0; S.fk = null; break;
-    case 'fset': { const f = fOf(fTarget()); f[r[0]] = +r[1]; S.fk = null; S.fk = `f-${r[0]}-${r[1]}`; break; }
+    case 'fset': { const f = fOf(fTarget()); f[r[0]] = +r[1]; S.fk = (S.modal && S.modal.pick ? 'fp-' : 'f-') + r[0] + '-' + r[1]; break; }
+    case 'fone': { const f = fOf(fTarget()); f[r[0]] = +r[1]; S.modal.pick = null; S.fk = 'f-' + r[0]; break; }
+    case 'fsortset': { const f = fOf(fTarget()); if (f.sort !== r[0]){ f.sort = r[0]; f.dir = 0; } S.fk = 'fp-sort-' + r[0]; break; }
     case 'ftog': { const f = fOf(fTarget()); f[r[0]] = !f[r[0]]; break; }
-    case 'fcyc': { const f = fOf(fTarget()); f[r[0]] = (f[r[0]] + 1) % +r[1]; break; }
     case 'fsort': { const t = fTarget(); const f = fOf(t); const so = fctx(t).sorts; f.sort = so[(so.indexOf(f.sort) + 1) % so.length]; f.dir = 0; break; }
     case 'fdir': { const f = fOf(fTarget()); f.dir = f.dir ? 0 : 1; break; }
-    case 'fpickopen': S.modal.pick = r[0]; S['pg_fpick' + r[0]] = 0; S.fk = null; break;
+    case 'fpickopen': if (!S.modal || S.modal.k !== 'filter') S.modal = {k:'filter'}; S.modal.pick = r[0]; S['pg_fpick' + r[0]] = 0; S.fk = null; break;
     case 'fpick': { const f = fOf(fTarget()); const k = S.modal.pick; const v = r.join(':'); const a = f[k]; const i = a.indexOf(v); if (i < 0) a.push(v); else a.splice(i, 1); break; }
     case 'fpickclear': fOf(fTarget())[S.modal.pick] = []; break;
     case 'fpickdone': S.fk = 'f-' + S.modal.pick; S.modal.pick = null; break;
@@ -2205,7 +2235,7 @@ function explain(){
     if (m === 'confirm') return ['Remove, with a safety check', 'Removing a download never touches your server copy, progress or highlights. The message says so in plain words.', []];
     if (m === 'connect') return ['Offline: connect and download?', 'You tapped a book that lives only on your server while offline. One tap turns on Wi-Fi and downloads it; then it opens.', []];
     if (m === 'menu') return ['Home menu', 'Edit Home, your lists and BookSync settings. Sync and search are in the header instead: the sync status shows the state at a glance and syncs in one tap.', []];
-    if (m === 'filter') return ['Filter', 'One filter sheet behind every filter button: Show, Where, Refine (author, series, tags, length, rating, when added), Group and Sort, in that order everywhere. Sections that do not apply are hidden. The button counts the books live; Reset goes back to this screen\'s defaults; Save as a Book list on Home keeps it as a widget.' + (x4c ? ' <kbd>Prev</kbd>/<kbd>Next</kbd> move, <kbd>Select</kbd> picks or steps, <kbd>Back</kbd> closes and applies.' : ''), []];
+    if (m === 'filter') return ['Filter', 'One filter sheet behind every filter button, on one screen: Show, Where, Author, Series, Tags, Length, Rating, Added, and Group & sort. Every row shows its value and opens a picker; changed rows are bold with a dot. Pickers with one answer show how many books each choice would give. The button counts the books live; Reset goes back to this screen\'s defaults; Save as a Book list on Home keeps it as a widget.' + (x4c ? ' <kbd>Prev</kbd>/<kbd>Next</kbd> move, <kbd>Select</kbd> opens a row or picks, <kbd>Back</kbd> closes the picker, then the sheet, and applies.' : ''), []];
     if (m === 'rename') return ['Rename a page', x4 ? 'There is no keyboard on the X4, so pick a name from the list.' + (x4c ? ' <kbd>Select</kbd> on the name steps through the choices.' : '') : 'Type a name with KOReader\'s keyboard, or pick one. A name you set is never replaced by an automatic one.', []];
     if (m === 'picker') return ['Add a widget', 'Every widget, grouped by when it ships. Each shows a live miniature at its default size and lists the sizes it can take. “Recommended for you” is a placeholder for later. The dropped widgets are kept here as later options, not on Home.', ['Add one: it lands in the first space it fits, or on a new page if there is no room.']];
   }
@@ -2214,7 +2244,7 @@ function explain(){
     if (S.edit) return ['Edit Home', 'Every widget is a block on a ' + (x4 ? '2-column, 7-row' : '4-column, 8-row') + ' grid. ' + (x4c ? '<kbd>Select</kbd> picks a widget up. <kbd>Prev</kbd>/<kbd>Next</kbd> carry it with the same move rule (right, then down a row at the edge), <kbd>More</kbd> steps its size, <kbd>Select</kbd> drops it and <kbd>Back</kbd> puts it back where it was. <kbd>More</kbd> on a widget you have not picked up opens its menu (Configure, Next size, Remove).' : 'Tap one to select it, then use the arrows. <b>Move rule:</b> if the cells next to it are free it moves one cell; if not, it trades places with the smallest band of widgets in its way, which shift back into the space it left, keeping their order. Nothing ever overlaps. Arrows grey out only at the page edge; when no trade fits, a toast offers the next page.') + ' <b>Configure</b> (on any Book list) sets its title, source (built in, one of your Lists, a series, an author, or a custom filter), style, sort and caption. Tap the page name at the top, or Rename at the bottom, to rename the page. Dotted squares are free space: tap one to add a widget there.', ['Select “Also reading” and press Size: the widget lays itself out again for each size.', 'Select Reading records on a page and press Down: the widgets below shift up and it lands under them.', 'Select a Book list and press Configure, then Source › Custom filter.', 'Tap the page name to rename it.']];
     const pg = pages[S.page];
     if (S.page === 0) return ['Home, page 1: ' + pg.name, 'Your current book is the hero: its cover, one plain progress bar and a short line, “62% · 3 h 22 m left”' + (x4 ? '; the whole tile resumes it.' : ', with when you will finish beside Resume.') + ' Below: the other books you are reading, your Lists with counts, ' + (x4 ? 'Want to read as a little cover grid, and Recently added.' : 'the Library count with what is on this device and the storage bar, Recently added and Want to read.') + ' The sync status in the header is a button: tap it to sync. Search is beside it.' + btn, ['Tap Resume to open the book.', 'Turn on Offline, then tap a cover with a cloud badge.', 'Long-press a cover for its actions.', `Swipe, or use the arrows, for the other pages (${names}).`]];
-    const what = {Stats:'Year in reading is the biggest tile: every day of the past year as a cell, darker for more, today ringed. Then Battery, small (how long it will last at your pace; tap it for the full Battery page), When you read' + (x4 ? ' as a shaded 24-hour strip' : ' as hour bars that touch, with the peak marked') + ', This week as labelled day columns' + (x4 ? '.' : ', and your Reading records.'), Library:'Your library at a glance: the Library widget (count, what is on the card, the storage bar, Authors), the books on this reader with their progress, and what you have finished.'}[pg.name] || 'Widgets you placed here. A new page is called “Page N” until its first widget names it; tap the name in Edit Home to rename it.';
+    const what = {Stats:'Year in reading is the biggest tile: every day of the past year as a cell, darker for more, today ringed. Then Battery, small (how long it will last at your usual use; tap it for the full Battery page), When you read' + (x4 ? ' as a shaded 24-hour strip' : ' as hour bars that touch, with the peak marked') + ', This week as labelled day columns' + (x4 ? '.' : ', and your Reading records.'), Library:'Your library at a glance: the Library widget (count, what is on the card, the storage bar, Authors), the books on this reader with their progress, and what you have finished.'}[pg.name] || 'Widgets you placed here. A new page is called “Page N” until its first widget names it; tap the name in Edit Home to rename it.';
     return [`Home, page ${S.page + 1}: ${pg.name}`, what + (x4c ? ' The focus starts on the first widget; running off the last one turns the page.' : ''), ['Open ⋯ › Edit Home to rearrange, resize or configure.']];
   }
   if (c.n === 'reader'){
@@ -2226,10 +2256,10 @@ function explain(){
     return ['Reading', 'Just the book: the text, the optional clock at the top and KOReader\'s status line at the bottom. No BookSync chrome.' + (x4c ? ' <kbd>Prev</kbd>/<kbd>Next</kbd> turn pages, <kbd>More</kbd> opens the top menu, <kbd>Select</kbd> the bottom one, <kbd>Back</kbd> goes Home.' : ' Tap the top strip for the top menu, the bottom strip for the bottom menu, the left third to go back a page, anywhere else to go forward.'), ['Use Go to and type 100% to see the end of book.']];
   }
   if (c.n === 'settings'){ const g = c.grp;
-    if (g === 'sync') return ['Sync, Wi-Fi & power', 'One mode at the top sets Wi-Fi, when your place is sent, and sleep and wake syncs together: Battery saver, Balanced or Always up to date, each with its battery estimate at your pace. Every setting stays visible underneath. Change one and the mode becomes Custom, with “Back to Balanced” to undo. Settings that do nothing in the current mix say why instead of hiding.' + (x4c ? ' <kbd>Select</kbd> on the mode steps to the next one.' : ''), ['Set Wi-Fi to “Off while reading”: Sync while reading warns that its syncs wait until you close the book.', 'Turn off “Sync when the reader sleeps”: the sleep limit says it is not used.']];
+    if (g === 'sync') return ['Sync, Wi-Fi & power', 'One mode at the top sets Wi-Fi, when your place is sent, and sleep and wake syncs together: Battery saver, Balanced or Always up to date, each with its battery estimate at your usual use. Every setting stays visible underneath. Change one and the mode becomes Custom, with “Back to Balanced” to undo. Settings that do nothing in the current mix say why instead of hiding.' + (x4c ? ' <kbd>Select</kbd> on the mode steps to the next one.' : ''), ['Set Wi-Fi to “Off while reading”: Sync while reading warns that its syncs wait until you close the book.', 'Turn off “Sync when the reader sleeps”: the sleep limit says it is not used.']];
     if (g === 'updates') return ['Updates', 'Three channels, each with what it means: Stable, RC (the builds about to become stable) and Preview (every test build). Installed shows the version and its channel.', []];
     return ['BookSync settings', 'Everything you change day to day, on the reader itself. Each group shows a one-line summary. Rows page rather than scroll; swipe sideways or use the arrows.', []]; }
-  if (c.n === 'battery') return ['Battery', 'The level and time left at your pace, how the estimate is made, measured rates (with their margin of error), daily use and recent charges.', []];
+  if (c.n === 'battery') return ['Battery', 'The level and time left at your usual use, how the estimate is made, measured rates (with their margin of error), daily use and recent charges.', []];
   if (c.n === 'storage') return ['Storage', 'What uses the space and what each action frees. Low space only warns; a download is blocked only when it would leave less than 200 MB free.', ['Set Space to Nearly full in the controls above, then try a download.']];
   const t = {reading:['Reading now', 'Every book you\'ve started, newest first. Books you haven\'t opened for three weeks sit in “Put down” below: that is the old “Pick back up”, merged in.', []],
     list:['A book list', 'One screen for every list: covers or rows in pages (e-ink turns pages rather than scrolling; swipe sideways or use the arrows). The filter button opens the same filter sheet as everywhere else: show, where, refine, group and sort. Whatever is active shows as chips you can remove; with nothing active there is no row at all.', ['Tap the filter button, choose Unread and On this device, then Show.']], scopes:['Lists', 'All your saved lists with live counts. They come from your server through BookSync\'s library interface, so the name is the same whatever server you use.', []], authors:['Authors', 'Secondary on purpose: one tap from the Library widget.', []], serieslist:['Series', 'Secondary list; tap a series for its page.', []],

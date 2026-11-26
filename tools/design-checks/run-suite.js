@@ -10,8 +10,10 @@ const checks = [
   'critic-shots/classic.js', 'critic-shots/r2/m2.js',
   'critic-shots/r2/c2.js', 'critic-shots/r2/c3.js',
   'critic-shots/r2/c4.js', 'critic-shots/r2/fuzz.js',
-  'critic-shots/r3/dark.js', 'critic-shots/r3/filt.js',
-  'critic-shots/r3/filt2.js', 'critic-shots/r3/names.js',
+  'critic-shots/r3/names.js',
+  'critic-shots/r5/bat.js', 'critic-shots/r5/ser.js',
+  'critic-shots/r5/p5.js', 'critic-shots/r5/f5.js',
+  'critic-shots/r5/z6.js', 'critic-shots/r5/cl5.js',
 ];
 let failures = 0;
 for (const script of checks) {
@@ -25,7 +27,8 @@ for (const script of checks) {
   const bad = result.status !== 0 || result.error ||
     /\b(?:FAIL|ERR|ERRORS|OVERFLOW)\b|NO FOCUS/.test(diagnostic) ||
     /\b(?:small:?\s+|overflow\s+|fails\s+)[1-9]\d*/i.test(diagnostic) ||
-    /"bad"\s*:\s*\[(?!\])/.test(diagnostic);
+    /"bad"\s*:\s*\[(?!\])/.test(diagnostic) ||
+    /!OUT|NOSHEET|"(?:clip|out)":\[(?!\])/.test(diagnostic);
   console.log(`${bad ? 'FAIL' : 'PASS'} ${script}`);
   if (bad) { failures++; console.error(log || result.error?.message); }
 }

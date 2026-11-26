@@ -1,9 +1,9 @@
 # BookSync Home, tap to download and series
 
-**Current visual review:** [revision-8 notes](DESIGN-NOTES.md),
+**Current visual review:** [revision-10 notes](DESIGN-NOTES.md),
 [clickable prototype](prototype.html) and [screenshot gallery](mockups.html)
 replace the earlier visual/interaction examples below. The adversarial critic
-approved the supplied design after four rounds; maintainer sign-off is pending.
+approved the supplied design after six rounds; maintainer sign-off is pending.
 Native integration, backend, licensing and measured-fit gates below still apply.
 Implementation and merge are not authorized by critic approval.
 
