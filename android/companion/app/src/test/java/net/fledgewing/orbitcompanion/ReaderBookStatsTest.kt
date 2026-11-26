@@ -62,7 +62,9 @@ class ReaderBookStatsTest {
                 assertEquals(62L,(st.bookItem(7) as Map<*,*>)["progressPercentage"])
 
                 assertEquals(false,(book["stats"] as Map<*,*>)["available"])
-                assertEquals(false,read(mapOf("op" to "battery"))["available"])
+                val battery=read(mapOf("op" to "battery"))
+                assertNull(battery["hours_usual_use"])
+                assertEquals("local-device",(battery["freshness"] as Map<*,*>)["origin"])
                 assertTrue((read(mapOf("op" to "reader","path" to "/books/other.epub"))["items"] as List<*>).isEmpty())
                 ledger.writeBytes(LuaValue.encode(mapOf("owner" to "other","books" to listOf(mapOf("book_id" to 7,"path" to "/books/fixture.epub")))))
                 assertTrue((read(mapOf("op" to "reader","path" to "/books/fixture.epub"))["items"] as List<*>).isEmpty())
