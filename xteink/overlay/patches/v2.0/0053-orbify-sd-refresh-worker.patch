@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: complete SD catalog in a global refresh worker
+Subject: [PATCH] BookSync: complete SD catalog in a global refresh worker
 
 diff --git a/src/activities/ActivityManager.cpp b/src/activities/ActivityManager.cpp
 index d9649b1..8e98a69 100644
@@ -128,7 +128,7 @@ index 7f9de82..ba7d665 100644
 @@ -625,7 +642,7 @@ void BookOrbitCatalogBrowserActivity::onWifiSelectionComplete(const bool connect
    if (!connected) {
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
-     // Orbify (patch 0035): with a saved mirror the catalog opens offline from the cache.
+     // BookSync (patch 0035): with a saved mirror the catalog opens offline from the cache.
 -    if (OrbifyMirror::saved() && entryLink.bookId == 0) {
 +    if (OrbifyCache::freshness(BOOKORBIT_STORE.getBaseUrl() + "/plugin/catalog/root").saved && entryLink.bookId == 0) {
        offlineSession = true;
@@ -149,7 +149,7 @@ index 7f9de82..ba7d665 100644
 -    booksFromFacet = false;
 -    downloadFromHome = true;
 -    // A sync sent this one to replace the open book's outdated copy: back to that book after,
--    // whatever the outcome. The End-of-Book page's "Download & open" (Orbify, patch 0028) also
+-    // whatever the outcome. The End-of-Book page's "Download & open" (BookSync, patch 0028) also
 -    // comes back to its book, and opens the new one once it is downloaded.
 -    reopenPath = link.replacePath.empty() ? link.returnPath : link.replacePath;
 +  if (entryLink.bookId != 0) { openLinkedBook(); return; }
@@ -167,7 +167,7 @@ index 7f9de82..ba7d665 100644
 +  booksFromFacet = false;
 +  downloadFromHome = true;
 +  // A sync sent this one to replace the open book's outdated copy: back to that book after,
-+  // whatever the outcome. The End-of-Book page's "Download & open" (Orbify, patch 0028) also
++  // whatever the outcome. The End-of-Book page's "Download & open" (BookSync, patch 0028) also
 +  // comes back to its book, and opens the new one once it is downloaded.
 +  reopenPath = link.replacePath.empty() ? link.returnPath : link.replacePath;
  #if CROSSINK_TAILNET_ORBIFY_FINISH
@@ -405,8 +405,8 @@ index d96ac71..d00b2a2 100644
 
  namespace fui = freeink::ui;
 @@ -40,13 +41,14 @@ namespace {
- // Orbify (patch 0027): "Mark Finished at End" sits before Home.
- // Orbify (patch 0034): "Keep book copies current" follows it.
+ // BookSync (patch 0027): "Mark Finished at End" sits before Home.
+ // BookSync (patch 0034): "Keep book copies current" follows it.
  constexpr int ORBIFY_MARK_ROWS = CROSSINK_TAILNET_ORBIFY_FINISH ? 1 : 0;
 -constexpr int ORBIFY_ROWS = ORBIFY_MARK_ROWS + (CROSSINK_TAILNET_ORBIFY_COPY_REFRESH ? 1 : 0);
 +constexpr int ORBIFY_SETTING_ROWS = CROSSINK_TAILNET_ORBIFY_MIRROR ? 3 : 0;
@@ -446,7 +446,7 @@ index d96ac71..d00b2a2 100644
 +constexpr int WIFI_IDLE_ROW = STORAGE_ROW + 2;
  constexpr int HOME_ROW = 8 + ORBIFY_ROWS;
  constexpr int BACKGROUND_SYNC_ROW = 9 + ORBIFY_ROWS;
- // The Home page: the top shelf, the bottom shelf, then the refresh, and Orbify's Full refresh
+ // The Home page: the top shelf, the bottom shelf, then the refresh, and BookSync's Full refresh
 @@ -243,6 +253,9 @@ void BookOrbitSettingsActivity::handleSelection() {
                             [this](const ActivityResult& result) {
                               if (!result.isCancelled) {
@@ -574,7 +574,7 @@ index f146597..74ca819 100644
 +++ b/src/components/themes/bookorbit/BookOrbitHomeUi.cpp
 @@ -156,16 +156,21 @@ void BookOrbitHomeUi::drawTopBar() const {
  #if CROSSINK_TAILNET_ORBIFY_MIRROR
-   // Orbify (patch 0041): a Full refresh left unfinished shows its one % in the header's left corner
+   // BookSync (patch 0041): a Full refresh left unfinished shows its one % in the header's left corner
    // (it carries on in the catalog and at the sleep syncs). Home makes no requests: read once per boot.
 -  static const int pending = OrbifyMirror::pendingPercent();
 +  const auto refresh = OrbifyMirror::snapshot();

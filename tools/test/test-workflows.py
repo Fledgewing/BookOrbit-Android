@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 
 root = pathlib.Path(__file__).resolve().parents[2]
 files = sorted((root / ".github/workflows").glob("*.yml")) + sorted((root / ".github/actions").glob("*/action.yml"))
+files += sorted((root / "stub/.github/workflows").glob("*.yml"))
 errors = []
 
 PINNED = re.compile(r"^[\w.-]+/[\w./-]+@[0-9a-f]{40}(\s+#.*)?$")
@@ -88,6 +89,31 @@ if verification.findtext("v:configuration/v:verify-metadata", namespaces=ns) != 
 for artifact in verification.findall("v:components/v:component/v:artifact", ns):
     if not artifact.findall("v:sha256", ns):
         errors.append(f"Gradle artifact has no SHA-256: {artifact.get('name')}")
+
+# Releases must reject a skipped reader job, and plugin changes must exercise it on PRs.
+release_tests = (root / ".github/workflows/release-tests.yml").read_text()
+reader_jobs = jobs_of(release_tests)
+gate = reader_jobs.get("reader-required", "")
+if not all(piece in gate for piece in ["needs: reader-startup", "always()", 'test "$READER_RESULT" = success']):
+    errors.append("release-tests: required reader gate must reject skipped/failed startup flows")
+if '"android/koreader/**"' not in release_tests.split("  workflow_call:")[0]:
+    errors.append("release-tests: plugin PRs must run reader flows")
+if "grep -q ORBIT_REQUIRE_READER_FLOWS" not in reader_jobs.get("reader-startup", ""):
+    errors.append("release-tests: old tags must not silently ignore the required-scenario flag")
+release_jobs = jobs_of((root / ".github/workflows/release.yml").read_text())
+if not re.search(r"needs:\s*(?:tests\b|\[[^\]\n]*\btests\b)", release_jobs["build"]) or "platform: android" not in release_jobs["tests"]:
+    errors.append("release: Android build must depend on the reusable reader gate")
+
+# Cache reuse permits an intentional skip, never cancellation or a missing gate.
+if "needs.plan.outputs.android_release_tests == 'false'" not in release_jobs["build"]:
+    errors.append("release: skipped tests require matching source evidence")
+xteink_jobs = jobs_of((root / ".github/workflows/xteink.yml").read_text())
+if "needs.resolve.outputs.firmware_release_tests == 'false'" not in xteink_jobs["publish"]:
+    errors.append("xteink: skipped emulated tests require matching source evidence")
+for name, job in [("Android sign", release_jobs["sign"]), ("firmware dispatch", release_jobs["firmware"]),
+                  ("Android feed", release_jobs["feed"]), ("firmware publish", xteink_jobs["publish"])]:
+    if "!cancelled()" not in job:
+        errors.append(name + ": cancellation must prevent publication")
 
 if errors:
     print("\n".join(errors), file=sys.stderr)

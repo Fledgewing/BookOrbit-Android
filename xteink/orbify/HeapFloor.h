@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: the internal heap the sync's extra work (copy refresh, the next cover, the mirror's slice)
+// BookSync: the internal heap the sync's extra work (copy refresh, the next cover, the mirror's slice)
 // may use (docs/design/XTEINK-BUILD-NOTES.md "The sleep sync on a shared heap").
 //
 // An X4 Pro sleep sync with Tailscale up kept ~30 KB of internal RAM free beside its one TLS session.

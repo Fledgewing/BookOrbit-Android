@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Copyright (c) 2026 Fledgewing. Part of Orbify (see android/koreader/LICENSE).
+-- Copyright (c) 2026 Fledgewing. Part of BookSync (see android/koreader/LICENSE).
 -- Part of orbit.koplugin: loaded by main.lua into the plugin's shared environment, in the
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
@@ -149,7 +149,7 @@ function Companion.state(fresh)
             if st == "frozen" then
                 log("companion disabled:", Companion.disabledText(), "Wi-Fi can't be switched")
             elseif st == "untrusted" then
-                log("companion: not signed by Orbify's release key; nothing is sent to it")
+                log("companion: not signed by BookSync's release key; nothing is sent to it")
             else
                 log("companion", st == "ok" and "available" or "not installed")
             end
@@ -243,7 +243,7 @@ end
 function Companion.problem()
     local st = Companion.state()
     if st == "frozen" then return Companion.disabledText() end
-    if st == "untrusted" then return _("This BookSync Companion is not an Orbify release; BookSync doesn't use it.") end
+    if st == "untrusted" then return _("This BookSync Companion is not a BookSync release; BookSync doesn't use it.") end
     if st == "missing" then return _("BookSync Companion is not installed.") end
     return nil
 end
@@ -251,7 +251,7 @@ end
 request_seq = 0
 
 -- One command, through the companion's caller-checked call (android/docs/INTERFACE.md). Only
--- to the companion signed by Orbify's release key (Companion.state), so a look-alike app never
+-- to the companion signed by BookSync's release key (Companion.state), so a look-alike app never
 -- gets a command or the BookOrbit login some carry.
 function Companion.send(action, extras)
     extras = extras or {}

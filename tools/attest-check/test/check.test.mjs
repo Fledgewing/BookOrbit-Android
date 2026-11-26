@@ -11,7 +11,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '../../..');
 const fixture = (name) => path.join(here, 'fixtures', name, 'server/src');
 
-// What Orbify's plugin calls on the catalog, as the extractor reports it.
+// What BookSync's plugin calls on the catalog, as the extractor reports it.
 const ORBIFY = manifest([
   { method: '*', path: '/koreader/plugin/catalog/books', file: 'ko/mirror.lua', line: 83 },
   { method: 'GET', path: '/koreader/plugin/catalog/books/:p', file: 'ko/sleepscreen.lua', line: 190 },
@@ -26,7 +26,7 @@ test('a clean server passes', () => {
   assert.deepEqual(unmatched, []);
 });
 
-test('a guard on a route Orbify does not call passes', () => {
+test('a guard on a route BookSync does not call passes', () => {
   assert.deepEqual(run('other-route').errors, []);
 });
 
@@ -35,7 +35,7 @@ test('a handler-level guard fails with the route, file:line and why', () => {
   assert.equal(errors.length, 1);
   assert.match(errors[0], /\/koreader\/plugin\/catalog\/books\/:p\/thumbnail requires app attestation/);
   assert.match(errors[0], /@RequireAppAttest\(\) on the handler at server\/src\/modules\/koreader\/koreader-catalog.controller.ts:15/);
-  assert.match(errors[0], /Orbify cannot call this route/);
+  assert.match(errors[0], /BookSync cannot call this route/);
   assert.match(errors[0], /ko\/cache.lua:597/);
 });
 
@@ -129,7 +129,7 @@ test('routeOf only takes a route at the start, after a base URL or a host', () =
   assert.equal(routeOf('/sdcard/koreader/settings'), null);
 });
 
-test('the repo: Orbify\'s own calls are found', () => {
+test('the repo: BookSync\'s own calls are found', () => {
   const { routes } = extractRepo(repo, [{ dir: 'android/koreader/orbit.koplugin', ext: '.lua', lang: 'lua' }]);
   const paths = new Set(routes.map((r) => r.path));
   for (const p of ['/koreader/plugin/catalog/books', '/koreader/plugin/catalog/books/:p', '/koreader/plugin/catalog/books/:p/thumbnail']) {

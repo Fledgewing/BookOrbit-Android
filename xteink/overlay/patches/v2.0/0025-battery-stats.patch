@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: battery stats
+Subject: [PATCH] BookSync: battery stats
 
 Hook battery history recording and its settings activity into the firmware.
 
@@ -124,7 +124,7 @@ index 79b92c4d..46e780a5 100644
 @@ -1,5 +1,7 @@
  #include "UsbDriveActivity.h"
  
-+#include "orbify/BatteryStats.h"  // Orbify battery stats
++#include "orbify/BatteryStats.h"  // BookSync battery stats
 +
  #include <Arduino.h>
  #include <HalStorage.h>
@@ -147,7 +147,7 @@ index ed3f6d3b..c2b09b72 100644
  #include <string>
  
  #include "ReaderSession.h"
-+#include "orbify/BatteryStats.h"  // Orbify battery stats
++#include "orbify/BatteryStats.h"  // BookSync battery stats
  
  // Reader callers serialize these small fields with RenderLock. Rendering only
  // records scalars; the main loop and exit path perform SD writes.
@@ -209,7 +209,7 @@ index 4356642d..e57f815f 100644
  #endif
  #include "util/BatteryDiagnosticLog.h"
  #include "util/BookUpdateMigration.h"
-+#include "orbify/BatteryStats.h"  // Orbify battery stats
++#include "orbify/BatteryStats.h"  // BookSync battery stats
  #include "util/ButtonNavigator.h"
  #include "util/ButtonShortcutController.h"
  #include "util/Dictionary.h"

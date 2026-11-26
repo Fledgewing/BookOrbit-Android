@@ -8,7 +8,12 @@ plugins {
 
 // Release builds pass -PorbitVersion=<tag without "v"> (.github/workflows/release.yml).
 // Shared encoder: preview.N < rc.N < stable, with codes above the legacy releases.
-val orbitVersion = (findProperty("orbitVersion") as String?)?.removePrefix("v") ?: "0.0.0-dev"
+@Suppress("UNCHECKED_CAST")
+val sharedVersion = (groovy.json.JsonSlurper()
+    .parse(file("../../../shared/version.json")) as Map<String, Any>)["version"] as String
+val orbitVersion = (findProperty("orbitVersion") as String?)?.removePrefix("v") ?: sharedVersion
+// Test artifacts may override the version; published 0.12+ builds must match the manifest
+// (enforced before Gradle in release.yml).
 val orbitVersionCode: Int = run {
     val m = Regex("""^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$""").matchEntire(orbitVersion)
         ?: error("orbitVersion '$orbitVersion' is not MAJOR.MINOR.PATCH[-pre]")
@@ -176,8 +181,8 @@ abstract class OpenSourceNotices : DefaultTask() {
         }
 
         val sb = StringBuilder()
-        sb.append("Orbit Companion: third-party notices\n")
-        sb.append("Orbit Companion itself is MIT-licensed (https://github.com/Fledgewing/Orbify).\n")
+        sb.append("BookSync Companion: third-party notices\n")
+        sb.append("BookSync Companion itself is MIT-licensed (https://github.com/Fledgewing/BookSync).\n")
         sb.append("It bundles the libraries below. Generated at build time from the runtime classpath.\n\n")
         for (m in modules) {
             val coord = "${m.group}:${m.name}:${m.version}"
@@ -256,3 +261,13 @@ androidComponents {
 
 // One battery drawing program for the companion sleep screen and Lua reading strips.
 android.sourceSets["main"].resources.srcDir("../../../shared/ui")
+
+
+// CI checks the resolved Android identity alongside plugin packaging and firmware identity.
+tasks.register("verifySharedVersion") {
+    doLast {
+        check(android.defaultConfig.versionName == sharedVersion) {
+            "Android version differs from shared/version.json"
+        }
+    }
+}

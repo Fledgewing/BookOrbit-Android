@@ -26,7 +26,7 @@ What OFL asks of us when we redistribute them unmodified:
 - **Reserved Font Names apply only to modified versions.** We ship upstream's files byte for byte
   (the SHA-256 check guarantees it), so "Bitter Pro" doesn't constrain us. If we ever subset or
   instance a font ourselves, the result must not be called "Bitter Pro" ("Bitter" is not reserved).
-- The license covers the fonts only; it doesn't extend to Orbify's code (MIT) or the documents
+- The license covers the fonts only; it doesn't extend to BookSync's code (MIT) or the documents
   rendered with them.
 
 **Static, not variable.** google/fonts ships only `Bitter[wght].ttf` and Literata's variable
@@ -81,7 +81,7 @@ its `OFL.txt`.
   the live catalog the firmware reads (`uxjulia/crossink-fonts`, release `sd-fonts-m1-b4`,
   `fonts.json`, checked 2026-11-23) lists it. Settings › Reader › Font Options › Download Fonts
   fetches it to `/.fonts/Literata/` as `.cpfont` files on every model, the X3 included.
-- Also possible without Orbify: on X4 Pro and X4 (scalable builds), the static TTFs copied to
+- Also possible without BookSync: on X4 Pro and X4 (scalable builds), the static TTFs copied to
   `/fonts/<Family>/` on the SD card or uploaded on the web Fonts page
   (`src/network/CrossPointWebServer.cpp:517-520`); `.cpfont` only on the X3.
 

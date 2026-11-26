@@ -42,7 +42,7 @@ Citations are `file:line` at the pins in `tools/upstreams.lock`:
   `X1.6/` = v1.6.1 `d7b4aa8`, which is cloned in `upstream/crossink-v1.6`. Citations added in
   draft 2 are `X1.6/`. In `BookOrbitCatalogBrowserActivity.cpp`, every line checked in draft 1
   was the same in both; re-check these when building.
-- `O/` = Orbify at `1de3f82`.
+- `O/` = BookSync at `1de3f82`.
 
 ## Outcome
 
@@ -293,7 +293,7 @@ offline it goes in upstream's band (`P/bookorbit_catalog_lists.lua:1356-1363`).
 - **Phase 1:** the overlay also applies to book lists. Wrap `switchTo` for `context.kind ==
   "books"` and overlay `context.books` with a copy; the saved page from
   `P/bookorbit_list_cache.lua` is left untouched. List rows read `progressPercentage`
-  (`P/bookorbit_list_view.lua:558`). Series and author views (Orbify's grouping) take the same
+  (`P/bookorbit_list_view.lua:558`). Series and author views (BookSync's grouping) take the same
   path. A row is marked `not synced` only under the shared rule.
 - **Phase 2:** lists open from their saved page first, then refresh quietly with the same
   content-key rule per row. Upstream keeps the newest 24 pages

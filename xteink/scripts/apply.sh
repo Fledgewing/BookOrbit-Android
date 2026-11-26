@@ -7,7 +7,7 @@
 #   platformio.local.ini  (copied from overlay/)
 #   tailnet               (symlink to this repo's tailnet/, excluded via .git/info/exclude)
 #   src/tailnet           (symlink to tailnet/ui, built with CrossInk's own sources)
-#   src/orbify            (symlink to orbify/: Orbify's own features, behind their switches)
+#   src/orbify            (symlink to orbify/: BookSync's own features, behind their switches)
 # and applies the patch series for its CrossInk version (the Settings row; on the C3, the
 # framebuffer freed while Tailscale runs: TailnetNetPhase.h). MicroLink's changes
 # live on the crossink branch of the Fledgewing/microlink fork (the submodule).

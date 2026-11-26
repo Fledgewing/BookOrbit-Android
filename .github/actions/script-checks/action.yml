@@ -5,13 +5,24 @@ description: >
 runs:
   using: composite
   steps:
+    - name: Feature matrix and shared settings coverage
+      shell: bash
+      run: python3 tools/test/test-features.py </dev/null
+
+    - name: Release fingerprints and selection
+      shell: bash
+      run: python3 tools/test/test-release-inputs.py </dev/null
+
     - name: USB installer, sideload and signing tool checks
       shell: bash
       run: |
         set -euo pipefail
-        shellcheck -x tools/install-usb.sh tools/test/test-install-usb.sh android/koreader/package.sh tools/upstreams \
+        shellcheck -x tools/rename-to-booksync.sh tools/repo-urls.sh tools/test/test-repo-urls.sh tools/install-usb.sh tools/test/test-install-usb.sh android/koreader/package.sh tools/upstreams \
           tools/android-test-version.sh tools/sideload-android.sh tools/sideload-xteink.sh tools/test/test-sideload.sh \
           tools/feed-keys/feed-keys tools/test/test-feed-keys.sh
+        python3 tools/test/test-repo-name.py </dev/null
+        bash tools/test/test-repo-urls.sh </dev/null
         bash tools/test/test-install-usb.sh </dev/null
         bash tools/test/test-sideload.sh </dev/null
         bash tools/test/test-feed-keys.sh </dev/null
+        python3 tools/releases/test_android_feed.py </dev/null

@@ -34,7 +34,7 @@ Related designs, still drafts outside this repo: menus (ROADMAP 8b) and cache / 
 ## 1. Outcome
 
 1. **Two modes, chosen on first run, switchable later.**
-   - **Full** is today's Orbify. The companion is the Home app, switches Wi-Fi, holds the wake
+   - **Full** is today's BookSync. The companion is the Home app, switches Wi-Fi, holds the wake
      lock for sleep sync, turns the screen off, and runs the clicker and PIN services.
    - **Add-on** does not take over the launcher or manage Wi-Fi and sleep. Everything else is the
      same: it still downloads, installs, updates and configures KOReader, the BookOrbit plugin
@@ -171,7 +171,7 @@ Header: "Full setup (12/14)". A one-line row at the top: "Mode: Full · Settings
 
 Revision note: the user ruled that Add-on users are more careful about permissions. The Add-on
 checklist therefore has **two different kinds of row**:
-- a short **Required** list: what Orbify can't work without;
+- a short **Required** list: what BookSync can't work without;
 - an **Optional permissions and features** list. Each row says what is lost *without* it, not a
   fix to do.
 
@@ -262,7 +262,7 @@ When the plugin runs a pass, each item is in one of these states:
 | **skipped / kept** | the user chose Keep mine (or Skip) before | left alone for good, until they change it on the review page |
 
 That gives the two cases the user described, in both modes:
-- **KOReader installed fresh by Orbify, or with untouched defaults**: every available item is at
+- **KOReader installed fresh by BookSync, or with untouched defaults**: every available item is at
   default, so all are applied, and the plugin shows one line, "Applied 7 recommended settings ·
   Review" (mockup 5). No question is asked.
 - **An existing KOReader with changed values**: the at-default items are applied the same way,
@@ -586,7 +586,7 @@ Both directions are idempotent: running a half-finished switch again completes i
 | Device | Mode | Why |
 |---|---|---|
 | Readers where BookSync is already Home (Full set up) | Full | the companion is already Home; the PIN and the launcher matter |
-| A new reader whose owner keeps the vendor launcher | Add-on (their choice on first run) | keep their launcher; Orbify installs and configures KOReader and the plugins |
+| A new reader whose owner keeps the vendor launcher | Add-on (their choice on first run) | keep their launcher; BookSync installs and configures KOReader and the plugins |
 | KOReader with the BookSync plugin only | plugin only | reading features; no installs or device helpers |
 
 No device changes mode at the update (§4.1).
@@ -687,7 +687,7 @@ Order: 1 first (independent), 2 before 3–6, 4 before 5 and 6.
 | # | Question | Options | Decision | Why |
 |---|---|---|---|---|
 | 1 | Should recommended-settings behaviour depend on the mode? | by mode / by KOReader's state | **By KOReader's state, the same in both modes** | User ruling (revision note). Add-on still installs KOReader fresh in most cases. |
-| 2 | How do we tell "the user changed it" from "default"? | a snapshot at install / compare with the stock default per item / a "fresh KOReader" flag | **Per-item compare with the stock default, read at run time** | It is exact per setting, works for a KOReader that predates Orbify, and reuses upstream's own default tables (`B/main.lua:102`, `K/gestures main.lua:310`). A global "fresh" flag would either overwrite one changed gesture or skip everything. |
+| 2 | How do we tell "the user changed it" from "default"? | a snapshot at install / compare with the stock default per item / a "fresh KOReader" flag | **Per-item compare with the stock default, read at run time** | It is exact per setting, works for a KOReader that predates BookSync, and reuses upstream's own default tables (`B/main.lua:102`, `K/gestures main.lua:310`). A global "fresh" flag would either overwrite one changed gesture or skip everything. |
 | 3 | In a conflict, ask or skip? | overwrite / skip silently / list for review | **List for review, change nothing** | User ruling: never overwrite; "apply / keep mine". |
 | 4 | Ask before applying at-default items? | ask / apply and say so | **Apply, show one line with Review and Undo** | The user asked for it to happen at setup; undo makes it safe; a question per item is an intervention. |
 | 5 | Re-run on every start? | every start / first setup + new ids + new caps | **Only first setup, new ids, newly available items** | Re-running would fight a user who changes a setting by hand later. |

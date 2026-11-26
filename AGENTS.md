@@ -1,6 +1,6 @@
-# Orbify
+# BookSync
 
-Orbify is one ecosystem for e-readers syncing with a BookOrbit server over Tailscale: Android
+BookSync is one ecosystem for e-readers syncing with a BookOrbit server over Tailscale: Android
 readers (KOReader + the BookSync plugin + BookSync Companion) and Xteink readers (CrossInk-Bookorbit
 firmware + the Tailnet overlay). Reason about both platforms together: a new feature ships on
 every platform whose hardware allows it.
@@ -13,15 +13,15 @@ every platform whose hardware allows it.
 | `android/companion/` | BookSync Companion app, package `net.fledgewing.orbitcompanion` | MIT |
 | `android/docs/` | Android designs, the plugin–companion interface, setup guide | MIT |
 | `xteink/` | CrossInk-Tailnet overlay: MicroLink submodule, shim, UI, patch series per CrossInk line | MIT; firmware code moved out of the patches (`SPDX-License-Identifier: GPL-3.0-or-later`) and the binaries GPL-3.0, see `xteink/README.md` |
-| `docs/FEATURES.md` | What Orbify ships, per platform | MIT |
-| `ROADMAP.md` | What Orbify plans: outcomes and status | MIT |
+| `docs/FEATURES.md` | What BookSync ships, per platform | MIT |
+| `ROADMAP.md` | What BookSync plans: outcomes and status | MIT |
 | `docs/server-contract.md` | The BookOrbit endpoints we use and how the server really behaves | MIT |
 | `docs/design/` | Cross-platform feature designs | MIT |
 | `shared/fixtures/` | Recorded responses that both platforms' tests read | MIT |
 | `tools/install-usb.sh` | One-shot Android install over USB | MIT |
 | `tools/sideload-android.sh`, `tools/sideload-xteink.sh` | Put a test build on a test device over USB ("Test builds" below) | MIT |
 | `tools/upstreams` | Clones pinned upstream source into `upstream/` (gitignored) | MIT |
-| `tools/attest-check/` | Fails when the pinned BookOrbit server requires app attestation on a route Orbify calls | MIT |
+| `tools/attest-check/` | Fails when the pinned BookOrbit server requires app attestation on a route BookSync calls | MIT |
 | `tools/feed-keys/`, `shared/release-signing.json` | Release signing keys for firmware, the feed and the plugin zip ([design](docs/design/release-signing.md)) | MIT |
 
 ## Platforms
@@ -34,12 +34,20 @@ every platform whose hardware allows it.
 | X3 | Xteink X3 and C3 X4, ESP32-C3, no PSRAM; flash nearly full | `default` |
 
 Xteink firmware is built on CrossInk 2.x only. CrossInk 1.6 is retired: no builds, no patches
-(they are in git history); its readers stay on the stable `xteink-v1.6.1.114` until a final
-CrossInk 2.x release becomes the stable one (`xteink/README.md` "Releases and the update feed").
+(they are in git history); its readers stay on the stable `xteink-v1.6.1.114` until a stable
+CrossInk 2.x bridge and the later stable BookSync releases become available (`xteink/README.md` "Releases and the update feed").
 
 ## Product principles
 
-- **Nothing interrupts reading.** While a book is open in the foreground, nothing from Orbify,
+- **UI calls BookSync's library interface.** Binding on the KOReader plugin, Android companion
+  and Xteink overlay. Maintainer rule 2026-11-26, verbatim:
+  "all API calls the UI makes should be to our own interface so that we can plumb BookOrbit / Grimmory separately."
+  UI code calls only BookSync's library interface; BookOrbit and Grimmory are adapters behind it.
+  Gate server-dependent features on adapter capabilities, never server identity. Filters are
+  neutral objects that adapters translate, with local fallback on the cached catalog.
+  The interface is introduced in 0.12 ([BookSync Home's owned-client design](docs/design/backend-independence.md#1-owned-android-client-and-ledger)).
+
+- **Nothing interrupts reading.** While a book is open in the foreground, nothing from BookSync,
   the companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader
   or takes focus. It waits for the next moment nobody is reading, or is dropped when stale. The
   only exceptions are what the reader does in the book: menus they open, the end-of-book sheet;
@@ -65,22 +73,43 @@ commit when a design or `docs/server-contract.md` relies on upstream behaviour; 
 
 ## Features and roadmap
 
+- Plan every feature across Android, X4 Pro, X4 and X3. The platform reference is
+  `shared/features.json`, rendered as `docs/FEATURES.md`. Every PR that adds or changes a
+  user-facing feature or setting updates all four platform cells, with a reason for every
+  partial, missing or not-applicable cell. Put "why not on this device" and maintainer rulings
+  in the cell's `reason`; put later ideas in `deferred` (and `ROADMAP.md`). Regenerate with
+  `python3 tools/features.py`; check with `python3 tools/test/test-features.py`.
 - Every new feature request goes into `ROADMAP.md` first, as a one-line outcome with its
   platforms and status (idea, designing, approved, building, shipped).
 - Its design doc (`docs/design/`) and mockups need the user's approval before the item moves to
   building.
 - `docs/FEATURES.md` lists what is shipped. When an item ships, move it from `ROADMAP.md` into
-  `docs/FEATURES.md` in the same change, so the two never disagree.
+  `shared/features.json` and regenerate `docs/FEATURES.md` in the same change, so the two never
+  disagree.
 - Both list only what **we** add, never features of KOReader, BookOrbit or CrossInk themselves.
   Where a feature only makes up for an upstream behaviour, give that behaviour one line, linked to
   its section in `docs/server-contract.md`.
 
 ## Releases
 
-One repo releases both platforms; the tag prefix says which.
+One repo releases both platforms; the tag prefix says which. From 0.12, the product
+version comes from shared/version.json on the release commit, shared by the companion,
+packaged plugin and every firmware build. The ordering is -preview.N, then -rc.N, then stable. release.yml dispatches firmware at the same immutable tag. Previews may retain older
+unchanged platform builds; RC/stable stamp every platform with the same version.
+Source fingerprints select preview builds and permit reuse of passing component/release
+tests at the same scope; cheap artifact/version/signature checks still run. Android
+companion and plugin remain one publication unit with matching installed versions.
+See [the rollout and bridge](docs/design/unified-version.md). Main stays on 0.11 until its
+bridge has reached devices; 0.12 is prepared on feature/0.12.
+
+The upstream-driven Xteink release policy below applies through 0.11. From 0.12,
+firmware tags are xteink-v<booksync version>+crossink.<upstream tag>, with the upstream
+"+" replaced by ".". BookSync preview/rc/stable decides the channel. Daily pinning and
+publication remain limited to the legacy bridge line; unified builds keep the release
+commit's pin and publish only at the matching Android tag.
 
 - Android: `v<version>` (`.github/workflows/release.yml`): signed APK, stamped plugin zip,
-  `SHA256SUMS`, attestations. Always marked "latest". Keep the package id and the signing
+  `SHA256SUMS`, attestations. Stable Android releases take "latest". Keep the package id and the signing
   certificate (SHA-256 `F5:07:8C:…:0A:15`, checked by the workflow): either change breaks updates.
 - Android/plugin builds start as `vMAJOR.MINOR.PATCH-preview.N`; use `-rc.N` only when a
   maintainer judges it a real release candidate, then the plain version for stable. Preview
@@ -93,16 +122,20 @@ One repo releases both platforms; the tag prefix says which.
   An upstream rc or beta builds a pre-release, a final upstream release a stable one
   (`xteink/scripts/upstream-line.sh`). Firmware tags keep CrossInk's upstream rc/beta labels;
   they describe the upstream base, not a judgment that our overlay is a release candidate.
-- "latest" must stay an Android release: every companion and plugin (and the old patch) reads `releases/latest`
-  (0.6.x through the old BookOrbit-Android URL, and it parses only `v<version>` tags).
+- "latest" must stay an Android release: older companions and plugins (and the old patch) read
+  `releases/latest` (0.6.x through the old BookOrbit-Android URL, parsing only `v<version>` tags).
+  The companion now verifies the signed Android feed on `android-feed`, at `android/releases.json`;
+  withdrawals and recovery are described in `docs/design/release-safety.md`.
 - GitHub orders the release list by version-like tag name: `v…` tags first, prefixed tags
-  after all of them. So Android keeps plain `v…` tags (its pre-release check reads the list),
+  after all of them. So Android keeps plain `v…` tags (older pre-release checks read the list),
   and readers find firmware through the feed `xteink/releases.json` on the `xteink-feed`
-  branch (newest stable and pre-release, written by the xteink workflow), never the list. The
+  branch (current stable/prerelease plus retained legacy bridges, written by the xteink workflow), never the list. The
   Android pieces also read `android-v` tags and skip `xteink-v` ones.
 - A tag is never moved: fix forward with the next version.
-- Both release workflows first run the emulated release tests (`release-tests.yml`, below) on the
-  release commit; nothing publishes unless they pass.
+- Both release workflows require passing emulated release tests (`release-tests.yml`, below).
+  From 0.12, identical source fingerprints may reuse passing evidence; version-only promotion
+  still rebuilds and checks artifacts. Missing evidence runs the full gate. See the
+  [selective release policy](docs/design/unified-version.md#selective-previews-and-promotion).
 
 ## Test builds: sideload first, release after
 
@@ -128,25 +161,26 @@ ask before changing it (`--yes` skips the question). Agents never run them again
   match `--env` or a port another program holds (it stops nothing), reads the offsets from the
   reader's partition table (checked against the build's `.parttable`), writes the image to
   `ota_0` and blanks `otadata` so `ota_0` boots. NVS (Wi-Fi, Tailscale keys, settings) and the
-  SD card are untouched. The test build's fourth version number is below every later run's, so
-  the reader takes the next release over the air.
+  SD card are untouched. Through 0.11, the test build's fourth version number is below every later run's.
+  From 0.12, its BookSync identity is <version core>-0.test.<run>, below preview/rc/stable,
+  so the reader takes the next release over the air. Test identities are rejected by the feed picker.
 - Tests: `bash tools/test/test-sideload.sh` (CI: android.yml).
 
 ## Checks
 
 - Android: `luajit android/koreader/test/test_logic.lua`, `.../test_flows.lua`,
   `bash tools/test/test-install-usb.sh`, `bash tools/test/test-sideload.sh`, and in `android/companion`
-  `./gradlew testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
+  `./gradlew verifySharedVersion testDebugUnitTest assembleDebug lintDebug` (CI: `.github/workflows/android.yml`).
 - Xteink: `xteink/scripts/apply.sh <CrossInk checkout>`, `xteink/test/run-host-tests.sh <checkout>`,
   then `pio run -e <env>` (CI: `.github/workflows/xteink.yml`, all three readers; pushes build the
   CrossInk pinned as `crossink-v2.0` in `tools/upstreams.lock`; daily runs first move that pin to
   upstream's newest 2.x tag, rc included, and always build the commit the lock records).
-- Workflows: `python3 tools/test/test-workflows.py` and actionlint (CI: `.github/workflows/workflow-lint.yml`):
+- Workflows: `python3 tools/test/test-workflows.py`, `python3 tools/test/test-release-inputs.py` and actionlint (CI: `.github/workflows/workflow-lint.yml`):
   actions pinned by SHA, no stored checkout credentials, and no write permission, secret or token
   in a job that runs a build tool. Steps shared by several workflows live in `.github/actions/`.
 - BookOrbit app attestation: `tools/upstreams check` (CI: the app-attest job in
   `.github/workflows/plugin-compat.yml`): fails when the pinned server requires app attestation on
-  a route Orbify calls (`docs/server-contract.md` "App attestation"). Tests:
+  a route BookSync calls (`docs/server-contract.md` "App attestation"). Tests:
   `node --test tools/attest-check/test/check.test.mjs` after `npm ci --prefix tools/attest-check`.
 - BookOrbit plugin hooks: `luajit android/koreader/test/plugin_compat.lua <plugin dir>`
   (weekly in `.github/workflows/plugin-compat.yml`).
@@ -176,9 +210,9 @@ that change the tests, or by hand from the Actions tab). Locally, with Docker:
 
 ## Upstream projects
 
-Orbify only. Never open pull requests or issues, or send patches, to the projects we build on
+BookSync only. Never open pull requests or issues, or send patches, to the projects we build on
 (CrossInk-Bookorbit, BookOrbit, KOReader, MicroLink, the CrossInk simulator). Work around
-anything upstream inside Orbify: an overlay patch, a build-time edit of a fetched package
+anything upstream inside BookSync: an overlay patch, a build-time edit of a fetched package
 (`xteink/tailnet/sim/sim_package.py`), or a test-side shim.
 
 ## Repo rules

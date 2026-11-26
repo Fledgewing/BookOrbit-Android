@@ -16,7 +16,7 @@ owner, changes its row in the same change.
 |---|---|
 | `bookorbit/finish-cases.json` | Not a recording: the end-of-book tables (`docs/design/end-of-book/DESIGN.md` §3, §6, §7): the next/suggestion/author picker over the `catalog-book.*.json` details, the drain guard, error backoff and the stale-push hold |
 | `bookorbit/finish-steps.json` | Not a recording: the Xteink drain request by request (book-states, match-check for a sideloaded book, guard, read-status, rating) with the job state after each answer |
-| `github/orbify-releases.json` | GitHub `GET /repos/Fledgewing/Orbify/releases`: Android (`android-v`, `v`) and firmware (`xteink-v`) releases mixed, stable and pre-release |
+| `github/booksync-releases.json` | GitHub `GET /repos/Fledgewing/BookSync/releases`: Android (`android-v`, `v`) and firmware (`xteink-v`) releases mixed, stable and pre-release |
 | `bookorbit/catalog-dashboard-section.want-to-read.json` | `GET …/catalog/dashboard/sections/want-to-read`, recorded from the e2e server (synthetic library) |
 | `bookorbit/catalog-sections.smart-scopes.json`, `bookorbit/catalog-sections.collections.json` | `GET …/catalog/sections/smart-scopes` and `/collections` in the server's shape (`{section, items}`, ids as strings, no `count` on scopes past the shelf-extras cap); made up: 12 scopes, 1 collection |
 | `status/format.json` | W17 shared page/progress and 12/24-hour clock format examples |

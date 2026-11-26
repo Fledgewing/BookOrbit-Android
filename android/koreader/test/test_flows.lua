@@ -17,7 +17,7 @@ function W.fake_sha(s) return string.format("%064x", #s) end
 -- The companion's status call (Companion.status): W.web[STATUS_KEY] is its JSON's W.json key.
 local STATUS_KEY = "companion:STATUS"
 -- The installed companion's certificate (BigInteger hex, as Jni.packageSigners reads it):
--- Orbify's release key unless a test sets another.
+-- BookSync's release key unless a test sets another.
 local RELEASE_CERT = "f5078c85f8231830c1f18d93fe30d71f87936c1d9424f2d815983d1d21a90a15"
 W.companion_cert = RELEASE_CERT
 local SELF = os.tmpname()
@@ -537,6 +537,7 @@ do
     function W.wall() ffi.C.gettimeofday(tv, nil); return tonumber(tv.tv_sec) + tonumber(tv.tv_usec) / 1e6 end
 end
 local passed, failed = 0, 0
+local executed = {}
 -- Each test gets TEST_LIMIT_S seconds (CPU or wall clock); past that it fails with a traceback
 -- instead of hanging the suite. The hook runs every 10000 VM instructions; LuaJIT skips hooks in
 -- compiled traces, so the JIT is off here (the suite is small; it runs in about a second).
@@ -557,6 +558,7 @@ local function withLimit(name, fn, limit)
 end
 local function test(name, fn)
     if os.getenv("ORBIT_TEST_ONLY") and not name:find(os.getenv("ORBIT_TEST_ONLY"), 1, true) then return end
+    executed[name] = true
     W.intent_window, W.intent_max = {}, 0
     local t0 = W.wall()
     local ok, err = withLimit(name, fn)
@@ -1252,7 +1254,7 @@ test("companion: an app with its name and another signer gets nothing, the login
     ok(#W.broadcasts == 0, "nothing reached it")
     ok(RE.Companion.status() == nil, "no status asked")
     ok(RE.Companion.workerProblem() ~= nil, "nothing heavy runs")
-    ok(tostring(RE.Companion.problem()):find("not an Orbify release", 1, true), "the menus' problem line")
+    ok(tostring(RE.Companion.problem()):find("not a BookSync release", 1, true), "the menus' problem line")
     W.companion_cert = RELEASE_CERT
     RE.installed_cache.at = -1000
     ok(RE.Companion.state() == "ok", "the release-signed one is used")
@@ -7011,13 +7013,15 @@ end
             ReaderUI.instance = nil
             E.Mirror.notices, E.Mirror.busy, E.Mirror.active = true, true, true
             -- No companion repair answer is delivered. Opening cannot wait for one.
-            local before = #W.broadcasts
+            local before, quits = #W.broadcasts, W.quits or 0
             local reader = { document={file="/books/synthetic.epub"}, name="reader" }
             Reader.doShowReader = function() ReaderUI.instance=reader; UIManager:show(reader) end
             Reader:showReader("/books/synthetic.epub", "epub")
             ok(#W.shown > 0, origin .. ": opening widget keeps UIManager alive before next tick")
             run(0)
             eq(UIManager:getTopmostVisibleWidget(), reader, origin .. ": ReaderUI shown")
+            eq(ReaderUI.instance, reader, origin .. ": reader instance survives")
+            eq(W.quits or 0, quits, origin .. ": KOReader did not exit")
             for n=before+1,#W.broadcasts do ok(not W.broadcasts[n].extras.repair_book, "open never sends repair") end
         end
         local Trap = class()
@@ -7036,6 +7040,14 @@ end)
 
 dofile(here .. "/status_layout_flows.lua")(here, test, ok, eq)
 
+if os.getenv("ORBIT_REQUIRE_READER_FLOWS") then
+    for _, name in ipairs({
+        "startup smoke: last document remains the top reader through a yielding progress pull",
+        "startup smoke: Home, history and file browser open during Full refresh with repair pending",
+    }) do
+        assert(executed[name], "required reader flow did not run: " .. name)
+    end
+end
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
     for _, l in ipairs(W.logs) do print(l) end

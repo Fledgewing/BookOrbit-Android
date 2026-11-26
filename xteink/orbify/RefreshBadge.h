@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-// Orbify: one progress number for a Full refresh on the X4 Pro and X4 (CROSSINK_TAILNET_ORBIFY_MIRROR;
+// BookSync: one progress number for a Full refresh on the X4 Pro and X4 (CROSSINK_TAILNET_ORBIFY_MIRROR;
 // docs/design/sqlite-cache.md "Xteink: the same rule", XTEINK-BUILD-NOTES "One progress number").
 // The start popup the catalog and the Home's refresh boot show once, and the corner badge they keep
 // in its own rectangle. The rules (the %, when to repaint, the words) are core/Mirror's.

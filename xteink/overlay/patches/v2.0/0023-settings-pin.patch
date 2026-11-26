@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: settings pin
+Subject: [PATCH] BookSync: settings pin
 
 Guard settings and web settings with the reader PIN.
 

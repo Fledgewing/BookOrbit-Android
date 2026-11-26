@@ -6,7 +6,7 @@ replacement cost are estimates until an A/B link proves them.** No device access
 
 ## Artifact and baseline
 
-Read-only download from [Orbify run 45688398918](https://github.com/Fledgewing/Orbify/actions/runs/45688398918),
+Read-only download from [BookSync run 45688398918](https://github.com/Fledgewing/BookSync/actions/runs/45688398918),
 overlay commit `0ebe1858cfd9ca213715b44d8daeba5ed265429f`, current-base rc3
 `87e2e1984481e8a3d996f12b34b50a383f9013b8`. Artifact
 `firmware-default-2.0.0.376-bookorbit.1-rc3` includes the X3/C3 ELF, image and

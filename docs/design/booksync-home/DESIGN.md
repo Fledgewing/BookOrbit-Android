@@ -21,7 +21,7 @@ target by replacing all other Home paths. Revision 2 incorporated the maintainer
 
 ## 1. Existing behavior and evidence
 
-Local paths below are relative to Orbify. Upstream `B/` means
+Local paths below are relative to BookSync. Upstream `B/` means
 `upstream/bookorbit/` at pinned v3.9.0,
 `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`; `X/` means
 `upstream/crossink-v2.0/` at v2.0.0+bookorbit.1-rc3,
@@ -668,11 +668,11 @@ explicitly says BookOrbit sync/catalog are fork additions and KOReader Sync was
 removed to make room (`X/README.md:1`, `:3`). Our code calls these additions
 throughout; renaming Home cannot make the fork optional.
 
-Counts below are reproducible from this Orbify tree's 58 files in
+Counts below are reproducible from this BookSync tree's 58 files in
 `xteink/overlay/patches/v2.0/*.patch`: count each `diff --git a/PATH b/PATH`
 header whose PATH matches the row. Repeated edits to one path in different patches
 count again. “Patch files” counts each patch once within that category; categories
-overlap. Baseline is Orbify `653e50d` (the initial draft's merge of main).
+overlap. Baseline is BookSync `653e50d` (the initial draft's merge of main).
 The brief's 19/17/30/8 are useful earlier touch estimates; this inspected
 tree yields 18/20/27/8 file-edit headers, not claims about independent modules.
 
@@ -720,12 +720,12 @@ pinned SDK/dependency sources to the build/reproducibility plan.
 | Themes/status/sleep | Minimal and Dashboard alongside inherited themes (`CI/README.md:35`; `src/CrossPointSettings.h:370`; `src/components/UITheme.cpp:24`). | Classic/Lyra/RoundedRaff and sleep/status controls (`CP/README.md:52`; `src/components/UITheme.cpp:17`). | Our Home is independent of theme. CrossPoint would still need migration for CrossInk-only theme/sleep preferences and visual regression checks for status margins. |
 | Reader/local library | Existing CrossInk EPUB activity and local reading state (`CI/src/activities/reader/EpubReaderActivity.cpp:2541`, `:6222`). | EPUB reader, bookmarks, dictionaries, local indexed library (`CP/README.md:20`, `:38`; `src/activities/reader/EpubReaderActivity.cpp:241`). | Both are viable readers. CrossPoint is not a drop-in same-line rebase; reader lifecycle/status/bookmark hooks differ. Retain positions and verify locators on real sample EPUBs. |
 | Settings and sync | CrossInk settings plus its own KOReader auth/sync (`CI/src/CrossPointSettings.h:638`; `src/activities/settings/KOReaderAuthActivity.cpp:1`). | Native settings and KOReader sync (`CP/src/CrossPointSettings.h:354`; `README.md:20`). | Neither supplies our complete BookOrbit adapter. Disable competing native sync for BookSync-managed books; preserve unrelated user choices. |
-| OTA/recovery | `CI/src/network/OtaUpdater.cpp:1`, `src/network/OtaBootSwitch.cpp:1`. | `CP/src/network/OtaUpdater.cpp:1`, `src/activities/settings/OtaUpdateActivity.cpp:14`. | Keep Orbify signed feed, TLS, source archive and A/B boot validation. Native OTA alone is not our trusted update path. |
+| OTA/recovery | `CI/src/network/OtaUpdater.cpp:1`, `src/network/OtaBootSwitch.cpp:1`. | `CP/src/network/OtaUpdater.cpp:1`, `src/activities/settings/OtaUpdateActivity.cpp:14`. | Keep BookSync signed feed, TLS, source archive and A/B boot validation. Native OTA alone is not our trusted update path. |
 | Devices/tooling | `default`, `x4-pro`, `x4-classic` and our familiar simulators (`CI/platformio.ini:219`, `:371`, `:393`, `:477`, `:553`). | X3/C3 and S3 supported, with `x4pro` / `x4c` environment names (`CP/README.md:9`; `platformio.ini:306`, `:392`, `:477`). | Both support hardware, but CP needs environment/simulator/CI mapping and SDK integration work. Neither proves our overlay fits. |
 | SDK | FreeInk SDK submodule plus additional assets (`CI/.gitmodules:1`). | FreeInk SDK submodule (`CP/.gitmodules:1`). | Pin recursive dependencies and audit HAL/input/network differences; no assumed ABI compatibility. |
 | Top-level license | MIT (`CI/LICENSE:1`, `:6`). | MIT (`CP/LICENSE:1`, `:5`). | X's top-level `LICENSE:1` is MIT too. A base switch is not a reason to relabel existing GPL files or the combined firmware MIT. |
 
-License scope matters: Orbify files marked GPL-3.0-or-later retain that license;
+License scope matters: BookSync files marked GPL-3.0-or-later retain that license;
 MIT base/overlay notices and third-party notices remain. Current binaries are
 GPL-3.0-or-later because of the complete component set, including wolfSSL
 (`xteink/README.md:389`, `:397`); changing the top-level base does not remove those
@@ -768,7 +768,7 @@ of this design**, and must not be mixed with a current branch or a plain-base bu
 | X3/C3 | 6,514,417 (99.40%) | 39,183 | 6,415 |
 
 **Newer X3 evidence for this revision:** public run
-[45688398918](https://github.com/Fledgewing/Orbify/actions/runs/45688398918)
+[45688398918](https://github.com/Fledgewing/BookSync/actions/runs/45688398918)
 (commit `0ebe1858cfd9ca213715b44d8daeba5ed265429f`) used **6,466,767 B
 (98.68%)**, leaving **54,065 B** to the actual 6,520,832 B gate. Its debug ELF
 contains **17,520 B** of named BookOrbit Home presentation symbols and **5,108 B**
@@ -812,7 +812,7 @@ lines excluding `+++`/`---`. Names are only an audit aid, not proof of isolation
 | Current | 58 files, figures above | Real baseline from this design branch. |
 | 0.12 owned Home on current base | Actual total not yet known; expect temporary integration work, not an immediate net reduction | Retire Home/catalog UI patches as owned activities take over; keep sync/download/login patches behind the adapter until replaced. |
 | Plain CrossInk + owned adapter | Planning budget: review the 20 base-only patches, and consolidate remaining integration into at most six seam groups (Home/activity routing, reader/end-of-book, sleep, settings/login, transport/network boot, build/OTA). Approximately 26 patch files before further consolidation is a **design target**, not an apply-tested result. | Zero patch targets on removed BookOrbit paths; owned C++ sources carry the replacement behavior. Mixed patches must be split, not discarded. Actual diff/hunk totals require the port. |
-| CrossPoint alternative | No defensible patch-count saving before a port; same six owned integration seams plus CrossInk feature/settings work | A smaller fork ancestry does not establish a smaller Orbify maintenance burden. |
+| CrossPoint alternative | No defensible patch-count saving before a port; same six owned integration seams plus CrossInk feature/settings work | A smaller fork ancestry does not establish a smaller BookSync maintenance burden. |
 
 Do not copy the 58-patch series onto the new base and suppress failures. Create a
 new exact-pin series; each retained behavior gets an owned module and minimal
@@ -1139,7 +1139,7 @@ these in `X/src/activities/reader/EpubReaderDrawerActivity.cpp:436` and renders 
 `EpubReaderActivity.cpp:4462`, `:4506`, `:4530`, `:5072`. These are overlay patch
 seams, not KOReader APIs. Keep the reader/session engine and native file formats;
 replace presentation and route commands to the existing operation owners. This
-work stays inside Orbify's overlay and owned sources, never upstream patches.
+work stays inside BookSync's overlay and owned sources, never upstream patches.
 
 | Surface | X4 Pro / X4 Classic | X3 |
 |---|---|---|

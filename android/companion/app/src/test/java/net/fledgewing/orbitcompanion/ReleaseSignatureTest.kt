@@ -8,6 +8,7 @@ package net.fledgewing.orbitcompanion
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -103,6 +104,65 @@ class ReleaseSignatureTest {
         val cert = head + sign(root, "orbify-release-key-v1\n".toByteArray() + head)
         val sig = sign(release, "orbify-artifact-v1\n$tag\n$asset\n$sha256\n".toByteArray())
         return "release-key ${hex(cert)}\n${hex(sig)}  $asset\n"
+    }
+
+    @Test
+    fun androidFeedAuthenticatesWithdrawalsAndReleaseSelectionTogether() {
+        val root = keyPair()
+        val rootHex = hex(raw(root))
+        val payload = """{"withdrawn":["v0.11.3-rc.11"],"releases":[{"tag_name":"v0.11.3-rc.11","prerelease":true},{"tag_name":"v0.11.3-rc.9","prerelease":true}]}"""
+        val sigs = signatures(root, keyPair(), 1, AndroidReleaseFeed.TAG, AndroidReleaseFeed.ASSET, sha(payload.toByteArray()))
+        fun envelope(body: String = payload, sig: String = sigs) = JSONObject()
+            .put("payload", body).put("signatures", sig).toString()
+        val feed = AndroidReleaseFeed.parse(envelope(), rootHex, 1)
+        assertEquals("v0.11.3-rc.9", UpdatePolicy.pick(feed.releases, UpdateChannel.PREVIEW, feed.withdrawn)?.tag)
+        for ((body, signature, key, serial) in listOf(
+            listOf(payload.replace("v0.11.3-rc.11", "v0.11.3-rc.10"), sigs, rootHex, "1"),
+            listOf(payload.replace("rc.9", "rc.12"), sigs, rootHex, "1"),
+            listOf(payload, "", rootHex, "1"),
+            listOf(payload, sigs, hex(raw(keyPair())), "1"),
+            listOf(payload, sigs, rootHex, "2"),
+        )) {
+            try {
+                AndroidReleaseFeed.parse(envelope(body, signature), key, serial.toLong())
+                throw AssertionError("untrusted feed accepted")
+            } catch (_: IllegalArgumentException) { }
+        }
+    }
+
+    @Test
+    fun repositoryRenameDoesNotRewriteAnAlreadySignedAndroidPayload() {
+        val root = keyPair()
+        val rootHex = hex(raw(root))
+        val release = keyPair()
+        val name = "orbit-companion-1.0.0.apk"
+        val oldUrl = "https://github.com/${Updater.LEGACY_REPO}/releases/download/v1.0.0/$name"
+        val payload = JSONObject().put("withdrawn", org.json.JSONArray()).put("releases",
+            org.json.JSONArray().put(JSONObject().put("tag_name", "v1.0.0").put("assets",
+                org.json.JSONArray().put(JSONObject().put("name", name).put("browser_download_url", oldUrl))))).toString()
+        fun envelope(body: String, resign: Boolean = false): String {
+            val signedBody = if (resign) body else payload
+            return JSONObject().put("payload", body).put("signatures",
+                signatures(root, release, 1, AndroidReleaseFeed.TAG, AndroidReleaseFeed.ASSET,
+                    sha(signedBody.toByteArray()))).toString()
+        }
+        // Moving the envelope's fetch location leaves these exact payload bytes valid.
+        assertEquals(oldUrl, AndroidReleaseFeed.parse(envelope(payload), rootHex, 1).releases.single().assets[name])
+        val renamed = payload.replace(Updater.LEGACY_REPO, Updater.REPO)
+        assertNotEquals(payload, renamed)
+        try {
+            AndroidReleaseFeed.parse(envelope(renamed), rootHex, 1)
+            throw AssertionError("rewritten payload accepted without a new signature")
+        } catch (_: IllegalArgumentException) { }
+        val attempts = mutableListOf<String>()
+        val recovered = AndroidReleaseFeed.fromLocations { url ->
+            attempts += url
+            AndroidReleaseFeed.parse(envelope(if (url == AndroidReleaseFeed.URL) renamed else payload), rootHex, 1)
+        }
+        assertEquals(listOf(AndroidReleaseFeed.URL, AndroidReleaseFeed.LEGACY_URL), attempts)
+        assertEquals(oldUrl, recovered.releases.single().assets[name])
+        assertEquals(oldUrl.replace(Updater.LEGACY_REPO, Updater.REPO),
+            AndroidReleaseFeed.parse(envelope(renamed, resign = true), rootHex, 1).releases.single().assets[name])
     }
 
     @Test

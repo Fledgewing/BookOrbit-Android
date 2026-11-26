@@ -1,0 +1,4 @@
+{
+  "xteink-feed": ["xteink/releases.json", "xteink/releases.json.sig"],
+  "android-feed": ["android/releases.json"]
+}

@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: rc2 integration
+Subject: [PATCH] BookSync: rc2 integration
 
 Adapt the overlay hooks to the CrossInk release-candidate layout.
 

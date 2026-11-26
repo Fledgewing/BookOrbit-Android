@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Which CrossInk-Bookorbit tags Orbify builds, and which release channel a build goes to.
+# Which CrossInk-Bookorbit tags BookSync builds, and which release channel a build goes to.
 #   upstream-line.sh channel <tag>   prints "stable" or "prerelease"; refuses an unsupported tag
 #   upstream-line.sh pick            reads tags newest first on stdin, prints the first supported one
 #   upstream-line.sh publish <event> <tag> <marker> <force>
@@ -25,7 +25,7 @@ supported() { # v2.0.0+bookorbit.1-rc3 -> yes when the major version is 2 or mor
 case "${1:-}" in
   channel)
     tag="${2:-}"
-    supported "$tag" || { echo "unsupported CrossInk tag '$tag': Orbify builds 2.x and later only" >&2; exit 1; }
+    supported "$tag" || { echo "unsupported CrossInk tag '$tag': BookSync builds 2.x and later only" >&2; exit 1; }
     if printf '%s' "$tag" | grep -Eq -- '-[A-Za-z]'; then echo prerelease; else echo stable; fi
     ;;
   pick)

@@ -1,5 +1,5 @@
 #pragma once
-// Orbify: "Keep book copies current" (patch 0034, docs/design/XTEINK-BUILD-NOTES.md). When the
+// BookSync: "Keep book copies current" (patch 0034, docs/design/XTEINK-BUILD-NOTES.md). When the
 // server rewrites a library file (tags or a cover written into the EPUB), the card copy stops
 // syncing highlights and bookmarks (positionIncompatible). This finds those copies and replaces
 // them in place, one book at a time, with their reading position, highlights and bookmarks

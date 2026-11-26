@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: catalog boot session
+Subject: [PATCH] BookSync: catalog boot session
 
 Keep catalog networking in its own boot session.
 

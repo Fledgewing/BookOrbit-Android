@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: offline mirror refresh
+Subject: [PATCH] BookSync: offline mirror refresh
 
 Save a catalog mirror for offline browsing and explicit Full refresh.
 
@@ -59,7 +59,7 @@ index 0926e1a8..403cf673 100644
  constexpr int HEADER_CONTROL_GAP = 10;
  constexpr int16_t HEADER_CONTROL_SORT = 0;
  constexpr int16_t HEADER_CONTROL_FILTER = 1;
-+constexpr int16_t HEADER_CONTROL_REFRESH = 2;  // Orbify (patch 0035)
++constexpr int16_t HEADER_CONTROL_REFRESH = 2;  // BookSync (patch 0035)
  
  // The Library's sort methods that BookOrbit can apply, in the Library's order. The server
  // sorts authors by last name and has no first-name or genre order.
@@ -92,7 +92,7 @@ index 0926e1a8..403cf673 100644
  }
  
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+// Orbify (patch 0035): the ⟳ at the header's right on every view; tap = Refresh, hold = Full
++// BookSync (patch 0035): the ⟳ at the header's right on every view; tap = Refresh, hold = Full
 +// refresh (docs/design/write-through-cache.md, "Refresh and Full refresh").
 +template <typename Screen>
 +void addRefreshControl(Screen& screen, const GfxRenderer& renderer) {
@@ -138,7 +138,7 @@ index 0926e1a8..403cf673 100644
    }
    if (!connected) {
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+    // Orbify (patch 0035): with a saved mirror the catalog opens offline from the cache.
++    // BookSync (patch 0035): with a saved mirror the catalog opens offline from the cache.
 +    if (OrbifyMirror::saved() && entryLink.bookId == 0) {
 +      offlineSession = true;
 +      LOG_INF("BookOrbit", "Catalog: no Wi-Fi; opening offline from the saved mirror");
@@ -313,7 +313,7 @@ index 0926e1a8..403cf673 100644
    const std::string title = headerTitle();
    const auto drawHeader = [this, &title, listOptionsShown] {
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+    // Orbify (patch 0035): the ⟳ at the right, its "updated …" stamp beside it.
++    // BookSync (patch 0035): the ⟳ at the right, its "updated …" stamp beside it.
 +    const std::string stamp = viewStamp();
 +    if (mappedInput.hasTouchHardware()) {
 +      const int controls = listOptionsShown ? 3 * HEADER_CONTROL_SIZE + 2 * HEADER_CONTROL_GAP : HEADER_CONTROL_SIZE;
@@ -360,7 +360,7 @@ index 0926e1a8..403cf673 100644
  }
 +
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+// Orbify (patch 0035): the header's ⟳, "Refresh and Full refresh" in
++// BookSync (patch 0035): the header's ⟳, "Refresh and Full refresh" in
 +// docs/design/write-through-cache.md. Refresh asks the server for this view now and keeps what
 +// changed; Full refresh first saves the offline mirror (OrbifyMirror), then reloads the view
 +// with the cache bypassed. Offline, either connects first.
@@ -490,7 +490,7 @@ index 8687d20a..a2a1136b 100644
    bool loadBooks(const BookOrbitBookQuery& query, const std::string& title, int page, bool fromFacet,
                   PageLoad load = PageLoad::Open, bool allowNetwork = true);
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  // Orbify (patch 0035): the header's ⟳. full: hold ⟳ / long-press Confirm (Full refresh, which
++  // BookSync (patch 0035): the header's ⟳. full: hold ⟳ / long-press Confirm (Full refresh, which
 +  // also saves the offline mirror); otherwise tap ⟳ / Confirm (Refresh: this view, checked now).
 +  void refreshView(bool full);
 +  // The view on screen was just loaded: from the server (or the cache) now, or offline.
@@ -537,7 +537,7 @@ index 11a7622d..b992d368 100644
  #endif
    }
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  // Orbify (patch 0035): a Full refresh asked for from settings (or the catalog's ⟳ hold that a
++  // BookSync (patch 0035): a Full refresh asked for from settings (or the catalog's ⟳ hold that a
 +  // reset cut short) saves the catalog for offline here, its progress on screen. Automatic ones
 +  // (7 days, a new library version) wait for the sleep sync instead.
 +  if (refreshed && OrbifyMirror::requested()) {
@@ -578,7 +578,7 @@ index 8dfc556b..d8b493c3 100644
    // Repaints the scan's step: at once when the step changes, then at most every few seconds.
    static void onScanProgress(void* context, BookOrbitDeviceScan::Step step, size_t done, size_t total);
    void setScanSummary(const BookOrbitDeviceScan::Summary& summary);
-+  // Orbify (patch 0035): the Full refresh's "saving for offline N/M", repainted every few seconds.
++  // BookSync (patch 0035): the Full refresh's "saving for offline N/M", repainted every few seconds.
 +  static void onMirrorStep(void* context, size_t done, size_t total);
  
    State state = State::Connecting;
@@ -612,7 +612,7 @@ index ad3743b5..316b80f9 100644
    }
 +#endif
 +#if CROSSINK_TAILNET_ORBIFY_MIRROR
-+  // Orbify (patch 0035): the offline mirror, when asked for or due (never saved, 7 days old, a new
++  // BookSync (patch 0035): the offline mirror, when asked for or due (never saved, 7 days old, a new
 +  // library version): up to two minutes per sleep, resumed by the next one.
 +  if (wifiConnectedForSleepSync && state != SYNC_FAILED && !sleepSyncWakeRequested()) {
 +    const auto due = OrbifyMirror::dueNow();
@@ -645,7 +645,7 @@ index 455d20b9..6c319c1c 100644
  constexpr int BACKGROUND_SYNC_ROW = 9 + ORBIFY_ROWS;
 -// The Home page: the top shelf, the bottom shelf, then the refresh.
 -constexpr int HOME_ITEMS = 3;
-+// The Home page: the top shelf, the bottom shelf, then the refresh, and Orbify's Full refresh
++// The Home page: the top shelf, the bottom shelf, then the refresh, and BookSync's Full refresh
 +// (patch 0035: saves the catalog for offline, its value says when it last did).
 +constexpr int HOME_ITEMS = 3 + (CROSSINK_TAILNET_ORBIFY_MIRROR ? 1 : 0);
  constexpr int REFRESH_ROW = 2;

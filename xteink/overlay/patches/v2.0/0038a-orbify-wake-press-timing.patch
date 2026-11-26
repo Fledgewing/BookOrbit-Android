@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: wake press timing
+Subject: [PATCH] BookSync: wake press timing
 
 Measure the wake press while the sleep sync watcher is running.
 

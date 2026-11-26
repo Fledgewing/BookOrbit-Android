@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Fails when the pinned BookOrbit server requires app attestation on a route Orbify calls, or
+// Fails when the pinned BookOrbit server requires app attestation on a route BookSync calls, or
 // installs the attestation guard globally. Only BookOrbit's official apps can pass attestation, so
-// such a route breaks Orbify. See docs/server-contract.md "App attestation".
+// such a route breaks BookSync. See docs/server-contract.md "App attestation".
 //
 //   node tools/attest-check/check.mjs [--repo DIR] [--server DIR] [--list]
-//     --repo    Orbify checkout (default: this one)
+//     --repo    BookSync checkout (default: this one)
 //     --server  BookOrbit server/src (default: <repo>/upstream/bookorbit/server/src, from tools/upstreams)
-//     --list    print the routes Orbify calls (the manifest, read from the code) and where
+//     --list    print the routes BookSync calls (the manifest, read from the code) and where
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +32,7 @@ if (missing.length) {
 }
 const calls = manifest(routes);
 if (!calls.length) {
-  console.error('attest-check: found no BookOrbit route in Orbify\'s code; the extractor is broken');
+  console.error('attest-check: found no BookOrbit route in BookSync\'s code; the extractor is broken');
   process.exit(2);
 }
 if (args.includes('--list')) {
@@ -48,8 +48,8 @@ for (const u of unmatched) {
 const attested = srv.routes.filter((r) => r.attest).length;
 if (errors.length) {
   for (const e of errors) console.error(`ERROR: ${e}`);
-  console.error(`attest-check: ${errors.length} problem(s); ${calls.length} Orbify routes checked against ${srv.routes.length} server routes (${attested} require attestation).`);
+  console.error(`attest-check: ${errors.length} problem(s); ${calls.length} BookSync routes checked against ${srv.routes.length} server routes (${attested} require attestation).`);
   process.exit(1);
 }
-console.log(`attest-check: ok. ${calls.length} Orbify routes, none requires app attestation; ` +
+console.log(`attest-check: ok. ${calls.length} BookSync routes, none requires app attestation; ` +
   `${srv.routes.length} server routes read, ${attested} require it, no global attestation guard.`);

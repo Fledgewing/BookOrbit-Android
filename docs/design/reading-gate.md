@@ -1,6 +1,6 @@
 # Nothing interrupts reading
 
-**Principle (v0.11.1).** While a book is open in the foreground, nothing from Orbify, BookSync
+**Principle (v0.11.1).** While a book is open in the foreground, nothing from BookSync, BookSync
 Companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader or
 takes focus. Whatever would have shown waits for the next moment nobody is reading, or is dropped
 once it has gone stale.
@@ -89,7 +89,7 @@ Every `UIManager:show`, BookOrbit toast, `Jni.startActivity` and restart in `ko/
 | Wi-Fi "Connecting…" | KOReader's turn-on message | not shown: `wifi_backend.lua` brings the network up quietly |
 
 BookOrbit's own modal dialogs (sync conflict, "further ahead") are not intercepted yet: they come
-from its sync, which Orbify runs at wake and sleep, not mid-book.
+from its sync, which BookSync runs at wake and sleep, not mid-book.
 
 ## Audit: companion
 

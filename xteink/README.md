@@ -1,7 +1,7 @@
-# Orbify for Xteink (CrossInk-Tailnet)
+# BookSync for Xteink (CrossInk-Tailnet)
 
-Orbify's Xteink firmware, built as the CrossInk-Tailnet overlay. It lived in
-Fledgewing/CrossInk-Tailnet until it moved into Orbify with its history (`xteink/`); that repo is
+BookSync's Xteink firmware, built as the CrossInk-Tailnet overlay. It lived in
+Fledgewing/CrossInk-Tailnet until it moved into BookSync with its history (`xteink/`); that repo is
 archived. Releases are this repo's `xteink-v…` tags (AGENTS.md "Releases").
 
 [CrossInk-Bookorbit](https://github.com/agosez/CrossInk-Bookorbit) firmware with your reader on
@@ -15,13 +15,13 @@ This is an **overlay**, not a fork. CrossInk's source is used as released; the o
 | MicroLink | `third_party/microlink` (submodule: the `crossink` branch of [our fork](https://github.com/Fledgewing/microlink)) | Tailscale-compatible WireGuard client for ESP32, with our changes (closest relay region, per-peer relays) on top |
 | Shim | `tailnet/shim` | Starts MicroLink when WiFi gets an address, stops it when WiFi goes away; answers tailnet names (`bookorbit`, `bookorbit.<tailnet>.ts.net`) for every HTTP client in the firmware |
 | Settings screen | `tailnet/ui` | **Settings > Tailscale**: on/off, status and address, log in (QR code) and log out |
-| Build hook | `tailnet/tailnet_build.py` + `overlay/platformio.local.ini` | Compiles the above into CrossInk's normal PlatformIO build and points the updater at Orbify's `xteink-v…` releases (patch `ota-tag-prefix`) |
+| Build hook | `tailnet/tailnet_build.py` + `overlay/platformio.local.ini` | Compiles the above into CrossInk's normal PlatformIO build and points the updater at BookSync's `xteink-v…` releases (patch `ota-tag-prefix`) |
 | CrossInk patches | `overlay/patches/v2.0/` (CrossInk 2.x) | One numbered series per upstream line: the Settings row (0001), the framebuffer freed while Tailscale runs in a network boot on the X3/X4 (0002, `tailnet/shim/TailnetNetPhase.h`), and the memory and download changes after them |
 
-**CrossInk 2.x only.** Orbify no longer builds or supports CrossInk 1.6 (its patch series is in git
+**CrossInk 2.x only.** BookSync no longer builds or supports CrossInk 1.6 (its patch series is in git
 history). Readers still on 1.6 stay on the feed's stable entry, `xteink-v1.6.1.114+bookorbit.9`,
-until CrossInk 2.0 leaves its release candidates (below). These rc labels describe CrossInk,
-not a release-candidate judgment about Orbify’s overlay builds.
+until a stable 2.x bridge and the later stable BookSync releases become available (below).
+Through 0.11, rc labels describe CrossInk, not the overlay's readiness.
 
 When CrossInk-Bookorbit releases, the daily CI run pins its newest 2.x tag in
 `tools/upstreams.lock` (the workflow commits the bump), builds the commit the lock records with the
@@ -29,6 +29,21 @@ overlay and publishes a release here. The build jobs that run upstream's build s
 write token and no secret; a separate job, which never runs upstream code, checks the built files
 and publishes them. The only thing that can need hand work is the patch series for that upstream
 line, and CI says so if it stops applying.
+
+### Shared BookSync versions from 0.12
+
+shared/version.json supplies the same identity as the Android companion and plugin.
+Firmware tags become xteink-v<version>+crossink.<base>; About shows
+"BookSync 0.12.0 (CrossInk 2.0.0-rc3)". BookSync preview.N → rc.N → stable
+decides the channel, independently of the pinned CrossInk base. Android release
+publication dispatches firmware at the same tag. Daily builds keep that pinned base
+and do not publish a new product version.
+
+The 0.11 bridge retains the legacy numeric tag and adds booksync_version to the
+feed. It must reach readers before 0.12. The feed retains legacy channel heads
+indefinitely so old devices can still install the bridge. Stable-only devices need
+a stable bridge. See [rollout, version rules and tests](../docs/design/unified-version.md).
+The following upstream-driven release policy applies through the bridge line.
 
 ### Releases and the update feed
 
@@ -45,7 +60,7 @@ the newest pre-release `xteink-v…` release. Which one a build becomes is decid
 Every firmware release keeps `make_latest=false`: GitHub's "latest" stays an Android release.
 
 Each firmware image in the feed also carries `orbify_signature`: a release-key certificate from
-Orbify's offline root key and the release key's signature over the tag, the image name and its
+BookSync's offline root key and the release key's signature over the tag, the image name and its
 SHA-256 (`docs/design/release-signing.md`). Once the staged image matches its SHA-256, the updater
 checks the signature (overlay patch 0050). Until `shared/release-signing.json` sets `enforce`, a
 missing or bad signature is only logged (`unsigned`, `signature invalid`) and the update installs.
@@ -76,7 +91,7 @@ The partition table is never changed (that can only be done over USB).
 ### X3 (v2.0) differences
 
 CrossInk 2.x plus Tailscale does not fit the ESP32-C3's app slot, so the `default` build
-(X3 and the C3 X4) of CrossInk 2.x leaves out four upstream features and Orbify's server certificate check. The X4 Pro and X4 Classic
+(X3 and the C3 X4) of CrossInk 2.x leaves out four upstream features and BookSync's server certificate check. The X4 Pro and X4 Classic
 keep everything. Each is a switch in `tailnet/tailnet_build.py` (`CROSSINK_TAILNET_NO_*`).
 
 | Removed on the X3 | Workaround |
@@ -103,15 +118,14 @@ Where the downloads used to be, the reader shows where to copy the files.
 
 Flash the `.bin` for your reader from the latest release the same way you install CrossInk from
 an SD card or USB. After that, **Settings > Check for updates** installs new releases over the air:
-Orbify's `xteink-v…` firmware releases (a reader on a CrossInk-Tailnet build gets there through
-that repo's last release, which already points at Orbify). To go back to stock CrossInk-Bookorbit, flash its `.bin` the same way.
+BookSync's `xteink-v…` firmware releases (a reader on a CrossInk-Tailnet build gets there through
+that repo's last release, which already points at BookSync). To go back to stock CrossInk-Bookorbit, flash its `.bin` the same way.
 
-The check reads Orbify's own small feed (`xteink/releases.json` on the `xteink-feed` branch, two
-releases), not GitHub's release API, and a failed check is tried once more. The download then runs
+The check reads BookSync's own small feed (`xteink/releases.json` on the `xteink-feed` branch, current channel heads plus retained legacy bridges), not GitHub's release API, and a failed check is tried once more. The download then runs
 with the larger WiFi buffers of the boots that park the screen (the X3's `parked` tier). The last
 CrossInk-Tailnet bridge (`v2.0.0.51+bookorbit.1-rc2`) still reads the GitHub API and the small
 buffers: on an X3 its first check can fail out of memory (try again) and its download can take
-30-50 minutes. Leave the reader on its charger; the next update from Orbify is fast.
+30-50 minutes. Leave the reader on its charger; the next update from BookSync is fast.
 
 ## Joining your tailnet
 
@@ -220,7 +234,7 @@ book.
 
 ## Nothing interrupts reading
 
-While a book is open, Orbify never draws over it, repaints it or restarts the reader on its own:
+While a book is open, BookSync never draws over it, repaints it or restarts the reader on its own:
 no message, no update prompt, no sync or WiFi status. The checks for updates run only from
 **Settings > Check for updates**; the sync while reading never repaints the page. What does show
 while reading: the End-of-Book page (you reached it), any menu or screen you open, and the sleep
@@ -365,9 +379,9 @@ starts. The X3 and X4 build (`default`) writes the file without the numbers on t
 
 ```bash
 git clone --recursive https://github.com/agosez/CrossInk-Bookorbit
-git clone --recursive https://github.com/Fledgewing/Orbify
-Orbify/xteink/scripts/apply.sh CrossInk-Bookorbit
-Orbify/xteink/test/run-host-tests.sh CrossInk-Bookorbit   # the overlay's host tests
+git clone --recursive https://github.com/Fledgewing/BookSync
+BookSync/xteink/scripts/apply.sh CrossInk-Bookorbit
+BookSync/xteink/test/run-host-tests.sh CrossInk-Bookorbit   # the overlay's host tests
 cd CrossInk-Bookorbit && pio run -e x4-pro    # or x4-classic, default
 ```
 
@@ -381,7 +395,7 @@ If you also build other CrossInk lines, keep a separate PlatformIO home for 2.x 
 pioarduino platforms), e.g. `PLATFORMIO_CORE_DIR=~/.platformio-2x pio run -e default`.
 
 To rebuild a published release, use the commits from its notes: clone CrossInk-Bookorbit at the
-release's upstream tag (`git clone --recursive --branch <tag> ...`), check out Orbify at
+release's upstream tag (`git clone --recursive --branch <tag> ...`), check out BookSync at
 the release's overlay commit (`git checkout <commit> && git submodule update --init --recursive`),
 then run the same commands. CI builds with PlatformIO Core 6.1.19 (pioarduino); see
 `.github/workflows/xteink.yml` at that commit (`.github/workflows/build.yml` in

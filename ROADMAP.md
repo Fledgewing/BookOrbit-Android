@@ -1,6 +1,6 @@
 # Roadmap
 
-Outcomes Orbify plans, in order. A design doc and mockups need the user's approval before an item
+Outcomes BookSync plans, in order. A design doc and mockups need the user's approval before an item
 moves to building; when it ships it moves into [`docs/FEATURES.md`](docs/FEATURES.md)
 (AGENTS.md "Features and roadmap"). Items are outcomes only: designs live in
 [`docs/design/`](docs/design/).
@@ -10,6 +10,7 @@ CrossInk 2.x only; 1.6 is retired).
 
 | Outcome | Platforms | Status | Design |
 |---|---|---|---|
+| Withdraw broken releases through a signed Android feed and require reader opening flows before publication. | Android | building (W35 implementation requested) | [release safety](docs/design/release-safety.md) |
 | Caller-verified companion commands and one tested plugin–companion contract, with file operations confined to BookSync data. | Android | building (approved design; caller checks merged) | [security](docs/design/security.md), [contract](android/docs/INTERFACE.md) |
 
 ## Next release (0.12): BookSync Home
@@ -22,6 +23,9 @@ becomes a data source. X3 is a full 0.12 target: BookSync replaces the other com
 flash/heap fit remains a release acceptance gate. The later server-package
 phase does not defer owned X4 Home; plain-base cutover follows adapter completeness.
 
+All four remaining parity gaps below ship in 0.12 (maintainer ruling 2026-11-25);
+design and mockup approval still apply.
+
 | Outcome | Platforms | Status |
 |---|---|---|
 | **BookSync Home** replaces the BookOrbit Home on Android and Xteink: complete reader-preset widget library retained as the staged target and rebuilt by BookSync from the offline database, instant and offline, with BookSync's own book detail page. | Android, X4 Pro, X4, X3 | designing (W36; 0.12 together) |
@@ -29,7 +33,12 @@ phase does not defer owned X4 Home; plain-base cutover follows adapter completen
 | **Tap to download** (Next 5) on Home, lists, series and detail. | Android, X4 Pro, X4, X3 | designing (W36; 0.12 together) |
 | **Series view** (Next 6): every book in order, on device or server only, read state, download next. | Android, X4 Pro, X4, X3 | designing (W36; 0.12 together) |
 | **Owned Xteink adapter and firmware path**: Home reads our SD database through our adapter in 0.12, replacing other X3 Home implementations to fit; replace fork sync/download/login, then cut over to plain CrossInk + our layer after separate base-switch approval. | X4 Pro, X4, X3 | designing ([audit and stages](docs/design/booksync-home/DESIGN.md#82-what-currently-depends-on-crossink-bookorbit)) |
-| **One BookSync version** from 0.12 across companion, plugin and firmware; CrossInk version is base metadata, with an explicit legacy updater transition. | Android, X4 Pro, X4, X3 | designing ([version contract](docs/design/booksync-home/DESIGN.md#87-one-booksync-version-from-012)) |
+| **Stable / RC / Preview update channels** selected from the BookSync version, with stored opt-in migration and no channel-switch downgrade. | Android, X4 Pro, X4, X3 | building (0.12, maintainer-approved W42) |
+| **BookSync library interface**: all platform UIs use one interface with BookOrbit/Grimmory adapters, capability-gated features and neutral filters with cached-catalog fallback ([BookSync Home owned-client design](docs/design/backend-independence.md#1-owned-android-client-and-ledger)); maintainer rule 2026-11-26. | Android (KOReader plugin + companion), X4 Pro, X4, X3 | planned (0.12) |
+| **Equivalent settings controls**: expose the [parity gap 1](docs/FEATURES.md#prioritised-parity-bugs) controls, including a sleep sync budget aligned with Android's 10/15/20 s choices. | X4 Pro, X4 | planned (0.12) |
+| **BookSync status-bar preset**: add one preset over the existing native controls ([parity gap 2](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |
+| **Discoverable settings**: make equivalent settings easy to find while retaining button navigation ([parity gap 3](docs/FEATURES.md#prioritised-parity-bugs)). | X4 Pro, X4 | planned (0.12) |
+| **Persistent crash summary**: retain a deduplicated crash summary across restarts, never uploaded automatically ([parity gap 4](docs/FEATURES.md#prioritised-parity-bugs)). | Android | planned (0.12) |
 | **Add-on mode and setup checklist** (Next 10, 10a). | Android | approved items carried over |
 | **Unified in-book menus** (Later 8b): BookSync reader screens and quick settings match Home, with stock KOReader/plugin escape; TOC, annotations, go to, search, book info, End of book and cached sleep presentation. No KOReader core patches; capability and flash gates per screen. | Android, X4 Pro, X4, X3 | designing (maintainer direction decided; [audit and increments](docs/design/booksync-home/DESIGN.md#13-in-book-experience-revision-4-continued)) |
 | **No visible app switches** (Later 9) where the new Home makes them small. | Android | stretch |
@@ -59,7 +68,7 @@ and any UI mockups still need approval before implementation.
 | 4 | **Local-first Xteink catalog**: the write-through cache on Xteink: catalog screens open from the cache without Wi-Fi and refresh in the background. | X4 Pro, X4, X3 | building: X4s have the cache, the ⟳ on every catalog view and the offline mirror (2.x rc); background revalidation and the X3 to come | [write-through-cache](docs/design/write-through-cache.md), [local-first](docs/design/local-first/DESIGN.md) |
 | 5 | **Tap to download in BookSync Home**: a book tile opens its local copy or downloads and opens it, with progress and cancel. | Android, X4 Pro, X4, X3 | designing (W36; approval pending) | [Home design](docs/design/booksync-home/DESIGN.md), [mockups](docs/design/booksync-home/mockups.html) |
 | 6 | **Series view in BookSync Home**: every primary/secondary member in order, local/server/read state and download next N. | Android, X4 Pro, X4, X3 | designing (W36; approval pending) | [Home design](docs/design/booksync-home/DESIGN.md), [mockups](docs/design/booksync-home/mockups.html) |
-| 10 | **Add-on mode**: Orbify installs, updates and configures KOReader and both plugins without becoming the Home app or managing Wi-Fi and sleep; recommended settings are applied during setup in both modes (only values still at their default; the user's own are listed for review, with Undo). | Android | shipped (0.11.0); §16 lists what waits | [addon-mode](docs/design/addon-mode.md), [mockups](docs/design/addon-mode-mockups.html) |
+| 10 | **Add-on mode**: BookSync installs, updates and configures KOReader and both plugins without becoming the Home app or managing Wi-Fi and sleep; recommended settings are applied during setup in both modes (only values still at their default; the user's own are listed for review, with Undo). | Android | shipped (0.11.0); §16 lists what waits | [addon-mode](docs/design/addon-mode.md), [mockups](docs/design/addon-mode-mockups.html) |
 | 10a | **Setup checklist that reads at a glance**: a summary first ("All set" or "2 things need you"), finished rows folded into one line per group, plain words with one verb per row, and "what you lose without it" on every optional, skipped or unfinished row in both modes. | Android | building (companion built; not released yet) | [companion-checklist](docs/design/companion-checklist.md), [mockups](docs/design/companion-checklist-mockups.html) |
 | 6a | **Group catalog lists by series or author on Xteink**, matching Android 0.6.0. | X4 Pro, X4; not X3 | approved | [local-first](docs/design/local-first/DESIGN.md), [mockups](https://claude.ai/artifact/QzDMmBphtiPiG41z44CBjk) |
 | 6b | **BookSync-owned Home and book detail**: offline screens independent of BookOrbit UI, companion adapters first, with migration and rollback; UI portion of backend independence step 1. | Android, X4 Pro, X4, X3 | designing (W36; approval pending) | [Home design](docs/design/booksync-home/DESIGN.md), [mockups](docs/design/booksync-home/mockups.html) |
@@ -78,7 +87,7 @@ and any UI mockups still need approval before implementation.
 
 | # | Outcome | Platforms | Status | Design |
 |---|---|---|---|---|
-| 7 | **Smarter cache**: BookOrbit's UI stays current with local state and syncs in the background, covering USB-added files, books finished while auto-sync is off, and linking Orbify downloads. | Android | idea | |
+| 7 | **Smarter cache**: BookOrbit's UI stays current with local state and syncs in the background, covering USB-added files, books finished while auto-sync is off, and linking BookSync downloads. | Android | idea | |
 | 8b | **BookSync plugin hooks the BookOrbit board** (widget registry, `loadBookDetail`, `Activity`, `StateManager`) and replaces KOReader's menus with cleaner ones. 8a (the plugin replaces the user patch) shipped in 0.8.0. | Android | idea (board hooks superseded by W36 owned Home; menu cleanup remains separate) | [orbit-plugin](docs/design/orbit-plugin.md), [owned Home](docs/design/booksync-home/DESIGN.md) |
 | 9 | **No visible app switches**: KOReader stays in front and the companion runs as a background service. | Android | idea | |
 
@@ -86,5 +95,7 @@ and any UI mockups still need approval before implementation.
 
 | Outcome | Platforms | Status | Design |
 |---|---|---|---|
+| **Server-served battery comparison data**: a future BookSync server could serve cross-reader battery comparison data to other devices; on-device comparison remains Android-only by design (screen size), per maintainer ruling 2026-11-25. | Server, Android, X4 Pro, X4, X3 | idea (deferred) | |
 | Submit the companion for Google Play Protect review. | Android | idea | |
 | X3 parity review for each feature above. | X3 | idea | |
+| **One BookSync version from 0.12**: companion, plugin and all Xteink readers share a product version and release channel; previews retain unchanged platform builds, RC/stable converge with passing-test reuse by source fingerprint, and an old-scheme firmware bridge keeps OTA working across the transition. | Android, X4 Pro, X4, X3 | building (maintainer-approved W39; bridge release and device validation pending) | [unified version](docs/design/unified-version.md) |

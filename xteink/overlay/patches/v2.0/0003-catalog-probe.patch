@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: catalog probe
+Subject: [PATCH] BookSync: catalog probe
 
 Probe the catalog through Tailscale before entering its browser.
 

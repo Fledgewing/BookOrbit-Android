@@ -1,4 +1,4 @@
-// Host test for Orbify's write-through cache rules (xteink/orbify/core/CatalogCache): the shared
+// Host test for BookSync's write-through cache rules (xteink/orbify/core/CatalogCache): the shared
 // table shared/fixtures/cache/cases.json (Android's tests read the same one) and the Xteink size cap.
 #include <ArduinoJson.h>
 

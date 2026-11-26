@@ -1,8 +1,8 @@
 # BookOrbit credit (W18)
 
-The user approved the wording and placements below in the clarified W18 brief. Orbify keeps
+The user approved the wording and placements below in the clarified W18 brief. BookSync keeps
 its name. This is a courtesy acknowledgment of BookOrbit and the runtime hooks, not a claim
-that Orbify contains its code or shares its licence.
+that BookSync contains its code or shares its licence.
 
 The copyright line is verbatim from pinned BookOrbit commit
 `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`, `ADDITIONAL_TERMS.md:5` (also `:17-19`).
@@ -10,7 +10,7 @@ The public About placement is informed by `ADDITIONAL_TERMS.md:13-27` at that co
 The user's independence statement and thanks supersede that document's credit heading.
 
 `shared/about/credits.json` is the one notice source. Its order is independence, thanks and
-project URL, BookOrbit copyright and licence, then Orbify's licences immediately after.
+project URL, BookOrbit copyright and licence, then BookSync's licences immediately after.
 The companion is MIT (`android/companion/LICENSE`); the plugin is AGPL-3.0-or-later as a
 KOReader plugin (`android/koreader/LICENSE`, `android/koreader/README.md`). The Xteink overlay
 source is MIT (`xteink/LICENSE`), with marked firmware files and the firmware binaries

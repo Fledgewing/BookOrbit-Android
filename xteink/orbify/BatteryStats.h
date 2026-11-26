@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 Fledgewing. Part of Orbify's Xteink firmware code (xteink/README.md "License"):
+// Copyright (c) 2026 Fledgewing. Part of BookSync's Xteink firmware code (xteink/README.md "License"):
 // it builds into CrossInk-Bookorbit, so it is GPL-3.0-or-later, unlike the MIT overlay around it.
 #pragma once
 
@@ -8,7 +8,7 @@
 //     book open/close, frontlight, 1 % step) appended to /.crossink/battery.bin. Never a
 //     timer or a wakeup: records are written where the firmware already is awake.
 //   2 + export: Settings > System > Battery stats writes /battery_stats.json in the
-//     orbit-battery-stats/1 format (Orbify docs/design/STATS.md).
+//     orbit-battery-stats/1 format (BookSync docs/design/STATS.md).
 //   3 + the numbers on that page, and an export whenever USB Drive mode starts.
 // At 0 every call below is an empty inline.
 

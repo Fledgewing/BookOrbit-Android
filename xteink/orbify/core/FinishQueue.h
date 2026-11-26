@@ -1,5 +1,5 @@
 #pragma once
-// Orbify "mark done at the end of a book" (docs/design/end-of-book/DESIGN.md §3, §5, §7): the device's
+// BookSync "mark done at the end of a book" (docs/design/end-of-book/DESIGN.md §3, §5, §7): the device's
 // durable queue of finished books and the drain that tells BookOrbit about them.
 //
 // Pure C++: no Arduino, no SD card, no HTTP. The firmware glue (../FinishSync.cpp) gives it a

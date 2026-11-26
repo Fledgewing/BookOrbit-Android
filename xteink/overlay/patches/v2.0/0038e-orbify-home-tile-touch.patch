@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: home tile touch
+Subject: [PATCH] BookSync: home tile touch
 
 Align the Home tile touch target and consume the menu-closing swipe.
 

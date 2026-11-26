@@ -23,7 +23,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=SCRIPTDIR/install-usb.sh
 source "$here/install-usb.sh" # helpers: sha256, unpack_orbit, push_plugin, dsh, pick_device, q
 
-REPO="Fledgewing/Orbify" # artifacts come from this repo only
+REPO=$BOOKSYNC_REPO # artifacts come from this repo only
 ARTIFACT_PREFIX="android-test-"
 COMPANION_PKG="net.fledgewing.orbitcompanion"
 KO_PKG="org.koreader.launcher"
@@ -92,7 +92,7 @@ fetch_artifact() {
     if [[ $SOURCE =~ ^[0-9]+$ ]]; then
         command -v gh >/dev/null 2>&1 || die "gh not found (needed to download run $SOURCE)"
         say "Run $SOURCE in $REPO:"
-        gh run view "$SOURCE" -R "$REPO" --json workflowName,headBranch,headSha,event,status,conclusion \
+        booksync_run_info --json workflowName,headBranch,headSha,event,status,conclusion \
             -q '"  workflow \(.workflowName), branch \(.headBranch) \(.headSha[0:12]), \(.event), \(.status) \(.conclusion)"' ||
             die "can't read run $SOURCE in $REPO"
         gh run download "$SOURCE" -R "$REPO" -p "${ARTIFACT_PREFIX}*" -D "$WORK/dl" ||

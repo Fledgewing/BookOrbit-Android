@@ -19,7 +19,7 @@ releases, checks each download, and walks you through the rest with one button. 
 ## 2. Sideload BookSync Companion
 
 On the reader, download `orbit-companion-<version>.apk` from
-[this project's releases](https://github.com/Fledgewing/Orbify/releases/latest)
+[this project's releases](https://github.com/Fledgewing/BookSync/releases/latest)
 and open it. When Android asks, allow your browser or file manager to install apps.
 
 **Play Protect** may say the app is unknown or "unsafe". That is its standard warning for apps

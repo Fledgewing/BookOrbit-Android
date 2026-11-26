@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: explicit-only Full refresh feedback
+Subject: [PATCH] BookSync: explicit-only Full refresh feedback
 
 Keep intermediate notices silent and use the persisted user request as the progress gate.
 Implementation: orbify/Mirror and orbify/RefreshBadge.

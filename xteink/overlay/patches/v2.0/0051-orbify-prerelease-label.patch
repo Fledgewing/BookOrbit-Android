@@ -1,6 +1,6 @@
-Subject: [PATCH] Orbify: describe overlay updates as pre-releases
+Subject: [PATCH] BookSync: describe overlay updates as pre-releases
 
-CrossInk's rc tag describes its base, not the readiness of Orbify's overlay.
+CrossInk's rc tag describes its base, not the readiness of BookSync's overlay.
 Keep the upstream version tags and setting key; label our OTA opt-in generically.
 
 diff --git a/lib/I18n/translations/english.yaml b/lib/I18n/translations/english.yaml

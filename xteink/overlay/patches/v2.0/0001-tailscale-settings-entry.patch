@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: tailscale settings entry
+Subject: [PATCH] BookSync: tailscale settings entry
 
 Expose Tailscale setup through the firmware settings menu.
 

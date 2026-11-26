@@ -217,7 +217,7 @@ data class ReleaseInfo(val tag: String, val prerelease: Boolean, val draft: Bool
 }
 
 /**
- * Orbify releases both platforms from one repo (AGENTS.md "Releases"): Android tags are
+ * BookSync releases both platforms from one repo (AGENTS.md "Releases"): Android tags are
  * `v<version>` (`android-v<version>` is read too), firmware tags `xteink-v<version>`, which the
  * Android pieces skip.
  */
@@ -240,6 +240,25 @@ object ReleaseTags {
     fun forVersion(v: String): List<String> = listOf("v$v", "$PREFIX$v")
 }
 
+/** BookSync's product version alone decides channel eligibility. */
+enum class UpdateChannel(val key: String) {
+    STABLE("stable"), RC("rc"), PREVIEW("preview");
+
+    fun allows(version: Version?): Boolean {
+        if (version == null) return false
+        val pre = version.pre ?: return true
+        return when {
+            Regex("rc\\.[1-9][0-9]*").matches(pre) -> this != STABLE
+            Regex("preview\\.[1-9][0-9]*").matches(pre) -> this == PREVIEW
+            else -> false
+        }
+    }
+
+    companion object {
+        fun fromKey(key: String?) = values().firstOrNull { it.key == key } ?: STABLE
+    }
+}
+
 object UpdatePolicy {
     const val INTERVAL_MS = 24 * 60 * 60_000L
     const val SUMS_NAME = "SHA256SUMS"
@@ -249,10 +268,14 @@ object UpdatePolicy {
     /** At most one automatic check per 24 h; a clock that went backwards also allows one. */
     fun due(lastCheckMs: Long, nowMs: Long): Boolean = lastCheckMs <= 0 || nowMs < lastCheckMs || nowMs - lastCheckMs >= INTERVAL_MS
 
-    /** The newest usable release: never a draft, a pre-release only when asked for. */
-    fun pick(releases: List<ReleaseInfo>, includePre: Boolean): ReleaseInfo? =
-        releases.filter { !it.draft && (includePre || !it.prerelease) && it.version != null && !TestBuild.isTest(it.version) }
+    /** The newest usable release allowed by the selected BookSync channel. */
+    fun pick(releases: List<ReleaseInfo>, channel: UpdateChannel, withdrawn: Set<Version> = emptySet()): ReleaseInfo? =
+        releases.filter { !it.draft && channel.allows(it.version) && it.version != null && !TestBuild.isTest(it.version) && it.version !in withdrawn }
             .maxWithOrNull(compareBy { it.version!! })
+
+    fun shouldInstall(candidate: Version?, current: Version?, withdrawn: Set<Version>): Boolean =
+        candidate != null && candidate !in withdrawn && candidate != current &&
+            (isNewer(candidate, current) || current in withdrawn)
 
     fun isNewer(candidate: Version?, current: Version?): Boolean =
         candidate != null && (current == null || candidate > current)

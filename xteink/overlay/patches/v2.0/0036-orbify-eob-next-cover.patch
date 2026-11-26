@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: eob next cover
+Subject: [PATCH] BookSync: eob next cover
 
 Fetch and display the next book cover on the End-of-Book page.
 
@@ -20,11 +20,11 @@ index 316b80f9..d48ececb 100644
 --- a/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 +++ b/src/activities/reader/bookorbit/BookOrbitSyncActivity.cpp
 @@ -112,6 +112,12 @@ void BookOrbitSyncActivity::completeAlreadySynced() {
-   // Orbify (patch 0028): the open book's series card, near its end (design §5).
+   // BookSync (patch 0028): the open book's series card, near its end (design §5).
    if (!backgroundSync && !wakeRequested()) OrbifyFinish::refreshCard(epubPath, localProgress.percentage);
    syncSession.reset();  // no request follows; free the TLS session before the reader reloads
 +#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
-+  // Orbify (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
++  // BookSync (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
 +  if (!backgroundSync && !wakeRequested()) {
 +    OrbifyFinish::fetchNextCover(epubPath, sleepSync ? &sleepSyncWakeRequested : nullptr);
 +  }
@@ -37,7 +37,7 @@ index 316b80f9..d48ececb 100644
      BookOrbitHomeStore::decodePendingCovers(&sleepSyncWakeRequested, homeCoverSizes);
    }
 +#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
-+  // Orbify (patch 0036): the End-of-Book page's next cover, with the radio off like Home's.
++  // BookSync (patch 0036): the End-of-Book page's next cover, with the radio off like Home's.
 +  if (!sleepSyncWakeRequested()) OrbifyFinish::decodeNextCovers(&sleepSyncWakeRequested);
 +#endif
    LOG_INF("BookOrbit", "Sleep sync over (state=%d)", static_cast<int>(state));
@@ -48,7 +48,7 @@ index 316b80f9..d48ececb 100644
  
    syncSession.reset();
 +#if CROSSINK_TAILNET_ORBIFY_EOB_COVER
-+  // Orbify (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
++  // BookSync (patch 0036): the next book's cover, on its own connection (decoded with the radio off).
 +  if (result == BookOrbitSyncClient::OK && !backgroundSync && !wakeRequested()) {
 +    OrbifyFinish::fetchNextCover(epubPath, sleepSync ? &sleepSyncWakeRequested : nullptr);
 +  }

@@ -45,7 +45,7 @@ Pinned source: BookOrbit `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`,
 (facet page envelope), `:730` (details). CrossInk
 `87e2e1984481e8a3d996f12b34b50a383f9013b8`,
 `src/network/BookOrbitCatalogClient.cpp:522` (facet browser request) and `:463`
-(book browser request). These are source lines before applying Orbify's overlay.
+(book browser request). These are source lines before applying BookSync's overlay.
 
 ## Storage and final state
 

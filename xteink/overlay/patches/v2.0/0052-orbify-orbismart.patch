@@ -30,7 +30,7 @@ index 4516bac..ca711be 100644
    bool syncOnSleep = false;
 +  bool orbiSmart = true;  // shared setting sync_mode=orbismart|custom
  #if CROSSINK_TAILNET_ORBIFY_FINISH
-   bool orbifyMarkAtEnd = true;  // Orbify: the End-of-Book page marks the book finished (D1)
+   bool orbifyMarkAtEnd = true;  // BookSync: the End-of-Book page marks the book finished (D1)
  #endif
 @@ -87,9 +88,12 @@ class BookOrbitCredentialStore : public PersistableStore<BookOrbitCredentialStor
    }
@@ -435,7 +435,7 @@ index f3ca177..006e7a3 100644
 --- a/src/activities/settings/BookOrbitSettingsActivity.cpp
 +++ b/src/activities/settings/BookOrbitSettingsActivity.cpp
 @@ -41,7 +41,14 @@ namespace {
- // Orbify (patch 0034): "Keep book copies current" follows it.
+ // BookSync (patch 0034): "Keep book copies current" follows it.
  constexpr int ORBIFY_MARK_ROWS = CROSSINK_TAILNET_ORBIFY_FINISH ? 1 : 0;
  constexpr int ORBIFY_ROWS = ORBIFY_MARK_ROWS + (CROSSINK_TAILNET_ORBIFY_COPY_REFRESH ? 1 : 0);
 -constexpr int MENU_ITEMS = 9 + ORBIFY_ROWS + (CROSSINK_TAILNET_BACKGROUND_SYNC ? 1 : 0);

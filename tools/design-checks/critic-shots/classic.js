@@ -8,7 +8,7 @@ await p.goto(prototypeURL+'?dev=x4c');await p.waitForTimeout(200);
 const H=x=>p.evaluate(x=>window.__proto.hw(x),x);const A=a=>p.evaluate(a=>window.__proto.act(a),a);
 const st=()=>p.evaluate(()=>{const S=window.__proto.S;const c=S.stack[S.stack.length-1];return JSON.stringify({scr:c.n,panel:c.panel,sheet:c.sheet,fk:S.fk,page:S.page,modal:S.modal&&S.modal.k,edit:S.edit,sel:S.sel})});
 const fks=()=>p.evaluate(()=>[...document.querySelectorAll('#screen [data-fk]')].filter(e=>e.offsetParent).map(e=>e.dataset.fk).join(' '));
-console.log('home', await st()); 
+console.log('home', await st());
 for(let i=0;i<14;i++){await H('next');} console.log('after 14 next', await st());
 await A('page:0');
 await H('more'); console.log('more on home', await st()); await H('back'); console.log(await st());

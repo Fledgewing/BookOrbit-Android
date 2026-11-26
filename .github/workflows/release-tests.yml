@@ -4,7 +4,7 @@
 #
 #   stage 0  server kit: the fault proxy's tests, then the real BookOrbit (pinned by digest,
 #            tools/e2e/compose.yml) seeded with the synthetic library, checked through the proxy
-#   stage 1  Xteink: Orbify's overlay in upstream's SDL simulator, one job per reader, the
+#   stage 1  Xteink: BookSync's overlay in upstream's SDL simulator, one job per reader, the
 #            scenarios in xteink/test/e2e/run.py against the stage-0 server
 #   stage 2  Android: the companion's JVM tests, Robolectric included (install-session states)
 #
@@ -12,14 +12,19 @@
 name: release-tests
 
 on:
-  # A change to the tests themselves runs them; anything else waits for a release (§6.3).
+  push:
+    branches: [main]
+    paths: ["android/koreader/**", ".github/workflows/release-tests.yml", ".github/workflows/release.yml"]
   pull_request:
     paths:
+      - "android/koreader/**"
+      - ".github/workflows/release.yml"
       - "tools/e2e/**"
       - "shared/fixtures/e2e/**"
       - "xteink/test/e2e/**"
       - "xteink/tailnet/sim/**"
       - "xteink/overlay/patches/v2.0/0090-orbify-simulator-build.patch"
+      - "xteink/overlay/patches/v2.0/0056-booksync-update-channels.patch"
       - ".github/workflows/release-tests.yml"
       - ".github/actions/pio-setup/**"
       - ".github/actions/android-setup/**"
@@ -30,9 +35,13 @@ on:
         type: string
         default: all
       ref:
-        description: "Orbify commit to test (default: the caller's)"
+        description: "BookSync commit to test (default: the caller's)"
         type: string
         default: ""
+      profiles:
+        description: 'Simulator profiles as a JSON array'
+        type: string
+        default: '["x4-pro","x4-classic","x3"]'
       upstream_ref:
         description: "CrossInk tag or commit for stage 1 (default: tools/upstreams.lock's commit)"
         type: string
@@ -45,9 +54,13 @@ on:
         options: [all, xteink, android]
         default: all
       ref:
-        description: "Orbify commit to test (default: this run's)"
+        description: "BookSync commit to test (default: this run's)"
         type: string
         default: ""
+      profiles:
+        description: 'Simulator profiles as a JSON array'
+        type: string
+        default: '["x4-pro","x4-classic","x3"]'
       upstream_ref:
         description: "CrossInk tag or commit for stage 1 (default: tools/upstreams.lock)"
         type: string
@@ -91,20 +104,15 @@ jobs:
     if: (inputs.platform || 'all') != 'android'
     needs: kit
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    # X4 Pro completes 40 passing scenarios near 40 minutes including its build.
+    # Leave room for artifact upload/cleanup; scenario deadlines remain in run.py.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        profile: [x4-pro, x4-classic, x3]
-        include:
-          - profile: x4-pro
-            env: x4-pro-simulator
-          - profile: x4-classic
-            env: x4-classic-simulator
-          - profile: x3
-            env: simulator-X3
+        profile: ${{ fromJSON(inputs.profiles || '["x4-pro","x4-classic","x3"]') }}
     steps:
-      - name: Check out Orbify
+      - name: Check out BookSync
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
@@ -142,7 +150,7 @@ jobs:
 
       - name: Build the ${{ matrix.profile }} simulator
         working-directory: upstream
-        run: pio run -e "${{ matrix.env }}" </dev/null
+        run: pio run -e "${{ (matrix.profile == 'x3' && 'simulator-X3' || format('{0}-simulator', matrix.profile)) }}" </dev/null
 
       - name: BookOrbit up and seeded
         run: python3 orbify/tools/e2e/kit.py up </dev/null
@@ -151,6 +159,22 @@ jobs:
         run: |
           python3 orbify/xteink/test/e2e/run.py --checkout upstream --profile "${{ matrix.profile }}" \
             --out "$RUNNER_TEMP/e2e" </dev/null
+
+      - name: Record passing release inputs
+        working-directory: orbify
+        run: |
+          # An ad-hoc upstream override is useful for diagnosis but proves no pinned build.
+          if [ "$(git -C ../upstream rev-parse HEAD)" = "$(awk '$1 == "crossink-v2.0" {print $4}' tools/upstreams.lock)" ]; then
+            python3 tools/releases/inputs.py receipt --platforms ${{ matrix.profile == 'x3' && 'default' || matrix.profile }} --scope release > passed-inputs.json
+          else
+            echo '[]' > passed-inputs.json
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: passed-inputs-release-${{ matrix.profile }}
+          path: orbify/passed-inputs.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Results
         if: always()
@@ -172,7 +196,7 @@ jobs:
           if-no-files-found: warn
 
   reader-startup:
-    name: KOReader start into last book
+    name: KOReader start into last book and open from Home/history
     if: (inputs.platform || 'all') != 'xteink'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -197,8 +221,11 @@ jobs:
         env:
           ORBIT_KOREADER_SOURCE: ${{ runner.temp }}/koreader
           ORBIT_TEST_ONLY: startup
+          ORBIT_REQUIRE_READER_FLOWS: "1"
         run: |
           sudo apt-get install -y -qq luajit libsqlite3-0 >/dev/null
+          # Older tags must not ignore the required-scenario flag during a manual rebuild.
+          grep -q ORBIT_REQUIRE_READER_FLOWS android/koreader/test/test_flows.lua
           luajit android/koreader/test/test_flows.lua </dev/null
 
   android:
@@ -219,3 +246,31 @@ jobs:
       - name: Companion unit and Robolectric tests
         working-directory: android/companion
         run: ./gradlew --no-daemon testDebugUnitTest </dev/null
+
+  android-receipt:
+    needs: [kit, android, reader-required]
+    if: (inputs.platform || 'all') != 'xteink'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - name: Record passing release inputs
+        run: python3 tools/releases/inputs.py receipt --platforms app,plugin --scope release > passed-inputs.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: passed-inputs-release-android
+          path: passed-inputs.json
+          if-no-files-found: error
+          retention-days: 90
+  reader-required:
+    name: Required KOReader release gate
+    needs: reader-startup
+    if: ${{ always() && (inputs.platform || 'all') != 'xteink' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Reader flows must have run successfully
+        env:
+          READER_RESULT: ${{ needs.reader-startup.result }}
+        run: test "$READER_RESULT" = success

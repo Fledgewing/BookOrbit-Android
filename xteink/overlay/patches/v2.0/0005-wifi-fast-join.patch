@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: wifi fast join
+Subject: [PATCH] BookSync: wifi fast join
 
 Try the saved Wi-Fi channel and BSSID before scanning.
 

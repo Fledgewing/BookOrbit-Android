@@ -1,4 +1,4 @@
-Subject: [PATCH] Orbify: catalog cache first
+Subject: [PATCH] BookSync: catalog cache first
 
 Open a current saved catalog without first joining Wi-Fi.
 
@@ -81,7 +81,7 @@ index 1fffb70..5b80dd9 100644
      errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
                                                                  : tr(STR_BOOKORBIT_CATALOG_ERROR);
 @@ -2460,10 +2484,33 @@ void BookOrbitCatalogBrowserActivity::render(RenderLock&&) {
-     // Orbify (patch 0035): the ⟳ at the right, its "updated …" stamp beside it.
+     // BookSync (patch 0035): the ⟳ at the right, its "updated …" stamp beside it.
      const std::string stamp = viewStamp();
      if (mappedInput.hasTouchHardware()) {
 +      // Patch 0038: the stamp is drawn here, just left of the controls. Passed as the header's
