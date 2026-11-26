@@ -118,6 +118,19 @@ class LibraryTest {
             assertFalse(model.publish("other",listOf(request)))
         }
     }
+    @Test fun readingStatsUsesExistingBoundedOwnerScopedProjection() {
+        store().use { st ->
+            val request=String(LuaValue.encode(mapOf("op" to "reading.stats", "limit" to 1, "bytes" to 16384)),Charsets.ISO_8859_1)
+            var calls=0
+            val model=LibraryReadModel(st,{99},{},readingStats={ calls++; mapOf("state" to "empty", "hours" to List(24) { 0 }) })
+            model.publish("wrong-owner",listOf(request)); assertEquals(0,calls)
+            model.publish(owner,listOf(request)); assertEquals(1,calls)
+            val result=st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?",owner,request) { it.bytes(0)!! }.single()
+            assertTrue(result.size<=16384)
+            assertEquals("empty",(LuaValue.parse(result) as Map<*,*>)["state"])
+
+        }
+    }
     @Test fun projectionsDistinguishMissingFromEmptyAndFilterBeforePaging() {
         store().use { st ->
             assertEquals("Not saved yet",read(st,mapOf("op" to "window","source" to "reading"))["empty"])

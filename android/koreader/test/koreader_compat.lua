@@ -109,6 +109,7 @@ local NEEDS = {
     { "frontend/apps/reader/modules/readerrolling.lua", { { "cre_top_bar_enabled", F } } },
     { "frontend/apps/reader/modules/readertoc.lua", { "getTocTitleByPage" } },
     { "frontend/document/document.lua", { "getPageCount" } },
+    { "frontend/ui/widget/widget.lua", { "getSize" } },
     { "frontend/ui/widget/textwidget.lua", { "getSize", "paintTo", "free" } },
     { "frontend/device/generic/device.lua", { "getPowerDevice" } },
     { "frontend/device/generic/powerd.lua", { "getCapacity", "isCharging" } },
@@ -135,7 +136,7 @@ local BASE = {
     { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
         "terminateSubProcess" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
-    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, "writeToFile", "free" } },
+    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRect", "writeToFile", "free" } },
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
     -- The offline cache's database (ko/db.lua; docs/design/sqlite-cache.md), as KOReader's statistics plugin uses it.
     { "thirdparty/lua-ljsqlite3/init.lua", { "open", "set_busy_timeout", "prepare", "exec", "rowexec", "step", "bind",
