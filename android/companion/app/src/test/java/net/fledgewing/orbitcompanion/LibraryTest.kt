@@ -125,6 +125,8 @@ class LibraryTest {
             seed(st)
             val caps=read(st,mapOf("op" to "capabilities")); assertEquals(false,(caps["lists"] as Map<*,*>)["save"])
             val key=BookOrbitLibrary.key(owner,"book",1)
+            assertNull(BookOrbitLibrary.id(owner,"book","$key:2"))
+            assertNull(BookOrbitLibrary.id(owner,"book",BookOrbitLibrary.key(owner,"file",1)))
             assertEquals("reading",read(st,mapOf("op" to "status","key" to key))["status"])
             assertEquals("missing",read(st,mapOf("op" to "book","key" to BookOrbitLibrary.key("other","book",1)))["error"])
             st.putDetail(1,mapOf("id" to 1,"description" to "<p>Plain text</p>","files" to listOf(mapOf("id" to 4,"format" to "epub","downloadUrl" to "/private"))),100)

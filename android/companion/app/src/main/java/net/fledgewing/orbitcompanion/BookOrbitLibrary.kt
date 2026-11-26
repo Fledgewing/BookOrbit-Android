@@ -17,7 +17,10 @@ object BookOrbitLibrary {
     }
     fun namespace(owner: String): String = "bo:" + MessageDigest.getInstance("SHA-256").digest(owner.toByteArray()).take(12).joinToString("") { "%02x".format(it) }
     fun key(owner: String, kind: String, id: Any) = "${namespace(owner)}:$kind:$id"
-    fun id(owner: String, kind: String, key: Any?): Long? = key?.toString()?.takeIf { it.startsWith("${namespace(owner)}:$kind:") }?.substringAfterLast(':')?.toLongOrNull()
+    fun id(owner: String, kind: String, key: Any?): Long? {
+        val prefix = "${namespace(owner)}:$kind:"
+        return (key as? String)?.takeIf { it.startsWith(prefix) }?.removePrefix(prefix)?.toLongOrNull()?.takeIf { it > 0 }
+    }
 
     /** Existing cached catalog vocabulary (BulkCatalog.selection). Residuals always run locally.
      * This is a plan, not a network request; unverified server fields are deliberately residual. */
