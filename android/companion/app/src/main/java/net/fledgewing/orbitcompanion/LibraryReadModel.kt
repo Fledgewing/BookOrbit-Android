@@ -43,6 +43,7 @@ class LibraryReadModel(
                     "device.clock" -> ClockWidget.snapshot(clock(), power, twelve = args["twelve_hour"] == true)
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power
+                    "sleep.choices" -> SleepChoiceWindow.project(SleepChoices.read(SleepScreen.dir()), args)
                     "capabilities" -> adapter.capabilities(owner) + mapOf("battery" to true)
                     else -> adapter.project(owner, args)
                 } } catch (_: IllegalArgumentException) { mapOf("error" to "unsupported", "items" to emptyList<Any>()) }

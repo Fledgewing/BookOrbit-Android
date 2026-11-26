@@ -157,6 +157,37 @@ function Library:sources(category, offset, limit, caps)
         allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
 end
 
+-- Settings projections reuse the companion's sleep choices and device settings owners.
+function Library.refreshDevice(attempt)
+    local finish=Budgets.span("library.settings-device.refresh",now_s,log)
+    local result=Jni.call(Companion.AUTHORITY,Companion.PACKAGE..".call.DEVICE_SETTINGS",{})
+    local body=result and result.ok=="1" and result.body
+    Library.device_snapshot=type(body)=="string" and #body<=16384 and Cache.decode(body) or nil
+    assert(Budgets.check(Budgets.get("screens","settings-device"),{rows=1,bytes=type(body)=="string" and #body or 0,
+        spawns=0,roundTrips=1,network=0,snapshotBytes=type(body)=="string" and #body or 0}))
+    if Library.device_snapshot and Library.device_snapshot.pending and (attempt or 0)<3 then
+        UIManager:scheduleIn(.5,function() Library.refreshDevice((attempt or 0)+1) end)
+    end
+    finish()
+end
+function Library:deviceSettings()
+    local finish=Budgets.span("library.settings-device",now_s,log)
+    local device=Library.device_snapshot or {reader="Not available",sleep_label="Not available",unavailable=true}
+    self.usage.rows=self.usage.rows+1; self.metrics.rows=self.metrics.rows+1
+    assert(Budgets.check(self.budget,self.usage))
+    assert(Budgets.check(self.screen_budget,self.metrics))
+    finish(); return device
+end
+function Library:sleepChoices(category, offset)
+    return self:read("sleep.choices", {category=category,offset=offset or 0,limit=6})
+end
+function Library.sleepAfter(ms, done)
+    return command("device.sleep",function() return LibraryAdapter.command("device.sleep",{ms=ms},function(result)
+        if result.device then Library.device_snapshot=result.device end
+        done(result)
+    end) end)
+end
+
 -- Explicit background acquisition; paints consume local references from their snapshots.
 function Library.acquireCover(key,done)
     return command("covers.acquire",function()
