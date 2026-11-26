@@ -33,6 +33,7 @@ function ReaderSheet:onStepLess()
     return self:focusStep(-1)
 end
 function ReaderSheet:control(widget,callback,scrubber)
+    if widget.enabled==false then return widget end
     self.focus_controls[#self.focus_controls+1]=widget
     if callback then widget.callback=callback end
     if scrubber and not self.focus_index then self.focus_index=#self.focus_controls end
@@ -178,7 +179,14 @@ function ReaderSheet:rowWidget(block,w,h,mt)
         end
         return area
     end
-    return EndSheet.rowWidget(self,block,w,h,mt)
+    if block.kind=="footer" then
+        local cells={}
+        for _,row in ipairs(block.items) do cells[#cells+1]={text=row.text,callback=row.action,height=mt.button} end
+        return self:buttonTable{width=w,buttons={cells},zero_sep=true}
+    end
+    local widget=EndSheet.rowWidget(self,block,w,h,mt)
+    if block.kind=="button" then self:control(widget) end
+    return widget
 end
 function ReaderSheet:onClose() if self.scrub_focus then self.scrub_focus=false else ReaderPanel.close() end; return true end
 function ReaderSheet:onTapAnywhere(_arg, ges)

@@ -6,7 +6,7 @@ return function(here, test, ok, eq)
             local c=setmetatable({}, {__index=base})
             c.__index=c
             function c:extend(t) return setmetatable(t or {}, {__index=self, __call=self.new}) end
-            function c:new(t) t=setmetatable(t or {}, {__index=self}); if t.init then t:init() end; return t end
+            function c:new(t) t=setmetatable(t or {}, {__index=self}); if t.buttons then t.buttons_layout=t.buttons end; if t.init then t:init() end; return t end
             return c
         end
         local Widget=class()
@@ -208,6 +208,21 @@ return function(here, test, ok, eq)
         eq(sheet:onTapAnywhere(nil,{pos={y=799}}),true); eq(E.ReaderPanel.sheet,nil)
         W.ui.rolling=nil; W.ui.paging={onGotoPercentage=function(_,value) W.fraction=value; return true end}
         E.Library.readerAction(W.ui,"seek",50); eq(W.fraction,.5,"paging expects a fraction; rolling expects percent")
+    end)
+    test("reader keyboard: every top action and footer participates in focus order",function()
+        local W,E=world(); E.ReaderPanel.show(W.ui,"reader-top-panel")
+        local sheet=E.ReaderPanel.sheet
+        local names={}
+        for i,widget in ipairs(sheet.focus_controls) do
+            if widget.text then names[widget.text]=i end
+        end
+        ok(names["Home"]); ok(names["Reading settings"]); ok(names["Back to book"])
+        sheet.focus_index=names["Reading settings"]; sheet:onSelect()
+        eq(E.ReaderPanel.sheet.screen,"reader-bottom-panel")
+        E.ReaderPanel.show(W.ui,"reader-top-panel"); sheet=E.ReaderPanel.sheet
+        sheet.focus_index=#sheet.focus_controls; sheet:onStepMore(); eq(sheet.focus_index,1)
+        sheet:onStepLess(); eq(sheet.focus_index,#sheet.focus_controls)
+        sheet.focus_index=names["Back to book"]; sheet:onSelect(); eq(E.ReaderPanel.sheet,nil)
     end)
     test("reader controls: native inputs bounded, missing/pending snapshots and marked state",function()
         local W,E=world()
