@@ -94,3 +94,9 @@ Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
 
 Budgets.screens["position-consent"] = budget(1, 16384, 50)
 Budgets.screens["position-verification"] = budget(1, 16384, 50)
+-- Sleep picker pages inherit six companion-materialized names/counts, never a choice catalog.
+Budgets.screens["settings-sleep-choices"] = budget(6,16384,50)
+Budgets.screens["settings-device"] = budget(1,16384,50)
+
+
+Budgets.screens["settings-sleep-choices"].displayRows = 10

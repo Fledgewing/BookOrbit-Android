@@ -518,7 +518,7 @@ local function menuAll(items, out)
     for _, it in ipairs(items) do
         table.insert(out, it)
         if type(it.sub_item_table) == "table" then menuAll(it.sub_item_table, out)
-        elseif it.settings_group then menuAll(it.sub_item_table_func(), out) end
+        elseif it.settings_group then menuAll((it.sub_item_table_func or it.settings_rows)(), out) end
     end
     return out
 end
@@ -2731,13 +2731,13 @@ test("settings PIN: a locked companion makes the BookSync menu read-only, with t
     ok(#all > 20, "the whole menu, read-only " .. #all)
     local enabled = 0
     for i, it in ipairs(all) do
-        if i > 1 and it.callback and not it.sub_item_table and not it.keep_menu_open and not it.read_only and not (it.enabled_func and it.enabled_func() == false) then
+        if i > 1 and it.callback and not it.settings_group and not it.sub_item_table and not it.keep_menu_open and not it.read_only and not (it.enabled_func and it.enabled_func() == false) then
             enabled = enabled + 1
         end
     end
     eq(enabled, 0, "no control enabled while locked")
     local wifi = RE.S.sync_on_wake
-    for _, it in ipairs(all) do if it.text == "Sync on wake" then it.callback() end end
+    for _, it in ipairs(all) do if it.text == "Sync when it wakes" then it.callback() end end
     eq(RE.S.sync_on_wake, wifi, "a tap changes nothing")
     run(1)
     for _, a in ipairs(W.activities) do ok(not a.action:match("SHOW_PIN$"), "no keypad until asked") end
@@ -6183,7 +6183,7 @@ test("settings: sync controls remain visible under either position rule", functi
         local texts = {}
         for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts+1] = it.text or (it.text_func and it.text_func()) or "" end
         local all = table.concat(texts, "|")
-        ok(all:find("Sync on wake", 1, true), "wake always visible")
+        ok(all:find("Sync when it wakes", 1, true), "wake always visible")
         ok(all:find("Sleep sync limit", 1, true), "sleep budget always visible")
         eq(not not all:find("Read from here everywhere", 1, true), mode == "orbismart")
     end
@@ -6241,9 +6241,9 @@ test("settings: Home selector uses the host's shared setting and labels its butt
     local home
     for _, group in ipairs(m:menuItems()) do if group.settings_group == "home" then home = group.sub_item_table_func() end end
     local old = RE.S.home_screen
-    home[1].sub_item_table[2].callback()
+    home[3].sub_item_table[2].callback()
     eq(RE.S.home_screen, "booksync")
-    ok(home[2].text_func():find("BookSync Home", 1, true), "button policy names the selected Home")
+    ok(home[5].text_func():find("BookSync Home", 1, true), "button policy names the selected Home")
     ok(lastBroadcast(".SETTINGS"), "shared settings transport")
     RE.Shared.set("home_screen", old)
 end)
@@ -6299,6 +6299,7 @@ test("settings: mode estimates come from one bounded library read; presets and C
     RE.LibraryAdapter.read = function(encoded)
         local args = RE.Cache.decode(encoded)
         if args.op=="account.state" then eq(args.limit,1); return {signedIn=false},128 end
+        if args.op=="settings.device" then eq(args.limit,1); return {reader="Reader",sleep_ms=600000,sleep_label="10 min idle"},128 end
         eq(args.op, "mode-estimates"); eq(args.limit, 3)
         requests = requests + 1
         return {items={{id="saver", text="≈ 4 days at your usual use"}}}, 128
@@ -6713,6 +6714,8 @@ test("library ready model: real SQLite reads stay bounded and batch once", funct
     st.conn:close(); os.execute("rm -rf '" .. dir .. "'")
     ok(success,err)
 end)
+
+dofile(here .. "/settings_flows.lua")(test,eq,ok,RE,W,Widget)
 
 dofile(here .. "/home_host_flows.lua")(test,eq,ok,RE,W,Widget)
 
