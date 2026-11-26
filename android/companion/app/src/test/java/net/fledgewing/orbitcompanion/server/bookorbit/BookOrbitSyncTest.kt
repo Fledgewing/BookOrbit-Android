@@ -68,6 +68,9 @@ class BookOrbitSyncTest {
         val row=k.sync.nextVerification("account",k.document)["row"] as Map<*, *>
         assertEquals("/p10",row["start"]); assertEquals("/p11",row["end"])
         assertFalse(row.containsKey("serverId")); assertFalse(row.containsKey("version"))
+        val capture=k.sync.capture(mapOf("path" to k.book.path,"percentage" to .5,"position" to "/p50","captured_at" to 1001L))
+        val captured=LuaValue.parse(capture.second) as Map<*, *>
+        assertEquals("unverified sidecar rows must not become local uploads",emptyList<Any>(),captured["annotations"])
         k.sync.verification("account",k.document,row["key"] as String,true,10)
         assertTrue(k.sync.nextVerification("account",k.document).isEmpty())
         assertEquals(true,(((k.calls.last().second["books"] as List<*>).single() as Map<*, *>)["applied"] as List<*>).let { (it.single() as Map<*, *>)["verified"] })
@@ -88,6 +91,13 @@ class BookOrbitSyncTest {
         k.sync.phase(job,"state",held.checkpoint,null)
         val summary=LegacyLifecycleImport.literal(k.sidecar)!!["summary"] as Map<*, *>
         assertEquals("complete",summary["status"]); assertEquals(4L,summary["rating"])
+    }
+    @Test fun disabledAnnotationSyncDoesNotStartExchangesOrChangeSidecars() = fixture { k ->
+        val original=k.sidecar.readBytes()
+        for(job in listOf(k.job(mapOf("annotation_sync" to false)),k.job(emptyMap(),mapOf("legacy" to mapOf("annotation_sync" to false))))) {
+            assertTrue(k.sync.phase(job,"annotations",job.checkpoint,null).complete)
+        }
+        assertTrue(k.calls.isEmpty()); assertArrayEquals(original,k.sidecar.readBytes())
     }
     @Test fun malformedSidecarIsPreservedInsteadOfBeingOverwritten() = fixture { k ->
         k.sidecar.writeText("return os.execute('not evaluated')")

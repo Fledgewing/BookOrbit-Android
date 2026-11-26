@@ -81,14 +81,15 @@ internal class BookOrbitSync(private val settings: File,
             "progress" to position,"status" to summary["status"],"status_modified" to summary["modified"],
             "rating" to (summary["rating"] as? Number)?.toInt()?.takeIf { it in 1..5 },"review_note" to bounded(summary["note"],10000),"ts" to args["captured_at"],
             "title" to (data["doc_props"] as? Map<*, *>)?.get("title"),"authors" to (data["doc_props"] as? Map<*, *>)?.get("authors"),
-            "stats_ids" to ids,"annotations" to annotations(data,false),"bookmarks" to annotations(data,true),"native_capture" to true)
+            "stats_ids" to ids,"annotations" to annotations(data,false),"bookmarks" to annotations(data,true),"native_capture" to true,
+            "annotation_sync" to ((LegacyLifecycleImport.literal(File(settings.parentFile,"settings.reader.lua"))?.get("bookorbit") as? Map<*, *>)?.get("annotation_sync")!=false))
         return digest to LuaValue.encode(snapshot)
     }
     private fun annotations(data: Map<*, *>, bookmarks: Boolean): List<Map<String,Any?>> = list(data["annotations"]).mapNotNull { raw ->
         val a=map(raw); val date=(a["datetime"] as? String)?.takeIf { it.matches(Regex("\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d")) } ?: return@mapNotNull null
         val start=a[if(bookmarks) "page" else "pos0"] ?: return@mapNotNull null
         if ((a["drawer"]==null)!=bookmarks) return@mapNotNull null
-        if (a["bookorbit_pending_verification"]==true) return@mapNotNull null
+        if (a["bookorbit_pending_verification"]==true || a["booksync_pending_verification"]==true) return@mapNotNull null
         if (bookmarks && start !is String) return@mapNotNull null
         if (!bookmarks && locator(start)==null) return@mapNotNull null
         if (bookmarks) mapOf("datetime" to date,"datetimeUpdated" to a["datetime_updated"],"pos" to bounded(start,4000),
@@ -157,6 +158,8 @@ internal class BookOrbitSync(private val settings: File,
             "annotations" -> {
                 if(map(checkpoint["match"])["positionCompatible"]==false) return done()
                 val pending=map(checkpoint["remote_pending"]).toMutableMap()
+                val enabled=map(checkpoint["legacy"])["annotation_sync"]!=false && snap["annotation_sync"]!=false
+                if(!enabled && pending["annotations"]==null && pending["bookmarks"]==null) return done()
                 var incomplete=false
                 if(!isOpen && book!=null && book.isFile) cleanVerified(entry.owner,entry.document,book)
                 for ((kind,bookmark) in listOf("annotations" to false,"bookmarks" to true)) {
@@ -171,6 +174,7 @@ internal class BookOrbitSync(private val settings: File,
                         pending.remove(kind)
                         if(progress["done"]==true && existing["more"]!=true) { checkpoint[key]=progress; continue }
                     }
+                    if(!enabled) continue // Complete imported pending applications, but do not restart disabled exchanges.
                     val changes=if(progress.containsKey("changes")) list(progress["changes"]).map(::map) else {
                         val captured=if(snap["native_capture"]==true && !isOpen && book!=null) annotations(readSidecar(book),bookmark) else list(snap[kind]).map(::map)
                         progress["changes"]=captured; captured
@@ -193,7 +197,7 @@ internal class BookOrbitSync(private val settings: File,
                     checkpoint[key]=progress
                 }
                 checkpoint["remote_pending"]=pending
-                if(!incomplete && !isOpen && book!=null && book.isFile) writeSidecar(book,readSidecar(book)+("booksync_sync_known" to true))
+                if(enabled && !incomplete && !isOpen && book!=null && book.isFile) writeSidecar(book,readSidecar(book)+("booksync_sync_known" to true))
                 return done(!incomplete)
             }
             "state" -> {

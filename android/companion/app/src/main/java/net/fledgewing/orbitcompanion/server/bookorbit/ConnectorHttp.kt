@@ -18,8 +18,8 @@ internal object ConnectorHttp : BookOrbitServerAdapter.ConnectorTransport {
             if (body != null) {
                 c.doOutput = true; c.setRequestProperty("Content-Type", "application/json")
                 val bytes = JSONObject(body).toString().toByteArray(Charsets.UTF_8)
-                val limit=if(path.startsWith("/koreader/plugin/")) 1048576 else 16384
-                try { require(bytes.size <= limit); c.outputStream.use { it.write(bytes) } } finally { bytes.fill(0) }
+                // Worker batches have a transport cap; screen snapshots retain their 16 KiB cap.
+                try { require(bytes.size <= 1048576); c.outputStream.use { it.write(bytes) } } finally { bytes.fill(0) }
             }
             val code = c.responseCode
             if (code !in 200..299) return BookOrbitAccount.Reply(code)

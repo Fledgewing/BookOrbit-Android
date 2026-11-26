@@ -66,7 +66,7 @@ function OrbitAndroid:testSyncPath()
                 err and (_("The plugin reported: ") .. tostring(err)) or nil)
             show()
         end
-        ReadingSync.run(inBook() and "manual" or "close",function(ok,why) plugin_done(ok and nil or why or "delivery pending") end)
+        ReadingSync.run(inBook() and "manual" or "close",function(ok,why) plugin_done(not ok and (why or "delivery pending") or nil) end)
         UIManager:scheduleIn(60, function() plugin_done("timeout") end)
     end)
 end
