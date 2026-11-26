@@ -743,3 +743,42 @@ the panel with Custom picked). Screens: `shots/*-r10-*.png`.
 **Rev 16 (critic approved round 10; four minors):** the margins, line spacing and contrast editors open with focus on +;
 the M8C Font Custom segment shows its value ("Baskerville +1"); contrast values read Lighter / Normal / Darker instead of
 "Dark ±"; §23 now says Custom margins are stored per device. `flows3.js` 338/338. The critic's r10 scripts join `r3/all.sh`.
+
+
+### Android implementation of §23 (F12-M, 2026-11-26)
+
+The rev 16 editor builds on `ko/menu.lua:236` (Reading group),
+`logic/settings_ui.lua:21` (computed mode label), `ko/reader_panel.lua:30`
+(reader sheet and library paint), `ko/endsheet.lua:135` (measured rows),
+`logic/sheet_layout.lua:23` (bounded layout), `ko/settings.lua:61`
+(device-local settings), and `ko/library.lua:15` (caller budgets). No companion
+read-model or server operation is needed: these are user-selected native styles.
+
+`S.custom_reading` is one device-local record outside shared settings: pixel margins
+never travel to another device. Per-book choices use KOReader's in-memory document
+settings and normal flush. Editing Custom updates only changed, selected styles;
+native margin application owns its position update. Reopening a book using Custom
+reads the latest local record. Closing the reader discards the editor and its return callback.
+
+Each editor has a named budget in `logic/budgets.lua`: at most 12 display rows, one
+local record per read, zero decoded bytes, network, subprocesses and companion
+round-trips. Library calls inherit the caller's screen budget. Paints and style
+reads/apply/save/copy log info timing spans. Device targets remain unconfirmed;
+deterministic host checks are not an M8C timing result.
+
+Native behavior was checked at pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`:
+`frontend/apps/reader/modules/readerfont.lua:163` loads the face and configurable
+weight/spacing/gamma; `:212`, `:221` and `:269` notify, so the adapter uses their
+document setters quietly. `frontend/apps/reader/modules/readertypeset.lua:541`
+scales margins and reserves the footer; reuse preserves vertical margins and the
+BookSync strip hook. `frontend/ui/data/creoptions.lua:581` supplies the gamma table;
+Custom selects the nearest engine gamma to 1 + its displayed contrast value.
+`frontend/ui/widget/touchmenu.lua:658` returns to a row by ID without dismissing Reading.
+
+Font choices resolve preferred installed faces through the native adapter, with
+bundled Noto Serif / FreeSerif / Noto Sans fallbacks matching the prototype's fallback
+intent. No fonts are downloaded or installed. Copy retains any installed face name.
+The compact native-widget preview illustrates weight and contrast; the open EPUB
+receives the supported engine weight, spacing, margin and gamma values. PDFs retain
+the existing KOReader-menu escape. Android comes first under the 2026-11-25 approval;
+X4 Pro, X4 and X3 remain deferred, with their own device margin ranges.

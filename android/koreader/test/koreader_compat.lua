@@ -105,6 +105,12 @@ local NEEDS = {
     { "frontend/ui/widget/progresswidget.lua", { "paintTo", {"percentage", F} } },
     { "frontend/ui/widget/button.lua", { {"height", F}, {"text_font_size", F}, {"avoid_text_truncation", F} } },
     { "frontend/ui/widget/container/framecontainer.lua", { {"radius", F}, {"background", F} } },
+    -- Device-local Custom reading styles: quiet native setters and in-place Settings return.
+    { "frontend/apps/reader/modules/readerfont.lua", { {"font_face", F}, {"font_base_weight", T}, {"line_spacing", T}, {"font_gamma", T} } },
+    { "frontend/document/credocument.lua", { "setFontFace", "setFontBaseWeight", "setEmbeddedFonts", "setInterlineSpacePercent", "setGammaIndex", "engineInit" } },
+    { "frontend/ui/widget/touchmenu.lua", { "updateItems", {"keep_menu_open", T} } },
+    { "frontend/ui/widget/textboxwidget.lua", { {"line_height", F}, {"fgcolor", F}, {"face", F} } },
+    { "frontend/ui/widget/button.lua", { {"text_font_face", F} } },
     -- Reading strips: temporary effective margins and native hidden-footer release.
     { "frontend/apps/reader/modules/readerfooter.lua", { "getHeight", "onToggleFooterMode",
         { "reclaim_height", F }, { "pageno", F }, { "pages", F }, { "percent_finished", F } } },
@@ -137,12 +143,14 @@ for _, w in ipairs({ "infomessage", "textviewer", "confirmbox", "button", "conta
 end
 -- koreader-base (the base/ submodule): ffi modules the plugin requires.
 local BASE = {
+    { "ffi/freetype.lua", { "getEmboldenHalfStrength" } },
+    { "cre.cpp", { {"getFontFaceFilenameAndFaceIndex", T} } },
     -- Home editor: dkjson preserves array/object tags and nulls for Layout.save/load.
     { "thirdparty/dkjson/CMakeLists.txt", { { "dkjson.lua", T } } },
     { "ffi/util.lua", { "runInSubProcess", "isSubProcessDone", "readAllFromFD", "writeToFD",
         "terminateSubProcess" } },
     { "ffi/input_android.lua", { { "waitForEvent", T } } },
-    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRect", "writeToFile", "free" } },
+    { "ffi/blitbuffer.lua", { { "COLOR_BLACK", F }, { "COLOR_WHITE", F }, { "COLOR_LIGHT_GRAY", F }, { "COLOR_GRAY", F }, { "COLOR_DARK_GRAY", F }, "paintRect", "writeToFile", "free", {"Color8", T} } },
     { "ffi/framebuffer_android.lua", { "getRotationMode", "setRotationMode", { "ASCREEN_ORIENTATION_", T } } },
     -- The offline cache's database (ko/db.lua; docs/design/sqlite-cache.md), as KOReader's statistics plugin uses it.
     { "thirdparty/lua-ljsqlite3/init.lua", { "open", "set_busy_timeout", "prepare", "exec", "rowexec", "step", "bind",

@@ -6782,6 +6782,17 @@ test("settings: failed Sync now leaves the screen awake", function()
     W.server_code = 200
 end)
 
+test("settings: Custom sync mode labels are clear and keep the stored custom id", function()
+    local _,m = newUI(false)
+    local row=m:settingRow("sync_mode")
+    eq(row.sub_item_table[2].text,"KOReader decides")
+    local old=RE.S.sync_mode
+    row.sub_item_table[2].callback(); eq(RE.S.sync_mode,"custom")
+    ok(row.text_func():find("KOReader decides",1,true))
+    eq(RE.SettingsUI.modeLabel({}),"Your own settings")
+    RE.Shared.set("sync_mode",old)
+end)
+
 test("settings: Home layout actions enter the existing editor in the requested mode", function()
     local _, m = newUI(false)
     local open, calls = RE.HomeEditor.open, {}

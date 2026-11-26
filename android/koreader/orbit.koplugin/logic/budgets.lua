@@ -68,3 +68,12 @@ for _, id in ipairs({"reader-top-panel", "book-info", "details"}) do
 end
 
 Budgets.widgets["reader-progress"] = budget(1, 16384, 50)
+
+-- Device-local style editors read one bounded record; no worker or decoded snapshots.
+for _, key in ipairs({"font", "margins", "spacing", "contrast"}) do
+    Budgets.screens["reading-custom-" .. key] = budget(12, 0, 50)
+    Budgets.screens["reading-custom-" .. key].roundTrips = 0
+end
+
+Budgets.screens["reading-copy"] = budget(3, 0, 50)
+Budgets.screens["reading-copy"].roundTrips = 0

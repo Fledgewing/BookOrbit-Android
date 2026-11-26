@@ -105,6 +105,7 @@ end
 function OrbitAndroid:settingRow(key)
     local d = assert(SCHEMA.byKey[key], "Missing shared setting: " .. key)
     local function display(text)
+        if key == "sync_mode" and text == "Custom" then return "KOReader decides" end
         return SettingsUI.words(text, key == "home_button" and S.home_screen or nil)
     end
     local function set(value)
@@ -234,7 +235,9 @@ function OrbitAndroid:menuItems()
             return out
         end),
         group("reading", "Reading", function()
-            return rows({"status_orbit_layout", "status_orbit_size", "local_first", "eob_sheet", "eob_auto"})
+            local out = CustomReading.settingsRows(self.ui)
+            for _, row in ipairs(rows({"status_orbit_layout", "status_orbit_size", "local_first", "eob_sheet", "eob_auto"})) do out[#out+1] = row end
+            return out
         end),
         group("home", "Home", function()
             local out = rows({"home_screen", "home_button"})
