@@ -159,6 +159,10 @@ record real device milliseconds. Moving protocol ownership adds no new screen or
 
 ### Lua compatibility adapter and remaining transport work
 
+F12-Q's [checkpoint notes](booksync-home/F12-Q-NOTES.md) track the companion transport
+cutover. Its durable position queue prerequisite is not wired into lifecycle hooks;
+the Android plugin is not yet server-free. The remaining paths below still apply.
+
 The owned UI still calls `ko/library.lua`; it receives normalized bounded projections.
 `ko/server/bookorbit.lua` binds the existing plugin account and compatibility operations.
 The reviewed facade callers are `ko/home.lua` (reading gate/Home), `ko/start.lua` (toast),
