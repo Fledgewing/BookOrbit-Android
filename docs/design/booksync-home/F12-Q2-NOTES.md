@@ -119,3 +119,10 @@ sync worker's watcher contract; no copy, finish or lifecycle queue is truncated 
 retired. Grouping's old aggregation, copies, recommendations and finish operations
 remain for steps 4–5. Android-first remains the maintainer's ruling; firmware
 implementation is deferred. No devices, releases or tags are involved.
+
+The shared JNI reply decoder now returns the neutral `id`, `body`, `owner` and
+`pending` fields (the legacy decoder silently discarded them). Provider text converts
+model bytes to/from UTF-8 exactly once; byte limits charge UTF-8 bytes. A real JNI
+stand-in and companion codec tests cover non-ASCII owner/query/path round-trips.
+The package gate asserts the protocol inventory is absent from the plugin zip;
+its companion copy remains checked against the shared inventory fixture.

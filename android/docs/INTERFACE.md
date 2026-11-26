@@ -524,3 +524,10 @@ it never receives backend response JSON. Cached windows open offline without ask
 to connect. New materializations redraw only their still-visible initiating view.
 Remaining grouping, copies, recommendations and end-of-book transport are separate
 follow-up slices. No replacement sync/lifecycle writer is enabled here.
+
+JNI replies include `id`, `body`, `owner` and `pending` in addition to the original
+status/proof fields. Bundle strings carry Unicode text; encoded Lua model values
+convert through UTF-8 exactly once, with 8 KiB request and 16 KiB result byte limits.
+The model's ISO-8859-1 byte-string convention is only for model values/local files,
+not Java Bundle text. `SERVER_STATE` accepts `reload="1"` for a lifecycle refresh
+of cached identity; polling uses `reload="0"` and performs no server transport.

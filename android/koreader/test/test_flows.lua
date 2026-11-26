@@ -1356,6 +1356,20 @@ test("contract: every command, call, page, launch command, status key, file and 
     eq(table.concat(tables, ","), table.concat(C.db.tables, ","), "every orbit.db table")
 end)
 
+test("library bridge: real JNI decoding returns command IDs and bounded state/result fields",function()
+    local call=W.companionCall
+    local body=RE.Cache.encode({title="Résumé",local_path="/fixture/é.epub"})
+    W.companionCall=function() return {kind="bundle",extras={ok="1",id="job-1",body=body,owner="lecteur-é",pending="1"}} end
+    local success,err=pcall(function()
+        local result=RE.Jni.call(RE.Companion.AUTHORITY,RE.Companion.PACKAGE..".call.SERVER_STATE",{reload="1"})
+        eq(result.id,"job-1");eq(result.body,body);eq(result.owner,"lecteur-é");eq(result.pending,"1")
+        eq(RE.Cache.decode(result.body).title,"Résumé")
+    end)
+    W.companionCall=call
+    ok(success,err)
+end)
+
+
 ---------------------------------------------------------------- recommended settings (addon-mode §5)
 local BO_DEFAULTS = { auto_sync = false, sync_forward = 1, sync_backward = 3, catalog_auto_open = "off" }
 -- A KOReader with nothing changed: the plugin and gestures at their stock defaults.

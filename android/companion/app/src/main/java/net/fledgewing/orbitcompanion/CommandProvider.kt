@@ -33,6 +33,7 @@ class CommandProvider : ContentProvider() {
 
         /** The plugin's key and the companion's proof for one `GET /clicks` (ClickChannel). */
         const val CLICKS = "${Contract.PACKAGE}.call.CLICKS"
+        const val DEVICE_SETTINGS = "${Contract.PACKAGE}.call.DEVICE_SETTINGS"
 
         /** USB only: the shell (adb, tools/sideload-android.sh) asks for KOReader's restart. */
         const val RESTART_KOREADER = "${Contract.PACKAGE}.call.RESTART_KOREADER"
@@ -70,28 +71,28 @@ class CommandProvider : ContentProvider() {
                 return answer(true)
             }
             if (!KoreaderTrust.check(ctx, uid)) return answer(false, "caller")
-            if (method == "${Contract.PACKAGE}.call.DEVICE_SETTINGS") {
+            if (method == DEVICE_SETTINGS) {
                 DeviceSettings.refreshAsync()
-                return answer(true).apply { putString("body",String(LuaValue.encode(DeviceSettings.snapshot()),Charsets.ISO_8859_1)) }
+                return answer(true).apply { putString("body",LuaValue.transportText(DeviceSettings.snapshot())) }
             }
             if (method == ServerCommands.START) {
                 val encoded = extras?.getString("args")?.takeIf { it.length <= 8192 } ?: return answer(false,"budget")
                 val op = extras.getString("op") ?: return answer(false,"missing")
                 return try {
-                    val args = LuaValue.parse(encoded.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: return answer(false,"invalid")
+                    val args = LuaValue.parseTransport(encoded) as? Map<*, *> ?: return answer(false,"invalid")
                     answer(true).apply { putString("id",ServerCommands.start(ctx,op,args)) }
                 } catch (_: Exception) { answer(false,"invalid") }
             }
             if (method == ServerCommands.RESULT) {
                 val id = extras?.getString("id")?.takeIf { it.length <= 64 } ?: return answer(false,"invalid")
-                return answer(true).apply { putString("body",String(LuaValue.encode(ServerCommands.result(id)),Charsets.ISO_8859_1)) }
+                return answer(true).apply { putString("body",LuaValue.transportText(ServerCommands.result(id))) }
             }
             if (method == LibraryAccount.STATE) {
                 if(extras?.getString("reload")=="1") LibraryAccount.refreshIdentity(ctx) else LibraryAccount.initialize(ctx)
                 return answer(true).apply {
                     putString("pending", if (LibraryAccount.ready()) "0" else "1")
-                    putString("owner", LibraryAccount.owner())
-                    putString("body",String(LuaValue.encode(LibraryAccount.state()),Charsets.ISO_8859_1))
+                    putString("owner", LibraryAccount.owner()?.let(LuaValue::utf8))
+                    putString("body",LuaValue.transportText(LibraryAccount.state()))
                 }
             }
             if (method == LibraryAccount.OPEN) {

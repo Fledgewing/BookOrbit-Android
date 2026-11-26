@@ -13,7 +13,11 @@
     "why",
     "status",
     "key",
-    "proof"
+    "proof",
+    "id",
+    "body",
+    "owner",
+    "pending"
   ],
   "commands": [
     {
@@ -240,6 +244,63 @@
       "extras": [],
       "answer": [],
       "does": "USB only (tools/sideload-android.sh): restart KOReader the companion's way"
+    },
+    {
+      "name": "SERVER_STATE",
+      "method": "net.fledgewing.orbitcompanion.call.SERVER_STATE",
+      "caller": "koreader-library",
+      "extras": [
+        "reload"
+      ],
+      "answer": [
+        "owner",
+        "body",
+        "pending"
+      ],
+      "does": "bounded cached account state and opaque owner; reload refreshes identity without transport"
+    },
+    {
+      "name": "SERVER_COMMAND",
+      "method": "net.fledgewing.orbitcompanion.call.SERVER_COMMAND",
+      "caller": "koreader-library",
+      "extras": [
+        "op",
+        "args"
+      ],
+      "answer": [
+        "id"
+      ],
+      "does": "dispatch a neutral library command with bounded Lua arguments"
+    },
+    {
+      "name": "SERVER_RESULT",
+      "method": "net.fledgewing.orbitcompanion.call.SERVER_RESULT",
+      "caller": "koreader-library",
+      "extras": [
+        "id"
+      ],
+      "answer": [
+        "body"
+      ],
+      "does": "poll one bounded neutral command result"
+    },
+    {
+      "name": "ACCOUNT_OPEN",
+      "method": "net.fledgewing.orbitcompanion.call.ACCOUNT_OPEN",
+      "caller": "koreader-library",
+      "extras": [],
+      "answer": [],
+      "does": "open the companion account form"
+    },
+    {
+      "name": "DEVICE_SETTINGS",
+      "method": "net.fledgewing.orbitcompanion.call.DEVICE_SETTINGS",
+      "caller": "koreader-library",
+      "extras": [],
+      "answer": [
+        "body"
+      ],
+      "does": "one cached neutral device-settings record"
     }
   ],
   "activities": [
