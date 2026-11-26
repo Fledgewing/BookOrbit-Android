@@ -146,6 +146,9 @@ function Library.readerInput(ui)
     local total=ui.document.info and ui.document.info.number_of_pages
     local page=view.state and view.state.page or ui.rolling and ui.rolling.current_page
     local input={page=page,total=total,marked=view.dogear_visible==true,chapters={},bookmarks={}}
+    -- Keep the reader's current dogear visible even when a long annotation list
+    -- needs sampling. It is already a cached scalar, with no anchor lookup.
+    if input.marked and type(page)=="number" then input.bookmarks[1]=page end
     local toc=ui.toc and ui.toc.toc or {}
     local annotations=ui.annotation and ui.annotation.annotations or {}
     input.chapter_total=#toc
@@ -171,10 +174,10 @@ function Library.readerInput(ui)
     end
     for i=1,math.min(Budgets.readerControls.markersPerKind,#annotations) do
         local item=annotations[math.floor((i-1)*#annotations/math.min(Budgets.readerControls.markersPerKind,#annotations))+1]
-        if not item.drawer then
+        if not item.drawer and #input.bookmarks<Budgets.readerControls.markersPerKind then
             local pageNumber=type(item.page)=="number" and item.page
                 or ui.bookmark and ui.bookmark:getBookmarkPageNumber(item)
-            input.bookmarks[#input.bookmarks+1]=pageNumber
+            if not input.marked or pageNumber~=page then input.bookmarks[#input.bookmarks+1]=pageNumber end
         end
     end
     finish(); return input

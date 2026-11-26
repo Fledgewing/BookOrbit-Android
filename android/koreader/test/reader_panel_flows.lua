@@ -240,6 +240,10 @@ return function(here, test, ok, eq)
         for i=1,10000 do W.ui.toc.toc[i]={page=i}; W.ui.annotation.annotations[i]={page=i} end
         local input=E.Library.readerInput(W.ui)
         eq(#input.chapters,64); eq(#input.bookmarks,64); eq(input.total,200); eq(input.page,124)
+        W.ui.view.dogear_visible=true
+        input=E.Library.readerInput(W.ui); eq(input.bookmarks[1],124); eq(#input.bookmarks,64)
+        for _,annotation in ipairs(W.ui.annotation.annotations) do annotation.drawer="lighten" end
+        input=E.Library.readerInput(W.ui); eq(#input.bookmarks,1); eq(input.bookmarks[1],124)
         W.controls={items={{marked=true}}}; E.ReaderPanel.show(W.ui,"reader-top-panel")
         ok(row(E,"Remove bookmark"))
         W.controls={items={},pending=true}; E.ReaderPanel.show(W.ui,"reader-bottom-panel")
