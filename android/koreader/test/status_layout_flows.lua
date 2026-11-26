@@ -92,7 +92,7 @@ return function(here, test, ok, eq)
         W.E,W.ui,W.v,W.Geom=E,ui,v,Geom
         return W,E.ReadingStatus,native
     end
-    test("status: enable, resize, tap, close and reopen never change document/global settings or layout", function()
+    test("status: enable, resize, tap, close and reopen preserve document/global settings", function()
         for _, paged in ipairs({false,true}) do
             local w,R,native=world(paged)
             local doc='return { ["copt_t_page_margin"]=15, ["copt_b_page_margin"]=15, ["copt_sync_t_b_page_margins"]=1, ["copt_font_size"]=24, ["footer"]=false }'
@@ -103,9 +103,6 @@ return function(here, test, ok, eq)
             w.E.G_reader_settings.saveSetting=forbidden
             w.E.G_reader_settings.delSetting=forbidden
             w.ui.doc_settings={saveSetting=forbidden,delSetting=forbidden}
-            for _, name in ipairs({"setPageMargins","setViewDimen","setViewMode","setStatusLineProp"}) do w.ui.document[name]=forbidden end
-            w.ui.handleEvent=forbidden
-            if not paged then w.ui.typeset.onSetPageMargins=forbidden end
             local footer=w.v.footer
             local height,mode,visible,settings=footer:getHeight(),footer.mode,w.v.footer_visible,footer.settings
             local original=footer.onToggleFooterMode
@@ -113,12 +110,12 @@ return function(here, test, ok, eq)
                 w.E.S.status_orbit_size=size
                 w.E.S.status_orbit_add_space=true -- obsolete saved preference must do nothing
                 R.enable(w.ui)
-                ok(w.log:find("footer_height=18",1,true), "native footer reservation logged")
+                ok(w.log:find("footer_height=0",1,true), "hidden native reservation released")
                 if not paged then ok(w.log:find("top=20 bottom=30",1,true), "loaded margin values logged") end
                 eq(footer:onToggleFooterMode(),true)
                 eq(footer:onToggleFooterMode(),true)
                 R.refreshGeometry(R.session)
-                eq(footer:getHeight(),height); eq(footer.mode,mode); eq(w.v.footer_visible,visible)
+                eq(footer:getHeight(),0); eq(footer.mode,mode); eq(w.v.footer_visible,visible)
                 eq(footer.settings,settings); eq(native.reclaim_height,true)
                 R.disable(); eq(footer.onToggleFooterMode,original)
                 eq(rawget(footer,"onToggleFooterMode"),nil); eq(rawget(footer,"paintTo"),nil)
@@ -156,16 +153,16 @@ return function(here, test, ok, eq)
         w.ui.typeset.unscaled_margins={31,25,47,29}
         w.E.S.status_orbit_size="small"
         R.enable(w.ui); local s=R.session
-        eq(s.top.height,25); eq(s.bottom.height,29)
+        eq(s.top.height,14); eq(s.bottom.height,14)
         eq(s.left,31); eq(s.width,522)
-        eq(s.top.size,25); eq(s.bottom.size,29)
+        eq(s.top.size,14); eq(s.bottom.size,14)
         local count=0
         s.Text={new=function(_,t)
             eq(t.fgcolor,s.BB.COLOR_BLACK); eq(t.bold,true)
             return { getSize=function() return {w=#t.text,h=t.face.size-2} end,
                 free=function() end,paintTo=function(_,bb,x,y)
                     ok(x>=31 and x+#t.text<=553)
-                    ok(y>=771 or y+t.face.size-2<=25)
+                    ok(y>=786 or y+t.face.size-2<=14)
                     count=count+1
                 end }
         end}
@@ -173,14 +170,14 @@ return function(here, test, ok, eq)
         local refresh=R.refreshGeometry; R.refreshGeometry=function() end
         local rects={}
         R.paint(s,{paintRect=function(_,x,y,width,height,color)
-            ok(x>=31 and x+width<=553); ok(y>=771 or y+height<=25)
+            ok(x>=31 and x+width<=553); ok(y>=786 or y+height<=14)
             rects[#rects+1]={x,y,width,height,color}
         end},0,0)
         R.refreshGeometry=refresh
         ok(count>=3); ok(#rects>=6)
         eq(rects[3][5],1); eq(rects[4][5],0) -- battery black outline, white inset
         w.ui.typeset.unscaled_margins={40,10,50,12}; R.refreshGeometry(s)
-        eq(s.top.height,10); eq(s.bottom.height,12); eq(s.left,40); eq(s.width,510)
+        eq(s.top.height,14); eq(s.bottom.height,14); eq(s.left,40); eq(s.width,510)
         R.disable()
     end)
     test("status: minimum inset and unclipped 100 percent plus charging mark at every size and scale", function()
@@ -225,7 +222,7 @@ return function(here, test, ok, eq)
                             painted,pixels={},{}
                             R.paint(session,{paintRect=function(_,x,y,pw,ph,color)
                                 ok(x>=left*scale and x+pw<=width-17*scale)
-                                ok(y>=800-29*scale and y+ph<=800)
+                                ok(y>=800-session.bottom.height and y+ph<=800)
                                 if stage then
                                     ok(x>=left*scale+4*scale,"battery/charging minimum left inset")
                                     ok(x+pw<=width-17*scale-4*scale,"battery/charging right inset")
@@ -236,7 +233,7 @@ return function(here, test, ok, eq)
                             for _,text in ipairs(painted) do
                                 ok(text.x>=left*scale+4*scale)
                                 ok(text.x+text.w<=width-17*scale-4*scale)
-                                ok(text.y>=800-29*scale and text.y+text.h<=800)
+                                ok(text.y>=800-session.bottom.height and text.y+text.h<=800)
                                 if text.text=="100%" then percentage=text end
                             end
                             if width==600 then ok(percentage,"100% remains complete at all tested margins/sizes/scales") end
@@ -275,7 +272,7 @@ return function(here, test, ok, eq)
                 w.v.state={offset={x=20,y=12}}
                 w.v.visible_area={w=560,h=772}
                 R.refreshGeometry(s)
-                eq(s.top.height,12); eq(s.bottom.height,16); eq(s.left,20); eq(s.width,560)
+                eq(s.top.height,0); eq(s.bottom.height,14); eq(s.left,20); eq(s.width,560)
                 w.v.state.offset.y=0; w.v.visible_area.h=800
                 R.paint(s,{paintRect=function() error("zoom removed surround") end},0,0)
                 eq(s.top.height,0); eq(s.bottom.height,0)
@@ -287,15 +284,55 @@ return function(here, test, ok, eq)
         local w,R=world(false); w.ui.rolling.cre_top_bar_enabled=false
         R.enable(w.ui); local s=R.session; w.dirty={}
         s.clock="12:01"; s.battery=77
-        s.tick(); eq(#w.dirty,1); eq(w.dirty[1].rect.y,0); eq(w.dirty[1].rect.h,20)
+        s.tick(); eq(#w.dirty,1); eq(w.dirty[1].rect.y,0); eq(w.dirty[1].rect.h,14)
         eq(w.dirty[1].mode,"partial"); eq(w.queue[s.tick],60)
         s.clock="12:02"; w.capacity=76; s.tick()
-        eq(#w.dirty,2); eq(w.dirty[2].rect.y,770)
+        eq(#w.dirty,2); eq(w.dirty[2].rect.y,786)
         w.top={}; s.tick(); eq(#w.dirty,2)
         w.E.OrbitAndroid.onSuspend({ui=w.ui}); eq(w.queue[s.tick],nil)
         w.E.OrbitAndroid.onResume({ui=w.ui}); eq(w.queue[s.tick],60)
         w.E.OrbitAndroid.onCloseDocument({ui=w.ui}); eq(R.session,nil); eq(next(w.queue),nil)
         w.E.OrbitAndroid.onCloseWidget({ui=w.ui}); eq(next(w.queue),nil)
+    end)
+    test("status: fixed sizes ignore native height and margins; off restores effective margins", function()
+        for _, size in ipairs({"small", "medium", "large"}) do
+            for _, nativeHeight in ipairs({18,57,120}) do
+                for _, margin in ipairs({0,15,90}) do
+                    local w,R=world(false)
+                    w.ui.rolling.cre_top_bar_enabled=false
+                    w.v.footer.getHeight=function() return nativeHeight end
+                    w.v.footer.reclaim_height=false
+                    w.v.footer.settings={reclaim_height=false,container_height=57}
+                    w.ui.typeset.unscaled_margins={10,margin,10,margin}
+                    w.E.S.status_orbit_size=size
+                    local expected=w.E.StatusLayout.fontSize(size)
+                    R.enable(w.ui)
+                    eq(R.session.top.height,expected); eq(R.session.bottom.height,expected)
+                    eq(R.session.top.size,expected); eq(R.session.bottom.size,expected)
+                    eq(w.v.footer:getHeight(),0); eq(w.v.footer.reclaim_height,true)
+                    eq(w.margins[2],math.max(margin,expected)); eq(w.margins[4],math.max(margin,expected))
+                    R.disable()
+                    eq(w.margins[2],margin); eq(w.margins[4],margin)
+                    eq(w.ui.typeset.unscaled_margins[2],margin); eq(w.ui.typeset.unscaled_margins[4],margin)
+                    eq(w.v.footer.reclaim_height,false); eq(w.v.footer.settings.container_height,57)
+                    eq(w.v.footer:getHeight(),0)
+                    w.v.footer.mode=1
+                    eq(w.v.footer:getHeight(),nativeHeight,"chosen native height is retained")
+                end
+            end
+        end
+    end)
+    test("status: hidden reservation repaired once with strips off, chosen native values retained", function()
+        local w,R=world(false)
+        w.E.S.status_orbit_layout=false
+        w.v.footer.reclaim_height=false
+        w.v.footer.getHeight=function() return 57 end
+        w.E.OrbitAndroid.onReaderReady({ui=w.ui})
+        local getter=w.v.footer.getHeight
+        eq(w.v.footer:getHeight(),0); eq(w.margins[4],30)
+        w.E.OrbitAndroid.onReaderReady({ui=w.ui})
+        eq(w.v.footer.getHeight,getter)
+        w.v.footer.mode=1; eq(w.v.footer:getHeight(),57)
     end)
     test("status: narrow lanes keep every group within text bounds", function()
         local L=world(false).E.StatusLayout

@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Paint-only reading strips. Never call a document/layout/settings setter here.
+-- Reader-owned strips. Effective engine margins are temporary; native settings stay untouched.
 ReadingStatus = {}
 local RS = ReadingStatus
 local function hook(s, obj, key, fn)
@@ -20,10 +20,7 @@ function RS.margins(s)
     if v.view_mode == "scroll" then return 0, 0, 0, 0 end
     local m = s.ui.typeset.unscaled_margins
     local scale = function(n) return Device.screen:scaleBySize(n) end
-    -- The engine already reserves native footer height when not reclaimed. Use it,
-    -- without ever changing that height, visibility, mode or the book's margins.
-    local footer = not s.footer.reclaim_height and s.footer:getHeight() or 0
-    return scale(m[2]), scale(m[4])+footer, scale(m[1]), scale(m[3])
+    return scale(m[2]), scale(m[4]), scale(m[1]), scale(m[3])
 end
 function RS.refreshGeometry(s)
     local top, bottom, left, right = RS.margins(s)
@@ -32,18 +29,19 @@ function RS.refreshGeometry(s)
         tostring(s.ui.rolling and s.ui.rolling.cre_top_bar_enabled), Device.screen:scaleBySize(1)}, ":")
     if s.geometry_key == key then return end
     s.geometry_key = key
-    local function fit(margin)
-        local lane = StatusLayout.fit(margin, StatusLayout.fontSize(S.status_orbit_size),
-            math.max(1, Device.screen:scaleBySize(1)), function(size)
-                local w = s.Text:new{ text="Ag", face=s.Font:getFace("ffont", size), bold=true, padding=0, fgcolor=s.BB.COLOR_BLACK }
-                local h = w:getSize().h; w:free(); return h
-            end)
-        lane.face = s.Font:getFace("ffont", math.max(1, lane.size))
-        return lane
+    local size = StatusLayout.fontSize(S.status_orbit_size)
+    local face = s.Font:getFace("ffont", size)
+    local text = s.Text:new{ text="Ag", face=face, bold=true, padding=0, fgcolor=s.BB.COLOR_BLACK }
+    local height = StatusLayout.stripHeight(text:getSize().h, math.max(1, Device.screen:scaleBySize(1)))
+    text:free()
+    local function lane(available)
+        -- EPUB reserves only missing space in the engine, never in saved margins.
+        local safe = not s.ui.paging and s.view.view_mode ~= "scroll" or available >= height
+        return {size=size, height=safe and height or 0, face=face}
     end
-    -- Respect a native header rather than painting over its content.
-    s.top = fit(s.ui.rolling and s.ui.rolling.cre_top_bar_enabled and 0 or top)
-    s.bottom = fit(bottom)
+    s.top = lane(top)
+    if s.ui.rolling and s.ui.rolling.cre_top_bar_enabled then s.top.height = 0 end
+    s.bottom = lane(bottom)
     if s.bottom_visible == nil then s.bottom_visible = true end
 end
 function RS.visible(s)
@@ -99,7 +97,7 @@ function RS.paint(s, bb, x, y, bottom_only)
     s.battery = battery
     local icon = "▱"
     local glyph = s.battery_program
-    local icon_size = math.max(1, (lane.height - 2 * Device.screen:scaleBySize(1)) / glyph.height)
+    local icon_size = math.max(0, (lane.height - 2 * Device.screen:scaleBySize(1)) / glyph.height)
     local icon_w = glyph.width * icon_size
     local battery_text = string.format("%d%%", battery)
     local percent_w = measure(battery_text)
@@ -132,12 +130,35 @@ function RS.paint(s, bb, x, y, bottom_only)
     text(layout.right, layout.rx, by)
 end
 
+-- Normalize the hidden native reservation once per reader instance, including when
+-- BookSync strips are off. Do not guess a saved height or overwrite a chosen value.
+function RS.releaseHiddenFooter(ui)
+    local footer = ui and ui.view and ui.view.footer
+    if not footer or footer._booksync_height then return false end
+    local stock = footer.getHeight
+    footer._booksync_height = stock
+    footer.getHeight = function(self, ...)
+        if RS.session and RS.session.ui == ui or self.mode == 0 then return 0 end
+        return stock(self, ...)
+    end
+    return true
+end
+function RS.relayout(ui)
+    if ui.typeset and not ui.paging then
+        ui.typeset:onSetPageMargins(ui.typeset.unscaled_margins)
+    elseif ui.paging then
+        ui:handleEvent(Event:new("SetDimensions", Device.screen:getSize()))
+        ui.paging:onInitScrollPageStates()
+    end
+end
+
 function RS.enable(ui)
     if RS.session or not ui or not ui.document or not ui.view or not ui.view.footer then return end
     local s = { ui=ui, view=ui.view, footer=ui.view.footer, undo={},
         Geom=require("ui/geometry"), Text=require("ui/widget/textwidget"),
         Font=require("ui/font"), BB=require("ffi/blitbuffer"),
         inset=math.max(1, Device.screen:scaleBySize(4)), gap=math.max(1, Device.screen:scaleBySize(4)) }
+    RS.releaseHiddenFooter(ui)
     RS.session = s
     local margins = ui.typeset and ui.typeset.unscaled_margins or {}
     log("status layout: loaded margins top=" .. tostring(margins[2]) .. " bottom=" .. tostring(margins[4])
@@ -149,6 +170,17 @@ function RS.enable(ui)
     end
     assert(s.battery_program, "BookSync battery drawing program missing")
     RS.refreshGeometry(s)
+    hook(s, s.footer, "reclaim_height", function() return true end)
+    if ui.typeset and not ui.paging then
+        hook(s, ui.document, "setPageMargins", function(stock) return function(self, l,t,r,b)
+            RS.refreshGeometry(s)
+            if s.view.view_mode ~= "scroll" then
+                t, b = math.max(t, s.top.height), math.max(b, s.bottom.height)
+            end
+            return stock(self, l,t,r,b)
+        end end)
+    end
+    RS.relayout(ui)
     -- Suppress native painting only when an overlay fits. All native state and
     -- refresh/layout machinery keep running untouched, including disabled footers.
     hook(s, s.footer, "paintTo", function(stock) return function(self, ...)
@@ -184,7 +216,7 @@ function RS.disable(closing)
     RS.session = nil
     UIManager:unschedule(s.tick)
     for i=#s.undo,1,-1 do local h=s.undo[i]; h[1][h[2]]=h[3] end
-    if not closing then UIManager:setDirty(s.ui, "partial") end
+    if not closing then RS.relayout(s.ui); UIManager:setDirty(s.ui, "partial") end
 end
 function RS.changed()
     UIManager:nextTick(function()
@@ -203,7 +235,11 @@ local function after(name, fn)
         return result
     end
 end
-after("onReaderReady", function(self) if S.status_orbit_layout == true then RS.enable(self.ui) end end)
+after("onReaderReady", function(self)
+    local repaired = RS.releaseHiddenFooter(self.ui)
+    if S.status_orbit_layout == true then RS.enable(self.ui)
+    elseif repaired then RS.relayout(self.ui) end
+end)
 after("onPageUpdate", function() local s=RS.session; if s then RS.dirty(s, false) end end)
 after("onPosUpdate", function() local s=RS.session; if s then RS.dirty(s, false) end end)
 after("onSuspend", function() local s=RS.session; if s then s.asleep=true; UIManager:unschedule(s.tick) end end)
