@@ -2,7 +2,7 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require}
+            scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,readFile=E.OC.readFile,writeFile=E.OC.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
         Widget.free=function() end
@@ -38,13 +38,25 @@ return function(test,eq,ok,E,W,Widget)
             if a.op == "lists" then return {items={{key="opaque-list",title="Favourites",count=3}},freshness={saved=true}},150 end
             return {items={{key="opaque-book",title="The Moon",authors={"A"},progress=25,local_path="/fixture/book.epub"}},freshness={saved=true}},200
         end,request=function(batch) batches[#batches+1]=batch; return true end}
+        local records,files={},{}; local seq=0
+        E.HomeEditor.loaded=true
+        E.HomeEditor.path=function() return "home-layout-fixture" end
+        E.HomeEditor.codec=function() return {encode=function(d)
+            seq=seq+1; records[tostring(seq)]=E.Layout.copy(d); return tostring(seq)
+        end,decode=function(raw) return E.Layout.copy(records[raw]) end} end
+        E.OC.readFile=function(path) return files[path] end
+        E.OC.writeFile=function(path,raw) files[path]=raw; return true end
         W.shown={}
         local success,err=pcall(fn,batches,reads,U)
         if E.HomeHost.active then E.HomeHost.active:onCloseWidget() end
         E.LibraryAdapter,E.HomeWidgets._ui,E.S.home_layout,E.S.home_screen=saved.adapter,saved.ui,saved.layout,saved.screen
         E.Device.screen.scaleBySize,W.shown,Widget.free,Widget.paintTo,E.require=saved.scale,saved.shown,saved.free,saved.paint,saved.require
+        E.HomeEditor.codec,E.HomeEditor.path,E.HomeEditor.loaded=saved.codec,saved.path,saved.loaded
+        E.HomeEditor.save=saved.save
+        E.OC.readFile,E.OC.writeFile=saved.readFile,saved.writeFile
         ok(success,err)
     end
+    dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     test("Home host: paint batches only installed visible widgets and page swipe",function()
         withHost(function(batches,reads)
             E.S.home_layout=E.Layout.default()
@@ -95,7 +107,7 @@ return function(test,eq,ok,E,W,Widget)
             local success,err=pcall(function()
                 local h=E.HomeHost.create(); E.HomeHost.active=h
                 local canvas=h[1][1]
-                local boundary=canvas[4] -- header, Close, Search, first widget
+                local boundary=canvas[5] -- header, Close, Search, Edit, first widget
                 local failed=boundary[1]
                 local Frame=E.HomeWidgets.ui().Frame
                 Frame.paintTo=function() end
@@ -141,7 +153,7 @@ return function(test,eq,ok,E,W,Widget)
             E.S.home_layout=nil
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             h:onNext()
-            local tile=h[1][1][4][1][1]
+            local tile=h[1][1][5][1][1]
             eq(tile[3].text,"2 on device ›")
             eq(tile[4].text,"Authors ›"); eq(tile[5].text,"Series ›")
             for _,child in ipairs(tile) do if child.height then
@@ -173,6 +185,13 @@ return function(test,eq,ok,E,W,Widget)
                 if p.settings.src=="custom" then found=p end
             end end
             ok(found); eq(found.settings.source,"recently-added"); eq(found.settings.query.show,"unread")
+            E.S.home_layout=nil; E.HomeEditor.loaded=false
+            local reloaded=E.HomeHost.document()
+            local restored
+            for _,page in ipairs(reloaded.pages) do for _,p in ipairs(page.placements) do
+                if p.instance==found.instance then restored=p end
+            end end
+            ok(restored); eq(restored.settings.query.show,"unread")
             local toast=W.shown[#W.shown]
             toast.buttons[1][1].callback()
             eq(h.list_layout,nil)
@@ -185,6 +204,17 @@ return function(test,eq,ok,E,W,Widget)
             eq(h.filter.model.source,"search"); eq(h.filter.model.query.q,"Moon")
             eq(h.filter.model.query.sort,"match")
             eq(h[1][1][4].text,"Filter")
+        end)
+    end)
+    test("Home wiring: failed filter save preserves the published layout",function()
+        withHost(function()
+            E.S.home_layout=E.Layout.default()
+            local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+            local published=E.S.home_layout
+            E.HomeEditor.save=function() return nil,"layout write failed" end
+            eq(h:saveFilter({base_source="search",query={q="Moon"}}),false)
+            eq(E.S.home_layout,published)
+            eq(W.shown[#W.shown].text,"layout write failed")
         end)
     end)
     test("Home wiring: bounded list paging returns to the prior full window",function()

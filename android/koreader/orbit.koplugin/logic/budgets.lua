@@ -11,6 +11,14 @@ for _, id in ipairs({"home", "library", "details", "series", "settings", "filter
 end
 -- Owned Search inherits the Library screen family; Home pages inherit home.
 Budgets.screens.search = Budgets.screens.library
+-- Editor draws only its current page; it never reads a catalog or widget snapshot.
+Budgets.screens.editor.drawNodes = 208
+Budgets.screens.editor.rows = 128
+Budgets.screens.editor.bytes = 0
+Budgets.screens.editor.roundTrips = 0
+Budgets.screens["editor-picker"] = budget(3, 0, 100)
+Budgets.screens["editor-picker"].roundTrips = 0
+Budgets.screens["editor-picker"].drawNodes = 24
 -- Picker pages inherit the same filter screen limits, including one worker round-trip.
 Budgets.screens["filter-picker"] = budget(24, 16384, 50)
 Budgets.libraryWindow = budget(32, 32768, 30)
@@ -30,6 +38,7 @@ function Budgets.check(b, counts)
         if type(n) ~= "number" or n < 0 or n ~= math.floor(n)
             or type(limit) ~= "number" or limit < 0 or limit ~= math.floor(limit) or n > limit then return nil, "budget: " .. k end
     end
+    if b.drawNodes and (type(counts.drawNodes) ~= "number" or counts.drawNodes < 0 or counts.drawNodes ~= math.floor(counts.drawNodes) or counts.drawNodes > b.drawNodes) then return nil,"budget: drawNodes" end
     if b.spawns ~= 0 or b.network ~= 0 or b.roundTrips > 1 or b.snapshotBytes > 16384 then
         return nil, "unsafe budget"
     end
@@ -47,7 +56,7 @@ Budgets.MAX_SNAPSHOT, Budgets.MAX_ROWS = 16384, 24
 Budgets.MAX_BATCH, Budgets.MAX_REQUEST = 16, 8192
 function Budgets.get(kind, id)
     local b = assert(Budgets[kind] and Budgets[kind][id], "Missing screen/widget budget")
-    assert(Budgets.check(b, {rows=0,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}))
+    assert(Budgets.check(b, {rows=0,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0,drawNodes=0}))
     return b
 end
 

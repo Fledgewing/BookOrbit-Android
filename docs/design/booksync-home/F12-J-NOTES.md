@@ -42,8 +42,9 @@ neutral source and Best match default. Search and Filter are adjacent in list
 headers; changed filters have removable chips. FilterView handles the actual
 sheet and picker UI. Save preserves base source and query in a local Book list,
 uses Layout.add's first available slot across pages, or creates an auto-named
-page. It offers Go to Home and never writes a server list. Shared.set persists
-the existing S.home_layout; temporary list navigation does not modify it.
+page. It offers Go to Home and never writes a server list. After integrating F12-I (`57c1d0b9`), `ko/home_editor.lua:24` owns the atomic
+save and previous-valid backup for the same S.home_layout; filter saving reuses
+HomeEditor.save, including its failure handling and restart persistence. Temporary list navigation does not modify it.
 Legacy server-plugin screens remain available through the existing Home choice.
 
 ## Inherited performance rule

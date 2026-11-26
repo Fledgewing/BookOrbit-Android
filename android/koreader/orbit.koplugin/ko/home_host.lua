@@ -3,6 +3,7 @@
 HomeHost = {}
 function HomeHost.document()
     -- Layout editor publishes the same validated layout-as-data in reader settings.
+    HomeEditor.load()
     local d=S.home_layout
     if d and Layout.validate(d) then return d end
     return Layout.default()
@@ -55,6 +56,9 @@ function HomeHost.create()
             end
         end
         local sharedStats
+        if not self.list_layout then
+            HomeWidgets.button(canvas,_("Edit"),w-scale(190),gap,scale(80),scale(36),function() HomeEditor.show(self) end)
+        end
         for _,p in ipairs(page.placements) do
             local rect=HomeHostPlan.rect(p,resolved.grid,w-2*gap,h-top-bottom,gap)
             rect.x,rect.y=rect.x+gap,rect.y+top
@@ -190,7 +194,11 @@ function HomeHost.create()
             UIManager:show(InfoMessage:new{text=_("No room on Home")}) -- gate: user action (save filter)
             return false
         end
-        Shared.set("home_layout",document)
+        local saved,err=HomeEditor.save(document)
+        if not saved then
+            UIManager:show(InfoMessage:new{text=err or _("Could not save Home")}) -- gate: user action (save filter)
+            return false
+        end
         -- gate: user action (save filter)
         UIManager:show(require("ui/widget/buttondialog"):new{title=_("Book list saved on Home"),buttons={{{text=_("Go to Home"),callback=function()
             -- Close this toast before rebuilding the initiating host.

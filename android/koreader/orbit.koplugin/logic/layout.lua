@@ -1,10 +1,12 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Versioned layout-as-data. Pure: codecs and atomic storage are injected at the boundary.
 Layout = { MAX_BYTES=131072, MAX_PAGES=16, MAX_PLACEMENTS=128, MAX_ROWS=12 }
-local function copy(v)
+local function copy(v, jsonObjects)
     if type(v) ~= "table" then return v end
-    local out = {}; for k, x in pairs(v) do out[k] = copy(x) end
-    return setmetatable(out, getmetatable(v))
+    local out = {}; for k, x in pairs(v) do out[k] = copy(x, jsonObjects) end
+    -- Most layout settings/override maps start as plain empty Lua tables. dkjson
+    -- otherwise writes those as []; tag them only in the save-boundary copy.
+    return setmetatable(out, getmetatable(v) or (jsonObjects and not next(out) and {__jsontype="object"} or nil))
 end
 Layout.copy = copy
 local function shallow(v)
@@ -92,6 +94,11 @@ local function projection(page, overrides, geometryOnly)
     end
     return out
 end
+-- Bounded editor projection: only the changed/current page, retaining hidden/unknown
+-- placements so the editor cannot accidentally occupy their reserved cells.
+function Layout.editorPage(d, index)
+    return projection(d.pages[index],d.overrides["android-tablet"] or {},true)
+end
 -- Android is the only implemented projection. Unsupported class overrides are shape-checked
 -- and preserved, not rejected for Android coordinates; future hosts opt into their classes.
 function Layout.validate(d, registry, classes)
@@ -162,7 +169,7 @@ function Layout.parse(raw, codec, registry)
 end
 function Layout.serialize(d, codec, registry)
     local valid,err=Layout.validate(d,registry); if not valid then return nil,err end
-    local ok,raw=pcall(codec.encode,d)
+    local ok,raw=pcall(codec.encode,copy(d,true))
     if not ok or type(raw) ~= "string" or #raw > Layout.MAX_BYTES then return nil,"invalid/oversized encoding" end
     -- Verify the exact encoded representation, including empty objects and arrays.
     local decoded,why=Layout.parse(raw,codec,registry); if not decoded then return nil,why end
