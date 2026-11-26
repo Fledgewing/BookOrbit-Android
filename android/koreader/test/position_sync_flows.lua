@@ -93,6 +93,21 @@ return function(test,eq,ok,E,W,UIManager,run,newUI,ReaderUI,FileManager)
         eq(x.commands[1].op,"sync.decide"); eq(x.commands[1].args.moment,"wake-local")
         ok(E.ReadingSync.prompt); eq(#x.moves,0)
     end) end)
+    test("position decision: replacing the native document rejects delayed consent and verification",function() world(function(x)
+        x.delay=true
+        E.ReadingSync.run("open"); x.callbacks[1]()
+        eq(x.commands[2].op,"sync.decide")
+        x.ui.document={file="/fixture/other.epub"}
+        x.callbacks[2]()
+        eq(E.ReadingSync.prompt,nil); eq(#x.commands,2); eq(#x.moves,0)
+    end) end)
+    test("position decision: changing mode rejects the old in-flight decision",function() world(function(x)
+        x.delay=true
+        E.ReadingSync.run("open"); x.callbacks[1]()
+        E.S.sync_mode="custom"; E.ReadingSync.modeChanged()
+        x.callbacks[2]()
+        eq(E.ReadingSync.prompt,nil); eq(#x.commands,2); eq(#x.moves,0)
+    end) end)
     test("position capture: a close arriving during another sync is not dropped",function() world(function(x)
         x.delay=true
         E.ReadingSync.run("open"); E.ReadingSync.run("close")

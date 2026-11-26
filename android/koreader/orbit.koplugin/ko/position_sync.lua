@@ -115,6 +115,7 @@ function ReadingSync.run(moment,done,override)
     done=done or function() end
     local ui=liveUI()
     local args=ReadingSync.capture(ui,moment)
+    local native=ui and ui.document
     local function run()
         ReadingSync.running=(ReadingSync.running or 0)+1
         ReadingSync.busy=true
@@ -130,13 +131,14 @@ function ReadingSync.run(moment,done,override)
             if not r.snapshot then return finish(false,"Saved · awaiting remote place") end
             r.snapshot.document=r.document
             -- The worker sees geometry only while it still belongs to this native document.
-            if liveUI()~=ui or not ui.document or ui.document.file~=args.path then
+            if liveUI()~=ui or ui.document~=native or not ui.document or ui.document.file~=args.path then
                 return ReadingSync.command("sync.drain",{},function(d) finish(not d.error and (d.remaining or 0)==0,d.error) end)
             end
             local mapped=ReadingSync.geometry(r.snapshot,ui,moment)
             ReadingSync.command("sync.decide",mapped,function(d)
-                if moment~="close" and moment~="sleep" then ReadingSync.present(d,ui) end
-                if moment~="sleep" and moment~="close" then ReadingSync.verify(ui,r.document) end
+                local current=liveUI()==ui and ui.document==native and args.automatic==ReadingSync.on()
+                if current and moment~="close" and moment~="sleep" then ReadingSync.present(d,ui) end
+                if current and moment~="sleep" and moment~="close" then ReadingSync.verify(ui,r.document) end
                 finish(not d.error and (d.remaining or 0)==0,d.error)
             end)
         end)
