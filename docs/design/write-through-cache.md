@@ -156,6 +156,15 @@ cover jobs. Neither of our modes goes through that deletion.
   This removes the unconditional fork/IPC boundary observed on cache-hit All Books opens in
   the preview.1 log (6.7 s total, with 170–250 ms from cache response to render). The target
   is under 500 ms on the M8C; device timing still needs maintainer verification.
+- **Bulk letter rail:** one ranked SQL query computes each bucket's first filtered index and
+  count. The previous implementation repeated the whole filtered join for every letter,
+  exceeding the 500 ms CPU budget for 7,000 books in CI. `RANK()-1` preserves the original
+  `count(pos < first)` semantics, including non-contiguous `#` entries and filtered windows;
+  only the small bucket table reaches Lua. This runs in KOReader's bundled SQLite 3.53.3
+  (`base/thirdparty/sqlite/CMakeLists.txt:14-18` at base commit
+  `6e4bc81af4e04f78d81677a323a780a71b29702a`, linked by pinned KOReader
+  `9192014d8bd82a91dc1012473be0f238dedfdb54`). The regression keeps the 500 ms budget, decodes
+  only the visible books and bounds the number of queries independently of alphabet size.
 - **Open timings:** one info-level `open:` line at render reports milliseconds since fetch
   entry for request, fork request, child entry, response and render. `store` is total SQLite
   lookup time including `decode`, which reports the decode subset separately. A skipped fork

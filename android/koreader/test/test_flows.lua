@@ -6108,10 +6108,23 @@ test("bulk catalog: a 7000-book mirror decodes only the requested window within 
         st:run("INSERT INTO bulk_ranks VALUES (1,'title','asc',?,?,?)",i,i-1,letter)
         if i%2 == 0 then st:run("INSERT INTO bulk_members (g,kind,value,id) VALUES (1,'collectionId','4',?)",i) end
     end
+    -- One letter occurs at both ends: indexes cannot be inferred by adding
+    -- grouped letter counts. The collection filter must still produce dense indexes.
+    st:run("UPDATE bulk_ranks SET letter='#' WHERE id IN (1,7000)")
     st.conn:exec("COMMIT")
     withStore(dir,function()
-        local decode = RE.Cache.decode
-        local decoded = 0
+        local decode, connect = RE.Cache.decode, RE.Store.conn
+        local decoded, queries = 0, 0
+        RE.Store.conn = function(...)
+            local conn, err = connect(...)
+            if not conn then return nil, err end
+            return setmetatable({}, {__index=function(_, key)
+                return function(_, ...)
+                    if key == "prepare" then queries=queries+1 end
+                    return conn[key](conn, ...)
+                end
+            end})
+        end
         RE.Cache.decode = function(...) decoded=decoded+1; return decode(...) end
         local success, err = pcall(function()
             for _, query in ipairs({
@@ -6119,17 +6132,32 @@ test("bulk catalog: a 7000-book mirror decodes only the requested window within 
                 "sort=recently_added&order=desc",
                 "sort=title&order=asc&buckets=1&collectionId=4",
             }) do
-                decoded=0
+                decoded, queries=0, 0
                 local path="/koreader/plugin/catalog/books?size=12&page=1&" .. query
                 local start=os.clock()
                 local entry=RE.Store.read(DBFX.owner,path,path,nil)
-                ok(os.clock()-start < 0.5,"bulk window CPU budget: " .. query)
+                local elapsed=(os.clock()-start)*1000
+                print(string.format("bulk window: %.1f ms, %d queries, %d decodes (%s)", elapsed, queries, decoded, query))
+                ok(elapsed < 500,"bulk window CPU budget: " .. elapsed .. " ms (" .. query .. ")")
                 eq(#entry.body.items,12)
                 ok(decoded <= 13,"only 12 items and an optional header decoded: " .. decoded)
                 eq(entry.body.total,query:find("collectionId",1,true) and 3500 or 7000)
+                ok(queries <= 8,"query count stays fixed as the alphabet grows: " .. queries)
+                if entry.body.buckets then
+                    local rail=entry.body.buckets
+                    if query:find("collectionId",1,true) then
+                        eq(rail[1].key,"A"); eq(rail[1].index,0)
+                        eq(rail[2].key,"B"); eq(rail[2].index,135)
+                        eq(rail[#rail].key,"#"); eq(rail[#rail].index,3499); eq(rail[#rail].count,1)
+                    else
+                        eq(rail[1].key,"#"); eq(rail[1].index,0); eq(rail[1].count,2)
+                        eq(rail[2].key,"A"); eq(rail[2].index,1)
+                        eq(rail[3].key,"B"); eq(rail[3].index,270)
+                    end
+                end
             end
         end)
-        RE.Cache.decode=decode
+        RE.Cache.decode, RE.Store.conn=decode, connect
         ok(success,err)
     end)
     st:close(); sh("rm -rf",dir)

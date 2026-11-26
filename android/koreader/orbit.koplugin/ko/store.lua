@@ -115,6 +115,20 @@ function Store.meta(conn, k)
     return r and r[1] or nil
 end
 
+-- One pass over the filtered rank metadata, rather than a full joined count per
+-- letter. RANK()-1 is exactly count(pos < first), including tied positions and
+-- non-contiguous letters such as '#'. Only the small bucket table reaches Lua.
+local function buckets(conn, from, args, letter, pos)
+    local result = {}
+    local sql = "SELECT letter,min(ix),count(*) FROM (SELECT " .. letter
+        .. " AS letter,RANK() OVER (ORDER BY " .. pos .. ")-1 AS ix FROM " .. from
+        .. ") GROUP BY letter ORDER BY min(ix)"
+    for _, b in ipairs(rows(conn, sql, unpack(args))) do
+        table.insert(result, {key=b[1] or "#", index=tonumber(b[2]) or 0, count=tonumber(b[3]) or 0})
+    end
+    return result
+end
+
 -- Bulk-generation windows: SQL filters/ranks use bound values and decode only this window.
 -- Network, JSON parsing and index construction belong to the companion.
 local function bulk_list(conn, w)
@@ -188,21 +202,11 @@ local function bulk_list(conn, w)
     local h = rows(conn, "SELECT head FROM bulk_heads WHERE g=? AND identity=?",g,w.identity)[1]
     local head = h and decode(h[1] or "") or {}
     if not w.section and q.buckets == "1" and (q.sort == "title" or q.sort == "author") then
-        head.buckets = {}
-        for _, b in ipairs(rows(conn, "SELECT r.letter,min(r.pos),count(*) FROM " .. from .. " GROUP BY r.letter ORDER BY min(r.pos)", unpack(args))) do
-            local a = {unpack(args)}; table.insert(a, tonumber(b[2]))
-            local index = tonumber(rows(conn, "SELECT count(*) FROM " .. from .. " AND r.pos<?", unpack(a))[1][1]) or 0
-            table.insert(head.buckets, {key=b[1] or "#", index=index, count=tonumber(b[3]) or 0})
-        end
+        head.buckets = buckets(conn, from, args, "r.letter", "r.pos")
     end
     if w.section and (w.section=="authors" or w.section=="series") and q.sort~="books" then
-        head.buckets={}
         local pos=q.sort=="name_desc" and "r.pos" or "b.pos"
-        for _,b in ipairs(rows(conn,"SELECT b.letter,min(" .. pos .. "),count(*) FROM " .. from .. " GROUP BY b.letter ORDER BY min(" .. pos .. ")",unpack(args))) do
-            local a={unpack(args)};table.insert(a,tonumber(b[2]))
-            local index=tonumber(rows(conn,"SELECT count(*) FROM " .. from .. " AND " .. pos .. "<?",unpack(a))[1][1]) or 0
-            table.insert(head.buckets,{key=b[1] or "#",index=index,count=tonumber(b[3]) or 0})
-        end
+        head.buckets = buckets(conn, from, args, "b.letter", pos)
     end
     if context then
         local a = {unpack(args)}
