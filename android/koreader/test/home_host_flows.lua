@@ -136,6 +136,21 @@ return function(test,eq,ok,E,W,Widget)
             ok(rectangles>=400,"real Year, weekly and hourly renderers painted")
         end)
     end)
+    test("Home wiring: default Library tile exposes bounded device and group links",function()
+        withHost(function()
+            E.S.home_layout=nil
+            local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+            h:onNext()
+            local tile=h[1][1][4][1][1]
+            eq(tile[3].text,"2 on device ›")
+            eq(tile[4].text,"Authors ›"); eq(tile[5].text,"Series ›")
+            for _,child in ipairs(tile) do if child.height then
+                ok(child.overlap_offset[2]+child.height<=tile.dimen.h)
+            end end
+            tile[5].callback()
+            eq(h.filter.model.source,"library/all"); eq(h.filter.model.query.group,"series")
+        end)
+    end)
     test("Home wiring: list and search filter buttons save a reusable tile",function()
         withHost(function(batches,reads)
             E.S.home_layout=E.Layout.default()

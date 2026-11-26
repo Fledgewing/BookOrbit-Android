@@ -114,14 +114,15 @@ HomeWidgets.register("library",function(p,snapshot,dispatch,rect)
     HomeWidgets.button(c,_("Library").."  ›",scale(8),scale(8),rect.w-scale(16),scale(30),function() dispatch("all") end)
     local d=snapshot.data or {}
     local saved=d.freshness and d.freshness.saved
-    HomeWidgets.text(c,saved and tostring(d.total or 0).." books" or _("Not saved yet"),scale(8),scale(44),rect.w-scale(16),20,false,true)
-    if rect.h>scale(120) then
-        HomeWidgets.button(c,d.on_device~=nil and tostring(d.on_device).._(" on device").." ›" or _("On device · not checked yet"),
-            scale(8),scale(80),rect.w-scale(16),scale(40),function() dispatch("device") end)
-        if p.h>=2 and rect.h>=scale(170) then
-            for i,group in ipairs({"author","series"}) do
-                HomeWidgets.button(c,group=="author" and _("Authors ›") or _("Series ›"),scale(8)+(i-1)*math.floor((rect.w-scale(16))/2),rect.h-scale(50),math.floor((rect.w-scale(16))/2),scale(42),function() dispatch("group",{group=group}) end)
-            end
+    local wide=rect.h>=scale(144)
+    local half=math.floor((rect.w-scale(16))/2)
+    HomeWidgets.text(c,saved and tostring(d.total or 0).." books" or _("Not saved yet"),scale(8),scale(44),wide and half or rect.w-scale(16),20,false,true)
+    if wide then
+        HomeWidgets.button(c,(d.on_device~=nil and tostring(d.on_device) or "—").._(" on device").." ›",
+            scale(8)+half,scale(40),half,scale(50),function() dispatch("device") end)
+        for i,group in ipairs({"author","series"}) do
+            HomeWidgets.button(c,group=="author" and _("Authors ›") or _("Series ›"),scale(8)+(i-1)*half,
+                rect.h-scale(52),half,scale(50),function() dispatch("group",{group=group}) end)
         end
     end
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
