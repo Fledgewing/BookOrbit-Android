@@ -105,6 +105,15 @@ object Worker {
             synchronized(lock) { patches.addLast { worker().savePluginState(LuaValue.str(state)) }; lock.notifyAll() }
             return start()
         }
+        if (i.action == ACTION_PATCH && i.hasExtra("library_batch")) {
+            val encoded = i.getStringExtra("library_batch")?.takeIf { it.length <= 131072 } ?: return
+            val owner = i.getStringExtra("owner") ?: return
+            synchronized(lock) { patches.addLast {
+                val requests = LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? List<*> ?: return@addLast
+                if (requests.size <= LibraryReadModel.MAX_BATCH) LibraryReadModel(worker().store).publish(LuaValue.str(owner), requests)
+            }; lock.notifyAll() }
+            return start()
+        }
         if (i.action == ACTION_PATCH && i.hasExtra("remember_id")) {
             val id = i.getStringExtra("remember_id")?.toLongOrNull() ?: return
             synchronized(lock) { patches.addLast { worker().rememberDetail(id) }; lock.notifyAll() }

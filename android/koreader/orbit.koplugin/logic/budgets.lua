@@ -37,3 +37,12 @@ function Budgets.span(id, clock, info)
     local start = clock()
     return function() info(string.format("BookSync %s %.1f ms", id, (clock()-start)*1000)) end
 end
+
+-- Wire/result ceilings for the companion read model. Caller budgets may be narrower.
+Budgets.MAX_SNAPSHOT, Budgets.MAX_ROWS = 16384, 24
+Budgets.MAX_BATCH, Budgets.MAX_REQUEST = 16, 8192
+function Budgets.get(kind, id)
+    local b = assert(Budgets[kind] and Budgets[kind][id], "Missing screen/widget budget")
+    assert(Budgets.check(b, {rows=0,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}))
+    return b
+end
