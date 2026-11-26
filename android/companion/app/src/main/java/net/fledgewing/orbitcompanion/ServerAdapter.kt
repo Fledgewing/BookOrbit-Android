@@ -27,6 +27,7 @@ interface ServerAdapter {
     fun setProgress(owner: String, key: String, position: Map<String, Any?>): Map<String, Any?> = unsupported()
     fun setStatus(owner: String, key: String, status: String): Map<String, Any?> = unsupported()
     fun saveList(owner: String, key: String?, query: Map<String, Any?>): Map<String, Any?> = unsupported()
+    fun localFiles(owner: String): List<LocalBook>? = null
     fun cachedReadingStats(owner: String): RemoteReadingStats? = null
     fun readingStats(owner: String): Map<String, Any?> = unsupported()
     fun state(): Map<String, Any?> = unsupported()
@@ -51,6 +52,8 @@ interface ServerAdapter {
 
 /** Existing projection persistence; adapters may reuse their catalog DB without exposing it to UI. */
 interface ProjectionStore : AutoCloseable {
+    val root: File
+
     fun db(): Sql
     fun meta(k: String): String?
     fun <T> transaction(block: () -> T): T

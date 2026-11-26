@@ -14,7 +14,7 @@ import java.io.File
  * Plain JVM over [Sql] (Android's SQLite on the device, JDBC in the unit tests). The schema is
  * shared/fixtures/cache/schema.sql, which CacheStoreTest compares with [SCHEMA].
  */
-class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it) }, private val open: (File) -> Sql = { AndroidSql(it) }) : ProjectionStore {
+class CacheStore(override val root: File, private val log: (String) -> Unit = { OLog.i(it) }, private val open: (File) -> Sql = { AndroidSql(it) }) : ProjectionStore {
     val file get() = File(root, FILE)
     private var sql: Sql? = null
 

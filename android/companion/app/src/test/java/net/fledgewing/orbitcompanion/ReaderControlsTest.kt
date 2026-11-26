@@ -16,6 +16,7 @@ class ReaderControlsTest {
                 val owner="fixture|https://library.invalid"
                 LibraryReadModel.initialize(sql)
                 val store=object: ProjectionStore {
+                    override val root=directory
                     override fun db()=sql
                     override fun meta(k: String)=if (k=="owner") owner else null
                     override fun <T> transaction(block: () -> T): T=sql.transaction(block)

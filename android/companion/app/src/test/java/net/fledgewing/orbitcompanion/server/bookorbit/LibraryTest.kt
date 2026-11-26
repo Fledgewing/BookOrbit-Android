@@ -8,6 +8,34 @@ import java.io.File
 import java.nio.file.Files
 
 class LibraryTest {
+    @Test fun localStoragePublishesOneSmallRowWithoutInventingCapacity() {
+        store().use { st ->
+            val request=String(LuaValue.encode(mapOf("op" to "storage.summary","limit" to 1,"bytes" to 16384)),Charsets.ISO_8859_1)
+            LibraryReadModel(st,log={}).publish(owner,listOf(request))
+            val body=st.db().query("SELECT body FROM library_views WHERE request=?",request) { it.bytes(0)!! }.single()
+            val data=LuaValue.parse(body) as Map<*,*>
+            assertTrue(body.size<=16384)
+            assertNull(data["total"]); assertNull(data["free"])
+            assertEquals(false,data["available"])
+        }
+    }
+    @Test fun collectionsUseBoundedOpaquePagesAndCachedMembership() {
+        store().use { st ->
+            seed(st)
+            for(i in 1..8) st.db().exec("INSERT INTO bulk_sections(g,section,pos,id,name,n) VALUES(1,'collections',?,?,?,?)",i,i.toString(),"Collection $i",i)
+            val page=read(st,mapOf("op" to "collections","limit" to 6))
+            assertEquals(6,(page["items"] as List<*>).size); assertEquals(6L,page["next"])
+            val next=read(st,mapOf("op" to "collections","limit" to 6,"offset" to 6))
+            assertEquals(2,(next["items"] as List<*>).size); assertNull(next["next"])
+            st.db().exec("INSERT INTO bulk_members(g,kind,value,id,context) VALUES(1,'collectionId','1',3,?)",LuaValue.encode(emptyMap<String,Any>()))
+            val source=mapOf("kind" to "collection","key" to BookOrbitLibrary.key(owner,"collection",1))
+            val books=read(st,mapOf("op" to "window","source" to source))["items"] as List<*>
+            assertEquals(listOf("Book 3"),books.map { (it as Map<*,*>)["title"] })
+            st.setMeta("bulk_complete",null)
+            assertEquals("Not saved yet",read(st,mapOf("op" to "collections"))["empty"])
+            assertEquals("Not saved yet",read(st,mapOf("op" to "window","source" to source))["empty"])
+        }
+    }
     private val owner = "fixture|https://library.invalid"
     private val book = mapOf<String, Any?>("key" to "b", "title" to "The Moon", "authors" to listOf("A", "B"), "series" to listOf("Orbit"),
         "tags" to listOf("Space"), "status" to "reading", "want_to_read" to true, "on_device" to true,
