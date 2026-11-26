@@ -80,6 +80,8 @@ Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library
 the placement count. Home pages and Settings groups inherit their screen-family budget. Reader progress
 surfaces reuse the same one-row widget budget, including Book info and Details;
 completion callbacks may redraw only a still-visible user-opened panel.
+Filter picker pages inherit the filter screen budget; facet counts and zero-value
+ordering stay in the companion.
 
 ## Read the source, not memory
 

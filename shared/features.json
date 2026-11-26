@@ -5249,6 +5249,57 @@
       "deferred": "Home host integration, local finish ledger and goal settings; firmware renderers."
     },
     {
+      "id": "filter-sheet",
+      "feature": "Owned reusable filter sheet (0.12 foundation; unreleased)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Nine-row component, bounded companion facets, chips/reset and Home save callback; owned host wiring follows",
+          "reason": "deliberately deferred: owned list/search and Home hosts integrate the component in their 0.12 slices",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/filter_sheet.lua",
+              "line": 3
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Planned after Android; same neutral filter and counting contract",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Planned after Android; same neutral filter and counting contract",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Planned after Android; same neutral filter and counting contract",
+          "reason": "deliberately deferred: maintainer-authorised Android-first 0.12 build; firmware implementation follows",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "reader-book-progress",
       "feature": "Owned reader top panel, Book info and Details progress (0.12 implementation)",
       "category": "Behaviour",
@@ -5534,7 +5585,7 @@
     {
       "feature": "home",
       "roadmap": "Next release: BookSync Home",
-      "note": "Android implementation authorised 2026-11-25 on feature/0.12; Xteink follows later. Reader progress pages and Stats widgets are building; no release or device validation yet."
+      "note": "Android implementation authorised 2026-11-25 on feature/0.12; Xteink follows later. Home slices are building; no release or device validation yet."
     },
     {
       "feature": "signatures",
