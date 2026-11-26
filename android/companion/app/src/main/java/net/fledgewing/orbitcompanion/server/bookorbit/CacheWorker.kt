@@ -228,7 +228,7 @@ class CacheWorker(
                 val relative = f.relativeTo(dir).path
                 val currentAccount = f.parentFile == dir || f.parentFile?.name == store.meta("owner")?.let(BookOrbitLibrary::namespace)
                 items.add(StorageLogic.Item("c:$relative", f.length() + (if (etag.isFile) etag.length() else 0L), f.lastModified() / 1000,
-                    if (currentAccount && f.name.substringBefore('_').toLongOrNull() in protected) "kept" else if (relative in keep) "mirror_cover" else "cover"))
+                    if (currentAccount && f.name.substringBefore('_').toLongOrNull() in protected) "kept" else if (relative in keep || currentAccount && (f.name in keep || "${f.parentFile.name}/${f.name}" in keep)) "mirror_cover" else "cover"))
             }
         }
         return items
@@ -421,6 +421,7 @@ class CacheWorker(
         val op get() = m["op"] as? String ?: "resume"
         val reason get() = m["reason"] as? String
         val owner get() = m["owner"] as? String ?: ""
+        val server get() = m["server"] as? String ?: owner.substringAfter('|')
         val sentinel get() = m["sentinel"] as? String ?: MirrorLogic.SENTINEL
         val templates get() = m["templates"] as? Map<*, *> ?: emptyMap<String, Any?>()
         val detailTemplate get() = m["detail_template"] as? String
@@ -851,7 +852,7 @@ class CacheWorker(
         r.requests++
         if (job.kind == "entry") {
             val account = plan.owner
-            val server = plan.owner.substringAfter('|')
+            val server = plan.server
             store.putEntry(MirrorLogic.key(account, server, path), path, body, t)
             return
         }
@@ -951,7 +952,7 @@ class CacheWorker(
         val rate = r.done.toDouble() / secs
         return sortedMapOf(
             "v" to 4L, "runner" to "companion", "engine" to (if (r.plan.m["catalog"] is Map<*, *>) "bulk" else "crawl"), "run" to r.plan.run, "running" to running.takeIf { it }, "beat" to now(),
-            "op" to store.meta("run_op"), "at" to metaLong("full_at"), "lib_version" to store.meta("lib_version"),
+            "owner" to r.plan.owner,"op" to store.meta("run_op"), "at" to metaLong("full_at"), "lib_version" to store.meta("lib_version"),
             "done" to r.done, "total" to r.total, "left" to left, "pct" to r.pct, "rate" to Math.round(rate * 10) / 10.0,
             "eta_s" to (if (rate > 0 && left > 0) (left / rate).toLong() else null), "skipped" to r.skipped, "errors" to r.errors,
             "covers" to sortedMapOf<String, Any?>("ok" to r.covers[0], "not_modified" to r.covers[1], "failed" to r.covers[2], "bytes" to r.covers[3]),
@@ -961,7 +962,15 @@ class CacheWorker(
 
     private fun writeStatus(r: Run, running: Boolean): Boolean {
         onProgress(if (running && store.meta("run_op") == "full") r.pct else null)
-        return write(File(mirrorDir, "status.lua"), LuaValue.encode(status(r, running)))
+        val written=write(File(mirrorDir, "status.lua"), LuaValue.encode(status(r, running)))
+        if(written) runCatching { publishCatalogState() }.onFailure { log("catalog status projection deferred") }
+        return written
+    }
+
+    fun publishCatalogState() {
+        val owner=store.meta("owner") ?: return
+        val request=String(LuaValue.encode(mapOf("op" to "catalog.state","limit" to 1L,"bytes" to 16384L)),Charsets.ISO_8859_1)
+        LibraryReadModel(store,log=log).publish(owner,listOf(request))
     }
 
     /** The run's counts, from the jobs table; the % never goes down and is 100 only at the end. */
@@ -1014,7 +1023,7 @@ class CacheWorker(
                     "op" to if (plan.op == "resume") "full" else plan.op,
                     "done" to r.done, "total" to total, "left" to maxOf(0L, total - r.done), "pct" to r.pct) +
                     saved.orEmpty().entries.associate { it.key.toString() to it.value } + mapOf(
-                    "run" to plan.run, "running" to null, "beat" to now(), "why" to "failed", "errors" to r.errors)
+                    "owner" to plan.owner,"run" to plan.run, "running" to null, "beat" to now(), "why" to "failed", "errors" to r.errors)
             }
             write(File(mirrorDir, "status.lua"), LuaValue.encode(state))
             summary(plan, "failed", r, (state["done"] as? Number)?.toLong() ?: r.done, state = state)
@@ -1033,6 +1042,8 @@ class CacheWorker(
         runProtected = plan.ids("seed_details").toSet()
         val st = store
         st.own(plan.owner)
+        st.setMeta("catalog_server",plan.server)
+        st.setMeta("catalog_probe_at",now())
         plan.detailTemplate?.let { st.setMeta("detail_template", it) }
         if (plan.m["catalog"] is Map<*, *> && plan.op in setOf("full", "incremental", "revalidate", "resume")) {
             st.setMeta("run_op", if (plan.op == "resume") st.meta("run_op") ?: "full" else plan.op)
@@ -1050,7 +1061,7 @@ class CacheWorker(
                 val body = try { decodeJson(String(reply.body, Charsets.UTF_8)) as? Map<*, *> } catch(_:Exception) { null }
                     ?: throw FastCatalogRefresh.FetchFailure(reply.body.size.toLong())
                 body.entries.associate { it.key.toString() to it.value } + ("_bulkBytes" to reply.body.size.toLong())
-            }, { yieldTo(); checkpoint() }, { File(mirrorDir, "stop").isFile }, now, { pct ->
+            }, { yieldTo(); checkpoint() }, { File(mirrorDir, "stop").isFile || st.meta("owner")!=plan.owner }, now, { pct ->
                 r.pct = pct.toLong(); r.done = pct.toLong(); writeStatus(r, true)
             }, log, dataRoom={growth -> plan.limit==null || room(r,growth,false,st.fileBytes())})
             val why = fast.run()
@@ -1282,7 +1293,11 @@ class CacheWorker(
                             if (l.cover != "transport") allTransport = false
                             // "Save every cover": the pruner keeps this file.
                             if (r.plan.coversOn && l.cover in setOf("ok", "not_modified", "kept")) (st.bookItem(j.id) as? Map<*, *>)?.let { coverName(it) }
-                                ?.let { st.db().exec("INSERT OR IGNORE INTO cover_keep (name) VALUES (?)", it) }
+                                ?.let { name ->
+                                    val scope=allowed(r.plan.coverDir)?.name
+                                    val kept=if(scope==BookOrbitLibrary.namespace(r.plan.owner)) "$scope/$name" else name
+                                    st.db().exec("INSERT OR IGNORE INTO cover_keep (name) VALUES (?)",kept)
+                                }
                             st.db().exec("UPDATE jobs SET state = 1 WHERE kind = ? AND ref = ?", j.kind, ref)
                             continue
                         }
@@ -1371,6 +1386,8 @@ class CacheWorker(
 
     private fun summary(plan: Plan, why: String, r: Run, jobs: Long, saved: Boolean = false, revalidated: Boolean = false,
         state: Map<String, Any?> = status(r, false, why)) {
+        write(File(mirrorDir,"status.lua"),LuaValue.encode(state))
+        runCatching { publishCatalogState() }.onFailure { log("catalog status projection deferred") }
         write(File(mirrorDir, "summary.lua"), LuaValue.encode(sortedMapOf<String, Any?>(
             "run" to plan.run, "why" to why, "jobs" to jobs, "status" to state,
             "changed" to r.changed.toList(), "written" to r.written.toList(), "written_more" to r.writtenMore.takeIf { it },
