@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <Logging.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -15,6 +16,7 @@
 #include "HeapFloor.h"
 #include "network/BookOrbitCatalogClient.h"
 #include "core/WifiPolicy.h"
+#include "core/HeapBudget.h"
 #include "network/SavedWifiConnect.h"
 namespace OrbifyWifi {
 namespace {
@@ -116,7 +118,11 @@ void tick(bool reading, bool browsing, bool busy) {
   const bool on = WiFi.getMode() != WIFI_OFF;
   const bool restore = policy.book(reading, on);
   // Do not leave the PHY's periodic calibration running on a starved heap.
-  heapEmergency = on && !holds.held() && !busy && !OrbifyHeap::roomForCatalog();
+  // This is idle cleanup, not a refused catalog request. Do not emit the
+  // request guard's "waiting for heap" diagnostic after a successful sleep sync.
+  constexpr uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+  heapEmergency = on && !holds.held() && !busy &&
+      !orbify::heap::catalogFits(heap_caps_get_free_size(caps),heap_caps_get_largest_free_block(caps));
   const bool off = heapEmergency ||
       ((managedRadio || policy.forceOff) && policy.off(on, holds.held(), busy, millis() / 1000, browsing));
   if ((off || restore) && !switching.exchange(true)) {
