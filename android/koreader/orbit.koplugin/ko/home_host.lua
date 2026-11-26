@@ -154,6 +154,7 @@ function HomeHost.create()
     end
     function Host:dispatch(action,row,p)
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
+        elseif action == "battery" then BatteryUI.show()
         elseif action == "book" then
             if Library.open(row) then
                 if HomeHost.active==self then UIManager:close(self) end

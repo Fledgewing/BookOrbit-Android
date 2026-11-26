@@ -127,37 +127,9 @@ HomeWidgets.register("library",function(p,snapshot,dispatch,rect)
     end
     return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
 end,function() return {op="library.summary",limit=1} end)
--- The companion owns all measured rates and predictions; Lua only formats scalars.
+-- F12-O extends the existing Battery registration with the snapshot-only page renderer.
 HomeWidgets.register("battery",function(p,snapshot,dispatch,rect)
     assert(Budgets.check(Budgets.get("widgets","battery"),{rows=1,bytes=snapshot.bytes,
         snapshotBytes=snapshot.bytes,spawns=0,network=0,roundTrips=0}))
-    local model=BatteryWidgetPlan.model(snapshot.data)
-    local scale=function(n) return Device.screen:scaleBySize(n) end
-    local w,h=rect.w-2,rect.h-2
-    local c=HomeWidgets.canvas(w,h)
-    local pad=scale(8)
-    local compact=h<scale(120); local narrow=w<scale(190)
-    HomeWidgets.text(c,_(model.charging and "Battery · charging" or "Battery"),pad,pad,compact and math.max(1,w-scale(84)) or w-2*pad,16,false,true)
-    HomeWidgets.text(c,model.level_text,compact and w-scale(76) or pad,compact and pad or scale(32),
-        compact and scale(68) or w/2,compact and 18 or 28,false,true)
-    HomeWidgets.text(c,_(narrow and model.narrow_usual or model.usual),pad,scale(compact and 34 or 72),w-2*pad,compact and 12 or 14)
-    if model.fraction then
-        local bw=compact and w-2*pad or math.min(scale(100),math.floor(w/2)-pad)
-        HomeWidgets.put(c,HomeWidgets.ui().Progress:new{width=bw,height=scale(compact and 6 or 12),
-            percentage=model.fraction,radius=0,margin_h=0,margin_v=0},compact and pad or w-pad-bw,compact and h-pad-scale(6) or scale(42))
-    end
-    if not compact then
-        if narrow then
-            HomeWidgets.text(c,_(model.screen_on),pad,scale(100),w-2*pad,11)
-            HomeWidgets.text(c,_(model.standby),pad,scale(118),w-2*pad,11)
-        else
-            HomeWidgets.text(c,_(model.screen_on.." · "..model.standby),pad,scale(100),w-2*pad,12)
-            if h>=scale(220) then
-                HomeWidgets.text(c,_(model.reading),pad,scale(124),w-2*pad,12)
-                HomeWidgets.text(c,_(model.asleep),pad,scale(144),w-2*pad,12)
-                HomeWidgets.text(c,_(model.charge),pad,scale(168),w-2*pad,11)
-            elseif h>=scale(144) then HomeWidgets.text(c,_(model.charge),pad,scale(122),w-2*pad,11) end
-        end
-    end
-    return HomeWidgets.ui().Frame:new{padding=0,margin=0,bordersize=1,c}
+    return BatteryUI.widget(p,snapshot,dispatch,rect)
 end,function() return {op="battery",limit=1} end)

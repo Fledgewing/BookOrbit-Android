@@ -80,3 +80,6 @@ end
 
 Budgets.screens["reading-copy"] = budget(3, 0, 50)
 Budgets.screens["reading-copy"].roundTrips = 0
+-- Battery tabs select bounded windows from one companion materialization.
+Budgets.screens.battery.rows = 1
+Budgets.screens.battery.bytes = 16384
