@@ -26,22 +26,27 @@ def build_feed(releases, repo=None):
                        r["tag_name"].startswith("xteink-v")), key=lambda r: r["created_at"], reverse=True)
     selected = []
     stems = ("firmware-x4-pro", "firmware-x4-classic", "firmware-x3-x4")
+
+    def keep_heads(group):
+        # Select a head per device: previews may contain only changed readers.
+        # Preserve original assets so tags, versions and signatures stay bound.
+        for stem in stems:
+            head = next((r for r in group if any(
+                a["name"].startswith(stem + "-v") and a["name"].endswith(".bin")
+                for a in r["assets"])), None)
+            if head is not None and head not in selected:
+                selected.append(head)
+
+    # Old readers still need both numeric bridge heads, regardless of product channel.
+    legacy = [r for r in releases if re.match(r"xteink-v\d+\.\d+\.\d+\.\d+", r["tag_name"])]
     for pre in (False, True):
-        channel = [r for r in releases if r["prerelease"] == pre]
-        # Keep legacy channel heads indefinitely. Old firmware compares numeric tags and
-        # cannot cross from 2.0.0.N to 0.12 without first installing this bridge.
-        legacy = [r for r in channel if re.match(r"xteink-v\d+\.\d+\.\d+\.\d+", r["tag_name"])]
-        product = sorted((r for r in channel if r not in legacy and identity(r)),
-                         key=product_key, reverse=True)
-        for group in (product, legacy):
-            # Select a head for each device: a preview may contain just one reader.
-            # Keep original releases/assets so tags, versions and signatures stay bound.
-            for stem in stems:
-                head = next((r for r in group if any(
-                    a["name"].startswith(stem + "-v") and a["name"].endswith(".bin")
-                    for a in r["assets"])), None)
-                if head is not None and head not in selected:
-                    selected.append(head)
+        keep_heads([r for r in legacy if r["prerelease"] == pre])
+    # Product labels alone classify new readers' channels. A newer preview must
+    # never evict an RC, including an older RC retained for an unchanged device.
+    product = sorted((r for r in releases if identity(r)), key=product_key, reverse=True)
+    for minimum in (2, 1, 0):  # Stable; RC allows stable; Preview allows every product label
+        keep_heads([r for r in product if product_key(r)[3] >= minimum])
+
     result = []
     for release in selected:
         entry = {key: release[key] for key in ("tag_name", "name", "draft", "prerelease", "created_at")}

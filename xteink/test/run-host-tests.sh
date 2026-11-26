@@ -28,7 +28,7 @@ if [ ! -f "$json_src" ]; then
 fi
 
 "${CXX:-c++}" -std=c++17 -Wall -Wextra -O1 \
-  -I"$up/lib/JsonParser" -I"$json_inc" -I"$up/src/network" \
+  -I"$up/lib/JsonParser" -I"$json_inc" -I"$up/src/network" -I"$up/src" \
   "$here/ota_release_pick_test.cpp" \
   "$up/lib/JsonParser/ReleaseJsonParser.cpp" "$json_src" \
   "$up/src/network/FirmwareVersion.cpp" "$up/src/network/OtaReleasePick.cpp" \

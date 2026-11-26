@@ -908,20 +908,15 @@
    "applies": "now"
   },
   {
-   "key": "patch_update_prerelease",
-   "type": "bool",
-   "default": false,
+   "key": "update_channel",
+   "type": "choice",
+   "default": "stable",
    "section": "updates",
-   "label": "Include previews and release candidates",
-   "line": "Off: only finished releases.",
-   "reader": [
-    "companion"
-   ],
-   "search": [
-    "beta",
-    "pre-release",
-    "update"
-   ],
+   "label": "Update channel",
+   "line": "Stable: tested releases only. RC: also release candidates, about to become stable. Preview: every test build.",
+   "values": [{"id": "stable", "label": "Stable"}, {"id": "rc", "label": "RC"}, {"id": "preview", "label": "Preview"}],
+   "reader": ["companion"],
+   "search": ["stable", "rc", "preview", "pre-release", "update"],
    "applies": "now"
   },
   {

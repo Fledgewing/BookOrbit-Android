@@ -50,7 +50,7 @@ diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
            includePrereleases ? "yes" : "no");
    for (int attempt = 1;; attempt++) {
      esp_err = checkOnce(client_config);
-+    // Prefer the canonical feed; any transport or manifest failure tries the previous name.
++    // Before the repository rename, the new default feed does not exist yet.
 +    const bool usable = releaseParser.isReleaseList() && newestListed &&
 +                        newestListed->tagFound && newestListed->firmwareFound;
 +    if (orbify::ota_manifest::needsFallback(esp_err == ESP_OK, usable,

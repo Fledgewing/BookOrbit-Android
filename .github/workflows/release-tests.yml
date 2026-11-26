@@ -24,6 +24,7 @@ on:
       - "xteink/test/e2e/**"
       - "xteink/tailnet/sim/**"
       - "xteink/overlay/patches/v2.0/0090-orbify-simulator-build.patch"
+      - "xteink/overlay/patches/v2.0/0056-booksync-update-channels.patch"
       - ".github/workflows/release-tests.yml"
       - ".github/actions/pio-setup/**"
       - ".github/actions/android-setup/**"

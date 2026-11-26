@@ -3,9 +3,9 @@
 Approved maintainer/coordinator rule: test Android/plugin builds are previews. A maintainer
 chooses `rc` only when a build is a real release candidate; the plain version is stable.
 Xteink tags keep the upstream CrossInk rc/beta labels, which describe the firmware base.
-The overlay changes the OTA opt-in's English label to Include pre-releases (upstream
-`lib/I18n/translations/english.yaml:262` at pinned CrossInk
-`87e2e1984481e8a3d996f12b34b50a383f9013b8` called it Include Release Candidates).
+Update channels now offer Stable / RC / Preview, selected from the BookSync version,
+including firmware `booksync_version`; CrossInk labels do not classify BookSync releases.
+See [update channels](update-channels.md).
 
 The next published build is `v0.11.4-preview.1`, titled **BookSync 0.11.4 preview 1**.
 Semver sorts the labels lexically, so the patch bump is required to update devices already
@@ -15,8 +15,8 @@ on `0.11.3-rc.17`:
 
 The Companion's release picker and Lua version comparator use semver, including numeric
 prerelease identifiers. The plugin's `PATCH_VERSION` is stamped with the whole version;
-the Companion installs the plugin of its own release. Include previews and release candidates
-opts into published prereleases; artifact-only workflow runs never create releases or tags.
+the Companion installs the plugin of its own release. The RC and Preview channels
+opt into published release candidates and previews respectively; artifact-only workflow runs never create releases or tags.
 `tools/android-test-version.sh` uses the workflow run number (or the next unused number from
 published previews), continues an open preview patch and bumps the patch after RC/stable.
 A later published preview must exceed any artifact preview installed on a test reader.
