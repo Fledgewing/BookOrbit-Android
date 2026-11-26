@@ -77,9 +77,10 @@ info-level timing span per call/paint; host timing is not a device performance t
 Stats widgets share one materialized `reading.stats` row per paint; aggregate in the companion.
 Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library window
 <30 ms, editor move <100 ms. Layout moves validate only their changed page, bounded by
-the placement count. Home pages and Settings groups inherit their screen-family budget. Settings paints read only
-shared values and bounded library snapshots; choice catalogs stay in the companion until
-the library exposes bounded windows.
+the placement count. Home pages and Settings groups inherit their screen-family budget.
+Settings paints read only shared values and bounded library snapshots; choice catalogs
+stay in the companion until the library exposes bounded windows. Filter picker pages
+inherit the filter screen budget; facet counts and zero-value ordering stay in the companion.
 
 ## Read the source, not memory
 
