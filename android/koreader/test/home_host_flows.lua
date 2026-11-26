@@ -2,9 +2,10 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free}
+            scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,problem=E.Companion.workerProblem}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
+        E.Companion.workerProblem=function() end
         Widget.free=function() end
         local U={Font={getFace=function() return {} end},BB={COLOR_BLACK=0,COLOR_WHITE=1,COLOR_DARK_GRAY=.3}}
         for _,k in ipairs({"Overlap","Frame","Text","Button","Progress"}) do U[k]=Widget:extend{} end
@@ -20,9 +21,11 @@ return function(test,eq,ok,E,W,Widget)
         if E.HomeHost.active then E.HomeHost.active:onCloseWidget() end
         E.LibraryAdapter,E.HomeWidgets._ui,E.S.home_layout,E.S.home_screen=saved.adapter,saved.ui,saved.layout,saved.screen
         E.Device.screen.scaleBySize,W.shown,Widget.free=saved.scale,saved.shown,saved.free
+        E.Companion.workerProblem=saved.problem
         ok(success,err)
     end
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
+    dofile((arg[0]:match("^(.*)/") or ".").."/battery_flows.lua")(test,eq,ok,E,W,withHost)
     test("Home host: paint batches only installed visible widgets and page swipe",function()
         withHost(function(batches,reads)
             E.S.home_layout=E.Layout.default()
@@ -113,7 +116,7 @@ return function(test,eq,ok,E,W,Widget)
         eq(E.HomeHostPlan.snapshot({items={}}).state,"offline-without-data")
         eq(E.HomeHostPlan.snapshot({items={{key="b"}},freshness={saved=true,offline=true}}).state,"offline-with-data")
         local registry=E.HomeHost.installed()
-        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,1)
+        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,2)
         local projected=E.HomeHostPlan.resolve(E.Layout.default(),registry,{wantToRead=false,lists={read=false}})
         for _,p in ipairs(projected.pages[1].placements) do ok(p.widget ~= "lists" and p.instance ~= "want") end
     end)

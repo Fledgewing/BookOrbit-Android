@@ -66,7 +66,9 @@ return function(test,eq,ok,E,W,Widget,withHost)
             ok(described>=3)
             -- Default Home is full: all allowed spans are tried before a new page is added.
             local n=#m.document.pages
-            click(e,"Add",2) -- second picker entry is Continue reading
+            local hero
+            for i,id in ipairs(E.HomeEditor.available({})) do if id=="continue-reading" then hero=i end end
+            click(e,"Add",hero) -- Find by contract; registering another widget may reorder the picker.
             eq(#m.document.pages,n+1); eq(m:page().name,"Reading")
             eq(m.index,n+1); ok(m.selected)
             e.picker=nil; e:rebuild(); e:turn(-1); e:turn(1)

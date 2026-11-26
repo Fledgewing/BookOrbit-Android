@@ -5594,6 +5594,57 @@
           "deferred": "Firmware account adapter and platform credential storage"
         }
       }
+    },
+    {
+      "id": "home-battery",
+      "feature": "BookSync Home battery widget and snapshot Battery page",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Six widget sizes, Overview/Rates/Daily/Charges and Settings link",
+          "reason": "deliberately deferred: 0.12 Android source implementation is building, unreleased and awaiting device validation. Grouped rates, page/refresh efficiency and export/compare actions remain later work; missing evidence is labelled explicitly.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-O-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned battery widget and page follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; implement the snapshot widget and page in the later Xteink slice.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-O-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned battery widget and page follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; implement the snapshot widget and page in the later Xteink slice.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-O-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned battery widget and page follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; implement the snapshot widget and page in the later Xteink slice. X3 also requires measured flash fit.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-O-NOTES.md",
+              "line": 1
+            }
+          ]
+        }
+      }
     }
   ],
   "release_evidence": {

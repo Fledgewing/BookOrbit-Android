@@ -62,6 +62,9 @@ function HomeHost.create()
             local signature=Cache.encode(result)
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
+            if p.widget == "battery" then
+                result={items={result},freshness={saved=not result.pending},pending=result.pending,error=result.error}
+            end
             local snapshot=HomeHostPlan.snapshot(result)
             local dispatch=function(action,row) self:dispatch(action,row,p) end
             local rendered,card=pcall(HomeWidgets.renderers[p.widget],HomeHostPlan.immutable(p),snapshot,dispatch,rect)
@@ -118,6 +121,7 @@ function HomeHost.create()
     end
     function Host:dispatch(action,row,p)
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
+        elseif action == "battery" then BatteryUI.show()
         elseif action == "book" then
             UIManager:close(self)
             if not Library.open(row) and not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then
