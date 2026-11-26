@@ -54,6 +54,34 @@ diff --git a/lib/PngToBmpConverter/PngToBmpConverter.cpp b/lib/PngToBmpConverter
    if (!rowScratch) {
      LOG_ERR("PNG", "OOM: row scratch buffer (%u bytes)", static_cast<unsigned>(rowScratchBytes));
      return false;
+diff --git a/lib/hal/HalWifi.cpp b/lib/hal/HalWifi.cpp
+--- a/lib/hal/HalWifi.cpp
++++ b/lib/hal/HalWifi.cpp
+@@ -2,6 +2,8 @@
+ #include <Logging.h>
+ #include <WifiTransmitPower.h>
+ #include <esp_wifi.h>
++#include <esp_heap_caps.h>
++#include "../../src/orbify/core/HeapBudget.h"
+ 
+ #include <algorithm>
+ 
+@@ -21,6 +23,15 @@
+ extern "C" esp_err_t __real_esp_wifi_start();
+ 
+ extern "C" esp_err_t __wrap_esp_wifi_start() {
++#if defined(BOARD_HAS_PSRAM)
++  // Leave the PHY enough internal RAM before its Wi-Fi task starts calibration.
++  // Preserve the existing transmit-power wrapper and its board ceiling.
++  if (!orbify::heap::catalogFits(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
++                                heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT))) {
++    LOG_ERR("WIFI", "Not enough internal memory to start Wi-Fi; using saved data");
++    return ESP_ERR_NO_MEM;
++  }
++#endif
+   const esp_err_t started = __real_esp_wifi_start();
+   if (started != ESP_OK) return started;
+ 
 diff --git a/src/BookOrbitHomeStore.cpp b/src/BookOrbitHomeStore.cpp
 --- a/src/BookOrbitHomeStore.cpp
 +++ b/src/BookOrbitHomeStore.cpp
@@ -150,7 +178,7 @@ diff --git a/src/BookOrbitHomeStore.h b/src/BookOrbitHomeStore.h
 -bool refresh(StopCheck shouldStop, const CoverSizes& sizes);
 +using RefreshProgress = void (*)(void*, size_t listsDone, size_t listsTotal, size_t books, size_t covers);
 +bool refresh(StopCheck shouldStop, const CoverSizes& sizes, RefreshProgress progress = nullptr, void* context = nullptr);
-+// Mark only a completed Home refresh; the snapshot header/account validation stays in load().
++// Mark only a completed Home refresh; the snapshot header validation stays in load().
 +void markSynced();
  
  // False when the snapshot's shelves are not the ones the BookOrbit settings choose, so
