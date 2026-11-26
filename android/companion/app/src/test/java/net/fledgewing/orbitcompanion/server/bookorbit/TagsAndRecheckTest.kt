@@ -39,15 +39,17 @@ class TagsAndRecheckTest {
         }
         val w = CacheWorker(root, http, now = { 100L }, log = {}, openSql = { JdbcSql(it) })
         val covers = File(root, "covers").apply { mkdirs() }
-        for (id in 1..3) File(covers, "$id.jpg").writeBytes(byteArrayOf(-1, -40, -1) + "old".toByteArray())
-        File(covers, "1.jpg.etag").writeText("\"a\""); File(covers, "2.jpg.etag").writeText("\"b\"")
-        w.recheckCovers("full refresh", CacheWorker.Creds("https://books.example", "reader", "k"), (1L..3L).map { it to File(covers, "$it.jpg").path })
-        assertEquals(mapOf(1L to "\"a\"", 2L to "\"b\""), sent)
-        assertEquals("new", File(covers, "2.jpg").readText()); assertEquals("\"n\"", File(covers, "2.jpg.etag").readText())
-        assertEquals("old", File(covers, "1.jpg").readBytes().drop(3).toByteArray().toString(Charsets.UTF_8))
-        assertFalse(File(covers, "2.jpg.part").exists())
-        val ev = File(root, "events").listFiles()!!.filter { it.extension == "lua" }.single().let { LuaValue.parse(it.readBytes()) as Map<*, *> }
-        assertEquals("covers_rechecked", ev["kind"]); assertEquals(listOf(2L), ev["changed"]); assertEquals(3L, ev["checked"])
+        for (id in 1..3) File(covers, "${id}_0.jpg").writeBytes(byteArrayOf(-1, -40, -1) + "old".toByteArray())
+        File(covers, "1_0.jpg.etag").writeText("\"a\""); File(covers, "2_0.jpg.etag").writeText("\"b\"")
+        w.store.own("owner")
+        val results=(1L..3L).associateWith { w.acquireCoverReference("owner",File(covers,"${it}_0.jpg").path,
+            CacheWorker.Creds("https://books.example","reader","k"),covers,true) }
+        assertEquals(mapOf(1L to "\"a\"",2L to "\"b\"",3L to null),sent)
+        fun delivered(id: Long)=File(LuaValue.utf8(results.getValue(id)["local_path"] as String))
+        assertEquals("new",delivered(2).readText()); assertEquals("\"n\"",File(delivered(2).path+".etag").readText())
+        assertEquals("old",delivered(1).readBytes().drop(3).toByteArray().toString(Charsets.UTF_8))
+        assertFalse(File(delivered(2).path+".part").exists())
+        assertEquals("old",File(covers,"2_0.jpg").readBytes().drop(3).toByteArray().toString(Charsets.UTF_8))
         root.deleteRecursively()
     }
 }

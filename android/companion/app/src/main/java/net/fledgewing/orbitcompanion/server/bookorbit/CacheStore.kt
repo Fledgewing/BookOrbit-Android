@@ -70,6 +70,18 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
         setMeta("owner", owner)
     }
 
+    /** An explicit cover command can initialize a pristine projection namespace even when
+     * catalog caching is disabled. Never adopt unowned catalog work or switch an existing owner. */
+    fun ownIfEmpty(owner: String): Boolean = transaction {
+        meta("owner")?.let { return@transaction it==owner }
+        if ((TABLES+BulkCatalog.tables).filter { it!="meta" }.any { table ->
+                db().query("SELECT 1 FROM $table LIMIT 1") { true }.isNotEmpty()
+            }) return@transaction false
+        db().exec("DELETE FROM library_views")
+        setMeta("owner",owner)
+        true
+    }
+
     // ------------------------------------------------------------------ writes
 
     /** A book as list pages show it. -> the row is new. */

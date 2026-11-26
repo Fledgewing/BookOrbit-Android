@@ -129,11 +129,17 @@ test('routeOf only takes a route at the start, after a base URL or a host', () =
   assert.equal(routeOf('/sdcard/koreader/settings'), null);
 });
 
-test('the repo: BookSync\'s own calls are found', () => {
-  const { routes } = extractRepo(repo, [{ dir: 'android/koreader/orbit.koplugin', ext: '.lua', lang: 'lua' }]);
-  const paths = new Set(routes.map((r) => r.path));
-  for (const p of ['/koreader/plugin/catalog/books', '/koreader/plugin/catalog/books/:p', '/koreader/plugin/catalog/books/:p/thumbnail']) {
+test('the repo: catalog calls remain inventoried and cover routes belong to the companion', () => {
+  const lua = extractRepo(repo, [{ dir: 'android/koreader/orbit.koplugin', ext: '.lua', lang: 'lua' }]);
+  const paths = new Set(lua.routes.map((r) => r.path));
+  for (const p of ['/koreader/plugin/catalog/books', '/koreader/plugin/catalog/books/:p']) {
     assert.ok(paths.has(p), `missing ${p}`);
+  }
+  assert.ok(!lua.routes.some((r) => /\/(thumbnail|photo)$/.test(r.path)), 'plugin Lua must not own cover routes');
+  const companion = extractRepo(repo, [{ dir: 'android/companion', ext: '.kt', lang: 'kotlin', under: '/src/main/' }]);
+  const coverPaths = new Set(companion.routes.map((r) => r.path));
+  for (const p of ['/koreader/plugin/catalog/books/:p/thumbnail', '/koreader/plugin/catalog/authors/:p/photo']) {
+    assert.ok(coverPaths.has(p), `missing companion route ${p}`);
   }
 });
 

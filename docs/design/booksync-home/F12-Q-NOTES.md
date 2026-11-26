@@ -1,7 +1,7 @@
 # F12-Q: companion-owned Android sync
 
-Status: the Android plugin's **sync path is server-free** on feature/0.12. F12-Q2
-owns the remaining covers/catalog/mirror/copies/recommendations/end-of-book cutover.
+Status: the Android plugin's **sync path is server-free** on feature/0.12. F12-Q2’s cover cutover is merged; that slice
+owns the remaining catalog/mirror/copies/recommendations/end-of-book cutover.
 This is source implementation, not a release or device acceptance claim. Xteink
 remains deferred under the maintainer's Android-first authorization.
 

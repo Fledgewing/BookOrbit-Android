@@ -174,7 +174,9 @@ sync calls/routes in every plugin Lua file, including private adapter files, wit
 an exemption. Shared policy fixtures and a neutral toy companion adapter cover the new
 owner, offline restart, override, stale consent and account isolation.
 
-The parallel F12-Q2 slice owns remaining cover acquisition, catalog/grouping, mirror,
+Cover acquisition and refresh now use neutral companion commands; the plugin reads
+bounded local references. The former cover downloader and thumbnail child scanner
+are removed. The parallel F12-Q2 slice owns remaining catalog/grouping, mirror,
 copies, recommendations and end-of-book transport. Until that slice lands, the **whole
 plugin** is not yet server-free. Its cached catalog display helpers are extracted into
 `ko/server/bookorbit/local_view.lua`; existing non-sync jobs receive neutral lifecycle
