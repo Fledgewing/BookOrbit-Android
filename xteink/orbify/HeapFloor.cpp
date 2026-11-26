@@ -1,4 +1,5 @@
 #include "HeapFloor.h"
+#include "core/HeapBudget.h"
 
 #include <Arduino.h>
 #include <Logging.h>
@@ -42,6 +43,23 @@ bool roomForRequest(const char* what) {
   if (free >= KEPT_CONNECTION_MIN_FREE) return true;
   LOG_INF("ORB", "%s: waiting for heap (free=%u, needs %u, maxAlloc=%u); next sync", what, static_cast<unsigned>(free),
           static_cast<unsigned>(KEPT_CONNECTION_MIN_FREE), static_cast<unsigned>(ESP.getMaxAllocHeap()));
+  return false;
+}
+
+bool roomForWifi() {
+  const auto free = heap_caps_get_free_size(INTERNAL_CAPS);
+  const auto largest = heap_caps_get_largest_free_block(INTERNAL_CAPS);
+  if (orbify::heap::wifiFits(free, largest)) return true;
+  LOG_ERR("ORB", "Not enough memory to connect; close the catalog and try again (free=%u largest=%u)",
+          static_cast<unsigned>(free), static_cast<unsigned>(largest));
+  return false;
+}
+bool roomForCatalog() {
+  const auto free = heap_caps_get_free_size(INTERNAL_CAPS);
+  const auto largest = heap_caps_get_largest_free_block(INTERNAL_CAPS);
+  if (orbify::heap::catalogFits(free, largest)) return true;
+  LOG_ERR("ORB", "Catalog: waiting for heap (free=%u largest=%u); using saved data",
+          static_cast<unsigned>(free), static_cast<unsigned>(largest));
   return false;
 }
 

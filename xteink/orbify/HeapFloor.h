@@ -34,6 +34,9 @@ constexpr uint32_t TRANSFER_MIN_FREE = 16 * 1024;
 bool roomForRequest(const char* what);
 // For a transfer's cancel check: true (logged once per boot) when the heap is starved.
 bool starved();
+// Catalog browsing leaves headroom for the Wi-Fi PHY, even on an already joined radio.
+bool roomForCatalog();
+bool roomForWifi();
 
 // The X4s: wolfSSL allocates from PSRAM (internal RAM when PSRAM has no room). Call once at boot,
 // before the first TLS session. No-op without PSRAM and on the simulator.

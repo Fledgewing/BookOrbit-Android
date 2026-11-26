@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <Logging.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -12,27 +13,33 @@
 #include <mutex>
 
 #include "Settings.h"
+#include "HeapFloor.h"
+#include "network/BookOrbitCatalogClient.h"
 #include "core/WifiPolicy.h"
+#include "core/HeapBudget.h"
 #include "network/SavedWifiConnect.h"
 namespace OrbifyWifi {
 namespace {
 std::recursive_mutex mutex;
 orbify::wifi::Holds holds;
 orbify::wifi::Policy policy;
-bool switchingOff = false;
+bool switchingOff = false, heapEmergency = false;
 bool managedRadio = false, currentBrowsing = false;
 std::atomic<bool> switching{false}, networkBusy{false};
 void offTask(void*) {
   {
     std::lock_guard<std::recursive_mutex> lock(mutex);
-    if ((managedRadio || policy.forceOff) &&
-        policy.off(WiFi.getMode() != WIFI_OFF, holds.held(), networkBusy.load(), millis() / 1000,
-                   currentBrowsing)) {
+    if ((heapEmergency && !holds.held() && !networkBusy.load()) ||
+        ((managedRadio || policy.forceOff) &&
+         policy.off(WiFi.getMode() != WIFI_OFF, holds.held(), networkBusy.load(), millis() / 1000,
+                    currentBrowsing))) {
+      BookOrbitCatalogClient::closeBootSession("radio idle");
       switchingOff = true;
       SavedWifiConnect::disconnect();
       switchingOff = false;
       policy.wifiOff();
       managedRadio = false;
+      heapEmergency = false;
     }
   }
   switching.store(false);
@@ -87,6 +94,7 @@ void simulatorIdleOffProbe() {
 bool connect(const char* reason, bool (*stop)()) {
   const auto mode = OrbifySettings::get("wifi_mode");
   if (!orbify::wifi::shouldConnect(mode, reason ? reason : "", false)) return false;
+  if (WiFi.status() != WL_CONNECTED && !OrbifyHeap::roomForWifi()) return false;
   LOG_INF("ORB", "Wi-Fi up reason=%s mode=%s", reason, mode.c_str());
   return SavedWifiConnect::connect(stop);
 }
@@ -109,8 +117,14 @@ void tick(bool reading, bool browsing, bool busy) {
   currentBrowsing = browsing;
   const bool on = WiFi.getMode() != WIFI_OFF;
   const bool restore = policy.book(reading, on);
-  const bool off =
-      (managedRadio || policy.forceOff) && policy.off(on, holds.held(), busy, millis() / 1000, browsing);
+  // Do not leave the PHY's periodic calibration running on a starved heap.
+  // This is idle cleanup, not a refused catalog request. Do not emit the
+  // request guard's "waiting for heap" diagnostic after a successful sleep sync.
+  constexpr uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+  heapEmergency = on && !holds.held() && !busy &&
+      !orbify::heap::catalogFits(heap_caps_get_free_size(caps),heap_caps_get_largest_free_block(caps));
+  const bool off = heapEmergency ||
+      ((managedRadio || policy.forceOff) && policy.off(on, holds.held(), busy, millis() / 1000, browsing));
   if ((off || restore) && !switching.exchange(true)) {
     if (xTaskCreate(restore ? restoreTask : offTask, "orb_wifi", restore ? 8192 : 4096, nullptr, 1,
                     nullptr) != pdPASS)

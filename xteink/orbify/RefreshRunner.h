@@ -9,6 +9,7 @@ struct Snapshot {
   bool active = false, finished = false, paused = false;
   unsigned percent = 0;
   size_t done = 0, total = 0, failures = 0;
+  size_t books = 0;
   std::string result;
 };
 #if CROSSINK_TAILNET_ORBIFY_MIRROR
@@ -22,6 +23,7 @@ void stopForSleep();
 void credentialsChanging();
 bool busy();
 void countCatalogRequest();
+void catalogProgress(size_t done, size_t total, size_t books);
 bool cancelCatalogRequest();
 bool catalogTask();
 #else

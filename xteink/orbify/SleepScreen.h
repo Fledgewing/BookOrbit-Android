@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <string>
+#include <functional>
 
 #if CROSSINK_TAILNET_ORBIFY_SLEEP
 #include "core/SleepLayout.h"
@@ -77,7 +78,10 @@ void drawExtras(const GfxRenderer& renderer, bool redraw);
 
 // On the lent connection, after the next cover: the scope names, Leave out's member lists, the source
 // list or bag, then up to FETCH_PER_SYNC covers. openBookPath: the book open at sleep (never picked).
-void topUp(const std::string& openBookPath, bool (*stop)(), unsigned long budgetMs = 40000);
+enum class Connection { Borrow, Own };
+struct RefreshProgress {std::function<void(size_t,size_t,size_t,size_t)> report;};
+void topUp(const std::string& openBookPath, bool (*stop)(), unsigned long budgetMs = 40000,
+           const RefreshProgress* progress = nullptr, Connection connection = Connection::Borrow);
 void drawPlaceholder(const GfxRenderer& renderer, bool redraw);
 // With the radio off: fetched covers become screen-size BMPs (renderer: the panel's tone profile).
 void decodeCovers(const GfxRenderer& renderer, bool (*stop)());

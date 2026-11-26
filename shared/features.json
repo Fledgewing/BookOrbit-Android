@@ -142,7 +142,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "SQLite cache via companion",
+          "note": "SQLite cache via companion; local window queries",
           "reason": null,
           "evidence": [
             {
@@ -154,7 +154,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "SD cache; retained replies",
+          "note": "Ranked SD rows serve every refreshed list window without Wi-Fi, independent of source page size",
           "reason": null,
           "evidence": [
             {
@@ -166,7 +166,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "SD cache; retained replies",
+          "note": "Ranked SD rows serve every refreshed list window without Wi-Fi, independent of source page size",
           "reason": null,
           "evidence": [
             {
@@ -178,7 +178,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "X3 flash gate; no PSRAM",
+          "note": "Online catalog; no refreshed SD windows",
           "reason": "hardware: X3 flash gate; no PSRAM",
           "evidence": [
             {
@@ -197,7 +197,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Refresh tap always refreshes normally; hold offers Full refresh; companion reports queued and active progress without timer-only failure",
+          "note": "Refresh tap always refreshes normally; hold offers Full refresh; companion owns queued/active progress and completion stamps without timer-only failure",
           "reason": null,
           "evidence": [
             {
@@ -209,7 +209,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Persistent checkpoint and worker with native refresh progress controls; Android companion queue fix does not apply",
+          "note": "Refreshed SD lists serve browser windows offline; live list, book and cover counts; finish-time BookSync stamp",
           "reason": null,
           "evidence": [
             {
@@ -221,7 +221,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Persistent checkpoint and worker with native refresh progress controls; Android companion queue fix does not apply",
+          "note": "Refreshed SD lists serve browser windows offline; live list, book and cover counts; finish-time BookSync stamp",
           "reason": null,
           "evidence": [
             {
@@ -234,7 +234,7 @@
         "x3": {
           "status": "missing",
           "note": "X3 flash gate; no PSRAM",
-          "reason": "hardware: X3 flash gate and no PSRAM exclude the Full refresh worker and its progress controls",
+          "reason": "hardware: X3 flash gate and no PSRAM exclude the bulk catalog worker and its progress counts; Home sync keeps its finish-time stamp",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",

@@ -5,8 +5,8 @@
 // (control server and relay), and with its task stacks that took the X4 Pro
 // from ~180 KB of free internal RAM to ~33 KB, below what BookOrbit sync
 // requires (it refused: "Insufficient heap for sync request"). The link wraps
-// esp_mbedtls_mem_calloc (tailnet_build.py) to prefer PSRAM for anything but
-// small allocations, as CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC would. Boards
+// esp_mbedtls_mem_calloc (tailnet_build.py) to prefer PSRAM, including the
+// small certificate/session nodes on the X4s. Boards
 // without PSRAM fall back to internal RAM, as before.
 #include <esp_heap_caps.h>
 #include <stddef.h>
@@ -15,6 +15,8 @@
 
 void *__wrap_esp_mbedtls_mem_calloc(size_t n, size_t size) {
     const unsigned internal = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+#if !defined(BOARD_HAS_PSRAM)
     if (n * size < TAILNET_TLS_PSRAM_MIN) return heap_caps_calloc(n, size, internal);
+#endif
     return heap_caps_calloc_prefer(n, size, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, internal);
 }

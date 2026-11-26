@@ -53,6 +53,8 @@ struct Lookup {
   std::string path;  // the saved reply
 };
 Lookup lookup(const std::string& url);
+// Slice a refreshed SD source page into a browser window, without a request.
+bool readWindow(const std::string& url, JsonVariantConst filter, JsonDocument& out);
 // The reply at tmpPath answered `url` with a 2xx: keep it (renamed, not
 // copied). Returns true when the view's content changed (always false for a
 // first fetch).

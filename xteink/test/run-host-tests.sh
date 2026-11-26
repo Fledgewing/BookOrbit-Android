@@ -73,6 +73,11 @@ if [ -z "$ajson" ]; then
   for d in "$up"/.pio/libdeps/*/ArduinoJson/src; do [ -f "$d/ArduinoJson.h" ] && ajson="$d" && break; done
 fi
 [ -n "$ajson" ] || { echo "ArduinoJson not found: run 'pio pkg install -e <env>' in $up, or set ARDUINOJSON_DIR" >&2; exit 1; }
+# The actual patched cover allocator: dirty heap bytes must become zeroed PNG
+# rows, and the X4's small image buffers must preserve the internal PHY reserve.
+"${CXX:-c++}" -std=c++20 -DARDUINO_ARCH_ESP32=1 -I"$up/test/memory_policy/stubs" -I"$up/lib/Memory" \
+  "$here/image_memory_test.cpp" -o "$out/image_memory_test"
+"$out/image_memory_test"
 core="$repo/xteink/orbify/core"
 orbify_test() { # name [sources...]: the test reads its tables from shared/fixtures/bookorbit
   local name="$1"
@@ -110,6 +115,7 @@ orbify_test sleep_sync_deadline
 orbify_test wifi_holds
 orbify_test refresh_plan "$core/Mirror.cpp"
 orbify_test bulk_refresh "$core/BulkCatalog.cpp" "$core/CatalogCache.cpp"
+orbify_test cached_window "$core/CatalogWindow.cpp" "$core/CatalogCache.cpp"
 orbify_test wifi_policy
 # Battery stats (orbify/core/BatteryStatsCore): CrossInk-style GoogleTest cases through GtestShim.h.
 orbify_test battery_stats "$core/BatteryStatsCore.cpp"

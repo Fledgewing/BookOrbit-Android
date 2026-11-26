@@ -495,3 +495,54 @@ change; missing identities are added. Rechecking page one always schedules the r
 pages, because an unchanged total says nothing about membership or ordering. Explicit Refresh
 also seeds newly browsable lists. A completed Full refresh logs `lists saved by kind: …`,
 counting distinct successfully fetched identities in that run, grouped independently of ids.
+
+
+### X4 refresh repair (0.11, maintainer request 2026-11-25)
+
+Normal Home refresh keeps its bounded flow. Its sync-transport top-ups now keep
+their raw replies through the catalog save hook before deleting the temporary file;
+previously they bypassed that hook. Those saved source pages (100 rows) and
+browser windows (20 rows, or the facet default) share an absolute-offset model;
+Full refresh continues to use the ranked SD catalog. All-format source rows are
+filtered locally before paging, including when the browser selects EPUB. Omitted
+default sort/order and page-one spellings do not change the sequence. Every refreshed finite list
+and later window opens offline. Search remains an explicit uncached request.
+
+For the dedicated refresh screen, the maintainer now requests live counts in addition
+to the existing percentage: lists completed / total discovered, books saved, covers
+available. This supersedes the earlier Xteink “no N/M” rule on that screen. Counts
+update at most once a second with a partial e-ink refresh. A book on screen still
+receives no refresh popup or progress repaint. The Home tile says BookSync and
+“Synced just now” for the first minute after a successful completion, using the
+finish time after cover/SD work. A failed refresh does not advance the stamp.
+
+The redacted .407 report records internal free heap falling from 160,732 bytes
+before a cache miss to 33,952 bytes after networking and several pages, then 6,676
+bytes before a PHY allocation abort; PSRAM still had 7,565,528 bytes free. The
+page vectors were bounded (60 rows reserved, 8,640 bytes plus 1,363 bytes of text),
+and the 33,952-to-6,676 drop occurred after leaving the catalog. This supports
+network pressure plus a later allocation/fragmentation spike, not proof of a
+per-page leak. The first missed page took about 14 seconds including connection;
+the supplied .224-era fragment has no comparable browse-page timing.
+
+The repair explicitly places JSON, numeric indexes, image scratch buffers and
+small tailnet TLS nodes in PSRAM on X4. SD font caches are released before joining.
+Wi-Fi init needs 61,440 internal bytes and a 24,576-byte block; PHY start and new
+catalog work need 24,576 bytes and a 4,096-byte block. Radio ownership preserves its originally-off state across the miss-to-request
+handoff, so it is restored off after the three-second grace rather than being
+kept for the 120-second idle timeout. An idle radio under the catalog floor is
+also released, including its catalog TLS session.
+Existing lent sleep-sync sessions keep their separate tested budget. The final
+device scan runs before that lent session closes. Normal Home top-ups own one
+sync session and lend it to catalog/cover requests, then close it before releasing
+the radio, instead of handshaking for each metadata request.
+
+Host regressions: saved 100-row pages are projected into 20-, 31- and 60-row
+windows, including mixed-format and smart-scope cases, with no network reader.
+The ranked catalog also tests 245 synthetic books, 294 offline windows across all seven sort
+families, both 100-row boundaries and the short final page; 56,998-byte tracked
+JSON/index peak, zero live arena bytes after each window. The emulator also asserts
+that offline paging stays above the Wi-Fi reserve and does not retain internal
+heap. These are host/emulator measurements, not a post-fix physical-device reading.
+X3 retains its online catalog and has no bulk catalog/PSRAM worker; its Home stamp
+and cover allocation fallback still follow the same completion and ownership rules.

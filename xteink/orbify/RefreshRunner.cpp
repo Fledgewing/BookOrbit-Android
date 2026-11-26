@@ -18,6 +18,7 @@
 #include <mutex>
 
 #include "CacheStore.h"
+#include "BookOrbitHomeStore.h"
 #include "BulkCatalog.h"
 #include "CopyRefresh.h"
 #include "HeapFloor.h"
@@ -100,6 +101,7 @@ void runTask() {
       state.active = !quiet.load(); state.percent = std::max(state.percent,p); state.paused = false;
     }, !quiet.load());
     if(ok) {
+      BookOrbitHomeStore::markSynced();
       if (!quiet.load()) {
       const auto now=time(nullptr);
       write("/.crosspoint/orbify/mirror.state",std::to_string(now>1700000000?now:0)+"\t"+OrbifyCopyRefresh::libraryVersion()+"\n");
@@ -146,6 +148,10 @@ Snapshot snapshot() {
 bool busy() { return running.load() && !snapshot().finished; }
 void countCatalogRequest() {
   if (xTaskGetCurrentTaskHandle() == workerTask.load()) ++requestCount;
+}
+void catalogProgress(size_t done, size_t total, size_t books) {
+  std::lock_guard<std::mutex> lock(stateMutex);
+  state.done=done;state.total=total;state.books=books;
 }
 bool catalogTask() { return xTaskGetCurrentTaskHandle() == workerTask.load(); }
 bool cancelCatalogRequest() { return xTaskGetCurrentTaskHandle() == workerTask.load() && stop(); }

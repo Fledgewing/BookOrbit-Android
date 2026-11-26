@@ -2,6 +2,8 @@
 // @fixture catalog/bulk-refresh/catalog.json
 #include "BulkRefresh.h"
 #include "BulkCatalog.h"
+#include "CatalogWindow.h"
+#include "HeapBudget.h"
 #include <sstream>
 #include <fstream>
 #include <tuple>
@@ -11,6 +13,8 @@
 struct MemoryFiles : orbify::bulk::Files {
   std::map<std::string,std::string> files;
   bool failWrites=false, failRoom=false;
+  uint32_t clock=1700000000;
+  uint32_t now() const override {return clock;}
   bool room(size_t) override {return !failRoom;}
   bool read(const std::string& p,std::string& out) override {auto at=files.find(p);if(at==files.end())return false;out=at->second;return true;}
   bool write(const std::string& p,const std::string& s) override {if(failWrites)return false;files[p]=s;return true;}
@@ -107,10 +111,13 @@ int main(int argc, char** argv) {
     }
     return true;
   };
+  const auto started=disk.clock;
   std::vector<unsigned> shown;
-  CHECK(catalog.refresh("account-device-variant",fetch,[]{return false;},[&](unsigned p){shown.push_back(p);if(p>=90){baseReady=true;orbify::bulk::Catalog offline(disk);JsonDocument base;CHECK(offline.reply("/plugin/catalog/books?sort=title&size=100",base));CHECK(base["items"].size()==8);}}));
+  CHECK(catalog.refresh("account-device-variant",fetch,[]{return false;},[&](unsigned p){shown.push_back(p);disk.clock=started+300;if(p>=90){baseReady=true;orbify::bulk::Catalog offline(disk);JsonDocument base;CHECK(offline.reply("/plugin/catalog/books?sort=title&size=100",base));CHECK(base["items"].size()==8);}}));
   if(!catalog.error.empty())std::printf("engine error: %s\n",catalog.error.c_str());
   CHECK(catalog.stats.seriesRequests==2);
+  std::string finished;CHECK(disk.read("bulk/a/at",finished));CHECK(finished==std::to_string(started+300));
+  CHECK(catalog.stats.listsDone==catalog.stats.listsTotal);
   CHECK(std::is_sorted(shown.begin(),shown.end()) && shown.back()==100);
   for(JsonObjectConst window:fx["windows"].as<JsonArrayConst>()) {
     JsonDocument out;const auto path=std::string("/plugin/catalog/books?")+(window["query"]|"")+"&size=100";
@@ -209,5 +216,85 @@ int main(int argc, char** argv) {
   JsonDocument pick;CHECK(catalog.reply("/plugin/catalog/dashboard",pick));CHECK(pick["discover"][0]["id"]==1);
   CHECK(catalog.refresh("account-device-variant",discover(3),[]{return false;},[](unsigned){},false,true));
   CHECK(catalog.reply("/plugin/catalog/dashboard",pick));CHECK(pick["discover"][0]["id"]==3);
+
+  // Reproduce .407: refresh uses 100-row source pages; the browser asks for
+  // 20-row windows with the default order omitted. Cross both source boundaries
+  // and the short final page, repeatedly, with NO transport in the read object.
+  struct Arena final : ArduinoJson::Allocator {
+    struct alignas(std::max_align_t) Header {size_t bytes;};
+    size_t live=0,peak=0;
+    void* allocate(size_t n) override {
+      auto* h=static_cast<Header*>(std::malloc(sizeof(Header)+n));
+      if(!h)return nullptr;h->bytes=n;live+=n;peak=std::max(peak,live);return h+1;
+    }
+    void deallocate(void* p) override {if(p){auto* h=static_cast<Header*>(p)-1;live-=h->bytes;std::free(h);}}
+    void* reallocate(void* p,size_t n) override {
+      if(!p)return allocate(n);auto* h=static_cast<Header*>(p)-1;auto old=h->bytes;
+      auto* next=static_cast<Header*>(std::realloc(h,sizeof(Header)+n));
+      if(!next)return nullptr;next->bytes=n;live=live-old+n;peak=std::max(peak,live);return next+1;
+    }
+  } arena;
+  MemoryFiles large;
+  unsigned requests=0,progressEvents=0;
+  {
+    orbify::bulk::Catalog refresh(large,&arena);
+    refresh.observe=[&](const orbify::bulk::Stats& stats){++progressEvents;CHECK(stats.listsDone<=stats.listsTotal);};
+    auto transport=[&](const std::string& path,JsonDocument& out) {
+      ++requests;auto q=params(path);
+      if(path.find("/root")!=std::string::npos){out["sections"].to<JsonArray>();return true;}
+      if(path.find("/dashboard")!=std::string::npos){out["discover"].to<JsonArray>();return true;}
+      const bool manifest=path.find("/manifest?")!=std::string::npos;
+      const bool authors=path.find("/sections/authors?")!=std::string::npos;
+      const bool books=path.find("/books?")!=std::string::npos;
+      const size_t count=(manifest||authors||books)?245:0;
+      const size_t size=q["size"].empty()?100:std::stoul(q["size"]);
+      const size_t offset=manifest?(q["cursor"].empty()?0:std::stoul(q["cursor"])):
+        orbify::catalog::Window::page(q["page"].empty()?1:std::stoul(q["page"]),size).offset;
+      const auto end=std::min(offset+size,count);
+      auto items=out["items"].to<JsonArray>();
+      for(size_t i=offset;i<end;++i) {
+        const int64_t id=(q["order"]=="desc" || q["sort"]=="name_desc")?count-i:i+1;
+        auto row=items.add<JsonObject>();row["id"]=id;row["title"]="Synthetic "+std::to_string(id);
+        if(authors){row["count"]=1;continue;}
+        row["authors"][0]="Synthetic author";row["formats"][0]="epub";row["readStatus"]="unread";
+      }
+      out["page"]=offset/size+1;out["size"]=size;out["total"]=count;out["hasNext"]=end<count;
+      if(manifest&&end<count)out["nextCursor"]=std::to_string(end);
+      large.clock+=1;return true;
+    };
+    CHECK(refresh.refresh("synthetic",transport,[]{return false;},[](unsigned){}));
+    CHECK(refresh.stats.booksSaved==245);
+    CHECK(refresh.stats.listsDone==refresh.stats.listsTotal);
+  }
+  CHECK(arena.live==0);CHECK(progressEvents>245);
+  const auto requestCount=requests;
+  for(int repeat=0;repeat<3;++repeat)for(const char* sort:{"recently_added","recently_read","recently_updated","title","author","series","published"}) {
+    for(size_t page=1;page<=14;++page) {
+      {
+        orbify::bulk::Catalog offline(large,&arena);JsonDocument window(&arena);
+        const auto path=std::string("/plugin/catalog/books?format=epub&sort=")+sort+"&page="+std::to_string(page)+"&size=20";
+        CHECK(offline.reply(path,window));
+        const auto w=orbify::catalog::Window::page(page,20);
+        const auto expected=w.offset<245?w.end(245)-w.offset:0;
+        CHECK(window["items"].size()==expected);CHECK(window["hasNext"]==(w.offset+20<245));
+        const bool desc=std::string(sort).find("recently_")==0;
+        for(size_t i=0;i<expected;++i)CHECK(window["items"][i]["id"]==(desc?245-w.offset-i:w.offset+i+1));
+        CHECK(offline.reply("/plugin/catalog/sections/authors?page="+std::to_string(page)+"&size=20",window));
+        CHECK(window["items"].size()==expected);
+      }
+      CHECK(arena.live==0);  // page/index/JSON buffers are released on every window
+    }
+  }
+  CHECK(requests==requestCount);
+  CHECK(arena.peak<1024*1024);  // firmware arena is PSRAM; no library-sized internal JSON/index
+  CHECK(!orbify::heap::wifiFits(6676,1780));
+  CHECK(!orbify::heap::wifiFits(160732,1780));
+  CHECK(!orbify::heap::wifiFits(60000,86004));
+  CHECK(orbify::heap::wifiFits(61440,24576));
+  CHECK(!orbify::heap::catalogFits(23999,20468));
+  CHECK(!orbify::heap::catalogFits(160732,1780));
+  CHECK(orbify::heap::catalogFits(24576,4096));
+  std::printf("offline paging: 245 books, 294 windows, arena peak %zu bytes, live after each window 0; internal Wi-Fi floor %u bytes\n",arena.peak,orbify::heap::WIFI_FREE);
+
   return report("bulk-refresh");
 }

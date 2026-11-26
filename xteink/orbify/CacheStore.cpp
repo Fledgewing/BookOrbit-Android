@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "CacheStore.h"
 #include "BulkCatalog.h"
+#include "HeapFloor.h"
+#include "core/BulkCatalog.h"
+#include "core/CatalogWindow.h"
 
 #if CROSSINK_TAILNET_ORBIFY_CACHE
 #include <Arduino.h>
@@ -65,6 +68,9 @@ unsigned repliesSinceClear = 0;
 orbify::mirror::Stop stopReason = orbify::mirror::Stop::None;
 bool s_loaded = false;
 Index s_index;
+// Only the three loaded browser windows need virtual-source stamps in RAM.
+struct WindowStamp {uint32_t hash=0;Freshness value;};
+WindowStamp windowStamps[3];size_t nextWindowStamp=0;
 
 uint32_t nowSeconds() {
   const time_t t = time(nullptr);
@@ -168,6 +174,7 @@ void save() {
 void wipe() {
   Storage.removeDir(DIR);
   Storage.mkdir(DIR);
+  for(auto& stamp:windowStamps)stamp={};
   s_index = Index{};
   s_index.owner = currentOwner();
 }
@@ -378,6 +385,7 @@ uint32_t hashReply(const std::string& path, uint32_t hash) {
 
 ScopedMode::ScopedMode(const Mode mode) {
   std::lock_guard<std::recursive_mutex> guard(s_lock);
+  if(mode!=Mode::Open)for(auto& stamp:windowStamps)stamp={};
   previous = modeForTask();
   modes[xTaskGetCurrentTaskHandle()] = mode;
 }
@@ -424,6 +432,34 @@ Lookup lookup(const std::string& url) {
   // Without a clock the 60 s window can't be measured: online, ask the server.
   if (!l.hasEntry && !offline && now == 0) l.fetch = true;
   return l;
+}
+
+bool readWindow(const std::string& url, JsonVariantConst filter, JsonDocument& out) {
+  std::lock_guard<std::recursive_mutex> guard(s_lock);
+  if (modeForTask()!=Mode::Open || !BOOKORBIT_STORE.hasCredentials()) return false;
+  index();
+  IndexEntry exact;
+  const auto account=BOOKORBIT_STORE.getUsername();
+  const bool hadExact=loadEntry(keyHash(keyForUrl(account,"GET",url)),exact);
+  std::pair<uint32_t,uint32_t> oldest{UINT32_MAX,UINT32_MAX};
+  uint32_t validated=UINT32_MAX;bool notUpdated=false;
+  JsonDocument window(&psram);
+  const bool ok=orbify::catalog::readCachedWindow(url,[&](const std::string& source,JsonDocument& doc) {
+    IndexEntry entry;
+    if(!loadEntry(keyHash(keyForUrl(account,"GET",source)),entry) ||
+       !readDocument(entryPath(entry.hash),doc) || !doc["items"].is<JsonArray>() ||
+       (doc["size"]|size_t(100))!=orbify::catalog::FETCH_SIZE) return false;
+    oldest=std::min(oldest,std::make_pair(entry.fetchedAt,entry.usedAt));
+    validated=std::min(validated,entry.validatedAt?entry.validatedAt:entry.fetchedAt);
+    notUpdated|=(entry.flags&FLAG_NOT_UPDATED)!=0;
+    return true;
+  },window,&psram);
+  // A later explicit 20-row refresh wins over an older 100-row source.
+  if(!ok || (hadExact && std::make_pair(exact.fetchedAt,exact.usedAt)>=oldest)) return false;
+  out.clear();orbify::bulk::project(window.as<JsonVariantConst>(),filter,out.to<JsonVariant>());
+  if(!out.overflowed())windowStamps[nextWindowStamp++%3]={keyHash(keyForUrl(account,"GET",url)),{true,validated,notUpdated}};
+  OrbifyHeap::logHeap("after saved catalog window");
+  return !out.overflowed();
 }
 
 bool storeReply(const Lookup& l, const std::string& url, const char* tmpPath) {
@@ -567,6 +603,8 @@ Freshness freshness(const std::string& url) {
   if(OrbifyBulk::available(url,false)&&!(e&&OrbifyBulk::wasObserved(url,OrbifyBulk::generation()))) {
     f.saved=true;f.validatedAt=OrbifyBulk::savedAt();return f;
   }
+  const auto hash=keyHash(keyForUrl(BOOKORBIT_STORE.getUsername(),"GET",url));
+  for(const auto& stamp:windowStamps)if(stamp.hash==hash&&stamp.value.saved)return stamp.value;
   if (!e) return f;
   f.saved = true;
   f.validatedAt = e->validatedAt ? e->validatedAt : e->fetchedAt;

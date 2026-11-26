@@ -64,6 +64,7 @@
 
 #include "TailnetNetPhase.h"
 #include "TailnetSysSwitches.h"
+#include "../../orbify/core/HeapBudget.h"
 
 void tailnet_log_emit(const char* format, ...);  // TailnetLog.cpp
 // TailnetNetPhase.cpp (CrossInk side). Weak: the framework's lib-builder pass links the
@@ -240,6 +241,14 @@ esp_err_t __real_esp_wifi_init(const wifi_init_config_t* config);
 
 esp_err_t __wrap_esp_wifi_init(const wifi_init_config_t* config) {
   if (config == NULL || config->magic != WIFI_INIT_CONFIG_MAGIC) return __real_esp_wifi_init(config);
+#if defined(BOARD_HAS_PSRAM)
+  // PSRAM is not a substitute for the internal PHY/driver allocation pool.
+  if (heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < BOOKSYNC_WIFI_FREE ||
+      heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < BOOKSYNC_WIFI_BLOCK) {
+    tailnet_log_emit("E tailnet: Not enough internal memory to start Wi-Fi; try again after closing the catalog\n");
+    return ESP_ERR_NO_MEM;
+  }
+#endif
   wifi_init_config_t cfg = *config;
   const uint32_t target = tailnet_network_boot_target ? tailnet_network_boot_target() : 0;
   const wifi_tier_t tier = tierForBoot(target);
@@ -281,3 +290,4 @@ esp_err_t __wrap_esp_wifi_init(const wifi_init_config_t* config) {
   return __real_esp_wifi_init(&cfg);
 #endif
 }
+
