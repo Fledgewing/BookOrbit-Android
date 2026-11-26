@@ -4,7 +4,7 @@ import java.util.Locale
 
 /** Neutral filter semantics; executed only on the companion worker. Never paginates before filtering. */
 object LibraryFilter {
-    val fields = setOf("show", "wtr", "where", "author", "series", "tags", "length", "len", "rating", "added", "group", "sort", "dir", "q")
+    val fields = setOf("show", "wtr", "where", "author", "series", "tags", "length", "len", "rating", "added", "group", "sort", "dir", "q", "without_series")
     fun validate(f: Map<*, *>) {
         require(f.keys.all { it in fields }) { "unsupported filter" }
         fun choice(k: String, values: Set<String>) { require(f[k] == null || f[k] in values) { "invalid $k" } }
@@ -13,6 +13,7 @@ object LibraryFilter {
         choice("group", setOf("none", "author", "series"))
         choice("sort", setOf("order", "match", "title", "author", "last", "added", "rating", "series"))
         choice("dir", setOf("asc", "desc"))
+        require(f["without_series"] == null || f["without_series"] is Boolean)
         require(f["wtr"] == null || f["wtr"] is Boolean)
         require(f["q"] == null || f["q"] is String && (f["q"] as String).length <= 512)
         for (k in listOf("author", "series", "tags")) require(f[k] == null || f[k] is List<*> && (f[k] as List<*>).size <= 100 && (f[k] as List<*>).all { it is String })
@@ -32,6 +33,7 @@ object LibraryFilter {
         return (m["min"] == null || compare(v, m["min"]!!) >= 0) && (m["max"] == null || compare(v, m["max"]!!) <= 0)
     }
     fun matches(b: Map<String, Any?>, f: Map<*, *>): Boolean {
+        if (f["without_series"] == true && !(b["series"] as? List<*>).isNullOrEmpty()) return false
         val show = f["show"] ?: "all"
         if (show == "want-to-read" && b["want_to_read"] != true) return false
         if (show != "all" && show != "want-to-read" && b["status"] != show && !(show == "reading" && b["status"] == "rereading")) return false

@@ -38,6 +38,8 @@ function HomeHost.create()
         self:rebuild()
     end
     function Host:rebuild()
+        if self.series_key then return SeriesUI.paint(self) end
+        if self.list_layout and self.filter.model.query.group~="none" and self.filter.model.query.group~=nil then return SeriesUI.groups(self) end
         local paint=Library.paint(self.list_layout and (self.filter.model.source=="search" and "search" or "library") or "home")
         local ready,caps=pcall(paint.capabilities,paint)
         caps=ready and caps or {}
@@ -153,6 +155,7 @@ function HomeHost.create()
         UIManager:show(menu) -- gate: user action (Home menu)
     end
     function Host:turn(delta)
+        if self.series_key then return SeriesUI.page(self,delta) end
         if self.list_layout then return self:listPage(delta) end
         local resolved=HomeHostPlan.resolve((self.list_layout or HomeHost.document()),HomeHost.installed(),self.caps)
         local index=HomeHostPlan.page(self.index,delta,#resolved.pages)
@@ -201,7 +204,18 @@ function HomeHost.create()
                 action=="group" and {group=row.group} or need.query,need.exclude_current)
         end
     end
+    function Host:showSeries(key,onBack)
+        if self.series_key then return end
+        self.series_key,self.series_offset,self.series_return=key,0,onBack
+        self:rebuild(); UIManager:setDirty(self,"ui")
+    end
     function Host:showList(title,source,query,exclude_current)
+        if self.series_key or self.list_layout then
+            self.catalog_history=self.catalog_history or {}
+            self.catalog_history[#self.catalog_history+1]={series_key=self.series_key,series_offset=self.series_offset,
+                list_layout=self.list_layout,list_title=self.list_title,filter=self.filter,index=self.index,group_offsets=self.group_offsets,series_return=self.series_return}
+        end
+        self.series_key=nil; self.series_return=nil; self.group_offsets={}
         if not self.list_layout then self.home_index=self.index end
         self.list_title=title or "Library"
         self.list_layout=Layout.default()
@@ -210,12 +224,13 @@ function HomeHost.create()
             x=0,y=0,w=4,h=3,settings={title=self.list_title,source=source,query=query or {},exclude_current=exclude_current,offset=0,limit=8,style=1}}}}}
         local settings=self.list_layout.pages[1].placements[1].settings
         self.filter=FilterView.new{title=self.list_title,source=source,query=query,exclude_current=exclude_current,
-            onChange=function(q) settings.query=q; settings.offset=0; self:rebuild(); UIManager:setDirty(self,"ui") end,
-            onApply=function(q) settings.query=q; settings.offset=0; self:rebuild(); UIManager:setDirty(self,"ui") end,
+            onChange=function(q) settings.query=q; settings.offset=0; self.group_offsets={}; self:rebuild(); UIManager:setDirty(self,"ui") end,
+            onApply=function(q) settings.query=q; settings.offset=0; self.group_offsets={}; self:rebuild(); UIManager:setDirty(self,"ui") end,
             onSave=function(saved) self:saveFilter(saved) end}
         self.index=1; self:rebuild(); UIManager:setDirty(self,"ui")
     end
     function Host:listPage(delta)
+        if self.filter.model.query.group and self.filter.model.query.group~="none" then return SeriesUI.groupPage(self,delta) end
         local settings=self.list_layout.pages[1].placements[1].settings
         local result=self.list_result or {}
         if delta>0 and not result.next then return true end
@@ -257,6 +272,20 @@ function HomeHost.create()
         return true
     end
     function Host:onClose()
+        if self.series_key then
+            local back=self.series_return
+            self.series_key=nil; self.series_return=nil
+            if back then back(); return true end
+            self:rebuild(); UIManager:setDirty(self,"ui"); return true
+        end
+        if self.catalog_history and #self.catalog_history>0 then
+            if self.filter then self.filter:close(false) end
+            local previous=table.remove(self.catalog_history)
+            self.series_key,self.series_offset=previous.series_key,previous.series_offset
+            self.list_layout,self.list_title,self.filter,self.index=previous.list_layout,previous.list_title,previous.filter,previous.index
+            self.group_offsets=previous.group_offsets; self.series_return=previous.series_return
+            self:rebuild(); UIManager:setDirty(self,"ui"); return true
+        end
         if self.list_layout then
             self.list_layout=nil; self.list_title=nil; self.filter=nil; self.index=self.home_index or 1; self.home_index=nil; self:rebuild(); UIManager:setDirty(self,"ui"); return true
         end
@@ -264,6 +293,8 @@ function HomeHost.create()
         return true
     end
     function Host:onCloseWidget()
+        for _,entry in ipairs(self.catalog_history or {}) do if entry.filter then entry.filter:close(false) end end
+        self.catalog_history=nil
         if self.filter then self.filter:close(false); self.filter=nil end
         if self.unsubscribe then self.unsubscribe(); self.unsubscribe=nil end
         if self.redraw then UIManager:unschedule(self.redraw); self.redraw=nil end
