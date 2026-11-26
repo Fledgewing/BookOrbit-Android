@@ -53,9 +53,22 @@ class LibraryReadModel(
         if (op == "mode-estimates") return mapOf("items" to listOf("saver", "balanced", "current").take(((a["limit"] as? Number)?.toInt() ?: 3).coerceIn(1, 3)).map {
             mapOf("id" to it, "text" to "Estimate available after measured use", "measured" to false)
         })
+        // Local-only placeholder until the battery slice supplies its measured projection.
+        if (op == "battery") return mapOf("available" to false, "freshness" to freshness(false))
+        if (op == "reader") {
+            val path = a["path"] as? String ?: return empty(false)
+            val entry = BookOrbitLibrary.localEntries(store, owner)?.firstOrNull { it["path"] == path }
+                ?: return empty(false)
+            val id = (entry["book_id"] as? Number)?.toLong() ?: return empty(false)
+            val result = project(owner, a + mapOf("op" to "book", "key" to BookOrbitLibrary.key(owner, "book", id)))
+            val current = (a["native_progress"] as? Number)?.toDouble()?.takeIf { it.isFinite() && it in 0.0..1.0 }
+            val book = (result["items"] as? List<*>)?.singleOrNull() as? Map<*, *>
+            return if (current != null && book != null) result + mapOf("items" to listOf(book +
+                mapOf("progress" to current * 100, "progress_origin" to "local-reader"))) else result
+        }
         if (op == "reading.stats") return readingStats()
         if (op == "capabilities") return mapOf("catalog" to true, "detail" to true, "download" to false,
-            "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false),
+            "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false, "syncCurrent" to true),
             "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
             "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
             "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
@@ -79,6 +92,10 @@ class LibraryReadModel(
             val id = BookOrbitLibrary.id(owner, "book", a["key"]) ?: return mapOf("error" to "missing")
             val raw = store.bookItem(id) as? Map<*, *> ?: return mapOf("error" to "missing", "freshness" to freshness(false))
             val summary = BookOrbitLibrary.summary(owner, raw, 0, null).toMutableMap()
+            if (op == "book") {
+                val entry = BookOrbitLibrary.localEntries(store, owner)?.firstOrNull { (it["book_id"] as? Number)?.toLong() == id }
+                summary["stats"] = ReaderBookStats.read(store.root, entry)
+            }
             val detail = store.detail(id)
             if (op == "book" && detail?.first is Map<*, *>) {
                 val d = detail.first as Map<*, *>

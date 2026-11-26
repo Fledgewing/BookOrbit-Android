@@ -82,6 +82,8 @@ their changed page, bounded by the placement count. Home pages and Settings grou
 their screen-family budget. Settings paints read only shared values and bounded library snapshots;
 choice catalogs stay in the companion until the library exposes bounded windows. Filter picker
 pages inherit the filter screen budget; facet counts and zero-value ordering stay in the companion.
+Reader progress surfaces reuse a one-row widget budget, including Book info and
+Details; completion callbacks redraw only a still-visible user-opened panel.
 
 ## Read the source, not memory
 
