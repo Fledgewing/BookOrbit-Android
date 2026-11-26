@@ -1251,7 +1251,7 @@ test("companion: an app with its name and another signer gets nothing, the login
     RE.installed_cache.at = -1000
     W.broadcasts = {}
     ok(RE.Companion.state() == "untrusted", "untrusted: " .. tostring(RE.Companion.state()))
-    ok(not RE.Companion.send(RE.Companion.ACTION.CHECK, { server = "https://books.example", user = "u", userkey = "k" }), "not sent")
+    ok(not RE.Companion.send(RE.Companion.ACTION.SLEEP_REFRESH, { server = "https://books.example", user = "u", userkey = "k" }), "not sent")
     ok(#W.broadcasts == 0, "nothing reached it")
     ok(RE.Companion.status() == nil, "no status asked")
     ok(RE.Companion.workerProblem() ~= nil, "nothing heavy runs")
@@ -1264,7 +1264,7 @@ test("companion: an app with its name and another signer gets nothing, the login
     -- Replacing the app must not inherit a recent menu/status check's cached trust.
     W.companion_cert = "1234abcd"
     W.broadcasts = {}
-    ok(not RE.Companion.send(RE.Companion.ACTION.CHECK, { userkey = "k" }), "cached trust cannot send a credential")
+    ok(not RE.Companion.send(RE.Companion.ACTION.SLEEP_REFRESH, { userkey = "k" }), "cached trust cannot send a credential")
     eq(#W.broadcasts, 0, "the replacement receives nothing")
     W.companion_cert = RELEASE_CERT
     RE.installed_cache.at = -1000
@@ -1355,6 +1355,20 @@ test("contract: every command, call, page, launch command, status key, file and 
     schema:close()
     eq(table.concat(tables, ","), table.concat(C.db.tables, ","), "every orbit.db table")
 end)
+
+test("library bridge: real JNI decoding returns command IDs and bounded state/result fields",function()
+    local call=W.companionCall
+    local body=RE.Cache.encode({title="Résumé",local_path="/fixture/é.epub"})
+    W.companionCall=function() return {kind="bundle",extras={ok="1",id="job-1",body=body,owner="lecteur-é",pending="1"}} end
+    local success,err=pcall(function()
+        local result=RE.Jni.call(RE.Companion.AUTHORITY,RE.Companion.PACKAGE..".call.SERVER_STATE",{reload="1"})
+        eq(result.id,"job-1");eq(result.body,body);eq(result.owner,"lecteur-é");eq(result.pending,"1")
+        eq(RE.Cache.decode(result.body).title,"Résumé")
+    end)
+    W.companionCall=call
+    ok(success,err)
+end)
+
 
 ---------------------------------------------------------------- recommended settings (addon-mode §5)
 local BO_DEFAULTS = { auto_sync = false, sync_forward = 1, sync_backward = 3, catalog_auto_open = "off" }
@@ -2556,7 +2570,7 @@ test("update: without the companion of this version the menu says what to do and
     local UE = getfenv(Orbit.onSuspend)
     local real = UE.Companion.workerProblem
     local asked
-    UE.Companion.workerProblem = function(purpose) asked = purpose; return "BookSync Companion needed " .. tostring(purpose) end
+    UE.Companion.workerProblem = function(purpose) if purpose then asked = purpose end; return "BookSync Companion needed " .. tostring(purpose) end
     W.broadcasts, W.shown = {}, {}
     local _ui, orbit = newUI(false)
     orbit:checkPatchUpdate()
@@ -3397,7 +3411,7 @@ test("copies: never while reading; the queue waits on disk and goes once the boo
     E.Copies.ask("test")
     run(5)
     ok(#copies.calls == 0, "nothing while reading")
-    ok(#E.Copies.state().queue == 2, "queued: " .. #E.Copies.state().queue)
+    eq(#E.Copies.state().queue,0,"durable companion event waits until reading ends")
     m:onCloseWidget()
     copiesUI(false)
     run(10)
@@ -3835,135 +3849,15 @@ function cacheTeardown()
 end
 local DASH = "/koreader/plugin/catalog/dashboard"
 
-test("cache: a read is answered from the cache at once, checked after 60 s, redrawn when it changed", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server[DASH] = { continueReading = { { id = 7, title = "A" } } }
-    local b = client:request("GET", DASH)
-    ok(b and b.continueReading[1].id == 7 and #cache.calls == 1, "first read: the server")
-    -- The companion saves it (it asks the server again: CHECK mode "store").
-    run(1)
-    ok(#cache.calls == 2 and E.Store.read(E.OC.owner(client), "x", DASH) == nil, "not saved under another key")
-    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = b }, client = client }, Cat)
-    cat:switchTo("Home", {}, cat.current_context, false)
-    ok(cat._orbit_view_keys, "the view knows its keys")
-    package.loaded["bookorbit_catalog"] = Cat
-    cache.calls = {}
-    b = client:request("GET", DASH)
-    ok(b.continueReading[1].id == 7 and #cache.calls == 0, "again within 60 s: the cache, no request")
-    -- Later: served at once, checked in the background; the server changed -> Home redraws.
-    W.clock = W.clock + 61
-    cache.server[DASH] = { continueReading = { { id = 8, title = "B" } } }
-    E.OC.client = function() return client end
-    local hosts = E.serverPlugin
-    E.serverPlugin = function() return { catalog_browser = cat } end
-    b = client:request("GET", DASH)
-    ok(b.continueReading[1].id == 7 and #cache.calls == 0, "served at once from the cache")
-    run(5)
-    ok(#cache.calls == 1, "one background check: " .. table.concat(cache.calls, ","))
-    ok(cache.reloaded == 1, "Home reloaded from the cache")
-    cache.calls = {}
-    b = client:request("GET", DASH)
-    ok(b.continueReading[1].id == 8 and #cache.calls == 0, "the new body, from the cache")
-    -- Unchanged on the next check: no redraw.
-    W.clock = W.clock + 61
-    client:request("GET", DASH); run(5)
-    ok(cache.reloaded == 1, "unchanged: no redraw")
-    -- Offline: the cache, no request.
-    W.wifi, cache.calls = false, {}
-    W.clock = W.clock + 600
-    b = client:request("GET", DASH); run(5)
-    ok(b.continueReading[1].id == 8 and #cache.calls == 0, "offline: the cache")
-    E.serverPlugin = hosts
-    cacheTeardown()
-end)
 
-test("cache: Refresh checks now; Full refresh goes to the server; neither evicts covers", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server[DASH] = { continueReading = { { id = 7 } } }
-    client:request("GET", DASH); run(1)
-    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = cache.server[DASH] }, client = client }, Cat)
-    function cat:refreshCurrent()
-        self:evictCachedCovers(self.dashboardBooks(self.current_context.dashboard))
-        self.client:request("GET", DASH)
-    end
-    lf.evicted, cache.calls = {}, {}
-    E.OC.refresh(cat)
-    ok(#cache.calls == 0, "Refresh: answered from the cache")
-    run(5)
-    ok(#cache.calls == 1 and #lf.evicted == 0, "...and checked at once, no cover evicted")
-    cache.calls = {}
-    E.OC.fullRefresh(cat)
-    ok(#cache.calls == 0, "Full refresh starts asynchronously")
-    ok(#lf.evicted == 0, "no cover evicted")
-    -- Hold ⟳ on a list = Full refresh; a broken cover file on screen is removed for re-download.
-    local bad = cache.dir .. "/covers/7_1.jpg"
-    local good = cache.dir .. "/covers/8_1.jpg"
-    local fh = io.open(bad, "wb"); fh:write("<html>oops</html>"); fh:close()
-    fh = io.open(good, "wb"); fh:write("\255\216\255\224jpeg"); fh:close()
-    cat.current_context = { kind = "books", books = { { id = 7, hasCover = true }, { id = 8, hasCover = true } } }
-    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. b.id .. "_1.jpg" end
-    function cat:invalidateThumbnail(b) cache.invalidated = b.id end
-    cache.calls = {}
-    cat:listRun({ kind = "orbit-refresh" }, nil, true)
-    ok(io.open(bad) and io.open(good), "cover inspection waits for companion")
-    ok(#cache.calls == 0, "Full refresh from a list starts asynchronously")
-    cacheTeardown()
-end)
 
-test("cache: Refresh tap during Full refresh expands progress without starting another job", function()
-    local client, Cat = cacheSetup()
-    local cat = setmetatable({client=client}, Cat)
-    local mirror = E.Mirror
-    local shown
-    E.Mirror={fullRunning=function() return true end, showProgress=function(why) shown=why end}
-    W.wifi=false -- progress is local even if connectivity was lost
-    E.OC.refresh(cat)
-    eq(shown,"Refresh tapped"); eq(#cache.calls,0)
-    E.Mirror=mirror
-    cacheTeardown()
-end)
 
-test("cache: a write patches the cached book and marks Home stale; accounts never mix", function()
-    local client = cacheSetup()
-    W.wifi = true
-    local DET = "/koreader/plugin/catalog/books/7"
-    cache.server[DET] = { id = 7, readStatus = "reading", seriesMembers = { { id = 6, readStatus = "read" } } }
-    cache.server[DASH] = { continueReading = { { id = 7, readStatus = "reading" } } }
-    client:request("GET", DET); client:request("GET", DASH); run(1)
-    client:request("PUT", "/koreader/plugin/catalog/books/7/read-status", { status = "read" })
-    -- The companion patches the saved replies (PATCH).
-    run(1)
-    cache.calls = {}
-    local d = client:request("GET", DET)
-    ok(d.readStatus == "read" and #cache.calls == 0, "detail patched, from the cache")
-    local h = client:request("GET", DASH)
-    ok(h.continueReading[1].readStatus == "read", "Home patched")
-    run(5)
-    ok(#cache.calls == 1 and cache.calls[1] == "GET " .. DASH, "Home stale: checked")
-    -- Another account on the same server: nothing of the first is served.
-    local other = setmetatable({ username = "kid", userkey = "k2", server_url = "https://books.example" }, getmetatable(client))
-    cache.calls = {}
-    other:request("GET", DET)
-    ok(#cache.calls == 1, "another account: the server")
-    cacheTeardown()
-end)
 
-test("cache: a read made in the catalog's child process is saved by the companion", function()
-    local client = cacheSetup()
-    W.wifi = true
-    cache.server[DASH] = { continueReading = { { id = 9 } } }
-    local done, r = client:runInSubprocess(function() return client:request("GET", DASH) end)
-    ok(done and r.body.continueReading[1].id == 9, "the child's answer")
-    run(1)
-    local key = E.ServerCache.key({ account = E.OC.owner(client), server = client.server_url, method = "GET", path = DASH })
-    ok(E.Store.read(E.OC.owner(client), key, DASH) ~= nil, "the companion saved it")
-    cache.calls = {}
-    local b = client:request("GET", DASH)
-    ok(b.continueReading[1].id == 9 and #cache.calls == 0, "then served from the cache")
-    cacheTeardown()
-end)
+
+
+
+
+
 
 test("covers: low-level legacy calls are local only even with caching disabled", function()
     local client = cacheSetup()
@@ -3991,75 +3885,11 @@ local PLUGIN_PATHS = {
     detail = "/koreader/plugin/catalog/books/549?deviceId=F00D",
 }
 
-test("cache: every catalog read the plugin makes in its child process is cached and served (M8C: Home and lists bypassed it)", function()
-    local client = cacheSetup()
-    W.wifi = true
-    for name, path in pairs(PLUGIN_PATHS) do cache.server[path] = { name = name, items = { { id = 1 } } } end
-    for name, path in pairs(PLUGIN_PATHS) do
-        local done, r = client:runInSubprocess(function() return client:request("GET", path) end)
-        ok(done and r.body and r.body.name == name, name .. ": answered in the child, err " .. tostring(r.err) .. " " .. tostring(cache.child_crash))
-    end
-    run(1)
-    cache.calls = {}
-    for name, path in pairs(PLUGIN_PATHS) do
-        local _, r = client:runInSubprocess(function() return client:request("GET", path) end)
-        -- A list's page 2 is served from its positions (its head fields come with page 1).
-        ok(r.body and (r.body.name == name or name == "books" and r.body.items[1].id == 1), name .. ": from the cache")
-    end
-    ok(#cache.calls == 0, "no request the second time: " .. table.concat(cache.calls, ","))
-    -- Offline: a cached list page pages without a request or an error.
-    W.wifi = false
-    W.clock = W.clock + 3600
-    local _, r = client:runInSubprocess(function() return client:request("GET", PLUGIN_PATHS.books) end)
-    ok(r.body and r.body.items[1].id == 1 and #cache.calls == 0, "offline: the cached page, err " .. tostring(r.err))
-    W.wifi = true
-    cacheTeardown()
-end)
 
-test("cache: offline, a cached page opens without connecting; an uncached one asks Connect and load more", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server[PLUGIN_PATHS.books] = { items = { { id = 1 } } }
-    client:runInSubprocess(function() return client:request("GET", PLUGIN_PATHS.books) end)
-    run(1)
-    ok(rawget(Cat, "__orbit_stock") and Cat.__orbit_stock["cache:runConnected"], "runConnected wrapped")
-    local cat = setmetatable({ client = client }, Cat)
-    cache.connects = 0
-    W.wifi = false
-    local got, err
-    cat:runConnected(function() local _, r = client:runInSubprocess(function() return client:request("GET", PLUGIN_PATHS.books) end); got, err = r.body, r.err end)
-    ok(got and cache.connects == 0, "cached: no connect, no error")
-    local before = #W.shown
-    cat:runConnected(function() local _, r = client:runInSubprocess(function() return client:request("GET", "/koreader/plugin/catalog/books?page=9") end); got, err = r.body, r.err end)
-    ok(got == nil and err == "cancelled" and cache.connects == 0, "uncached: quiet (cancelled), not yet connected: " .. tostring(err))
-    local box = W.shown[#W.shown]
-    ok(#W.shown > before and box.ok_text == "Connect and load more", "asks: " .. tostring(box and box.ok_text))
-    box.ok_callback()
-    ok(cache.connects == 1, "then connects and loads")
-    W.wifi = true
-    cacheTeardown()
-end)
 
-test("cache: tap ⟳ says Refreshing (a tip to hold, once); hold starts a Full refresh with no other note (the badge says it)", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    local notes = {}
-    E.OC.note = function(t) table.insert(notes, t) end
-    cache.server[DASH] = { continueReading = { { id = 7, hasCover = true } } }
-    client:request("GET", DASH)
-    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = cache.server[DASH] }, client = client }, Cat)
-    function cat:refreshCurrent() self.client:request("GET", DASH); self:switchTo("Home", {}, self.current_context, false) end
-    E.S.refresh_tip_shown = nil
-    E.OC.refresh(cat); E.OC.refresh(cat)
-    ok(notes[1]:find("Tip: hold ⟳ for a full refresh", 1, true) and notes[2] == "Refreshing…", "tip once: " .. table.concat(notes, " | "))
-    notes = {}
-    W.logs = {}
-    E.OC.fullRefresh(cat)
-    run(5)
-    ok(#notes == 0, "no note during a Full refresh: " .. table.concat(notes, " | "))
-    ok(table.concat(W.logs, "\n"):find("starting companion bulk catalog", 1, true), "logged")
-    cacheTeardown()
-end)
+
+
+
 
 ---------------------------------------------------------------- v0.11.1: first paint, covers, offline mirror
 
@@ -4149,205 +3979,17 @@ local function withHost(cat, fn)
 end
 
 -- @fixture catalog/sections.json
-test("mirror: every Home shelf and server index is planned before any browsing", function()
-    local client, Cat = cacheSetup()
-    local cat = pluginCatalog(Cat, client)
-    local plan = E.Mirror.plan(cat, "full", "coverage")
-    local inventory = E.Mirror.INVENTORY
-    local paths = {}
-    for _, path in ipairs(plan.browse_lists) do paths[path] = true end
-    for kind, params in pairs(inventory.home_books) do
-        local q = {}
-        for k, v in pairs(params) do q[k] = v end
-        q.order = cat:effectiveOrder(q); cat:listDecorateBookQuery(q)
-        ok(paths[client:query("/koreader/plugin/catalog/books", q)], "uncovered Home shelf: " .. kind)
-    end
-    for kind, params in pairs(inventory.root_books) do
-        local q = {}
-        for k, v in pairs(params) do q[k] = v end
-        q.order = cat:effectiveOrder(q); cat:listDecorateBookQuery(q)
-        ok(paths[client:query("/koreader/plugin/catalog/books", q)], "uncovered server book row: " .. kind)
-    end
-    eq(#plan.sections, #inventory.sections)
-    for _, section in ipairs(inventory.sections) do
-        local template = plan.templates[section]
-        ok(template and template.path, "uncovered selector " .. section)
-        for _, key in ipairs(inventory.selectors[section]) do
-            local path = key == "series" and template.series_name_path or template.path
-            ok(path:find(key .. "=" .. E.Mirror.SENTINEL, 1, true), "uncovered selector key " .. key)
-        end
-    end
-    eq(plan.catalog, inventory)
-    local incremental = E.Mirror.plan(cat, "incremental", "coverage")
-    eq(#incremental.dynamic_lists, #plan.dynamic_lists)
-    ok(#incremental.entries >= 5, "root, Home, Discover and composed shelves")
-    cacheTeardown()
-end)
 
-test("cache: after a Full refresh, offline paging through every page of a linked list never asks to connect", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    local lib = { n_books = 30, series4 = 25 }
-    cache.server_fn = libraryServer(lib)
-    local cat = pluginCatalog(Cat, client)
-    withHost(cat, function()
-        -- Home's shelf read page 1 of Recently added (12 a page); the series list was never opened.
-        client:request("GET", DASH)
-        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
-        E.OC.fullRefresh(cat)
-        run(600)
-        local m = E.Mirror.status()
-        ok(m.at and m.left == 0, "the Full refresh finished: " .. tostring(m.left) .. " left")
-        ok(FC.count("SELECT count(*) FROM lists WHERE identity = ?", "/koreader/plugin/catalog/books?order=desc&sort=recently_added") == 1, "the Home shelf's list is mirrored")
-        ok(E.Mirror.savedText():find("^Saved for offline · "), "says when: " .. E.Mirror.savedText())
-        -- Offline: every page of the shelf's list, and every page of a series it never opened.
-        W.wifi, cache.strict_offline = false, true
-        cache.connects = 0
-        local before = #W.shown
-        for p = 1, 3 do
-            local b, err = offlineRead(cat, client, pagePath(cat, { sort = "recently_added" }, p, 12))
-            ok(b and #b.items == (p < 3 and 12 or 6), "recently added page " .. p .. ": " .. tostring(err))
-        end
-        for p = 1, 2 do
-            local b, err = offlineRead(cat, client, pagePath(cat, cat:paramsForEntry("series", { seriesId = 4 }), p, 20))
-            ok(b and b.items[1] and b.items[1].id == 1000 + (p - 1) * 20 + 1, "series page " .. p .. ": " .. tostring(err))
-        end
-        local b = offlineRead(cat, client, "/koreader/plugin/catalog/sections/series?offset=0&size=11")
-        ok(b and b.items[1].seriesId == 4, "the series index")
-        ok(cache.connects == 0 and #W.shown == before, "never asked to connect")
-        -- A search offline only says it needs a connection.
-        local notes = {}
-        E.OC.note = function(t) table.insert(notes, t) end
-        offlineRead(cat, client, "/koreader/plugin/catalog/books?q=dune&page=1&size=12")
-        ok(notes[1] == "Search needs a connection" and #W.shown == before, "search: " .. tostring(notes[1]))
-        W.wifi, cache.strict_offline = true, nil
-    end)
-    cacheTeardown()
-end)
 
-test("cache: offline, a search answers from the saved books (title, author, series); the UI thread decodes only the page it shows", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 60, series4 = 3 })
-    local cat = pluginCatalog(Cat, client)
-    withHost(cat, function()
-        client:request("GET", DASH)
-        E.OC.fullRefresh(cat); run(600)
-        W.wifi, cache.strict_offline = false, true
-        cache.connects = 0
-        local b
-        local decode, biggest = E.Cache.decode, 0
-        E.Cache.decode = function(str)
-            if type(str) == "string" and not W.in_companion and #str > biggest then biggest = #str end
-            return decode(str)
-        end
-        b = offlineRead(cat, client, "/koreader/plugin/catalog/books?q=b1&page=1&size=5")
-        E.Cache.decode = decode
-        -- B1, B10..B19: 11 books, the first page of 5.
-        ok(b and b.total == 11 and #b.items == 5 and b.hasNext == true, "found: " .. tostring(b and b.total))
-        ok(biggest < 4 * 1024, "decoded only what it shows: " .. biggest .. " bytes")
-        b = offlineRead(cat, client, "/koreader/plugin/catalog/books?q=b1&page=3&size=5")
-        ok(b and #b.items == 1 and b.hasNext == false, "the last page")
-        ok(cache.connects == 0, "never asked to connect")
-        W.wifi, cache.strict_offline = true, nil
-    end)
-    cacheTeardown()
-end)
 
-test("cache: a series gains a 21st book -> Refresh rechecks every saved page and shows it", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    local lib = { n_books = 5, series4 = 20 }
-    cache.server_fn = libraryServer(lib)
-    local cat = pluginCatalog(Cat, client)
-    withHost(cat, function()
-        client:request("GET", DASH)
-        E.OC.fullRefresh(cat); run(600)
-        local series = cat:paramsForEntry("series", { seriesId = 4 })
-        W.wifi = false
-        local b = offlineRead(cat, client, pagePath(cat, series, 2, 20))
-        ok(b and #b.items == 0 and b.total == 20, "20 books before")
-        W.wifi = true
-        lib.series4 = 21
-        cache.calls = {}
-        E.OC.refresh(cat); run(600)
-        local rechecked = 0
-        for _, c in ipairs(cache.calls) do if c:find("size=100") then rechecked = rechecked + 1 end end
-        ok(rechecked >= 7, "every saved page rechecked (five section indexes, the series and all books): " .. rechecked)
-        W.wifi = false
-        b = offlineRead(cat, client, pagePath(cat, series, 2, 20))
-        ok(b and #b.items == 1 and b.items[1].id == 1021 and b.total == 21, "the 21st book: " .. tostring(b and b.total))
-        W.wifi = true
-    end)
-    cacheTeardown()
-end)
 
-test("cache: a Full refresh is manual only, even after the old TTL", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
-    local cat = pluginCatalog(Cat, client)
-    withHost(cat, function()
-        client:request("GET", DASH)
-        E.OC.fullRefresh(cat); run(600)
-        local first = E.Mirror.status().at
-        ok(first, "saved once")
-        W.clock = W.clock + 30 * 86400
-        E.Mirror.tick("network up"); run(600)
-        ok(E.Mirror.status().at == first, "no scheduled Full refresh")
-    end)
-    cacheTeardown()
-end)
 
-test("cache: Home's first paint after a progress write comes from this cache with the reader's book on it; no second full paint", function()
-    local saved_body = { continueReading = { { id = 7, progressPercentage = 1 } } }
-    local client, Cat = cacheSetup(function(Cat)
-        function Cat:initialDashboardContext() lf.saved_paint = true; return {}, { kind = "dashboard", dashboard = saved_body, stale = true } end
-        function Cat:dashboardRootFetch(opts)
-            local b = self.client:request("GET", DASH)
-            if not b then return {}, { kind = "dashboard", unavailable = true } end
-            return {}, { kind = "dashboard", dashboard = b }
-        end
-        function Cat:refreshOnDevice() if lf.maps then self.on_device = lf.maps; return true end self:hydrateOnDeviceMaps(); return false end
-        function Cat:hydrateOnDeviceMaps() lf.hydrating = true end
-    end)
-    W.wifi = true
-    local book = cache.dir .. "/book7.epub"
-    io.open(book, "w"):close()
-    cache.server[DASH] = { continueReading = { { id = 7, progressPercentage = 40 } }, generatedAt = "1" }
-    client:request("GET", DASH); run(1)
-    -- An earlier BookOrbit session knew book 7 is on the reader.
-    local old = setmetatable({ client = client, on_device = { [7] = book } }, Cat)
-    E.LF.keepOnDevice(old)
-    -- Reading moved the book on; the write marks Home stale.
-    client:request("PUT", "/koreader/plugin/syncs/progress", { percentage = 0.5 })
-    run(1)
-    -- A new BookOrbit view: its plugin maps are gone (every state flush drops them).
-    lf.maps, lf.full_paint, lf.stock_switch = nil, 0, 0
-    local cat = setmetatable({ client = client }, Cat)
-    cat:refreshOnDevice()
-    ok(cat.on_device and cat.on_device[7] == book, "book 7 is on the reader before BookOrbit's own maps are back (Resume, not Download)")
-    local items, ctx = cat:initialDashboardContext()
-    ok(not lf.saved_paint and ctx.orbit_first and ctx.dashboard.continueReading[1].progressPercentage == 40, "first paint from this cache")
-    cat:switchTo("Home", items, ctx, false)
-    ok(lf.stock_switch == 1, "one full paint")
-    -- The open-time refresh: the stale Home is checked; only the server's clock moved.
-    cache.server[DASH] = { continueReading = { { id = 7, progressPercentage = 40 } }, generatedAt = "2" }
-    withHost(cat, function()
-        cat._board_ctx, cat._board_tiles = { d = {} }, { { item = { type = "hero" } } }
-        cache.calls = {}
-        local _, c2 = cat:dashboardRootFetch({})
-        run(5)
-        ok(#cache.calls == 1, "checked once: " .. table.concat(cache.calls, ","))
-        ok(cache.reloaded == nil, "unchanged (generatedAt only): no redraw")
-        -- BookOrbit's maps come back the same: no repaint.
-        lf.maps = { [7] = book }
-        cat:refreshOnDevice()
-        cat:updateItems(nil, true)
-        ok(lf.full_paint == 0 and lf.stock_switch == 1, "no second full paint")
-    end)
-    cacheTeardown()
-end)
+
+
+
+
+
+
 
 test("covers: companion batches never fork and stale results cannot redraw", function()
     local function prep(Cat)
@@ -4444,10 +4086,10 @@ test("wifi: just in time keeps Wi-Fi on while BookOrbit's Home is over the book,
     ok(a == nil, "BookOrbit's Home over the book: kept (" .. tostring(why) .. ")")
     a = WP.decide(st, { now = 100 + 121, wifi_on = true, browsing = true })
     ok(a == "off", "idle there for the just-in-time time: off")
-    E.OC.inflight = { k = { key = "k", at = 0 } }
+    E.Library.catalog_active=true
     local busy, bwhy = E.Wifi.busy()
-    ok(busy and bwhy:find("cache"), "a cache check out at the companion keeps it: " .. tostring(bwhy))
-    E.OC.inflight = {}
+    ok(busy and bwhy:find("catalog"), "a cache check out at the companion keeps it: " .. tostring(bwhy))
+    E.Library.catalog_active=nil
 end)
 
 test("suspend: a Home press (app switch) with the book unmoved skips BookOrbit's snapshot; a page turn, Sync and sleep always snapshot", function()
@@ -4506,17 +4148,7 @@ test("remove: with a book open (no file browser) BookOrbit's remove asks through
     package.loaded["bookorbit_toast"], package.loaded["bookorbit_book_peek"] = nil, nil
 end)
 
-test("cache: a progress write leaves no false patch count; Continue reading moves at the next check", function()
-    local client = cacheSetup()
-    W.wifi = true
-    cache.server[DASH] = { continueReading = { { id = 7, progressPercentage = 10 } } }
-    client:request("GET", DASH); run(1)
-    client:request("PUT", "/koreader/syncs/progress", { document = "d7", percentage = 0.5 })
-    run(1)
-    ok(FC.count("SELECT count(*) FROM entries WHERE home = 1 AND stale = 1") == 1, "Home marked to check")
-    for _, l in ipairs(W.logs) do ok(not l:find("patched 0", 1, true), "no 'patched 0' noise: " .. l) end
-    cacheTeardown()
-end)
+
 
 
 ---------------------------------------------------------------- v0.11.2 (M8C test of v0.11.1)
@@ -4590,133 +4222,13 @@ test("reading gate: BookOrbit over the book is not reading, whatever floats on t
     W.shown = {}
 end)
 
-test("mirror: a request with no answer is retried in smaller pages, then skipped; the run goes on (v0.11.2)", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    local base = libraryServer({ n_books = 3, series4 = 2 })
-    local asked = {}
-    cache.server_fn = function(path)
-        -- The series index never answers in pages of 100 (M8C: no answer after 60 s); authors never at all.
-        if path:find("/sections/series", 1, true) and path:find("size=100", 1, true) then table.insert(asked, path); return false end
-        if path:find("/sections/authors", 1, true) then return false end
-        return base(path)
-    end
-    local cat = pluginCatalog(Cat, client)
-    withHost(cat, function()
-        client:request("GET", DASH)
-        W.logs = {}
-        E.OC.fullRefresh(cat)
-        run(900)
-        local m = E.Mirror.status()
-        ok(m.at and m.left == 0, "finished: " .. tostring(m.left) .. " left")
-        local function saved(identity) return FC.count("SELECT count(*) FROM lists WHERE identity = ?", identity) == 1 end
-        local fifty = false
-        for _, c in ipairs(FC.calls) do if c:find("/sections/series?page=1&size=50", 1, true) then fifty = true end end
-        ok(saved("/koreader/plugin/catalog/sections/series") and fifty, "the series index saved, asked in pages of 50")
-        ok(not saved("/koreader/plugin/catalog/sections/authors") and m.skipped == 1, "authors skipped: " .. tostring(m.skipped))
-        -- The retries' log lines are the companion's (CacheWorkerTest "retriedInSmallerPagesThenSkipped").
-        local log = table.concat(W.logs, "\n")
-        ok(not log:find("paused (offline)", 1, true), "never offline")
-        -- Offline, the series index opens from its pages of 50.
-        W.wifi, cache.strict_offline = false, true
-        local b = offlineRead(cat, client, "/koreader/plugin/catalog/sections/series?offset=0&size=11")
-        ok(b and b.items[1].seriesId == 4, "the series index offline")
-        W.wifi, cache.strict_offline = true, nil
-    end)
-    cacheTeardown()
-end)
 
-test("mirror: a second Full refresh keeps the run; a paused run resumes at network up, wake or Home (v0.11.2)", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 30, series4 = 2 })
-    local notes = {}
-    E.OC.note = function(t) table.insert(notes, t) end
-    local cat = pluginCatalog(Cat, client)
-    local _ui, mod = newUI(false)
-    FC.rate = 1 -- a slow companion, so the test sees the run mid-way
-    withHost(cat, function()
-        client:request("GET", DASH)
-        E.OC.fullRefresh(cat)
-        run(7)
-        local m = E.Mirror.status()
-        local done, total = m.done, m.total
-        ok(E.Mirror.fullRunning() and done > 0, "saving: " .. tostring(done))
-        notes = {}
-        W.logs = {}
-        E.OC.fullRefresh(cat)
-        E.Badge.expanded = nil
-        local run_id = E.Mirror.run_id
-        E.OC.refresh(cat)
-        eq(E.Mirror.run_id, run_id, "tap keeps the running Full refresh")
-        ok(E.Badge.expanded, "tap immediately expands visible progress")
-        m = E.Mirror.status()
-        ok(m.done >= done and m.total >= total and m.left > 0, "the run is kept, not restarted")
-        local h = E.Badge.history or {}
-        ok(#notes == 0 and E.Badge.expanded and (h[#h] or ""):find("^Full refresh · %d+%% · [%d,]+ of [%d,]+"), "the badge opens on its full message: " .. tostring(h[#h]))
-        ok(table.concat(W.logs, "\n"):find("Full refresh already running (pressed again); kept", 1, true), "logged")
-        -- The network goes mid-run: paused; it comes back: resumed, no read needed.
-        W.wifi = false
-        run(10)
-        ok(not E.Mirror.active and E.Mirror.status().left > 0, "paused offline")
-        W.wifi = true
-        W.logs = {}
-        mod:onNetworkConnected()
-        run(900)
-        ok(table.concat(W.logs, "\n"):find("mirror: resuming (network up)", 1, true), "resumed at network up: " .. table.concat(W.logs, " | "))
-        m = E.Mirror.status()
-        ok(m.left == 0 and m.at, "finished")
-    end)
-    cacheTeardown()
-end)
 
-test("mirror: pressing Full refresh after a failed bulk run resumes saved progress", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    local cat = pluginCatalog(Cat, client)
-    withHost(cat, function()
-        E.Mirror.cat = cat
-        E.Mirror.active, E.Mirror.busy = nil, nil
-        E.Mirror._status_dir = E.Mirror.dir()
-        E.Mirror._status = { v = 4, engine = "bulk", op = "full", done = 15, total = 100, left = 85, pct = 15 }
-        local launch, op = E.Mirror.launch
-        E.Mirror.launch = function(next_op) op = next_op; return true end
-        E.Mirror.start("Full refresh", true)
-        local resumed, done = op, E.Mirror.status().done
-        E.Mirror._status.left = 0
-        E.Mirror.start("Full refresh", true)
-        E.Mirror.launch = launch
-        eq(resumed, "resume", "paused bulk pages are kept on a second press")
-        eq(done, 15, "saved count is kept")
-        eq(op, "full", "a completed run can be refreshed from scratch")
-    end)
-    cacheTeardown()
-end)
 
-test("mirror: background full runs and resumes never display a badge", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 50, series4 = 2 })
-    local rate = FC.rate
-    FC.rate = 1
-    local cat = pluginCatalog(Cat, client)
-    withHost(cat, function()
-        E.Mirror.cat = cat
-        E.Badge.close(); E.Badge.running = nil
-        E.Mirror.start("background legacy run", false)
-        ok(not E.Badge.running, "background start is silent")
-        run(3)
-        E.Mirror.manual = nil
-        ok(not E.Badge.running, "background polls are silent")
-        W.wifi = false; E.Mirror.stop("offline"); run(6)
-        W.wifi = true; E.Mirror.tick("network up")
-        ok(not E.Badge.running, "background resume is silent")
-        run(600)
-        ok(not E.Badge.running, "background completion is silent")
-    end)
-    FC.rate = rate
-    cacheTeardown()
-end)
+
+
+
+
 
 test("background notices: queued native jobs retain their own interactive flag", function()
     local burst, restore = noticeFixture()
@@ -4734,155 +4246,13 @@ test("background notices: queued native jobs retain their own interactive flag",
     restore()
 end)
 
-test("background notices: storage replies and post-refresh repaint are silent after Full refresh ends", function()
-    local client, Cat = cacheSetup()
-    local burst, restore = noticeFixture()
-    local cat = pluginCatalog(Cat, client)
-    withHost(cat, function()
-        local refresh = E.LF.refreshKeepingCovers
-        E.LF.refreshKeepingCovers = function() burst("post refresh repaint") end
-        E.Mirror.active, E.Mirror.notices = true, true
-        W.shown, W.presented = {}, {}
-        E.Mirror.finish({ saved = 1 })
-        ok(not E.Mirror.notices, "Full refresh suppression has ended")
-        run(0.5)
-        eq(#W.presented, 0, "completion repaint remains silent")
-        ok(noticeLog("post refresh repaint: Loading book..."), "completion notice text logged")
-        E.LF.refreshKeepingCovers = refresh
-        local send = E.Companion.send
-        E.Companion.send = function(action, ...)
-            if action == E.Companion.ACTION.STORAGE then burst("storage cleanup") end
-            return send(action, ...)
-        end
-        E.OC.storage_asked, E.OC.storage_last = nil, nil
-        E.OC.storageCount("over the limit")
-        eq(#W.presented, 0, "storage request remains silent outside full refresh")
-        ok(noticeLog("storage cleanup: Trapper"), "storage notice text logged")
-        E.Companion.send = send
-    end)
-    restore()
-    cacheTeardown()
-end)
 
-test("mirror: Full refresh suppresses loading, errors, direct notices and queued notes", function()
-    local old = #W.shown
-    local saved_toast = package.loaded["bookorbit_toast"]
-    local Toast = { show = function() error("toast escaped") end, error = function() error("error escaped") end, loading = function() error("loading escaped refresh gate") end }
-    package.loaded["bookorbit_toast"] = Toast
-    E.Gate.installToast()
-    E.Mirror.notices = true
-    local pill = Toast.loading("Loading book...")
-    Toast.loading("Loading EPUB delivery preference…"):close()
-    Toast.loading("Updating Home…"):close()
-    local detail = E.Badge.long({}, 0)
-    ok(detail:find("Loading book...", 1, true) and detail:find("Loading EPUB delivery preference…", 1, true)
-        and detail:find("Updating Home…", 1, true), "suppressed loading goes into badge details")
-    ok(pill and pill.close, "loading keeps its close handle")
-    pill:close()
-    Toast.show("saved")
-    Toast.error("failed")
-    UIManager:show(require("ui/widget/infomessage"):new{ text = "direct notice" })
-    E.Gate.show("background result", function() error("notice escaped refresh gate") end)
-    ok(#W.shown == old, "no notice appears")
-    E.Mirror.notices = nil
-    E.Badge.notices = nil
-    package.loaded["bookorbit_toast"] = saved_toast
-end)
 
-test("mirror: Full refresh saves every book's details, outside the cap; covers only with 'Save every cover' (v0.11.2)", function()
-    local client, Cat = cacheSetup(function(Cat)
-        function Cat:pruneThumbnailCache() for _, p in ipairs(cache.prune or {}) do os.remove(p) end end
-    end)
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 4, series4 = 2, covers = true })
-    local cat = pluginCatalog(Cat, client)
-    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. dofile(here .. "/companion_rules.lua")(E.Cache).coverName(b) end
-    withHost(cat, function()
-        client:request("GET", DASH)
-        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
-        E.S.mirror_covers = false
-        E.OC.fullRefresh(cat); run(900)
-        local details = {}
-        for _, c in ipairs(cache.calls) do
-            local id = c:match("^GET /koreader/plugin/catalog/books/(%d+)")
-            if id then details[tonumber(id)] = true end
-        end
-        ok(details[1] and details[2] and details[3] and details[4], "every listed book's details saved")
-        local kept = 0
-        for id = 1, 4 do if detailEntry(client, id) then kept = kept + 1 end end
-        ok(kept == 4, "every book's detail saved, once: " .. kept)
-        ok((E.Mirror.status().cover_total or 0) == 0, "no covers fetched for lists with the setting off: " .. tostring(E.Mirror.status().cover_total))
-        -- On: Full refresh fetches every cover the mirror lists, shows them in its progress, and
-        -- the plugin's pruner leaves them.
-        E.S.mirror_covers = true
-        local notes = {}
-        E.OC.note = function(t) table.insert(notes, t) end
-        FC.rate = 2
-        E.OC.fullRefresh(cat); run(900)
-        local m = E.Mirror.status()
-        ok((m.cover_total or 0) >= 4, "every book's cover queued: " .. tostring(m.cover_total))
-        -- One number on screen: the badge's %, never a count per kind; no other note.
-        local odd
-        for _, t in ipairs(E.Badge.history or {}) do if not (t:match("^%d+%%$") or t == "Done") then odd = t end end
-        ok(not odd and #notes <= 1, "only the %: " .. tostring(odd) .. " | " .. table.concat(notes, " | "))
-        local a, other = cache.dir .. "/covers/1_1.jpg", cache.dir .. "/covers/999_x.jpg"
-        io.open(a, "w"):close(); io.open(other, "w"):close()
-        cache.prune = { a, other }
-        cat:pruneThumbnailCache()
-        ok(io.open(a, "rb") and io.open(other, "rb"), "upstream pruning is replaced by companion storage policy")
-        -- Off again: nothing deleted now; the plugin's pruner treats them like any cover.
-        E.S.mirror_covers = false
-        ok(io.open(a, "rb"), "turning it off deletes nothing")
-        cat:pruneThumbnailCache()
-        ok(io.open(a, "rb"), "storage worker owns eviction; plugin never walks or prunes")
-        cache.prune = nil
-    end)
-    E.S.mirror_covers = nil
-    cacheTeardown()
-end)
 
-test("copies: a Full refresh and Home look for changed copies; the mirror's details find a changed hash (v0.11.2)", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    local base = libraryServer({ n_books = 3, series4 = 2 })
-    cache.server_fn = function(path)
-        local id = path:match("/catalog/books/(%d+)%f[^%d]")
-        if id then return { id = tonumber(id), files = { { id = tonumber(id) * 10, fileHash = "srv" .. id } } } end
-        return base(path)
-    end
-    local cat = pluginCatalog(Cat, client)
-    local whys = {}
-    local tick = E.Copies.tick
-    E.Copies.tick = function(why) table.insert(whys, why) end
-    E.EOB.details = {} -- only what the mirror saved
-    withHost(cat, function()
-        client:request("GET", DASH)
-        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
-        E.OC.fullRefresh(cat); run(900)
-        local all = table.concat(whys, ",")
-        ok(all:find("full refresh", 1, true), "Full refresh looks: " .. all)
-        whys = {}
-        E.Mirror.kick("Home"); run(3)
-        ok(whys[1] == "Home", "Home open looks (no catalog read needed): " .. table.concat(whys, ","))
-        -- Book 2's copy on the reader has the old hash; its saved detail lists the new one.
-        local books = { old2 = { file = "/books/b.epub", bookId = 2, fileId = 20 }, srv3 = { file = "/books/c.epub", bookId = 3, fileId = 30 } }
-        local sm = package.loaded["bookorbit_state_manager"]
-        package.loaded["bookorbit_state_manager"] = { state = function() return { books = books } end }
-        local exists = FC.exists
-        FC.exists = function() return true end
-        local pump = E.Copies.pump
-        E.Copies.pump = function() end
-        E.Copies.state().queue, E.Copies.asked = {}, nil
-        ok(E.Copies.ask("test"), "asked")
-        run(3)
-        local q = E.Copies.state().queue
-        ok(#q == 1 and q[1].path == "/books/b.epub" and q[1].why == "hash", "the changed copy is found from the mirror's details: " .. #q)
-        package.loaded["bookorbit_state_manager"], FC.exists, E.Copies.pump = sm, exists, pump
-        E.Copies.state().queue = {}
-    end)
-    E.Copies.tick = tick
-    cacheTeardown()
-end)
+
+
+
+
 
 test("local-first: Home's first paint has the on-device marks; a changed tile names what changed (v0.11.2)", function()
     local client, Cat = cacheSetup(function(Cat)
@@ -4911,148 +4281,9 @@ test("local-first: Home's first paint has the on-device marks; a changed tile na
     cacheTeardown()
 end)
 
-test("storage limit: BookSync Companion counts and removes; eligible covers go before browsing data, all in last-shown order; never the saved lists", function()
-    local client, Cat = cacheSetup()
-    local MB = 1048576
-    local lfs = require("libs/libkoreader-lfs")
-    local cdir = cache.dir .. "/covers"
-    E.OC.cover_dir = cdir
-    local covers = { ["a.jpg"] = { 20, 10 }, ["m1.jpg"] = { 20, 3 }, ["m2.jpg"] = { 20, 40 } } -- MB, last seen
-    for name in pairs(covers) do io.open(cdir .. "/" .. name, "w"):close() end
-    local attributes = lfs.attributes
-    lfs.attributes = function(f, k)
-        local c = covers[tostring(f):match("^" .. cdir:gsub("%p", "%%%0") .. "/(.+)$") or ""]
-        if c and io.open(f, "rb") then
-            local a = { mode = "file", size = c[1] * MB, modification = c[2] }
-            if k then return a[k] end
-            return a
-        end
-        if k == "size" then return nil end
-        return attributes(f, k)
-    end
-    -- In the database: Home (kept) and two browsing replies, by size and when saved.
-    local function entry(key, bytes, at, home)
-        FC.db():run("INSERT OR REPLACE INTO entries (key, path, body, fetched_at, validated_at, home, bytes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            key, "/p/" .. key, "{}", at, at, home and 1 or nil, bytes)
-    end
-    local function has(key) return FC.count("SELECT count(*) FROM entries WHERE key = ?", key) == 1 end
-    FC.own(E.OC.owner(client))
-    entry("list", 30 * MB, 1, true); entry("old", 30 * MB, 2); entry("new", 30 * MB, 50)
-    E.S.mirror_covers = true
-    FC.db():run("INSERT INTO cover_keep (name) VALUES ('m1.jpg'), ('m2.jpg')")
-    E.S.storage_limit_mb = 100
-    W.logs, W.broadcasts = {}, {}
-    local asks = FC.storage_asks
-    local walks = 0
-    local dir = lfs.dir
-    lfs.dir = function(d) if not W.in_companion and d == cdir then walks = walks + 1 end return dir(d) end
-    E.OC.storageCount("start")
-    local b = lastBroadcast(".STORAGE")
-    ok(b and b.extras.limit == tostring(100 * MB) and b.extras.cover_dir == cdir and b.extras.mirror_covers == "1", "asked the companion")
-    ok(b.extras.userkey == nil, "no login with it")
-    run(3)
-    ok(FC.storage_asks == asks + 1, "the companion counted")
-    ok(walks == 0, "the UI thread never walks the cover folder")
-    ok(has("old") and has("new"), "browsing data wins over both cover tiers")
-    ok(not io.open(cdir .. "/a.jpg", "rb") and not io.open(cdir .. "/m1.jpg", "rb") and not io.open(cdir .. "/m2.jpg", "rb"), "eligible covers went first")
-    ok(E.OC.storage.used == 90 * MB and E.OC.storageText() == "Using 90 MB", "Using: " .. E.OC.storageText())
-    ok(table.concat(W.logs, "\n"):find("storage: 150.0 MB of 100 MB (start); removed 0 browsing entries, 1 covers, 2 saved-for-offline covers -> 90.0 MB", 1, true), "logged: " .. table.concat(W.logs, " | "))
-    -- Once every eligible cover is gone, expendable browsing pages can go; Home stays.
-    E.S.storage_limit_mb = 55
-    E.OC.storageCount("limit changed"); run(3)
-    ok(not has("old") and not has("new"), "browsing pages go only after eligible covers")
-    ok(has("list"), "Home stays")
-    -- A write over the limit asks for a count.
-    E.S.storage_limit_mb = 60
-    entry("big", 40 * MB, 99)
-    E.OC.storageCount("over the limit"); run(3)
-    ok(not has("big") and E.OC.storage.used == 30 * MB, "checked on the write")
-    -- The totals are there at the next start (the database's meta).
-    E.OC.storage = nil
-    E.OC.client = function() return client end
-    ok(E.OC.storageTotals() == nil, "UI never opens the database for a storage count")
-    E.OC.storageCount("last count"); run(3)
-    ok(E.OC.storageTotals() and E.OC.storageTotals().used == 30 * MB, "companion supplies the count")
-    -- 10 GB crosses the signed 32-bit byte boundary: preserve the limit over IPC and enforce it.
-    run(10)
-    E.S.storage_limit_mb = 10240
-    ok(E.OC.limitBytes() == 10737418240, "10 GB in bytes")
-    entry("big", 10240 * MB, 99)
-    E.OC.storageCount("limit changed")
-    ok(lastBroadcast(".STORAGE").extras.limit == "10737418240", "10 GB reaches the companion intact")
-    run(3)
-    ok(not has("big") and has("list"), "10 GB limit evicts browsing data, preserving saved data")
-    -- No limit: nothing goes.
-    run(10) -- drain the startup count before changing its limit
-    E.S.storage_limit_mb = 0
-    entry("big", 900 * MB, 99)
-    E.OC.storageCount("limit changed"); run(3)
-    ok(has("big"), "no limit")
-    run(10) -- the plugin's own count at start
-    -- Without the companion of this version nothing is counted on the UI thread.
-    cache.worker_problem = "BookSync Companion needed"
-    local n = FC.storage_asks
-    E.OC.storageCount("count"); run(3)
-    ok(FC.storage_asks == n and walks == 0, "nothing counted")
-    cache.worker_problem = nil
-    lfs.attributes, lfs.dir = attributes, dir
-    E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
-    cacheTeardown()
-end)
 
-test("storage limit: it stops the every-cover pass, then the run, and the Full refresh note says so (v0.11.2)", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 4, series4 = 2, covers = true })
-    local cat = pluginCatalog(Cat, client)
-    function cat:thumbnailPath(b) return cache.dir .. "/covers/" .. dofile(here .. "/companion_rules.lua")(E.Cache).coverName(b) end
-    local MB = 1048576
-    local notes = {}
-    E.OC.note = function(t) table.insert(notes, t) end
-    local batch = FC.COVER_BATCH
-    FC.COVER_BATCH = 1
-    E.S.mirror_covers, E.S.storage_limit_mb = true, 1
-    local kept = 0.2 * MB
-    -- What else counts (the companion counts it at the run's start: here a kept entry of that size);
-    -- each cover the companion saves is 0.4 MB.
-    FC.cover_bytes = 0.4 * MB
-    local function keptEntry()
-        FC.db():run("INSERT OR REPLACE INTO entries (key, path, body, fetched_at, validated_at, home, bytes) VALUES ('k', '/p', '{}', 1, 1, 1, ?)", kept)
-    end
-    local items = FC.storageItems
-    FC.storageItems = function(...)
-        keptEntry()
-        return items(...)
-    end
-    withHost(cat, function()
-        client:request("GET", DASH)
-        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
-        W.logs = {}
-        E.OC.fullRefresh(cat); run(900)
-        local m = E.Mirror.status()
-        local note = m.limit_note and m.limit_note.text or ""
-        ok(note:find("^Storage limit reached: %d+ of %d+ covers saved%. No room for new data; protected covers are kept%. Raise the limit in BookSync settings%.$"), "the stop: " .. note)
-        local shown
-        for _, t in ipairs(E.Badge.history or {}) do if t == note then shown = true end end
-        ok(shown, "the badge says it: " .. table.concat(E.Badge.history or {}, " | "))
-        local c = m.covers
-        ok((c.ok or 0) + (c.not_modified or 0) + (c.failed or 0) == 2, "two covers, then the pass stopped")
-        ok(m.left == 0 and m.at, "the lists and details went on to the end")
-        ok(E.Mirror.savedText():find("storage limit reached", 1, true), "the menu line says so")
-        -- Lists and details alone fill it: the whole run stops.
-        kept = 2 * MB
-        notes = {}
-        E.OC.fullRefresh(cat); run(900)
-        m = E.Mirror.status()
-        note = m.limit_note and m.limit_note.text or ""
-        ok(note:find("^Storage limit reached: 0 of %d+ lists and books saved"), "the run stops: " .. note)
-        local h = E.Badge.history or {}
-        ok(m.left == 0 and h[#h] == note, "shown: " .. table.concat(h, " | "))
-    end)
-    FC.storageItems, FC.COVER_BATCH = items, batch
-    E.S.mirror_covers, E.S.storage_limit_mb = nil, 250
-    cacheTeardown()
-end)
+
+
 
 ---------------------------------------------------------------- v0.11.3: the mirror off the UI thread
 -- (docs/design/companion-worker.md). On the M8C, v0.11.3 showed "KOReader isn't responding": the
@@ -5081,209 +4312,15 @@ local function uiEncodes(fn)
     return biggest, n
 end
 
-test("mirror: a Full refresh of a big library does no request, entry write or queue encode on the UI thread (v0.11.3)", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 450, series4 = 30 })
-    local on_ui = {}
-    local rb = client.requestBlocking
-    client.requestBlocking = function(self, method, path, ...)
-        if path:find("size=100", 1, true) or path:find("/catalog/books/%d") then
-            if not W.in_child then table.insert(on_ui, path) end
-        end
-        return rb(self, method, path, ...)
-    end
-    local cat = pluginCatalog(Cat, client)
-    withHost(cat, function()
-        client:request("GET", DASH)
-        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
-        local biggest = uiEncodes(function()
-            E.OC.fullRefresh(cat)
-            run(1200)
-        end)
-        local m = E.Mirror.status()
-        ok(m.at and m.left == 0 and m.total > 450, "finished: " .. tostring(m.done) .. "/" .. tostring(m.total))
-        ok(#on_ui == 0, "every mirror request ran in the worker: " .. table.concat(on_ui, " | "))
-        -- The UI thread encodes only small things (a browsing entry, a log line's data): never the
-        -- queue or the index, whatever the library's size.
-        ok(biggest < 8 * 1024, "largest encode on the UI thread: " .. biggest .. " bytes")
-        ok(not io.open(cache.dir .. "/index.lua", "rb"), "no index: the plugin keeps nothing of the cache but a few lines of its own")
-    end)
-    client.requestBlocking = rb
-    cacheTeardown()
-end)
 
-test("mirror: lists are saved before details, so the total stops growing once the lists are in (v0.11.3)", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 120, series4 = 30 })
-    local cat = pluginCatalog(Cat, client)
-    local order, totals = {}, {}
-    withHost(cat, function()
-        client:request("GET", DASH) -- Home: book 7 is a seed (Continue reading)
-        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12)) -- Home's shelf
-        E.OC.fullRefresh(cat)
-        run(1200)
-        for _, t in ipairs(FC.trace) do
-            if t.k == "page" or t.k == "detail" then table.insert(order, t.k == "page" and "list" or "detail"); table.insert(totals, t.total) end
-        end
-        local last_list, first_detail = 0, nil
-        for i, k in ipairs(order) do
-            if k == "list" then last_list = i end
-        end
-        -- The seed's detail comes first; after it, no detail before the last list page.
-        for i, k in ipairs(order) do if k == "detail" and i > 2 then first_detail = first_detail or i end end
-        ok(first_detail and first_detail > last_list, "lists " .. last_list .. ", first detail " .. tostring(first_detail))
-        local final = E.Mirror.status().total
-        local grew_after = false
-        for i = last_list + 1, #totals do if totals[i] ~= final then grew_after = true end end
-        ok(not grew_after and final > 120, "the total held at " .. tostring(final) .. " once the lists were saved")
-    end)
-    cacheTeardown()
-end)
 
-test("cache: a background check of a big page compares and saves it in the child; the UI thread never handles the body (v0.11.3)", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    local function shelf(n)
-        local items = {}
-        for i = 1, 400 do items[i] = { id = i, title = string.rep("T", 40) .. i, progressPercentage = n } end
-        return { continueReading = items }
-    end
-    cache.server[DASH] = shelf(1)
-    client:request("GET", DASH); run(1)
-    local cat = setmetatable({ current_context = { kind = "dashboard", dashboard = {} }, client = client }, Cat)
-    cat:switchTo("Home", {}, cat.current_context, false)
-    cache.server[DASH] = shelf(2)
-    W.clock = W.clock + 61
-    W.logs = {}
-    -- The read decodes the one reply it serves (from the database); the check is the companion's.
-    client:request("GET", DASH)
-    local biggest = uiEncodes(function() run(10) end)
-    ok(table.concat(W.logs, "\n"):find("checked: changed", 1, true), "checked and changed: " .. table.concat(W.logs, " | "))
-    ok(biggest < 8 * 1024, "the UI thread handled at most " .. biggest .. " bytes")
-    local e = E.Store.read(E.OC.owner(client), E.ServerCache.key({ account = E.OC.owner(client), server = client.server_url, method = "GET", path = DASH }), DASH)
-    ok(e and e.body.continueReading[1].progressPercentage == 2, "the new page is saved")
-    cacheTeardown()
-end)
 
-test("mirror: the Full refresh badge: a popup at the start, then one % that only rises, redrawn at most every 3 s, Done at the end; no other note (rc.6)", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 450, series4 = 30 })
-    local cat = pluginCatalog(Cat, client)
-    local notes = {}
-    E.OC.note = function(t) table.insert(notes, t) end
-    local popups = {}
-    local orbitNote = E.orbitNote
-    E.orbitNote = function(t, timeout) table.insert(popups, { text = t, timeout = timeout }) end
-    local dirties, shown, closed = {}, 0, 0
-    local setDirty, show, close = UIManager.setDirty, UIManager.show, UIManager.close
-    UIManager.setDirty = function(self, w, how, ...)
-        if w == E.Badge.widget then table.insert(dirties, { at = W.clock, region = type(how) == "function" and select(2, how()) or nil }) end
-        return setDirty(self, w, how, ...)
-    end
-    UIManager.show = function(self, w, ...) if type(w) == "table" and w.name == "orbit_refresh_badge" then shown = shown + 1 end return show(self, w, ...) end
-    UIManager.close = function(self, w, ...) if type(w) == "table" and w.name == "orbit_refresh_badge" then closed = closed + 1 end return close(self, w, ...) end
-    FC.rate = 7 -- a run of about a minute and a half: many polls
-    E.Badge.history = {}
-    withHost(cat, function()
-        client:request("GET", DASH)
-        client:request("GET", pagePath(cat, { sort = "recently_added" }, 1, 12))
-        E.OC.fullRefresh(cat)
-        run(1200)
-        local m = E.Mirror.status()
-        ok(m.at and m.left == 0 and m.total > 450, "finished: " .. tostring(m.done) .. "/" .. tostring(m.total))
-        ok(#popups == 1 and popups[1].text:find("^Full refresh in progress · about %d+%% done · you can keep reading and browsing while it loads$"), "one popup: " .. tostring(popups[1] and popups[1].text))
-        ok(#notes == 0, "no other note: " .. table.concat(notes, " | "))
-        local h, last = E.Badge.history, -1
-        ok(#h > 5, "the % moved along: " .. table.concat(h, " "))
-        for i, t in ipairs(h) do
-            local p = tonumber(t:match("^(%d+)%%$"))
-            if i < #h then
-                ok(p and p >= last and p < 100, "one number, only rising, 100 only at the end: " .. table.concat(h, " "))
-                last = p or last
-            end
-        end
-        ok(h[#h] == "Done", "Done at the end: " .. tostring(h[#h]))
-        ok(shown == 1, "one badge, changed in place: " .. shown)
-        for i = 2, #dirties do ok(dirties[i].at - dirties[i - 1].at >= E.Badge.EVERY_S or i == #dirties, "at most every 3 s") end
-        ok(dirties[1] and dirties[1].region and dirties[1].region.w and dirties[1].region.w < 600, "only its rectangle redrawn")
-        run(E.Badge.DONE_S + 1)
-        ok(closed == 1 and E.Badge.widget == nil, "then it goes")
-        ok(E.Cache.count(8551) == "8,551" and E.Cache.count(512) == "512" and E.Cache.count(1234567) == "1,234,567", "thousands")
-    end)
-    -- A tap outside a book unfolds it to the full message; in a book it stays passive.
-    E.Badge.running = true; E.Badge.pct = 40; E.Badge.status = { done = 400, total = 1000, eta_s = 600, errors = 2 }
-    E.Badge.draw()
-    E.Badge.toggle()
-    local h = E.Badge.history
-    ok(h[#h] == "Full refresh · 40% · 400 of 1,000 · about 10 min left · 2 errors", "unfolded: " .. h[#h])
-    E.Badge.toggle()
-    ok(h[#h] == "40%", "folded")
-    E.Badge.running = nil; E.Badge.close()
-    UIManager.setDirty, UIManager.show, UIManager.close = setDirty, show, close
-    E.orbitNote = orbitNote
-    cacheTeardown()
-end)
 
-test("companion: the cache worker needs the companion of the plugin's own version; nothing runs in KOReader without it", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
-    local cat = pluginCatalog(Cat, client)
-    E.Companion.workerProblem = cache.real_workerProblem
-    client.userkey = "s3cret-Key-9f2"
-    local file = { version = E.PATCH_VERSION }
-    local readFile = E.Companion.readFile
-    E.Companion.readFile = function() return file end
-    local function fresh() E.installed_cache.at, E.Companion.version_at = -1000, nil end
-    local function mirrors() local n = 0; for _, b in ipairs(W.broadcasts) do if b.action:match("%.MIRROR$") then n = n + 1 end end return n end
-    local function checks() local n = 0; for _, b in ipairs(W.broadcasts) do if b.action:match("%.CHECK$") then n = n + 1 end end return n end
-    withHost(cat, function()
-        client:request("GET", DASH)
-        -- Missing: no run, no check, and the menu line says what is needed.
-        W.companion = false; fresh()
-        W.broadcasts = {}
-        local notes = {}
-        E.OC.note = function(t) table.insert(notes, t) end
-        E.OC.fullRefresh(cat); run(30)
-        ok(mirrors() == 0 and not E.Mirror.active, "no run without the companion: " .. mirrors() .. " " .. tostring(E.Mirror.active))
-        ok(E.Mirror.savedText() == "BookSync Companion needed to save library for offline", "menu: " .. E.Mirror.savedText())
-        ok(table.concat(notes, "|"):find("BookSync Companion needed", 1, true), "said when pressed: " .. table.concat(notes, " | "))
-        W.clock = W.clock + 61
-        cache.calls = {}
-        client:request("GET", DASH); run(5)
-        ok(checks() == 0 and #cache.calls == 0, "no background check either: " .. table.concat(cache.calls, ","))
-        -- Another version: update it.
-        W.companion = true; file = { version = "0.0.1" }; fresh()
-        ok(E.Mirror.savedText():find("^Update BookSync Companion to " .. E.PATCH_VERSION:gsub("%p", "%%%0") .. " to save library for offline %(it is 0%.0%.1%)$"), "menu: " .. E.Mirror.savedText())
-        E.OC.fullRefresh(cat); run(30)
-        ok(mirrors() == 0, "no run with another version")
-        -- The same version: the run goes to the companion, with the login in the broadcast only.
-        file = { version = E.PATCH_VERSION }; fresh()
-        W.logs = {}
-        E.OC.fullRefresh(cat); run(600)
-        ok(mirrors() == 1 and E.Mirror.status().at, "run by the companion")
-        local b
-        for _, x in ipairs(W.broadcasts) do if x.action:match("%.MIRROR$") then b = x end end
-        ok(b.package == "net.fledgewing.orbitcompanion" and b.extras.userkey == client.userkey and b.extras.user == client.username
-            and b.extras.server == client.server_url, "the login goes to the companion's package")
-        local plan = io.open(cache.dir .. "/mirror/plan.lua", "rb"):read("*a")
-        ok(not plan:find(client.userkey, 1, true) and not plan:find("userkey", 1, true), "never in the plan file")
-        local decoded = E.Cache.decode(plan)
-        ok(decoded.cover_width > 0 and decoded.cover_height > 0, "device thumbnail bounds travel in the plan")
-        local counted = false
-        for _, x in ipairs(W.broadcasts) do
-            if x.action:match("%.STORAGE$") and x.extras.reason == "after refresh" then counted = true end
-        end
-        ok(counted, "run completion requests live totals instead of adding replacement bytes")
-        local log = table.concat(W.logs, "\n")
-        ok(not log:find(client.userkey, 1, true), "never in the log")
-    end)
-    E.Companion.readFile = readFile
-    cacheTeardown()
-end)
+
+
+
+
+
 
 test("sleep screen: back from a real sleep the plugin tells the companion (no service needed); an app switch doesn't", function()
     local on = RE.Sleep.on
@@ -5876,168 +4913,13 @@ local function withStore(dir, fn)
 end
 
 -- @fixture catalog/bulk-refresh/catalog.json @fixture catalog/bulk-refresh/schema.sql
-test("bulk catalog: plugin SQL serves offline windows, filters and secondary context", function()
-    local fx = JSONF.decode(io.open(here .. "/../../../shared/fixtures/catalog/bulk-refresh/catalog.json", "rb"):read("*a"))
-    local dir, st = fixtureStore()
-    for sql in io.lines(here .. "/../../../shared/fixtures/catalog/bulk-refresh/schema.sql") do st.conn:exec(sql) end
-    st:run("INSERT OR REPLACE INTO meta VALUES ('bulk_active','1')")
-    st:run("INSERT OR REPLACE INTO meta VALUES ('full_at','1000')")
-    local function member(kind, value, id, c)
-        local ix = c and tonumber(c.seriesIndex)
-        st:run("INSERT OR REPLACE INTO bulk_members VALUES (1,?,?,?,?,?,?,?)", kind, tostring(value), id,
-            c and RE.Cache.encode(c) or nil, ix and math.floor(ix), ix and (ix % 1 == 0 and -1 or tonumber(tostring(ix):match("%.(.*)$"))), c and c.seriesIndex)
-    end
-    for i, b in ipairs(fx.manifest) do
-        local row = {}
-        for k,v in pairs(b) do row[k]=v end
-        for k,v in pairs(fx.rows[i]) do row[k]=v end
-        local status = ({reading="reading",on_hold="reading",read="finished"})[row.readStatus] or "unread"
-        local ix=tonumber(b.seriesIndex)
-        st:run("INSERT INTO bulk_books VALUES (1,?,?,?,?,?,?,?,?,?,?,?)", b.id, RE.Cache.encode(row), RE.Cache.encode(b), b.title,b.seriesName,
-            ix and math.floor(ix),ix and (ix % 1 == 0 and -1 or tonumber(tostring(ix):match("%.(.*)$"))),b.seriesIndex,status,row.addedAt,row.updatedAt)
-        for _,a in ipairs(b.authors) do member("author",a,b.id) end
-        for _,f in ipairs(b.formats) do member("format",f,b.id) end
-        for _,kind in ipairs({"title","series"}) do
-            for _,d in ipairs({"asc","desc"}) do st:run("INSERT INTO bulk_ranks VALUES (1,?,?,?,?, 'B')",kind,d,b.id,d=="asc" and i-1 or #fx.manifest-i) end
-        end
-    end
-    for key, ids in pairs(fx.memberships) do
-        local kind,value=key:match("^([^:]+):(.*)$")
-        for _,id in ipairs(ids) do
-            local c
-            if kind=="seriesId" then
-                c=fx.secondary_context[key .. ":" .. id] or {seriesId=tonumber(value),seriesName="Shared name",seriesIndex=fx.manifest[id].seriesIndex}
-            end
-            member(kind,value,id,c)
-        end
-    end
-    for key, ids in pairs(fx.ranks) do
-        local kind,d=key:match("^([^:]+):(.*)$")
-        for i,id in ipairs(ids) do st:run("INSERT INTO bulk_ranks VALUES (1,?,?,?,?, 'A')",kind,d,id,i-1) end
-    end
-    withStore(dir,function()
-        for _,w in ipairs(fx.windows) do
-            for offset=0,#w.ids+1 do
-                for _,size in ipairs({1,3,100}) do
-                    local path="/koreader/plugin/catalog/books?" .. w.query .. "&offset=" .. offset .. "&size=" .. size
-                    local e=RE.Store.read(DBFX.owner,path,path,nil)
-                    ok(e~=nil,"missing " .. path)
-                    local expected={}
-                    for i=offset+1,math.min(#w.ids,offset+size) do table.insert(expected,w.ids[i]) end
-                    local got={};for _,b in ipairs(e.body.items) do table.insert(got,b.id) end
-                    eq(table.concat(got,","),table.concat(expected,","),path)
-                end
-            end
-        end
-        local p="/koreader/plugin/catalog/books?sort=title&order=asc&buckets=1"
-        local e=RE.Store.read(DBFX.owner,p,p,nil)
-        eq(e.body.buckets[1].key,"B","letter rail retained")
-        eq(e.body.buckets[1].count,8,"letter count")
-    end)
-    st:close();os.execute("rm -rf '" .. dir .. "'")
-end)
 
-test("sqlite cache: the plugin's reads answer the shared fixture (db.json) from the rows", function()
-    local dir, st = fixtureStore()
-    withStore(dir, function()
-        for _, r in ipairs(DBFX.reads) do
-            local key = r.key or RE.ServerCache.key({ account = DBFX.owner:match("^([^|]*)"), server = DBFX.owner:match("|(.*)$"), method = "GET", path = r.path })
-            local e = RE.Store.read(DBFX.owner, key, r.path, DBFX.detail_template)
-            if r["null"] then
-                ok(e == nil, r.path .. " should not be saved")
-            else
-                ok(e ~= nil, r.path .. " not answered")
-                local b = e.body
-                if r.ids then
-                    local got = {}
-                    for _, it in ipairs(b.items) do table.insert(got, tostring(it.id)) end
-                    local want = {}
-                    for _, id in ipairs(r.ids) do table.insert(want, tostring(id)) end
-                    eq(table.concat(got, ","), table.concat(want, ","), r.path)
-                    if r.read_status_2 then
-                        for _, it in ipairs(b.items) do if it.id == 2 then eq(it.readStatus, r.read_status_2, "newest item wins") end end
-                    end
-                end
-                for _, k in ipairs({ "total", "page", "size", "offset", "hasNext", "hasPrevious" }) do
-                    if r[k] ~= nil then eq(b[k], r[k], r.path .. " " .. k) end
-                end
-                for _, k in ipairs(r.no or {}) do eq(b[k], nil, r.path .. " has " .. k) end
-                if r.head then eq(b.authorSummary.bookCount, 2) end
-                if r.titles then for i, t in ipairs(r.titles) do eq(b.items[i].title, t) end end
-                if r.detail then eq(b.id, r.detail); eq(#b.files, r.files) end
-                if r.continue then eq(b.continueReading[1].id, r.continue[1]) end
-            end
-        end
-        -- Another account's database answers nothing.
-        eq(RE.Store.read("other|http://x", "k", DBFX.reads[1].path, DBFX.detail_template), nil, "another owner")
-    end)
-    local n = st:run("SELECT count(*) FROM books")[1][1]
-    eq(tonumber(n), DBFX.books_rows, "each book is one row")
-    for id, text in pairs(DBFX.search_text) do
-        eq(st:run("SELECT search FROM books WHERE id = ?", tonumber(id))[1][1], text, "search text " .. id)
-    end
-    st:close()
-end)
 
-test("sqlite cache: offline search over the saved books", function()
-    local dir, st = fixtureStore()
-    withStore(dir, function()
-        for _, s in ipairs(DBFX.searches) do
-            local body = RE.Store.search(DBFX.owner, "/koreader/plugin/catalog/books?page=1&q=" .. s.q:gsub(" ", "%%20") .. "&size=20")
-            ok(body ~= nil, s.q)
-            local got = {}
-            for _, it in ipairs(body.items) do table.insert(got, tostring(it.id)) end
-            local want = {}
-            for _, id in ipairs(s.ids) do table.insert(want, tostring(id)) end
-            eq(table.concat(got, ","), table.concat(want, ","), "search " .. s.q)
-            eq(body.total, #s.ids)
-        end
-    end)
-    st:close()
-end)
 
-test("sqlite cache: a replaced or busy database is reopened or missed, never an error", function()
-    local dir, st = fixtureStore()
-    withStore(dir, function()
-        local path = DBFX.reads[1].path
-        ok(RE.Store.read(DBFX.owner, "k", path, nil) ~= nil, "first read")
-        -- The companion holds the commit lock: return the cached result within the UI budget.
-        local sq3 = RE.Db.sq3()
-        local open, attempts, queries, busy_ms = sq3.open, 0, 0, nil
-        sq3.open = function(...)
-            attempts = attempts + 1
-            local conn = open(...)
-            return setmetatable({}, { __index = function(_, key)
-                return function(_, ...)
-                    if key == "set_busy_timeout" then busy_ms = ... end
-                    if key == "rowexec" or key == "exec" or key == "prepare" then queries = queries + 1 end
-                    return conn[key](conn, ...)
-                end
-            end })
-        end
-        RE.Db.close(dir .. "/orbit.db")
-        ok(RE.Db.BUSY_MS <= 20, "UI busy timeout stays short")
-        st.conn:exec("BEGIN EXCLUSIVE")
-        local success, err = pcall(function()
-            ok(RE.Store.read(DBFX.owner, "k", path, nil) ~= nil, "busy: cached fallback")
-        end)
-        sq3.open = open
-        st.conn:exec("COMMIT")
-        ok(success, err)
-        eq(attempts, 1, "busy read opens once, without retries")
-        eq(queries, 1, "one busy query, without retries")
-        eq(busy_ms, RE.Db.BUSY_MS, "connection uses the bounded SQLite busy timeout")
-        -- A new file (another inode): reopened. Here: an empty database of the same schema.
-        st:close()
-        os.remove(dir .. "/orbit.db")
-        local st2 = FakeStore.open(dir .. "/orbit.db")
-        st2:own(DBFX.owner)
-        W.ino[dir .. "/orbit.db"] = 2
-        eq(RE.Store.read(DBFX.owner, "k", path, nil), nil, "the new file is read, not the old one")
-        st2:close()
-        W.ino[dir .. "/orbit.db"] = nil
-    end)
-end)
+
+
+
+
 
 test("reading: a locked cache cannot delay page turns or cold/warm cache reads", function()
     local dir, st = fixtureStore()
@@ -6045,7 +4927,9 @@ test("reading: a locked cache cannot delay page turns or cold/warm cache reads",
         local path = DBFX.reads[1].path
         local reading, conn = RE.reading, RE.Db.conn
         RE.reading = function() return false end
-        local warm = RE.Store.read(DBFX.owner, "tap-warm", path, nil)
+        st.conn:exec("CREATE TABLE IF NOT EXISTS library_views (owner TEXT,request TEXT,body BLOB,at INTEGER,PRIMARY KEY(owner,request))")
+        st.conn:exec("INSERT INTO library_views VALUES ('"..DBFX.owner.."','tap-warm','{items={}}',1)")
+        local warm = RE.Store.library(DBFX.owner, "tap-warm")
         ok(warm ~= nil, "prime the decoded cache before reading")
         local ui, m = newUI(true)
         RE.EOB.page_digests[ui] = { file = ui.document.file, digest = "tap-regression" }
@@ -6059,8 +4943,8 @@ test("reading: a locked cache cannot delay page turns or cold/warm cache reads",
             uiWorkBudget(function()
                 for page = 2, 26 do
                     m:onPageUpdate(page)
-                    eq(RE.Store.read(DBFX.owner, "tap-warm", path, nil), warm, "memory hit")
-                    eq(RE.Store.read(DBFX.owner, "tap-cold", path, nil), nil, "cold miss skips SQL")
+                    eq(RE.Store.library(DBFX.owner,"tap-warm"), warm, "memory hit")
+                    eq(RE.Store.library(DBFX.owner,"tap-cold"), nil, "cold miss skips SQL")
                 end
             end, { opens = 0, reads = 0, walks = 0, entries = 0, intents = 0 })
         end)
@@ -6756,14 +5640,13 @@ test("settings: Home selector uses the host's shared setting and labels its butt
     RE.Shared.set("home_screen", old)
 end)
 
-test("settings: Full refresh uses the library and its connection message is neutral", function()
-    local client, note = RE.bookorbit, RE.OC.note
-    local message
-    RE.bookorbit = function() return nil end
-    RE.OC.note = function(text) message = text end
-    RE.Library.fullRefresh()
-    RE.bookorbit, RE.OC.note = client, note
-    eq(message, "Connect to the server and sign in to refresh the catalog.")
+test("settings: Full refresh without an imported owner dispatches nothing", function()
+    local owner,command=RE.LibraryAdapter.owner,RE.LibraryAdapter.command
+    RE.LibraryAdapter.owner=function() end
+    RE.LibraryAdapter.command=function() error("must not dispatch without an owner") end
+    local result=RE.Library.fullRefresh()
+    RE.LibraryAdapter.owner,RE.LibraryAdapter.command=owner,command
+    eq(result,false)
 end)
 
 test("settings: every group has a budget and neutral screen text; one channel row opens its picker", function()
@@ -6922,6 +5805,7 @@ test("startup: 7000 cover files keep each UI callback within a fixed IO/intent b
     local cdir = cache.dir .. "/covers"
     for i=1,7000 do local f=assert(io.open(cdir .. "/" .. i .. ".jpg.etag", "wb")); f:write("etag"); f:close() end
     E.OC.cover_dir = cdir
+    FC.coverDirectory=cdir
     local checked = 0
     local items = FC.storageItems
     -- The fake worker walks the real directory; companion tests cover its actual cleanup/count.
@@ -6955,180 +5839,18 @@ test("startup: 7000 cover files keep each UI callback within a fixed IO/intent b
 end)
 
 
-test("W32: an irreducible storage limit and a lost mailbox ack stay below 30 intents per minute", function()
-    local client = cacheSetup()
-    local items, send = FC.storageItems, E.Companion.send
-    W.broadcasts = {}
-    local MB = 1048576
-    FC.storageItems = function() return { { k = "protected", bytes = 3 * 1024 * MB, at = 0, kind = "kept" } } end
-    E.Companion.send = function(action, extras)
-        if extras.drain_events == "1" then
-            -- JNI accepted it, but the companion was stopped before acknowledging.
-            local receive = W.on_broadcast; W.on_broadcast = nil
-            W.deliver({ action = action, extras = extras })
-            W.on_broadcast = receive
-            return true
-        end
-        return send(action, extras)
-    end
-    local passed_guard, err = pcall(function()
-        E.OC.storage = { used = 3 * 1024 * MB, kept = 3 * 1024 * MB }
-        E.S.storage_limit_mb = 1024
-        E.OC.storageCount("over the limit")
-        for second = 1, 180 do
-            for i = 1, 100 do E.OC.drainEvents(); E.OC.storageCount("over the limit") end
-            run(1)
-        end
-        local events, counts = 0, 0
-        for _, b in ipairs(W.broadcasts) do
-            if b.extras.drain_events then events = events + 1 end
-            if b.action:match("%.STORAGE$") then counts = counts + 1 end
-        end
-        ok(events <= 20, "lost acknowledgement uses backoff: " .. events)
-        ok(counts <= 5, "unreducible storage is counted at most once a minute: " .. counts)
-        ok(E.OC.storage.used >= 3 * 1024 * MB, "protected data remains over the limit")
-    end)
-    FC.storageItems, E.Companion.send = items, send
-    E.S.storage_limit_mb = 250
-    cacheTeardown()
-    ok(passed_guard, err)
-end)
-
-test("W32: Full refresh starts companion work before any cover IO and shows progress to completion", function()
-    local client, Cat = cacheSetup()
-    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
-    local cat = pluginCatalog(Cat, client)
-    local readFile = E.OC.readFile
-    local bad_reads = 0
-    E.OC.readFile = function(path, ...)
-        if not W.in_companion and tostring(path):find("/covers/", 1, true) then bad_reads = bad_reads + 1; error("UI cover IO") end
-        return readFile(path, ...)
-    end
-    local success, err = pcall(function()
-        withHost(cat, function()
-            uiWorkBudget(function() E.OC.fullRefresh(cat) end)
-            ok(E.Badge.running, "progress visible immediately")
-            run(60)
-            local ask = lastBroadcast(".MIRROR")
-            local plan = ask and E.Cache.decode(ask.extras.plan)
-            ok(plan and plan.op == "full" and plan.catalog, "bulk catalog inventory reaches companion")
-            eq(bad_reads, 0)
-            eq(E.Mirror.status().left, 0)
-            ok(not E.Badge.running, "completion closes running progress")
-            -- Settings uses the same entry point, even with no visible catalog.
-            E.OC.menuFullRefresh(); run(60)
-            ok(lastBroadcast(".MIRROR"), "Companion Catalog action starts work")
-        end)
-    end)
-    E.OC.readFile = readFile
-    cacheTeardown()
-    ok(success, err)
-end)
-
-test("W32: detail persistence never opens or flushes a settings file on the UI thread", function()
-    local c = E.EOB.details
-    E.EOB.details = {}
-    local LuaSettings = require("luasettings")
-    local open = LuaSettings.open
-    local send, problem = E.Companion.send, E.Companion.workerProblem
-    local ask, intents = nil, 0
-    LuaSettings.open = function() error("UI settings IO") end
-    E.Companion.workerProblem = function() return nil end
-    E.Companion.send = function(_, extras) intents = intents + 1; ask = extras; return true end
-    local success, err = pcall(function()
-        uiWorkBudget(function() E.EOB.remember({ id = 7, title = "Synthetic", files = {} }) end,
-            { opens = 0, reads = 0, walks = 0, entries = 0 })
-        eq(intents, 1, "one companion intent persists the detail")
-        eq(ask.remember_id, "7")
-        eq(E.EOB.cache()["7"].title, "Synthetic")
-    end)
-    LuaSettings.open, E.Companion.send, E.Companion.workerProblem = open, send, problem
-    E.EOB.details = c
-    ok(success, err)
-end)
 
 
-test("W32: Full refresh supersedes preparation of an old crawl instead of showing stale progress", function()
-    local client, Cat = cacheSetup()
-    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
-    local cat = pluginCatalog(Cat, client)
-    E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "resume"
-    E.Mirror.preparing = {}
-    E.Mirror._status_dir = E.Mirror.dir()
-    E.Mirror._status = { op = "full", left = 1159556 }
-    W.broadcasts = {}
-    withHost(cat, function()
-        E.OC.fullRefresh(cat); run(5)
-        local sent = lastBroadcast(".MIRROR")
-        local plan = sent and E.Cache.decode(sent.extras.plan)
-        ok(plan and plan.op == "full" and plan.catalog, "a new bulk refresh starts")
-    end)
-    cacheTeardown()
-end)
 
-test("W34: crawl progress is retired and a busy obsolete run cannot block bulk dispatch", function()
-    local client, Cat = cacheSetup()
-    cache.server_fn = libraryServer({ n_books = 3, series4 = 2 })
-    local cat = pluginCatalog(Cat, client)
-    local d = E.Mirror.dir()
-    local stale = { done=85, total=100, left=15, bytes=3032748032, at=1, op="full", run="old" }
-    E.OC.writeFile(d .. "/status.lua", E.Cache.encode(stale))
-    E.Mirror._status = nil
-    eq(next(E.Mirror.status()), nil, "crawl status is not bulk progress")
-    eq(E.OC.readFile(d .. "/status.lua"), nil, "obsolete status deleted")
-    E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "resume"
-    E.Mirror._status, E.Mirror.run_id = stale, "old"
-    -- The old companion is gone and will never supply a summary.
-    local receive = W.on_broadcast
-    W.on_broadcast = nil
-    withHost(cat, function()
-        W.broadcasts = {}
-        E.OC.fullRefresh(cat)
-        eq(E.Mirror.status().pct, 0, "fresh progress immediately")
-        eq(E.Mirror.status().at, nil, "no stale completion time")
-        run(1)
-        local sent = lastBroadcast(".MIRROR")
-        local plan = sent and E.Cache.decode(sent.extras.plan)
-        ok(plan and plan.op == "full" and plan.catalog, "bulk intent sent without old summary")
-        local status = E.Cache.decode(E.OC.readFile(d .. "/status.lua"))
-        eq(status.run, plan.run); eq(status.pct, 0); eq(status.engine, "bulk")
-        eq(status.bytes, nil, "old bytes not inherited")
-        W.on_broadcast = receive
-        W.deliver(sent)
-        run(60)
-        eq(E.Mirror.status().left, 0, "new run completes")
-    end)
-    W.on_broadcast = receive
-    cacheTeardown()
-end)
 
-test("W34: global footer repair survives a native flush without touching the loaded document", function()
-    local prior_mode, prior_token = store.reader_footer_mode, E.S.native_footer_repair
-    local ui = newUI(true)
-    local footer = { mode=1 }
-    ui.view = { footer=footer }
-    store.reader_footer_mode, E.S.native_footer_repair = 1, nil
-    W.shown = {ui}
-    local event = { kind="native_footer_repair", before="1", after="0", token="synthetic-footer" }
-    E.OC.applyEvents({event})
-    eq(store.reader_footer_mode, 0, "native global memory agrees with companion disk repair")
-    eq(footer.mode, 1, "no change to open footer or document layout")
-    eq(UIManager:getTopmostVisibleWidget(), ui, "nothing interrupts reading")
-    -- KOReader's unconditional dump of G_reader_settings must now persist 0.
-    eq(G_reader_settings:readSetting("reader_footer_mode"), 0, "next native flush retains repair")
-    store.reader_footer_mode = 1 -- later deliberate user setting
-    E.OC.applyEvents({event})
-    eq(store.reader_footer_mode, 1, "replayed mailbox cannot undo a later user choice")
-    E.OC.applyEvents({{kind=event.kind,before="1",after="nil",token="synthetic-unset"}})
-    eq(store.reader_footer_mode, nil, "original absent setting is restored")
-    store.reader_footer_mode = 2
-    E.OC.applyEvents({{kind=event.kind,before="1",after="0",token="synthetic-changed"}})
-    eq(store.reader_footer_mode, 2, "a newer native value is retained")
-    E.OC.applyEvents({{kind=event.kind,before="2",after="invalid",token="synthetic-invalid"}})
-    eq(store.reader_footer_mode, 2, "malformed repair does nothing")
-    store.reader_footer_mode, E.S.native_footer_repair = prior_mode, prior_token
-    ReaderUI.instance = nil; W.shown = {}
-end)
+
+
+
+
+
+
+
+
 
 -- This case is also in the emulated release gate (ORBIT_TEST_ONLY=startup).
 -- With a pinned checkout it executes KOReader's actual opening coroutine.

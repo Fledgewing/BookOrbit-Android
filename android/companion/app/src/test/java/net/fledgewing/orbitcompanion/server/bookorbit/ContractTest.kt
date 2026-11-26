@@ -46,7 +46,10 @@ class ContractTest {
     @Test fun everyCallIsTheProvidersOwn() {
         val calls = c.getJSONArray("calls").objects().associate { it.getString("name") to it }
         assertEquals(mapOf("STATUS" to CommandProvider.STATUS, "TAKE_COMMAND" to CommandProvider.TAKE_COMMAND, "CLICKS" to CommandProvider.CLICKS,
-            "RESTART_KOREADER" to CommandProvider.RESTART_KOREADER), calls.mapValues { it.value.getString("method") })
+            "RESTART_KOREADER" to CommandProvider.RESTART_KOREADER,
+            "SERVER_STATE" to LibraryAccount.STATE, "SERVER_COMMAND" to ServerCommands.START,
+            "SERVER_RESULT" to ServerCommands.RESULT, "ACCOUNT_OPEN" to LibraryAccount.OPEN,
+            "DEVICE_SETTINGS" to CommandProvider.DEVICE_SETTINGS), calls.mapValues { it.value.getString("method") })
         assertEquals("shell", calls.getValue("RESTART_KOREADER").getString("caller"))
         calls.values.forEach { o -> (o.getJSONArray("extras").strings() + o.getJSONArray("answer").strings()).forEach { used(it, "call field") } }
         c.getJSONArray("answer").strings().forEach { used(it, "answer field") }

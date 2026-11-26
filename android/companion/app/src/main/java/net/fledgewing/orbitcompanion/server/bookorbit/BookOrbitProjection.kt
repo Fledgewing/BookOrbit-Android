@@ -23,9 +23,106 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
     private fun freshness(saved: Boolean): Map<String, Any?> = mapOf("saved" to saved,
         "generation" to store.meta("bulk_active"), "origin" to "cached-remote", "at" to if (saved) store.meta("bulk_at")?.toLongOrNull() else null)
     private fun empty(saved: Boolean) = mapOf("items" to emptyList<Any>(), "total" to 0, "freshness" to freshness(saved), "empty" to if (saved) "No books" else "Not saved yet")
+    /** Compatibility renderer input: neutral selectors in, bounded normalized display rows out.
+     * CacheStore owns SQL/ranks/search and BulkCatalog owns generation materialization. */
+    private fun connectorCatalog(owner: String, args: Map<*,*>): Map<String,Any?> {
+        val view=args["view"] as? String ?: "books"
+        val limit=((args["limit"] as? Number)?.toInt() ?: 24).coerceIn(1,24)
+        val offset=((args["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+        val selection=args["selection"] as? Map<*,*> ?: emptyMap<Any,Any>()
+        val names=mapOf("library" to "libraryId","collection" to "collectionId","list" to "smartScopeId",
+            "series" to "seriesId","series_name" to "series","author" to "author","format" to "format",
+            "status" to "readStatus","ids" to "ids","search" to "q","direction" to "order","section_filter" to "filter")
+        require(selection.keys.all { it in names || it=="sort" })
+        require(selection.values.all { it is String && it.length<=4096 })
+        val q=selection.entries.associate { (key,value) -> (names[key] ?: "sort") to value.toString() }.toMutableMap()
+        q["sort"]?.let { sort -> q["sort"]=mapOf("added" to "recently_added","updated" to "recently_updated","last" to "recently_read")[sort] ?: sort }
+        q["offset"]=offset.toString();q["size"]=limit.toString()
+        val reference=args["reference"]
+        val endpoint=when(view) {
+            "books" -> "/koreader/plugin/catalog/books"
+            "book" -> {
+                val id=(reference as? Number)?.toLong() ?: BookOrbitLibrary.id(owner,"book",reference)
+                require(id!=null && id>0)
+                "/koreader/plugin/catalog/books/$id"
+            }
+            "index" -> {
+                val category=args["category"] as? String
+                require(category in setOf("libraries","collections","lists","authors","series"))
+                "/koreader/plugin/catalog/sections/"+(if(category=="lists") "smart-scopes" else category)
+            }
+            else -> throw IllegalArgumentException("view")
+        }
+        val path=if(view=="book") endpoint else endpoint+"?"+MirrorLogic.encQuery(q)
+        val body=if(view=="books" && !q["q"].isNullOrBlank()) store.search(q["q"]!!,offset,limit) else
+            store.read(MirrorLogic.key(owner,store.meta("catalog_server") ?: owner.substringAfter('|'),path),path,"/koreader/plugin/catalog/books/${MirrorLogic.SENTINEL}")?.body as? Map<*,*>
+            ?: return empty(false)
+        val raw=if(view=="book") listOf(body) else (body["items"] as? List<*>).orEmpty()
+        val items=raw.take(limit).mapNotNull { it as? Map<*,*> }.map { row ->
+            if(view=="index") mapOf("reference" to row["id"],"title" to (row["name"] ?: row["title"]),"count" to (row["count"] ?: row["bookCount"]),
+                "series_reference" to row["seriesId"],"reading" to row["readingCount"],"finished" to row["finishedCount"])
+            else BookOrbitLibrary.summary(owner,row,0,null) + mapOf("reference" to row["id"],"cover_revision" to row["updatedAt"],
+                "cover_available" to (row["hasCover"]==true),"series_reference" to row["seriesId"],
+                "description" to (row["description"] as? String)?.take(2048),
+                "files" to (row["files"] as? List<*>).orEmpty().take(8).mapNotNull { it as? Map<*,*> }.map { file ->
+                    mapOf("reference" to file["id"],"format" to file["format"],"bytes" to (file["sizeBytes"] ?: file["size"]),"digest" to (file["fileHash"] ?: file["md5"]),"revision" to file["contentVersion"],
+                        "role" to file["role"],"filename" to file["filename"],"delivery" to file["downloadVariant"],"requested_delivery" to file["requestedVariant"],"local_path" to file["devicePath"])
+                })
+        }
+        return mapOf("items" to items,"total" to (body["total"] ?: items.size),"offset" to offset,"limit" to limit,
+            "more" to (offset+items.size<((body["total"] as? Number)?.toInt() ?: items.size)),"freshness" to freshness(true))
+    }
+    private fun connectorHome(owner: String, args: Map<*,*>): Map<String,Any?> {
+        val shelves=(args["shelves"] as? List<*>).orEmpty(); val names=(args["names"] as? List<*>).orEmpty()
+        require(shelves.size<=6 && names.size<=2)
+        var rows=1
+        val displays=linkedMapOf<String,Any?>()
+        for(raw in shelves) {
+            val shelf=raw as? Map<*,*> ?: continue
+            val slot=shelf["slot"] as? String ?: continue
+            require(slot.length<=100)
+            val limit=minOf(4,24-rows)
+            if(limit<=0) break
+            val result=connectorCatalog(owner,mapOf("view" to "books","selection" to shelf["selection"],"limit" to limit))
+            val items=(result["items"] as? List<*>).orEmpty()
+            rows+=items.size; displays[slot]=items
+        }
+        val labels=linkedMapOf<String,Any?>()
+        for(category in names.filterIsInstance<String>()) {
+            val limit=minOf(4,24-rows)
+            if(limit<=0) break
+            val result=connectorCatalog(owner,mapOf("view" to "index","category" to category,"limit" to limit))
+            val items=(result["items"] as? List<*>).orEmpty()
+            rows+=items.size;labels[category]=items.mapNotNull { (it as? Map<*,*>)?.get("title") }
+        }
+        val cachedDashboardEndpoint="/koreader/plugin/catalog/dashboard"
+        val raw=store.read(MirrorLogic.key(owner,store.meta("catalog_server") ?: owner.substringAfter('|'),cachedDashboardEndpoint),cachedDashboardEndpoint,null)?.body as? Map<*,*>
+        val goal=raw?.get("readingGoal") as? Map<*,*>
+        val streak=raw?.get("readingStreak") as? Map<*,*>
+        val year=raw?.get("readingYear") as? Map<*,*>
+        return mapOf("shelves" to displays,"names" to labels,"row_count" to maxOf(1,rows),
+            "greeting" to raw?.get("displayName"),"account_label" to raw?.get("username"),"total" to (raw?.get("totalBooks") ?: raw?.get("bookCount")),
+            "goal" to mapOf("year" to goal?.get("year"),"target" to goal?.get("goalBooks"),"completed" to goal?.get("completedBooks")),
+            "streak" to mapOf("current" to streak?.get("currentStreak"),"best" to streak?.get("longestStreak")),
+            "activity" to mapOf("start_date" to year?.get("startDate"),"minutes" to (year?.get("minutes") as? List<*>)?.take(371)),
+            "freshness" to freshness(raw!=null || store.meta("bulk_active")!=null))
+    }
+    private fun connectorRoot(owner:String):Map<String,Any?> {
+        val catalogRootEndpoint="/koreader/plugin/catalog/root"
+        val body=store.read(MirrorLogic.key(owner,store.meta("catalog_server") ?: owner.substringAfter('|'),catalogRootEndpoint),catalogRootEndpoint,null)?.body as? Map<*,*>
+        val categories=(body?.get("sections") as? List<*>).orEmpty().take(24).mapNotNull { it as? Map<*,*> }.map { section ->
+            val kind=section["section"] ?: section["id"]
+            mapOf("kind" to if(kind=="smart-scopes") "lists" else kind,"title" to section["title"],"count" to section["count"])
+        }
+        return mapOf("items" to categories,"freshness" to freshness(body!=null))
+    }
     override fun project(owner: String, a: Map<*, *>): Map<String, Any?> {
         if (store.meta("owner") != owner) return mapOf("error" to "unauthorized", "items" to emptyList<Any>())
         val op = a["op"]
+        if (op == "connector.root") return connectorRoot(owner)
+        if (op == "connector.home") return connectorHome(owner,a)
+        if (op == "connector.catalog") return connectorCatalog(owner,a)
+        if (op == "catalog.state") return CatalogPlan.status(store)
         if (op == "reader") {
             val path = a["path"] as? String ?: return empty(false)
             val entry = BookOrbitLibrary.localEntries(store, owner)?.firstOrNull { it["path"] == path }
@@ -57,11 +154,12 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             val remote = fallbackReadingStats(owner)
             val a = accountStats(owner).orEmpty()
             val server = accountState()
+            val cachedDetail=(server["catalog"] as? Map<*,*>)?.get("cachedDetail")==true
             val managed = server["owner"] == owner
             val opds = (server["opds"] as? Map<*, *>)?.get("available") == true
             val sync = (server["sync"] as? Map<*, *>)?.get("available") == true
-            return mapOf("collections" to !managed, "catalog" to (!managed || opds), "detail" to !managed, "download" to opds,
-                "lists" to mapOf("read" to !managed, "save" to false), "progress" to mapOf("read" to (!managed || sync), "write" to sync, "syncCurrent" to !managed),
+            return mapOf("collections" to (!managed || cachedDetail), "catalog" to (!managed || opds || cachedDetail), "detail" to (!managed || cachedDetail), "download" to opds,
+                "lists" to mapOf("read" to (!managed || cachedDetail), "save" to false), "progress" to mapOf("read" to (!managed || sync || cachedDetail), "write" to sync, "syncCurrent" to (!managed || cachedDetail)),
                 "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
                 "account" to server,
                 "stats" to mapOf("days" to (a["days"] != null || remote?.days != null), "streak" to (remote?.streak != null),
@@ -71,7 +169,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                     "yearReview" to false, "activityDetails" to false, "celebrations" to false),
                 "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
                 "series" to mapOf("read" to true, "downloadNext" to false),
-                "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
+                "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh").takeIf { !managed || (server["catalog"] as? Map<*,*>)?.get("canRefresh")==true }),
                 "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
         }
         if (op == "sources") {

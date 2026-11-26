@@ -10,15 +10,12 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * The cache worker's Android side (docs/design/companion-worker.md): the plugin's MIRROR and CHECK
- * broadcasts (android/docs/INTERFACE.md) land here and run on one worker thread, checks first
- * (a mirror run answers waiting checks between its jobs). Needs no service: the receiver starts the
- * thread. The BookOrbit login comes with each broadcast and is held in memory only, never written
- * or logged.
+ * Sole cache writer. Neutral catalog commands resolve credentials in the server adapter and
+ * queue private plans here; display snapshots/events reuse the existing database and mailbox.
+ * Remaining copy/sleep compatibility commands share this writer until their separate cutover.
+ * No catalog login or protocol plan arrives from the plugin.
  */
 object AdapterWorker : ServerRuntime {
-    const val ACTION_MIRROR = "${Contract.PACKAGE}.action.MIRROR"
-    const val ACTION_CHECK = "${Contract.PACKAGE}.action.CHECK"
     const val ACTION_STORAGE = "${Contract.PACKAGE}.action.STORAGE"
     const val ACTION_COPIES = "${Contract.PACKAGE}.action.COPIES"
     const val ACTION_SLEEP_REFRESH = "${Contract.PACKAGE}.action.SLEEP_REFRESH"
@@ -33,7 +30,6 @@ object AdapterWorker : ServerRuntime {
     fun root(): File = File(Environment.getExternalStorageDirectory(), "koreader/settings/orbit-cache")
 
     private val lock = Object()
-    private val checks = ArrayDeque<CacheWorker.Check>()
     private val patches = ArrayDeque<() -> Unit>()
     private var pending: Pair<CacheWorker.Plan, CacheWorker.Creds>? = null
     private var storage: CacheWorker.StorageAsk? = null
@@ -41,13 +37,15 @@ object AdapterWorker : ServerRuntime {
     private var pickers: Pair<String, CacheWorker.Creds>? = null
     @Volatile private var app: Context? = null
     private var running = false
+    private var activeCatalogOwner: String? = null
+    private var deferredAccountChange = false
 
     @Volatile
     override var mirrorRunning = false
         private set
 
     /** Work in hand: an automatic Wi-Fi off waits for it. */
-    override fun busy(): Boolean = mirrorRunning || synchronized(lock) { checks.isNotEmpty() || patches.isNotEmpty() || pending != null || storage != null || sleep != null || pickers != null }
+    override fun busy(): Boolean = mirrorRunning || synchronized(lock) { patches.isNotEmpty() || pending != null || storage != null || sleep != null || pickers != null }
 
     private var worker: CacheWorker? = null
 
@@ -91,12 +89,22 @@ object AdapterWorker : ServerRuntime {
         start()
     }
 
+    /** Ownership changes wait until the active catalog writer has stopped. Lifecycle/position
+     * queues are untouched; the same sole writer applies the cache transition afterward. */
+    private fun applyAccountChange() {
+        val owner=LibraryAccount.owner()
+        synchronized(lock) { if(pending?.first?.owner!=owner) pending=null }
+        owner?.let { worker().store.own(it) }
+        worker().store.db().exec("DELETE FROM library_views")
+        worker().event(mapOf("kind" to "account"))
+    }
     override fun accountChanged(ctx: Context) {
-        app = ctx.applicationContext
+        app=ctx.applicationContext
         synchronized(lock) { patches.addLast {
-            LibraryAccount.owner()?.let { worker().store.own(it) }
-            worker().store.db().exec("DELETE FROM library_views")
-            worker().event(mapOf("kind" to "account"))
+            if(mirrorRunning && LibraryAccount.owner()!=activeCatalogOwner) {
+                File(root(),"mirror/stop").writeText("stop")
+                deferredAccountChange=true
+            } else applyAccountChange()
         }; lock.notifyAll() }
         start()
     }
@@ -159,6 +167,57 @@ object AdapterWorker : ServerRuntime {
         start()
     }
 
+    /** One sole-writer command. The plugin sends an action and opaque owner, never a plan/login. */
+    fun catalogControl(ctx: Context, credentials: CacheWorker.Creds, owner: String, action: String, manual: Boolean,
+        done: (Map<String,Any?>?,String?) -> Unit) {
+        app=ctx.applicationContext
+        BulkWork.attach(ctx)
+        synchronized(lock) { patches.addLast {
+            val started=System.nanoTime()
+            val result=runCatching {
+                BulkWork.checkpoint()
+                val current=LibraryAccount.owner()
+                if(current!=owner) throw ServerFailure("canceled")
+                val w=worker()
+                val state=if(w.store.meta("owner")==owner) CatalogPlan.status(w.store) else emptyMap()
+                var accepted: Map<String,Any?>?=null
+                if(action=="stop") {
+                    File(root(),"mirror/stop").apply { parentFile?.mkdirs(); writeText("stop") }
+                } else if((!mirrorRunning && synchronized(lock) { pending==null }) ||
+                    (manual && action in setOf("full","refresh") &&
+                        (activeCatalogOwner!=owner || state["op"]!="full") && synchronized(lock) { pending?.first?.let { it.owner!=owner || it.op!="full" } != false })) {
+                    val limit=SettingsStore.get(ctx,"storage_limit_mb").toLongOrNull()?.takeIf { it>0 }?.times(1048576)
+                    val now=System.currentTimeMillis()/1000
+                    val last=w.store.meta("catalog_probe_at")?.toLongOrNull() ?: 0L
+                    val op=CatalogPlan.operation(action,state,limit,manual,now,last)
+                    if(op!=null) {
+                        if(mirrorRunning) File(root(),"mirror/stop").writeText("stop")
+                        val ids=BookOrbitLibrary.localEntries(w.store,owner).orEmpty().mapNotNull { (it["book_id"] as? Number)?.toLong() }
+                        val external=Environment.getExternalStorageDirectory()
+                        val directory=File(ConnectorPlugin.coverCacheDir(external),BookOrbitLibrary.namespace(owner))
+                        val plan=CatalogPlan.create(owner,op,ids,SettingsStore.get(ctx,"mirror_covers")=="1",directory.path,limit,manual,server=credentials.server)
+
+                        val file=File(root(),"mirror/plan.lua"); file.parentFile?.mkdirs()
+                        val tmp=File(file.path+".tmp"); tmp.writeBytes(LuaValue.encode(plan.m)); check(tmp.renameTo(file))
+                        accepted=mapOf("run" to plan.run,"op" to if(op=="resume") "full" else op,"running" to true,"beat" to now,
+                            "done" to if(op=="resume") state["done"] else 0L,"total" to if(op=="resume") state["total"] else 100L,
+                            "left" to if(op=="resume") state["left"] else 100L,"pct" to if(op=="resume") state["pct"] else 0L,"row_count" to 1L)
+                        if(!mirrorRunning) {
+                            w.store.own(owner)
+                            File(root(),"mirror/status.lua").writeBytes(LuaValue.encode(accepted+mapOf("owner" to owner,"engine" to "bulk")))
+                        }
+                        synchronized(lock) { pending=plan to credentials; lock.notifyAll() }
+                    }
+                }
+                w.publishCatalogState()
+                accepted ?: CatalogPlan.status(w.store)
+            }
+            OLog.i("library.catalog.control ms=${(System.nanoTime()-started)/1_000_000}")
+            result.fold({ done(it,null) },{ done(null,(it as? ServerFailure)?.kind ?: "unavailable") })
+        }; lock.notifyAll() }
+        start()
+    }
+
     private fun creds(i: Intent): CacheWorker.Creds? {
         val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
         val user = i.getStringExtra("user") ?: return null
@@ -170,7 +229,6 @@ object AdapterWorker : ServerRuntime {
         app = ctx.applicationContext
         BulkWork.attach(ctx)
         LibraryAccount.initialize(ctx)
-        if (i.action in setOf(ACTION_MIRROR, ACTION_CHECK)) LibraryAccount.refresh(ctx)
         if (i.action == ACTION_SQLITE_STRESS) {
             val secs = i.getStringExtra("seconds")?.toIntOrNull()?.coerceIn(5, 600) ?: SqliteStress.SECONDS
             return SqliteStress.start(root(), secs)
@@ -183,7 +241,7 @@ object AdapterWorker : ServerRuntime {
             }
             // No login: files only. A newer ask replaces a waiting one.
             val a = CacheWorker.StorageAsk(i.getStringExtra("reason") ?: "plugin", i.getStringExtra("limit")?.toLongOrNull()?.takeIf { it > 0 },
-                i.getStringExtra("cover_dir")?.takeIf { it.isNotEmpty() }, i.getStringExtra("mirror_covers") == "1")
+                ConnectorPlugin.coverCacheDir(Environment.getExternalStorageDirectory()).path, i.getStringExtra("mirror_covers") == "1")
             synchronized(lock) { storage = a; lock.notifyAll() }
             return start()
         }
@@ -247,15 +305,7 @@ object AdapterWorker : ServerRuntime {
             synchronized(lock) { patches.addLast { worker().drainEvents(ack) }; lock.notifyAll() }
             return start()
         }
-        if (i.action == ACTION_PATCH) {
-            // The database only, no login; in order with the checks.
-            val wipe = i.getStringExtra("wipe") == "1"
-            val id = i.getStringExtra("id")?.toLongOrNull()
-            val fields = i.getStringExtra("fields")?.takeIf { it.isNotEmpty() }?.let { runCatching { LuaValue.parse(LuaValue.str(it).toByteArray(Charsets.ISO_8859_1)) }.getOrNull() } as? Map<*, *>
-            val staleHome = i.getStringExtra("stale_home") == "1"
-            synchronized(lock) { patches.addLast { worker().patch(id, fields ?: emptyMap<Any?, Any?>(), staleHome, wipe) }; lock.notifyAll() }
-            return start()
-        }
+        if (i.action == ACTION_PATCH) return
         if (i.action == ACTION_COPIES) {
             val prepare = i.getStringExtra("prepare")
             val ask = i.getStringExtra("ask")
@@ -288,13 +338,6 @@ object AdapterWorker : ServerRuntime {
             return
         }
         when (i.action) {
-            ACTION_CHECK -> {
-                val key = i.getStringExtra("cache_key") ?: return
-                val path = i.getStringExtra("path") ?: return
-                val c = CacheWorker.Check(LuaValue.str(key), LuaValue.str(path), i.getStringExtra("mode") ?: "open", creds,
-                    LuaValue.str(i.getStringExtra("owner") ?: ""), i.getStringExtra("template")?.takeIf { it.isNotEmpty() }?.let { LuaValue.str(it) })
-                synchronized(lock) { checks.addLast(c); lock.notifyAll() }
-            }
             ACTION_SLEEP_REFRESH -> if (i.getStringExtra("scopes_only") == "1") {
                 // The pickers' lists only (Pick from, Leave out and its tags); never a pool build.
                 synchronized(lock) { pickers = (i.getStringExtra("reason") ?: "picker") to creds; lock.notifyAll() }
@@ -302,27 +345,6 @@ object AdapterWorker : ServerRuntime {
                 val a = SleepPoolBuilder.Ask(i.getStringExtra("from") ?: "", SleepPoolLogic.rules(i.getStringExtra("rules")),
                     i.getStringExtra("open_id")?.toLongOrNull(), i.getStringExtra("every") == "1", i.getStringExtra("storage_limit_mb")?.toLongOrNull(), creds)
                 synchronized(lock) { sleep = (i.getStringExtra("reason") ?: "plugin") to a; lock.notifyAll() }
-            }
-            ACTION_MIRROR -> {
-                val encoded = i.getStringExtra("plan") ?: return
-                synchronized(lock) {
-                    patches.addLast {
-                        BulkWork.checkpoint()
-                        val bytes = LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)
-                        val m = LuaValue.parse(bytes) as? Map<*, *> ?: return@addLast
-                        val plan = CacheWorker.Plan(m)
-                        OLog.i("worker: mirror ${plan.op} (${plan.reason}) run ${plan.run}")
-                        val f = File(root(), "mirror/plan.lua")
-                        f.parentFile?.mkdirs()
-                        // A replacement must stop the current run before the next
-                        // one clears this flag in loop().
-                        if (mirrorRunning) File(root(), "mirror/stop").writeText("stop")
-                        val tmp = File(f.path + ".tmp")
-                        tmp.writeBytes(bytes); check(tmp.renameTo(f))
-                        synchronized(lock) { pending = plan to creds; lock.notifyAll() }
-                    }
-                    lock.notifyAll()
-                }
             }
             else -> return
         }
@@ -351,10 +373,7 @@ object AdapterWorker : ServerRuntime {
             val pt = synchronized(lock) { patches.removeFirstOrNull() } ?: break
             try { pt() } catch (e: Exception) { OLog.w("worker: patch failed", e) }
         }
-        while (true) {
-            val c = synchronized(lock) { checks.removeFirstOrNull() } ?: return
-            try { worker().check(c) } catch (e: Exception) { OLog.w("worker: check failed", e) }
-        }
+
     }
 
     /** The sleep screen's pool, then its picture redrawn; the plugin hears a sleep_pool event. */
@@ -393,13 +412,14 @@ object AdapterWorker : ServerRuntime {
         while (true) {
             drainChecks()
             val p = synchronized(lock) {
-                if (checks.isEmpty() && patches.isEmpty() && pending == null && storage == null && sleep == null && pickers == null) { return }
+                if (patches.isEmpty() && pending == null && storage == null && sleep == null && pickers == null) { return }
                 pending.also { pending = null }
             } ?: continue
             File(root(), "mirror/stop").delete()
             progress = 0
             manualRefresh = p.first.m["manual"] == true
             mirrorRunning = true
+            activeCatalogOwner=p.first.owner
             try {
                 val why = BulkWork.phase("mirror") { worker().run(p.first, p.second) { drainChecks() } }
                 OLog.i("worker: mirror run ${p.first.run} ended: $why")
@@ -407,7 +427,9 @@ object AdapterWorker : ServerRuntime {
                 OLog.w("worker: mirror run failed", e)
             } finally {
                 mirrorRunning = false
+                activeCatalogOwner=null
                 progress = null
+                if(deferredAccountChange) { deferredAccountChange=false;applyAccountChange() }
             }
         }
     }

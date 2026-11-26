@@ -131,5 +131,15 @@ class ServerAdapterTest {
                 assertTrue(bytes.size <= 512)
             }
         } } finally { root.deleteRecursively() }
+    }    @Test fun providerTextPreservesModelBytesAndChargesUtf8Bytes() {
+        val model=mapOf("owner" to LuaValue.str("lecteur-é|https://library.example"),"query" to LuaValue.str("Résumé"))
+        val wire=LuaValue.transportText(model)
+        assertTrue(wire.contains("Résumé"))
+        assertArrayEquals(LuaValue.encode(model),wire.toByteArray(Charsets.UTF_8))
+        assertEquals(model,LuaValue.parseTransport(wire))
+        val oversized=LuaValue.transportText(mapOf("label" to LuaValue.str("é".repeat(5000))))
+        assertTrue(oversized.length<8192);assertTrue(oversized.toByteArray(Charsets.UTF_8).size>8192)
+        try { LuaValue.parseTransport(oversized);fail("UTF-8 byte budget ignored") } catch(_:IllegalArgumentException) {}
     }
+
 }
