@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 
 root = pathlib.Path(__file__).resolve().parents[2]
 files = sorted((root / ".github/workflows").glob("*.yml")) + sorted((root / ".github/actions").glob("*/action.yml"))
+files += sorted((root / "stub/.github/workflows").glob("*.yml"))
 errors = []
 
 PINNED = re.compile(r"^[\w.-]+/[\w./-]+@[0-9a-f]{40}(\s+#.*)?$")

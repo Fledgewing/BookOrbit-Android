@@ -11,6 +11,20 @@ data class AndroidReleaseFeed(val releases: List<ReleaseInfo>, val withdrawn: Se
         const val TAG = "android-feed"
         const val ASSET = "android-releases.json"
 
+        /** Both locations must pass the same signature and payload checks. */
+        internal fun <T> fromLocations(read: (String) -> T): T {
+            return try {
+                read(URL)
+            } catch (primary: Exception) {
+                try {
+                    read(LEGACY_URL)
+                } catch (fallback: Exception) {
+                    fallback.addSuppressed(primary)
+                    throw fallback
+                }
+            }
+        }
+
         fun parse(text: String, root: String, minSerial: Long): AndroidReleaseFeed {
             val envelope = JSONObject(text)
             val payload = envelope.getString("payload")

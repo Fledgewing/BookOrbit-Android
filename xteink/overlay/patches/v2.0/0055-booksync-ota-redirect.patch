@@ -1,8 +1,8 @@
 Subject: [PATCH] BookSync: tolerate repository rename during OTA checks
 
-Ignore redirect/error bodies before parsing the manifest. Until the rename, a
-404 from the new default feed retries the previous name once. Custom feeds
-never fall back to a public feed.
+Ignore redirect/error bodies before parsing the manifest. A failed request or
+unusable manifest at the canonical feed retries the previous name once. Custom
+feeds never fall back to a public feed.
 
 diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
 --- a/src/network/OtaUpdater.cpp
@@ -46,14 +46,15 @@ diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
    }
    if (err == ESP_OK) LOG_DBG("OTA", "Response received: %zu bytes total", totalBytesReceived);
    return err;
-@@ -362,6 +369,15 @@
+@@ -362,6 +369,16 @@
            includePrereleases ? "yes" : "no");
    for (int attempt = 1;; attempt++) {
      esp_err = checkOnce(client_config);
-+    // Before the repository rename, the new default feed does not exist yet.
-+    // Retry its old name once; custom/test feeds never get this fallback.
-+    if (esp_err == ESP_ERR_NOT_FOUND && readList && fallbackReleaseUrl[0] != '\0' &&
-+        client_config.url != fallbackReleaseUrl) {
++    // Prefer the canonical feed; any transport or manifest failure tries the stub.
++    const bool usable = releaseParser.isReleaseList() && newestListed &&
++                        newestListed->tagFound && newestListed->firmwareFound;
++    if (orbify::ota_manifest::needsFallback(esp_err == ESP_OK, usable,
++          readList && fallbackReleaseUrl[0] != '\0', client_config.url == fallbackReleaseUrl)) {
 +      releaseParser.reset();
 +      if (newestListed) *newestListed = ReleaseJsonParser::Release{};
 +      client_config.url = fallbackReleaseUrl;

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Reduce GitHub releases to current BookSync channels plus legacy OTA bridges."""
 import json
+import os
+from urllib.parse import quote
 import re
 import sys
 
@@ -19,7 +21,7 @@ def product_key(release):
     return (*map(int, match.group(1, 2, 3)),
             {None: 2, "rc": 1, "preview": 0}[match[4]], int(match[5] or 0))
 
-def build_feed(releases):
+def build_feed(releases, repo=None):
     releases = sorted((r for r in releases if not r.get("draft") and
                        r["tag_name"].startswith("xteink-v")), key=lambda r: r["created_at"], reverse=True)
     selected = []
@@ -45,6 +47,10 @@ def build_feed(releases):
         entry = {key: release[key] for key in ("tag_name", "name", "draft", "prerelease", "created_at")}
         entry["assets"] = [{k: a[k] for k in ("name", "size", "digest", "browser_download_url") if k in a}
                            for a in release["assets"]]
+        if repo:
+            for asset in entry["assets"]:
+                asset["browser_download_url"] = (f"https://github.com/{repo}/releases/download/"
+                    f"{quote(release['tag_name'], safe='')}/{quote(asset['name'], safe='')}")
         book = identity(release)
         if book:
             entry["booksync_version"] = book
@@ -52,5 +58,5 @@ def build_feed(releases):
     return result
 
 if __name__ == "__main__":
-    json.dump(build_feed(json.load(sys.stdin)), sys.stdout, indent=2)
+    json.dump(build_feed(json.load(sys.stdin), os.environ["GITHUB_REPOSITORY"]), sys.stdout, indent=2)
     print()

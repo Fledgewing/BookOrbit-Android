@@ -154,6 +154,13 @@ class ReleaseSignatureTest {
             AndroidReleaseFeed.parse(envelope(renamed), rootHex, 1)
             throw AssertionError("rewritten payload accepted without a new signature")
         } catch (_: IllegalArgumentException) { }
+        val attempts = mutableListOf<String>()
+        val recovered = AndroidReleaseFeed.fromLocations { url ->
+            attempts += url
+            AndroidReleaseFeed.parse(envelope(if (url == AndroidReleaseFeed.URL) renamed else payload), rootHex, 1)
+        }
+        assertEquals(listOf(AndroidReleaseFeed.URL, AndroidReleaseFeed.LEGACY_URL), attempts)
+        assertEquals(oldUrl, recovered.releases.single().assets[name])
         assertEquals(oldUrl.replace(Updater.LEGACY_REPO, Updater.REPO),
             AndroidReleaseFeed.parse(envelope(renamed, resign = true), rootHex, 1).releases.single().assets[name])
     }
