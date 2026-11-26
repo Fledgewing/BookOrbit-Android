@@ -12,12 +12,24 @@
 SettingsSync = { FUTURE_MS = 86400000 }
 
 -- schema: the decoded schema.json. -> { settings = {…}, byKey = {…}, sections = {…} }
-function SettingsSync.index(schema)
+function SettingsSync.index(schema, choiceIds)
     local out = { settings = {}, byKey = {}, sections = {} }
     if type(schema) ~= "table" then return out end
     for _, s in ipairs(schema.sections or {}) do table.insert(out.sections, s) end
     for _, d in ipairs(schema.settings or {}) do
         if type(d) == "table" and type(d.key) == "string" then
+            if choiceIds and type(d.values) == "table" then
+                local bound = {}
+                for k, v in pairs(d) do bound[k] = v end
+                bound.values = {}
+                for i, value in ipairs(d.values) do
+                    local choice = {}
+                    for k, v in pairs(value) do choice[k] = v end
+                    choice.id = choiceIds[tostring(value.id)] or value.id
+                    bound.values[i] = choice
+                end
+                d = bound
+            end
             table.insert(out.settings, d)
             out.byKey[d.key] = d
         end

@@ -48,10 +48,7 @@ function UIManager:unschedule(fn, ...)
 end
 
 -- Event handlers, repaint work and synchronous bridges also run outside scheduled tasks.
-for _, name in ipairs({ "OrbitAndroid", "ReadingStatus", "EOB", "OSM", "Store", "OC", "LF",
-    "Companion", "Jni", "Shared", "Clicks", "Channel", "Wifi", "Net", "Sync", "Mirror",
-    "Copies", "Sleep", "Stats" }) do
-    local t = plugin_env[name]
+local function wrapTable(t,name)
     if type(t) == "table" then
         for key, fn in pairs(t) do
             if type(fn) == "function" and getfenv(fn) == plugin_env then
@@ -60,3 +57,7 @@ for _, name in ipairs({ "OrbitAndroid", "ReadingStatus", "EOB", "OSM", "Store", 
         end
     end
 end
+for _,name in ipairs({"OrbitAndroid","ReadingStatus","Store","Companion","Jni","Shared","Clicks","Channel","Wifi","Net","Sleep","Stats"}) do
+    wrapTable(plugin_env[name],name)
+end
+Server.timeLegacy(wrapTable)

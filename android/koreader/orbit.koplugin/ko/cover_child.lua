@@ -4,13 +4,13 @@ CoverChild = {}
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 -- The book's other cover files in dir: "<id>_<version>.jpg" with an ETag next to it.
 function CoverChild.olderCover(dir, name, id)
-    if not lfs_ok or not (OC.child or Db.pid() ~= Store.ui_pid) then return nil end
+    if not lfs_ok or not (Store.inChild() or Db.pid() ~= Store.ui_pid) then return nil end
     local best, best_t
     local prefix = "^" .. id .. "_%d+%.jpg$"
     for n in lfs.dir(dir) do
         if n ~= name and n:match(prefix) then
             local p = dir .. "/" .. n
-            if OC.readFile(p .. ".etag", 200) then
+            if Store.readFile(p .. ".etag", 200) then
                 local t = lfs.attributes(p, "modification") or 0
                 if not best_t or t > best_t then best, best_t = p, t end
             end

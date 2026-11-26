@@ -462,8 +462,8 @@ enum class WifiMode(val key: String, val label: String) {
 
 /** The shared "Home button" setting. */
 enum class HomeButton(val key: String, val label: String) {
-    SMART("smart", "Back to my book, then BookOrbit home"),
-    BOOKORBIT("bookorbit", "BookOrbit home");
+    SMART("smart", "Back to my book, then library home"),
+    LIBRARY(ServerAdapters.connector.homeModeKey, "library home");
 
     companion object {
         val DEFAULT = SMART
@@ -538,7 +538,7 @@ object HomeCommands {
     const val RESTART = "restart"
     /** After a restart with a book open: reopen it at its place (patch 0.5.5+; older ones ignore it). */
     const val REOPEN_BOOK = "reopen_book"
-    /** Setup's rows (plugin 0.11.0+): BookOrbit's sign-in page, the recommended settings' review page. */
+    /** Setup's rows (plugin 0.11.0+): library's sign-in page, the recommended settings' review page. */
     const val SIGNIN = "signin"
     const val RECOMMENDED = "recommended"
     /** Settings' "Do now" buttons (docs/design/companion-settings.md A2, A4, A5); the work runs in KOReader. */
@@ -566,7 +566,7 @@ object HomeCommands {
  * The display's orientation for KOReader's Home (ROTATION extra, android/docs/INTERFACE.md "go
  * home"): how the device is held when Home is pressed. KOReader's file browser locks its own
  * rotation (fm_rotation_mode, else upright), which on Android turns the whole display; the
- * plugin turns BookOrbit Home back to this one. [rotation] is Display.getRotation() (0-3, the
+ * plugin turns library Home back to this one. [rotation] is Display.getRotation() (0-3, the
  * Surface.ROTATION_* quarter turns); [naturalPortrait]: the panel's natural (rotation 0)
  * orientation is portrait. Named as KOReader's rotation modes, the way KOReader's launcher reads
  * the display (android-luajit-launcher extensions/ActivityExtensions.kt:295-302,
@@ -814,9 +814,9 @@ object UpdateFlow {
     /**
      * When the companion may restart KOReader (v0.11.1, user decision): a MANUAL update (the user
      * tapped Update or Install) restarts at once, book open or not: the plugin saves the book and
-     * reopens it, and returns to BookOrbit Home if that was on top. An automatic update never
+     * reopens it, and returns to library Home if that was on top. An automatic update never
      * restarts KOReader from the companion while the screen is on, not even with no book open or
-     * on BookOrbit Home: only at [screenOff] (the plugin also saves and quits by itself when
+     * on library Home: only at [screenOff] (the plugin also saves and quits by itself when
      * KOReader goes to the background).
      */
     fun mayRestart(manual: Boolean, screenOff: Boolean): Restart = if (manual || screenOff) Restart.NOW else Restart.WAIT
@@ -976,7 +976,7 @@ object SetupAttention {
     /** Rows that report a test or a sighting, not a setting: never prompted about. */
     val INFO_ONLY = setOf("patch_seen", "wifi_test", "keymapper", "play_protect", "managed", "freeze_tip")
 
-    fun idOf(label: String): String = when {
+    fun idOf(label: String): String = ServerAdapters.connector.setupId(label) ?: when {
         label.startsWith("Set BookSync as Home") -> "home"
         label.startsWith("Allow notifications") -> "notifications"
         label.startsWith("Not disabled") -> "disabled"
@@ -987,14 +987,14 @@ object SetupAttention {
         // "KOReader patch …" up to 0.7.x: kept so earlier snoozes and ignores still apply.
         label.startsWith("BookSync plugin installed") || label.startsWith("KOReader patch installed") -> "patch"
         label.startsWith("KOReader app") -> "koreader"
-        label.startsWith("BookOrbit plugin") -> "plugin"
+        label.startsWith("library plugin") -> "plugin"
         label.startsWith("Play Protect") -> "play_protect"
         label.startsWith("Launcher can freeze apps") -> "freeze_tip"
         label.startsWith("Family Link") || label.startsWith("Managed device") -> "managed"
         label.startsWith("BookSync plugin answered") || label.startsWith("KOReader patch answered") -> "patch_seen"
         label.startsWith("Wi-Fi off/on test") -> "wifi_test"
         label.startsWith("Clicker buttons") -> "clicker"
-        label.startsWith("Signed in to BookOrbit") -> "signed_in"
+        label.startsWith("Signed in to library") -> "signed_in"
         label.startsWith("Recommended settings") -> "recommended"
         label.startsWith("BookSync keyboard") -> "keyboard"
         label.startsWith("Key Mapper") || label.startsWith("Another key mapper") -> "keymapper"
@@ -1057,7 +1057,7 @@ object SetupAttention {
 object WhatsNew {
     val NOTES: List<Pair<String, List<String>>> = listOf(
         "0.2.2" to listOf(
-            "Home goes book → BookOrbit home → this launcher → back to your book.",
+            "Home goes book → library home → this launcher → back to your book.",
             "Setup can install the KOReader patch for you.",
             "A setup guide for new readers: android/docs/SETUP.md.",
         ),
@@ -1074,7 +1074,7 @@ object WhatsNew {
             "Setup: after installing the KOReader patch, the step updates at once; if KOReader still runs the old patch, a \"Restart KOReader\" button finishes it.",
         ),
         "0.3.2" to listOf(
-            "Settings › Home opens: KOReader + BookOrbit, or any reader app (Readest, Moon+ Reader, …). Home brings it back where it was; press Home twice for the launcher page.",
+            "Settings › Home opens: KOReader + library, or any reader app (Readest, Moon+ Reader, …). Home brings it back where it was; press Home twice for the launcher page.",
         ),
         "0.4.0" to listOf(
             "Settings › Clicker buttons: map a Bluetooth clicker's buttons (press, hold, double press) to next/previous page, Home, Back, frontlight or Sync and sleep.",
@@ -1101,10 +1101,10 @@ object WhatsNew {
             "Update checks retry twice when GitHub doesn't answer right after Wi-Fi comes up, and no longer blame 'Block connections without VPN' unless it is on.",
         ),
         "0.4.6" to listOf(
-            "Settings PIN: works as soon as it's set, unlocks only while you stay in the settings or the app you unlocked, and on Boox guards only the Settings screen (no longer the launcher). Home on KOReader's file browser opens BookOrbit home again.",
+            "Settings PIN: works as soon as it's set, unlocks only while you stay in the settings or the app you unlocked, and on Boox guards only the Settings screen (no longer the launcher). Home on KOReader's file browser opens library home again.",
         ),
         "0.4.7" to listOf(
-            "Home opens BookOrbit home again on KOReader 2025.10 and newer (KOReader now wraps the plugin's actions, which the patch took as missing). Test sync path and Apply recommended settings work there too.",
+            "Home opens library home again on KOReader 2025.10 and newer (KOReader now wraps the plugin's actions, which the patch took as missing). Test sync path and Apply recommended settings work there too.",
         ),
         "0.4.8" to listOf(
             "Settings PIN: after you leave the settings or a guarded app it stays unlocked for 2 minutes, so coming straight back needs no PIN. The screen turning off still locks it.",
@@ -1112,21 +1112,21 @@ object WhatsNew {
             "Home settings are simpler: \"Home opens\" now offers the BookSync launcher page (it replaces the \"Home always opens…\" switch), and \"In KOReader, Home goes to\" shows only with KOReader.",
         ),
         "0.4.9" to listOf(
-            "Home on any BookOrbit screen other than its main page (a book, a list, search, a sheet) goes back to BookOrbit's main page; Home on the main page opens the launcher page.",
+            "Home on any library screen other than its main page (a book, a list, search, a sheet) goes back to library's main page; Home on the main page opens the launcher page.",
         ),
         "0.5.0" to listOf(
             "One update covers everything: after the app updates it installs the matching KOReader patch itself, and KOReader restarts to load it once no book is open (or when the device next sleeps). It never interrupts reading.",
             "The Settings PIN keypad no longer covers an install: the installer, permission screens and Play Protect's scan pass while an update runs and for a minute after, even with the Play Store guarded.",
         ),
         "0.5.1" to listOf(
-            "Setup installs the rest: one tap each for the official KOReader, the BookOrbit plugin and the KOReader patch, every download checked. A new reader needs only this app sideloaded.",
+            "Setup installs the rest: one tap each for the official KOReader, the library plugin and the KOReader patch, every download checked. A new reader needs only this app sideloaded.",
             "Setup › Fix next walks every open step in order and comes back after each one. Setup also explains up front what may get in the way: Play Protect's warnings, a launcher that freezes apps, Family Link.",
         ),
         "0.5.2" to listOf(
             "After an update, KOReader restarts by itself to load the new patch, whichever patch it ran before; with a book open it waits until you close it. No Setup step, and no Settings PIN for update steps.",
             "No more \"setup step needs you\" for a step already being done, and What's new is a line on this page instead of a notification.",
             "Pages keep their scroll position when they update (Check for updates, Fix, toggles).",
-            "Apply recommended settings in KOReader sets BookOrbit's \"Make BookOrbit home\" only where the plugin knows that setting.",
+            "Apply recommended settings in KOReader sets library's \"Make library home\" only where the plugin knows that setting.",
         ),
         "0.5.3" to listOf(
             "Setup's tips (Family Link, Play Protect, a launcher that freezes apps) have \"Got it\" and never count as steps; \"Show hidden tips\" brings them back.",
@@ -1134,7 +1134,7 @@ object WhatsNew {
         ),
         "0.5.4" to listOf(
             "KOReader restarts to load a newer patch whenever it runs an older one, however the patch got there (after your book, if one is open).",
-            "Home on BookOrbit's second page (or any list past its first page) goes to page 1 first; Home on page 1 goes to the launcher.",
+            "Home on library's second page (or any list past its first page) goes to page 1 first; Home on page 1 goes to the launcher.",
         ),
         "0.5.5" to listOf(
             "An update you start yourself restarts KOReader right away, and your book reopens where you were. Background updates still wait for the book.",
@@ -1142,7 +1142,7 @@ object WhatsNew {
             "Every companion page scrolls.",
         ),
         "0.6.0" to listOf(
-            "In BookOrbit, any library, collection or smart scope can be shown by series or by author: Sort › By series / By author.",
+            "In library, any library, collection or list can be shown by series or by author: Sort › By series / By author.",
         ),
         "0.6.1" to listOf(
             "After any app update, KOReader restarts right away and your book reopens where you were.",
@@ -1154,7 +1154,7 @@ object WhatsNew {
             "Orbify: the app and the KOReader patch now update from github.com/Fledgewing/Orbify, one home for Android and Xteink readers. Nothing changes on the reader.",
         ),
         "0.11.0" to listOf(
-            "Recommended settings are applied by themselves in KOReader: only settings still at their default change, anything you set yourself is listed for review, and Undo puts back what was there. Setup shows them, and whether KOReader is signed in to BookOrbit.",
+            "Recommended settings are applied by themselves in KOReader: only settings still at their default change, anything you set yourself is listed for review, and Undo puts back what was there. Setup shows them, and whether KOReader is signed in to library.",
         ),
     )
 
@@ -1172,12 +1172,12 @@ object WhatsNew {
 }
 
 /**
- * "Home opens" (android/docs/DESIGN.md): KOReader + BookOrbit (the default, "") or any launchable app,
+ * "Home opens" (android/docs/DESIGN.md): KOReader + library (the default, "") or any launchable app,
  * by package. For another app a Home press just brings it to the front; the KOReader commands
  * (home / home_smart) and the patch's Smart Home steps don't apply.
  */
 object HomeApp {
-    const val KOREADER_BOOKORBIT = ""
+    const val KOREADER_LIBRARY = ""
     const val KOREADER_PKG = "org.koreader.launcher"
     /** "Orbit launcher page": Home shows the companion's launcher page (was the toggle's off). */
     const val LAUNCHER = "orbit:launcher"
@@ -1209,11 +1209,11 @@ object HomeApp {
     /** Settings' "Home opens" row: what it opens, and the double press unless that is the launcher. */
     fun summary(choice: String?, appLabel: String?): String = when {
         isLauncher(choice) -> LAUNCHER_LABEL
-        isKoreader(choice) -> "KOReader + BookOrbit · $TWICE"
+        isKoreader(choice) -> "KOReader + library · $TWICE"
         else -> "${appLabel ?: choice} · $TWICE"
     }
 
-    /** The "Home button" choice applies (and shows) only with KOReader + BookOrbit. */
+    /** The "Home button" choice applies (and shows) only with KOReader + library. */
     fun showsHomeButton(choice: String?): Boolean = isKoreader(choice)
 
     /** pkg null = KOReader (with command/from); else that app, no extras. */

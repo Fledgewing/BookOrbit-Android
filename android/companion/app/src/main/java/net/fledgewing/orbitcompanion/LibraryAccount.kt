@@ -18,9 +18,7 @@ object LibraryAccount {
     @Volatile private var loaded = false
     private var nextRefreshAt = 0L
     private fun adapter(ctx: Context): ServerAdapter = adapter ?: run {
-        val credentials = ServerCredentials(EncryptedAccountVault.android(ctx))
-        val account = BookOrbitAccount(credentials.accountVault, AccountHttp, setupOnSignIn = { false })
-        BookOrbitServerAdapter(credentials, account, ConnectorHttp).also { adapter = it }
+        ServerAdapters.session(ctx).also { adapter = it }
     }
     fun state(): Map<String, Any?> = published.state
     fun owner(): String? = published.owner
@@ -46,7 +44,7 @@ object LibraryAccount {
         queue.execute {
             val start = System.nanoTime()
             var error: String? = null
-            try { work(adapter(app)) } catch (e: BookOrbitAccount.Failure) { error = e.kind }
+            try { work(adapter(app)) } catch (e: ServerFailure) { error = e.kind }
             catch (_: Exception) { error = "unavailable" }
             finally { cleanup() }
             runCatching { adapter?.let(::publish) }.onFailure { published = Published(); error = "unavailable" }
@@ -72,7 +70,7 @@ object LibraryAccount {
     }
     fun download(ctx: Context, key: String, destination: File, done: (String?) -> Unit) = command(ctx, {
         require(Places.inside(destination.path,Places.roots()) != null)
-        if (!it.download(key,destination)) throw BookOrbitAccount.Failure("unavailable")
+        if (!it.download(key,destination)) throw ServerFailure("unavailable")
     }, done)
     @Synchronized fun refresh(ctx: Context) {
         val now = System.currentTimeMillis()

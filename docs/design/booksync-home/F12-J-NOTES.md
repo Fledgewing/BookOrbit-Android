@@ -29,13 +29,11 @@ existing Home command path. No extra catalog, network client or worker is added.
 The new library operation is deliberately small: `library.summary` reuses the
 worker's canonical catalog/filter projection and owner-checked local paths,
 returning total and an optional on-device count. Unknown local coverage stays
-unknown. Battery now reuses F12-E's measured `Library:battery()` projection
-(`bb6f081f`, `BatteryEstimate.kt:100`), replacing the initial stub. Its Home
-renderer draws the actual level, usual-use estimate, measured rates and latest
-charge, plus labeled non-stop/standby figures in larger tiles. All model fitting,
-history processing and predictions stay in the companion. Scalar duration display
-reuses `logic/reader_panel.lua`; pure Battery presentation is in
-`logic/battery_widget.lua`. Missing measurements remain absent. Summary and
+unknown. Battery reuses F12-E's measured `Library:battery()` projection
+(`bb6f081f`, `BatteryEstimate.kt:100`), replacing the initial stub. The interim
+Home scalar renderer is superseded by F12-O's complete companion-formatted
+widget/page (`ko/battery.lua`, `logic/battery_widget.lua`); no parallel Battery renderer
+or Lua formatter remains. Missing measurements remain absent. Summary and
 battery have companion projection tests. Home book actions now inherit
 F12-H’s owned Details flow. All UI queries use Library, opaque list keys and
 neutral filters. Capabilities hide unsupported sources/statistics.
@@ -82,6 +80,6 @@ remain unconfirmed: Home <500 ms, widget <50 ms, cached window <30 ms, editor
 Flow tests draw all three pages with real stats renderers, verify one stats read
 and one batch per paint, drive list Filter → Show picker → Unread → Save → Go to
 Home → reopen, and drive Search with its filter button. Pure placement tests
-exercise new-page naming without changing the prior document. Device acceptance,
-the full Battery page, cached covers and richer details/actions remain later work.
+exercise new-page naming without changing the prior document. Device acceptance, cached covers and richer details/actions remain later work.
+The Battery page is integrated by F12-O.
 No devices, adb, test-build dispatch, tags or releases are used here.

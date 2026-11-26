@@ -1,209 +1,128 @@
 package net.fledgewing.orbitcompanion
 
+import java.io.File
+import java.nio.file.Files
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
-import java.io.File
-import java.time.Instant
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+/** These adapters deliberately have different identity shapes and capability sets. Neither
+ * imports the shipping implementation or uses its fixtures, JSON vocabulary or numeric IDs. */
 class ServerAdapterTest {
-    private class Vault : AccountVault {
-        var value: Map<String,Any?>? = null
-        override fun load() = value
-        override fun save(value: Map<String,Any?>?) { this.value = value?.toMap() }
-    }
-    private class Kit {
-        val vault = Vault()
-        val credentials = ServerCredentials(vault)
-        val logs = mutableListOf<String>()
-        val calls = mutableListOf<Pair<String,Map<String,String>>>()
-        var existing: Any? = null
-        var provision: ByteArray? = null
-        var syncCreates = 0; var opdsCreates = 0
-        var selection = "first"
-        var dashboardCode = 200
-        var lastBody: Map<String,Any?>? = null
-        var lastDownload = false
-        val now = Instant.parse("2026-11-25T12:00:00Z").epochSecond
-        val account = BookOrbitAccount(credentials.accountVault, object : BookOrbitAccount.Http {
-            override fun request(server: String, path: String, method: String, body: Map<String, Any?>?, bearer: String?): BookOrbitAccount.Reply = when {
-                path.startsWith("/koreader/plugin-package?") -> BookOrbitAccount.Reply(200,provision?.copyOf())
-                path == "/auth/login" -> BookOrbitAccount.Reply(200,mapOf("accessToken" to "private-access", "refreshToken" to "private-refresh", "accessTokenExpiresAt" to Instant.ofEpochSecond(now+900).toString(), "refreshTokenExpiresAt" to Instant.ofEpochSecond(now+604800).toString(), "user" to mapOf("id" to 7)))
-                path == "/koreader/credentials" && method == "GET" -> BookOrbitAccount.Reply(200,existing)
-                path == "/koreader/credentials" && method == "POST" -> { syncCreates++; existing = mapOf("username" to body!!["username"]); BookOrbitAccount.Reply(201) }
-                path == "/opds-users" && method == "POST" -> { opdsCreates++; BookOrbitAccount.Reply(201) }
-                else -> BookOrbitAccount.Reply(200,emptyList<Any>())
+    private class FakeAdapter : ServerAdapter {
+        override val id = "fake"
+        val requests = mutableListOf<Map<*, *>>()
+        override fun project(owner: String, request: Map<*, *>): Map<String, Any?> {
+            requests += request
+            return when (request["op"]) {
+                "capabilities" -> mapOf("catalog" to true, "detail" to true, "download" to false)
+                "window", "book" -> mapOf("items" to listOf(mapOf("key" to "$owner/urn:one", "title" to "Fixture", "status" to "unknown")))
+                "lists", "sources" -> mapOf("items" to emptyList<Any>())
+                "progress" -> mapOf("progress" to 20)
+                "status" -> mapOf("status" to "unknown")
+                else -> unsupported()
             }
-        }, {now}, logs::add, setupOnSignIn = { false })
-        val adapter = BookOrbitServerAdapter(credentials,account,object : BookOrbitServerAdapter.ConnectorTransport {
-            override fun request(server: String, path: String, method: String, body: Map<String, Any?>?, headers: Map<String, String>): BookOrbitAccount.Reply {
-                calls.add(path to headers); lastBody = body
-                if (path == "/koreader/plugin/catalog/dashboard" && dashboardCode != 200) return BookOrbitAccount.Reply(dashboardCode)
-                return BookOrbitAccount.Reply(200, when {
-                    path == "/koreader/plugin/catalog/dashboard" -> mapOf("readingYear" to mapOf("startDate" to "2026-11-25","minutes" to listOf(3)),
-                        "readingGoal" to mapOf("year" to 2026,"goalBooks" to 12,"completedBooks" to 2))
-                    path.startsWith("/opds/catalog") -> """<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Moon</title><author><name>Fixture</name></author><link rel="http://opds-spec.org/acquisition" href="/api/v1/opds/1/download?fileId=1&amp;selection=$selection" type="application/epub+zip"/></entry></feed>"""
-                    else -> mapOf("progress" to "position", "percentage" to 0.5, "userkey" to "must-not-escape")
-                })
-            }
-            override fun download(server: String,path: String,headers: Map<String,String>,destination: File): Boolean { calls.add(path to headers); lastDownload = true; return true }
-        })
-        fun user(kind: String) = adapter.setLogin(kind,"https://library.invalid","direct-$kind","separate-secret".toCharArray())
-        fun account() = adapter.signIn("https://library.invalid","fixture","account-password".toCharArray())
-        fun set(kind: String) = (adapter.state()[kind] as Map<*,*>)["set"]
-        fun origin(kind: String) = (adapter.state()[kind] as Map<*,*>)["origin"]
-        fun canSync() = adapter.position("a".repeat(32))
-    }
-    @Test fun syncAndOpdsWorkIndividuallyWithoutAccountAndNeverReturnSecrets() {
-        val sync = Kit(); sync.user("sync")
-        assertEquals(false,sync.adapter.state()["signedIn"]); assertEquals(true,sync.set("sync")); assertEquals(false,sync.set("opds"))
-        assertEquals(32,sync.credentials.login("sync")!!.secret.length)
-        val position = sync.canSync(); assertEquals(0.5,position["percentage"])
-        assertFalse(position.toString().contains("must-not-escape"))
-        assertNotNull(sync.calls.last().second["x-auth-key"])
-        val opds = Kit(); opds.user("opds")
-        assertEquals(false,opds.set("sync")); assertEquals(true,opds.set("opds"))
-        val catalog = opds.adapter.catalog(); val row = (catalog["items"] as List<*>).single() as Map<*,*>
-        assertEquals("Moon",row["title"]); assertFalse(row.toString().contains("/opds/"))
-        assertTrue(opds.adapter.download(row["key"] as String,File("unused-test-destination")))
-        for (result in listOf(position,sync.adapter.state(),opds.adapter.state(),catalog,sync.logs,opds.logs)) {
-            for (secret in listOf("separate-secret","private-access","private-refresh","must-not-escape")) assertFalse(result.toString(),result.toString().contains(secret))
         }
     }
-    @Test fun accountOnlySignOutRemovesBothConnectorsAndStopsSyncAndDownloads() {
-        val k = Kit(); k.account()
-        assertEquals("account",k.origin("sync")); assertEquals("account",k.origin("opds")); k.canSync()
-        val row = ((k.adapter.catalog()["items"] as List<*>).single() as Map<*,*>)
-        k.adapter.signOut()
-        assertEquals(false,k.set("sync")); assertEquals(false,k.set("opds")); assertNull(k.vault.value)
-        try { k.canSync(); fail() } catch (e: BookOrbitAccount.Failure) { assertEquals("unauthorized",e.kind) }
-        try { k.adapter.download(row["key"] as String,File("unused")); fail() } catch (e: BookOrbitAccount.Failure) { assertEquals("unauthorized",e.kind) }
+    private class AcquisitionOnlyAdapter : ServerAdapter {
+        override val id = "acquisition"
+        override fun project(owner: String, request: Map<*, *>): Map<String, Any?> = when (request["op"]) {
+            "capabilities" -> mapOf("catalog" to true, "download" to true, "lists" to mapOf("read" to false))
+            "window" -> mapOf("items" to listOf(mapOf("key" to "urn:uuid:alternate", "title" to "Feed item")))
+            else -> unsupported()
+        }
+        override fun download(owner: String, key: String, file: String, revision: String?) = mapOf<String, Any?>("job" to "transfer:opaque")
     }
-    @Test fun userLoginsAreNotOverwrittenByAccountAndSurviveItsSignOut() {
-        val k = Kit(); k.user("sync"); k.user("opds")
-        val key = k.credentials.login("sync")!!.secret
-        k.account(); assertEquals(0,k.syncCreates); assertEquals(0,k.opdsCreates)
-        assertEquals(key,k.credentials.login("sync")!!.secret)
-        k.adapter.signOut(); assertEquals("user",k.origin("sync")); assertEquals("user",k.origin("opds")); k.canSync(); k.adapter.catalog()
+    private class Store(root: File) : ProjectionStore {
+        private val sql = JdbcSql(File(root, "projection.sqlite3"))
+        init { sql.exec("CREATE TABLE meta (k TEXT PRIMARY KEY,v TEXT)"); LibraryReadModel.initialize(sql); sql.exec("INSERT INTO meta VALUES ('owner','fixture')") }
+        override fun db() = sql
+        override fun meta(k: String) = sql.query("SELECT v FROM meta WHERE k=?", k) { it.text(0) }.firstOrNull()
+        override fun <T> transaction(block: () -> T): T = sql.transaction(block)
+        override fun close() = sql.close()
     }
-    @Test fun mixedOriginsRemoveOnlyAccountLoginsAndEachRemovalIsIndependent() {
-        val k = Kit(); k.user("sync"); k.account()
-        assertEquals("account",k.origin("opds")); k.adapter.signOut()
-        assertEquals(true,k.set("sync")); assertEquals(false,k.set("opds")); k.canSync()
-        val other = Kit(); other.user("opds"); other.account()
-        val row = ((other.adapter.catalog()["items"] as List<*>).single() as Map<*,*>)
-        other.adapter.removeLogin("sync"); assertEquals(true,other.set("opds")); assertEquals(true,other.adapter.state()["signedIn"])
-        other.adapter.signOut(); assertEquals(true,other.set("opds")); assertTrue(other.adapter.download(row["key"] as String,File("unused")))
+    @Test fun registryAndPublisherDoNotAssumeBackendOrIdentityShape() {
+        val registry = AdapterRegistry(listOf(
+            "fake" to { _, _ -> FakeAdapter() }, "acquisition" to { _, _ -> AcquisitionOnlyAdapter() },
+        ))
+        val root = Files.createTempDirectory("adapter-contract").toFile()
+        try {
+            Store(root).use { store ->
+                for (id in listOf("fake", "acquisition")) {
+                    val adapter = registry.create(id, store)
+                    val model = LibraryReadModel(store, log = {}, adapter = adapter)
+                    val request = String(LuaValue.encode(mapOf("op" to "window", "source" to "all", "limit" to 1)), Charsets.ISO_8859_1)
+                    assertTrue(model.publish("fixture", listOf(request)))
+                    val bytes = store.db().query("SELECT body FROM library_views WHERE request=?", LuaValue.utf8(request)) { it.bytes(0)!! }.single()
+                    val result = LuaValue.parse(bytes) as Map<*, *>
+                    val row = (result["items"] as List<*>).single() as Map<*, *>
+                    assertTrue(row["key"].toString().contains(if (id == "fake") "urn:one" else "urn:uuid:"))
+                    assertTrue(bytes.size <= LibraryReadModel.MAX_BYTES)
+                    assertFalse(model.publish("another-account", listOf(request)))
+                }
+                assertThrows(IllegalArgumentException::class.java) { registry.create("missing", store) }
+                assertThrows(IllegalArgumentException::class.java) {
+                    AdapterRegistry(listOf("wrong" to { _, _ -> FakeAdapter() })).create("wrong", store)
+                }
+                assertEquals(false, (registry.create("acquisition", store).capabilities("fixture")["lists"] as Map<*, *>)["read"])
+                assertEquals("unsupported", registry.create("acquisition", store).detail("fixture", "opaque")["error"])
+                assertEquals("transfer:opaque", registry.create("acquisition", store).download("fixture", "opaque", "epub", null)["job"])
+            }
+        } finally { root.deleteRecursively() }
     }
-    @Test fun explicitlyAdoptedExistingSyncLoginCountsAsAccountOrigin() {
-        val k = Kit(); k.user("sync"); k.existing = mapOf("username" to "direct-sync"); k.account()
-        assertEquals("user",k.origin("sync"))
-        k.adapter.useAccountLogin("sync"); assertEquals("account",k.origin("sync")); assertEquals(0,k.syncCreates)
-        k.adapter.signOut(); assertEquals(false,k.set("sync"))
+    @Test fun optionalOperationsAreExplicitAndSecretsAreCleared() {
+        val fake = FakeAdapter()
+        assertEquals(emptyList<Any>(), fake.sources("fixture", "builtin")["items"])
+        assertEquals("sources", fake.requests.last()["op"])
+        assertEquals("unsupported", fake.manifest("fixture")["error"])
+        assertEquals("unsupported", fake.cover("fixture", "opaque")["error"])
+        assertEquals("unsupported", fake.setProgress("fixture", "opaque", emptyMap())["error"])
+        assertEquals("unsupported", fake.setStatus("fixture", "opaque", "finished")["error"])
+        assertEquals("unsupported", fake.saveList("fixture", null, emptyMap())["error"])
+        assertEquals("unsupported", fake.readingStats("fixture")["error"])
+        assertEquals("unsupported", fake.setupCredentials(emptyMap())["error"])
+        assertEquals("unsupported", assertThrows(ServerFailure::class.java) { fake.signOut() }.kind)
+        val secret = "fixture".toCharArray()
+        assertEquals("unsupported", assertThrows(ServerFailure::class.java) { fake.signIn("https://library.invalid", "reader", secret) }.kind)
+        assertTrue(secret.all { it == '\u0000' })
+        secret.fill('x')
+        assertEquals("unsupported", fake.connectorCredentials("reader", "reader", secret)["error"])
+        assertTrue(secret.all { it == '\u0000' })
+        val factory: AdapterFactory = { _, _ -> fake }
+        assertThrows(IllegalArgumentException::class.java) { AdapterRegistry(listOf("fake" to factory, "fake" to factory)) }
     }
-    @Test fun changingAnAccountFilledLoginExplicitlyMakesItUserOrigin() {
-        val k = Kit(); k.account(); k.user("sync"); k.adapter.signOut()
-        assertEquals(true,k.set("sync")); assertEquals(false,k.set("opds")); k.canSync()
-        k.adapter.removeLogin("sync"); assertEquals(false,k.set("sync"))
+    @Test fun oneBatchSharesOneLocalStatisticsAggregate() {
+        val root = Files.createTempDirectory("adapter-stats").toFile()
+        try { Store(root).use { store ->
+            val fake = FakeAdapter()
+            var reads = 0
+            val model = LibraryReadModel(store, log = {}, adapter = fake,
+                readingStats = { reads++; mapOf("state" to "ready") })
+            val requests = listOf(512, 1024).map { budget -> String(LuaValue.encode(
+                mapOf("op" to "reading.stats", "bytes" to budget)), Charsets.ISO_8859_1) }
+            assertTrue(model.publish("fixture", requests))
+            assertEquals(1, reads)
+            assertTrue(fake.requests.isEmpty())
+            assertEquals(2, store.db().query("SELECT body FROM library_views") { it.bytes(0) }.size)
+        } } finally { root.deleteRecursively() }
     }
-    @Test fun accountRemainsUsableWhenBothOptionalConnectorsAreRemoved() {
-        val k = Kit(); k.account()
-        k.adapter.removeLogin("sync"); k.adapter.removeLogin("opds")
-        assertEquals(true,k.adapter.state()["signedIn"])
-        val owner = k.adapter.owner()!!
-        assertTrue(owner.startsWith("account:")); assertNotNull(k.adapter.stats(owner))
-        assertEquals(false,k.set("sync")); assertEquals(false,k.set("opds"))
+    @Test fun publisherEnforcesCallerBudgetAgainstAnOversizedAdapter() {
+        val root = Files.createTempDirectory("adapter-budget").toFile()
+        try { Store(root).use { store ->
+            var payload: List<Map<String, String>> = emptyList()
+            val adapter = object : ServerAdapter {
+                override val id = "oversize"
+                override fun project(owner: String, request: Map<*, *>) = mapOf<String, Any?>("items" to payload)
+            }
+            val request = String(LuaValue.encode(mapOf("op" to "window", "limit" to 1, "bytes" to 512)), Charsets.ISO_8859_1)
+            // Separate failures: too many bytes in one row; too many rows within the byte cap.
+            for (items in listOf(listOf(mapOf("key" to "one", "title" to "x".repeat(1000))),
+                    listOf(mapOf("key" to "one"), mapOf("key" to "two")))) {
+                payload = items
+                LibraryReadModel(store, log = {}, adapter = adapter).publish("fixture", listOf(request))
+                val bytes = store.db().query("SELECT body FROM library_views") { it.bytes(0)!! }.single()
+                assertEquals("budget", (LuaValue.parse(bytes) as Map<*, *>)["error"])
+                assertTrue(bytes.size <= 512)
+            }
+        } } finally { root.deleteRecursively() }
     }
-
-    @Test fun accountRefillReusesItsKnownKeyAndExplicitAdoptionUsesTheCurrentUserKey() {
-        val k = Kit(); k.account()
-        val known = k.credentials.login("sync")!!
-        k.provision = SyncProvisionTest.archive(known.user,known.secret)
-        k.adapter.removeLogin("sync"); k.account()
-        assertEquals(known.secret,k.credentials.login("sync")!!.secret)
-        val direct = "f".repeat(32)
-        k.adapter.setLogin("sync",known.server,known.user,direct.toCharArray(),derivedKey=true)
-        k.adapter.useAccountLogin("sync")
-        assertEquals(direct,k.credentials.login("sync")!!.secret)
-        assertEquals("account",k.origin("sync"))
-    }
-
-    @Test fun standaloneSyncPreservesLocatorsAndRejectsOversizeWritesWithoutSendingThem() {
-        val k = Kit(); k.user("sync")
-        k.adapter.position("a".repeat(32),mapOf("percentage" to 0.5,"position" to LuaValue.str("位置")))
-        assertEquals("位置",k.lastBody!!["progress"])
-        val count = k.calls.size
-        try { k.adapter.position("a".repeat(32),mapOf("percentage" to 0.5,"position" to "x".repeat(4097))); fail() }
-        catch (_: IllegalArgumentException) { }
-        assertEquals(count,k.calls.size)
-    }
-
-    @Test fun failedExplicitAccountReplacementKeepsTheDirectLoginAndReportsFailure() {
-        val k = Kit(); k.user("sync"); k.existing = mapOf("username" to "other-sync"); k.account()
-        val key = k.credentials.login("sync")!!.secret
-        try { k.adapter.useAccountLogin("sync"); fail() }
-        catch (e: BookOrbitAccount.Failure) { assertEquals("unavailable",e.kind) }
-        assertEquals("user",k.origin("sync")); assertEquals(key,k.credentials.login("sync")!!.secret); k.canSync()
-    }
-
-    @Test fun existingServerSyncProvisionIsAdoptedAsAccountOriginAndRemovedOnSignOut() {
-        val k = Kit(); k.existing = mapOf("username" to "existing-sync")
-        k.provision = SyncProvisionTest.archive("existing-sync","c".repeat(32))
-        k.account()
-        assertEquals(0,k.syncCreates); assertEquals("account",k.origin("sync"))
-        assertEquals("c".repeat(32),k.credentials.login("sync")!!.secret)
-        k.canSync(); k.adapter.signOut()
-        assertEquals(false,k.set("sync")); assertEquals(false,k.set("opds"))
-        try { k.canSync(); fail() } catch (e: BookOrbitAccount.Failure) { assertEquals("unauthorized",e.kind) }
-    }
-
-    @Test fun directSyncProvidesConnectorStatisticsAfterAccountSignOut() {
-        val k = Kit(); k.user("sync"); k.account(); k.adapter.refreshStats()
-        assertEquals(12L,k.adapter.fallbackReadingStats()!!.target)
-        k.adapter.signOut()
-        assertEquals(2L,k.adapter.fallbackReadingStats()!!.finished)
-        k.adapter.refreshStats(); assertEquals(12L,k.adapter.fallbackReadingStats()!!.target)
-        k.adapter.removeLogin("sync"); assertNull(k.adapter.fallbackReadingStats())
-    }
-
-    @Test fun unsupportedConnectorStatisticsDisableOnlyThatFeatureWithoutRetries() {
-        val k = Kit(); k.user("sync"); k.dashboardCode = 403
-        k.adapter.refreshStats(); k.adapter.refreshStats()
-        assertEquals(1,k.calls.count { it.first == "/koreader/plugin/catalog/dashboard" })
-        assertNull(k.adapter.fallbackReadingStats()); k.canSync()
-    }
-
-    @Test fun accountCatalogIdentitySurvivesDeliveryLocatorChangesAndRelogin() {
-        val k = Kit(); k.account()
-        fun key() = ((k.adapter.catalog()["items"] as List<*>).single() as Map<*,*>)["key"]
-        val first = key()
-        k.selection = "second"; assertEquals(first,key())
-        k.adapter.signOut(); k.account(); assertEquals(first,key())
-    }
-
-    @Test fun removingSyncDeletesItsSecretWithoutRemovingAccountOrOpds() {
-        val k = Kit(); k.account()
-        val secret = k.credentials.login("sync")!!.secret
-        k.adapter.removeLogin("sync")
-        assertFalse(k.vault.value.toString().contains(secret))
-        assertEquals(true,k.adapter.state()["signedIn"]); assertEquals(true,k.set("opds"))
-    }
-
-    @Test fun displayStateUsesEachLoginsOwnAddressAndNameWithoutExportingSecrets() {
-        val k = Kit(); k.user("sync"); k.account()
-        val state = k.adapter.state()
-        assertEquals("fixture", LuaValue.utf8(state["username"] as String))
-        assertEquals("https://library.invalid/api/v1", state["server"])
-        val sync = state["sync"] as Map<*, *>
-        assertEquals(k.credentials.login("sync")!!.server,sync["server"])
-        assertEquals(k.credentials.login("sync")!!.user,LuaValue.utf8(sync["username"] as String))
-        assertEquals("user",sync["origin"])
-        assertEquals("created",(state["opds"] as Map<*, *>)["outcome"])
-        for (key in listOf("password","secret","access","refresh","key")) assertFalse(state.toString(),state.toString().contains("$key="))
-    }
-
 }

@@ -1,8 +1,9 @@
 # Backend independence
 
-Status: **proposed, awaiting approval** (24 November 2026). Deferred roadmap work;
-no implementation is authorized. Design and any reader-facing mockups need approval under
-AGENTS.md before building. The [roadmap](../../ROADMAP.md#planned-backend-independence)
+Status: Android implementation authorised on 25 November 2026 on `feature/0.12`.
+The maintainer explicitly approved the widget system and Android-first delivery. This covers
+its adapter boundary; portable ledger, new backends and firmware remain later phases with
+their existing design/approval requirements. The [roadmap](../../ROADMAP.md#planned-backend-independence)
 records the order below.
 
 BookSync is on a journey to backend independence. Readers should work with whichever library
@@ -99,3 +100,105 @@ Use synthetic fixtures and isolated services; these are proposed experiments, no
 
 Each phase needs its own acceptance review. No mirrors, jobs, deployment, devices or upstream
 changes are created by this documentation change.
+
+## Android adapter enforcement (F12-L)
+
+`ServerAdapter` is the worker-facing contract. It covers capabilities, bounded catalog
+windows, manifest, detail/covers, download jobs, progress/status, lists, statistics, account
+and connector credentials. Unsupported projection operations return `error=unsupported`;
+unsupported account commands raise neutral `ServerFailure("unsupported")` and clear secret
+inputs. Capability flags determine UI availability. Do not advertise an operation just because the interface
+has a method. The cached catalog projection retains read-only detail/status and no list-write action.
+Native sync and OPDS commands use the account session and advertise their actual connector
+capabilities; unavailable operations retain explicit errors, avoiding a second sync writer.
+
+`LibraryReadModel` owns bounded publishing, owner checks, the existing `library_views`
+table and per-call timing. It depends on `ProjectionStore` and `ServerAdapter`, not a server
+implementation. The existing `CacheStore` implements that persistence seam within the
+adapter; the existing catalog, bulk/mirror worker and normalizer moved there without a
+second database or HTTP client. ReadingStats aggregation/merging and LibraryFacets remain neutral. The bounded `sources` operation returns at most six neutral names/counts; server-section
+translation and current-book exclusion stay in the adapter. Cached server statistics
+cross `ServerAdapter.cachedReadingStats` as `RemoteReadingStats`, never backend JSON; the
+publisher shares one lazy combined aggregate per batch. `CachedListProjection` owns the legacy
+sleep picker's cached-section translation; shared picker code receives `SleepChoices` and
+uses the neutral label Lists. Backend terms and authentication headers are guarded too.
+`ServerAdapters.kt` is the sole Kotlin composition root. It also constructs the native
+account session through `ServerAdapter`; `LibraryAccount` never imports an implementation
+and reports only neutral `ServerFailure` codes. Native authentication, sync/OPDS credentials,
+provisioning and raw account-stat normalization live inside the adapter. Shared encrypted
+storage and `AccountStats.combine` process only neutral values. Worker command routing, connector
+installation and cover setup use neutral service contracts; their protocol implementations
+are under `net.fledgewing.orbitcompanion.server.bookorbit`.
+
+To add an adapter:
+
+1. Implement `ServerAdapter` under `server/<id>` and normalize all server fields there.
+   Preserve account namespaces and opaque keys; do not coerce another backend's keys to
+   the first adapter's numeric IDs. Return explicit unavailable/error states.
+2. Register its factory in `ServerAdapters.kt`; supply its persistence and worker services
+   at that composition root. Do not import implementations into screens or projections.
+3. Publish only supported capabilities and gate UI through the library interface. Add
+   independent fixtures and contract cases like the fake and acquisition-only test adapters
+   in `ServerAdapterTest.kt`. Never reuse the shipping adapter's fixtures to prove neutrality.
+4. Run `python3 tools/test/test-server-boundary.py`, both Lua harnesses and companion tests.
+   The guard scans every production Kotlin/Java/Lua source, strips comments while preserving
+   strings, rejects protocol fields/routes and implementation imports, and tests its own
+   rejection behavior. There are no frozen baselines or suppression annotations. The CI
+   plugin-test action runs it explicitly; the existing Lua harness invokes it too.
+
+The same guard scans production resources and shared Settings/UI definitions. About credit
+prose may name the credited project; routes and protocol fields remain forbidden there.
+The Settings schema uses a neutral `server-home` choice. Each client binds that choice through
+the existing adapter Home key when loading the schema, preserving installed wire values.
+
+Every screen/widget keeps its declared budget in `logic/budgets.lua` / the registry.
+Adapter calls inherit those limits: at most 24 rows and 16 KiB per widget snapshot, no
+render-path network/subprocesses, one batched companion round-trip per Home paint. Counts,
+filtering, sorting, joins, stats and battery work stay on the companion worker; timing spans
+record real device milliseconds. Moving protocol ownership adds no new screen or widget.
+
+### Lua compatibility adapter and remaining transport work
+
+The owned UI still calls `ko/library.lua`; it receives normalized bounded projections.
+`ko/server/bookorbit.lua` binds the existing plugin account and compatibility operations.
+The reviewed facade callers are `ko/home.lua` (reading gate/Home), `ko/start.lua` (toast),
+`ko/notices.lua` (catalog lifecycle), `ko/test_sync_path.lua` (explicit test action),
+`ko/sleepscreen.lua` (credential handoff). Only
+`main.lua` loads implementation files. Guards forbid additional facade consumers and still
+check every reviewed caller for protocol fields/routes and direct imports. The remaining
+legacy lifecycle callers (`ko/wifi.lua`, `ko/sleep.lua`, `ko/module.lua`,
+`ko/endsheet.lua`, `ko/menu.lua`) may obtain the compatibility plugin through `serverPlugin`;
+owned UI cannot. The remaining middleware callers are `ko/net.lua` (cache resume),
+`ko/shared.lua` (settings follow-up jobs) and `ko/main_loop.lua` (timing wrappers).
+Direct shared implementation globals are forbidden even in these reviewed files. Local
+file IO and directory/clock providers live on generic `Store`; legacy protocol lookups and
+search live in the adapter. The storage provider has no facade permission. Historical Home wire values and cover-cache folder names stay in the adapter,
+so the guard rejects backend names in every casing without breaking installed settings.
+Its adapter package owns the old cache/mirror/copies, finish, grouping, local-first and
+position-sync hooks; pure protocol helpers live in `logic/server/bookorbit`. Generic cache
+encoding remains `logic/cache.lua`; `ko/store.lua` keeps the small owned projection read.
+The legacy query interpreter moved to `ko/server/bookorbit/store.lua`. The shared `Cache`
+object contains only codec/local utilities; legacy paging, response assembly, cache keys and
+normalization live on private `ServerCache`, whose direct use is guarded too.
+
+The maintainer explicitly permits routing oversized migrations through this one Lua adapter
+for this slice. Remaining server calls **inside that adapter**, to move to companion commands
+in a later transport/sole-sync-owner slice, are:
+
+- `ko/server/bookorbit.lua`: `probeServer` (HEAD reachability in the background child).
+- `ko/server/bookorbit/cache.lua`: `OC.httpCover` (legacy thumbnail GET); its request wrappers
+  bridge the upstream API and cached replies. Mirror/copies construct only private protocol
+  plans sent to the companion worker.
+- `ko/server/bookorbit/endofbook.lua`: compatibility detail/status/rating calls through the
+  existing finish outbox. Preserve sole-writer ordering when moving these.
+- `ko/server/bookorbit/grouping.lua`: rollback catalog reads through the upstream client.
+  Owned lists/filtering use companion projections; do not reuse this full-list path for Home.
+- `ko/server/bookorbit/sync.lua`, `reading_sync.lua` and `lifecycle.lua`: legacy outbox,
+  pull/push, remote-progress parsing and upstream snapshot/settings bindings. Root start/sleep/
+  Wi-Fi flows call the adapter facade; the guard also forbids upstream primitive API names.
+- `ko/server/bookorbit/orbismart.lua`: upstream progress client interception. Keep the approved
+  one-draw position prompt and reading gate while moving sync ownership.
+
+These are adapter-contained compatibility implementations, not permission to introduce new
+Lua HTTP, backend JSON, full-catalog work or legacy views into the owned client. Firmware
+adapter enforcement remains deferred under the Android-first instruction.

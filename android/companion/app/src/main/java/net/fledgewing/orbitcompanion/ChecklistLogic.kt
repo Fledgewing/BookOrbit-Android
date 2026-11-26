@@ -12,7 +12,7 @@ object Checklist {
 
     /** The groups (§3.2), in page order. */
     enum class Group(val title: String) {
-        APPS("Apps"), BOOKORBIT("BookOrbit"), PERMISSIONS("Permissions"), CONNECTION("Connection"), OPTIONAL("Optional"),
+        APPS("Apps"), LIBRARY("Library"), PERMISSIONS("Permissions"), CONNECTION("Connection"), OPTIONAL("Optional"),
     }
 
     /** Which group a row id sits in; a row marked optional always sits in Optional. */
@@ -22,10 +22,10 @@ object Checklist {
         "koreader_trust" to Group.APPS,
         "plugin" to Group.APPS,
         "patch" to Group.APPS,
-        "signed_in" to Group.BOOKORBIT,
-        "server_account" to Group.BOOKORBIT,
-        "recommended" to Group.BOOKORBIT,
-        "sharp_covers" to Group.BOOKORBIT,
+        "signed_in" to Group.LIBRARY,
+        "server_account" to Group.LIBRARY,
+        "recommended" to Group.LIBRARY,
+        "sharp_covers" to Group.LIBRARY,
         "home" to Group.PERMISSIONS,
         "install_updates" to Group.PERMISSIONS,
         "notifications" to Group.PERMISSIONS,

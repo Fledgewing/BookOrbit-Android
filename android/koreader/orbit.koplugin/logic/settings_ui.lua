@@ -27,7 +27,7 @@ function SettingsUI.modeLabel(settings, effectiveWifi)
     return "Your own settings"
 end
 function SettingsUI.words(text, home_screen)
-    local words = (text:gsub("BookOrbit home", "Server plugin's Home"):gsub("Back to my book, then home", "Back to my book, then Server plugin's Home"):gsub("BookOrbit", "Server plugin")
+    local words = (text:gsub("Back to my book, then home", "Back to my book, then Server plugin's Home")
         :gsub("Tailscale", "VPN"):gsub("tailnet", "VPN"):gsub(" %(matches Xteink%)", ""))
     if home_screen == "booksync" then words = words:gsub("Server plugin's Home", "BookSync Home") end
     return words

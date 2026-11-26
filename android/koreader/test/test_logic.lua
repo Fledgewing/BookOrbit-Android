@@ -320,14 +320,14 @@ test("home: elsewhere with no book open -> BookOrbit home (history is not reopen
     eq(H{ mode = "smart", on_dashboard = true, from_other = true }, "dashboard", "from the companion, no book")
 end)
 test("home: any BookOrbit screen but its main page -> the main page, in both modes", function()
-    eq(H{ mode = "smart", in_reader = true, covered = true, bookorbit_sub = true, from_other = false }, "bookorbit_main")
-    eq(H{ mode = "smart", in_reader = false, covered = true, bookorbit_sub = true, from_other = true }, "bookorbit_main")
-    eq(H{ mode = "bookorbit", bookorbit_sub = true }, "bookorbit_main")
+    eq(H{ mode = "smart", in_reader = true, covered = true, library_sub = true, from_other = false }, "library_main")
+    eq(H{ mode = "smart", in_reader = false, covered = true, library_sub = true, from_other = true }, "library_main")
+    eq(H{ mode = "bookorbit", library_sub = true }, "library_main")
 end)
 test("home: a BookOrbit page past the first -> page 1 first (M8C 11-22)", function()
     eq(H{ mode = "smart", on_dashboard = true, page_above_1 = true, from_other = false }, "first_page", "dashboard page 2")
     eq(H{ mode = "bookorbit", on_dashboard = true, page_above_1 = true, from_other = false }, "first_page")
-    eq(H{ mode = "smart", bookorbit_sub = true, page_above_1 = true, from_other = false }, "first_page", "a list's page 3")
+    eq(H{ mode = "smart", library_sub = true, page_above_1 = true, from_other = false }, "first_page", "a list's page 3")
     eq(H{ mode = "smart", on_dashboard = true, page_above_1 = false, from_other = false }, "companion", "page 1 leaves")
     eq(H{ mode = "smart", on_dashboard = true, page_above_1 = true, from_other = true }, "dashboard",
         "from another app: the usual rule")
@@ -365,7 +365,7 @@ test("home: BookOrbit Home keeps the rotation the device is held in", function()
     -- The reported case: held upside down (left-handed) in another app; KOReader's file browser
     -- had forced upright; Home opens BookOrbit Home -> turn back to the held rotation.
     eq(R{ action = "dashboard", held = "reverse_portrait", current = 0 }, 2)
-    eq(R{ action = "bookorbit_main", held = "landscape", current = 0 }, 1)
+    eq(R{ action = "library_main", held = "landscape", current = 0 }, 1)
     eq(R{ action = "first_page", held = "reverse_landscape", current = 2 }, 3)
     eq(R{ action = "dashboard", held = "portrait", current = 2 }, 0, "held upright, KOReader upside down")
     eq(R{ action = "dashboard", held = "reverse_portrait", current = 2 }, nil, "already right")
@@ -918,7 +918,7 @@ test("local-first: ISO times, content keys and changed tiles", function()
 end)
 
 ---------------------------------------------------------------- write-through cache (shared cases)
-local C = M.Cache
+local C = M.ServerCache
 -- The companion's rules as the fake companion plays them (test/companion_rules.lua): checked here
 -- against the tables the companion's tests read, so the fake cannot drift from the real worker.
 local CR = dofile(here .. "/companion_rules.lua")(C)
@@ -1395,12 +1395,13 @@ test("reading gate: every show, toast, activity start and restart names its gate
     local pat = { "UIManager:show%(", "bookorbit_toast\"%)%.show", "bookorbit_toast\"%)%.error", "Toast%.show%(",
         "Toast%.error%(", "Jni%.startActivity{", "restartKOReader%(%)", "UIManager:quit%(%)" }
     local missing = {}
-    local p = io.popen('ls "' .. dir .. '"')
-    for name in p:lines() do
+    local p = io.popen('find "' .. dir .. '" -type f -name "*.lua"')
+    for path in p:lines() do
+        local name = path:sub(#dir + 1)
         if name:match("%.lua$") and name ~= "jni.lua" then
             local prev = ""
             local n = 0
-            for line in io.lines(dir .. name) do
+            for line in io.lines(path) do
                 n = n + 1
                 local code = line:gsub("%-%-.*$", function(c) return c:find("gate:", 1, true) and c or "" end)
                 for _, q in ipairs(pat) do
@@ -1421,7 +1422,7 @@ end)
 -- entry format, which the companion's cache worker must match byte for byte (CacheWorkerTest
 -- reads the same file). Regenerate only when the plugin's rules change, then fix the companion.
 test("cache worker fixture: the plugin's keys, hashes, pages, cover names and entry format", function()
-    local Cache = M.Cache
+    local Cache = M.ServerCache
     -- @fixture cache/worker.json
     local fx = JSON.fixture(here, "cache/worker.json")
     for _, k in ipairs(fx.keys) do
@@ -1457,7 +1458,15 @@ end)
 local SettingsSync = M.SettingsSync
 local function readFile(path) local f = assert(io.open(path, "rb")); local t = f:read("*a"); f:close(); return t end
 local schemaText = readFile(here .. "/../../../shared/settings/schema.json")
-local SIDX = SettingsSync.index(SettingsSync.decodeJson(schemaText))
+local SIDX = SettingsSync.index(SettingsSync.decodeJson(schemaText), {["server-home"] = M.HomePlan.SERVER_HOME})
+
+test("settings schema: neutral choices bind opaque adapter keys without changing source data", function()
+    local raw = SettingsSync.decodeJson(schemaText)
+    local bound = SettingsSync.index(raw, {["server-home"] = "alternate:home"})
+    eq(bound.byKey.home_button.values[2].id, "alternate:home")
+    eq(SettingsSync.fromWire(SIDX.byKey.home_button, M.HomePlan.SERVER_HOME), M.HomePlan.SERVER_HOME)
+    eq(SettingsSync.index(raw).byKey.home_button.values[2].id, "server-home")
+end)
 
 test("settings schema: the plugin's own JSON reader loads it", function()
     ok(#SIDX.settings >= 30, "settings: " .. #SIDX.settings)
@@ -1648,7 +1657,7 @@ test("main loop: directory iterators are confined to the guarded thumbnail child
         local source = readFile(here .. "/../orbit.koplugin/" .. module)
         if module == "ko/cover_child.lua" then
             ok(source:find("Db.pid() ~= Store.ui_pid",1,true), "child PID guard")
-            ok(source:find("if not lfs_ok or not (OC.child",1,true), "guard precedes iterator")
+            ok(source:find("if not lfs_ok or not (Store.inChild()",1,true), "guard precedes iterator")
         else
             ok(not source:find("lfs.dir",1,true), module .. " must not enumerate a directory")
             ok(not source:find("lfs%.attributes[^\n]*for "), module .. " file scans belong to companion")
@@ -1752,8 +1761,8 @@ test("settings modes: approved presets use shared wire values and Balanced match
     for _, key in ipairs(UI.modeKeys) do if key ~= "wifi_mode" then unset[key] = balanced[key] end end
     eq(UI.mode(unset, "jit"), "balanced", "effective device Wi-Fi default")
     eq(UI.mode(balanced, "always_on"), "custom", "effective capability policy beats stored Wi-Fi preference")
-    eq(UI.words("BookOrbit home"), "Server plugin's Home")
-    eq(UI.words("BookOrbit home", "booksync"), "BookSync Home")
+    eq(UI.words("Server plugin's Home"), "Server plugin's Home")
+    eq(UI.words("Server plugin's Home", "booksync"), "BookSync Home")
     eq(UI.words("Wake Tailscale for syncs"), "Wake VPN for syncs")
 end)
 

@@ -30,22 +30,22 @@ local PATCH_VERSION = "0.0.0-dev"
 
 local LOGIC = {
     "logic/schedule.lua", "logic/plan.lua", "logic/update.lua", "logic/wifi_plan.lua",
-    "logic/home_plan.lua", "logic/compat.lua", "logic/stats.lua", "logic/clicks.lua",
-    "logic/prompts.lua", "logic/group.lua", "logic/finish.lua", "logic/localfirst.lua", "logic/sheet_layout.lua", "logic/cache.lua",
-    "logic/recommended.lua", "logic/caps.lua", "logic/copies.lua", "logic/sleep_pool.lua", "logic/settings_sync.lua",
+    "logic/home_plan.lua", "logic/server/bookorbit/compat.lua", "logic/stats.lua", "logic/clicks.lua",
+    "logic/prompts.lua", "logic/server/bookorbit/group.lua", "logic/server/bookorbit/finish.lua", "logic/server/bookorbit/localfirst.lua", "logic/sheet_layout.lua", "logic/cache.lua", "logic/server/bookorbit/cache.lua",
+    "logic/server/bookorbit/recommended.lua", "logic/caps.lua", "logic/copies.lua", "logic/sleep_pool.lua", "logic/settings_sync.lua",
     "logic/orbismart.lua", "logic/status_layout.lua",
-    "logic/account.lua", "logic/reading_style.lua", "logic/settings_ui.lua", "logic/reader_panel.lua", "logic/battery_widget.lua", "logic/budgets.lua", "logic/widget_registry.lua", "logic/layout.lua", "logic/filter_sheet.lua", "logic/reading_stats.lua", "logic/home_host.lua", "logic/home_editor.lua", "logic/booklist.lua",
+    "logic/reading_style.lua", "logic/account.lua", "logic/settings_ui.lua", "logic/reader_panel.lua", "logic/budgets.lua", "logic/widget_registry.lua", "logic/layout.lua", "logic/filter_sheet.lua", "logic/reading_stats.lua", "logic/battery_widget.lua", "logic/home_host.lua", "logic/home_editor.lua", "logic/booklist.lua",
 }
 local KO = {
     "ko/base.lua", "ko/settings.lua", "ko/jni.lua", "ko/companion.lua", "ko/shared.lua",
-    "ko/bookorbit.lua", "ko/net.lua", "ko/sync.lua", "ko/wifi.lua", "ko/updater.lua",
+    "ko/server/bookorbit.lua", "ko/net.lua", "ko/server/bookorbit/sync.lua", "ko/wifi.lua", "ko/updater.lua",
     "ko/background.lua", "ko/runtime.lua", "ko/clicks_channel.lua", "ko/keys.lua",
-    "ko/module.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/reading_sync.lua",
-    "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/recommended.lua", "ko/menu.lua",
-    "ko/wifi_backend.lua", "ko/grouping.lua", "ko/endsheet.lua", "ko/endofbook.lua",
-    "ko/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/badge.lua", "ko/cover_child.lua", "ko/cache.lua", "ko/mirror.lua", "ko/copies.lua", "ko/sleepscreen.lua",
-    "ko/sqlite_stress.lua", "ko/library_bookorbit.lua", "ko/library.lua", "ko/account.lua", "ko/reading_style.lua", "ko/custom_reading.lua", "ko/reader_panel.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/battery.lua", "ko/home_host.lua", "ko/home_editor.lua", "ko/booklist_config.lua",
-    "ko/orbismart.lua", "ko/status_layout.lua", "ko/notices.lua", "ko/main_loop.lua",
+    "ko/module.lua", "ko/server/bookorbit/lifecycle.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/server/bookorbit/reading_sync.lua",
+    "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/server/bookorbit/recommended.lua", "ko/menu.lua",
+    "ko/wifi_backend.lua", "ko/server/bookorbit/grouping.lua", "ko/endsheet.lua", "ko/server/bookorbit/endofbook.lua",
+    "ko/server/bookorbit/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/server/bookorbit/store.lua", "ko/badge.lua", "ko/cover_child.lua", "ko/server/bookorbit/cache.lua", "ko/server/bookorbit/mirror.lua", "ko/server/bookorbit/copies.lua", "ko/sleepscreen.lua",
+    "ko/sqlite_stress.lua", "ko/server/bookorbit/library_bookorbit.lua", "ko/library.lua", "ko/account.lua", "ko/reading_style.lua", "ko/custom_reading.lua", "ko/reader_panel.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/battery.lua", "ko/home_host.lua", "ko/home_editor.lua", "ko/booklist_config.lua",
+    "ko/server/bookorbit/orbismart.lua", "ko/status_layout.lua", "ko/notices.lua", "ko/main_loop.lua",
 }
 
 -- This plugin's folder: PluginLoader dofile()s <folder>/main.lua (frontend/pluginloader.lua:244).
@@ -76,7 +76,7 @@ if rawget(_G, "ORBIT_ANDROID_TEST") then
     return { Schedule = env.Schedule, Plan = env.Plan, Update = env.Update, WifiPlan = env.WifiPlan,
         HomePlan = env.HomePlan, disabledText = env.disabledText, Compat = env.Compat, Stats = env.Stats,
         Clicks = env.Clicks, SetupPrompt = env.SetupPrompt, MenuLock = env.MenuLock,
-        BookList = env.BookList, ReadingStyle = env.ReadingStyle, HomeEditorPlan = env.HomeEditorPlan, Layout = env.Layout, WidgetRegistry = env.WidgetRegistry, Budgets = env.Budgets, FilterSheet = env.FilterSheet, RestartPlan = env.RestartPlan, Group = env.Group, Finish = env.Finish, LocalFirst = env.LocalFirst, Cache = env.Cache, SheetLayout = env.SheetLayout, Recommended = env.Recommended, Caps = env.Caps, CopiesPlan = env.CopiesPlan, SleepPool = env.SleepPool, SettingsSync = env.SettingsSync, OrbiSmart = env.OrbiSmart, StatusLayout = env.StatusLayout, BatteryGlyph = env.BatteryGlyph, PATCH_VERSION = PATCH_VERSION }
+        ReadingStyle = env.ReadingStyle, BookList = env.BookList, HomeEditorPlan = env.HomeEditorPlan, Layout = env.Layout, WidgetRegistry = env.WidgetRegistry, Budgets = env.Budgets, FilterSheet = env.FilterSheet, RestartPlan = env.RestartPlan, Group = env.Group, Finish = env.Finish, LocalFirst = env.LocalFirst, Cache = env.Cache, ServerCache = env.ServerCache, SheetLayout = env.SheetLayout, Recommended = env.Recommended, Caps = env.Caps, CopiesPlan = env.CopiesPlan, SleepPool = env.SleepPool, SettingsSync = env.SettingsSync, OrbiSmart = env.OrbiSmart, StatusLayout = env.StatusLayout, BatteryGlyph = env.BatteryGlyph, PATCH_VERSION = PATCH_VERSION }
 end
 
 -- The old user patch still loaded (koreader/patches/2-orbit-android.lua; it hooks PluginLoader at

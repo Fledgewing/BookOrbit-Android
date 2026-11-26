@@ -154,7 +154,7 @@ abstract class EinkActivity : Activity() {
         if (requestCode == Installers.PLUGIN_REQUEST_CODE) {
             OLog.i("plugin install: storage permission ${if (granted) "granted" else "denied"}")
             if (granted) Installers.plugin(this) { refresh() }
-            else Prefs(this).pluginInstallStatus = "no storage permission: allow it, or copy bookorbit.koplugin into koreader/plugins/ (SETUP.md)"
+            else Prefs(this).pluginInstallStatus = "no storage permission: allow it, or copy the library connector plugin into the KOReader plugins folder (SETUP.md)"
             refresh()
             return
         }

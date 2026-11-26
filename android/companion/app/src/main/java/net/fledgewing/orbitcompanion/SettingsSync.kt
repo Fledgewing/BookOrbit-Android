@@ -50,7 +50,10 @@ class SettingsSchema(val sections: List<SettingsSection>, val settings: List<Set
             val arr = o.optJSONArray("settings") ?: JSONArray()
             val settings = (0 until arr.length()).map { arr.getJSONObject(it) }.map { d ->
                 val type = d.getString("type")
-                val values = d.optJSONArray("values")?.let { v -> (0 until v.length()).map { v.getJSONObject(it) }.map { it.get("id").toString() to it.getString("label") } }.orEmpty()
+                val values = d.optJSONArray("values")?.let { v -> (0 until v.length()).map { v.getJSONObject(it) }.map {
+                    val id = it.get("id").toString()
+                    (if (id == "server-home") HomeButton.LIBRARY.key else id) to it.getString("label")
+                } }.orEmpty()
                 val def = d.opt("default")
                 val defWire = when {
                     def == null || def == JSONObject.NULL -> ""

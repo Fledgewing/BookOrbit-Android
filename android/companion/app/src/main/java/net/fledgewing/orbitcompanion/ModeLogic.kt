@@ -85,7 +85,7 @@ object ModeLogic {
 }
 
 /**
- * The Orbit plugin's REPORT (§7.3): one yes/no about the BookOrbit login and the recommended
+ * The Orbit plugin's REPORT (§7.3): one yes/no about the library login and the recommended
  * settings' state. A REPORT never carries the server, the account or the key (only MIRROR and CHECK do,
  * for the cache worker, which keeps them in memory: Worker.kt).
  */
@@ -121,7 +121,7 @@ object PluginReport {
     fun signedInRow(signedIn: String, running: String? = null): Row = when {
         !canReport(running) || signedIn.isEmpty() -> CHECKING_ROW
         signedIn == "1" -> Row(true, false, "done")
-        else -> Row(false, false, "not signed in · tap to open BookOrbit's sign-in in KOReader")
+        else -> Row(false, false, "not signed in · tap to open library's sign-in in KOReader")
     }
 
     fun recommendedRow(state: String, conflicts: Int, running: String? = null): Row = when {
@@ -272,7 +272,7 @@ object AddonLogic {
         "KOReader keeps its reading settings. BookSync undoes only what needed Full mode: KOReader's Wi-Fi action and the two-finger swipe for other apps.",
     )
     val TO_FULL_CHANGES = listOf(
-        "BookSync becomes the Home app: Home opens your book or BookOrbit.",
+        "BookSync becomes the Home app: Home opens your book or library.",
         "BookSync switches Wi-Fi, keeps the reader awake for sleep syncs and runs in the background.",
         "Setup then walks the permissions Full mode needs.",
     )

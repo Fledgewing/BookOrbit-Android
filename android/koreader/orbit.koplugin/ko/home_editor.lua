@@ -10,19 +10,19 @@ function HomeEditor.codec()
         return value
     end}
 end
-function HomeEditor.path() return OC.dir().."/home-layout.json" end
+function HomeEditor.path() return Store.dir().."/home-layout.json" end
 function HomeEditor.load()
     if HomeEditor.loaded then return end
     HomeEditor.loaded=true
     local path=HomeEditor.path()
-    if not OC.readFile(path,1) and not OC.readFile(path..".bak",1) then return end
-    local document,notice=Layout.load(path,OC,HomeEditor.codec())
+    if not Store.readFile(path,1) and not Store.readFile(path..".bak",1) then return end
+    local document,notice=Layout.load(path,Store,HomeEditor.codec())
     -- Retain the host's existing in-memory layout when no file has been saved yet.
-    if OC.readFile(HomeEditor.path(),1) or OC.readFile(HomeEditor.path()..".bak",1) then S.home_layout=document end
+    if Store.readFile(HomeEditor.path(),1) or Store.readFile(HomeEditor.path()..".bak",1) then S.home_layout=document end
     HomeEditor.notice=notice
 end
 function HomeEditor.save(document)
-    local ok,err=Layout.save(HomeEditor.path(),document,OC,HomeEditor.codec())
+    local ok,err=Layout.save(HomeEditor.path(),document,Store,HomeEditor.codec())
     if ok then S.home_layout=document end
     return ok,err
 end

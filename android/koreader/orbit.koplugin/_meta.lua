@@ -3,5 +3,5 @@
 local _ = require("gettext")
 return {
     fullname = _("BookSync"),
-    description = _([[Gets an Android e-reader's network ready for the BookOrbit plugin and tells it when to sync (BookSync, with BookSync Companion).]]),
+    description = _([[Gets an Android e-reader's network ready for the library plugin and tells it when to sync (BookSync, with BookSync Companion).]]),
 }

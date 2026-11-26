@@ -68,8 +68,8 @@ function Library:read(op, args)
     if not ok then error(result,0) end
     return result
 end
-function Library:summary() return self:read("library.summary", {limit=1}) end
 function Library:accountState() return self:read("account.state", {limit=1}) end
+function Library:summary() return self:read("library.summary", {limit=1}) end
 function Library:modeEstimates() return self:read("mode-estimates", {limit=3}) end
 function Library:battery() return self:read("battery", {limit=1}) end
 function Library:readingStats() return self:read("reading.stats", {limit=1}) end
@@ -143,14 +143,14 @@ function Library.download(key,destination,callback)
     return LibraryAdapter.command("downloads.start",{key=key,destination=destination},callback)
 end
 
+-- Explicit account actions only; credentials are dispatched and immediately released.
+function Library.accountCommand(op,args,done)
+    return command(op,function() return LibraryAdapter.command(op,args,done) end)
+end
+
 -- Paged source names/counts, never a catalog delivered to the editor.
 function Library:sources(category, offset, limit, caps)
     return self:read("sources", {category=category,offset=offset or 0,limit=limit or 6,
         allow_lists=not (caps and caps.lists and caps.lists.read==false),
         allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
-end
-
--- Explicit account actions only; credentials are dispatched and immediately released.
-function Library.accountCommand(op,args,done)
-    return command(op,function() return LibraryAdapter.command(op,args,done) end)
 end

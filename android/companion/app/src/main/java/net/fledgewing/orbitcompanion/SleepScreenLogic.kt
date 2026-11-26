@@ -121,14 +121,14 @@ data class SleepSettings(
         "sleep_flash" to if (flash) "1" else "0",
     )
 
-    /** "Up next in series", "Smart scope 12", "Library", several joined with ", " (R1c). */
+    /** "Up next in series", "List 12", "Library", several joined with ", " (R1c). */
     fun fromLabel(): String = SleepPoolLogic.sources(from).joinToString(", ") { item ->
         when (item) {
             SleepPoolLogic.LIBRARY -> "Library"
             "up_next" -> "Up next in series"
             "want_to_read" -> "Want to read"
             "discover" -> "Discover"
-            else -> item.substringBefore(':').let { when (it) { "scope" -> "Smart scope"; "library" -> "Library"; else -> "Collection" } } + " " + item.substringAfter(':')
+            else -> item.substringBefore(':').let { when (it) { "scope" -> "List"; "library" -> "Library"; else -> "Collection" } } + " " + item.substringAfter(':')
         }
     }
 }

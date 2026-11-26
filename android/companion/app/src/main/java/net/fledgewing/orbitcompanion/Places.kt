@@ -13,7 +13,7 @@ object Places {
     /** orbit-cache, KOReader's cover folder for BookOrbit, orbit-sleep. */
     fun roots(): List<File> {
         val ext = Environment.getExternalStorageDirectory()
-        return listOf(File(ext, "koreader/settings/orbit-cache"), File(ext, "koreader/cache/bookorbit"), File(ext, "koreader/settings/orbit-sleep"))
+        return listOf(File(ext, "koreader/settings/orbit-cache"), ServerAdapters.connector.coverCacheDir(ext), File(ext, "koreader/settings/orbit-sleep"))
     }
 
     /**

@@ -1,7 +1,7 @@
 return function(test,eq,ok,here,Cache)
     local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() end},{__index=_G})
     local root=here..'/../orbit.koplugin/'
-    for _,p in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','logic/reader_panel.lua','logic/battery_widget.lua','ko/reading_stats.lua'}) do
+    for _,p in ipairs({'logic/budgets.lua','logic/widget_registry.lua','logic/reading_stats.lua','logic/reader_panel.lua','ko/reading_stats.lua'}) do
         setfenv(assert(loadfile(root..p)),e)()
     end
     local data={state='ready',year={intensity={},days_read=7,start='2025-11-26'},

@@ -125,7 +125,7 @@ return function(test, eq, ok, here, Cache)
     test("library: reopening and source events refresh the worker, publications do not loop", function()
         local e=setmetatable({Cache=Cache, now_s=function() return 10 end, log=function() end,
             OC={watchChecks=function() end},Library={changed=function() end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
         local a=e.LibraryAdapter
         a.owner=function() return "fixture" end
         a.sent={stale=1}; a.watch(true); eq(next(a.sent),nil)
@@ -138,62 +138,65 @@ return function(test, eq, ok, here, Cache)
         local plugin={settings={username="fixture",server_url="https://library.invalid"},
             newClient=function() error("render constructed a backend client") end}
         local reads=0
-        local e=setmetatable({bookorbit=function() return plugin end, OC={
+        local e=setmetatable({serverPlugin=function() return plugin end, OC={
             client=function() error("render called the legacy client factory") end,
             owner=function(settings) eq(settings,plugin.settings); return "fixture-owner" end},
             Store={library=function(owner, request) reads=reads+1; eq(owner,"fixture-owner"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
         eq(e.LibraryAdapter.owner(),"fixture-owner")
         local r,bytes=e.LibraryAdapter.read("bounded"); eq(#r.items,0); eq(bytes,32); eq(reads,1)
         plugin.settings=nil; eq(e.LibraryAdapter.owner(),nil)
         eq(e.LibraryAdapter.read("bounded"),nil); eq(reads,1)
 
     end)
-    test("library: backend references cannot spread beyond adapters and frozen legacy seam", function()
-        local baseline={}
-        for line in io.lines(here .. "/library-legacy-boundary.txt") do baseline[line]=(baseline[line] or 0)+1 end
-        local function backend(line)
-            return line:find("/koreader/",1,true) or line:find("/api/",1,true)
-                or line:find("bookorbit",1,true) or line:find("BookOrbit",1,true)
-                or line:find("OC.client",1,true) or line:find("OC.owner",1,true)
-                or line:find("client:request",1,true) or line:find("client:query",1,true)
-                or line:find("require.*[\"']net[\"']")
-                or line:find("readStatus",1,true) or line:find("progressPercentage",1,true)
-                or line:find("smartScopeId",1,true) or line:find("seriesName",1,true)
-                or line:find("thumbnailUrl",1,true) or line:find("detailUrl",1,true)
-                or line:find("addedAt",1,true) or line:find("updatedAt",1,true)
-                or line:find("lastReadAt",1,true) or line:find("libraryId",1,true)
-                or line:find("collectionId",1,true) or line:find("seriesId",1,true)
-                or line:find("seriesIndex",1,true) or line:find("downloadUrl",1,true)
-                or line:find("userkey",1,true) or line:find("server_url",1,true)
-        end
-        local p=assert(io.popen('find "' .. root .. 'ko" -type f -name "*.lua"'))
-        for path in p:lines() do
-            local name=path:sub(#(root .. "ko/")+1)
-            if name~="library_bookorbit.lua" and name~="bookorbit.lua" and name~="net.lua" then
-                for line in io.lines(path) do
-                    local code=line:gsub("%-%-.*$",""):match("^%s*(.-)%s*$")
-                    if backend(code) then
-                        local signature=name .. "\t" .. code
-                        ok((baseline[signature] or 0)>0,"backend reference outside adapter: " .. name .. ": " .. code)
-                        baseline[signature]=baseline[signature]-1
-                    end
-                end
-            end
-        end
-        p:close()
-        -- Removing legacy references is always allowed; adding another identical one is not.
+    test("storage: local IO and directory providers work without a backend", function()
+        eq(Cache.normalize,nil); eq(Cache.listWindow,nil); eq(Cache.key,nil)
+        local mkdirs=0
+        local e=setmetatable({Db={pid=function() return 1 end},require=function(name)
+            if name=="libs/libkoreader-lfs" then return {mkdir=function() mkdirs=mkdirs+1 end} end
+            if name=="datastorage" then return {getSettingsDir=function() return "/fixture/settings" end} end
+            error(name)
+        end}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/store.lua")),e)()
+        eq(e.OC,nil); eq(e.Store.directoryReady(),false); eq(e.Store.inChild(),false)
+        eq(e.Store.dir(),"/fixture/settings/orbit-cache"); eq(e.Store.dir(),"/fixture/settings/orbit-cache")
+        eq(mkdirs,2); eq(e.Store.directoryReady(),true)
+        e.Store.directory=function() return "/alternate" end
+        eq(e.Store.path(),"/alternate/orbit.db")
+        local path=os.tmpname()
+        local success,err=pcall(function()
+            eq(e.Store.writeFile(path,"a\0b"),true)
+            eq(e.Store.readFile(path,2),"a\0")
+            eq(e.Store.readFile(path),"a\0b")
+        end)
+        os.remove(path)
+        ok(success,err)
+    end)
+    test("library: server boundary has no baselines or suppressions", function()
+        local result = os.execute('python3 "' .. here .. '/../../../tools/test/test-server-boundary.py"')
+        eq(result, 0, "server boundary guard")
+    end)
+    test("library: account launch gets the server only inside its adapter", function()
+        local calls=0
+        local e=setmetatable({Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
+            serverPlugin=function() return {settings={server_url="https://library.invalid"}} end,
+            Jni={call=function(_,method,args)
+                eq(method,"companion.call.ACCOUNT_OPEN"); eq(args.server,"https://library.invalid")
+                calls=calls+1; return {ok="1"}
+            end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
+        eq(e.LibraryAdapter.openAccount(),true); eq(calls,1)
     end)
     test("library: server lifecycle imports only an opaque owner, never credentials", function()
         local result={ok="1",owner="opaque-login"}
         local e=setmetatable({Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
             Jni={call=function(_,method,args) eq(method,"companion.call.SERVER_STATE"); eq(next(args),nil); return result end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
         eq(e.LibraryAdapter.accountReturned(),true); eq(e.LibraryAdapter.owner(),"opaque-login")
         eq(e.LibraryAdapter.accountReturned(),false)
         result.owner=nil
         eq(e.LibraryAdapter.accountReturned(),true); eq(e.LibraryAdapter.managed_owner,nil)
-        local code=source(root .. "ko/library_bookorbit.lua")
+        local code=source(root .. "ko/server/bookorbit/library_bookorbit.lua")
         eq(code:find('result.userkey',1,true),nil)
         eq(code:find('result.secret',1,true),nil)
     end)
@@ -201,10 +204,10 @@ return function(test, eq, ok, here, Cache)
     test("account snapshot: signed-out UI reads one bounded lifecycle row without a catalog owner", function()
         local state={signedIn=false,sync={set=true,available=true,origin="user"},opds={set=false}}
         local body=Cache.encode(state)
-        local e=setmetatable({Cache=Cache,Budgets={MAX_SNAPSHOT=16384},Companion={workerProblem=function() end,AUTHORITY="fixture",PACKAGE="fixture"},
-            Jni={call=function() return {ok="1",body=body} end},bookorbit=function() return nil end,
+        local e=setmetatable({Cache=Cache,ServerCache={encode=Cache.encode,decode=Cache.decode},Budgets={MAX_SNAPSHOT=16384},Companion={workerProblem=function() end,AUTHORITY="fixture",PACKAGE="fixture"},
+            Jni={call=function() return {ok="1",body=body} end},serverPlugin=function() return nil end,
             Store={library=function() error("no catalog should be read") end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
         e.LibraryAdapter.accountReturned()
         local a,n=e.LibraryAdapter.read("opaque","account.state")
         eq(a.signedIn,false); eq(a.sync.origin,"user"); eq(n,#body)

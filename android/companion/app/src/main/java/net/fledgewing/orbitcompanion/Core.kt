@@ -209,7 +209,7 @@ class Prefs(ctx: Context) {
         set(v) = setStr("restart_reopen", v)
 
     /** When this app last changed version (AfterUpdate), 0 none. */
-    var updatedAt by LongPref("updated_at")
+    var appUpdatedAt by LongPref("updated_at")
 
     /** Wall time of the last STATS that said reading (Reading, ReadingLogic), 0 not reading. */
     var readingAt by LongPref("reading_at")

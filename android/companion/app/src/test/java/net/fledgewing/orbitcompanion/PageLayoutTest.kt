@@ -172,7 +172,7 @@ class PageLayoutTest {
     @Test
     fun aLongValueWrapsInsteadOfPushingTheTextOut() {
         val a = open<SettingsActivity>()
-        val long = Ui.value(a, "Up next in series, Want to read, Discover, Romance (smart scope)  ›")
+        val long = Ui.value(a, "Up next in series, Want to read, Discover, Romance (list)  ›")
         val row = Ui.row(a, "Applies when KOReader restarts and a few more words", "A line that is long enough to wrap twice on a phone", long)
         (tagged(a, "section:sleep")!!.parent as ViewGroup).addView(row)
         assertNoOverlap(a)

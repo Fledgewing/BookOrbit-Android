@@ -429,7 +429,7 @@ object Setup {
         out += "Plugin version KOReader runs" to p.patchVersionSeen.ifEmpty { "not reported" }
         out += "Plugin file version" to (PatchInstaller.installedVersion() ?: "unreadable")
         out += "KOReader" to "${Installers.koreaderVersion(ctx) ?: "-"} (${Installers.koreaderState(ctx)})"
-        out += "BookOrbit plugin" to (Installers.pluginVersion() ?: "not found")
+        out += "library plugin" to (Installers.pluginVersion() ?: "not found")
         out += "Signed in (from the plugin)" to when (p.reportSignedIn) { "1" -> "yes"; "0" -> "no"; else -> "not reported" }
         out += "Recommended settings" to "${p.reportRecommended.ifEmpty { "not reported" }} · ${p.reportConflicts} conflicts"
         allChecks(ctx).mapNotNull { it.battery }.forEach { b -> out += "Battery: ${b.name}" to "${BatteryMerge.appLine(b)} (${b.row.detail})" }
@@ -535,7 +535,7 @@ object Setup {
             a.tryStart(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")), "install unknown apps")
         })
 
-        // Setup installs the rest: KOReader, the BookOrbit plugin, the patch (Installers).
+        // Setup installs the rest: KOReader, the library plugin, the patch (Installers).
         val ko = Installers.koreaderState(ctx)
         val koV = Installers.koreaderVersion(ctx)
         val koOk = ko == KoreaderRelease.State.OFFICIAL
@@ -577,21 +577,21 @@ object Setup {
         }
 
         val plV = Installers.pluginVersion()
-        val plNeeds = PluginRelease.needsInstall(plV)
+        val plNeeds = ServerAdapters.connector.needsInstall(plV)
         list.add(
             Check(
-                "BookOrbit plugin",
+                "library plugin",
                 !plNeeds,
                 when {
                     Installers.busy(Installers.PLUGIN) -> "Downloading…"
-                    !plNeeds -> "Version $plV · it updates itself from your BookOrbit server"
+                    !plNeeds -> "Version $plV · it updates itself from your library server"
                     prefs.pluginInstallStatus.isNotEmpty() -> "Not installed: ${prefs.pluginInstallStatus}"
                     plV == null -> "Not installed"
-                    else -> "Older than the BookSync plugin needs (v${PluginRelease.MIN_VERSION})"
+                    else -> "Older than the BookSync plugin needs (v${ServerAdapters.connector.minimumVersion})"
                 },
                 action = if (!plNeeds) null else if (plV == null) "Install" else "Update",
                 id = "plugin",
-                short = "BookOrbit plugin",
+                short = "library plugin",
             ) { a ->
                 if (plNeeds && !Installers.busy(Installers.PLUGIN)) Installers.pluginFrom(a) { a.refresh() }
                 a.refresh()
@@ -652,10 +652,10 @@ object Setup {
         // Pending ("Checking…") while the running plugin is older than REPORT or none came yet.
         LibraryAccount.initialize(ctx)
         val signed = PluginReport.signedInRow(prefs.reportSignedIn, runningV)
-        list.add(Check("BookOrbit account", signed.done && !signed.pending,
+        list.add(Check("library account", signed.done && !signed.pending,
             when { signed.pending -> "Checking… open KOReader once"; signed.done -> "Signed in"; else -> "Not signed in" },
             pending = signed.pending, action = if (signed.pending) null else "Sign in", id = "signed_in", short = "Signed in") { a ->
-            Koreader.start(a, "setup: sign in to BookOrbit", HomeCommands.SIGNIN)
+            Koreader.start(a, "setup: sign in to library", HomeCommands.SIGNIN)
         })
         val rec = PluginReport.recommendedRow(prefs.reportRecommended, prefs.reportConflicts, runningV)
         list.add(Check("Recommended settings", rec.done && !rec.pending,
@@ -1021,7 +1021,7 @@ class SetupActivity : EinkActivity(), ChecklistUi.Actions {
 }
 
 /**
- * Settings › Home opens: KOReader + BookOrbit (default), then reader apps (KnownApps and the
+ * Settings › Home opens: KOReader + library (default), then reader apps (KnownApps and the
  * vendor's), then every other launchable app A–Z. Paged, no scrolling.
  */
 class HomeAppActivity : EinkActivity() {
@@ -1043,26 +1043,26 @@ class HomeAppActivity : EinkActivity() {
         val root = page()
         root.addView(Ui.header(this, "Home opens", "‹ Back") { finish() })
         val current = Prefs(this).homeApp
-        val rows = listOf(HomeApp.KOREADER_BOOKORBIT to "KOReader + BookOrbit", HomeApp.LAUNCHER to HomeApp.LAUNCHER_LABEL) + apps
+        val rows = listOf(HomeApp.KOREADER_LIBRARY to "KOReader + library", HomeApp.LAUNCHER to HomeApp.LAUNCHER_LABEL) + apps
         val perPage = maxOf(3, (resources.displayMetrics.heightPixels / resources.displayMetrics.density).toInt().minus(300) / (Ui.ROW_DP + 4))
         val pages = maxOf(1, (rows.size + perPage - 1) / perPage)
         pageIndex = pageIndex.coerceIn(0, pages - 1)
         rows.drop(pageIndex * perPage).take(perPage).forEach { (pkg, label) ->
             val sub = when {
-                pkg == HomeApp.KOREADER_BOOKORBIT -> "Smart Home, sync on sleep, Just in time Wi-Fi"
+                pkg == HomeApp.KOREADER_LIBRARY -> "Smart Home, sync on sleep, Just in time Wi-Fi"
                 pkg == HomeApp.LAUNCHER -> "BookSync's own page of apps"
                 pkg in readers -> "reader app"
                 else -> null
             }
-            val chosen = if (HomeApp.isKoreader(current)) pkg == HomeApp.KOREADER_BOOKORBIT else pkg == current
+            val chosen = if (HomeApp.isKoreader(current)) pkg == HomeApp.KOREADER_LIBRARY else pkg == current
             root.addView(Ui.row(this, label, sub, Ui.check(this, chosen), onClick = {
                 Prefs(this).homeApp = pkg
-                OLog.i("settings: Home opens ${if (pkg.isEmpty()) "KOReader + BookOrbit" else pkg}")
+                OLog.i("settings: Home opens ${if (pkg.isEmpty()) "KOReader + library" else pkg}")
                 finish()
             }))
         }
         root.addView(android.view.View(this), android.widget.LinearLayout.LayoutParams(1, 0, 1f))
-        root.addView(Ui.text(this, "Another app: Home brings it back where it was; press Home twice for the launcher page. Sync on sleep, Just in time Wi-Fi and BookOrbit home work only inside KOReader.", 15f, color = Ui.MID))
+        root.addView(Ui.text(this, "Another app: Home brings it back where it was; press Home twice for the launcher page. Sync on sleep, Just in time Wi-Fi and library home work only inside KOReader.", 15f, color = Ui.MID))
         if (pages > 1) {
             root.addView(Ui.gap(this, 8))
             root.addView(Ui.weightRow(this,

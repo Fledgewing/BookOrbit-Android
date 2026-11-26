@@ -97,7 +97,7 @@ class HomeActivity : Activity() {
         // A patch waiting to load and no book open: this Home press restarts KOReader instead.
         if (action == HomeAction.START_KOREADER && !HomeApp.isApp(choice) && PatchInstaller.follow(this, "home press")) return
         if (action == HomeAction.START_KOREADER) {
-            // "Home button": BookOrbit home -> "home" on a press, a plain start after KOReader went
+            // "Home button": library home -> "home" on a press, a plain start after KOReader went
             // away. Back to my book -> "home_smart" for both; the patch decides (HomePlan).
             // Another "Home opens" app: just bring it to the front (HomeApp.launch).
             val l = HomeApp.launch(choice, press, prefs.homeButton, EinkActivity.companionPageInFront())
@@ -187,7 +187,7 @@ class LauncherActivity : EinkActivity() {
         open.text = android.text.SpannableStringBuilder().apply {
             append("Open KOReader\n")
             val s = length
-            append(if (Prefs(this@LauncherActivity).homeButton == HomeButton.SMART) "back to your book" else "opens on BookOrbit home")
+            append(if (Prefs(this@LauncherActivity).homeButton == HomeButton.SMART) "back to your book" else "opens on library home")
             setSpan(android.text.style.RelativeSizeSpan(0.65f), s, length, 0)
             setSpan(android.text.style.StyleSpan(android.graphics.Typeface.NORMAL), s, length, 0)
         }

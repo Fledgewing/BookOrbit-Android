@@ -38,7 +38,7 @@ object Attention {
         if (last in 1 until now) {
             p.whatsNewFromCode = last
             p.updatedFromCode = last
-            p.updatedAt = System.currentTimeMillis()
+            p.appUpdatedAt = System.currentTimeMillis()
             OLog.i("setup: updated from code $last to $now; what's new pending; prompts held ${AfterUpdate.GRACE_MS / 1000} s")
             // What is still wrong once the update settled prompts then.
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
@@ -57,7 +57,7 @@ object Attention {
             .let { all -> if (PatchInstaller.inProgress(ctx)) all - "patch" else all }
         // An update settling: the patch and a reconnecting clicker wait, and nothing prompts.
         val settling = AfterUpdate.settling(
-            System.currentTimeMillis(), p.updatedAt, p.lastSeenVersionCode != BuildConfig.VERSION_CODE,
+            System.currentTimeMillis(), p.appUpdatedAt, p.lastSeenVersionCode != BuildConfig.VERSION_CODE,
             PatchInstaller.afterUpdateBusy || PatchInstaller.busy || PatchInstaller.inProgress(ctx),
         )
         val processAge = android.os.SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime()

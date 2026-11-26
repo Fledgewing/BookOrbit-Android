@@ -11,7 +11,7 @@ local F = { rate = 1000, step_s = 1, PAGE = 100 }
 
 local E, W, fetch, UIManager
 local here = (debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or ".")
-local function C() return E.Cache end
+local function C() return E.ServerCache end
 -- The companion's own rules (the plugin no longer has them).
 local makeRules, rules, rulesFor = dofile(here .. "/companion_rules.lua"), nil, nil
 local function R()

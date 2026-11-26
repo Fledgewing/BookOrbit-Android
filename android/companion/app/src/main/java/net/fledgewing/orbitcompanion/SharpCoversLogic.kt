@@ -1,13 +1,11 @@
 package net.fledgewing.orbitcompanion
 
-import java.net.URLDecoder
-import java.net.URLEncoder
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
  * Sharp sleep-screen covers (docs/design/lock-screen.md L7, R3), pure and unit-tested
- * (SharpCoversLogicTest). A recommended cover always comes from BookOrbit's full-size cover
+ * (SharpCoversLogicTest). A recommended cover always comes from library's full-size cover
  * (`GET /api/v1/opds/:bookId/cover`, B `opds/opds.controller.ts:229`), scaled once to the panel.
  * That route takes the OPDS cover token (`?t=`, B `opds/opds-auth.guard.ts` isTokenImagePath), which
  * the companion learns once from a small OPDS feed signed in with the reader's OPDS login. Until
@@ -40,30 +38,6 @@ object SharpCoversLogic {
         404 -> Outcome.NO_COVER
         else -> Outcome.LATER
     }
-
-    /** "https://h/", "https://h/api/v1", "https://h/api/v1/koreader" -> "https://h/api/v1" (as the BookOrbit plugin normalises). */
-    fun apiBase(server: String): String? {
-        val s = server.trim().trimEnd('/')
-        if (!Regex("^https?://[^/?#]+.*$").matches(s)) return null
-        val base = s.removeSuffix("/koreader") // orbify:not-a-route: a base-URL suffix the plugin may keep, not a call
-        return if (base.endsWith("/api/v1")) base else "$base/api/v1"
-    }
-
-    /** A small acquisition feed: recent books, enough that one of them has a cover. */
-    fun feedUrl(base: String): String = "$base/opds/recent?page=1&size=20"
-
-    fun coverUrl(base: String, id: Long, token: String): String =
-        "$base/opds/$id/cover?t=${URLEncoder.encode(token, "UTF-8")}"
-
-    /** The token's shape at the pin: `<userId>.<32 hex>` (createCoverToken). */
-    private val TOKEN = Regex("^\\d+\\.[0-9a-fA-F]{16,128}$")
-    // orbify:not-a-route: a pattern for the feed's image links; the cover route is called in coverUrl.
-    private val IMAGE_LINK = Regex("""/opds/\d+/(?:cover|thumbnail)\?t=([^"'&<\s]+)""") // orbify:not-a-route
-
-    /** The cover token from a feed's image links (B opds.service.ts:205), or null. */
-    fun tokenFromFeed(xml: String): String? = IMAGE_LINK.findAll(xml).map { m ->
-        runCatching { URLDecoder.decode(m.groupValues[1], "UTF-8") }.getOrNull()
-    }.firstOrNull { it != null && TOKEN.matches(it) }
 
     /** The cover's size once fitted inside the panel (never enlarged). */
     fun fit(srcW: Int, srcH: Int, panelW: Int, panelH: Int): Pair<Int, Int> {
@@ -111,17 +85,17 @@ object SharpCoversLogic {
     /** The Sleep screen page's row: (sub line, right-hand value). */
     fun row(state: State, haveServer: Boolean, sharp: Int, pool: Int, why: String?): Pair<String, String> = when {
         !haveServer -> "Waiting for KOReader's next cover refresh, which tells BookSync the server" to ""
-        state == State.ON -> "Full-size covers from BookOrbit · $sharp of $pool ready" to "On ›"
-        state == State.LOST -> "${why ?: "BookOrbit stopped accepting the sign-in"} · $FALLBACK" to "Sign in again ›"
-        else -> "Sign in once with your BookOrbit OPDS login · $FALLBACK" to "Sign in once ›"
+        state == State.ON -> "Full-size covers from library · $sharp of $pool ready" to "On ›"
+        state == State.LOST -> "${why ?: "library stopped accepting the sign-in"} · $FALLBACK" to "Sign in again ›"
+        else -> "Sign in once with your library OPDS login · $FALLBACK" to "Sign in once ›"
     }
 
-    const val PROMPT = "Your BookOrbit OPDS login (often the same as your KOReader sync login). " +
+    const val PROMPT = "Your library OPDS login (often the same as your KOReader sync login). " +
         "BookSync uses it once to get a cover link and keeps only that link, never the password."
     const val WRONG = "OPDS username or password not accepted."
     const val OPDS_OFF = "OPDS is off on this server or for this account. Covers come from the small thumbnail until it is on."
-    const val NO_TOKEN = "BookOrbit sent no cover link: none of its recent books has a cover yet. Try again later."
-    const val OFFLINE = "BookOrbit couldn't be reached. Try again when the reader is online."
+    const val NO_TOKEN = "library sent no cover link: none of its recent books has a cover yet. Try again later."
+    const val OFFLINE = "library couldn't be reached. Try again when the reader is online."
 
     /** The words after a sign-in attempt, for [outcome] (null: signed in). */
     fun signInMessage(outcome: Outcome, gotToken: Boolean): String? = when (outcome) {
@@ -133,5 +107,5 @@ object SharpCoversLogic {
 
     /** Why the sign-in was lost, for the row and Setup. */
     fun lostWhy(outcome: Outcome): String =
-        if (outcome == Outcome.OPDS_OFF) "OPDS is off on this server or for this account" else "BookOrbit stopped accepting the sign-in"
+        if (outcome == Outcome.OPDS_OFF) "OPDS is off on this server or for this account" else "library stopped accepting the sign-in"
 }

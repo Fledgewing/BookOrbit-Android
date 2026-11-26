@@ -37,7 +37,7 @@ function Net.up(p, opts, cb)
         res.failed_at = failed_at
         res.detail = detail
         Net.inflight = nil
-        if ok and Mirror and Mirror.kick then Mirror.kick("network up") end
+        if ok then Server.resumeCache("network up") end
         log("network up:", ok and "ok" or ("FAILED at " .. tostring(failed_at)), opts.reason,
             "wifi", res.wifi_s and fmt(res.wifi_s) or "-", "vpn", res.vpn_s and fmt(res.vpn_s) or "-",
             "server", res.server_s and fmt(res.server_s) or "-", "total", fmt(res.elapsed), detail or "")
@@ -115,7 +115,7 @@ function Net.up(p, opts, cb)
         if el >= cap then
             local stage = (S.wake_tailscale and not res.vpn_s) and "tailscale" or "server"
             return finish(false, stage, stage == "tailscale" and ("Tailscale didn't connect in " .. cap .. " s")
-                or ("BookOrbit didn't answer in " .. cap .. " s"))
+                or ("library didn't answer in " .. cap .. " s"))
         end
         UIManager:scheduleIn(0.5, tick)
     end

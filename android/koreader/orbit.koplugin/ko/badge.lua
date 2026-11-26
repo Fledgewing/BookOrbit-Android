@@ -22,7 +22,7 @@ function Badge.notice(what)
     if #Badge.notices > 8 then table.remove(Badge.notices, 1) end
 end
 
-local function nowT() return OC.now() end
+local function nowT() return Store.now() end
 
 -- "37%".
 function Badge.short(pct) return string.format("%d%%", pct or 0) end

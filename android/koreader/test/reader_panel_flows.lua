@@ -128,7 +128,7 @@ return function(here, test, ok, eq)
         local ui={document={file="fixture.epub"},view={footer={percent_finished=0.73}}}
         local up, reply, timeout, done, message, sent, released
         sent,released=0,0
-        local E={liveUI=function() return ui end, bookorbit=function() return {} end,
+        local E={liveUI=function() return ui end, serverPlugin=function() return {} end,
             hasHandler=function() return true end,
             Wifi={acquire=function() end,release=function() released=released+1 end},
             Net={up=function(_,_,cb) up=cb end},
@@ -137,7 +137,7 @@ return function(here, test, ok, eq)
                 eq(event,"BookOrbitSyncBook"); eq(options.quiet,true)
                 sent=sent+1; reply=options.on_done
             end}
-        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/library_bookorbit.lua")),setmetatable(E,{__index=_G}))()
+        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/server/bookorbit/library_bookorbit.lua")),setmetatable(E,{__index=_G}))()
         eq(E.LibraryAdapter.readerPosition("fixture.epub"),0.73)
         eq(E.LibraryAdapter.readerPosition("other.epub"),nil)
         ui.view.footer.percent_finished=0/0

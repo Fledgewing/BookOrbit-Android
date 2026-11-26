@@ -14,10 +14,10 @@
 --   current.png, current.json    Current book: the open book's cover, written once per book at
 --                                ReaderReady. It stays after the book closes: "the last book read".
 --   state.json                   Written by the companion: the cover it showed and when.
---   scopes.json, tags.json       The companion's: every smart scope and collection, and the tags in
+--   scopes.json, tags.json       The companion's: every list and collection, and the tags in
 --                                the saved book details, with counts, for the pickers (Pick from,
 --                                Leave out); refreshed when one opens and with the pool.
---   bag.lua, leave_out.lua       The companion's: the shuffle bag of a smart scope or collection, and
+--   bag.lua, leave_out.lua       The companion's: the shuffle bag of a list or collection, and
 --                                the member lists of Leave out's scope and collection rules.
 -- Rules: logic/sleep_pool.lua. Settings: S.sleep_*, shared with the companion through SETTINGS.
 ---------------------------------------------------------------------------------------------
@@ -122,14 +122,7 @@ local function readJson(path)
 end
 
 -- The BookOrbit id of a book file on this reader (the plugin's on-device map), or nil.
-function Sleep.bookId(path)
-    local cat = Mirror and Mirror.catalog and Mirror.catalog()
-    if not (path and cat and type(cat.on_device) == "table") then return nil end
-    for id, p in pairs(cat.on_device) do
-        if p == path then return tonumber(id) end
-    end
-    return nil
-end
+function Sleep.bookId(path) return Server.localBookId(path) end
 
 ---------------------------------------------------------------- Current book (R9)
 
@@ -189,9 +182,9 @@ end
 
 -- The login travels only in the caller-checked call to the verified companion (Companion.send), never in a file.
 local function ask(client, extras)
-    extras.server, extras.user, extras.userkey = client.server_url, client.username, client.userkey
+    Server.credentials(client, extras)
     Companion.send(Companion.ACTION.SLEEP_REFRESH, extras)
-    OC.watchChecks()
+    Server.watchCache()
 end
 
 function Sleep.refresh(why)
@@ -206,12 +199,12 @@ function Sleep.refresh(why)
         return false
     end
     Sleep.problem = nil
-    local client = OC.client()
+    local client = Server.cacheClient()
     if not (client and Sleep.dir()) then
-        log("sleep screen: no BookOrbit client yet; the pool waits (" .. tostring(why) .. ")")
+        log("sleep screen: no library client yet; the pool waits (" .. tostring(why) .. ")")
         return false
     end
-    Sleep.asked, Sleep.refreshed_at = OC.now(), t
+    Sleep.asked, Sleep.refreshed_at = Store.now(), t
     Wifi.acquire("sleep screen")
     log("sleep screen: the companion refreshes the pool from", s.sleep_from, "(" .. tostring(why) .. ")")
     ask(client, { reason = tostring(why), from = s.sleep_from, rules = SleepPool.encodeRules(s.sleep_leave_out),
@@ -227,7 +220,7 @@ function Sleep.landed(ev)
         Sleep.scopes_asked = nil
         Sleep.scopes_cache = nil
         local v = Sleep.scopes()
-        if v then log(string.format("sleep screen: %d smart scope(s), %d collection(s) listed", #v.scopes, #v.collections))
+        if v then log(string.format("sleep screen: %d list(s), %d collection(s) listed", #v.scopes, #v.collections))
         else Sleep.scopes_at = nil; log("sleep screen: scopes and collections not listed:", tostring(ev.err or "no answer")) end
         local done = Sleep.scopes_done
         Sleep.scopes_done = nil
@@ -261,7 +254,7 @@ end
 
 ---------------------------------------------------------------- the pickers
 
--- The account's smart scopes and collections, for Pick from and Leave out: every entry of the two
+-- The account's lists and collections, for Pick from and Leave out: every entry of the two
 -- section lists, with counts. Saved in scopes.json ({ v, at, scopes = {…}, collections = {…} },
 -- entries { id, title, count }) so a picker opens at once, offline too; refreshed in the
 -- background each time a picker opens and at each pool refresh.
@@ -298,14 +291,14 @@ end
 
 -- The companion lists both again when online; done(v or nil) after.
 function Sleep.refreshScopes(why, done)
-    local client = OC.client()
+    local client = Server.cacheClient()
     local t = os.time()
     if Sleep.scopes_asked or not client or not NetworkMgr:isConnected() or Companion.workerProblem()
         or (Sleep.scopes_at and t >= Sleep.scopes_at and t - Sleep.scopes_at < Sleep.SCOPES_EVERY_S) then
         if done then done(nil) end
         return false
     end
-    Sleep.scopes_asked, Sleep.scopes_at, Sleep.scopes_done = OC.now(), t, done
+    Sleep.scopes_asked, Sleep.scopes_at, Sleep.scopes_done = Store.now(), t, done
     ask(client, { reason = tostring(why), scopes_only = "1" })
     return true
 end
@@ -328,7 +321,7 @@ function Sleep.tags()
     return out
 end
 
--- "Romance (smart scope)", "Scope 12 (not listed)" …
+-- "Romance (list)", "Scope 12 (not listed)" …
 function Sleep.ruleLabel(rule)
     local p = SleepPool.parseRule(rule)
     if not p then return tostring(rule) end
@@ -336,11 +329,11 @@ function Sleep.ruleLabel(rule)
     if p.kind == "library" and not p.id then return _("Library (every book)") end
     if not Sleep.scope_names then Sleep.scopes() end
     local name = Sleep.scope_names and Sleep.scope_names[p.key]
-    local kind = p.kind == "library" and _("library") or (p.kind == "scope" and _("smart scope") or _("collection"))
+    local kind = p.kind == "library" and _("library") or (p.kind == "scope" and _("list") or _("collection"))
     if name then return string.format("%s (%s)", name, kind) end
     local lo = Sleep.load("leave_out.lua") or {}
     local e = lo[p.key]
-    return string.format(_("%s %d (%s)"), p.kind == "library" and _("Library") or (p.kind == "scope" and _("Smart scope") or _("Collection")), p.id,
+    return string.format(_("%s %d (%s)"), p.kind == "library" and _("Library") or (p.kind == "scope" and _("List") or _("Collection")), p.id,
         e and string.format(_("%d books"), #(e.ids or {})) or _("not listed yet"))
 end
 
@@ -359,7 +352,7 @@ function Sleep.fromLabel(v)
     if p.kind == "list" then return _(SleepPool.label(SleepPool.LISTS, p.id)) end
     if not Sleep.scope_names then Sleep.scopes() end
     local name = Sleep.scope_names and Sleep.scope_names[v]
-    return name or string.format("%s %d", p.kind == "library" and _("Library") or (p.kind == "scope" and _("Smart scope") or _("Collection")), p.id)
+    return name or string.format("%s %d", p.kind == "library" and _("Library") or (p.kind == "scope" and _("List") or _("Collection")), p.id)
 end
 
 ---------------------------------------------------------------- hooks
@@ -399,7 +392,7 @@ local function info(text_func)
     return { text_func = text_func, keep_menu_open = true, callback = function() end }
 end
 
--- The smart scopes and collections, as menu rows; pick(key) on a tap; checked(key): ticked (a set).
+-- The lists and collections, as menu rows; pick(key) on a tap; checked(key): ticked (a set).
 local function scopeRows(pick, checked)
     return function()
         local rows = {}
@@ -408,8 +401,8 @@ local function scopeRows(pick, checked)
         local fetching = Sleep.refreshScopes("picker")
         if not got then
             return { info(function()
-                return fetching and _("Loading the smart scopes and collections… open this again in a moment.")
-                    or _("No saved list of smart scopes and collections yet: connect, then open this again.")
+                return fetching and _("Loading the lists and collections… open this again in a moment.")
+                    or _("No saved list of lists and collections yet: connect, then open this again.")
             end) }
         end
         local function add(title, list, kind)
@@ -426,7 +419,7 @@ local function scopeRows(pick, checked)
             end
         end
         if got.libraries and #got.libraries > 0 then add(_("Libraries"), got.libraries, "library") end
-        add(_("Smart scopes"), got.scopes or {}, "scope")
+        add(_("Lists"), got.scopes or {}, "scope")
         add(_("Collections"), got.collections or {}, "collection")
         return rows
     end
@@ -505,7 +498,7 @@ function Sleep.menuItem(_plugin, later)
                 local p = SleepPool.parseFrom(it)
                 if p and (p.kind == "scope" or p.kind == "collection") then n = n + 1 end
             end
-            return _("Libraries, smart scopes and collections…") .. (n > 0 and string.format(" (%d)", n) or "")
+            return _("Libraries, lists and collections…") .. (n > 0 and string.format(" (%d)", n) or "")
         end,
         sub_item_table_func = scopeRows(togglePick, picked),
     })
@@ -547,11 +540,11 @@ function Sleep.menuItem(_plugin, later)
             return false
         end
         local function toggleRule(key) if hasRule(key) then removeRule(key) else addRule(key) end end
-        table.insert(rows, { text = _("Add a rule: Library, smart scope or collection…"),
+        table.insert(rows, { text = _("Add a rule: Library, list or collection…"),
             sub_item_table_func = scopeRows(toggleRule, hasRule) })
 
         table.insert(rows, info(function()
-            return _("For a custom field: make a smart scope with that condition on the server, then add it here.")
+            return _("For a custom field: make a list with that condition in library, then add it here.")
         end))
         return rows
     end

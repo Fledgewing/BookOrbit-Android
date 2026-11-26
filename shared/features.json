@@ -36,7 +36,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/cache.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/cache.lua",
               "line": 24
             }
           ],
@@ -91,7 +91,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/grouping.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/grouping.lua",
               "line": 40
             }
           ],
@@ -146,8 +146,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CacheStore.kt",
-              "line": 15
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/CacheStore.kt",
+              "line": 17
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -201,8 +201,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-              "line": 60
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+              "line": 62
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -311,8 +311,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-              "line": 17
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+              "line": 19
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -366,11 +366,11 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-              "line": 60
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+              "line": 62
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/cache.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/cache.lua",
               "line": 24
             }
           ],
@@ -563,7 +563,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/copies.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/copies.lua",
               "line": 18
             }
           ],
@@ -626,11 +626,11 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CopiesLogic.kt",
-              "line": 8
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/CopiesLogic.kt",
+              "line": 10
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/copies.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/copies.lua",
               "line": 18
             }
           ],
@@ -697,7 +697,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/orbismart.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/orbismart.lua",
               "line": 33
             }
           ],
@@ -764,7 +764,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/orbismart.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/orbismart.lua",
               "line": 33
             }
           ],
@@ -874,11 +874,11 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/reading_sync.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/reading_sync.lua",
               "line": 139
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/orbismart.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/orbismart.lua",
               "line": 33
             }
           ],
@@ -933,7 +933,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/sync.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/sync.lua",
               "line": 14
             }
           ],
@@ -992,7 +992,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/sync.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/sync.lua",
               "line": 14
             }
           ],
@@ -1047,7 +1047,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/endofbook.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/endofbook.lua",
               "line": 39
             },
             {
@@ -1378,7 +1378,7 @@
               "line": 9
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/localfirst.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/localfirst.lua",
               "line": 30
             }
           ],
@@ -1514,8 +1514,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SleepPoolBuilder.kt",
-              "line": 16
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/SleepPoolBuilder.kt",
+              "line": 18
             },
             {
               "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SleepScreen.kt",
@@ -1955,8 +1955,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-              "line": 17
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+              "line": 19
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -2731,7 +2731,7 @@
               "line": 25
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/recommended.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/recommended.lua",
               "line": 14
             }
           ],
@@ -5254,7 +5254,7 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Account-first Stats with cached connector and local fallback, integrated into Home with one shared snapshot per paint (0.12; unreleased)",
+          "note": "0.12 account-first days, hours, weekly sessions, finished counts and goals; cached connector fallback with per-field provenance, integrated into Home with one shared snapshot per paint",
           "reason": "deliberately deferred: Android build authorised 2026-11-25; device acceptance and local finish/goal settings remain pending. No server inclusion watermark: local today stays separate.",
           "evidence": [
             {
@@ -5372,19 +5372,19 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Home, Library and Stats pages with measured Battery, shared filtered lists/search and atomic Save to Home (0.12; unreleased); legacy Home remains the default",
-          "reason": "deliberately deferred: device acceptance, the full Battery page, cached covers and richer book actions follow the staged Android build",
+          "note": "Implemented on feature/0.12: Home, Library and Stats pages; shared filtered lists/search and local Save to Home; legacy Home remains the default",
+          "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
           "evidence": [
             {
               "path": "android/koreader/orbit.koplugin/ko/home_host.lua",
               "line": 1
             }
           ],
-          "deferred": "Full Battery page, full widget library, cached covers and richer book actions"
+          "deferred": "Battery history, full widget library, cached covers and richer book actions"
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Three-page Home, measured Battery and filtered lists follow the Android build",
+          "note": "Three-page Home wiring and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5395,7 +5395,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Three-page Home, measured Battery and filtered lists follow the Android build",
+          "note": "Three-page Home wiring and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5406,7 +5406,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Three-page Home, measured Battery and filtered lists follow the Android build",
+          "note": "Three-page Home wiring and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5604,57 +5604,6 @@
       }
     },
     {
-      "id": "home-battery",
-      "feature": "BookSync Home battery widget and snapshot Battery page",
-      "category": "Behaviour",
-      "platforms": {
-        "android": {
-          "status": "partial",
-          "note": "Six widget sizes, Overview/Rates/Daily/Charges and Settings link",
-          "reason": "deliberately deferred: 0.12 Android source implementation is building, unreleased and awaiting device validation. Grouped rates, page/refresh efficiency and export/compare actions remain later work; missing evidence is labelled explicitly.",
-          "evidence": [
-            {
-              "path": "docs/design/booksync-home/F12-O-NOTES.md",
-              "line": 1
-            }
-          ]
-        },
-        "x4_pro": {
-          "status": "missing",
-          "note": "Owned battery widget and page follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; implement the snapshot widget and page in the later Xteink slice.",
-          "evidence": [
-            {
-              "path": "docs/design/booksync-home/F12-O-NOTES.md",
-              "line": 1
-            }
-          ]
-        },
-        "x4": {
-          "status": "missing",
-          "note": "Owned battery widget and page follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; implement the snapshot widget and page in the later Xteink slice.",
-          "evidence": [
-            {
-              "path": "docs/design/booksync-home/F12-O-NOTES.md",
-              "line": 1
-            }
-          ]
-        },
-        "x3": {
-          "status": "missing",
-          "note": "Owned battery widget and page follow Android",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; implement the snapshot widget and page in the later Xteink slice. X3 also requires measured flash fit.",
-          "evidence": [
-            {
-              "path": "docs/design/booksync-home/F12-O-NOTES.md",
-              "line": 1
-            }
-          ]
-        }
-      }
-    },
-    {
       "id": "custom-reading-styles",
       "feature": "Clear, editable Custom reading styles and apply-then-edit quick choices",
       "category": "Behaviour",
@@ -5714,6 +5663,57 @@
       }
     },
     {
+      "id": "home-battery",
+      "feature": "BookSync Home battery widget and snapshot Battery page",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Six widget sizes, Overview/Rates/Daily/Charges and Settings link",
+          "reason": "deliberately deferred: 0.12 Android source implementation is building, unreleased and awaiting device validation. Grouped rates, page/refresh efficiency and export/compare actions remain later work; missing evidence is labelled explicitly.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-O-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned battery widget and page follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; implement the snapshot widget and page in the later Xteink slice.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-O-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned battery widget and page follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; implement the snapshot widget and page in the later Xteink slice.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-O-NOTES.md",
+              "line": 1
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned battery widget and page follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; implement the snapshot widget and page in the later Xteink slice. X3 also requires measured flash fit.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-O-NOTES.md",
+              "line": 1
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "home-booklist-configuration",
       "feature": "Home editor Book list configuration (0.12 foundation; unreleased)",
       "category": "Behaviour",
@@ -5736,7 +5736,7 @@
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
-              "line": 747
+              "line": 809
             }
           ]
         },
@@ -5747,7 +5747,7 @@
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
-              "line": 747
+              "line": 809
             }
           ]
         },
@@ -5758,7 +5758,7 @@
           "evidence": [
             {
               "path": "docs/design/booksync-home/DESIGN-NOTES.md",
-              "line": 747
+              "line": 809
             }
           ]
         }
@@ -6111,12 +6111,12 @@
           "line": 271
         },
         {
-          "path": "android/koreader/orbit.koplugin/ko/mirror.lua",
+          "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/mirror.lua",
           "line": 71
         },
         {
-          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-          "line": 223
+          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+          "line": 225
         }
       ]
     }

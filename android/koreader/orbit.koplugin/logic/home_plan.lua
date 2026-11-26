@@ -4,7 +4,7 @@
 -- order main.lua lists (docs/design/orbit-plugin.md "Module layout").
 
 -- Smart Home (android/docs/INTERFACE.md "go home"). What Home does in KOReader.
---   mode: "smart" | "bookorbit"; in_reader: a book is open; covered: a menu or the
+--   mode: "smart" | HomePlan.SERVER_HOME; in_reader: a book is open; covered: a menu or the
 --   plugin's views are over it; on_dashboard: the plugin's BookOrbit home (dashboard) is the
 --   top widget; from_other: Home came from another app (or KOReader was just started);
 --   reopen: a current book that isn't open now and still exists: the book Home itself closed
@@ -23,7 +23,7 @@ function HomePlan.decide(o)
     if o.page_above_1 and not o.from_other then return "first_page" end
     -- Any BookOrbit screen other than its main page (a detail, list, search, board, settings,
     -- a sheet or dialog over the catalog): back to the main page (v0.4.9).
-    if o.bookorbit_sub then return "bookorbit_main" end
+    if o.library_sub then return "library_main" end
     if o.on_dashboard and not o.from_other then return "companion" end
     if o.mode ~= "smart" then return "dashboard" end
     if o.in_reader then
