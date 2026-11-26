@@ -32,5 +32,11 @@ return function(M,test,ok,eq)
         eq(m:configure({title="A",src="invalid"}),nil); eq(m.document,original)
         ok(m:configure(next)); eq(original.pages[1].placements[2].settings.title,"Also reading")
         eq(m.document.pages[1].placements[2].settings.src,"author:A"); ok(L.validate(m.document))
+        local page=L.default(); page=assert(L.remove(page,"home","resume"))
+        local home=M.HomeEditorPlan.new(page); home.selected="also"
+        ok(home:configure(B.preset("recent"))); eq(home:page().name,"Home")
+        local added=M.HomeEditorPlan.new(L.default()); ok(added:pageAction("add")); ok(added:add("booklist"))
+        ok(added:configure(B.preset("wtr"))); eq(added:page().name,"Want to read")
+
     end)
 end
