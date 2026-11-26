@@ -487,7 +487,10 @@ The library dispatches `sync.activate`, `sync.capture`, `sync.pull`, `sync.decid
 through the existing serial command worker. Activation requires a successful native
 retirement handshake and reader process epoch. A restarted companion repeats that
 handshake before retrying. Native captures carry a path, optional cached document ID,
-locator/fraction, page geometry, capture time, small summary and lifecycle moment.
+locator/fraction, page geometry, capture time, small summary, selected automatic/Custom
+mode and lifecycle moment. Direction preferences are translated privately by the
+companion adapter. A post-close drain releases the open-sidecar lease by `closed_path`
+only after native closure; offline closure does not initiate transport.
 The companion owns catalog/statistics/sidecar work and all server protocol. Secrets
 and backend response fields never return to the plugin.
 

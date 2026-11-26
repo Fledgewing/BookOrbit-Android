@@ -23,7 +23,7 @@ function ReadingSync.capture(ui, moment)
     local _,page=pcall(function() return doc:getCurrentPage() end)
     local summary=ui.doc_settings and ui.doc_settings:readSetting("summary") or {}
     if type(summary)~="table" then summary={} end
-    return {path=doc.file,document=ui.doc_settings and ui.doc_settings:readSetting("partial_md5_checksum"),position=ok and position or nil,percentage=fraction,page=type(page)=="number" and page or nil,
+    return {automatic=ReadingSync.on(),path=doc.file,document=ui.doc_settings and ui.doc_settings:readSetting("partial_md5_checksum"),position=ok and position or nil,percentage=fraction,page=type(page)=="number" and page or nil,
         summary={status=summary.status,rating=summary.rating,modified=summary.modified},
         finished=summary.status=="complete",released=(ReadingSync.forward or 0)>=10,turn_at=ReadingSync.turn_at,
         stats_id=ui.statistics and ui.statistics.id_curr_book,captured_at=os.time(),moment=moment,online=NetworkMgr:isConnected()}
@@ -135,7 +135,7 @@ function ReadingSync.run(moment,done,override)
             end
             local mapped=ReadingSync.geometry(r.snapshot,ui,moment)
             ReadingSync.command("sync.decide",mapped,function(d)
-                if ReadingSync.on() and moment~="close" and moment~="sleep" then ReadingSync.present(d,ui) end
+                if moment~="close" and moment~="sleep" then ReadingSync.present(d,ui) end
                 if moment~="sleep" and moment~="close" then ReadingSync.verify(ui,r.document) end
                 finish(not d.error and (d.remaining or 0)==0,d.error)
             end)
@@ -145,7 +145,7 @@ function ReadingSync.run(moment,done,override)
 end
 function ReadingSync.readFromHere(why) return ReadingSync.run("manual",nil,true) end
 function ReadingSync.preview(ui)
-    if not ReadingSync.on() or not (SyncRetirement and SyncRetirement.safe) or not (ui and ui.document) then return end
+    if not (SyncRetirement and SyncRetirement.safe) or not (ui and ui.document) then return end
     local snapshot=Library.positionCached(ui.document.file)
     if not snapshot or not snapshot.remote then return end
     local args=ReadingSync.geometry(snapshot,ui,"prerender")

@@ -54,7 +54,14 @@ state without overwriting newer owned records. It keeps positions and timestamps
 immutable across retries, consumes overrides once, rejects stale consent and isolates
 accounts. Every shared policy fixture passes, including resets, rereads and behind-hold.
 A crash after delivery but before acknowledgment can replay a request; exactly-once
-server delivery is not claimed.
+server delivery is not claimed. Proven old-account rating/review history is imported
+under its own namespace too, preserving explicit clears when a different login is active.
+
+Custom direction preferences are translated inside the companion adapter, including
+values saved before the automatic preset. The single owner preserves Keep, prompt and
+lifecycle-push decisions; scheduled prompt checks stay quiet. A known silent placement
+can run before the first draw; after draw it uses the approved one-draw consent rather
+than a hidden jump. Native code sends only the selected mode and geometry.
 
 Annotations and book-state changes wait until the document closes before writing its
 sidecar. Closed-file writes precede acknowledgments. Native xpointer verification uses

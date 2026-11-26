@@ -38,6 +38,7 @@ interface ServerAdapter {
     fun owner(): String? = null
     /** Position credentials may belong to a different account from the catalog login. */
     fun positionOwner(): String? = owner()
+    fun positionDirections(): PositionDirections = PositionDirections()
     fun stats(owner: String): Map<*, *>? = null
     fun position(document: String, update: Map<String, Any?>? = null): Map<String, Any?> = unsupported()
     /** Companion's sole sync owner invokes these on its serial worker, never from rendering. */
@@ -86,3 +87,6 @@ interface CachedListProjection {
 open class ServerFailure(val kind: String) : Exception(kind)
 
 data class CapturedPosition(val percentage: Double?, val position: String?, val capturedAt: Long, val finished: Boolean = false)
+
+/** Owned position policy options, translated by adapters from any legacy preference format. */
+data class PositionDirections(val automatic: Boolean=true,val ahead: String="ask",val behind: String="keep")

@@ -57,6 +57,14 @@ internal class BookOrbitSync(private val settings: File,
         val temp=File(dest.parentFile,dest.name+".booksync.tmp")
         temp.writeBytes("return ".toByteArray()+LuaValue.encode(data)); check(temp.renameTo(dest))
     }
+    fun directions(): PositionDirections {
+        val root=LegacyLifecycleImport.literal(File(settings.parentFile,"settings.reader.lua")).orEmpty()
+        val owned=map(root["orbit_android"]); val legacy=map(root["bookorbit"])
+        val saved=map(owned["osm_saved_plugin"])
+        val source=if(legacy["sync_forward"]==3L && legacy["sync_backward"]==3L && saved.isNotEmpty()) saved else legacy
+        fun strategy(key: String, fallback: String)=when((source[key] as? Number)?.toInt()) { 1->"ask"; 2->"follow"; 3->"keep"; else->fallback }
+        return PositionDirections(owned["sync_mode"]!="custom",strategy("sync_forward","ask"),strategy("sync_backward","keep"))
+    }
     fun capture(args: Map<*, *>): Pair<String,ByteArray> {
         val percentage=(args["percentage"] as? Number)?.toDouble()
         require(percentage==null || percentage.isFinite() && percentage in 0.0..1.0)

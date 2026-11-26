@@ -86,8 +86,15 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             val namedHash=MessageDigest.getInstance("MD5").digest(identity.toByteArray(Charsets.ISO_8859_1)).joinToString("") { "%02x".format(it) }
             val selected=states.firstOrNull { it.second["account_identity"]==identity || it.first.name=="bookorbit_sync_state_$namedHash.lua" }?.second
             val books=(selected?.get("books") as? Map<*, *>).orEmpty()
-            for((doc,book) in books) if(doc is String && book is Map<*, *>) {
-                queue.sql.exec("INSERT OR IGNORE INTO adapter_sync_books VALUES (?,?,?)",bound,doc,LuaValue.encode(book))
+            // Queued snapshots can belong to an older account. Preserve its known state too:
+            // null rating/review captures mean explicit clears only with that account's history.
+            for((file,state) in states) {
+                val proven=(state["account_identity"] as? String)
+                    ?: identity.takeIf { file.name=="bookorbit_sync_state_$namedHash.lua" }
+                val stateOwner=proven?.let(::namespace) ?: continue
+                for((doc,book) in (state["books"] as? Map<*, *>).orEmpty()) if(doc is String && book is Map<*, *>) {
+                    queue.sql.exec("INSERT OR IGNORE INTO adapter_sync_books VALUES (?,?,?)",stateOwner,doc,LuaValue.encode(book))
+                }
             }
             for((document,value) in old.orEmpty()) {
                 if(document !is String || value !is Map<*, *> || queue.record(id,bound,document).isNotEmpty()) continue
@@ -104,6 +111,7 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         }
         return count
     }
+    override fun positionDirections() = sync?.directions() ?: PositionDirections()
     override fun captureLifecycle(capture: Map<*, *>) = (sync ?: throw ServerFailure("writer-active")).capture(capture)
     override fun positionIntent(document: String, update: Map<String,Any?>) = LuaValue.encode(mapOf(
         "digest" to document,"percentage" to update["percentage"],"progress" to update["position"],"ts" to update["capturedAt"]))

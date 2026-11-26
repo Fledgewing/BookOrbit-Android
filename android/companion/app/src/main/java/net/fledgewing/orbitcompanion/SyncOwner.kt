@@ -83,7 +83,13 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
             val document=capture?.first ?: args["document"] as? String ?: throw IllegalArgumentException("document")
             var rec=record(a,document).toMutableMap()
             if (path!=null) rec["path"]=path
-            val local=mapOf("percentage" to args["percentage"],"position" to args["position"],"at" to time(args["captured_at"]).takeIf { it>0 }.let { it ?: now() },"page" to args["page"],"turnAt" to args["turn_at"],"finished" to args["finished"],"released" to args["released"])
+            if(capture!=null) {
+                val directions=a.positionDirections()
+                rec["automatic"]=args["automatic"] as? Boolean ?: directions.automatic
+                rec["directions"]=mapOf("ahead" to directions.ahead,"behind" to directions.behind)
+                if(args["moment"]=="open") rec["compared"]=false
+            }
+            val local=mapOf("percentage" to args["percentage"],"position" to args["position"],"at" to time(args["captured_at"]).takeIf { it>0 }.let { it ?: now() },"page" to args["page"],"turnAt" to args["turn_at"],"finished" to args["finished"],"released" to args["released"],"moment" to args["moment"])
             when (op) {
                 "sync.verify.next" -> return a.nextSyncVerification(owner,document)
                 "sync.verify.result" -> {
@@ -137,11 +143,23 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
         val rec=previews[adapter+"|"+owner+"|"+args["path"]] ?: return mapOf("pending" to true)
         if (args["token"]!=rec["token"]) return mapOf("stale" to true)
         val out=decision(rec,args)
-        return mapOf("decision" to out.decision,"applied" to PositionPolicy.apply(out.decision,"prerender"),"remote" to rec["remote"],"token" to rec["token"],"document" to rec["document"])
+        return mapOf("decision" to out.decision,"applied" to presentation(rec,args,out,"prerender"),"remote" to rec["remote"],"token" to rec["token"],"document" to rec["document"])
     }
     private fun decision(rec: Map<String,Any?>, args: Map<*, *>): PositionPolicy.Decision {
         val remote=map(rec["remote"]); val marker=map(rec["marker"]); val local=map(rec["local"])
         val percentOnly=args["percent_only"]==true
+        if((args["automatic"] ?: rec["automatic"])==false && map(rec["override"]).isEmpty()) {
+            val here=number(args["page"]) ?: 0.0; val there=number(args["remote_page"])
+            val tolerance=number(args["tolerance"]) ?: 1.0
+            if(there==null) return PositionPolicy.Decision("push","custom-empty")
+            if(kotlin.math.abs(here-there)<=tolerance) return PositionPolicy.Decision("same","custom-same")
+            val turn=time(args["turn_at"] ?: local["turnAt"])
+            val newer=if(turn>0) time(remote["at"])>turn || there>here && rec["compared"]!=true else there>here
+            val strategy=map(rec["directions"])[if(newer) "ahead" else "behind"] ?: if(newer) "ask" else "keep"
+            if(strategy=="keep") return PositionPolicy.Decision(if(newer) "hold" else "push","custom-keep")
+            if(time(rec["declinedAt"])!=0L && rec["declinedAt"]==remote["at"]) return PositionPolicy.Decision(if(newer) "stay" else "push","custom-declined")
+            return PositionPolicy.Decision(if(newer) "take" else "follow","custom-$strategy")
+        }
         return PositionPolicy.decide(PositionPolicy.Input(number(args["page"]) ?: 0.0,number(args["remote_page"]),
             number(args["tolerance"]) ?: 1.0,time(remote["at"]),
             number(args["marker_page"])?.let { PositionPolicy.Marker(time(marker["at"]),it) },
@@ -151,19 +169,31 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
             if (remote["reset"]==true && rec["declinedReset"]==true) time(remote["at"]) else time(rec["declinedAt"]),
             map(rec["override"])["at"]?.let(::time),percentOnly))
     }
+    private fun presentation(rec: Map<String,Any?>, args: Map<*, *>, out: PositionPolicy.Decision, moment: String): String {
+        if((args["automatic"] ?: rec["automatic"])==false && out.rule.startsWith("custom-")) {
+            // A prompt strategy never interrupts a scheduled reading pause. Cached silent
+            // placement is safe before draw; after draw, use the approved one-draw consent.
+            if(moment=="prerender" && out.rule!="custom-follow") return "no"
+            if(moment=="pause" && out.rule=="custom-ask") return "no"
+        }
+        return PositionPolicy.apply(out.decision,moment)
+    }
     private fun decide(a: ServerAdapter, document: String, rec: MutableMap<String,Any?>, args: Map<*, *>): Map<String,Any?> {
         if (args["token"]!=rec["token"]) return mapOf("stale" to true)
         val out=decision(rec,args); val moment=args["moment"] as? String ?: "reading"
+        rec["compared"]=true
         if (out.dropped) rec.remove("override")
         if (out.rule=="rule7" && out.decision=="push") rec["rereadAt"]=map(rec["remote"])["at"]
         if (out.decision=="same") { rec["marker"]=rec["remote"]; rec.remove("pending") }
-        val applied=PositionPolicy.apply(out.decision,if(moment=="wake-local") "wake" else moment)
+        val applied=presentation(rec,args,out,if(moment=="wake-local") "wake" else moment)
         if (applied=="wake") rec["pending"]=true
         rec["allowPush"]=out.decision in setOf("push","override")
         rec["policyToken"]=rec["token"]
         save(a,document,rec)
         val result=mapOf("decision" to out.decision,"applied" to applied,"remote" to rec["remote"],"token" to rec["token"],"document" to document)
-        return result+if(moment=="wake-local") emptyMap() else drain(a)
+        if(moment=="wake-local") return result
+        val delivered=drain(a)
+        return result+delivered+if(record(a,document)["token"]!=result["token"]) mapOf("stale" to true) else emptyMap()
     }
     fun drain(a: ServerAdapter): Map<String,Any?> {
         val started=System.nanoTime()
@@ -173,6 +203,7 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
     private fun drainWindow(a: ServerAdapter, started: Long): Map<String,Any?> {
         ensure(); val owner=scope(a)
         var error: String?=null
+        val defaultAutomatic=a.positionDirections().automatic
         for (entry in journal.window(a.id,owner)) {
             if (entry.source!=null && !entry.retired) continue
             var checkpoint=entry.checkpoint
@@ -197,10 +228,12 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
                             time(remote["at"]),number(map(rec["marker"])["percentage"])?.let { PositionPolicy.Marker(time(map(rec["marker"])["at"]),it*100) },
                             time(map(rec["local"])["turnAt"]),remote["reset"]==true,finished=capture.finished,released=exempt,
                             overrideAt=if(exempt) time(override["at"]) else null,percentOnly=true))
-                        val allowed=if(rec["policyToken"]==rec["token"] && number(map(rec["local"])["percentage"])==fraction) rec["allowPush"]==true
-                            else fallback.decision in setOf("push","override")
+                        val custom=(rec["automatic"] ?: defaultAutomatic)==false
+                        val lifecycle=map(rec["local"])["moment"] in setOf("close","sleep","suspend")
+                        val allowed=if(custom && lifecycle) true else if(rec["policyToken"]==rec["token"] && number(map(rec["local"])["percentage"])==fraction) rec["allowPush"]==true
+                            else custom || fallback.decision in setOf("push","override")
                         val olderThanOverride=capture.capturedAt<time(rec["lastOverrideAt"])
-                        if (olderThanOverride || !allowed || !PositionPolicy.mayPush(fraction?.times(100),remoteFraction?.times(100),1.0,exempt)) {
+                        if (olderThanOverride || !allowed || !PositionPolicy.mayPush(fraction?.times(100),remoteFraction?.times(100),1.0,exempt || custom)) {
                             journal.acknowledge(entry.id,phase,checkpoint); continue
                         }
                         if (fraction!=null) {
@@ -210,7 +243,11 @@ class SyncOwner(private val journal: LifecycleQueue, private val settings: File,
                             val changed=record(a,entry.document).toMutableMap()
                             if(override.isNotEmpty() && exempt) changed["lastOverrideAt"]=override["at"]
                             changed.remove("override"); changed.remove("rereadAt")
-                            changed["marker"]=mapOf("at" to (sent["timestamp"] ?: now()),"percentage" to fraction,"position" to chosen)
+                            val committed=mapOf("at" to (sent["timestamp"] ?: now()),"percentage" to fraction,"position" to chosen)
+                            changed["marker"]=committed
+                            changed["remote"]=committed+mapOf("reset" to false,"web" to false,"label" to (sent["label"] ?: "this reader"))
+                            changed["token"]=java.util.UUID.randomUUID().toString()
+                            changed.remove("pending")
                             save(a,entry.document,changed)
                         }
                         journal.acknowledge(entry.id,phase,checkpoint)

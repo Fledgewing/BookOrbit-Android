@@ -29,7 +29,7 @@ class LegacyAdapterMigrationTest {
             val digest="a".repeat(32); val id="entry_${digest}_100_1"
             fun literal(file: File,value: Map<String,Any?>) { file.parentFile!!.mkdirs(); file.writeBytes("return ".toByteArray()+LuaValue.encode(value)) }
             literal(File(root,"settings.reader.lua"),mapOf("bookorbit" to mapOf("server_url" to current.server,"username" to current.user)))
-            literal(File(settings,"bookorbit_sync_state.lua"),mapOf("account_identity" to "${old.server}|${old.user}","books" to mapOf(digest to mapOf("file" to "/fixture/one.epub"))))
+            literal(File(settings,"bookorbit_sync_state.lua"),mapOf("account_identity" to "${old.server}|${old.user}","books" to mapOf(digest to mapOf("file" to "/fixture/one.epub","ratingSyncedKnown" to true,"ratingSynced" to 4,"reviewSyncedKnown" to true,"reviewSyncedNote" to "old review"))))
             literal(File(settings,"bookorbit-lifecycle-outbox/${id}_g1.lua"),mapOf("version" to 1,"id" to id,"generation" to 1,"payload_generation" to 1,"digest" to digest,"acknowledged" to emptyMap<String,Any>()))
             literal(File(settings,"bookorbit-lifecycle-outbox/${id}_payload_g1.lua"),mapOf("version" to 1,"id" to id,"digest" to digest,"snapshot" to mapOf("digest" to digest,"file" to "/fixture/one.epub","ts" to 100,"percentage" to .5)))
             JdbcSql(File(root,"journal.db")).use { sql ->
@@ -40,6 +40,10 @@ class LegacyAdapterMigrationTest {
                 assertEquals(current.owner(),credentials.login("sync")!!.owner())
                 assertEquals(current.secret,credentials.login("sync")!!.secret)
                 assertTrue(queue.window(adapter.id,old.owner()).single().retired)
+                val known=sql.query("SELECT body FROM adapter_sync_books WHERE owner=? AND document=?",old.owner(),digest) { LuaValue.parse(it.bytes(0)!!) as Map<*, *> }.single()
+                assertEquals(4L,known["ratingSynced"]); assertEquals("old review",known["reviewSyncedNote"])
+                assertEquals(true,known["ratingSyncedKnown"]); assertEquals(true,known["reviewSyncedKnown"])
+                assertTrue(sql.query("SELECT body FROM adapter_sync_books WHERE owner=?",current.owner()) { it.bytes(0)!! }.isEmpty())
             }
         } finally { root.deleteRecursively() }
     }

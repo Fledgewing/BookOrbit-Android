@@ -92,12 +92,28 @@ class BookOrbitSyncTest {
         val summary=LegacyLifecycleImport.literal(k.sidecar)!!["summary"] as Map<*, *>
         assertEquals("complete",summary["status"]); assertEquals(4L,summary["rating"])
     }
+    @Test fun knownAccountHistoryPreservesExplicitRatingAndReviewClears() = fixture { k ->
+        k.sql.exec("INSERT INTO adapter_sync_books VALUES (?,?,?)","account",k.document,LuaValue.encode(mapOf(
+            "ratingSyncedKnown" to true,"ratingSynced" to 4,"reviewSyncedKnown" to true,"reviewSyncedNote" to "old review")))
+        k.sync.phase(k.job(emptyMap()),"state",LuaValue.encode(emptyMap<String,Any>()),k.book.path)
+        val sent=(k.calls.single().second["books"] as List<*>).single() as Map<*, *>
+        assertEquals(true,sent["ratingCleared"]); assertEquals(true,sent["reviewCleared"])
+    }
     @Test fun disabledAnnotationSyncDoesNotStartExchangesOrChangeSidecars() = fixture { k ->
         val original=k.sidecar.readBytes()
         for(job in listOf(k.job(mapOf("annotation_sync" to false)),k.job(emptyMap(),mapOf("legacy" to mapOf("annotation_sync" to false))))) {
             assertTrue(k.sync.phase(job,"annotations",job.checkpoint,null).complete)
         }
         assertTrue(k.calls.isEmpty()); assertArrayEquals(original,k.sidecar.readBytes())
+    }
+    @Test fun customDirectionsTranslateSavedPresetAndRespectLaterPreferenceChanges() = fixture { k ->
+        val settings=File(k.root,"settings").also { it.mkdirs() }
+        val config=File(k.root,"settings.reader.lua")
+        fun write(ahead: Int,behind: Int) { config.writeBytes(LuaValue.encode(mapOf("orbit_android" to mapOf("sync_mode" to "custom",
+            "osm_saved_plugin" to mapOf("sync_forward" to 2,"sync_backward" to 1)),"bookorbit" to mapOf("sync_forward" to ahead,"sync_backward" to behind)))) }
+        val sync=BookOrbitSync(settings,{_,_->error("preferences never use network")},k.sql,::JdbcSql,{true})
+        write(3,3); assertEquals(PositionDirections(false,"follow","ask"),sync.directions())
+        write(1,2); assertEquals(PositionDirections(false,"ask","follow"),sync.directions())
     }
     @Test fun malformedSidecarIsPreservedInsteadOfBeingOverwritten() = fixture { k ->
         k.sidecar.writeText("return os.execute('not evaluated')")

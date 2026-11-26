@@ -11,6 +11,8 @@ class SyncOwnerTest {
         override val id="toy"
         var account="account/one"
         var offline=false
+        var directions=PositionDirections()
+        override fun positionDirections()=directions
         var remote: Map<String,Any?> = emptyMap()
         val writes=mutableListOf<Map<String,Any?>>()
         val phases=mutableListOf<String>()
@@ -105,6 +107,53 @@ class SyncOwnerTest {
         a.remote=a.remote+("timestamp" to 1200L)
         owner.command(a,"sync.drain",emptyMap<Any,Any>())
         assertTrue(a.writes.isEmpty()); assertNull(q.record(a.id,a.account,"urn:toy:book")["override"])
+    }
+    @Test fun customKeepAndLifecyclePushRemainOwnedByCompanion() = fixture { _,_,owner,a ->
+        a.directions=PositionDirections(false,"keep","keep")
+        a.remote=mapOf("percentage" to .8,"position" to "remote:240","timestamp" to 900L)
+        val pulled=owner.command(a,"sync.capture",args()+mapOf("automatic" to false))
+        val snapshot=pulled["snapshot"] as Map<*, *>
+        val mapped=mapOf("document" to "urn:toy:book","token" to snapshot["token"],"page" to 120,"remote_page" to 240,"turn_at" to 1000,"moment" to "open","automatic" to false)
+        assertEquals("hold",owner.command(a,"sync.decide",mapped)["decision"])
+        assertTrue(a.writes.isEmpty())
+        owner.command(a,"sync.capture",args(moment="close",online=false)+mapOf("automatic" to false))
+        owner.command(a,"sync.drain",emptyMap<Any,Any>())
+        assertEquals(.4,a.writes.last()["percentage"])
+    }
+    @Test fun customPromptIsQuietDuringScheduledPauseAndReadingAfterDeclineCanPush() = fixture { _,_,owner,a ->
+        a.directions=PositionDirections(false,"ask","keep")
+        a.remote=mapOf("percentage" to .8,"position" to "remote:240","timestamp" to 900L)
+        val snapshot=owner.command(a,"sync.capture",args()+mapOf("automatic" to false))["snapshot"] as Map<*, *>
+        val mapped=mapOf("document" to "urn:toy:book","token" to snapshot["token"],"page" to 120,"remote_page" to 240,"moment" to "pause","automatic" to false)
+        assertEquals("no",owner.command(a,"sync.decide",mapped)["applied"])
+        assertEquals("ask",owner.command(a,"sync.decide",mapped+mapOf("moment" to "open","turn_at" to 0))["applied"])
+        owner.command(a,"sync.answer",mapped+mapOf("yes" to false))
+        owner.command(a,"sync.capture",args(.45,1100,moment="pause")+mapOf("automatic" to false))
+        val result=owner.command(a,"sync.decide",mapped+mapOf("page" to 135,"turn_at" to 1100))
+        assertEquals("push",result["decision"]); assertEquals(.45,a.writes.last()["percentage"])
+    }
+    @Test fun customSilentKnownPlacementUsesPurePrerenderPreviewAndConsentAfterDraw() = fixture { _,_,owner,a ->
+        a.directions=PositionDirections(false,"follow","keep")
+        a.remote=mapOf("percentage" to .8,"position" to "remote:240","timestamp" to 900L)
+        val snapshot=owner.command(a,"sync.capture",args()+mapOf("automatic" to false))["snapshot"] as Map<*, *>
+        val mapped=mapOf("path" to "/fixture/book.epub","document" to "urn:toy:book","token" to snapshot["token"],"page" to 120,"remote_page" to 240,"turn_at" to 0,"moment" to "open","automatic" to false)
+        assertEquals("now",owner.preview(a.id,a.account,mapped)["applied"])
+        assertTrue(a.writes.isEmpty())
+        assertEquals("ask",owner.command(a,"sync.decide",mapped)["applied"])
+    }
+    @Test fun successfulDeliveryPublishesTheCommittedPlaceAndClearsDeferredConsent() = fixture { root,q,owner,a ->
+        a.directions=PositionDirections(false,"ask","keep")
+        a.remote=mapOf("percentage" to .8,"position" to "remote:240","timestamp" to 900L)
+        val snapshot=owner.command(a,"sync.capture",args()+mapOf("automatic" to false))["snapshot"] as Map<*, *>
+        owner.command(a,"sync.decide",mapOf("document" to "urn:toy:book","token" to snapshot["token"],"page" to 120,"remote_page" to 240,"moment" to "sleep","automatic" to false))
+        owner.command(a,"sync.capture",args(moment="close",online=false)+mapOf("automatic" to false))
+        owner.command(a,"sync.drain",emptyMap<Any,Any>())
+        val record=q.record(a.id,a.account,"urn:toy:book")
+        assertEquals(.4,(record["remote"] as Map<*, *>)["percentage"])
+        assertNull(record["pending"]); assertNotEquals(snapshot["token"],record["token"])
+        assertEquals(true,owner.command(a,"sync.answer",mapOf("document" to "urn:toy:book","token" to snapshot["token"],"yes" to true))["stale"])
+        val cached=File(root,"orbit-cache/position").listFiles()!!.single()
+        assertEquals(.4,((LuaValue.parse(cached.readBytes()) as Map<*, *>)["remote"] as Map<*, *>)["percentage"])
     }
     @Test fun ownerSwitchNeverSendsAnotherAccountsQueueAndPreviewHasNoTransport() = fixture { _,q,owner,a ->
         owner.command(a,"sync.capture",args(online=false))
