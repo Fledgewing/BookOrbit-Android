@@ -195,20 +195,6 @@
       "login": true
     },
     {
-      "name": "RECHECK",
-      "method": "net.fledgewing.orbitcompanion.action.RECHECK",
-      "extras": [
-        "reason",
-        "ids",
-        "paths",
-        "server",
-        "user",
-        "userkey"
-      ],
-      "does": "ask a Full refresh's covers on screen again, If-None-Match",
-      "login": true
-    },
-    {
       "name": "SQLITE_STRESS",
       "method": "net.fledgewing.orbitcompanion.action.SQLITE_STRESS",
       "extras": [

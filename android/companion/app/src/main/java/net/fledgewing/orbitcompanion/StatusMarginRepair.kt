@@ -101,6 +101,36 @@ object StatusMarginRepair {
         Table(entries, end)
     }.getOrNull()
 
+    /** Extract one top-level literal table without evaluating or decoding unrelated settings.
+     * Reuses the byte-preserving tokenizer; duplicate keys and executable selected values fail closed. */
+    internal fun literalTable(source: String, key: String): String? = runCatching {
+        val t=tokens(source)
+        require(t.size>=3 && t[0].text=="return" && t[1].text=="{")
+        var depth=0
+        var result: String?=null
+        for (i in 1 until t.size) {
+            val token=t[i]
+            if (depth==1 && token.text=="[" && i+4<t.size &&
+                t[i+1].text.removeSurrounding("\"").removeSurrounding("'")==key) {
+                require(result==null && t[i+2].text=="]" && t[i+3].text=="=" && t[i+4].text=="{")
+                var nested=0
+                var end=-1
+                for (j in i+4 until t.size) {
+                    if (t[j].text=="{") nested++
+                    require(nested<=40)
+                    if (t[j].text=="}") { nested--; if (nested==0) { end=j; break } }
+                }
+                require(end>=0 && t.getOrNull(end+1)?.text in setOf(",",";","}"))
+                result=source.substring(t[i+4].start,t[end].end)
+            }
+            if (token.text=="{") depth++
+            if (token.text=="}") { depth--; if (depth==0) require(i==t.lastIndex) }
+            require(depth>=0)
+        }
+        require(depth==0)
+        result
+    }.getOrNull()
+
     /** null = unreadable/nonliteral source; an unchanged string = nothing to restore. */
     internal fun restore(current: String, old: String, keys: Set<String>): String? {
         val now = table(current, keys) ?: return null
