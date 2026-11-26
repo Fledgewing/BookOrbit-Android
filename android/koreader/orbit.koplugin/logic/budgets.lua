@@ -98,3 +98,10 @@ Budgets.screens.collections = budget(6,16384,50)
 
 Budgets.screens["storage-folder"] = Budgets.screens.storage
 Budgets.screens["storage-confirm"] = Budgets.screens.storage
+
+-- Sleep picker pages inherit six companion-materialized names/counts, never a choice catalog.
+Budgets.screens["settings-sleep-choices"] = budget(6,16384,50)
+Budgets.screens["settings-device"] = budget(1,16384,50)
+
+
+Budgets.screens["settings-sleep-choices"].displayRows = 10

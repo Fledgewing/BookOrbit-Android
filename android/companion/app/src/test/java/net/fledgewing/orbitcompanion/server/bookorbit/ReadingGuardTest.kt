@@ -25,6 +25,7 @@ class ReadingGuardTest {
         Site("OrbitKeys.kt", "nm.notify(NOTE_ID", 1, "keyboard note: Reading.show(KEY_KEYBOARD), or at once when the user focused a text field"),
         Site("Installers.kt", "app.startActivity(confirm", 1, "KOReader install prompt: inside Reading.show(installKey)"),
         // Exempt: never pops up, or started by the user.
+        Site("DeviceSettings.kt", "ctx.startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS", 1, "trusted plugin command: user chose Sleep after in an explicitly opened Settings menu; never automatic"),
         Site("OrbitService.kt", "notify(ID_STATUS", 1, "the ongoing foreground-service status: IMPORTANCE_LOW, setOnlyAlertOnce, never pops up"),
         Site("Updater.kt", "ctx.startActivity(confirm)", 1, "install prompt only when interactive: the user tapped Check for updates"),
         Site("Core.kt", "ctx.startActivity(i)", 2, "HomeTarget/Koreader starts: Home press, Setup taps, RELAUNCH; restarts follow UpdateFlow.restart (manual or screen-off only)"),

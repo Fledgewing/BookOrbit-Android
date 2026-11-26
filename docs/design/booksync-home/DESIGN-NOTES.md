@@ -897,3 +897,13 @@ pass. Small Library cards retain only the links that fit 50 px targets; M8C
 its selection in the companion and sets KOReader's download directory through
 the library interface after success. This is unreleased foundation work;
 real-device typography, touch and timing acceptance still follow.
+
+### Android Settings presentation follow-through (g-settings)
+
+The approved revision-16 Settings card, row order, installed-channel/reader summaries
+and bounded sleep choices now reuse the existing group/library/sleep owners.
+See [implementation and acceptance limits](F12-G-SETTINGS.md). Every screen/widget
+keeps a declared budget inherited by Library: six sleep choices and 16 KiB per
+page, zero render network/subprocesses; device settings are a lifecycle-cached row.
+Counts and choice decoding stay in the companion; paints/calls log info timing
+spans. Device latency and Android power-policy acceptance remain pending.

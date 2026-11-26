@@ -98,7 +98,7 @@ Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library
 only their host owns the batched read and read-model invalidation. Layout moves validate only
 their changed page, bounded by the placement count. Home pages and Settings groups inherit
 their screen-family budget. Owned list and Search screens inherit the Library screen-family budget. Settings paints read only shared values and bounded library snapshots;
-choice catalogs stay in the companion until the library exposes bounded windows. Filter picker
+choice catalogs stay in the companion until the library exposes bounded windows. Sleep choice pages read at most six names/counts and 16 KiB; device settings use one lifecycle-cached local row. Filter picker
 pages inherit the filter screen budget; facet counts and zero-value ordering stay in the companion.
 Home editor moves project only the current page and draw bounded geometry controls (no widget
 snapshots, JSON decode, file IO or library round-trip); atomic layout validation/save runs on Done.
