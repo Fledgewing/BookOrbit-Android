@@ -209,7 +209,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Home refresh saves every offline list window; live list, book and cover counts; completion-time BookSync stamp",
+          "note": "Refreshed SD lists serve browser windows offline; live list, book and cover counts; finish-time BookSync stamp",
           "reason": null,
           "evidence": [
             {
@@ -221,7 +221,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Home refresh saves every offline list window; live list, book and cover counts; completion-time BookSync stamp",
+          "note": "Refreshed SD lists serve browser windows offline; live list, book and cover counts; finish-time BookSync stamp",
           "reason": null,
           "evidence": [
             {

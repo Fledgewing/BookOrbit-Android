@@ -517,23 +517,34 @@ def home_refresh_completion_stamp(ctx: Context, tmp: Path) -> None:
     import time
     card = ctx.card(tmp)
     card.theme(UI_THEME_BOOKORBIT)
+    sleep_pick(card, **{"from": "library", "hours": 0})
     sx, sy = home_tile(ctx.sim.run(card, "home", script="3000:QUIT", timeout_s=10).output, "sync")
     ctx.faults([{"match": {"path": "/plugin/catalog/"}, "action": "delay", "ms": 250}])
     started = int(time.time())
     run = ctx.sim.run(card, "refresh-counts", script=f"3000:TAP:{sx},{sy},120", after_reboot="", timeout_s=100,
-                      env={"ORBIFY_SIM_QUIT_BULK_DONE": "1"})
-    after(run.output, "Full refresh: Done")
+                      env={"ORBIFY_SIM_QUIT_HOME_DONE": "1"})
+    ended = int(time.time())
+    after(run.output, "Home refresh over (ok=1")
+    assert "Mirror: Full refresh asked for" not in run.output, "ordinary refresh became Full refresh"
     counts = re.findall(r"Refresh progress: lists=(\d+)/(\d+) books=(\d+) covers=(\d+)", run.output)
     assert len(counts) >= 2, f"refresh displayed no live counters: {counts}"
-    bulk = card.crosspoint / "orbify-catalog" / "bulk"
-    generation = (bulk / "active").read_text()
-    finished = int((bulk / generation / "at").read_text())
     stamp = struct.unpack_from("<I", (card.crosspoint / "bookorbit_home.bin").read_bytes(), 8)[0]
-    assert finished > started + 5, "refresh did not exercise a delayed completion"
-    assert abs(stamp - finished) <= 2, f"Home age {stamp} was not stamped at completion {finished}"
+    assert ended > started + 5, "refresh did not exercise a delayed completion"
+    assert 0 <= ended-stamp <= 5, f"Home age {stamp} was not stamped at completion {ended}"
     ctx.faults("offline")
     home = ctx.sim.run(card, "just-synced", script="3000:QUIT", timeout_s=10)
     after(home.output, "Home sync stamp: Synced just now")
+    assert not (card.crosspoint / "orbify-catalog" / "bulk" / "active").exists(), "ordinary refresh started a bulk generation"
+    library = ctx.sim.run(card, "offline-library", script="3000:SWIPE:0.8,0.5,0.2,0.5,250;5000:QUIT", timeout_s=10)
+    cx, cy = home_tile(library.output, "catalog")
+    before = len(ctx.requests())
+    downs = ";".join(f"{7500+n*240}:DOWN:100" for n in range(58))
+    offline = ctx.sim.run(card,"ordinary-refresh-offline-pages",
+        script=f"3000:SWIPE:0.8,0.5,0.2,0.5,250;4500:TAP:{cx},{cy};6000:DOWN:100;6500:CONFIRM:100;"+downs+";24000:QUIT", timeout_s=30)
+    after(offline.output,"Listing page 3")
+    assert "Joining saved network" not in offline.output and not ctx.requests()[before:], "refreshed 100-row data woke the network"
+    samples=[int(n) for n in re.findall(r"Heap after saved catalog window: internal free=(\d+)",offline.output)]
+    assert len(samples)>=3 and min(samples)>=60*1024, f"ordinary refresh paging heap: {samples}"
 
 
 @scenario("x4-pro")

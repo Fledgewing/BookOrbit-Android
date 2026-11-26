@@ -499,9 +499,11 @@ counting distinct successfully fetched identities in that run, grouped independe
 
 ### X4 refresh repair (0.11, maintainer request 2026-11-25)
 
-The Home refresh now saves the same ranked SD catalog as Full refresh. Source pages
-(100 rows) and browser windows (20 rows) address absolute offsets in that catalog;
-omitted default order does not change the sequence. Every refreshed finite list
+Normal Home refresh keeps its bounded flow. Its saved source pages (100 rows) and
+browser windows (20 rows, or the facet default) share an absolute-offset model;
+Full refresh continues to use the ranked SD catalog. All-format source rows are
+filtered locally before paging, including when the browser selects EPUB. Omitted
+default sort/order and page-one spellings do not change the sequence. Every refreshed finite list
 and later window opens offline. Search remains an explicit uncached request.
 
 For the dedicated refresh screen, the maintainer now requests live counts in addition
@@ -528,9 +530,14 @@ catalog work need 24,576 bytes and a 4,096-byte block. Radio ownership preserves
 handoff, so it is restored off after the three-second grace rather than being
 kept for the 120-second idle timeout. An idle radio under the catalog floor is
 also released, including its catalog TLS session.
-Existing lent sleep-sync sessions keep their separate tested budget.
+Existing lent sleep-sync sessions keep their separate tested budget. The final
+device scan runs before that lent session closes. Normal Home top-ups own one
+sync session and lend it to catalog/cover requests, then close it before releasing
+the radio, instead of handshaking for each metadata request.
 
-Host regression: 245 synthetic books, 294 offline windows across all seven sort
+Host regressions: saved 100-row pages are projected into 20-, 31- and 60-row
+windows, including mixed-format and smart-scope cases, with no network reader.
+The ranked catalog also tests 245 synthetic books, 294 offline windows across all seven sort
 families, both 100-row boundaries and the short final page; 56,998-byte tracked
 JSON/index peak, zero live arena bytes after each window. The emulator also asserts
 that offline paging stays above the Wi-Fi reserve and does not retain internal

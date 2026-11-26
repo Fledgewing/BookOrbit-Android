@@ -20,6 +20,7 @@
 #include <ctime>
 #include <memory>
 #include <new>
+#include <optional>
 #include <vector>
 
 #include "BookOrbitCredentialStore.h"
@@ -520,6 +521,16 @@ struct Run {
   bool (*stop)() = nullptr;
   unsigned long deadline = 0;
   int pagesLeft = PAGES_PER_SLEEP;
+  const RefreshProgress* progress=nullptr;
+  size_t lists=0,total=0,books=0,covers=0;
+  uint32_t* seen=nullptr;
+  ~Run(){heap_caps_free(seen);}
+  void report(){if(progress)progress->report(lists,total,books,covers);}
+  void book(uint32_t id) {
+    if(!progress||!seen||!id)return;
+    auto end=seen+books,at=std::lower_bound(seen,end,id);
+    if(at==end||*at!=id)if(books<BAG_MAX+LIST_KINDS*BATCH) {std::move_backward(at,end,end+1);*at=id;++books;}
+  }
   bool over() const { return (stop && stop()) || static_cast<long>(millis() - deadline) >= 0; }
 };
 
@@ -531,6 +542,7 @@ bool saveScopes(Run& run) {
   bool all = true, changed = false;
   for (const char* section : {"smart-scopes", "collections", "libraries"}) {
     if (run.over()) { all = false; break; }
+    ++run.total;run.report();
     const unsigned long began = millis();
     JsonDocument filter;
     filter["items"][0]["id"] = true;
@@ -542,6 +554,7 @@ bool saveScopes(Run& run) {
       all = false;
       continue;
     }
+    ++run.lists;run.report();
     const char kind = section[0] == 'l' ? 'l' : (section[0] == 'c' ? 'c' : 's');
     std::string merged;
     for (size_t at = 0; at < out.size();) {
@@ -578,6 +591,7 @@ bool saveScopes(Run& run) {
 // The file starts with the next page to ask for. Returns true when the listing is complete
 // (`ids` then holds all of it).
 bool listPages(const char* query, const char* partPath, Ids& ids, Run& run, const bool eligibleOnly) {
+  ++run.total;run.report();
   uint32_t page = 1;
   if (Storage.exists(partPath)) {
     HalFile f;
@@ -608,10 +622,13 @@ bool listPages(const char* query, const char* partPath, Ids& ids, Run& run, cons
       if (eligibleOnly && (item["hasCover"] == false || std::strcmp(item["readStatus"] | "", "read") == 0)) continue;
       ids.add(jsonId(item["id"]));
     }
+    for(JsonObjectConst item:doc["items"].as<JsonArrayConst>())run.book(jsonId(item["id"]));
+    run.report();
     page++;
     complete = !(doc["hasNext"] | false) || ids.n >= ids.cap;
   }
   if (complete) {
+    ++run.lists;run.report();
     if (Storage.exists(partPath)) Storage.remove(partPath);
     if (ids.n >= ids.cap) LOG_INF(TAG, "Sleep screen: %s lists over %u books: using the newest %u", query,
                                   static_cast<unsigned>(ids.cap), static_cast<unsigned>(ids.cap));
@@ -752,7 +769,8 @@ void saveBag(const BagFile& b) {
 }
 
 // One dashboard list into the store's slot for it: eligible books in the server's order.
-bool fetchList(const FromKind kind, Store& st) {
+bool fetchList(const FromKind kind, Store& st, Run& run) {
+  ++run.total;run.report();
   JsonDocument filter;
   filter["section"]["books"][0]["id"] = true;
   filter["section"]["books"][0]["hasCover"] = true;
@@ -767,6 +785,8 @@ bool fetchList(const FromKind kind, Store& st) {
     if (count < BATCH) st.list[k][count++] = id;
   }
   st.listCount[k] = count;
+  for(JsonObjectConst b:doc["section"]["books"].as<JsonArrayConst>())run.book(jsonId(b["id"]));
+  ++run.lists;run.report();
   return true;
 }
 
@@ -851,16 +871,24 @@ Probe probe(const uint32_t id, const Settings& s) {
 
 }  // namespace
 
-void topUp(const std::string& openBookPath, bool (*stop)(), const unsigned long budgetMs) {
+void topUp(const std::string& openBookPath, bool (*stop)(), const unsigned long budgetMs, const RefreshProgress* progress, const Connection connection) {
   const Settings& s = settings();
   if (!s.pick || !BOOKORBIT_STORE.hasCredentials()) return;
   OrbifyWifi::Hold radio(OrbifyWifi::Owner::SleepSync);
+  // Home has no book-sync session to borrow. Own one here so it closes before
+  // the radio hold, and lend the same connection to cover/catalog requests.
+  std::optional<BookOrbitSyncClient::Session> session;
+  std::optional<BookOrbitCatalogClient::LentConnection> lent;
+  if(connection==Connection::Own){session.emplace();lent.emplace(BookOrbitSyncClient::sessionConnection());}
   const unsigned long began = millis();
   Run run;
+  run.progress=progress;
+  if(progress)run.seen=static_cast<uint32_t*>(heap_caps_malloc((BAG_MAX+LIST_KINDS*BATCH)*sizeof(uint32_t),MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
   run.stop = stop;
   run.deadline = millis() + budgetMs;
   const uint32_t now = nowEpoch();
   Store st = loadStore();
+  run.covers=st.batch.count;run.report();
   Storage.mkdir(DIR);
 
   // Pick from is a set (R1c): the dashboard lists picked, and one bag over every picked library, smart
@@ -914,7 +942,7 @@ void topUp(const std::string& openBookPath, bool (*stop)(), const unsigned long 
     bool all = true;
     for (size_t k = 0; k < LIST_KINDS && !run.over(); k++) {
       // The picked lists, and a fallback list in use (R1).
-      if (picked[k] || st.listCount[k]) all = fetchList(static_cast<FromKind>(k), st) && all;
+      if (picked[k] || st.listCount[k]) all = fetchList(static_cast<FromKind>(k), st, run) && all;
     }
     if (all) st.listAt = now;
   }
@@ -946,7 +974,7 @@ void topUp(const std::string& openBookPath, bool (*stop)(), const unsigned long 
     // R1: every picked source is empty: Up next, Want to read, Discover (not picked), fetched now.
     for (size_t k = 0; k < LIST_KINDS && candidates.n == 0 && !run.over(); k++) {
       if (picked[k] || st.listCount[k]) continue;
-      fetchList(static_cast<FromKind>(k), st);
+      fetchList(static_cast<FromKind>(k), st, run);
       candidates.n = orbify::sleep::candidates(s.from.c_str(), listAt, &listCtx, next, bagCount, candidates.p,
                                                candidates.cap, &fallback);
     }
@@ -1043,6 +1071,7 @@ void topUp(const std::string& openBookPath, bool (*stop)(), const unsigned long 
     }
     if (takenCount < FETCH_PER_SYNC) taken[takenCount++] = id;
     fetched++;
+    run.book(id);run.covers=st.batch.count;run.report();
   }
   if (isBag) {
     bagTake(bagFile.bag, taken, takenCount);
