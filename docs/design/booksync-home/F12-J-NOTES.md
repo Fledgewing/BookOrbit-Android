@@ -57,7 +57,8 @@ F12-F's later server/local projection (`0077684c`) is also integrated: the same
 reading.stats operation supplies per-field provenance and separate local-today
 values when the server has no inclusion watermark. Home retains these labels and
 uses indexed checks on immutable arrays; all four Stats renderers still share
-one host read per paint.
+one host read per paint. The independent account layer (`db1fa0c1`) retains
+that operation and per-field provenance; Home does not read account or backend JSON.
 
 ## Inherited performance rule
 

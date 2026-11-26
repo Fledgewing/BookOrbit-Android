@@ -17,7 +17,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
     local source_field=({['year-in-reading']='days',['this-week']='days',
         ['when-you-read']='hours',['reading-records']='records'})[id]
     if sources[source_field] == 'this reader' then
-        p.source=id == 'reading-records' and 'Pages and sessions · this reader' or 'This reader'
+        p.source=id == 'reading-records' and (data.records and data.records.longest_session_period == 'week' and 'Pages · this reader' or 'Pages and sessions · this reader') or 'This reader'
     end
     local header=p.source and 16 or 0
     if id == 'year-in-reading' and not data.year then
@@ -64,7 +64,9 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
         local r=data.records
         if data.records_available ~= false then
             label(8,30+header,tostring(r.recorded_pages)..' recorded pages')
-            label(8,52+header,tostring(math.floor(r.longest_session_seconds/60))..' min longest session')
+            label(8,52+header,tostring(math.floor(r.longest_session_seconds/60))..(r.longest_session_period == 'week' and ' min longest · this week' or ' min longest session'))
+        elseif r.longest_session_period == 'week' then
+            label(8,30+header,tostring(math.floor(r.longest_session_seconds/60))..' min longest · this week')
         else label(8,30+header,'Local records unavailable') end
         if r.streak ~= nil then label(8,74+header,tostring(r.streak)..' day streak · best '..r.best_streak..
             (sources.streak == 'this reader' and ' · this reader' or '')) end

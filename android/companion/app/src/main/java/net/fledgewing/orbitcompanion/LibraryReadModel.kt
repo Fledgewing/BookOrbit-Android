@@ -6,6 +6,9 @@ class LibraryReadModel(
     private val store: CacheStore,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
     private val log: (String) -> Unit = { OLog.i(it) },
+    private val fallbackReadingStats: (String) -> RemoteReadingStats? = { BookOrbitLibrary.readingStats(store) },
+    private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
+    private val accountStats: (String) -> Map<*, *>? = { null },
     private val readingStats: () -> Map<String, Any?> = {
         mapOf("state" to "not-saved", "freshness" to mapOf("saved" to false))
     },
@@ -23,7 +26,7 @@ class LibraryReadModel(
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
         // Different widget byte budgets can encode distinct requests for the same paint.
-        val stats by lazy { ReadingStats.combine(readingStats(), BookOrbitLibrary.readingStats(store), clock()) }
+        val stats by lazy { AccountStats.combine(readingStats(), fallbackReadingStats(owner), accountStats(owner), clock()) }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue
@@ -68,13 +71,27 @@ class LibraryReadModel(
             return if (current != null && book != null) result + mapOf("items" to listOf(book +
                 mapOf("progress" to current * 100, "progress_origin" to "local-reader"))) else result
         }
-        if (op == "capabilities") return mapOf("catalog" to true, "detail" to true, "download" to false,
-            "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false, "syncCurrent" to true),
-            "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
-            "stats" to (BookOrbitLibrary.readingStats(store)?.capabilities() ?: mapOf("days" to false, "streak" to false, "goal" to false, "finished" to false)),
-            "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
-            "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
-            "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
+        if (op == "account.state") return accountState()
+        if (op == "capabilities") {
+            val remote = fallbackReadingStats(owner)
+            val a = accountStats(owner).orEmpty()
+            val server = accountState()
+            val managed = server["owner"] == owner
+            val opds = (server["opds"] as? Map<*, *>)?.get("available") == true
+            val sync = (server["sync"] as? Map<*, *>)?.get("available") == true
+            return mapOf("catalog" to (!managed || opds), "detail" to !managed, "download" to opds,
+                "lists" to mapOf("read" to !managed, "save" to false), "progress" to mapOf("read" to (!managed || sync), "write" to sync, "syncCurrent" to !managed),
+                "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
+                "account" to server,
+                "stats" to mapOf("days" to (a["days"] != null || remote?.days != null), "streak" to (remote?.streak != null),
+                    "hours" to (a["hours"] != null), "sessions" to (a["sessions"] != null),
+                    "goal" to (a["goal"] != null || remote?.goalAvailable == true),
+                    "finished" to (a["finished"] != null || remote?.finished != null),
+                    "yearReview" to false, "activityDetails" to false, "celebrations" to false),
+                "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
+                "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
+                "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
+        }
         if (op == "lists") {
             val g = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
             if (store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
