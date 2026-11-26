@@ -186,8 +186,16 @@ class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applic
     /** Worker-only normalized snapshot. Raw measurements stay in stats.db, never in Lua. */
     @Synchronized
     fun batterySnapshot(now: Long, zone: ZoneId): Map<String, Any?> {
-        val v = view(now, zone, 14)
         val raw = snapsSince(now - BatteryStats.RAW_DAYS * DAY_MS)
+        val rollupAhead = (meta("rolled_until")?.toLongOrNull() ?: Long.MIN_VALUE) >= BatteryStats.day(now, zone)
+        val v = if (rollupAhead) {
+            // A backwards clock correction must not let a future day cursor hide current data.
+            // Keep archived statistics intact and project only observed raw intervals here.
+            rollup(now, zone)
+            val segments = BatteryStats.segments(raw)
+            View(BatteryStats.totals(BatteryStats.rollup(segments, zone)),
+                BatteryStats.daily(raw, zone).values.toList(), raw.lastOrNull(), firstT() ?: now)
+        } else view(now, zone, 14)
         return BatteryEstimate.snapshot(v.totals, v.days, v.last, emptyList(), now, zone,
             BatteryEstimate.usualDays(raw, now), recentCharges = savedCharges())
     }

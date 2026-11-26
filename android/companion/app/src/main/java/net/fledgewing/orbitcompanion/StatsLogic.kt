@@ -279,6 +279,7 @@ object BatteryStats {
             s.hours < minH -> String.format(java.util.Locale.US, "%.1f h of %.0f h needed", s.hours, minH)
             s.change <= MIN_CHANGE_PCT -> String.format(java.util.Locale.US, "%.0f%% change of >2%% needed", s.change)
             s.sxx <= 0 -> "no change seen yet"
+            !v.isFinite() || v <= 0 -> "more samples needed for a positive rate"
             else -> null
         }
         return Rate(v, se, s.hours, s.change, s.segments, missing == null, missing)
@@ -337,12 +338,13 @@ object BatteryStats {
     /** Hours left at [level]% with screen-on share f: level ÷ (f·R_on + (1−f)·R_standby). */
     fun hoursLeft(level: Int, f: Double?, rOn: Rate?, rStandby: Rate?): Double? {
         if (f == null || level < 0 || rOn?.shown != true || rStandby?.shown != true) return null
+        if (!rOn.pctPerH.isFinite() || !rStandby.pctPerH.isFinite() || rOn.pctPerH <= 0 || rStandby.pctPerH <= 0) return null
         val per = f * rOn.pctPerH + (1 - f) * rStandby.pctPerH
         return if (per > 0) level / per else null
     }
 
     fun hoursLeftAt(level: Int, r: Rate?): Double? =
-        if (level < 0 || r?.shown != true || r.pctPerH <= 0) null else level / r.pctPerH
+        if (level < 0 || r?.shown != true || !r.pctPerH.isFinite() || r.pctPerH <= 0) null else level / r.pctPerH
 }
 
 /** orbit-battery-stats/1: the device-comparison file (docs/design/STATS-DESIGN.md "Export JSON"). */

@@ -15,6 +15,24 @@ class BatteryStoreTest {
     private fun reset(store: StatsStore) {
         for (table in listOf("snap","daily","daily_cat","meta")) store.writableDatabase.delete(table,null,null)
     }
+    @Test fun aFutureRollupCursorCannotHideCurrentMeasurementsAfterClockCorrection() {
+        val store=StatsStore.get(RuntimeEnvironment.getApplication())
+        reset(store)
+        val t=1_700_000_000_000L
+        val h=3_600_000L
+        val day=24*h
+        store.insert(Snap(t+100*day,Snap.START,100,false,false,wmode="jit",elapsed=0))
+        store.rollup(t+101*day,ZoneOffset.UTC)
+        for ((hours,pct,on) in listOf(Triple(0,75,true),Triple(1,71,true),Triple(2,67,false),Triple(14,61,false),Triple(26,55,false))) {
+            store.insert(Snap(t+hours*h,if(hours==0) Snap.START else "battery",pct,false,on,
+                wmode="jit",content=if(on) "text" else null,elapsed=2*day+hours*h))
+        }
+        val snapshot=store.batterySnapshot(t+26*h,ZoneOffset.UTC)
+        assertEquals(55,snapshot["level"])
+        assertEquals(4.0,(snapshot["screen_on"] as Map<*,*>)["pct_per_hour"] as Double,1e-9)
+        assertEquals(0.5,(snapshot["standby"] as Map<*,*>)["pct_per_hour"] as Double,1e-9)
+        assertEquals(71.5,snapshot["hours_usual_use"] as Double,1e-9)
+    }
     @Test fun pruningInsideAChargeDoesNotArchiveTheRemainingSuffixAsAnotherCharge() {
         val store=StatsStore.get(RuntimeEnvironment.getApplication())
         reset(store)

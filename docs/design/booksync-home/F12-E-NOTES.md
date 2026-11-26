@@ -121,3 +121,13 @@ through the same operation; its temporary stub is removed. Missing evidence keep
 the unavailable line. Manual Sync, the `book-info` screen budget, and the existing
 reading/visibility gates are preserved. All four reader-progress platform cells
 record the Android model and continued firmware deferral.
+
+If the saved calendar rollup cursor is ahead after a backwards clock correction,
+it must not hide new measurements until that date arrives. The battery projection
+uses observed raw samples through the same statistics engine in that case and
+keeps archived statistics intact. A database-level regression rolls into the
+future, corrects the clock, and verifies current rates and usual-use time.
+
+A nonpositive or nonfinite fitted rate is unavailable, with a request for more
+samples. It cannot cancel a valid drain component or produce a false lifetime.
+A noisy fuel-gauge regression and direct estimate-boundary tests enforce that.

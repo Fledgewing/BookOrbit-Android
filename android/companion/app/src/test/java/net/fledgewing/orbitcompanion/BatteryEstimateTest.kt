@@ -59,6 +59,16 @@ class BatteryEstimateTest {
         val clockOverlap=BatteryEstimate.retainCharges(listOf(complete),listOf(charge(h,3*h,20,100,false)))
         assertEquals("Separate completed sessions may overlap after a clock correction",2,clockOverlap.size)
     }
+    @Test fun nonpositiveOrNonfiniteFitsNeverCreateArtificiallyLongLifetimes() {
+        val noisy=snapshot(listOf(row(0,100,true),row(1,50,true),row(2,99,true),row(3,95,true)))
+        assertNull((noisy["screen_on"] as Map<*,*>)["pct_per_hour"])
+        assertNotNull((noisy["screen_on"] as Map<*,*>)["missing"])
+        val measured=Rate(1.0,0.0,24.0,24.0,1,true,null)
+        for (bad in listOf(-1.0,0.0,Double.POSITIVE_INFINITY,Double.NaN)) {
+            assertNull(BatteryStats.hoursLeft(50,0.25,measured.copy(pctPerH=bad),measured))
+            assertNull(BatteryStats.hoursLeftAt(50,measured.copy(pctPerH=bad)))
+        }
+    }
     @Test fun newDeviceHasExplicitMissingEvidenceAndNoInventedLifetime() {
         val s = snapshot(emptyList())
         assertNull(s["level"]); assertNull(s["hours_usual_use"])
