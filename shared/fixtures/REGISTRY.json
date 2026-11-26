@@ -562,6 +562,14 @@
         "kt",
         "lua"
       ]
+    },
+    {
+      "file": "reading-stats/dashboard.json",
+      "rule": "Synthetic pinned dashboard stats: cross-device days, streak, full finish count and goal; no inclusion watermark",
+      "owner": "companion",
+      "readers": [
+        "kt"
+      ]
     }
   ]
 }

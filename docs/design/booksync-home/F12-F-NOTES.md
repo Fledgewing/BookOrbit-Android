@@ -69,3 +69,66 @@ Next slice: wire the registry renderer into the Home host, refresh after reader
 statistics flush, retain cached data offline, and add the owned finish ledger and
 goal settings without guessing values from catalog status. Device visual and
 performance validation remains with the maintainer; no device or adb was used.
+
+## F12-F2: server-first field precedence
+
+This section supersedes the local-only source/availability statements above.
+Android remains authorised; X4 Pro, X4 and X3 remain deferred. No new screen or
+widget is introduced. Existing `logic/budgets.lua:17` widget limits still apply:
+one shared materialized row, at most 16 KiB decoded per widget, zero subprocesses
+and render network calls, at most one companion batch per paint. The companion
+per-call span and widget render/paint spans remain in place; device targets still
+require device validation.
+
+Reuse: `BookOrbitLibrary.kt:6` owns backend normalization; `CacheStore.kt:108`
+provides existing cached entries, published by `FastCatalogRefresh.kt:321-326`.
+Its cache paths omit the network client's `/api/v1` prefix. `ReadingStats.kt:35`
+retains the local read-only worker aggregation. `LibraryReadModel.kt:22` retains
+owner isolation, byte limits, timing and the owned `library_views` table, and now
+shares one stats aggregate even if widget requests carry different byte limits.
+`ko/library.lua:23` and `ko/reading_stats.lua:4` retain bounded read/draw ownership.
+No new library operation, transport, database, sync writer or UI endpoint call.
+
+Pinned BookOrbit commit `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`:
+
+- `server/src/modules/koreader/koreader-catalog.service.ts:239-295` returns
+  generatedAt, readingYear, readingStreak, readingGoal and finishedThisYear.
+- `server/src/modules/dashboard/dashboard-widget.service.ts:130-144` returns
+  goalBooks (nullable), completedBooks and year. This is the full finish count;
+  `koreader-catalog.service.ts:332-340` builds a limited finished shelf, whose
+  length must never substitute for that total.
+- `dashboard-widget.service.ts:178-201` uses the account's local date and rounds
+  daily seconds to minutes. The adapter preserves those date labels, then projects
+  the existing trailing 365-date and Monday-week widget windows. Device/account
+  timezone differences do not reassign server dates to device hours.
+- `koreader-catalog.service.ts:279` supplies generation time, **not an inclusion
+  watermark**. `server/src/modules/koreader/koreader-stats.service.ts:116-117`
+  acknowledges each uploaded book's maximum event start time; the dashboard has
+  no matching per-device inclusion cursor, and the widget services cache aggregates
+  independently. A fetch time or maximum of local/server minutes cannot prove overlap.
+
+`stats.days`, `stats.streak`, `stats.goal`, `stats.finished` capabilities are
+independent and reflect valid cached fields. Each available server field wins;
+missing/disabled fields retain local equivalents. Without either source,
+completion and target remain unavailable, never inferred from page coverage.
+The neutral result supplies `sources` per field, using `all your devices` or
+`this reader`. Hour buckets, peak and session/page records remain local. Widgets
+show small source text for local fields, including the local portion of a mixed
+Records card; server-derived values need no source line.
+
+Without a provable inclusion watermark, server Today/Week/Year totals and this
+reader's Today total remain separate, explicitly labeled; local Today may overlap
+and is never added. The neutral companion combiner also accepts an inclusive
+local-event-start watermark paired with the exact local aggregate, for a future
+adapter that can prove inclusion. It adds only post-watermark visits in today,
+coalesces overlapping intervals and rejects mismatched/future watermarks. The
+current BookOrbit adapter deliberately does not manufacture one from generatedAt
+or upload acknowledgements. This follows DESIGN.md's read-model rule to show
+separate summaries when overlap cannot be reconciled.
+
+The synthetic dashboard fixture and companion tests cover mapping, independent
+precedence/fallback, capability-off, missing local DB, separate Today, proven and
+mismatched watermark merges, owner isolation and single-row/byte budgets. Lua
+harness tests cover source labels and server-only availability. The next Home
+slice can consume the same `reading.stats` operation; Goal/Streak widgets can use
+the newly available targets/counts without inspecting a backend payload.
