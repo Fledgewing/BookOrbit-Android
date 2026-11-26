@@ -39,7 +39,7 @@ return function(here, test, ok, eq)
             getTopmostVisibleWidget=function() return W.top end}
         E.wrap=function(t,k,f) t[k]=f(t[k]) end
         E.require=function(name)
-            if name=="device" then return {screen={getWidth=function() return 600 end,getHeight=function() return 800 end,scaleBySize=function(_,n) return n*(W.scale or 1) end}} end
+            if name=="device" then return {screen={getWidth=function() return 600 end,getHeight=function() return 800 end,scaleBySize=function(_,n) return math.ceil(n*(W.scale or 1)) end}} end
             if name=="document/credocument" then return {engineInit=function() return {getFontFaceFilenameAndFaceIndex=function(face) return face .. ".ttf",0 end} end} end
             if name=="ui/event" then return {new=function(_,name) return {name=name} end} end
             if name=="apps/reader/modules/readermenu" then return Menu end
@@ -265,6 +265,20 @@ return function(here, test, ok, eq)
         eq(heavy.face.getFallbackFont(0),heavy.face,"native shaped glyphs use the private preview strength")
         eq(W.face.hash,"fixture"); eq(W.face.embolden_half_strength,nil,"shared UI face stays immutable")
         local _,frame=preview("margins",60); eq(frame.padding_left,50); eq(frame.padding_right,50)
+    end)
+
+    test("Custom margins: physical pixels roundtrip at fractional native screen scales",function()
+        local W,E=world(); local ui=styleReader(W)
+        for _,factor in ipairs({1.25,1.5,1.8,2.34}) do
+            W.scale=factor
+            for _,pixels in ipairs({10,46,80}) do
+                local s=E.Library.readingCustom(); s.margins=pixels; E.Library.readingSave(s,nil)
+                E.Library.readingApply(ui,"margins","custom")
+                eq(math.ceil(ui.typeset.unscaled_margins[1]*factor),pixels,"native margin in physical pixels")
+                E.Library.readingCopy(ui)
+                eq(E.Library.readingCustom().margins,pixels,"one-time copy keeps the applied margin")
+            end
+        end
     end)
 
 end

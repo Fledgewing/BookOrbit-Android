@@ -56,7 +56,11 @@ function Library.readingApply(ui,key,choice,deferUpdate,screen)
         ui.document:setEmbeddedFonts(ui.typeset.configurable.embedded_fonts)
     elseif key=="margins" then
         local m=ui.typeset.unscaled_margins
-        local unscaled=value/scale(1)
+        -- scaleBySize rounds up (koreader-base ffi/framebuffer.lua:414).
+        -- Calibrate at a large size so a fractional screen scale is not rounded
+        -- to the next whole factor, then guard floating-point ceil overshoot.
+        local unscaled=value/(scale(10000)/10000)
+        if scale(unscaled)>value then unscaled=unscaled-0.000001 end
         ui.typeset.configurable.h_page_margins={unscaled,unscaled}
         ui.typeset.unscaled_margins={unscaled,m[2],unscaled,m[4]}
         ui.typeset:onSetPageMargins(ui.typeset.unscaled_margins)
