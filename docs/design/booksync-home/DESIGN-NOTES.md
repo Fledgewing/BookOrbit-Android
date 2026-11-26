@@ -872,7 +872,8 @@ latency acceptance; the complete revision-16 prototype remains the target.
 ### Android Storage implementation (2026-11-26, g-storage)
 
 The Library widget now consumes `library.summary` plus one `storage.summary`
-row in the existing Home batch. Storage, its confirmation and folder chooser
+row in the existing Home batch. Known local storage figures remain visible before
+the remote catalog is saved. Storage, its confirmation and folder chooser
 share a one-row/16 KiB screen budget; Collections pages contain at most six
 companion-projected rows/16 KiB. All paints and library calls log timing spans.
 No render network, subprocess, catalog scan or capacity calculation runs in Lua.

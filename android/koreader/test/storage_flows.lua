@@ -48,6 +48,25 @@ return function(test,eq,ok,E,W,withHost)
             page:onClose(); eq(E.StorageUI.active,nil)
         end)
     end)
+    test('storage: known device figures paint even before the catalog is saved',function()
+        withHost(function()
+            local read=E.LibraryAdapter.read
+            E.LibraryAdapter.read=function(raw)
+                local op=E.Cache.decode(raw).op
+                if op=='library.summary' then return {items={},total=0,freshness={saved=false}},100 end
+                if op=='storage.summary' then return data(),700 end
+                return read(raw)
+            end
+            local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+            local function hasText(node,label)
+                if node.text==label then return true end
+                for _,child in ipairs(node) do if type(child)=='table' and hasText(child,label) then return true end end
+                return false
+            end
+            ok(hasText(h,'Low space · 1.2 GB free'),'known local capacity must not depend on a saved remote catalog')
+            eq(h.metrics.roundTrips,1)
+        end)
+    end)
     test('storage: pending, unavailable, empty, low and cached offline states remain bounded',function()
         withHost(function()
             for _,state in ipairs({{pending=true},{error='unavailable'},{caption='Space unavailable',parts={},actions={}},data()}) do

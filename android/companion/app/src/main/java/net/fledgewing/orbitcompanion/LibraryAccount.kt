@@ -81,6 +81,14 @@ object LibraryAccount {
             catch (_: Exception) { complete(null,"unavailable") }
         }
     }
+    fun acquireCoverReference(ctx: Context, reference: String, refresh: Boolean, owner: String, done: (Map<String, Any?>?, String?) -> Unit) {
+        val app=ctx.applicationContext
+        queue.execute {
+            try { adapter(app).acquireCoverReference(reference,refresh,owner) { result,error -> main.post { done(result,error) } } }
+            catch (e: ServerFailure) { main.post { done(null,e.kind) } }
+            catch (_: Exception) { main.post { done(null,"unavailable") } }
+        }
+    }
     fun download(ctx: Context, key: String, destination: File, done: (String?) -> Unit) = command(ctx, {
         require(Places.inside(destination.path,Places.roots()+DeviceStorage.downloadRoot(Worker.root())) != null)
         if (!it.download(key,destination)) throw ServerFailure("unavailable")

@@ -94,10 +94,11 @@ class DeviceStorageTest {
 
     @Test fun clearCoversIncludesOwnedAccountSubfolders()=fixture { volume,_,_,storage ->
         val cover=File(volume,"covers/account-cache/1.jpg").apply { requireNotNull(parentFile).mkdirs(); writeBytes(ByteArray(100)) }
+        val marker=File(cover.parentFile,".thumbnails/1.jpg.done").apply { requireNotNull(parentFile).mkdirs(); writeText("sized") }
         val action=actions(storage.summary("fixture")).single()
-        assertEquals("covers",action["id"]); assertEquals(100L,action["bytes"])
+        assertEquals("covers",action["id"]); assertEquals(105L,action["bytes"])
         storage.command("fixture","storage.free",mapOf("action" to "covers","token" to action["token"]))
-        assertFalse(cover.exists()); assertTrue(actions(storage.summary("fixture")).isEmpty())
+        assertFalse(cover.exists()); assertFalse(marker.exists()); assertTrue(actions(storage.summary("fixture")).isEmpty())
     }
 
     @Test fun shallowProjectionRootsStillPublishUnavailableCapacity() {
@@ -111,6 +112,28 @@ class DeviceStorageTest {
         val data=DeviceStorage(store,object:ServerAdapter { override val id="fixture" }).summary("fixture")
         assertEquals(false,data["available"]); assertNull(data["total"])
         assertEquals(store.root,DeviceStorage.downloadRoot(store.root).parentFile)
+    }
+
+    @Test fun removalRefreshesFileJoinsAndCoverReferencesButKeepsBatterySnapshots()=fixture { volume,store,files,storage ->
+        val file=book(volume,"done",200); files+=LocalBook(file,true,null)
+        var level=78
+        val adapter=object:ServerAdapter {
+            override val id="fixture"
+            override fun localFiles(owner:String)=files
+            override fun project(owner:String,request:Map<*,*>)=mapOf<String,Any?>("items" to listOf(mapOf(
+                "key" to "fixture-book", "local_path" to file.takeIf { it.isFile }?.path?.let(LuaValue::str))),"freshness" to mapOf("saved" to true))
+        }
+        val model=LibraryReadModel(store,log={},adapter=adapter,battery={mapOf("level" to level)})
+        val operations=listOf("window","book","reader","cover","cover.reference","groups","series","counts","facets","sources","battery")
+        fun request(op:String)=String(LuaValue.encode(mapOf("op" to op,"limit" to 1)),Charsets.ISO_8859_1)
+        fun result(op:String)=LuaValue.parse(store.db().query("SELECT body FROM library_views WHERE owner=? AND request=?","fixture",request(op)) { it.bytes(0)!! }.single()) as Map<*,*>
+        model.publish("fixture",operations.map(::request))
+        assertNotNull((((result("groups")["items"] as List<*>).single()) as Map<*,*>)["local_path"])
+        val action=actions(storage.summary("fixture")).single()
+        storage.command("fixture","storage.free",mapOf("action" to "finished","token" to action["token"]))
+        level=0; model.refreshLocalFiles("fixture")
+        for(op in operations.filter { it!="battery" }) assertNull(op,(((result(op)["items"] as List<*>).single()) as Map<*,*>)["local_path"])
+        assertEquals(78L,result("battery")["level"])
     }
 
 }

@@ -39,8 +39,9 @@ class DeviceStorage(private val store: ProjectionStore, private val adapter: Ser
         val file=Places.inside(it.file,listOf(volume))
         if(file != null && file.isFile && Places.inside(file,listOf(store.root,covers)) == null) it.copy(file=file) else null
     }?.distinctBy { it.file.path }
-    private fun coverFiles(): List<File> = (if(Places.inside(covers,listOf(volume))==null) emptyList() else covers.walkTopDown().maxDepth(2).onEnter { Places.inside(it,listOf(covers)) != null && !java.nio.file.Files.isSymbolicLink(it.toPath()) }.toList()).filter {
-        it.isFile && Places.inside(it,listOf(covers)) != null && (it.extension == "jpg" || it.name.endsWith(".jpg.etag"))
+    private fun coverFiles(): List<File> = (if(Places.inside(covers,listOf(volume))==null) emptyList() else covers.walkTopDown().maxDepth(3).onEnter { Places.inside(it,listOf(covers)) != null && !java.nio.file.Files.isSymbolicLink(it.toPath()) }.toList()).filter {
+        it.isFile && Places.inside(it,listOf(covers)) != null && ((it.parentFile?.name != ".thumbnails" && (it.extension == "jpg" || it.name.endsWith(".jpg.etag"))) ||
+            (it.parentFile?.name == ".thumbnails" && it.name.endsWith(".jpg.done")))
     }
     private fun old(book: LocalBook): Boolean = lastOpened(book)?.let {
         it < Instant.ofEpochSecond(now()).atZone(ZoneOffset.UTC).minusMonths(6).toEpochSecond()

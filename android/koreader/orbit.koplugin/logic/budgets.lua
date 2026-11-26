@@ -99,6 +99,10 @@ Budgets.screens.collections = budget(6,16384,50)
 Budgets.screens["storage-folder"] = Budgets.screens.storage
 Budgets.screens["storage-confirm"] = Budgets.screens.storage
 
+-- One local cover reference per lookup. Acquisition is owned by the off-paint host.
+Budgets.screens["cover-cache"] = budget(1,16384,30)
+Budgets.screens["cover-cache"].roundTrips = 0
+
 -- Series/grouped windows charge summary, preview books and one capability row.
 Budgets.screens.series.rows = Budgets.MAX_ROWS + 1
 

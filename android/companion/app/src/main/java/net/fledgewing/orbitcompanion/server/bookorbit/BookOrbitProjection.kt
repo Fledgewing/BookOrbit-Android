@@ -37,6 +37,14 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             return if (current != null && book != null) result + mapOf("items" to listOf(book +
                 mapOf("progress" to current * 100, "progress_origin" to "local-reader"))) else result
         }
+        if (op == "cover.reference") {
+            val reference=a["reference"] as? String ?: return mapOf("error" to "missing")
+            require(reference.length<=4096)
+            val saved=store.meta("cover_ref_"+MirrorLogic.hash(reference))?.let { LuaValue.parse(it.toByteArray(Charsets.ISO_8859_1)) } as? Map<*,*>
+            val path=if (saved?.get("reference")==reference) (saved["local_path"] as? String)?.let(LuaValue::utf8) else null
+            return mapOf("local_path" to path?.takeIf { java.io.File(it).isFile }?.let(LuaValue::str),
+                "stale" to (saved?.get("stale")==true),"freshness" to freshness(path!=null && java.io.File(path).isFile))
+        }
         if (op == "cover") {
             val id = BookOrbitLibrary.id(owner,"book",a["key"]) ?: return mapOf("error" to "missing")
             val path = store.meta("cover_file_$id")?.let(LuaValue::utf8)

@@ -104,6 +104,8 @@ function HomeHost.create()
                 local data=context:read(need.op,need)
                 if p.widget=="library" then
                     local merged={}; for k,v in pairs(data) do merged[k]=v end
+                    -- This widget owns a summary record, including when the catalog is unsaved.
+                    merged.items=nil
                     merged.storage=context:storage()
                     merged.collections_available=caps.collections==true
                     return merged

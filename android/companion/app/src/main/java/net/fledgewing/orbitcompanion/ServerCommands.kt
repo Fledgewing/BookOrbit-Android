@@ -38,7 +38,9 @@ object ServerCommands {
                 LibraryAccount.position(ctx,document,update,::finish)
             }
             "catalog.window" -> LibraryAccount.catalog(ctx,(args["page"] as? Number)?.toInt() ?: 1,(args["limit"] as? Number)?.toInt()?.coerceIn(1,24) ?: 24,::finish)
-            "covers.acquire" -> LibraryAccount.acquireCover(ctx,text("key"),::finish)
+            "covers.acquire" -> if (args["reference"] != null)
+                LibraryAccount.acquireCoverReference(ctx,text("reference"),args["refresh"]==true,args["owner"] as? String ?: throw IllegalArgumentException("owner"),::finish)
+                else LibraryAccount.acquireCover(ctx,text("key"),::finish)
             "downloads.start" -> {
                 val key = args["key"] as? String ?: throw IllegalArgumentException("key")
                 val destination = File(LuaValue.utf8(args["destination"] as? String ?: throw IllegalArgumentException("destination")))

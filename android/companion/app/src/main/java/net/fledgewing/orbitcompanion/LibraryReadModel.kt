@@ -69,4 +69,16 @@ class LibraryReadModel(
         }
         return changed
     }
+    /** Local removal changes every cached file join, including grouped/Series previews.
+     * Keep unrelated account, reading and battery materializations intact. */
+    fun refreshLocalFiles(owner: String): Boolean {
+        val operations=setOf("storage.summary","library.summary","window","book","reader","cover","cover.reference",
+            "groups","series","counts","facets","sources")
+        val requests=store.db().query("SELECT request FROM library_views WHERE owner=?",LuaValue.utf8(owner)) { it.text(0)!! }
+            .filter { raw -> (LuaValue.parse(raw.toByteArray(Charsets.ISO_8859_1)) as? Map<*,*>)?.get("op") in operations }
+        var changed=false
+        requests.chunked(MAX_BATCH).forEach { if(publish(owner,it)) changed=true }
+        return changed
+    }
+
 }
