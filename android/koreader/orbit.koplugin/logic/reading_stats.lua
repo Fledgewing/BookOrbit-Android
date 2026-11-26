@@ -122,7 +122,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
         local short=rows==1
         local available=data.records_available~=false and r.recorded_pages~=nil
         local compact=h<220
-        label(8,top,available and r.recorded_pages or '—',short and 24 or compact and 30 or 40,true)
+        label(8,top,available and (d.pages or r.recorded_pages) or '—',short and 24 or compact and 30 or 40,true)
         label(8,top+(short and 26 or compact and 32 or 44),available and 'recorded pages, all time' or 'Local records unavailable',12)
         local y=short and top or top+(compact and 54 or 78)
         local cw=(w-24)/(short and 4 or 2)

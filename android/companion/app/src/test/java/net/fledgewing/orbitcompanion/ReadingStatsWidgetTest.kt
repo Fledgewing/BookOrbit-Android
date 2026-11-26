@@ -10,7 +10,7 @@ class ReadingStatsWidgetTest {
     private val now=Instant.parse("2026-11-25T21:42:00Z").epochSecond
     @Test fun labelsFollowResolvedFieldsAndDoNotInventMissingRecords() {
         val local=mapOf("state" to "ready", "hours" to List(24) { 0 }, "peak_hour" to 22,
-            "records" to mapOf("longest_session_seconds" to 7200),
+            "records" to mapOf("longest_session_seconds" to 7200,"recorded_pages" to 48210),
             "week" to mapOf("seconds" to listOf(60,120,0,0,0,0,0),"total_seconds" to 180),
             "year" to mapOf("start" to "2025-11-26"),"local_today_seconds" to 600,
             "sources" to mapOf("longest_session_seconds" to "all your devices"))
@@ -20,6 +20,7 @@ class ReadingStatsWidgetTest {
         assertEquals(2,d["best_index"]); assertEquals("2 m",d["best_duration"])
         assertEquals("Evenings",d["period"]); assertEquals("22:00",d["peak"])
         assertEquals("2 h 0 m",d["longest"])
+        assertEquals("48,210",LuaValue.utf8(d["pages"] as String))
         assertEquals("10 m today · this reader (separate)",LuaValue.utf8(d["local_today"] as String))
         assertEquals(local["sources"],out["sources"])
         assertEquals(12,(d["months"] as List<*>).size)

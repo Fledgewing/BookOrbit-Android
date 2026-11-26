@@ -202,6 +202,7 @@ object ReadingStats {
             "best_day" to best?.let { LuaValue.str(java.time.DayOfWeek.of(it+1).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())) },
             "months" to months, "period" to period, "peak" to peak?.let { "$it:00" },
             "record_day" to (records?.get("best_day") as? String)?.let { LuaValue.str(LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))) },
+            "pages" to (records?.get("recorded_pages") as? Number)?.let { LuaValue.str(java.text.NumberFormat.getIntegerInstance().format(it)) },
             "longest" to records?.get("longest_session_seconds")?.let { duration(it) },
             "local_today" to data["local_today_seconds"]?.let { LuaValue.str("${duration(it)} today · this reader (separate)") }
         ))
