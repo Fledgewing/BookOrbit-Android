@@ -15,7 +15,10 @@ struct Policy {
   uint32_t activity = 0, released = 0;
   bool releasePending = false, restoreOff = false, inBook = false, bookWasOn = false, forceOff = false;
   void acquire(bool on, unsigned heldBefore, uint32_t now) {
-    if (!heldBefore) restoreOff = !on;
+    // A cache miss joins, then hands the connection to the catalog request.
+    // Keep the original radio state across that grace-period handoff: observing
+    // our own newly joined radio as "already on" kept it alive for 120 s.
+    if (!heldBefore && !releasePending) restoreOff = !on;
     releasePending = false;
     activity = now;
   }

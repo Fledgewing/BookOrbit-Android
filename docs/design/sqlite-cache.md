@@ -524,8 +524,10 @@ the supplied .224-era fragment has no comparable browse-page timing.
 The repair explicitly places JSON, numeric indexes, image scratch buffers and
 small tailnet TLS nodes in PSRAM on X4. SD font caches are released before joining.
 Wi-Fi init needs 61,440 internal bytes and a 24,576-byte block; PHY start and new
-catalog work need 24,576 bytes and a 4,096-byte block. An idle radio under that
-floor is released, including its catalog TLS session, before further PHY work.
+catalog work need 24,576 bytes and a 4,096-byte block. Radio ownership preserves its originally-off state across the miss-to-request
+handoff, so it is restored off after the three-second grace rather than being
+kept for the 120-second idle timeout. An idle radio under the catalog floor is
+also released, including its catalog TLS session.
 Existing lent sleep-sync sessions keep their separate tested budget.
 
 Host regression: 245 synthetic books, 294 offline windows across all seven sort
