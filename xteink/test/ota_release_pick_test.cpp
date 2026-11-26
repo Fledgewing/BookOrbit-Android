@@ -4,6 +4,8 @@
 // applied (it compiles CrossInk's own parser and version code).
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
+#include <vector>
 #include <string>
 
 #include "FirmwareVersion.h"
@@ -106,6 +108,50 @@ int main(int argc, char** argv) {
         for (size_t chunk : {size_t(1), size_t(7), size_t(4096)}) {
           CHECK(pick("xteink-v", channel, device, chunk, true, &body).newest.tagFound == expected);
         }
+      }
+    }
+  }
+
+  // The newest allowed version wins, irrespective of channel label or feed order.
+  struct ChannelCase {
+    Channel channel;
+    std::initializer_list<const char*> versions;
+    const char* expected;
+    const char* installed = "0.11.0";
+    bool install = true;
+  };
+  const ChannelCase channelCases[] = {
+      {Channel::RC, {"0.12.0-rc.3", "0.12.0"}, "0.12.0"},
+      {Channel::RC, {"0.12.0", "0.12.1-preview.2"}, "0.12.0"},
+      {Channel::RC, {"0.12.1-rc.1", "0.12.0"}, "0.12.1-rc.1"},
+      {Channel::Preview, {"0.12.1-preview.3", "0.12.1-rc.1", "0.12.1"}, "0.12.1"},
+      {Channel::Stable, {"0.12.0", "0.12.1-rc.1", "0.12.1-preview.2"}, "0.12.0"},
+      {Channel::Stable, {"0.12.1-rc.1", "0.12.1-preview.2"}, nullptr, "0.11.0", false},
+      {Channel::RC, {"0.12.0", "0.12.1-preview.2"}, "0.12.0", "0.12.1-preview.3", false},
+      {Channel::Stable, {"0.12.0", "0.12.1-rc.1"}, "0.12.0", "0.12.1-rc.1", false},
+  };
+  for (const auto& test : channelCases) for (bool reversed : {false, true}) {
+    const std::vector<const char*> versions(test.versions);
+    for (const char* device : {"firmware-x4-pro", "firmware-x4-classic", "firmware-x3-x4"}) {
+      std::string body = "[";
+      for (size_t i = 0; i < versions.size(); ++i) {
+        const char* version = versions[reversed ? versions.size() - 1 - i : i];
+        if (i) body += ",";
+        body += std::string("{\"tag_name\":\"xteink-v") + version +
+            "+crossink.2.0.0.bookorbit.1-rc3\",\"booksync_version\":\"" + version +
+            "\",\"prerelease\":true,\"assets\":[{\"name\":\"" + device +
+            "-v-test.bin\",\"browser_download_url\":\"https://example.invalid/fw.bin\"}]}";
+      }
+      body += "]";
+      for (size_t chunk : {size_t(1), size_t(7), size_t(4096)}) {
+        const auto selected = pick("xteink-v", test.channel, device, chunk, true, &body).newest;
+        CHECK(selected.tagFound == (test.expected != nullptr));
+        if (test.expected) CHECK(std::string(selected.booksyncVersion) == test.expected);
+        // OtaUpdater uses this comparison to suppress downgrades after a channel switch.
+        const bool install = selected.tagFound &&
+            ota_release_pick::compare(selected.booksyncVersion, test.installed,
+                                      selected.tagName, "") > 0;
+        CHECK(install == test.install);
       }
     }
   }

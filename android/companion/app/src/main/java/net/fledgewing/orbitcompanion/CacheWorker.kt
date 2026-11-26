@@ -908,6 +908,42 @@ class CacheWorker(
      * or nothing answers.
      */
     fun run(plan: Plan, creds: Creds, yieldTo: () -> Unit = {}): String {
+        val r = Run(plan)
+        r.startedMs = clockMs()
+        try {
+            return runMirror(plan, creds, yieldTo, r)
+        } catch (e: Exception) {
+            log("mirror: run failed (${e.javaClass.simpleName}); checkpoints retained")
+            r.errors++
+            val state = try {
+                if (plan.m["catalog"] is Map<*, *>) {
+                    r.total = 100
+                    r.pct = store.meta("bulk_stage_pct")?.toLongOrNull() ?: r.pct
+                    r.done = r.pct
+                } else recount(r, false)
+                status(r, false, "failed")
+            } catch (reporting: Exception) {
+                e.addSuppressed(reporting)
+                // A database failure must not prevent the file-based reply to the plugin.
+                val saved = runCatching { LuaValue.parse(File(mirrorDir, "status.lua").readBytes()) as? Map<*, *> }.getOrNull()
+                val bulk = plan.m["catalog"] is Map<*, *>
+                val total = if (bulk) 100L else r.total
+                mapOf("v" to 4L, "engine" to if (bulk) "bulk" else "crawl",
+                    "op" to if (plan.op == "resume") "full" else plan.op,
+                    "done" to r.done, "total" to total, "left" to maxOf(0L, total - r.done), "pct" to r.pct) +
+                    saved.orEmpty().entries.associate { it.key.toString() to it.value } + mapOf(
+                    "run" to plan.run, "running" to null, "beat" to now(), "why" to "failed", "errors" to r.errors)
+            }
+            write(File(mirrorDir, "status.lua"), LuaValue.encode(state))
+            summary(plan, "failed", r, (state["done"] as? Number)?.toLong() ?: r.done, state = state)
+            // A failed SQLite session must not poison every later resume in this process.
+            // Closing rolls back uncommitted work; committed pages/cursors remain on disk.
+            try { store.close() } catch (closing: Exception) { e.addSuppressed(closing) }
+            throw e
+        } finally { coverUsage = null; runProtected = emptySet() }
+    }
+
+    private fun runMirror(plan: Plan, creds: Creds, yieldTo: () -> Unit, r: Run): String {
         checkpoint()
         NoMedia.directory(mirrorDir)
         thumbnailWidth = (plan.m["cover_width"] as? Number)?.toInt() ?: 0
@@ -916,13 +952,12 @@ class CacheWorker(
         val st = store
         st.own(plan.owner)
         plan.detailTemplate?.let { st.setMeta("detail_template", it) }
-        val r = Run(plan)
-        r.startedMs = clockMs()
         if (plan.m["catalog"] is Map<*, *> && plan.op in setOf("full", "incremental", "revalidate", "resume")) {
             st.setMeta("run_op", if (plan.op == "resume") st.meta("run_op") ?: "full" else plan.op)
-            st.setMeta("run_started", now())
+            if (plan.op != "resume") st.setMeta("run_started", now())
             r.total = 100
-            r.pct = 0
+            r.pct = if (plan.op == "resume") st.meta("bulk_stage_pct")?.toLongOrNull() ?: 0L else 0L
+            r.done = r.pct
             writeStatus(r, true)
             if(plan.limit!=null)storage(StorageAsk("before refresh",plan.limit,plan.coverDir,plan.coversOn))
             coverUsage=if(plan.limit!=null)CoverUsage(storageItems(plan.coverDir,plan.coversOn)) else null
@@ -941,6 +976,7 @@ class CacheWorker(
             if (why != "finished") r.errors++
             writeStatus(r, false)
             summary(plan, why, r, r.done, why == "finished" && st.meta("run_op") == "full", why == "finished" && st.meta("run_op") == "revalidate")
+            if (why != "finished") st.close()
             return why
         }
         val pendingBefore = count("SELECT count(*) FROM jobs WHERE state = 0")
@@ -1248,9 +1284,10 @@ class CacheWorker(
         return if (why == "finished" && r.limitNote != null) "storage limit" else why
     }
 
-    private fun summary(plan: Plan, why: String, r: Run, jobs: Long, saved: Boolean = false, revalidated: Boolean = false) {
+    private fun summary(plan: Plan, why: String, r: Run, jobs: Long, saved: Boolean = false, revalidated: Boolean = false,
+        state: Map<String, Any?> = status(r, false, why)) {
         write(File(mirrorDir, "summary.lua"), LuaValue.encode(sortedMapOf<String, Any?>(
-            "run" to plan.run, "why" to why, "jobs" to jobs, "status" to status(r, false, why),
+            "run" to plan.run, "why" to why, "jobs" to jobs, "status" to state,
             "changed" to r.changed.toList(), "written" to r.written.toList(), "written_more" to r.writtenMore.takeIf { it },
             "saved" to saved.takeIf { it }, "revalidated" to revalidated.takeIf { it })))
     }

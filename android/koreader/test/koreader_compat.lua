@@ -96,11 +96,11 @@ local NEEDS = {
     { "frontend/gettext.lua", { { "GetText", T } } },
     { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T }, "paintTo" } },
     { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T } } },
-    -- W31 paint-only status overlay: no document setters or layout hooks.
+    -- Reading strips: temporary effective margins and native hidden-footer release.
     { "frontend/apps/reader/modules/readerfooter.lua", { "getHeight", "onToggleFooterMode",
         { "reclaim_height", F }, { "pageno", F }, { "pages", F }, { "percent_finished", F } } },
     { "frontend/apps/reader/modules/readerview.lua", { "paintTo" } },
-    { "frontend/apps/reader/modules/readertypeset.lua", { { "unscaled_margins", F } } },
+    { "frontend/apps/reader/modules/readertypeset.lua", { "onSetPageMargins", { "unscaled_margins", F } } },
     { "frontend/apps/reader/modules/readerrolling.lua", { { "cre_top_bar_enabled", F } } },
     { "frontend/apps/reader/modules/readertoc.lua", { "getTocTitleByPage" } },
     { "frontend/document/document.lua", { "getPageCount" } },
@@ -109,7 +109,8 @@ local NEEDS = {
     { "frontend/device/generic/powerd.lua", { "getCapacity", "isCharging" } },
     -- OrbiSmart (ko/orbismart.lua): places in this layout's pages, and the Yes / No popup (its
     -- Back / tap outside runs cancel_callback).
-    { "frontend/document/credocument.lua", { "getPageCount", "getPageFromXPointer", "getCurrentPage" } },
+    { "frontend/document/credocument.lua", { "getPageCount", "getPageFromXPointer", "getCurrentPage", "setPageMargins" } },
+    { "frontend/apps/reader/modules/readerpaging.lua", { "onInitScrollPageStates" } },
     { "frontend/ui/widget/confirmbox.lua", { { "ok_text", F }, { "cancel_text", F }, { "cancel_callback", F },
         { "self.cancel_callback()", T } } },
     -- The sleep screen (ko/sleepscreen.lua): the open book's cover and title, and the text input.

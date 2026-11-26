@@ -77,7 +77,7 @@
    ],
    "section": "reading",
    "label": "Status bar size",
-   "line": "Small fits the available margin; Medium and Large cap the text size. Page margins never change.",
+   "line": "Small, Medium and Large use fixed text sizes with minimal padding. Saved page margins never change.",
    "reader": [
     "plugin"
    ],

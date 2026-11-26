@@ -3913,6 +3913,19 @@ test("cache: Refresh checks now; Full refresh goes to the server; neither evicts
     cacheTeardown()
 end)
 
+test("cache: Refresh tap during Full refresh expands progress without starting another job", function()
+    local client, Cat = cacheSetup()
+    local cat = setmetatable({client=client}, Cat)
+    local mirror = E.Mirror
+    local shown
+    E.Mirror={fullRunning=function() return true end, showProgress=function(why) shown=why end}
+    W.wifi=false -- progress is local even if connectivity was lost
+    E.OC.refresh(cat)
+    eq(shown,"Refresh tapped"); eq(#cache.calls,0)
+    E.Mirror=mirror
+    cacheTeardown()
+end)
+
 test("cache: a write patches the cached book and marks Home stale; accounts never mix", function()
     local client = cacheSetup()
     W.wifi = true
@@ -4716,7 +4729,11 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
         notes = {}
         W.logs = {}
         E.OC.fullRefresh(cat)
-        E.OC.fullRefresh(cat)
+        E.Badge.expanded = nil
+        local run_id = E.Mirror.run_id
+        E.OC.refresh(cat)
+        eq(E.Mirror.run_id, run_id, "tap keeps the running Full refresh")
+        ok(E.Badge.expanded, "tap immediately expands visible progress")
         m = E.Mirror.status()
         ok(m.done >= done and m.total >= total and m.left > 0, "the run is kept, not restarted")
         local h = E.Badge.history or {}
@@ -4733,6 +4750,29 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
         ok(table.concat(W.logs, "\n"):find("mirror: resuming (network up)", 1, true), "resumed at network up: " .. table.concat(W.logs, " | "))
         m = E.Mirror.status()
         ok(m.left == 0 and m.at, "finished")
+    end)
+    cacheTeardown()
+end)
+
+test("mirror: pressing Full refresh after a failed bulk run resumes saved progress", function()
+    local client, Cat = cacheSetup()
+    W.wifi = true
+    local cat = pluginCatalog(Cat, client)
+    withHost(cat, function()
+        E.Mirror.cat = cat
+        E.Mirror.active, E.Mirror.busy = nil, nil
+        E.Mirror._status_dir = E.Mirror.dir()
+        E.Mirror._status = { v = 4, engine = "bulk", op = "full", done = 15, total = 100, left = 85, pct = 15 }
+        local launch, op = E.Mirror.launch
+        E.Mirror.launch = function(next_op) op = next_op; return true end
+        E.Mirror.start("Full refresh", true)
+        local resumed, done = op, E.Mirror.status().done
+        E.Mirror._status.left = 0
+        E.Mirror.start("Full refresh", true)
+        E.Mirror.launch = launch
+        eq(resumed, "resume", "paused bulk pages are kept on a second press")
+        eq(done, 15, "saved count is kept")
+        eq(op, "full", "a completed run can be refreshed from scratch")
     end)
     cacheTeardown()
 end)

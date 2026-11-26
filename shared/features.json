@@ -197,7 +197,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Manual refresh indicator and worker",
+          "note": "Refresh tap expands running Full refresh progress; otherwise refreshes normally; hold offers Full refresh",
           "reason": null,
           "evidence": [
             {
@@ -209,7 +209,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Persistent checkpoint and worker",
+          "note": "Persistent checkpoint and worker with native refresh progress controls",
           "reason": null,
           "evidence": [
             {
@@ -221,7 +221,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Persistent checkpoint and worker",
+          "note": "Persistent checkpoint and worker with native refresh progress controls",
           "reason": null,
           "evidence": [
             {
@@ -234,7 +234,7 @@
         "x3": {
           "status": "missing",
           "note": "X3 flash gate; no PSRAM",
-          "reason": "hardware: X3 flash gate; no PSRAM",
+          "reason": "hardware: X3 flash gate and no PSRAM exclude the Full refresh worker and its progress controls",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -2959,7 +2959,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Companion schema row; conditional on parent/capability",
+          "note": "Fixed 14/18/22 pt reading strips; hidden native footer space released; saved margins and footer preferences retained",
           "reason": null,
           "evidence": [
             {
@@ -2976,7 +2976,7 @@
         "x4_pro": {
           "status": "partial",
           "note": "Native bar visibility and slot controls; no one-toggle BookSync preset",
-          "reason": "gap — no reason",
+          "reason": "gap — no reason: BookSync preset is not implemented; native CrossInk status slots and text sizes have no KOReader footer reservation",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -2994,7 +2994,7 @@
         "x4": {
           "status": "partial",
           "note": "Native bar visibility and slot controls; no one-toggle BookSync preset",
-          "reason": "gap — no reason",
+          "reason": "gap — no reason: BookSync preset is not implemented; native CrossInk status slots and text sizes have no KOReader footer reservation",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3012,7 +3012,7 @@
         "x3": {
           "status": "partial",
           "note": "Native bar visibility and slot controls; no one-toggle BookSync preset",
-          "reason": "gap — no reason",
+          "reason": "gap — no reason: BookSync preset is not implemented; native CrossInk status slots and text sizes have no KOReader footer reservation",
           "evidence": [
             {
               "path": "xteink/tailnet/tailnet_build.py",
@@ -3039,7 +3039,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Companion schema row; conditional on parent/capability",
+          "note": "Fixed 14/18/22 pt reading strips; hidden native footer space released; saved margins and footer preferences retained",
           "reason": null,
           "evidence": [
             {
@@ -3055,7 +3055,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Native Small / Medium / Large text size selector; different wire key",
+          "note": "Native Small / Medium / Large text selector; independent of KOReader footer reservation",
           "reason": null,
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
           "evidence": [
@@ -3075,7 +3075,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Native Small / Medium / Large text size selector; different wire key",
+          "note": "Native Small / Medium / Large text selector; independent of KOReader footer reservation",
           "reason": null,
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
           "evidence": [
@@ -3095,7 +3095,7 @@
         },
         "x3": {
           "status": "supported",
-          "note": "Native Small / Medium / Large text size selector; different wire key",
+          "note": "Native Small / Medium / Large text selector; independent of KOReader footer reservation",
           "reason": null,
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
           "evidence": [

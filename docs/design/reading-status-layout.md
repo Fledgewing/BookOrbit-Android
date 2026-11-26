@@ -66,30 +66,41 @@ use KOReader's document pagination. Missing/unknown totals show no progress grou
 
 ## W31 correction (maintainer brief approved)
 
-The renderer is now strictly a paint-only overlay. It calls no document, engine,
-viewport, typeset or settings setters, and changes no footer settings, height,
-visibility, mode, generator, header or timers. The native layout runs exactly as
-it does with BookSync off. “Add space” is removed and its saved value ignored.
-Scroll modes and PDFs without unused screen surround show no overlay. An enabled
-CRE header remains native; the overlay clock is omitted there to avoid collision.
+The preview.1 regression is corrected: Small/Medium/Large select fixed 14/18/22
+point faces. Each strip measures one bold text line and adds one scaled pixel of
+padding per edge. Neither native footer height nor page margins enlarge the text
+or battery. Horizontal anchors follow scaled book margins or rendered PDF bounds;
+the battery group retains its four scaled pixel inset and gaps.
 
-Each lane fits measured bold black text to the existing margin, with zero widget
-padding and one scaled pixel of outer padding per side. Default Small selects the
-largest face fitting that margin, up to 48 pt; Medium and Large retain explicit
-18/22 pt caps. Horizontal anchors follow scaled left/right book margins, or the
-rendered PDF bounds. The battery group starts four scaled pixels inside that
-left edge; four-pixel scaled gaps separate its glyph, full percentage and separate
-black charging mark. Reserve the complete group before truncating page text. If
-it cannot fit at all, omit the whole group rather than clipping it. No text-block
-coordinate or hit transform changes.
+For EPUB page mode only, an instance wrapper on the document margin setter uses
+`max(user margin, strip height)`. It never changes unscaled margins, configurable
+values, sidecars or global settings. Disabling removes the wrapper and reapplies
+the user's margins through `ReaderTypeset:onSetPageMargins`, preserving the reading
+anchor without closing/reopening the book. Scroll and PDF strips draw only where
+a complete fixed-size line fits outside the document. A native CRE header still
+suppresses the BookSync clock.
 
-Native footer painting is suppressed only when an overlay fits. Its layout and
-refresh controller keep running. Footer-toggle events change only a private
-BookSync bottom-lane flag, without calling KOReader's settings-writing handler.
-Disabling or closing removes the three instance paint/toggle hooks and the minute
-timer; inherited or absent methods become inherited/absent again. No restore
-setter is necessary because native state never changes. Native footer settings
-menus remain the user's own controls.
+The native footer's effective height is zero while BookSync strips are active.
+Their temporary `reclaim_height=true` is restored on disable. Separately, once per
+reader instance, a height wrapper releases the native reservation whenever its
+mode is off, including when BookSync strips are off. Visible native footers keep
+the user's chosen height. This also repairs an already loaded 57-pixel hidden
+reservation without guessing whether the saved value was deliberate: **no saved
+footer height or reclaim preference is reset**. A session toggle removes the
+BookSync paint hooks and timer; the hidden-footer height policy lasts until that
+reader instance is discarded.
+
+At pinned KOReader commit `9192014d8bd82a91dc1012473be0f238dedfdb54`,
+`frontend/apps/reader/modules/readerfooter.lua:578` scales `container_height`,
+`:994-1002` returns measured footer content height, and
+`frontend/apps/reader/modules/readertypeset.lua:541-554` adds that height even in
+footer mode 0 when `reclaim_height=false`. Thus the log's 57 px is measured native
+layout, not evidence that BookSync saved a corrupt height. BookSync's old Small
+cap of 48 pt then grew into that reservation. The log cannot recover a user's
+original numeric footer height; resetting one would risk overwriting their choice.
+
+Native footer taps while strips are active toggle only the private bottom-lane
+visibility. Native settings and refresh timers retain their own controller.
 
 The shared sleep/reading battery program retains a black outline and terminal,
 white inner gap, and black proportional fill at 0–100%. A wider gap prevents the
@@ -142,7 +153,8 @@ snapshots survive `.old` rotation, including across companion restarts.
 At pinned KOReader commit `9192014d8bd82a91dc1012473be0f238dedfdb54`,
 `frontend/apps/reader/modules/readertypeset.lua:541-552` adds native footer height
 to CRE margins unless reclaimed; `frontend/document/credocument.lua:1346-1351`
-applies engine margins. The overlay calls neither method.
+applies engine margins. The instance wrapper changes only effective engine margins;
+saved unscaled margins are untouched.
 `frontend/apps/reader/modules/readerfooter.lua:2485-2510` changes native footer
 mode and persists it; the overlay consumes that event without invoking this path.
 `frontend/ui/widget/textwidget.lua:30-35` defines bold/black text and widget
@@ -175,3 +187,27 @@ W34 additionally checks KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`:
 `frontend/luasettings.lua:270-274` unconditionally dumps the loaded settings on flush;
 `frontend/ui/uimanager.lua:222-225` flushes before CloseWidget. Updating native global
 memory as well as the file is required to retain the recovered footer mode.
+
+## Preview.1 log findings (device local time, 2026-11-25)
+
+All Books opening notices at 16:40:22.917 and 16:40:38.377 precede first paints at
+16:40:29.656 and 16:40:45.093: **6.739 s and 6.716 s**. Cache-hit lines occur at
+16:40:29.404 and 16:40:44.923 (6.487 s and 6.546 s after the notices), followed by
+paint in 252 ms and 170 ms. Both pages came from cache; validation is scheduled in
+the background. The delay is before the cache-hit log (subprocess scheduling and
+cache assembly are not separately timed), so this log cannot attribute it to a
+server fetch or identify a safe targeted performance fix. First-open covers
+finished at 16:40:34.165, another 4.509 s after first paint; the second open had
+all 12 covers on disk.
+
+The apparent home/back flash includes an opening-file notice at 16:44:29.287,
+reader open at 16:44:29.394 and ready at 16:44:29.826. Another reopen occurs at
+16:47:58.995. Neither is preceded by a BookSync close/reopen/restart command in
+the log. Status setting callbacks only change instance hooks; the corrected
+layout uses in-place margin updates, never a reader close or reload. The log is
+insufficient to assign the reopen to a specific native setting action.
+
+A single Refresh tap now checks for a running Full refresh before network checks
+or normal refresh notices. It expands that run's existing progress badge with the
+latest status, leaving the run and catalog view intact. Long press keeps its
+existing Full refresh behavior.

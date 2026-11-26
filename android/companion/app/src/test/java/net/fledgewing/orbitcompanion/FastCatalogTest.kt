@@ -105,6 +105,113 @@ class FastCatalogTest {
         } finally { worker.store.close(); root.deleteRecursively() }
     }
 
+    @Test fun storageRetirementJoinsARunningMirrorTransaction() = nestedMirrorWrite(true)
+    @Test fun patchJoinsARunningMirrorTransaction() = nestedMirrorWrite(false)
+
+    private fun nestedMirrorWrite(retire: Boolean) {
+        val root = Files.createTempDirectory("bulk-nested-writes").toFile()
+        lateinit var worker: CacheWorker
+        var nested = false
+        val creds = CacheWorker.Creds("https://books.example/api/v1", "reader", "key")
+        worker = CacheWorker(root, { url, _, _, _ ->
+            CacheWorker.Reply(200, JSONObject(reply(url.substringAfter("/api/v1"))).toString().toByteArray())
+        }, log = {}, openSql = { file ->
+            val jdbc = JdbcSql(file)
+            object : Sql by jdbc {
+                override fun exec(sql: String, vararg args: Any?) {
+                    jdbc.exec(sql, *args)
+                    // Re-enter the public helpers while a mirror page is landing.
+                    if (!nested && sql.startsWith("INSERT OR REPLACE INTO bulk_books")) {
+                        nested = true
+                        worker.store.setMeta("bulk_active", 1L)
+                        if (retire) worker.storage(CacheWorker.StorageAsk("during mirror", null, null, false))
+                        else {
+                            worker.patch(1L, mapOf("rating" to 4L), true, false)
+                            assertEquals(4L, (worker.store.bookItem(1L) as Map<*, *>)["rating"])
+                        }
+                    }
+                }
+            }
+        })
+        try {
+            assertEquals("finished", worker.run(plan(), creds))
+            assertTrue(nested)
+            val summary = LuaValue.parse(File(root, "mirror/summary.lua").readBytes()) as Map<*, *>
+            assertEquals("finished", summary["why"])
+        } finally { worker.store.close(); root.deleteRecursively() }
+    }
+
+    @Test fun failedRunWritesSummaryAndResumeKeepsSavedProgressAndPages() {
+        val root = Files.createTempDirectory("bulk-failed-summary").toFile()
+        val creds = CacheWorker.Creds("https://books.example/api/v1", "reader", "key")
+        var fail = false
+        val requested = arrayListOf<String>()
+        val progress = arrayListOf<Long?>()
+        val worker = CacheWorker(root, { url, _, _, _ ->
+            val path = url.substringAfter("/api/v1")
+            requested.add(path)
+            CacheWorker.Reply(200, JSONObject(reply(path)).toString().toByteArray())
+        }, log = {}, openSql = ::JdbcSql, onProgress = progress::add,
+            checkpoint = { if (fail) { fail = false; error("injected storage failure") } })
+        fun state(name: String) = LuaValue.parse(File(root, "mirror/$name.lua").readBytes()) as Map<*, *>
+        try {
+            var stop = false
+            assertEquals("incomplete coverage", FastCatalogRefresh(worker.store, plan(), ::reply,
+                { if (stop) throw CatalogFailure() }, { false }, { 1000 }, { if (it == 15) { assertEquals("15", worker.store.meta("bulk_stage_pct")); stop = true } }, {}).run())
+            assertEquals("15", worker.store.meta("bulk_stage_pct"))
+            fail = true
+            try {
+                worker.run(plan("resume"), creds)
+                throw AssertionError("expected failure")
+            } catch (_: IllegalStateException) { }
+            assertEquals("failed", state("summary")["why"])
+            val saved = state("summary")["status"] as Map<*, *>
+            assertEquals(15L, saved["done"])
+            assertEquals(85L, saved["left"])
+            progress.clear()
+            assertEquals("finished", worker.run(plan("resume"), creds))
+            assertEquals(15L, progress.first())
+            assertTrue(requested.none { "/manifest" in it })
+            assertEquals(100L, state("status")["done"])
+        } finally { worker.store.close(); root.deleteRecursively() }
+    }
+
+    @Test fun failedDatabaseSessionStillRepliesAndIsReopenedOnRetry() {
+        val root = Files.createTempDirectory("bulk-broken-session").toFile()
+        var broken = false
+        var opens = 0
+        val worker = CacheWorker(root, { url, _, _, _ ->
+            CacheWorker.Reply(200, JSONObject(reply(url.substringAfter("/api/v1"))).toString().toByteArray())
+        }, log = {}, openSql = { file ->
+            opens++
+            val jdbc = JdbcSql(file)
+            object : Sql by jdbc {
+                override fun <T> query(sql: String, vararg args: Any?, row: (Sql.Row) -> T): List<T> {
+                    check(!broken) { "broken SQLite session" }
+                    return jdbc.query(sql, *args, row = row)
+                }
+                override fun close() { jdbc.close(); broken = false }
+            }
+        })
+        try {
+            worker.store.db()
+            File(root, "mirror/status.lua").apply {
+                parentFile!!.mkdirs()
+                writeBytes(LuaValue.encode(mapOf("engine" to "bulk", "op" to "full", "done" to 15L, "total" to 100L, "left" to 85L)))
+            }
+            broken = true
+            try {
+                worker.run(plan("resume"), CacheWorker.Creds("https://books.example/api/v1", "reader", "key"))
+                throw AssertionError("expected broken session")
+            } catch (e: IllegalStateException) { assertEquals("broken SQLite session", e.message) }
+            val summary = LuaValue.parse(File(root, "mirror/summary.lua").readBytes()) as Map<*, *>
+            assertEquals("failed", summary["why"])
+            assertEquals(15L, (summary["status"] as Map<*, *>)["done"])
+            assertEquals("finished", worker.run(plan("resume"), CacheWorker.Creds("https://books.example/api/v1", "reader", "key")))
+            assertEquals(2, opens)
+        } finally { worker.store.close(); root.deleteRecursively() }
+    }
+
     @Test fun schemaMatchesThePluginFixture() {
         assertEquals(BulkCatalog.schema,File("../../../shared/fixtures/catalog/bulk-refresh/schema.sql").readLines().filter(String::isNotBlank).map {it.removeSuffix(";")})
     }
