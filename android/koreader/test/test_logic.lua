@@ -918,7 +918,7 @@ test("local-first: ISO times, content keys and changed tiles", function()
 end)
 
 ---------------------------------------------------------------- write-through cache (shared cases)
-local C = M.Cache
+local C = M.ServerCache
 -- The companion's rules as the fake companion plays them (test/companion_rules.lua): checked here
 -- against the tables the companion's tests read, so the fake cannot drift from the real worker.
 local CR = dofile(here .. "/companion_rules.lua")(C)
@@ -1422,7 +1422,7 @@ end)
 -- entry format, which the companion's cache worker must match byte for byte (CacheWorkerTest
 -- reads the same file). Regenerate only when the plugin's rules change, then fix the companion.
 test("cache worker fixture: the plugin's keys, hashes, pages, cover names and entry format", function()
-    local Cache = M.Cache
+    local Cache = M.ServerCache
     -- @fixture cache/worker.json
     local fx = JSON.fixture(here, "cache/worker.json")
     for _, k in ipairs(fx.keys) do

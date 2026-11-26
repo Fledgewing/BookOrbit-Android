@@ -150,6 +150,7 @@ return function(test, eq, ok, here, Cache)
 
     end)
     test("storage: local IO and directory providers work without a backend", function()
+        eq(Cache.normalize,nil); eq(Cache.listWindow,nil); eq(Cache.key,nil)
         local mkdirs=0
         local e=setmetatable({Db={pid=function() return 1 end},require=function(name)
             if name=="libs/libkoreader-lfs" then return {mkdir=function() mkdirs=mkdirs+1 end} end
@@ -203,7 +204,7 @@ return function(test, eq, ok, here, Cache)
     test("account snapshot: signed-out UI reads one bounded lifecycle row without a catalog owner", function()
         local state={signedIn=false,sync={set=true,available=true,origin="user"},opds={set=false}}
         local body=Cache.encode(state)
-        local e=setmetatable({Cache=Cache,Budgets={MAX_SNAPSHOT=16384},Companion={workerProblem=function() end,AUTHORITY="fixture",PACKAGE="fixture"},
+        local e=setmetatable({Cache=Cache,ServerCache={encode=Cache.encode,decode=Cache.decode},Budgets={MAX_SNAPSHOT=16384},Companion={workerProblem=function() end,AUTHORITY="fixture",PACKAGE="fixture"},
             Jni={call=function() return {ok="1",body=body} end},serverPlugin=function() return nil end,
             Store={library=function() error("no catalog should be read") end}}, {__index=_G})
         setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()

@@ -3959,7 +3959,7 @@ test("cache: a read made in the catalog's child process is saved by the companio
     local done, r = client:runInSubprocess(function() return client:request("GET", DASH) end)
     ok(done and r.body.continueReading[1].id == 9, "the child's answer")
     run(1)
-    local key = E.Cache.key({ account = E.OC.owner(client), server = client.server_url, method = "GET", path = DASH })
+    local key = E.ServerCache.key({ account = E.OC.owner(client), server = client.server_url, method = "GET", path = DASH })
     ok(E.Store.read(E.OC.owner(client), key, DASH) ~= nil, "the companion saved it")
     cache.calls = {}
     local b = client:request("GET", DASH)
@@ -5247,7 +5247,7 @@ test("cache: a background check of a big page compares and saves it in the child
     local biggest = uiEncodes(function() run(10) end)
     ok(table.concat(W.logs, "\n"):find("checked: changed", 1, true), "checked and changed: " .. table.concat(W.logs, " | "))
     ok(biggest < 8 * 1024, "the UI thread handled at most " .. biggest .. " bytes")
-    local e = E.Store.read(E.OC.owner(client), E.Cache.key({ account = E.OC.owner(client), server = client.server_url, method = "GET", path = DASH }), DASH)
+    local e = E.Store.read(E.OC.owner(client), E.ServerCache.key({ account = E.OC.owner(client), server = client.server_url, method = "GET", path = DASH }), DASH)
     ok(e and e.body.continueReading[1].progressPercentage == 2, "the new page is saved")
     cacheTeardown()
 end)
@@ -5937,7 +5937,7 @@ end)
 local JSONF = dofile(here .. "/json_mini.lua")
 -- @fixture cache/db.json @fixture cache/schema.sql
 local DBFX = JSONF.decode(io.open(here .. "/../../../shared/fixtures/cache/db.json", "rb"):read("*a"))
-local FakeStore = dofile(here .. "/fake_store.lua")(RE.Cache, SQ3, here .. "/../../../shared/fixtures/cache/schema.sql")
+local FakeStore = dofile(here .. "/fake_store.lua")(RE.ServerCache, SQ3, here .. "/../../../shared/fixtures/cache/schema.sql")
 
 local function fixtureStore()
     local dir = os.tmpname() .. "-store"
@@ -5945,7 +5945,7 @@ local function fixtureStore()
     local st = FakeStore.open(dir .. "/orbit.db")
     st:own(DBFX.owner)
     for i, sv in ipairs(DBFX.saves) do
-        local key = sv.key or RE.Cache.key({ account = DBFX.owner:match("^([^|]*)"), server = DBFX.owner:match("|(.*)$"), method = "GET", path = sv.path })
+        local key = sv.key or RE.ServerCache.key({ account = DBFX.owner:match("^([^|]*)"), server = DBFX.owner:match("|(.*)$"), method = "GET", path = sv.path })
         st:save(key, sv.path, sv.reply, 1000 + i, DBFX.detail_template)
     end
     return dir, st
@@ -6026,7 +6026,7 @@ test("sqlite cache: the plugin's reads answer the shared fixture (db.json) from 
     local dir, st = fixtureStore()
     withStore(dir, function()
         for _, r in ipairs(DBFX.reads) do
-            local key = r.key or RE.Cache.key({ account = DBFX.owner:match("^([^|]*)"), server = DBFX.owner:match("|(.*)$"), method = "GET", path = r.path })
+            local key = r.key or RE.ServerCache.key({ account = DBFX.owner:match("^([^|]*)"), server = DBFX.owner:match("|(.*)$"), method = "GET", path = r.path })
             local e = RE.Store.read(DBFX.owner, key, r.path, DBFX.detail_template)
             if r["null"] then
                 ok(e == nil, r.path .. " should not be saved")

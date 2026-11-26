@@ -3,7 +3,7 @@
 function Server.bulkList(conn, w)
     local g = tonumber(Store.meta(conn, "bulk_active"))
     if not g then return nil end
-    local q = Cache.parseQuery(w.identity:match("%?(.*)$") or "")
+    local q = ServerCache.parseQuery(w.identity:match("%?(.*)$") or "")
     local statusarg
     local args, from, cond, order, context = {g}, "bulk_books b", {"b.g=?"}, nil, false
     if w.section then
@@ -67,9 +67,9 @@ function Server.bulkList(conn, w)
     end
     from = from .. " WHERE " .. table.concat(cond, " AND ")
     local total = tonumber(Store.rows(conn, "SELECT count(*) FROM " .. from, unpack(args))[1][1]) or 0
-    local start, stop, size = Cache.window(w.kind, total, w.page, w.size, w.offset)
+    local start, stop, size = ServerCache.window(w.kind, total, w.page, w.size, w.offset)
     local h = Store.rows(conn, "SELECT head FROM bulk_heads WHERE g=? AND identity=?",g,w.identity)[1]
-    local head = h and Cache.decode(h[1] or "") or {}
+    local head = h and ServerCache.decode(h[1] or "") or {}
     if not w.section and q.buckets == "1" and (q.sort == "title" or q.sort == "author") then
         head.buckets = {}
         for _, b in ipairs(Store.rows(conn, "SELECT r.letter,min(r.pos),count(*) FROM " .. from .. " GROUP BY r.letter ORDER BY min(r.pos)", unpack(args))) do
@@ -100,12 +100,12 @@ function Server.bulkList(conn, w)
         .. " FROM " .. from .. " ORDER BY " .. order .. " LIMIT ? OFFSET ?", unpack(args))
     local items = {}
     for _, row in ipairs(got) do
-        local book = Cache.decode(row[1] or "")
+        local book = ServerCache.decode(row[1] or "")
         if type(book) ~= "table" then return nil end
-        if context then for k, v in pairs(Cache.decode(row[2] or "") or {}) do book[k] = v end end
+        if context then for k, v in pairs(ServerCache.decode(row[2] or "") or {}) do book[k] = v end end
         table.insert(items, book)
     end
-    return {body=Cache.assemble(head, items, total, start, stop, size, w.offset),
+    return {body=ServerCache.assemble(head, items, total, start, stop, size, w.offset),
         validated_at=tonumber(Store.meta(conn, "bulk_at")) or 0, table="lists"}
 end
 
@@ -120,17 +120,17 @@ local function list(conn, w)
     local l = rows(conn, "SELECT kind, total, head, validated_at FROM lists WHERE identity = ?", w.identity)[1]
     if not l then return nil end
     local total = tonumber(l[2]) or 0
-    local start, stop, size = Cache.window(l[1] or w.kind, total, w.page, w.size, w.offset)
+    local start, stop, size = ServerCache.window(l[1] or w.kind, total, w.page, w.size, w.offset)
     local got = rows(conn, "SELECT li.pos, COALESCE(b.item, li.item) FROM list_items li LEFT JOIN books b ON b.id = li.book_id "
         .. "WHERE li.identity = ? AND li.pos >= ? AND li.pos < ? ORDER BY li.pos", w.identity, start, stop)
     if #got ~= stop - start then return nil end
     local items = {}
     for i, r in ipairs(got) do
-        local item = Cache.decode(r[2] or "")
+        local item = ServerCache.decode(r[2] or "")
         if type(item) ~= "table" then return nil end
         items[i] = item
     end
-    return { body = Cache.assemble(Cache.decode(l[3] or ""), items, total, start, stop, size, w.offset),
+    return { body = ServerCache.assemble(ServerCache.decode(l[3] or ""), items, total, start, stop, size, w.offset),
         validated_at = tonumber(l[4]) or 0, table = "lists" }
 end
 
@@ -138,24 +138,24 @@ end
 -- template: the plugin's detail request with Mirror.SENTINEL for the id (Mirror.detailPath).
 function Store.read(owner, key, path, template)
     return within(owner, "read:" .. key, function(conn)
-        local w = Cache.listWindow(path)
+        local w = ServerCache.listWindow(path)
         local e
         if w then
             e = list(conn, w)
         else
-            local id = Cache.detailId(path, template, Mirror.SENTINEL)
+            local id = ServerCache.detailId(path, template, Mirror.SENTINEL)
             if id then
                 local r = rows(conn, "SELECT detail, detail_at FROM books WHERE id = ? AND detail IS NOT NULL", id)[1]
-                local body = r and Cache.decode(r[1] or "")
+                local body = r and ServerCache.decode(r[1] or "")
                 if type(body) == "table" then e = { body = body, validated_at = tonumber(r[2]) or 0, table = "books" }
                 elseif Store.meta(conn, "bulk_active") then
                     local stub = rows(conn, "SELECT item FROM bulk_books WHERE g = ? AND id = ?", tonumber(Store.meta(conn, "bulk_active")), id)[1]
-                    local item = stub and Cache.decode(stub[1] or "")
+                    local item = stub and ServerCache.decode(stub[1] or "")
                     if type(item) == "table" then e = {body=item, validated_at=0, stale=true, table="books", partial=true} end
                 end
             else
                 local r = rows(conn, "SELECT body, validated_at, stale FROM entries WHERE key = ?", key)[1]
-                local body = r and Cache.decode(r[1] or "")
+                local body = r and ServerCache.decode(r[1] or "")
                 if type(body) == "table" then e = { body = body, validated_at = tonumber(r[2]) or 0, stale = tonumber(r[3]) == 1 or nil, table = "entries" } end
             end
         end
@@ -166,8 +166,8 @@ end
 
 -- An offline search over the saved books (title, authors, series): the server's list shape.
 function Store.search(owner, path)
-    local q = Cache.parseQuery((tostring(path):match("%?(.*)$")) or "")
-    local words = Cache.searchWords(q.q)
+    local q = ServerCache.parseQuery((tostring(path):match("%?(.*)$")) or "")
+    local words = ServerCache.searchWords(q.q)
     if #words == 0 then return nil end
     return within(owner, "search:" .. path, function(conn)
         local where = {}
@@ -177,16 +177,16 @@ function Store.search(owner, path)
         local item = bulk and "c.item" or "item"
         local cond = item .. " IS NOT NULL AND " .. table.concat(where, " AND ")
         local total = tonumber(rows(conn, "SELECT count(*) FROM " .. source .. " WHERE " .. cond, unpack(words))[1][1]) or 0
-        local start, stop, size = Cache.window("books", total, q.page, q.size, q.offset)
+        local start, stop, size = ServerCache.window("books", total, q.page, q.size, q.offset)
         local args = { unpack(words) }
         table.insert(args, stop - start)
         table.insert(args, start)
         local items = {}
         for _, r in ipairs(rows(conn, "SELECT " .. item .. " FROM " .. source .. " WHERE " .. cond .. " ORDER BY search LIMIT ? OFFSET ?", unpack(args))) do
-            local item = Cache.decode(r[1] or "")
+            local item = ServerCache.decode(r[1] or "")
             if type(item) == "table" then table.insert(items, item) end
         end
-        return Cache.assemble({ query = q.q }, items, total, start, stop, size, q.offset)
+        return ServerCache.assemble({ query = q.q }, items, total, start, stop, size, q.offset)
     end)
 end
 

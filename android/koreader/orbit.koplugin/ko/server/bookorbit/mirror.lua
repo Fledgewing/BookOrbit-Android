@@ -52,7 +52,7 @@ function Mirror.dir()
 end
 
 local function load(name)
-    local v = Cache.decode(OC.readFile(Mirror.dir() .. "/" .. name) or "")
+    local v = ServerCache.decode(OC.readFile(Mirror.dir() .. "/" .. name) or "")
     return type(v) == "table" and v or nil
 end
 
@@ -338,10 +338,10 @@ function Mirror.launch(op, reason)
         Mirror.run_id, Mirror.sent_at, Mirror.seen_beat = plan.run, nowT(), nil
         if op == "full" then
             Mirror._status.run = plan.run
-            OC.writeFile(Mirror.dir() .. "/status.lua", Cache.encode(Mirror._status))
+            OC.writeFile(Mirror.dir() .. "/status.lua", ServerCache.encode(Mirror._status))
         end
         Companion.send(Companion.ACTION.MIRROR, { reason = op .. ": " .. tostring(reason), server = client.server_url,
-            user = client.username, userkey = client.userkey, plan = Cache.encode(plan) })
+            user = client.username, userkey = client.userkey, plan = ServerCache.encode(plan) })
         Mirror.poll()
     end
     UIManager:nextTick(advance)
@@ -478,11 +478,11 @@ function Mirror.changedOnScreen(identity)
     local p = serverPlugin(liveUI())
     local cat = p and p.catalog_browser
     if not cat or cat.catalog_closed or not cat._orbit_view_keys then return end
-    local want = Cache.key({ path = identity })
+    local want = ServerCache.key({ path = identity })
     for k in pairs(cat._orbit_view_keys) do
         local path, q = k:match("|GET|([^|]*)|(.*)$")
-        local w = path and Cache.listWindow(path .. (q ~= "" and ("?" .. q) or ""))
-        if w and Cache.key({ path = w.identity }) == want then
+        local w = path and ServerCache.listWindow(path .. (q ~= "" and ("?" .. q) or ""))
+        if w and ServerCache.key({ path = w.identity }) == want then
             OC.redraw_soon(k)
             return
         end

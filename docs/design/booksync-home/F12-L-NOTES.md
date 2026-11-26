@@ -101,3 +101,14 @@ move from the old cache into the existing `ko/store.lua`, with injected director
 providers and a backend-free storage test. Legacy lookup/search move into the existing private
 store module and keep the same read transaction/gate. New guard probes reject direct globals,
 indexed global access and persistence reads from UI.
+
+The final helper audit also separates policy from codec: generic `logic/cache.lua` no
+longer receives backend methods. The existing legacy key/read/paging/response-assembly
+functions move to private `ServerCache` under `logic/server/bookorbit/cache.lua`. Owned
+code retains the generic codec; protocol fixtures explicitly load the adapter policy. The
+guard rejects policy access even from wiring, and the backend-free IO test verifies the
+generic codec has no protocol methods.
+
+The companion mirrors this split: response ID traversal and legacy paging move from
+`LuaValue` into the existing private `CacheRules`; the generic serializer no longer
+interprets server response fields. Paging field names are covered by the guard inventory.

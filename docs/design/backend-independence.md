@@ -172,7 +172,9 @@ so the guard rejects backend names in every casing without breaking installed se
 Its adapter package owns the old cache/mirror/copies, finish, grouping, local-first and
 position-sync hooks; pure protocol helpers live in `logic/server/bookorbit`. Generic cache
 encoding remains `logic/cache.lua`; `ko/store.lua` keeps the small owned projection read.
-The legacy bulk query interpreter moved to `ko/server/bookorbit/store.lua`.
+The legacy query interpreter moved to `ko/server/bookorbit/store.lua`. The shared `Cache`
+object contains only codec/local utilities; legacy paging, response assembly, cache keys and
+normalization live on private `ServerCache`, whose direct use is guarded too.
 
 The maintainer explicitly permits routing oversized migrations through this one Lua adapter
 for this slice. Remaining server calls **inside that adapter**, to move to companion commands

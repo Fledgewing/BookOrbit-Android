@@ -74,7 +74,7 @@ function Copies.ask(why)
     local okp, path = pcall(function() return client and Mirror.detailPath(client, Mirror.SENTINEL) end)
     if okp and path then ask.owner, ask.server, ask.detail_template = OC.owner(client), client.server_url, path end
     Copies.asked, Copies.asked_seq = OC.now(), Copies.seq
-    Companion.send(Companion.ACTION.COPIES, { reason = tostring(why), ask = Cache.encode(ask) })
+    Companion.send(Companion.ACTION.COPIES, { reason = tostring(why), ask = ServerCache.encode(ask) })
     OC.watchChecks()
     return true
 end
@@ -167,7 +167,7 @@ function Copies.pump()
     local template = client:query("/koreader/plugin/catalog/books/" .. Mirror.SENTINEL,
         { deviceId = client.device_id, variant = Delivery.preference(cat.settings or {}, client) })
     Copies.preparing, Copies.prepare_at = job, OC.now()
-    Companion.send(Companion.ACTION.COPIES, { reason = "prepare replacement", prepare = Cache.encode(job),
+    Companion.send(Companion.ACTION.COPIES, { reason = "prepare replacement", prepare = ServerCache.encode(job),
         template = template, server = client.server_url, user = client.username, userkey = client.userkey })
     OC.watchChecks()
 end

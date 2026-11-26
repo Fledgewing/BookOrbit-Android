@@ -279,7 +279,7 @@ function LF.yearMinutes(now, year)
     local key = tostring(year) .. ":" .. os.date("%Y-%m-%d", now) .. ":" .. tostring(math.floor(now / 120))
     if LF.year_key ~= key and not Companion.workerProblem() then
         LF.year_key = key
-        Companion.send(Companion.ACTION.PATCH, { reason = "Home calendar", board_year = Cache.encode(year or {}),
+        Companion.send(Companion.ACTION.PATCH, { reason = "Home calendar", board_year = ServerCache.encode(year or {}),
             board_key = key, board_now = tostring(now) })
         LF.year_waiting = os.time()
         OC.watchChecks()
@@ -585,7 +585,7 @@ function LF.keepOnDevice(cat)
         if type(path) == "string" then map[tostring(id)] = path; n = n + 1 end
     end
     local saved = S.orbit_on_device
-    local sig = Cache.encode(map)
+    local sig = ServerCache.encode(map)
     if saved and saved.owner == deviceOwner(cat) and saved.sig == sig then return end
     S.orbit_on_device = { owner = deviceOwner(cat), map = map, sig = sig }
     saveSettings()

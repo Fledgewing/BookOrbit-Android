@@ -166,7 +166,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
                 // Other replies that name the book (Home's sections): patched where they are.
                 for ((key, body) in db().query("SELECT key, body FROM entries") { it.text(0)!! to it.bytes(1) }) { // key: as stored
                     val b = body?.let { LuaValue.parse(it) } ?: continue
-                    if (id !in LuaValue.ids(b)) continue
+                    if (id !in CacheRules.ids(b)) continue
                     db().exec("UPDATE entries SET body = ? WHERE key = ?", LuaValue.encode(patched(b, id, fields)), key)
                     n++
                 }

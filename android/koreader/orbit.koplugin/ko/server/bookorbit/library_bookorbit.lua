@@ -19,7 +19,7 @@ function LibraryAdapter.read(request,op)
     if not owner then
         if op=="capabilities" and LibraryAdapter.account_snapshot then
             local result={account=LibraryAdapter.account_snapshot}
-            return result,#Cache.encode(result)
+            return result,#ServerCache.encode(result)
         end
         return nil
     end
@@ -28,7 +28,7 @@ function LibraryAdapter.read(request,op)
         local merged={}
         for k,v in pairs(result or {}) do merged[k]=v end
         merged.account=LibraryAdapter.account_snapshot
-        bytes=#Cache.encode(merged)
+        bytes=#ServerCache.encode(merged)
         if bytes>Budgets.MAX_SNAPSHOT then return nil end
         result=merged
     end
@@ -56,7 +56,7 @@ function LibraryAdapter.request(requests)
         end
     end
     if #due == 0 then return false end
-    local batch = Cache.encode(due)
+    local batch = ServerCache.encode(due)
     assert(#batch <= 131072, "Library batch byte budget exceeded")
     Companion.send(Companion.ACTION.PATCH, {library_batch=batch, owner=owner})
     return true
@@ -144,7 +144,7 @@ function LibraryAdapter.accountReturned(attempt)
     if not result or result.ok ~= "1" then return false end
     local body=result.body
     if type(body)=="string" and #body<=Budgets.MAX_SNAPSHOT then
-        LibraryAdapter.account_snapshot=Cache.decode(body)
+        LibraryAdapter.account_snapshot=ServerCache.decode(body)
         LibraryAdapter.account_bytes=#body
     end
     local changed = LibraryAdapter.managed_owner ~= result.owner
@@ -156,7 +156,7 @@ end
 -- Explicit dispatched commands only; paint reads continue to use the owned SQLite windows.
 function LibraryAdapter.command(op, args, callback)
     if Companion.workerProblem() then callback({error="unavailable"}); return false end
-    local encoded = Cache.encode(args or {})
+    local encoded = ServerCache.encode(args or {})
     assert(#encoded <= Budgets.MAX_REQUEST, "Server command exceeds budget")
     local sent = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_COMMAND", {op=op,args=encoded})
     if not sent or sent.ok ~= "1" or not sent.id then callback({error="unavailable"}); return false end
@@ -165,12 +165,12 @@ function LibraryAdapter.command(op, args, callback)
         local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.SERVER_RESULT", {id=sent.id})
         local body = result and result.body
         if type(body) ~= "string" or #body > Budgets.MAX_SNAPSHOT then callback({error="unavailable"}); return end
-        local decoded = Cache.decode(body)
+        local decoded = ServerCache.decode(body)
         if type(decoded) ~= "table" then callback({error="invalid"}); return end
         if not decoded.pending then
             if decoded.state then
                 LibraryAdapter.account_snapshot=decoded.state
-                LibraryAdapter.account_bytes=#Cache.encode(decoded.state)
+                LibraryAdapter.account_bytes=#ServerCache.encode(decoded.state)
                 LibraryAdapter.managed_owner=decoded.state.owner
                 LibraryAdapter.reset()
             end

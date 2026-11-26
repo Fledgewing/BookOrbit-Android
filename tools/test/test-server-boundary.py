@@ -18,13 +18,14 @@ FIELDS = ("readStatus", "progressPercentage", "smartScopeId", "seriesName", "ser
           "seriesSummary", "libraryVersion", "generatedAt", "finishedThisYear", "readingGoal",
           "thumbnailUrl", "detailUrl", "downloadUrl", "userkey", "server_url",
           "accessToken", "refreshToken", "accessTokenExpiresAt", "refreshTokenExpiresAt",
-          "clientKind", "deviceLabel", "readingSeconds", "durationSeconds", "sessionId", "dashboardConfig")
+          "clientKind", "deviceLabel", "readingSeconds", "durationSeconds", "sessionId", "dashboardConfig",
+          "hasNext", "hasPrevious")
 WIRE_PROTOCOL = re.compile(
     r'/api/v1|/?koreader/plugin\b|\bcatalog/(?:books|sections|dashboard)|\b(?:' + '|'.join(FIELDS) +
     r')\b|smart[ _-]?scopes?|x-auth-user|x-auth-key|/koreader/(?:users|syncs|credentials)|'
     r'/auth/(?:login|refresh|logout)|/opds(?:-users\b|[/?\"\']|$)', re.I)
 PROTOCOL = re.compile(WIRE_PROTOCOL.pattern + r'|bookorbit', re.I)
-IMPLEMENTATION = re.compile(r'(?:net\.fledgewing\.orbitcompanion\.server\.[a-z]+|(?:ko|logic)[/.]server[/.]|[\"\']bookorbit_)')
+IMPLEMENTATION = re.compile(r'(?:net\.fledgewing\.orbitcompanion\.server\.[a-z]+|(?:ko|logic)[/.]server[/.]|[\"\']bookorbit_|\bServerCache\b)')
 # Reviewed legacy facade consumers: permissions to call the facade, never protocol exemptions.
 # main.lua is the only implementation loader; owned Home/Details/widget modules are absent.
 LUA_COMPAT_CONSUMERS = frozenset(LUA / 'ko' / name for name in (
@@ -73,6 +74,8 @@ def violations(path, source):
         # These are implementation objects exported by old shared-environment modules,
         # not neutral services. Quoted UI labels such as "Sync" are still ordinary data.
         identifiers = LUA_STRINGS.sub(lambda m: re.sub(r'[^\n]', ' ', m[0]), code)
+        if re.search(r'\bServerCache[.:]', identifiers):
+            errors.append(f'{path}: protocol cache policy outside adapter')
         if re.search(r'\b(?:' + LEGACY_GLOBALS + r')\b', identifiers) or re.search(
                 r'\[\s*["\'](?:' + LEGACY_GLOBALS + r')["\']\s*\]', code):
             errors.append(f'{path}: shared backend implementation outside adapter; use Library or reviewed Server facade')
@@ -118,7 +121,7 @@ class GuardTests(unittest.TestCase):
         self.assertTrue(violations(LUA / 'ko/home.lua', 'p:fetchRemoteProgress(digest, callback)'))
     def test_shared_environment_cannot_bypass_adapter_import_guards(self):
         for value in ('OC.client()', 'Mirror.catalog()', 'OSM.pullThenDrain()', 'Sync.waitOutbox()',
-                      'EOB.actions.book()', 'Rec.report()', 'quiet(Copies)', 'env["OC"].request()',
+                      'EOB.actions.book()', 'Rec.report()', 'quiet(Copies)', 'env["OC"].request()', 'ServerCache.normalize(reply)',
                       'Store.read(owner,key,path)', 'Store.search(owner,path)', 'Store.library(owner,key)'):
             self.assertTrue(violations(LUA / 'ko/home_widgets.lua', value), value)
             self.assertTrue(violations(LUA / 'ko/home.lua', value), value)
@@ -133,6 +136,7 @@ class GuardTests(unittest.TestCase):
         self.assertTrue(violations(REGISTRY, 'val path="/api/v1"'))
         self.assertTrue(violations(REGISTRY, 'val path="bookorbit/api/v1"'))
         self.assertTrue(violations(LUA_REGISTRY, 'local field="readStatus"'))
+        self.assertTrue(violations(LUA_REGISTRY, 'ServerCache.normalize(reply)'))
     def test_entire_production_tree(self):
         errors = []
         for root in (COMPANION, LUA):

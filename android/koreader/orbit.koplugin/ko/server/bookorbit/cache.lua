@@ -38,7 +38,7 @@ local function writeFile(...) return Store.writeFile(...) end
 OC.readFile, OC.writeFile = readFile, writeFile
 
 -- The entry's file name (Cache.hash; the key is stored inside and checked).
-function OC.hash(s) return Cache.hash(s) end
+function OC.hash(s) return ServerCache.hash(s) end
 
 -- In a forked child (the plugin's runInSubprocess, catalog.lua:881): never JNI (NetworkMgr on
 -- Android is JNI, device/android/device.lua:333; a child that calls it dies and the plugin gets
@@ -57,7 +57,7 @@ end
 -- the companion's detail template) and the copies queue. A few lines, written in place.
 function OC.state()
     if OC._state then return OC._state end
-    local d = Cache.decode(readFile(OC.dir() .. "/plugin-state.lua") or "")
+    local d = ServerCache.decode(readFile(OC.dir() .. "/plugin-state.lua") or "")
     OC._state = type(d) == "table" and d or {}
     return OC._state
 end
@@ -65,7 +65,7 @@ end
 function OC.saveState()
     if OC.child then return end
     if Companion.workerProblem() then return end
-    Companion.send(Companion.ACTION.PATCH, { reason = "plugin state", plugin_state = Cache.encode(OC.state()) })
+    Companion.send(Companion.ACTION.PATCH, { reason = "plugin state", plugin_state = ServerCache.encode(OC.state()) })
 end
 
 -- Everything goes: the setting turned off, or on request (another account or server: the
@@ -110,7 +110,7 @@ function OC.drainEvents()
     local t = now_s()
     if OC.events_read_at and t - OC.events_read_at < OC.EVENT_POLL_S then return end
     OC.events_read_at = t
-    local batch = Cache.decode(readFile(OC.dir() .. "/events-batch.lua", 65536) or "")
+    local batch = ServerCache.decode(readFile(OC.dir() .. "/events-batch.lua", 65536) or "")
     if type(batch) ~= "table" or not batch.id then return end
     if batch.id ~= OC.events_ack then
         -- Record before dispatch: an event may synchronously call a watcher again.
@@ -209,13 +209,13 @@ end
 -- The wrapper's body for a cacheable GET. Returns handled, body, err, errbody.
 function OC.read(client, stock, method, path, body, headers)
     local owner = OC.owner(client)
-    local key = Cache.key({ account = owner, server = client.server_url, method = method, path = path })
+    local key = ServerCache.key({ account = owner, server = client.server_url, method = method, path = path })
     local entry = OC.lookup(client, key, path)
     local mode = OC.mode()
     -- Within one refresh each key is fetched or checked once; later reads are plain opens.
     if mode ~= "open" and OC.done[key] then mode = "open" end
     local offline = not OC.online(client)
-    local serve, fetch = Cache.readPlan(entry, nowT(), mode, offline)
+    local serve, fetch = ServerCache.readPlan(entry, nowT(), mode, offline)
     if OC.cache_only then fetch = false end
     local variant = tostring(path):match("/catalog/books/%d+%?.*variant=([%w_]+)")
     if variant and not inChild(client) and OC.state().detail_variant ~= variant then
@@ -236,12 +236,12 @@ function OC.read(client, stock, method, path, body, headers)
         else
             log("cache:", short, "from the cache, age", (nowT() - (entry.validated_at or 0)) .. "s" .. (offline and ", offline" or ""))
         end
-        return true, Cache.copy(entry.body)
+        return true, ServerCache.copy(entry.body)
     end
     if offline and OC.offline_pass then
         -- Offline, not saved: quiet ("cancelled" is the plugin's no-error path) and the
         -- runConnected wrapper asks to connect; a search only says it needs a connection.
-        if Cache.isSearch(path) then
+        if ServerCache.isSearch(path) then
             -- Offline search: over the saved books (title, authors, series).
             local found = Store.search(OC.owner(client), path)
             if found and (found.total or 0) > 0 then
@@ -268,7 +268,7 @@ function OC.read(client, stock, method, path, body, headers)
         OC.saw(client, key, "cache")
         log("cache:", short, "server failed (" .. tostring(e) .. "); the cached copy instead")
         OC.failed[key] = true
-        return true, Cache.copy(entry.body)
+        return true, ServerCache.copy(entry.body)
     end
     return true, b, e, eb
 end
@@ -277,7 +277,7 @@ OC.pending, OC.source, OC.failed = {}, {}, {}
 -- A reply read from the server: the companion asks again and saves it (CHECK mode "store"), so
 -- KOReader never encodes or writes a reply. A search isn't saved (offline search reads the books).
 function OC.store(client, key, method, path, headers)
-    if Cache.isSearch(path) then return end
+    if ServerCache.isSearch(path) then return end
     if inChild(client) then return OC.event("check", { key = key, method = method, path = path, headers = headers, mode = "store" }) end
     OC.check(nil, key, method, path, headers, client, "store")
 end
@@ -432,14 +432,14 @@ end
 ---------------------------------------------------------------- writes
 
 function OC.afterWrite(method, path, body)
-    local eff = Cache.writeEffect(method, path, body)
+    local eff = ServerCache.writeEffect(method, path, body)
     if not eff then return end
     -- The companion patches the saved book (and the lists that name it) and marks Home stale.
     -- A progress write names the book by document digest; the local overlay already shows this
     -- device's position, and Home is checked against the server on its next read.
     if Companion.workerProblem() then return end
     Companion.send(Companion.ACTION.PATCH, { reason = "write", id = eff.id and tostring(eff.id) or "",
-        fields = eff.fields and Cache.encode(eff.fields) or "", stale_home = eff.stale_home and "1" or "0" })
+        fields = eff.fields and ServerCache.encode(eff.fields) or "", stale_home = eff.stale_home and "1" or "0" })
     log("cache: a write to", (tostring(path):gsub("^/koreader/plugin/catalog", "")), "sent to the companion to patch")
 end
 
@@ -566,7 +566,7 @@ local MB = 1048576
 OC.STORAGE_WAIT_S = 60
 
 function OC.limitBytes()
-    local mb = tonumber(S.storage_limit_mb) or Cache.STORAGE_DEFAULT_MB
+    local mb = tonumber(S.storage_limit_mb) or ServerCache.STORAGE_DEFAULT_MB
     return mb > 0 and mb * MB or nil
 end
 
@@ -642,7 +642,7 @@ end
 -- A cover file that is there and looks like an image.
 function OC.coverOk(path)
     local head = readFile(path, 16)
-    return head ~= nil and Cache.imageHeader(head)
+    return head ~= nil and ServerCache.imageHeader(head)
 end
 
 ---------------------------------------------------------------- Refresh and Full refresh
@@ -807,7 +807,7 @@ function OC.install(why)
         return false
     end
     wrap(Api, "request", function(stock) return function(self, method, path, body, headers)
-        if OC.on() and Cache.cacheable(method, path) then
+        if OC.on() and ServerCache.cacheable(method, path) then
             local okr, handled, b, e, eb = pcall(OC.read, self, stock, method, path, body, headers)
             if okr and handled then return b, e, eb end
             if not okr then log("cache: read failed, straight to the server:", handled) end
