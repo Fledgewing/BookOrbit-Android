@@ -1,6 +1,7 @@
 -- A small JSON decoder for the tests (KOReader has its own; plain LuaJIT has none).
 -- Enough for the recorded responses in shared/fixtures: objects, arrays, strings with
--- the common escapes, numbers, true/false/null (null becomes nil).
+-- the common escapes, numbers, true/false/null (null becomes nil by default).
+-- Optional typed mode retains object/array/null tags for layout round-trip tests.
 local M = {}
 
 local function skip(s, i)
@@ -33,11 +34,11 @@ local function decode_string(s, i)
     end
 end
 
-function decode_value(s, i)
+function decode_value(s, i, typed)
     i = skip(s, i)
     local c = s:sub(i, i)
     if c == "{" then
-        local obj = {}
+        local obj = typed and setmetatable({}, {__jsontype="object"}) or {}
         i = skip(s, i + 1)
         if s:sub(i, i) == "}" then return obj, i + 1 end
         while true do
@@ -45,7 +46,7 @@ function decode_value(s, i)
             key, i = decode_string(s, skip(s, i))
             i = skip(s, i)
             assert(s:sub(i, i) == ":", "expected : at " .. i)
-            obj[key], i = decode_value(s, i + 1)
+            obj[key], i = decode_value(s, i + 1, typed)
             i = skip(s, i)
             local d = s:sub(i, i)
             if d == "}" then return obj, i + 1 end
@@ -53,11 +54,11 @@ function decode_value(s, i)
             i = i + 1
         end
     elseif c == "[" then
-        local arr = {}
+        local arr = typed and setmetatable({}, {__jsontype="array"}) or {}
         i = skip(s, i + 1)
         if s:sub(i, i) == "]" then return arr, i + 1 end
         while true do
-            arr[#arr + 1], i = decode_value(s, i)
+            arr[#arr + 1], i = decode_value(s, i, typed)
             i = skip(s, i)
             local d = s:sub(i, i)
             if d == "]" then return arr, i + 1 end
@@ -68,15 +69,16 @@ function decode_value(s, i)
         return decode_string(s, i)
     elseif s:sub(i, i + 3) == "true" then return true, i + 4
     elseif s:sub(i, i + 4) == "false" then return false, i + 5
-    elseif s:sub(i, i + 3) == "null" then return nil, i + 4
+    elseif s:sub(i, i + 3) == "null" then return typed and setmetatable({}, {__jsontype="null"}) or nil, i + 4
     end
     local num = s:match("^-?%d+%.?%d*[eE]?[-+]?%d*", i)
     if not num or num == "" then error("unexpected '" .. c .. "' at " .. i) end
     return tonumber(num), i + #num
 end
 
-function M.decode(s)
-    local v = decode_value(s, 1)
+function M.decode(s, typed)
+    local v, pos = decode_value(s, 1, typed)
+    if typed then assert(skip(s, pos) > #s, "trailing JSON") end
     return v
 end
 
