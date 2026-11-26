@@ -15,14 +15,25 @@ diff --git a/lib/JpegToBmpConverter/JpegToBmpConverter.cpp b/lib/JpegToBmpConver
 diff --git a/lib/Memory/Memory.h b/lib/Memory/Memory.h
 --- a/lib/Memory/Memory.h
 +++ b/lib/Memory/Memory.h
-@@ -233,3 +233,17 @@
+@@ -3,6 +3,7 @@
+ #include <cstddef>
+ #include <cstdint>
+ #include <cstdlib>
++#include <cstring>
+ #include <memory>
+ #include <new>
+ #include <type_traits>
+@@ -233,3 +234,20 @@
  
  template <typename F>
  ScopedCleanup(F) -> ScopedCleanup<F>;
 +
 +// Cover working storage must not compete with the Wi-Fi PHY's internal RAM.
 +inline HeapByteBuffer makeImageByteBufferNoThrow(size_t count) {
-+  return psramHeapAvailable() ? makePsramByteBufferNoThrow(count) : makeHeapByteBufferNoThrow(count);
++  auto bytes=psramHeapAvailable() ? makePsramByteBufferNoThrow(count) : makeHeapByteBufferNoThrow(count);
++  // Match new uint8_t[count](): PNG filters require an all-zero previous row.
++  if (bytes) std::memset(bytes.get(),0,count);
++  return bytes;
 +}
 +struct ImageObjectDeleter {
 +  template<class T> void operator()(T* p) const {

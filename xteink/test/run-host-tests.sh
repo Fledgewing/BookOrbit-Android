@@ -73,6 +73,11 @@ if [ -z "$ajson" ]; then
   for d in "$up"/.pio/libdeps/*/ArduinoJson/src; do [ -f "$d/ArduinoJson.h" ] && ajson="$d" && break; done
 fi
 [ -n "$ajson" ] || { echo "ArduinoJson not found: run 'pio pkg install -e <env>' in $up, or set ARDUINOJSON_DIR" >&2; exit 1; }
+# The actual patched cover allocator: dirty heap bytes must become zeroed PNG
+# rows, and the X4's small image buffers must preserve the internal PHY reserve.
+"${CXX:-c++}" -std=c++20 -DARDUINO_ARCH_ESP32=1 -I"$up/test/memory_policy/stubs" -I"$up/lib/Memory" \
+  "$here/image_memory_test.cpp" -o "$out/image_memory_test"
+"$out/image_memory_test"
 core="$repo/xteink/orbify/core"
 orbify_test() { # name [sources...]: the test reads its tables from shared/fixtures/bookorbit
   local name="$1"
