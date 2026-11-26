@@ -74,7 +74,7 @@ for _, name in ipairs({ "newClient", "getDocumentDigest", "getLastPercent", "enq
     "updateProgress", "pushProgressAfterBookSync", "catalogBook", "catalogSetReadStatus", "catalogSetRating", "getBook", "mutate",
     "onDeviceMaps", "rememberServerState", "applyServerStateLive", "applyServerStateSidecar", "sidecarMtime",
     "downloadDefaultFile", "downloadFile", "checkDownloadFile", "loadBooks", "switchTo", "refreshOnDevice",
-    "updateItems", "refreshCurrent", "dashboardRootFetch", "boardHeader", "boardRun", "boardRefreshTile",
+    "updateItems", "refreshCurrent", "fetch", "dashboardRootFetch", "boardHeader", "boardRun", "boardRefreshTile",
     "boardRefreshClock", "listRun", "listHeader", "build", "statusCluster", "hit", "icon", "hstack",
     "header", "listMetadata", "isBlocked", "getLifecycleOutbox", "evictCachedCovers",
     "scheduleThumbnailDownloads", "dashboardBooks", "thumbnailDisplay",

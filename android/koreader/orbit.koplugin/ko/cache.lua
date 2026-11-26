@@ -205,6 +205,43 @@ function OC.applyEvents(events)
     end
 end
 
+-- One span follows a fetch through the child (when needed) and the first render.
+-- Times are monotonic milliseconds; absent stages are printed as -1, never inferred.
+function OC.mark(name)
+    local t = OC.open_span
+    if t and t[name] == nil then t[name] = (now_s() - t.started) * 1000 end
+end
+
+function OC.logOpen(rendered)
+    local t = OC.open_span
+    if not t then return end
+    if rendered ~= false then OC.mark("render") end
+    log(string.format("open: request=%.1f spawn=%.1f spawned=%.1f store=%.1f decode=%.1f response=%.1f render=%.1f ms source=%s",
+        t.request or -1, t.spawn or -1, t.spawned or -1, t.store or 0, t.decode or 0,
+        t.response or -1, t.render or -1, t.source or "?"))
+    OC.open_span = nil
+end
+
+-- fetch callbacks are read-only API calls. Probe only bounded list windows; a miss
+-- aborts before any network, companion work or write, then stock fetch owns the child.
+-- The upstream contract is bookorbit_catalog.lua:881,1142 at c1dd6b4f.
+local probe_miss = {}
+function OC.probe(client, method, path, headers)
+    if not Cache.cacheable(method, path) then error(probe_miss, 0) end
+    local w = Cache.listWindow(path)
+    local size = w and (w.size or (w.kind == "books" and 20))
+    if not size or size > 100 or OC.mode() == "full" then error(probe_miss, 0) end
+    OC.mark("request")
+    local key = Cache.key({ account = OC.owner(client), server = client.server_url, method = method, path = path })
+    local entry = OC.lookup(client, key, path)
+    local mode = OC.mode()
+    if OC.done[key] then mode = "open" end
+    local serve, check = Cache.readPlan(entry, nowT(), mode, not OC.online(client))
+    if not serve then error(probe_miss, 0) end
+    table.insert(OC.probing, {client=client, key=key, method=method, path=path, headers=headers, check=check})
+    return Cache.copy(entry.body)
+end
+
 ---------------------------------------------------------------- reads
 
 -- The active refresh mode: { mode = "refresh" | "full", until_t }.
@@ -826,6 +863,8 @@ function OC.install(why)
         return false
     end
     wrap(Api, "request", function(stock) return function(self, method, path, body, headers)
+        if OC.probing then return OC.probe(self, method, path, headers) end
+        OC.mark("request")
         if OC.on() and Cache.cacheable(method, path) then
             local okr, handled, b, e, eb = pcall(OC.read, self, stock, method, path, body, headers)
             if okr and handled then return b, e, eb end
@@ -848,17 +887,20 @@ function OC.install(why)
         if inChild(self) then return stock(self, fn, ...) end
         local okn, on = pcall(NetworkMgr.isConnected, NetworkMgr)
         OC.parent_online = not okn or on == true
+        OC.mark("spawn")
         local a, b = stock(self, function(...)
+            OC.mark("spawned")
             OC.child = true -- this copy of the process is the child
             OC.child_events = {}
             local okf, r1, r2, r3 = pcall(fn, ...)
             OC.child = nil
             if not okf then error(r1, 0) end
-            return { orbit_result = { body = r1, err = r2, errbody = r3 }, orbit_events = OC.child_events }
+            return { orbit_result = { body = r1, err = r2, errbody = r3 }, orbit_events = OC.child_events, orbit_span = OC.open_span }
         end, ...)
         if a and type(b) == "table" and type(b.body) == "table" and b.body.orbit_result then
             local envelope = b.body
             b = envelope.orbit_result
+            OC.open_span = envelope.orbit_span or OC.open_span
             OC.applyEvents(envelope.orbit_events or {})
         end
         pcall(OC.drainEvents)
@@ -911,6 +953,38 @@ function OC.install(why)
         if okd then return r1, r2 end
         return stock(self, book_id, local_path, opts)
     end end, "cache")
+    wrap(Catalog, "fetch", function(stock) return function(self, text, fn, opts)
+        OC.open_span = {started=now_s()}
+        if OC.on() and not inChild(self.client) then
+            OC.probing = {}
+            local success, body, err, errbody = pcall(fn)
+            local reads = OC.probing
+            OC.probing = nil -- always restore, including misses and callback errors
+            if success and body ~= nil and #reads > 0 then
+                for _, r in ipairs(reads) do OC.saw(r.client, r.key, "cache") end
+                OC.open_span.source = "cache-inline"
+                OC.mark("response")
+                -- Retain cache-only redraw semantics after the caller clears its flag.
+                local cache_only = OC.cache_only
+                -- Nothing before paint waits for the companion or starts the mirror.
+                UIManager:nextTick(function()
+                    for _, r in ipairs(reads) do
+                        if r.check and not cache_only then
+                            OC.done[r.key] = true
+                            OC.check(nil, r.key, r.method, r.path, r.headers, r.client)
+                        end
+                    end
+                    if not cache_only then pcall(OC.mirrorTick, "read") end
+                end)
+                return body, err, errbody
+            end
+        end
+        local body, err, errbody = stock(self, text, fn, opts)
+        OC.mark("response")
+        if OC.open_span then OC.open_span.source = "worker" end
+        if not body then OC.logOpen(false) end
+        return body, err, errbody
+    end end, "cache")
     -- The keys a view was built from, for redrawing it when one of them changes; a log line per
     -- paint naming where its data came from.
     wrap(Catalog, "switchTo", function(stock) return function(self, title, item_table, context, push)
@@ -925,6 +999,7 @@ function OC.install(why)
             OC.pending = {}
         end
         local r = stock(self, title, item_table, context, push)
+        OC.logOpen()
         if OC.full then OC.fullStep("painted") end
         pcall(OC.coverSummary, self)
         return r

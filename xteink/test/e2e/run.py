@@ -89,7 +89,8 @@ def sleep_sync(ctx: Context, card: SdCard, name: str, **kw):
         # The sleep sync needs the last open book, even when the card already has UI state.
         card.open_book(card.add_book(ctx.source("Standalone 01")))
     card.sync_on_sleep()
-    run = ctx.sim.run(card, name, script="2500:POWER:120", timeout_s=kw.pop("timeout_s", 90), **kw)
+    run = ctx.sim.run(card, name, script="2500:POWER:120", input_from_poll=True,
+                      timeout_s=kw.pop("timeout_s", 90), **kw)
     after(run.output, "Restarting into the BookOrbit sleep sync")
     return run
 

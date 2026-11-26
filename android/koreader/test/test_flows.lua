@@ -3951,6 +3951,80 @@ test("cache: a write patches the cached book and marks Home stale; accounts neve
     cacheTeardown()
 end)
 
+test("cache: bounded list opens paint under 500 ms without a subprocess or companion reply", function()
+    local forks = 0
+    local client, Cat = cacheSetup(function(Cat)
+        -- Model upstream fetch, rather than the harness's ordinary inline fake.
+        function Cat:fetch(_, fn)
+            forks = forks + 1
+            local done, r = self.client:runInSubprocess(fn)
+            if not done then return nil, "cancelled" end
+            return r.body, r.err, r.errbody
+        end
+    end)
+    local cat = setmetatable({client=client}, Cat)
+    W.logs = {}
+    local paths = {
+        "/koreader/plugin/catalog/books?buckets=1&order=asc&page=1&size=12&sort=title",
+        "/koreader/plugin/catalog/books?sort=recently_added&order=desc&size=12&page=1",
+        "/koreader/plugin/catalog/books?collectionId=4&sort=title&size=12&page=1",
+    }
+    for _, path in ipairs(paths) do
+        cache.server[path] = {items={{id=7,title="Saved book"}},total=1,page=1,size=12}
+        client:request("GET", path)
+    end
+    -- The stored catalog is large; opening it must decode only a 12-book window.
+    local books = {}
+    for i=1,7000 do books[i]={id=i,title="Saved book " .. i} end
+    cache.server[paths[1]] = {items=books,total=7000,page=1,size=7000}
+    client:request("GET", paths[1])
+    run(1) -- companion stores the server replies
+    W.clock = W.clock + 61 -- stale hits must also paint before asking for revalidation
+    cache.calls = {}
+    local send = E.Companion.send
+    local sends = 0
+    E.Companion.send = function(...) sends=sends+1; return send(...) end
+    for _, path in ipairs(paths) do
+        local before, virtual = os.clock(), W.clock
+        local body = cat:fetch("Opening", function() return client:request("GET", path) end)
+        cat:switchTo("Books", {}, {kind="books",books=body.items})
+        ok(os.clock()-before < 0.5 and W.clock-virtual < 0.5, "cache-hit render budget")
+        eq(body.items[1].id,path == paths[1] and 1 or 7)
+        if path == paths[1] then eq(#body.items,12,"only the visible window is decoded") end
+        eq(forks,0,"cache hit never enters subprocess")
+        eq(sends,0,"cache hit never asks/waits for companion before render")
+    end
+    eq(#cache.calls,0,"no network before paint")
+    local spans = 0
+    for _, line in ipairs(W.logs) do
+        if line:find("source=cache-inline",1,true) then
+            spans = spans + 1
+            ok(line:find("spawn=-1.0 spawned=-1.0",1,true),"span distinguishes skipped fork")
+        end
+    end
+    eq(spans,3,"one timing line per cache-hit open")
+    run(0.1)
+    ok(sends > 0,"stale checks resume after render without waiting for their replies")
+    local check, mirror = E.OC.check, E.OC.mirrorTick
+    local jobs = 0
+    E.OC.check = function() jobs=jobs+1 end
+    E.OC.mirrorTick = function() jobs=jobs+1 end
+    E.OC.cache_only = true
+    ok(cat:fetch("Redraw", function() return client:request("GET",paths[1]) end))
+    E.OC.cache_only = nil -- the redraw clears it before nextTick
+    run(0.1)
+    eq(jobs,0,"cache-only redraw never schedules background work after its flag clears")
+    E.OC.check, E.OC.mirrorTick = check, mirror
+    -- Cache miss still uses exactly one child; errors cannot leave probe mode set.
+    local missing = "/koreader/plugin/catalog/books?collectionId=99&size=12"
+    cache.server[missing] = {items={},total=0}
+    ok(cat:fetch("Opening", function() return client:request("GET",missing) end))
+    eq(forks,1,"miss uses the asynchronous path")
+    eq(E.OC.probing,nil,"probe restored after miss")
+    E.Companion.send = send
+    cacheTeardown()
+end)
+
 test("cache: a read made in the catalog's child process is saved by the companion", function()
     local client = cacheSetup()
     W.wifi = true
@@ -6019,6 +6093,74 @@ test("bulk catalog: plugin SQL serves offline windows, filters and secondary con
         eq(e.body.buckets[1].count,8,"letter count")
     end)
     st:close();os.execute("rm -rf '" .. dir .. "'")
+end)
+
+test("bulk catalog: a 7000-book mirror decodes only the requested window within 500 ms", function()
+    local dir, st = fixtureStore()
+    for sql in io.lines(here .. "/../../../shared/fixtures/catalog/bulk-refresh/schema.sql") do st.conn:exec(sql) end
+    st:run("INSERT OR REPLACE INTO meta VALUES ('bulk_active','1')")
+    st.conn:exec("BEGIN")
+    for i=1,7000 do
+        local letter = string.char(65 + math.floor((i-1)*26/7000))
+        local title = letter .. string.format("%05d",i)
+        local item = RE.Cache.encode({id=i,title=title,description=string.rep("x",1000)})
+        st:run("INSERT INTO bulk_books (g,id,item,title,status,added) VALUES (1,?,?,?,'unread',?)",i,item,title,tostring(i))
+        st:run("INSERT INTO bulk_ranks VALUES (1,'title','asc',?,?,?)",i,i-1,letter)
+        if i%2 == 0 then st:run("INSERT INTO bulk_members (g,kind,value,id) VALUES (1,'collectionId','4',?)",i) end
+    end
+    -- One letter occurs at both ends: indexes cannot be inferred by adding
+    -- grouped letter counts. The collection filter must still produce dense indexes.
+    st:run("UPDATE bulk_ranks SET letter='#' WHERE id IN (1,7000)")
+    st.conn:exec("COMMIT")
+    withStore(dir,function()
+        local decode, connect = RE.Cache.decode, RE.Store.conn
+        local decoded, queries = 0, 0
+        RE.Store.conn = function(...)
+            local conn, err = connect(...)
+            if not conn then return nil, err end
+            return setmetatable({}, {__index=function(_, key)
+                return function(_, ...)
+                    if key == "prepare" then queries=queries+1 end
+                    return conn[key](conn, ...)
+                end
+            end})
+        end
+        RE.Cache.decode = function(...) decoded=decoded+1; return decode(...) end
+        local success, err = pcall(function()
+            for _, query in ipairs({
+                "sort=title&order=asc&buckets=1",
+                "sort=recently_added&order=desc",
+                "sort=title&order=asc&buckets=1&collectionId=4",
+            }) do
+                decoded, queries=0, 0
+                local path="/koreader/plugin/catalog/books?size=12&page=1&" .. query
+                local start=os.clock()
+                local entry=RE.Store.read(DBFX.owner,path,path,nil)
+                local elapsed=(os.clock()-start)*1000
+                print(string.format("bulk window: %.1f ms, %d queries, %d decodes (%s)", elapsed, queries, decoded, query))
+                ok(elapsed < 500,"bulk window CPU budget: " .. elapsed .. " ms (" .. query .. ")")
+                eq(#entry.body.items,12)
+                ok(decoded <= 13,"only 12 items and an optional header decoded: " .. decoded)
+                eq(entry.body.total,query:find("collectionId",1,true) and 3500 or 7000)
+                ok(queries <= 8,"query count stays fixed as the alphabet grows: " .. queries)
+                if entry.body.buckets then
+                    local rail=entry.body.buckets
+                    if query:find("collectionId",1,true) then
+                        eq(rail[1].key,"A"); eq(rail[1].index,0)
+                        eq(rail[2].key,"B"); eq(rail[2].index,135)
+                        eq(rail[#rail].key,"#"); eq(rail[#rail].index,3499); eq(rail[#rail].count,1)
+                    else
+                        eq(rail[1].key,"#"); eq(rail[1].index,0); eq(rail[1].count,2)
+                        eq(rail[2].key,"A"); eq(rail[2].index,1)
+                        eq(rail[3].key,"B"); eq(rail[3].index,270)
+                    end
+                end
+            end
+        end)
+        RE.Cache.decode, RE.Store.conn=decode, connect
+        ok(success,err)
+    end)
+    st:close(); sh("rm -rf",dir)
 end)
 
 test("sqlite cache: the plugin's reads answer the shared fixture (db.json) from the rows", function()

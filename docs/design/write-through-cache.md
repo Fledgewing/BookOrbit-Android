@@ -143,8 +143,36 @@ cover jobs. Neither of our modes goes through that deletion.
 - **Choke point:** `BookOrbitApi:request(method, path, body, headers)` (plugin `bookorbit_api.lua:372-383`)
   is every JSON call; it runs `requestBlocking` (:261) inline or in a forked child
   (`runInSubprocess`, :336). BookSync wraps it on the API class (`wrap`, feature key `cache`).
-- **Child processes:** the catalog runs most requests inside a forked child (`fetch`,
-  `bookorbit_catalog.lua:881`), so the wrapper runs there. A child never calls JNI or the UI:
+- **Cache-hit list opens:** BookSync wraps `fetch` before the upstream fork. Its read-only
+  callback is first tried with a cache-only request guard: only list windows of at most 100
+  items are eligible. A hit reads the requested SQLite window in-process, copies the decoded
+  body, records the view keys, and schedules revalidation and mirror work for the next UI tick.
+  It neither starts a subprocess nor asks the companion before returning the body to render.
+  A miss or an ineligible request aborts the probe before network or writes, restores the guard,
+  and uses the normal asynchronous fetch. Full refresh also keeps that asynchronous path.
+  The callback contract and single-request book-page closure are pinned BookOrbit
+  `koreader-plugin/bookorbit.koplugin/bookorbit_catalog.lua:881-905,1142-1144` at
+  `c1dd6b4f1947ff50843a155e12e70f1e7d15f0c7`.
+  This removes the unconditional fork/IPC boundary observed on cache-hit All Books opens in
+  the preview.1 log (6.7 s total, with 170–250 ms from cache response to render). The target
+  is under 500 ms on the M8C; device timing still needs maintainer verification.
+- **Bulk letter rail:** one ranked SQL query computes each bucket's first filtered index and
+  count. The previous implementation repeated the whole filtered join for every letter,
+  exceeding the 500 ms CPU budget for 7,000 books in CI. `RANK()-1` preserves the original
+  `count(pos < first)` semantics, including non-contiguous `#` entries and filtered windows;
+  only the small bucket table reaches Lua. This runs in KOReader's bundled SQLite 3.53.3
+  (`base/thirdparty/sqlite/CMakeLists.txt:14-18` at base commit
+  `6e4bc81af4e04f78d81677a323a780a71b29702a`, linked by pinned KOReader
+  `9192014d8bd82a91dc1012473be0f238dedfdb54`). The regression keeps the 500 ms budget, decodes
+  only the visible books and bounds the number of queries independently of alphabet size.
+- **Open timings:** one info-level `open:` line at render reports milliseconds since fetch
+  entry for request, fork request, child entry, response and render. `store` is total SQLite
+  lookup time including `decode`, which reports the decode subset separately. A skipped fork
+  has `spawn=-1 spawned=-1`; cache hits use `source=cache-inline`. Child timings travel back
+  with the result, so the line can distinguish process startup, store work and IPC delay.
+  Failed/cancelled fetches emit the line on return instead of waiting for render.
+- **Child processes:** remaining catalog requests run inside a forked child (`fetch`,
+  `bookorbit_catalog.lua:881` at the same pin), so the request wrapper runs there. A child never calls JNI or the UI:
   `NetworkMgr:isConnected` is JNI on Android (`device/android/device.lua:333`), and a child that
   calls it dies, which the plugin reports as `subprocess_no_result` (v0.10.0 on the M8C). The parent
   records its connectivity just before forking; the child reads that, and reports what it read,
