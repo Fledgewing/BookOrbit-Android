@@ -69,6 +69,7 @@ function Library:read(op, args)
     return result
 end
 function Library:accountState() return self:read("account.state", {limit=1}) end
+function Library:summary() return self:read("library.summary", {limit=1}) end
 function Library:modeEstimates() return self:read("mode-estimates", {limit=3}) end
 function Library:battery() return self:read("battery", {limit=1}) end
 function Library:readingStats() return self:read("reading.stats", {limit=1}) end

@@ -10,6 +10,8 @@ for _, id in ipairs({"home", "library", "details", "series", "settings", "batter
         id == "home" and 500 or id == "editor" and 100 or 50)
 end
 Budgets.screens["account"] = budget(3, 16384, 50)
+-- Owned Search inherits the Library screen family; Home pages inherit home.
+Budgets.screens.search = Budgets.screens.library
 -- Editor draws only its current page; it never reads a catalog or widget snapshot.
 Budgets.screens.editor.drawNodes = 208
 Budgets.screens.editor.rows = 128

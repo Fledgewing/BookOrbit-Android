@@ -194,7 +194,7 @@ end
 -- and drops it when it has gone stale. Exceptions are only what the reader does in the book:
 -- menus they open, the end-of-book sheet.
 function reading()
-    if HomeHost and (HomeHost.opening or HomeHost.active and topWidget() == HomeHost.active) then return false end
+    if HomeHost and (HomeHost.opening or HomeHost.foreground()) then return false end
     local ui = liveUI()
     if not (ui and ui.document) then return false end
     if Wifi and Wifi.state and Wifi.state().foreground == false then return false end

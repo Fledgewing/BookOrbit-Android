@@ -64,3 +64,7 @@ The existing publisher accepts neutral account snapshots and passes them to proj
 composition. Native account launch/return is explicit lifecycle work, never a widget read.
 The account screen keeps F12-K's budget and timing spans. Shared Settings schema wording
 is neutral while stored wire values remain compatible.
+
+F12-E and F12-J integration keeps battery estimation local to the neutral publisher (one
+lazy snapshot per batch), and contains the added `library.summary` catalog join in the
+server projection. No renderer receives raw catalog fields or performs that aggregation.
