@@ -39,3 +39,31 @@ function LibraryAdapter.request(requests)
     Companion.send(Companion.ACTION.PATCH, {library_batch=batch, owner=owner})
     return true
 end
+
+-- Keep the existing sync writer and Wi-Fi lifecycle behind the adapter. No second outbox.
+function LibraryAdapter.syncCurrent(done)
+    local ui = liveUI()
+    local p = bookorbit(ui)
+    if not (p and ui and ui.document and hasHandler(p, "BookOrbitSyncBook")) then
+        done(false, "Sync unavailable")
+        return false
+    end
+    Wifi.acquire("reader-panel")
+    Net.up(p, {reason="reader-panel", cap=20, need_server=true}, function(ok)
+        if not ok then
+            Wifi.release("reader-panel")
+            done(false, "Offline · will sync when connected")
+            return
+        end
+        local completed = false
+        local function finish(err)
+            if completed then return end
+            completed = true
+            Wifi.release("reader-panel")
+            done(err == nil, err and "Sync failed · your place stays saved" or "Synced")
+        end
+        pluginEvent(ui, p, "BookOrbitSyncBook", {quiet=true, on_done=finish})
+        UIManager:scheduleIn(30, function() finish("timeout") end)
+    end)
+    return true
+end

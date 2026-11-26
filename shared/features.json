@@ -5191,6 +5191,61 @@
       "settings_keys": [
         "recommended_choice"
       ]
+    },
+    {
+      "id": "reader-book-progress",
+      "feature": "Owned reader top panel, Book info and Details progress (0.12 implementation)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Plain progress bar and cached reading stats; manual Sync in the top panel",
+          "reason": "deliberately deferred: 0.12 Android implementation is building, not released or device validated; battery projection remains a stub and stats require saved KOReader records plus the tracked-file ledger.",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/reader_panel.lua",
+              "line": 1
+            },
+            {
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/ReaderBookStats.kt",
+              "line": 1
+            }
+          ]
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned reader progress pages planned after Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice.",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned reader progress pages planned after Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. Implement on this reader in the later Xteink slice.",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned reader progress pages planned after Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; this slice does not change firmware. X3 also requires measured flash fit.",
+          "evidence": [
+            {
+              "path": "ROADMAP.md",
+              "line": 36
+            }
+          ]
+        }
+      }
     }
   ],
   "release_evidence": {
@@ -5423,7 +5478,7 @@
     {
       "feature": "home",
       "roadmap": "Next release: BookSync Home",
-      "note": "Designing; no new UI implementation authorised by this audit."
+      "note": "Android implementation authorised 2026-11-25 on feature/0.12; Xteink follows later. Reader progress pages are building; no release or device validation yet."
     },
     {
       "feature": "signatures",

@@ -37,8 +37,17 @@ class LibraryReadModel(private val store: CacheStore, private val clock: () -> L
     private fun empty(saved: Boolean) = mapOf("items" to emptyList<Any>(), "total" to 0, "freshness" to freshness(saved), "empty" to if (saved) "No books" else "Not saved yet")
     private fun project(owner: String, a: Map<*, *>): Map<String, Any?> {
         val op = a["op"]
+        // Local-only placeholder until the battery slice supplies its measured projection.
+        if (op == "battery") return mapOf("available" to false, "freshness" to freshness(false))
+        if (op == "reader") {
+            val path = a["path"] as? String ?: return empty(false)
+            val entry = BookOrbitLibrary.localEntries(store, owner)?.firstOrNull { it["path"] == path }
+                ?: return empty(false)
+            val id = (entry["book_id"] as? Number)?.toLong() ?: return empty(false)
+            return project(owner, a + mapOf("op" to "book", "key" to BookOrbitLibrary.key(owner, "book", id)))
+        }
         if (op == "capabilities") return mapOf("catalog" to true, "detail" to true, "download" to false,
-            "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false),
+            "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false, "syncCurrent" to true),
             "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
             "wantToRead" to true, "customFields" to false, "onDevice" to true,
             "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
@@ -52,6 +61,10 @@ class LibraryReadModel(private val store: CacheStore, private val clock: () -> L
             val id = BookOrbitLibrary.id(owner, "book", a["key"]) ?: return mapOf("error" to "missing")
             val raw = store.bookItem(id) as? Map<*, *> ?: return mapOf("error" to "missing", "freshness" to freshness(false))
             val summary = BookOrbitLibrary.summary(owner, raw, 0, null).toMutableMap()
+            if (op == "book") {
+                val entry = BookOrbitLibrary.localEntries(store, owner)?.firstOrNull { (it["book_id"] as? Number)?.toLong() == id }
+                summary["stats"] = ReaderBookStats.read(store.root, entry)
+            }
             val detail = store.detail(id)
             if (op == "book" && detail?.first is Map<*, *>) {
                 val d = detail.first as Map<*, *>

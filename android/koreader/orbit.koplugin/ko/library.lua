@@ -49,12 +49,17 @@ function Library:read(op, args)
     finish()
     return result or {items={}, freshness={saved=false}, pending=true}
 end
+function Library:battery() return self:read("battery", {limit=1}) end
 function Library:capabilities() return self:read("capabilities") end
 function Library:window(source, query, offset, limit)
     return self:read("window", {source=source or "library/all", query=query or {}, offset=offset or 0, limit=limit})
 end
 function Library:book(key) return self:read("book", {key=key, limit=1}) end
 function Library:counts(source, query) return self:read("counts", {source=source or "library/all", query=query or {}}) end
+-- Reader identity stays opaque to the UI; the worker joins the local file ledger.
+function Library:reader(path) return self:read("reader", {path=path, limit=1}) end
+-- An explicit user action, never invoked by paint/read.
+function Library.syncCurrent(done) return LibraryAdapter.syncCurrent(done) end
 function Library:progress(key) return self:read("progress", {key=key, limit=1}) end
 function Library:status(key) return self:read("status", {key=key, limit=1}) end
 function Library:job(key) return self:read("job", {key=key, limit=1}) end
