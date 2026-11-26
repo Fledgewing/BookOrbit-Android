@@ -16,6 +16,7 @@
 #include "BookOrbitSyncClient.h"
 #include "CacheStore.h"
 #include "Settings.h"
+#include "RefreshRunner.h"
 #include "HeapFloor.h"
 #include "core/BulkCatalog.h"
 #include "network/BookOrbitCatalogClient.h"
@@ -161,6 +162,7 @@ bool refresh(bool fresh,bool (*cancelled)(),const std::function<void(unsigned)>&
   writesSinceClear=0;
 #endif
   diskBytes.store(treeBytes(DIR));diskKnown.store(true);Arena arena;orbify::bulk::Catalog catalog(files,&arena);
+  catalog.observe=[](const orbify::bulk::Stats& s){OrbifyMirror::catalogProgress(s.listsDone,s.listsTotal,s.booksSaved);};
   const auto start=millis();
   const bool ok=catalog.refresh(owner(),[&](const std::string& path,JsonDocument& out){
     if(!OrbifyHeap::roomForRequest("Full refresh"))return false;
@@ -183,9 +185,12 @@ bool available(const std::string& url,bool detailSaved) {
   return !detail || (!detailSaved && WiFi.status()!=WL_CONNECTED);
 }
 bool read(const std::string& url,JsonVariantConst filter,JsonDocument& out) {
-  Arena arena;JsonDocument reply(&arena);orbify::bulk::Catalog catalog(files,&arena);
-  if(!catalog.reply(url,reply))return false;
-  out.clear();orbify::bulk::project(reply.as<JsonVariantConst>(),filter,out.to<JsonVariant>());
+  {
+    Arena arena;JsonDocument reply(&arena);orbify::bulk::Catalog catalog(files,&arena);
+    if(!catalog.reply(url,reply))return false;
+    out.clear();orbify::bulk::project(reply.as<JsonVariantConst>(),filter,out.to<JsonVariant>());
+  }
+  OrbifyHeap::logHeap("after saved catalog window");
   return !out.overflowed();
 }
 bool detailCurrent(const std::string& url,const std::string& path) {

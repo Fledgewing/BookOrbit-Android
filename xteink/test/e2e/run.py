@@ -212,6 +212,10 @@ def full_refresh_offline_last_pages(ctx: Context, tmp: Path) -> None:
     after(offline.output, "Listing page 3")
     assert "[WIFI] Joined" not in offline.output and "Joining saved network" not in offline.output
     assert not ctx.requests()[before:], "saved navigation made network requests"
+    samples = [int(n) for n in re.findall(r"Heap after saved catalog window: internal free=(\d+)", offline.output)]
+    assert len(samples) >= 4, f"too few offline heap samples: {samples}"
+    assert min(samples) >= 60 * 1024, f"offline browsing crossed the Wi-Fi heap reserve: {samples}"
+    assert samples[-1] >= samples[0] - 16 * 1024, f"page browsing retained internal heap: {samples}"
     after(offline.output, "Entering activity: EpubReader")
 
 

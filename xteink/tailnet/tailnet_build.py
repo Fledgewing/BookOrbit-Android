@@ -489,6 +489,7 @@ def _process_project_deps_with_tailnet(env):
                           "-Wl,--wrap=esp_mbedtls_mem_calloc",
                           # TailnetWifiMem.c: the WiFi init switches
                           "-Wl,--wrap=esp_wifi_init",
+                          "-Wl,--wrap=esp_wifi_start",
                           # TailnetStacks.c: MicroLink stops before WiFi goes off
                           "-Wl,--wrap=esp_wifi_stop",
                           # TailnetLwipLock.c: Arduino's hostByName clears the DNS cache

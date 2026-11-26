@@ -52,6 +52,7 @@ using Ids = std::vector<int64_t, IndexAllocator<int64_t>>;
 struct Stats {
   uint64_t requests = 0, bytes = 0, seriesRequests = 0, rows = 0;
   size_t peakPageBytes = 0, peakJsonBytes = 0;
+  size_t listsDone = 0, listsTotal = 29, booksSaved = 0;
 };
 class Catalog {
  public:
@@ -67,6 +68,8 @@ class Catalog {
   static bool recognizes(const std::string& path);
   bool patch(int64_t id, JsonObjectConst fields);
   bool active() const;
+  // Called between durable rows/pages, including when the percentage has not changed.
+  std::function<void(const Stats&)> observe;
   Stats stats;
   std::string error;
  private:

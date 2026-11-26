@@ -1,0 +1,481 @@
+Subject: [PATCH] BookSync: refresh offline windows, progress, finish stamp and heap headroom
+
+diff --git a/lib/JpegToBmpConverter/JpegToBmpConverter.cpp b/lib/JpegToBmpConverter/JpegToBmpConverter.cpp
+--- a/lib/JpegToBmpConverter/JpegToBmpConverter.cpp
++++ b/lib/JpegToBmpConverter/JpegToBmpConverter.cpp
+@@ -749,7 +749,7 @@
+ 
+   s_jpegFile = &jpegFile;
+ 
+-  const auto jpeg = makeUniqueNoThrow<JPEGDEC>();
++  const auto jpeg = makeImageObjectNoThrow<JPEGDEC>();
+   if (!jpeg) {
+     LOG_ERR("JPG", "OOM: JPEG decoder");
+     return false;
+diff --git a/lib/Memory/Memory.h b/lib/Memory/Memory.h
+--- a/lib/Memory/Memory.h
++++ b/lib/Memory/Memory.h
+@@ -233,3 +233,17 @@
+ 
+ template <typename F>
+ ScopedCleanup(F) -> ScopedCleanup<F>;
++
++// Cover working storage must not compete with the Wi-Fi PHY's internal RAM.
++inline HeapByteBuffer makeImageByteBufferNoThrow(size_t count) {
++  return psramHeapAvailable() ? makePsramByteBufferNoThrow(count) : makeHeapByteBufferNoThrow(count);
++}
++struct ImageObjectDeleter {
++  template<class T> void operator()(T* p) const {
++    if (p) { p->~T(); HeapByteBufferDeleter{}(reinterpret_cast<uint8_t*>(p)); }
++  }
++};
++template<class T> std::unique_ptr<T, ImageObjectDeleter> makeImageObjectNoThrow() {
++  auto bytes=makeImageByteBufferNoThrow(sizeof(T));
++  return std::unique_ptr<T, ImageObjectDeleter>(bytes ? new (bytes.release()) T() : nullptr);
++}
+diff --git a/lib/PngToBmpConverter/PngToBmpConverter.cpp b/lib/PngToBmpConverter/PngToBmpConverter.cpp
+--- a/lib/PngToBmpConverter/PngToBmpConverter.cpp
++++ b/lib/PngToBmpConverter/PngToBmpConverter.cpp
+@@ -601,7 +601,7 @@
+   // These rows have the same lifetime, so one allocation avoids leaving small
+   // gaps in the constrained internal heap during image conversion.
+   const size_t scanlineRowBytes = rawRowBytes;
+-  auto scanlineRows = makeUniqueNoThrow<uint8_t[]>(scanlineRowBytes * 2);
++  auto scanlineRows = makeImageByteBufferNoThrow(scanlineRowBytes * 2);
+   if (!scanlineRows) {
+     LOG_ERR("PNG", "OOM: scanline buffers (%u bytes each)", rawRowBytes);
+     return false;
+@@ -681,7 +681,7 @@
+   // The encoded and grayscale rows are also used together for the whole
+   // conversion, so keep them in one automatically owned scratch allocation.
+   const size_t rowScratchBytes = static_cast<size_t>(bytesPerRow) + static_cast<size_t>(width);
+-  auto rowScratch = makeUniqueNoThrow<uint8_t[]>(rowScratchBytes);
++  auto rowScratch = makeImageByteBufferNoThrow(rowScratchBytes);
+   if (!rowScratch) {
+     LOG_ERR("PNG", "OOM: row scratch buffer (%u bytes)", static_cast<unsigned>(rowScratchBytes));
+     return false;
+diff --git a/src/BookOrbitHomeStore.cpp b/src/BookOrbitHomeStore.cpp
+--- a/src/BookOrbitHomeStore.cpp
++++ b/src/BookOrbitHomeStore.cpp
+@@ -127,7 +127,7 @@
+   }
+ }
+ 
+-void fetchMissingCovers(const BookOrbitHomeSnapshot& snapshot, const StopCheck shouldStop, const CoverSizes& sizes) {
++void fetchMissingCovers(const BookOrbitHomeSnapshot& snapshot, const StopCheck shouldStop, const CoverSizes& sizes, RefreshProgress progress = nullptr, void* context = nullptr) {
+   Storage.mkdir(COVER_DIR);
+   int fetched = 0;
+   // Patch 0037: one summary line per sync ("covers: N needed, N on SD, N fetched, N deferred (why)").
+@@ -135,6 +135,7 @@
+   const char* why = "";
+   uint32_t deferFree = 0, deferMaxAlloc = 0;
+   forEachCover(snapshot, sizes, [&](const BookOrbitHomeBook& book, const int width, const int height) {
++    if (progress) progress(context, BookOrbitHomeSnapshot::SHELVES+2, BookOrbitHomeSnapshot::SHELVES+2, 0, onCard+fetched-failed);
+     ++needed;
+     char path[64];
+     coverPath(book, width, height, path, sizeof(path));
+@@ -199,6 +200,7 @@
+       ++failed;
+     }
+   });
++  if (progress) progress(context,BookOrbitHomeSnapshot::SHELVES+2,BookOrbitHomeSnapshot::SHELVES+2,0,onCard+fetched-failed);
+   if (deferred > 0 && deferFree != 0) {
+     LOG_INF("BookOrbit", "covers: %d needed, %d on SD, %d fetched, %d deferred (heap: free=%u maxAlloc=%u)", needed,
+             onCard, fetched - failed, deferred, static_cast<unsigned>(deferFree), static_cast<unsigned>(deferMaxAlloc));
+@@ -337,7 +339,7 @@
+ }
+ }  // namespace
+ 
+-bool refresh(const StopCheck shouldStop, const CoverSizes& sizes) {
++bool refresh(const StopCheck shouldStop, const CoverSizes& sizes, RefreshProgress progress, void* context) {
+   // The sleep sync comes here after the book's own exchanges. Everything below is
+   // retried by the next sync, so short of heap it can simply wait for one.
+   if (!roomToFetch()) {
+@@ -379,6 +381,8 @@
+   next->fetchDay = getCurrentLocalReadingStatsDateTimeAnyClock(today) ? readingStatsDayIndex(today.date) : 0;
+   next->localFinishedAtFetch = GlobalReadingStats::load().completedBooks;
+ 
++  size_t listsDone=1;
++  if (progress) progress(context,listsDone,BookOrbitHomeSnapshot::SHELVES+2,next->continueCount,0);
+   for (BookOrbitHomeShelf& shelf : next->shelves) {
+     const BookOrbitHomeShelf* kept = hadPrevious ? findShelf(*previous, shelf.source) : nullptr;
+     // The server draws Discover anew on every request. Keeping a day's draw stops each
+@@ -390,6 +394,7 @@
+       shelf.count = kept->count;
+       memcpy(shelf.books, kept->books, sizeof(shelf.books));
+     }
++    if (progress) progress(context,++listsDone,BookOrbitHomeSnapshot::SHELVES+2,next->continueCount,0);
+   }
+ 
+   // What Home's "All (N)" opens: the dashboard's own in-progress count takes in every
+@@ -414,9 +419,21 @@
+   }
+   rebuildPendingReading();
+ 
+-  fetchMissingCovers(*next, shouldStop, sizes);
++  fetchMissingCovers(*next, shouldStop, sizes, progress, context);
+   evictCovers(*next, sizes);
+   return true;
++}
++
++void markSynced() {
++  // Update the persisted snapshot at completion, after covers and SD work. Never use
++  // the server's generatedAt or the time the lengthy refresh started.
++  auto snapshot = makeUniqueNoThrow<BookOrbitHomeSnapshot>();
++  const auto now = time(nullptr);
++  if (!snapshot || now < MIN_PLAUSIBLE_EPOCH || !load(*snapshot)) return;
++  HalFile file = Storage.open(PATH, O_RDWR);
++  if (!file || !file.seekSet(HEADER_SIZE + offsetof(BookOrbitHomeSnapshot, generatedAt))) return;
++  const uint32_t at = static_cast<uint32_t>(now);
++  if (file.write(reinterpret_cast<const uint8_t*>(&at), sizeof(at)) == sizeof(at)) file.sync();
+ }
+ 
+ bool shelvesFollowSettings() {
+@@ -530,7 +547,7 @@
+     if (!Storage.exists(pending)) return;
+     char path[64];
+     coverPath(book, width, height, path, sizeof(path));
+-    if (ESP.getMaxAllocHeap() < MIN_MAX_ALLOC_FOR_DECODE) {
++    if ((psramHeapAvailable() ? byteHeapSnapshot(MemoryPool::Psram).largest : ESP.getMaxAllocHeap()) < MIN_MAX_ALLOC_FOR_DECODE) {
+       LOG_INF("BookOrbit", "Cover decode waits for more heap (maxAlloc=%u)", ESP.getMaxAllocHeap());
+       return;
+     }
+diff --git a/src/BookOrbitHomeStore.h b/src/BookOrbitHomeStore.h
+--- a/src/BookOrbitHomeStore.h
++++ b/src/BookOrbitHomeStore.h
+@@ -83,7 +83,10 @@
+ // Wi-Fi up. shouldStop, when set, is checked between requests. The local reading the
+ // new snapshot cannot hold, what still waits in the books' upload queues, becomes the
+ // pending time of ReadingDailyMinutes.
+-bool refresh(StopCheck shouldStop, const CoverSizes& sizes);
++using RefreshProgress = void (*)(void*, size_t listsDone, size_t listsTotal, size_t books, size_t covers);
++bool refresh(StopCheck shouldStop, const CoverSizes& sizes, RefreshProgress progress = nullptr, void* context = nullptr);
++// Mark only a completed Home refresh; the snapshot header/account validation stays in load().
++void markSynced();
+ 
+ // False when the snapshot's shelves are not the ones the BookOrbit settings choose, so
+ // the next sync would change them. True without a snapshot: there is nothing to follow.
+diff --git a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+--- a/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
++++ b/src/activities/browser/BookOrbitCatalogBrowserActivity.cpp
+@@ -67,6 +67,7 @@
+ #include "BookOrbitSyncClient.h"
+ #include "orbify/Mirror.h"
+ #include "orbify/SleepScreen.h"
++#include "orbify/HeapFloor.h"
+ #include "orbify/RefreshBadge.h"
+ #include "orbify/core/LocalFirst.h"
+ #endif
+@@ -753,8 +754,12 @@
+   if (allowNetwork) catalogSession.emplace();
+   if (!cacheHit && !BookOrbitCatalogClient::fetchRootSections(sections) && !(connectForMiss() && BookOrbitCatalogClient::fetchRootSections(sections))) {
+     state = BrowserState::ERROR;
+-    errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
+-                                                                : tr(STR_BOOKORBIT_CATALOG_ERROR);
++    errorMessage =
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++        !OrbifyHeap::roomForCatalog() ? "Not enough memory to connect. Close the catalog and try again." :
++#endif
++        BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
++                                                    : tr(STR_BOOKORBIT_CATALOG_ERROR);
+     requestUpdate();
+     return false;
+   }
+@@ -971,8 +976,12 @@
+   }
+   if (!cacheHit && !BookOrbitCatalogClient::fetchSectionEntries(sectionId, page, result) && !(connectForMiss() && BookOrbitCatalogClient::fetchSectionEntries(sectionId, page, result))) {
+     state = BrowserState::ERROR;
+-    errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
+-                                                                : tr(STR_BOOKORBIT_CATALOG_ERROR);
++    errorMessage =
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++        !OrbifyHeap::roomForCatalog() ? "Not enough memory to connect. Close the catalog and try again." :
++#endif
++        BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
++                                                    : tr(STR_BOOKORBIT_CATALOG_ERROR);
+     requestUpdate();
+     return false;
+   }
+@@ -1034,8 +1043,12 @@
+   }
+   if (!cacheHit && !BookOrbitCatalogClient::fetchBooks(query, page, result) && !(connectForMiss() && BookOrbitCatalogClient::fetchBooks(query, page, result))) {
+     state = BrowserState::ERROR;
+-    errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
+-                                                                : tr(STR_BOOKORBIT_CATALOG_ERROR);
++    errorMessage =
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++        !OrbifyHeap::roomForCatalog() ? "Not enough memory to connect. Close the catalog and try again." :
++#endif
++        BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
++                                                    : tr(STR_BOOKORBIT_CATALOG_ERROR);
+     requestUpdate();
+     return false;
+   }
+@@ -1552,8 +1565,12 @@
+   if (!BookOrbitCatalogClient::fetchBookDetail(bookId, detail) &&
+       !(connectForMiss() && BookOrbitCatalogClient::fetchBookDetail(bookId, detail))) {
+     state = BrowserState::ERROR;
+-    errorMessage = BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
+-                                                                : tr(STR_BOOKORBIT_CATALOG_ERROR);
++    errorMessage =
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++        !OrbifyHeap::roomForCatalog() ? "Not enough memory to connect. Close the catalog and try again." :
++#endif
++        BookOrbitCatalogClient::lastFetchBadResponse ? tr(STR_BOOKORBIT_CATALOG_BAD_RESPONSE)
++                                                    : tr(STR_BOOKORBIT_CATALOG_ERROR);
+     requestUpdate();
+     return;
+   }
+@@ -2703,6 +2720,13 @@
+     statusMessage = tr(STR_CONNECTING);
+   }
+   requestUpdateAndWait();
++  // Reclaim SD font caches before the radio and tailnet need internal RAM.
++  sdFontSystem.releaseForNetwork(renderer);
++  if (!OrbifyHeap::roomForWifi()) {
++    RenderLock lock(*this);
++    errorMessage = "Not enough memory to connect. Close the catalog and try again.";
++    return false;
++  }
+   if (!OrbifyWifi::connect("miss", [] { return false; })) {
+     LOG_INF("BookOrbit", "Catalog: could not connect for a view not in the cache");
+     return false;
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.cpp b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.cpp
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.cpp
+@@ -19,6 +19,7 @@
+ #endif
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+ #include "orbify/Mirror.h"
++#include "orbify/CacheStore.h"
+ #include "orbify/SleepScreen.h"
+ #include "orbify/RefreshBadge.h"
+ #endif
+@@ -106,6 +107,19 @@
+   self->showStep(State::Scanning);
+   // Counted from the end of the paint, so a slow panel still leaves the scan most of the time.
+   self->scanPaintedAt = millis();
++}
++
++void BookOrbitHomeRefreshActivity::onRefreshProgress(void* context, size_t done, size_t total, size_t books, size_t covers) {
++  auto* self=static_cast<BookOrbitHomeRefreshActivity*>(context);
++  const auto now=millis();
++  {
++    RenderLock lock(*self);
++    self->refreshLists=done;self->refreshTotal=total;
++    self->refreshBooks=std::max(self->refreshBooks,books);self->refreshCovers=covers;
++  }
++  if(now-self->refreshPaintedAt<1000)return;
++  self->requestUpdateAndWait();
++  self->refreshPaintedAt=millis();
+ }
+ 
+ void BookOrbitHomeRefreshActivity::setScanSummary(const BookOrbitDeviceScan::Summary& summary) {
+@@ -152,7 +166,12 @@
+   WallClock::checkpoint();
+ 
+   const auto sizes = BookOrbitHomeLayout::coverSizes(renderer);
+-  const bool refreshed = BookOrbitHomeStore::refresh(nullptr, sizes);
++  const bool refreshed = [&] {
++#if CROSSINK_TAILNET_ORBIFY_CACHE
++    OrbifyCache::ScopedMode refresh(orbify::cache::Mode::Refresh);
++#endif
++    return BookOrbitHomeStore::refresh(nullptr, sizes, &BookOrbitHomeRefreshActivity::onRefreshProgress, this);
++  }();
+   if (refreshed) {
+     const BookOrbitDeviceScan::Progress progress{this, &BookOrbitHomeRefreshActivity::onScanProgress};
+     setScanSummary(BookOrbitDeviceScan::run(nullptr, &progress));
+@@ -184,6 +203,17 @@
+     return;
+   }
+ #endif
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (refreshed) {
++    // The tile refresh must save the same ranked SD rows used by every browser
++    // window, not just Home's 100-row shelf replies.
++    OrbifyMirror::request();
++    mirrorWalk.begin();
++    state=State::Mirroring;
++    requestUpdate();
++    return;
++  }
++#endif
+   finishRefresh(refreshed);
+ }
+ 
+@@ -204,6 +234,11 @@
+     showStep(State::DecodingCovers);
+     BookOrbitHomeStore::decodePendingCovers(nullptr, sizes);
+   }
++  if (refreshed
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++      && !OrbifyMirror::busy()
++#endif
++  ) BookOrbitHomeStore::markSynced();
+   LOG_INF("BookOrbit", "Home refresh over (ok=%d, free=%u maxAlloc=%u)", refreshed, ESP.getFreeHeap(),
+           ESP.getMaxAllocHeap());
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+@@ -246,6 +281,10 @@
+     return;
+   }
+   if (done) return;
++  if (snapshot.total && millis()-refreshPaintedAt>=1000 &&
++      (refreshLists!=snapshot.done || refreshTotal!=snapshot.total || refreshBooks!=snapshot.books)) {
++    onRefreshProgress(this,snapshot.done,snapshot.total,snapshot.books,refreshCovers);
++  }
+   if (mirrorPopupUntil != 0 && now >= mirrorPopupUntil) {
+     {
+       RenderLock lock(*this);
+@@ -378,9 +417,16 @@
+   const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+   renderer.clearScreen();
+   GUI.drawHeader(renderer, Rect{screen.x, screen.y + metrics.topPadding, screen.width, metrics.headerHeight},
+-                 tr(STR_BOOKORBIT_SYNC));
++                 "BookSync");
+   int y = screen.y + screen.height / 2 - 40;
+   y += UITheme::drawCenteredWrappedText(renderer, text, UI_10_FONT_ID, y, status, 3, true, EpdFontFamily::BOLD) + gap;
++  if ((state==State::Refreshing || state==State::Mirroring) && refreshTotal) {
++    snprintf(line,sizeof(line),"Lists %u / %u",unsigned(refreshLists),unsigned(refreshTotal));
++    UITheme::drawCenteredText(renderer,screen,UI_10_FONT_ID,y,line);y+=lineHeight+gap;
++    snprintf(line,sizeof(line),"Books saved %u · Covers %u",unsigned(refreshBooks),unsigned(refreshCovers));
++    UITheme::drawCenteredText(renderer,screen,UI_10_FONT_ID,y,line);y+=lineHeight+gap;
++    LOG_INF("ORB","Refresh progress: lists=%u/%u books=%u covers=%u",unsigned(refreshLists),unsigned(refreshTotal),unsigned(refreshBooks),unsigned(refreshCovers));
++  }
+   if (total > 0) {
+     snprintf(line, sizeof(line), "%u / %u", static_cast<unsigned>(done), static_cast<unsigned>(total));
+     UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, y, line);
+@@ -421,5 +467,5 @@
+     }
+   }
+ #endif
+-  renderer.displayBuffer();
+-}
++  renderer.displayBuffer((state==State::Refreshing || state==State::Mirroring) ? HalDisplay::FAST_REFRESH : HalDisplay::HALF_REFRESH);
++}
+diff --git a/src/activities/network/BookOrbitHomeRefreshActivity.h b/src/activities/network/BookOrbitHomeRefreshActivity.h
+--- a/src/activities/network/BookOrbitHomeRefreshActivity.h
++++ b/src/activities/network/BookOrbitHomeRefreshActivity.h
+@@ -46,6 +46,9 @@
+   void runRefresh();
+   // Repaints the scan's step: at once when the step changes, then at most every few seconds.
+   static void onScanProgress(void* context, BookOrbitDeviceScan::Step step, size_t done, size_t total);
++  static void onRefreshProgress(void*, size_t, size_t, size_t, size_t);
++  size_t refreshLists=0, refreshTotal=0, refreshBooks=0, refreshCovers=0;
++  unsigned long refreshPaintedAt=0;
+   void setScanSummary(const BookOrbitDeviceScan::Summary& summary);
+   // After the refresh (and the Full refresh, if one ran): Wi-Fi off, covers, back to Home.
+   void finishRefresh(bool refreshed);
+diff --git a/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp b/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp
+--- a/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp
++++ b/src/components/themes/bookorbit/BookOrbitHomeHomePage.cpp
+@@ -231,6 +231,10 @@
+   if (snapshot->generatedAt == 0 || now < static_cast<time_t>(snapshot->generatedAt)) return;
+   const uint32_t minutes = static_cast<uint32_t>(now - snapshot->generatedAt) / 60u;
+   char age[16];
++  if (minutes == 0) {
++    tiles.drawFitted(UI_12_FONT_ID, tile.x + kPad, y - 2, "Synced just now", tile.width - 2 * kPad, true);
++    return;
++  }
+   if (minutes < 60) {
+     snprintf(age, sizeof(age), "%lu min", static_cast<unsigned long>(minutes));
+   } else if (minutes < 48u * 60u) {
+@@ -252,7 +256,7 @@
+     tiles.drawTileFooter(tile, tr(STR_BROWSE));
+     return;
+   }
+-  tiles.drawTileHeader(tile, tr(STR_BOOKORBIT), &icon_home_refresh_24);
++  tiles.drawTileHeader(tile, "BookSync", &icon_home_refresh_24);
+   drawSyncAge(context, tile);
+   tiles.drawTileFooter(tile, tr(STR_HOME_SYNC_NOW));
+ }
+diff --git a/src/network/BookOrbitCatalogClient.cpp b/src/network/BookOrbitCatalogClient.cpp
+--- a/src/network/BookOrbitCatalogClient.cpp
++++ b/src/network/BookOrbitCatalogClient.cpp
+@@ -176,7 +176,7 @@
+   const OrbifyCache::Lookup cached = OrbifyCache::lookup(url);
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+   if(cached.bulk) {
+-    JsonDocument filter;buildFilter(filter);
++    JsonDocument filter(ORBIFY_CATALOG_JSON_ALLOCATOR);buildFilter(filter);
+     if(OrbifyBulk::read(url,filter.as<JsonVariantConst>(),outDoc))return true;
+     return false;
+   }
+@@ -199,7 +199,7 @@
+   // on a transient allocation race; a fresh connection usually succeeds.
+   HttpDownloader::DownloadOptions options;
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+-  options.shouldCancel = OrbifyMirror::cancelCatalogRequest;
++  options.shouldCancel = [] { return (s_lentConnection ? OrbifyHeap::starved() : !OrbifyHeap::roomForCatalog()) || OrbifyMirror::cancelCatalogRequest(); };
+ #endif
+   // wolfSSL rather than mbedTLS: the latter needs more heap than this chip has to spare
+   // while parsing a modern certificate chain, which is what makes catalog fetches fail with
+@@ -212,13 +212,19 @@
+   options.wolfSslClient = catalogConnection();
+ #endif
+ #if !CROSSINK_TAILNET_FILTER_AFTER_TLS
+-  JsonDocument filter;
++  JsonDocument filter(ORBIFY_CATALOG_JSON_ALLOCATOR);
+   buildFilter(filter);
+ #endif
+ #if CROSSINK_TAILNET_ORBIFY_CACHE
+   if (parsePath == TMP_PATH) {
+     networkLock.lock();
+     options.wolfSslClient = catalogConnection();
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++    if (!(s_lentConnection ? OrbifyHeap::roomForRequest("Lent catalog") : OrbifyHeap::roomForCatalog())) {
++      BookOrbitCatalogClient::closeBootSession("low heap");
++      return false;
++    }
++#endif
+     if (!OrbifyCache::roomForReply()) return false;
+ #endif
+   HttpDownloader::DownloadError err = HttpDownloader::HTTP_ERROR;
+@@ -290,7 +296,7 @@
+ #if CROSSINK_TAILNET_FILTER_AFTER_TLS
+   // Built only now: the request's TLS session is gone, so the filter's nodes never share
+   // the heap with its handshake.
+-  JsonDocument filter;
++  JsonDocument filter(ORBIFY_CATALOG_JSON_ALLOCATOR);
+   buildFilter(filter);
+ #endif
+   FileJsonReader reader{file};
+diff --git a/src/network/BookOrbitCatalogClient.h b/src/network/BookOrbitCatalogClient.h
+--- a/src/network/BookOrbitCatalogClient.h
++++ b/src/network/BookOrbitCatalogClient.h
+@@ -2,6 +2,7 @@
+ #include <cstdint>
+ #include <CrossInkTailnetCuts.h>
+ #include <ArduinoJson.h>
++#include "orbify/core/CatalogWindow.h"
+ #include <atomic>
+ #include <string>
+ #include <vector>
+@@ -143,7 +144,7 @@
+  */
+ class BookOrbitCatalogClient {
+  public:
+-  static constexpr int PAGE_SIZE = 20;
++  static constexpr int PAGE_SIZE = orbify::catalog::BROWSE_SIZE;
+ #if CROSSINK_TAILNET_ORBIFY_MIRROR
+   static bool fetchBulk(const std::string& path, JsonDocument& out);
+ #endif
+diff --git a/src/network/SavedWifiConnect.cpp b/src/network/SavedWifiConnect.cpp
+--- a/src/network/SavedWifiConnect.cpp
++++ b/src/network/SavedWifiConnect.cpp
+@@ -1,5 +1,6 @@
+ #include "SavedWifiConnect.h"
+ #include "orbify/Wifi.h"
++#include "orbify/HeapFloor.h"
+ 
+ #include <Arduino.h>
+ #include <CrossInkTailnetCuts.h>
+@@ -214,6 +215,9 @@
+ 
+ bool SavedWifiConnect::connect(const StopCheck shouldStop) {
+   if (WiFi.status() == WL_CONNECTED) return true;
++#if CROSSINK_TAILNET_ORBIFY_MIRROR
++  if (!OrbifyHeap::roomForWifi()) return false;
++#endif
+   if (WIFI_STORE.getCredentialCount() == 0) {
+     LOG_INF("WIFI", "No saved network to join in the background");
+     return false;

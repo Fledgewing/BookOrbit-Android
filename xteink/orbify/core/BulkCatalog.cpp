@@ -7,6 +7,7 @@
 #endif
 #if ORBIFY_BULK_AVAILABLE
 #include "BulkCatalog.h"
+#include "CatalogWindow.h"
 #include "BulkRefresh.h"
 #include "CatalogCache.h"
 #include <cctype>
@@ -102,7 +103,7 @@ bool Catalog::writeIds(const std::string& path,const Ids& values) {
 }
 bool Catalog::book(int64_t id,JsonDocument& out,const std::string& gen) {return load(record(id,gen),out);}
 bool Catalog::active() const {return fs.exists("bulk/active");}
-void Catalog::tick(unsigned n) {shown=std::max(shown,std::min(99u,n));progress(shown);}
+void Catalog::tick(unsigned n) {shown=std::max(shown,std::min(99u,n));progress(shown);if(observe)observe(stats);}
 bool Catalog::ask(const std::string& path,JsonDocument& out) {
   if(cancelled()) {error="cancelled";return false;}
   out.clear();++stats.requests;
@@ -113,11 +114,14 @@ bool Catalog::ask(const std::string& path,JsonDocument& out) {
 }
 bool Catalog::pages(const std::string& endpoint,const std::string& q,const std::string& key,
                     const std::function<bool(JsonObjectConst,size_t)>& row) {
+  // 29 fixed lists: seven facets, five dashboard/root entries, fourteen ranks, three states.
+  if(q.find("libraryId=")==0||q.find("collectionId=")==0||q.find("smartScopeId=")==0||
+     q.find("seriesId=")==0||q.find("series=")==0) ++stats.listsTotal;
   for(size_t page=1;;++page) {
     const auto marker=root()+"pages/"+encode(key)+"/"+std::to_string(page);
     JsonDocument body(arena);
     if(!load(marker,body)) {
-      if(!ask(BASE+endpoint+"?"+q+(q.empty()?"":"&")+"size=100&page="+std::to_string(page),body))return false;
+      if(!ask(BASE+endpoint+"?"+q+(q.empty()?"":"&")+"size="+std::to_string(catalog::FETCH_SIZE)+"&page="+std::to_string(page),body))return false;
     }
     auto items=body["items"].as<JsonArrayConst>();
     if(items.isNull()) {error="items missing";return false;}
@@ -125,8 +129,8 @@ bool Catalog::pages(const std::string& endpoint,const std::string& q,const std::
     if(items.size()==0 && (page-1)*100<total) {error="incomplete page";return false;}
     const size_t pageSize=body["size"]|size_t(100);
     if(!pageSize||pageSize>100){error="invalid page size";return false;}
-    size_t pos=(page-1)*pageSize;
-    for(JsonObjectConst item:items)if(cancelled()||!row(item,pos++))return false;
+    size_t pos=catalog::Window::page(page,pageSize).offset;
+    for(JsonObjectConst item:items) {if(cancelled()||!row(item,pos++))return false;tick(shown);}
     // Page data and idempotent rows are durable before a completed page is reused.
     if(endpoint=="/books") {
       const bool seriesContext=key.find("seriesId:")==0||key.find("series:")==0;
@@ -137,7 +141,7 @@ bool Catalog::pages(const std::string& endpoint,const std::string& q,const std::
       }
     }
     if(!save(marker,body.as<JsonVariantConst>()))return false;
-    if(page*pageSize>=total && body["hasNext"]!=true)return true;
+    if(page*pageSize>=total && body["hasNext"]!=true){++stats.listsDone;tick(shown);return true;}
   }
 }
 bool Catalog::manifest() {
@@ -148,7 +152,7 @@ bool Catalog::manifest() {
     cursor.restarts=checkpoint["restarts"]|0;
     if(!readIds(root()+"ids",ids))return false;
   }
-  if(cursor.complete){stats.rows=ids.size();return true;}
+  if(cursor.complete){stats.rows=ids.size();for(auto id:ids)if(fs.exists(root()+"rich/"+leaf(id)))++stats.booksSaved;return true;}
   while(!cursor.complete) {
     JsonDocument page(arena);
     if(!ask(BASE+"/manifest?size=200"+(cursor.cursor.empty()?"":"&cursor="+encode(cursor.cursor)),page))return false;
@@ -174,7 +178,9 @@ bool Catalog::manifest() {
     checkpoint["cursor"]=cursor.cursor;checkpoint["complete"]=cursor.complete;checkpoint["restarts"]=cursor.restarts;
     if(!save(root()+"manifest.state",checkpoint.as<JsonVariantConst>()))return false;
   }
-  stats.rows=ids.size();return true;
+  stats.rows=ids.size();
+  for(auto id:ids)if(fs.exists(root()+"rich/"+leaf(id)))++stats.booksSaved;
+  return true;
 }
 bool Catalog::rich(JsonObjectConst row, bool freshState) {
   const int64_t id=row["id"]|int64_t(0);
@@ -188,7 +194,9 @@ bool Catalog::rich(JsonObjectConst row, bool freshState) {
   for(const char* key:{"seriesId","progressPercentage","lastReadAt","readStatus","addedAt","updatedAt","hasCover","thumbnailUrl","detailUrl"}) {
     if(body[key]!=row[key]){body[key].set(row[key]);changed=true;}
   }
-  return (!changed||save(record(id),body.as<JsonVariantConst>()))&&(hydrated||fs.write(marker,"1"));
+  if((changed&&!save(record(id),body.as<JsonVariantConst>()))||(!hydrated&&!fs.write(marker,"1")))return false;
+  if(!hydrated)++stats.booksSaved;
+  return true;
 }
 bool Catalog::metadata() {
   for(const char* section:{"libraries","collections","smart-scopes","authors","series"}) {
@@ -206,13 +214,14 @@ bool Catalog::metadata() {
     })||!writeIds(root()+"section-ranks/"+section+":name_desc",positions))return false;
   }
   for(const char* entry:{"/root","/dashboard","/dashboard/discover","/dashboard/sections/want-to-read","/dashboard/sections/up-next-in-series"}) {
-    const auto path=root()+"entries/"+encode(entry);if(fs.exists(path))continue;
+    const auto path=root()+"entries/"+encode(entry);if(fs.exists(path)){++stats.listsDone;continue;}
     JsonDocument doc(arena);if(!ask(BASE+entry,doc))return false;
     if(!manualRun&&!previous.empty()) {
       JsonDocument prior(arena);
       if(load(root(previous)+"entries/"+encode(entry),prior)&&!prior["discover"].isNull())doc["discover"].set(prior["discover"]);
     }
     if(!save(path,doc.as<JsonVariantConst>()))return false;
+    ++stats.listsDone;tick(shown);
   }
   return true;
 }
@@ -406,7 +415,7 @@ bool Catalog::refresh(const std::string& owner,const Fetch& transport,const std:
     // Publish all base lists first. No completion stamp until later series succeeds.
     if(!fs.write("bulk/active",generation)||!fs.write("bulk/owner",owner))return false;tick(90);
     if(!secondary()||!seriesNames()||!indexes())return false;tick(99);
-    if(cancelled()||!fs.write(root()+"complete","1"))return false;
+    if(cancelled()||!fs.write(root()+"at",std::to_string(fs.now()))||!fs.write(root()+"complete","1"))return false;
     if(!fs.erase("bulk/stage")||!fs.erase("bulk/stage-owner")||!fs.erase("bulk/stage-previous"))return false;
     progress(100);return true;
   };
@@ -498,9 +507,10 @@ bool Catalog::reply(const std::string& requested,JsonDocument& out) {
   if(path.find("/books/")==0) {
     const auto id=strtoll(path.substr(7).c_str(),nullptr,10);return id>0&&book(id,out);
   }
-  const size_t size=std::max(1,std::min(200,q["size"].empty()?20:atoi(q["size"].c_str())));
+  const size_t size=std::max(1,std::min(200,q["size"].empty()?static_cast<int>(catalog::BROWSE_SIZE):atoi(q["size"].c_str())));
   const size_t page=std::max(1,q["page"].empty()?1:atoi(q["page"].c_str()));
-  const size_t offset=q["offset"].empty()?(page-1)*size:strtoul(q["offset"].c_str(),nullptr,10);
+  const catalog::Window window{q["offset"].empty()?catalog::Window::page(page,size).offset:strtoul(q["offset"].c_str(),nullptr,10),size};
+  const size_t offset=window.offset;
   if(path.find("/sections/")==0) {
     const auto section=path.substr(10);
     if(section.find('/')!=std::string::npos)return false;
@@ -517,7 +527,7 @@ bool Catalog::reply(const std::string& requested,JsonDocument& out) {
     }
     out.clear();out["page"]=page;out["size"]=size;out["total"]=positions.size();out["hasNext"]=offset+size<positions.size();
     auto items=out["items"].to<JsonArray>();
-    for(size_t i=offset;i<std::min(offset+size,positions.size());++i){JsonDocument row(arena);if(!load(root()+"sections/"+section+"/"+std::to_string(positions[i]),row))return false;items.add(row.as<JsonVariantConst>());}
+    for(size_t i=offset;i<window.end(positions.size());++i){JsonDocument row(arena);if(!load(root()+"sections/"+section+"/"+std::to_string(positions[i]),row))return false;items.add(row.as<JsonVariantConst>());}
     return !out.overflowed();
   }
   if(path!="/books"||!q["q"].empty())return false;
@@ -551,7 +561,7 @@ bool Catalog::reply(const std::string& requested,JsonDocument& out) {
   }
   out.clear();out["page"]=page;out["size"]=size;out["total"]=selected.size();out["hasNext"]=offset+size<selected.size();
   auto items=out["items"].to<JsonArray>();
-  for(size_t i=offset;i<std::min(offset+size,selected.size());++i) {
+  for(size_t i=offset;i<window.end(selected.size());++i) {
     JsonDocument row(arena);if(!book(selected[i],row))return false;
     if(!seriesKey.empty()) {
       JsonDocument ctx(arena);
