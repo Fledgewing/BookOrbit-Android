@@ -6746,7 +6746,7 @@ test("settings: sync controls remain visible under either position rule", functi
         local texts = {}
         for _, it in ipairs(menuAll(m:menuItems())) do texts[#texts+1] = it.text or (it.text_func and it.text_func()) or "" end
         local all = table.concat(texts, "|")
-        ok(all:find("Sync on wake", 1, true), "wake always visible")
+        ok(all:find("Sync when it wakes", 1, true), "wake always visible")
         ok(all:find("Sleep sync limit", 1, true), "sleep budget always visible")
         eq(not not all:find("Read from here everywhere", 1, true), mode == "orbismart")
     end
