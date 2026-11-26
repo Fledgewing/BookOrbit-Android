@@ -24,6 +24,7 @@ function BatteryUI.widget(p,snapshot,dispatch,rect)
         HomeWidgets.text(c,plan.level,s(56),s(32),w-s(68),24,false,true)
     else
         HomeWidgets.text(c,plan.level,s(12),s(37),x-s(16),22,false,true)
+        BatteryUI.glyph(c,plan.level_fraction,s(12),s(70),s(36),s(14))
     end
     local size=narrow and 11 or short and 12 or 13
     local step=s(narrow and 19 or short and 17 or 23)
@@ -54,7 +55,8 @@ function BatteryUI.create()
         local s=function(n) return Device.screen:scaleBySize(n) end
         local w,h=self.dimen.w,self.dimen.h
         local c=HomeWidgets.canvas(w,h)
-        HomeWidgets.text(c,"Battery · "..plan.level,s(16),s(12),w-s(120),24,false,true)
+        HomeWidgets.text(c,"Battery · "..plan.level,s(16),s(12),w-s(180),24,false,true)
+        BatteryUI.glyph(c,(result.level or 0)/100,w-s(164),s(22),s(44),s(18))
         HomeWidgets.button(c,"Close",w-s(100),s(8),s(90),s(36),function() self:onClose() end)
         HomeWidgets.text(c,plan.estimate,s(16),s(52),w-s(32),16,false,true)
         for i,title in ipairs(BatteryPlan.tabs) do
