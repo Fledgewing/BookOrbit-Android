@@ -9,7 +9,7 @@ shipped Xteink parsers consuming redirect bodies; no firmware rollout is needed 
 part of the migration. `stub/` is the deployable template, not a second development checkout.
 
 **Remaining blocker:** raw feeds are only part of the installed-client contract. Shipped
-Android companions and Lua patches read the old GitHub Releases API. Existing signed Android
+Android companions, Lua patches and the earliest 1.6/2.x firmware read the old GitHub Releases API. Existing signed Android
 payloads and firmware feeds also contain old release-download URLs. Recreating the old
 repository removes GitHub's redirects for those paths ([GitHub rename guidance](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)); an empty release list or 404 download
 would strand those clients. A feed-only stub cannot serve GitHub's Releases API or redirect
@@ -32,10 +32,11 @@ outside the mirror and never fall back to public feeds.
 
 | Old URL (query variants share the same endpoint) | Consumers and source evidence | Stub coverage |
 |---|---|---|
-| `https://raw.githubusercontent.com/Fledgewing/Orbify/xteink-feed/xteink/releases.json` | Retired stable `xteink-v1.6.1.114+bookorbit.9:xteink/tailnet/tailnet_build.py:24-27,395-396`; current `xteink/tailnet/tailnet_build.py:31-35,564-570`. All inspected 1.6/2.x firmware uses this layout. | `xteink-feed` branch, `xteink/releases.json`, exact bytes. |
+| `https://raw.githubusercontent.com/Fledgewing/Orbify/xteink-feed/xteink/releases.json` | Retired stable `xteink-v1.6.1.114+bookorbit.9:xteink/tailnet/tailnet_build.py:24-27,395-396`; current `xteink/tailnet/tailnet_build.py:31-35,564-570`. Used from 1.6.1.111 and 2.0.0.110 onward; earlier API users are listed below. | `xteink-feed` branch, `xteink/releases.json`, exact bytes. |
 | `https://raw.githubusercontent.com/Fledgewing/Orbify/xteink-feed/xteink/releases.json.sig` | Publisher `.github/workflows/xteink.yml:603,626`; detached feed signature, not a separate client manifest. | Same branch, `xteink/releases.json.sig`, exact bytes, committed with the JSON. |
 | `https://raw.githubusercontent.com/Fledgewing/Orbify/android-feed/android/releases.json` | Signed-feed companion on main: `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/AndroidReleaseFeed.kt:9-10`; no separate plugin feed. | `android-feed` branch, `android/releases.json`, exact signed envelope bytes. |
 | `https://api.github.com/repos/Fledgewing/Orbify/releases/latest` and `/releases?per_page=N` | Shipped `v0.7.0:android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:40-41,144-147`; `v0.11.3-rc.17:android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:40-41,207-210`; Lua `v0.7.0:android/koreader-patch/2-orbit-android.lua:2312,2368` (`N=30` in that patch). | **Not covered. Blocking.** GitHub generates this API from releases, not raw branch files. |
+| `https://api.github.com/repos/Fledgewing/Orbify/releases?per_page=25` | Earliest firmware `xteink-v1.6.1.104+bookorbit.8:xteink/tailnet/tailnet_build.py:23-25,392-393` and `xteink-v2.0.0.106+bookorbit.1-rc2:xteink/tailnet/tailnet_build.py:23-25,392-393`. | **Not covered. Blocking.** These readers need the release-list API too. |
 | `https://api.github.com/repos/Fledgewing/BookOrbit-Android/releases/latest` and `/releases?per_page=N` | Earliest companion `v0.1.0:companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:40-41,110-113` (`N=5`); patch `v0.6.2:koreader-patch/2-orbit-android.lua:2310,2366`. | Historical alias must be checked separately; do not assume it chains through the recreated name. |
 | `https://github.com/Fledgewing/Orbify/releases/download/<tag>/<asset>` (also historical `BookOrbit-Android` paths) | URLs returned by those APIs and already stored in published feeds; `v0.11.3-rc.17:android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Updater.kt:228-246`; firmware `OtaUpdater.cpp` uses the manifest's asset URL. | **Not covered. Blocking.** New generated feeds use canonical downloads; that cannot rewrite cached URLs or old signed envelopes. |
 
@@ -79,8 +80,8 @@ same installed population; retiring raw branches alone does not retire cached as
 
 ## Inspected clients
 
-All 53 local Android release tags use `HttpURLConnection` without disabling redirects. All
-20 local firmware tags resolve to the four upstream commits below. The audit includes the
+All 54 local Android release tags use `HttpURLConnection` without disabling redirects. All
+21 local firmware tags resolve to the four upstream commits below. The audit includes the
 retired stable firmware, not only current source. Tag counts describe the local tag inventory
 at this change, not an assertion that every tag was installed on a device.
 
