@@ -14,7 +14,7 @@ name: release-tests
 on:
   push:
     branches: [main]
-    paths: ["android/koreader/**", ".github/workflows/release-tests.yml", ".github/workflows/release.yml"]
+    paths: ["android/koreader/**", "xteink/overlay/**", "xteink/scripts/**", "tools/upstreams.lock", ".github/workflows/release-tests.yml", ".github/workflows/release.yml"]
   pull_request:
     paths:
       - "android/koreader/**"
@@ -23,8 +23,9 @@ on:
       - "shared/fixtures/e2e/**"
       - "xteink/test/e2e/**"
       - "xteink/tailnet/sim/**"
-      - "xteink/overlay/patches/v2.0/0090-orbify-simulator-build.patch"
-      - "xteink/overlay/patches/v2.0/0056-booksync-update-channels.patch"
+      - "xteink/overlay/**"
+      - "xteink/scripts/**"
+      - "tools/upstreams.lock"
       - ".github/workflows/release-tests.yml"
       - ".github/actions/pio-setup/**"
       - ".github/actions/android-setup/**"
@@ -138,15 +139,15 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
+      - name: Apply the overlay
+        run: orbify/xteink/scripts/apply.sh upstream
+
       - uses: ./orbify/.github/actions/pio-setup
         with:
           pio-core: ${{ env.PIO_CORE }}
           platformio-ini: upstream/platformio.ini
           cache-prefix: pio-sim
           extra-apt: libsdl2-dev libssl-dev libwolfssl-dev pkg-config
-
-      - name: Apply the overlay
-        run: orbify/xteink/scripts/apply.sh upstream
 
       - name: Build the ${{ matrix.profile }} simulator
         working-directory: upstream

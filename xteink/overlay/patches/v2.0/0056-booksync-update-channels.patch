@@ -212,7 +212,7 @@ index 75bc36fc..f4e53709 100644
  
  // The version part of `tag`: what follows the prefix, or nullptr when `tag` lacks it.
 diff --git a/src/network/OtaUpdater.cpp b/src/network/OtaUpdater.cpp
-index 5f694df2..e84de504 100644
+index 5574cc24..aaf57a23 100644
 --- a/src/network/OtaUpdater.cpp
 +++ b/src/network/OtaUpdater.cpp
 @@ -336,7 +336,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
@@ -233,7 +233,7 @@ index 5f694df2..e84de504 100644
    ReleaseJsonParser releaseParser(isMatchingFirmwareAssetName, newestListed ? keepNewestListedRelease : nullptr,
                                    &listedPick);
  
-@@ -369,8 +369,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+@@ -369,7 +369,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
    // the same check after a restart got through. A slow read gets more time, and a failed check
    // is asked once more on a fresh connection, as the catalog's fetchJson does.
    client_config.timeout_ms = 15000;
@@ -243,8 +243,7 @@ index 5f694df2..e84de504 100644
 +          static_cast<unsigned>(channel));
    for (int attempt = 1;; attempt++) {
      esp_err = checkOnce(client_config);
-     // Prefer the canonical feed; any transport or manifest failure tries the stub.
-@@ -393,8 +393,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+@@ -394,8 +394,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
  #else
  
    totalBytesReceived = 0;
