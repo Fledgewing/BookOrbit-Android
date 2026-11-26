@@ -33,6 +33,19 @@ class LibraryTest {
             assertTrue(results.any { it["level"] == 78L }); assertTrue(results.any { it["hours"] == listOf(1L,2L) })
         }
     }
+    @Test fun settingsModeEstimatesUseTheMeasuredBatteryProvider() {
+        store().use { st ->
+            val request=String(LuaValue.encode(mapOf("op" to "mode-estimates","limit" to 1)),Charsets.ISO_8859_1)
+            LibraryReadModel(st,{99},{},battery={ mapOf("modes" to listOf(mapOf(
+                "id" to "battery-saver", "hours_usual_use" to 48.0, "estimated" to false))) }).publish(owner,listOf(request))
+            val result=st.db().query("SELECT body FROM library_views WHERE request=?",request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
+            val item=(result["items"] as List<*>).single() as Map<*,*>
+            assertEquals("saver",item["id"])
+            assertEquals(true,item["measured"])
+            assertEquals(48L,(item["hours_usual_use"] as Number).toLong())
+            assertTrue(LuaValue.utf8(item["text"] as String).contains("at your usual use"))
+        }
+    }
     @Test fun settingsModeEstimatesInheritCallerRowsAndNeverInventNewDeviceHours() {
         store().use { st ->
             val rows=read(st,mapOf("op" to "mode-estimates","limit" to 3))["items"] as List<*>
@@ -122,6 +135,20 @@ class LibraryTest {
         LibraryReadModel(st, {99}, {}).publish(owner,listOf(request))
         return st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?", owner,request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
     }
+    @Test fun modeEstimatesAreSmallHonestWorkerSnapshots() {
+        store().use { st ->
+            val result = read(st, mapOf("op" to "mode-estimates", "limit" to 3))
+            val items = result["items"] as List<*>
+            assertEquals(listOf("saver", "balanced", "current"), items.map { (it as Map<*, *>)["id"] })
+            for (item in items) {
+                assertEquals(false, (item as Map<*, *>)["measured"])
+                assertEquals("Estimate available after measured use", item["text"])
+            }
+            assertTrue(LuaValue.encode(result).size < 1024)
+            assertEquals(1, (read(st, mapOf("op" to "mode-estimates", "limit" to 1))["items"] as List<*>).size)
+        }
+    }
+
     @Test fun homeListsAreBoundedNeutralAndNotEmptyUntilMembershipIsSaved() {
         store().use { st ->
             assertEquals("Not saved yet",read(st,mapOf("op" to "lists"))["empty"])

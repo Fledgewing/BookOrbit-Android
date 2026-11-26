@@ -629,11 +629,8 @@ do
         if not okr then log("orbismart: open failed:", tostring(err)) end
         return base_ready(self, ...)
     end
-    local base_page = OrbitAndroid.onPageUpdate
-    function OrbitAndroid:onPageUpdate(page, ...)
-        if OSM.on() and type(page) == "number" and self.ui and self.ui.document then pcall(OSM.onPage, self, page) end
-        return base_page(self, page, ...)
-    end
+    -- 0.12: Sync, Wi-Fi & power controls cadence, including Off. Scheduled
+    -- pulls retain the safe position decision without a second pause timer.
     local base_resume = OrbitAndroid.onResume
     function OrbitAndroid:onResume(...)
         pcall(OSM.onResume)
