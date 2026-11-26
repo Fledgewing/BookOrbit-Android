@@ -631,6 +631,9 @@ store.orbit_android.open_book_at_exit = "/books/killed.epub"
 store.orbit_android.sync_mode = "custom"
 local PLUGIN_MAIN = here .. "/../orbit.koplugin/main.lua"
 local Orbit = dofile(PLUGIN_MAIN)
+-- Historical upstream Home compatibility scenarios explicitly exercise that path.
+assert(store.orbit_android.home_screen == "booksync", "fresh 0.12 defaults to owned Home")
+store.orbit_android.home_screen = "server"
 -- The companion's status file. A real companion always writes one with its mode and caps;
 -- the fake's is a Full-mode companion with every cap unless a test says otherwise.
 local CAPS_FILE = os.tmpname()
@@ -5341,8 +5344,8 @@ test("companion: the cache worker needs the companion of the plugin's own versio
         client:request("GET", DASH); run(5)
         ok(checks() == 0 and #cache.calls == 0, "no background check either: " .. table.concat(cache.calls, ","))
         -- Another version: update it.
-        W.companion = true; file = { version = "0.0.1" }; fresh()
-        ok(E.Mirror.savedText():find("^Update BookSync Companion to " .. E.PATCH_VERSION:gsub("%p", "%%%0") .. " to save library for offline %(it is 0%.0%.1%)$"), "menu: " .. E.Mirror.savedText())
+        W.companion = true; file = { version = "0.0.0-alpha" }; fresh()
+        ok(E.Mirror.savedText():find("^Update BookSync Companion to " .. E.PATCH_VERSION:gsub("%p", "%%%0") .. " to save library for offline %(it is 0%.0%.0%-alpha%)$"), "menu: " .. E.Mirror.savedText())
         E.OC.fullRefresh(cat); run(30)
         ok(mirrors() == 0, "no run with another version")
         -- The same version: the run goes to the companion, with the login in the broadcast only.
@@ -6829,16 +6832,49 @@ test("settings: Home layout actions enter the existing editor in the requested m
     eq(#calls, 3)
 end)
 
-test("settings: Home selector uses the host's shared setting and labels its button policy", function()
+test("0.11.4 upgrade: settings cutover is durable, additive and retryable",function()
+    local document=RE.Layout.default()
+    document.pages[1].name="My shelves"
+    local durable={orbit_android={sync_mode="custom",home_layout=document,
+        settings_at={sync_mode=400},orbismart={fixture={pending={page=17}}}},
+        bookorbit={username="fixture",server_url="https://library.example.test",outbox={{page=17}}}}
+    local staged,crash,flushes=nil,true,0
+    local env=setmetatable({G_reader_settings={
+        readSetting=function(_,key) return RE.Layout.copy(durable[key]) end,
+        saveSetting=function(_,key,value) staged={key=key,value=RE.Layout.copy(value)} end,
+        flush=function()
+            if crash then error("simulated death before flush") end
+            durable[staged.key]=RE.Layout.copy(staged.value); flushes=flushes+1
+        end,
+    }},{__index=RE})
+    local function startup()
+        setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/settings.lua")),env)()
+    end
+    eq(pcall(startup),false)
+    eq(durable.orbit_android.home_screen,nil,"unflushed migration not durable")
+    crash=false; startup()
+    eq(flushes,1); eq(durable.orbit_android.home_screen,"booksync")
+    eq(durable.orbit_android.news_012_pending,true)
+    eq(durable.orbit_android.sync_mode,"custom"); eq(durable.orbit_android.settings_at.sync_mode,400)
+    eq(durable.orbit_android.home_layout.pages[1].name,"My shelves")
+    eq(durable.orbit_android.orbismart.fixture.pending.page,17)
+    eq(durable.bookorbit.username,"fixture"); eq(durable.bookorbit.outbox[1].page,17)
+    startup(); eq(flushes,1,"idempotent startup")
+    eq(env.S.news_012_pending,true)
+end)
+
+test("settings: Home has editor controls and no legacy selector", function()
     local _, m = newUI(false)
     local home
     for _, group in ipairs(m:menuItems()) do if group.settings_group == "home" then home = group.sub_item_table_func() end end
-    local old = RE.S.home_screen
-    home[1].sub_item_table[2].callback()
-    eq(RE.S.home_screen, "booksync")
-    ok(home[2].text_func():find("BookSync Home", 1, true), "button policy names the selected Home")
-    ok(lastBroadcast(".SETTINGS"), "shared settings transport")
-    RE.Shared.set("home_screen", old)
+    eq(#home,4)
+    eq(home[2].text,"Edit layout")
+    eq(RE.SCHEMA.byKey.home_screen,nil,"retired selector cannot return via shared settings")
+    local old=RE.S.home_screen
+    RE.S.home_screen="booksync"
+    RE.Shared.mergeValues({home_screen={v="server",at=os.time()*1000}},"old companion value")
+    eq(RE.S.home_screen,"booksync")
+    RE.S.home_screen=old
 end)
 
 test("settings: Full refresh uses the library and its connection message is neutral", function()

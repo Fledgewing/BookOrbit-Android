@@ -43,12 +43,17 @@ function HomeHostPlan.need(p)
     -- The companion removes the hero before applying the chosen query/sort.
     return {op="window",source=source,query=query,offset=offset,limit=s.limit or 4,exclude_current=exclude or nil}
 end
-function HomeHostPlan.snapshot(result)
+function HomeHostPlan.snapshot(result, account)
     result=result or {error="Unavailable"}
     local state=result.error and "error" or result.pending and "loading"
         or not (result.freshness and result.freshness.saved) and "offline-without-data"
         or #(result.items or {}) == 0 and "empty"
         or (result.offline or result.freshness and result.freshness.offline) and "offline-with-data" or "ready"
+    -- Missing catalog windows cannot finish before setup. Cached rows still draw,
+    -- and a directly entered catalog login works without a server account.
+    if result.pending and account and not account.signedIn and not AccountPlan.login(account,"opds").available then
+        state="signed-out"
+    end
     local snapshot={state=state,items=result.items or {},count=#(result.items or {}),
         total=result.total, next=result.next, error=result.error, freshness=result.freshness,
         data=not result.items and result or nil, bytes=#Cache.encode(result)}

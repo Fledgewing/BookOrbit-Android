@@ -82,3 +82,14 @@ function RestartPlan.doneText(version)
 end
 
 ---------------------------------------------------------------------------------------------
+
+-- One additive Android 0.12 cutover; all other settings and ledgers stay untouched.
+FirstRun = {}
+function FirstRun.migrate(settings)
+    if settings.home_012_migrated then return false end
+    local upgrade = next(settings) ~= nil
+    settings.home_screen = "booksync"
+    settings.news_012_pending = upgrade
+    settings.home_012_migrated = true
+    return true
+end

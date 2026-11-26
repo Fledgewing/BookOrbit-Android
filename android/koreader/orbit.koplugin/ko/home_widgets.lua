@@ -49,9 +49,13 @@ function HomeWidgets.card(p, snapshot, dispatch, rect)
     if hero or p.widget == "lists" then HomeWidgets.text(canvas,_(title),pad,pad,w-2*pad,18,hero,true)
     else HomeWidgets.button(canvas,_(title).."  ›",pad,pad,w-2*pad,scale(30),function() dispatch("all") end) end
     if not ready then
-        local labels={loading="Loading…",empty="Nothing here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
+        local labels={["signed-out"]="Sign in to load your library",loading="Loading…",empty=p.widget == "continue-reading" and "Open a book to start reading" or "No books here yet",["offline-without-data"]="Not saved yet",error="Couldn't load this widget"}
         if not compact then HomeWidgets.text(canvas,_(labels[snapshot.state] or "Unavailable"),pad,pad+scale(38),w-2*pad,16) end
-        HomeWidgets.button(canvas,_("Retry"),pad,h-scale(compact and 34 or 48),w-2*pad,scale(compact and 28 or 38),function() dispatch("retry") end)
+        if snapshot.state == "signed-out" then
+            HomeWidgets.button(canvas,_("Sign in"),pad,h-scale(compact and 34 or 50),w-2*pad,scale(compact and 28 or 50),function() dispatch("setup") end)
+        elseif snapshot.state ~= "empty" then
+            HomeWidgets.button(canvas,_("Retry"),pad,h-scale(compact and 34 or 48),w-2*pad,scale(compact and 28 or 38),function() dispatch("retry") end)
+        end
     elseif compact then
         local b=snapshot.items[1]
         HomeWidgets.button(canvas,b.title or _("Untitled"),pad,h-scale(34),w-2*pad,scale(28),function() dispatch(p.widget == "lists" and "list" or "book",b) end)

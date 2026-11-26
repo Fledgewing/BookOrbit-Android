@@ -100,7 +100,7 @@ function HomeHost.create()
             self.signatures[p.instance]=signature
             if previous[p.instance] ~= signature then self.changed_rects[#self.changed_rects+1]=rect end
             if self.list_layout then self.list_result=result end
-            local snapshot=HomeHostPlan.snapshot(result)
+            local snapshot=HomeHostPlan.snapshot(result,caps.account)
             local dispatch=function(action,row) self:dispatch(action,row,p) end
             local rendered,card=pcall(HomeWidgets.renderers[p.widget],HomeHostPlan.immutable(p),snapshot,dispatch,rect)
             if not rendered then card=HomeWidgets.card(p,HomeHostPlan.snapshot({error="Render failed"}),dispatch,rect) end
@@ -161,7 +161,8 @@ function HomeHost.create()
         UIManager:nextTick(self.redraw)
     end
     function Host:dispatch(action,row,p)
-        if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
+        if action == "setup" then AccountView.open()
+        elseif action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action == "battery" then BatteryUI.show()
         elseif action == "book" then
             if self.caps.account and not row.local_path and not AccountPlan.login(self.account or {},"opds").available then
@@ -267,5 +268,32 @@ function HomeHost.show()
     if not ok then error(host) end
     HomeHost.active=host
     UIManager:show(host) -- gate: user action (Home command or menu)
+    if S.news_012_pending then HomeHost.whatsNew() end
     return true
+end
+
+-- Only opened after the explicit Home action has left the reading foreground.
+function HomeHost.whatsNew()
+    local finish=Budgets.span("whats-new.paint",now_s,log)
+    local budget=Budgets.get("screens","whats-new")
+    local dialog
+    dialog=require("ui/widget/buttondialog"):new{
+        title=_("What's new in 0.12"),
+        buttons={
+            {{text=_("Home is a widget grid you can edit"),enabled=false}},
+            {{text=_("Lists (your saved filters) on Home"),enabled=false}},
+            {{text=_("BookSync settings on the reader"),enabled=false}},
+            {{text=_("Battery: time left at your usual use"),enabled=false}},
+            {{text=_("Done"),callback=function() UIManager:close(dialog) end}},
+        },
+        dismiss_callback=function()
+            S.news_012_pending=false
+            saveSettings()
+            G_reader_settings:flush()
+        end,
+    }
+    assert(Budgets.check(budget,{rows=#dialog.buttons,bytes=0,spawns=0,roundTrips=0,network=0,snapshotBytes=0}))
+    UIManager:show(dialog) -- gate: explicit Home action, above the Home host
+    finish()
+    return dialog
 end

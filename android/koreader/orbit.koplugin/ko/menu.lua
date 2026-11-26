@@ -253,7 +253,7 @@ function OrbitAndroid:menuItems()
             return out
         end),
         group("home", "Home", function()
-            local out = rows({"home_screen", "home_button"})
+            local out = rows({"home_button"})
             out[#out+1] = action("Edit layout", function() HomeEditor.open("edit") end)
             out[#out+1] = action("Reset layout", function() HomeEditor.open("reset") end)
             out[#out+1] = action("Page names", function() HomeEditor.open("rename") end)

@@ -70,6 +70,58 @@ return function(test,eq,ok,E,W,Widget)
     dofile((arg[0]:match("^(.*)/") or ".").."/booklist_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/battery_flows.lua")(test,eq,ok,E,W,withHost)
+    test("First run: upgrade news appears once on Home, with a static budget",function()
+        withHost(function(batches)
+            local pending=E.S.news_012_pending
+            local saved=E.saveSettings
+            local saves=0
+            E.saveSettings=function() saves=saves+1 end
+            E.S.news_012_pending=true
+            ok(E.HomeHost.show())
+            local dialog=W.shown[#W.shown]
+            eq(dialog.title,"What's new in 0.12"); eq(#dialog.buttons,5)
+            eq(#batches,1,"news adds no read-model batch")
+            dialog.buttons[5][1].callback()
+            eq(E.S.news_012_pending,false); eq(saves,1)
+            ok(E.HomeHost.show())
+            eq(W.shown[#W.shown],E.HomeHost.active,"already seen")
+            E.S.news_012_pending=false
+            ok(E.HomeHost.show())
+            eq(W.shown[#W.shown],E.HomeHost.active,"fresh install has no news")
+            E.saveSettings=saved; E.S.news_012_pending=pending
+            eq(E.Budgets.screens["whats-new"].roundTrips,0)
+        end)
+    end)
+    test("First run: empty reading and shelves give guidance without a dead Retry",function()
+        withHost(function()
+            for _,widget in ipairs({"continue-reading","booklist"}) do
+                local p={widget=widget,settings={title="Want to read"}}
+                local card=E.HomeWidgets.card(p,E.HomeHostPlan.snapshot({items={},freshness={saved=true}}),function() error("no action") end,{w=400,h=300})[1]
+                local guidance=false
+                for _,child in ipairs(card) do
+                    ok(child.text~="Retry")
+                    if child.text=="Open a book to start reading" or child.text=="No books here yet" then guidance=true end
+                end
+                ok(guidance)
+            end
+        end)
+    end)
+    test("First run: missing catalog uses actionable signed-out cards, cached rows survive",function()
+        withHost(function()
+            local a={signedIn=false,opds={available=false}}
+            local missing=E.HomeHostPlan.snapshot({items={},pending=true},a)
+            eq(missing.state,"signed-out")
+            local action
+            local card=E.HomeWidgets.card({widget="booklist",settings={}},missing,function(id) action=id end,{w=400,h=300})[1]
+            eq(card[#card].text,"Sign in"); card[#card].callback(); eq(action,"setup")
+            local cached=E.HomeHostPlan.snapshot({items={{key="b"}},freshness={saved=true}},a)
+            eq(cached.state,"ready")
+            a.opds.available=true
+            eq(E.HomeHostPlan.snapshot({items={},pending=true},a).state,"loading","own catalog login needs no account")
+            a.signedIn=true; a.opds.available=false
+            eq(E.HomeHostPlan.snapshot({items={},pending=true},a).state,"loading","signed in projection can complete")
+        end)
+    end)
     test("Home host: paint batches only installed visible widgets and page swipe",function()
         withHost(function(batches,reads)
             E.S.home_layout=E.Layout.default()

@@ -90,6 +90,8 @@ five charges and three mode estimates inside the 16 KiB snapshot. Battery UI sel
 labels and seven-day display windows; it never computes estimates, rates, dates or daily totals.
 Stats widgets share one materialized `reading.stats` row per paint; aggregate and resolve per-field
 server/local precedence and provenance in the companion, never in Lua.
+First-run and upgrade sheets are screens too: declare static row limits and zero-work budgets when they need no library data.
+
 Device targets pending confirmation: Home <500 ms, widget <50 ms, cached library window
 <30 ms, editor move <100 ms. Owned Home widgets receive immutable snapshots and a dispatch handle;
 only their host owns the batched read and read-model invalidation. Layout moves validate only

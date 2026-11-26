@@ -5364,15 +5364,12 @@
     },
     {
       "id": "owned-home",
-      "feature": "Opt-in BookSync Home with three pages, starter shelves, Library and Stats",
+      "feature": "Default BookSync Home with three pages, starter shelves, Library and Stats",
       "category": "Behaviour",
-      "settings_keys": [
-        "home_screen"
-      ],
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: Home, Library and Stats pages; shared filtered lists/search and local Save to Home; legacy Home remains the default",
+          "note": "Implemented on feature/0.12: default Home, Library and Stats pages for installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves",
           "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
           "evidence": [
             {
@@ -5384,7 +5381,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Three-page Home wiring and filtered lists follow the Android build",
+          "note": "Default Home cutover, upgrade news, three-page wiring and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5395,7 +5392,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Three-page Home wiring and filtered lists follow the Android build",
+          "note": "Default Home cutover, upgrade news, three-page wiring and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
@@ -5406,7 +5403,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Three-page Home wiring and filtered lists follow the Android build",
+          "note": "Default Home cutover, upgrade news, three-page wiring and filtered lists follow the Android build",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
