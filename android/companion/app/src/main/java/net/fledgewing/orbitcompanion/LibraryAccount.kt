@@ -131,7 +131,7 @@ object LibraryAccount {
         }
     }
     fun download(ctx: Context, key: String, destination: File, done: (String?) -> Unit) = command(ctx, {
-        require(Places.inside(destination.path,Places.roots()) != null)
+        require(Places.inside(destination.path,Places.roots()+DeviceStorage.downloadRoot(Worker.root())) != null)
         if (!it.download(key,destination)) throw ServerFailure("unavailable")
     }, done)
     @Synchronized fun refresh(ctx: Context) {

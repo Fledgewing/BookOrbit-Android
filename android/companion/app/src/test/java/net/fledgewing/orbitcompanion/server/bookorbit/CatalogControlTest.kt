@@ -109,6 +109,13 @@ class CatalogControlTest {
         catch(e:ServerFailure) { assertEquals("canceled",e.kind) }
         assertEquals(1,queued)
     }
+    @Test fun collectionsFollowManagedCachedCatalogCapability() = store { cache ->
+        fun capabilities(saved: Boolean) = BookOrbitProjection(cache, accountState={
+            mapOf("owner" to owner,"catalog" to mapOf("cachedDetail" to saved))
+        }).project(owner,mapOf("op" to "capabilities"))
+        assertEquals(false,capabilities(false)["collections"])
+        assertEquals(true,capabilities(true)["collections"])
+    }
     @Test fun refreshPolicyResumesWithoutResettingAndDoesNotLoopUnderStoragePressure() {
         val state=mapOf("op" to "full","left" to 58L,"done" to 42L,"limit_note" to mapOf("limit" to 100L))
         assertNull(CatalogPlan.operation("incremental",state,100L,false,2000,0))
