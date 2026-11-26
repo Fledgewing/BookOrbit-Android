@@ -33,9 +33,11 @@ preserve its search text and Best match order on reset. List searches also retai
 their query; Reading now and Recently added inherit the library's default ordering. On device hides Where;
 Reading now hides Show. Context defaults can supply source-specific grouping/order.
 
-Home's layout owner supplies `onSave{source="custom-filter",query=...}` and owns
+Home's layout owner supplies `onSave{source="custom-filter",base_source=...,query=...}` and owns
 first-fit placement/new-page naming, persistence and the navigation toast. The
-footer action is present and disabled until this callback is supplied. This slice
+footer action is present and disabled until this callback is supplied. The saved
+base source preserves constraints such as Finished, On device or a named list,
+so reopening the Home Book list queries the same source and filter. This slice
 never creates a parallel layout store. The owned list/search/Home slices must
 wire these callbacks; the legacy upstream UI is not retrofitted.
 

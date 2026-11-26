@@ -3,9 +3,11 @@
 FilterView = {}
 function FilterView.new(context)
     context=context or {}
-    return setmetatable({model=FilterSheet.new(context),onApply=context.onApply,onChange=context.onChange,
+    local model=FilterSheet.new(context)
+    return setmetatable({model=model,onApply=context.onApply,onChange=context.onChange,
         onSave=context.onSave,title=context.title or "Library",sorts=context.sorts or
-            (context.source=="search" and {"match","title","author","added","rating"} or {"order","title","author","last","added","rating"}),
+            (model.defaults.sort=="match" and {"match","title","author","added","rating"} or
+                model.defaults.sort=="series" and {"series","title","author","last","added","rating"} or {"order","title","author","last","added","rating"}),
         alive=false}, {__index=FilterView})
 end
 function FilterView:header(total)
@@ -92,7 +94,7 @@ function FilterView:paint(attempt)
             if r.divider then table.insert(buttons,#buttons,{}) end -- thin divider, no heading
         end
         local b=row("+ Save as a Book list on Home",function()
-            if self.onSave then self.onSave({source="custom-filter",query=Layout.copy(m.query)}); self:close(true) end
+            if self.onSave then self.onSave({source="custom-filter",base_source=Layout.copy(m.source),query=Layout.copy(m.query)}); self:close(true) end
         end)
         b.enabled=self.onSave~=nil
         buttons[#buttons+1]={{text="Reset",callback=function() m:reset(); self:changed() end},

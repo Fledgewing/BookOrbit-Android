@@ -61,7 +61,7 @@ return function(test, eq, ok, here, M)
         eq(view.model.pick,nil); eq(view.model.query.show,"unread")
         local h=view:header(3); ok(h.active); h.chips[1].callback(); eq(view.model.query.show,"all")
         view.dialog.buttons[11][1].callback() -- divider makes the save row 11
-        eq(saved.source,"custom-filter"); eq(saved.query.q,"stars"); ok(applied); eq(view.alive,false)
+        eq(saved.base_source,"search"); eq(saved.source,"custom-filter"); eq(saved.query.q,"stars"); ok(applied); eq(view.alive,false)
         saved.query.q="changed"; eq(view.model.query.q,"stars"); ok(logs>0)
         local b=M.Budgets.get("screens","filter-picker")
         eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,1)
