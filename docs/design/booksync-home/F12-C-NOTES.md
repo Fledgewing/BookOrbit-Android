@@ -9,11 +9,11 @@ Reading and Home settings; Server plugin’s Home remains the default.
 Reuse evidence (source on this branch, before this slice): `ko/home.lua:561` and
 `:763` route Home commands; `ko/cache.lua:124` and `:148` poll/dispatch acknowledged
 worker events; `ko/store.lua:107` bounds SQLite blobs before decode;
-`ko/db.lua:17` shares read-only connections. `ko/library.lua:5` and `:59` own
-paint contexts and the single flush. `logic/caps.lua:11`, `logic/home_plan.lua:20`
+`ko/db.lua:64` shares read-only connections. `ko/library.lua:7` and `:61` own
+paint contexts and the single flush. `logic/caps.lua:29`, `logic/home_plan.lua:20`
 and `logic/sheet_layout.lua:58` retain their existing capability/routing/sheet
-roles; this host does not copy them. `logic/layout.lua:148` resolves projections
-and `:194` supplies the approved M8C defaults. Companion `CacheStore.kt:20`/`:37` owns the
+roles; this host does not copy them. `logic/layout.lua:134` resolves projections
+and `:174` supplies the approved M8C defaults. Companion `CacheStore.kt:20`/`:37` owns the
 same catalog/read-model database; `Core.kt:600`'s existing Home command path remains
 unchanged. No second catalog, worker, credential store or sync loop is added.
 
