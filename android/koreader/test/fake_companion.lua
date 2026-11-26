@@ -1235,6 +1235,12 @@ end
 function F.receive(intent)
     if not (W.companion and intent.package == "net.fledgewing.orbitcompanion") then return end
     if intent.action:match("%.MIRROR$") then
+        if intent.extras.query_run then
+            local run = intent.extras.query_run
+            writeFile(mdir() .. "/run.lua", C().encode({ run = F.running or run,
+                query_for = run, state = F.running and "progress" or "stopped" }))
+            return
+        end
         if intent.extras.plan then
             require("libs/libkoreader-lfs").mkdir(dir() .. "/mirror")
             os.remove(dir() .. "/mirror/stop")

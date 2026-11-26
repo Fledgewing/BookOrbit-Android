@@ -708,7 +708,6 @@ local function whenOnline(what, fn)
 end
 
 function OC.refresh(cat)
-    if Mirror and Mirror.fullRunning() then return Mirror.showProgress("Refresh tapped") end
     if whenOnline("Refresh", function() OC.refresh(cat) end) then return end
     log("cache: Refresh")
     if not S.refresh_tip_shown then

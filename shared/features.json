@@ -197,7 +197,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Refresh tap expands running Full refresh progress; otherwise refreshes normally; hold offers Full refresh",
+          "note": "Refresh tap always refreshes normally; hold offers Full refresh; companion reports queued and active progress without timer-only failure",
           "reason": null,
           "evidence": [
             {
@@ -209,7 +209,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Persistent checkpoint and worker with native refresh progress controls",
+          "note": "Persistent checkpoint and worker with native refresh progress controls; Android companion queue fix does not apply",
           "reason": null,
           "evidence": [
             {
@@ -221,7 +221,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Persistent checkpoint and worker with native refresh progress controls",
+          "note": "Persistent checkpoint and worker with native refresh progress controls; Android companion queue fix does not apply",
           "reason": null,
           "evidence": [
             {

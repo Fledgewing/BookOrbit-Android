@@ -32,6 +32,7 @@ object Worker {
     fun root(): File = File(Environment.getExternalStorageDirectory(), "koreader/settings/orbit-cache")
 
     private val lock = Object()
+    private val mirrorRuns = MirrorRuns(::root)
     private val checks = ArrayDeque<CacheWorker.Check>()
     private val patches = ArrayDeque<() -> Unit>()
     private var pending: Pair<CacheWorker.Plan, CacheWorker.Creds>? = null
@@ -64,7 +65,7 @@ object Worker {
         return MirrorLogic.runningProgressLine(progress, BulkWork.paused)
     }
 
-    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, cpuMs = { android.os.SystemClock.currentThreadTimeMillis() }, checkpoint = { BulkWork.checkpoint() }, threadFactory = { name, task -> BulkWork.thread(name, task) }, onProgress = { progress = it }, places = Places.roots(), bookRoots = listOf(Environment.getExternalStorageDirectory()), resizeThumbnail = { f, w, h ->
+    private fun worker(): CacheWorker = worker ?: CacheWorker(root(), UrlHttp, cpuMs = { android.os.SystemClock.currentThreadTimeMillis() }, checkpoint = { BulkWork.checkpoint() }, threadFactory = { name, task -> BulkWork.thread(name, task) }, onProgress = { progress = it }, onRunState = mirrorRuns::progress, places = Places.roots(), bookRoots = listOf(Environment.getExternalStorageDirectory()), resizeThumbnail = { f, w, h ->
         val dm = app?.resources?.displayMetrics
         BulkWork.phase("cover") { ThumbnailCache.shrink(f, if (w > 0) w else (dm?.widthPixels ?: 1080) / 3,
             if (h > 0) h else (dm?.heightPixels ?: 1440) / 3) }
@@ -181,6 +182,10 @@ object Worker {
             return start()
         }
 
+        if (i.action == ACTION_MIRROR && i.hasExtra("query_run")) {
+            mirrorRuns.query(i.getStringExtra("query_run") ?: return)
+            return
+        }
         app = ctx.applicationContext
         val creds = creds(i)
         if (creds == null) {
@@ -211,21 +216,24 @@ object Worker {
             }
             ACTION_MIRROR -> {
                 val encoded = i.getStringExtra("plan") ?: return
+                val run = i.getStringExtra("run") ?: return
+                val op = i.getStringExtra("op") ?: return
+                if (!mirrorRuns.admit(run, op, i.getStringExtra("done")?.toLongOrNull() ?: 0L,
+                        i.getStringExtra("total")?.toLongOrNull() ?: 100L)) return
                 synchronized(lock) {
                     patches.addLast {
-                        BulkWork.checkpoint()
-                        val bytes = LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)
-                        val m = LuaValue.parse(bytes) as? Map<*, *> ?: return@addLast
-                        val plan = CacheWorker.Plan(m)
-                        OLog.i("worker: mirror ${plan.op} (${plan.reason}) run ${plan.run}")
-                        val f = File(root(), "mirror/plan.lua")
-                        f.parentFile?.mkdirs()
-                        // A replacement must stop the current run before the next
-                        // one clears this flag in loop().
-                        if (mirrorRunning) File(root(), "mirror/stop").writeText("stop")
-                        val tmp = File(f.path + ".tmp")
-                        tmp.writeBytes(bytes); check(tmp.renameTo(f))
-                        synchronized(lock) { pending = plan to creds; lock.notifyAll() }
+                        try {
+                            BulkWork.checkpoint()
+                            val bytes = LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)
+                            val m = LuaValue.parse(bytes) as? Map<*, *> ?: error("invalid mirror plan")
+                            val plan = CacheWorker.Plan(m)
+                            OLog.i("worker: mirror ${plan.op} (${plan.reason}) run ${plan.run}")
+                            val f = File(root(), "mirror/plan.lua")
+                            f.parentFile?.mkdirs()
+                            val tmp = File(f.path + ".tmp")
+                            tmp.writeBytes(bytes); check(tmp.renameTo(f))
+                            synchronized(lock) { pending = plan to creds; lock.notifyAll() }
+                        } catch (e: Exception) { mirrorRuns.ended(run); throw e }
                     }
                     lock.notifyAll()
                 }
@@ -312,11 +320,13 @@ object Worker {
             manualRefresh = p.first.m["manual"] == true
             mirrorRunning = true
             try {
+                mirrorRuns.started(p.first.run)
                 val why = BulkWork.phase("mirror") { worker().run(p.first, p.second) { drainChecks() } }
                 OLog.i("worker: mirror run ${p.first.run} ended: $why")
             } catch (e: Exception) {
                 OLog.w("worker: mirror run failed", e)
             } finally {
+                mirrorRuns.ended(p.first.run)
                 mirrorRunning = false
                 progress = null
             }

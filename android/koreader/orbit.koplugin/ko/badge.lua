@@ -25,12 +25,18 @@ end
 local function nowT() return OC.now() end
 
 -- "37%".
-function Badge.short(pct) return string.format("%d%%", pct or 0) end
+function Badge.short(pct, s)
+    if s and s.state == "queued" then return _("Queued") end
+    if s and s.state == "started" then return _("Starting") end
+    return string.format("%d%%", pct or 0)
+end
 
 -- "Full refresh · 37% · 2,140 of 10,512 · about 3 min left · 2 errors".
 function Badge.long(s, pct)
     s = s or {}
     local parts = { string.format(_("Full refresh · %d%%"), pct or 0) }
+    if s.state == "queued" then table.insert(parts, _("Queued"))
+    elseif s.state == "started" then table.insert(parts, _("Starting")) end
     local total = math.max(tonumber(s.total) or 0, tonumber(s.done) or 0)
     if total > 0 then table.insert(parts, string.format(_("%s of %s"), Cache.count(s.done or 0), Cache.count(total))) end
     local eta = tonumber(s.eta_s)
@@ -111,7 +117,7 @@ end
 
 -- Shows or changes the badge. -- gate: the Full refresh badge, the user's one exception (sqlite-cache.md "Progress display")
 function Badge.draw()
-    local text = Badge.expanded and Badge.long(Badge.status, Badge.pct) or Badge.text_now or Badge.short(Badge.pct)
+    local text = Badge.expanded and Badge.long(Badge.status, Badge.pct) or Badge.text_now or Badge.short(Badge.pct, Badge.status)
     Badge.history = Badge.history or {}
     if Badge.widget and Badge.widget.text == text and Badge.widget.expanded == Badge.expanded then return end
     table.insert(Badge.history, text)
@@ -157,9 +163,10 @@ end
 -- every EVERY_S.
 function Badge.update(s)
     if not Badge.running then return end
+    local old_state = Badge.status and Badge.status.state
     Badge.status = s
     local pct = math.min(99, math.max(Badge.pct or 0, tonumber(s and s.pct) or 0))
-    local changed = pct ~= Badge.pct
+    local changed = pct ~= Badge.pct or old_state ~= (s and s.state)
     Badge.pct = pct
     if not changed and not Badge.expanded then return end
     if nowT() - (Badge.drawn_at or 0) < Badge.EVERY_S then return end
