@@ -44,7 +44,7 @@ function AccountPlan.result(before,after)
     for _,k in ipairs({"sync","opds"}) do
         local old,l=AccountPlan.login(before,k),AccountPlan.login(after,k)
         local text
-        if old.set and old.origin=="user" then text="Kept: the one you set · Replace with the account's in " .. AccountPlan.names[k]
+        if l.set and l.origin=="user" then text="Kept: the one you set · Replace with the account's in " .. AccountPlan.names[k]
         elseif l.set then
             text=not old.set and l.outcome=="created" and "Created" or "Found"
             if not old.set and focus=="account" then focus=k end
