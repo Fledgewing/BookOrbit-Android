@@ -26,3 +26,21 @@ function ReaderPanelPlan.model(result, battery)
         time=stats.reading_seconds and (tostring(math.floor(stats.reading_seconds/60)) .. " min reading time") or "Reading time: not saved yet",
         pages=stats.pages_read and (tostring(stats.pages_read) .. " pages read") or "Pages read: not saved yet" }
 end
+
+-- Quick-size steps wrap through the approved M8C choices, including a native size
+-- outside the preset list. No style/catalog work occurs in this projection.
+local FONT_SIZES={16,18,20,22,24,27}
+function ReaderPanelPlan.sizeIndex(current)
+    local index=1
+    for i,value in ipairs(FONT_SIZES) do if math.abs(value-current)<math.abs(FONT_SIZES[index]-current) then index=i end end
+    return index
+end
+function ReaderPanelPlan.fontSize(current,delta)
+    return FONT_SIZES[(ReaderPanelPlan.sizeIndex(current)-1+delta)%#FONT_SIZES+1]
+end
+function ReaderPanelPlan.sizeDots(current)
+    local selected=ReaderPanelPlan.sizeIndex(current)
+    local dots={}
+    for i=1,#FONT_SIZES do dots[i]=i<=selected and "●" or "○" end
+    return table.concat(dots)
+end

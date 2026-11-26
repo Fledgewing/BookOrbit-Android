@@ -38,6 +38,7 @@ class LibraryReadModel(
             store.transaction {
                 if (store.meta("owner") != owner) return@transaction
                 val result = try { when (args["op"]) {
+                    "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
                     "reading.stats" -> stats
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power
