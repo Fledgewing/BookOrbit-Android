@@ -55,6 +55,8 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
             // Persist only after the complete response validates. Retire an older session best effort.
             val previous = session
             val previousConnector = connector().takeIf { previous?.get("id") == id && previous["server"] == base }
+            if (previousConnector != null) next.putAll(mapOf("connectorUser" to LuaValue.str(previousConnector.user),
+                "connectorKey" to previousConnector.key, "connectorState" to "ready"))
             session = next; blocked.clear(); persist()
             if (previous != null) runCatching { http.request(previous["server"] as String, "/auth/logout", "POST", mapOf("refreshToken" to previous["refresh"]), null) }
             if (setupOnSignIn()) setupConnector(previousConnector ?: legacy)
@@ -101,7 +103,7 @@ class BookOrbitAccount(private val vault: AccountVault, private val http: Http,
             val user = (existing["username"] as? String) ?: throw Failure("invalid-response")
             val pending = (s["pendingUser"] as? String)?.let { u -> (s["pendingKey"] as? String)?.let { CacheWorker.Creds(server, LuaValue.utf8(u), it) } }
             val stored = (s["connectorUser"] as? String)?.let { u -> (s["connectorKey"] as? String)?.let { CacheWorker.Creds(server, LuaValue.utf8(u), it) } }
-            val known = listOfNotNull(stored, pending, legacy).firstOrNull {
+            val known = listOfNotNull(legacy, pending, stored).firstOrNull {
                 it.user == LuaValue.utf8(user) && normalizeServer(it.server) == server
             }
             s["connectorUser"] = user; s.remove("connectorKey")

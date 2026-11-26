@@ -111,4 +111,16 @@ class ServerAdapterTest {
         assertEquals(false,k.set("sync")); assertEquals(false,k.set("opds"))
     }
 
+    @Test fun accountRefillReusesItsKnownKeyAndExplicitAdoptionUsesTheCurrentUserKey() {
+        val k = Kit(); k.account()
+        val known = k.credentials.login("sync")!!
+        k.adapter.removeLogin("sync"); k.account()
+        assertEquals(known.secret,k.credentials.login("sync")!!.secret)
+        val direct = "f".repeat(32)
+        k.adapter.setLogin("sync",known.server,known.user,direct.toCharArray(),derivedKey=true)
+        k.adapter.useAccountLogin("sync")
+        assertEquals(direct,k.credentials.login("sync")!!.secret)
+        assertEquals("account",k.origin("sync"))
+    }
+
 }
