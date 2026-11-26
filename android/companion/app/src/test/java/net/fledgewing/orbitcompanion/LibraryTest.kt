@@ -11,6 +11,49 @@ class LibraryTest {
         "tags" to listOf("Space"), "status" to "reading", "want_to_read" to true, "on_device" to true,
         "pages" to 200, "rating" to 4, "added" to "2026-11-01", "rank" to 0, "last_read" to "2026-11-03")
 
+    @Test fun batteryIsOneBoundedLocalProjectionWithoutACatalog() {
+        store().use { st ->
+            val logs=mutableListOf<String>()
+            val request=String(LuaValue.encode(mapOf("op" to "battery","limit" to 1,"bytes" to 16384)),Charsets.ISO_8859_1)
+            LibraryReadModel(st,{99},logs::add, battery={ mapOf("level" to 78,"freshness" to mapOf("origin" to "local-device")) }).publish(owner,listOf(request))
+            val body=st.db().query("SELECT body FROM library_views WHERE request=?",request) { it.bytes(0)!! }.single()
+            assertEquals(78L,(LuaValue.parse(body) as Map<*,*>)["level"])
+            assertTrue(body.size<=16384); assertEquals(1,logs.size)
+            val tiny=String(LuaValue.encode(mapOf("op" to "battery","bytes" to 256)),Charsets.ISO_8859_1)
+            LibraryReadModel(st,{99},{},battery={ mapOf("oversized" to "x".repeat(16385)) }).publish(owner,listOf(tiny))
+            assertEquals("budget",(LuaValue.parse(st.db().query("SELECT body FROM library_views WHERE request=?",tiny) { it.bytes(0)!! }.single()) as Map<*,*>)["error"])
+        }
+    }
+    @Test fun batteryAndReadingStatsShareTheExistingBatch() {
+        store().use { st ->
+            val requests=listOf("battery","reading.stats").map { op -> String(LuaValue.encode(mapOf("op" to op,"limit" to 1)),Charsets.ISO_8859_1) }
+            LibraryReadModel(st,{99},{},readingStats={ mapOf("hours" to listOf(1,2)) },battery={ mapOf("level" to 78) }).publish(owner,requests)
+            val results=st.db().query("SELECT body FROM library_views") { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }
+            assertEquals(2,results.size)
+            assertTrue(results.any { it["level"] == 78L }); assertTrue(results.any { it["hours"] == listOf(1L,2L) })
+        }
+    }
+    @Test fun settingsModeEstimatesUseTheMeasuredBatteryProvider() {
+        store().use { st ->
+            val request=String(LuaValue.encode(mapOf("op" to "mode-estimates","limit" to 1)),Charsets.ISO_8859_1)
+            LibraryReadModel(st,{99},{},battery={ mapOf("modes" to listOf(mapOf(
+                "id" to "battery-saver", "hours_usual_use" to 48.0, "estimated" to false))) }).publish(owner,listOf(request))
+            val result=st.db().query("SELECT body FROM library_views WHERE request=?",request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
+            val item=(result["items"] as List<*>).single() as Map<*,*>
+            assertEquals("saver",item["id"])
+            assertEquals(true,item["measured"])
+            assertEquals(48L,(item["hours_usual_use"] as Number).toLong())
+            assertTrue(LuaValue.utf8(item["text"] as String).contains("at your usual use"))
+        }
+    }
+    @Test fun settingsModeEstimatesInheritCallerRowsAndNeverInventNewDeviceHours() {
+        store().use { st ->
+            val rows=read(st,mapOf("op" to "mode-estimates","limit" to 3))["items"] as List<*>
+            assertEquals(3,rows.size)
+            assertTrue(rows.all { val r=it as Map<*,*>; r["measured"]==false && r["hours_usual_use"]==null })
+            assertEquals(1,(read(st,mapOf("op" to "mode-estimates","limit" to 1))["items"] as List<*>).size)
+        }
+    }
     @Test fun everyNeutralFieldHasLocalSemanticsAndAnExplicitTranslationPlan() {
         val cases = mapOf<String, Any>("show" to "reading", "wtr" to true, "where" to "on-device", "author" to listOf("B"), "series" to listOf("Orbit"), "tags" to listOf("space"),
             "length" to mapOf("min" to 100, "max" to 200), "len" to mapOf("max" to 200), "rating" to mapOf("min" to 4), "added" to mapOf("min" to "2026-01-01"),
