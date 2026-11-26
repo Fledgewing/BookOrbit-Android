@@ -90,7 +90,7 @@ class CacheWorkerTest {
             if (down) return CacheWorker.Reply(0, err = "timeout")
             if (url.endsWith("/thumbnail")) {
                 if (!forceCover && headers["If-None-Match"] == "\"e1\"") return CacheWorker.Reply(304)
-                sink!!.writeBytes(byteArrayOf(1, 2, 3))
+                sink!!.writeBytes(byteArrayOf(-1, -40, -1))
                 return CacheWorker.Reply(200, etag = "\"e1\"", contentType = "image/jpeg")
             }
             val b = routes[url] ?: return CacheWorker.Reply(404)
@@ -372,7 +372,7 @@ class CacheWorkerTest {
         assertEquals("finished", w.run(plan(root, "full", mapOf("limit" to 1024L * 1024)), creds) {
             if (first) {
                 first = false
-                w.recheckCovers("test", creds, listOf(99L to cover.path))
+                w.acquireCover("alice|$S",99,creds,thumbs,true,mapOf("id" to 99L,"hasCover" to true))
                 w.store.putEntry("home", "/dashboard/test", mapOf("payload" to "x".repeat(250 * 1024)), 1L, home = true)
             }
         })

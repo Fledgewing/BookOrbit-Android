@@ -190,9 +190,11 @@ for this slice. Remaining server calls **inside that adapter**, to move to compa
 in a later transport/sole-sync-owner slice, are:
 
 - `ko/server/bookorbit.lua`: `probeServer` (HEAD reachability in the background child).
-- `ko/server/bookorbit/cache.lua`: `OC.httpCover` (legacy thumbnail GET); its request wrappers
-  bridge the upstream API and cached replies. Mirror/copies construct only private protocol
-  plans sent to the companion worker.
+- `ko/server/bookorbit/store.lua`: the surviving non-cover request wrappers bridge the
+  upstream catalog API and cached replies. Mirror/copies still construct private protocol
+  plans sent to the companion worker. The former `cache.lua`, cover downloader and thumbnail
+  child scanner are removed. Cover acquisition and forced refresh use neutral companion
+  commands; the plugin reads only bounded local cover references.
 - `ko/server/bookorbit/endofbook.lua`: compatibility detail/status/rating calls through the
   existing finish outbox. Preserve sole-writer ordering when moving these.
 - `ko/server/bookorbit/grouping.lua`: rollback catalog reads through the upstream client.
