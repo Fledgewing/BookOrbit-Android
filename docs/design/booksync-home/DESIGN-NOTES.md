@@ -898,6 +898,52 @@ its selection in the companion and sets KOReader's download directory through
 the library interface after success. This is unreleased foundation work;
 real-device typography, touch and timing acceptance still follow.
 
+### Android Series and grouped catalog presentation (2026-11-26)
+
+The owned Home host now opens Series from grouped Library/Search headers and
+Book info/Details. `SeriesUI.show(opaqueKey)` is the entry for the later end sheet;
+it does not depend on end-of-book transport. Back restores the initiating list,
+its query, page and exclusion context. Search from Series returns to that Series;
+Book info/Details entries return to their initiating panel.
+Primary and secondary membership comes from the existing adapter's saved catalog
+and context, not from title matching in the UI. Incomplete secondary publication
+says “Not saved yet”; missing identity and errors remain distinct from empty data.
+
+The companion owns reading order, author/name grouping, counts, status-only labels,
+full-Series progress dots and the exact next three unsaved titles. Group windows
+preserve Search predicates, put unassigned books last, distinguish same-named
+series keys, and show “All N” only when the cover preview omits members. Series
+headers always open Series; complete author/unassigned groups have no link.
+The neutral `without_series` filter keeps an unassigned drilldown and its removable
+chip within the same Library/Search/filter owner.
+
+Series inherits `budgets.lua`'s Series screen budget; grouped Library/Search inherit
+the Library family budget. Every screen/widget must declare a strict budget and
+library reads inherit it. Nested cover and next-book previews are charged as rows,
+not hidden behind one group/summary row. Each cached result is at most 16 KiB;
+there is one batched companion dispatch, no render network/subprocess, and one
+info timing span per call/paint. Dots are capped at 24 with a range label on long
+Series; books page by the available height. Filtering, joining and sorting stay
+in the companion. Host tests do not establish the device latency targets.
+
+This presentation does not fabricate cached covers, file sizes, storage capacity
+or a working bulk transfer. The current adapter explicitly advertises
+`series.downloadNext=false`: the Series page shows exact next-title previews and
+“Downloads unavailable for this source”. Enabling the approved Download next N
+control requires the transport owner to provide its job/cancellation/storage
+contract; it must not be routed back through legacy Lua. The roadmap retains that
+outcome; Android is partial in the feature matrix. X4 Pro, X4 and X3 follow later
+under the maintainer's Android-first authorization.
+
+Reuse evidence at the slice's base `4d082fa0`: `ko/home_host.lua:27` owns navigation,
+`ko/home_widgets.lua:17`–`:32` owns native drawing helpers, `ko/library.lua:29`
+owns bounded reads, `logic/filter_sheet.lua:15` owns neutral context,
+`LibraryReadModel.kt:26` publishes through the existing cache, and
+`server/bookorbit/BookOrbitProjection.kt:155` already owns worker filtering/joins.
+Plugin-relative paths are under `android/koreader/orbit.koplugin/`; companion paths
+are under `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/`.
+
+
 ### Android Settings presentation follow-through (g-settings)
 
 The approved revision-16 Settings card, row order, installed-channel/reader summaries

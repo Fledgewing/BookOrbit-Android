@@ -88,6 +88,16 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
             back(); ReaderPanel.stockMenu(ui.menu)
         end})
     else
+        local summary=result.items and result.items[1]
+        if summary and summary.series_key and not (caps.series and caps.series.read==false) then
+            table.insert(rows, button("View series", function()
+                local document=ui and ui.document
+                back()
+                SeriesUI.show(summary.series_key,function()
+                    if not ui or ui.document==document then ReaderPanel.show(ui,screen,key) end
+                end)
+            end))
+        end
         table.insert(rows, {kind="label", text=m.days})
         table.insert(rows, {kind="label", text=m.time})
         table.insert(rows, {kind="label", text=m.pages})

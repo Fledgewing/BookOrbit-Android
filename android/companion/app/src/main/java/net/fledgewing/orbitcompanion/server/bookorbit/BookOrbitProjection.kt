@@ -62,6 +62,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                     "finished" to (a["finished"] != null || remote?.finished != null),
                     "yearReview" to false, "activityDetails" to false, "celebrations" to false),
                 "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
+                "series" to mapOf("read" to true, "downloadNext" to false),
                 "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
                 "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
         }
@@ -139,16 +140,17 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
                 else -> mapOf("items" to listOf(summary), "freshness" to freshness(true), "detail_at" to detail?.second)
             }
         }
-        require(op == "window" || op == "counts" || op == "facets" || op == "library.summary")
+        require(op == "series" || op == "groups" || op == "window" || op == "counts" || op == "facets" || op == "library.summary")
         val f = a["query"] as? Map<*, *> ?: emptyMap<Any, Any>()
         BookOrbitLibrary.translate(f) // validates; same plan is available to future remote checks
-        val source = if (op == "library.summary") "library/all" else a["source"]
+        val source = if (op == "library.summary") "library/all" else if (op == "series") mapOf("kind" to "series", "key" to a["key"]) else a["source"]
         val kind = if (source is String) source else (source as? Map<*, *>)?.get("kind") as? String
         val sourceKey = (source as? Map<*, *>)?.get("key")
         require(kind in setOf("library/all", "all", "reading", "want-to-read", "recently-added", "finished", "on-device", "list", "collection", "series", "author", "search"))
         val g = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
         // Secondary contexts are not complete at base publication; never turn an unknown source into an empty list.
-        if (kind in setOf("series", "list", "collection") && store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
+        if ((kind in setOf("series", "list", "collection") || op == "groups" && f["group"] == "series") && store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
+
         val localPaths = BookOrbitLibrary.localPaths(store, owner)
         val local = localPaths?.keys
         if ((a["field"] == "where" || kind == "on-device" || f["where"] in setOf("on-device", "server-only")) && local == null) return empty(false)
@@ -216,6 +218,29 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         if (op == "library.summary") return mapOf("total" to total, "on_device" to local?.let { selected.count { b -> b["local_path"] != null } }, "freshness" to freshness(true))
         val counts = selected.groupingBy { it["status"].toString() }.eachCount()
         if (op == "counts") return mapOf("total" to total, "statuses" to counts, "freshness" to freshness(true))
+        if (op == "series" || op == "groups") {
+            if (op == "groups") require(filter["group"] in setOf("series", "author"))
+            val offset = ((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+            val limit = ((a["limit"] as? Number)?.toInt() ?: 12).coerceIn(5, MAX_ROWS)
+            val result = if (op == "groups") SeriesPresentation.groups(selected, filter, offset, limit,
+                ((a["preview"] as? Number)?.toInt() ?: 3).coerceIn(1,9), ((a["group_limit"] as? Number)?.toInt() ?: limit/4).coerceIn(1,6)) else {
+                val id = BookOrbitLibrary.id(owner, "series", sourceKey)!!
+                val title = store.db().query("SELECT name FROM bulk_sections WHERE g=? AND section='series' AND id=?", g, "series:$id") { it.text(0)?.let(LuaValue::str) }.firstOrNull()
+                SeriesPresentation.series(selected, title, offset, limit)
+            }
+            val projected = if (op == "groups" && filter["group"] == "series") {
+                val rows = (result["items"] as List<*>).map { raw ->
+                    @Suppress("UNCHECKED_CAST") val row = raw as Map<String,Any?>
+                    val key = row["series_key"]
+                    if (key == null) row else {
+                        val series = project(owner, mapOf("op" to "series","key" to key,"limit" to 5))
+                        row + mapOf("dots" to series["dots"],"dot_caption" to series["dot_caption"])
+                    }
+                }
+                result + mapOf("items" to rows)
+            } else result
+            return projected + mapOf("freshness" to freshness(true))
+        }
         selected.sortWith(LibraryFilter.comparator(filter))
         val offset = ((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
         val limit = ((a["limit"] as? Number)?.toInt() ?: MAX_ROWS).coerceIn(1, MAX_ROWS)
