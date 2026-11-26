@@ -791,3 +791,10 @@ log marker with a bounded deadline; its request assertions are unchanged. The
 shared host harness tests marker stopping, missing markers and visible crashes.
 The repaired X4 Pro case passes against an isolated synthetic server. This is a
 test-harness fix only; no firmware product code is changed by F12-M.
+
+
+KOReader's `scaleBySize` rounds upward (`koreader-base` pin
+`6e4bc81af4e04f78d81677a323a780a71b29702a`, `ffi/framebuffer.lua:414`).
+The native adapter calibrates its inverse at a large size rather than treating
+`scaleBySize(1)` as an exact factor. Fractional-scale tests verify that displayed
+physical pixel margins survive apply and one-time copy unchanged.
