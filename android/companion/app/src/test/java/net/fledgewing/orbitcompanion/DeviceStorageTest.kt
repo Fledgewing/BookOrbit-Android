@@ -100,4 +100,17 @@ class DeviceStorageTest {
         assertFalse(cover.exists()); assertTrue(actions(storage.summary("fixture")).isEmpty())
     }
 
+    @Test fun shallowProjectionRootsStillPublishUnavailableCapacity() {
+        val store=object:ProjectionStore {
+            override val root=File("/storage-fixture")
+            override fun db():Sql=error("not used")
+            override fun meta(k:String):String?=null
+            override fun <T> transaction(block:()->T):T=block()
+            override fun close() {}
+        }
+        val data=DeviceStorage(store,object:ServerAdapter { override val id="fixture" }).summary("fixture")
+        assertEquals(false,data["available"]); assertNull(data["total"])
+        assertEquals(store.root,DeviceStorage.downloadRoot(store.root).parentFile)
+    }
+
 }

@@ -11,7 +11,7 @@ data class LocalBook(val file: File, val finished: Boolean, val md5: String?)
 
 /** Runs only on the existing companion writer. No scan, arithmetic or formatting in Lua. */
 class DeviceStorage(private val store: ProjectionStore, private val adapter: ServerAdapter,
-    private val volume: File = requireNotNull(requireNotNull(requireNotNull(store.root.parentFile).parentFile).parentFile),
+    private val volume: File = store.root.parentFile?.parentFile?.parentFile ?: store.root,
     private val covers: File = ServerAdapters.connector.coverCacheDir(volume),
     private val capacity: (File) -> Pair<Long,Long> = { StatFs(it.path).let { s -> s.totalBytes to s.availableBytes } },
     private val now: () -> Long = { System.currentTimeMillis()/1000 },
@@ -21,7 +21,7 @@ class DeviceStorage(private val store: ProjectionStore, private val adapter: Ser
         fun downloadRoot(root: File): File {
             val saved=File(root,"download-folder")
             val name=if(saved.isFile) saved.readText().takeIf(folders::contains) else null
-            val volume=requireNotNull(requireNotNull(requireNotNull(root.parentFile).parentFile).parentFile)
+            val volume=root.parentFile?.parentFile?.parentFile ?: root
             return File(volume,name ?: "Books")
         }
         fun format(bytes: Long): String = if (bytes >= 1_000_000_000L) String.format(java.util.Locale.ROOT,"%.1f GB",bytes/1e9)
