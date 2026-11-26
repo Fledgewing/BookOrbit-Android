@@ -122,6 +122,86 @@ class LibraryTest {
             assertEquals(0L,read(st,mapOf("op" to "counts","source" to author,"query" to mapOf("author" to listOf("Other"))))["total"])
         }
     }
+    @Test fun backendProjectionImplementationStaysInItsServerAdapterPackage() {
+        assertEquals("net.fledgewing.orbitcompanion.server.bookorbit.BookOrbitLibrary",BookOrbitLibrary::class.java.name)
+    }
+    @Test fun bookListSourcesAreCountedPagedAndCapabilityGated() {
+        store().use { st ->
+            assertEquals(false,(read(st,mapOf("op" to "sources","category" to "series"))["freshness"] as Map<*,*>)["saved"])
+            seed(st)
+            for (i in 1..13) {
+                st.db().exec("INSERT INTO bulk_sections(g,section,pos,id,name,n) VALUES(1,'smart-scopes',?,?,?,?)",i,"$i","List $i",i)
+                st.db().exec("INSERT INTO bulk_sections(g,section,pos,id,name,n) VALUES(1,'series',?,?,?,?)",i,"series:$i","Series $i",i)
+                st.db().exec("INSERT INTO bulk_members(g,kind,value,id) VALUES(1,'seriesId',?,1)","$i")
+            }
+            val builtin=read(st,mapOf("op" to "sources","category" to "builtin","limit" to 6))
+            val rows=(builtin["items"] as List<*>).map { it as Map<*,*> }
+            assertEquals(6,rows.size)
+            assertEquals(5L,rows.first { it["src"]=="custom" }["count"])
+            assertEquals(0L,rows.first { it["src"]=="reading" }["count"])
+            assertEquals(1L,rows.first { it["src"]=="wtr" }["count"])
+            assertNull(rows.first { it["src"]=="device" }["count"])
+            val gated=read(st,mapOf("op" to "sources","category" to "builtin","allow_wtr" to false,"allow_device" to false))
+            assertEquals(4,(gated["items"] as List<*>).size)
+            assertTrue((read(st,mapOf("op" to "sources","category" to "lists","allow_lists" to false))["items"] as List<*>).isEmpty())
+            for (category in listOf("series","lists")) {
+                val page=read(st,mapOf("op" to "sources","category" to category,"offset" to 6,"limit" to 24))
+                val items=page["items"] as List<*>
+                assertEquals(6,items.size); assertEquals(13L,page["total"]); assertEquals(12L,page["next"])
+                val row=items.first() as Map<*,*>
+                assertEquals(7L,row["count"])
+                val kind=if (category=="series") "series" else "list"
+                val sourceKey=row["src"].toString().removePrefix("$kind:")
+                assertEquals(BookOrbitLibrary.key(owner,kind,7),sourceKey)
+                if (kind=="series") assertEquals(1L,read(st,mapOf("op" to "counts","source" to mapOf("kind" to kind,"key" to sourceKey)))["total"])
+                assertTrue(LuaValue.encode(page).size<=16384)
+                assertEquals(1,(read(st,mapOf("op" to "sources","category" to category,"offset" to 12))["items"] as List<*>).size)
+            }
+            val authors=read(st,mapOf("op" to "sources","category" to "authors"))
+            val author=(authors["items"] as List<*>).single() as Map<*,*>
+            assertEquals("author:A",author["src"]); assertEquals(5L,author["count"])
+            assertEquals(1L,authors["total"])
+        }
+    }
+    @Test fun sourceNamesKeepUnicodeAndNeverSplitUtf8AtTheConfigLimit() {
+        store().use { st ->
+            seed(st)
+            val title="星の本棚".repeat(10)
+            st.db().exec("INSERT INTO bulk_sections(g,section,pos,id,name,n) VALUES(1,'series',0,'series:1',?,1)",title)
+            val row=(read(st,mapOf("op" to "sources","category" to "series"))["items"] as List<*>).single() as Map<*,*>
+            val label=row["title"] as String
+            assertTrue(label.length<=80)
+            assertEquals(title.take(26),LuaValue.utf8(label))
+            assertFalse(LuaValue.utf8(label).contains('\uFFFD'))
+        }
+    }
+    @Test fun alsoReadingExcludesTheHeroBeforeAnyFilterSortOrPaging() {
+        store().use { st ->
+            seed(st)
+            for ((id,title,date) in listOf(Triple(10L,"Z hero","2026-11-26"),Triple(11L,"A other","2026-11-25"))) {
+                st.db().exec("INSERT INTO bulk_books(g,id,item) VALUES(1,?,?)",id,LuaValue.encode(mapOf(
+                    "id" to id,"title" to title,"authors" to listOf("A"),"readStatus" to "reading","lastReadAt" to date)))
+            }
+            val hero=(read(st,mapOf("op" to "window","source" to "reading","limit" to 1))["items"] as List<*>).single() as Map<*,*>
+            assertEquals(BookOrbitLibrary.key(owner,"book",10),hero["key"])
+            for (sort in listOf("title","last","author","order")) {
+                val args=mapOf("op" to "window","source" to "reading","exclude_current" to true,"query" to mapOf("sort" to sort),"limit" to 1)
+                val first=read(st,args)
+                val second=read(st,args+mapOf("offset" to 1))
+                assertEquals(2L,first["total"])
+                val keys=((first["items"] as List<*>)+(second["items"] as List<*>)).map { (it as Map<*,*>)["key"] }
+                assertEquals(2,keys.distinct().size); assertFalse(keys.contains(hero["key"]))
+            }
+            val filtered=read(st,mapOf("op" to "window","source" to "reading","exclude_current" to true,"query" to mapOf("q" to "hero")))
+            assertEquals(0L,filtered["total"])
+            val facet=read(st,mapOf("op" to "facets","source" to "reading","exclude_current" to true,"field" to "author"))
+            assertEquals(2L,facet["total"])
+            assertEquals(2L,((facet["items"] as List<*>).single() as Map<*,*>)["count"])
+            val shows=read(st,mapOf("op" to "facets","source" to "reading","exclude_current" to true,"field" to "show"))
+            val reading=(shows["items"] as List<*>).map { it as Map<*,*> }.single { it["value"]=="reading" }
+            assertEquals(2L,reading["count"])
+        }
+    }
     private fun store() = CacheStore(Files.createTempDirectory("library-test").toFile(), {}) { JdbcSql(it) }.also { it.own(owner) }
     private fun seed(st: CacheStore) {
         st.setMeta("bulk_active", 1); st.setMeta("bulk_at", 1234); st.setMeta("bulk_complete", 1)

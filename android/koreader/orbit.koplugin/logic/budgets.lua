@@ -73,6 +73,12 @@ end
 
 Budgets.widgets["reader-progress"] = budget(1, 16384, 50)
 
+-- Book list settings draw small configuration; source pages read one companion window.
+Budgets.screens["booklist-config"] = budget(0, 0, 100)
+Budgets.screens["booklist-config"].roundTrips = 0
+Budgets.screens["booklist-sources"] = budget(6, 16384, 50)
+
+
 -- Device-local style editors read one bounded record; no worker or decoded snapshots.
 for _, key in ipairs({"font", "margins", "spacing", "contrast"}) do
     Budgets.screens["reading-custom-" .. key] = budget(12, 0, 50)

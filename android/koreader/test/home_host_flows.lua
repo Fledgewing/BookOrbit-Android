@@ -15,6 +15,9 @@ return function(test,eq,ok,E,W,Widget)
         E.require=function(name)
             if name=="ffi/blitbuffer" then return U.BB end
             if name=="ui/size" then return {padding={buttontable=0}} end
+            if name=="ui/widget/buttondialog" then
+                return Widget:extend{moveFocusTo=function(self,x,y) self.focus={x,y} end,getButtonById=function() end}
+            end
             if name=="ui/widget/inputdialog" then
                 return Widget:extend{getInputText=function() return "Moon" end,onShowKeyboard=function() end}
             end
@@ -64,6 +67,7 @@ return function(test,eq,ok,E,W,Widget)
         E.Companion.workerProblem=saved.problem
         ok(success,err)
     end
+    dofile((arg[0]:match("^(.*)/") or ".").."/booklist_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/battery_flows.lua")(test,eq,ok,E,W,withHost)
     test("Home host: paint batches only installed visible widgets and page swipe",function()
@@ -362,7 +366,7 @@ return function(test,eq,ok,E,W,Widget)
         eq(E.HomeHostPlan.need({widget="booklist",settings={src="wtr"}}).source,"want-to-read")
         eq(E.HomeHostPlan.need({widget="booklist",settings={src="recent"}}).source,"recently-added")
         local also=E.HomeHostPlan.need({widget="booklist",settings={src="reading",sort=3}})
-        eq(also.offset,1); eq(also.query.sort,"last"); eq(also.query.dir,"desc")
+        eq(also.offset,0); eq(also.exclude_current,true); eq(also.query.sort,"last"); eq(also.query.dir,"desc")
         eq(E.HomeHostPlan.snapshot({items={},freshness={saved=true}}).state,"empty")
         eq(E.HomeHostPlan.snapshot({items={},pending=true}).state,"loading")
         eq(E.HomeHostPlan.snapshot({items={}}).state,"offline-without-data")

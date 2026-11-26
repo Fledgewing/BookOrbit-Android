@@ -33,14 +33,14 @@ function HomeEditorPlan:remove()
     if ok then self.selected=nil end
     return ok,err
 end
-function HomeEditorPlan:add(widget, x,y)
+function HomeEditorPlan:add(widget, x,y,cfg)
     local contract=WidgetRegistry[widget]
     if not contract then return nil,"unavailable widget" end
     local id=self:id("widget-")
     local function place(d,pg)
         for _,size in ipairs(contract.sizes["android-tablet"]) do
             local p={instance=id,widget=widget,version=contract.version,x=x or 0,y=y or 0,w=size[1],h=size[2],
-                settings=widget == "booklist" and {title="Book list",src="recent",style=0,sort=0,cap=0} or {}}
+                settings=widget == "booklist" and Layout.copy(cfg or BookList.preset()) or {}}
             local result,err=Layout.add(d,pg.id,p)
             if result then return result end
             if err ~= "no room" then return nil,err end
@@ -71,4 +71,25 @@ end
 function HomeEditorPlan:reset()
     self.document=Layout.reset(self.document); self.index=1; self.selected=nil
     return true
+end
+
+function HomeEditorPlan:configure(cfg)
+    local valid,err=BookList.valid(cfg)
+    if not valid then return nil,err end
+    local d=Layout.copy(self.document)
+    for _,p in ipairs(d.pages[self.index].placements) do
+        if p.instance==self.selected and p.widget=="booklist" then
+            local oldTitle=p.settings.title
+            p.settings=Layout.copy(cfg)
+            -- Remove only this class's old settings; other class overrides survive.
+            local o=(d.overrides["android-tablet"] or {})[p.instance]
+            if o then o.settings=nil end
+            d.revision=d.revision+1
+            local page=d.pages[self.index]
+            if not page.named and page.placements[1]==p and
+                ((page.name or ""):match("^Page %d+$") or page.name=="Book list" or page.name==oldTitle) then page.name=cfg.title end
+            return self:accept(d)
+        end
+    end
+    return nil,"select a Book list"
 end

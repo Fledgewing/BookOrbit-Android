@@ -1732,6 +1732,7 @@ test("fixture registry: the plugin reads every table it is named for, and every 
 end)
 
 dofile(here .. "/layout_tests.lua")(M, test, ok, eq, JSON)
+dofile(here .. "/booklist_tests.lua")(M,test,ok,eq)
 
 test("settings modes: approved presets use shared wire values and Balanced matches defaults", function()
     local e = setmetatable({}, {__index=_G}); setfenv(assert(loadfile(here .. "/../orbit.koplugin/logic/settings_ui.lua")), e)()

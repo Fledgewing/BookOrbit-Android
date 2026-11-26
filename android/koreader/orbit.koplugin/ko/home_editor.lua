@@ -50,7 +50,7 @@ function HomeEditor.create(host)
         local id=resolved.pages[host.index].id
         local index=1; for i,p in ipairs(document.pages) do if p.id==id then index=i end end
         self.model=HomeEditorPlan.new(document,index)
-        self.key_events={Close={{"Back"}}}
+        self.key_events={Close={{"Back"}},More={{"Menu"}}}
         self.message=HomeEditor.notice
         self:rebuild()
     end
@@ -78,21 +78,28 @@ function HomeEditor.create(host)
         end
         if self.picker then
             local ids=HomeEditor.available(host.caps)
+            if not (host.caps and host.caps.catalog==false) then
+                for _i,preset in ipairs({"also","recent","wtr","finished","ondevice"}) do
+                    if not (preset=="wtr" and host.caps.wantToRead==false or preset=="ondevice" and host.caps.onDevice==false) then ids[#ids+1]=preset end
+                end
+            end
             local per=math.max(1,math.min(3,math.floor((h-scale(150))/scale(150))))
             local pages=math.max(1,math.ceil(#ids/per))
             self.picker=math.min(self.picker,pages)
             HomeWidgets.text(canvas,_("Add a widget"),gap,gap,w-gap*2,24,false,true)
             for i=(self.picker-1)*per+1,math.min(#ids,self.picker*per) do
-                local id=ids[i]; local contract=WidgetRegistry[id]; local y=scale(60)+(i-1)%per*scale(150)
+                local id=ids[i]; local preset=BookList.presets[id]
+                local contract=preset and {name=preset.title,description="Book list preset",sizes=WidgetRegistry.booklist.sizes} or WidgetRegistry[id]; local y=scale(60)+(i-1)%per*scale(150)
                 count=count+1
-                local sizes={}; for _,s in ipairs(contract.sizes["android-tablet"]) do sizes[#sizes+1]=s[1].."×"..s[2] end
+                local sizes={}; for _i,s in ipairs(contract.sizes["android-tablet"]) do sizes[#sizes+1]=s[1].."×"..s[2] end
                 HomeWidgets.text(canvas,_(contract.name),gap,y,w-2*gap,21,false,true)
                 HomeWidgets.text(canvas,_(contract.description),gap,y+scale(30),w-2*gap,15)
                 HomeWidgets.text(canvas,_("Sizes")..": "..table.concat(sizes," · "),gap,y+scale(58),w-2*gap,14)
                 button("Add",gap,y+scale(83),scale(90),function()
                     self:action(function()
-                        local ok,err=m:add(id,self.slotX,self.slotY)
+                        local ok,err=m:add(preset and "booklist" or id,self.slotX,self.slotY,preset)
                         if ok then self.picker=nil end
+                        if ok and id=="booklist" then self:configure() end
                         return ok,err
                     end)
                 end)
@@ -109,7 +116,7 @@ function HomeEditor.create(host)
             local grid=m.document.grids["android-tablet"]
             local top,bottom=scale(74),scale(250)
             local occupied={}
-            for _,p in ipairs(pg.placements) do
+            for _i,p in ipairs(pg.placements) do
                 count=count+1
                 if not p.hidden then
                     for y=p.y,p.y+p.h-1 do for x=p.x,p.x+p.w-1 do occupied[y*grid.cols+x]=true end end
@@ -133,7 +140,12 @@ function HomeEditor.create(host)
             bar({{"←",function() move(-1,0) end},{"↑",function() move(0,-1) end},{"↓",function() move(0,1) end},
                 {"→",function() move(1,0) end},{"Size",function() self:sizes() end},
                 {"Remove",function() self:action(function() return m:remove() end) end}},h-scale(235))
-            HomeWidgets.text(canvas,(self.message or (m:page().name or "Page").." · "..m.index.." / "..#m.document.pages),gap,h-scale(180),w-2*gap,15)
+            if m.selected then
+                for _i,p in ipairs(pg.placements) do if p.instance==m.selected and p.widget=="booklist" then
+                    HomeWidgets.button(canvas,_("Configure"),w-scale(140),h-scale(192),scale(130),scale(40),function() self:configure() end)
+                end end
+            end
+            HomeWidgets.text(canvas,(self.message or (m:page().name or "Page").." · "..m.index.." / "..#m.document.pages),gap,h-scale(180),w-scale(170),15)
             bar({{"‹",function() self:turn(-1) end},{"Rename",function() self:rename() end},
                 {"›",function() self:turn(1) end},{"+ Page",function() self:action(function() return m:pageAction("add") end) end}},h-scale(150))
             bar({{"Move ‹",function() self:reorder(-1) end},{"Move ›",function() self:reorder(1) end},
@@ -173,12 +185,39 @@ function HomeEditor.create(host)
         UIManager:show(dialog) -- gate: user action (editor rename)
         dialog:onShowKeyboard()
     end
+    function Editor:configure(classic)
+        local m=self.model
+        for _i,p in ipairs(Layout.editorPage(m.document,m.index).placements) do
+            if p.instance==m.selected and p.widget=="booklist" then
+                self.config=BookListConfig.new{cfg=p.settings,caps=host.caps,classic=classic or (Device.isTouchDevice and not Device:isTouchDevice()),
+                    onDone=function(cfg) return self:action(function() return m:configure(cfg) end) end,
+                    onSave=function(saved)
+                        local d,page=HomeHostPlan.saveFilter(m.document,saved,"Custom filter")
+                        if not d then
+                            Gate.show("save Book list",function()
+                                UIManager:show(InfoMessage:new{text=_("No room on Home")}) -- gate: Gate.show, explicit save
+                            end)
+                            return false
+                        end
+                        m.document=d
+                        local name
+                        for i,pg in ipairs(d.pages) do if pg.id==page then name=pg.name or pg.tab end end
+                        self.config.notice="Book list added to "..(name or "Home").." · Done saves your Home"
+                        self:action(function() return true end)
+                        return true
+                    end}
+                self.config:paint(); return self.config
+            end
+        end
+    end
+    -- Classic More shares the selected widget's Configure path; no keyboard required.
+    function Editor:onMore() return self:configure(true) end
     function Editor:sizes()
         local selected
-        for _,p in ipairs(Layout.editorPage(self.model.document,self.model.index).placements) do if p.instance==self.model.selected then selected=p end end
+        for _i,p in ipairs(Layout.editorPage(self.model.document,self.model.index).placements) do if p.instance==self.model.selected then selected=p end end
         if not selected or not WidgetRegistry[selected.widget] then return end
         local buttons={}; local dialog
-        for _,size in ipairs(WidgetRegistry[selected.widget].sizes["android-tablet"]) do
+        for _i,size in ipairs(WidgetRegistry[selected.widget].sizes["android-tablet"]) do
             local sw,sh=size[1],size[2]
             buttons[#buttons+1]={{text=sw.."×"..sh,callback=function()
                 self:action(function() return self.model:resize(sw,sh) end); UIManager:close(dialog)
@@ -202,6 +241,9 @@ function HomeEditor.create(host)
         UIManager:close(self)
         host.index=1; host:rebuild(); UIManager:setDirty(host,"ui")
         return true
+    end
+    function Editor:onCloseWidget()
+        if self.config then self.config:close(); self.config=nil end
     end
     function Editor:onClose()
         if self.picker then self.picker=nil; self:action(function() return true end); return true end

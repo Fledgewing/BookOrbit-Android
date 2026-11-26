@@ -25,20 +25,23 @@ function HomeHostPlan.need(p)
     if p.widget == "continue-reading" then return {op="window",source="reading",query={},offset=0,limit=1} end
     local source = s.source or sources[s.src] or "recently-added"
     -- Neutral context keys only; adapters interpret their opaque identities.
-    if type(s.src) == "string" and s.src:match("^list:") then source={kind="list",key=s.src:sub(6)} end
+    if type(s.src) == "string" and s.src:match("^(%a+):") then
+        local kind,key=s.src:match("^(%a+):(.+)$")
+        if kind=="list" or kind=="series" or kind=="author" then source={kind=kind,key=key} end
+    end
     assert(s.query == nil or type(s.query) == "table", "Invalid widget query")
     assert(s.limit == nil or type(s.limit) == "number" and s.limit >= 1, "Invalid widget limit")
     local query=Layout.copy(s.query or {})
     local sorts={[1]="title",[2]="author",[3]="last",[4]="added"}
-    if sorts[s.sort] and not query.sort then
+    if sorts[s.sort] then
         query.sort=sorts[s.sort]
         query.dir=(s.sort == 3 or s.sort == 4) and "desc" or "asc"
     end
     local offset=s.offset or 0
-    -- The default Also reading source has the same rank as the one-row hero.
-    -- Advance its companion window; never fetch and filter a catalog in Lua.
-    if s.src == "reading" and s.query == nil and (s.sort == nil or s.sort == 0 or s.sort == 3) and s.offset == nil then offset=1 end
-    return {op="window",source=source,query=query,offset=offset,limit=s.limit or 4}
+    -- Reading now shares the hero identity; exclusion belongs to the companion.
+    local exclude=s.src == "reading" or s.exclude_current
+    -- The companion removes the hero before applying the chosen query/sort.
+    return {op="window",source=source,query=query,offset=offset,limit=s.limit or 4,exclude_current=exclude or nil}
 end
 function HomeHostPlan.snapshot(result)
     result=result or {error="Unavailable"}
@@ -65,7 +68,8 @@ function HomeHostPlan.resolve(document,registry,caps)
             local valid,need=pcall(HomeHostPlan.need,p)
             need=valid and need or {}
             local supported=true
-            if p.widget == "lists" and caps and type(caps.lists) == "table" and caps.lists.read == false then supported=false end
+            if (p.widget == "lists" or type(need.source)=="table" and need.source.kind=="list")
+                and caps and type(caps.lists) == "table" and caps.lists.read == false then supported=false end
             if (p.widget == "booklist" or p.widget == "continue-reading") and caps and caps.catalog == false then supported=false end
             if p.widget == "battery" and caps and caps.battery == false then supported=false end
             if p.widget == "library" and caps and caps.catalog == false then supported=false end
@@ -92,8 +96,8 @@ function HomeHostPlan.saveFilter(document, saved, title)
     end
     while used[id] do id=id.."-new" end
     local p={instance=id,widget="booklist",version=1,x=0,y=0,w=2,h=2,
-        settings={title=title or "Book list",source=Layout.copy(saved.base_source or "library/all"),
-            src="custom",query=Layout.copy(saved.query or {}),style=0}}
+        settings={title=title or "Custom filter",source=Layout.copy(saved.base_source or "library/all"),
+            src="custom",query=Layout.copy(saved.query or {}),exclude_current=saved.exclude_current,style=0,sort=0,cap=0}}
     for _,page in ipairs(document.pages) do
         local result=Layout.add(document,page.id,p)
         if result then return result,page.id end

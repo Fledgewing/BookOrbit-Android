@@ -91,8 +91,8 @@ function Library.syncCurrent(done)
     finish()
     return result
 end
-function Library:facets(source, query, field, offset, limit)
-    return self:read("facets", {source=source or "library/all", query=query or {}, field=field, offset=offset or 0, limit=limit})
+function Library:facets(source, query, field, offset, limit, exclude_current)
+    return self:read("facets", {source=source or "library/all", query=query or {}, field=field, offset=offset or 0, limit=limit, exclude_current=exclude_current})
 end
 function Library:progress(key) return self:read("progress", {key=key, limit=1}) end
 function Library:status(key) return self:read("status", {key=key, limit=1}) end
@@ -141,6 +141,13 @@ function Library.catalogPage(page,limit,callback)
 end
 function Library.download(key,destination,callback)
     return LibraryAdapter.command("downloads.start",{key=key,destination=destination},callback)
+end
+
+-- Paged source names/counts, never a catalog delivered to the editor.
+function Library:sources(category, offset, limit, caps)
+    return self:read("sources", {category=category,offset=offset or 0,limit=limit or 6,
+        allow_lists=not (caps and caps.lists and caps.lists.read==false),
+        allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
 end
 
 -- Explicit account actions only; credentials are dispatched and immediately released.
