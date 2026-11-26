@@ -46,6 +46,12 @@ page. It offers Go to Home and never writes a server list. After integrating F12
 save and previous-valid backup for the same S.home_layout; filter saving reuses
 HomeEditor.save, including its failure handling and restart persistence. Temporary list navigation does not modify it.
 Legacy server-plugin screens remain available through the existing Home choice.
+The single reading gate reuses `ko/home.lua:382`'s visibleStack helper to recognize
+Home beneath its filter/picker/editor dialogs. A reader above Home restores the
+gate, and a stale active-host pointer alone never permits cached reads or notices.
+Open-book flow tests cover sheet, picker and foreground-reader transitions.
+Nonlocal Details retain Home beneath them, so cached detail refreshes work and
+Back returns to Home; local Resume closes Home and restores foreground reading.
 
 ## Inherited performance rule
 

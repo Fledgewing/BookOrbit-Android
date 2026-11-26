@@ -2,7 +2,7 @@
 return function(test,eq,ok,E,W,Widget)
     local function withHost(fn)
         local saved={adapter=E.LibraryAdapter,ui=E.HomeWidgets._ui,layout=E.S.home_layout,screen=E.S.home_screen,
-            scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,readFile=E.OC.readFile,writeFile=E.OC.writeFile}
+            scale=E.Device.screen.scaleBySize,shown=W.shown,free=Widget.free,paint=Widget.paintTo,require=E.require,codec=E.HomeEditor.codec,path=E.HomeEditor.path,loaded=E.HomeEditor.loaded,save=E.HomeEditor.save,liveUI=E.liveUI,wifiState=E.Wifi.state,eobSheet=E.EOB.sheet,open=E.Library.open,panel=E.ReaderPanel,readFile=E.OC.readFile,writeFile=E.OC.writeFile}
         local batches,reads={},{}
         E.Device.screen.scaleBySize=function(_,n) return n end
         Widget.free=function() end
@@ -52,7 +52,9 @@ return function(test,eq,ok,E,W,Widget)
         E.LibraryAdapter,E.HomeWidgets._ui,E.S.home_layout,E.S.home_screen=saved.adapter,saved.ui,saved.layout,saved.screen
         E.Device.screen.scaleBySize,W.shown,Widget.free,Widget.paintTo,E.require=saved.scale,saved.shown,saved.free,saved.paint,saved.require
         E.HomeEditor.codec,E.HomeEditor.path,E.HomeEditor.loaded=saved.codec,saved.path,saved.loaded
+        E.Library.open,E.ReaderPanel=saved.open,saved.panel
         E.HomeEditor.save=saved.save
+        E.liveUI,E.Wifi.state,E.EOB.sheet=saved.liveUI,saved.wifiState,saved.eobSheet
         E.OC.readFile,E.OC.writeFile=saved.readFile,saved.writeFile
         ok(success,err)
     end
@@ -204,6 +206,65 @@ return function(test,eq,ok,E,W,Widget)
             eq(h.filter.model.source,"search"); eq(h.filter.model.query.q,"Moon")
             eq(h.filter.model.query.sort,"match")
             eq(h[1][1][4].text,"Filter")
+        end)
+    end)
+    test("Home wiring: filter dialogs over Home keep cached reads available above an open book",function()
+        withHost(function()
+            local h=E.HomeHost.create(); E.HomeHost.active=h
+            local reader={document={}}
+            E.liveUI=function() return reader end
+            E.Wifi.state=function() return {foreground=true} end
+            E.EOB.sheet=nil
+            W.shown={reader,h}
+            eq(E.reading(),false)
+            local read=E.LibraryAdapter.read
+            E.LibraryAdapter.read=function(raw)
+                eq(E.reading(),false,"owned Home dialog is browsing, not foreground reading")
+                return read(raw)
+            end
+            h:showList("Library","library/all")
+            h.filter:show()
+            eq(E.reading(),false,"filter sheet above Home")
+            h.filter.dialog.buttons[1][1].callback()
+            eq(h.filter.model.pick,"show"); eq(h.filter.total,2)
+            eq(E.reading(),false,"picker above Home")
+            h.filter.dialog.buttons[1][1].callback()
+            eq(h.filter.model.query.show,"unread")
+            W.shown={h,reader}
+            eq(E.reading(),true,"reader placed above Home remains protected")
+            W.shown={reader}
+            eq(E.reading(),true,"stale active Home cannot open the gate")
+            local filter=h.filter
+            h:onCloseWidget()
+            eq(filter.alive,false); eq(filter.dialog,nil); eq(filter.retry,nil)
+        end)
+    end)
+    test("Home wiring: nonlocal Details retain Home above the open book",function()
+        withHost(function()
+            local h=E.HomeHost.create(); E.HomeHost.active=h
+            local reader={document={}}
+            E.liveUI=function() return reader end
+            E.Wifi.state=function() return {foreground=true} end
+            E.EOB.sheet=nil
+            W.shown={reader,h}
+            E.Library.open=function() return false end
+            E.ReaderPanel={details=function(key)
+                eq(key,"opaque-book"); eq(E.reading(),false)
+                W.shown[#W.shown+1]={name="booksync_details"}
+                return true
+            end}
+            h:dispatch("book",{key="opaque-book"})
+            eq(W.shown[2],h,"Details Back returns to Home")
+            eq(E.reading(),false)
+            table.remove(W.shown)
+            h:onClose(); h:onCloseWidget()
+            eq(E.reading(),true,"closing Home restores foreground reading")
+            local resumed=E.HomeHost.create(); E.HomeHost.active=resumed; W.shown={reader,resumed}
+            E.Library.open=function() return true end
+            E.ReaderPanel={details=function() error("local Resume must not open Details") end}
+            resumed:dispatch("book",{key="local-book",local_path="/fixture/book.epub"})
+            eq(W.shown[#W.shown],reader)
+            eq(E.reading(),true,"local Resume closes Home")
         end)
     end)
     test("Home wiring: failed filter save preserves the published layout",function()

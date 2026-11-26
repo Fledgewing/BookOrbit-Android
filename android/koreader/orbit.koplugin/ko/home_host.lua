@@ -1,6 +1,17 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- One screen owner; widgets receive only an immutable snapshot and a dispatch handle.
 HomeHost = {}
+-- Reuse the central visible stack: owned dialogs remain above Home, and a reader
+-- placed above Home restores the reading gate. No separate dialog-specific gate.
+function HomeHost.foreground()
+    if not HomeHost.active then return false end
+    local reader=liveUI()
+    for _,widget in ipairs(visibleStack()) do
+        if reader and widget==reader then return false end
+        if widget==HomeHost.active then return true end
+    end
+    return false
+end
 function HomeHost.document()
     -- Layout editor publishes the same validated layout-as-data in reader settings.
     HomeEditor.load()
@@ -144,8 +155,9 @@ function HomeHost.create()
     function Host:dispatch(action,row,p)
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action == "book" then
-            UIManager:close(self)
-            if not Library.open(row) and not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then
+            if Library.open(row) then
+                if HomeHost.active==self then UIManager:close(self) end
+            elseif not (ReaderPanel and row.key and ReaderPanel.details(row.key)) then
                 UIManager:show(TextViewer:new{title=row.title or _("Book details"),text=_("This book is not saved on this reader.")}) -- gate: user action (widget book)
             end
         elseif action == "list" then self:showList(row.title,{kind="list",key=row.key})
@@ -217,6 +229,7 @@ function HomeHost.create()
         return true
     end
     function Host:onCloseWidget()
+        if self.filter then self.filter:close(false); self.filter=nil end
         if self.unsubscribe then self.unsubscribe(); self.unsubscribe=nil end
         if self.redraw then UIManager:unschedule(self.redraw); self.redraw=nil end
         if HomeHost.active == self then HomeHost.active=nil end
