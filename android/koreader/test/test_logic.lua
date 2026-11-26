@@ -16,6 +16,25 @@ local function eq(a, b, what)
     if a ~= b then error((what or "value") .. ": expected " .. tostring(b) .. ", got " .. tostring(a), 2) end
 end
 
+test("0.12 first run: fresh install, additive upgrade and crash retry", function()
+    local fresh={}
+    ok(M.HomePlan.migrate012(fresh))
+    eq(fresh.home_screen,"booksync"); eq(fresh.news_012_pending,false)
+    eq(M.HomePlan.migrate012(fresh),false)
+    local layout,logins,caches,outbox={pages={}}, {sync="fixture"}, {}, {{id=1}}
+    local old={home_screen="server",sync_mode="custom",home_layout=layout,
+        logins=logins,caches=caches,outbox=outbox,settings_at={sync_mode=125}}
+    ok(M.HomePlan.migrate012(old))
+    eq(old.home_screen,"booksync"); eq(old.news_012_pending,true)
+    eq(old.sync_mode,"custom"); eq(old.settings_at.sync_mode,125)
+    eq(old.home_layout,layout); eq(old.logins,logins); eq(old.caches,caches); eq(old.outbox,outbox)
+    old.news_012_pending=false
+    eq(M.HomePlan.migrate012(old),false); eq(old.news_012_pending,false)
+    -- A process dying before the atomic settings flush leaves the old durable state.
+    local beforeFlush={sync_mode="custom"}
+    ok(M.HomePlan.migrate012(beforeFlush)); eq(beforeFlush.news_012_pending,true)
+end)
+
 -- Turns `n` pages, all in chapter `key` (nil: no table of contents).
 local function turn(s, n, key, t)
     for _ = 1, n do Schedule.onPage(s, key, t) end

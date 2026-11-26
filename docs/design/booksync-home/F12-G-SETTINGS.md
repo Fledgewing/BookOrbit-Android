@@ -65,3 +65,7 @@ for one cached local row and zero decode/round-trip work during paint. Filtering
 counts, sorting and choice-catalog decoding stay in the companion, with no render
 network or subprocesses. Call and paint info timing spans remain mandatory.
 Host tests do not prove the pending M8C <500/<50/<30/<100 ms device targets.
+
+First-run integration: the legacy Home selector is retired from the schema.
+Home now orders Edit layout, Reset layout, Page names, and Home button policy.
+The existing nested-choice Back/focus regression follows Home button policy.

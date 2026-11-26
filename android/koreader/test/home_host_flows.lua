@@ -17,7 +17,13 @@ return function(test,eq,ok,E,W,Widget)
             if name=="ui/size" then return {padding={buttontable=0}} end
             if name=="ui/widget/touchmenu" then return Widget:extend{} end
             if name=="ui/widget/buttondialog" then
-                return Widget:extend{moveFocusTo=function(self,x,y) self.focus={x,y} end,getButtonById=function() end}
+                return Widget:extend{moveFocusTo=function(self,x,y) self.focus={x,y} end,getButtonById=function() end,
+                    -- Pinned ButtonDialog:onClose uses tap_close_callback, not dismiss_callback.
+                    onClose=function(self)
+                        if self.tap_close_callback then self.tap_close_callback() end
+                        E.UIManager:close(self)
+                        return true
+                    end}
             end
             if name=="ui/widget/inputdialog" then
                 return Widget:extend{getInputText=function() return "Moon" end,onShowKeyboard=function() end}
@@ -73,6 +79,69 @@ return function(test,eq,ok,E,W,Widget)
     dofile((arg[0]:match("^(.*)/") or ".").."/booklist_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/battery_flows.lua")(test,eq,ok,E,W,withHost)
+    test("First run: upgrade news appears once on Home, with a static budget",function()
+        withHost(function(batches)
+            local pending=E.S.news_012_pending
+            local saved=E.saveSettings
+            local saves=0
+            E.saveSettings=function() saves=saves+1 end
+            E.S.news_012_pending=true
+            ok(E.HomeHost.show())
+            local dialog=W.shown[#W.shown]
+            eq(dialog.title,"What's new in 0.12"); eq(#dialog.buttons,5)
+            ok(dialog.buttons[5][1].height>=50,"upgrade acknowledgement meets the touch minimum")
+            eq(#batches,1,"news adds no read-model batch")
+            dialog.buttons[5][1].callback()
+            eq(E.S.news_012_pending,false); eq(saves,1)
+            ok(E.HomeHost.show())
+            eq(W.shown[#W.shown],E.HomeHost.active,"already seen")
+            E.S.news_012_pending=true
+            local dismissed=E.HomeHost.whatsNew()
+            eq(dismissed.dismiss_callback,nil,"ButtonDialog does not support InfoMessage's dismissal hook")
+            dismissed:onClose() -- native Back and outside taps take this same path
+            eq(E.S.news_012_pending,false); eq(saves,2)
+            E.S.news_012_pending=false
+            ok(E.HomeHost.show())
+            eq(W.shown[#W.shown],E.HomeHost.active,"fresh install has no news")
+            E.saveSettings=saved; E.S.news_012_pending=pending
+            eq(E.Budgets.screens["whats-new"].roundTrips,0)
+        end)
+    end)
+    test("First run: empty reading and shelves give guidance without a dead Retry",function()
+        withHost(function()
+            for _,widget in ipairs({"continue-reading","booklist","lists"}) do
+                local p={widget=widget,settings={title="Want to read"}}
+                local card=E.HomeWidgets.card(p,E.HomeHostPlan.snapshot({items={},freshness={saved=true}}),function() error("no action") end,{w=400,h=300})[1]
+                local guidance=false
+                for _,child in ipairs(card) do
+                    ok(child.text~="Retry")
+                    if child.text==(widget=="continue-reading" and "Open a book to start reading" or widget=="lists" and "No lists yet" or "No books here yet") then guidance=true end
+                end
+                ok(guidance)
+            end
+        end)
+    end)
+    test("First run: missing catalog uses actionable signed-out cards, cached rows survive",function()
+        withHost(function()
+            local a={signedIn=false,opds={available=false}}
+            local missing=E.HomeHostPlan.snapshot({items={},pending=true},a)
+            eq(missing.state,"error"); eq(missing.setup,true)
+            local declared=false
+            for _,state in ipairs(E.WidgetRegistry.booklist.states) do if state==missing.state then declared=true end end
+            ok(declared,"setup cards retain the declared widget state contract")
+            local action
+            local card=E.HomeWidgets.card({widget="booklist",settings={}},missing,function(id) action=id end,{w=400,h=300})[1]
+            eq(card[#card].text,"Sign in"); card[#card].callback(); eq(action,"setup")
+            local cached=E.HomeHostPlan.snapshot({items={{key="b"}},freshness={saved=true}},a)
+            eq(cached.state,"ready")
+            a.opds.available=true
+            eq(E.HomeHostPlan.snapshot({items={},pending=true},a).state,"loading","own catalog login needs no account")
+            a.opds.available=false; a.sync={available=true}
+            eq(E.HomeHostPlan.snapshot({items={},pending=true},a).state,"loading","own sync login can still materialize local windows")
+            a.signedIn=true; a.sync.available=false
+            eq(E.HomeHostPlan.snapshot({items={},pending=true},a).state,"loading","signed in projection can complete")
+        end)
+    end)
     dofile((arg[0]:match("^(.*)/") or ".").."/storage_flows.lua")(test,eq,ok,E,W,withHost)
     test("Home host: paint batches only installed visible widgets and page swipe",function()
         withHost(function(batches,reads)
@@ -93,7 +162,7 @@ return function(test,eq,ok,E,W,Widget)
     test("Home design: page title, menu settings and Back restore the originating page",function()
         withHost(function()
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
-            h:turn(1); local index=h.index
+            h:turn(2); local index=h.index
             eq(h[1][1][1].text,"Stats")
             ok(h[1][1][1].max_width<=h.dimen.w-220,"page title leaves room for Edit and Close")
             h:showList("Want to read","want-to-read")
@@ -133,11 +202,11 @@ return function(test,eq,ok,E,W,Widget)
                 for _,size in ipairs(E.WidgetRegistry[id].sizes["android-tablet"]) do
                     local rect=E.HomeHostPlan.rect({x=0,y=0,w=size[1],h=size[2]},{cols=4,rows=8},678,764,12)
                     local p={widget=id,w=size[1],h=size[2],settings={style=1}}
-                    for _,state in ipairs({"ready","empty","loading","error","offline-without-data","offline-with-data"}) do
+                    for _,state in ipairs({"ready","empty","loading","error","offline-without-data","offline-with-data","setup"}) do
                         local snap=E.HomeHostPlan.snapshot(data)
                         if id=="library" then snap=E.HomeHostPlan.snapshot({total=7,on_device=2,freshness={saved=true}}) end
                         if id=="battery" then snap=E.HomeHostPlan.snapshot({level=78,display={level="78%"},freshness={saved=true}}) end
-                        local plain={state=state,items=snap.items,count=snap.count,data=snap.data,bytes=snap.bytes}
+                        local plain={state=state=="setup" and "error" or state,setup=state=="setup",items=snap.items,count=snap.count,data=snap.data,bytes=snap.bytes}
                         local card=E.HomeWidgets.renderers[id](p,plain,function() end,rect)
                         controls(card,0,0,{w=rect.w,h=rect.h},{})
                         if id=="continue-reading" and (state=="ready" or state=="offline-with-data") then
@@ -237,22 +306,22 @@ return function(test,eq,ok,E,W,Widget)
             h:onCloseWidget(); eq(E.Library.listener,nil)
         end)
     end)
-    test("Home wiring: both approved default pages draw and Stats shares one bounded row",function()
+    test("Home wiring: all three required default pages draw and Stats shares one bounded row",function()
         withHost(function(batches,reads)
             E.S.home_layout=nil
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
             local rectangles=0
             local bb={paintRect=function(_,x,y,w,h,color) ok(w>=0 and h>=0); ok(color~=nil); rectangles=rectangles+1 end}
-            for page=1,2 do
+            for page=1,3 do
                 eq(h.index,page)
                 h[1]:paintTo(bb,0,0)
                 ok(E.Budgets.check(E.Budgets.screens.home,h.metrics))
                 eq(h.metrics.spawns,0); eq(h.metrics.network,0); eq(h.metrics.roundTrips,1)
-                if page<2 then h:onNext() end
+                if page<3 then h:onNext() end
             end
             local stats=0
             for _,a in ipairs(reads) do if a.op=="reading.stats" then stats=stats+1 end end
-            eq(stats,1); eq(#batches,2)
+            eq(stats,1); eq(#batches,3)
             ok(rectangles>=400,"real Year, weekly and hourly renderers painted")
         end)
     end)
@@ -471,7 +540,7 @@ return function(test,eq,ok,E,W,Widget)
         eq(E.HomeHostPlan.snapshot({items={}}).state,"offline-without-data")
         eq(E.HomeHostPlan.snapshot({items={{key="b"}},freshness={saved=true,offline=true}}).state,"offline-with-data")
         local registry=E.HomeHost.installed()
-        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,2)
+        eq(#E.HomeHostPlan.resolve(E.Layout.default(),registry,{}).pages,3)
         local projected=E.HomeHostPlan.resolve(E.Layout.default(),registry,{wantToRead=false,lists={read=false},battery=false})
         for _,p in ipairs(projected.pages[1].placements) do ok(p.widget ~= "lists" and p.instance ~= "want") end
     end)

@@ -5380,15 +5380,12 @@
     },
     {
       "id": "owned-home",
-      "feature": "Opt-in BookSync Home with device defaults, starter shelves, Library and Stats",
+      "feature": "Default BookSync Home with three pages, starter shelves, Library and Stats",
       "category": "Behaviour",
-      "settings_keys": [
-        "home_screen"
-      ],
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "Implemented on feature/0.12: approved M8C Home and Stats pages with Library widgets; shared filtered lists/search and local Save to Home; legacy Home remains the default; design review restores Settings/Battery destinations, Home page titles/Back and minimum touch targets; new/reset layouts use the two-page M8C default, saved layouts stay intact",
+          "note": "Implemented on feature/0.12: default Home, Library and Stats pages for installs and upgrades; preserves saved layouts and sync settings, shows upgrade news once, and offers sign-in from empty first-run shelves; retains design-review Settings/Battery destinations, page titles/Back and minimum touch targets",
           "reason": "deliberately deferred: device acceptance, battery history, cached covers and richer book actions follow the staged Android build",
           "evidence": [
             {
@@ -5400,8 +5397,8 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Device-specific Home defaults and filtered lists follow the Android build",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this design review changes Android only under the same ruling",
+          "note": "Default Home cutover, upgrade news, three-page wiring and filtered lists follow the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-J-NOTES.md",
@@ -5411,8 +5408,8 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Device-specific Home defaults and filtered lists follow the Android build",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this design review changes Android only under the same ruling",
+          "note": "Default Home cutover, upgrade news, three-page wiring and filtered lists follow the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-J-NOTES.md",
@@ -5422,8 +5419,8 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Device-specific Home defaults and filtered lists follow the Android build",
-          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later; this design review changes Android only under the same ruling",
+          "note": "Default Home cutover, upgrade news, three-page wiring and filtered lists follow the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-J-NOTES.md",
