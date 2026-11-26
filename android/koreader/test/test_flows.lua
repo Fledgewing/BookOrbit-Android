@@ -6909,6 +6909,7 @@ end)
 test("settings: every group has a budget and neutral screen text; one channel row opens its picker", function()
     local _, m = newUI(false)
     local groups = {}
+    eq(#m:menuItems(),8,"approved Settings root has eight groups")
     for _, it in ipairs(m:menuItems()) do
         if it.settings_group then
             groups[it.settings_group] = it.sub_item_table_func()

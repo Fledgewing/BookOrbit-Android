@@ -34,6 +34,8 @@ interface ServerAdapter {
     fun fallbackReadingStats(): RemoteReadingStats? = null
     fun refreshStats() {}
     fun owner(): String? = null
+    /** Position credentials may belong to a different account from the catalog login. */
+    fun positionOwner(): String? = owner()
     fun stats(owner: String): Map<*, *>? = null
     fun position(document: String, update: Map<String, Any?>? = null): Map<String, Any?> = unsupported()
     fun catalog(page: Int = 1, limit: Int = 24): Map<String, Any?> = unsupported()

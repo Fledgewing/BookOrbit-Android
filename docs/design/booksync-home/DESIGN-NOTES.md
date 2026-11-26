@@ -902,3 +902,19 @@ The upgrade sheet uses pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54
 handles both Back and outside taps; Done acknowledges explicitly before closing.
 The regression double follows that native path rather than InfoMessage's separate
 `dismiss_callback`. The compatibility guard now requires the native callback field.
+
+### Android design review pass 4 (2026-11-26)
+
+[The comparison ledger](REVIEW-PASS-4.md) records baseline file/line findings,
+regressions, retained native behavior and unfinished staged prototype surfaces.
+Home/reader Settings and Battery destinations, list Back, page titles, hero
+percentages and touch targets are repaired using the existing host and library.
+Every screen/widget retains its strict inherited budget: companion-owned heavy
+work, bounded ready-to-draw rows/bytes, zero render network/subprocesses, one Home
+batch and at most 16 KiB per widget. Flow geometry is not device typography or
+latency acceptance; the complete revision-16 prototype remains the target.
+
+Pass 3 integration ruling: the first-run task explicitly requires three Android
+default pages. Keep Home, Library and Stats and the existing starter shelves,
+while retaining pass 4's navigation and touch fixes. This explicit task requirement
+supersedes pass 4's two-page default adjustment; saved layouts remain untouched.

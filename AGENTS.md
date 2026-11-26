@@ -56,6 +56,9 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   `python3 tools/test/test-server-boundary.py`; no baseline, suppression or skip list is allowed.
   The guard scans production resources and shared Settings/UI data too; About credit prose may name its credited project.
   See `docs/design/backend-independence.md` for adapter registration and legacy follow-ups.
+  A transport cutover must checkpoint every unacknowledged lifecycle phase before retiring
+  its source queue. Never activate a replacement position writer while the legacy writer
+  can still drain that document; a durable position queue alone is not a lifecycle migration.
 
 - **Nothing interrupts reading.** While a book is open in the foreground, nothing from BookSync,
   the companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader
