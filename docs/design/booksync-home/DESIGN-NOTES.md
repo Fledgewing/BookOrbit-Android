@@ -879,3 +879,13 @@ budget, zero render network/subprocesses and ≤16 KiB widget snapshots. Native
 capture copies at most 64 cached entries per marker kind, never a full TOC or
 sidecar. See [implementation and pinned native citations](G-READER-NOTES.md).
 Host flow tests do not establish physical font fit or device latency.
+
+### Android Settings presentation follow-through (g-settings)
+
+The approved revision-16 Settings card, row order, installed-channel/reader summaries
+and bounded sleep choices now reuse the existing group/library/sleep owners.
+See [implementation and acceptance limits](F12-G-SETTINGS.md). Every screen/widget
+keeps a declared budget inherited by Library: six sleep choices and 16 KiB per
+page, zero render network/subprocesses; device settings are a lifecycle-cached row.
+Counts and choice decoding stay in the companion; paints/calls log info timing
+spans. Device latency and Android power-policy acceptance remain pending.

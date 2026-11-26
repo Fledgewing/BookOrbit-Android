@@ -99,3 +99,10 @@ Budgets.screens["reader-bottom-panel"] = budget(2, 2 * 16384, 50)
 Budgets.widgets["reader-controls"] = budget(1, 16384, 50)
 
 Budgets.readerControls = { markersPerKind=64, tocComparisons=32 }
+
+-- Sleep picker pages inherit six companion-materialized names/counts, never a choice catalog.
+Budgets.screens["settings-sleep-choices"] = budget(6,16384,50)
+Budgets.screens["settings-device"] = budget(1,16384,50)
+
+
+Budgets.screens["settings-sleep-choices"].displayRows = 10
