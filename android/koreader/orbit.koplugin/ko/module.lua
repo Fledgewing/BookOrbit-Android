@@ -44,6 +44,7 @@ function OrbitAndroid:init()
             self:maybeSetupPrompt("start")
         end)
         UIManager:scheduleIn(1, function()
+            if Library then Library.accountReturned() end
             local handled = self:checkCommand("start")
             if S.restart_book ~= nil then
                 if handled then S.restart_book = nil; saveSettings() else self:reopenAfterRestart("start") end

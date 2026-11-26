@@ -74,6 +74,16 @@ object Worker {
         worker().event(mapOf("kind" to "native_footer_repair", "before" to before, "after" to after, "token" to token))
     }
 
+    /** Invalidate normalized views after a private account command, using the existing writer queue. */
+    internal fun accountChanged(ctx: Context) {
+        app = ctx.applicationContext
+        synchronized(lock) { patches.addLast {
+            worker().store.db().exec("DELETE FROM library_views")
+            worker().event(mapOf("kind" to "account"))
+        }; lock.notifyAll() }
+        start()
+    }
+
     private fun creds(i: Intent): CacheWorker.Creds? {
         val server = i.getStringExtra("server")?.takeIf { it.isNotEmpty() } ?: return null
         val user = i.getStringExtra("user") ?: return null
@@ -84,6 +94,8 @@ object Worker {
     fun onIntent(ctx: Context, i: Intent) {
         app = ctx.applicationContext
         BulkWork.attach(ctx)
+        LibraryAccount.initialize(ctx)
+        if (i.action == ACTION_MIRROR) LibraryAccount.refresh(ctx)
         if (i.action == ACTION_SQLITE_STRESS) {
             val secs = i.getStringExtra("seconds")?.toIntOrNull()?.coerceIn(5, 600) ?: SqliteStress.SECONDS
             return SqliteStress.start(root(), secs)

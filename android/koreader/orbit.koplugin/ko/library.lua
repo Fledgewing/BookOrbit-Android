@@ -101,3 +101,7 @@ function Library.open(row)
 end
 
 function Library.retry() LibraryAdapter.reset() end
+
+-- Explicit account commands; transport and connector compatibility stay behind the adapter.
+function Library.openAccount() return LibraryAdapter.openAccount() end
+function Library.accountReturned() return LibraryAdapter.accountReturned() end

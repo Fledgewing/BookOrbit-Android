@@ -340,6 +340,7 @@ function OrbitAndroid:menuItems()
         { text = _("Full refresh of BookOrbit"), callback = later(function() OC.menuFullRefresh() end),
           help_text = _("Gets this view and Home fresh from the server, re-checks the covers, then saves everything reachable from Home for reading offline. Tap ⟳ for a normal refresh; hold ⟳ for this.") },
         { text_func = function() return self:recommendedMenuText() end, callback = later(function() self:showRecommended("menu") end), separator = true },
+        { text = _("Sign in to your server"), callback = later(function() Library.openAccount() end) },
         { text = _("Open BookSync Companion"), callback = later(function() self:onOrbitOpenCompanion() end) },
         Companion.has("apps") and { text = _("Open another app…"), callback = later(function() self:onOrbitOpenApps() end) } or false,
         Companion.installed() and { text = _("Buttons, PIN and setup: in BookSync Companion ›"), callback = later(function() self:onOrbitOpenCompanion() end), separator = true } or false,

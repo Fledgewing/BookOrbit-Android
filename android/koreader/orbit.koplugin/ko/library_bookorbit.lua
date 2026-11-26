@@ -55,3 +55,31 @@ function LibraryAdapter.changed(ev)
 end
 
 function LibraryAdapter.reset() LibraryAdapter.sent, LibraryAdapter.ready, LibraryAdapter.order = {}, {}, {} end
+
+-- User-invoked only: the trusted provider opens the companion's private sign-in screen.
+function LibraryAdapter.openAccount()
+    if Companion.workerProblem() then return false end
+    local p = bookorbit()
+    local settings = p and p.settings or {}
+    local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.ACCOUNT_OPEN", {
+        server=settings.server_url or "", user=settings.username, userkey=settings.userkey,
+    })
+    return result and result.ok == "1"
+end
+-- Lifecycle handoff, never a paint read. Only the connector key crosses this boundary.
+function LibraryAdapter.accountReturned()
+    if Companion.workerProblem() then return false end
+    local result = Jni.call(Companion.AUTHORITY, Companion.PACKAGE .. ".call.ACCOUNT_CONNECTOR", {})
+    if not result or result.ok ~= "1" or not result.server or not result.user or not result.userkey then return false end
+    local p = bookorbit()
+    if not p or type(p.settings) ~= "table" then return false end
+    local s = p.settings
+    if s.server_url == result.server and s.username == result.user and s.userkey == result.userkey then return false end
+    -- The account owner explicitly chose sign-in in the companion. Existing sync ownership
+    -- is left to upstream's one ledger on its next normal command; no second sync writer.
+    s.server_url, s.username, s.userkey = result.server, result.user, result.userkey
+    G_reader_settings:saveSetting("bookorbit", s)
+    G_reader_settings:flush()
+    LibraryAdapter.reset()
+    return true
+end

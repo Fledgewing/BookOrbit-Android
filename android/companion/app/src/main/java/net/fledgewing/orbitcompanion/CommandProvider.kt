@@ -67,6 +67,19 @@ class CommandProvider : ContentProvider() {
                 return answer(true)
             }
             if (!KoreaderTrust.check(ctx, uid)) return answer(false, "caller")
+            if (method == LibraryAccount.CONNECTOR) {
+                return answer(true).apply {
+                    LibraryAccount.connector()?.let { putString("server", it.server); putString("user", it.user); putString("userkey", it.key) }
+                }
+            }
+            if (method == LibraryAccount.OPEN) {
+                val server = extras?.getString("server").orEmpty()
+                val user = extras?.getString("user")
+                val key = extras?.getString("userkey")
+                LibraryAccount.bind(ctx, if (user != null && key != null) CacheWorker.Creds(server, user, key) else null)
+                main.post { ctx.startActivity(Intent(ctx, AccountActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("server", server)) }
+                return answer(true)
+            }
             if (method == TAKE_COMMAND) {
                 val c = extras?.getString("command")
                 val ok = SentCommands.shared.take(c, SystemClock.elapsedRealtime())
