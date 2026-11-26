@@ -371,12 +371,24 @@ open class SettingsSectionActivity : SleepPickerPage() {
         // The page's title already names it (Sleep screen's own choice): shown once.
         val label = d.label.takeIf { it != schema.section(sectionId)?.title }
         when {
+            d.key == "update_channel" -> {
+                root.addView(Ui.text(this, d.label, 21f))
+                val descriptions = listOf("tested releases only", "also release candidates, about to become stable", "every test build")
+                val channels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; tag = "key:${d.key}" }
+                root.addView(channels)
+                d.values.forEachIndexed { i, (key, title) ->
+                    Ui.row(this, title, descriptions[i], Ui.value(this, if (v == key) "●" else "○"),
+                        onClick = if (locked) null else ({ setShared(d.key, key) })).also {
+                        it.tag = "channel:$key"
+                        channels.addView(it)
+                    }
+                }
+            }
             d.type == "bool" -> toggleRow(root, d.label, line, v == "1") { on ->
                 // Merged rows (§5.2): one switch sets the companion's half too.
                 when (d.key) {
                     "wake_tailscale" -> prefs.wakeTailscaleWithWifi = on
                     "auto_update_patch" -> prefs.autoUpdate = on
-                    "patch_update_prerelease" -> prefs.includePreReleases = on
                 }
                 if (d.applies == "restart") restartNeeded = true
                 setShared(d.key, if (on) "1" else "0")

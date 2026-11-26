@@ -98,6 +98,26 @@ def sleep_sync(ctx: Context, card: SdCard, name: str, **kw):
 
 
 @scenario(*ALL)
+def update_channels(ctx: Context, tmp: Path) -> None:
+    """Stored opt-in migration and the real Settings Confirm cycle/save/reload path."""
+    for name, settings, expected in (
+        ("default", {}, 0),
+        ("old-off", {"otaIncludePrereleases": 0}, 0),
+        ("old-on", {"otaIncludePrereleases": 1}, 2),
+        ("rc-wins", {"otaChannel": 1, "otaIncludePrereleases": 1}, 1),
+    ):
+        card = ctx.card(tmp / name)
+        card.settings.update(settings)
+        card.save()
+        run = ctx.sim.run(card, name, timeout_s=15, env={"ORBIFY_SIM_UPDATE_CHANNEL_TEST": "1"})
+        assert run.returncode == 0
+        after(run.output, f"BookSync channel cycle passed (initial={expected})")
+        stored = json.loads((card.crosspoint / "crossink-settings.json").read_text())
+        assert stored["otaChannel"] == expected
+        assert "otaIncludePrereleases" not in stored
+
+
+@scenario(*ALL)
 def sync_through_proxy(ctx: Context, tmp: Path) -> None:
     """Foundation: a manual BookOrbit sync from Home reaches the real server through the proxy and
     uploads the open book's position under the simulator's device id."""

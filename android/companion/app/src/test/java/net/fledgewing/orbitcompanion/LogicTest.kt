@@ -217,10 +217,38 @@ class UpdatePolicyTest {
     private fun r(tag: String, pre: Boolean = false, draft: Boolean = false) = ReleaseInfo(tag, pre, draft, emptyMap())
 
     @Test
+    fun channelVersionMatrixIgnoresGithubFlagAndNeverDowngradesOnSwitch() {
+        val cases = mapOf(
+            "0.12.0" to listOf(true, true, true),
+            "0.12.0+crossink.rc3" to listOf(true, true, true),
+            "0.12.0-rc.1" to listOf(false, true, true),
+            "0.12.0-rc.20" to listOf(false, true, true),
+            "0.13.0-preview.1" to listOf(false, false, true),
+            "0.12.0-0.test.99" to listOf(false, false, false),
+            "0.12.0-beta.1" to listOf(false, false, false),
+            "0.12.0-rc.0" to listOf(false, false, false),
+            "0.12.0-preview.01" to listOf(false, false, false),
+            "invalid" to listOf(false, false, false),
+        )
+        for ((version, expected) in cases) for ((i, channel) in UpdateChannel.values().withIndex()) {
+            for (flag in listOf(false, true)) {
+                assertEquals("$version / $channel / GitHub=$flag", expected[i],
+                    UpdatePolicy.pick(listOf(r("v$version", flag)), channel) != null)
+            }
+        }
+        val releases = listOf(r("v0.12.0"), r("v0.13.0-rc.1"), r("v0.14.0-preview.1"))
+        for ((i, channel) in UpdateChannel.values().withIndex()) {
+            val candidate = UpdatePolicy.pick(releases, channel)!!.version
+            assertEquals(releases[i].version, candidate)
+            assertFalse(UpdatePolicy.shouldInstall(candidate, Version.parse("0.14.0-preview.1"), emptySet()))
+        }
+    }
+
+    @Test
     fun installedRc17SeesPreview1() {
         val release = r("v0.11.4-preview.1", pre = true)
-        assertNull(UpdatePolicy.pick(listOf(release), includePre = false))
-        val picked = UpdatePolicy.pick(listOf(release, r("v0.11.3-rc.17", pre = true)), includePre = true)!!
+        assertNull(UpdatePolicy.pick(listOf(release), channel = UpdateChannel.STABLE))
+        val picked = UpdatePolicy.pick(listOf(release, r("v0.11.3-rc.17", pre = true)), channel = UpdateChannel.PREVIEW)!!
         assertEquals(release, picked)
         assertTrue(UpdatePolicy.isNewer(picked.version, Version.parse("0.11.3-rc.17")))
         assertFalse(TestBuild.isTest(picked.version)) // previews may be published; legacy 0.test builds may not
@@ -229,9 +257,9 @@ class UpdatePolicyTest {
     @Test
     fun picksNewestStableUnlessPreReleasesWanted() {
         val list = listOf(r("v0.3.0-rc.1", pre = true), r("v0.2.0"), r("v0.4.0", draft = true), r("v0.1.0"), r("nightly"))
-        assertEquals("v0.2.0", UpdatePolicy.pick(list, includePre = false)?.tag)
-        assertEquals("v0.3.0-rc.1", UpdatePolicy.pick(list, includePre = true)?.tag)
-        assertNull(UpdatePolicy.pick(listOf(r("v1.0.0-rc.1", pre = true)), includePre = false))
+        assertEquals("v0.2.0", UpdatePolicy.pick(list, channel = UpdateChannel.STABLE)?.tag)
+        assertEquals("v0.3.0-rc.1", UpdatePolicy.pick(list, channel = UpdateChannel.PREVIEW)?.tag)
+        assertNull(UpdatePolicy.pick(listOf(r("v1.0.0-rc.1", pre = true)), channel = UpdateChannel.STABLE))
     }
 
     @Test
@@ -239,13 +267,13 @@ class UpdatePolicyTest {
         val bad = setOf(Version.parse("0.11.3-rc.10")!!, Version.parse("0.11.3-rc.11")!!)
         val list = listOf(r("v0.11.3-rc.11", true), r("android-v0.11.3-rc.10", true),
             r("v0.11.3-rc.9", true), r("v0.11.2"))
-        val candidate = UpdatePolicy.pick(list, true, bad)!!.version
+        val candidate = UpdatePolicy.pick(list, UpdateChannel.PREVIEW, bad)!!.version
         assertEquals(Version.parse("0.11.3-rc.9"), candidate)
         assertTrue(UpdatePolicy.shouldInstall(candidate, Version.parse("0.11.3-rc.11"), bad))
         assertFalse(UpdatePolicy.shouldInstall(candidate, Version.parse("0.11.3-rc.12"), bad))
         assertFalse(UpdatePolicy.shouldInstall(Version.parse("0.11.3-rc.11"), Version.parse("0.11.2"), bad))
-        assertNull(UpdatePolicy.pick(list.take(2), true, bad))
-        assertEquals("v0.11.2", UpdatePolicy.pick(list, false, bad)?.tag)
+        assertNull(UpdatePolicy.pick(list.take(2), UpdateChannel.PREVIEW, bad))
+        assertEquals("v0.11.2", UpdatePolicy.pick(list, UpdateChannel.STABLE, bad)?.tag)
         assertFalse(UpdatePolicy.shouldInstall(candidate, candidate, bad))
         assertFalse(UpdatePolicy.shouldInstall(null, Version.parse("0.11.3-rc.11"), bad))
     }
@@ -260,11 +288,11 @@ class UpdatePolicyTest {
     @Test
     fun readsOnlyAndroidTagsFromTheSharedReleaseList() {
         val list = fixture()
-        assertEquals("android-v0.7.1", UpdatePolicy.pick(list, includePre = false)?.tag)
-        assertEquals("android-v0.7.2-rc.1", UpdatePolicy.pick(list, includePre = true)?.tag)
+        assertEquals("android-v0.7.1", UpdatePolicy.pick(list, channel = UpdateChannel.STABLE)?.tag)
+        assertEquals("android-v0.7.2-rc.1", UpdatePolicy.pick(list, channel = UpdateChannel.PREVIEW)?.tag)
         assertNull(list.first { it.tag.startsWith("xteink-v") }.version)
         assertEquals(Version.parse("0.7.0"), list.first { it.tag == "v0.7.0" }.version)
-        assertTrue(UpdatePolicy.pick(list, includePre = false)!!.assets.containsKey("orbit-companion-0.7.1.apk"))
+        assertTrue(UpdatePolicy.pick(list, channel = UpdateChannel.STABLE)!!.assets.containsKey("orbit-companion-0.7.1.apk"))
     }
 
     @Test
@@ -292,8 +320,8 @@ class UpdatePolicyTest {
         assertTrue(UpdatePolicy.isNewer(Version.parse("0.11.3-0.test.43"), test))
         // A test version that ever reached a release list is never picked.
         val list = listOf(r("v0.11.3-0.test.42"), r("v0.11.2"), r("v0.11.4-0.test.1", pre = true))
-        assertEquals("v0.11.2", UpdatePolicy.pick(list, includePre = false)?.tag)
-        assertEquals("v0.11.2", UpdatePolicy.pick(list, includePre = true)?.tag)
+        assertEquals("v0.11.2", UpdatePolicy.pick(list, channel = UpdateChannel.STABLE)?.tag)
+        assertEquals("v0.11.2", UpdatePolicy.pick(list, channel = UpdateChannel.PREVIEW)?.tag)
         // It installs over the release it was built after (same or higher versionCode).
         assertTrue(test.code >= Version.parse("0.11.2")!!.code)
     }

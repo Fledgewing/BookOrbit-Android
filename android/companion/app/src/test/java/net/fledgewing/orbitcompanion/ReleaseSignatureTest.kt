@@ -115,7 +115,7 @@ class ReleaseSignatureTest {
         fun envelope(body: String = payload, sig: String = sigs) = JSONObject()
             .put("payload", body).put("signatures", sig).toString()
         val feed = AndroidReleaseFeed.parse(envelope(), rootHex, 1)
-        assertEquals("v0.11.3-rc.9", UpdatePolicy.pick(feed.releases, true, feed.withdrawn)?.tag)
+        assertEquals("v0.11.3-rc.9", UpdatePolicy.pick(feed.releases, UpdateChannel.PREVIEW, feed.withdrawn)?.tag)
         for ((body, signature, key, serial) in listOf(
             listOf(payload.replace("v0.11.3-rc.11", "v0.11.3-rc.10"), sigs, rootHex, "1"),
             listOf(payload.replace("rc.9", "rc.12"), sigs, rootHex, "1"),
