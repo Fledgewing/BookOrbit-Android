@@ -46,7 +46,7 @@ object SeriesPresentation {
         var used = 0
         val rows = mutableListOf<Map<String, Any?>>()
         for (group in grouped.drop(offset)) {
-            val ordered = group.sortedWith(if (series) order else LibraryFilter.comparator(filter + mapOf("group" to "none")))
+            val ordered = group.sortedWith(if (series && group.first()["series_key"] != null) order else LibraryFilter.comparator(filter + mapOf("group" to "none")))
             val count = minOf(preview.coerceIn(1, 9), ordered.size, limit-1)
             if (used + 1 + count > limit || rows.size >= groupLimit) break
             val first = ordered.first()

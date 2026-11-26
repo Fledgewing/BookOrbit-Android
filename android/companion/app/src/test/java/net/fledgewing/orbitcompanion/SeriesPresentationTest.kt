@@ -59,6 +59,12 @@ class SeriesPresentationTest {
         val missing=(last["items"] as List<*>).single() as Map<*,*>
         assertEquals("Not in a series",missing["title"]); assertEquals("1 book",missing["count_text"])
     }
+    @Test fun unassignedSeriesGroupPreservesSelectedListSort() {
+        val books=(1..3).map { book(it)+mapOf("series_key" to null,"series" to emptyList<String>()) }
+        val result=SeriesPresentation.groups(books,mapOf("group" to "series","sort" to "title","dir" to "desc"),0,8)
+        val group=(result["items"] as List<*>).single() as Map<*,*>
+        assertEquals(listOf("Book 3","Book 2","Book 1"),(group["books"] as List<*>).map { (it as Map<*,*>)["title"] })
+    }
     @Test fun authorGroupsHonorSearchFilteringAndMissingSeriesDrilldownIsNeutral() {
         val books=(1..9).map { book(it) }.filter { LibraryFilter.matches(it,mapOf("q" to "Book 1")) }
         val result=SeriesPresentation.groups(books,mapOf("group" to "author"),0,8)
