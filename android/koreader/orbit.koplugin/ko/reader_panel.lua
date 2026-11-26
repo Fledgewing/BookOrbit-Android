@@ -139,7 +139,7 @@ function ReaderSheet:rowWidget(block,w,h,mt)
                 if ges and ges.pos then r.set(math.floor(math.max(0,math.min(1,(ges.pos.x-area.dimen.x-12)/(width-24)))*100+.5)) end
                 return true
             end
-            self:touchControl(area,function() r.set((r.value+10)%110) end)
+            self:touchControl(area,function() r.set(math.min(100,r.value+10)) end)
             table.insert(group,area)
         end
         return group
@@ -169,12 +169,15 @@ function ReaderSheet:rowWidget(block,w,h,mt)
             if ges and ges.pos then r.seek(math.max(0,math.min(1,(ges.pos.x-area.dimen.x)/w))*100) end
             return true
         end
+        local previous
+        if r.previous then
+            previous=self:control(require("ui/widget/button"):new{icon="chevron.first",width=mt.button,height=mt.button,callback=r.previous})
+        end
         self:touchControl(area,function() self.scrub_focus=not self.scrub_focus end)
         if not self.focus_index then self.focus_index=#self.focus_controls end
-        if r.previous then
+        if previous then
             return require("ui/widget/horizontalgroup"):new{
-                self:control(require("ui/widget/button"):new{icon="chevron.first",width=mt.button,height=mt.button,callback=r.previous}),
-                area,
+                previous,area,
                 self:control(require("ui/widget/button"):new{icon="chevron.last",width=mt.button,height=mt.button,callback=r.next})}
         end
         return area

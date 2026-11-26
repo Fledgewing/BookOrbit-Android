@@ -190,6 +190,9 @@ return function(here, test, ok, eq)
         E.ReaderPanel.show(W.ui,"reader-bottom-panel")
         local sheet=E.ReaderPanel.sheet
         eq(W.trips,1); eq(#W.batch,2)
+        eq(sheet.focus_index,2,"scrubber starts between its chapter arrows")
+        sheet:focusStep(-1); eq(sheet.focus_controls[sheet.focus_index].icon,"chevron.first")
+        sheet:focusStep(1)
         local scrub
         for _,r in ipairs(sheet:rows()) do if r.kind=="scrubber" then scrub=r end end
         eq(#scrub.chapters,6); eq(#scrub.bookmarks,2); eq(scrub.value,.62)
