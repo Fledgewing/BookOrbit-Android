@@ -71,26 +71,6 @@ function inBook()
     return ui ~= nil and ui.document ~= nil
 end
 
-function serverUrl(p)
-    local settings = p and p.settings or G_reader_settings:readSetting("bookorbit")
-    return settings and settings.server_url or nil
-end
-
--- Any HTTP status from the base URL counts: it proves the route and the server, with no login.
--- Blocking primitive: only called by Net.up's background child. Socket timeouts
--- do not bound DNS resolution; Background.run also caps the child's lifetime.
-function probeServer(url, timeout)
-    local http = require("socket.http")
-    local socket = require("socket")
-    local socketutil = require("socketutil")
-    local ltn12 = require("ltn12")
-    timeout = math.min(1.5, timeout)
-    socketutil:set_timeout(timeout, timeout)
-    local code = socket.skip(1, http.request{ url = url, method = "HEAD", sink = ltn12.sink.null() })
-    socketutil:reset_timeout()
-    return type(code) == "number", code
-end
-
 ---------------------------------------------------------------------------------------------
 
 -- One compatibility entry point. Only main.lua loads this implementation.
@@ -107,40 +87,23 @@ end
 
 function Server.signedIn(p) return p ~= nil and p:isLoggedIn() end
 function Server.openLogin(p) return p:promptLogin() end
-function Server.drain(p, ...) return p:requestLifecycleOutboxDrain(...) end
-function Server.pull(p, reason) return p:requestProgressPull(false, false, reason) end
-function Server.snapshot(p) return pcall(p._onSuspend, p) end
-function Server.syncBusy(p)
-    local c = p:getSyncCoordinator()
-    if c:isBusy() or c:queuedCount() > 0 then return true end
-    return outboxPending(p:getLifecycleOutbox():diagnostics()) > 0
-end
-function Server.testReady(p)
-    return hasHandler(p, Server.events.sync) and Compat.callable(p.startSweep) and Compat.callable(p.errorLabel)
-end
-function Server.testError(p, err) return p:errorLabel(err) end
-function Server.testSync(p, reader, done)
-    if reader then pluginEvent(liveUI(), p, Server.events.sync, {quiet=true, on_done=done})
-    else p:startSweep({quiet=true, on_progress=function() end, on_done=done}) end
-end
-
 -- Legacy service bridge. Only reviewed lifecycle/sheet modules use this facade.
 function Server.cacheClient() return OC.client() end
+function Server.readerIdle()
+    if Copies and Copies.tick then pcall(Copies.tick,"book closed") end
+    if EOB and EOB.drain and not reading() then
+        local p=serverPlugin()
+        if p then EOB.drain(p,false,function() end) end
+    end
+end
 function Server.watchCache() return OC.watchChecks() end
 function Server.cacheBusy() if OC and OC.busy then return OC.busy() end end
 function Server.refreshLibrary(...) return OC.menuFullRefresh(...) end
 function Server.resumeCache(...) if Mirror and Mirror.kick then return Mirror.kick(...) end end
 function Server.fullRefreshNotice() return Mirror and (Mirror.notices or Mirror.fullRunning()) end
 function Server.installGrouping(...) return Grouping.install(...) end
-function Server.positionOn() return OSM and OSM.on() end
-function Server.positionWakeMinimum() return OSM.WAKE_MIN_S end
-function Server.pullThenDrain(...) return OSM.pullThenDrain(...) end
-function Server.readFromHere(...) return OSM.readFromHere(...) end
-function Server.waitOutbox(...) return Sync.waitOutbox(...) end
-function Server.clearPullDebounce(...) return Sync.clearPullDebounce(...) end
 function Server.countStorage(...) if OC and OC.storageCount then return OC.storageCount(...) end end
 function Server.refreshCovers(...) if Mirror and Mirror.coverPass then return Mirror.coverPass(...) end end
-function Server.positionModeChanged(...) if OSM and OSM.modeChanged then return OSM.modeChanged(...) end end
 function Server.reportRecommended(...) if Rec then return Rec.report(...) end end
 function Server.applyRecommended(...) if Rec then return Rec.applyChoices(...) end end
 function Server.capabilitiesLost(...) if Rec then return Rec.capsLost(...) end end
@@ -158,10 +121,12 @@ function Server.quietLegacy(quiet)
     quiet(OC,{"watchChecks","applyEvents","landed","redraw_soon","redraw","storageCount","storageCounted","rechecked"})
     quiet(Mirror,{"tick","kick","poll","ran","finish","coverPass"})
     quiet(LF,{"quiet","paintTiles","quietSwitch"})
-    quiet(OSM,{"pause","pullThenDrain"})
 end
 function Server.timeLegacy(wrap)
-    for _,name in ipairs({"EOB","OSM","OC","LF","Sync","Mirror","Copies"}) do
+    for _,name in ipairs({"EOB","OC","LF","Mirror","Copies"}) do
         wrap(getfenv(1)[name],name)
     end
 end
+
+-- Temporary non-transport compatibility for the finish adapter while its parallel cutover lands.
+Sync = { waitOutbox=function(_,_,done) return ReadingSync.run("close",done) end }

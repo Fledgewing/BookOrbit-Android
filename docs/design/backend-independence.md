@@ -157,52 +157,34 @@ render-path network/subprocesses, one batched companion round-trip per Home pain
 filtering, sorting, joins, stats and battery work stay on the companion worker; timing spans
 record real device milliseconds. Moving protocol ownership adds no new screen or widget.
 
-### Lua compatibility adapter and remaining transport work
+### Android sync is server-free; remaining catalog compatibility
 
-F12-Q's [checkpoint notes](booksync-home/F12-Q-NOTES.md) track the companion transport
-cutover. Its durable position queue prerequisite is not wired into lifecycle hooks;
-the Android plugin is not yet server-free. The remaining paths below still apply.
+The Android plugin's sync path now calls only neutral commands through `ko/library.lua`.
+The companion's single `SyncOwner` owns policy, durable marker/override/decline state,
+offline queues and delivery through `ServerAdapter`. The production adapter alone owns
+backend requests and payloads. The native reader captures small locators/geometry and
+shows the approved one-draw consent prompt. It does not call a server for sync.
 
-The owned UI still calls `ko/library.lua`; it receives normalized bounded projections.
-`ko/server/bookorbit.lua` binds the existing plugin account and compatibility operations.
-The reviewed facade callers are `ko/home.lua` (reading gate/Home), `ko/start.lua` (toast),
-`ko/notices.lua` (catalog lifecycle), `ko/test_sync_path.lua` (explicit test action),
-`ko/sleepscreen.lua` (credential handoff). Only
-`main.lua` loads implementation files. Guards forbid additional facade consumers and still
-check every reviewed caller for protocol fields/routes and direct imports. The remaining
-legacy lifecycle callers (`ko/wifi.lua`, `ko/sleep.lua`, `ko/module.lua`,
-`ko/endsheet.lua`, `ko/menu.lua`) may obtain the compatibility plugin through `serverPlugin`;
-owned UI cannot. The remaining middleware callers are `ko/net.lua` (cache resume),
-`ko/shared.lua` (settings follow-up jobs) and `ko/main_loop.lua` (timing wrappers).
-Direct shared implementation globals are forbidden even in these reviewed files. Local
-file IO and directory/clock providers live on generic `Store`; legacy protocol lookups and
-search live in the adapter. The storage provider has no facade permission. Historical Home wire values and cover-cache folder names stay in the adapter,
-so the guard rejects backend names in every casing without breaking installed settings.
-Its adapter package owns the old cache/mirror/copies, finish, grouping, local-first and
-position-sync hooks; pure protocol helpers live in `logic/server/bookorbit`. Generic cache
-encoding remains `logic/cache.lua`; `ko/store.lua` keeps the small owned projection read.
-The legacy query interpreter moved to `ko/server/bookorbit/store.lua`. The shared `Cache`
-object contains only codec/local utilities; legacy paging, response assembly, cache keys and
-normalization live on private `ServerCache`, whose direct use is guarded too.
+[F12-Q notes](booksync-home/F12-Q-NOTES.md) document the retirement handshake, five-phase
+legacy import, generation fallback, account provenance and crash boundaries. Checkpoints
+commit before source retirement; uncertain ownership retains the original files. The
+old Lua sync, reading_sync, lifecycle, orbismart and localfirst implementations are
+removed. KOReader's own built-in sync remains independent. The guard checks retired
+sync calls/routes in every plugin Lua file, including private adapter files, without
+an exemption. Shared policy fixtures and a neutral toy companion adapter cover the new
+owner, offline restart, override, stale consent and account isolation.
 
-The maintainer explicitly permits routing oversized migrations through this one Lua adapter
-for this slice. Remaining server calls **inside that adapter**, to move to companion commands
-in a later transport/sole-sync-owner slice, are:
+The parallel F12-Q2 slice owns remaining cover acquisition, catalog/grouping, mirror,
+copies, recommendations and end-of-book transport. Until that slice lands, the **whole
+plugin** is not yet server-free. Its cached catalog display helpers are extracted into
+`ko/server/bookorbit/local_view.lua`; existing non-sync jobs receive neutral lifecycle
+signals through the library binding. The named middleware (`wifi`, `sleep`, `module`,
+`net`, `shared`, `main_loop`) no longer accesses the server facade for sync. The remaining
+reviewed compatibility facade consumers are Home, notices, sleepscreen and endsheet;
+only `main.lua` loads implementation files. No new Lua transport is permitted.
 
-- `ko/server/bookorbit.lua`: `probeServer` (HEAD reachability in the background child).
-- `ko/server/bookorbit/cache.lua`: `OC.httpCover` (legacy thumbnail GET); its request wrappers
-  bridge the upstream API and cached replies. Mirror/copies construct only private protocol
-  plans sent to the companion worker.
-- `ko/server/bookorbit/endofbook.lua`: compatibility detail/status/rating calls through the
-  existing finish outbox. Preserve sole-writer ordering when moving these.
-- `ko/server/bookorbit/grouping.lua`: rollback catalog reads through the upstream client.
-  Owned lists/filtering use companion projections; do not reuse this full-list path for Home.
-- `ko/server/bookorbit/sync.lua`, `reading_sync.lua` and `lifecycle.lua`: legacy outbox,
-  pull/push, remote-progress parsing and upstream snapshot/settings bindings. Root start/sleep/
-  Wi-Fi flows call the adapter facade; the guard also forbids upstream primitive API names.
-- `ko/server/bookorbit/orbismart.lua`: upstream progress client interception. Keep the approved
-  one-draw position prompt and reading gate while moving sync ownership.
-
-These are adapter-contained compatibility implementations, not permission to introduce new
-Lua HTTP, backend JSON, full-catalog work or legacy views into the owned client. Firmware
-adapter enforcement remains deferred under the Android-first instruction.
+Every screen/widget keeps its budget. Consent and bounded native verification add named
+one-row / 16 KiB budgets; commands, drains and paints log timing spans. No sync is added
+to Home paint. Heavy capture, sidecar processing and statistics stay on the companion.
+Device acceptance targets remain pending maintainer confirmation. Firmware adapter
+enforcement is deferred under the Android-first instruction.

@@ -26,18 +26,18 @@ function Net.up(p, opts, cb)
     -- The companion takes part when it switches Wi-Fi or holds the wake lock for sleep syncs;
     -- otherwise the plugin wakes Tailscale itself (docs/design/addon-mode.md §3).
     local res = { companion = Companion.has("wifi") or Companion.has("sleep_sync"), wifi_switch = Companion.has("wifi") }
-    local url = opts.need_server and serverUrl(p) or nil
+    -- Server reachability/authentication is decided by the companion sync command.
+    local url = nil
     log("network up: start", opts.reason, "cap", cap .. "s", "companion", res.companion and "yes" or "no",
         "server", url and "set" or "none")
 
-    local next_probe = 0
     local ts_resent = false
     local function finish(ok, failed_at, detail)
         res.elapsed = now_s() - t0
         res.failed_at = failed_at
         res.detail = detail
         Net.inflight = nil
-        if ok then Server.resumeCache("network up") end
+        if ok then Library.networkRestored() end
         log("network up:", ok and "ok" or ("FAILED at " .. tostring(failed_at)), opts.reason,
             "wifi", res.wifi_s and fmt(res.wifi_s) or "-", "vpn", res.vpn_s and fmt(res.vpn_s) or "-",
             "server", res.server_s and fmt(res.server_s) or "-", "total", fmt(res.elapsed), detail or "")
@@ -90,34 +90,7 @@ function Net.up(p, opts, cb)
             res.vpn_s = el
             log("network: VPN up after", fmt(el))
         end
-        if not url then return finish(true) end
-        if el < cap and el >= next_probe then
-            local remaining = cap - el
-            -- A HEAD can wait on DNS/connect/read for seconds. Scheduling tick does not
-            -- make that I/O asynchronous: run it in a child, including while reading.
-            Background.run("network probe", function()
-                local answered, code = probeServer(url, math.max(0.05, math.min(1.5, remaining)))
-                return answered and tostring(code) or ""
-            end, math.min(2, remaining), function(result)
-                local after = now_s() - t0
-                local code = tonumber(result)
-                if code then
-                    res.server_s = after
-                    log("network: server answered", code, "after", fmt(after))
-                    return finish(true)
-                end
-                log("network: server not answering yet at", fmt(after))
-                next_probe = after + 1
-                tick()
-            end)
-            return
-        end
-        if el >= cap then
-            local stage = (S.wake_tailscale and not res.vpn_s) and "tailscale" or "server"
-            return finish(false, stage, stage == "tailscale" and ("Tailscale didn't connect in " .. cap .. " s")
-                or ("library didn't answer in " .. cap .. " s"))
-        end
-        UIManager:scheduleIn(0.5, tick)
+        return finish(true)
     end
     tick()
 end

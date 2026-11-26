@@ -18,7 +18,8 @@ internal object ConnectorHttp : BookOrbitServerAdapter.ConnectorTransport {
             if (body != null) {
                 c.doOutput = true; c.setRequestProperty("Content-Type", "application/json")
                 val bytes = JSONObject(body).toString().toByteArray(Charsets.UTF_8)
-                try { require(bytes.size <= 16384); c.outputStream.use { it.write(bytes) } } finally { bytes.fill(0) }
+                val limit=if(path.startsWith("/koreader/plugin/")) 1048576 else 16384
+                try { require(bytes.size <= limit); c.outputStream.use { it.write(bytes) } } finally { bytes.fill(0) }
             }
             val code = c.responseCode
             if (code !in 200..299) return BookOrbitAccount.Reply(code)

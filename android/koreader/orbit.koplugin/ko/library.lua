@@ -154,3 +154,40 @@ function Library:sources(category, offset, limit, caps)
         allow_lists=not (caps and caps.lists and caps.lists.read==false),
         allow_wtr=not (caps and caps.wantToRead==false),allow_device=not (caps and caps.onDevice==false)})
 end
+
+-- Position sync owns one local row and a bounded pure preview; all writes remain worker commands.
+function Library.nativeReaderPosition(path) return LibraryAdapter.readerPosition(path) end
+function Library.idle() if LibraryAdapter.idle then return LibraryAdapter.idle() end end
+function Library.networkRestored() if LibraryAdapter.networkRestored then return LibraryAdapter.networkRestored() end end
+function Library.positionCommand(op,args,done)
+    return command(op,function() return LibraryAdapter.command(op,args,done or function() end) end)
+end
+function Library.positionCached(path)
+    local finish=Budgets.span("library.position.cached",now_s,log)
+    local b=Budgets.get("screens","position-consent")
+    local root=require("datastorage"):getSettingsDir() .. "/orbit-cache"
+    local body=Store.readFile(root .. "/position/" .. require("ffi/sha2").md5(path) .. ".lua",b.bytes+1)
+    local value=type(body)=="string" and #body<=16384 and Cache.decode(body) or nil
+    finish()
+    return type(value)=="table" and value.path==path and value or nil
+end
+function Library.positionPreview(args)
+    local finish=Budgets.span("library.position.preview",now_s,log)
+    local encoded=Cache.encode(args); assert(#encoded<=Budgets.MAX_REQUEST,"Position preview exceeds budget")
+    local result=Jni.call(Companion.AUTHORITY,Companion.PACKAGE .. ".call.SYNC_PREVIEW",{args=encoded})
+    local body=result and result.body
+    local value=type(body)=="string" and #body<=16384 and Cache.decode(body) or nil
+    finish()
+    return value
+end
+
+-- Neutral lifecycle hooks shared with the independently migrating catalog/finish adapter.
+function Library.backgroundCommand(op,...)
+    local args={...}
+    return command(op,function() return LibraryAdapter.backgroundCommand(op,unpack(args)) end)
+end
+function Library.backgroundBusy()
+    local finish=Budgets.span("library.background.busy",now_s,log)
+    local busy=LibraryAdapter.backgroundBusy and LibraryAdapter.backgroundBusy()
+    finish(); return busy
+end

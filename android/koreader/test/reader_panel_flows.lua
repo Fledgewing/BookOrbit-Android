@@ -124,36 +124,18 @@ return function(here, test, ok, eq)
         local m=E.ReaderPanelPlan.model({items={{progress=200}}},{}); eq(m.progress,1)
         eq(E.ReaderPanelPlan.model({items={{progress=0/0}}},{}).progress,nil)
     end)
-    test("reader Sync adapter: existing writer, offline, document change and late timeout",function()
+    test("reader Sync adapter: explicit sync uses the companion owner",function()
         local ui={document={file="fixture.epub"},view={footer={percent_finished=0.73}}}
-        local up, reply, timeout, done, message, sent, released
-        sent,released=0,0
-        local E={liveUI=function() return ui end, serverPlugin=function() return {} end,
-            hasHandler=function() return true end,
-            Wifi={acquire=function() end,release=function() released=released+1 end},
-            Net={up=function(_,_,cb) up=cb end},
-            UIManager={scheduleIn=function(_,_,cb) timeout=cb end},
-            pluginEvent=function(_,_,event,options)
-                eq(event,"BookOrbitSyncBook"); eq(options.quiet,true)
-                sent=sent+1; reply=options.on_done
-            end}
+        local called,reply,done,message
+        local E={liveUI=function() return ui end,ReadingSync={run=function(moment,callback) called=moment; reply=callback; return true end}}
         setfenv(assert(loadfile(here.."/../orbit.koplugin/ko/server/bookorbit/library_bookorbit.lua")),setmetatable(E,{__index=_G}))()
         eq(E.LibraryAdapter.readerPosition("fixture.epub"),0.73)
         eq(E.LibraryAdapter.readerPosition("other.epub"),nil)
-        ui.view.footer.percent_finished=0/0
-        eq(E.LibraryAdapter.readerPosition("fixture.epub"),nil)
-        ui.view.footer.percent_finished=0
-        eq(E.LibraryAdapter.readerPosition("fixture.epub"),0)
-        local function complete(ok,text) done,message=ok,text end
-        E.LibraryAdapter.syncCurrent(complete); up(false)
-        eq(sent,0); eq(released,1); eq(done,false); eq(message,"Offline · will sync when connected")
-        E.LibraryAdapter.syncCurrent(complete); ui.document={file="other.epub"}; up(true)
-        eq(sent,0); eq(released,2); eq(done,false)
-        E.LibraryAdapter.syncCurrent(complete); up(true)
-        eq(sent,1); reply(nil); eq(done,true); eq(message,"Synced"); eq(released,3)
-        timeout(); eq(released,3,"late timer cannot complete twice")
-        E.LibraryAdapter.syncCurrent(complete); up(true); timeout()
-        eq(done,false); eq(released,4); reply(nil); eq(released,4)
+        ui.view.footer.percent_finished=0/0; eq(E.LibraryAdapter.readerPosition("fixture.epub"),nil)
+        E.LibraryAdapter.syncCurrent(function(ok,text) done,message=ok,text end)
+        eq(called,"manual"); reply(false,"Offline · saved"); eq(done,false); eq(message,"Offline · saved")
+        E.LibraryAdapter.syncCurrent(function(ok,text) done,message=ok,text end)
+        reply(true); eq(done,true); eq(message,"Synced")
     end)
 
     local function styleReader(W)

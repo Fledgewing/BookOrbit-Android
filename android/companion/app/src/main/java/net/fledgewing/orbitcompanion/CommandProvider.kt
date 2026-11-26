@@ -67,11 +67,21 @@ class CommandProvider : ContentProvider() {
                 return answer(true)
             }
             if (!KoreaderTrust.check(ctx, uid)) return answer(false, "caller")
+            if (method == "${Contract.PACKAGE}.call.SYNC_PREVIEW") {
+                val encoded=extras?.getString("args")?.takeIf { it.length<=8192 } ?: return answer(false,"budget")
+                val args=LuaValue.parse(encoded.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: return answer(false,"invalid")
+                val start=System.nanoTime()
+                val body=LuaValue.encode(LibraryAccount.positionPreview(args))
+                OLog.i("sync.preview ms=${(System.nanoTime()-start)/1_000_000}")
+                if(body.size>16384) return answer(false,"budget")
+                return answer(true).apply { putString("body",String(body,Charsets.ISO_8859_1)) }
+            }
             if (method == ServerCommands.START) {
                 val encoded = extras?.getString("args")?.takeIf { it.length <= 8192 } ?: return answer(false,"budget")
                 val op = extras.getString("op") ?: return answer(false,"missing")
                 return try {
-                    val args = LuaValue.parse(encoded.toByteArray(Charsets.ISO_8859_1)) as? Map<*, *> ?: return answer(false,"invalid")
+                    val parsed=LuaValue.parse(encoded.toByteArray(Charsets.ISO_8859_1))
+                    val args=when(parsed) { is Map<*, *> -> parsed; emptyList<Any>() -> emptyMap<Any,Any>(); else -> return answer(false,"invalid") }
                     answer(true).apply { putString("id",ServerCommands.start(ctx,op,args)) }
                 } catch (_: Exception) { answer(false,"invalid") }
             }

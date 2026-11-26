@@ -31,15 +31,14 @@ IMPLEMENTATION = re.compile(r'(?:net\.fledgewing\.orbitcompanion\.server\.[a-z]+
 # Reviewed legacy facade consumers: permissions to call the facade, never protocol exemptions.
 # main.lua is the only implementation loader; owned Home/Details/widget modules are absent.
 LUA_COMPAT_CONSUMERS = frozenset(LUA / 'ko' / name for name in (
-    'home.lua', 'start.lua', 'notices.lua', 'test_sync_path.lua', 'sleepscreen.lua',
-    'wifi.lua', 'sleep.lua', 'module.lua', 'endsheet.lua', 'menu.lua',
-    'net.lua', 'shared.lua', 'main_loop.lua',
+    'home.lua', 'notices.lua', 'sleepscreen.lua',
+    'endsheet.lua',
 ))
 
 LEGACY_GLOBALS = r'OC|Mirror|OSM|Copies|LF|Grouping|Rec|EOB|Sync'
 LUA_STRINGS = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\[(=*)\[.*?\]\1\]', re.S)
 
-LEGACY_API = re.compile(r'\b(?:requestLifecycleOutboxDrain|requestProgressPull|requestProgressPush|fetchRemoteProgress|getLifecycleOutbox|getSyncCoordinator|last_remote_progress|pull_timestamp|push_timestamp|promptLogin|startSweep|enqueueLifecycleSnapshot|catalogSetReadStatus|catalogSetRating|catalogBooks|catalogBook|newClient|getDocumentDigest|getLastPercent|getLastProgress|remoteProgressIsNewer|isSamePlace|pages_before_update|isLoggedIn|_onSuspend)\b')
+LEGACY_API = re.compile(r'\b(?:requestLifecycleOutboxDrain|requestProgressPull|requestProgressPush|fetchRemoteProgress|getLifecycleOutbox|getSyncCoordinator|last_remote_progress|pull_timestamp|push_timestamp|promptLogin|startSweep|enqueueLifecycleSnapshot|catalogSetReadStatus|catalogSetRating|catalogBooks|catalogBook|newClient|getDocumentDigest|remoteProgressIsNewer|isSamePlace|pages_before_update|isLoggedIn|_onSuspend)\b')
 
 
 
@@ -52,6 +51,18 @@ def code_only(source, lua=False):
 
 def violations(path, source):
     path = Path(path)
+    # Sync ownership has completed its cutover. This check precedes adapter handling:
+    # no Lua adapter/facade can resurrect the retired client's server-call primitives.
+    if path.is_relative_to(LUA) and path.suffix == '.lua':
+        code = code_only(source, True)
+        identifiers = LUA_STRINGS.sub(lambda m: re.sub(r'[^\n]', ' ', m[0]), code)
+        if re.search(r'[:.]\s*(?:requestLifecycleOutboxDrain|requestProgressPull|requestProgressPush|fetchRemoteProgress|'
+                     r'getLifecycleOutbox|getSyncCoordinator|enqueueLifecycleSnapshot|startSweep|'
+                     r'getProgress|updateProgress|matchCheck|uploadPageStats|uploadAnnotations|exchangeAnnotations|'
+                     r'exchangeAck|exchangeBookmarks|exchangeBookmarksAck|uploadBookStates|bulkProgress|sweepComplete)\s*\(', identifiers):
+            return [f'{path}: retired server sync call in the Android plugin; use Library companion commands']
+        if re.search(r'/koreader/(?:syncs\b|plugin/(?:match-check|page-stats|annotations(?:/|[\"\'])|bookmarks(?:/|[\"\'])|book-states|bulk-progress|sweep-complete))', code):
+            return [f'{path}: sync route in Android plugin']
     relative = path.relative_to(COMPANION) if path.is_relative_to(COMPANION) else None
     source_root = COMPANION / relative.parts[0] / relative.parts[1] if relative and len(relative.parts) > 2 and relative.parts[1] in ('java', 'kotlin') else None
     kotlin_adapter = source_root is not None and path.is_relative_to(source_root / 'net/fledgewing/orbitcompanion/server')
@@ -107,6 +118,12 @@ def violations(path, source):
 
 
 class GuardTests(unittest.TestCase):
+    def test_sync_transport_cannot_hide_inside_a_lua_adapter(self):
+        for name in ('ko/sync.lua','ko/server/hidden.lua','ko/server/bookorbit.lua'):
+            for code in ('p:requestProgressPull()', 'api:updateProgress(doc, .5)', 'api:exchangeBookmarks({})', '"/koreader/syncs/progress"', '"/koreader/plugin/page-stats"', '"/koreader/plugin/annotations/exchange"'):
+                self.assertTrue(violations(LUA / name, code), (name,code))
+        # These are native KOReader locator captures, also used by its independent built-in sync.
+        self.assertFalse(violations(LUA / 'ko/position_sync.lua','engine:getLastProgress(); engine:getLastPercent()'))
     def test_rejects_protocol_and_imports_even_with_suppression_comments(self):
         for path in (KOTLIN / 'Widget.kt', LUA / 'ko/widget.lua'):
             for value in ('"/api/v1/books"', '"catalog/books"', '"/auth/login"', '"/opds/catalog"', '"x-auth-key"', '"Smart Scopes"', '"/koreader/plugin/catalog/books"', '"readStatus"', '"BookOrbit"', '"bookorbit"', '"BOOKORBIT"', '"bookorbit_api"'):

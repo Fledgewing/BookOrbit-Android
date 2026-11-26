@@ -57,7 +57,8 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   The guard scans production resources and shared Settings/UI data too; About credit prose may name its credited project.
   See `docs/design/backend-independence.md` for adapter registration and legacy follow-ups.
   A transport cutover must checkpoint every unacknowledged lifecycle phase before retiring
-  its source queue. Never activate a replacement position writer while the legacy writer
+  its source queue. Android sync now uses only neutral Library companion commands; keep policy,
+  durable decision state and all five lifecycle phases in the companion single owner. Never activate a replacement position writer while the legacy writer
   can still drain that document; a durable position queue alone is not a lifecycle migration.
 
 - **Nothing interrupts reading.** While a book is open in the foreground, nothing from BookSync,

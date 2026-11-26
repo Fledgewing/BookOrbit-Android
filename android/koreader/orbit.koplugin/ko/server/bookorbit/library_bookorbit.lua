@@ -65,39 +65,13 @@ end
 function LibraryAdapter.fullRefresh() return OC.menuFullRefresh() end
 
 function LibraryAdapter.syncNow(reader) return reader:onOrbitSyncAndSleep(true) end
--- Keep the existing sync writer and Wi-Fi lifecycle behind the adapter. No second outbox.
+-- Explicit Sync delegates to the companion owner through the neutral library command path.
 function LibraryAdapter.syncCurrent(done)
-    local ui = liveUI()
-    local p = serverPlugin(ui)
-    if not (p and ui and ui.document and hasHandler(p, "BookOrbitSyncBook")) then
-        done(false, "Sync unavailable")
-        return false
-    end
-    local document = ui.document
-    Wifi.acquire("reader-panel")
-    Net.up(p, {reason="reader-panel", cap=20, need_server=true}, function(ok)
-        if not ok then
-            Wifi.release("reader-panel")
-            done(false, "Offline · will sync when connected")
-            return
-        end
-        if liveUI() ~= ui or ui.document ~= document then
-            Wifi.release("reader-panel")
-            done(false, "Book closed · your place stays saved")
-            return
-        end
-        local completed = false
-        local function finish(err)
-            if completed then return end
-            completed = true
-            Wifi.release("reader-panel")
-            done(err == nil, err and "Sync failed · your place stays saved" or "Synced")
-        end
-        pluginEvent(ui, p, "BookOrbitSyncBook", {quiet=true, on_done=finish})
-        UIManager:scheduleIn(30, function() finish("timeout") end)
-    end)
-    return true
+    return ReadingSync.run("manual",function(ok,why) done(ok,why or (ok and "Synced" or "Saved · delivery pending")) end)
 end
+-- Non-sync lifecycle notifications retained for the parallel catalog/finish cutover.
+function LibraryAdapter.idle() return Server.readerIdle() end
+function LibraryAdapter.networkRestored() return Server.resumeCache("network up") end
 
 -- KOReader already computes this on page/position updates, even with its footer hidden.
 -- No document scan, sidecar read or second progress writer on a panel paint.
@@ -181,4 +155,14 @@ function LibraryAdapter.command(op, args, callback)
     end
     UIManager:scheduleIn(0.2,poll)
     return true
+end
+
+function LibraryAdapter.backgroundBusy() return Server.cacheBusy() end
+function LibraryAdapter.backgroundCommand(op,...)
+    local hooks={ ["views.install"]=Server.installGrouping,["cache.resume"]=Server.resumeCache,
+        ["storage.recount"]=Server.countStorage,["covers.refresh"]=Server.refreshCovers,
+        ["preferences.report"]=Server.reportRecommended,["preferences.apply"]=Server.applyRecommended,
+        ["capabilities.lost"]=Server.capabilitiesLost,["capabilities.gained"]=Server.capabilitiesGained }
+    local run=assert(hooks[op],"Unknown lifecycle operation")
+    return run(...)
 end

@@ -13,7 +13,27 @@ object LibraryAccount {
     private val queue = Executors.newSingleThreadExecutor { r -> Thread(r, "booksync-server").apply { isDaemon = true } }
     private val main = Handler(Looper.getMainLooper())
     private var adapter: ServerAdapter? = null
-    private class Published(val state: Map<String, Any?> = emptyMap(), val owner: String? = null, val stats: Map<*, *>? = null, val fallback: RemoteReadingStats? = null)
+    @Volatile private var syncOwner: SyncOwner? = null
+    private var syncRetryScheduled=false
+    private fun syncOwner(ctx: Context): SyncOwner = syncOwner ?: SyncOwner(
+        LifecycleQueue(AndroidSql(File(ctx.filesDir,"sync-journal.db"))),
+        File(android.os.Environment.getExternalStorageDirectory(),"koreader/settings")).also { syncOwner=it }
+    private fun retrySync(ctx: Context) {
+        val owner=syncOwner ?: return
+        val a=adapter ?: return
+        if(syncRetryScheduled || !owner.needsRetry(a)) return
+        syncRetryScheduled=true
+        main.postDelayed({ queue.execute {
+            syncRetryScheduled=false
+            runCatching { if(owner.needsRetry(a)) owner.drain(a) }
+            retrySync(ctx)
+        } },60000)
+    }
+    fun positionPreview(args: Map<*, *>): Map<String,Any?> {
+        val a=adapter ?: return mapOf("pending" to true)
+        return syncOwner?.preview(a.id,published.positionOwner,args) ?: mapOf("pending" to true)
+    }
+    private class Published(val state: Map<String, Any?> = emptyMap(), val owner: String? = null, val stats: Map<*, *>? = null, val fallback: RemoteReadingStats? = null, val positionOwner: String? = null)
     @Volatile private var published = Published()
     @Volatile private var loaded = false
     private var nextRefreshAt = 0L
@@ -29,7 +49,7 @@ object LibraryAccount {
         if (loaded) { main.post(done); return }
         val app = ctx.applicationContext
         queue.execute {
-            try { if (!loaded) { publish(adapter(app)); loaded = true } }
+            try { if (!loaded) { publish(adapter(app)); syncOwner(app).restorePreviews(adapter(app)); loaded = true } }
             catch (_: Exception) { published = Published() }
             finally { main.post(done) }
         }
@@ -37,7 +57,7 @@ object LibraryAccount {
     private fun publish(a: ServerAdapter) {
         val state = a.state(); val owner = a.owner()
         require(LuaValue.encode(state).size <= 16384)
-        published = Published(state, owner, owner?.let(a::stats),a.fallbackReadingStats())
+        published = Published(state, owner, owner?.let(a::stats),a.fallbackReadingStats(),a.positionOwner())
     }
     private fun command(ctx: Context, work: (ServerAdapter) -> Unit, done: (String?) -> Unit, cleanup: () -> Unit = {}, invalidate: Boolean = true) {
         val app = ctx.applicationContext
@@ -46,7 +66,7 @@ object LibraryAccount {
             var error: String? = null
             try { work(adapter(app)) } catch (e: ServerFailure) { error = e.kind }
             catch (_: Exception) { error = "unavailable" }
-            finally { cleanup() }
+            finally { cleanup(); runCatching { retrySync(app) } }
             runCatching { adapter?.let(::publish) }.onFailure { published = Published(); error = "unavailable" }
             if (invalidate) Worker.accountChanged(app)
             OLog.i("server.command ms=${(System.nanoTime()-start)/1_000_000}")
@@ -62,7 +82,12 @@ object LibraryAccount {
     fun useAccountLogin(ctx: Context, kind: String, done: (String?) -> Unit) = command(ctx, { it.useAccountLogin(kind) }, done)
     fun position(ctx: Context, document: String, update: Map<String,Any?>? = null, done: (Map<String,Any?>?,String?) -> Unit) {
         var result: Map<String,Any?>? = null
-        command(ctx, { result = it.position(document,update) }, { done(result,it) }, invalidate = false)
+        // Writes go through the same owner/policy journal as lifecycle captures.
+        command(ctx, { result = if(update==null) it.position(document,null) else syncOwner(ctx.applicationContext).write(it,document,update) }, { done(result,it) }, invalidate = false)
+    }
+    fun sync(ctx: Context, op: String, args: Map<*, *>, done: (Map<String,Any?>?,String?)->Unit) {
+        var result: Map<String,Any?>?=null
+        command(ctx,{ result=syncOwner(ctx.applicationContext).command(it,op,args) },{ done(result,it) },invalidate=false)
     }
     fun catalog(ctx: Context, page: Int = 1, limit: Int = 24, done: (Map<String,Any?>?,String?) -> Unit) {
         var result: Map<String,Any?>? = null

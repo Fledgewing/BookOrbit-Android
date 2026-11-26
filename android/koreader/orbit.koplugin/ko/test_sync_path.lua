@@ -7,7 +7,6 @@
 ---------------------------------------------------------------------------------------------
 
 function OrbitAndroid:testSyncPath()
-    local p = serverPlugin(self.ui)
     local lines = {}
     local t0 = now_s()
     local wait = InfoMessage:new{ text = _("Testing the sync path…") }
@@ -36,9 +35,7 @@ function OrbitAndroid:testSyncPath()
         end
         UIManager:close(wait)
         local text = table.concat(lines, "\n") .. "\n\n" .. string.format(_("Total %s."), fmt(now_s() - t0))
-            .. "\n" .. _("Step 4 only checks that the server answers at its base address; it uses no login.")
-        local cl = compatLines(serverPlugin(self.ui))
-        if #cl > 0 then text = text .. "\n\n" .. table.concat(cl, "\n") end
+            .. "\n" .. _("Server requests run in BookSync Companion; saved changes are sent through its sync owner.")
         UIManager:show(TextViewer:new{ title = _("Test sync path"), text = text }) -- gate: user action (menu)
     end
 
@@ -53,17 +50,12 @@ function OrbitAndroid:testSyncPath()
     else
         add(false, _("Companion answered"), nil, _("BookSync Companion is not installed: Wi-Fi stays as it is, Tailscale is woken directly."))
     end
-    if not p or not Server.signedIn(p) then
-        add(false, _("library plugin signed in"), nil, _("Sign in to library first."))
-        return show()
-    end
     local was_on = Wifi.acquire("test")
     held = true
     if was_on == false then add(Companion.has("wifi"), _("Wi-Fi was off: turning it on for the test"), nil, Companion.problem()) end
-    Net.up(p, { reason = "test", cap = 20, need_server = true }, function(ok, res)
+    Net.up(nil, { reason = "test", cap = 20, need_server = true }, function(ok, res)
         add(res.wifi_s ~= nil, _("Wi-Fi connected"), res.wifi_s, _("Turn Wi-Fi on, or check BookSync Companion's Wi-Fi permission."))
         add(res.vpn_s ~= nil, _("Tailscale up"), res.vpn_s, _("Tailscale not connected: open Tailscale and sign in."))
-        add(res.server_s ~= nil, _("library server answered"), res.server_s, _("No answer from the server: check Tailscale and the server address in library settings."))
         if not ok then return show() end
         local s0 = now_s()
         local reported = false
@@ -71,15 +63,10 @@ function OrbitAndroid:testSyncPath()
             if reported then return end
             reported = true
             add(err == nil, _("library plugin synced"), now_s() - s0,
-                err and (_("The plugin reported: ") .. tostring(Server.testError(p, err))) or nil)
+                err and (_("The plugin reported: ") .. tostring(err)) or nil)
             show()
         end
-        if not (Server.testReady(p)) then
-            add(true, _("library plugin step skipped: ") .. Compat.fallback("test_sync"), nil)
-            return show()
-        end
-        -- The plugin's own Sync now: this book in a book, the library otherwise.
-        Server.testSync(p, inBook(), plugin_done)
+        ReadingSync.run(inBook() and "manual" or "close",function(ok,why) plugin_done(ok and nil or why or "delivery pending") end)
         UIManager:scheduleIn(60, function() plugin_done("timeout") end)
     end)
 end

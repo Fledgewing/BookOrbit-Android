@@ -85,7 +85,6 @@ function OrbitAndroid:statusText()
     end
     local need = Shared.setupNeededText()
     if need then table.insert(parts, need) end
-    for _i, l in ipairs(compatLines(serverPlugin(self.ui))) do table.insert(parts, l) end
     return _("Status: ") .. table.concat(parts, " · ")
 end
 
@@ -237,8 +236,8 @@ function OrbitAndroid:menuItems()
             out[#out+1] = action("Sleep & power: open companion…", function() self:onOrbitOpenCompanion() end)
             out[#out+1] = action("Battery ›", function() BatteryUI.show() end)
             out[#out+1] = action("Sync and sleep now", function() self:onOrbitSyncAndSleep() end)
-            if Server.positionOn() and self.ui and self.ui.document then
-                out[#out+1] = action("Read from here everywhere", function() Server.readFromHere("menu") end)
+            if ReadingSync.on() and self.ui and self.ui.document then
+                out[#out+1] = action("Read from here everywhere", function() ReadingSync.readFromHere("menu") end)
             end
             return out
         end),
