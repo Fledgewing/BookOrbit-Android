@@ -111,6 +111,26 @@ return function(test,eq,ok,E,W,Widget,withHost)
             eq(E.S.home_layout.pages[1].placements[2].settings.src,"custom")
         end)
     end)
+    test("Book list save: Go to Home resolves the destination past hidden future pages",function()
+        withHost(function()
+            local d=E.Layout.default()
+            d.pages={
+                {id="hidden",tab="Home",name="Future",placements={{instance="future",widget="future",version=1,x=0,y=0,w=4,h=8,settings={}}}},
+                {id="target",tab="Home",name="My shelves",placements=setmetatable({},{__jsontype="array"})},
+                d.pages[1],
+            }
+            E.S.home_layout=d
+            local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+            h:showList("Saved filter","library/all")
+            ok(h:saveFilter({base_source="library/all",query={show="unread"}}))
+            local toast=W.shown[#W.shown]
+            ok(toast.title:find("My shelves",1,true))
+            toast.buttons[1][1].callback()
+            eq(h.list_layout,nil); eq(h.index,1)
+            local resolved=E.HomeHostPlan.resolve(E.S.home_layout,E.HomeHost.installed(),h.caps)
+            eq(resolved.pages[h.index].id,"target")
+        end)
+    end)
     test("Book list save: first fitting space, full-page naming, errors and captions",function()
         withHost(function()
             local d=E.Layout.default()
