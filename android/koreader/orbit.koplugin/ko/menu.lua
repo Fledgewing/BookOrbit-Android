@@ -314,8 +314,8 @@ function OrbitAndroid.readOnly(items)
     return out
 end
 
-function OrbitAndroid:lockedMenuItems()
-    local items = OrbitAndroid.readOnly(self:menuItems())
+function OrbitAndroid:lockedMenuItems(items)
+    items = OrbitAndroid.readOnly(items or self:menuItems())
     table.insert(items, 1, { text = _("Locked by the Settings PIN. Enter it to change these…"), separator = true,
         callback = function(touchmenu)
             if touchmenu and touchmenu.closeMenu then touchmenu:closeMenu() end
@@ -327,7 +327,12 @@ end
 -- The owned Home and reader gear share the existing Settings rows and PIN policy.
 function OrbitAndroid:showSettings()
     Shared.refresh("menu")
-    local items=Shared.pin_locked and self:lockedMenuItems() or self:menuItems()
+    -- Tools may prepend context actions such as Book info; Settings has only its groups.
+    local items={}
+    for _,row in ipairs(self:menuItems()) do
+        if row.settings_group then items[#items+1]=row end
+    end
+    if Shared.pin_locked then items=self:lockedMenuItems(items) end
     items.icon="appbar.settings"
     local menu=require("ui/widget/touchmenu"):new{width=Device.screen:getWidth(),tab_item_table={items}}
     UIManager:show(menu) -- gate: user action (BookSync settings)

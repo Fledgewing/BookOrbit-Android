@@ -157,15 +157,15 @@ return function(test,eq,ok,E,W,Widget)
         withHost(function()
             local owner=setmetatable({}, {__index=E.OrbitAndroid})
             local normal,locked=0,0
-            owner.menuItems=function() normal=normal+1; return {{text="Your server"}} end
-            owner.lockedMenuItems=function() locked=locked+1; return {{text="Locked"}} end
+            owner.menuItems=function() normal=normal+1; return {{text="Book info"},{text="Your server",settings_group="account"}} end
+            owner.lockedMenuItems=function(_,items) locked=locked+1; eq(#items,1); eq(items[1].settings_group,"account"); return {{text="Locked"}} end
             E.Shared.refresh=function() end
             E.Shared.pin_locked=false
             local menu=owner:showSettings()
-            eq(menu.tab_item_table[1][1].text,"Your server"); eq(normal,1); eq(locked,0)
+            eq(menu.tab_item_table[1][1].text,"Your server"); eq(#menu.tab_item_table[1],1); eq(normal,1); eq(locked,0)
             E.Shared.pin_locked=true
             menu=owner:showSettings()
-            eq(menu.tab_item_table[1][1].text,"Locked"); eq(normal,1); eq(locked,1)
+            eq(menu.tab_item_table[1][1].text,"Locked"); eq(normal,2); eq(locked,1)
         end)
     end)
     test("Home design: wide cover shelves read columns rather than a text-row limit",function()
