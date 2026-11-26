@@ -7,10 +7,10 @@ return function(test, eq, ok, here, Cache)
     end
     test("library: all screens and starter widgets declare strict budgets", function()
         local e = setmetatable({}, {__index=_G}); setfenv(assert(loadfile(root .. "logic/budgets.lua")), e)()
-        for _, name in ipairs({"home","library","details","series","settings","filter","editor","reader-top-panel"}) do
+        for _, name in ipairs({"home","library","details","series","settings","battery","filter","editor","reader-top-panel"}) do
             local b=e.Budgets.get("screens",name); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,1); ok(b.snapshotBytes<=16384)
         end
-        for _, name in ipairs({"continue-reading","booklist","library"}) do ok(e.Budgets.get("widgets",name)) end
+        for _, name in ipairs({"continue-reading","booklist","library","battery"}) do ok(e.Budgets.get("widgets",name)) end
         eq(pcall(e.Budgets.get,"widgets","undeclared"), false)
     end)
     test("library: bounded ready rows, one batch for a Home paint, no network/fork", function()
@@ -66,6 +66,19 @@ return function(test, eq, ok, here, Cache)
         e.LibraryAdapter.read=function() return {total=2},128 end
         local r=e.Library.paint("home"):widget("library")
         r:counts(); eq(r.usage.rows,1,"summary is a materialized row")
+    end)
+    test("library: battery widget uses one bounded local row and inherited timing", function()
+        local logs=0
+        local e=setmetatable({Cache=Cache,now_s=function() return 0 end,log=function() logs=logs+1 end,
+            LibraryAdapter={read=function(request)
+                local args=Cache.decode(request); eq(args.op,"battery"); eq(args.limit,1)
+                return {level=78,hours_usual_use=54},1024
+            end,request=function(batch) eq(#batch,1); return true end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "logic/budgets.lua")),e)(); setfenv(assert(loadfile(root .. "ko/library.lua")),e)()
+        local p=e.Library.paint("home"); eq(p:widget("battery"):battery().level,78)
+        local m=p:flush(); eq(m.rows,1); eq(m.roundTrips,1); eq(m.spawns,0); eq(m.network,0); eq(logs,2)
+        e.LibraryAdapter.read=function() return {level=78},16385 end
+        eq(pcall(function() e.Library.paint("battery"):battery() end),false)
     end)
     test("library: backend references cannot spread beyond adapters and frozen legacy seam", function()
         local baseline={}

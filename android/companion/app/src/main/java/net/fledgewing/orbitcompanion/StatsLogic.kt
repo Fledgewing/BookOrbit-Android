@@ -34,6 +34,7 @@ data class Snap(
     val partial: Int = 0,
     val temp: Int? = null,
     val volt: Int? = null,
+    val elapsed: Long? = null,
 ) {
     companion object {
         /** The service (re)started: nothing is known about the time before this row. */
@@ -206,7 +207,7 @@ object BatteryStats {
         for (s in rows) {
             val b = cur
             if (b != null) {
-                if (s.kind == Snap.START) {
+                if (gap(b.last, s)) {
                     out += b.build()
                     cur = null
                 } else {
@@ -227,6 +228,11 @@ object BatteryStats {
         return out
     }
 
+    /** A restart, backwards clock or wall/monotonic disagreement makes the gap unknown. */
+    fun gap(a: Snap, b: Snap): Boolean = b.kind == Snap.START || b.t <= a.t ||
+        (a.elapsed != null && b.elapsed != null &&
+            (b.elapsed <= a.elapsed || kotlin.math.abs((b.t-a.t)-(b.elapsed-a.elapsed)) > 60_000))
+
     /** The rate categories a segment adds to: "state" and "state|dimension=value". */
     fun categories(k: SegKey): List<String> {
         val s = k.state.key
@@ -234,7 +240,7 @@ object BatteryStats {
         val dims = when (k.state) {
             PowerState.STANDBY -> listOf("wifi_mode" to k.wmode, "radio" to onOff(k.radio))
             PowerState.READING -> listOf("content" to k.content, "wifi_mode" to k.wmode, "light" to onOff(k.light))
-            PowerState.AWAKE -> listOf("light" to onOff(k.light))
+            PowerState.AWAKE -> listOf("wifi_mode" to k.wmode, "light" to onOff(k.light))
             PowerState.CHARGING -> emptyList()
         }
         return listOf(s) + dims.filter { it.second != null }.map { "$s|${it.first}=${it.second}" }
@@ -294,7 +300,7 @@ object BatteryStats {
         for (i in all.indices) {
             val b = all[i]
             if (b.pages + b.full + b.partial > 0) upd(day(b.t, zone)) { it.copy(pages = it.pages + b.pages, full = it.full + b.full, partial = it.partial + b.partial) }
-            if (i == 0 || b.kind == Snap.START) continue
+            if (i == 0 || gap(all[i-1], b)) continue
             val a = all[i - 1]
             val st = PowerState.of(a)
             if (!a.charging && a.level >= 0 && b.level >= 0 && b.level < a.level) {

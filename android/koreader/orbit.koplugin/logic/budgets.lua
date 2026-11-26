@@ -5,7 +5,7 @@ local function budget(rows, bytes, ms)
     return { rows=rows, bytes=bytes, spawns=0, roundTrips=1, network=0,
         snapshotBytes=16384, targetMs=ms }
 end
-for _, id in ipairs({"home", "library", "details", "series", "settings", "filter", "editor", "reader-top-panel"}) do
+for _, id in ipairs({"home", "library", "details", "series", "settings", "battery", "filter", "editor", "reader-top-panel"}) do
     Budgets.screens[id] = budget(id == "home" and 128 or 32, id == "home" and 131072 or 32768,
         id == "home" and 500 or id == "editor" and 100 or 50)
 end

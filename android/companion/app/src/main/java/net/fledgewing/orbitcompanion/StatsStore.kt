@@ -20,7 +20,7 @@ import java.time.ZoneId
  * Raw rows for 90 days, daily rollups forever. Rolled up when the Battery page opens or the
  * service starts, never on a timer.
  */
-class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "stats.db", null, 1) {
+class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "stats.db", null, 2) {
     companion object {
         @Volatile
         private var inst: StatsStore? = null
@@ -34,7 +34,7 @@ class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applic
         db.execSQL(
             "CREATE TABLE snap(t INTEGER NOT NULL, kind TEXT NOT NULL, level INTEGER, charging INTEGER, screen INTEGER, " +
                 "radio INTEGER, vpn INTEGER, wmode TEXT, content TEXT, light INTEGER, bright INTEGER, " +
-                "pages INTEGER, full INTEGER, partial INTEGER, temp INTEGER, volt INTEGER)",
+                "pages INTEGER, full INTEGER, partial INTEGER, temp INTEGER, volt INTEGER, elapsed INTEGER)",
         )
         db.execSQL("CREATE INDEX snap_t ON snap(t)")
         db.execSQL(
@@ -48,18 +48,21 @@ class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applic
         db.execSQL("CREATE TABLE meta(k TEXT PRIMARY KEY, v TEXT)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) db.execSQL("ALTER TABLE snap ADD COLUMN elapsed INTEGER")
+    }
 
     private fun Boolean?.toInt(): Int? = this?.let { if (it) 1 else 0 }
     private fun Cursor.intOrNull(i: Int): Int? = if (isNull(i)) null else getInt(i)
     private fun Cursor.boolOrNull(i: Int): Boolean? = if (isNull(i)) null else getInt(i) != 0
 
+    @Synchronized
     fun insert(s: Snap) {
         val v = ContentValues().apply {
             put("t", s.t); put("kind", s.kind); put("level", s.level); put("charging", s.charging.toInt()); put("screen", s.screen.toInt())
             put("radio", s.radio.toInt()); put("vpn", s.vpn.toInt()); put("wmode", s.wmode); put("content", s.content)
             put("light", s.light.toInt()); put("bright", s.bright); put("pages", s.pages); put("full", s.full); put("partial", s.partial)
-            put("temp", s.temp); put("volt", s.volt)
+            put("temp", s.temp); put("volt", s.volt); put("elapsed", s.elapsed)
         }
         writableDatabase.insert("snap", null, v)
     }
@@ -67,15 +70,15 @@ class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applic
     fun snapsSince(t: Long): List<Snap> {
         val out = ArrayList<Snap>()
         readableDatabase.rawQuery(
-            "SELECT t, kind, level, charging, screen, radio, vpn, wmode, content, light, bright, pages, full, partial, temp, volt " +
-                "FROM snap WHERE t >= ? ORDER BY t, rowid",
+            "SELECT t, kind, level, charging, screen, radio, vpn, wmode, content, light, bright, pages, full, partial, temp, volt, elapsed " +
+                "FROM snap WHERE t >= ? ORDER BY rowid",
             arrayOf(t.toString()),
         ).use { c ->
             while (c.moveToNext()) {
                 out += Snap(
                     c.getLong(0), c.getString(1), c.getInt(2), c.getInt(3) != 0, c.getInt(4) != 0, c.boolOrNull(5), c.boolOrNull(6),
                     c.getString(7), c.getString(8), c.boolOrNull(9), c.intOrNull(10), c.getInt(11), c.getInt(12), c.getInt(13),
-                    c.intOrNull(14), c.intOrNull(15),
+                    c.intOrNull(14), c.intOrNull(15), if (c.isNull(16)) null else c.getLong(16),
                 )
             }
         }
@@ -144,7 +147,7 @@ class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applic
     )
 
     @Synchronized
-    fun view(now: Long, zone: ZoneId): View {
+    fun view(now: Long, zone: ZoneId, dayLimit: Int? = null): View {
         rollup(now, zone)
         val rolled = meta("rolled_until")?.toLongOrNull() ?: (BatteryStats.day(now, zone) - 1)
         val totals = HashMap<String, Sums>()
@@ -154,14 +157,23 @@ class StatsStore private constructor(ctx: Context) : SQLiteOpenHelper(ctx.applic
             }
         }
         val days = ArrayList<DayTotals>()
-        readableDatabase.rawQuery("SELECT day, used_pct, screen_min, standby_min, charge_min, pages, full, partial, charges FROM daily ORDER BY day", null).use { c ->
+        readableDatabase.rawQuery("SELECT day, used_pct, screen_min, standby_min, charge_min, pages, full, partial, charges FROM daily " + (dayLimit?.let { "WHERE day >= ${BatteryStats.day(now, zone)-it+1} " } ?: "") + "ORDER BY day", null).use { c ->
             while (c.moveToNext()) days += DayTotals(c.getLong(0), c.getInt(1), c.getDouble(2), c.getDouble(3), c.getDouble(4), c.getInt(5), c.getInt(6), c.getInt(7), c.getInt(8))
         }
         val rows = snapsSince(dayStart(rolled + 1, zone) - LOOKBACK_DAYS * DAY_MS)
         val live = BatteryStats.rollup(BatteryStats.segments(rows, now), zone).filterKeys { it.first > rolled }
         for ((k, s) in live) totals[k.second] = (totals[k.second] ?: Sums()) + s
         days += BatteryStats.daily(rows, zone, now).values.filter { it.day > rolled }.sortedBy { it.day }
-        return View(totals, days, rows.lastOrNull(), firstT() ?: now)
+        return View(totals, days.filter { dayLimit == null || it.day >= BatteryStats.day(now, zone)-dayLimit+1 }, rows.lastOrNull(), firstT() ?: now)
+    }
+
+    /** Worker-only normalized snapshot. Raw measurements stay in stats.db, never in Lua. */
+    @Synchronized
+    fun batterySnapshot(now: Long, zone: ZoneId): Map<String, Any?> {
+        val v = view(now, zone, 14)
+        val raw = snapsSince(now - BatteryStats.RAW_DAYS * DAY_MS)
+        return BatteryEstimate.snapshot(v.totals, v.days, v.last, BatteryStats.segments(raw, now), now, zone,
+            BatteryEstimate.usualDays(raw, now))
     }
 
     /** Segments over the raw window, for the export. */
@@ -184,7 +196,8 @@ class StatsRecorder(private val ctx: Context, private val prefs: Prefs) {
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) {
-            if (readBattery(intent)) record("battery")
+            if (intent.action == Intent.ACTION_TIME_CHANGED) record(Snap.START)
+            else if (readBattery(intent)) record("battery")
         }
     }
 
@@ -206,7 +219,7 @@ class StatsRecorder(private val ctx: Context, private val prefs: Prefs) {
         val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         ctx.registerReceiver(null, filter)?.let { readBattery(it) }
         record(Snap.START)
-        ctx.registerReceiver(batteryReceiver, filter)
+        ctx.registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED).apply { addAction(Intent.ACTION_TIME_CHANGED) })
         registered = true
         try {
             store.rollup(System.currentTimeMillis(), ZoneId.systemDefault())
@@ -245,7 +258,7 @@ class StatsRecorder(private val ctx: Context, private val prefs: Prefs) {
                 }
             }
             store.insert(Snap(now, kind, level, charging, screen, Net.wifiEnabled(ctx), Net.vpnUp(ctx), prefs.wifiMode.key,
-                book, light, bright, pages, full, partial, temp, volt))
+                book, light, bright, pages, full, partial, temp, volt, android.os.SystemClock.elapsedRealtime()))
         } catch (e: Exception) {
             OLog.w("stats: record $kind failed", e)
         }

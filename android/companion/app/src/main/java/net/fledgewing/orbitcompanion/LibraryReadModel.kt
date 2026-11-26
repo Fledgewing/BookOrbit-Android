@@ -2,7 +2,8 @@ package net.fledgewing.orbitcompanion
 
 /** Worker-owned projections in the existing cache DB. Plugin reads one small blob per operation.
  * Additive table: no schema reset, no second catalog, sync writer, credentials or network client. */
-class LibraryReadModel(private val store: CacheStore, private val clock: () -> Long = { System.currentTimeMillis() / 1000 }, private val log: (String) -> Unit = { OLog.i(it) }) {
+class LibraryReadModel(private val store: CacheStore, private val clock: () -> Long = { System.currentTimeMillis() / 1000 }, private val log: (String) -> Unit = { OLog.i(it) },
+    private val battery: () -> Map<String, Any?> = { BatteryEstimate.snapshot(emptyMap(), emptyList(), null, emptyList(), clock()*1000, java.time.ZoneOffset.UTC) }) {
     companion object {
         const val MAX_BYTES = 16384
         const val MAX_ROWS = 24
@@ -37,7 +38,8 @@ class LibraryReadModel(private val store: CacheStore, private val clock: () -> L
     private fun empty(saved: Boolean) = mapOf("items" to emptyList<Any>(), "total" to 0, "freshness" to freshness(saved), "empty" to if (saved) "No books" else "Not saved yet")
     private fun project(owner: String, a: Map<*, *>): Map<String, Any?> {
         val op = a["op"]
-        if (op == "capabilities") return mapOf("catalog" to true, "detail" to true, "download" to false,
+        if (op == "battery") return battery()
+        if (op == "capabilities") return mapOf("battery" to true, "catalog" to true, "detail" to true, "download" to false,
             "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false),
             "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
             "wantToRead" to true, "customFields" to false, "onDevice" to true,
