@@ -9,11 +9,11 @@ is superseded for Android. Firmware remains planned for X4 Pro, X4 and X3.
 
 - `ko/home.lua:215` supplies the existing reading gate for every show and repaint.
 - `ko/library.lua:6` supplies the caller-budget paint context; `:26` reads only
-  bounded projections and `:58` now exposes `facets`. The existing adapter delegates
+  bounded projections and `:59` now exposes `facets`. The existing adapter delegates
   to `ko/store.lua:107`, using the FFI connection in `ko/db.lua:64`, with no fork.
 - `logic/cache.lua:29` supplies canonical small selection comparison; the existing
   `logic/layout.lua:10` copy helper protects caller-owned data.
-- `LibraryReadModel.kt:13` publishes through the existing `CacheStore.kt:15`
+- `LibraryReadModel.kt:20` publishes through the existing `CacheStore.kt:15`
   SQLite store. Facets extend its existing source/membership scan and the existing
   `LibraryFilter.matches` predicate. No second catalog, sync writer or API client.
 - Existing `logic/sheet_layout.lua:21` is specifically the end-of-book block
