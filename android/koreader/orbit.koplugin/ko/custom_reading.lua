@@ -49,6 +49,11 @@ function Editor:rowWidget(block,w,h,mt)
             face.hash=tostring(face.hash) .. "-booksync-" .. delta
             face.is_real_bold=false
             face.embolden_half_strength=face.ftsize:getEmboldenHalfStrength(3/8*delta)
+            local fallback=face.getFallbackFont
+            face.getFallbackFont=function(num)
+                if not num or num==0 then return face end
+                return fallback and fallback(num)
+            end
         end
         local ink=delta<0 and BB.Color8 and BB.Color8(math.floor(math.min(200,-delta*60))) or BB.COLOR_BLACK
         local preview=require("ui/widget/textboxwidget"):new{
