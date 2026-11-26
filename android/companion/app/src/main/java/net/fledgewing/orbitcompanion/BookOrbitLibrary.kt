@@ -31,13 +31,16 @@ object BookOrbitLibrary {
             at = (raw["generatedAt"] as? String)?.takeIf { runCatching { java.time.Instant.parse(it) }.isSuccess })
     }
     /** Reuse Copies' account-scoped file ledger. Existence checks stay on the worker. */
-    fun localBooks(store: CacheStore, owner: String): Set<Long>? = localPaths(store, owner)?.keys
-    fun localPaths(store: CacheStore, owner: String): Map<Long, String>? {
+    fun localEntries(store: CacheStore, owner: String): List<Map<*, *>>? {
         val file = java.io.File(store.root, "copies/ask.lua")
         val ask = if (file.isFile) LuaValue.parse(file.readBytes()) as? Map<*, *> else null
         if (ask?.get("owner") != owner) return null
-        return (ask["books"] as? List<*>).orEmpty().mapNotNull { value ->
-            val b = value as? Map<*, *> ?: return@mapNotNull null
+        return (ask["books"] as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }
+    }
+    fun localBooks(store: CacheStore, owner: String): Set<Long>? = localPaths(store, owner)?.keys
+    fun localPaths(store: CacheStore, owner: String): Map<Long, String>? {
+        val entries = localEntries(store, owner) ?: return null
+        return entries.mapNotNull { b ->
             val path = b["path"] as? String ?: return@mapNotNull null
             (b["book_id"] as? Number)?.toLong()?.takeIf { java.io.File(LuaValue.utf8(path)).isFile }?.let { it to path }
         }.toMap()

@@ -45,6 +45,52 @@ function LibraryAdapter.request(requests)
     return true
 end
 
+-- Keep the existing sync writer and Wi-Fi lifecycle behind the adapter. No second outbox.
+function LibraryAdapter.syncCurrent(done)
+    local ui = liveUI()
+    local p = bookorbit(ui)
+    if not (p and ui and ui.document and hasHandler(p, "BookOrbitSyncBook")) then
+        done(false, "Sync unavailable")
+        return false
+    end
+    local document = ui.document
+    Wifi.acquire("reader-panel")
+    Net.up(p, {reason="reader-panel", cap=20, need_server=true}, function(ok)
+        if not ok then
+            Wifi.release("reader-panel")
+            done(false, "Offline · will sync when connected")
+            return
+        end
+        if liveUI() ~= ui or ui.document ~= document then
+            Wifi.release("reader-panel")
+            done(false, "Book closed · your place stays saved")
+            return
+        end
+        local completed = false
+        local function finish(err)
+            if completed then return end
+            completed = true
+            Wifi.release("reader-panel")
+            done(err == nil, err and "Sync failed · your place stays saved" or "Synced")
+        end
+        pluginEvent(ui, p, "BookOrbitSyncBook", {quiet=true, on_done=finish})
+        UIManager:scheduleIn(30, function() finish("timeout") end)
+    end)
+    return true
+end
+
+-- KOReader already computes this on page/position updates, even with its footer hidden.
+-- No document scan, sidecar read or second progress writer on a panel paint.
+function LibraryAdapter.readerPosition(path)
+    local ui = liveUI()
+    if not (ui and ui.document and ui.document.file == path) then return nil end
+    local footer = ui.view and ui.view.footer
+    local fraction = footer and footer.percent_finished
+    if type(fraction) == "number" and fraction == fraction and fraction >= 0 and fraction <= 1 then
+        return fraction
+    end
+end
+
 function LibraryAdapter.watch(enabled)
     LibraryAdapter.watching = enabled
     if enabled then LibraryAdapter.reset(); OC.watchChecks() end
