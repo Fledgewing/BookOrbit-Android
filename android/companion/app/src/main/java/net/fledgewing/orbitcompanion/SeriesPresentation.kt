@@ -22,6 +22,7 @@ object SeriesPresentation {
     }
     fun series(books: List<Map<String, Any?>>, title: String?, offset: Int, limit: Int): Map<String, Any?> {
         val sorted = books.sortedWith(order)
+        val dotOffset = if (sorted.size <= 24) 0 else offset / 24 * 24
         val current = sorted.indexOfFirst { state(it) == "reading" }
         val remaining = sorted.drop(current + 1).filter { state(it) != "read" }
         val next = remaining.filter { it["on_device"] == false }.take(3).map(::row)
@@ -30,7 +31,7 @@ object SeriesPresentation {
         val author = sorted.flatMap { (it["authors"] as? List<*>)?.filterIsInstance<String>().orEmpty() }.map(LuaValue::utf8).distinct().joinToString(" · ")
         return mapOf("items" to window, "row_count" to (1 + next.size + window.size), "title" to title,
             "subtitle" to LuaValue.str("${author}${if (author.isEmpty()) "" else " · "}${books.size} ${if (books.size == 1) "book" else "books"} · ${books.count { state(it) == "read" }} read, ${books.count { state(it) == "reading" }} reading"),
-            "dots" to sorted.drop(offset).take(24).map(::state), "dot_offset" to offset, "dot_caption" to if (sorted.size > 24) LuaValue.str("Books ${offset + 1}–${minOf(sorted.size, offset + 24)} of ${sorted.size}") else null,
+            "dots" to sorted.drop(dotOffset).take(24).map(::state), "dot_offset" to dotOffset, "dot_caption" to if (sorted.size > 24) LuaValue.str("Books ${dotOffset + 1}–${minOf(sorted.size, dotOffset + 24)} of ${sorted.size}") else null,
             "total" to books.size, "offset" to offset, "next" to (offset + window.size).takeIf { window.isNotEmpty() && it < sorted.size },
             "next_books" to next, "remaining_saved" to (remaining.isNotEmpty() && remaining.all { it["on_device"] == true }),
             "local_known" to books.all { it["on_device"] != null })

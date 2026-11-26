@@ -204,18 +204,18 @@ function HomeHost.create()
                 action=="group" and {group=row.group} or need.query,need.exclude_current)
         end
     end
-    function Host:showSeries(key)
+    function Host:showSeries(key,onBack)
         if self.series_key then return end
-        self.series_key,self.series_offset=key,0
+        self.series_key,self.series_offset,self.series_return=key,0,onBack
         self:rebuild(); UIManager:setDirty(self,"ui")
     end
     function Host:showList(title,source,query,exclude_current)
         if self.series_key or self.list_layout then
             self.catalog_history=self.catalog_history or {}
             self.catalog_history[#self.catalog_history+1]={series_key=self.series_key,series_offset=self.series_offset,
-                list_layout=self.list_layout,list_title=self.list_title,filter=self.filter,index=self.index,group_offsets=self.group_offsets}
+                list_layout=self.list_layout,list_title=self.list_title,filter=self.filter,index=self.index,group_offsets=self.group_offsets,series_return=self.series_return}
         end
-        self.series_key=nil; self.group_offsets={}
+        self.series_key=nil; self.series_return=nil; self.group_offsets={}
         if not self.list_layout then self.home_index=self.index end
         self.list_title=title or "Library"
         self.list_layout=Layout.default()
@@ -273,14 +273,17 @@ function HomeHost.create()
     end
     function Host:onClose()
         if self.series_key then
-            self.series_key=nil; self:rebuild(); UIManager:setDirty(self,"ui"); return true
+            local back=self.series_return
+            self.series_key=nil; self.series_return=nil
+            if back then back(); return true end
+            self:rebuild(); UIManager:setDirty(self,"ui"); return true
         end
         if self.catalog_history and #self.catalog_history>0 then
             if self.filter then self.filter:close(false) end
             local previous=table.remove(self.catalog_history)
             self.series_key,self.series_offset=previous.series_key,previous.series_offset
             self.list_layout,self.list_title,self.filter,self.index=previous.list_layout,previous.list_title,previous.filter,previous.index
-            self.group_offsets=previous.group_offsets
+            self.group_offsets=previous.group_offsets; self.series_return=previous.series_return
             self:rebuild(); UIManager:setDirty(self,"ui"); return true
         end
         if self.list_layout then

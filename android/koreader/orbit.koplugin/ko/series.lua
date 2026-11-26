@@ -151,9 +151,15 @@ function SeriesUI.groupPage(host,delta)
     host:rebuild(); UIManager:setDirty(host,"ui"); return true
 end
 -- Public entry for Details/Book info and the later end sheet, with no end transport dependency.
-function SeriesUI.show(key)
+function SeriesUI.show(key,onBack)
     if not key then return false end
-    if not HomeHost.foreground() and not HomeHost.show() then return false end
-    HomeHost.active:showSeries(key)
+    local wasHome=HomeHost.foreground()
+    if not wasHome and not HomeHost.show() then return false end
+    local host=HomeHost.active
+    host:showSeries(key,function()
+        if not wasHome then UIManager:close(host)
+        else host:rebuild(); UIManager:setDirty(host,"ui") end
+        if onBack then onBack() end
+    end)
     return true
 end

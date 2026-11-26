@@ -33,7 +33,7 @@ class SeriesPresentationTest {
         assertEquals(listOf("read","reading","unread","unread","unread","unread","unread"),result["dots"])
         assertEquals(4,result["next"])
         val page=SeriesPresentation.series(books,"Orbit",4,8)
-        assertEquals(3,(page["items"] as List<*>).size); assertNull(page["next"])
+        assertEquals(3,(page["items"] as List<*>).size); assertNull(page["next"]); assertEquals(7,(page["dots"] as List<*>).size)
     }
     @Test fun savedEmptyUnknownAndLongSeriesNeverClaimUnknownBooksAreOnDevice() {
         assertEquals(true,SeriesPresentation.series(listOf(book(1,local=true)),"Orbit",0,8)["remaining_saved"])

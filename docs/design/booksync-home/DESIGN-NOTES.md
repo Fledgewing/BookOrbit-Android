@@ -874,7 +874,8 @@ latency acceptance; the complete revision-16 prototype remains the target.
 The owned Home host now opens Series from grouped Library/Search headers and
 Book info/Details. `SeriesUI.show(opaqueKey)` is the entry for the later end sheet;
 it does not depend on end-of-book transport. Back restores the initiating list,
-its query, page and exclusion context. Search from Series returns to that Series.
+its query, page and exclusion context. Search from Series returns to that Series;
+Book info/Details entries return to their initiating panel.
 Primary and secondary membership comes from the existing adapter's saved catalog
 and context, not from title matching in the UI. Incomplete secondary publication
 says “Not saved yet”; missing identity and errors remain distinct from empty data.
