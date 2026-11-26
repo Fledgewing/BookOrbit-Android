@@ -17,17 +17,24 @@ class ConnectorTransportTest {
         val root = Files.createTempDirectory("connector-http").toFile()
         val server = ServerSocket(0,16,InetAddress.getLoopbackAddress())
         val headers = java.util.Collections.synchronizedList(mutableListOf<Map<String,List<String>>>())
+        val requests = java.util.Collections.synchronizedList(mutableListOf<Pair<String,String>>())
         val thread = Thread {
             try {
                 while (!server.isClosed) server.accept().use { socket ->
                     val reader = socket.getInputStream().bufferedReader()
-                    val path = reader.readLine().split(' ')[1].substringBefore('?')
+                    val requestLine = reader.readLine().split(' ')
+                    val path = requestLine[1].substringBefore('?')
                     val captured = mutableMapOf<String,List<String>>()
                     while (true) {
                         val line = reader.readLine() ?: break
                         if (line.isEmpty()) break
                         captured[line.substringBefore(':')] = listOf(line.substringAfter(':').trim())
                     }
+                    val length = captured.entries.firstOrNull { it.key.equals("Content-Length",true) }?.value?.single()?.toInt() ?: 0
+                    val input = CharArray(length)
+                    var read = 0
+                    while (read < length) { val n = reader.read(input,read,length-read); if (n < 0) break; read += n }
+                    requests.add(requestLine[0] to String(input))
                     headers.add(captured)
                     val text = when {
                         path.endsWith("/catalog") -> """<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Moon</title><link rel="http://opds-spec.org/acquisition" href="/api/v1/opds/1/download?fileId=1" type="application/epub+zip"/></entry></feed>"""
@@ -57,6 +64,8 @@ class ConnectorTransportTest {
             assertEquals(key,credentials.login("sync")!!.secret)
             val position = adapter.position("b".repeat(32))
             assertEquals(0.5,position["percentage"]); assertFalse(position.toString().contains("must-not-escape"))
+            adapter.position("b".repeat(32),mapOf("percentage" to 0.75,"position" to "next-position"))
+            assertTrue(requests.any { it.first == "PUT" && it.second.contains("next-position") && it.second.contains("0.75") })
             adapter.setLogin("opds",base,"fixture","opds-fixture-secret".toCharArray())
             val catalog = adapter.catalog()
             val row = (catalog["items"] as List<*>).single() as Map<*,*>

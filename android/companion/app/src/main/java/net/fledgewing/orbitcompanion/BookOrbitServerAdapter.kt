@@ -22,7 +22,8 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
             val c = credentials.login(kind)
             return credentials.status(kind) + ("available" to (c != null && (c.origin == "user" || accountState["signedIn"] == true)))
         }
-        return accountState + mapOf("account" to mapOf("set" to (accountState["signedIn"] == true), "origin" to "user".takeIf { accountState["signedIn"] == true }),
+        return mapOf("signedIn" to accountState["signedIn"], "expiresAt" to accountState["expiresAt"],
+            "account" to mapOf("set" to (accountState["signedIn"] == true), "origin" to "user".takeIf { accountState["signedIn"] == true }),
             "sync" to status("sync"), "opds" to status("opds"), "owner" to owner())
     }
     override fun signIn(server: String, username: String, password: CharArray) {
@@ -72,12 +73,16 @@ internal class BookOrbitServerAdapter(private val credentials: ServerCredentials
         val body = update?.let {
             val percentage = (it["percentage"] as? Number)?.toDouble() ?: throw IllegalArgumentException("percentage")
             require(percentage.isFinite() && percentage in 0.0..1.0)
-            mapOf("document" to document, "percentage" to percentage, "progress" to (it["position"] as? String)?.take(4096), "device" to "BookSync")
+            val position = it["position"] as? String
+            require(position == null || position.length <= 4096)
+            mapOf("document" to document, "percentage" to percentage, "progress" to position?.let(LuaValue::utf8), "device" to "BookSync")
         }
         val reply = transport.request(c.server, path, if (body == null) "GET" else "PUT", body, headers(c,"sync"))
         check(reply)
         val raw = reply.value as? Map<*, *> ?: emptyMap<Any,Any>()
-        return mapOf("position" to (raw["progress"] as? String)?.take(4096), "percentage" to (raw["percentage"] as? Number), "timestamp" to (raw["timestamp"] as? Number))
+        val position = raw["progress"] as? String
+        require(position == null || position.length <= 4096)
+        return mapOf("position" to position, "percentage" to (raw["percentage"] as? Number), "timestamp" to (raw["timestamp"] as? Number))
     }
     override fun catalog(page: Int, limit: Int): Map<String, Any?> {
         require(page in 1..10000 && limit in 1..24)

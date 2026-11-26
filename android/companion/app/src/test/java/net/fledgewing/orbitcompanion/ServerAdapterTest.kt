@@ -23,6 +23,7 @@ class ServerAdapterTest {
         val calls = mutableListOf<Pair<String,Map<String,String>>>()
         var existing: Any? = null
         var syncCreates = 0; var opdsCreates = 0
+        var lastBody: Map<String,Any?>? = null
         var lastDownload = false
         val now = Instant.parse("2026-11-25T12:00:00Z").epochSecond
         val account = BookOrbitAccount(credentials.accountVault, object : BookOrbitAccount.Http {
@@ -36,7 +37,7 @@ class ServerAdapterTest {
         }, {now}, logs::add, setupOnSignIn = { false })
         val adapter = BookOrbitServerAdapter(credentials,account,object : BookOrbitServerAdapter.ConnectorTransport {
             override fun request(server: String, path: String, method: String, body: Map<String, Any?>?, headers: Map<String, String>): BookOrbitAccount.Reply {
-                calls.add(path to headers)
+                calls.add(path to headers); lastBody = body
                 return BookOrbitAccount.Reply(200, when {
                     path.startsWith("/opds/catalog") -> """<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Moon</title><author><name>Fixture</name></author><link rel="http://opds-spec.org/acquisition" href="/api/v1/opds/1/download?fileId=1" type="application/epub+zip"/></entry></feed>"""
                     else -> mapOf("progress" to "position", "percentage" to 0.5, "userkey" to "must-not-escape")
@@ -121,6 +122,16 @@ class ServerAdapterTest {
         k.adapter.useAccountLogin("sync")
         assertEquals(direct,k.credentials.login("sync")!!.secret)
         assertEquals("account",k.origin("sync"))
+    }
+
+    @Test fun standaloneSyncPreservesLocatorsAndRejectsOversizeWritesWithoutSendingThem() {
+        val k = Kit(); k.user("sync")
+        k.adapter.position("a".repeat(32),mapOf("percentage" to 0.5,"position" to LuaValue.str("位置")))
+        assertEquals("位置",k.lastBody!!["progress"])
+        val count = k.calls.size
+        try { k.adapter.position("a".repeat(32),mapOf("percentage" to 0.5,"position" to "x".repeat(4097))); fail() }
+        catch (_: IllegalArgumentException) { }
+        assertEquals(count,k.calls.size)
     }
 
 }
