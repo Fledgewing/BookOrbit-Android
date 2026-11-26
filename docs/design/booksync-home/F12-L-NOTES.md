@@ -55,3 +55,12 @@ secret clearing and an oversized response. The internal adapter method `cachedRe
 `reading.stats` remains the existing UI operation with one aggregate per batch.
 Existing backend fixtures/tests moved into the
 adapter test package; reading and contract source guards now recurse into subpackages.
+
+F12-K integration keeps the native account, independent sync and OPDS transports, credential
+provisioning, OPDS parser and account-stat normalization in `server/bookorbit`. Shared
+`LibraryAccount` receives its session from registry wiring and catches only neutral
+`ServerFailure`; encrypted storage and normalized account-stat aggregation remain shared.
+The existing publisher accepts neutral account snapshots and passes them to projection
+composition. Native account launch/return is explicit lifecycle work, never a widget read.
+The account screen keeps F12-K's budget and timing spans. Shared Settings schema wording
+is neutral while stored wire values remain compatible.

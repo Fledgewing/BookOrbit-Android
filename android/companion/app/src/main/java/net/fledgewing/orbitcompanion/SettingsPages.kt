@@ -219,6 +219,9 @@ class SettingsActivity : SleepPickerPage() {
             schema.sections.forEach { s ->
                 out.addView(Ui.row(this, s.title, summary(s.id), Ui.value(this, "›"), onClick = { startActivity(SettingsPage.open(this, s.id)) }).apply { tag = "section:${s.id}" })
             }
+            out.addView(Ui.row(this, "Your server", "Account, sync and OPDS logins", Ui.value(this, "›"), onClick = {
+                startActivity(Intent(this, AccountActivity::class.java))
+            }).apply { tag = "server" })
             out.addView(Ui.row(this, "About", "Credits and legal notices", Ui.value(this, "›"), onClick = {
                 startActivity(Intent(this, AboutActivity::class.java))
             }).apply { tag = "about" })

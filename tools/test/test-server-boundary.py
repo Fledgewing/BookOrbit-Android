@@ -16,11 +16,13 @@ LUA_REGISTRY = LUA / 'main.lua'
 FIELDS = ("readStatus", "progressPercentage", "smartScopeId", "seriesName", "seriesId",
           "seriesIndex", "lastReadAt", "addedAt", "updatedAt", "contentVersion", "hasCover",
           "seriesSummary", "libraryVersion", "generatedAt", "finishedThisYear", "readingGoal",
-          "thumbnailUrl", "detailUrl", "downloadUrl", "userkey", "server_url")
+          "thumbnailUrl", "detailUrl", "downloadUrl", "userkey", "server_url",
+          "accessToken", "refreshToken", "accessTokenExpiresAt", "refreshTokenExpiresAt",
+          "clientKind", "deviceLabel", "readingSeconds", "durationSeconds", "sessionId", "dashboardConfig")
 WIRE_PROTOCOL = re.compile(
     r'/api/v1|/?koreader/plugin\b|\bcatalog/(?:books|sections|dashboard)|\b(?:' + '|'.join(FIELDS) +
     r')\b|smart[ _-]?scopes?|x-auth-user|x-auth-key|/koreader/(?:users|syncs|credentials)|'
-    r'/auth/(?:login|refresh|logout)|/opds(?:[/?\"\']|$)', re.I)
+    r'/auth/(?:login|refresh|logout)|/opds(?:-users\b|[/?\"\']|$)', re.I)
 PROTOCOL = re.compile(WIRE_PROTOCOL.pattern + r'|bookorbit', re.I)
 IMPLEMENTATION = re.compile(r'(?:net\.fledgewing\.orbitcompanion\.server\.[a-z]+|(?:ko|logic)[/.]server[/.]|[\"\']bookorbit_)')
 # Reviewed legacy facade consumers: permissions to call the facade, never protocol exemptions.
@@ -30,7 +32,7 @@ LUA_COMPAT_CONSUMERS = frozenset(LUA / 'ko' / name for name in (
     'wifi.lua', 'sleep.lua', 'module.lua', 'endsheet.lua', 'menu.lua',
 ))
 
-LEGACY_API = re.compile(r'\b(?:requestLifecycleOutboxDrain|requestProgressPull|requestProgressPush|fetchRemoteProgress|getLifecycleOutbox|getSyncCoordinator|last_remote_progress|pull_timestamp|push_timestamp|promptLogin|startSweep|enqueueLifecycleSnapshot|catalogSetReadStatus|catalogSetRating|catalogBooks|catalogBook|newClient|getDocumentDigest|getLastPercent|getLastProgress|remoteProgressIsNewer|isSamePlace|pages_before_update)\b')
+LEGACY_API = re.compile(r'\b(?:requestLifecycleOutboxDrain|requestProgressPull|requestProgressPush|fetchRemoteProgress|getLifecycleOutbox|getSyncCoordinator|last_remote_progress|pull_timestamp|push_timestamp|promptLogin|startSweep|enqueueLifecycleSnapshot|catalogSetReadStatus|catalogSetRating|catalogBooks|catalogBook|newClient|getDocumentDigest|getLastPercent|getLastProgress|remoteProgressIsNewer|isSamePlace|pages_before_update|isLoggedIn|_onSuspend)\b')
 
 
 

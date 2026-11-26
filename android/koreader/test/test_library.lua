@@ -25,7 +25,7 @@ return function(test, eq, ok, here, Cache)
     end)
     test("library: all screens and starter widgets declare strict budgets", function()
         local e = setmetatable({}, {__index=_G}); setfenv(assert(loadfile(root .. "logic/budgets.lua")), e)()
-        for _, name in ipairs({"home","library","details","series","settings","filter","editor","reader-top-panel"}) do
+        for _, name in ipairs({"home","library","details","series","settings","filter","editor","reader-top-panel","account"}) do
             local b=e.Budgets.get("screens",name); eq(b.spawns,0); eq(b.network,0); eq(b.roundTrips,name == "editor" and 0 or 1); ok(b.snapshotBytes<=16384)
         end
         for _, name in ipairs({"continue-reading","booklist","library"}) do ok(e.Budgets.get("widgets",name)) end
@@ -128,4 +128,29 @@ return function(test, eq, ok, here, Cache)
         local result = os.execute('python3 "' .. here .. '/../../../tools/test/test-server-boundary.py"')
         eq(result, 0, "server boundary guard")
     end)
+    test("library: account launch gets the server only inside its adapter", function()
+        local calls=0
+        local e=setmetatable({Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
+            serverPlugin=function() return {settings={server_url="https://library.invalid"}} end,
+            Jni={call=function(_,method,args)
+                eq(method,"companion.call.ACCOUNT_OPEN"); eq(args.server,"https://library.invalid")
+                calls=calls+1; return {ok="1"}
+            end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
+        eq(e.LibraryAdapter.openAccount(),true); eq(calls,1)
+    end)
+    test("library: server lifecycle imports only an opaque owner, never credentials", function()
+        local result={ok="1",owner="opaque-login"}
+        local e=setmetatable({Companion={AUTHORITY="trusted",PACKAGE="companion",workerProblem=function() end},
+            Jni={call=function(_,method,args) eq(method,"companion.call.SERVER_STATE"); eq(next(args),nil); return result end}}, {__index=_G})
+        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
+        eq(e.LibraryAdapter.accountReturned(),true); eq(e.LibraryAdapter.owner(),"opaque-login")
+        eq(e.LibraryAdapter.accountReturned(),false)
+        result.owner=nil
+        eq(e.LibraryAdapter.accountReturned(),true); eq(e.LibraryAdapter.managed_owner,nil)
+        local code=source(root .. "ko/server/bookorbit/library_bookorbit.lua")
+        eq(code:find('result.userkey',1,true),nil)
+        eq(code:find('result.secret',1,true),nil)
+    end)
+
 end

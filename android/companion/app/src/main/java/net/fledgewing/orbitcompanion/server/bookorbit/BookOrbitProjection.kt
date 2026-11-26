@@ -5,10 +5,13 @@ import net.fledgewing.orbitcompanion.LibraryReadModel.Companion.MAX_ROWS
 import net.fledgewing.orbitcompanion.LibraryReadModel.Companion.MAX_BYTES
 import net.fledgewing.orbitcompanion.LibraryReadModel.Companion.MAX_BATCH
 
-internal class BookOrbitProjection(private val store: CacheStore, private val clock: () -> Long = { System.currentTimeMillis()/1000 }) : ServerAdapter {
+internal class BookOrbitProjection(private val store: CacheStore, private val clock: () -> Long = { System.currentTimeMillis()/1000 },
+    private val fallbackReadingStats: (String) -> RemoteReadingStats? = { BookOrbitLibrary.readingStats(store) },
+    private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
+    private val accountStats: (String) -> Map<*, *>? = { null }) : ServerAdapter {
     override val id = "bookorbit"
     override fun cachedReadingStats(owner: String): RemoteReadingStats? =
-        if (store.meta("owner") == owner) BookOrbitLibrary.readingStats(store) else null
+        if (store.meta("owner") == owner) fallbackReadingStats(owner) else null
     private fun freshness(saved: Boolean): Map<String, Any?> = mapOf("saved" to saved,
         "generation" to store.meta("bulk_active"), "origin" to "cached-remote", "at" to if (saved) store.meta("bulk_at")?.toLongOrNull() else null)
     private fun empty(saved: Boolean) = mapOf("items" to emptyList<Any>(), "total" to 0, "freshness" to freshness(saved), "empty" to if (saved) "No books" else "Not saved yet")
@@ -26,13 +29,27 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             return if (current != null && book != null) result + mapOf("items" to listOf(book +
                 mapOf("progress" to current * 100, "progress_origin" to "local-reader"))) else result
         }
-        if (op == "capabilities") return mapOf("catalog" to true, "detail" to true, "download" to false,
-            "lists" to mapOf("read" to true, "save" to false), "progress" to mapOf("read" to true, "write" to false, "syncCurrent" to true),
-            "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
-            "stats" to (BookOrbitLibrary.readingStats(store)?.capabilities() ?: mapOf("days" to false, "streak" to false, "goal" to false, "finished" to false)),
-            "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
-            "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
-            "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
+        if (op == "account.state") return accountState()
+        if (op == "capabilities") {
+            val remote = fallbackReadingStats(owner)
+            val a = accountStats(owner).orEmpty()
+            val server = accountState()
+            val managed = server["owner"] == owner
+            val opds = (server["opds"] as? Map<*, *>)?.get("available") == true
+            val sync = (server["sync"] as? Map<*, *>)?.get("available") == true
+            return mapOf("catalog" to (!managed || opds), "detail" to !managed, "download" to opds,
+                "lists" to mapOf("read" to !managed, "save" to false), "progress" to mapOf("read" to (!managed || sync), "write" to sync, "syncCurrent" to !managed),
+                "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
+                "account" to server,
+                "stats" to mapOf("days" to (a["days"] != null || remote?.days != null), "streak" to (remote?.streak != null),
+                    "hours" to (a["hours"] != null), "sessions" to (a["sessions"] != null),
+                    "goal" to (a["goal"] != null || remote?.goalAvailable == true),
+                    "finished" to (a["finished"] != null || remote?.finished != null),
+                    "yearReview" to false, "activityDetails" to false, "celebrations" to false),
+                "readingStats" to true, "wantToRead" to true, "customFields" to false, "onDevice" to true,
+                "jobs" to mapOf("refresh" to BookOrbitLibrary.key(owner, "job", "refresh")),
+                "limits" to mapOf("rows" to MAX_ROWS, "bytes" to MAX_BYTES, "batch" to MAX_BATCH))
+        }
         if (op == "lists") {
             val g = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
             if (store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)

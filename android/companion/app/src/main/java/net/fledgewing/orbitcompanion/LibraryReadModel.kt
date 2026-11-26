@@ -9,7 +9,11 @@ class LibraryReadModel(
     private val readingStats: () -> Map<String, Any?> = {
         mapOf("state" to "not-saved", "freshness" to mapOf("saved" to false))
     },
-    private val adapter: ServerAdapter = ServerAdapters.forStore(store, clock = clock),
+    private val fallbackReadingStats: ((String) -> RemoteReadingStats?)? = null,
+    private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
+    private val accountStats: (String) -> Map<*, *>? = { null },
+    private val adapter: ServerAdapter = ServerAdapters.forStore(store, clock = clock,
+        fallbackReadingStats = fallbackReadingStats, accountState = accountState, accountStats = accountStats),
 ) {
     companion object {
         const val MAX_BYTES = 16384
@@ -23,7 +27,7 @@ class LibraryReadModel(
         require(requests.size <= MAX_BATCH)
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
-        val stats by lazy { ReadingStats.combine(readingStats(), adapter.cachedReadingStats(owner), clock()) }
+        val stats by lazy { AccountStats.combine(readingStats(), adapter.cachedReadingStats(owner), accountStats(owner), clock()) }
         for (encoded in requests) {
             val start = System.nanoTime()
             val request = encoded as? String ?: continue

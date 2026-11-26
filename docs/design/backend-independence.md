@@ -120,7 +120,11 @@ cross `ServerAdapter.cachedReadingStats` as `RemoteReadingStats`, never backend 
 publisher shares one lazy combined aggregate per batch. `CachedListProjection` owns the legacy
 sleep picker's cached-section translation; shared picker code receives `SleepChoices` and
 uses the neutral label Lists. Backend terms and authentication headers are guarded too.
-`ServerAdapters.kt` is the sole Kotlin composition root. Worker command routing, connector
+`ServerAdapters.kt` is the sole Kotlin composition root. It also constructs the native
+account session through `ServerAdapter`; `LibraryAccount` never imports an implementation
+and reports only neutral `ServerFailure` codes. Native authentication, sync/OPDS credentials,
+provisioning and raw account-stat normalization live inside the adapter. Shared encrypted
+storage and `AccountStats.combine` process only neutral values. Worker command routing, connector
 installation and cover setup use neutral service contracts; their protocol implementations
 are under `net.fledgewing.orbitcompanion.server.bookorbit`.
 

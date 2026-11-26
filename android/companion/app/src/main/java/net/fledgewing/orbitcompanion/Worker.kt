@@ -6,6 +6,7 @@ import android.os.Environment
 import java.io.File
 
 interface ServerRuntime {
+    fun accountChanged(ctx: Context)
     fun busy(): Boolean
     val mirrorRunning: Boolean
     fun progressLine(): String?
@@ -24,6 +25,7 @@ object Worker {
     const val ACTION_SQLITE_STRESS = "${Contract.PACKAGE}.action.SQLITE_STRESS"
     const val ACTION_PATCH = "${Contract.PACKAGE}.action.PATCH"
     const val CAP = "cache_worker"
+    internal fun accountChanged(ctx: Context) = ServerAdapters.runtime.accountChanged(ctx)
     fun root() = File(Environment.getExternalStorageDirectory(), "koreader/settings/orbit-cache")
     fun busy() = ServerAdapters.runtime.busy()
     val mirrorRunning get() = ServerAdapters.runtime.mirrorRunning

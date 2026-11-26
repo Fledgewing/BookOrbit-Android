@@ -5250,12 +5250,16 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "0.12 server-first stats with per-field provenance and local hourly/session fallback",
-          "reason": "deliberately deferred: Android build authorised 2026-11-25; Home integration and local finish/goal settings remain pending. Dashboard has no inclusion watermark, so local today stays separate.",
+          "note": "0.12 account-first days, hours, weekly sessions, finished counts and goals; cached connector fallback with per-field provenance",
+          "reason": "deliberately deferred: Android build authorised 2026-11-25; device acceptance and local finish/goal settings remain pending. No server inclusion watermark: local today stays separate.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-F-NOTES.md",
               "line": 3
+            },
+            {
+              "path": "docs/design/bookorbit-account.md",
+              "line": 1
             }
           ],
           "version": null
@@ -5509,6 +5513,65 @@
               "line": 20
             }
           ]
+        }
+      }
+    },
+    {
+      "id": "server-account",
+      "feature": "Independent account, sync and OPDS logins (0.12 Android foundation)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Three encrypted optional logins, provenance-aware sign-out, private sync/OPDS operations and account stats",
+          "reason": "deliberately deferred: plain interim screen; final owned client integration, browser/OIDC sign-in and device acceptance follow. Server-supported sync provisioning is reused; direct login remains available when it is unavailable.",
+          "evidence": [
+            {
+              "path": "docs/design/bookorbit-account.md",
+              "line": 1
+            }
+          ],
+          "version": null,
+          "deferred": "Browser/OIDC sign-in and final account screen"
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Account login and token storage follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware account integration follows.",
+          "evidence": [
+            {
+              "path": "docs/design/bookorbit-account.md",
+              "line": 1
+            }
+          ],
+          "version": null,
+          "deferred": "Firmware account adapter and platform credential storage"
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Account login and token storage follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware account integration follows.",
+          "evidence": [
+            {
+              "path": "docs/design/bookorbit-account.md",
+              "line": 1
+            }
+          ],
+          "version": null,
+          "deferred": "Firmware account adapter and platform credential storage"
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Account login and token storage follow Android",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware account integration follows.",
+          "evidence": [
+            {
+              "path": "docs/design/bookorbit-account.md",
+              "line": 1
+            }
+          ],
+          "version": null,
+          "deferred": "Firmware account adapter and platform credential storage"
         }
       }
     }

@@ -7,7 +7,7 @@ import java.io.File
  * use LibraryReadModel, never this transport-facing interface. */
 interface ServerAdapter {
     val id: String
-    fun project(owner: String, request: Map<*, *>): Map<String, Any?>
+    fun project(owner: String, request: Map<*, *>): Map<String, Any?> = unsupported()
     fun capabilities(owner: String) = project(owner, mapOf("op" to "capabilities"))
     fun catalog(owner: String, query: Map<String, Any?>, limit: Int, offset: Int = 0) =
         project(owner, mapOf("op" to "window", "source" to "all", "query" to query, "limit" to limit, "offset" to offset))
@@ -23,8 +23,19 @@ interface ServerAdapter {
     fun saveList(owner: String, key: String?, query: Map<String, Any?>): Map<String, Any?> = unsupported()
     fun cachedReadingStats(owner: String): RemoteReadingStats? = null
     fun readingStats(owner: String): Map<String, Any?> = unsupported()
-    fun signIn(server: String, user: String, secret: CharArray): Map<String, Any?> = try { unsupported() } finally { secret.fill('\u0000') }
-    fun signOut(): Map<String, Any?> = unsupported()
+    fun state(): Map<String, Any?> = unsupported()
+    fun signIn(server: String, username: String, password: CharArray): Unit = try { throw ServerFailure("unsupported") } finally { password.fill('\u0000') }
+    fun signOut(): Unit = throw ServerFailure("unsupported")
+    fun setLogin(kind: String, server: String, username: String, secret: CharArray, derivedKey: Boolean = false): Unit = try { throw ServerFailure("unsupported") } finally { secret.fill('\u0000') }
+    fun removeLogin(kind: String): Unit = throw ServerFailure("unsupported")
+    fun useAccountLogin(kind: String): Unit = throw ServerFailure("unsupported")
+    fun fallbackReadingStats(): RemoteReadingStats? = null
+    fun refreshStats() {}
+    fun owner(): String? = null
+    fun stats(owner: String): Map<*, *>? = null
+    fun position(document: String, update: Map<String, Any?>? = null): Map<String, Any?> = unsupported()
+    fun catalog(page: Int = 1, limit: Int = 24): Map<String, Any?> = unsupported()
+    fun download(key: String, destination: File): Boolean = false
     fun setupCredentials(values: Map<String, String>): Map<String, Any?> = unsupported()
     fun connectorCredentials(connector: String, user: String, secret: CharArray): Map<String, Any?> = try { unsupported() } finally { secret.fill('\u0000') }
     fun unsupported(): Map<String, Any?> = mapOf("error" to "unsupported")
@@ -51,3 +62,6 @@ interface ConnectorInstaller {
 interface CachedListProjection {
     fun read(sql: Sql, saved: SleepChoices?): SleepChoices?
 }
+
+/** Neutral, credential-free failure surfaced by any adapter. */
+open class ServerFailure(val kind: String) : Exception(kind)
