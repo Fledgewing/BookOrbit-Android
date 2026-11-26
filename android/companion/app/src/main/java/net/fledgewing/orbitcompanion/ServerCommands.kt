@@ -10,7 +10,7 @@ object ServerCommands {
     private class Pending(val at: Long, var body: Map<String,Any?>? = null)
     private val jobs = linkedMapOf<String,Pending>()
     @Synchronized fun start(ctx: Context, op: String, args: Map<*, *>): String {
-        require(op in setOf("sync.read","sync.write","catalog.window","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
+        require(op in setOf("storage.free","storage.folder","sync.read","sync.write","catalog.window","downloads.start","account.signIn","account.signOut","login.save","login.remove","login.replace"))
         val now = System.currentTimeMillis()
         jobs.entries.removeAll { now - it.value.at > 120000 }
         require(jobs.size < 32)
@@ -23,6 +23,7 @@ object ServerCommands {
         fun accountDone(error: String?) = finish(mapOf("state" to LibraryAccount.state()),error)
         fun text(key: String) = LuaValue.utf8(args[key] as? String ?: throw IllegalArgumentException("missing"))
         try { when (op) {
+            "storage.free", "storage.folder" -> Worker.localCommand(ctx,op,args,::finish)
             "account.signIn" -> LibraryAccount.signIn(ctx,text("server"),text("username"),text("password").toCharArray(),::accountDone)
             "account.signOut" -> LibraryAccount.signOut(ctx,::accountDone)
             "login.save" -> LibraryAccount.setLogin(ctx,text("kind"),text("server"),text("username"),text("password").toCharArray(),false,::accountDone)

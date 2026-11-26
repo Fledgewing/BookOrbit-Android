@@ -25,9 +25,9 @@ return function(test,eq,ok,E,W,Widget)
             return require(name)
         end
         E.HomeWidgets._ui=U
-        E.LibraryAdapter={watch=function() end,read=function(raw)
+        E.LibraryAdapter={watch=function() end,reset=function() end,read=function(raw)
             local a=E.Cache.decode(raw); reads[#reads+1]=a
-            if a.op == "capabilities" then return {lists={read=true}},80 end
+            if a.op == "capabilities" then return {lists={read=true},collections=true},80 end
             if a.op == "library.summary" then return {total=7,on_device=2,freshness={saved=true}},100 end
             if a.op == "battery" then return {level=78,hours_usual_use=54,screen_on={pct_per_hour=4.1},
                 standby={pct_per_hour=.6},recent_charges={{from_pct=12,to_pct=100}},freshness={saved=true},
@@ -72,14 +72,15 @@ return function(test,eq,ok,E,W,Widget)
     dofile((arg[0]:match("^(.*)/") or ".").."/booklist_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/home_editor_flows.lua")(test,eq,ok,E,W,Widget,withHost)
     dofile((arg[0]:match("^(.*)/") or ".").."/battery_flows.lua")(test,eq,ok,E,W,withHost)
+    dofile((arg[0]:match("^(.*)/") or ".").."/storage_flows.lua")(test,eq,ok,E,W,withHost)
     test("Home host: paint batches only installed visible widgets and page swipe",function()
         withHost(function(batches,reads)
             E.S.home_layout=E.Layout.default()
             table.insert(E.S.home_layout.pages,2,{id="second",tab="Home",name="More books",placements={{instance="more",widget="booklist",version=1,x=0,y=0,w=4,h=2,settings={src="wtr"}}}})
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
-            eq(#batches,1); eq(#batches[1],7) -- capabilities + six installed placements
+            eq(#batches,1); eq(#batches[1],8) -- capabilities + six placements + local storage
             eq(h.metrics.spawns,0); eq(h.metrics.network,0); eq(h.metrics.roundTrips,1)
-            eq(h.metrics.rows,7); ok(h.metrics.bytes<=E.Budgets.screens.home.bytes)
+            eq(h.metrics.rows,8); ok(h.metrics.bytes<=E.Budgets.screens.home.bytes)
             eq(h.index,1)
             h:onHomeSwipe(nil,{direction="west"}); eq(h.index,2)
             eq(#batches,2); eq(#batches[2],2,"future-only page is skipped; second Shelf still reads")
@@ -196,7 +197,7 @@ return function(test,eq,ok,E,W,Widget)
                     if E.Cache.decode(raw).op=="window" then error("unavailable read") end
                     return read(raw)
                 end
-                h:rebuild(); eq(h.metrics.rows,3); eq(#batches,2)
+                h:rebuild(); eq(h.metrics.rows,4); eq(#batches,2)
             end)
             E.HomeWidgets.renderers.booklist=render
             ok(success,err)
@@ -293,15 +294,18 @@ return function(test,eq,ok,E,W,Widget)
         withHost(function()
             E.S.home_layout=E.Layout.default()
             E.S.home_layout.pages[2].placements={{instance="summary",widget="library",version=1,x=0,y=0,w=2,h=2,settings={}}}
+            local oldHeight=E.Device.screen.getHeight
+            E.Device.screen.getHeight=function() return 1600 end
             local h=E.HomeHost.create(); E.HomeHost.active=h; W.shown={h}
+            E.Device.screen.getHeight=oldHeight
             h:onNext()
             local tile=h[1][1][6][1][1]
-            eq(tile[3].text,"2 on device ›")
-            eq(tile[4].text,"Authors ›"); eq(tile[5].text,"Series ›")
+            local links={}; for _,child in ipairs(tile) do if child.callback then links[child.text]=child end end
+            ok(links["2 on device ›"]); ok(links["Authors ›"]); ok(links["Series ›"]); ok(links["Collections ›"])
             for _,child in ipairs(tile) do if child.height then
                 ok(child.overlap_offset[2]+child.height<=tile.dimen.h)
             end end
-            tile[5].callback()
+            links["Series ›"].callback()
             eq(h.filter.model.source,"library/all"); eq(h.filter.model.query.group,"series")
         end)
     end)

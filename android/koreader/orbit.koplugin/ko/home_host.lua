@@ -99,7 +99,14 @@ function HomeHost.create()
                     return sharedStats
                 end
                 if self.list_layout then self.list_limit=need.limit end
-                return context:read(need.op,need)
+                local data=context:read(need.op,need)
+                if p.widget=="library" then
+                    local merged={}; for k,v in pairs(data) do merged[k]=v end
+                    merged.storage=context:storage()
+                    merged.collections_available=caps.collections==true
+                    return merged
+                end
+                return data
             end)
             result=ok and result or {error="Unavailable"}
             local signature=Cache.encode(result)
@@ -181,6 +188,10 @@ function HomeHost.create()
     function Host:dispatch(action,row,p)
         if action == "retry" then Library.retry(); self:rebuild(); UIManager:setDirty(self,"ui")
         elseif action == "battery" then BatteryUI.show()
+        elseif action == "storage" then StorageUI.show()
+        elseif action == "collections" then StorageUI.show("collections",function(row)
+            self:showList(row.title,{kind="collection",key=row.key})
+        end)
         elseif action == "book" then
             if self.caps.account and not row.local_path and not AccountPlan.login(self.account or {},"opds").available then
                 local prompt=require("ui/widget/buttondialog"):new{title="No OPDS login, so it can't download",buttons={{{text="Keep browsing",callback=function() UIManager:close(self.download_prompt) end},{text="Set up",callback=function() UIManager:close(self.download_prompt); AccountView.open("opds") end}}}}

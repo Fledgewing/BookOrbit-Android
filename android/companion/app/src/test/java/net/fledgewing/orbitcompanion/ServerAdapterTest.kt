@@ -32,7 +32,7 @@ class ServerAdapterTest {
         }
         override fun download(owner: String, key: String, file: String, revision: String?) = mapOf<String, Any?>("job" to "transfer:opaque")
     }
-    private class Store(root: File) : ProjectionStore {
+    private class Store(override val root: File) : ProjectionStore {
         private val sql = JdbcSql(File(root, "projection.sqlite3"))
         init { sql.exec("CREATE TABLE meta (k TEXT PRIMARY KEY,v TEXT)"); LibraryReadModel.initialize(sql); sql.exec("INSERT INTO meta VALUES ('owner','fixture')") }
         override fun db() = sql

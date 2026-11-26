@@ -10,6 +10,14 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
     private val accountState: () -> Map<String, Any?> = { mapOf("signedIn" to false) },
     private val accountStats: (String) -> Map<*, *>? = { null }) : ServerAdapter {
     override val id = "bookorbit"
+    override fun localFiles(owner: String): List<LocalBook>? = BookOrbitLibrary.localEntries(store, owner)?.mapNotNull { entry ->
+        val path = (entry["path"] as? String)?.let(LuaValue::utf8) ?: return@mapNotNull null
+        val id = (entry["book_id"] as? Number)?.toLong() ?: return@mapNotNull null
+        val raw = store.bookItem(id) as? Map<*, *> ?: emptyMap<Any, Any>()
+        val book = BookOrbitLibrary.summary(owner, raw, 0, true)
+        LocalBook(java.io.File(path), book["status"] == "finished", entry["md5"] as? String)
+    }
+
     override fun cachedReadingStats(owner: String): RemoteReadingStats? =
         if (store.meta("owner") == owner) fallbackReadingStats(owner) else null
     private fun freshness(saved: Boolean): Map<String, Any?> = mapOf("saved" to saved,
@@ -37,7 +45,7 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             val managed = server["owner"] == owner
             val opds = (server["opds"] as? Map<*, *>)?.get("available") == true
             val sync = (server["sync"] as? Map<*, *>)?.get("available") == true
-            return mapOf("catalog" to (!managed || opds), "detail" to !managed, "download" to opds,
+            return mapOf("collections" to !managed, "catalog" to (!managed || opds), "detail" to !managed, "download" to opds,
                 "lists" to mapOf("read" to !managed, "save" to false), "progress" to mapOf("read" to (!managed || sync), "write" to sync, "syncCurrent" to !managed),
                 "status" to mapOf("read" to true, "write" to false), "ratings" to mapOf("read" to true, "write" to false),
                 "account" to server,
@@ -75,6 +83,16 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
             }
             return mapOf("items" to rows,"total" to definitions.size,"next" to (offset+rows.size).takeIf { it<definitions.size },
                 "freshness" to freshness(store.meta("bulk_active")!=null))
+        }
+        if (op == "collections") {
+            val g=store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
+            if(store.meta("bulk_complete")?.toLongOrNull()!=g) return empty(false)
+            val limit=((a["limit"] as? Number)?.toInt() ?: 6).coerceIn(1,6)
+            val offset=((a["offset"] as? Number)?.toInt() ?: 0).coerceAtLeast(0)
+            val rows=store.db().query("SELECT id,name,n FROM bulk_sections WHERE g=? AND section='collections' ORDER BY pos LIMIT ? OFFSET ?",g,limit+1,offset) {
+                mapOf("key" to BookOrbitLibrary.key(owner,"collection",it.text(0) ?: ""),"title" to LuaValue.boundedText(it.text(1) ?: "",80),"count" to it.long(2))
+            }
+            return mapOf("items" to rows.take(limit),"next" to (offset+limit).takeIf { rows.size>limit },"freshness" to freshness(true))
         }
         if (op == "lists") {
             val g = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
@@ -120,20 +138,20 @@ internal class BookOrbitProjection(private val store: CacheStore, private val cl
         val source = if (op == "library.summary") "library/all" else a["source"]
         val kind = if (source is String) source else (source as? Map<*, *>)?.get("kind") as? String
         val sourceKey = (source as? Map<*, *>)?.get("key")
-        require(kind in setOf("library/all", "all", "reading", "want-to-read", "recently-added", "finished", "on-device", "list", "series", "author", "search"))
+        require(kind in setOf("library/all", "all", "reading", "want-to-read", "recently-added", "finished", "on-device", "list", "collection", "series", "author", "search"))
         val g = store.meta("bulk_active")?.toLongOrNull() ?: return empty(false)
         // Secondary contexts are not complete at base publication; never turn an unknown source into an empty list.
-        if (kind in setOf("series", "list") && store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
+        if (kind in setOf("series", "list", "collection") && store.meta("bulk_complete")?.toLongOrNull() != g) return empty(false)
         val localPaths = BookOrbitLibrary.localPaths(store, owner)
         val local = localPaths?.keys
         if ((a["field"] == "where" || kind == "on-device" || f["where"] in setOf("on-device", "server-only")) && local == null) return empty(false)
         val membership = when (kind) {
-            "list", "series" -> {
+            "list", "series", "collection" -> {
                 val id = BookOrbitLibrary.id(owner, kind, sourceKey) ?: return mapOf("error" to "missing")
-                val section = if (kind == "list") "smart-scopes" else "series"
+                val section = when(kind) { "list" -> "smart-scopes"; "collection" -> "collections"; else -> "series" }
                 val exists = store.db().query("SELECT 1 FROM bulk_sections WHERE g=? AND section=? AND id=? LIMIT 1", g, section, if (kind == "series") "series:$id" else id.toString()) { true }.isNotEmpty()
                 if (!exists) return mapOf("error" to "missing")
-                store.db().query("SELECT id,context FROM bulk_members WHERE g=? AND kind=? AND value=?", g, if (kind == "list") "smartScopeId" else "seriesId", id.toString()) {
+                store.db().query("SELECT id,context FROM bulk_members WHERE g=? AND kind=? AND value=?", g, when(kind) { "list" -> "smartScopeId"; "collection" -> "collectionId"; else -> "seriesId" }, id.toString()) {
                     it.long(0)!! to (it.bytes(1)?.let(LuaValue::parse) as? Map<*, *>).orEmpty()
                 }.toMap()
             }

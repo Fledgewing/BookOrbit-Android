@@ -243,7 +243,11 @@ function OrbitAndroid:menuItems()
             return out
         end),
         group("library", "Library & downloads", function()
-            local out = rows({"offline_cache", "mirror_covers", "storage_limit_mb", "keep_copies_current"})
+            local paint=Library.paint("settings-library")
+            local storage=paint:storage(); paint:flush()
+            local out = {action("Storage · "..(storage.free_label or "Space unavailable").." ›",function() StorageUI.show(nil,nil,function() self:showSettings("library") end) end),
+                action("Download folder · "..(storage.folder_label or "Not selected").." ›",function() StorageUI.show("folder",nil,function() self:showSettings("library") end) end)}
+            for _,row in ipairs(rows({"keep_copies_current", "offline_cache", "mirror_covers", "storage_limit_mb"})) do out[#out+1]=row end
             out[#out+1] = action("Full refresh", function() Library.fullRefresh() end)
             return out
         end),
@@ -325,12 +329,15 @@ function OrbitAndroid:lockedMenuItems(items)
 end
 
 -- The owned Home and reader gear share the existing Settings rows and PIN policy.
-function OrbitAndroid:showSettings()
+function OrbitAndroid:showSettings(groupId)
     Shared.refresh("menu")
     -- Tools may prepend context actions such as Book info; Settings has only its groups.
     local items={}
     for _,row in ipairs(self:menuItems()) do
-        if row.settings_group then items[#items+1]=row end
+        if row.settings_group then
+            if groupId==row.settings_group then items=row.sub_item_table_func(); break end
+            items[#items+1]=row
+        end
     end
     if Shared.pin_locked then items=self:lockedMenuItems(items) end
     items.icon="appbar.settings"

@@ -28,6 +28,7 @@ class LibraryReadModel(
         require(requests.size <= MAX_BATCH)
         // Never take ownership from a read command, nor expose a prior account's data.
         if (store.meta("owner") != owner) return false
+        val storage by lazy { DeviceStorage(store, adapter) }
         val power by lazy { battery() }
         val stats by lazy { AccountStats.combine(readingStats(), adapter.cachedReadingStats(owner), accountStats(owner), clock()) }
         for (encoded in requests) {
@@ -38,6 +39,7 @@ class LibraryReadModel(
             store.transaction {
                 if (store.meta("owner") != owner) return@transaction
                 val result = try { when (args["op"]) {
+                    "storage.summary" -> storage.summary(owner,(args["exclude_path"] as? String)?.let(LuaValue::utf8),(args["current_folder"] as? String)?.let(LuaValue::utf8))
                     "reading.stats" -> stats
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power
