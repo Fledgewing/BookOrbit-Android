@@ -34,6 +34,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
         }
         sql = s
         BulkCatalog.initialize(s)
+        LibraryReadModel.initialize(s)
         return s
     }
 
@@ -55,7 +56,7 @@ class CacheStore(val root: File, private val log: (String) -> Unit = { OLog.i(it
 
     /** Another account or server: everything goes (the cache, the run's jobs and the pickers' tables). */
     fun wipe(why: String) {
-        transaction { (TABLES + BulkCatalog.tables).forEach { db().exec("DELETE FROM $it") } }
+        transaction { (TABLES + BulkCatalog.tables + "library_views").forEach { db().exec("DELETE FROM $it") } }
         log("store: cleared ($why)")
     }
 

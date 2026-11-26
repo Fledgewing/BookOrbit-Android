@@ -147,6 +147,7 @@ object BulkCatalog {
                 val saved=store.bookItem(id) as? Map<*,*> ?: continue
                 val updated=saved.entries.associate {it.key.toString() to it.value}.toMutableMap()
                 for(field in listOf("progressPercentage","lastReadAt","readStatus","addedAt","updatedAt","hasCover","thumbnailUrl","detailUrl")) updated[field]=row[field]
+                for(field in listOf("rating","pageCount","tags")) if(row.containsKey(field)) updated[field]=row[field]
                 store.db().exec("UPDATE bulk_books SET item=?,status=?,added=?,updated=? WHERE g=? AND id=?",LuaValue.encode(updated),status(updated["readStatus"]),updated["addedAt"],updated["updatedAt"],g,id)
                 store.db().exec("UPDATE books SET item_at=? WHERE id=?",at,id)
             }

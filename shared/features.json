@@ -5191,6 +5191,62 @@
       "settings_keys": [
         "recommended_choice"
       ]
+    },
+    {
+      "id": "reading-insights",
+      "feature": "Local Year, This week, hourly reading and Records widgets (0.12 foundation)",
+      "category": "Behaviour",
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "0.12 local aggregates and standalone renderers",
+          "reason": "deliberately deferred: Android build authorised 2026-11-25; Home host wiring, finish ledger and goal settings remain pending.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-F-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Firmware implementation deferred",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-F-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Firmware implementation deferred",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-F-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Firmware implementation deferred",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-F-NOTES.md",
+              "line": 3
+            }
+          ],
+          "version": null
+        }
+      },
+      "deferred": "Home host integration, local finish ledger and goal settings; firmware renderers."
     }
   ],
   "release_evidence": {
