@@ -88,8 +88,16 @@ class DeviceStorageTest {
         val current=File(volume,"Existing books").apply { mkdirs() }
         val data=storage.summary("fixture",currentFolder=current.path)
         assertEquals("/Existing books",LuaValue.utf8(data["folder_label"] as String))
-        assertEquals(current.path,LuaValue.utf8(data["download_path"] as String))
+        assertEquals(current.canonicalPath,LuaValue.utf8(data["download_path"] as String))
         assertEquals("Not selected",storage.summary("fixture")["folder_label"])
+    }
+
+    @Test fun clearCoversIncludesOwnedAccountSubfolders()=fixture { volume,_,_,storage ->
+        val cover=File(volume,"covers/account-cache/1.jpg").apply { requireNotNull(parentFile).mkdirs(); writeBytes(ByteArray(100)) }
+        val action=actions(storage.summary("fixture")).single()
+        assertEquals("covers",action["id"]); assertEquals(100L,action["bytes"])
+        storage.command("fixture","storage.free",mapOf("action" to "covers","token" to action["token"]))
+        assertFalse(cover.exists()); assertTrue(actions(storage.summary("fixture")).isEmpty())
     }
 
 }

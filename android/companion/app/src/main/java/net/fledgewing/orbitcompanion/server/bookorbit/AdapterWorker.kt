@@ -86,7 +86,7 @@ object AdapterWorker : ServerRuntime {
                 val storage = DeviceStorage(store, ServerAdapters.forStore(store))
                 val result = storage.command(owner,op,args)
                 val requests=store.db().query("SELECT request FROM library_views WHERE owner=?",LuaValue.utf8(owner)) { it.text(0)!! }
-                    .filter { raw -> (LuaValue.parse(raw.toByteArray(Charsets.ISO_8859_1)) as? Map<*,*>)?.get("op") in setOf("storage.summary","library.summary","window","book","reader") }
+                    .filter { raw -> (LuaValue.parse(raw.toByteArray(Charsets.ISO_8859_1)) as? Map<*,*>)?.get("op") in setOf("storage.summary","library.summary","window","book","reader","cover") }
                 val model=LibraryReadModel(store)
                 requests.chunked(LibraryReadModel.MAX_BATCH).forEach { model.publish(owner,it) }
                 worker().event(mapOf("kind" to "library", "owner" to owner))
