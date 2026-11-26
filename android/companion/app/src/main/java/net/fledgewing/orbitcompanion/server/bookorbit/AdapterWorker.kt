@@ -71,6 +71,23 @@ object AdapterWorker : ServerRuntime {
         worker().event(mapOf("kind" to "native_footer_repair", "before" to before, "after" to after, "token" to token))
     }
 
+    /** Invalidate normalized views after a private account command, using the existing writer queue. */
+    override fun localCommand(ctx: Context, op: String, args: Map<*, *>, done: (Map<String, Any?>?, String?) -> Unit) {
+        app = ctx.applicationContext
+        synchronized(lock) { patches.addLast {
+            try {
+                val store = worker().store
+                val owner = store.meta("owner") ?: throw IllegalArgumentException("owner")
+                val storage = DeviceStorage(store, ServerAdapters.forStore(store))
+                val result = storage.command(owner,op,args)
+                LibraryReadModel(store).refreshLocalFiles(owner)
+                worker().event(mapOf("kind" to "library", "owner" to owner))
+                done(result,null)
+            } catch (_: Exception) { done(null,"unavailable") }
+        }; lock.notifyAll() }
+        start()
+    }
+
     /** Ownership changes wait until the active catalog writer has stopped. Lifecycle/position
      * queues are untouched; the same sole writer applies the cache transition afterward. */
     private fun applyAccountChange() {
