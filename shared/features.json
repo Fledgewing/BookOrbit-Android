@@ -5298,6 +5298,61 @@
           ]
         }
       }
+    },
+    {
+      "id": "owned-home",
+      "feature": "Opt-in BookSync Home with Continue reading, Shelf and Lists",
+      "category": "Behaviour",
+      "settings_keys": [
+        "home_screen"
+      ],
+      "platforms": {
+        "android": {
+          "status": "partial",
+          "note": "Implemented on feature/0.12 behind Home screen; legacy Home remains the default",
+          "reason": "deliberately deferred: device acceptance and remaining Home widgets follow the staged Android build",
+          "evidence": [
+            {
+              "path": "android/koreader/orbit.koplugin/ko/home_host.lua",
+              "line": 1
+            }
+          ],
+          "deferred": "Full widget library, cached covers and richer book actions"
+        },
+        "x4_pro": {
+          "status": "missing",
+          "note": "Owned Home host follows the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-C-NOTES.md",
+              "line": 3
+            }
+          ]
+        },
+        "x4": {
+          "status": "missing",
+          "note": "Owned Home host follows the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-C-NOTES.md",
+              "line": 3
+            }
+          ]
+        },
+        "x3": {
+          "status": "missing",
+          "note": "Owned Home host follows the Android build",
+          "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows later",
+          "evidence": [
+            {
+              "path": "docs/design/booksync-home/F12-C-NOTES.md",
+              "line": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "release_evidence": {

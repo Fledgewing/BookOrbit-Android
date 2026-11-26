@@ -15,6 +15,10 @@ CrossInk 2.x only; 1.6 is retired).
 
 ## Next release (0.12): BookSync Home
 
+| Outcome | Platforms | Status |
+|---|---|---|
+| Opt-in owned Home host with paged placements, isolated Continue reading, Shelf and Lists widgets, and one budgeted batch per paint. | Android; X4 Pro, X4, X3 later | building (authorised 2026-11-25; device acceptance pending) |
+
 The release after 0.11.4 graduates from previews and release candidates. Built in parallel on the
 `feature/0.12` branch while 0.11.4 stabilises on `main`; design and mockups need approval first
 ([BookSync Home design](docs/design/booksync-home/DESIGN.md), in progress). This is the first step
@@ -24,7 +28,7 @@ becomes a data source.
 **Widget layout engine and budgeted host contracts:** versioned layouts, immutable class
 projections, M8C defaults, pure editing and previous-valid recovery — Android building
 (maintainer-approved 2026-11-25); X4 Pro, X4 and X3 deferred to the firmware implementation.
-The engine exposes no new screen yet; the renderer/editor host is the next slice.
+The layout editor and further widgets build on this engine.
 
 All four remaining parity gaps below ship in 0.12 (maintainer ruling 2026-11-25);
 design and mockup approval still apply.

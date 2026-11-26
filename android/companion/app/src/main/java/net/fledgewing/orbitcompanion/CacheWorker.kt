@@ -971,6 +971,7 @@ class CacheWorker(
                 r.pct = pct.toLong(); r.done = pct.toLong(); writeStatus(r, true)
             }, log, dataRoom={growth -> plan.limit==null || room(r,growth,false,st.fileBytes())})
             val why = fast.run()
+            event(mapOf("kind" to "library_source", "owner" to plan.owner))
             if (why == "storage limit") r.limitNote = mapOf("at" to now(), "limit" to plan.limit,
                 "text" to "Storage limit reached. Protected offline data is kept. Raise the limit in BookSync settings, then try Full refresh again.")
             if (why != "finished") r.errors++
