@@ -170,13 +170,16 @@ function C.panelRows(ui,refresh,screen)
         for _,choice in ipairs({pair[1],pair[2],"custom"}) do
             local custom=choice=="custom"
             local label=custom and ("Custom · " .. ReadingStyle.label(Library.readingCustom(screen),key)) or ReadingStyle.presets[key][choice][1]
-            cells[#cells+1]={text=(selected[key]==choice and "✓ " or "") .. ReadingStyle.names[key] .. "\n" .. label .. (custom and selected[key]==choice and " ✎" or ""),
+            local prefix=selected[key]==choice and "✓ " or ""
+            local suffix=custom and selected[key]==choice and " ✎" or ""
+            cells[#cells+1]={text=prefix .. ReadingStyle.names[key] .. "\n" .. label .. suffix,
+                display_text=prefix .. label .. suffix,
                 callback=function()
                     if ReadingStyle.tap(selected[key],choice)=="edit" then C.open(key,ui,refresh)
                     else Library.readingApply(ui,key,choice,nil,screen); refresh() end
                 end}
         end
-        rows[#rows+1]={kind="reading-choices",choices=cells}
+        rows[#rows+1]={kind="reading-choices",group_label=ReadingStyle.names[key],key=key,choices=cells}
     end
     return rows
 end

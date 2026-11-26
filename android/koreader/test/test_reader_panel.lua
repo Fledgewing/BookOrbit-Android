@@ -33,5 +33,6 @@ return function(test,eq,ok,here)
             eq(R.fontSize(size,-1),sizes[(i-2)%#sizes+1])
         end
         eq(R.fontSize(23,1),24); eq(R.fontSize(100,-1),24)
+        eq(R.sizeDots(16),"●○○○○○"); eq(R.sizeDots(22),"●●●●○○"); eq(R.sizeDots(27),"●●●●●●")
     end)
 end

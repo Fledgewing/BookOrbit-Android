@@ -7,7 +7,7 @@ adapter and staged-delivery contracts in DESIGN §3.5, §6 and §8.5 still apply
 No device, USB, firmware, release or tag operation is part of this change.
 
 The existing reader owner (`ko/reader_panel.lua:4`) retains EndSheet's measured
-rows (`ko/endsheet.lua:241`) and SheetLayout (`logic/sheet_layout.lua:61`). Its
+rows (`ko/endsheet.lua:241`) and SheetLayout (`logic/sheet_layout.lua:62`). Its
 header orders Home, title/author, Sync or account setup, Settings and bookmark;
 the next band orders Contents, Bookmarks, Search, Go to, Book info and the
 KOReader escape. Book info and Details retain their existing bounded progress
@@ -16,7 +16,7 @@ check; completion cannot reopen a dismissed panel.
 
 The separate bottom panel contains the chapter/page line, chapter arrows and
 touch scrubber, then Font/Size, Margins/Line spacing, Contrast/Status bar in two
-columns, hardware-supported Light/Warmth sliders, More reading settings and
+columns with group headings and a six-step size indicator, hardware-supported Light/Warmth sliders, More reading settings and
 Edit presets. The merged Custom owner (`ko/custom_reading.lua:162`) still applies
 a Custom choice first and edits it on the next tap. Edit presets opens the
 existing Reading settings group with the existing Settings PIN policy.

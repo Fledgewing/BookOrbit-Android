@@ -42,8 +42,18 @@ end
 function ReaderSheet:buttonTable(options)
     for _,row in ipairs(options.buttons) do for _,cell in ipairs(row) do
         cell.height=math.max(self.metrics.button,cell.height or 0)
-        cell.font_size=14; cell.font_bold=false
+        cell.font_size=cell.font_size or 14; cell.font_bold=false
     end end
+    local buttons={}
+    for _,row in ipairs(options.buttons) do
+        local cells={}
+        for _,cell in ipairs(row) do
+            local copy={}; for key,value in pairs(cell) do copy[key]=value end
+            copy.text=cell.display_text or cell.text; cells[#cells+1]=copy
+        end
+        buttons[#buttons+1]=cells
+    end
+    options.buttons=buttons
     local table=require("ui/widget/buttontable"):new(options)
     for _,row in ipairs(table.buttons_layout or {}) do for _,button in ipairs(row) do self:control(button) end end
     return table
@@ -98,7 +108,13 @@ function ReaderSheet:rowWidget(block,w,h,mt)
         if block.kind=="reader-actions" then
             for _,cell in ipairs(cells) do cell.icon=nil end
         end
-        return self:buttonTable{width=w,buttons={cells},zero_sep=true}
+        local choices=self:buttonTable{width=w,buttons={cells},zero_sep=true}
+        if block.row.group_label then
+            return require("ui/widget/verticalgroup"):new{align="left",
+                require("ui/widget/textwidget"):new{text=block.row.group_label,max_width=w,
+                    face=require("ui/font"):getFace("cfont",14),bold=true},choices}
+        end
+        return choices
     elseif block.kind=="reader-header" then
         local row=block.row
         local group=require("ui/widget/horizontalgroup"):new{}
@@ -137,8 +153,11 @@ function ReaderSheet:rowWidget(block,w,h,mt)
     elseif block.kind=="reader-grid" then
         local group=require("ui/widget/horizontalgroup"):new{}
         for _,row in ipairs(block.row.groups) do
-            table.insert(group,self:buttonTable{
-                width=math.floor(w/2),buttons={row.choices},zero_sep=true})
+            local width=math.floor(w/2)
+            table.insert(group,require("ui/widget/verticalgroup"):new{align="left",
+                require("ui/widget/textwidget"):new{text=row.group_label or "",max_width=width,
+                    face=require("ui/font"):getFace("cfont",14),bold=true},
+                self:buttonTable{width=width,buttons={row.choices},zero_sep=true}})
         end
         return group
     elseif block.kind=="reader-position" then
@@ -170,7 +189,9 @@ function ReaderSheet:rowWidget(block,w,h,mt)
             self:touchControl(area,function() r.set(math.min(100,r.value+10)) end)
             table.insert(group,area)
         end
-        return group
+        return require("ui/widget/verticalgroup"):new{align="left",
+            require("ui/widget/textwidget"):new{text=#block.row.controls>1 and "Front light & warmth" or "Front light",max_width=w,
+                face=require("ui/font"):getFace("cfont",14),bold=true},group}
     elseif block.kind=="scrubber" then
         local r=block.row
         local owner=self
@@ -308,12 +329,11 @@ function ReaderPanel.show(ui, screen, key, reuse, attempt)
         }
         local quick=CustomReading and CustomReading.panelRows(ui,refresh,screen) or {}
         local settings=Library.readerSettings(ui)
-        local size={kind="reading-choices",choices={}}
-        for _,delta in ipairs({-1,1}) do
-            size.choices[#size.choices+1]={text=(delta<0 and "A−" or "A+").." · "..settings.size.." pt",
-                callback=action("size",ReaderPanelPlan.fontSize(settings.size,delta),true),height=50}
-        end
-        local toggles={kind="reading-choices",choices={
+        local size={kind="reading-choices",group_label="Size · "..settings.size.." pt",choices={
+            {text="A−",font_size=14,callback=action("size",ReaderPanelPlan.fontSize(settings.size,-1),true)},
+            {text=ReaderPanelPlan.sizeDots(settings.size),font_size=12,enabled=false,callback=function() end},
+            {text="A+",font_size=24,callback=action("size",ReaderPanelPlan.fontSize(settings.size,1),true)}}}
+        local toggles={kind="reading-choices",group_label="Status bar",choices={
             {text=(settings.status and "✓ " or "").."Bottom bar",callback=action("status",nil,true),height=50},
             {text=(settings.clock and "✓ " or "").."Clock",callback=action("clock",nil,true),height=50}}}
         if #quick>0 then

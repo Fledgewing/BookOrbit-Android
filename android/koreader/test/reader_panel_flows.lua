@@ -338,8 +338,17 @@ return function(here, test, ok, eq)
         local settings=E.Library.readerSettings(ui); eq(settings.light,30); eq(settings.warmth,40)
         E.ReaderPanel.show(ui,"reader-bottom-panel")
         local sheet=E.ReaderPanel.sheet
-        local controls
-        for _,r in ipairs(sheet:rows()) do if r.kind=="reader-lights" then controls=r.controls end end
+        local controls,headings={},{}
+        for _,r in ipairs(sheet:rows()) do
+            if r.kind=="reader-lights" then controls=r.controls end
+            if r.kind=="reader-grid" then
+                for _,group in ipairs(r.groups) do headings[#headings+1]=group.group_label end
+                if r.groups[2].group_label:find("Size",1,true) then
+                    local size=r.groups[2]; eq(size.choices[2].text,"●●●●○○"); eq(size.choices[2].enabled,false)
+                end
+            end
+        end
+        eq(table.concat(headings,","),"Font,Size · 22 pt,Margins,Line spacing,Contrast,Status bar")
         eq(#controls,2); controls[1].set(60); eq(W.light,60); controls[2].set(70); eq(W.warmth,70)
         E.state.module={showSettings=function(_,group) W.settings_group=group end}
         row(E,"Edit presets").action(); eq(W.settings_group,"reading"); eq(E.ReaderPanel.sheet,nil)
@@ -347,7 +356,17 @@ return function(here, test, ok, eq)
         E.Library.readerAction(ui,"size",24); eq(W.size,24)
         ui.bookmark={onToggleBookmark=function() W.marked=true; return true end}
         E.ReaderPanel.show(ui,"reader-top-panel"); row(E,"Add bookmark").action(); eq(W.marked,true)
-        W.hardware=false; W.warmth_supported=false
+        W.warmth_supported=false
+        E.ReaderPanel.show(ui,"reader-bottom-panel")
+        sheet=E.ReaderPanel.sheet
+        for _,r in ipairs(sheet:rows()) do
+            if r.kind=="reader-lights" then
+                eq(#r.controls,1)
+                local widget=sheet:rowWidget({kind="reader-lights",row=r},500,74,sheet.metrics)
+                eq(widget[1].text,"Front light")
+            end
+        end
+        W.hardware=false
         E.ReaderPanel.show(ui,"reader-bottom-panel")
         for _,r in ipairs(E.ReaderPanel.sheet:rows()) do ok(r.kind~="reader-lights") end
     end)
