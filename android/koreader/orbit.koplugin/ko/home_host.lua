@@ -309,7 +309,7 @@ function HomeHost.whatsNew()
             {{text=_("Lists (your saved filters) on Home"),enabled=false}},
             {{text=_("BookSync settings on the reader"),enabled=false}},
             {{text=_("Battery: time left at your usual use"),enabled=false}},
-            {{text=_("Done"),callback=function() acknowledge(); UIManager:close(dialog) end}},
+            {{text=_("Done"),height=Device.screen:scaleBySize(50),callback=function() acknowledge(); UIManager:close(dialog) end}},
         },
         tap_close_callback=acknowledge,
     }

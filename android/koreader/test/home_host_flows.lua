@@ -88,6 +88,7 @@ return function(test,eq,ok,E,W,Widget)
             ok(E.HomeHost.show())
             local dialog=W.shown[#W.shown]
             eq(dialog.title,"What's new in 0.12"); eq(#dialog.buttons,5)
+            ok(dialog.buttons[5][1].height>=50,"upgrade acknowledgement meets the touch minimum")
             eq(#batches,1,"news adds no read-model batch")
             dialog.buttons[5][1].callback()
             eq(E.S.news_012_pending,false); eq(saves,1)

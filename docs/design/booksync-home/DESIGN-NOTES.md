@@ -918,3 +918,9 @@ Pass 3 integration ruling: the first-run task explicitly requires three Android
 default pages. Keep Home, Library and Stats and the existing starter shelves,
 while retaining pass 4's navigation and touch fixes. This explicit task requirement
 supersedes pass 4's two-page default adjustment; saved layouts remain untouched.
+
+The upgrade sheet's Done action declares a 50 px content height, in addition to
+native padding/borders. Pinned KOReader `9192014d8bd82a91dc1012473be0f238dedfdb54`
+`frontend/ui/widget/buttontable.lua:88` forwards an explicit height; without it,
+`frontend/ui/widget/button.lua:111` derives height from the font. The regression
+checks the action's minimum target as well as its acknowledgement lifecycle.
