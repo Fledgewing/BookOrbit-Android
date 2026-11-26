@@ -66,12 +66,13 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
         rect(x+142,h-18,10,10,2,true); label(x+158,h-20,'Today',11)
     elseif id == 'this-week' then
         assert(data.week.levels[7] ~= nil and data.week.levels[8] == nil)
-        label(8,top,d.week_total or '—',24,true)
+        local short=rows==1
+        label(short and w-90 or 8,short and 4 or top,d.week_total or '—',short and 16 or 24,true)
         if rows ~= 1 and d.best_day then label(8,top+30,(d.week_comparison and d.week_comparison..' · best day ' or 'Best day ')..d.best_day,12) end
         local separate=d.local_today
-        local bottom=h-(separate and 42 or 22)
-        local chartTop=top+(rows==1 and 30 or 68)
-        local height=math.max(1,bottom-chartTop-18)
+        local bottom=h-(separate and 42 or short and 8 or 22)
+        local chartTop=short and 30 or top+68
+        local height=math.max(1,bottom-chartTop-(short and 0 or 18))
         local width=(w-16)/7
         for i=1,7 do
             local bh=height*data.week.levels[i]
@@ -90,8 +91,8 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
         if not strip then label(8,top,d.period,22,true) end
         local peak=d.peak or (data.peak_hour and (data.peak_hour..':00'))
         label(8,strip and top or top+28,peak and ('Most at '..peak..(data.after_18_percent and ' · '..data.after_18_percent..'% after 18:00' or '')) or 'No reading recorded',12)
-        local bottom=h-24
-        local height=math.max(1,bottom-top-(strip and 24 or 72))
+        local bottom=h-(strip and 16 or 24)
+        local height=math.max(1,bottom-top-(strip and 16 or 72))
         local width=(w-16)/24
         for i=1,24 do
             local bh=strip and math.min(22,height) or height*data.hour_levels[i]
@@ -106,7 +107,7 @@ function ReadingStatsPlan.build(id, data, w, h, rows)
                 rect(x-2,bottom-height-7,4,5,4)
             end
         end
-        for i=0,3 do label(8+i*6*width,h-18,string.format('%02d',i*6),10) end
+        for i=0,3 do label(8+i*6*width,bottom+4,string.format('%02d',i*6),10) end
     else
         local r=data.records or {}
         local function caption(text,field)

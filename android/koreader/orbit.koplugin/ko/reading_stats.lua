@@ -23,9 +23,11 @@ function ReadingStatsWidgets.render(id, snapshot, placement)
     end
     text(8,4,plan.title,true)
     if plan.source then
-        local x,y=plan.sourceInline and math.max(180,width-160) or 8,plan.sourceInline and 4 or 24
-        plan.sourceRect={x=x-2,y=y-1,w=math.min(width-x-6,154),h=16}
-        text(x,y,plan.source,false,11)
+        local weekStrip=id=='this-week' and plan.sourceInline
+        local x,y=weekStrip and 112 or plan.sourceInline and math.max(180,width-160) or 8,plan.sourceInline and 4 or 24
+        local badgeWidth=weekStrip and 118 or math.min(width-x-6,154)
+        plan.sourceRect={x=x-2,y=y-1,w=badgeWidth,h=16}
+        text(x,y,plan.source,false,11,badgeWidth-4)
     end
     if plan.message then text(8,plan.source and 44 or 32,plan.message) end
     for _,v in ipairs(plan.labels) do text(v.x,v.y,v.text,v.bold,v.size,v.width) end

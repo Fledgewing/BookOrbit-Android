@@ -18,7 +18,8 @@ function ClockWidgets.render(p,snapshot,dispatch,rect)
         HomeWidgets.text(canvas,message,pad,pad+scale(30),w-2*pad,14)
     else
         local short=p.h==1
-        local timeSize=short and 34 or p.w==1 and 44 or 34
+        local longTime=#(d.time or "")>5
+        local timeSize=short and (longTime and 26 or 34) or p.w==1 and (longTime and 32 or 44) or 34
         HomeWidgets.text(canvas,d.time,pad,pad,w-2*pad,timeSize,false,true)
         local x=short and math.floor(w*.40) or pad
         local y=short and pad or pad+scale(p.w==1 and 56 or 40)

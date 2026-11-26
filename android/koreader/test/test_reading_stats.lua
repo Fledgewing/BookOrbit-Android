@@ -71,6 +71,10 @@ return function(test,eq,ok,here,Cache)
         end
         local p=e.ReadingStatsPlan.build('when-you-read',data,600,140,1)
         eq(p.rects[1].h,p.rects[24].h)
+        local strip=e.ReadingStatsPlan.build('when-you-read',data,333,85,1)
+        eq(strip.rects[1].h,22)
+        local week=e.ReadingStatsPlan.build('this-week',data,333,85,1)
+        ok(week.rects[7].h>=40,'compact week retains a visible chart')
         eq(Cache.encode(data),before)
         eq(e.ReadingStatsPlan.build('this-week',{state='empty'},300,200,2).message,'No reading recorded')
         local b=e.Budgets.widgets['year-in-reading']
