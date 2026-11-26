@@ -79,7 +79,8 @@ test("layout: class bounds, overlap, installed spans, hidden and unknown version
     valid(d); local out=assert(L.resolve(d,"android-tablet",R)); eq(#out.pages[1].placements,5)
     d.pages[1].placements[1].widget="continue-reading"; d.pages[1].placements[1].version=2
     valid(d); eq(#assert(L.resolve(d,"android-tablet",R)).pages[1].placements,5)
-    d=L.default(); d.overrides["android-tablet"].resume={hidden=true}
+    d=L.default(); d.pages[1].placements[1].hidden="future field"; valid(d); eq(#projected(d).placements,6)
+    d.overrides["android-tablet"].resume={hidden=true}
     eq(#assert(L.resolve(d,"android-tablet",R)).pages[1].placements,5)
     eq(L.resolve(d,"absent",R),nil)
 end)
@@ -99,7 +100,7 @@ end)
 
 test("layout: round trip retains unknown widgets, versions, fields, nulls and settings",function()
     local d=assert(L.parse(codec.encode(L.default()),codec)); local p=d.pages[1].placements[1]
-    p.widget="future-widget"; p.version=987; p.extra=codec.decode('{"emptyArray":[],"emptyObject":{},"null":null,"flag":false}')
+    p.widget="future-widget"; p.version=987; p.hidden="unknown base field"; p.extra=codec.decode('{"emptyArray":[],"emptyObject":{},"null":null,"flag":false}')
     p.settings=codec.decode('{"nested":{"preserve":[null,false,{},[]]}}')
     d.grids.future={cols=3,rows=12,custom="keep"}; d.overrides.future={resume={custom={a=1}}}
     local raw=assert(L.serialize(d,codec)); local saved=round(d)
@@ -199,7 +200,7 @@ test("budgets: every screen/widget/query declares and enforces deterministic lim
     for id,w in pairs(R) do
         eq(w.id,id); check(w.budget,true); eq(w.budget,B.widgets[id]); eq(#w.states,6)
         for _,need in ipairs(w.dataNeeds) do
-            eq(need.budget,w.budget); ok(need.source:match("^[a-z]+%.[a-z]+$")); eq(need.params.limit.maximum,w.budget.rows)
+            eq(need.budget,w.budget); ok(need.source:match("^[a-z]+%.[a-z]+$")); ok(need.params.limit.maximum <= w.budget.rows)
         end
     end
     eq(B.check(nil,zero),nil); local log; local now=1

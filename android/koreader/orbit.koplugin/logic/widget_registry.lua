@@ -20,5 +20,6 @@ widget("reading-records", "reading.stats", {{3,2},{2,3},{2,2},{4,1}}, {{2,2},{2,
 widget("clock", "device.clock", {{1,2},{2,1},{2,2}}, {{2,2},{1,1},{2,1}})
 -- The Library tile also displays local storage; both small needs share its budget and
 -- are part of the host's single batched snapshot, never separate render-time round trips.
+WidgetRegistry.library.dataNeeds[1].params.limit.maximum = 1
 WidgetRegistry.library.dataNeeds[2] = {source="storage.summary", params={limit={type="integer", maximum=1}},
     budget=Budgets.widgets.library}

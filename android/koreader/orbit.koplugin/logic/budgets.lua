@@ -14,6 +14,8 @@ for _, id in ipairs({"continue-reading", "booklist", "lists", "library", "batter
     "year-in-reading", "when-you-read", "reading-records", "clock"}) do
     Budgets.widgets[id] = budget(id == "booklist" and 12 or id == "lists" and 8 or 1, 16384, 50)
 end
+-- Library summary + local storage summary are two materialized rows in one batch.
+Budgets.widgets.library.rows = 2
 local fields = {"rows", "bytes", "spawns", "roundTrips", "network", "snapshotBytes"}
 -- Counts must be supplied by the host/read-model boundary, including zeroes. A Home paint
 -- checks aggregate counts once; each widget/read also checks its inherited budget.
@@ -22,7 +24,7 @@ function Budgets.check(b, counts)
     for _, k in ipairs(fields) do
         local n, limit = counts[k], b[k]
         if type(n) ~= "number" or n < 0 or n ~= math.floor(n)
-            or type(limit) ~= "number" or limit < 0 or n > limit then return nil, "budget: " .. k end
+            or type(limit) ~= "number" or limit < 0 or limit ~= math.floor(limit) or n > limit then return nil, "budget: " .. k end
     end
     if b.spawns ~= 0 or b.network ~= 0 or b.roundTrips > 1 or b.snapshotBytes > 16384 then
         return nil, "unsafe budget"

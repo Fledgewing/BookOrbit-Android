@@ -50,7 +50,7 @@ local function coords(p, partial)
         if (not partial or p[k] ~= nil) and not integer(p[k], (k == "x" or k == "y") and 0 or 1, 12) then return false end
     end
     return (p.settings == nil and partial or object(p.settings))
-        and (p.hidden == nil or partial and type(p.hidden) == "boolean")
+        and (not partial or p.hidden == nil or type(p.hidden) == "boolean")
 end
 local function overlap(a,b)
     return a.x < b.x+b.w and b.x < a.x+a.w and a.y < b.y+b.h and b.y < a.y+a.h
@@ -81,6 +81,9 @@ local function projection(page, overrides, geometryOnly)
     local out=shallow(page); out.placements=arr()
     for i,p in ipairs(page.placements) do out.placements[i]=geometryOnly and shallow(p) or copy(p) end
     for _,p in ipairs(out.placements) do
+        -- hidden is defined only in class overrides. A same-named unknown base field
+        -- remains in the saved document but cannot change projection semantics.
+        p.hidden=nil
         for k,v in pairs(overrides[p.instance] or {}) do
             if k == "settings" and not geometryOnly then
                 for sk,sv in pairs(v) do p.settings[sk]=copy(sv) end
@@ -300,7 +303,8 @@ function Layout.add(d,pageId,p,registry)
         end
         if not found then return nil,"no room" end
     end
-    pg.placements[#pg.placements+1]=placed
+    local geometry=shallow(placed); geometry.hidden=nil
+    pg.placements[#pg.placements+1]=geometry
     local ok,err=Layout.pageValid(pg,grid,"android-tablet",registry); if not ok then return nil,err end
     pg=copy(d.pages[index]); pg.placements[#pg.placements+1]=placed; autoname(pg); out.pages[index]=pg
     return out
