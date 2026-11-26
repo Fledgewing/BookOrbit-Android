@@ -144,6 +144,24 @@ class AccountAdapterTest {
         assertEquals(count,k.calls.size)
     }
 
+    @Test fun durableWritesKeepCaptureTimeAndUseSyncOwnershipEvenWithAnIndependentCatalog() {
+        val k = Kit(); k.user("sync")
+        val syncOwner = k.adapter.positionOwner()
+        k.user("opds")
+        assertEquals(syncOwner,k.adapter.positionOwner())
+        assertNotEquals(k.adapter.owner(),k.adapter.positionOwner())
+        k.adapter.position("a".repeat(32),mapOf("percentage" to 0.5,"position" to "locator","capturedAt" to 1234L))
+        assertEquals(1234L,k.lastBody!!["timestamp"])
+        val count = k.calls.size
+        assertThrows(IllegalArgumentException::class.java) {
+            k.adapter.position("a".repeat(32),mapOf("percentage" to 0.5,"capturedAt" to -1L))
+        }
+        assertEquals(count,k.calls.size)
+        k.adapter.removeLogin("sync")
+        assertNull(k.adapter.positionOwner())
+        assertNotNull(k.adapter.owner())
+    }
+
     @Test fun failedExplicitAccountReplacementKeepsTheDirectLoginAndReportsFailure() {
         val k = Kit(); k.user("sync"); k.existing = mapOf("username" to "other-sync"); k.account()
         val key = k.credentials.login("sync")!!.secret
