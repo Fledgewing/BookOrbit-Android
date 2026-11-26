@@ -24,6 +24,15 @@ class LibraryTest {
             assertEquals("budget",(LuaValue.parse(st.db().query("SELECT body FROM library_views WHERE request=?",tiny) { it.bytes(0)!! }.single()) as Map<*,*>)["error"])
         }
     }
+    @Test fun batteryAndReadingStatsShareTheExistingBatch() {
+        store().use { st ->
+            val requests=listOf("battery","reading.stats").map { op -> String(LuaValue.encode(mapOf("op" to op,"limit" to 1)),Charsets.ISO_8859_1) }
+            LibraryReadModel(st,{99},{},readingStats={ mapOf("hours" to listOf(1,2)) },battery={ mapOf("level" to 78) }).publish(owner,requests)
+            val results=st.db().query("SELECT body FROM library_views") { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }
+            assertEquals(2,results.size)
+            assertTrue(results.any { it["level"] == 78L }); assertTrue(results.any { it["hours"] == listOf(1L,2L) })
+        }
+    }
     @Test fun everyNeutralFieldHasLocalSemanticsAndAnExplicitTranslationPlan() {
         val cases = mapOf<String, Any>("show" to "reading", "wtr" to true, "where" to "on-device", "author" to listOf("B"), "series" to listOf("Orbit"), "tags" to listOf("space"),
             "length" to mapOf("min" to 100, "max" to 200), "len" to mapOf("max" to 200), "rating" to mapOf("min" to 4), "added" to mapOf("min" to "2026-01-01"),
@@ -104,6 +113,18 @@ class LibraryTest {
         val request=String(LuaValue.encode(args),Charsets.ISO_8859_1)
         LibraryReadModel(st, {99}, {}).publish(owner,listOf(request))
         return st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?", owner,request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
+    }
+    @Test fun readingStatsUsesExistingBoundedOwnerScopedProjection() {
+        store().use { st ->
+            val request=String(LuaValue.encode(mapOf("op" to "reading.stats", "limit" to 1, "bytes" to 16384)),Charsets.ISO_8859_1)
+            var calls=0
+            val model=LibraryReadModel(st,{99},{},readingStats={ calls++; mapOf("state" to "empty", "hours" to List(24) { 0 }) })
+            model.publish("wrong-owner",listOf(request)); assertEquals(0,calls)
+            model.publish(owner,listOf(request)); assertEquals(1,calls)
+            val result=st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?",owner,request) { it.bytes(0)!! }.single()
+            assertTrue(result.size<=16384)
+            assertEquals("empty",(LuaValue.parse(result) as Map<*,*>)["state"])
+        }
     }
     @Test fun projectionsDistinguishMissingFromEmptyAndFilterBeforePaging() {
         store().use { st ->

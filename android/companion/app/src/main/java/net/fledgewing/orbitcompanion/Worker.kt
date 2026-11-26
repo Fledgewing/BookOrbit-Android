@@ -110,7 +110,11 @@ object Worker {
             val owner = i.getStringExtra("owner") ?: return
             synchronized(lock) { patches.addLast {
                 val requests = LuaValue.parse(LuaValue.str(encoded).toByteArray(Charsets.ISO_8859_1)) as? List<*> ?: return@addLast
-                if (requests.size <= LibraryReadModel.MAX_BATCH) LibraryReadModel(worker().store, battery = { StatsStore.get(ctx).batterySnapshot(System.currentTimeMillis(), java.time.ZoneId.systemDefault()) }).publish(LuaValue.str(owner), requests)
+                if (requests.size <= LibraryReadModel.MAX_BATCH) LibraryReadModel(
+                    worker().store,
+                    readingStats = { ReadingStats.read(File(root().parentFile, "statistics.sqlite3"), System.currentTimeMillis() / 1000) },
+                    battery = { StatsStore.get(ctx).batterySnapshot(System.currentTimeMillis(), java.time.ZoneId.systemDefault()) },
+                ).publish(LuaValue.str(owner), requests)
             }; lock.notifyAll() }
             return start()
         }

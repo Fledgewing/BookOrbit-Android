@@ -87,3 +87,8 @@ measurements, additive schema migration and library snapshot bounds. The plugin'
 existing logic/flow harness covers the one-row battery read, timing, shared batch,
 missing budget and oversized snapshot. Feature-matrix checks and existing USB
 installer/sideload script tests run without touching devices.
+
+The latest feature branch's F12-F reading-statistics integration is retained: both
+worker providers share the existing `LibraryReadModel` and one Home batch. Merge
+coverage exercises battery and reading-statistics operations together; neither
+operation replaces the other's capability, registration or projection provider.
