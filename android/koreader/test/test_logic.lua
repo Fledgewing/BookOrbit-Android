@@ -1761,6 +1761,11 @@ test("settings modes: approved presets use shared wire values and Balanced match
     for _, key in ipairs(UI.modeKeys) do if key ~= "wifi_mode" then unset[key] = balanced[key] end end
     eq(UI.mode(unset, "jit"), "balanced", "effective device Wi-Fi default")
     eq(UI.mode(balanced, "always_on"), "custom", "effective capability policy beats stored Wi-Fi preference")
+    eq(UI.installed("0.12.0-preview.9"),"BookSync 0.12.0-preview.9 · Preview")
+    eq(UI.installed("0.12.0-rc.1"),"BookSync 0.12.0-rc.1 · RC")
+    eq(UI.installed("0.12.0"),"BookSync 0.12.0 · Stable")
+    ok(UI.modeCard({},nil,{items={}}):find("Your own settings",1,true))
+    ok(UI.modeCard(balanced,nil,{items={}}):find("Estimate pending",1,true))
     eq(UI.words("Server plugin's Home"), "Server plugin's Home")
     eq(UI.words("Server plugin's Home", "booksync"), "BookSync Home")
     eq(UI.words("Wake Tailscale for syncs"), "Wake VPN for syncs")
