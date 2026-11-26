@@ -115,6 +115,9 @@ Reader controls copy at most 64 already-loaded native chapter and annotation ent
 the companion projects their marker/position snapshot. Never load a TOC, scan a sidecar or
 construct a full bookmark index on a panel paint. Native actions stay behind Library.
 
+Cover lookups use a one-row, 16 KiB local-only budget with zero round-trips; post-paint
+cover batches are limited to four and only the companion fetches or writes images.
+
 Custom reading editors inherit a named screen budget through the library interface: one small
 device-local record, no catalog work, decoded JSON, network, subprocess or companion round-trip.
 Each editor paint and style operation logs one info-level timing span; host timings are not device acceptance.

@@ -21,7 +21,6 @@ object Worker {
     const val ACTION_STORAGE = "${Contract.PACKAGE}.action.STORAGE"
     const val ACTION_COPIES = "${Contract.PACKAGE}.action.COPIES"
     const val ACTION_SLEEP_REFRESH = "${Contract.PACKAGE}.action.SLEEP_REFRESH"
-    const val ACTION_RECHECK = "${Contract.PACKAGE}.action.RECHECK"
     const val ACTION_SQLITE_STRESS = "${Contract.PACKAGE}.action.SQLITE_STRESS"
     const val ACTION_PATCH = "${Contract.PACKAGE}.action.PATCH"
     const val CAP = "cache_worker"

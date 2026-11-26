@@ -3967,48 +3967,16 @@ test("cache: a read made in the catalog's child process is saved by the companio
     cacheTeardown()
 end)
 
-test("cache: covers keep their ETag; a moved version asks If-None-Match and a 304 renames the file", function()
+test("covers: low-level legacy calls are local only even with caching disabled", function()
     local client = cacheSetup()
-    local http = require("socket.http")
-    local stock_http = http.request
-    local sent = {}
-    local server_etag, cover = '"100"', "\255\216\255\224" .. string.rep("x", 60)
-    http.request = function(t)
-        local inm = t.headers and t.headers["If-None-Match"]
-        table.insert(sent, inm or "-")
-        if inm == server_etag then return 1, 304, {} end
-        t.sink(cover); t.sink(nil)
-        return 1, 200, { ["content-type"] = "image/jpeg", etag = server_etag, ["content-length"] = tostring(#cover) }
-    end
-    local ltn = require("ltn12")
-    local stock_file = ltn.sink.file
-    ltn.sink.file = function(f) return function(chunk) if chunk then f:write(chunk) end return 1 end end
-    local dir = cache.dir .. "/covers"
-    E.OC.child = true -- production downloads run in the thumbnail subprocess
-    local v1 = dir .. "/7_20261101.jpg"
-    ok(client:downloadCatalogThumbnail(7, v1, { temp_path = v1 .. ".part", max_bytes = 4e6 }), "first download")
-    local f = io.open(v1 .. ".etag"); ok(f and f:read("*a") == server_etag, "ETag kept"); if f then f:close() end
-    -- A metadata edit moved updatedAt: one 304, the file copied to the new version's name, no
-    -- body transferred; the older file stays for a view painted from an older body.
-    local v2 = dir .. "/7_20261121.jpg"
-    ok(client:downloadCatalogThumbnail(7, v2, { temp_path = v2 .. ".part", max_bytes = 4e6 }), "304")
-    ok(sent[2] == server_etag, "asked If-None-Match")
-    ok(io.open(v2) and io.open(v1), "the new version's file is there, and the older one stays")
-    -- The cover really changed: replaced, the old one gone, the new ETag kept.
-    server_etag, cover = '"200"', "\137PNG\r\n\26\n" .. string.rep("y", 40)
-    local v3 = dir .. "/7_20261122.jpg"
-    ok(client:downloadCatalogThumbnail(7, v3, { temp_path = v3 .. ".part", max_bytes = 4e6 }), "200")
-    ok(io.open(v3) and io.open(v2), "the new cover saved; the older version is the plugin's pruner's to drop")
-    f = io.open(v3 .. ".etag"); ok(f and f:read("*a") == '"200"', "new ETag"); if f then f:close() end
-    ok(cache.stock_cover == nil, "never the plugin's download")
-    -- Orphaned ETags are cleaned.
-    io.open(dir .. "/9_1.jpg.etag", "w"):close()
-    E.OC.child = nil
-    E.OC.cover_dir = dir
-    E.OC.cleanEtags()
-    run(3)
-    ok(not io.open(dir .. "/9_1.jpg.etag"), "orphan ETag removed by companion")
-    http.request, ltn.sink.file = stock_http, stock_file
+    local saved=E.Library.cachedCover
+    E.Library.cachedCover=function(path) return path=="/fixture/cached.jpg" and path or nil end
+    E.S.offline_cache=false
+    eq(client:downloadCatalogThumbnail(7,"/fixture/cached.jpg"),true)
+    eq(client:downloadCatalogThumbnail(7,"/fixture/missing.jpg"),nil)
+    eq(client:downloadCatalogAuthorPhoto(7,"/fixture/missing.jpg"),nil)
+    eq(cache.stock_cover,nil); eq(#cache.calls,0)
+    E.Library.cachedCover=saved; E.S.offline_cache=true
     cacheTeardown()
 end)
 
@@ -4383,139 +4351,88 @@ test("cache: Home's first paint after a progress write comes from this cache wit
     cacheTeardown()
 end)
 
--- The thumbnail worker as the pinned plugin runs it (bookorbit_catalog_thumbnails.lua:368-408):
--- a batch in the API's child process, each cover through downloadCatalogThumbnail, an ok table
--- back; the parent marks each one there (:333-343) and the tile draws from the file.
-local function coverWorker(client, jobs)
-    local done, r = client:runInSubprocess(function()
-        local outcome = {}
-        for _, j in ipairs(jobs) do
-            local ok_, err = client:downloadCatalogThumbnail(j.id, j.path, { temp_path = j.path .. ".part", max_bytes = 4e6, background = false })
-            outcome[tostring(j.id)] = ok_ == true
+test("covers: companion batches never fork and stale results cannot redraw", function()
+    local function prep(Cat)
+        function Cat:thumbnailEntry(book)
+            self.thumbnail_memo=self.thumbnail_memo or {}
+            local key=tostring(book.id)
+            self.thumbnail_memo[key]=self.thumbnail_memo[key] or {path=cache.dir.."/covers/"..key.."_100.jpg"}
+            return self.thumbnail_memo[key]
         end
-        return outcome
-    end)
-    return done and r.body or nil, r and r.err
-end
-
-local function coverServer(answers)
-    local http = require("socket.http")
-    local ltn = require("ltn12")
-    local saved = { http.request, ltn.sink.file }
-    ltn.sink.file = function(f) return function(chunk) if chunk then f:write(chunk) end return 1 end end
-    http.request = function(t)
-        local id = tonumber(t.url:match("/books/(%d+)/thumbnail"))
-        local a = answers[id] or { code = "timeout" }
-        if a.code == 304 and t.headers["If-None-Match"] == a.etag then return 1, 304, {} end
-        if a.code == "timeout" then return nil, "timeout" end
-        local body = "\255\216\255\224" .. string.rep("c", 30 + id)
-        t.sink(body); t.sink(nil)
-        return 1, 200, { ["content-type"] = "image/jpeg", etag = a.etag or '"e"', ["content-length"] = tostring(#body) }
+        function Cat:stopThumbnailWorker() self.stopped=true end
+        function Cat:updateItems() self.redraws=(self.redraws or 0)+1 end
     end
-    return function() http.request, ltn.sink.file = saved[1], saved[2] end
-end
-
-test("covers: the plugin's worker in its child process: 200, 304 and an error; the drawn tiles have their files", function()
-    local client = cacheSetup()
-    W.wifi = true
-    local dir = cache.dir .. "/covers"
-    -- Book 2 has an older version with its ETag; the server's cover is the same (304).
-    local old2 = dir .. "/2_100.jpg"
-    local fh = io.open(old2, "wb"); fh:write("\255\216\255\224old"); fh:close()
-    fh = io.open(old2 .. ".etag", "w"); fh:write('"two"'); fh:close()
-    local restore = coverServer({ [1] = { code = 200, etag = '"one"' }, [2] = { code = 304, etag = '"two"' }, [3] = { code = "timeout" } })
-    local jobs = { { id = 1, path = dir .. "/1_100.jpg" }, { id = 2, path = dir .. "/2_200.jpg" }, { id = 3, path = dir .. "/3_100.jpg" } }
-    local out, err = coverWorker(client, jobs)
-    restore()
-    ok(out and not cache.child_crash, "the worker's batch answered: " .. tostring(err) .. " " .. tostring(cache.child_crash))
-    ok(out["1"] and out["2"] and not out["3"], "1 and 2 ok, 3 failed")
-    ok(io.open(jobs[1].path) and io.open(jobs[2].path), "tiles 1 and 2 draw from their files")
-    ok(io.open(old2), "the older version of 2 is still there for an older body")
-    ok(not io.open(jobs[3].path), "3 retries later")
+    local client,Cat=cacheSetup(prep)
+    local commands={}; local paths={}
+    local cached,command=E.Library.cachedCover,E.LibraryAdapter.command
+    E.Library.cachedCover=function(ref) return paths[ref] end
+    E.LibraryAdapter.command=function(op,args,done)
+        eq(op,"covers.acquire"); ok(not W.in_child,"parent-side dispatch")
+        commands[#commands+1]=args
+        UIManager:scheduleIn(0.1,function() paths[args.reference]=args.reference; done({local_path=args.reference}) end)
+        return true
+    end
+    local cat=setmetatable({client=client,thumbnail_generation=1,thumbnail_queue={head=1,tail=2,{id=1},{id=2}},
+        thumbnail_prefetch_queue={head=1,tail=0}},Cat)
+    cat:runThumbnailWorker(1); run(0.5)
+    eq(#commands,2); eq(cat.redraws,1); ok(cat.stopped); eq(cache.stock_cover,nil); eq(cache.child_crash,nil)
+    cat.thumbnail_queue={head=1,tail=1,{id=3}}; cat.stopped=false
+    cat:runThumbnailWorker(1); cat.thumbnail_generation=2; run(0.5)
+    eq(cat.redraws,1,"departed generation cannot redraw")
+    E.Library.cachedCover,E.LibraryAdapter.command=cached,command
     cacheTeardown()
 end)
 
-test("covers: Full refresh re-asks the covers on screen through the companion, never a forked child", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    local dir = cache.dir .. "/covers"
-    local books = {}
-    for id = 1, 3 do
-        books[id] = { id = id, hasCover = true, updatedAt = "100" }
-        local f = io.open(dir .. "/" .. id .. "_100.jpg", "wb"); f:write("\255\216\255\224v1"); f:close()
-        if id < 3 then f = io.open(dir .. "/" .. id .. "_100.jpg.etag", "w"); f:write('"c' .. id .. '"'); f:close() end
+test("covers: forced recheck dispatches neutral references and never redraws while reading", function()
+    local _,Cat=cacheSetup()
+    local command=E.LibraryAdapter.command
+    local requests={}
+    E.LibraryAdapter.command=function(op,args,done)
+        eq(op,"covers.acquire"); eq(args.refresh,true); ok(args.server==nil and args.userkey==nil)
+        requests[#requests+1]=args.reference
+        UIManager:scheduleIn(0.1,function() done({local_path=args.reference}) end)
+        return true
     end
-    local function pathOf(b) return dir .. "/" .. b.id .. "_" .. tostring(b.updatedAt) .. ".jpg" end
-    function Cat:thumbnailPath(b) return pathOf(b) end
-    cache.server[DASH] = { continueReading = books }
-    local cat = setmetatable({ client = client, current_context = { kind = "dashboard", dashboard = cache.server[DASH] } }, Cat)
-    function cat:refreshCurrent() self.client:request("GET", DASH) end
-    local redrawn = 0
-    function cat:updateItems() redrawn = redrawn + 1 end
-    -- Book 2's cover changed on the server; book 1's didn't (304). Book 3 has no ETag: left alone.
-    FC.cover = function(c) return c.id == 2 and 200 or 304 end
-    local calls, forks, bg_run = #FC.calls, {}, E.Background.run
-    E.Background.run = function(name, ...) table.insert(forks, name); return bg_run(name, ...) end
-    W.broadcasts = {}
-    withHost(cat, function() E.OC.fullRefresh(cat); run(30) end)
-    E.Background.run = bg_run
-    local ask = lastBroadcast(".RECHECK")
-    ok(ask and ask.extras.ids == "1\n2\n3" and ask.extras.paths == pathOf(books[1]) .. "\n" .. pathOf(books[2]) .. "\n" .. pathOf(books[3]), "the companion is asked for 1 and 2: " .. tostring(ask and ask.extras.ids))
-    local rechecked = {}
-    for i = calls + 1, #FC.calls do if FC.calls[i]:find("^RECHECK") then table.insert(rechecked, FC.calls[i]) end end
-    ok(#rechecked == 2, "the companion re-asked both: " .. table.concat(rechecked, ","))
-    for _, name in ipairs(forks) do ok(name == "cache index", "no forked child but the index save: " .. name) end
-    local log = table.concat(W.logs, "\n")
-    ok(log:find("cache: covers re-asked: 2 checked, 1 replaced", 1, true), "logged")
-    ok(redrawn >= 1, "the view redrawn for the replaced cover")
-    FC.cover = nil
+    local cat=setmetatable({thumbnail_generation=1},Cat)
+    local redraw=0
+    function cat:updateItems() redraw=redraw+1 end
+    E.OC.recheckCovers(cat,{{path="/fixture/one.jpg"},{path="/fixture/two.jpg"}})
+    run(0.5); eq(#requests,2); eq(redraw,1)
+    local reading=E.reading; E.reading=function() return true end
+    E.OC.recheckCovers(cat,{{path="/fixture/one.jpg"}})
+    run(0.5); eq(redraw,1,"reading is never interrupted by a cover completion")
+    E.reading=reading; E.LibraryAdapter.command=command
     cacheTeardown()
 end)
 
-test("covers: Full refresh and Refresh with every cover 304 never paint a tile without its cover", function()
-    local client, Cat = cacheSetup()
-    W.wifi = true
-    local dir = cache.dir .. "/covers"
-    local books = {}
-    for id = 1, 3 do
-        books[id] = { id = id, hasCover = true, updatedAt = "200" }
-        local f = io.open(dir .. "/" .. id .. "_100.jpg", "wb"); f:write("\255\216\255\224v1"); f:close()
-        f = io.open(dir .. "/" .. id .. "_100.jpg.etag", "w"); f:write('"c' .. id .. '"'); f:close()
-    end
-    local function pathOf(b) return dir .. "/" .. b.id .. "_" .. tostring(b.updatedAt) .. ".jpg" end
-    function Cat:thumbnailPath(b) return pathOf(b) end
-    function Cat:cachedThumbnailPath(b) local f = io.open(pathOf(b)); if f then f:close(); return pathOf(b) end end
-    local blank = {}
-    local stock_switch = Cat.__orbit_stock["cache:switchTo"]
-    -- Every paint: each listed cover that the tile would draw must be on disk.
-    local function check(context)
-        for _, b in ipairs((context.dashboard or {}).continueReading or {}) do
-            if not io.open(pathOf(b)) then table.insert(blank, b.id .. "@" .. tostring(b.updatedAt)) end
+test("covers: saved local references stay drawable offline while refresh waits", function()
+    local function prep(Cat)
+        function Cat:thumbnailEntry(book)
+            self.thumbnail_memo=self.thumbnail_memo or {}
+            self.thumbnail_memo[book.id]=self.thumbnail_memo[book.id] or {path=cache.dir.."/covers/"..book.id.."_200.jpg"}
+            return self.thumbnail_memo[book.id]
         end
+        function Cat:stopThumbnailWorker() end
+        function Cat:updateItems() end
     end
-    local inner = Cat.__orbit_stock["lf:switchTo"]
-    Cat.__orbit_stock["lf:switchTo"] = function(self, title, items, context, push) check(context); return inner(self, title, items, context, push) end
-    local restore = coverServer({ [1] = { code = 304, etag = '"c1"' }, [2] = { code = 304, etag = '"c2"' }, [3] = { code = 304, etag = '"c3"' } })
-    -- The server's body names version 200; the plugin's saved body still names 100.
-    cache.server[DASH] = { continueReading = { books[1], books[2], books[3] } }
-    local cat = setmetatable({ client = client, current_context = { kind = "dashboard", dashboard = cache.server[DASH] } }, Cat)
-    function cat:refreshCurrent()
-        local b = self.client:request("GET", DASH)
-        self:switchTo("Home", {}, { kind = "dashboard", dashboard = b, orbit_refresh = true }, false)
+    local _,Cat=cacheSetup(prep)
+    local cached,command=E.Library.cachedCover,E.LibraryAdapter.command
+    local old=cache.dir.."/covers/1_100.jpg"
+    local f=assert(io.open(old,"wb")); f:write("\255\216\255\224cached"); f:close()
+    E.Library.cachedCover=function() return old end
+    local calls=0
+    E.LibraryAdapter.command=function(op,args,done)
+        calls=calls+1; eq(op,"covers.acquire")
+        UIManager:scheduleIn(0.1,function() done({local_path=old,stale=true}) end)
+        return true
     end
-    withHost(cat, function()
-        -- The worker fetches version 200 of each: 304s, copied beside version 100.
-        coverWorker(client, { { id = 1, path = pathOf(books[1]) }, { id = 2, path = pathOf(books[2]) }, { id = 3, path = pathOf(books[3]) } })
-        cat:switchTo("Home", {}, cat.current_context, false)
-        E.OC.fullRefresh(cat); run(600)
-        E.OC.refresh(cat); run(600)
-        -- A refresh that couldn't reach the server brings back the saved body (version 100).
-        local saved = { continueReading = { { id = 1, hasCover = true, updatedAt = "100" }, { id = 2, hasCover = true, updatedAt = "100" } } }
-        cat:switchTo("Home", {}, { kind = "dashboard", dashboard = saved, stale = true }, false)
-    end)
-    restore()
-    Cat.__orbit_stock["lf:switchTo"] = inner
-    ok(#blank == 0, "no tile painted without its cover: " .. table.concat(blank, ","))
+    local cat=setmetatable({thumbnail_generation=1,thumbnail_queue={head=1,tail=1,{id=1}},thumbnail_prefetch_queue={head=1,tail=0}},Cat)
+    W.wifi=false
+    local row=cat:thumbnailEntry({id=1}); eq(row.path,old); eq(row.exists,true); eq(calls,0,"paint is local-only")
+    cat:runThumbnailWorker(1)
+    eq(cat:thumbnailEntry({id=1}).path,old,"pending acquisition keeps the saved cover")
+    run(0.5); eq(cat:thumbnailEntry({id=1}).path,old); eq(#cache.calls,0)
+    E.Library.cachedCover,E.LibraryAdapter.command=cached,command
     cacheTeardown()
 end)
 
@@ -5050,7 +4967,7 @@ test("storage limit: BookSync Companion counts and removes; eligible covers go b
     -- A write over the limit asks for a count.
     E.S.storage_limit_mb = 60
     entry("big", 40 * MB, 99)
-    E.OC.storageAdd(40 * MB, "cache"); run(3)
+    E.OC.storageCount("over the limit"); run(3)
     ok(not has("big") and E.OC.storage.used == 30 * MB, "checked on the write")
     -- The totals are there at the next start (the database's meta).
     E.OC.storage = nil
@@ -7022,13 +6939,13 @@ test("startup: 7000 cover files keep each UI callback within a fixed IO/intent b
     end
     local passed_guard, err=pcall(function()
         uiWorkBudget(function()
-            E.OC.cleanEtags(cdir)
-            eq(E.OC.olderCover(cdir,"no.jpg","1"),nil,"UI never scans older covers")
+            E.OC.storageCount("orphan ETags")
+            eq(E.OC.olderCover,nil,"older-cover enumeration is companion-only")
         end)
         run(12)
         local reader={document={file="/books/reading.epub"}}
         ReaderUI.instance=reader; W.shown={reader}
-        uiWorkBudget(function() E.OC.cleanEtags(cdir) end)
+        uiWorkBudget(function() E.OC.storageCount("orphan ETags") end)
         run(12)
         ReaderUI.instance=nil; W.shown={}
         ok(checked > 0, "guard measured production callbacks")
@@ -7059,9 +6976,9 @@ test("W32: an irreducible storage limit and a lost mailbox ack stay below 30 int
     local passed_guard, err = pcall(function()
         E.OC.storage = { used = 3 * 1024 * MB, kept = 3 * 1024 * MB }
         E.S.storage_limit_mb = 1024
-        E.OC.storageAdd(1, "cover")
+        E.OC.storageCount("over the limit")
         for second = 1, 180 do
-            for i = 1, 100 do E.OC.drainEvents(); E.OC.storageAdd(1, "cover") end
+            for i = 1, 100 do E.OC.drainEvents(); E.OC.storageCount("over the limit") end
             run(1)
         end
         local events, counts = 0, 0

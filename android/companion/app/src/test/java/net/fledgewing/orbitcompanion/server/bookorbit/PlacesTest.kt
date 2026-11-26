@@ -56,7 +56,7 @@ class PlacesTest {
         base.deleteRecursively()
     }
 
-    @Test fun recheckLeavesFilesOutsideTheRootsAlone() {
+    @Test fun coverReferenceLeavesFilesOutsideTheRootsAlone() {
         val base = tmp("places-recheck")
         val root = File(base, "orbit-cache").apply { mkdirs() }
         val other = File(base, "other").apply { mkdirs() }
@@ -65,7 +65,11 @@ class PlacesTest {
         var asked = 0
         val http = CacheWorker.Http { _, _, sink, _ -> asked++; sink?.writeText("theirs"); CacheWorker.Reply(200, etag = "\"n\"", contentType = "image/jpeg") }
         val w = CacheWorker(root, http, log = {}, openSql = { JdbcSql(it) })
-        w.recheckCovers("plugin", CacheWorker.Creds("https://books.example", "reader", "k"), listOf(1L to f.path, 2L to "${root.path}/../other/1.jpg"))
+        w.store.own("owner")
+        for (reference in listOf(f.path,"${root.path}/../other/1.jpg")) {
+            try { w.acquireCoverReference("owner",reference,CacheWorker.Creds("https://books.example","reader","k"),root,true); org.junit.Assert.fail() }
+            catch (_: ServerFailure) {}
+        }
         assertEquals(0, asked)
         assertEquals("mine", f.readText())
         assertEquals("\"a\"", File(other, "1.jpg.etag").readText())

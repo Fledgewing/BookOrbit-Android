@@ -36,8 +36,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/cache.lua",
-              "line": 24
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/store.lua",
+              "line": 202
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -370,8 +370,8 @@
               "line": 62
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/cache.lua",
-              "line": 24
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/store.lua",
+              "line": 202
             }
           ],
           "version": "v0.11.3-rc.17"

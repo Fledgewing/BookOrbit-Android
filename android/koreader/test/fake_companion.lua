@@ -930,14 +930,10 @@ function FS.detail(client, id)
     return type(body) == "table" and body or nil
 end
 
--- The cover, by its ETag (OC.coverDownload); tests replace it.
-function FS.download(client, id, path)
-    if F.sleepDownload then return F.sleepDownload(client, id, path) end
-    local api = package.loaded["bookorbit_api"]
-    local stock = api and (api.__orbit_stock and api.__orbit_stock["cache:downloadCatalogThumbnail"] or api.downloadCatalogThumbnail)
-    if not stock then stock = function() return nil, "no plugin download" end end
-    local okd, ok = pcall(E.OC.coverDownload, client, stock, id, path, { temp_path = path .. ".part", max_bytes = 4 * 1024 * 1024 })
-    return okd and ok and true or false
+-- Companion-side image transport stand-in; no production plugin helper participates.
+function FS.download(client,id,path)
+    if F.sleepDownload then return F.sleepDownload(client,id,path) end
+    return writeFile(path,"\255\216\255\224fixture")
 end
 
 -- In the background process: lists what is due, picks and checks the books, fetches their covers
@@ -1202,36 +1198,6 @@ function F.sleep(extras)
     end)
 end
 
----------------------------------------------------------------- cover recheck (CacheWorker.recheckCovers)
-
-function F.recheckNow(extras)
-    local ids, paths, changed, checked = {}, {}, {}, 0
-    for v in ((extras.ids or "") .. "\n"):gmatch("([^\n]*)\n") do table.insert(ids, tonumber(v)) end
-    for v in ((extras.paths or "") .. "\n"):gmatch("([^\n]*)\n") do table.insert(paths, v) end
-    for i, id in ipairs(ids) do
-        local p = paths[i]
-        local etag = p and readFile(p .. ".etag")
-        if p and readFile(p) and etag then
-            checked = checked + 1
-            table.insert(F.calls, "RECHECK " .. id)
-            local r = F.cover and F.cover({ id = id, path = p }, etag) or 304
-            if r == 200 then writeFile(p, "\255\216\255\224fakejpeg2"); writeFile(p .. ".etag", '"e2"'); table.insert(changed, id) end
-        end
-    end
-    lfs.mkdir(dir() .. "/events")
-    F.seq = (F.seq or 0) + 1
-    writeFile(string.format("%s/events/%d-0-c%d.lua", dir(), now(), F.seq), C().encode({ kind = "covers_rechecked", why = extras.reason, checked = checked, changed = changed }))
-end
-
-function F.recheck(extras)
-    UIManager:scheduleIn(0.2, function()
-        W.in_companion = true
-        local okc, err = pcall(F.recheckNow, extras)
-        W.in_companion = nil
-        if not okc then error(err, 0) end
-    end)
-end
-
 function F.receive(intent)
     if not (W.companion and intent.package == "net.fledgewing.orbitcompanion") then return end
     if intent.action:match("%.MIRROR$") then
@@ -1245,7 +1211,6 @@ function F.receive(intent)
     elseif intent.action:match("%.STORAGE$") then F.storage(intent.extras)
     elseif intent.action:match("%.COPIES$") then F.copies(intent.extras)
     elseif intent.action:match("%.SLEEP_REFRESH$") then F.sleep(intent.extras)
-    elseif intent.action:match("%.RECHECK$") then F.recheck(intent.extras)
     elseif intent.action:match("%.PATCH$") then F.patch(intent.extras) end
 end
 
