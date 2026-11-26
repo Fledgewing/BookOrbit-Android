@@ -3913,16 +3913,92 @@ test("cache: Refresh checks now; Full refresh goes to the server; neither evicts
     cacheTeardown()
 end)
 
-test("cache: Refresh tap during Full refresh expands progress without starting another job", function()
+test("cache: Refresh tap during Full refresh performs a normal refresh", function()
     local client, Cat = cacheSetup()
     local cat = setmetatable({client=client}, Cat)
-    local mirror = E.Mirror
-    local shown
-    E.Mirror={fullRunning=function() return true end, showProgress=function(why) shown=why end}
-    W.wifi=false -- progress is local even if connectivity was lost
-    E.OC.refresh(cat)
-    eq(shown,"Refresh tapped"); eq(#cache.calls,0)
-    E.Mirror=mirror
+    local refreshed = 0
+    function cat:refreshCurrent() refreshed = refreshed + 1 end
+    E.Mirror.active, E.Mirror.busy, E.Mirror.op = true, true, "full"
+    E.Mirror._status = { engine = "bulk", op = "full", done = 10, total = 100, left = 90 }
+    W.wifi = true
+    E.LF.refreshTap(cat)
+    eq(refreshed, 1)
+    ok(not E.Badge.running and not E.Mirror.manual, "tap never promotes background work to manual Full refresh")
+    ok(not lastBroadcast(".MIRROR"), "no new Full refresh or resume from tap")
+    cacheTeardown()
+end)
+
+test("cache: long press offers Full refresh and only its menu item starts it", function()
+    local client, Cat = cacheSetup()
+    local cat = setmetatable({client=client}, Cat)
+    W.broadcasts = {}
+    E.LF.refreshHold(cat)
+    local menu = W.shown[#W.shown]
+    eq(menu.title, "Sync")
+    ok(not E.Mirror.busy and not lastBroadcast(".MIRROR"), "holding only opens the menu")
+    eq(menu.buttons[1][1].text, "Full refresh")
+    menu.buttons[1][1].callback()
+    ok(E.Mirror.busy, "explicit Full refresh starts the job")
+    cacheTeardown()
+end)
+
+test("mirror: missing, queued and stale working states never time out; only companion stop ends a run", function()
+    local client, Cat = cacheSetup()
+    local send = E.Companion.send
+    local queries, launches = 0, 0
+    E.Companion.send = function(action, extras)
+        if action == E.Companion.ACTION.MIRROR then
+            if extras.query_run then queries = queries + 1 else launches = launches + 1 end
+        end
+        return true
+    end
+    local success, err = pcall(function()
+        E.Mirror._status_dir = E.Mirror.dir()
+        E.Mirror.run_id, E.Mirror.busy, E.Mirror.active = "queued", true, true
+        E.Mirror._status = { engine = "bulk", op = "full", done = 0, total = 100, left = 100 }
+        E.Mirror.poll()
+        run(180)
+        ok(E.Mirror.busy, "missing acknowledgement is never a timer-only death")
+        local function state(name)
+            E.OC.writeFile(E.Mirror.dir() .. "/run.lua", E.Cache.encode({run="queued", state=name,
+                op="full", done=0, total=100, left=100, pct=0}))
+        end
+        E.Badge.start(false, E.Mirror._status)
+        state("queued"); run(300)
+        ok(E.Mirror.busy and E.Mirror.status().state == "queued", "sleep pool can hold the queue beyond 90 seconds")
+        eq(E.Badge.history[#E.Badge.history], "Queued", "queue is visible instead of a stuck zero")
+        state("started"); run(180)
+        eq(E.Badge.history[#E.Badge.history], "Starting")
+        E.OC.writeFile(E.Mirror.dir() .. "/status.lua", E.Cache.encode({run="queued", engine="bulk", op="full",
+            beat=1, done=37, total=100, left=63, pct=37}))
+        state("progress"); run(180)
+        eq(E.Mirror.status().done, 37)
+        eq(E.Badge.history[#E.Badge.history], "37%")
+        ok(E.Mirror.busy, "old heartbeat cannot kill a working run")
+        E.Mirror.tick("retry"); E.Mirror.tick("network up")
+        eq(launches, 0, "no duplicate resumes")
+        ok(queries > 0, "liveness is queried")
+        state("stopped"); run(3)
+        ok(not E.Mirror.busy and not E.Mirror.active, "explicit companion stop ends ownership")
+    end)
+    E.Companion.send = send
+    cacheTeardown()
+    ok(success, err)
+end)
+
+test("mirror: a duplicate request attaches to the companion's canonical run and consumes its summary", function()
+    cacheSetup()
+    E.Mirror._status_dir = E.Mirror.dir()
+    E.Mirror.run_id, E.Mirror.busy, E.Mirror.active = "duplicate", true, true
+    E.Mirror._status = {engine="bulk", op="full", done=0, total=100, left=100}
+    E.OC.writeFile(E.Mirror.dir() .. "/run.lua", E.Cache.encode({run="original", query_for="duplicate", state="queued"}))
+    E.Mirror.poll(); run(3)
+    eq(E.Mirror.run_id, "original")
+    E.OC.writeFile(E.Mirror.dir() .. "/summary.lua", E.Cache.encode({run="original", why="finished",
+        status={engine="bulk", op="full", done=100, total=100, left=0, pct=100}}))
+    run(3)
+    ok(not E.Mirror.busy, "canonical summary ends polling")
+    eq(E.Mirror.status().done, 100)
     cacheTeardown()
 end)
 
@@ -3948,6 +4024,80 @@ test("cache: a write patches the cached book and marks Home stale; accounts neve
     cache.calls = {}
     other:request("GET", DET)
     ok(#cache.calls == 1, "another account: the server")
+    cacheTeardown()
+end)
+
+test("cache: bounded list opens paint under 500 ms without a subprocess or companion reply", function()
+    local forks = 0
+    local client, Cat = cacheSetup(function(Cat)
+        -- Model upstream fetch, rather than the harness's ordinary inline fake.
+        function Cat:fetch(_, fn)
+            forks = forks + 1
+            local done, r = self.client:runInSubprocess(fn)
+            if not done then return nil, "cancelled" end
+            return r.body, r.err, r.errbody
+        end
+    end)
+    local cat = setmetatable({client=client}, Cat)
+    W.logs = {}
+    local paths = {
+        "/koreader/plugin/catalog/books?buckets=1&order=asc&page=1&size=12&sort=title",
+        "/koreader/plugin/catalog/books?sort=recently_added&order=desc&size=12&page=1",
+        "/koreader/plugin/catalog/books?collectionId=4&sort=title&size=12&page=1",
+    }
+    for _, path in ipairs(paths) do
+        cache.server[path] = {items={{id=7,title="Saved book"}},total=1,page=1,size=12}
+        client:request("GET", path)
+    end
+    -- The stored catalog is large; opening it must decode only a 12-book window.
+    local books = {}
+    for i=1,7000 do books[i]={id=i,title="Saved book " .. i} end
+    cache.server[paths[1]] = {items=books,total=7000,page=1,size=7000}
+    client:request("GET", paths[1])
+    run(1) -- companion stores the server replies
+    W.clock = W.clock + 61 -- stale hits must also paint before asking for revalidation
+    cache.calls = {}
+    local send = E.Companion.send
+    local sends = 0
+    E.Companion.send = function(...) sends=sends+1; return send(...) end
+    for _, path in ipairs(paths) do
+        local before, virtual = os.clock(), W.clock
+        local body = cat:fetch("Opening", function() return client:request("GET", path) end)
+        cat:switchTo("Books", {}, {kind="books",books=body.items})
+        ok(os.clock()-before < 0.5 and W.clock-virtual < 0.5, "cache-hit render budget")
+        eq(body.items[1].id,path == paths[1] and 1 or 7)
+        if path == paths[1] then eq(#body.items,12,"only the visible window is decoded") end
+        eq(forks,0,"cache hit never enters subprocess")
+        eq(sends,0,"cache hit never asks/waits for companion before render")
+    end
+    eq(#cache.calls,0,"no network before paint")
+    local spans = 0
+    for _, line in ipairs(W.logs) do
+        if line:find("source=cache-inline",1,true) then
+            spans = spans + 1
+            ok(line:find("spawn=-1.0 spawned=-1.0",1,true),"span distinguishes skipped fork")
+        end
+    end
+    eq(spans,3,"one timing line per cache-hit open")
+    run(0.1)
+    ok(sends > 0,"stale checks resume after render without waiting for their replies")
+    local check, mirror = E.OC.check, E.OC.mirrorTick
+    local jobs = 0
+    E.OC.check = function() jobs=jobs+1 end
+    E.OC.mirrorTick = function() jobs=jobs+1 end
+    E.OC.cache_only = true
+    ok(cat:fetch("Redraw", function() return client:request("GET",paths[1]) end))
+    E.OC.cache_only = nil -- the redraw clears it before nextTick
+    run(0.1)
+    eq(jobs,0,"cache-only redraw never schedules background work after its flag clears")
+    E.OC.check, E.OC.mirrorTick = check, mirror
+    -- Cache miss still uses exactly one child; errors cannot leave probe mode set.
+    local missing = "/koreader/plugin/catalog/books?collectionId=99&size=12"
+    cache.server[missing] = {items={},total=0}
+    ok(cat:fetch("Opening", function() return client:request("GET",missing) end))
+    eq(forks,1,"miss uses the asynchronous path")
+    eq(E.OC.probing,nil,"probe restored after miss")
+    E.Companion.send = send
     cacheTeardown()
 end)
 
@@ -4733,11 +4883,11 @@ test("mirror: a second Full refresh keeps the run; a paused run resumes at netwo
         local run_id = E.Mirror.run_id
         E.OC.refresh(cat)
         eq(E.Mirror.run_id, run_id, "tap keeps the running Full refresh")
-        ok(E.Badge.expanded, "tap immediately expands visible progress")
+        ok(not E.Badge.expanded, "normal tap does not expand Full refresh progress")
         m = E.Mirror.status()
         ok(m.done >= done and m.total >= total and m.left > 0, "the run is kept, not restarted")
         local h = E.Badge.history or {}
-        ok(#notes == 0 and E.Badge.expanded and (h[#h] or ""):find("^Full refresh · %d+%% · [%d,]+ of [%d,]+"), "the badge opens on its full message: " .. tostring(h[#h]))
+        ok((h[#h] or ""):find("^Full refresh · %d+%% · [%d,]+ of [%d,]+"), "the badge opens on its full message: " .. tostring(h[#h]))
         ok(table.concat(W.logs, "\n"):find("Full refresh already running (pressed again); kept", 1, true), "logged")
         -- The network goes mid-run: paused; it comes back: resumed, no read needed.
         W.wifi = false
@@ -6019,6 +6169,74 @@ test("bulk catalog: plugin SQL serves offline windows, filters and secondary con
         eq(e.body.buckets[1].count,8,"letter count")
     end)
     st:close();os.execute("rm -rf '" .. dir .. "'")
+end)
+
+test("bulk catalog: a 7000-book mirror decodes only the requested window within 500 ms", function()
+    local dir, st = fixtureStore()
+    for sql in io.lines(here .. "/../../../shared/fixtures/catalog/bulk-refresh/schema.sql") do st.conn:exec(sql) end
+    st:run("INSERT OR REPLACE INTO meta VALUES ('bulk_active','1')")
+    st.conn:exec("BEGIN")
+    for i=1,7000 do
+        local letter = string.char(65 + math.floor((i-1)*26/7000))
+        local title = letter .. string.format("%05d",i)
+        local item = RE.Cache.encode({id=i,title=title,description=string.rep("x",1000)})
+        st:run("INSERT INTO bulk_books (g,id,item,title,status,added) VALUES (1,?,?,?,'unread',?)",i,item,title,tostring(i))
+        st:run("INSERT INTO bulk_ranks VALUES (1,'title','asc',?,?,?)",i,i-1,letter)
+        if i%2 == 0 then st:run("INSERT INTO bulk_members (g,kind,value,id) VALUES (1,'collectionId','4',?)",i) end
+    end
+    -- One letter occurs at both ends: indexes cannot be inferred by adding
+    -- grouped letter counts. The collection filter must still produce dense indexes.
+    st:run("UPDATE bulk_ranks SET letter='#' WHERE id IN (1,7000)")
+    st.conn:exec("COMMIT")
+    withStore(dir,function()
+        local decode, connect = RE.Cache.decode, RE.Store.conn
+        local decoded, queries = 0, 0
+        RE.Store.conn = function(...)
+            local conn, err = connect(...)
+            if not conn then return nil, err end
+            return setmetatable({}, {__index=function(_, key)
+                return function(_, ...)
+                    if key == "prepare" then queries=queries+1 end
+                    return conn[key](conn, ...)
+                end
+            end})
+        end
+        RE.Cache.decode = function(...) decoded=decoded+1; return decode(...) end
+        local success, err = pcall(function()
+            for _, query in ipairs({
+                "sort=title&order=asc&buckets=1",
+                "sort=recently_added&order=desc",
+                "sort=title&order=asc&buckets=1&collectionId=4",
+            }) do
+                decoded, queries=0, 0
+                local path="/koreader/plugin/catalog/books?size=12&page=1&" .. query
+                local start=os.clock()
+                local entry=RE.Store.read(DBFX.owner,path,path,nil)
+                local elapsed=(os.clock()-start)*1000
+                print(string.format("bulk window: %.1f ms, %d queries, %d decodes (%s)", elapsed, queries, decoded, query))
+                ok(elapsed < 500,"bulk window CPU budget: " .. elapsed .. " ms (" .. query .. ")")
+                eq(#entry.body.items,12)
+                ok(decoded <= 13,"only 12 items and an optional header decoded: " .. decoded)
+                eq(entry.body.total,query:find("collectionId",1,true) and 3500 or 7000)
+                ok(queries <= 8,"query count stays fixed as the alphabet grows: " .. queries)
+                if entry.body.buckets then
+                    local rail=entry.body.buckets
+                    if query:find("collectionId",1,true) then
+                        eq(rail[1].key,"A"); eq(rail[1].index,0)
+                        eq(rail[2].key,"B"); eq(rail[2].index,135)
+                        eq(rail[#rail].key,"#"); eq(rail[#rail].index,3499); eq(rail[#rail].count,1)
+                    else
+                        eq(rail[1].key,"#"); eq(rail[1].index,0); eq(rail[1].count,2)
+                        eq(rail[2].key,"A"); eq(rail[2].index,1)
+                        eq(rail[3].key,"B"); eq(rail[3].index,270)
+                    end
+                end
+            end
+        end)
+        RE.Cache.decode, RE.Store.conn=decode, connect
+        ok(success,err)
+    end)
+    st:close(); sh("rm -rf",dir)
 end)
 
 test("sqlite cache: the plugin's reads answer the shared fixture (db.json) from the rows", function()

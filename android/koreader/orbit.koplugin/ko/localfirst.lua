@@ -619,7 +619,7 @@ function LF.seedOnDevice(cat)
     return n
 end
 
--- The board's ⟳ with its own hold: a hold on it is a Full refresh, not the tile's board editing
+-- The board's ⟳ with its own hold: a hold opens the refresh menu, not the tile's board editing
 -- (the tile's HoldSelect, bookorbit_catalog_board.lua:75, sees it only if this one doesn't).
 function LF.holdable(icon)
     local okw, wdg = pcall(function()
@@ -646,8 +646,18 @@ function LF.refreshTap(cat)
 end
 
 function LF.refreshHold(cat)
-    if OC and OC.installed then return OC.fullRefresh(cat) end
-    return LF.refreshKeepingCovers(cat)
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local dialog
+    dialog = ButtonDialog:new{ title = _("Sync"), buttons = {
+        { { text = _("Full refresh"), callback = function()
+            UIManager:close(dialog)
+            if OC and OC.installed then return OC.fullRefresh(cat) end
+            return LF.refreshKeepingCovers(cat)
+        end } },
+        { { text = _("Cancel"), callback = function() UIManager:close(dialog) end } },
+    } }
+    UIManager:show(dialog) -- gate: user action (refresh long-press menu)
+    return true
 end
 
 -- ⟳: the plugin's refresh of the current view, keeping the covers on disk.

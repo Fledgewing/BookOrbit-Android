@@ -45,8 +45,13 @@ function StatusLayout.layout(width, inset, gap, battery, icon, chapter, progress
 end
 
 -- Fixed unscaled text sizes; neither page margins nor the native footer choose a face.
-StatusLayout.SIZES = { small = 14, medium = 18, large = 22 }
-function StatusLayout.fontSize(choice) return StatusLayout.SIZES[choice] or 14 end
+StatusLayout.SIZES = { small = 12, medium = 18, large = 22 }
+function StatusLayout.fontSize(choice) return StatusLayout.SIZES[choice] or 12 end
+function StatusLayout.fontBold(choice) return choice == "medium" or choice == "large" end
+-- Whole pixels keep edge rounding from making the icon taller than a capital.
+function StatusLayout.batteryHeight(cap_height, text_height)
+    return math.max(0, math.floor(math.min(cap_height, text_height)))
+end
 function StatusLayout.stripHeight(text_height, padding) return math.ceil(text_height) + 2 * padding end
 -- Fit actual font metrics to each margin independently; the configured size is a maximum.
 function StatusLayout.fit(margin, maximum, padding, measureHeight)

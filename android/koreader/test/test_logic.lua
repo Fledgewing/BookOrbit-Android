@@ -1662,8 +1662,19 @@ test("status layout: default off, sizes, compact strips and proportional battery
     eq(indexed.byKey.status_orbit_layout.default, false)
     eq(indexed.byKey.status_orbit_size.default, "small")
     local L = M.StatusLayout
-    eq(L.fontSize("small"), 14); eq(L.fontSize("medium"), 18); eq(L.fontSize("large"), 22)
-    eq(L.fontSize("unknown"), 14)
+    eq(L.fontSize("small"), 12); eq(L.fontSize("medium"), 18); eq(L.fontSize("large"), 22)
+    eq(L.fontSize("unknown"), 12)
+    eq(L.fontBold("small"), false); eq(L.fontBold("unknown"), false)
+    eq(L.fontBold("medium"), true); eq(L.fontBold("large"), true)
+    for _, size in ipairs({"small", "medium", "large"}) do
+        for _, scale in ipairs({1, 1.5, 2}) do
+            local text_height = L.fontSize(size)*scale*1.4
+            local cap_height = L.fontSize(size)*scale*0.7
+            local battery_height = L.batteryHeight(cap_height, text_height)
+            ok(battery_height <= cap_height); ok(battery_height <= text_height)
+            eq(battery_height, math.floor(cap_height))
+        end
+    end
     for _, h in ipairs({12, 16, 24, 40}) do eq(L.stripHeight(h, 1), h+2) end
     eq(indexed.byKey.status_orbit_add_space, nil)
     local program=M.SettingsSync.decodeJson(readFile(here.."/../../../shared/ui/battery.json"))

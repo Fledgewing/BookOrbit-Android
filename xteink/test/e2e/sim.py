@@ -138,7 +138,7 @@ class Simulator:
 
     def run(self, card: SdCard, name: str, script: str = "", timeout_s: float = 30, after_reboot: str | None = None,
             wake: bool = False, screenshots: dict[int, str] | None = None, env: dict[str, str] | None = None,
-            choice: str = "none", quit_after_sync: bool = True) -> Run:
+            choice: str = "none", quit_after_sync: bool = True, input_from_poll: bool = False) -> Run:
         """One simulator chain on `card`. Screenshots {ms: name} land in artifacts as PNG.
         Scenario hooks of upstream's sync activity: CROSSINK_SIM_BOOKORBIT_CHOICE answers its
         choice screens, ..._QUIT_AFTER_SYNC ends the process once the sync settles."""
@@ -146,6 +146,11 @@ class Simulator:
         # The software renderer: SDL's dummy video driver has no accelerated one on Linux (CI), where the
         # simulator then had no renderer and silently saved no screenshots.
         e.update(SDL_VIDEODRIVER="dummy", SDL_RENDER_DRIVER="software", CROSSPOINT_SIM_INPUT_SCRIPT=script, CROSSINK_SIM_BOOKORBIT_CHOICE=choice)
+        # A cold/contended settings write can outlast an entire short button press.
+        # Sleep helpers start their script at the first input poll, not process start.
+        e.pop("ORBIFY_SIM_INPUT_FROM_POLL", None)
+        if input_from_poll:
+            e["ORBIFY_SIM_INPUT_FROM_POLL"] = "1"
         if self.program.parent.name in ("x4-pro-simulator", "x4-classic-simulator"):
             # X4 cache JSON allocates in PSRAM. A zero-sized simulator pool silently defeats it.
             e["CROSSINK_SIMULATOR_PSRAM_TOTAL"] = "8388608"

@@ -105,6 +105,29 @@ class FastCatalogTest {
         } finally { worker.store.close(); root.deleteRecursively() }
     }
 
+    @Test fun manifestReportsProgressBetweenPagesBeforeThePhaseCompletes() {
+        val root = Files.createTempDirectory("bulk-page-progress").toFile()
+        val reports = arrayListOf<Map<String, Any?>>()
+        var pages = 0
+        val worker = CacheWorker(root, { url, _, _, _ ->
+            val request = url.substringAfter("/api/v1")
+            val body = if ("/manifest?" in request) {
+                if (pages++ > 0) {
+                    assertTrue((reports.last()["done"] as Long) > 0)
+                    assertEquals(100L, reports.last()["total"])
+                    assertTrue((reports.last()["pct"] as Long) < 15)
+                }
+                reply(request.replace("size=200", "size=2"))
+            } else reply(request)
+            CacheWorker.Reply(200, JSONObject(body).toString().toByteArray())
+        }, log = {}, openSql = ::JdbcSql, onRunState = reports::add)
+        try {
+            assertEquals("finished", worker.run(plan(), CacheWorker.Creds("https://books.example/api/v1", "reader", "key")))
+            assertTrue(pages > 1)
+            assertEquals(100L, reports.last()["done"])
+        } finally { worker.store.close(); root.deleteRecursively() }
+    }
+
     @Test fun storageRetirementJoinsARunningMirrorTransaction() = nestedMirrorWrite(true)
     @Test fun patchJoinsARunningMirrorTransaction() = nestedMirrorWrite(false)
 

@@ -22,8 +22,11 @@ return function(here, test, ok, eq)
         E.SOURCE_DIR=here.."/../orbit.koplugin"
         E.SettingsSync={decodeJson=dofile(here.."/json_mini.lua").decode}
         E.os={time=function() return 120 end,date=function() return {hour=12,min=2} end}
-        local Text={new=function(_,t) return {getSize=function() return {w=#t.text,h=(t.face.size or 14)-2} end,paintTo=noop,free=noop} end}
+        local Text={new=function(_,t) return {face=t.face,bold=t.bold,getSize=function() return {w=#t.text,h=(t.face.size or 12)-2} end,paintTo=noop,free=noop} end}
         E.require=function(name)
+            if name=="ui/rendertext" then return {sizeUtf8Text=function(_,x,width,face,text)
+                eq(text,"H"); return {y_top=math.floor(face.size*0.7)}
+            end} end
             if name=="ui/geometry" then return Geom end
             if name=="ui/widget/textwidget" then return Text end
             if name=="ui/font" then return {getFace=function(_,name,size) return {size=size} end} end
@@ -153,16 +156,16 @@ return function(here, test, ok, eq)
         w.ui.typeset.unscaled_margins={31,25,47,29}
         w.E.S.status_orbit_size="small"
         R.enable(w.ui); local s=R.session
-        eq(s.top.height,14); eq(s.bottom.height,14)
+        eq(s.top.height,12); eq(s.bottom.height,12)
         eq(s.left,31); eq(s.width,522)
-        eq(s.top.size,14); eq(s.bottom.size,14)
+        eq(s.top.size,12); eq(s.bottom.size,12)
         local count=0
         s.Text={new=function(_,t)
-            eq(t.fgcolor,s.BB.COLOR_BLACK); eq(t.bold,true)
-            return { getSize=function() return {w=#t.text,h=t.face.size-2} end,
+            eq(t.fgcolor,s.BB.COLOR_BLACK); eq(t.bold,false)
+            return { face=t.face,bold=t.bold,getSize=function() return {w=#t.text,h=t.face.size-2} end,
                 free=function() end,paintTo=function(_,bb,x,y)
                     ok(x>=31 and x+#t.text<=553)
-                    ok(y>=786 or y+t.face.size-2<=14)
+                    ok(y>=788 or y+t.face.size-2<=12)
                     count=count+1
                 end }
         end}
@@ -170,15 +173,77 @@ return function(here, test, ok, eq)
         local refresh=R.refreshGeometry; R.refreshGeometry=function() end
         local rects={}
         R.paint(s,{paintRect=function(_,x,y,width,height,color)
-            ok(x>=31 and x+width<=553); ok(y>=786 or y+height<=14)
+            ok(x>=31 and x+width<=553); ok(y>=788 or y+height<=12)
             rects[#rects+1]={x,y,width,height,color}
         end},0,0)
         R.refreshGeometry=refresh
         ok(count>=3); ok(#rects>=6)
         eq(rects[3][5],1); eq(rects[4][5],0) -- battery black outline, white inset
         w.ui.typeset.unscaled_margins={40,10,50,12}; R.refreshGeometry(s)
-        eq(s.top.height,14); eq(s.bottom.height,14); eq(s.left,40); eq(s.width,510)
+        eq(s.top.height,12); eq(s.bottom.height,12); eq(s.left,40); eq(s.width,510)
         R.disable()
+    end)
+    test("status: rendered font weight and battery cap height follow size on both strips", function()
+        local previous
+        for _,size in ipairs({"small","medium","large"}) do
+            for _,scale in ipairs({1,1.5,2}) do
+                for _,paged in ipairs({false,true}) do
+                    local w,R=world(paged)
+                    w.E.S.status_orbit_size=size
+                    w.E.Device.screen.scaleBySize=function(_,n) return n*scale end
+                    if paged then
+                        w.v.state={offset={x=0,y=100}}
+                        w.v.visible_area={w=600,h=600}
+                    else w.ui.rolling.cre_top_bar_enabled=false end
+                    local painted={}
+                    local nativeRequire=w.E.require
+                    local expectedSize=({small=12,medium=18,large=22})[size]*scale
+                    local expectedBold=size~="small"
+                    w.E.require=function(name)
+                        if name=="ui/font" then return {getFace=function(_,font,n)
+                            eq(font,"ffont"); return {size=n*scale}
+                        end} end
+                        if name=="ui/widget/textwidget" then return {new=function(_,t)
+                            eq(t.face.size,expectedSize); eq(t.bold,expectedBold)
+                            return {face=t.face,bold=t.bold,
+                                getSize=function() return {w=#t.text*expectedSize/3,h=expectedSize*1.4} end,
+                                free=function() end,paintTo=function(_,bb,x,y)
+                                    painted[#painted+1]={text=t.text,y=y}
+                                end}
+                        end} end
+                        return nativeRequire(name)
+                    end
+                    R.enable(w.ui)
+                    local s=R.session
+                    local batteryTop,batteryBottom
+                    local draw=w.E.BatteryGlyph.draw
+                    local drawingBattery=false
+                    w.E.BatteryGlyph.draw=function(...)
+                        drawingBattery=true; draw(...); drawingBattery=false
+                    end
+                    w.v:paintTo({paintRect=function(_,x,y,width,height)
+                        if drawingBattery then
+                            batteryTop=math.min(batteryTop or y,y)
+                            batteryBottom=math.max(batteryBottom or y+height,y+height)
+                        end
+                    end},0,0)
+                    local top,bottom=false,false
+                    for _,t in ipairs(painted) do
+                        if t.y<400 then top=true else bottom=true end
+                    end
+                    ok(top and bottom,"header and footer both paint")
+                    local cap=math.floor(expectedSize*0.7)
+                    eq(batteryBottom-batteryTop,cap,"painted battery height equals capital ink height")
+                    ok(cap<expectedSize*1.4,"line box must not size the battery")
+                    if scale==1 and not paged then
+                        if previous then ok(cap>previous,"battery grows with size") end
+                        previous=cap
+                    end
+                    eq(w.E.S.status_orbit_size,size,"saved size retained")
+                    R.disable()
+                end
+            end
+        end
     end)
     test("status: minimum inset and unclipped 100 percent plus charging mark at every size and scale", function()
         for _, scale in ipairs({1,2}) do
@@ -196,7 +261,7 @@ return function(here, test, ok, eq)
                             if name=="ui/font" then return {getFace=function(_,_,n) return {size=n*scale} end} end
                             if name=="ui/widget/textwidget" then return {new=function(_,t)
                                 local width=#t.text*t.face.size/2
-                                return {getSize=function() return {w=width,h=t.face.size-2*scale} end,
+                                return {face=t.face,bold=t.bold,getSize=function() return {w=width,h=t.face.size-2*scale} end,
                                     free=function() end,paintTo=function(_,bb,x,y)
                                         painted[#painted+1]={text=t.text,x=x,y=y,w=width,h=t.face.size-2*scale}
                                     end}
@@ -271,10 +336,10 @@ return function(here, test, ok, eq)
             eq(w.v.dimen.h,800)
             R.paint(s,{paintRect=function() error("no safe margin") end},0,0)
             if paged then
-                w.v.state={offset={x=20,y=12}}
-                w.v.visible_area={w=560,h=772}
+                w.v.state={offset={x=20,y=10}}
+                w.v.visible_area={w=560,h=774}
                 R.refreshGeometry(s)
-                eq(s.top.height,0); eq(s.bottom.height,14); eq(s.left,20); eq(s.width,560)
+                eq(s.top.height,0); eq(s.bottom.height,12); eq(s.left,20); eq(s.width,560)
                 w.v.state.offset.y=0; w.v.visible_area.h=800
                 R.paint(s,{paintRect=function() error("zoom removed surround") end},0,0)
                 eq(s.top.height,0); eq(s.bottom.height,0)
@@ -286,10 +351,10 @@ return function(here, test, ok, eq)
         local w,R=world(false); w.ui.rolling.cre_top_bar_enabled=false
         R.enable(w.ui); local s=R.session; w.dirty={}
         s.clock="12:01"; s.battery=77
-        s.tick(); eq(#w.dirty,1); eq(w.dirty[1].rect.y,0); eq(w.dirty[1].rect.h,14)
+        s.tick(); eq(#w.dirty,1); eq(w.dirty[1].rect.y,0); eq(w.dirty[1].rect.h,12)
         eq(w.dirty[1].mode,"partial"); eq(w.queue[s.tick],60)
         s.clock="12:02"; w.capacity=76; s.tick()
-        eq(#w.dirty,2); eq(w.dirty[2].rect.y,786)
+        eq(#w.dirty,2); eq(w.dirty[2].rect.y,788)
         w.top={}; s.tick(); eq(#w.dirty,2)
         w.E.OrbitAndroid.onSuspend({ui=w.ui}); eq(w.queue[s.tick],nil)
         w.E.OrbitAndroid.onResume({ui=w.ui}); eq(w.queue[s.tick],60)

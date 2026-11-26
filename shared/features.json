@@ -197,7 +197,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Refresh tap expands running Full refresh progress; otherwise refreshes normally; hold offers Full refresh; companion owns refresh progress and completion stamps",
+          "note": "Refresh tap always refreshes normally; hold offers Full refresh; companion reports queued and active progress without timer-only failure",
           "reason": null,
           "evidence": [
             {
@@ -2959,7 +2959,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Fixed 14/18/22 pt reading strips; hidden native footer space released; saved margins and footer preferences retained",
+          "note": "Fixed 12/18/22 pt reading strips; Small regular, Medium/Large bold; battery capped to capital ink height at every size; saved margins and footer preferences retained",
           "reason": null,
           "evidence": [
             {
@@ -3039,7 +3039,7 @@
       "platforms": {
         "android": {
           "status": "supported",
-          "note": "Fixed 14/18/22 pt reading strips; hidden native footer space released; saved margins and footer preferences retained",
+          "note": "Fixed 12/18/22 pt reading strips; Small regular, Medium/Large bold; battery capped to capital ink height at every size; saved margins and footer preferences retained",
           "reason": null,
           "evidence": [
             {
@@ -3055,7 +3055,7 @@
         },
         "x4_pro": {
           "status": "supported",
-          "note": "Native Small / Medium / Large text selector; independent of KOReader footer reservation",
+          "note": "Native Small / Medium / Large text selector; uses firmware fonts and icons, so the KOReader strip weight and battery correction does not apply",
           "reason": null,
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
           "evidence": [
@@ -3075,7 +3075,7 @@
         },
         "x4": {
           "status": "supported",
-          "note": "Native Small / Medium / Large text selector; independent of KOReader footer reservation",
+          "note": "Native Small / Medium / Large text selector; uses firmware fonts and icons, so the KOReader strip weight and battery correction does not apply",
           "reason": null,
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
           "evidence": [
@@ -3095,7 +3095,7 @@
         },
         "x3": {
           "status": "supported",
-          "note": "Native Small / Medium / Large text selector; independent of KOReader footer reservation",
+          "note": "Native Small / Medium / Large text selector; uses firmware fonts and icons, so the KOReader strip weight and battery correction does not apply",
           "reason": null,
           "version": "xteink-v2.0.0.373+bookorbit.1-rc3",
           "evidence": [

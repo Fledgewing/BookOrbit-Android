@@ -20,7 +20,7 @@
 -- with the plugin: no run without it (Companion.workerProblem), and no fallback.
 ---------------------------------------------------------------------------------------------
 
-Mirror = { POLL_S = 3, DEAD_S = 90, SENTINEL = "987654321" }
+Mirror = { POLL_S = 3, SENTINEL = "987654321" }
 local lfs_ok, lfs = pcall(require, "libs/libkoreader-lfs")
 
 -- Section indexes Full refresh saves, in order; each entry's book list follows its index.
@@ -262,18 +262,31 @@ function Mirror.poll()
             return Mirror.ran(sum)
         end
         if not NetworkMgr:isConnected() then OC.writeFile(Mirror.stopFile(), "stop") end
-        local s = load("status.lua")
-        if s and s.run == Mirror.run_id then
-            Mirror._status = s
-            Mirror.seen_beat = nowT()
-        elseif nowT() - (Mirror.sent_at or 0) >= Mirror.DEAD_S then
-            Mirror.polling = nil
-            return Mirror.ran(nil)
+        local state = load("run.lua")
+        -- Admission can attach us to a run already queued by an earlier plugin process.
+        if state and state.query_for == Mirror.run_id and state.state ~= "stopped" then
+            Mirror.run_id, run_id = state.run, state.run
         end
-        if s and s.run == Mirror.run_id and nowT() - (s.beat or 0) >= Mirror.DEAD_S and nowT() - (Mirror.seen_beat or 0) < Mirror.DEAD_S then
-            -- The status stopped moving: the companion was stopped mid-run.
-            Mirror.polling = nil
-            return Mirror.ran(nil)
+        local s = load("status.lua")
+        if s and s.run == Mirror.run_id then Mirror._status = s end
+        if state and state.run == Mirror.run_id then
+            if state.state == "stopped" then
+                -- The summary can arrive between our reads above; check once more.
+                local ended = load("summary.lua")
+                Mirror.polling = nil
+                return Mirror.ran(ended and ended.run == Mirror.run_id and ended or nil)
+            end
+            if state.state == "queued" or state.state == "started" then
+                local current = {}
+                for k, v in pairs(Mirror._status or {}) do current[k] = v end
+                for k, v in pairs(state) do current[k] = v end
+                Mirror._status = current
+            end
+        end
+        -- A stale heartbeat is a reason to ask, never evidence that work stopped.
+        if not Mirror.queried_at or nowT() - Mirror.queried_at >= Mirror.POLL_S then
+            Mirror.queried_at = nowT()
+            Companion.send(Companion.ACTION.MIRROR, { query_run = Mirror.run_id })
         end
         Badge.update(Mirror._status)
         UIManager:scheduleIn(Mirror.POLL_S, tick)
@@ -335,13 +348,14 @@ function Mirror.launch(op, reason)
         end
         if coroutine.status(co) ~= "dead" then return UIManager:scheduleIn(0.01, advance) end
         Mirror.preparing = nil
-        Mirror.run_id, Mirror.sent_at, Mirror.seen_beat = plan.run, nowT(), nil
+        Mirror.run_id, Mirror.queried_at = plan.run, nil
         if op == "full" then
             Mirror._status.run = plan.run
             OC.writeFile(Mirror.dir() .. "/status.lua", Cache.encode(Mirror._status))
         end
         Companion.send(Companion.ACTION.MIRROR, { reason = op .. ": " .. tostring(reason), server = client.server_url,
-            user = client.username, userkey = client.userkey, plan = Cache.encode(plan) })
+            user = client.username, userkey = client.userkey, plan = Cache.encode(plan),
+            run = plan.run, op = op == "resume" and (Mirror.status().op or "full") or op, done = tostring(Mirror._status.done or 0), total = tostring(Mirror._status.total or 100) })
         Mirror.poll()
     end
     UIManager:nextTick(advance)
@@ -448,6 +462,12 @@ function Mirror.start(reason, manual)
         return true
     end
     Mirror.manual = manual
+    if Mirror.busy and not Mirror.preparing and Mirror.status().engine == "bulk" then
+        -- Finish stopping the owned run before admitting an explicit replacement.
+        Mirror.next = { op = "full", reason = reason }
+        OC.writeFile(Mirror.stopFile(), "stop")
+        return true
+    end
     if manual and Mirror.preparing then
         -- No companion job exists yet: discard the obsolete resume plan now.
         Mirror.preparing, Mirror.busy = nil, nil

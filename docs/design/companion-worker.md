@@ -118,6 +118,14 @@ Guards (`test_flows.lua`, "v0.11.3: the mirror off the UI thread"):
   and writes `status.lua` every 5 s and `summary.lua` at the end. The plugin polls `status.lua`
   every 3 s and applies the summary. Nothing of the run (request, reply, compare, write, queue)
   is in KOReader. Runs have no job budget: one run goes until it is done, stopped or offline.
+  Queue ownership is published immediately in `mirror/run.lua`, before sleep pool or picker
+  work releases the executor. Admission deduplicates queued and active runs. The plugin queries
+  the companion process for liveness; only an explicit stopped reply ends ownership without a
+  summary. Heartbeat age alone never ends a run. A new companion process reports stopped for
+  work it does not own. Queued/starting labels and page-level progress keep the badge current.
+  A normal refresh tap always refreshes the current view; the long-press menu's Full refresh
+  item starts the bulk job.
+
 - **Checks.** `cache: … checking (open)` sends `CHECK` (key, path, mode, login). The companion asks,
   compares with what the plugin would serve (its entry, else the mirror's pages, as `OC.lookup`),
   saves a changed reply under the key and writes a `checked` event. The plugin drains events every
