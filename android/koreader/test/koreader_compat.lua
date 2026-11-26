@@ -53,7 +53,7 @@ local NEEDS = {
     { "*", { "isConnected", "isWifiOn", "turnOnWifi", "turnOffWifi", "beforeWifiAction",
         "turnOnWifiAndWaitForConnection", "scheduleConnectivityCheck" } },
     { "frontend/ui/network/manager.lua", { { "NetworkMgr", T } } },
-    { "frontend/device/generic/device.lua", { "canRestart", "exit", "isAndroid", { "screen", F }, { "input", F },
+    { "frontend/device/generic/device.lua", { "canRestart", "exit", "isAndroid", "isTouchDevice", { "screen", F }, { "input", F },
         { "closed_rotation_mode", T } } },
     -- The start patch (orbit.koplugin/patches/1-orbit-start-rotation.lua): early patches, then the
     -- settings, the Device, the late patches, the first file browser.
