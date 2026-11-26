@@ -225,10 +225,10 @@ class ModeActivity : EinkActivity() {
             root.addView(Ui.header(this, "How should BookSync run?", "Later") { finish() })
             root.addView(Ui.text(this, "You can switch later in Settings.", 17f, color = Ui.MID))
             card(root, "Full: BookSync runs the reader",
-                "BookSync is the Home app: Home opens your book or BookOrbit. It switches Wi-Fi, keeps the reader awake for sleep syncs, and runs clicker buttons and the Settings PIN.",
+                "BookSync is the Home app: Home opens your book or library. It switches Wi-Fi, keeps the reader awake for sleep syncs, and runs clicker buttons and the Settings PIN.",
                 "Use Full") { choose(OrbitMode.FULL) }
             card(root, "Add-on: keep your launcher",
-                "Your reader keeps its own Home screen and Wi-Fi. BookSync installs, updates and sets up KOReader, BookOrbit and the BookSync plugin. Wi-Fi switching, sleep sync, clicker buttons and the PIN are optional helpers, off until you turn them on.",
+                "Your reader keeps its own Home screen and Wi-Fi. BookSync installs, updates and sets up KOReader, library and the BookSync plugin. Wi-Fi switching, sleep sync, clicker buttons and the PIN are optional helpers, off until you turn them on.",
                 "Use Add-on") { choose(OrbitMode.ADDON) }
             return
         }

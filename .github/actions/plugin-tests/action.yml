@@ -11,6 +11,7 @@ runs:
       run: |
         set -euo pipefail
         sudo apt-get install -y -qq luajit libsqlite3-0 >/dev/null
+        python3 tools/test/test-server-boundary.py
         # stdin closed: nothing in the tests may wait on a terminal.
         luajit android/koreader/test/test_logic.lua </dev/null
         luajit android/koreader/test/test_flows.lua </dev/null

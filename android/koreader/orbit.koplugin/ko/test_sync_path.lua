@@ -54,7 +54,7 @@ function OrbitAndroid:testSyncPath()
         add(false, _("Companion answered"), nil, _("BookSync Companion is not installed: Wi-Fi stays as it is, Tailscale is woken directly."))
     end
     if not p or not p:isLoggedIn() then
-        add(false, _("BookOrbit plugin signed in"), nil, _("Sign in to BookOrbit first."))
+        add(false, _("library plugin signed in"), nil, _("Sign in to library first."))
         return show()
     end
     local was_on = Wifi.acquire("test")
@@ -63,24 +63,24 @@ function OrbitAndroid:testSyncPath()
     Net.up(p, { reason = "test", cap = 20, need_server = true }, function(ok, res)
         add(res.wifi_s ~= nil, _("Wi-Fi connected"), res.wifi_s, _("Turn Wi-Fi on, or check BookSync Companion's Wi-Fi permission."))
         add(res.vpn_s ~= nil, _("Tailscale up"), res.vpn_s, _("Tailscale not connected: open Tailscale and sign in."))
-        add(res.server_s ~= nil, _("BookOrbit server answered"), res.server_s, _("No answer from the server: check Tailscale and the server address in BookOrbit settings."))
+        add(res.server_s ~= nil, _("library server answered"), res.server_s, _("No answer from the server: check Tailscale and the server address in library settings."))
         if not ok then return show() end
         local s0 = now_s()
         local reported = false
         local function plugin_done(err)
             if reported then return end
             reported = true
-            add(err == nil, _("BookOrbit plugin synced"), now_s() - s0,
+            add(err == nil, _("library plugin synced"), now_s() - s0,
                 err and (_("The plugin reported: ") .. tostring(p:errorLabel(err))) or nil)
             show()
         end
-        if not (hasHandler(p, "BookOrbitSyncBook") and Compat.callable(p.startSweep) and Compat.callable(p.errorLabel)) then
-            add(true, _("BookOrbit plugin step skipped: ") .. Compat.fallback("test_sync"), nil)
+        if not (hasHandler(p, Server.events.sync) and Compat.callable(p.startSweep) and Compat.callable(p.errorLabel)) then
+            add(true, _("library plugin step skipped: ") .. Compat.fallback("test_sync"), nil)
             return show()
         end
         -- The plugin's own Sync now: this book in a book, the library otherwise.
         if inBook() then
-            pluginEvent(liveUI(), p, "BookOrbitSyncBook", { quiet = true, on_done = plugin_done })
+            pluginEvent(liveUI(), p, Server.events.sync, { quiet = true, on_done = plugin_done })
         else
             p:startSweep({ quiet = true, on_progress = function() end, on_done = plugin_done })
         end

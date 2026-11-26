@@ -36,7 +36,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/cache.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/cache.lua",
               "line": 24
             }
           ],
@@ -91,7 +91,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/grouping.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/grouping.lua",
               "line": 40
             }
           ],
@@ -146,8 +146,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CacheStore.kt",
-              "line": 15
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/CacheStore.kt",
+              "line": 17
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -201,8 +201,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-              "line": 60
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+              "line": 62
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -311,8 +311,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-              "line": 17
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+              "line": 19
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -366,11 +366,11 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-              "line": 60
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+              "line": 62
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/cache.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/cache.lua",
               "line": 24
             }
           ],
@@ -563,7 +563,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/copies.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/copies.lua",
               "line": 18
             }
           ],
@@ -626,11 +626,11 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CopiesLogic.kt",
-              "line": 8
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/CopiesLogic.kt",
+              "line": 10
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/copies.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/copies.lua",
               "line": 18
             }
           ],
@@ -697,7 +697,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/orbismart.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/orbismart.lua",
               "line": 33
             }
           ],
@@ -764,7 +764,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/orbismart.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/orbismart.lua",
               "line": 33
             }
           ],
@@ -878,7 +878,7 @@
               "line": 139
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/orbismart.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/orbismart.lua",
               "line": 33
             }
           ],
@@ -1047,7 +1047,7 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/koreader/orbit.koplugin/ko/endofbook.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/endofbook.lua",
               "line": 39
             },
             {
@@ -1378,7 +1378,7 @@
               "line": 9
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/localfirst.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/localfirst.lua",
               "line": 30
             }
           ],
@@ -1514,8 +1514,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SleepPoolBuilder.kt",
-              "line": 16
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/SleepPoolBuilder.kt",
+              "line": 18
             },
             {
               "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/SleepScreen.kt",
@@ -1955,8 +1955,8 @@
           "reason": null,
           "evidence": [
             {
-              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-              "line": 17
+              "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+              "line": 19
             }
           ],
           "version": "v0.11.3-rc.17"
@@ -2731,7 +2731,7 @@
               "line": 25
             },
             {
-              "path": "android/koreader/orbit.koplugin/ko/recommended.lua",
+              "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/recommended.lua",
               "line": 14
             }
           ],
@@ -5700,12 +5700,12 @@
           "line": 271
         },
         {
-          "path": "android/koreader/orbit.koplugin/ko/mirror.lua",
+          "path": "android/koreader/orbit.koplugin/ko/server/bookorbit/mirror.lua",
           "line": 71
         },
         {
-          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/Worker.kt",
-          "line": 223
+          "path": "android/companion/app/src/main/java/net/fledgewing/orbitcompanion/server/bookorbit/AdapterWorker.kt",
+          "line": 225
         }
       ]
     }

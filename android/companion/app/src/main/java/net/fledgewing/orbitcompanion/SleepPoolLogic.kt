@@ -129,8 +129,8 @@ object SleepPoolLogic {
     /** R2: a cover, not read, not the book open now. */
     fun eligible(b: Map<String, Any?>?, openId: Long?): Boolean {
         val id = (b?.get("id") as? Number)?.toLong() ?: return false
-        if (b["hasCover"] == false) return false
-        if (b["readStatus"] == "read") return false
+        if (b["cover_available"] == false) return false
+        if (b["status"] == "finished") return false
         return openId == null || id != openId
     }
 

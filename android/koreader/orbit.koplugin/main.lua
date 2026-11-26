@@ -11,7 +11,7 @@ Orbit never talks to BookOrbit's API. It only:
   * checks that the plugin's configured server answers at its base URL (no login),
   * then triggers or waits on the plugin: its public action BookOrbitOpenDashboard and its
     "Push while reading" setting, and, behind a compatibility check with a fallback for each
-    (logic/compat.lua; android/koreader/README.md "Plugin hook points"), its internals
+    (logic/server/bookorbit/compat.lua; android/koreader/README.md "Plugin hook points"), its internals
     requestLifecycleOutboxDrain, requestProgressPull, requestProgressPush,
     fetchRemoteProgress, _onSuspend, onBookOrbitSyncBook, startSweep.
 
@@ -30,22 +30,22 @@ local PATCH_VERSION = "0.0.0-dev"
 
 local LOGIC = {
     "logic/schedule.lua", "logic/plan.lua", "logic/update.lua", "logic/wifi_plan.lua",
-    "logic/home_plan.lua", "logic/compat.lua", "logic/stats.lua", "logic/clicks.lua",
-    "logic/prompts.lua", "logic/group.lua", "logic/finish.lua", "logic/localfirst.lua", "logic/sheet_layout.lua", "logic/cache.lua",
-    "logic/recommended.lua", "logic/caps.lua", "logic/copies.lua", "logic/sleep_pool.lua", "logic/settings_sync.lua",
+    "logic/home_plan.lua", "logic/server/bookorbit/compat.lua", "logic/stats.lua", "logic/clicks.lua",
+    "logic/prompts.lua", "logic/server/bookorbit/group.lua", "logic/server/bookorbit/finish.lua", "logic/server/bookorbit/localfirst.lua", "logic/sheet_layout.lua", "logic/cache.lua", "logic/server/bookorbit/cache.lua",
+    "logic/server/bookorbit/recommended.lua", "logic/caps.lua", "logic/copies.lua", "logic/sleep_pool.lua", "logic/settings_sync.lua",
     "logic/orbismart.lua", "logic/status_layout.lua",
     "logic/budgets.lua", "logic/widget_registry.lua", "logic/layout.lua", "logic/filter_sheet.lua", "logic/reading_stats.lua", "logic/home_host.lua",
 }
 local KO = {
     "ko/base.lua", "ko/settings.lua", "ko/jni.lua", "ko/companion.lua", "ko/shared.lua",
-    "ko/bookorbit.lua", "ko/net.lua", "ko/sync.lua", "ko/wifi.lua", "ko/updater.lua",
+    "ko/server/bookorbit.lua", "ko/net.lua", "ko/sync.lua", "ko/wifi.lua", "ko/updater.lua",
     "ko/background.lua", "ko/runtime.lua", "ko/clicks_channel.lua", "ko/keys.lua",
     "ko/module.lua", "ko/start.lua", "ko/home.lua", "ko/sleep.lua", "ko/reading_sync.lua",
-    "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/recommended.lua", "ko/menu.lua",
-    "ko/wifi_backend.lua", "ko/grouping.lua", "ko/endsheet.lua", "ko/endofbook.lua",
-    "ko/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/badge.lua", "ko/cover_child.lua", "ko/cache.lua", "ko/mirror.lua", "ko/copies.lua", "ko/sleepscreen.lua",
-    "ko/sqlite_stress.lua", "ko/library_bookorbit.lua", "ko/library.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/home_host.lua",
-    "ko/orbismart.lua", "ko/status_layout.lua", "ko/notices.lua", "ko/main_loop.lua",
+    "ko/test_sync_path.lua", "ko/companion_ui.lua", "ko/server/bookorbit/recommended.lua", "ko/menu.lua",
+    "ko/wifi_backend.lua", "ko/server/bookorbit/grouping.lua", "ko/endsheet.lua", "ko/server/bookorbit/endofbook.lua",
+    "ko/server/bookorbit/localfirst.lua", "ko/db.lua", "ko/store.lua", "ko/server/bookorbit/store.lua", "ko/badge.lua", "ko/cover_child.lua", "ko/server/bookorbit/cache.lua", "ko/server/bookorbit/mirror.lua", "ko/server/bookorbit/copies.lua", "ko/sleepscreen.lua",
+    "ko/sqlite_stress.lua", "ko/server/bookorbit/library_bookorbit.lua", "ko/library.lua", "ko/filter_sheet.lua", "ko/reading_stats.lua", "ko/home_widgets.lua", "ko/home_host.lua",
+    "ko/server/bookorbit/orbismart.lua", "ko/status_layout.lua", "ko/notices.lua", "ko/main_loop.lua",
 }
 
 -- This plugin's folder: PluginLoader dofile()s <folder>/main.lua (frontend/pluginloader.lua:244).

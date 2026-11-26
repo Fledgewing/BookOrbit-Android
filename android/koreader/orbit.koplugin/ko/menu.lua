@@ -184,13 +184,13 @@ function OrbitAndroid:menuItems()
     })
     local home_items = {
         {
-            text = _("Back to my book, then BookOrbit home"),
+            text = _("Back to my book, then library home"),
             radio = true,
             checked_func = function() return S.home_button ~= "bookorbit" end,
             callback = function() Shared.set("home_button", "smart") end,
         },
         {
-            text = _("BookOrbit home"),
+            text = _("library home"),
             radio = true,
             checked_func = function() return S.home_button == "bookorbit" end,
             callback = function() Shared.set("home_button", "bookorbit") end,
@@ -224,7 +224,7 @@ function OrbitAndroid:menuItems()
           } },
         {
             text_func = function()
-                local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == "bookorbit" and _("BookOrbit home") or _("Back to my book, then BookOrbit home"))
+                local t = label("home_button", _("Home button in KOReader")) .. ": " .. (S.home_button == "bookorbit" and _("library home") or _("Back to my book, then library home"))
                 -- The companion's "Home opens": this applies only with KOReader.
                 if Shared.home_opens == "launcher" then t = t .. _(" (Home opens the BookSync launcher page)")
                 elseif Shared.home_opens == "app" then t = t .. _(" (Home opens another app)") end
@@ -313,7 +313,7 @@ function OrbitAndroid:menuItems()
             sub_item_table = limit_items,
         },
         toggle("keep_copies_current", label("keep_copies_current", _("Keep book copies current")),
-            _("When a book's file changes in the library (BookOrbit writes tags into it), the copy on this reader is downloaded again in the background, never while you read. Position, highlights and bookmarks stay.")),
+            _("When a book's file changes in the library (library writes tags into it), the copy on this reader is downloaded again in the background, never while you read. Position, highlights and bookmarks stay.")),
         { text_func = function() return Mirror.savedText() end, keep_menu_open = true, callback = function() end },
     })
     local updates = compact({
@@ -334,10 +334,10 @@ function OrbitAndroid:menuItems()
         { text = sectionTitle("updates", _("Updates and details")), sub_item_table = updates, separator = true },
         -- OrbiSmart's override (docs/design/position-sync.md §3.5), in a book only.
         (OSM and OSM.on() and self.ui and self.ui.document) and { text = _("Read from here everywhere"),
-          help_text = _("Sends this page to BookOrbit now, even if it is behind the place there. Your other readers move here at their next sync. Offline, it is sent first at the next sync."),
+          help_text = _("Sends this page to library now, even if it is behind the place there. Your other readers move here at their next sync. Offline, it is sent first at the next sync."),
           callback = later(function() OSM.readFromHere("menu") end) } or false,
         { text = _("Sync and sleep now"), callback = later(function() self:onOrbitSyncAndSleep() end) },
-        { text = _("Full refresh of BookOrbit"), callback = later(function() OC.menuFullRefresh() end),
+        { text = _("Full refresh of library"), callback = later(function() OC.menuFullRefresh() end),
           help_text = _("Gets this view and Home fresh from the server, re-checks the covers, then saves everything reachable from Home for reading offline. Tap ⟳ for a normal refresh; hold ⟳ for this.") },
         { text_func = function() return self:recommendedMenuText() end, callback = later(function() self:showRecommended("menu") end), separator = true },
         { text = _("Open BookSync Companion"), callback = later(function() self:onOrbitOpenCompanion() end) },

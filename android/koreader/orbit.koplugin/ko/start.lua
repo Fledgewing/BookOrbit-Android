@@ -47,7 +47,7 @@ function OrbitAndroid:wakeFlow(reason)
     end
     local p = bookorbit(self.ui)
     if not p or not p:isLoggedIn() then
-        log(reason .. ": BookOrbit plugin missing or signed out; nothing to do")
+        log(reason .. ": library plugin missing or signed out; nothing to do")
         return
     end
     local t0 = now_s()
@@ -84,9 +84,9 @@ function OrbitAndroid:wakeFlow(reason)
 end
 
 function OrbitAndroid:showWakeBanner(res)
-    local text = _("Can't reach BookOrbit. Reading from this device's place.") .. "\n" .. (res.detail or "")
+    local text = _("Can't reach library. Reading from this device's place.") .. "\n" .. (res.detail or "")
     local retry = function() self:wakeFlow("retry") end
-    local okt, Toast = pcall(require, "bookorbit_toast")
+    local okt, Toast = pcall(Server.require, "toast")
     Gate.show("wake banner: " .. text, function()
         if okt then
             Toast.error(text, retry, { timeout = 6 }) -- gate: Gate.show

@@ -115,7 +115,7 @@ function Net.up(p, opts, cb)
         if el >= cap then
             local stage = (S.wake_tailscale and not res.vpn_s) and "tailscale" or "server"
             return finish(false, stage, stage == "tailscale" and ("Tailscale didn't connect in " .. cap .. " s")
-                or ("BookOrbit didn't answer in " .. cap .. " s"))
+                or ("library didn't answer in " .. cap .. " s"))
         end
         UIManager:scheduleIn(0.5, tick)
     end

@@ -47,6 +47,13 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
   neutral objects that adapters translate, with local fallback on the cached catalog.
   The interface is introduced in 0.12 ([BookSync Home's owned-client design](docs/design/backend-independence.md#1-owned-android-client-and-ledger)).
 
+- **Server adapters own protocol.** Android endpoint paths, authentication, backend JSON and
+  backend terms live only in `server/bookorbit` (Kotlin) and `ko/server/bookorbit` /
+  `logic/server/bookorbit` (Lua compatibility). Only `ServerAdapters.kt` and the plugin loader
+  wire implementations. UI uses the neutral library/read model and capability flags. Run
+  `python3 tools/test/test-server-boundary.py`; no baseline, suppression or skip list is allowed.
+  See `docs/design/backend-independence.md` for adapter registration and legacy follow-ups.
+
 - **Nothing interrupts reading.** While a book is open in the foreground, nothing from BookSync,
   the companion or BookOrbit (as far as we can intercept it) appears on screen, restarts KOReader
   or takes focus. It waits for the next moment nobody is reading, or is dropped when stale. The
@@ -67,7 +74,7 @@ CrossInk 2.x bridge and the later stable BookSync releases become available (`xt
 ## Screen and widget performance budgets
 
 Maintainer rule 2026-11-25: every screen and widget declares a strict budget; library
-interface calls inherit the caller's budget. Keep filtering, sorting, grouping, counts,
+interface calls inherit the caller's budget; adapter projections preserve the same row/byte limits. Keep filtering, sorting, grouping, counts,
 search, stats, battery estimates and catalog joins in the companion; Lua only reads small,
 ready-to-draw windows. Enforce deterministic row/window and decoded-byte limits, zero
 subprocess spawns and render-path network calls, at most one batched companion round-trip

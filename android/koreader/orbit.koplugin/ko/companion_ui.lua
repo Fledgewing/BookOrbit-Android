@@ -27,7 +27,7 @@ function OrbitAndroid:openCompanionHome()
     -- Without the companion as Home (Add-on, plugin only): BookOrbit home is the top; Android's
     -- Home key goes to the reader's own launcher (docs/design/addon-mode.md §6.4).
     if not Companion.has("home") then
-        log("home: the companion isn't Home here; staying on BookOrbit home")
+        log("home: the companion isn't Home here; staying on library home")
         return true
     end
     local ok = Jni.startActivity{ action = Companion.ACTION.SHOW_LAUNCHER, package = Companion.PACKAGE } -- gate: user action (Home button/menu)

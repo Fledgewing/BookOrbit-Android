@@ -847,10 +847,10 @@ class HomeOpensTest {
 
     @Test
     fun koreaderChoice() {
-        val c = HomeApp.KOREADER_BOOKORBIT
+        val c = HomeApp.KOREADER_LIBRARY
         assertEquals("koreader", HomeApp.kind(c))
         assertTrue(HomeApp.showsHomeButton(c))
-        assertEquals("KOReader + BookOrbit · press Home twice for the launcher page", HomeApp.summary(c, null))
+        assertEquals("KOReader + library · press Home twice for the launcher page", HomeApp.summary(c, null))
         assertEquals(HomeAction.START_KOREADER, HomeDecider().onHomePress(0, true, opensApp = true))
         val l = HomeApp.launch(c, press = true, button = HomeButton.SMART, companionPageInFront = false)
         assertEquals(null, l.pkg)

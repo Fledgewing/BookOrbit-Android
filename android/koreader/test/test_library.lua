@@ -82,7 +82,7 @@ return function(test, eq, ok, here, Cache)
     test("library: reopening and source events refresh the worker, publications do not loop", function()
         local e=setmetatable({Cache=Cache, now_s=function() return 10 end, log=function() end,
             OC={watchChecks=function() end},Library={changed=function() end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
         local a=e.LibraryAdapter
         a.owner=function() return "fixture" end
         a.sent={stale=1}; a.watch(true); eq(next(a.sent),nil)
@@ -99,46 +99,15 @@ return function(test, eq, ok, here, Cache)
             client=function() error("render called the legacy client factory") end,
             owner=function(settings) eq(settings,plugin.settings); return "fixture-owner" end},
             Store={library=function(owner, request) reads=reads+1; eq(owner,"fixture-owner"); eq(request,"bounded"); return {items={}},32 end}}, {__index=_G})
-        setfenv(assert(loadfile(root .. "ko/library_bookorbit.lua")),e)()
+        setfenv(assert(loadfile(root .. "ko/server/bookorbit/library_bookorbit.lua")),e)()
         eq(e.LibraryAdapter.owner(),"fixture-owner")
         local r,bytes=e.LibraryAdapter.read("bounded"); eq(#r.items,0); eq(bytes,32); eq(reads,1)
         plugin.settings=nil; eq(e.LibraryAdapter.owner(),nil)
         eq(e.LibraryAdapter.read("bounded"),nil); eq(reads,1)
 
     end)
-    test("library: backend references cannot spread beyond adapters and frozen legacy seam", function()
-        local baseline={}
-        for line in io.lines(here .. "/library-legacy-boundary.txt") do baseline[line]=(baseline[line] or 0)+1 end
-        local function backend(line)
-            return line:find("/koreader/",1,true) or line:find("/api/",1,true)
-                or line:find("bookorbit",1,true) or line:find("BookOrbit",1,true)
-                or line:find("OC.client",1,true) or line:find("OC.owner",1,true)
-                or line:find("client:request",1,true) or line:find("client:query",1,true)
-                or line:find("require.*[\"']net[\"']")
-                or line:find("readStatus",1,true) or line:find("progressPercentage",1,true)
-                or line:find("smartScopeId",1,true) or line:find("seriesName",1,true)
-                or line:find("thumbnailUrl",1,true) or line:find("detailUrl",1,true)
-                or line:find("addedAt",1,true) or line:find("updatedAt",1,true)
-                or line:find("lastReadAt",1,true) or line:find("libraryId",1,true)
-                or line:find("collectionId",1,true) or line:find("seriesId",1,true)
-                or line:find("seriesIndex",1,true) or line:find("downloadUrl",1,true)
-                or line:find("userkey",1,true) or line:find("server_url",1,true)
-        end
-        local p=assert(io.popen('find "' .. root .. 'ko" -type f -name "*.lua"'))
-        for path in p:lines() do
-            local name=path:sub(#(root .. "ko/")+1)
-            if name~="library_bookorbit.lua" and name~="bookorbit.lua" and name~="net.lua" then
-                for line in io.lines(path) do
-                    local code=line:gsub("%-%-.*$",""):match("^%s*(.-)%s*$")
-                    if backend(code) then
-                        local signature=name .. "\t" .. code
-                        ok((baseline[signature] or 0)>0,"backend reference outside adapter: " .. name .. ": " .. code)
-                        baseline[signature]=baseline[signature]-1
-                    end
-                end
-            end
-        end
-        p:close()
-        -- Removing legacy references is always allowed; adding another identical one is not.
+    test("library: server boundary has no baselines or suppressions", function()
+        local result = os.execute('python3 "' .. here .. '/../../../tools/test/test-server-boundary.py"')
+        eq(result, 0, "server boundary guard")
     end)
 end

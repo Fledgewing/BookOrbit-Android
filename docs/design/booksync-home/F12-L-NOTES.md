@@ -1,0 +1,50 @@
+# F12-L: Android server boundary
+
+Authorised Android-only implementation on `feature/0.12`, 25 November 2026. Firmware follows
+later under the maintainer's Android-first direction. This is protocol ownership/enforcement,
+not a new screen or transport writer. Approved source: `origin/design/booksync-home`,
+`DESIGN.md` §§3.5, 6 and 8.5, its revision-8+ notes, schema and clickable prototype.
+
+## Reuse and ownership
+
+At starting feature commit `543d67d`, the implementation extends these existing seams:
+
+- `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CacheStore.kt:15`:
+  same cache/schema/transaction owner, moved into `server/bookorbit`, implementing the small
+  `ProjectionStore` persistence seam. No parallel catalog or database.
+- `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/CacheWorker.kt:25`:
+  same worker, bulk refresh and event mailbox, moved into the adapter package.
+- `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/BookOrbitLibrary.kt:36`:
+  same translation/normalization; the existing read-model projection joins moved alongside it.
+- `android/companion/app/src/main/java/net/fledgewing/orbitcompanion/LibraryReadModel.kt:20`:
+  retained bounded publishing, cache invalidation, owner isolation and timing. Server projection
+  is injected through `ServerAdapter`; local KOReader reading statistics remain neutral.
+- `android/koreader/orbit.koplugin/ko/library.lua:23` and `ko/store.lua:107`:
+  retained bounded UI reads. The protocol-specific bulk query interpreter moved into the
+  Lua compatibility adapter; serialization stays in the existing `logic/cache.lua`.
+- `android/koreader/orbit.koplugin/ko/home.lua:194`, `logic/caps.lua:1`,
+  `logic/home_plan.lua:19` and `logic/sheet_layout.lua:1`: retained reading gate,
+  capability resolution, Home planning and sheet sizing. No new screen/paint path.
+
+The companion adapter also owns the upstream connector installer and connector cover auth.
+Core's Android connectivity/package/preferences utilities contain no server calls and stay
+shared. Updater's release feed and APK installation are BookSync product services, not library
+server APIs, and stay shared. Local ReadingStats and LibraryFacets have no server protocol.
+
+The full rule, registration instructions and the enumerated Lua transport follow-up are in
+[backend independence](../backend-independence.md#android-adapter-enforcement-f12-l).
+The old Lua frozen baseline is deleted. Guards run over all production source files and
+self-test rejection of fields, routes, imports and attempted suppression comments.
+
+## Budgets and checks
+
+No new screen or widget is introduced. Every existing caller retains its declared
+`logic/budgets.lua` / registry budget, at most one Home batch, zero render-path subprocesses
+and network, and a 16 KiB snapshot cap. Shared publishing additionally rejects an adapter
+that returns more rows than the caller requested. Existing timing lines remain one per
+published call/paint; host tests do not establish the device timing targets.
+
+`ServerAdapterTest` runs fake and acquisition-only backends through the same publisher,
+with distinct opaque key shapes/capabilities, unsupported operations, account isolation,
+secret clearing and an oversized response. Existing backend fixtures/tests moved into the
+adapter test package; reading and contract source guards now recurse into subpackages.

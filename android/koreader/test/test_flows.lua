@@ -853,7 +853,7 @@ test("sync while reading, every chapter: Ask + server ahead never pulls or promp
     store.orbit_android.reading_schedule = "off"
 end)
 
-test("home from the companion: BookOrbit home opens over the book, which stays open", function()
+test("home from the companion: library home opens over the book, which stays open", function()
     local ui = newUI(true)
     run(30)
     W.home_called = false
@@ -909,7 +909,7 @@ test("test sync path reports five steps", function()
     m:testSyncPath()
     run(30)
     local viewer = W.shown[#W.shown]
-    ok(viewer and viewer.text and viewer.text:match("5%. BookOrbit plugin synced ✓"), viewer and viewer.text or "no viewer")
+    ok(viewer and viewer.text and viewer.text:match("5%. library plugin synced ✓"), viewer and viewer.text or "no viewer")
 end)
 
 ---------------------------------------------------------------- Wi-Fi modes (v0.2)
@@ -1206,7 +1206,7 @@ test("restart with a book open (an update you started): the next start reopens t
     m:onCloseWidget() -- the quit closes the reader
     ok(store.orbit_android.restart_book == "/b.epub", "the book kept for the next start")
     run(2)
-    -- The next process: KOReader starts in the file browser, BookOrbit home opened over it.
+    -- The next process: KOReader starts in the file browser, library home opened over it.
     W.opened = nil
     local ui2, m2 = newUI(false)
     local cb = {}
@@ -1216,7 +1216,7 @@ test("restart with a book open (an update you started): the next start reopens t
     m2:reopenAfterRestart("start") -- what init schedules 1 s after a start with restart_book set
     run(1)
     ok(W.opened == "/b.epub", "the book reopened: " .. tostring(W.opened))
-    ok(W.catalog_closed, "BookOrbit home closed so the book is on top")
+    ok(W.catalog_closed, "library home closed so the book is on top")
     ok(store.orbit_android.restart_book == nil, "used once")
     W.opened = nil
     m2:reopenAfterRestart("start")
@@ -1394,7 +1394,7 @@ test("recommended: a fresh KOReader at first start: every item applied with a ba
     m:recommendedPass("start")
     ok(p.settings.auto_sync == true, "auto-sync through the plugin's toggle")
     ok(p.settings.sync_forward == 2, "Silent")
-    ok(p.settings.catalog_auto_open == "home", "Make BookOrbit home")
+    ok(p.settings.catalog_auto_open == "home", "Make library home")
     ok(store.wifi_enable_action == "turn_on", "KOReader turns Wi-Fi on")
     local g = ui.gestures.data.gesture_reader
     ok(g.hold_top_right_corner.orbit_sync_and_sleep and g.hold_top_left_corner.bookorbit_sync_now
@@ -1578,7 +1578,7 @@ test("caps: Add-on degrades: Sync and sleep asks for the power button, Other app
     m:onOrbitOpenApps()
     ok(shownText("Use your reader's Home button for other apps."), "apps message")
     ok(#W.activities == 0, "no activity started")
-    ok(m:openCompanionHome() == true and #W.activities == 0, "Home at BookOrbit home stays")
+    ok(m:openCompanionHome() == true and #W.activities == 0, "Home at library home stays")
     local hasWifiRow, hasHelperLine, hasApps = false, false, false
     for _, it in ipairs(menuAll(m:menuItems())) do
         if it.text == "Let BookSync switch Wi-Fi for syncs" then hasWifiRow = true end
@@ -1932,7 +1932,7 @@ local function command(m, cmd, from)
     W.intent_extras["net.fledgewing.orbitcompanion.extra.FROM"] = from
 end
 
-test("smart home: pressed in a book -> BookOrbit home", function()
+test("smart home: pressed in a book -> library home", function()
     local ui, m = newUI(true)
     run(5)
     W.home_called = false
@@ -1940,7 +1940,7 @@ test("smart home: pressed in a book -> BookOrbit home", function()
     command(m, "home_smart")
     m:onResume()
     run(1)
-    ok(has(ui.bookorbit.calls, "dashboard") and not W.home_called, "BookOrbit home over the book")
+    ok(has(ui.bookorbit.calls, "dashboard") and not W.home_called, "library home over the book")
     ui.bookorbit.catalog_browser.close_callback()
 end)
 
@@ -1965,7 +1965,7 @@ test("smart home: cold start after KOReader was killed with a book open -> that 
     ok(W.opened == "/books/killed.epub", "reopened the book it was killed with")
 end)
 
-test("smart home: from the file browser with no book open -> BookOrbit home, not history", function()
+test("smart home: from the file browser with no book open -> library home, not history", function()
     store.lastfile = "/books/last.epub"
     W.files["/books/last.epub"] = true
     W.opened = nil
@@ -1976,10 +1976,10 @@ test("smart home: from the file browser with no book open -> BookOrbit home, not
     m:onResume()
     run(1)
     ok(W.opened == nil, "no book reopened from history")
-    ok(has(ui.bookorbit.calls, "dashboard"), "BookOrbit home")
+    ok(has(ui.bookorbit.calls, "dashboard"), "library home")
 end)
 
-test("smart home: book -> BookOrbit home -> companion -> back to the book", function()
+test("smart home: book -> library home -> companion -> back to the book", function()
     local ui, m = newUI(true)
     run(5)
     W.shown, W.activities, W.home_called = {}, {}, false
@@ -1990,7 +1990,7 @@ test("smart home: book -> BookOrbit home -> companion -> back to the book", func
         run(1)
     end
     press()
-    ok(ui.bookorbit.catalog_browser ~= nil and W.shown[#W.shown] == ui.bookorbit.catalog_browser, "1: BookOrbit home")
+    ok(ui.bookorbit.catalog_browser ~= nil and W.shown[#W.shown] == ui.bookorbit.catalog_browser, "1: library home")
     press()
     local a = W.activities[#W.activities]
     ok(a and a.action:match("%.SHOW_LAUNCHER$"), "2: companion")
@@ -2044,7 +2044,7 @@ local function sandboxed(p)
     return p
 end
 
-test("home: plugin handlers wrapped by KOReader 2026.07 -> Home on the file browser opens BookOrbit home", function()
+test("home: plugin handlers wrapped by KOReader 2026.07 -> Home on the file browser opens library home", function()
     store.lastfile = nil
     local ui, m = newUI(false)
     sandboxed(ui.bookorbit)
@@ -2054,13 +2054,13 @@ test("home: plugin handlers wrapped by KOReader 2026.07 -> Home on the file brow
     m:onResume()
     run(2)
     ok(has(ui.bookorbit.calls, "dashboard"), "dashboard handler ran")
-    ok(W.shown[#W.shown] == ui.bookorbit.catalog_browser, "BookOrbit home on top")
+    ok(W.shown[#W.shown] == ui.bookorbit.catalog_browser, "library home on top")
     ok(#W.activities == 0, "no companion page")
     ui.bookorbit.catalog_browser = nil
     W.shown = {}
 end)
 
-test("home: the instance shows no handler but the UI routes the event -> BookOrbit home opens", function()
+test("home: the instance shows no handler but the UI routes the event -> library home opens", function()
     store.lastfile = nil
     local ui, m = newUI(false)
     local real = ui.bookorbit
@@ -2077,7 +2077,7 @@ test("home: the instance shows no handler but the UI routes the event -> BookOrb
     m:onResume()
     run(2)
     ok(has(real.calls, "dashboard"), "event reached the plugin")
-    ok(W.shown[#W.shown] == real.catalog_browser, "BookOrbit home on top")
+    ok(W.shown[#W.shown] == real.catalog_browser, "library home on top")
     W.shown = {}
 end)
 
@@ -2156,7 +2156,7 @@ test("home button menu says it is about KOReader, and notes the companion's Home
     end
     W.json.STATUS = { version = "0.4.8", settings = { settings_at = 0, home_opens = "koreader" } }
     m:onResume(); run(1)
-    ok(homeText() == "Home button in KOReader: Back to my book, then BookOrbit home", tostring(homeText()))
+    ok(homeText() == "Home button in KOReader: Back to my book, then library home", tostring(homeText()))
     W.json.STATUS = { version = "0.4.8", settings = { settings_at = 0, home_opens = "launcher" } }
     m:onResume(); run(1)
     ok(homeText():find("(Home opens the BookSync launcher page)", 1, true), homeText())
@@ -2200,7 +2200,7 @@ test("compat: a plugin without fetchRemoteProgress -> Sync while reading does no
     ok(m:statusText():find("Sync while reading is off", 1, true), "status says so")
 end)
 
-test("compat: a catalog without dashboardMode -> not treated as BookOrbit home", function()
+test("compat: a catalog without dashboardMode -> not treated as library home", function()
     local ui, m = newUI(true)
     run(5)
     local cb = {}
@@ -2224,7 +2224,7 @@ test("open book at exit: set when a book opens, cleared when it is closed", func
     ok(store.orbit_android.open_book_at_exit == nil, "cleared")
 end)
 
-test("smart home: no last book -> BookOrbit home", function()
+test("smart home: no last book -> library home", function()
     store.lastfile = nil
     local ui, m = newUI(false)
     run(5)
@@ -2241,7 +2241,7 @@ local function dashboardOnTop(ui, kind)
 end
 
 for _, cmd in ipairs({ "home_smart", "home" }) do
-    test("home (" .. cmd .. "): pressed on BookOrbit home -> the companion's launcher page", function()
+    test("home (" .. cmd .. "): pressed on library home -> the companion's launcher page", function()
         store.lastfile = "/books/last.epub"
         W.files["/books/last.epub"] = true
         local ui, m = newUI(false)
@@ -2260,7 +2260,7 @@ for _, cmd in ipairs({ "home_smart", "home" }) do
     end)
 end
 
-test("home: from the companion page while BookOrbit home is on top, no book -> BookOrbit home", function()
+test("home: from the companion page while library home is on top, no book -> library home", function()
     store.lastfile = "/books/last.epub"
     W.files["/books/last.epub"] = true
     local ui, m = newUI(false)
@@ -2377,7 +2377,7 @@ test("home at KOReader's start after the start patch: no second turn", function(
     W.shown = {}
 end)
 
-test("home: file browser on top of a stale BookOrbit home -> BookOrbit home brought to the top", function()
+test("home: file browser on top of a stale library home -> library home brought to the top", function()
     store.lastfile = nil
     local ui, m = newUI(false)
     run(5)
@@ -2393,7 +2393,7 @@ test("home: file browser on top of a stale BookOrbit home -> BookOrbit home brou
     local top = W.shown[#W.shown]
     ok(#W.activities == 0, "no companion page")
     ok(ui.bookorbit.catalog_browser ~= nil and ui.bookorbit.catalog_browser ~= stale, "reopened")
-    ok(top == ui.bookorbit.catalog_browser, "BookOrbit home is on top")
+    ok(top == ui.bookorbit.catalog_browser, "library home is on top")
     ok(m:whereNow() == "bookorbit", "where: bookorbit")
     ui.bookorbit.catalog_browser = nil
     W.shown = {}
@@ -2464,7 +2464,7 @@ local function withPaging(cb, page)
     return cb
 end
 
-test("home: BookOrbit home on page 2 -> page 1, not the companion", function()
+test("home: library home on page 2 -> page 1, not the companion", function()
     store.lastfile = nil
     local ui, m = newUI(false)
     run(5)
@@ -3456,7 +3456,7 @@ test("copies: BookSync Companion finds the changed copies; the UI thread reads n
     copiesTeardown()
 end)
 
-test("end of book: Home from the companion with the sheet open closes it, opens BookOrbit home, sends the finish", function()
+test("end of book: Home from the companion with the sheet open closes it, opens library home, sends the finish", function()
     eobModules()
     local ui, m = bookUI()
     ui.status:onEndOfBook()
@@ -3468,13 +3468,13 @@ test("end of book: Home from the companion with the sheet open closes it, opens 
     run(30)
     ok(E.EOB.sheet == nil, "sheet closed")
     local cb = ui.bookorbit.catalog_browser
-    ok(cb and W.shown[#W.shown] == cb, "BookOrbit home on top: " .. tostring(W.shown[#W.shown] and W.shown[#W.shown].name))
+    ok(cb and W.shown[#W.shown] == cb, "library home on top: " .. tostring(W.shown[#W.shown] and W.shown[#W.shown].name))
     ok(table.concat(eob.calls, ","):find("status:42:read", 1, true), "finish sent: " .. table.concat(eob.calls, ","))
     cb.close_callback()
     W.intent_extras["net.fledgewing.orbitcompanion.extra.COMMAND"] = nil
 end)
 
-test("end of book: the sheet's Home opens BookOrbit home (never its menu) and sends the finish", function()
+test("end of book: the sheet's Home opens library home (never its menu) and sends the finish", function()
     eobModules()
     local ui, m = bookUI()
     ui.status:onEndOfBook()
@@ -3482,12 +3482,12 @@ test("end of book: the sheet's Home opens BookOrbit home (never its menu) and se
     sheetRow("footer", "Home").action()
     run(30)
     local top = W.shown[#W.shown]
-    ok(ui.bookorbit.catalog_browser and top == ui.bookorbit.catalog_browser, "BookOrbit home on top: " .. tostring(top and top.name))
+    ok(ui.bookorbit.catalog_browser and top == ui.bookorbit.catalog_browser, "library home on top: " .. tostring(top and top.name))
     ok(not has(ui.bookorbit.calls, "menu_sheet"), "no menu sheet")
     local noted = E.LocalState.load().books["d1"]
     ok(noted and noted.pending and noted.status == "complete", "the open book noted for Home's first paint")
     ok(table.concat(eob.calls, ","):find("status:42:read", 1, true), "finish sent: " .. table.concat(eob.calls, ","))
-    -- Home again with BookOrbit home already on top: it stays, no menu sheet.
+    -- Home again with library home already on top: it stays, no menu sheet.
     m:onOrbitGoHome()
     run(5)
     ok(not has(ui.bookorbit.calls, "menu_sheet") and W.shown[#W.shown] == ui.bookorbit.catalog_browser, "still Home, no menu")
@@ -5333,7 +5333,7 @@ test("companion: the cache worker needs the companion of the plugin's own versio
         E.OC.note = function(t) table.insert(notes, t) end
         E.OC.fullRefresh(cat); run(30)
         ok(mirrors() == 0 and not E.Mirror.active, "no run without the companion: " .. mirrors() .. " " .. tostring(E.Mirror.active))
-        ok(E.Mirror.savedText() == "BookSync Companion needed to save BookOrbit for offline", "menu: " .. E.Mirror.savedText())
+        ok(E.Mirror.savedText() == "BookSync Companion needed to save library for offline", "menu: " .. E.Mirror.savedText())
         ok(table.concat(notes, "|"):find("BookSync Companion needed", 1, true), "said when pressed: " .. table.concat(notes, " | "))
         W.clock = W.clock + 61
         cache.calls = {}
@@ -5341,7 +5341,7 @@ test("companion: the cache worker needs the companion of the plugin's own versio
         ok(checks() == 0 and #cache.calls == 0, "no background check either: " .. table.concat(cache.calls, ","))
         -- Another version: update it.
         W.companion = true; file = { version = "0.0.1" }; fresh()
-        ok(E.Mirror.savedText():find("^Update BookSync Companion to " .. E.PATCH_VERSION:gsub("%p", "%%%0") .. " to save BookOrbit for offline %(it is 0%.0%.1%)$"), "menu: " .. E.Mirror.savedText())
+        ok(E.Mirror.savedText():find("^Update BookSync Companion to " .. E.PATCH_VERSION:gsub("%p", "%%%0") .. " to save library for offline %(it is 0%.0%.1%)$"), "menu: " .. E.Mirror.savedText())
         E.OC.fullRefresh(cat); run(30)
         ok(mirrors() == 0, "no run with another version")
         -- The same version: the run goes to the companion, with the login in the broadcast only.
@@ -6235,7 +6235,7 @@ end)
 ---------------------------------------------------------------- OrbiSmart sync (docs/design/position-sync.md)
 -- A 300-page book; places are pages, xpointers "/p<page>". The BookOrbit plugin's API client is
 -- a fake bookorbit_api (getProgress answers W.osm_server; updateProgress stores it), wrapped by
--- ko/orbismart.lua like the real one.
+-- ko/server/bookorbit/orbismart.lua like the real one.
 local OSMApi = { puts = 0 }
 function OSMApi:getProgress(d) return W.osm_server end
 function OSMApi:updateProgress(d, pct, progress, ts)

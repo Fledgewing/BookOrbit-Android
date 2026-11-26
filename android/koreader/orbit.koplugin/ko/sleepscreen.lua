@@ -189,7 +189,7 @@ end
 
 -- The login travels only in the caller-checked call to the verified companion (Companion.send), never in a file.
 local function ask(client, extras)
-    extras.server, extras.user, extras.userkey = client.server_url, client.username, client.userkey
+    Server.credentials(client, extras)
     Companion.send(Companion.ACTION.SLEEP_REFRESH, extras)
     OC.watchChecks()
 end
@@ -208,7 +208,7 @@ function Sleep.refresh(why)
     Sleep.problem = nil
     local client = OC.client()
     if not (client and Sleep.dir()) then
-        log("sleep screen: no BookOrbit client yet; the pool waits (" .. tostring(why) .. ")")
+        log("sleep screen: no library client yet; the pool waits (" .. tostring(why) .. ")")
         return false
     end
     Sleep.asked, Sleep.refreshed_at = OC.now(), t
@@ -551,7 +551,7 @@ function Sleep.menuItem(_plugin, later)
             sub_item_table_func = scopeRows(toggleRule, hasRule) })
 
         table.insert(rows, info(function()
-            return _("For a custom field: make a smart scope with that condition in BookOrbit, then add it here.")
+            return _("For a custom field: make a smart scope with that condition in library, then add it here.")
         end))
         return rows
     end

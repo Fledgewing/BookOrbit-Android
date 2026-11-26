@@ -556,7 +556,7 @@ open class SettingsSectionActivity : SleepPickerPage() {
             }
             "preview" -> if (SettingsStore.get(this, "sleep_mode") != "off") {
                 linkRow(root, "Preview", "5 s, or until you tap") { startActivity(Intent(this, SleepPreviewActivity::class.java)) }
-            } else root.addView(note("The reader shows its own sleep screen. Turn this on for a recommended BookOrbit cover or the current book."))
+            } else root.addView(note("The reader shows its own sleep screen. Turn this on for a recommended library cover or the current book."))
             "do_sync_sleep" -> command("Sync and sleep now", HomeCommands.SYNC_SLEEP, root)
             "do_test_sync_path" -> command("Test the sync path", HomeCommands.TEST_SYNC_PATH, root)
             "do_full_refresh" -> command("Full refresh now", HomeCommands.FULL_REFRESH, root)
@@ -676,10 +676,10 @@ class SettingChoiceActivity : SleepPickerPage() {
             c.scopes.forEach { tick("scope:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
             if (c.collections.isNotEmpty()) subhead(root, "Collections")
             c.collections.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
-            if (c.at > 0) root.addView(note("Lists from BookOrbit, ${Ui.clock(this, c.at)}"))
+            if (c.at > 0) root.addView(note("Lists from library, ${Ui.clock(this, c.at)}"))
         }
         picked.filter { (it.startsWith("scope:") || it.startsWith("collection:") || it.startsWith("library:")) && c?.title(it) == null }.forEach { tick(it, c?.missingLabel(it) ?: SleepChoices.fallback(it), "Tap to drop this source") }
-        root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then pick it here."))
+        root.addView(note("For a custom field: make a smart scope with that condition in library, then pick it here."))
     }
 }
 
@@ -723,7 +723,7 @@ class LeaveOutActivity : SleepPickerPage() {
         c?.collections?.forEach { tick("collection:${it.id}", it.title, it.count?.let { n -> "$n books" }) }
         rules.filter { (it.startsWith("scope:") || it.startsWith("collection:") || it.startsWith("library:")) && c?.title(it) == null }
             .forEach { tick(it, c?.missingLabel(it) ?: SleepChoices.fallback(it), "Tap to drop this source") }
-        root.addView(note("For a custom field: make a smart scope with that condition in BookOrbit, then leave it out here."))
+        root.addView(note("For a custom field: make a smart scope with that condition in library, then leave it out here."))
     }
 
     private fun typeTag(done: (String) -> Unit) {
@@ -752,7 +752,7 @@ class RecommendedReviewActivity : SettingsPage() {
             return
         }
         val queued = SettingsStore.get(this, "recommended_choice")
-        root.addView(note("KOReader applies your choices when it next starts or wakes, because they are KOReader's and BookOrbit's own settings." +
+        root.addView(note("KOReader applies your choices when it next starts or wakes, because they are KOReader's and library's own settings." +
             if (r.at > 0) " List from KOReader, ${Ui.clock(this, r.at)}." else ""))
         r.items.forEach { it0 ->
             val q = SettingsUi.choiceFor(queued, it0.id)?.takeIf { it in it0.offers }

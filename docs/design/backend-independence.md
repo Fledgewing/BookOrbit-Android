@@ -1,8 +1,9 @@
 # Backend independence
 
-Status: **proposed, awaiting approval** (24 November 2026). Deferred roadmap work;
-no implementation is authorized. Design and any reader-facing mockups need approval under
-AGENTS.md before building. The [roadmap](../../ROADMAP.md#planned-backend-independence)
+Status: Android implementation authorised on 25 November 2026 on `feature/0.12`.
+The maintainer explicitly approved the widget system and Android-first delivery. This covers
+its adapter boundary; portable ledger, new backends and firmware remain later phases with
+their existing design/approval requirements. The [roadmap](../../ROADMAP.md#planned-backend-independence)
 records the order below.
 
 BookSync is on a journey to backend independence. Readers should work with whichever library
@@ -99,3 +100,72 @@ Use synthetic fixtures and isolated services; these are proposed experiments, no
 
 Each phase needs its own acceptance review. No mirrors, jobs, deployment, devices or upstream
 changes are created by this documentation change.
+
+## Android adapter enforcement (F12-L)
+
+`ServerAdapter` is the worker-facing contract. It covers capabilities, bounded catalog
+windows, manifest, detail/covers, download jobs, progress/status, lists, statistics, account
+and connector credentials. Unsupported operations return `error=unsupported`; capability
+flags determine UI availability. Do not advertise an operation just because the interface
+has a method. The current owned client still has read-only detail/progress/status and no
+owned download or list-write action. Those operations retain their explicit unsupported
+result until their owner is implemented, avoiding a second sync writer.
+
+`LibraryReadModel` owns bounded publishing, owner checks, the existing `library_views`
+table and per-call timing. It depends on `ProjectionStore` and `ServerAdapter`, not a server
+implementation. The existing `CacheStore` implements that persistence seam within the
+adapter; the existing catalog, bulk/mirror worker and normalizer moved there without a
+second database or HTTP client. ReadingStats and LibraryFacets remain neutral/local.
+`ServerAdapters.kt` is the sole Kotlin composition root. Worker command routing, connector
+installation and cover setup use neutral service contracts; their protocol implementations
+are under `net.fledgewing.orbitcompanion.server.bookorbit`.
+
+To add an adapter:
+
+1. Implement `ServerAdapter` under `server/<id>` and normalize all server fields there.
+   Preserve account namespaces and opaque keys; do not coerce another backend's keys to
+   the first adapter's numeric IDs. Return explicit unavailable/error states.
+2. Register its factory in `ServerAdapters.kt`; supply its persistence and worker services
+   at that composition root. Do not import implementations into screens or projections.
+3. Publish only supported capabilities and gate UI through the library interface. Add
+   independent fixtures and contract cases like the fake and acquisition-only test adapters
+   in `ServerAdapterTest.kt`. Never reuse the shipping adapter's fixtures to prove neutrality.
+4. Run `python3 tools/test/test-server-boundary.py`, both Lua harnesses and companion tests.
+   The guard scans every production Kotlin/Java/Lua source, strips comments while preserving
+   strings, rejects protocol fields/routes and implementation imports, and tests its own
+   rejection behavior. There are no frozen baselines or suppression annotations. The CI
+   plugin-test action runs it explicitly; the existing Lua harness invokes it too.
+
+Every screen/widget keeps its declared budget in `logic/budgets.lua` / the registry.
+Adapter calls inherit those limits: at most 24 rows and 16 KiB per widget snapshot, no
+render-path network/subprocesses, one batched companion round-trip per Home paint. Counts,
+filtering, sorting, joins, stats and battery work stay on the companion worker; timing spans
+record real device milliseconds. Moving protocol ownership adds no new screen or widget.
+
+### Lua compatibility adapter and remaining transport work
+
+The owned UI still calls `ko/library.lua`; it receives normalized bounded projections.
+`ko/server/bookorbit.lua` binds the existing plugin account and compatibility operations.
+Its adapter package owns the old cache/mirror/copies, finish, grouping, local-first and
+position-sync hooks; pure protocol helpers live in `logic/server/bookorbit`. Generic cache
+encoding remains `logic/cache.lua`; `ko/store.lua` keeps the small owned projection read.
+The legacy bulk query interpreter moved to `ko/server/bookorbit/store.lua`.
+
+The maintainer explicitly permits routing oversized migrations through this one Lua adapter
+for this slice. Remaining server calls **inside that adapter**, to move to companion commands
+in a later transport/sole-sync-owner slice, are:
+
+- `ko/server/bookorbit.lua`: `probeServer` (HEAD reachability in the background child).
+- `ko/server/bookorbit/cache.lua`: `OC.httpCover` (legacy thumbnail GET); its request wrappers
+  bridge the upstream API and cached replies. Mirror/copies construct only private protocol
+  plans sent to the companion worker.
+- `ko/server/bookorbit/endofbook.lua`: compatibility detail/status/rating calls through the
+  existing finish outbox. Preserve sole-writer ordering when moving these.
+- `ko/server/bookorbit/grouping.lua`: rollback catalog reads through the upstream client.
+  Owned lists/filtering use companion projections; do not reuse this full-list path for Home.
+- `ko/server/bookorbit/orbismart.lua`: upstream progress client interception. Keep the approved
+  one-draw position prompt and reading gate while moving sync ownership.
+
+These are adapter-contained compatibility implementations, not permission to introduce new
+Lua HTTP, backend JSON, full-catalog work or legacy views into the owned client. Firmware
+adapter enforcement remains deferred under the Android-first instruction.

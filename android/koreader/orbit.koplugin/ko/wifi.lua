@@ -66,7 +66,7 @@ function Wifi.busy()
             local d = p:getLifecycleOutbox():diagnostics()
             return outboxPending(d) > 0
         end)
-        if okb and busy then return true, "BookOrbit plugin syncing" end
+        if okb and busy then return true, "library plugin syncing" end
     end
     return false
 end

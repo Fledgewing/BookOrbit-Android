@@ -63,7 +63,7 @@ function OrbitAndroid:onDispatcherRegisterActions()
     Dispatcher:registerAction("orbit_sync_and_sleep",
         { category = "none", event = "OrbitSyncAndSleep", title = _("BookSync: sync and sleep"), general = true })
     Dispatcher:registerAction("orbit_go_home",
-        { category = "none", event = "OrbitGoHome", title = _("BookSync: go to BookOrbit home"), general = true })
+        { category = "none", event = "OrbitGoHome", title = _("BookSync: go to library home"), general = true })
     Dispatcher:registerAction("orbit_open_companion",
         { category = "none", event = "OrbitOpenCompanion", title = _("BookSync: open BookSync Companion"), general = true })
     Dispatcher:registerAction("orbit_open_apps",

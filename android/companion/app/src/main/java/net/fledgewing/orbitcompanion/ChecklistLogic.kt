@@ -12,7 +12,7 @@ object Checklist {
 
     /** The groups (§3.2), in page order. */
     enum class Group(val title: String) {
-        APPS("Apps"), BOOKORBIT("BookOrbit"), PERMISSIONS("Permissions"), CONNECTION("Connection"), OPTIONAL("Optional"),
+        APPS("Apps"), BOOKORBIT("library"), PERMISSIONS("Permissions"), CONNECTION("Connection"), OPTIONAL("Optional"),
     }
 
     /** Which group a row id sits in; a row marked optional always sits in Optional. */

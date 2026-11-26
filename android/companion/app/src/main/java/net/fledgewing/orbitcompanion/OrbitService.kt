@@ -428,7 +428,7 @@ class OrbitService : Service() {
             return
         }
         if (auto && Worker.busy()) {
-            OLog.i("wifi: OFF deferred ($reason): the cache worker is saving BookOrbit for offline | owner ${owner.key} | mode $mode")
+            OLog.i("wifi: OFF deferred ($reason): the cache worker is saving library for offline | owner ${owner.key} | mode $mode")
             main.postDelayed({ wifiOff(intent, reason) }, 5_000)
             return
         }

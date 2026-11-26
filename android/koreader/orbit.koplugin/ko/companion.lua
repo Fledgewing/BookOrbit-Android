@@ -224,7 +224,7 @@ end
 -- companion"): nil when the companion of this plugin's own version is there, else what to do.
 -- purpose: what it is needed for (default "to save BookOrbit for offline").
 function Companion.workerProblem(purpose)
-    purpose = purpose or _("to save BookOrbit for offline")
+    purpose = purpose or _("to save library for offline")
     local st = Companion.state()
     if st ~= "ok" then return _("BookSync Companion needed") .. " " .. purpose end
     local t = now_s()

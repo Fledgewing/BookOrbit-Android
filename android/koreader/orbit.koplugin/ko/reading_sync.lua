@@ -162,7 +162,7 @@ function OrbitAndroid:readingSync()
                 Sync.waitOutbox(p, 20, function() Wifi.release("reading") end)
             end)
             if not fetched then
-                log("reading: plugin could not read BookOrbit's position")
+                log("reading: plugin could not read library's position")
                 return
             end
             local remote = p.last_remote_progress

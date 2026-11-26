@@ -81,7 +81,7 @@ function OrbitAndroid:hookSuspendSnapshot()
     p._onSuspend = function(plugin, ...)
         local key = snapshotKey(plugin, self.ui)
         if not state.force_snapshot and key and key == state.last_snapshot_key and Jni.isInteractive() == true then
-            log("suspend: app switch and the book hasn't moved since its last snapshot; BookOrbit's snapshot skipped")
+            log("suspend: app switch and the book hasn't moved since its last snapshot; library's snapshot skipped")
             return
         end
         state.last_snapshot_key = key
@@ -113,7 +113,7 @@ function OrbitAndroid:sleepSync(reason)
         if held then Wifi.release("sleep", true) end
     end
     if not p or not p:isLoggedIn() then
-        return done(false, "BookOrbit plugin missing or signed out")
+        return done(false, "library plugin missing or signed out")
     end
     Wifi.acquire("sleep")
     held = true
@@ -167,7 +167,7 @@ function OrbitAndroid:onOrbitSyncAndSleep()
     local t0 = now_s()
     log("sync and sleep: start")
     local msg = InfoMessage:new{
-        text = _("Syncing…") .. "\n" .. _("BookOrbit · then sleep"),
+        text = _("Syncing…") .. "\n" .. _("library · then sleep"),
         dismiss_callback = function()
             if not closing then
                 cancelled = true
@@ -199,7 +199,7 @@ function OrbitAndroid:onOrbitSyncAndSleep()
             sleepNow("sync_and_sleep")
         else
             UIManager:show(InfoMessage:new{ -- gate: user action (Sync and sleep)
-                text = _("Couldn't reach BookOrbit — saved on this device.") .. "\n"
+                text = _("Couldn't reach library — saved on this device.") .. "\n"
                     .. _("It sends first when you next wake it. Sleeping now…"),
                 timeout = 3,
             })
@@ -212,7 +212,7 @@ function OrbitAndroid:onOrbitSyncAndSleep()
 
     local p = bookorbit(self.ui)
     if not p or not p:isLoggedIn() then
-        finish(false, "BookOrbit plugin missing or signed out")
+        finish(false, "library plugin missing or signed out")
         return true
     end
     Wifi.acquire("sync_and_sleep")

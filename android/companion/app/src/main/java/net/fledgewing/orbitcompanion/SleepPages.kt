@@ -54,7 +54,7 @@ object SharpCoversRow : SettingsSlots.Slot {
 
     private fun signOutAsk(a: SettingsPage) {
         android.app.AlertDialog.Builder(a)
-            .setMessage("Sleep-screen covers come from BookOrbit's full-size cover. Sign out to use the small thumbnail again.")
+            .setMessage("Sleep-screen covers come from library's full-size cover. Sign out to use the small thumbnail again.")
             .setPositiveButton("Sign out") { _, _ -> SharpCovers.signOut(a, "companion page"); a.render() }
             .setNegativeButton("Keep", null).show()
     }

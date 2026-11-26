@@ -23,7 +23,7 @@ function HomePlan.decide(o)
     if o.page_above_1 and not o.from_other then return "first_page" end
     -- Any BookOrbit screen other than its main page (a detail, list, search, board, settings,
     -- a sheet or dialog over the catalog): back to the main page (v0.4.9).
-    if o.bookorbit_sub then return "bookorbit_main" end
+    if o.library_sub then return "library_main" end
     if o.on_dashboard and not o.from_other then return "companion" end
     if o.mode ~= "smart" then return "dashboard" end
     if o.in_reader then

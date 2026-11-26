@@ -96,7 +96,7 @@ quietMethods(LF, { "quiet", "paintTiles", "quietSwitch" })
 quietMethods(OSM, { "pause", "pullThenDrain" })
 
 function Gate.installCatalog()
-    local Catalog = package.loaded["bookorbit_catalog"]
+    local Catalog = Server.loaded("catalog")
     if type(Catalog) ~= "table" then return end
     for _, name in ipairs({ "scheduleThumbnailDownloads", "downloadThumbnailBatch", "boardRefreshClock" }) do
         if type(Catalog[name]) == "function" then
