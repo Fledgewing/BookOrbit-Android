@@ -245,6 +245,28 @@ class UpdatePolicyTest {
     }
 
     @Test
+    fun newestVersionAllowedByChannelWins() {
+        data class Case(val channel: UpdateChannel, val versions: List<String>, val expected: String?,
+                        val installed: String = "0.11.0", val install: Boolean = true)
+        val cases = listOf(
+            Case(UpdateChannel.RC, listOf("0.12.0-rc.3", "0.12.0"), "0.12.0"),
+            Case(UpdateChannel.RC, listOf("0.12.0", "0.12.1-preview.2"), "0.12.0"),
+            Case(UpdateChannel.RC, listOf("0.12.1-rc.1", "0.12.0"), "0.12.1-rc.1"),
+            Case(UpdateChannel.PREVIEW, listOf("0.12.1-preview.3", "0.12.1-rc.1", "0.12.1"), "0.12.1"),
+            Case(UpdateChannel.STABLE, listOf("0.12.0", "0.12.1-rc.1", "0.12.1-preview.2"), "0.12.0"),
+            Case(UpdateChannel.STABLE, listOf("0.12.1-rc.1", "0.12.1-preview.2"), null, install = false),
+            Case(UpdateChannel.RC, listOf("0.12.0", "0.12.1-preview.2"), "0.12.0", "0.12.1-preview.3", false),
+            Case(UpdateChannel.STABLE, listOf("0.12.0", "0.12.1-rc.1"), "0.12.0", "0.12.1-rc.1", false),
+        )
+        for (case in cases) for (versions in listOf(case.versions, case.versions.reversed())) {
+            val picked = UpdatePolicy.pick(versions.map { r("v$it", pre = true) }, case.channel)
+            assertEquals("$case / $versions", case.expected, picked?.version?.toString())
+            assertEquals("$case / $versions", case.install,
+                UpdatePolicy.shouldInstall(picked?.version, Version.parse(case.installed), emptySet()))
+        }
+    }
+
+    @Test
     fun installedRc17SeesPreview1() {
         val release = r("v0.11.4-preview.1", pre = true)
         assertNull(UpdatePolicy.pick(listOf(release), channel = UpdateChannel.STABLE))
