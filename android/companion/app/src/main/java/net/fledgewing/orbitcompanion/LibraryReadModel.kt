@@ -40,6 +40,8 @@ class LibraryReadModel(
                 if (store.meta("owner") != owner) return@transaction
                 val result = try { when (args["op"]) {
                     "storage.summary" -> storage.summary(owner,(args["exclude_path"] as? String)?.let(LuaValue::utf8),(args["current_folder"] as? String)?.let(LuaValue::utf8))
+                    "reader.controls" -> ReaderControls.project(args["native"] as? Map<*, *> ?: emptyMap<Any, Any>())
+
                     "reading.stats" -> stats
                     "mode-estimates" -> BatteryEstimate.modeRows(power, (args["limit"] as? Number)?.toInt() ?: 3)
                     "battery" -> power

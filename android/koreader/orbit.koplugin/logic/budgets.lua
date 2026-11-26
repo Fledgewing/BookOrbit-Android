@@ -98,6 +98,15 @@ Budgets.screens.collections = budget(6,16384,50)
 
 Budgets.screens["storage-folder"] = Budgets.screens.storage
 Budgets.screens["storage-confirm"] = Budgets.screens.storage
+-- Reader controls are one companion-materialized row; native inputs are capped at 64 markers per kind.
+Budgets.screens["reader-top-panel"].rows = 4
+Budgets.screens["reader-top-panel"].bytes = 4 * 16384
+Budgets.screens["reader-bottom-panel"] = budget(2, 2 * 16384, 50)
+Budgets.widgets["reader-controls"] = budget(1, 16384, 50)
+
+Budgets.readerControls = { markersPerKind=64, tocComparisons=32 }
+
+
 
 -- One local cover reference per lookup. Acquisition is owned by the off-paint host.
 Budgets.screens["cover-cache"] = budget(1,16384,30)

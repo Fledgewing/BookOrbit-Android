@@ -900,6 +900,17 @@ pass. Small Library cards retain only the links that fit 50 px targets; M8C
 its selection in the companion and sets KOReader's download directory through
 the library interface after success. This is unreleased foundation work;
 real-device typography, touch and timing acceptance still follow.
+## Android reader-panel implementation
+
+The reader slice extends the existing panel, Library, Custom and status-strip
+owners with the header action arrangement and a separate bottom scrubber/quick
+settings panel. Native actions stay behind Library; the companion projects the
+bounded marker/position snapshot. Every screen and widget keeps its named
+budget, zero render network/subprocesses and ≤16 KiB widget snapshots. Native
+capture copies at most 64 cached entries per marker kind, never a full TOC or
+sidecar. See [implementation and pinned native citations](G-READER-NOTES.md).
+Host flow tests do not establish physical font fit or device latency.
+
 
 ### Android Series and grouped catalog presentation (2026-11-26)
 

@@ -440,21 +440,26 @@ function OrbitAndroid:settingsPresentation(items)
 end
 
 -- The owned Home and reader gear share the existing Settings rows and PIN policy.
-function OrbitAndroid:showSettings(groupId)
+function OrbitAndroid:showSettings(group)
     Shared.refresh("menu")
     Library.refreshDevice()
-    -- Tools may prepend context actions such as Book info; Settings has only its groups.
     local items={}
     for _,row in ipairs(self:menuItems()) do
-        if row.settings_group then
-            if groupId==row.settings_group then
-                local make=row.sub_item_table_func
-                return SettingsView.open(row.text,function()
-                    local rows=make()
-                    return Shared.pin_locked and OrbitAndroid.readOnly(rows) or rows
-                end,"settings-"..groupId,function() self:showSettings() end)
-            end
-            items[#items+1]=row
+        if row.settings_group then items[#items+1]=row end
+    end
+    -- Storage returns to its owned Library group; preserve the reader's native Reading route.
+    if group=="library" then
+        for _,row in ipairs(items) do if row.settings_group==group then
+            local make=row.sub_item_table_func
+            return SettingsView.open(row.text,function()
+                local rows=make()
+                return Shared.pin_locked and OrbitAndroid.readOnly(rows) or rows
+            end,"settings-"..group,function() self:showSettings() end)
+        end end
+    end
+    if group and not Shared.pin_locked then
+        for _,row in ipairs(items) do
+            if row.settings_group==group then items=row.sub_item_table_func(); break end
         end
     end
     if Shared.pin_locked then items=self:lockedMenuItems(items) end
