@@ -2,6 +2,7 @@
 -- Snapshot-only storage owner. Reuses the Home canvas, native buttons and Library batch.
 StorageUI = {}
 function StorageUI.bar(canvas,parts,x,y,w,h)
+    if not parts or not parts[1] then return end
     local Widget=require("ui/widget/widget")
     local Geom=require("ui/geometry")
     local bar=Widget:new{dimen=Geom:new{w=w,h=h}}

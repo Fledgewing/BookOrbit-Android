@@ -14,6 +14,8 @@ return function(test,eq,ok,E,W,withHost)
     end
     test('storage: patterned bar paints the bounded immutable Home snapshot',function()
         withHost(function()
+            local empty=E.HomeWidgets.canvas(100,10)
+            E.StorageUI.bar(empty,{},0,0,100,10); eq(#empty,0,"unknown capacity has no bar")
             local canvas=E.HomeWidgets.canvas(100,10)
             local parts=E.HomeHostPlan.immutable({{pattern='solid',fraction=.5},{pattern='hatch',fraction=.2},
                 {pattern='dots',fraction=.1},{pattern='white',fraction=.2}})
