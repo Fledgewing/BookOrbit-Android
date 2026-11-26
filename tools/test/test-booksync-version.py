@@ -90,6 +90,36 @@ class Versions(unittest.TestCase):
         earlier = release("0.12.0-preview.1", True, "8")
         self.assertIn(rc["tag_name"], [r["tag_name"] for r in F.build_feed([earlier, rc])])
 
+    def test_newest_version_allowed_by_channel_wins(self):
+        cases = (
+            ("rc", ("0.12.0-rc.3", "0.12.0"), "0.12.0", "0.11.0", True),
+            ("rc", ("0.12.0", "0.12.1-preview.2"), "0.12.0", "0.11.0", True),
+            ("rc", ("0.12.1-rc.1", "0.12.0"), "0.12.1-rc.1", "0.11.0", True),
+            ("preview", ("0.12.1-preview.3", "0.12.1-rc.1", "0.12.1"), "0.12.1", "0.11.0", True),
+            ("stable", ("0.12.0", "0.12.1-rc.1", "0.12.1-preview.2"), "0.12.0", "0.11.0", True),
+            ("stable", ("0.12.1-rc.1", "0.12.1-preview.2"), None, "0.11.0", False),
+            ("rc", ("0.12.0", "0.12.1-preview.2"), "0.12.0", "0.12.1-preview.3", False),
+            ("stable", ("0.12.0", "0.12.1-rc.1"), "0.12.0", "0.12.1-rc.1", False),
+        )
+        devices = ("firmware-x4-pro", "firmware-x4-classic", "firmware-x3-x4")
+        def release(version):
+            return dict(tag_name=f"xteink-v{version}+crossink.2.0.0.bookorbit.1-rc3",
+                        name=version, draft=False, prerelease=True, created_at="same-time",
+                        assets=[dict(name=device + "-v-test.bin") for device in devices])
+        for channel, versions, expected, installed, install in cases:
+            for order in (versions, versions[::-1]):
+                for device in devices:
+                    with self.subTest(channel=channel, versions=order, device=device, installed=installed):
+                        feed = F.build_feed([release(v) for v in order])
+                        minimum = {"stable": 2, "rc": 1, "preview": 0}[channel]
+                        allowed = [r for r in feed if F.product_key(r)[3] >= minimum and
+                                   any(a["name"].startswith(device + "-v") for a in r["assets"])]
+                        candidate = max(allowed, key=F.product_key, default=None)
+                        self.assertEqual(expected, F.identity(candidate) if candidate else None)
+                        # The feed supplies candidates; clients install only newer versions.
+                        self.assertEqual(install, any(F.product_key(r) > F.product_key(release(installed))
+                                                     for r in allowed))
+
     def test_three_channel_feed_ignores_github_and_upstream_labels(self):
         devices = ("firmware-x4-pro", "firmware-x4-classic", "firmware-x3-x4")
         def release(book, flag, builds=devices):
