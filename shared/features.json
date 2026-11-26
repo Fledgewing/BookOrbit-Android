@@ -5199,11 +5199,15 @@
       "platforms": {
         "android": {
           "status": "partial",
-          "note": "0.12 local aggregates and standalone renderers",
-          "reason": "deliberately deferred: Android build authorised 2026-11-25; Home host wiring, finish ledger and goal settings remain pending.",
+          "note": "Local aggregates and Home widgets share one reading.stats snapshot per paint (feature/0.12; unreleased)",
+          "reason": "deliberately deferred: device acceptance, local finish ledger and goal settings remain pending after Android Home integration.",
           "evidence": [
             {
               "path": "docs/design/booksync-home/F12-F-NOTES.md",
+              "line": 3
+            },
+            {
+              "path": "docs/design/booksync-home/F12-J-NOTES.md",
               "line": 3
             }
           ],
@@ -5211,7 +5215,7 @@
         },
         "x4_pro": {
           "status": "missing",
-          "note": "Firmware implementation deferred",
+          "note": "Home-integrated reading widgets follow Android; firmware implementation deferred",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
           "evidence": [
             {
@@ -5223,7 +5227,7 @@
         },
         "x4": {
           "status": "missing",
-          "note": "Firmware implementation deferred",
+          "note": "Home-integrated reading widgets follow Android; firmware implementation deferred",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
           "evidence": [
             {
@@ -5235,7 +5239,7 @@
         },
         "x3": {
           "status": "missing",
-          "note": "Firmware implementation deferred",
+          "note": "Home-integrated reading widgets follow Android; firmware implementation deferred",
           "reason": "deliberately deferred: maintainer authorised Android first on 2026-11-25; firmware follows the Android widgets.",
           "evidence": [
             {
@@ -5246,7 +5250,7 @@
           "version": null
         }
       },
-      "deferred": "Home host integration, local finish ledger and goal settings; firmware renderers."
+      "deferred": "Device acceptance, local finish ledger and goal settings; firmware renderers."
     },
     {
       "id": "filter-sheet",
