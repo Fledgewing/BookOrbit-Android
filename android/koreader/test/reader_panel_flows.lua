@@ -295,4 +295,25 @@ return function(here, test, ok, eq)
         eq(W.event.name,"UpdatePos"); eq(W.events,n+1,"one update for mixed changes")
     end)
 
+    test("Custom font copy: matching preset is selected; an outside face remains a visible choice",function()
+        local W,E=world(); local ui=styleReader(W)
+        for index,font in ipairs(E.ReadingStyle.fonts) do
+            ui.font.font_face=font.face
+            E.Library.readingCopy(ui)
+            local s=E.Library.readingCustom(); eq(s.fontIndex,index); eq(s.face,nil)
+            E.CustomReading.open("font",ui)
+            local selected=false
+            for _,r in ipairs(E.CustomReading.editor:rows()) do
+                if r.fontIndex==index and r.text:find("● ",1,true)==1 then selected=true end
+            end
+            ok(selected,"copied preset selected"); E.CustomReading.close()
+        end
+        ui.font.font_face="Fixture Serif"; local previous=E.Library.readingCopy(ui)
+        E.CustomReading.open("font",ui)
+        local rows=E.CustomReading.editor:rows(); eq(#rows,12,"copied face fits the editor budget")
+        eq(rows[3].face,"Fixture Serif"); eq(rows[3].text,"● Fixture Serif (copied)")
+        E.CustomReading.close(); E.Library.readingSave(previous,ui)
+        eq(E.Library.readingCustom().face,nil); eq(E.Library.readingCustom().fontIndex,4,"Undo keeps the previous font index")
+    end)
+
 end

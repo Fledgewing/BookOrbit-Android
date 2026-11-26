@@ -103,7 +103,12 @@ function Library.readingCopy(ui)
         local pair=G_reader_settings:readSetting("copt_h_page_margins")
         if type(pair)=="table" then margins={pair[1],0,pair[2],0} end
     end
-    local record={fontIndex=1,face=f and f.font_face or G_reader_settings:readSetting("cre_font"),
+    local face=f and f.font_face or G_reader_settings:readSetting("cre_font")
+    local fontIndex=1
+    for i,font in ipairs(ReadingStyle.fonts) do
+        if face==font.face then fontIndex=i; face=nil; break end
+    end
+    local record={fontIndex=fontIndex,face=face,
         weight=value("font_base_weight",0),margins=scale(margins[1]),spacing=value("line_spacing",100)/100,
         contrast=(gamma[value("font_gamma",15)+1] or 1)-1}
     local copied,previous=ReadingStyle.copy(Library.readingCustom(),record)

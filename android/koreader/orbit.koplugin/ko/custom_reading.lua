@@ -30,7 +30,7 @@ function Editor:rowWidget(block,w,h,mt)
         for _,cell in ipairs(block.items) do cells[#cells+1]={text=cell.text,callback=cell.action,height=mt.button,text_font_size=18} end
         return require("ui/widget/buttontable"):new{width=w,buttons={cells},zero_sep=true}
     elseif r and r.fontIndex then
-        local _,path=Library.readingFace(r.fontIndex)
+        local _,path=Library.readingFace(r.fontIndex,r.face)
         return require("ui/widget/button"):new{text=r.text,callback=r.action,width=w,height=math.max(50,h),
             text_font_face=path,text_font_size=20}
     elseif r and r.preview then
@@ -74,6 +74,10 @@ function Editor:build()
     local rows={{kind="title",text="Custom " .. ReadingStyle.names[self.key]:lower()},
         {kind="notice",text="Changes apply straight away."}}
     if self.key=="font" then
+        if record.face then
+            rows[#rows+1]={kind="button",fontIndex=record.fontIndex,face=record.face,
+                text="● " .. record.face .. " (copied)",action=function() end}
+        end
         for i,f in ipairs(ReadingStyle.fonts) do
             rows[#rows+1]={kind="button",fontIndex=i,text=(record.fontIndex==i and not record.face and "● " or "○ ") .. f.name,
                 action=function() local s=Library.readingCustom("reading-custom-" .. self.key); s.fontIndex=i; s.face=nil; Library.readingSave(s,self.ui,"reading-custom-" .. self.key); self:refresh() end}

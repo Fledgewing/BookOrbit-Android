@@ -811,3 +811,9 @@ sends `RedrawCurrentView` for gamma; `frontend/apps/reader/modules/readerrolling
 updates layout/metadata, while `frontend/apps/reader/modules/readerrolling.lua:1088`
 redraws the current page. Mixed edits still batch
 one position update (or reuse the native margin update).
+
+
+Copy maps a known installed face back to its preset index. An imported face outside
+the four presets appears as the selected copied choice, drawn in that face. It adds
+at most one row, keeping the font editor within its 12-row budget; choosing a preset
+replaces the imported face, and Undo restores the previous index and face exactly.
