@@ -10,6 +10,7 @@ return function(here, test, ok, eq)
             return c
         end
         local Widget=class()
+        W.face={hash="fixture",ftsize={getEmboldenHalfStrength=function(_,factor) return factor end}}
         local ui={document={file="/books/fixture.epub"},menu={}}
         local Menu={onShowMenu=function() W.stock=(W.stock or 0)+1; return "native" end}
         ui.menu=setmetatable({ui=ui},{__index=Menu})
@@ -43,8 +44,8 @@ return function(here, test, ok, eq)
             if name=="ui/event" then return {new=function(_,name) return {name=name} end} end
             if name=="apps/reader/modules/readermenu" then return Menu end
             if name=="ui/geometry" or name=="ui/gesturerange" then return {new=function(_,t) return t end} end
-            if name=="ui/font" then return {getFace=function() return {} end} end
-            if name=="ffi/blitbuffer" then return {COLOR_BLACK=0,COLOR_WHITE=1,COLOR_LIGHT_GRAY=2} end
+            if name=="ui/font" then return {getFace=function() return W.face end} end
+            if name=="ffi/blitbuffer" then return {COLOR_BLACK=0,COLOR_WHITE=1,COLOR_LIGHT_GRAY=2,Color8=function(n) return n end} end
             if name:match("^ui/widget/") then return Widget end
             return require(name)
         end
@@ -242,6 +243,27 @@ return function(here, test, ok, eq)
         eq(pcall(E.Library.readingCustom,"missing-screen"),false)
         E.Budgets.screens["reading-custom-spacing"].rows=0
         eq(pcall(E.Library.readingCustom,"reading-custom-spacing"),false)
+    end)
+
+    test("Custom previews: distinct weight/contrast steps and bounded page-scale gutters",function()
+        local W,E=world()
+        local function preview(key,value)
+            local s=E.Library.readingCustom(); s[key=="font" and "weight" or key]=value
+            E.Library.readingSave(s,nil)
+            E.CustomReading.open(key,nil)
+            local editor=E.CustomReading.editor
+            local frame=editor:rowWidget({row={preview=true}},500,100,editor.metrics)
+            E.CustomReading.close()
+            return frame[1][1],frame
+        end
+        local lighter=preview("contrast",-.5); local light=preview("contrast",-.4)
+        ok(lighter.fgcolor>light.fgcolor)
+        local dark=preview("contrast",.2); local darker=preview("contrast",.3)
+        ok(darker.face.embolden_half_strength>dark.face.embolden_half_strength)
+        local medium=preview("font",1); local heavy=preview("font",2)
+        ok(heavy.face.embolden_half_strength>medium.face.embolden_half_strength)
+        eq(W.face.hash,"fixture"); eq(W.face.embolden_half_strength,nil,"shared UI face stays immutable")
+        local _,frame=preview("margins",60); eq(frame.padding_left,50); eq(frame.padding_right,50)
     end)
 
 end

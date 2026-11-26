@@ -50,7 +50,7 @@ function Editor:rowWidget(block,w,h,mt)
             face.is_real_bold=false
             face.embolden_half_strength=face.ftsize:getEmboldenHalfStrength(3/8*delta)
         end
-        local ink=delta<0 and BB.Color8 and BB.Color8(math.floor(math.min(100,-delta*100))) or BB.COLOR_BLACK
+        local ink=delta<0 and BB.Color8 and BB.Color8(math.floor(math.min(200,-delta*60))) or BB.COLOR_BLACK
         local preview=require("ui/widget/textboxwidget"):new{
             text="She sat down on the iron bench with the book open on her knees.",
             face=face,_face_adjusted=true,width=w-2*gutter,
