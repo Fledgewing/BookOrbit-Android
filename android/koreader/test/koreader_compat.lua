@@ -97,7 +97,7 @@ local NEEDS = {
     { "frontend/logger.lua", { { "info", T }, { "warn", T } } },
     { "frontend/gettext.lua", { { "GetText", T } } },
     { "frontend/ui/widget/container/widgetcontainer.lua", { { "extend", T }, "paintTo" } },
-    { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T } } },
+    { "frontend/ui/widget/container/inputcontainer.lua", { { "ges_events", T }, "paintTo" } },
     -- Owned Home: absolute grid placements, ordinary buttons and a plain progress bar.
     { "frontend/ui/widget/overlapgroup.lua", { "paintTo", {"overlap_offset", T}, {"allow_mirroring", F} } },
     { "frontend/ui/widget/progresswidget.lua", { "paintTo", {"percentage", F} } },
