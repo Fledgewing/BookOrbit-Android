@@ -310,7 +310,7 @@ class LibraryTest {
             val model = LibraryReadModel(st,{99},{},accountState = {
                 mapOf("owner" to owner,"opds" to mapOf("available" to opds),"sync" to mapOf("available" to sync))
             })
-            val request = "{op=\"capabilities\"}"
+            val request = String(LuaValue.encode(mapOf("op" to "capabilities")),Charsets.ISO_8859_1)
             fun caps(): Map<*,*> {
                 model.publish(owner,listOf(request))
                 return st.db().query("SELECT body FROM library_views WHERE owner=? AND request=?",owner,request) { LuaValue.parse(it.bytes(0)!!) as Map<*,*> }.single()
